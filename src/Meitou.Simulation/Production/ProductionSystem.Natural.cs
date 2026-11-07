@@ -15,30 +15,34 @@ public sealed partial class ProductionSystem
 
     readonly Dictionary<string, BuildSite?> naturalSites = new(StringComparer.Ordinal);
     /// <summary>
-    /// A rock site's centre and bounds radius from the host's rock source, with its mesh's bounds box and the instance's transform when the source has the mesh: an operator inside
+    /// A rock site's centre and bounds radius from the host's rock source, with its mesh's shape (footprint and bounds box) and the instance's transform when the source has the mesh: an operator inside
     /// them has reached the rock.
     /// </summary>
     readonly record struct RockBounds(Vector3 Centre, float Radius, RockShape? Shape, Matrix4x4 Transform)
     {
         public Vector2 Flat => new(Centre.X, Centre.Z);
 
-        /// <summary>The X/Z gap from <paramref name="from"/> to the rock: to its bounds box where the instance places it (taken at the box's height), else to its bounds circle.</summary>
+        /// <summary>
+        /// The X/Z gap from <paramref name="from"/> to the rock: to its mesh's footprint (<see cref="RockShape.Outline"/>) where the instance places it (taken at the box's height), else
+        /// to its bounds circle. The footprint, not the bounds box: a long or scattered rock's box reached far past the stone, and miners mined from 20 m off (#332).
+        /// </summary>
         public float Gap(Vector3 from)
         {
             var at = new Vector2(from.X, from.Z);
             if (Shape is not { } shape || !Matrix4x4.Invert(Transform, out var inverse)) return MathF.Max(0, Vector2.Distance(at, Flat) - Radius);
-            var local = Vector3.Clamp(Vector3.Transform(new Vector3(from.X, Centre.Y, from.Z), inverse), shape.Min, shape.Max);
-            var nearest = Vector3.Transform(local, Transform);
+            var local = Vector3.Transform(new Vector3(from.X, Centre.Y, from.Z), inverse);
+            var edge = shape.NearestXZ(new Vector2(local.X, local.Z));
+            var nearest = Vector3.Transform(new Vector3(edge.X, local.Y, edge.Y), Transform);
             return Vector2.Distance(at, new Vector2(nearest.X, nearest.Z));
         }
 
-        /// <summary>Whether <paramref name="from"/> is inside the bounds box scaled 1.2 about its middle (taken at the box's height), else inside the bounds circle scaled 1.2.</summary>
+        /// <summary>Whether <paramref name="from"/> is inside the footprint scaled 1.2 about the box's middle (taken at the box's height), else inside the bounds circle scaled 1.2.</summary>
         public bool Touches(Vector3 from)
         {
             if (Shape is not { } shape || !Matrix4x4.Invert(Transform, out var inverse)) return Vector2.Distance(new Vector2(from.X, from.Z), Flat) < 1.2f * Radius;
             var local = Vector3.Transform(new Vector3(from.X, Centre.Y, from.Z), inverse);
-            Vector3 mid = (shape.Min + shape.Max) / 2, half = 1.2f * (shape.Max - shape.Min) / 2;
-            return MathF.Abs(local.X - mid.X) <= half.X && MathF.Abs(local.Z - mid.Z) <= half.Z;
+            var mid = new Vector2((shape.Min.X + shape.Max.X) / 2, (shape.Min.Z + shape.Max.Z) / 2);
+            return shape.InsideXZ(mid + (new Vector2(local.X, local.Z) - mid) / 1.2f);
         }
     }
 
