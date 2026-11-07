@@ -599,8 +599,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Birds, "birds");
         UpdateWeatherSource();
         UpdateInteriorView();
-        // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds.
-        float gameTime = (float)(session.Clock.GameSeconds / 600 % 1e4);
+        // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds. The clock moves in whole
+        // 1/30 s ticks, so it runs on by the alpha the characters are drawn at; at 1x the weather particles otherwise moved at 30 Hz.
+        double shownSeconds = session.Clock.GameSeconds + session.SimulationAlpha * session.Simulation.TickSeconds;
+        float gameTime = (float)(shownSeconds / 600 % 1e4);
         // The next world tick runs on its own thread while the world is drawn from the shown snapshots (docs/simulation.md "Tick ahead"): from here to the
         // join nothing the renderer calls back may touch the world, only the session's snapshots.
         if (tickAhead) session.BeginTickAhead();
