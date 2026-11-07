@@ -140,7 +140,7 @@ static void UseVisitors(ModContext c) => c.Dependency<VisitorsMod>("settlement.v
 - **Arrange**: one graph of every constraint between **enabled** mods: code `dependencies` (optional ones too), `loadAfter` and FCS `.mod`
   header `dependencies`. Each mod keeps its place unless a mod it needs comes later; that mod moves up to just before it (its own
   prerequisites first), so data overrides keep their order (`[A needs C, B, C]` gives `[C, A, B]`). Disabled mods add no constraint. The
-  moves are listed ("3 → 1  Framework") and applied only when accepted, saved only by Save mod list or Play. A cycle, including a code
+  moves are listed ("3 → 1  Framework") and applied only when accepted, then saved. A cycle, including a code
   constraint contradicting a data one, moves nothing and is shown edge by edge (`code: needs 'x'`, `data: its .mod header needs X.mod`).
 - Trust is per mod: allowing a dependent never allows its dependency.
 

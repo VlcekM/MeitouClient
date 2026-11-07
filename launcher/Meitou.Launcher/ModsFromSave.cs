@@ -31,7 +31,7 @@ public sealed partial class MainWindow
         if (saved is null) { Status(Tr("The save '{1}' has no mod list.", slot.Name)); return; }
 
         var missing = ApplyOrder(saved.Select(name => (name, true)));
-        Status(Tr("Mods of the save '{1}' applied (not saved yet).", slot.Name) + NotOnDisk(missing));
+        Status(Tr("Mods of the save '{1}' applied.", slot.Name) + NotOnDisk(missing));
     }
 
     /// <summary>Asks which save to take the mods from, newest first; null for Cancel or Escape.</summary>

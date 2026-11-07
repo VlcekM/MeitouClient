@@ -4,7 +4,7 @@ using Avalonia.Interactivity;
 namespace Meitou.Launcher;
 
 // Code mods (docs/modding.md "Trust"): an enabled mod with a meitou.json runs C# code of its own in the game. Play asks about the enabled ones not
-// decided yet; the Code mods button asks about every code mod in the list, so a choice can be changed. Allowed names go to the game's
+// decided yet; the Code mods button asks about every code mod in the list, so a choice can be changed; Trust all allows them all at once. Allowed names go to the game's
 // meitou.user.json (trustedCodeMods), the game loading only their code; data-only names go to the launcher's config, so Play does not ask again.
 public sealed partial class MainWindow
 {
@@ -28,6 +28,16 @@ public sealed partial class MainWindow
         if (names.Count == 0) { Status("No code mods in the list."); return; }
         game = GameSettings.Load();
         await DecideCodeMods(names);
+    }
+
+    void TrustAllCodeMods_Click(object? sender, RoutedEventArgs e)
+    {
+        var names = mods.Where(m => m.Mod.HasCode).Select(m => m.Name).ToList();
+        if (names.Count == 0) { Status("No code mods in the list."); return; }
+
+        game = GameSettings.Load();
+        var trusted = game.GetStrings(TrustedCodeModsKey).ToHashSet(StringComparer.Ordinal);
+        SaveCodeModChoices(names, [.. names], trusted);
     }
 
     /// <summary>

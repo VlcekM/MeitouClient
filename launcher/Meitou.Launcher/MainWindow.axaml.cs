@@ -60,7 +60,7 @@ public sealed partial class MainWindow : Window
         PlayVersionButton.Flyout = versionMenu;
         TrackPointer();
         ModListBox.ItemsSource = mods;
-        mods.CollectionChanged += (_, _) => { if (modsReady) ShowDependencyProblems(); };   // a drag or Alt+arrow move changes what loads first
+        mods.CollectionChanged += (_, _) => { if (modsReady) ModListChanged(); };   // a drag or Alt+arrow move changes what loads first
         ModListBox.AddHandler(PointerMovedEvent, ModList_PointerMoved, RoutingStrategies.Bubble, handledEventsToo: true);
         ModListBox.AddHandler(PointerReleasedEvent, ModList_PointerReleased, RoutingStrategies.Bubble, handledEventsToo: true);
         ModListBox.AddHandler(PointerCaptureLostEvent, (_, _) => EndDrag(), RoutingStrategies.Direct | RoutingStrategies.Bubble, handledEventsToo: true);
@@ -502,7 +502,7 @@ public sealed partial class MainWindow : Window
         if (load != modsLoad) return;
         foreach (var (entry, code) in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled, code));
         // Only a toggle changes the checks; the checks' own Notes changes must not start them again.
-        foreach (var row in mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ModToggled(); };
+        foreach (var row in mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ModListChanged(); };
         modsReady = true;
         ShowDependencyProblems();
         ModsEmpty.IsVisible = mods.Count == 0;
@@ -551,8 +551,8 @@ public sealed partial class MainWindow : Window
         var enabled = mods.ToDictionary(m => m.Name, m => m.Enabled, StringComparer.Ordinal);
         ApplyOrder(result.Order.Select(name => (name, enabled[name])));
         int left = mods.Count(m => m.DependencyProblems.Count > 0);
-        Status(left == 0 ? Tr("Mods arranged by their dependencies (not saved yet).")
-            : Tr("Mods arranged by their dependencies (not saved yet); {1} still need attention.", left));
+        Status(left == 0 ? Tr("Mods arranged by their dependencies.")
+            : Tr("Mods arranged by their dependencies; {1} still need attention.", left));
     }
 
     void ShowArrangeCycle(IReadOnlyList<OrderConstraint> cycle)
@@ -596,9 +596,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    // A checkbox click saves mods.cfg at once, so the game reads what the list shows. Select all / none toggle many rows: one save after
-    // them. A preset or Arrange moves rows with the checks suspended and does not save (docs/launcher.md "Mod list").
-    void ModToggled()
+    // A tick, drag or move saves mods.cfg at once, so the game reads what the list shows (docs/launcher.md "Mod list"). Select all / none
+    // change many rows: one save after them. ApplyOrder (presets, Arrange, From save) holds this and saves once itself.
+    void ModListChanged()
     {
         ShowDependencyProblems();
         if (checksSuspended || !modsReady || toggleSavePending) return;
@@ -609,11 +609,6 @@ public sealed partial class MainWindow : Window
             toggleSavePending = false;
             if (modsReady && SaveMods()) Status(Tr("Mod list saved: {1} enabled.", mods.Count(m => m.Enabled)));
         });
-    }
-
-    void SaveMods_Click(object? sender, RoutedEventArgs e)
-    {
-        if (SaveMods()) Status(Tr("Mod list saved: {1} enabled.", mods.Count(m => m.Enabled)));
     }
 
     void RefreshMods_Click(object? sender, RoutedEventArgs e) => LoadMods();
@@ -737,7 +732,7 @@ public sealed partial class MainWindow : Window
     {
         if (PresetBox.SelectedItem is not ModPreset preset || !ModsReady()) return;
         var missing = ApplyOrder(preset.Mods.Select(p => (p.Name, p.Enabled)));
-        Status(Tr("Preset '{1}' applied (not saved yet).", preset.Name) + NotOnDisk(missing));
+        Status(Tr("Preset '{1}' applied.", preset.Name) + NotOnDisk(missing));
     }
 
     /// <summary>
@@ -768,6 +763,7 @@ public sealed partial class MainWindow : Window
             checksSuspended = false;
         }
         ShowDependencyProblems();
+        SaveMods();
         return missing;
     }
 

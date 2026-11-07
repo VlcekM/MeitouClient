@@ -250,12 +250,12 @@ interpolated string, which no translation could match.
 
 - Shown as the original launcher shows it: enabled mods in `mods.cfg` order first, then the rest after their header dependencies.
   Mods in a dependency cycle are kept at the end, where the original drops them. Mods not in `__mods.list` are new and start enabled.
-- Saving (Save, Play, ticking or unticking a mod) writes `mods.cfg` (enabled `<name>.mod`, list order, CRLF) and `__mods.list` (every listed name, plus old
-  names not on disk). These are the files the original game reads, so the mod list applies to it too.
-- Discovery and the header reads run off the UI thread while the window opens; until they finish (or when they fail) Save, Play
-  and the preset buttons refuse, so an unloaded list never overwrites `mods.cfg`.
+- Every change to the list (a tick, a drag, a preset, Arrange, From save) and Play write `mods.cfg` (enabled `<name>.mod`, list
+  order, CRLF) and `__mods.list` (every listed name, plus old names not on disk). These are the files the original game reads, so the mod list applies to it too.
+- Discovery and the header reads run off the UI thread while the window opens; until they finish (or when they fail) Play and the
+  preset buttons refuse, and nothing is saved, so an unloaded list never overwrites `mods.cfg`.
 - A preset is a named, ordered list of names with enabled flags. Applying one reorders the list. Mods the preset doesn't name go
-  to the end, disabled, and mods it names that aren't on disk are reported. Applying doesn't save.
+  to the end, disabled, and mods it names that aren't on disk are reported. Applying saves.
 - From save lists the save folders (with `quick.save`) of Meitou's save root, the install's `save` and the per-user Kenshi save folder,
   newest first and labelled by root, and applies the chosen save's CAMERA `mods` list ([save](formats/save.md#camera-type-56-id-1051-the-world-record))
   as an all-enabled preset, without `base` and the core mods. `SaveModList` (Meitou.Core) reads it; **Verified** equal to
@@ -263,7 +263,8 @@ interpolated string, which no translation could match.
 - A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)), unless it
   also has `meitou.json`: then only the code-mod note shows.
 - A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)). Play asks about the enabled code mods not decided
-  yet; the Code mods button beside Save mod list asks about every code mod in the list, so a choice can be changed or revoked. The
+  yet; the Code mods button asks about every code mod in the list, so a choice can be changed or revoked; Trust all beside it allows
+  every code mod in the list without asking. The
   question has a box per mod (ticked: allowed now) and three answers: Data only all, Trust all, Apply (the ticks). Escape decides
   nothing. Allowed names go to `trustedCodeMods` in `meitou.user.json` (kept by game releases since 2026-10-20, which keep unknown
   keys); data-only names go to the launcher's `DataOnlyCodeMods`, so Play does not ask about them again.

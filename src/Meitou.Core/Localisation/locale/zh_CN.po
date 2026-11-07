@@ -2134,8 +2134,8 @@ msgstr "（未在上方启用：{1}）"
 msgid "Preset '{1}' saved."
 msgstr "预设「{1}」已保存。"
 
-msgid "Preset '{1}' applied (not saved yet)."
-msgstr "预设「{1}」已应用（尚未保存）。"
+msgid "Preset '{1}' applied."
+msgstr "预设「{1}」已应用。"
 
 msgid " Not on disk: {1}."
 msgstr " 不在磁盘上：{1}。"
@@ -2823,8 +2823,8 @@ msgstr "套用某个存档创建时的模组列表与加载顺序"
 msgid "Take the mods and their load order from this save:"
 msgstr "从这个存档套用模组及其加载顺序："
 
-msgid "Mods of the save '{1}' applied (not saved yet)."
-msgstr "已套用存档「{1}」的模组（尚未保存）。"
+msgid "Mods of the save '{1}' applied."
+msgstr "已套用存档「{1}」的模组。"
 
 msgid "Could not read the save '{1}': {2}"
 msgstr "无法读取存档「{1}」：{2}"
