@@ -129,7 +129,7 @@ sealed partial class GameHost
             (floorFollow, followedFloor) = (null, -1);
             return;
         }
-        var at = DrawnPosition(c);
+        var at = TrackedPosition(c);
         int floor = objects.InteriorAt(at, InsideMargin) is { } building ? building.FloorAt(at) : 0;
         if (floorFollow != id || floor != followedFloor) ViewedFloor = floor;
         (floorFollow, followedFloor) = (id, floor);

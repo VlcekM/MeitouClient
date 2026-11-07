@@ -373,10 +373,18 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (Selected().FirstOrDefault() is { } lead) CentreOn(lead.Id);
     }
 
+    CharacterSnapshot Carrier(CharacterSnapshot c)
+    {
+        for (int depth = 0; depth < 8 && !c.CarriedBy.IsNone; depth++)
+            if (session.CurrentSnapshot.Characters.FirstOrDefault(k => k.Id == c.CarriedBy) is { } carrier) c = carrier; else break;
+        return c;
+    }
+
     void CentreOn(CharacterId id, bool follow = true)
     {
         if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c) return;
         var view = session.Camera.Current;
+        c = Carrier(c);   // a carried body is centred where its carrier stands
         session.Camera.Place(new Vector2(c.Position.X, c.Position.Z), view.Yaw, view.Pitch, view.Distance);
         Follow = follow ? id : null;
     }

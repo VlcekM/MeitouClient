@@ -210,8 +210,9 @@ sealed partial class GameHost
     {
         if (player.Follow is not { } id || session.Camera.IsFree) return;
         if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } followed) { player.Follow = null; return; }
-        session.Camera.MovePivot(new Vector2(followed.Position.X, followed.Position.Z));
-        camera.Target = DrawnPosition(followed);
+        var tracked = Tracked(followed);
+        session.Camera.MovePivot(new Vector2(tracked.Position.X, tracked.Position.Z));
+        camera.Target = DrawnPosition(tracked);
     }
 
     void SandboxFollowCamera()

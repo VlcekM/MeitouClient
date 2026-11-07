@@ -205,7 +205,7 @@ sealed partial class GameHost
         cinema.Load();
         // Numpad / flies the camera across the squad in portrait order (docs/viewer.md "Squad tour"); it holds the camera like the cinema does.
         var tour = new SquadTour();
-        Vector3? TourPosition(CharacterId id) => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c ? DrawnPosition(c) : null;
+        Vector3? TourPosition(CharacterId id) => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c ? TrackedPosition(c) : null;
         bool tourFollows = false;
         void EndTour()
         {
