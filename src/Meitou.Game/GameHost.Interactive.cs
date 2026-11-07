@@ -826,14 +826,15 @@ sealed partial class GameHost
                     }
                     if (walkPaths && !covered) panelsBottom = DrawWalkPathsLabel(overlay, session.CurrentSnapshot, size.X, size.Y, panelsBottom);
                     characterBoxesToggle = walkPathsToggle = null;
+                    float menuTop = panelsBottom;   // the debug menu stands at the right beside the statistics, else below the panels
                     if (statsVisible && stats.Count > 0)
                     {
                         TickStatsToggles(stats);
                         panelsBottom = overlay.Panel(size.X, size.Y, "Meitou   (F11 hides this)", stats, panelsBottom, laidOut: statsLaidOut);
                         FindStatsToggles(overlay.CharWidth);
                     }
-                    if (debugMenuOpen) DrawDebugMenu(overlay, size.X, size.Y, panelsBottom);
-                    if (player.MapPick is not null) DrawMapPickHint(overlay, size.X, size.Y);
+                    if (debugMenuOpen) DrawDebugMenu(overlay, size.X, size.Y, statsVisible ? menuTop : panelsBottom, atRight: statsVisible);
+                    if (player.MapPick is not null && player.MapTabShown) DrawMapPickHint(overlay, size.X, size.Y);
                     if (inspectorMenuOpen) DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
                     if (interiorEditorOpen) DrawInteriorEditor(overlay, size.X, size.Y, panelsBottom);
                     if (ConsoleOpen) DrawConsole(overlay, size.X, size.Y);
@@ -845,10 +846,10 @@ sealed partial class GameHost
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiSettings);
                 // Over everything: the letterbox and the cinema's editor (F6, also with F7); the game hides its status line.
                 if (overlay is not null && !covered) cinema.Draw(overlay, size.X, size.Y, shot || take || feedbackShot || (interfaceHidden && !cinema.EditorVisible), showStatus: false);
-                // F11's character boxes and paths, on top of everything; the paths stay once ticked, with the statistics hidden too.
+                // The character boxes and paths (F11's tickboxes, also F10's Overlays rows), on top of everything; both stay once ticked, with the statistics hidden too.
                 if (ui && overlay is not null && !covered && !shot && !feedbackShot)
                 {
-                    if (characterBoxes && statsVisible && gpu.Characters is { } boxed) DrawCharacterBoxes(overlay, boxed, camera, size.X, size.Y);
+                    if (characterBoxes && gpu.Characters is { } boxed) DrawCharacterBoxes(overlay, boxed, camera, size.X, size.Y);
                     if (walkPaths) DrawWalkPaths(overlay, session.CurrentSnapshot, camera, size.X, size.Y);
                 }
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiCinema);
