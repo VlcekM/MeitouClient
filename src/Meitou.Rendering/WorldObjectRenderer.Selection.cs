@@ -45,25 +45,40 @@ public sealed partial class WorldObjectRenderer
     }
 
     /// <summary>
-    /// Draws what the main view drew of the selected building alone, through the colour pass (it writes alpha 1), into a <paramref name="width"/> × <paramref name="height"/>
-    /// mask outlined in <paramref name="tint"/> (null: no outline), seen from <paramref name="eye"/> along <paramref name="view"/> (unjittered), its planes hugging the
-    /// building. Called after the frame's colour pass, outside any pass; the draw counters stay as that pass left them.
+    /// Draws what the main view drew of the selected building above its floor alone, through the colour pass (it writes alpha 1), into a <paramref name="width"/> ×
+    /// <paramref name="height"/> mask outlined in the colour of <paramref name="outline"/> (null: no outline), seen from <paramref name="eye"/> along <paramref name="view"/>
+    /// (unjittered), its planes hugging the building. Called after the frame's colour pass, outside any pass; the draw counters stay as that pass left them.
     /// </summary>
-    public void DrawSelectionMask(Vector4? tint, int width, int height, Matrix4x4 view, float fieldOfView, Vector3 eye, WorldRenderOptions options)
+    public void DrawSelectionMask((string Key, float Floor, Vector4 Colour)? outline, int width, int height, Matrix4x4 view, float fieldOfView, Vector3 eye,
+        WorldRenderOptions options)
     {
         selectionMasks.Clear();
-        if (tint is { } colour && selectionDraws.Count > 0 && width > 0 && height > 0)
+        if (outline is { } o && selectionDraws.Count > 0 && width > 0 && height > 0)
         {
             var (near, far) = SelectionPlanes(eye);
             var projection = DepthConvention.Perspective(fieldOfView, width / (float)height, near, far);
             var (colourTarget, depthTarget) = SelectionTarget(width, height);
             var counters = (DrawCalls, DrawnTriangles, untexturedDraws);
             BatchSelection();
-            RecordSelection(PassTargets.Of(colourTarget, depthTarget), new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = Vector3.UnitY }, options);
+            RecordSelection(PassTargets.Of(colourTarget, depthTarget), SelectionView(view * projection, eye, o.Floor), options);
             (DrawCalls, DrawnTriangles, untexturedDraws) = counters;
-            selectionMasks.Add(new HoverMask(colourTarget, depthTarget, near, far, colour, selectionSpheres));
+            selectionMasks.Add(new HoverMask(colourTarget, depthTarget, near, far, o.Colour, selectionSpheres));
         }
         selectionDraws.Clear();
+    }
+
+    /// <summary>How far above its floor the outline starts: the floor's own top (the slab's, at the building's height) is left out with what is below it.</summary>
+    const float FloorClearance = 1;
+
+    /// <summary>
+    /// The mask's view: one cut volume with no footprint edges, everything at or below <paramref name="floor"/> + <see cref="FloorClearance"/>, which the draws
+    /// (all cut, <see cref="BatchSelection"/>) leave out: the foundations, piers and the base slab the building stands on, hidden or not, get no outline.
+    /// </summary>
+    static ViewConstants SelectionView(Matrix4x4 viewProjection, Vector3 eye, float floor)
+    {
+        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = Vector3.UnitY, CutVolumes = 1 };
+        view.CutRanges[0] = new Vector4(0, 0, float.MinValue, floor + FloorClearance);
+        return view;
     }
 
     /// <summary>The kept instances' bounding spheres (into <see cref="selectionSpheres"/>) and the planes round them, as the characters' masks have theirs.</summary>
@@ -80,12 +95,12 @@ public sealed partial class WorldObjectRenderer
         return (Math.Max(0.25f, near), far);
     }
 
-    /// <summary>The kept draws as the only batches, their matrices in this frame's constants (the frame's next <see cref="Draw"/> starts its own from nothing).</summary>
+    /// <summary>The kept draws as the only batches, all cut (<see cref="SelectionView"/>), their matrices in this frame's constants (the frame's next <see cref="Draw"/> starts its own from nothing).</summary>
     void BatchSelection()
     {
         foreach (var b in batchMap.Values) b.Count = 0;
         active.Clear();
-        foreach (var d in selectionDraws) AddLevels(d.Gpu, d.Materials, d.Blend, d.M, d.Weight, d.Near, d.BackCull, d.Site);
+        foreach (var d in selectionDraws) AddLevels(d.Gpu, d.Materials, d.Blend, d.M, d.Weight, d.Near, d.BackCull, d.Site, cut: true);
         UploadInstances();
     }
 

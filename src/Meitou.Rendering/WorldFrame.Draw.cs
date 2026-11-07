@@ -882,7 +882,7 @@ static partial class WorldFrame
         // The hover outline (Meitou only): the characters' masks drawn after the portraits, the selected building's from what the scene drew of it.
         if (gpu.HoverOutline is { } outline && post.Target is { } hoverPicture)
         {
-            gpu.Objects?.DrawSelectionMask(gpu.OutlinedBuilding?.Colour, width, height, view, camera.FieldOfView, eye, f.Render);
+            gpu.Objects?.DrawSelectionMask(gpu.OutlinedBuilding, width, height, view, camera.FieldOfView, eye, f.Render);
             if (OutlineMasks(gpu) is { Count: > 0 } masks)
             {
                 var (near, far, projection) = SceneProjection();

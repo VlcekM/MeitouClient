@@ -797,8 +797,8 @@ static partial class WorldFrame
         /// <summary>The hover outline the game draws round the character under the mouse, and with Alt those near (null in the viewer); <see cref="HoverKeys"/> picks the characters by their draw-list keys, each with its colour (empty: none).</summary>
         public HoverOutlineRenderer? HoverOutline;
         public IReadOnlyList<(long Key, Vector4 Colour)> HoverKeys = [];
-        /// <summary>The selected building <see cref="HoverOutline"/> outlines too, by placement key, in its colour (null: none; nothing while the interior view shows it).</summary>
-        public (string Key, Vector4 Colour)? OutlinedBuilding;
+        /// <summary>The selected building <see cref="HoverOutline"/> outlines too, by placement key, above its floor height, in its colour (null: none; nothing while the interior view shows it).</summary>
+        public (string Key, float Floor, Vector4 Colour)? OutlinedBuilding;
         /// <summary>
         /// A presentation cap on how far the frame reaches (the Meitou editor's bar, high above the world): the far plane and the shadow cascades end there, so the world below
         /// leaves the view; null in play.
