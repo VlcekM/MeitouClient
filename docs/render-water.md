@@ -37,11 +37,15 @@ break distance from the local floor slope); past the break and in a film their h
 wave. The breaker front's slope is the height difference over 6% of a wavelength, at most 0.35 (over 2%
 it made a thin steep strip that reflected as a bright greenish line ahead of every crest; found by cutting each term in turn). The breaker face's glow shows only within 80 units of the break (along the whole swell it drew a band ahead of every crest).
 Surf foam lies where noise clumps and blotches in the wave's frame pass a narrow threshold
-(rising with its age, holes even when fresh, frayed by the rims), with streaks of the blotch noise stretched 5:1 along the waves' way; its density
-follows that texture linearly (0.3 to 1.2, capped at 1, so the filtered distant foam keeps its mean), never a flat white sheet, and the thickest whitewater is capped at 0.88 so holes remain; shaded by two turned networks of bubble rims at fixed world scales (cells of 0.5 to 1.7 units). Every foam
+(rising with its age, holes even when fresh, frayed by the froth), with streaks of the blotch noise stretched 5:1 along the waves' way; its density
+follows that texture linearly (0.3 to 1.2, capped at 1, so the filtered distant foam keeps its mean), never a flat white sheet, and the thickest whitewater is capped at 0.88 so holes remain; shaded by the froth at two turned fixed world scales. Every foam
 pattern is world-space at fixed scales, so zooming never changes its size or shape: detail under a pixel is filtered by the texture's mips, and the
-finest octave (the bubbles' walls, 0.17 units) fades by the pixel's footprint (0.12 to 0.3 units), never by the eye's distance; the coarse lace (cells
-of 2.5 to 5 units, read as bricks up close) is not used. The waterline: no still foam
+finest octave (the bubbles' walls) fades by the pixel's footprint (0.12 to 0.3 units), never by the eye's distance.
+**Froth** (`WaterFoam`, the foam texture's A; every foam: surf, swash, rivers, open water, contact, wakes and splashes): not cellular. Five octaves of
+domain-warped value noise less round holes of widely varying size (four scales, mostly small, about half the cells empty), so a rising threshold (more
+age, less foam) leaves a sheet with holes, then irregular clusters, then dots; B holds bubble rings of 0.13 to 0.4 units for close views. The cellular lace
+(R, a single-scale network of rims) read as a honeycomb of thin lines on aging foam and is left to the floor's caustics. Open-water foam drifts with the
+current and, on still water, wanders half a unit over about a minute. The waterline: no still foam
 ring (an exposed shore gets a little with each wave). On the swash the foam's lace rides the sheet: shifted by level / beach slope along the
 waves' way, so it runs up with the uprush and back with the backwash; the sand behind dries in patches (two noises, 9 and 23 units) over the wave's cycle. Contact foam needs 2.5 to 4.5 units of standing (the ground relief made false lines). The water's
 edge fades over 2 units along the ray and 0.6 of depth, whichever is longer (0.5 and 0.2 for the swash), smoothstepped. Ponds and sheltered water: the
