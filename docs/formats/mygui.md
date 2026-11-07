@@ -242,7 +242,8 @@ Code: `UiDocument.Widgets.cs` (layout), `MyGuiScreenHost.Widgets.cs` (input). **
 - **Lines and long text** (**Observed**, the save list at 1440 lines): a list with a `SkinLine` lays its lines across the whole client and the
   line skin places the text (Meitou's 3 px inset and padding only without one); a resource font's line longer than its widget is cropped, never
   shortened with "..." (Faithful). The save list's lines are 28 px apart at 1440 lines: the template's `HeightLine` 21 times height / 1080, which
-  Meitou applies to the load, save and import windows (whether every template scales so is **Unknown**).
+  Meitou applies to the load, save and import windows and the HUD (the squad tabs' `HeaderPlace` scales so too, **Observed**; whether every
+  template does is **Unknown**).
 - **EditBox** (`EditBox.cpp` with `ScrollViewBase.cpp`; **Observed** in the editor's race description, `Kenshi_WordWrap`, which sets no `VisibleVScroll`):
   the vertical bar shows only when the text is taller than the client (and `VisibleVScroll` is not false); hidden, its thickness goes to the client, so text
   wraps up to 6 px inside the frame (a Hive Prince's description); shown, its thickness comes off the template's client, so the text keeps 14 px clear of it (a

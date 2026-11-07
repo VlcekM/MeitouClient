@@ -48,6 +48,7 @@ sealed partial class PlayerInterface
         var mainPanel = MyGuiReader.ReadLayout(resolve("Kenshi_MainPanel.layout") ?? throw new FileNotFoundException("Kenshi_MainPanel.layout not found."));
         faithfulHud = MyGuiTemplates.Expand(mainPanel, uiResources);
         relationsLineLayout = resolve("Kenshi_FactionRelationsLine.layout") is { } relationsLine ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(relationsLine), uiResources) : null;
+        ordersRowLayout = resolve("Kenshi_OrdersPanelOrder.layout") is { } ordersRow ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(ordersRow), uiResources) : null;
         squadBoxLayout = resolve("Kenshi_SquadBox.layout") is { } squadBox ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(squadBox), uiResources) : null;
         messageLayout = resolve("Kenshi_MessagePanel.layout") is { } messages ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(messages), uiResources) : null;
         taskBarLayout = resolve("Kenshi_ProgressBarPanel.layout") is { } taskBar ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(taskBar), uiResources) : null;
@@ -130,7 +131,8 @@ sealed partial class PlayerInterface
 
     UiBindings BindUi()
     {
-        var b = new UiBindings();
+        // The original sizes the HUD's template parts by height / 1080 (Observed: the squad tabs' 37 px HeaderPlace at 1440 lines, docs/game/ui-screens.md).
+        var b = new UiBindings { TemplateScale = Height / 1080f };
         var lead = Lead();
         b.Text["clock"] = $"{session.Clock.DayText}  {session.Clock.TimeText}";
         b.Text["DayText"] = session.Clock.DayText;
@@ -254,7 +256,7 @@ sealed partial class PlayerInterface
         squadBarRow = 0;   // no bar, no scrolling
         if (controls.FirstOrDefault(c => c.Name == "SquadPanel") is { } squadPanel) AddSquadPortraits(controls, squadPanel.Bounds);
         AddHudText(controls);
-        AddJobRemoveButtons(controls);
+        AddJobRowParts(controls);
         if (hud) AddTutorialPanel(controls);
         AddScreens(controls);
         return controls;

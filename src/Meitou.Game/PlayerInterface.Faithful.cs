@@ -352,25 +352,38 @@ sealed partial class PlayerInterface
         if (lead is not null) b.Properties["SpeedPanel"] = new Dictionary<string, string> { ["ImageName"] = RunSpeedIcons[Math.Min((int)lead.RunSpeed, RunSpeedIcons.Length - 1)] };
     }
 
-    /// <summary>
-    /// The jobs list (<c>JobsPanel</c>, docs/game/ui-screens.md section 4): the lead's jobs, one row each with an X that removes it from that character; with none, the
-    /// layout's hint. The job list (<see cref="Meitou.Simulation.Production.PermaJobs"/>, the medic and rescue jobs included)
-    /// as "&lt;row text&gt;: &lt;building&gt;" (the original's row text is <b>Unknown</b>); rows are dragged to reorder.
-    /// </summary>
+    /// <summary>The jobs list's row layout (<c>Kenshi_OrdersPanelOrder.layout</c>: a <c>Kenshi_ConnectBarSkin</c> bar, <c>OrderText</c> and <c>RemoveButton</c>).</summary>
+    MyGuiLayout? ordersRowLayout;
+
     /// <summary>The first Obedient Slave job of the jobs list (the tutorial highlight PanelOrdersJobObedience), -1: none.</summary>
     int obedienceJob = -1;
 
+    /// <summary>The jobs rows drawn at half alpha: the jobs switch is off and the job does not run without it (<see cref="BindJobs"/>).</summary>
+    readonly HashSet<string> dimmedJobs = [];
+
+    /// <summary>
+    /// The jobs list (<c>JobsPanel</c>, docs/game/ui-screens.md section 4): the lead's jobs, one <c>Kenshi_OrdersPanelOrder</c> row each, int(24 x height / 1080) tall
+    /// (<see cref="AddJobRowParts"/>), numbered from 1, with an X that removes it from that character; with none, the layout's hint. Rows are dragged to reorder.
+    /// </summary>
     void BindJobs(UiBindings b, Meitou.Simulation.CharacterSnapshot? lead)
     {
         obedienceJob = -1;
+        dimmedJobs.Clear();
         var jobs = new List<UiListItem>();
+        bool switchedOn = lead is not null && (lead.Orders & CharacterOrders.Jobs) != 0;
         for (int i = 0; i < (lead?.Jobs.Count ?? 0); i++)
         {
             var job = lead!.Jobs[i];
             if (job.Type == Meitou.Data.Gameplay.Ai.TaskType._SLAVE_OBEDIENCE && obedienceJob < 0) obedienceJob = i;
-            jobs.Add(new("job:" + i.ToString(CultureInfo.InvariantCulture), JobRowText(job)));
+            string id = "job:" + i.ToString(CultureInfo.InvariantCulture);
+            if (!switchedOn && !Meitou.Simulation.Production.PermaJobs.IgnoresSwitch(job.Type)) dimmedJobs.Add(id);
+            jobs.Add(new(id, (i + 1).ToString(CultureInfo.InvariantCulture) + ": " + JobRowText(job)));
         }
         b.Lists["JobsPanel"] = jobs;
+        b.Properties["JobsPanel"] = new Dictionary<string, string>
+        {
+            ["LineSkin"] = "Kenshi_ConnectBarSkin", ["LineHeight"] = ((int)(24 * Height / 1080f)).ToString(CultureInfo.InvariantCulture),
+        };
         if (jobs.Count > 0) b.Hidden.Add("JobsPanelInfo");
         // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an order").
         else b.Text["JobsPanelInfo"] = "[" + Loc.Tr("No jobs assigned") + "]\n[" + Loc.Tr("To add jobs, hold shift key when giving an order") + "]";
@@ -391,16 +404,58 @@ sealed partial class PlayerInterface
         return text;
     }
 
-    /// <summary>The X at the right end of each jobs row (the original's remove button, its tutorial: "remove a job at any time by pressing the X button").</summary>
-    static void AddJobRemoveButtons(List<UiControl> controls)
+    /// <summary>
+    /// Each jobs row's text and X over its bar (the original's cell layout <c>Kenshi_OrdersPanelOrder</c>; the X's tutorial: "remove a job at any time by pressing the X button").
+    /// The row keeps the list's picking (selection, drag); only the X takes a click of its own.
+    /// </summary>
+    void AddJobRowParts(List<UiControl> controls)
     {
-        foreach (var row in controls.Where(c => c.Properties.GetValueOrDefault("ListOwner") == "JobsPanel").ToArray())
+        if (ordersRowLayout is null) return;
+        for (int i = controls.Count - 1; i >= 0; i--)
         {
-            float size = row.Bounds.Height - 4;
-            controls.Add(new($"{row.Name}-remove", "Button", new(row.Bounds.X + row.Bounds.Width - size - 2, row.Bounds.Y + 2, size, size), "", "meitou:job-remove",
-                "Kenshi_CloseButtonSkin", true, new Dictionary<string, string>(), Vector4.Zero, Argument: row.Argument, Clip: row.Clip));
+            var row = controls[i];
+            if (row.Properties.GetValueOrDefault("ListOwner") != "JobsPanel") continue;
+
+            bool dimmed = dimmedJobs.Contains(row.Argument);
+            controls[i] = row with { Caption = "", Properties = Dimmed(row.Properties, dimmed) };
+            controls.InsertRange(i + 1, JobRowParts(row, dimmed));
         }
     }
+
+    /// <summary>
+    /// The row layout's text and X at <paramref name="row"/>: the layout is 300 x 20 px and sized to the row, so the text keeps its 10 px left and 35 px right margins and
+    /// the X (Right VStretch) stays 30 px wide at the right end, a pixel short of the row's height. The text is the Main colour (the original's <c>#afa68b</c> prefix).
+    /// </summary>
+    List<UiControl> JobRowParts(UiControl row, bool dimmed)
+    {
+        var box = row.Bounds;
+        var b = new UiBindings();
+        var root = ordersRowLayout!.Roots.FirstOrDefault();
+        if (root is not null) b.Positions[root.Name] = new(0, 0, box.Width, box.Height);
+        b.Positions["OrderText"] = new(10, 0, Math.Max(0, box.Width - 45), box.Height);
+        b.Positions["RemoveButton"] = new(box.Width - 30, 0, 30, Math.Max(0, box.Height - 1));
+        b.Text["OrderText"] = row.Caption;
+        b.Properties["OrderText"] = new Dictionary<string, string> { ["TextColour"] = MainColour };
+
+        var parts = new List<UiControl>();
+        foreach (var c in MyGuiPresentation.Arrange(ordersRowLayout, (int)box.Width, (int)box.Height, b, uiResources.Layers))
+        {
+            if (c.Name == root?.Name) continue;   // the row draws the bar
+
+            var clip = c.Clip is { } inner ? (inner with { X = inner.X + box.X, Y = inner.Y + box.Y }).Intersect(row.Clip ?? box) : row.Clip;
+            bool remove = c.Name == "RemoveButton";
+            parts.Add(c with
+            {
+                Name = $"{row.Name}-{c.Name}", Bounds = c.Bounds with { X = c.Bounds.X + box.X, Y = c.Bounds.Y + box.Y }, Clip = clip,
+                Action = remove ? "meitou:job-remove" : c.Action, Argument = row.Argument, Pickable = remove, Properties = Dimmed(c.Properties, dimmed),
+            });
+        }
+        return parts;
+    }
+
+    /// <summary>A jobs row's properties at half alpha when <paramref name="dimmed"/> (the original's cell alpha 0.5).</summary>
+    static IReadOnlyDictionary<string, string> Dimmed(IReadOnlyDictionary<string, string> properties, bool dimmed) =>
+        dimmed ? new Dictionary<string, string>(properties, StringComparer.Ordinal) { ["Alpha"] = "0.5" } : properties;
 
     /// <summary>The job row (its list index) pressed and being dragged to a new place in the list; null: none.</summary>
     int? jobDrag;

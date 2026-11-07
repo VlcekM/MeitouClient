@@ -99,11 +99,13 @@ public static partial class MyGuiPresentation
                 int buttons = captions?.Count ?? pages.Length;
                 int selected = Math.Clamp(bindings.SelectedTabs.GetValueOrDefault(w.Name), 0, Math.Max(0, buttons - 1));
                 foreach (var child in w.Children.Where(c => c.Type != "TabItem")) Visit(child, bounds, childClip, enabled, alpha);
-                // The buttons go in the skin's HeaderPlace (MyGUI's TabControl part), ButtonWidth wide unless ButtonAutoWidth.
+                // The buttons go in the skin's HeaderPlace (MyGUI's TabControl part), ButtonWidth (at the template scale) wide unless ButtonAutoWidth.
                 var header = result.LastOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == w.Name && c.Properties.GetValueOrDefault("TemplatePart") == "HeaderPlace")?.Bounds
-                    ?? new UiRect(bounds.X, bounds.Y, bounds.Width, 30);
-                float tabWidth = buttons == 0 ? 0 : props.GetValueOrDefault("ButtonAutoWidth") == "false" && float.TryParse(props.GetValueOrDefault("ButtonWidth"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float fixedWidth)
-                    ? Math.Min(fixedWidth, header.Width / buttons) : header.Width / buttons;
+                    ?? new UiRect(bounds.X, bounds.Y, bounds.Width, 30 * bindings.TemplateScale);
+                float tabWidth = buttons == 0 ? 0 : header.Width / buttons;
+                if (buttons > 0 && props.GetValueOrDefault("ButtonAutoWidth") == "false"
+                    && float.TryParse(props.GetValueOrDefault("ButtonWidth"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float fixedWidth))
+                    tabWidth = Math.Min(fixedWidth * bindings.TemplateScale, tabWidth);
                 // The selected tab is Checked, not a fixed State, so the painter shows the skin's hover and pushed states (amber caption under the mouse).
                 for (int i = 0; i < buttons; i++)
                     result.Add(new(w.Name + "@tab" + i, "Button", new(header.X + i * tabWidth, header.Y, tabWidth, header.Height),

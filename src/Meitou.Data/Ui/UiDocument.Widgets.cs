@@ -136,7 +136,9 @@ public static partial class MyGuiPresentation
     {
         int ci = IndexOfPart(result, w, "Client");
         var area = ci >= 0 ? result[ci].Bounds : bounds;
-        float line = w.UserStrings.TryGetValue("HeightLine", out var heightLine) && float.TryParse(heightLine, NumberStyles.Float, Inv, out float height) && height >= 1 ? height * b.TemplateScale : DefaultLine;
+        // A client-set LineHeight (pixels) wins over the skin's HeightLine (an ItemBox's cells are the client's size, the jobs list's int(24 x height / 1080)).
+        float line = props.TryGetValue("LineHeight", out var lineHeight) && float.TryParse(lineHeight, NumberStyles.Float, Inv, out float pixels) && pixels >= 1 ? pixels
+            : w.UserStrings.TryGetValue("HeightLine", out var heightLine) && float.TryParse(heightLine, NumberStyles.Float, Inv, out float height) && height >= 1 ? height * b.TemplateScale : DefaultLine;
         float content = items.Count * line, view = area.Height, max = content - view >= 1 ? content - view : 0;
         var barWidget = PartOf(w, "VScroll");
         int bi = barWidget is null ? -1 : result.FindLastIndex(c => c.Name == barWidget.Name);
