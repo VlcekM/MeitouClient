@@ -14,9 +14,6 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    /// <summary>A foot counts as planted while it moves under this share of the body's speed (it stands still in the world) and as lifted over the second (it swings past).</summary>
-    const float PlantedShare = 0.4f, LiftedShare = 1.2f;
-
     /// <summary>How far above the terrain a mark is still left: an ankle's height; higher is a floor or a roof.</summary>
     const float MarkAboveGround = 2.5f;
 
@@ -37,13 +34,14 @@ sealed partial class GameHost
     int trailFrame;
     readonly Dictionary<long, Walker> walkers = [];
 
-    /// <summary>A character's last frame: where its body and feet were, whether each foot is in the air, and the way walked since the last mark.</summary>
+    /// <summary>A character's last frame: where its body was, its capsules' contacts (<see cref="BodyContact"/>) and the way walked since the last fallback mark.</summary>
     struct Walker
     {
-        public Vector3 Body, Left, Right;
-        public bool LeftLifted, RightLifted, LeftNext;
+        public Vector3 Body;
+        public bool LeftNext;
         public float Walked;
         public int Frame;
+        public Contact[]? Contacts;
     }
 
     /// <summary>Once a frame, before the world is drawn: the marks the characters near what the camera looks at press this frame (the renderer's window is centred there).</summary>
@@ -78,7 +76,7 @@ sealed partial class GameHost
                 if (w.Frame != trailFrame) walkers.Remove(key);
     }
 
-    /// <summary>One character's frame: nothing while it stands (or the game is paused), else a furrow, its posed feet, or its stride.</summary>
+    /// <summary>One character's frame: its posed body against the ground, or, with no pose, a furrow or its stride.</summary>
     void WalkTrail(TerrainTrailRenderer trails, GroundSurfaces ground, CharacterSnapshot c, Vector3 body)
     {
         long key = DrawKey(c.Id);
@@ -87,33 +85,13 @@ sealed partial class GameHost
         var moved = new Vector2(body.X - w.Body.X, body.Z - w.Body.Z);
         (w.Body, w.Frame) = (body, trailFrame);
         float stepped = moved.Length();
+        bool animal = c.Appearance!.Animal is not null;
+        bool lying = c.Down || c.StayingLow || c.Ragdoll is not null || c.Body is { Crawling: true };
+        if (BodyContact(trails, ground, key, ref w, body, animal, !lying, continues ? stepped : 0, continues)) return;
         if (!continues || stepped < 1e-4f) return;
         var along = moved / stepped;
-        bool animal = c.Appearance!.Animal is not null;
         if (c.Down || c.StayingLow || c.Body is { Crawling: true }) Drag(trails, ground, ref w, body, along, stepped);
-        else if (!animal && gpu.Characters is { } characters && characters.BonePosition(key, "Bip01 L Foot") is { } left && characters.BonePosition(key, "Bip01 R Foot") is { } right)
-        {
-            Foot(trails, ground, key, ref w.Left, ref w.LeftLifted, left, "Bip01 L Toe0", along, stepped);
-            Foot(trails, ground, key, ref w.Right, ref w.RightLifted, right, "Bip01 R Toe0", along, stepped);
-        }
         else Stride(trails, ground, ref w, body, along, stepped, animal ? c.Scale : 1, animal);
-    }
-
-    /// <summary>A posed foot: a mark at the frame it comes down, turned along its toes; a foot stands still in the world while the body walks over it, whatever the rig.</summary>
-    void Foot(TerrainTrailRenderer trails, GroundSurfaces ground, long key, ref Vector3 last, ref bool lifted, Vector3 ankle, string toeBone, Vector2 along, float stepped)
-    {
-        float moved = new Vector2(ankle.X - last.X, ankle.Z - last.Z).Length();
-        last = ankle;
-        if (moved > stepped * LiftedShare) lifted = true;
-        if (!lifted || moved >= stepped * PlantedShare) return;
-        lifted = false;
-        if (gpu.Characters!.BonePosition(key, toeBone) is { } toe)
-        {
-            var foot = new Vector2(toe.X - ankle.X, toe.Z - ankle.Z);
-            if (foot.LengthSquared() > 0.04f) along = Vector2.Normalize(foot);
-        }
-        var sole = new Vector2(ankle.X, ankle.Z) + along * (SoleLength * 0.3f);
-        Press(trails, ground, ankle, new TrailStamp(sole, along, SoleLength, SoleLength, 1, TrailKind.Foot));
     }
 
     /// <summary>A character whose feet are not known: a print left and right of its path, a stride apart.</summary>
