@@ -54,6 +54,14 @@ sealed partial class PlayerInterface
     /// </summary>
     string PickLockCaption(Vector3 at, int level, bool building)
     {
+        if (LockChance(at, level) is not { } chance) return "Pick Lock";
+        if (building && chance < (SquadLimits?.Invoke()?.MinimumLockpickChance ?? 0.05f)) chance = 0;
+        return WithChance("Pick Lock", chance * 100);
+    }
+
+    /// <summary>The pick chance (0..1, no minimum) of a lock of <paramref name="level"/> at <paramref name="at"/> for the selected character nearest it; null with nobody selected.</summary>
+    float? LockChance(Vector3 at, int level)
+    {
         CharacterSnapshot? lead = null;
         float nearest = float.MaxValue;
         foreach (var c in Selected())
@@ -61,10 +69,7 @@ sealed partial class PlayerInterface
             float d = Vector3.DistanceSquared(c.Position, at);
             if (d < nearest) (lead, nearest) = (c, d);
         }
-        if (lead is null) return "Pick Lock";
-        float chance = Meitou.Simulation.Locks.Lockpicking.Chance(level, lead.LockpickSkill);
-        if (building && chance < (SquadLimits?.Invoke()?.MinimumLockpickChance ?? 0.05f)) chance = 0;
-        return WithChance("Pick Lock", chance * 100);
+        return lead is null ? null : Meitou.Simulation.Locks.Lockpicking.Chance(level, lead.LockpickSkill);
     }
 
     static (string Caption, float? Chance) SplitChance(string caption) =>

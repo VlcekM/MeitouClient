@@ -276,8 +276,8 @@ DatapanelGUI on the `Popup` layer with one row, empty key and value `{1,num}%` =
   globals read as the mouse x / y are written by `FUN_140829e00` among others.
 
 Meitou (`PlayerInterface.AddPointerChance`): the `knockout` label, from the pointed character's published `StealthKoChance` (the selection's first sneaking
-member, not the nearest), as a floating tooltip 32 px at 1080 above the mouse, recomputed every frame (engine choices); drawn with the Hardware mouse too.
-The `lockpick` label is not built.
+member, not the nearest); the `lockpick` label, from `Lockpicking.Chance` of the selected character nearest the lock (a caged character's cage, else the
+container, else the door under the mouse). A floating tooltip 32 px at 1080 above the mouse, recomputed every frame (engine choices); drawn with the Hardware mouse too.
 
 ### Character picking
 
