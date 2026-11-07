@@ -1,7 +1,7 @@
 {
   "doublevoid": {
-    "commits": 44,
-    "areas": "Navmesh, Navmesh tool, Interior joins, Ragdoll collision, Tests, Docs"
+    "commits": 46,
+    "areas": "Navmesh, Tests, Docs, Ragdoll collision"
   },
   "asc3ns10n": {
     "commits": 17,
