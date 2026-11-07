@@ -71,9 +71,14 @@ public sealed class MaterialResolver
         if (db is null) return;
         foreach (var record in db.Records.Values)
         {
+            // An item with mesh variants (a nest's bones: bone1..bone14.mesh) uses every variant its named mesh stands for (#342).
+            int variants = record.GetInt("number of meshes");
             foreach (var (key, value) in record.Filenames)
                 if (value.EndsWith(".mesh", StringComparison.OrdinalIgnoreCase))
+                {
                     Users(Path.GetFileName(value.Replace('\\', '/'))).Add((record, key));
+                    for (int n = 2; n <= variants; n++) Users(Meitou.Data.World.WorldObjectLayout.MeshVariant(value, n)).Add((record, key));
+                }
             foreach (var list in record.ReferenceLists)
                 foreach (var r in record.GetReferences(list))
                 {

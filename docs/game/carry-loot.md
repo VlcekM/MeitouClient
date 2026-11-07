@@ -19,8 +19,10 @@ are different: the menu offers Pick Up on a standing own character ([ui-input](u
 `boneWorldRot · q(w .70710677, x .70710677) · q(w .99254614, z .121869296)` (90° about x, ~14° about z); the `carry me` clip plays inside
 it. Bone = `AnimationClass+0x1b0` (`attachRootToMastersBone`, KenshiLib 1ce4a16), set by the attach `FUN_1405ced90`. `O` lerps by
 `t = 2·characterHeight_0to1` from (-1.4,0,1) to (-1.9,-1,2.6) (t<1), then to (-3,-0.4,5); `characterHeight_0to1 = (Height − 80)·0.025`,
-0.5 by default (Appearance+0x18c, `FUN_1405334d0`). Gated by `Character+0x1a9`, `AnimationClass+0x1c0` and vfunc 0x248 = 0 (meaning
-**Unknown**); otherwise the body is just put at the carrier's position.
+0.5 by default (Appearance+0x18c, `FUN_1405334d0`). Gated by `Character+0x1a9`, `AnimationClass+0x1c0` (meaning **Unknown**) and vfunc 0x248
+(`asAnimal`) = 0 (**Verified**: `CharacterAnimal` `FUN_1405e1f50` returns `this`, `Character`/`CharacterHuman` `FUN_1405e5950` 0); otherwise the body is just put at the
+carrier's position. So a carried **animal** gets neither the offset, the twist nor `carry me` here: its ragdoll's pinned carry bone holds it on the shoulder
+([ragdolls](ragdolls.md#bodies-kinematic-or-simulated), issue #307: the human rule stood a carried dog upright above its carrier's head).
 
 Lift sequence/clip/approach, reciprocal partner handles, weapon/ragdoll/state changes and unlink
 must stay ordered. **Verified** carry load is CONSTANTS30, not target's weight/race/inventory;
@@ -41,7 +43,7 @@ is that test for every lift (the rescue and leader rescue passes, kidnap, town d
 The lift rows (68, 213, 225, 240, 246, 170) carry condition `!26` on the carrier itself (**Verified**, `FUN_140599e90`: [state 26](ai-tasks.md)): a carrier staying low, playing dead or in a bed cannot start a lift (`CanCarry` tests `CharacterFacts.CrouchingOrLying`); a crawler (crippled) can.
 ### A carried body's position
 
-**Verified** (`FUN_1405cf130`, the per-frame position sync, slot 28 `0xe0`, the same function for `Character`, `CharacterHuman` and `CharacterAnimal`; `FUN_1407d1440`, `FUN_1407d16f0`): for a carried character (`+0x3d4`) the position `+0x48` is not the carrier's but the ragdoll root body's position when the ragdoll controller is valid and either its whole-ragdoll flag (`+0x59`) is set, or the character is down (vfunc `0x248` non-zero) and its carry flag (`+0x5a`) is set (a carried unconscious body); otherwise the movement position. `FUN_1405d00b0` then pushes `+0x48` into the movement. Meitou (engine choice): a carried body stays at its carrier's place with the `carry me` pose; the body's own simulated root is not followed.
+**Verified** (`FUN_1405cf130`, the per-frame position sync, slot 28 `0xe0`, the same function for `Character`, `CharacterHuman` and `CharacterAnimal`; `FUN_1407d1440`, `FUN_1407d16f0`): for a carried character (`+0x3d4`) the position `+0x48` is not the carrier's but the ragdoll root body's position when the ragdoll controller is valid and either its whole-ragdoll flag (`+0x59`) is set, or the character is an animal (vfunc `0x248` `asAnimal` non-zero) and its carry flag (`+0x5a`) is set (a carried animal); otherwise the movement position. `FUN_1405d00b0` then pushes `+0x48` into the movement. Meitou (engine choice): a carried body stays at its carrier's place with the `carry me` pose; the body's own simulated root is not followed.
 
 ### A carried body's animation
 
@@ -191,7 +193,7 @@ the target to share the owner's faction (vfunc `0x58`), tested only when the glo
 faction has `+0x250` set (the player's; **Verified** `FUN_1408cd2d0`). An NPC rescuer is never faction-tested: it takes any sensed ALLY body, allied factions included. Rescue (`allowBed` 0)
 therefore skips bed and cage occupants and animals; there is no range limit (the bound is `DAT_14169bc38`, the largest float), the distance is to the place the entry was last sensed at (Meitou: `CarrySystem.FindRescue` reads the ALLY entries of the sense block, and every character in sight as well, since the block is capped); leader finder 142 (`FUN_140598540`) has neither test. Kidnap's `allowBed` 1 also takes sleepers out of beds. 132 is a
 planner goal (A: 153 got a victim, B: not carrying, effect 48 carrying); 254 has no finder: its B list 153, 154 chains 132, then 112/281 find a cage (`FUN_1408d0770`) and 108 puts the
-carried one in (the candidate cages are the current town's, else the faction's nearest, plus the home's: [economy 11.7](economy.md#117-arrest)). 281 applies to **any** carried body, whoever lifted it: its desire `FUN_1405a1140` reads only the carry flag and the carried handle (no dead test) and 281 has no list B (**Verified**, `FUN_1405a1140`, `FUN_140319a60`). Meitou: `TownDutySystem.LookDeadCarriers` cages a dead body carried by a free member whose package lists 281; a kidnapper or arrester whose victim dies keeps it on the shoulder for that. What sets `Status+0xe9` ("innocent victim") was not found: it is saved with the slave state (`FUN_140626580` / `FUN_140626830`), cleared by the per-update
+carried one in (the candidate cages are the current town's, else the faction's nearest, plus the home's: [economy 11.7](economy.md#117-arrest)). 281 applies to **any** carried body, whoever lifted it: its desire `FUN_1405a1140` reads only the carry flag and the carried handle (no dead test) and 281 has no list B (**Verified**, `FUN_1405a1140`, `FUN_140319a60`). Meitou: `TownDutySystem.LookCarriers` cages a body carried by a free member whose package lists 281 (or 112 for a living one); a kidnapper or arrester whose victim dies keeps it on the shoulder for that. What sets `Status+0xe9` ("innocent victim") was not found: it is saved with the slave state (`FUN_140626580` / `FUN_140626830`), cleared by the per-update
 `FUN_140852a30` (not carried and in its town's bed, or carried by a friend) and read at the lift's release (`FUN_1405ce1e0`) and by `FUN_1406cc470` / `FUN_1407211b0`;
 it is not part of target eligibility.
 

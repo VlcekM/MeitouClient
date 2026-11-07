@@ -108,7 +108,7 @@ static partial class WorldFrame
         {
             giPost.GiResolve = giResolve ? gpu.GiResolve : 0;
             giPost.SsrSurfaces = reflections;
-            giPost.GiNear = giResolve && post.Options.GiNearFielding ? gpu.GiNear : null;
+            giPost.GiCache = giResolve && post.Options.GiCaching ? gpu.GiCache : null;
         }
         if (gpu.Probes is { } giProbes)
         {
@@ -217,7 +217,7 @@ static partial class WorldFrame
         if (gpu.Characters is { } posed && gpu.Debris is { } boltMeshes)
         {
             posed.CollectBolts(gpu.BoltPieces);
-            foreach (var bolt in gpu.BoltPieces) boltMeshes.Extent(bolt.Mesh);   // loads a mesh the first time
+            foreach (var bolt in gpu.BoltPieces) boltMeshes.Extent(bolt.Mesh, null, bolt.Limb);   // loads a mesh the first time (a held limb's with its look)
         }
         StageClock.Part(StageClock.PartBolts);
 
@@ -711,9 +711,11 @@ static partial class WorldFrame
         {
             objects.FogCull = gpu.FogVolumes;
             objects.InteriorCut = gpu.InteriorMask;
+            objects.Selected = gpu.HoverOutline is null ? null : gpu.OutlinedBuilding?.Key;   // its draws kept for the outline's mask
             if (f.Render.Objects) objects.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, f.RelativeRotation * s.Jittered);
             objects.FogCull = null;
             objects.InteriorCut = null;
+            objects.Selected = null;
         }
         StageClock.Lap(7);
     }
@@ -751,7 +753,11 @@ static partial class WorldFrame
             debris.Draw(CollectionsMarshal.AsSpan(gpu.DebrisPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light,
                 look => gpu.Characters is { } chars && chars.SkinOn(look.Race, look.SkinDefault) ? chars.SkinTable : 0, relative);
             if (gpu.BirdPieces.Count > 0) debris.Draw(CollectionsMarshal.AsSpan(gpu.BirdPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light, relative: relative);
-            if (gpu.BoltPieces.Count > 0) debris.Draw(CollectionsMarshal.AsSpan(gpu.BoltPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light, relative: relative);
+            if (gpu.BoltPieces.Count > 0)
+            {
+                debris.Draw(CollectionsMarshal.AsSpan(gpu.BoltPieces), s.ViewProjection, f.Eye, s.Frustum, f.Light,
+                    look => gpu.Characters is { } chars && chars.SkinOn(look.Race, look.SkinDefault) ? chars.SkinTable : 0, relative);
+            }
         }
         StageClock.Lap(6);
     }
@@ -956,18 +962,26 @@ static partial class WorldFrame
 
         // The movement marker and stealth arrows, in their materials' colours, like the game's debug_marker.
         if (gpu.Markers is { Active: true } marker && f.ParticleNear > 0 && post.Target is { } picture)
-            marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, eye, f.Sun);
+            marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, camera, f.Sun);
         else gpu.Markers?.Idle();
 
         // The navmesh debug view (Meitou only).
         if (gpu.NavmeshOverlay is { Visible: true } navOverlay && post.Target is { } navPicture)
             navOverlay.Record(navPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, eye);
 
-        // The hover outline (Meitou only): the mask drawn after the portraits.
-        if (gpu.HoverOutline is { } outline && gpu.Characters?.HoverMasks is { Count: > 0 } hover && post.Target is { } hoverPicture)
+        // The pick & collision inspector's hulls over the finished picture (Meitou only).
+        if (gpu.InspectorOverlay is { Visible: true } debugOverlay && post.Target is { } debugPicture)
+            debugOverlay.Record(debugPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, eye);
+
+        // The hover outline (Meitou only): the characters' masks drawn after the portraits, the selected building's from what the scene drew of it.
+        if (gpu.HoverOutline is { } outline && post.Target is { } hoverPicture)
         {
-            var (near, far, projection) = SceneProjection();
-            outline.Record(hoverPicture, width, height, hover, post.SceneDepth, post.RenderWidth, post.RenderHeight, near, far, view * projection);
+            gpu.Objects?.DrawSelectionMask(gpu.OutlinedBuilding, width, height, view, camera.FieldOfView, eye, f.Render);
+            if (OutlineMasks(gpu) is { Count: > 0 } masks)
+            {
+                var (near, far, projection) = SceneProjection();
+                outline.Record(hoverPicture, width, height, masks, post.SceneDepth, post.RenderWidth, post.RenderHeight, near, far, view * projection);
+            }
         }
 
         if (gpu.DebugShadows is > 0 and < 4 && gpu.Shadow is not null)
@@ -979,5 +993,13 @@ static partial class WorldFrame
             Matrix4x4.Invert(f.Rotation * SceneProjection().Projection, out var inverse);
             giDebug.Run(gpu.GiDebug, traced, post.SceneDepth, giTarget, post.RenderWidth, post.RenderHeight, inverse, eye, f.Light);
         }
+    }
+
+    /// <summary>The hover outline's masks: the characters', then the selected building's (a list made only when both have one).</summary>
+    static IReadOnlyList<HoverMask> OutlineMasks(Gpu gpu)
+    {
+        IReadOnlyList<HoverMask> characters = gpu.Characters?.HoverMasks ?? [], building = gpu.Objects?.SelectionMasks ?? [];
+        if (building.Count == 0) return characters;
+        return characters.Count == 0 ? building : [.. characters, .. building];
     }
 }

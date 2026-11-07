@@ -34,7 +34,7 @@ public sealed partial class DialogueSystem
         var offers = Arrests.BailOffers(world, b.Npc);
         var c = new Conversation { Npc = b.Npc, Player = b.Player, Event = DialogueEvents.PlayerTalkToMe, Speaker = b.Npc, Text = Loc.Tr("Pay Bounty") };
         foreach (var (_, name, price) in offers) c.Choices.Add((null, $"{name} (c.{price.ToString("N0", CultureInfo.InvariantCulture)})"));
-        c.Choices.Add((null, "[Leave]"));
+        c.Choices.Add((null, LeaveChoice));
         if (offers.Count == 0) world.Post(Loc.Tr("Nobody here to bail out."));
         bailList = [.. offers.Select(o => o.Prisoner)];
         open = c;

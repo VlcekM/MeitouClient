@@ -153,10 +153,11 @@ the goal conditions (the call is virtual). Meitou applies the height limit above
 
 Meitou (`SiteReach`): builders 40 (walls 60), operators and storage fetches the `use range`, doubled once stopped, measured
 to the building's footprint hull (engine choice standing in for touching; a building without collision uses its parts' bounds
-hull) or, unknown, its position. A rock's operator has arrived inside its mesh's bounds box as the instance places it, scaled 1.2
-(a circle of 1.2 x its radius without the mesh), or within the `use range` (doubled once stopped) of the box's centre, which
+hull) or, unknown, its position. A rock's operator has arrived inside its mesh's footprint (the convex hull of its vertices
+seen from above) as the instance places it, scaled 1.2 about the box's middle (a circle of 1.2 x its radius without the mesh; the bounds box without the movement flag let
+miners work a scattered or long rock from 20 m off, #332), or within the `use range` (doubled once stopped) of the box's centre, which
 stands in for the position marker (engine choice; a rock's origin can lie off its pile); it faces that centre. Taking its ore
-measures 40 to the box's edge. Height: Meitou has no floor id, so `SiteReach.AtHeight` requires |dy| below the limit above (130 door, 15 inside a building, else 45; slot 0x428 not read) for every site goal.
+measures 40 to the footprint's edge. Height: Meitou has no floor id, so `SiteReach.AtHeight` requires |dy| below the limit above (130 door, 15 inside a building, else 45; slot 0x428 not read) for every site goal.
 
 Repair (**Verified**, Building slot 0x328 `FUN_1400f6b70`, `Task_Build` `FUN_14034a440`): a building needs repair when
 `progress < target`; building health is construction progress. Orders 2 and 95 are both `Task_Build`, which pushes the
@@ -232,7 +233,9 @@ shows the first failing message in this order (**Verified** unless marked):
   **Unknown/not modelled:** the original tests only that nearest town (Meitou tests every one), and swaps it for the
   town containing the ghost (`FUN_140928890`) when inside 0.9 x its radius (0.6 x when the nearest is ruins/POI).
 - **Outposts** (**Verified**, `FUN_1404d6d90` per queued ghost on Confirm, then `FUN_1404db180`): a ghost in or on a
-  building takes that building's town; else the nearest town of the player faction within 5000 (X/Z); else the town of
+  building takes that building's town when it is within 5000 (X/Z) of the ghost, so furniture in a bought town house
+  joins that town and never makes an outpost (Meitou: none, `BuildSite.Town` names player towns only; a level building
+  of no town, such as a wilderness ruin, goes on to the rules below); else the nearest town of the player faction within 5000 (X/Z); else the town of
   the nearest player building within 2500 (the decompile adds an X/Z > 10000 test there that looks unreachable,
   **Observed**); else a `creates player town` building that is not a wall makes an outpost at its position
   (the ghost node's position plus `Aabb::getSize` of the ghost's bounds, the full X, Y and Z extent, **Verified** `FUN_1404d6d90`; Meitou: `PlannedBuilding.BoundsSize`, the merge of the ghost parts' mesh bounds in their own space, from `PlayerInterface.GhostBoundsSize`), and every player building whose town is a player town or none
@@ -372,7 +375,7 @@ short; a piece runs from its position along its own +Z for `link length` x `scal
 - **Controls**: click the start, move, click the end (no hold-drag). The first click starts a line for a normal wall, or
   for a single only when snapped (unsnapped singles and selected subsections place as one ordinary ghost). The second
   click queues every piece and, unless the end snapped or the wall is a single, a new line starts at the far end (clicks
-  chain a polyline). Right click drops the line. The first click posts "Blue arrows point outwards, towards enemy.";
+  chain a polyline). Right click drops the line; with no line, Meitou's right click on empty ground drops the chosen item (ghost and list highlight, queue stays; original **Unknown**, [level-editor](level-editor.md)). The first click posts "Blue arrows point outwards, towards enemy.";
   arrows (`arrow.mesh`, "bluebuilding", at rot x (0, 30, len/2), turned 180 deg, scale 2) mark each piece; the mesh's tip is at -X (see
   [perception](perception.md#spotting-a-sneaker)), which way it ends up facing is **Unknown**. A global flag `DAT_1421337b8` can block the first click (**Unknown**).
 - **Pieces** (`FUN_14042b660`): the wall and its `wall subsections`; connector and lower wedge kept apart, the rest with a
@@ -770,7 +773,9 @@ to `FUN_140836b70`: contribution k of the frame is x 0.6^k (counter `+0x174`, cl
   research load zero it (**Verified**, `FUN_140834390`, `FUN_140836cb0`, `FUN_1408360f0`). Available (`FUN_1408333b0`): not `blueprint only`, not finished or queued,
   `level` <= tech level, requirements met leniently (`FUN_140832fa0` with its flag set, **Verified**: a RESEARCH finished, another record
   unlocked, or else that record's own `requirements` all met strictly, one level, an empty list passing; blueprint learning `FUN_1402b65d0`
-  checks strictly), grouped by `category`.
+  checks strictly), grouped by `category`. The research window's queue click (`FUN_1404976c0`) checks leniently too (**Verified**, disassembly: flags 1, 1;
+  "Cannot research '{1}'. Requirements not met." otherwise), so a research one unfinished requirement away queues and completes: base Tech Level 2 needs the research
+  Small House, which needs nothing (#363). The fourth flag's extra test (`+0xd8` set, `FUN_140832e50`, only when global `+0x2a0` is set) is **Unknown**; Meitou skips it.
 - **Queue** (`FUN_1408348a0`): needs `level` <= bench level (`FUN_140830a30` names the missing level) and the cost
   paid (`FUN_1408343c0`): `cost` items (of the repetition, below) summed over the inventories of the
   player's research benches (**Verified**: `FUN_14082e750` runs a `BuildingFinderNearestAllies_Function` at the position of the camera focus node

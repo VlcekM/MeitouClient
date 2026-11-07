@@ -209,25 +209,53 @@ public static class TownBuildings
     public static Dictionary<string, List<TownBuilding>> Build(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight,
         bool contents = true)
     {
-        var towns = new List<(TownPlacement Placement, Gameplay.TownData Town)>();
-        foreach (var t in levels.Towns())
-            if (db.Find(t.TownId) is { Type: FcsRecordType.TOWN } record) towns.Add((t, Gameplay.TownData.From(record)));
-        var beds = new Dictionary<string, bool>(StringComparer.Ordinal);
-        var functions = new Dictionary<string, GameRecord?>(StringComparer.Ordinal);
-        // The instance of each building state's own handle, so a turret's mounted handle names the building it stands on.
-        var instances = new Dictionary<(int C, int I), string>();
-        foreach (var b in levels.Buildings())
-            if (b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zone) && zone.Find(b.StateId) is { } state && state.GetInt("handleTYPE") == (int)FcsRecordType.BUILDING && state.Ints.ContainsKey("handleI"))
-                instances[(state.GetInt("handleC"), state.GetInt("handleI"))] = b.Key;
-        var names = new Dictionary<(string, bool), IReadOnlySet<string>>();
+        var builder = new Builder(db, levels, layouts, terrainHeight, contents);
         var result = new Dictionary<string, List<TownBuilding>>(StringComparer.Ordinal);
         foreach (var b in levels.Buildings())
         {
-            if (BuildingPlacements.Resolve(b, db, levels, terrainHeight) is not { } resolved) continue;
+            if (builder.Build(b) is not var (town, building)) continue;
+            if (!result.TryGetValue(town, out var list)) result[town] = list = [];
+            list.Add(building);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Builds the town buildings one at a time with the data the boot pass shares between them (<see cref="TownBuildings.Build"/> runs it over every level building; the level editor over
+    /// a single one placed in the session, so the two make a <see cref="TownBuilding"/> the same way). Its tables are filled while it works: one builder is used by one thread.
+    /// </summary>
+    public sealed class Builder
+    {
+        readonly GameDatabase db;
+        readonly WorldLevelData levels;
+        readonly BuildingLayouts? layouts;
+        readonly Func<double, double, float> terrainHeight;
+        readonly bool contents;
+        readonly List<(TownPlacement Placement, Gameplay.TownData Town)> towns = [];
+        readonly Dictionary<string, bool> beds = new(StringComparer.Ordinal);
+        readonly Dictionary<string, GameRecord?> functions = new(StringComparer.Ordinal);
+        readonly Dictionary<(int C, int I), string> instances = [];
+        readonly Dictionary<(string, bool), IReadOnlySet<string>> names = [];
+
+        public Builder(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight, bool contents = true)
+        {
+            (this.db, this.levels, this.layouts, this.terrainHeight, this.contents) = (db, levels, layouts, terrainHeight, contents);
+            foreach (var t in levels.Towns())
+                if (db.Find(t.TownId) is { Type: FcsRecordType.TOWN } record) towns.Add((t, Gameplay.TownData.From(record)));
+            // The instance of each building state's own handle, so a turret's mounted handle names the building it stands on.
+            foreach (var b in levels.Buildings())
+                if (b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zone) && zone.Find(b.StateId) is { } state && state.GetInt("handleTYPE") == (int)FcsRecordType.BUILDING && state.Ints.ContainsKey("handleI"))
+                    instances[(state.GetInt("handleC"), state.GetInt("handleI"))] = b.Key;
+        }
+
+        /// <summary>The town building of a level building and the placement id of its town; null for a node marker, a resource building or one no town takes (<see cref="MemberOf"/>).</summary>
+        public (string Town, TownBuilding Building)? Build(BuildingPlacement b)
+        {
+            if (BuildingPlacements.Resolve(b, db, levels, terrainHeight) is not { } resolved) return null;
             var record = resolved.Record;
-            if (record.GetBool("is node") || record.GetBool("is foliage")) continue;
+            if (record.GetBool("is node") || record.GetBool("is foliage")) return null;
             var state = b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
-            if (MemberOf(towns, resolved.Position, record) is not { } town) continue;
+            if (MemberOf(towns, resolved.Position, record) is not { } town) return null;
             var functionality = FunctionOf(db, record, functions);
             TurretPost? turret = functionality is { } fn && fn.GetInt("function") == ObjectRanges.TurretFunction
                 ? new TurretPost(resolved.Position, YawOf(b.Rotation), fn.GetFloat("use range", 10),
@@ -237,9 +265,8 @@ public static class TownBuildings
                 ? LayContents(db, layouts, resolved, state, beds, functions)
                 : new Contents { Furnished = record.GetReferences("interior").Count > 0 };
             if (contents) AddAlone(db, resolved, functionality, c);
-            if (!result.TryGetValue(town.InstanceId, out var list)) result[town.InstanceId] = list = [];
             string? owner = state?.GetString("owner faction ID") is { Length: > 0 } o ? o : null;
-            list.Add(new TownBuilding(b.InstanceId, record.StringId, record.Name, resolved.Position, YawOf(b.Rotation), c.Shop, c.Bar, c.Spots)
+            return (town.InstanceId, new TownBuilding(b.InstanceId, record.StringId, record.Name, resolved.Position, YawOf(b.Rotation), c.Shop, c.Bar, c.Spots)
             {
                 OwnerFactionId = owner, Fixtures = c.Fixtures, ItemSlots = c.ItemSlots, Zone = b.Zone, Resolved = resolved,
                 CanHouse = record.GetBool("is wall gate") || record.GetReferences("interior").Count > 0 && !record.GetBool("links together"),
@@ -265,7 +292,6 @@ public static class TownBuildings
                 Function = functionality?.GetInt("function") ?? -1,
             });
         }
-        return result;
     }
 
     /// <summary>

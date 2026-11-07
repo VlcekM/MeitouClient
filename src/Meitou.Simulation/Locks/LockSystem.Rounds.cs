@@ -272,7 +272,9 @@ public sealed partial class LockSystem : IStateHashed
                 if (StrangerInside(world, squad, home, extent)) continue;
                 if (StartDoors(world, worker, RoundKind.LockDoors, building, extent, fromOutside: worker == outside && worker != lockUp)) started++;
             }
-            else if (houseLocked.Contains(building))   // 86 Opening up (finder FUN_1408cb360): only a member whose package lists it, in its hours
+            // 86 Opening up (finder FUN_1408cb360): only a member whose package lists it, in its hours, while the home counts as locked (87 allDoorsLocked, FUN_1408cb1c0): a round
+            // locked it, or no door is open, broken or unlocked (a home locked from its level state or its template's initial door state).
+            else if (houseLocked.Contains(building) || world.Fixtures.AllDoorsLocked(building))
             {
                 if (opener < 0 || Busy(table.IdOf(opener))) continue;
                 if (StartDoors(world, opener, RoundKind.UnlockDoors, building, Extent(home))) started++;

@@ -45,8 +45,9 @@ public sealed record SquadPlan(SquadTemplate Template, IReadOnlyList<MemberPlan>
 /// then n' = trunc(n x M), at least 1 when n is above 0, M the Squad size multiplier unless the template has <c>dont multiply</c>.</item>
 /// <item>Order and roles: the first <c>leader</c> (role 2); <c>num random chars</c> picks from <c>choosefrom list</c> (weighted by v0, 0 counts
 /// as 100, entries gated by a world state that does not hold are skipped; role 0, or 2 when there is no leader yet); <c>squad</c> (role 0);
-/// <c>squad2</c> (role 1); <c>animals</c> (role 0, the first becomes the leader when nothing is); <c>animals2</c> (role 1); <c>slaves</c> as
-/// squads of their own (role 4).</item>
+/// <c>squad2</c> (role 1); <c>animals</c> (role 0, the first leads when it is the first member); <c>animals2</c> (role 1); <c>slaves</c> as
+/// squads of their own (role 4). The platoon's first member leads, so a shop guard before its animals (the squad's leader is then
+/// <see cref="SquadRegistry.Successor"/>'s first non-animal).</item>
 /// <item>Layout: member number i (every member so far; the leader is 0) stands at (3 x (i mod 8), 3 x floor(i / 8) + (i mod 2)) from the squad
 /// position; animals2 use spacing 5.</item>
 /// <item>Not made yet (Unknown or later stages): <c>prisoners</c> (they need cages in the home building), <c>housemates</c> and the squad's AI
@@ -127,7 +128,8 @@ public static class SquadFactory
                 {
                     float age = 1;
                     if (animals) age = Math.Max(0, Rng.Float(Next()) * template.AnimalAgeRandom - 0.1f + entry.V2 / 100f);
-                    var memberRole = animals && !haveLeader && role == SquadRole.Squad1 ? SquadRole.Leader : role;
+                    // The platoon's first member leads: an animal only when nothing was made before it.
+                    var memberRole = animals && members.Count == 0 && role == SquadRole.Squad1 ? SquadRole.Leader : role;
                     Add(entry.Id, memberRole, animals, age, spacing);
                 }
             }

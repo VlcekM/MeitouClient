@@ -1,0 +1,57 @@
+[
+ {
+  "id": "example-biome",
+  "name": "Example Biome",
+  "aliases": [],
+  "kind": "biome",
+  "faction": null,
+  "region": null,
+  "x": null,
+  "z": null,
+  "zone": null,
+  "verified": false,
+  "verifiedOn": null,
+  "seen": "",
+  "source": "example entry, replace",
+  "confidence": "Unknown",
+  "notes": "Fake entry that only shows the schema. Delete it.",
+  "data": {
+   "cellCount": 2,
+   "cells": [
+    "39-16",
+    "40-16"
+   ],
+   "homelessAmount": 1,
+   "numNests": 6,
+   "nestsAtFixedMarkersOnly": false,
+   "squads": [
+    {
+     "squad": "Example Pack",
+     "record": "0-example.mod",
+     "sharePct": 10.0,
+     "faction": "Example Faction",
+     "leader": "",
+     "members": [],
+     "animals": [
+      "Example Beast"
+     ],
+     "worldState": []
+    }
+   ],
+   "nests": [
+    {
+     "nest": "Example Den",
+     "weightPct": 100,
+     "squads": [
+      "Example Pack"
+     ]
+    }
+   ],
+   "towns": [
+    "Example Town"
+   ],
+   "townCount": 1,
+   "record": "0-example.mod"
+  }
+ }
+]

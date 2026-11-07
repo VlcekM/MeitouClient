@@ -43,6 +43,13 @@ public static class Loc
     public static string Tr(string english) => !Translating ? english : catalog.Find(english) ?? meitou.Find(english) ?? english;
 
     /// <summary>
+    /// <paramref name="english"/> under the message context <paramref name="context"/> (<c>msgctxt</c>, <c>pgettext</c>): a Meitou text whose msgid the
+    /// game's catalog already translates with another sense ("Loaded" is its ranged-weapon label). The context's entry in either catalog, else <see cref="Tr(string)"/>.
+    /// </summary>
+    public static string TrIn(string context, string english) =>
+        !Translating ? english : catalog.Find(english, context) ?? meitou.Find(english, context) ?? Tr(english);
+
+    /// <summary>
     /// <see cref="Tr(string)"/> followed by <see cref="Format"/>: the boost-style placeholders <c>{1}</c>, <c>{1,num}</c> and <c>{1,num=fix,p=2}</c>
     /// of the pot (1-based), so a translation may reorder them.
     /// </summary>

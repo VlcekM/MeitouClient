@@ -10,7 +10,7 @@ public sealed partial class World
     internal EffectBuffer BufferAt(int i) => buffers[i];
 
     /// <summary>
-    /// Where a character is drawn: a character on the water, which the simulation keeps on the navmesh's flat surface, is lowered to the seabed or, swimming, to <see cref="Bodies.Speed.WadingHeight"/>
+    /// Where a character is drawn: a character on the water, which the simulation keeps on the navmesh's flat surface, is lowered to what it stands on (<see cref="IWalkability.WaterBed"/>: a sunken floor, else the seabed) or, swimming, to <see cref="Bodies.Speed.WadingHeight"/>
     /// (the same surface test as <see cref="MovementSystem"/>'s water state: within <see cref="Bodies.Speed.WaterSlack"/> of the water level). Not a carried or a downed body.
     /// One lying in a bed is raised by <see cref="BedLift"/>.
     /// </summary>
@@ -18,8 +18,8 @@ public sealed partial class World
     {
         if (cold?.InSomething == Locks.HeldState.Bed) return at with { Y = at.Y + BedLift };
         if (cold is not { Race: { } race, Medical: not { Incapacitated: true } } || !cold.CarriedBy.IsNone || at.Y > Meitou.Data.World.WorldWater.Height + Bodies.Speed.WaterSlack) return at;
-        float terrain = Walkability.TerrainHeight(at.X, at.Z);
-        return terrain < at.Y ? at with { Y = Bodies.Speed.WadingHeight(terrain, 1, race.Swims) } : at;
+        float bed = Walkability.WaterBed(at.X, at.Z, at.Y);
+        return bed < at.Y ? at with { Y = Bodies.Speed.WadingHeight(bed, 1, race.Swims) } : at;
     }
 
     /// <summary>
@@ -97,9 +97,28 @@ public sealed partial class World
     static IReadOnlyList<HealthPartView> HealthPartsOf(Bodies.MedicalState health, RaceData anatomy) =>
         Array.AsReadOnly(health.Parts.Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp, p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb }).ToArray());
 
+    /// <summary>
+    /// The inventory window's view: Total Weight is the carried weight (<see cref="Bodies.Encumbrance.CarriedWeight"/>, a carried person included, as the original's panel
+    /// <c>FUN_1405d4260</c>, docs/game/ui-screens.md), the maximum and the burden factor from the holder's strength.
+    /// </summary>
+    InventoryView InventoryViewOf(CharacterCold cold, Items.Inventory grid, PopulationData? population, GameConstants? constants)
+    {
+        float items = grid.ContentWeight(Player.Held);
+        bool carrying = !cold.Carrying.IsNone;
+        float strengthMult = cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1;
+        var stats = constants is null ? null : cold.Stats;
+        return new InventoryView(grid.Width, grid.Height, grid.Backpack?.Contents?.Width ?? 0, grid.Backpack?.Contents?.Height ?? 0, ItemsOf(grid, cold.Faction, population))
+        {
+            TotalWeight = constants is null ? items : Bodies.Encumbrance.CarriedWeight(constants, items, carrying),
+            CarryCapacity = stats is null ? null : Bodies.Encumbrance.WindowCapacity(constants!, stats.Strength, strengthMult),
+            Burden = stats is null || items <= 0 && !carrying ? 1 : Bodies.Encumbrance.Factor(constants!, items, carrying, stats.Strength, strengthMult),
+        };
+    }
+
     static IReadOnlyList<InventoryItemView> ItemsOf(Items.Inventory grid, int faction, PopulationData? population) =>
         Array.AsReadOnly(grid.Shown().Select(shown => new InventoryItemView(shown.Index, shown.Item.Record, shown.Item.Name, shown.Item.Section, shown.Item.X, shown.Item.Y, shown.Item.Width, shown.Item.Height, shown.Item.Quantity, shown.Item.Weight, shown.Item.Quality) { Material = shown.Item.MaterialId, Colour = shown.Item.ColourId, Charge = shown.Item.ChargeFraction, Company = shown.Item.CompanyId, Crafter = shown.Item.Crafter, Level = shown.Item.Level, Charges = shown.Item.Charges, MaxCharges = shown.Item.MaxCharges,
-            StolenFrom = shown.Item.IsStolenFor(faction, population) ? shown.Item.StolenFrom : -1, Unique = shown.Item.Unique }).ToArray());
+            StolenFrom = shown.Item.IsStolenFor(faction, population) ? shown.Item.StolenFrom : -1, Unique = shown.Item.Unique,
+            BagItems = shown.Item.Contents?.Items.Count ?? -1 }).ToArray());
 
     /// <summary>Slots a publish job takes at a time: the characters are made on the worker pool, each one reading only the tick's state.</summary>
     const int PublishChunk = 256;
@@ -240,12 +259,8 @@ public sealed partial class World
             s.Knockdown = cold?.Knockdown ?? default;
             s.ClosedSlots = cold is null || !detailed ? [] : ClosedSlotsOf(cold);
             s.HealthParts = detailed && cold!.Medical is { } health && cold.Race is { } anatomy ? HealthPartsOf(health, anatomy) : [];
-            s.ItemGrid = (selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id)) && cold!.Inventory is { } grid ? new InventoryView(grid.Width, grid.Height, grid.Backpack?.Contents?.Width ?? 0, grid.Backpack?.Contents?.Height ?? 0,
-                ItemsOf(grid, cold.Faction, population))
-                { TotalWeight = grid.ContentWeight(), CarryCapacity = cold.Stats is { } strength && systems.OfType<BodySystem>().FirstOrDefault() is { } bodies
-                    ? Bodies.Encumbrance.WindowCapacity(bodies.Constants, strength.Strength, cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1) : null,
-                    Burden = cold.Stats is { } bs && systems.OfType<BodySystem>().FirstOrDefault() is { } bb && grid.ContentWeight() is var bw && (bw > 0 || !cold.Carrying.IsNone)
-                    ? Bodies.Encumbrance.Factor(bb.Constants, bw, !cold.Carrying.IsNone, bs.Strength, cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1) : 1 } : null;
+            s.ItemGrid = (selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id)) && cold!.Inventory is { } grid
+                ? InventoryViewOf(cold, grid, population, bodyConstants) : null;
             s.Bounties = detailed && cold!.Bounties is not null ? Crime.CrimeSystem.Lines(cold, Tick, TickSeconds, LocalFaction(cold, state[i].Position, population)) : [];
             s.Slave = cold is { SlaveState: >= 1 and <= 3 } ? new SlaveView(cold.SlaveState, population is { Factions: { } factions } && (uint)cold.SlaveOwner < (uint)factions.Count ? factions[cold.SlaveOwner].Name : "",
                 systems.OfType<Kidnap.CaptiveSystem>().FirstOrDefault()?.LooksLikeSlaveLevel(cold) ?? 0) : null;
@@ -264,6 +279,8 @@ public sealed partial class World
             s.Carry = cold is { CarriedBy.IsNone: false } ? cold.CarryAttach ?? Carrying.CarryPose.Fallback : null;
             s.Carrying = cold?.Carrying ?? CharacterId.None;
             s.HeldTool = state[i].Task == (byte)CharacterTask.Operate && cold is { OperateSite: not null, Appearance.Animal: null } ? cold.OperateTool : null;
+            s.Mouth = cold?.Mouth?.Record;
+            s.MouthTone = cold?.MouthTone ?? default;
             s.WorkEvents = WorkEventsOf(state[i].Task, cold);
             s.Task = (CharacterTask)state[i].Task;
             s.PickingLock = cold?.PickingLock is not null;
@@ -366,7 +383,8 @@ public sealed partial class World
             : c.Shackles is { Work: Locks.ShackleWork.Pick } job && Characters.TryResolveNext(job.Wearer, out int w) ? Locks.LockSystem.WornShackles(Characters.Cold(w))?.Lock : null;
         if (l is not { EffectivelyLocked: true }) return null;
         float chance = Locks.Lockpicking.RollChance(c, l.Level);
-        return new TaskBar(FormattableString.Invariant($"Lockpicking (Chance {MathF.Round(chance * 100)}%)"), l.NextRoll > 0 ? Math.Clamp(l.PickTime / l.NextRoll, 0, 1) : 0);
+        string text = Loc.Tr("Lockpicking (Chance {1}%)", MathF.Round(chance * 100));
+        return new TaskBar(text, l.NextRoll > 0 ? Math.Clamp(l.PickTime / l.NextRoll, 0, 1) : 0);
     }
 
     /// <summary>The bar of Task_UseTrainingDummy (docs/game/ai-tasks.md "Finders of the jobs"): "Training", filled with the trained stat's fraction, while the user works the dummy.</summary>

@@ -404,18 +404,9 @@ public sealed partial class FirstAidSystem
     }
 
     /// <summary>
-    /// The sensed entry's seen or heard flag (+0x38, +0x39): the medic's sensed list (<see cref="AggroSystem"/>) holds the patient and it was sensed at the last look. True without the aggro system.
-    /// The original's sensed map has no cap, Meitou's block does (<see cref="SenseBlock.Cap"/>): a patient the block lacks is judged by the shared sight test (<see cref="SightMap.Sees"/>) directly.
+    /// The sensed entry's seen or heard flag (+0x38, +0x39): the medic's sensed list holds the patient and it was sensed at the last look (<see cref="CharacterFacts.Perceives"/>).
     /// </summary>
-    static bool SeenOrHeard(World world, int medic, int patient)
-    {
-        var table = world.Characters;
-        if (CharacterFacts.Senses(world, medic) is not { } block || block.Knows(table.IdOf(patient), now: true)) return true;
-        if (block.Knows(table.IdOf(patient))) return false;   // sensed earlier, not now
-        if (table.Cold(medic) is not { } m) return false;
-        float outdoor = AggroSystem.RangeOf(m, AggroSystem.OutdoorSight);
-        return world.Sight.Sees(medic, patient, table.Next[medic].Position, table.Next[patient].Position, outdoor, -1) > 0;
-    }
+    static bool SeenOrHeard(World world, int medic, int patient) => CharacterFacts.Perceives(world, medic, patient, now: true);
 
     /// <summary>
     /// Whether the patient sits in a cage, and whether that cage stands in the medic squad's home building <paramref name="homeKey"/> (<c>FUN_14099f690</c>, <b>Verified</b>: the cage's

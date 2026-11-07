@@ -257,7 +257,7 @@ NPC answers an event's lines like any other; the rule is also in [Arrival banter
   radius +0x364 x a scale) + 7 x 3 (7 x 2 when the target is a ragdoll), that reach **doubled when the talker is not moving**, and
   |dy| < 10 (< 35 on the same floor); else within 7 x 1.6 = 11.2 on the same floor or |dy| < 35. Meitou (`DialogueSystem.InTalkRange`):
   the target's scaled radius (`CombatSteering.Radius`: footprint x body scale) + 21, doubled once stopped, |dy| < 35; also for an NPC walking up to talk (task 102, engine choice).
-- **Walking to a moving NPC** (**Observed**: the player-reported vanilla behaviour of issue #136, the chase of a moving pick-up target; the task-12 walk's own re-aim code is not read): the talker follows the NPC's current position until in range. Meitou (`DialogueSystem.SlowWorld`): every 0.5 s the Move order is renewed when the NPC is over 12 from the walk's goal or the walk has ended short of it; the NPC is kept still only when idle or wandering (`Hold`), so a walking NPC is chased; a talker found on any other task (another order, a fight) drops the approach (engine choice). The give-up after `ApproachSeconds` (60 s) is an engine choice.
+- **Walking to a moving NPC** (**Observed**: the player-reported vanilla behaviour of issue #136, the chase of a moving pick-up target; the task-12 walk's own re-aim code is not read): the talker follows the NPC's current position until in range. Meitou (`DialogueSystem.SlowWorld`): every 0.5 s the Move order is renewed when the NPC is over 12 from the walk's goal or the walk has ended short of it; the NPC is kept still only when idle or wandering (`Hold`), so a walking NPC is chased; a talker found on any other task (another order, a fight) drops the approach (engine choice). Once the conversation opens, an NPC on its AI's walk stops and walks on after (`TaskStart.OnAiWalk`; engine choice, whether the original stops it is **Unknown**). The give-up after `ApproachSeconds` (60 s) is an engine choice.
 
 **Saying a line** (`FUN_1406839a0`): in a player conversation a line with **no children ends the conversation at once** without being
 shown (whether the original shows such closing lines elsewhere is **Unknown**). Otherwise: pick a text and mark the line and its parent chain
@@ -422,7 +422,7 @@ Talk menu's dry run is picking.
 | 4 / 5 CARRYING_BOUNTY_ALIVE / DEAD | S carries a living / dead body with a bounty for Me's faction (or a diplomat of a hostile faction) | Bool |
 | 6, 15, 34, 51 | not evaluated, always pass | - |
 | 7 / 8 IMPRISONED_BY_TARGET / OTHER | S caged (in-something state 2) by Me's faction (7) or another (8); when S is Me, by the target's faction; no target: !B | Bool |
-| 9 IS_A_TRADER | S's squad trades | Bool |
+| 9 IS_A_TRADER | S's SQUAD_TEMPLATE has `is trader`, whatever the squad stocks (`FUN_1405cff70`, [who trades](economy.md#who-trades)) | Bool |
 | 10 FACTION_RANK | the player's rank in Me's faction ([faction rank](factions-squads-towns.md#32-faction-rank)), any `who` | Num3 |
 | 11 BUILDING_IS_CLOSED_AND_SECURED | a bool at `+0xe8` of Me's platoon AI object (`FUN_140791ba0`: Character `+0x658` -> `+0x78` -> `+0xf8`; its setter **Unknown**, not built) | Bool |
 | 12 PLAYER_TECH_LEVEL | the research manager's tech level, `*(*(game + 0x38) + 8)` (**Observed**; the manager's level is the one [research](buildings-production.md#research) raises, 1 at the start), any `who` | Num3 |
@@ -445,7 +445,7 @@ Talk menu's dry run is picking.
 | 39 IS_OUTNUMBERED | S's counters (the object at S's `+0x650` + 0x28, Character slot 13 `FUN_1405c8700`): `+0x94` > `+0x4c` × 1.3, strict (**Observed**; the counts are `SensoryData` numEnemies and numConsciousAllies, [ragdolls](ragdolls.md); Meitou: `BodySystem.Senses`) | Bool |
 | 40 / 47 BOUNTY_AMOUNT_PERCEIVED / ACTUAL | S's bounty with Me's faction (perceived: only while recognised) | Num2 |
 | 45 IS_FEMALE | S's race is female | Bool |
-| 46 CARRYING_SOMEONE_TO_ENSLAVE | S carries a living adventurer, bandit, slave or civilian (false for value 0 too) | asymmetric |
+| 46 CARRYING_SOMEONE_TO_ENSLAVE | S carries a living adventurer, bandit, slave or civilian. Carrying nobody, the result is `!(value > 0)`; carrying anyone, value 0 is always false (**Verified**, `FUN_140676950` case 0x2e; the slavers' "A new slave?" line needs the speaker at value 0, carrying nobody) | asymmetric |
 | 48 IM_UNARMED | S has no weapon | Bool |
 | 49 TOWN_HAS_FORTIFICATIONS_WALLS, 58 TOWN_WALLS_LOCKED_UP | S's current town (Character slot 14 `FUN_1405e1ed0` -> `+0x88`) has a building of the gate class near Me: town slot 97 `FUN_140929910` returns the nearest member of the town's building set with a non-null Building slot 123 (49 is true when any exists, wherever it is) / town slot 96 `FUN_140929820`: true when the town has at least one such building and none of them (gates without a first door, or failing `FUN_140547930`, are skipped) has a first door in state `+0x380` 1 (slot 123 is the gate-class test, state 1 is an open door `+0x380`, **Verified** `FUN_140929820`, `FUN_1409c70f0`; the extra door test `FUN_140547930` is **Unknown**). 49 has no use in the data; neither is built (**Observed**) | Bool |
 | 57 WITHIN_TOWN_WALLS | S's gate code > 0 (Character slot 35 `FUN_140792200`, `amInsideTownWalls`, [gate codes](pathfinding.md#gate-codes)): refreshed from S's building (a gateway gives the code of the side S stands on) and cached at `+0xA0`, else the code the gate pass gave S (**Verified**, decompile `FUN_140676950`). Meitou reads the gate region at S's position; no gate pass yet counts as outside | Bool |
@@ -528,7 +528,7 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 
 | DA | Effect |
 |---|---|
-| 1 TRADE | ends the conversation, opens trade with the speaker |
+| 1 TRADE | ends the conversation, opens trade with the speaker whatever its squad stocks (**Verified**, `FUN_140680560` case 1 → `FUN_1409524f0`: it tests only that the speaker, the target and the speaker's purse holder (its platoon, else its faction's, `FUN_140791b10`) exist; [who trades](economy.md#who-trades)) |
 | 2 TALK_TO_LEADER | a player target: the speaker's squad leader gets task 102 on the target |
 | 3 / 18 JOIN_SQUAD_WITH_EDIT / FAST | the speaker joins the target's squad (player: recruited, its package becomes `dialogue package player`; 3 opens the editor, [characters](../characters.md)) |
 | 4 AFFECT_RELATIONS, 5 AFFECT_REPUTATION | speaker's faction toward the target's: relation += val0 (clamp ±100) / the speaker's faction's global trust += val0, no clamp, whoever the target is (slot 9, `FUN_1406b2530`) |

@@ -174,14 +174,14 @@ public sealed partial class LockSystem
             if (c.Freeing.IsNone)
             {
                 c.EnteringCage = null;
-                if (cage.Lock is { EffectivelyLocked: true }) { if (c.IsPlayer) world.Post($"{c.Name}: It's locked."); continue; }
+                if (cage.Lock is { EffectivelyLocked: true }) { if (c.IsPlayer) Say(world, c, "It's locked."); continue; }
                 world.Fixtures.Imprison(world, table.IdOf(s), cage, constants.PrisonTime);
                 continue;
             }
             var prisoner = c.Freeing;
             c.Freeing = CharacterId.None;
             // A locked cage of its own faction is opened by the release itself (Task_ReleasePrisoner clears the lock, Verified); another faction's must be opened first.
-            if (cage.Lock is { EffectivelyLocked: true } && cage.Owner != c.Faction) { if (c.IsPlayer) world.Post($"{c.Name}: It's locked."); continue; }
+            if (cage.Lock is { EffectivelyLocked: true } && cage.Owner != c.Faction) { if (c.IsPlayer) Say(world, c, "It's locked."); continue; }
             if (!table.TryResolveNext(prisoner, out int ps) || table.Cold(ps) is not { } pc || !Conscious(pc)) continue;
             // Letting a prisoner out of another faction's cage is the crime of lifting it out (FixtureRegistry.LiftOut): a pending code 7 against the cage's owner.
             if (cage.Owner >= 0 && cage.Owner != c.Faction) Crimes?.SetPending(world, s, CrimeCode.Terrorism, cage.Owner, prisoner, CrimeSystem.MinTimer);

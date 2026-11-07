@@ -45,14 +45,22 @@ Addresses are `kenshi_x64.exe` (1.0.68).
 - **UI strings**: strings that exist as msgids in `main.pot` go through the catalog at central sinks: UI bindings (`UiBindings.Coded`, captions and
   combo items), HUD `AddLines`, context-menu verbs, `Notice`, `Confirm`/`UpperTr`, `PlaceTooltip` (keys and values; bracketed headings by their
   inside), stat help (`StatHelpCatalog`), the loading tip, the day text, and the interpolated simulation messages (relations, bounties, research,
-  campaigns, construction, fixtures, discoveries). Layout captions the original leaves English stay English.
+  campaigns, construction, fixtures, discoveries, crime names ([economy 11.2](../game/economy.md#112-how-a-bounty-is-gained)), crimes, arrests, bail,
+  locks, shackles, trade; the host's save/load notices). The simulation keeps its English markers (the dialogue's engine `[Leave]` choice,
+  matched by that text) and translates only the text it publishes or posts; the world hash and saves never contain translated text. Layout
+  captions the original leaves English stay English.
 - **Meitou's own texts** (`MeitouTranslations`): the launcher, the title menu (`UpperTr`) and the settings menu's drawn captions, hints and choices
   are not in Kenshi's catalog, so after it `Loc.Tr` looks them up in a second gettext catalog: `src/Meitou.Core/Localisation/locale/<code>.po`
   (embedded; `pt_BR` and `zh_CN` so far), with `locale/<code>/meitou.po` in the Kenshi folder read over it (a user or mod adds a language or overrides a
   string without a rebuild). Same format and rules as the game's catalog, exact lookups, English msgids; the launcher reads the same files for
   its own labels. Settings rows measure the active font's wrapped label and hint and grow to fit. A text the code builds with a value in it
   keeps the English sentence as its msgid with the game's `{1}`, `{2}` placeholders (`LauncherText.Translate("Version {1} for {2}.", …)`), so
-  the catalog matches it and a translation may reorder the holes.
+  the catalog matches it and a translation may reorder the holes. Game and simulation messages do the same (`Loc.Tr("{1} is arresting {2}!", …)`). A
+  character's line in a message ("name: line", `LockSystem.Say`) keeps the line as its own game msgid ("Pick failed") inside a `{1}: {2}` frame,
+  so every language with a game catalogue translates the line. A Meitou entry cannot override a game msgid (the game's catalog is asked first).
+  Where the game's sense is wrong, the code asks under a `msgctxt` (`Loc.TrIn`; without a context entry it falls back to `Tr`): the load notice
+  "Loaded" is `msgctxt "save notice"`, since the game's "Loaded" is the ranged-weapon label (`getGUIData.cpp`, zh "已装载"; **Verified** in
+  en_GB `main.pot`, zh_CN `main.po`).
 - **Fonts, tips, names**: through the overlay folder (`OgreScriptResources.ForInstall`) and `Loc.FindTextFile`.
 - **New-game option help**: `NewGameHelpCatalog` reads the installed English `main.pot` source references and passes the exact msgid through `Loc.Tr`; no paraphrases or translated paragraphs are embedded. Missing translations fall back to the original English; a missing template leaves help empty. Font resources use the active locale overlay.
 - All text files are read and written as UTF-8.

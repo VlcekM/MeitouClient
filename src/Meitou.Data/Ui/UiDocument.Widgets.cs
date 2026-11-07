@@ -265,7 +265,9 @@ public static partial class MyGuiPresentation
         int mark = result.Count;
         foreach (var child in w.Children) visit(child, bounds, childClip, enabled, alpha);
         var clientWidget = PartOf(w, "Client");
-        if (clientWidget is null || b.NativeScroll.Contains(w.Name)) return;
+        if (clientWidget is null) return;
+        // A host-scrolled view (NativeScroll) lays out as one with nothing to scroll: no bars, the client in their place.
+        bool native = b.NativeScroll.Contains(w.Name);
         int ci = result.FindLastIndex(c => c.Name == clientWidget.Name);
         if (ci < 0) return;
         var vWidget = PartOf(w, "VScroll"); var hWidget = PartOf(w, "HScroll");
@@ -274,6 +276,7 @@ public static partial class MyGuiPresentation
         if (b.Canvas.TryGetValue(w.Name, out var canvas)) (cw, ch) = canvas;
         else if (props.TryGetValue("CanvasSize", out var size) && size.Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: 2 } xy
             && float.TryParse(xy[0], NumberStyles.Float, Inv, out float sw) && float.TryParse(xy[1], NumberStyles.Float, Inv, out float sh)) (cw, ch) = (sw * scale, sh * scale);
+        if (native) (cw, ch) = (0, 0);
         UiRect c0 = result[ci].Bounds, v0 = vi >= 0 ? result[vi].Bounds : default, h0 = hi >= 0 ? result[hi].Bounds : default;
         bool flagV = props.GetValueOrDefault("VisibleVScroll") != "false", flagH = props.GetValueOrDefault("VisibleHScroll") != "false";
         bool vShown = vi >= 0, hShown = hi >= 0;
@@ -316,6 +319,7 @@ public static partial class MyGuiPresentation
             if (previous is null) b.Properties.Remove(clientWidget.Name); else b.Properties[clientWidget.Name] = previous;
             foreach (var action in undo) action();
         }
+        if (native) return;
         props["ScrollKey"] = w.Name; props["ScrollMax"] = N(vRange); props["ScrollWheel"] = N(ScrollViewWheel * scale);
         props["ScrollKeyH"] = w.Name + "@h"; props["ScrollMaxH"] = N(hRange); props["ScrollWheelH"] = N(ScrollViewWheel * scale);
         props["CanvasX"] = N(origin.X); props["CanvasY"] = N(origin.Y);

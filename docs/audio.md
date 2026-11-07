@@ -409,7 +409,9 @@ host running without sound.
   - **3D paths**: a positioned container's one-shots pick a random path and move along its vertices (listener-relative x, z); the player
     pans them left/right by direction (equal power). The ambience has no attenuation and no sends, so these get neither distance gain nor reverb.
   - **Positions, attenuation, reverb**: [below](#game-objects-3d-and-attenuation).
-- `AudioOutput` keeps four blocks of 1024 frames (23 ms each at 44100 Hz) queued on one OpenAL Soft streaming source, refilled by a thread.
+- `AudioOutput` keeps four blocks of 1024 frames (23 ms each at 44100 Hz) queued on one OpenAL Soft streaming source, refilled by a thread. Every 0.5 s it checks
+  `ALC_CONNECTED`; a lost device (unplugged, switched or disabled output) is reopened on the current default with `alcReopenDeviceSOFT`,
+  since OpenAL otherwise stays silent until restart (issue #309).
 - `AmbienceDirector` is the game's rules above: biome under the pivot, day/night, `Camera_Zoom`, `Time_in_Game`, rain and wind. Two
   fixes of the game's bugs, each a switch on the Fixes settings page (off plays as the game): the delayed-load suffix bug is not copied (the right event always plays; `Ambience after loading`), and the wind is stopped with
   `Weather_Wind_End` (`Wind stops`; off posts the game's `Weather_Wind_Stop`).

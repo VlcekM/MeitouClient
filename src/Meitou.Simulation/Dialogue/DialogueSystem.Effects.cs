@@ -41,9 +41,9 @@ public sealed partial class DialogueSystem
             switch (effect.Action)
             {
                 case DialogueActions.Trade:
+                    // The window opens whatever the speaker's squad stocks (FUN_1409524f0 tests no stock); a squad with none trades from an empty one (TradeSystem.StockFor).
                     c.Ended = true;
-                    if (mc is { SquadId: >= 0 } && world.Squads.Find(mc.SquadId)?.Shop is not null)
-                        world.Defer(new Trading.OpenTrade(target, me) { Tick = world.Tick + 1 });
+                    if (mc is { SquadId: >= 0 }) world.Defer(new Trading.OpenTrade(target, me) { Tick = world.Tick + 1 });
                     return;
                 case DialogueActions.AffectRelations when mc is not null && tc is not null:
                     ChangeRelation(world, mc.Faction, tc.Faction, effect.Value);

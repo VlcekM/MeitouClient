@@ -136,7 +136,7 @@ sealed partial class GameHost
         var focus = session.Camera.Current.Target;
         if (!TitleVisible && gpu.Characters is { } near) near.LoadingFocus = new Vector2(focus.X, focus.Z);
         bool charactersReady = gpu.Characters is not { } characters || !characters.ContentPending &&
-            session.CurrentSnapshot.Characters.All(c => c.Appearance is null || !InLoadingReach(c) || characters.IsPrepared(c.Appearance));
+            !session.CurrentSnapshot.Characters.Any(c => AwaitsLook(c, characters));
         bool sceneReady = TitleVisible ? TitleSceneReady : populationReady && charactersReady &&
             gpu.Streamer is not { Idle: false } && !(gpu.Objects?.Pending > 0) && !(gpu.Foliage?.LoadingPending > 0);
         guardSeconds = gpu.Guard is { Pressure: true } ? guardSeconds + seconds : 0;
@@ -163,7 +163,7 @@ sealed partial class GameHost
             {
                 nextWarmReport = warmSeconds + 5;
                 int pendingLooks = gpu.Characters is { } characterRenderer
-                    ? TitleVisible ? characterRenderer.PendingLoads : session.CurrentSnapshot.Characters.Count(c => c.Appearance is { } appearance && InLoadingReach(c) && !characterRenderer.IsPrepared(appearance))
+                    ? TitleVisible ? characterRenderer.PendingLoads : session.CurrentSnapshot.Characters.Count(c => AwaitsLook(c, characterRenderer))
                     : 0;
                 Console.WriteLine($"loading   {(TitleVisible ? "menu" : "game")} still preparing: terrain {(gpu.Streamer?.Idle == false ? "pending" : "ready")}, objects {gpu.Objects?.Pending ?? 0}{(gpu.Objects is { Pending: > 0 } po ? $" ({po.PendingDetail})" : "")}, foliage {gpu.Foliage?.LoadingPending ?? 0}{(gpu.Foliage is { LoadingPending: > 0 } pf ? $" ({pf.PendingDetail})" : "")}, population {(populationReady ? "ready" : "pending")}, characters {((TitleVisible ? TitleCharactersReady : charactersReady) ? "ready" : $"pending ({pendingLooks} looks; {gpu.Characters?.PendingLoads ?? 0} assets/textures)")}");
             }
@@ -191,6 +191,13 @@ sealed partial class GameHost
     /// <summary>Whether a character is one the loading screen waits for (within the renderer's <see cref="Meitou.Rendering.Characters.CharacterRenderer.LoadingReach"/> of its focus).</summary>
     bool InLoadingReach(Meitou.Simulation.CharacterSnapshot c) => gpu.Characters is not { LoadingFocus: { } f } r
         || Vector2.DistanceSquared(new Vector2(c.Position.X, c.Position.Z), f) <= r.LoadingReach * r.LoadingReach;
+
+    /// <summary>
+    /// Whether the loading screen still waits for a character's look: one in its reach whose drawn look is not prepared. An operator's tool look, once prepared, is
+    /// the drawn one (<see cref="HeldLook"/>) and its plain look is listed no more, so that may never be built.
+    /// </summary>
+    bool AwaitsLook(Meitou.Simulation.CharacterSnapshot c, Meitou.Rendering.Characters.CharacterRenderer characters) =>
+        c.Appearance is { } look && InLoadingReach(c) && !characters.IsPrepared(look) && !HeldPrepared(look, c.HeldTool, characters);
 
     void AdvanceSkyArrival(double seconds)
     {

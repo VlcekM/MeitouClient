@@ -39,6 +39,12 @@ public sealed class ZoneNavMesh
     /// (docs/game/pathfinding.md, "Heights").
     /// </summary>
     public HeightGrid?[]? Heights { get; internal set; }
+    /// <summary>
+    /// The first polygon of the building interiors appended to the zone's exterior (<see cref="NavInteriors.Combine"/>), <see cref="int.MaxValue"/> when
+    /// there are none: the exterior's polygons come first and their neighbours are exterior polygons. The seed flood tests portal widths on exterior edges
+    /// only (<see cref="SeedPruner.MinPortalWidth"/>).
+    /// </summary>
+    public int InteriorStart { get; init; } = int.MaxValue;
     /// <summary>The zone's heightmap samples (exact terrain heights; the simulation's own grid is exact only near where the game started). Read when the zone loads, not cached.</summary>
     public Meitou.Data.World.HeightWindow? Terrain { get; internal set; }
 
@@ -90,6 +96,7 @@ public sealed class ZoneNavMesh
     {
         ZoneX = ZoneX, ZoneZ = ZoneZ, Vertices = Vertices, Polygons = Polygons, Neighbours = Neighbours, Areas = Areas, Links = Links, Kept = kept,
         BoundsMin = BoundsMin, BoundsMax = BoundsMax, DoorIds = DoorIds, DoorOf = DoorOf, Surfaces = Surfaces, Terrain = Terrain, Heights = Heights,
+        InteriorStart = InteriorStart,
     };
 
     /// <summary>
@@ -129,8 +136,17 @@ public sealed class ZoneNavMesh
         {
             ZoneX = ZoneX, ZoneZ = ZoneZ, Vertices = [.. vertices], Polygons = polygons, Neighbours = neighbours, Areas = areas, Links = links,
             Kept = kept, BoundsMin = BoundsMin, BoundsMax = BoundsMax, DoorIds = DoorIds, DoorOf = doorOf, Surfaces = Surfaces, Terrain = Terrain,
-            Heights = HeightsOf(heights),
+            Heights = HeightsOf(heights), InteriorStart = KeptInteriorStart(map),
         };
+    }
+
+    /// <summary><see cref="InteriorStart"/> in the copy's numbering (<paramref name="map"/>: the copy's index per polygon, −1 if pruned).</summary>
+    int KeptInteriorStart(int[] map)
+    {
+        if (InteriorStart >= PolygonCount) return InteriorStart;
+        int kept = 0;
+        for (int p = 0; p < InteriorStart; p++) if (map[p] >= 0) kept++;
+        return kept;
     }
 
     /// <summary>A polygon's vertices in the copy's numbering, each vertex copied the first time a kept polygon uses it.</summary>

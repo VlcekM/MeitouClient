@@ -678,7 +678,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// The first pass of the watchers' finder (183, <c>FUN_1408cd630</c>, <b>Verified</b>): the nearest (engine reading of the sensed list, as the capture finder's) live character in sight
+    /// The first pass of the watchers' finder (183, <c>FUN_1408cd630</c>, <b>Verified</b>): the nearest (engine reading of the sensed list: a bare sight-range query, no building test) live character in sight
     /// in slave state 1 or 2 that is free (not carried, caged or held), no animal, not another job's or given up, and <see cref="NeedsProcessing"/>. No distance bound, no cage. -1: none.
     /// </summary>
     int FreeSlaveToProcess(World world, int slot, CharacterCold me)

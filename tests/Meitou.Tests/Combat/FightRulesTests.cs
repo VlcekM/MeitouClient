@@ -44,7 +44,8 @@ public class FightRulesTests
     }
 
     /// <summary>
-    /// The fight's own target down (docs/game/combat.md "Leaving a fight", CombatClassAI update FUN_14060d6a0): the fight ends at once, though another still attacks the fighter.
+    /// The fight's own target down (docs/game/combat.md "Leaving a fight", CombatClassAI update FUN_14060d6a0): the fight ends once a swing in progress reaches its end marker
+    /// ("Pacing"), though another still attacks the fighter.
     /// </summary>
     [Fact]
     public void A_fighter_whose_task_target_drops_ends_its_fight_at_once()
@@ -54,6 +55,7 @@ public class FightRulesTests
         world.RunTicks(10);
         Assert.Equal(b.Slot, combat.StateOf(a).TargetSlot);
         world.Characters.Cold(b.Slot)!.Medical!.KnockOut(600);
+        for (int k = 0; k < 120 && combat.StateOf(a).AttackTech >= 0; k++) world.RunTicks(1);
         world.RunTicks(1);
         Assert.False(world.Characters.Cold(a.Slot)!.InCombat, "the task target is down: the fight ends");
         Assert.Equal(a.Slot, combat.StateOf(c).TargetSlot);

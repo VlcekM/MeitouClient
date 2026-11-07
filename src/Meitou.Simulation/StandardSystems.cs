@@ -282,7 +282,9 @@ public static class StandardSystems
         for (int k = 0; k < extensions.Systems.Count; k++)
         {
             var factory = extensions.Systems[k];
-            if (factory.Create(context) is { } system) placed.Add((wiring.Position(factory.Anchor), k, system));
+            if (factory.Create(context) is not { } system) continue;
+            SimulationExtensions.Made(system, factory);
+            placed.Add((wiring.Position(factory.Anchor), k, system));
         }
         placed.Sort((a, b) => a.Position != b.Position ? a.Position.CompareTo(b.Position) : a.Order.CompareTo(b.Order));
         var merged = new List<ITickSystem>(wiring.Systems.Count + placed.Count);

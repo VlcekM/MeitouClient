@@ -267,7 +267,7 @@ public sealed partial class DialogueSystem
     /// faction has fewer free places (CONSTANTS <c>max faction size</c> less its characters) than ticked rows, the window staying open. Otherwise each bought animal has its AI
     /// orders dropped, keeps a quarter of its combat, athletic and stealth stats (<see cref="TamedStats"/>) and joins the player as a recruit does; what its backpack held goes back
     /// to the seller's squad, each item into the first backpack of the seller's squad members (from the last member back) that takes it, the rest destroyed. Then the total is
-    /// taken from the player's money. The original then opens the character editor on the bought animals to name them (not opened: Meitou's editor does not edit animals).
+    /// taken from the player's money. The original then opens the in-play character editor (mode 1) on the animals bought, none when none was (<see cref="OpenAnimalEditor"/>).
     /// </summary>
     void BuyAnimals(World world, CharacterTrade t, int seller, List<(int Slot, CharacterCold Cold, long Price)> chosen, long total)
     {
@@ -282,6 +282,7 @@ public sealed partial class DialogueSystem
         }
         if (!table.TryResolveNext(t.Player, out int p) || table.Cold(p) is not { IsPlayer: true } buyer) return;
         var sellerSquad = world.Squads.Find(table.Cold(seller)!.SquadId);
+        var bought = new List<CharacterId>();
         foreach (var (slot, c, _) in chosen)
         {
             c.Ai = null;
@@ -290,8 +291,20 @@ public sealed partial class DialogueSystem
             foreach (var item in packed) c.Inventory!.Remove(item);
             if (!JoinPlayer(world, slot, buyer)) continue;
             foreach (var item in packed) GiveBack(world, sellerSquad, item);
+            bought.Add(table.IdOf(slot));
         }
         if (world.Player.Money >= total) world.Player.Money -= total;
+        OpenAnimalEditor(t, bought);
+    }
+
+    /// <summary>
+    /// The end of the animal buying confirm (<c>FUN_1406aac20</c> -> <c>FUN_1406e32f0</c>, <b>Verified</b>): the character editor opens in mode 1 on the animals that were bought, after
+    /// the money is taken, and not at all when none was. The host acts on the request (it names them: the editor's animal page, <see cref="Editing.CharacterEditing"/>'s name-only edit).
+    /// </summary>
+    void OpenAnimalEditor(CharacterTrade t, List<CharacterId> bought)
+    {
+        if (bought.Count == 0) return;
+        request = new DialogueRequest(++requestId, DialogueRequestKind.AnimalEditor, bought[0], t.Slaver) { Characters = bought };
     }
 
     /// <summary>Puts an item from a bought animal's bag into the first backpack of <paramref name="squad"/>'s members, from the last member back, that takes it; none: it is gone.</summary>
@@ -319,25 +332,8 @@ public sealed partial class DialogueSystem
 
     CharacterAssembly? chainAssembly;
 
-    /// <summary>
-    /// <c>Character::setChainedMode</c> (<c>FUN_14032e590</c>, <b>Verified</b> by decompile): a character wearing no locked shackles gets a new pair, <c>SHACKLES</c> (Prisoner Shackles, boots)
-    /// while its boots section is enabled, else <c>SHACKLES-BODY</c> (Hive Prisoner Shackles, body; Meitou reads a disabled boots section as the race's <c>no shoes</c>), worn and locked
-    /// (the ARMOUR's lock). What it wore in that slot goes into its inventory (engine choice, as <see cref="Locks.LockSystem"/>'s putting on).
-    /// </summary>
-    void Chain(CharacterCold c)
-    {
-        if (c.Inventory is not { } inv || Locks.LockSystem.WornShackles(c) is not null) return;
-        if (data.Items.Create(c.Race?.NoShoes == true ? "SHACKLES-BODY" : Kidnap.CaptiveSystem.ShacklesRecord, 1) is not { } shackles) return;
-        if (inv.Items.FirstOrDefault(i => i.Section == shackles.EquipmentSection) is { } worn)
-        {
-            var (section, x, y) = (worn.Section, worn.X, worn.Y);
-            inv.Items.Remove(worn);
-            worn.Section = "main";
-            if (!inv.Add(worn)) { (worn.Section, worn.X, worn.Y) = (section, x, y); inv.Items.Add(worn); }
-        }
-        if (!Items.InventoryCommands.TryEquip(inv, shackles)) return;
-        (chainAssembly ??= new CharacterAssembly(data)).RefreshEquipment(c);
-    }
+    /// <summary>Chains a character (<see cref="CharacterAssembly.Chain"/>).</summary>
+    void Chain(CharacterCold c) => (chainAssembly ??= new CharacterAssembly(data)).Chain(c);
 
     void ChangeTowardPlayer(World world, int faction, int amount)
     {

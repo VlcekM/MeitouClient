@@ -24,18 +24,29 @@ internal static class ShopSave
         platoon.Strings[StockKey] = ContainerSave.Write(shop.Stock) ?? "[]";
     }
 
-    /// <summary>The shop a Meitou save holds for <paramref name="squad"/> (made from a saved platoon, its home already set); null without one or when its template trades no more.</summary>
+    /// <summary>
+    /// The shop a Meitou save holds for <paramref name="squad"/> (made from a saved platoon, its home already set); null without one. A squad whose template fills no shop gets back the
+    /// stock a trade gave it (<see cref="TradeSystem.UnfilledShop"/>; a housed squad's goes back to its containers at the next stock pass).
+    /// </summary>
     public static Shop? Read(World world, Squad squad, FcsRecord platoon, PopulationData data)
     {
         if (!platoon.Strings.TryGetValue(StockKey, out var text)) return null;
-        if (data.Db.Find(squad.TemplateId) is not { } record || !SquadFactory.IsTemplate(record) || SquadTemplate.From(record) is not { HasShop: true } template) return null;
+        if (TradeSystem.TemplateRecord(data, squad.TemplateId) is not { HasShop: true } template) return Unfilled(text, squad, data);
         // As the trade system makes it: a housed trader making no prisoner or slave squads has a building shop when its home has stock containers.
-        var terms = new Trader(squad.Town, squad.Faction, template.BuyMult, template.BuysStolen, template.BuysIllegal);
+        var terms = TradeSystem.TermsOf(squad, template);
         var shop = (squad.HomeBuilding is { } home && template.Prisoners.Count == 0 && template.Slaves.Count == 0 ? Shop.ForBuilding(home, terms) : null) ?? new Shop { Terms = terms };
         ContainerSave.Read(text, shop.Stock, data.Items);
         shop.Fills = platoon.Ints.GetValueOrDefault(FillsKey);
-        double hours = platoon.Floats.GetValueOrDefault(RefreshKey);
-        shop.NextRestockTick = world.Tick + (long)Math.Ceiling(Math.Max(hours - world.GameHours, 0) / BodySystem.HoursPerTick);
+        // At most one refresh away (engine choice): older Meitou saves pushed it out by the save's clock at each load.
+        double hours = Math.Clamp(platoon.Floats.GetValueOrDefault(RefreshKey) - world.GameHours, 0, template.VendorsRefreshTime);
+        shop.NextRestockTick = world.Tick + (long)Math.Ceiling(hours / BodySystem.HoursPerTick);
+        return shop;
+    }
+
+    static Shop? Unfilled(string text, Squad squad, PopulationData data)
+    {
+        var shop = TradeSystem.UnfilledShop(squad, TradeSystem.TemplateRecord(data, squad.TemplateId));
+        if (shop is not null) ContainerSave.Read(text, shop.Stock, data.Items);
         return shop;
     }
 }

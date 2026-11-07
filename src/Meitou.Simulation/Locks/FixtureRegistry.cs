@@ -144,13 +144,52 @@ public sealed partial class FixtureRegistry
     {
         if (site < 0 || site >= data.Sites.Count || !sites.Add(site)) return;
         int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
-        foreach (var b in data.Sites[site].Buildings)
-        {
-            RegisterBuilding(world, data, site, b, townFaction);
-            if (data.Sight is { } sight) world.Sight.Add(sight, SightBuilding(b, IsDestroyed(b)));
-        }
+        foreach (var b in data.Sites[site].Buildings) RegisterWithSight(world, data, site, b, townFaction);
         Bind(world);
         EmptyPurchased(world, site);
+    }
+
+    void RegisterWithSight(World world, PopulationData data, int site, TownBuilding b, int townFaction)
+    {
+        RegisterBuilding(world, data, site, b, townFaction);
+        if (data.Sight is { } sight) world.Sight.Add(sight, SightBuilding(b, IsDestroyed(b)));
+    }
+
+    /// <summary>
+    /// A building added to a town's list while the world runs (<see cref="TownEdits.Place"/>, the level editor): registered as <see cref="RegisterSite"/> registers a loaded one
+    /// (doors, lock, beds, seats, containers, property, room and lamps). A town not registered yet takes it with the rest when it is.
+    /// </summary>
+    internal void RegisterAdded(World world, PopulationData data, int site, TownBuilding b)
+    {
+        if (!sites.Contains(site)) return;
+        RegisterWithSight(world, data, site, b, site < data.SiteFactions.Count ? data.SiteFactions[site] : -1);
+        Bind(world);
+    }
+
+    /// <summary>
+    /// A building taken out of a town's list (<see cref="TownEdits.Clear"/>): its fixtures, property, public flag, room and lamps go; whoever lies in its beds or sits in its cages
+    /// is let out first (a cage's lock opened for it).
+    /// </summary>
+    internal void RemoveBuilding(World world, string building)
+    {
+        foreach (var f in OfBuilding(building).ToArray())
+        {
+            if (f.Occupant.IsNone) continue;
+            if (f.Kind == FixtureKind.Bed) LeaveBed(world, f.Occupant);
+            else if (f.Kind == FixtureKind.Cage)
+            {
+                if (f.Lock is { } cageLock) cageLock.Locked = false;
+                GetOut(world, f.Occupant);
+            }
+        }
+        Unregister(building);
+        properties.Remove(building);
+        resetBuildings.Remove(building);
+        publicFlags.Remove(building);
+        levelPublic.Remove(building);
+        nested.Remove(building);
+        ownedProperties = null;
+        world.Sight.Remove(building);
     }
 
     void RegisterBuilding(World world, PopulationData data, int site, TownBuilding b, int townFaction)
@@ -595,12 +634,16 @@ public sealed partial class FixtureRegistry
             if (f.Kind != FixtureKind.Door) continue;
             if (f.Motion == DoorMotion.Opening)
             {
+                bool wasNavOpen = f.OpenAmount >= DoorLeaf.NavOpen;
                 f.OpenAmount += dt * f.Leaf.Speed;
                 if (f.OpenAmount >= 1) { f.OpenAmount = 1; f.Motion = DoorMotion.Open; }
+                if (!wasNavOpen && f.OpenAmount >= DoorLeaf.NavOpen) SyncDoors(f.Building);   // the navmesh counts it open now, locked or not
             }
             else if (f.Motion == DoorMotion.Closing)
             {
+                bool wasNavOpen = f.OpenAmount >= DoorLeaf.NavOpen;
                 f.OpenAmount -= dt * f.Leaf.Speed;
+                if (wasNavOpen && f.OpenAmount < DoorLeaf.NavOpen) SyncDoors(f.Building);
                 if (f.OpenAmount >= 0) continue;
                 f.OpenAmount = 0;
                 f.Motion = DoorMotion.Closed;
@@ -639,7 +682,7 @@ public sealed partial class FixtureRegistry
         {
             if (d.Kind != FixtureKind.Door) continue;
             any = true;
-            if (d.DoorBroken || d.Lock is not { EffectivelyLocked: true }) blocked = false;
+            if (d.DoorBroken || d.OpenAmount >= DoorLeaf.NavOpen || d.Lock is not { EffectivelyLocked: true }) blocked = false;
         }
         if (any) doors.SetDoorsBlocked(building, blocked);
     }
@@ -1264,6 +1307,10 @@ public sealed partial class FixtureRegistry
             l.Locked = state.Bools.GetValueOrDefault("locked" + suffix);
         }
     }
+
+    /// <summary>Whether any container of a registered building holds items (what <see cref="WriteBuilding"/> would store as container text).</summary>
+    public bool HasContents(string buildingInstance) =>
+        byBuilding.TryGetValue(buildingInstance, out var list) && list.Any(f => f.Contents is { } grid && ContainerSave.Write(grid) is not null);
 
     /// <summary>Writes a registered building's lock and door state into its saved state record (the keys of <see cref="Restore"/>; <c>locked</c> true only when effectively locked). False when the building is not registered.</summary>
     public bool WriteBuilding(string buildingInstance, FcsRecord state)

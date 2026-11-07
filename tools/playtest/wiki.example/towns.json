@@ -1,0 +1,89 @@
+[
+ {
+  "id": "example-town",
+  "name": "Example Town",
+  "aliases": [
+   "example"
+  ],
+  "kind": "town",
+  "faction": null,
+  "region": null,
+  "x": null,
+  "z": null,
+  "zone": null,
+  "verified": false,
+  "verifiedOn": null,
+  "seen": "",
+  "source": "example entry, replace",
+  "confidence": "Unknown",
+  "notes": "Fake entry that only shows the schema. Delete it.",
+  "data": {
+   "townType": "Town",
+   "residents": [
+    "Example Squad"
+   ],
+   "walls": 0,
+   "gates": 0,
+   "shops": [
+    "Example Shop"
+   ],
+   "forSale": [
+    {
+     "building": "Small Shack",
+     "price": 4000,
+     "ruin": false
+    }
+   ],
+   "overrides": [
+    "Example Town (override) ruined (Ruins) when Example Lord is not alive"
+   ],
+   "buildingTypes": [
+    {
+     "type": "Bakery",
+     "count": 1,
+     "category": "shop"
+    },
+    {
+     "type": "Barracks",
+     "count": 1,
+     "category": "other"
+    },
+    {
+     "type": "Slave Shop",
+     "count": 1,
+     "category": "slave shop"
+    },
+    {
+     "type": "Residential",
+     "count": 2,
+     "category": "other",
+     "forSale": 1,
+     "priceMin": 4000,
+     "priceMax": 4000
+    }
+   ],
+   "building_assignment_example": {
+    "note": "One possible pairing of building models with residents; the original rerolls it at every new game and mods change the lists. Only buildingTypes is reliable.",
+    "buildings": [
+     {
+      "name": "Longhouse",
+      "count": 1,
+      "kind": "shop",
+      "usedAs": "Bakery",
+      "forSale": 1,
+      "priceMin": 4000,
+      "priceMax": 4000,
+      "ruins": 0
+     }
+    ]
+   },
+   "biome": "Example Biome"
+  },
+  "found_via": "optional: where the position first came from, if an outside source; leave out otherwise",
+  "observed": {
+   "date": "2026-01-01",
+   "how": "tp then observe --radius 300",
+   "build": "agent-playtest <commit>"
+  }
+ }
+]

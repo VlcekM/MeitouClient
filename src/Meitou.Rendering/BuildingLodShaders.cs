@@ -91,7 +91,8 @@ static class BuildingLodShaders
         f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", ScaffoldFunctions + "\nvoid main()\n{");
         if (solid) f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;", "");
         else
-            f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", """
+            f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", CutVolumes + """
+
             void main()
             {
                 if (vRange.y < 1.0 || vRange.x > 0.0)
@@ -99,6 +100,7 @@ static class BuildingLodShaders
                     float dv = ditherValue();
                     if (dv < vRange.x || dv >= vRange.y) discard;
                 }
+                if ((uFadeMode & 2) != 0 && inCutVolume(vWorld)) discard;
             """ + ScaffoldTest);
         // The viewer's plain lighting is overwritten by the game sky's lighting: compute it only where it is used (the same values).
         f = Literal(f, "if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, glossLit, vWorld);\n", "");
@@ -182,14 +184,14 @@ static class BuildingLodShaders
     /// has no dither): of an instance's two blending levels exactly one casts, and a distant town casts only where it is drawn (the camera's distance fade).
     /// Without that test the Hub's baked distant mesh, the intact town, cast its roofs' shadows into the ruins at every distance.
     /// </summary>
-    // The shadow side of the cut into viewed buildings (WorldObjectRenderer.ShadowCut): a caster fragment of a cut draw (fadeMode bit 2) inside a viewed
-    // building's hull (convex footprint and height range, the view's cut volumes) casts nothing.
-    const string ShadowCut = """
+    // The view's cut volumes (convex footprint and height range each): a fragment of a cut draw (fadeMode bit 2) inside one is left out. The shadow side of the
+    // cut into viewed buildings (WorldObjectRenderer.ShadowCut), and the selection mask's floor (WorldObjectRenderer.DrawSelectionMask); the main view has none.
+    const string CutVolumes = """
         uniform int uFadeMode;
         uniform uint uCutVolumes;
         uniform vec4 uCutRanges[4];
         uniform vec4 uCutPlanes[32];
-        bool inShadowCut(vec3 p)
+        bool inCutVolume(vec3 p)
         {
             for (uint v = 0u; v < uCutVolumes; v++)
             {
@@ -213,8 +215,8 @@ static class BuildingLodShaders
             flat in float vScaffold;
             float gridLine(float v) { float f = fract(v); return min(f, 1.0 - f); }
             """);
-        return Replace(f, @"void\s+main\s*\(\s*\)\s*\{", "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + ShadowCut + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
-            + "    if ((uFadeMode & 2) != 0 && inShadowCut(vWorld)) discard;\n" + ScaffoldTest);
+        return Replace(f, @"void\s+main\s*\(\s*\)\s*\{", "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + CutVolumes + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
+            + "    if ((uFadeMode & 2) != 0 && inCutVolume(vWorld)) discard;\n" + ScaffoldTest);
     }
 
     // ---- the native model (docs/renderer-native.md 3.3, step O) ----

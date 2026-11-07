@@ -150,8 +150,11 @@ public sealed class ItemInstance
     /// </summary>
     public bool IsStolenFor(int holderFaction, PopulationData? data) => StolenFrom >= 0 && StolenFrom != holderFaction && data?.IsLawless(holderFaction) != true;
 
-    /// <summary>The weight this item and what is in it add to the load.</summary>
-    public float Weight => UnitWeight * Quantity + (Contents?.ContentWeight() ?? 0) * ContentsFactor;
+    /// <summary>
+    /// The weight this item and what is in it add to the load: a bag's contents count times its <see cref="ContentsFactor"/> only while it is worn, in full anywhere else
+    /// (<c>FUN_140749160</c>, docs/game/ui-screens.md "Backpack rows").
+    /// </summary>
+    public float Weight => UnitWeight * Quantity + (Contents?.ContentWeight() ?? 0) * (Section == "backpack_attach" ? ContentsFactor : 1);
 
     /// <summary>
     /// How full the item (a stack's partly used unit) is, 0 to 1, for the inventory cell's charge bar, whose width is charges / maximum (<c>FUN_140711200</c>, <b>Observed</b>); null when the

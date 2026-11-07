@@ -121,20 +121,20 @@ static partial class GiResolveShaders
     const string ResolveUniforms = "uniform float uDiv;";
 
     /// <summary>
-    /// <see cref="Resolve"/> for the frame's <c>gihybrid</c> parts (docs/render-gi.md "Hybrid GI"): reading relocated probes; taking the near field (<see cref="GiNearField"/>, the same
+    /// <see cref="Resolve"/> for the frame's <c>gihybrid</c> parts (docs/render-gi.md "Hybrid GI"): reading relocated probes; taking the radiance cache (<see cref="GiCache"/>, the same
     /// texels: its a says how much) in place of the probes' light.
     /// </summary>
-    public static string ResolveFor(bool relocate, bool near)
+    public static string ResolveFor(bool relocate, bool cache)
     {
         string resolve = relocate ? GiShaders.Relocating(Resolve) : Resolve;
-        if (!near) return resolve;
+        if (!cache) return resolve;
         if (!resolve.Contains(ProbesRead, StringComparison.Ordinal)) throw new InvalidOperationException("ResolveFor: no probe read");
         const string Taken = """
 
-                vec4 field = texelFetch(uGiNear, ivec2(floor(gl_FragCoord.xy)), 0);
-                gi = vec4(mix(gi.rgb, field.rgb, field.a), mix(gi.a, 1.0, field.a));
+                vec4 cached = texelFetch(uGiCache, ivec2(floor(gl_FragCoord.xy)), 0);
+                gi = vec4(mix(gi.rgb, cached.rgb, cached.a), mix(gi.a, 1.0, cached.a));
             """;
-        return resolve.Replace(ResolveUniforms, ResolveUniforms + "\nuniform sampler2D uGiNear;", StringComparison.Ordinal)
+        return resolve.Replace(ResolveUniforms, ResolveUniforms + "\nuniform sampler2D uGiCache;", StringComparison.Ordinal)
             .Replace(ProbesRead, ProbesRead + Taken, StringComparison.Ordinal);
     }
 

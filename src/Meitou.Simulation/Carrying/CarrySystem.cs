@@ -146,6 +146,37 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         return MathF.Sqrt(dx * dx + dz * dz);
     }
 
+    /// <summary>
+    /// Whether <paramref name="a"/> is within <paramref name="reach"/> of <paramref name="b"/> (<see cref="Gap"/>) on its floor: no more than <see cref="MovementSystem.FloorSlack"/> apart in height,
+    /// so a body on the floor below is walked down to, not reached through the floor (#292). Outdoors at this reach the height only parts a cliff's top from its foot.
+    /// A body's height is its ragdoll root's, which a big body holds well off the ground: the floor under it counts too (<see cref="FloorUnder"/>).
+    /// </summary>
+    static bool InReach(World world, in CharacterHot a, in CharacterHot b, float reach) =>
+        Gap(a, b) <= reach && (Level(a.Position.Y, b.Position.Y) || Level(a.Position.Y, FloorUnder(world, b.Position)));
+
+    static bool Level(float a, float b) => MathF.Abs(a - b) <= MovementSystem.FloorSlack;
+
+    /// <summary>
+    /// The floor a body at <paramref name="body"/> lies over: the walkable surface under its point (<see cref="IWalkability.GroundHeight(float, float, float)"/>), so a storey above stays apart.
+    /// <b>Observed</b> (Gigachad save, a downed Cleanser Unit, Big-Bones, frozen on a slope): its root is 67 over the terrain under it, and a looter standing there never reached it.
+    /// </summary>
+    static float FloorUnder(World world, Vector3 body) => world.Walkability.GroundHeight(body.X, body.Z, body.Y);
+
+    /// <summary>
+    /// Where a carrier walks to reach a body at <paramref name="body"/>: a floor point (<see cref="IWalkability.FloorNear"/>) within <see cref="MovementSystem.FloorSlack"/> of the body's height, asked
+    /// at the body's height and then lower. A body lying on furniture (a counter, a table) is over the hole the furniture cuts in the floor, where a walker's height snaps to the storey above
+    /// (<b>Observed</b>: a body 16 over the Hub bar's floor, under its upper floor 38 over it, was walked to upstairs and never reached). The body's own point when no floor is found.
+    /// </summary>
+    static Vector3 Approach(World world, Vector3 body)
+    {
+        const float Slack = MovementSystem.FloorSlack;
+        for (float drop = 0; drop <= Slack; drop += Slack / 2)
+        {
+            if (world.Walkability.FloorNear(body.X, body.Z, body.Y - drop, Slack) is { } floor && MathF.Abs(floor.Y - body.Y) <= Slack) return floor;
+        }
+        return body;
+    }
+
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
 
     // ------------------------------------------------------------------ orders
@@ -470,7 +501,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                 continue;
             }
             const ushort Path = (ushort)MoveFlags.AnyPath;
-            if (Gap(next[i], next[t]) <= (lifting ? ReachOf(world, table.Cold(t)!) : Settings.Reach))
+            if (InReach(world, next[i], next[t], lifting ? ReachOf(world, table.Cold(t)!) : Settings.Reach))
             {
                 if ((n.Flags & Path) != 0)
                 {
@@ -484,11 +515,17 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             }
             if (lifting && cold.LiftTime >= 0) continue;   // lifting: it does not walk after the body
             n.TaskTime -= dt;
-            var goal = new Vector2(next[t].Position.X, next[t].Position.Z);
             bool asking = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
+            if (asking || n.TaskTime > 0) continue;
+
+            // The body's floor: one downstairs is walked to down the stairs, not to the floor above it; one on furniture from the floor beside it.
+            var spot = Approach(world, next[t].Position);
+            var goal = new Vector2(spot.X, spot.Z);
             bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0 || Vector2.DistanceSquared(goal, n.Goal) > PursuitSystem.RepathDistance * PursuitSystem.RepathDistance;
-            if (asking || !stale || n.TaskTime > 0) continue;
+            if (!stale) continue;
+
             n.Goal = goal;
+            (cold.GoalHeight, cold.GoalHeightAt) = (spot.Y, goal);
             n.Mode = SpeedMode.Free;
             n.Flags |= (ushort)MoveFlags.NeedPath;
             n.TaskTime = PursuitSystem.RepathSeconds;
@@ -748,7 +785,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     void Loot(World world, CharacterTable table, int i, float dt)
     {
         var cold = table.Cold(i)!;
-        if (!table.TryResolveNext(cold.CarryTarget, out int t) || Gap(table.Next[i], table.Next[t]) > ReachOf(world, table.Cold(t)!)) return;   // still walking (Schedule ends a loot whose target went)
+        if (!table.TryResolveNext(cold.CarryTarget, out int t) || !InReach(world, table.Next[i], table.Next[t], ReachOf(world, table.Cold(t)!))) return;   // still walking (Schedule ends a loot whose target went)
         var victim = table.Cold(t)!;
         // The loot window is open: the looter stays in the task (squatting, no other task) for as long as it stays open, then ends it (Task_Loot_Order, FUN_140354ef0).
         if ((cold.LootFlags & LootStart.WindowHeld) != 0)
@@ -830,7 +867,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var table = world.Characters;
         return table.TryResolveNext(player.OpenLoot, out int t) && table.Cold(t) is { } body && Openable(table, t)
             && table.TryResolveNext(player.LootOpener, out int o) && table.Cold(o) is { Medical.Incapacitated: false, Inventory: not null } looter && looter.CarriedBy.IsNone
-            && Gap(table.Next[o], table.Next[t]) <= ReachOf(world, body) * 1.5f ? (o, t) : null;
+            && InReach(world, table.Next[o], table.Next[t], ReachOf(world, body) * 1.5f) ? (o, t) : null;
     }
 
     /// <summary>

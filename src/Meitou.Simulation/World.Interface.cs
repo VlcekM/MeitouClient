@@ -18,7 +18,7 @@ public sealed partial class World
             or Carrying.TakeLootItem or Carrying.PutLootItem or Production.PutInMachine or Production.TakeFromMachine
             or Trading.BuyItem or Trading.SellItem or Trading.ArrangeStock or Trading.CloseTrade or Dialogue.DialogueChoice or Dialogue.EndConversation or Dialogue.ConfirmCharacterTrade or Dialogue.CloseCharacterTrade
             or Construction.PlaceBuildings or Construction.CancelSite or Construction.ConfirmDismantle or Construction.PauseSite or Editing.EditCharacter or Editing.FinishCreation
-            or Locks.ToggleDoorsOrder or Locks.ToggleDoorLocksOrder);
+            or Locks.ToggleDoorsOrder or Locks.ToggleDoorLocksOrder or DebugGiveItem);
         if (due.Count == 0) return;
         Characters.BeginTick();
         Characters.Phase = TablePhase.Inputs;

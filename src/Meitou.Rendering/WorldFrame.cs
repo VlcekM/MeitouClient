@@ -176,6 +176,8 @@ sealed class WorldOptions
     public bool Windowed;
     /// <summary>Interactive window: never shown (<c>--hidden-window</c>, for unattended runs such as <c>--play-bench</c>); implies <see cref="Windowed"/>.</summary>
     public bool HiddenWindow;
+    /// <summary>Interactive loop without a window, swapchain or presentation (<c>--headless</c> or <c>MEITOU_HEADLESS=1</c>; the control channel and screenshots work); the size is <c>--size</c>, else 1920x1080.</summary>
+    public bool Headless;
     /// <summary>Offscreen pictures: seconds the grass sway advances every frame (tests the grass motion under a temporal upscaler; 0 holds it still).</summary>
     public float SwayStep;
     /// <summary>The character renderer's test harness (<c>--crowd N</c>, <see cref="Characters.CrowdHarness"/>): N generated characters round the start point.</summary>
@@ -244,6 +246,7 @@ sealed class WorldOptions
           --yaw <deg> --pitch <deg> --distance <units>   camera around the point (defaults 30, 35, radius)
           --screenshot <out.png> --size <W>x<H>          render offscreen to a PNG and exit
           --monitor <n>                                  open the window on monitor n (1-based)
+          --headless                                     no window, swapchain or presentation: the interactive loop draws into an offscreen picture of --size (default 1920x1080), 30 fps unless --fps-limit; for the control channel (--control-dir) and its screenshot command; env MEITOU_HEADLESS=1
           --windowed                                     a bordered window: the --size asked, else maximized (default: borderless full screen; Alt+Enter toggles)
           --no-objects             skip buildings and map features
           --no-foliage             no trees, bushes, rocks or grass (F toggles)
@@ -315,7 +318,7 @@ sealed class WorldOptions
           --smaa                   SMAA instead of FXAA when no upscaler runs
           --gtao-quality <0..2>    the gtao switch's budget (default 1): 0 half size, 2 x 4; 1 half size, 3 x 6; 2 render size, 3 x 6
           --particle-divisor <0|1|2|4>   the weather's alpha and additive particles drawn at 1/n of the render size (0, the default: by sprite size; `--faithful particles` draws them full size)
-          --gi-hybrid <parts>      the gihybrid switch on with these parts only (comma list: relocate, clouds, near)
+          --gi-hybrid <parts>      the gihybrid switch on with these parts only (comma list: relocate, clouds, cache)
           --no-heat-haze           no heat haze (the game's HeatHaze setting, default on: strength from the weather's `heat haze`)
           (ambient occlusion, dithering, light shafts, heat haze strength, the tone map, night grading and the rest are the switches above: --meitou / --faithful <id>; their strengths are Tab sliders)
         Keys: left drag orbit, right drag look around, wheel zoom, W/A/S/D free fly along the view, Q/E down/up (Shift faster, Ctrl slower),
@@ -362,6 +365,8 @@ sealed class WorldOptions
         }
 
         if (o.Radius <= 0) throw new ArgumentException("--radius must be positive");
+        if (Environment.GetEnvironmentVariable("MEITOU_HEADLESS") == "1") o.Headless = true;
+        if (o.Headless && !o.SizeGiven) (o.Width, o.Height) = (1920, 1080);
         if (!o.SizeGiven && (o.BenchFrames > 0 || o.Ab is not null)) (o.Width, o.Height) = BenchSize;
         return o;
     }
@@ -516,6 +521,7 @@ sealed class WorldOptions
             case "--no-vsync": o.VSync = false; break;
             case "--monitor": o.Monitor = r.Int(); break;
             case "--windowed": o.Windowed = true; break;
+            case "--headless": o.Headless = true; break;
             case "--hidden-window": o.HiddenWindow = o.Windowed = true; break;
             case "--sway-step": o.SwayStep = r.Float(); break;
             case "--orbit-step": o.OrbitStep = r.Float() * MathF.PI / 180; break;
@@ -795,9 +801,13 @@ static partial class WorldFrame
         public InteriorMaskRenderer? InteriorMask;
         /// <summary>The navmesh debug view (null in the viewer; drawn while visible).</summary>
         public NavmeshOverlayRenderer? NavmeshOverlay;
+        /// <summary>The pick & collision inspector's drawing (Meitou only): pick hulls and shapes, same kind of renderer as the navmesh view.</summary>
+        public NavmeshOverlayRenderer? InspectorOverlay;
         /// <summary>The hover outline the game draws round the character under the mouse, and with Alt those near (null in the viewer); <see cref="HoverKeys"/> picks the characters by their draw-list keys, each with its colour (empty: none).</summary>
         public HoverOutlineRenderer? HoverOutline;
         public IReadOnlyList<(long Key, Vector4 Colour)> HoverKeys = [];
+        /// <summary>The selected building <see cref="HoverOutline"/> outlines too, by placement key, above its floor height, in its colour (null: none; nothing while the interior view shows it).</summary>
+        public (string Key, float Floor, Vector4 Colour)? OutlinedBuilding;
         /// <summary>
         /// A presentation cap on how far the frame reaches (the Meitou editor's bar, high above the world): the far plane and the shadow cascades end there, so the world below
         /// leaves the view; null in play.
@@ -818,7 +828,7 @@ static partial class WorldFrame
         internal Gi.GiScene? Gi;
         internal Gi.GiDebugPass? GiDebugPass;
         internal Gi.GiProbes? Probes;
-        internal Gi.GiNearField? GiNear;
+        internal Gi.GiCache? GiCache;
         /// <summary>A backend-owned probe GI (Metal's native ray tracing); Vulkan uses <see cref="Gi"/> and <see cref="Probes"/> instead.</summary>
         internal Gi.IProbeGi? ProbeGi;
         internal WorldLamps? Lamps;
@@ -870,7 +880,7 @@ static partial class WorldFrame
         public void Dispose()
         {
             GiDebugPass?.Dispose();
-            GiNear?.Dispose();
+            GiCache?.Dispose();
             TracedSun?.Dispose();
             TracedSunVolume?.Dispose();
             ProbeGi?.Dispose();
@@ -888,6 +898,7 @@ static partial class WorldFrame
             Debris?.Dispose();
             InteriorMask?.Dispose();
             NavmeshOverlay?.Dispose();
+            InspectorOverlay?.Dispose();
             Water?.Dispose();
             Surfaces?.Dispose();
             Reflection?.Dispose();
@@ -1144,6 +1155,7 @@ static partial class WorldFrame
         {
             var l = WorldLevelData.Load(install, includeInteriors: true);
             var layouts = new BuildingLayouts(lampDb, l.Interiors);
+            l.ApplyBuildingSwaps(lampDb, layouts);   // as the scene's objects: a swapped building or piece of furniture brings its own lamps
             ResidentRuins.Apply(lampDb, l, layouts);
             return (l, layouts);
         });
@@ -1265,7 +1277,7 @@ static partial class WorldFrame
         if (o.Gi)
         {
             gpu.Probes = new Gi.GiProbes(context) { Enabled = o.GiProbes, InteriorEnabled = o.InteriorGi };
-            gpu.GiNear = new Gi.GiNearField(context, gpu.Gi, gpu.Probes);
+            gpu.GiCache = new Gi.GiCache(context, gpu.Gi, gpu.Probes);
             Console.WriteLine($"gi        {gpu.Probes.Describe()}");
         }
         else PublishReflectionSurfaces(gpu, context);

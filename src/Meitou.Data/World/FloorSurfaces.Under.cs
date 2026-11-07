@@ -15,7 +15,7 @@ public sealed partial class FloorSurfaces
         foreach (var s in surfaces)
         {
             if (q.X < s.Min.X || q.Y < s.Min.Y || q.X > s.Max.X || q.Y > s.Max.Y || s.YMin > top) continue;
-            for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+            foreach (int i in s.Grid.At(q))
                 if (HeightAt(s.Corners[i], s.Corners[i + 1], s.Corners[i + 2], q) is { } y && y <= top && y > best) best = y;
         }
         return float.IsNegativeInfinity(best) ? null : best;
@@ -32,7 +32,7 @@ public sealed partial class FloorSurfaces
         foreach (var s in surfaces)
         {
             if (s.Floor > floor || s.Stairs || q.X < s.Min.X || q.Y < s.Min.Y || q.X > s.Max.X || q.Y > s.Max.Y || s.YMax <= best) continue;
-            for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+            foreach (int i in s.Grid.At(q))
                 if (HeightAt(s.Corners[i], s.Corners[i + 1], s.Corners[i + 2], q) is { } y && y > best) best = y;
         }
         return float.IsNegativeInfinity(best) ? null : best;
@@ -58,7 +58,7 @@ public sealed partial class FloorSurfaces
             foreach (var s in list)
             {
                 if (q.X < s.Min.X || q.Y < s.Min.Y || q.X > s.Max.X || q.Y > s.Max.Y || s.YMax < bottom) continue;
-                for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+                foreach (int i in s.Grid.At(q))
                     if (HeightAt(s.Corners[i], s.Corners[i + 1], s.Corners[i + 2], q) is { } y && y >= bottom && y < best) best = y;
             }
         return float.IsPositiveInfinity(best) ? null : best;

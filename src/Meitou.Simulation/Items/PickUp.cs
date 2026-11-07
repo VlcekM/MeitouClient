@@ -135,12 +135,10 @@ namespace Meitou.Simulation
                 }
                 c.PickingUpItem = null;
                 if (next[s].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, s);
-                // An animal takes a limb in its mouth and eats it later (docs/game/character-stats.md "Eating").
-                if (Items.FeedSystem.CanHold(c, item.Item))
+                // An animal takes a limb in its mouth and eats it later; one with no mouth point leaves it on the ground (docs/game/character-stats.md "Eating", "Mouth").
+                if (Items.FeedSystem.IsMouthPickUp(c, item.Item))
                 {
-                    world.GroundItems.Take(id);
-                    Items.FeedSystem.HoldInMouth(world, s, c, item.Item);
-                    world.EmitSound(SoundKind.PickedUp, s, next[s].Position);
+                    TakeInMouth(world, s, c, item);
                     continue;
                 }
                 // Another faction's item is stolen from it (the "Steal" pick-up); what stays on the ground keeps its old mark.
@@ -165,6 +163,15 @@ namespace Meitou.Simulation
                     world.Post($"{c.Name}: Not enough room in my inventory");
                 }
             }
+        }
+
+        /// <summary>An animal's pick-up of a limb: into its mouth when it has the point, else nothing (no sound or message, the limb stays where it lies).</summary>
+        static void TakeInMouth(World world, int slot, CharacterCold cold, Items.GroundItem item)
+        {
+            if (!Items.FeedSystem.HasMouth(cold)) return;
+            world.GroundItems.Take(item.Id);
+            Items.FeedSystem.HoldInMouth(world, slot, cold, item.Item, item.Fall?.SkinTone ?? default);
+            world.EmitSound(SoundKind.PickedUp, slot, world.Characters.Next[slot].Position);
         }
     }
 }

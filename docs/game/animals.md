@@ -90,7 +90,10 @@ from the start.
   merged data: 43 animals, e.g. Bonedog 1 Animal Skin / 4 Animal Teeth / 3 Raw Meat; Pet Dog, Settler's Pup, Pack Beast Dead none).
 - Added when a new character's inventory is set up, after the `inventory` list (`Character::vfunc_88` `FUN_140622e80`, called last
   by both setup functions, not for an inventory loaded from a save); entries below 1 skipped; each item gets the byte `+0x138`
-  set (**Observed**, decompile).
+  set (**Observed**, decompile). `FUN_140622e80` adds them only when its second argument is 0; the animal setup `FUN_14062a130` passes its own second argument
+  through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). What that argument is, and whether it is
+  why the player's own animals have none (#341), is **Unknown**: its `+0x20` / `+0x2c` hold a position and rotation copied onto the request, so it reads as a saved state the
+  character is made from (**Inferred**).
 - `+0x138` is the saved item key `death` (read/written by `FUN_140761550` / `FUN_1407609e0`) (**Observed**). In saves these items
   take ordinary grid cells beside carried goods, each entry one stack of its whole quantity whatever the item's `stackable`
   (Electrical Components 4, Iron Plates 6, `stackable` 1), and a stack of the same record without the flag stays a separate stack
@@ -103,7 +106,7 @@ from the start.
 - No inventory-window filter on the flag was found: the items show while the owner lives (**Observed**, absence in the decompile).
 - Unknown: `FUN_1405a59a0` (reads record 3979's `death items`); whether the flag changes weight.
 
-Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`), stacks merge only with the same flag, the feed search skips them,
+Meitou: `ItemFactory.Build` adds them (`ItemInstance.Death`) to characters made for other factions only (engine choice: players report the original's own animals have none, #341), stacks merge only with the same flag, the feed search skips them,
 moving an item out of its inventory clears it, and a loot take (or an item moved out of the open loot) that removes flagged units from a live down body (`CharacterFacts.Down`) butchers it.
 
 ## Ageing
@@ -185,9 +188,15 @@ Confirm (`FUN_1406aac20`, **Observed**):
 - each bought animal: its AI orders cleared, toughness, athletics, melee defence, melee attack, martial arts, dodge, stealth, mass combat and
   swimming x 0.25 (`FUN_1406aa730`), recruited as by DA 3/18 (`FUN_140692820`, [dialogue](dialogue.md#recruiting)).
 - each item in the bought animals' backpacks goes into the backpack of the seller's platoon members (tried from the last), else is destroyed.
-- the total is taken from the player's money; the character editor opens on the bought animals (`FUN_1406e32f0` -> `FUN_1405f4dd0`, mode 1).
+- the total is taken from the player's money (the backpack items already moved); then, only when at least one animal was bought, the character
+  editor opens at once on exactly the bought animals, in mode 1 (in play; `FUN_1406e32f0(window, list, 1)` -> `FUN_1405f4dd0`), replacing any
+  editor already open. **Verified** (decompile: the call follows the money write and is skipped when the bought list is empty; mode argument 1).
+  The animal page ([characters.md](../characters.md#character-editor)) then lets the player name each one. The other mode-1 callers are
+  DA 3 recruiting (`FUN_1407ff8b0`) and `FUN_1407f3670`.
 
-Meitou: `DialogueSystem` `CharacterTradeKind.AnimalBuying`; the town test is `Squad.Town`; the editor is not opened.
+Meitou: `DialogueSystem` `CharacterTradeKind.AnimalBuying`; the town test is `Squad.Town`; the confirm publishes a `DialogueRequestKind.AnimalEditor`
+request listing the bought animals and the host opens the editor (`EditKind.Recruit`, the in-play kind) on them; the names are saved by the
+name-only `EditCharacter` ([characters.md](../characters.md#character-editor)).
 
 ## Breeding and eggs
 

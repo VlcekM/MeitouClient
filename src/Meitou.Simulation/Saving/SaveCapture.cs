@@ -115,7 +115,7 @@ public static partial class SaveCapture
         // The zone files of the zones visited since (before the locks, the player's buildings and the home handles, which write into them).
         ZoneSave.WriteVisited(game, world, data, options.Levels);
         var buildings = HeldSave.BuildingStates(game);
-        WriteLocks(world, buildings);
+        WriteLocks(game, world, buildings, options.Levels);
         world.Fixtures.WriteResets(buildings);
         ResearchSave.Write(game.Research, world.Research);
         var outposts = data.PlayerFaction >= 0 ? BuildingSave.Write(game, world, data.Factions[data.PlayerFaction].Id, options.Seed) : new Dictionary<int, Hand>();
@@ -790,18 +790,66 @@ public static partial class SaveCapture
     /// <summary>The <c>CS</c> of every zone container (docs/formats/save.md "Object handles").</summary>
     const int ZoneContainerSerial = 11111;
 
-    /// <summary>The registered buildings' locks and doors, and the homes a lock-up round locked, into their zones' existing state records (a building the save has no record of, or a new save without zones, is left out).</summary>
-    static void WriteLocks(World world, IReadOnlyDictionary<string, FcsRecord> buildings)
+    /// <summary>
+    /// The registered buildings' locks, doors and container contents, and the homes a lock-up round locked, into their zones' state records. A building the save has no record of
+    /// is left out, except a level placement (one placed during the session) whose containers hold items: it gets a state record in its zone's file (<see cref="AddPlacedState"/>),
+    /// since its level-edit state is rebuilt without them.
+    /// </summary>
+    static void WriteLocks(SaveGame game, World world, Dictionary<string, FcsRecord> buildings, WorldLevelData? levels)
     {
         var locks = world.Systems.OfType<Locks.LockSystem>().FirstOrDefault();
+        Dictionary<string, BuildingPlacement>? placements = null;
         foreach (var b in world.Fixtures.Buildings)
         {
-            if (!buildings.TryGetValue(b, out var state)) continue;
+            if (!buildings.TryGetValue(b, out var state))
+            {
+                if (levels is null || !world.Fixtures.HasContents(b)) continue;
+                placements ??= levels.Buildings().GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+                if (!placements.TryGetValue(b, out var placement) || AddPlacedState(game, placement) is not { } added) continue;
+                buildings[b] = state = added;
+            }
             world.Fixtures.WriteBuilding(b, state);
             if (locks is null) continue;
             if (locks.IsHouseLocked(world, b)) state.Bools[Locks.LockSystem.HouseLockedKey] = true;
             else state.Bools.Remove(Locks.LockSystem.HouseLockedKey);
         }
+    }
+
+    /// <summary>
+    /// Puts a level placement into its zone's file of the save: its instance in the building list and a GAMESTATE_BUILDING of its own, with the keys the building's fixtures read
+    /// back (completeness, damage and height). Null when the zone has no file. The state has no handle, as a level building's state in the level data has none.
+    /// </summary>
+    static FcsRecord? AddPlacedState(SaveGame game, BuildingPlacement placement)
+    {
+        if (!game.Zones.TryGetValue(placement.Zone, out var zone)) return null;
+        var file = zone.File;
+        var list = zone.BuildingList;
+        if (list is null)
+        {
+            list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Id = NextRecordId(file), Name = "0", StringId = WorldLevelData.BuildingListId };
+            file.Records.Add(list);
+        }
+        string stateId = placement.StateId ?? placement.InstanceId + "-S23";   // the hex of GAMESTATE_BUILDING (35)
+        var state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Id = NextRecordId(file), Name = "0", StringId = stateId };
+        state.Bools["is complete"] = true;
+        state.Bools["destroyed"] = placement.DestroyedOverride ?? false;
+        state.Floats["world Y pos"] = placement.WorldY ?? placement.Position.Y;
+        state.Ints["flags"] = 1;   // bit 0: outside
+        if (placement.InteriorLayout is { Length: > 0 } interior) state.Strings["interior layout name"] = interior;   // as the level edits write the same placement
+        if (placement.ExteriorLayout is { Length: > 0 } exterior) state.Strings["exterior layout name"] = exterior;
+        file.Records.Add(state);
+        list.Instances.RemoveAll(i => i.Id == placement.InstanceId);
+        var instance = new FcsInstance { Id = placement.InstanceId, Target = placement.BuildingId, Position = placement.Position, Rotation = placement.Rotation };
+        instance.States.Add(stateId);
+        list.Instances.Add(instance);
+        return state;
+    }
+
+    static int NextRecordId(SaveFile file)
+    {
+        int id = file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => r.Id)) + 1;
+        file.Data.NextId = id;   // later writers allocate from it (BuildingSave, Wild)
+        return id;
     }
 
     static RaceData? RaceOf(string recordId, GameDatabase db, Dictionary<string, RaceData?> cache)

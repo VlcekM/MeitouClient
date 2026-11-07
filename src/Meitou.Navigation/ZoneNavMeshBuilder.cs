@@ -167,9 +167,10 @@ internal static partial class ZoneNavMeshBuilder
         foreach (int c in meshSolids) RemoveInside(g.MeshSolids[c], chf, g.Solids, solids);
         if (g.Ground is { } ground) RemoveUnderground(ground, s.AgentHeight, chf);
         foreach (int c in painters) Mark(ctx, g.Painters[c], NavArea.Door, chf, s.CellSize * s.DoorInflateCells);
+        var steps = SideSteps(chf, g.Ground);
 
         long t2 = Stopwatch.GetTimestamp();
-        var result = Partition(ctx, chf, s, ticks);
+        var result = Partition(ctx, chf, s, ticks, steps);
         long t5 = Stopwatch.GetTimestamp();
         detail = result is null ? null : SampleHeights(result, chf, border);
         long t6 = Stopwatch.GetTimestamp();
@@ -184,23 +185,25 @@ internal static partial class ZoneNavMeshBuilder
     /// search to expand; docs/game/pathfinding.md "Search cost"). DotRecast refuses some watershed contours that Recast only warns about (a region winding
     /// round a hole with two outlines, an outline simplified into a bad one): such a tile is partitioned monotone.
     /// </summary>
-    static RcPolyMesh? Partition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks)
+    static RcPolyMesh? Partition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<StepLink> steps)
     {
-        if (s.Watershed && TryPartition(ctx, chf, s, ticks, watershed: true, out var mesh)) return mesh;
-        TryPartition(ctx, chf, s, ticks, watershed: false, out mesh);
+        if (s.Watershed && TryPartition(ctx, chf, s, ticks, steps, watershed: true, out var mesh)) return mesh;
+        TryPartition(ctx, chf, s, ticks, steps, watershed: false, out mesh);
         return mesh;
     }
 
-    static bool TryPartition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, bool watershed, out RcPolyMesh? mesh)
+    static bool TryPartition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<StepLink> steps, bool watershed, out RcPolyMesh? mesh)
     {
         mesh = null;
         long t0 = Stopwatch.GetTimestamp();
+        CutSteps(chf, steps);
         if (watershed)
         {
             RcRegions.BuildDistanceField(ctx, chf);
             RcRegions.BuildRegions(ctx, chf, s.MinRegionArea, s.MergeRegionArea);
         }
         else RcRegions.BuildRegionsMonotone(ctx, chf, s.MinRegionArea, s.MergeRegionArea);
+        RelinkWithinRegions(chf, steps);
         long t1 = Stopwatch.GetTimestamp();
         Interlocked.Add(ref ticks.Regions, t1 - t0);
         RcContourSet contours;
@@ -276,35 +279,89 @@ internal static partial class ZoneNavMeshBuilder
             int columns = (x1 - 1 - x0) / HeightSampleCells + 2, rows = (z1 - 1 - z0) / HeightSampleCells + 2;
             var values = new float[columns * rows];
             var own = new bool[columns * rows];
-            for (int j = 0; j < rows; j++)
-                for (int i = 0; i < columns; i++)
-                {
-                    int cx = x0 + i * HeightSampleCells + border, cz = z0 + j * HeightSampleCells + border;
-                    float y = float.NaN;
-                    if (cx < chf.width && cz < chf.height)
-                    {
-                        var cell = chf.cells[cx + cz * chf.width];
-                        float plane = Plane(cx - border + 0.5f, cz - border + 0.5f), nearest = HeightReach / chf.ch, nearestOwn = float.MaxValue;
-                        for (int s = cell.index, end = cell.index + cell.count; s < end; s++)
-                        {
-                            if (chf.areas[s] == NavArea.Null) continue;
-                            float top = chf.spans[s].y - 0.5f;
-                            float off = MathF.Abs(top - plane);
-                            if (regions.Contains(chf.spans[s].reg))
-                            {
-                                if (off >= nearestOwn) continue;
-                                (nearestOwn, y) = (off, top);
-                                own[j * columns + i] = true;
-                            }
-                            else if (!own[j * columns + i] && off < nearest) (nearest, y) = (off, top);
-                        }
-                        if (!float.IsNaN(y)) y = chf.bmin.Y + y * chf.ch;
-                    }
-                    values[j * columns + i] = y;
-                }
+            SampleCells(chf, border, x0, z0, columns, regions, Plane, values, own);
+            FillFromNeighbours(chf, border, x0, z0, columns, values);
             grids[p] = new HeightGrid(chf.bmin.X + (x0 + border + 0.5f) * chf.cs, chf.bmin.Z + (z0 + border + 0.5f) * chf.cs, step, columns, rows, values) { Own = own };
         }
         return grids;
+    }
+
+    /// <summary>
+    /// Each sample of a polygon's box (<see cref="SampleHeights"/>): the walkable span of its regions nearest its <paramref name="planeAt"/> (in cells), else the one
+    /// nearest the plane within <see cref="HeightReach"/>; NaN where there is none.
+    /// </summary>
+    static void SampleCells(RcCompactHeightfield chf, int border, int x0, int z0, int columns, HashSet<int> regions, Func<float, float, float> planeAt,
+        float[] values, bool[] own)
+    {
+        for (int j = 0, rows = values.Length / columns; j < rows; j++)
+            for (int i = 0; i < columns; i++)
+            {
+                int cx = x0 + i * HeightSampleCells + border, cz = z0 + j * HeightSampleCells + border;
+                float y = float.NaN;
+                if (cx < chf.width && cz < chf.height)
+                {
+                    var cell = chf.cells[cx + cz * chf.width];
+                    float plane = planeAt(cx - border + 0.5f, cz - border + 0.5f), nearest = HeightReach / chf.ch, nearestOwn = float.MaxValue;
+                    for (int s = cell.index, end = cell.index + cell.count; s < end; s++)
+                    {
+                        if (chf.areas[s] == NavArea.Null) continue;
+                        float top = chf.spans[s].y - 0.5f;
+                        float off = MathF.Abs(top - plane);
+                        if (regions.Contains(chf.spans[s].reg))
+                        {
+                            if (off >= nearestOwn) continue;
+                            (nearestOwn, y) = (off, top);
+                            own[j * columns + i] = true;
+                        }
+                        else if (!own[j * columns + i] && off < nearest) (nearest, y) = (off, top);
+                    }
+                    if (!float.IsNaN(y)) y = chf.bmin.Y + y * chf.ch;
+                }
+                values[j * columns + i] = y;
+            }
+    }
+
+    /// <summary>
+    /// Gives the samples <see cref="SampleCells"/> left without a span the walkable span within a climb a cell of a sampled neighbour's height, spreading from
+    /// sample to sample until none is added (engine choice). A polygon is one connected surface, so where the ground leaves its plane by more than
+    /// <see cref="HeightReach"/> in a region none of its corners touches, its height carries on from its neighbours (Observed zone 20.32 at -50695,805,
+    /// docs/game/pathfinding.md "Polygon heights"). Without it the plane, ~40 over the ground, was taken there and walkers could not step onto it.
+    /// </summary>
+    static void FillFromNeighbours(RcCompactHeightfield chf, int border, int x0, int z0, int columns, float[] values)
+    {
+        int rows = values.Length / columns;
+        float reach = chf.walkableClimb * HeightSampleCells * chf.ch;
+        var queue = new Queue<int>();
+        for (int k = 0; k < values.Length; k++)
+            if (!float.IsNaN(values[k])) queue.Enqueue(k);
+
+        while (queue.TryDequeue(out int k))
+        {
+            int i = k % columns, j = k / columns;
+            Spread(i - 1, j, values[k]);
+            Spread(i + 1, j, values[k]);
+            Spread(i, j - 1, values[k]);
+            Spread(i, j + 1, values[k]);
+        }
+
+        void Spread(int i, int j, float from)
+        {
+            if (i < 0 || j < 0 || i >= columns || j >= rows || !float.IsNaN(values[j * columns + i])) return;
+            int cx = x0 + i * HeightSampleCells + border, cz = z0 + j * HeightSampleCells + border;
+            if (cx >= chf.width || cz >= chf.height) return;
+            var cell = chf.cells[cx + cz * chf.width];
+            float y = float.NaN, nearest = reach;
+            for (int s = cell.index, end = cell.index + cell.count; s < end; s++)
+            {
+                if (chf.areas[s] == NavArea.Null) continue;
+                float top = chf.bmin.Y + (chf.spans[s].y - 0.5f) * chf.ch;
+                if (MathF.Abs(top - from) > nearest) continue;
+                (nearest, y) = (MathF.Abs(top - from), top);
+            }
+            if (float.IsNaN(y)) return;
+            values[j * columns + i] = y;
+            queue.Enqueue(j * columns + i);
+        }
     }
 
     /// <summary>The regions (not the tile border's) of the walkable spans within the climb of a polygon's corners, in the four cells round each.</summary>

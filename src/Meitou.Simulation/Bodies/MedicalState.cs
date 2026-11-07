@@ -51,8 +51,9 @@ public sealed partial class MedicalState
     public DeathCause Cause { get; private set; }
 
     /// <summary>
-    /// Set when blood reached 0 (<c>+0x163 bloodlossTrauma</c>); clears above 25 (the original only on an update that found blood below capacity, docs/game/character-stats.md
-    /// "Blood and KO"). While set, a conscious character goes down only under -25, and the HUD's Toughness XP shows "Blood loss trauma: +2x".
+    /// Set when blood reached 0 or while a limb is freshly cut off (<c>+0x163 bloodlossTrauma</c>, <see cref="HasFreshStump"/>); clears only on a tick that finds blood below
+    /// capacity and then above 25 (docs/game/character-stats.md "Blood and KO"). While set, a conscious character goes down only under -25, and the HUD's Toughness XP shows
+    /// "Blood loss trauma: +2x".
     /// </summary>
     public bool BloodKo { get; private set; }
 
@@ -159,7 +160,24 @@ public sealed partial class MedicalState
     public bool PlayingDead { get; private set; }
 
     /// <summary>Knocked out with nothing but the KO timer keeping it down (vital parts and blood allow waking): whether it may wake within <paramref name="dt"/> seconds.</summary>
-    public bool WakesWithin(float dt) => Unconscious && !Dead && KoTimer <= dt && !VitalPartsKeepDown(LegKoPoint) && Blood >= 0;
+    public bool WakesWithin(float dt) => Unconscious && !Dead && KoTimer <= dt && !VitalPartsKeepDown(LegKoPoint) && Blood >= WakeBloodFloor;
+
+    /// <summary>
+    /// An arm or leg stump whose h - s is still under -M (M of the stump's base HP 5), as right after the cut (<c>hasFreshlySeveredALimb</c> <c>FUN_140645350</c>, <b>Verified</b>
+    /// decompile). While one is, each tick sets <see cref="BloodKo"/> and blood holds an unconscious character down only under -25, as a conscious one.
+    /// </summary>
+    public bool HasFreshStump
+    {
+        get
+        {
+            foreach (var p in parts)
+                if (p.Limb == LimbState.Stump && p.Template.Type is BodyPartType.Leg or BodyPartType.Arm && p.Flesh - p.Stun < -p.MaxHp) return true;
+            return false;
+        }
+    }
+
+    /// <summary>The blood an unconscious character needs to wake: 0, or -25 with a <see cref="HasFreshStump"/> (<c>reassessCollapseMode</c> then takes the conscious rule).</summary>
+    float WakeBloodFloor => HasFreshStump ? -25 : 0;
 
     /// <summary>How <see cref="StandUp"/> ended playing dead (staying low or not) for the get-up to take, instead of the sneak order; null when it did not.</summary>
     public bool? WokenLow { get; set; }

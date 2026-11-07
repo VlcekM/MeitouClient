@@ -155,6 +155,8 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     public int StolenFrom { get; init; } = -1;
     /// <summary>The item's <c>unique</c> flag (<see cref="Items.ItemInstance.Unique"/>): the tooltip's [Unique] row.</summary>
     public bool Unique { get; init; }
+    /// <summary>How many items a bag holds (-1: not a bag); an empty one's tooltip name ends in " (empty)".</summary>
+    public int BagItems { get; init; } = -1;
 }
 public sealed record InventoryView(int Width, int Height, int BagWidth, int BagHeight, IReadOnlyList<InventoryItemView> Items)
 {
@@ -258,6 +260,10 @@ public sealed class CharacterSnapshot
     public Carrying.CarryAttach? Carry { get; internal set; }
     /// <summary>The ITEM (string id) held in the <c>hands</c> point while operating: the functionality's <c>special tool</c> (docs/game/buildings-production.md "Production"); null for none.</summary>
     public string? HeldTool { get; internal set; }
+    /// <summary>The limb (ITEM string id) an animal holds in its <c>mouth</c> point (<see cref="CharacterCold.Mouth"/>); null for none.</summary>
+    public string? Mouth { get; internal set; }
+    /// <summary>The skin tone of the character that limb was cut from (<see cref="CharacterCold.MouthTone"/>).</summary>
+    public System.Numerics.Vector3 MouthTone { get; internal set; }
     /// <summary>While it works a machine (playing its clip): the functionality whose <c>animation events</c> sound on that clip; null otherwise. Display only.</summary>
     public WorkEvents? WorkEvents { get; internal set; }
     /// <summary>The size the body is drawn at: an animal's lerp(age, <c>scale min</c>, <c>scale max</c>) (its <c>MedicalState.ScaleK</c>), 1 for people.</summary>

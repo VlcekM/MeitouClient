@@ -18,7 +18,7 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class PlayerInterface
 {
-    sealed class EditorSession(EditKind kind, IReadOnlyList<CharacterId> characters, CharacterId surgeon, bool paid = false)
+    sealed class EditorSession(EditKind kind, IReadOnlyList<CharacterId> characters, IReadOnlySet<CharacterId> animals, CharacterId surgeon, bool paid = false)
     {
         /// <summary>A surgeon's dialogue took the money already (<see cref="EditCharacter.Paid"/>).</summary>
         public bool Paid { get; } = paid;
@@ -30,6 +30,12 @@ sealed partial class PlayerInterface
         public bool Clothes = true;
         public Dictionary<CharacterId, CharacterDraft> Drafts { get; } = [];
         public Dictionary<CharacterId, string> StartNames { get; } = [];
+        /// <summary>The animals among <see cref="Characters"/>: listed and shown, but only their name can be changed (<c>FUN_1405efd60</c>); no draft is made of them.</summary>
+        public IReadOnlySet<CharacterId> Animals { get; } = animals;
+        /// <summary>The animals' names as typed in NameText.</summary>
+        public Dictionary<CharacterId, string> AnimalNames { get; } = [];
+        /// <summary>The characters shown so far: CONFIRM asks first when some never were.</summary>
+        public HashSet<CharacterId> Shown { get; } = [];
         public int Seed = Environment.TickCount;
         public CharacterId Current => Characters[Index];
         /// <summary>The camera's orbit, the character it was last set for, and the button dragging it (with where the pointer was last).</summary>
@@ -67,19 +73,30 @@ sealed partial class PlayerInterface
     public (CharacterId Character, EditorTab Tab)? EditorFocus => EditorOpen ? (editor!.Current, editor.Tab) : null;
     /// <summary>Every character the open editor edits, the shown one included; empty while it is closed.</summary>
     public IReadOnlyList<CharacterId> EditorCharacters => EditorOpen ? editor!.Characters : [];
+    /// <summary>Whether the open editor lists <paramref name="id"/> as an animal (its page offers the name only).</summary>
+    public bool IsEditorAnimal(CharacterId id) => EditorOpen && editor!.Animals.Contains(id);
     /// <summary>The host draws the editor's scene in the world (the Meitou bar, <see cref="EditorBar"/>): the backdrop is left out.</summary>
     public bool EditorInWorld { get; set; }
 
     /// <summary>
-    /// Opens the editor for <paramref name="characters"/> (the start's squad at creation; one character at a surgeon). Characters without a person's look (animals) are
-    /// left out; nothing opens when none is left.
+    /// Opens the editor for <paramref name="characters"/> (the start's squad at creation; one character at a surgeon). Animals are listed too, as the original's window
+    /// takes every character it is given (<c>FUN_1405f4dd0</c>): the Guy with a Dog start's dog is its second character. Characters without a look are left out; nothing
+    /// opens when none is left.
     /// </summary>
     public bool OpenEditor(EditKind kind, IReadOnlyList<CharacterId> characters, CharacterId surgeon = default, bool paid = false)
     {
         if (EditorData is null) return false;
-        var people = characters.Where(id => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { Appearance: { Animal: null } look } && RecordOf(look) is not null).ToList();
-        if (people.Count == 0) return false;
-        editor = new EditorSession(kind, people, surgeon, paid);
+        var listed = new List<CharacterId>();
+        var animals = new HashSet<CharacterId>();
+        foreach (var id in characters)
+        {
+            if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.Appearance is not { } look) continue;
+            if (look.Animal is not null) animals.Add(id);
+            else if (RecordOf(look) is null) continue;
+            listed.Add(id);
+        }
+        if (listed.Count == 0) return false;
+        editor = new EditorSession(kind, listed, animals, surgeon, paid);
         previews.Clear();
         faithfulScreens.Open("editor");
         ShowEditorCharacter();
@@ -91,7 +108,7 @@ sealed partial class PlayerInterface
 
     CharacterDraft? Draft(CharacterId id)
     {
-        if (editor is null || EditorData is not { } data) return null;
+        if (editor is null || EditorData is not { } data || editor.Animals.Contains(id)) return null;
         if (editor.Drafts.TryGetValue(id, out var draft)) return draft;
         if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { Appearance: { } look } snapshot || RecordOf(look) is not { } record) return null;
         draft = new CharacterDraft(data.Db, data.InstallRoot, record, snapshot.Name);
@@ -102,7 +119,15 @@ sealed partial class PlayerInterface
 
     void ShowEditorCharacter()
     {
-        if (editor is null || Draft(editor.Current) is not { } draft) return;
+        if (editor is null) return;
+        editor.Shown.Add(editor.Current);
+        if (editor.Animals.Contains(editor.Current))
+        {
+            faithfulScreens.SetText("editor", "NameText", AnimalName(editor, editor.Current));
+            Select([editor.Current], false);
+            return;
+        }
+        if (Draft(editor.Current) is not { } draft) return;
         // At creation a character of a race the editor doesn't offer (a start's `force race`) takes the first offered race (FUN_1405efd60).
         if (editor.Kind == EditKind.Creation && EditorData is { } data && EditorRaces(data.Db) is [{ } first, ..] groups && IndexOf(groups, draft.Race) < 0)
             draft.SetRace(first.Races[0], editor.Seed++);
@@ -198,10 +223,11 @@ sealed partial class PlayerInterface
 
     /// <summary>
     /// The idle stance the editor shows a character in: its draft's <c>idle stance</c> (the original's preview plays the chosen stance; the world's idles are the
-    /// simulation's), or null while the editor is closed or has no draft of it.
+    /// simulation's), or null while the editor is closed or has no draft of it. An animal keeps the simulation's idle: the stance is a human clip its skeleton lacks,
+    /// and it stood frozen in its binding pose (#337).
     /// </summary>
     public string? EditorIdle(CharacterId id) =>
-        EditorOpen && editor!.Drafts.TryGetValue(id, out var draft) && draft.Record.Strings.GetValueOrDefault("idle stance") is { Length: > 0 } stance ? stance : null;
+        EditorOpen && !editor!.Animals.Contains(id) && editor.Drafts.TryGetValue(id, out var draft) && draft.Record.Strings.GetValueOrDefault("idle stance") is { Length: > 0 } stance ? stance : null;
 
     /// <summary>The preview look being prepared for a character (the host lists it hidden, so the renderer builds it), or null.</summary>
     public CharacterAppearance? EditorPending(CharacterId id) => EditorOpen && previews.TryGetValue(id, out var entry) ? entry.Pending : null;
@@ -245,7 +271,7 @@ sealed partial class PlayerInterface
     public (CharacterId Character, float Yaw, float Elevation, float Distance, bool Head)? EditorView()
     {
         if (!EditorOpen || editor is not { } s) return null;
-        bool head = s.Tab != EditorTab.Body;
+        bool head = s.Tab != EditorTab.Body && !s.Animals.Contains(s.Current);   // an animal is always shown whole (FUN_1405efd60)
         if (s.Orbit.Head != head || s.OrbitCharacter != s.Current) { s.Orbit.Reset(head); s.OrbitCharacter = s.Current; s.Drag = null; }
         return (s.Current, s.Orbit.Yaw, s.Orbit.Elevation, s.Orbit.Distance, head);
     }
@@ -284,6 +310,11 @@ sealed partial class PlayerInterface
 
     void EditorAction(MyGuiEvent e)
     {
+        if (editor is { } open && open.Animals.Contains(open.Current))
+        {
+            AnimalEditorAction(open, e);
+            return;
+        }
         if (editor is not { } s || Draft(s.Current) is not { } draft || EditorData is not { } data) return;
         bool creation = s.Kind == EditKind.Creation;
         switch (e.Widget)
@@ -297,8 +328,7 @@ sealed partial class PlayerInterface
             case "ResetButton": draft.Reset(); return;
             case "ClothesButton": s.Clothes = !s.Clothes; return;
             case "CharLeftArrow" or "CharRightArrow":
-                s.Index = (s.Index + (e.Widget == "CharLeftArrow" ? s.Characters.Count - 1 : 1)) % s.Characters.Count;
-                ShowEditorCharacter();
+                ChangeEditorCharacter(s, e.Widget);
                 return;
             case "RaceLeftButton" or "RaceRightButton" or "SubRaceLeftButton" or "SubRaceRightButton" when creation:
             {
@@ -335,6 +365,41 @@ sealed partial class PlayerInterface
     }
 
 
+    void ChangeEditorCharacter(EditorSession s, string arrow)
+    {
+        s.Index = (s.Index + (arrow == "CharLeftArrow" ? s.Characters.Count - 1 : 1)) % s.Characters.Count;
+        ShowEditorCharacter();
+    }
+
+    /// <summary>An animal's page: its name, the character arrows, CLOTHES and CONFIRM; nothing else is shown for it (<see cref="BindAnimalEditor"/>).</summary>
+    void AnimalEditorAction(EditorSession s, MyGuiEvent e)
+    {
+        switch (e.Widget)
+        {
+            case "NameText" when e.Action == "text":
+                s.AnimalNames[s.Current] = e.Text;
+                return;
+            case "ClothesButton":
+                s.Clothes = !s.Clothes;
+                return;
+            case "CharLeftArrow" or "CharRightArrow":
+                ChangeEditorCharacter(s, e.Widget);
+                return;
+            case "ConfirmButton":
+                ConfirmEditor();
+                return;
+        }
+    }
+
+    /// <summary>An animal's name in the editor: as typed, else its name in the world, which is kept as its start name (an unchanged name is not sent).</summary>
+    string AnimalName(EditorSession s, CharacterId id)
+    {
+        if (s.AnimalNames.TryGetValue(id, out var typed)) return typed;
+        string name = session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.Name ?? "";
+        s.StartNames.TryAdd(id, name);
+        return name;
+    }
+
     static int IndexOf(IReadOnlyList<EditorRaceGroup> groups, GameRecord race)
     {
         for (int i = 0; i < groups.Count; i++)
@@ -353,7 +418,7 @@ sealed partial class PlayerInterface
     void ConfirmEditor(bool asked = false)
     {
         if (editor is not { } s) return;
-        if (!asked && s.Drafts.Count < s.Characters.Count)
+        if (!asked && s.Shown.Count < s.Characters.Count)
         {
             Confirm("CONFIRM", "There are other characters whose appearance haven't been changed. Are you sure you want to continue?", () => ConfirmEditor(true));
             return;
@@ -362,6 +427,10 @@ sealed partial class PlayerInterface
         foreach (var (id, draft) in s.Drafts)
             if (s.Kind == EditKind.Surgery || draft.Version > 0 || draft.Name != s.StartNames[id])
                 Say(new EditCharacter(id, CharacterDraft.Copy(draft.Record), draft.Name, s.Kind) { Tick = tick, Surgeon = s.Surgeon, Paid = s.Paid });
+        // An animal's page changes its name only (FUN_1405e9410 renames whichever character is shown).
+        foreach (var (id, name) in s.AnimalNames)
+            if (name != s.StartNames.GetValueOrDefault(id))
+                Say(new EditCharacter(id, null, name, s.Kind) { Tick = tick, Surgeon = s.Surgeon, Paid = s.Paid });
         if (s.Kind == EditKind.Creation) Say(new FinishCreation { Tick = tick });
         CloseEditor();
         session.Simulation.SetSpeed(1);   // CONFIRM unpauses and sets the speed to Normal for every kind of editor (FUN_1405e9f40)
@@ -477,6 +546,11 @@ sealed partial class PlayerInterface
 
     void BindEditor(UiBindings b)
     {
+        if (editor is { } open && open.Animals.Contains(open.Current))
+        {
+            BindAnimalEditor(b, open);
+            return;
+        }
         if (editor is not { } s || Draft(s.Current) is not { } draft || EditorData is not { } data) return;
         bool creation = s.Kind == EditKind.Creation;
         foreach (string name in new[] { "BodyTabButton", "FaceTabButton", "HairTabButton", "RandomiseButton", "RandomiseAllButton", "ResetButton", "ClothesButton", "ConfirmButton" })
@@ -516,6 +590,50 @@ sealed partial class PlayerInterface
         b.Properties["ConfirmButton"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
         BindEditorRows(b, draft, s.Tab);
     }
+
+    /// <summary>
+    /// An animal's page (<c>FUN_1405efd60</c>, <c>FUN_1405ee0c0</c>): its name, its race's name as race and subrace, gender "-", the race's description and stats, CLOTHES, CONFIRM
+    /// and the character arrows. The tabs and their rows, RANDOMISE, RESET, RANDOMISE ALL, IMPORT, EXPORT and every race and gender arrow are hidden.
+    /// </summary>
+    void BindAnimalEditor(UiBindings b, EditorSession s)
+    {
+        if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current)?.Appearance is not { } look) return;
+        foreach (string name in new[] { "ClothesButton", "ConfirmButton" })
+        {
+            b.Disabled.Remove(name);
+            b.Actions[name] = name;
+        }
+        foreach (string name in AnimalHidden) b.Hidden.Add(name);
+        if (s.Characters.Count > 1)
+        {
+            foreach (string name in new[] { "CharLeftArrow", "CharRightArrow" })
+            {
+                b.Disabled.Remove(name);
+                b.Actions[name] = name;
+            }
+        }
+        else b.Disabled.Add("CharIndexText");
+        foreach (var (name, key) in EditorCaptions) b.Text[name] = Loc.Tr(key).ToUpperInvariant();
+
+        string clothes = s.Clothes ? "true" : "false";
+        b.Properties["ClothesButton"] = new Dictionary<string, string> { ["Checked"] = clothes, ["StateSelected"] = clothes };
+        b.Text["RaceText"] = look.Race.Name;
+        b.Text["SubRaceText"] = look.Race.Name;
+        b.Text["GenderText"] = "-";
+        b.Text["CharIndexText"] = $"{s.Index + 1}/{s.Characters.Count}";
+        b.Text["DescriptionPanelText"] = look.Race.GetString("description");
+        string ink = MyGuiColours.TemplateInk(uiResources, "Kenshi_WordWrap");
+        b.Properties["DescriptionPanelText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true", ["TextAlign"] = "Left Top", ["TextColour"] = ink };
+        b.Properties["NameText"] = new Dictionary<string, string> { ["DefaultAction"] = "false" };
+        b.Properties["ConfirmButton"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
+    }
+
+    /// <summary>What an animal's page hides (<c>FUN_1405efd60</c>, <c>FUN_1405ee0c0</c>).</summary>
+    static readonly string[] AnimalHidden =
+    [
+        "BodyTabButton", "FaceTabButton", "HairTabButton", "TabsPanelContent", "RandomiseButton", "RandomiseAllButton", "ResetButton", "ImportButton", "ExportButton",
+        "RaceLeftButton", "RaceRightButton", "SubRaceLeftButton", "SubRaceRightButton", "GenderLeftButton", "GenderRightButton",
+    ];
 
     /// <summary>The widgets whose captions the original sets from the catalog (<c>FUN_1405f1a40</c>), upper-cased, and their messages.</summary>
     static readonly (string Widget, string Key)[] EditorCaptions =
@@ -645,8 +763,10 @@ sealed partial class PlayerInterface
 
     void AddEditorContent(List<UiControl> controls)
     {
-        if (editor is not { } s || Draft(s.Current) is not { } draft) return;
-        if (controls.FirstOrDefault(c => c.Name == "StatsPanelText") is { } stats) AddRaceStats(controls, draft.Race, stats);
+        if (editor is not { } s) return;
+        // An animal's page shows its race's stats too (FUN_1405ee0c0 fills them for any character).
+        var race = s.Animals.Contains(s.Current) ? session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current)?.Appearance?.Race : Draft(s.Current)?.Race;
+        if (race is not null && controls.FirstOrDefault(c => c.Name == "StatsPanelText") is { } stats) AddRaceStats(controls, race, stats);
     }
 
     /// <summary>The scroll state's key of the RACE STATS list: the editor's screen (the scrollbar's arrows, track and wheel act on the screen they are in).</summary>

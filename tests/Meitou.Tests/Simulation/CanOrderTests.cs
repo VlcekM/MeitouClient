@@ -121,4 +121,27 @@ public class CanOrderTests
         Assert.True(CharacterFacts.HostileToPlayer(null, 1, 2, fightsPlayer: false));
         Assert.True(CharacterFacts.HostileToPlayer(null, 1, 1, fightsPlayer: true));
     }
+
+    /// <summary>
+    /// An animal holding a limb in its mouth publishes the limb's record and the skin tone of the character it was cut from, one with an empty mouth none (the renderer draws
+    /// the limb from them, docs/game/character-stats.md "Eating"). Catches the snapshot dropping them.
+    /// </summary>
+    [Fact]
+    public void The_snapshot_publishes_the_limb_in_an_animals_mouth()
+    {
+        using var world = new SimWorld(new WorldSettings { Seed = 3 }, new OpenGroundWalkability(SyntheticTown.Ground));
+        var tone = new System.Numerics.Vector3(0.2f, 0.4f, 0.6f);
+        CharacterId Add(Action<CharacterCold>? shape = null)
+        {
+            var cold = new Meitou.Tests.Combat.Combatant().MakeCold();
+            shape?.Invoke(cold);
+            return world.Characters.Spawn(new CharacterHot { Position = new(100 + world.Characters.HighWater * 20, 300, 100) }, cold, 0);
+        }
+        var holder = Add(c => (c.Mouth, c.MouthTone) = (new Meitou.Simulation.Items.ItemInstance { Record = "limb-t" }, tone));
+        var empty = Add();
+        world.RunTick();
+        CharacterSnapshot Of(CharacterId id) => world.Snapshot.Characters.Single(c => c.Id == id);
+        Assert.Equal(("limb-t", tone), (Of(holder).Mouth, Of(holder).MouthTone));
+        Assert.Null(Of(empty).Mouth);
+    }
 }

@@ -41,6 +41,61 @@ public sealed class RockShape(Vector3[] corners, Vector3 min, Vector3 max)
         return best;
     }
 
+    Vector2[]? outline;
+
+    /// <summary>The mesh's footprint: the convex hull of its corners' X/Z, counter-clockwise (made on first use).</summary>
+    public Vector2[] Outline => outline ??= Hull([.. corners.Select(c => new Vector2(c.X, c.Z))]);
+
+    /// <summary>Whether the mesh-space point lies inside the footprint.</summary>
+    public bool InsideXZ(Vector2 p)
+    {
+        var hull = Outline;
+        if (hull.Length < 3) return false;
+        for (int i = 0; i < hull.Length; i++)
+            if (Cross(hull[i], hull[(i + 1) % hull.Length], p) < 0) return false;
+        return true;
+    }
+
+    /// <summary>The footprint's point nearest the mesh-space point: itself when inside.</summary>
+    public Vector2 NearestXZ(Vector2 p)
+    {
+        var hull = Outline;
+        if (hull.Length == 0 || InsideXZ(p)) return p;
+        Vector2 best = hull[0];
+        float bestDistance = float.MaxValue;
+        for (int i = 0; i < hull.Length; i++)
+        {
+            Vector2 a = hull[i], b = hull[(i + 1) % hull.Length], ab = b - a;
+            float t = ab.LengthSquared() > 0 ? Math.Clamp(Vector2.Dot(p - a, ab) / ab.LengthSquared(), 0, 1) : 0;
+            var q = a + t * ab;
+            float d = Vector2.DistanceSquared(p, q);
+            if (d < bestDistance) (best, bestDistance) = (q, d);
+        }
+        return best;
+    }
+
+    static float Cross(Vector2 o, Vector2 a, Vector2 b) => (a.X - o.X) * (b.Y - o.Y) - (a.Y - o.Y) * (b.X - o.X);
+
+    /// <summary>Andrew's monotone chain: the convex hull, counter-clockwise, without collinear points.</summary>
+    static Vector2[] Hull(Vector2[] points)
+    {
+        var sorted = points.Distinct().OrderBy(p => p.X).ThenBy(p => p.Y).ToArray();
+        if (sorted.Length < 3) return sorted;
+        var hull = new Vector2[2 * sorted.Length];
+        int k = 0;
+        foreach (var p in sorted)
+        {
+            while (k >= 2 && Cross(hull[k - 2], hull[k - 1], p) <= 0) k--;
+            hull[k++] = p;
+        }
+        for (int i = sorted.Length - 2, lower = k + 1; i >= 0; i--)
+        {
+            while (k >= lower && Cross(hull[k - 2], hull[k - 1], sorted[i]) <= 0) k--;
+            hull[k++] = sorted[i];
+        }
+        return hull[..(k - 1)];
+    }
+
     /// <summary>The triangle lists of <paramref name="mesh"/>'s submeshes; null when it has none.</summary>
     public static RockShape? Of(OgreMesh mesh)
     {

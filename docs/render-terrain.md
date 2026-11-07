@@ -65,13 +65,13 @@ decode its tiles again.
 
 Meitou look, not in the game (`GroundRelief`). The parallax and the displacement are Faithful/Meitou switches `parallax` and
 `displace` (Tab "Ground parallax", "Ground displacement (tessellation)"; Faithful: flat ground, as the game). Tab toggles "Terrain outline
-refinement (tessellation)", "Rock smoothing (tessellation)"; sliders "Ground relief quality" (High by default; Medium and Low reduce
+refinement (tessellation)" and "Rock smoothing (tessellation)" (both off by default, on at the Ultra preset); sliders "Ground relief quality" (High by default; Medium and Low reduce
 the march; compiled into the colour programs, one set per quality made on first use: a uniform quality cost High 12% of the terrain's
-GPU time, **Verified** by swamp-low A/B), "Ground relief depth (cm, typical ground)" (default 30), "Ground displacement distance (m)" (100), "Ground parallax
-distance (m)" (60); all on the settings' Graphics > World page, where quality and depth hide while parallax and displacement are both
-off and each distance while its effect is off; viewer K toggles the parallax. The other values are tuned constants, expressed at a 20 cm reference depth and
-settable for a run with the viewer's `--relief Name=value`: target slope 0.2, scale follow 0.5, max depth 80 cm (120 at the default
-30), cliff scale 1, overlay relief 1, self-shadow 0.6, tessellation detail 0.5, refinement 0.5 px, tilt 0.5, broad cut 2 m.
+GPU time, **Verified** by swamp-low A/B), "Ground relief depth (cm, typical ground)" (default 20, set by every preset), "Ground displacement
+distance (m)" (100), "Ground parallax distance (m)" (60); all on the settings' Graphics > World page, where quality and depth hide while parallax
+and displacement are both off and each distance while its effect is off; viewer K toggles the parallax. The other values are tuned constants,
+expressed at a 20 cm reference depth and settable for a run with the viewer's `--relief Name=value`: target slope 0.2, scale follow 0.5, max depth
+80 cm, cliff scale 1, overlay relief 1, self-shadow 0.6, tessellation detail 0.5, refinement 0.5 px, tilt 0.5, broad cut 2 m.
 
 **Heights** (`NormalHeight.FromNormals`, at load, ≤512², an R8 array, one slice per pair slot; no readable normal map: flat, out
 of the relief). The normal map's slopes (`dh/du = x/z`, `dh/dv = -y/z` in the terrain tangent frame) are integrated by FFT
@@ -197,18 +197,18 @@ to 14 layer samples each.
   share with the cliff's (its projections' heights along the normal, ÷ n.y, held at n.y 0.3).
 - **Refresh**: the inputs (bindless indices, overlay window, `TerrainTextures.MaterialVersion` = writes to the biomes' parameter rows, relief settings)
   are hashed each frame; a change re-bakes every level 64 rows a frame, finest first, drawn from meanwhile.
-- **Draw**: the level whose texel is the pixel's footprint (short axis, as the layers' 8x anisotropic sampling), blended with the next coarser.
-  A pixel finer than level 0's texel (a close-up: about 0.02 units a pixel at 1080p near a character, level -3.6) shades the layers, mixed with
-  the cache over the half level below 0: read magnified, level 0 was a blurred ground (**Observed**, user report, the sand beside a character);
-  beyond the levels, beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), or on faces with n.y ≤ 0.5
-  (an xz texel spans 1 / n.y of the face: **Observed**, cliffs smeared into vertical streaks, their parallax wavy), the layers are shaded. The
+- **Draw**: the level whose texel is the pixel's footprint (short axis, as the layers' 8x anisotropic sampling), blended with the next coarser;
+  a footprint finer than level 0's texel (within ~23 m of a 1080p camera), beyond the levels, beyond 0.3 × the nearest resident biome's fade distance (the bake has no distance fade), or on faces with n.y ≤ 0.5
+  (an xz texel spans 1 / n.y of the face: **Observed**, cliffs smeared into vertical streaks, their parallax wavy), the layers are shaded (the
+  finer footprint mixed with the cache over the half level below 0, so no line where it switches). Level 0's
+  texel is about 5x a layer's (tiling 50: 2048 texels over 100 units); read magnified it blurred the near ground (**Observed**, 2026-11-07). The
   parallax marches the cached height with the march's steps and self-shadow (the sun's from two levels coarser; where displaced, only what the level
   holds finer than one at half the mesh spacing): one read a step, no per-biome work. A per-pixel gather (cliff layers live over a cached ground,
   per-biome fade) cost as much as it saved: terrain 4.0 ms against 3.9 live.
-- **Differences** (**Observed**, viewer A/B stills, 1920x1080 DLSS): mean 0.8-1.1 / 255, 0.35-1.4% of pixels over 12; the ripples' parallax phase
+- **Differences** (**Observed**, viewer A/B stills, 1920x1080 DLSS, before near footprints shaded the layers): mean 0.8-1.1 / 255, 0.35-1.4% of pixels over 12; the ripples' parallax phase
   and self-shadow shift slightly; a slope's parallax (n.y over 0.5) follows the height field instead of the cliff's projections. After a 90 m flight at 12 units a
   frame: mean 1.27 against the live picture, no stale strips. The game's `--screenshot` does not run the cache (its frames skip the hook).
-- **Cost** (**Observed**, `--play-bench` on save "stutter final boss", RTX 4070, 1080p DLSS 0.83, interleaved with master): terrain 3.94 -> 2.33 ms
+- **Cost** (**Observed** before near footprints shaded the layers, `--play-bench` on save "stutter final boss", RTX 4070, 1080p DLSS 0.83, interleaved with master): terrain 3.94 -> 2.33 ms
   idle, orbit 3.98 -> 2.23, pan 3.77 -> 1.77; GPU frame 7.85 -> 6.20; frame p99 unchanged. Viewer A/B at two views: terrain -0.39 and -0.88 ms.
 
 ## Ground trails
@@ -234,7 +234,7 @@ or save change, and marks are lost when the window moves past them. Vulkan host 
 
 ## Rocks
 
-Meitou look, not in the game (`RockSmoothing`; Tab: "Rock smoothing (tessellation)"). Many TERRAIN-mode rocks have hard
+Meitou look, not in the game (`RockSmoothing`; Tab: "Rock smoothing (tessellation)", off by default, on at the Ultra preset; the welded normals are always made). Many TERRAIN-mode rocks have hard
 edges ([foliage](formats/foliage.md), "Expression reference"). At decode (`FoliageRenderer.DecodeTrimmed`, not the leaves) a
 position whose copies' normals disagree gets, per corner, the area-weighted normals of the faces round it turning less than 60°
 from the corner's own; positions that agree keep theirs. Every position also gets one geometry normal (all its faces, or the

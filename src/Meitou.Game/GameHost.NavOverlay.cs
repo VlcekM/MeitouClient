@@ -40,6 +40,20 @@ sealed partial class GameHost
         });
     }
 
+    int inspectorShown = -1;
+
+    /// <summary>Once a frame: the inspector's hulls go to their renderer when they changed (docs/viewer.md "Pick & collision inspector").</summary>
+    void UpdateInspectorOverlay()
+    {
+        if (!player.InspectorDrawing) { if (gpu.InspectorOverlay is { Visible: true } hidden) hidden.Visible = false; inspectorShown = -1; return; }
+        if (gpu.InspectorOverlay is not { } overlay) return;
+        overlay.Visible = true;
+        if (inspectorShown == player.InspectorRevision) return;
+        inspectorShown = player.InspectorRevision;
+        var (origin, fill, edges) = player.InspectorGeometry;
+        overlay.SetMesh(origin, fill, edges);
+    }
+
     /// <summary>Once a frame: a finished build goes to the renderer; a changed world or view starts the next.</summary>
     void UpdateNavOverlay()
     {

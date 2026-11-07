@@ -101,6 +101,8 @@ public sealed class CharacterCold
     public int ProvisionalBlocked { get; set; }
     /// <summary>Times the walker was stopped on the navmesh part of its path since it last reached a waypoint or was given an order (<see cref="MovementSystem.BlockedRepathLimit"/>).</summary>
     public int BlockedRepaths { get; set; }
+    /// <summary>The tick a move-order walker held blocked past those limits asks for its path again (<see cref="MovementSystem.BlockedRetrySeconds"/>); 0: not held. Not hashed.</summary>
+    public long BlockedRetryTick { get; set; }
     /// <summary>The path request in flight, so an answer to an older one is ignored.</summary>
     public long PathRequest { get; set; }
     /// <summary>
@@ -199,10 +201,16 @@ public sealed class CharacterCold
     /// <summary>Burst by a fatal hit in luckyren Mode (<see cref="World.Luckyren"/>): the blow's direction (X/Z); <see cref="BodySystem"/> removes it at the end of the tick. Not saved.</summary>
     public System.Numerics.Vector2? Burst { get; set; }
     /// <summary>
-    /// Meitou: the hit that put it down: the speed (world units/s) its new ragdoll starts with, its own motion then plus a push along the blow, and that push alone
-    /// (<see cref="Ragdolls.RagdollSystem"/> takes it and clears it). The original starts a ragdoll at rest. Not saved.
+    /// Meitou: the hit that put it down (<see cref="Ragdolls.RagdollBlow"/>; <see cref="Ragdolls.RagdollSystem"/> takes it and clears it). The original starts a ragdoll at rest. Not saved.
     /// </summary>
-    public (System.Numerics.Vector3 Velocity, System.Numerics.Vector3 Push)? Blow { get; set; }
+    public Ragdolls.RagdollBlow? Blow { get; set; }
+    /// <summary>
+    /// Meitou: a throw given to a downed character (the debug explosion, <c>CombatSystem.Blast</c>): world units/s. <see cref="Ragdolls.RagdollSystem"/> adds it to the ragdoll's bodies
+    /// (waking a frozen one) or, without a ragdoll, turns it into <see cref="Slide"/>, and clears it. Not hashed, not saved.
+    /// </summary>
+    public System.Numerics.Vector3? Launch { get; set; }
+    /// <summary>The flat speed (world units/s) a downed character without a ragdoll is still sliding at after a <see cref="Launch"/>; it drags to a stop. Not hashed, not saved.</summary>
+    public System.Numerics.Vector3 Slide { get; set; }
     /// <summary>The last <see cref="Blow"/> it was given, kept for the drawing (a cut-off head is thrown with it, <see cref="CharacterSnapshot.Knockdown"/>). Not hashed, not saved.</summary>
     public System.Numerics.Vector3 Knockdown { get; set; }
     /// <summary>What it carries (null for anything without a race; an animal's grid is its <c>inventory w</c> x <c>inventory h</c>, its luggage on the backpack slot):<see cref="Meitou.Simulation.Items.FeedSystem"/> eats from it, <see cref="BodySystem"/> weighs it.</summary>
@@ -274,6 +282,12 @@ public sealed class CharacterCold
     public float TargetFleeingTime { get; set; }
     /// <summary>Its last path request came back with no way there (set by the <see cref="MovementSystem"/>, taken by the <see cref="PursuitSystem"/>).</summary>
     public bool PathFailed { get; set; }
+    /// <summary>
+    /// How its last walk (<see cref="CharacterTask.GoTo"/>) ended, set by the <see cref="MovementSystem"/>: <see cref="WalkEnd.Finished"/> when it followed its path to the
+    /// last point, <see cref="WalkEnd.Failed"/> when it gave the path up (no way there, blocked, a locked door), <see cref="WalkEnd.None"/> while walking or when another
+    /// system stopped it. What the AI's arrival reads (<c>isAtLocation</c>, docs/game/ai-tasks.md "Planner"). Not saved or hashed.
+    /// </summary>
+    public WalkEnd WalkEnd { get; set; }
     /// <summary>The target's place (height included) when the <see cref="PursuitSystem"/> last asked a path to <see cref="CharacterHot.Goal"/>: the path's end is measured against it, as the target may have moved since. Not saved.</summary>
     public Vector3 PursuitGoal { get; set; }
     /// <summary>
@@ -532,6 +546,8 @@ public sealed class CharacterCold
     public Items.ItemInstance? Mouth { get; set; }
     /// <summary>The world tick at which <see cref="Mouth"/> was taken.</summary>
     public long MouthSinceTick { get; set; }
+    /// <summary>The skin tone of the character <see cref="Mouth"/> was cut from (<see cref="Items.FallSource.SkinTone"/>; 0: untinted), for its drawing only.</summary>
+    public Vector3 MouthTone { get; set; }
     /// <summary>The building site the <see cref="CharacterTask.Build"/>, <see cref="CharacterTask.Dismantle"/> or <see cref="CharacterTask.DeliverMaterials"/> task works (<see cref="Construction.BuildSite.Id"/>; null: none). Serial phases only. Hashed only while set.</summary>
     public string? BuildSite { get; set; }
     /// <summary>The material delivery bar (0 to 1, filling at 0.2 per second, <see cref="CharacterTask.DeliverMaterials"/>). Hashed with <see cref="BuildSite"/>.</summary>

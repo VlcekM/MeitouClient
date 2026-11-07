@@ -46,7 +46,7 @@ static class Program
             return 2;
         }
         // Booting to the Meitou title: the world is loaded round the title's view, which it shows first (docs/engine.md).
-        bool toTitle = game.TitlePreview || world.Screenshot is null && !game.NewGame && game.Load is null && game.Sandbox == 0 && !game.Duel && game.Battle is null && !game.NoPopulation;
+        bool toTitle = game.TitlePreview || world.Screenshot is null && !game.NewGame && game.Load is null && !game.Continue && game.Sandbox == 0 && !game.Duel && game.Battle is null && !game.NoPopulation;
         if (world.X is null && world.Zone is null && world.Town is null && toTitle) (world.X, world.Z) = TitleComposition.Focus;
         if (world.X is null && world.Zone is null && world.Town is null) world.Town = "The Hub";
         var install = GameInstall.Locate();
@@ -57,6 +57,7 @@ static class Program
             Console.Error.WriteLine($"Kenshi install not found: set {GameInstall.EnvironmentVariable} or create {GameInstall.LocalConfigFile}.");
             return 1;
         }
+        if (game.Continue && ContinueSave(game, install) is { } continueExit) return continueExit;
         try
         {
             var modsCfg = game.ModsCfg ?? Environment.GetEnvironmentVariable("MEITOU_MODS_CFG");
@@ -67,6 +68,7 @@ static class Program
             Console.Error.WriteLine(e.Message);
             return 2;
         }
+        if (game.WikiExport is { } wikiDir) return WikiExport.Run(wikiDir, install, game.WikiFactsOnly);
         if (game.DataCheck)
         {
             var checkedDb = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));
@@ -83,9 +85,9 @@ static class Program
         }
         // Steamworks must start before Vulkan creates its device so Steam can hook the renderer for Shift+Tab. Not for pictures or a
         // listing: those must not count as Kenshi play time or get the overlay.
-        using var steam = world.Screenshot is null && !game.ListStarts ? SteamSession.TryStart(install) : null;
+        using var steam = world.Screenshot is null && !game.ListStarts && !world.Headless ? SteamSession.TryStart(install) : null;
         // A native splash at once, until the game window draws (docs/engine.md "Loading"); not for pictures, a listing or a hidden window.
-        using var splash = world.Screenshot is null && !game.ListStarts && !world.HiddenWindow ? SplashWindow.Show(install.DataDirectory) : null;
+        using var splash = world.Screenshot is null && !game.ListStarts && !world.HiddenWindow && !world.Headless ? SplashWindow.Show(install.DataDirectory) : null;
         var config = UserConfig.Load();
         Meitou.Localisation.Loc.Use(install);   // the language of settings.cfg: texts from locale/<code>/LC_MESSAGES/main.mo (docs/formats/localisation.md)
         // The saved texture quality before the world loads: the terrain's layer arrays are sized from it once (the Tab panel's restore after
@@ -211,5 +213,26 @@ static class Program
         using var scene = WorldFrame.Load(install, world, db);
         if (scene is null) return 1;
         return new GameHost(install, scene, new AssetLocator(install), world, game, config, start) { StartSave = save }.Run();
+    }
+
+    /// <summary><c>--continue</c>: puts the newest save into <see cref="GameOptions.Load"/>; an exit code when it can't.</summary>
+    static int? ContinueSave(GameOptions game, GameInstall install)
+    {
+        if (game.Load is not null)
+        {
+            Console.Error.WriteLine("--continue picks the save itself: drop --load.");
+            return 2;
+        }
+
+        var newest = SaveModList.Scan(SaveModList.Roots(install)).FirstOrDefault();
+        if (newest is null)
+        {
+            Console.Error.WriteLine("--continue: no save found.");
+            return 1;
+        }
+
+        Console.WriteLine($"continue  {newest.Name} ({newest.Source}, {newest.ModifiedUtc.ToLocalTime():g})");
+        game.Load = newest.Folder;
+        return null;
     }
 }

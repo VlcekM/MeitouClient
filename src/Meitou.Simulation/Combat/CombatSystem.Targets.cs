@@ -262,6 +262,14 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
+    /// Whether <paramref name="a"/> at <paramref name="from"/> and <paramref name="t"/> at <paramref name="to"/> stand on different floors (engine reading, #292): either is in or on a
+    /// building (<see cref="SightMap.Outdoors"/>) and they are over <see cref="SameFloorHeight"/> apart in height. A fighter does not swing through a floor or stop its chase there; outdoors a
+    /// ledge is reached by the 3D gap alone (<see cref="CombatTuning.Gap"/>). Last tick's places; any thread after Sight's update.
+    /// </summary>
+    public static bool OtherFloor(World world, int a, Vector3 from, int t, Vector3 to) =>
+        (!world.Sight.Outdoors(a) || !world.Sight.Outdoors(t)) && MathF.Abs(to.Y - from.Y) > SameFloorHeight;
+
+    /// <summary>
     /// Turns a fighter on a new target: it asks its target again for a place and weighs its techniques afresh. A crossbowman closing in on the old one has its closing timer
     /// set to <see cref="RangedTuning.NewTargetClear"/> (<c>FUN_1404371f0</c>), so the first closing ray to pass stops it.
     /// </summary>

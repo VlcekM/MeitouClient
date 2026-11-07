@@ -249,6 +249,12 @@ public static class TaskStart
         Stamp(table, slot);
     }
 
+    /// <summary>
+    /// Whether the character walks for its AI (a goal's act-out, <see cref="TaskSource.Goal"/>): a walk another system may stop with <see cref="Stand"/>, the AI walking on once it decides
+    /// again (the stop counts as neither arrival nor failure).
+    /// </summary>
+    public static bool OnAiWalk(CharacterTable table, int slot) => table.Next[slot].Task == (byte)CharacterTask.GoTo && table.Cold(slot)!.Running is { Source: TaskSource.Goal };
+
     /// <summary>The act-out's own system walks its character on (any phase, its own slot; <see cref="MovementSystem.GoTo"/>), keeping the provenance: a walk to the act-out's next spot.</summary>
     public static void StepTo(CharacterTable table, int slot, System.Numerics.Vector2 goal, byte mode)
     {

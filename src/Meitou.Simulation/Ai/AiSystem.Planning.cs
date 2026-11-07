@@ -123,8 +123,8 @@ public sealed partial class AiSystem
         bool At(in PlanTarget t)
         {
             if (t.IsNone) return true;
-            if (world.Characters.Cold(slot)?.Ai?.ArrivedAt is { } arrived && Flat(t.Position) == arrived) return true;   // its walk there ended on its own (isAtLocation)
             var p = Me.Position;
+            if (world.Characters.Cold(slot)?.Ai is { } mind && mind.ArrivedThere(Flat(t.Position), Flat(p))) return true;   // its walk there ended on its own (isAtLocation)
             float slack = t.Kind == Targets.Store ? StoreSlack : t.Kind == Targets.Turret ? TurretSlack : t.Kind == Targets.Work ? WorkReach : system.Settings.PostSlack;
             if (Vector2.DistanceSquared(Flat(p), Flat(t.Position)) > slack * slack) return false;
             // A spot on a floor counts on that floor only (NaN: no floor).
@@ -159,8 +159,8 @@ public sealed partial class AiSystem
             bool value = condition.State switch
             {
                 StateType.isAtLocation or StateType.isAtLocation_46 or StateType.atNode => At(target),
-                StateType.isWithin10Meters => Distance(target) <= 10,
-                StateType.isWithin50Meters => Distance(target) <= 50,
+                StateType.isWithin10Meters => Distance(target) < Within10Meters,
+                StateType.isWithin50Meters => Distance(target) < Within50Meters,
                 StateType.isNearTo => Distance(target) <= 10,
                 // 62 (slot 149), 63 (slot 175) and 64 (62 or 63) of a machine target (FUN_1405974e0, FUN_1405a2ba0, FUN_1405a2e60, Verified); false for any other target. 65 (any of the
                 // character's machines jammed) and 105 are not wired.

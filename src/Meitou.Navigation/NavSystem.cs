@@ -23,7 +23,8 @@ public sealed class NavSystem : IDisposable
     readonly WorldLevelData levels;
     readonly GameDatabase db;
     // The level data's buildings by placement key (what the door polygons are named by), their BUILDING record ids.
-    readonly Lazy<Dictionary<string, string>> levelRecords;
+    // Made on first use and again when the level data was edited (WorldLevelData.EditRevision).
+    (int Revision, Dictionary<string, string> Map)? levelRecords;
     readonly Dictionary<string, GameRecord?> functions = [];
     readonly object labelGate = new();
     readonly Func<double, double, float> placementHeight;
@@ -33,12 +34,6 @@ public sealed class NavSystem : IDisposable
     {
         this.levels = levels;
         this.db = db;
-        levelRecords = new(() =>
-        {
-            var map = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var b in levels.Buildings()) map.TryAdd(b.Key, b.BuildingId);
-            return map;
-        });
         placementHeight = (x, z) => terrainHeight((float)x, (float)z);
         footprints = new(() => new BuildingFootprints(install, db, levels));
         // The long-range grid reads every second heightmap sample (36 units) when it is first needed: the simulation's own grid is coarse far from the start.
@@ -102,6 +97,12 @@ public sealed class NavSystem : IDisposable
         UpdatePlayerRoute();
     }
 
+    /// <summary>The level data's buildings changed near <paramref name="position"/> (the level editor placed or cleared one): the zones it reaches are built again from the level data as it is now.</summary>
+    public void LevelChanged(System.Numerics.Vector3 position)
+    {
+        foreach (var zone in NavRuntimeBuildings.ZonesReached(position)) RebuildZone(zone);
+    }
+
     /// <summary>The building is gone (dismantled, cancelled, a world replaced): the zones it shaped are built again without it.</summary>
     public void RemoveRuntimeBuilding(string instanceId)
     {
@@ -129,9 +130,19 @@ public sealed class NavSystem : IDisposable
         {
             var runtime = Runtime.All().ToDictionary(p => p.Key, p => p.BuildingId, StringComparer.Ordinal);
             return NavGateRegions.Label(Walkability.World, id =>
-                (runtime.TryGetValue(id, out var record) || levelRecords.Value.TryGetValue(id, out record)) && db.Find(record) is { } building
+                (runtime.TryGetValue(id, out var record) || LevelRecords().TryGetValue(id, out record)) && db.Find(record) is { } building
                 && TownBuildings.IsGate(db, building, functions));
         }
+    }
+
+    Dictionary<string, string> LevelRecords()
+    {
+        int revision = levels.EditRevision;
+        if (levelRecords is { } known && known.Revision == revision) return known.Map;
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var b in levels.Buildings()) map.TryAdd(b.Key, b.BuildingId);
+        levelRecords = (revision, map);
+        return map;
     }
 
     /// <summary>Builds a zone again if its mesh is loaded (a zone that is not is built with the current buildings when it is asked for).</summary>

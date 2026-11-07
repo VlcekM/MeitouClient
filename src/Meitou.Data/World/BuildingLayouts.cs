@@ -85,6 +85,15 @@ public sealed class BuildingLayouts
     public void UseSwaps(Gameplay.BuildingSwaps swaps, IReadOnlyDictionary<string, string> owners) => (this.swaps, swapOwners) = (swaps, owners);
 
     /// <summary>
+    /// Swaps the furniture as <paramref name="levels"/>' placements were swapped (<see cref="WorldLevelData.FurnitureSwaps"/>; nothing when they were not). Every reader of the
+    /// layouts calls it, or a piece the owner's swaps skip is drawn by none but still walled off in the navmesh (#345, #346: a robot faction's beds).
+    /// </summary>
+    public void UseSwaps(WorldLevelData levels)
+    {
+        if (levels.FurnitureSwaps is { } s) UseSwaps(s.Swaps, s.Owners);
+    }
+
+    /// <summary>
     /// The layout's furniture as <paramref name="placement"/>'s owner faction has it made: each piece goes through the faction's building swaps as <c>createBuilding</c> asks them (<c>FUN_14057cc70</c>), a
     /// skipped one is left out and a replaced one is the new building in the same place. Without swaps, <see cref="Items(GameRecord)"/>.
     /// </summary>

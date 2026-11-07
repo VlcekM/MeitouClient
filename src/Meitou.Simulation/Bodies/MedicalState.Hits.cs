@@ -8,8 +8,8 @@ public sealed partial class MedicalState
     // ------------------------------------------------------------------ hits
 
     /// <summary>
-    /// The game's F10 debug heal (Meitou only, not the original's): every part whole (no wear, stun, bandage or splint), full blood, no wounds and no KO time left,
-    /// so the next body tick wakes the character. A dead character stays dead; a stump or crushed limb stays one (<see cref="RestoreLimbs"/> gives it back).
+    /// The game's F10 debug heal (Meitou only, not the original's): every part whole (no wear, stun, bandage or splint), full blood, no wounds and no KO time left
+    /// and awake (also a character playing dead). A dead character stays dead; a stump or crushed limb stays one (<see cref="RestoreLimbs"/> gives it back).
     /// </summary>
     public void Heal(in MedicalContext ctx)
     {
@@ -25,6 +25,9 @@ public sealed partial class MedicalState
         Blood = Capacity(ctx);
         BloodKo = false;
         KoTimer = 0;
+        // Also up from a knock-out: a character lying on "playing dead" (hostiles near) would otherwise stay down while they are, however whole it is.
+        if (PlayingDead) StandUp();
+        Unconscious = false;
     }
 
     /// <summary>The F10 debug full heal's limbs (Meitou only): every stump and crushed limb is the original again; a fitted prosthetic stays. True when one changed.</summary>
@@ -335,6 +338,22 @@ public sealed partial class MedicalState
         PlayingDead = false;
     }
 
+    /// <summary>
+    /// Ends a knock-out (or playing dead) at once without healing anything (agent-playtest control channel: wake): the character is conscious and controllable. A flat-blood character keeps
+    /// the blood-KO flag, as after a natural waking, so it does not fall again at once; a vital part still under the KO point does put it down again on the next tick (heal first then).
+    /// False when it is dead or not unconscious.
+    /// </summary>
+    public bool WakeUp(List<MedicalEvent>? events = null)
+    {
+        if (Dead || !Unconscious) return false;
+        Unconscious = false;
+        PlayingDead = false;
+        KoTimer = 0;
+        if (Blood <= 25) BloodKo = true;
+        events?.Add(new MedicalEvent(MedicalEventKind.WokeUp));
+        return true;
+    }
+
     /// <summary>Starts the KO timer over at <paramref name="seconds"/>, also when a longer KO is running (<c>startKnockoutTimer</c> overwrites it).</summary>
     void RestartKo(float seconds, List<MedicalEvent>? events)
     {
@@ -346,6 +365,9 @@ public sealed partial class MedicalState
     /// <summary>Kills the character because one of its death items was taken while it was down (docs/game/animals.md "Death items").</summary>
     public void Butcher(List<MedicalEvent>? events = null) => Die(DeathCause.Butchered, events);
 
+    /// <summary>Kills the character outright (the dev console's <c>kill</c>; a vital part counts as the cause). Nothing happens to one already dead.</summary>
+    public void Kill(List<MedicalEvent>? events = null) => Die(DeathCause.VitalPart, events);
+
     void Die(DeathCause cause, List<MedicalEvent>? events)
     {
         if (Dead) return;
@@ -354,11 +376,10 @@ public sealed partial class MedicalState
         events?.Add(new MedicalEvent(MedicalEventKind.Died, Cause: cause));
     }
 
-    /// <summary>Blood rules shared by a hit and the tick: blood at 0 (or -25 once flagged) starts a KO, at -capacity the character dies, above 25 the flag clears.</summary>
+    /// <summary>Blood rules shared by a hit and the tick: blood at 0 (or -25 once flagged) starts a KO, at -capacity the character dies. The flag clears in <c>TickBlood</c>.</summary>
     void CheckBlood(in MedicalContext ctx, List<MedicalEvent>? events)
     {
         if (Dead) return;
-        if (Blood > 25) BloodKo = false;
         float cap = Capacity(ctx);
         if (Blood <= -cap) { Die(DeathCause.BloodLoss, events); return; }
         if (Blood <= 0 && !BloodKo) { BloodKo = true; StartKo(ctx, events); }

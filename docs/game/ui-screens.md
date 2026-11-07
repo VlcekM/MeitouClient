@@ -451,7 +451,7 @@ to Jobs; the saved `chase mode` flag is that switch (**Verified**, [perma-jobs](
   `FactionWarMgr::isBiomeHomeTerritory` for the biome at its position; this entry passes 0, as do four of the other five callers); then for slave state 0: a pending crime (Character `+0x148` code, `+0x180` timer) "Committing Crime!" with int(timer), text
   "This character is currently committing {1}, make sure nobody witnesses it." while timer <= 3, else "...has been caught committing {1}! He might end up with a bounty on his head if he
   can't vanish." plus " Current bounty is c.{2,num}" with the local faction's bounty (`getActualBounty`) above 0; the escaped flag (`+0xe8`) "Escaped Prisoner", text "... Leave town to
-  clear this status. Expires in {1}" with `{1,num} hr(s)` of the constant 99999; a bounty: the bounty entry; else the slave states above. Crime, escaped and slave entries list the bounty rows
+  clear this status. Expires in {1}" with `{1,num} hr(s)` of the constant 99999 (text only: no timer or town test clears the flag, [locks](locks.md)); a bounty: the bounty entry; else the slave states above. Crime, escaped and slave entries list the bounty rows
   (`FUN_1405d1400`) before their text. "Imprisoned:" belongs to the Lockpicking section. Meitou: `World.StatusOf`, `PlayerInterface.StatusLine` / `StatusRows` / `SlaveRows` (slave hints for
   player characters only; engine choice); the entry's title is the `BountyText` line; Diplomatic Status is `CharacterCold.NpcClass` Diplomat.
 - Bounty panel (`FUN_1405d2da0`, **Observed**; colour strings **Verified**: their static initialisers `FUN_14158a2a0` `#afa68b` Main, `FUN_14158a320` `#492620` Title,
@@ -651,8 +651,9 @@ How a building gets selected: [ui-input](ui-input.md#building-picking-and-select
   building is lives in the SQUAD_TEMPLATE named by the state's `squad template`: `building name` ("The Dancing Skeleton") and, for a
   trader, its `vendors` VENDOR_LISTs ("medical and travel supplies"). The owner's screenshot shows "The Dancing Skeleton" in the name
   bar with `Type:` the record. Housing sets `name` (**Verified**) and `squad template` (**Observed**, [town residents](factions-squads-towns.md#town-residents)). Meitou names the building from
-  a loaded save's state, else the level state as the boot housed it: `building name` when set, else `name`, else the record; and, in the Meitou UI mode only, a trader's shop whose
-  state name is only its layout's generic one ("Shop") from its first vendor list ("Medical and travel supplies"); the Faithful UI keeps "Shop".
+  a loaded save's state, else the level state as the boot housed it: `building name` when set, else `name`, else the record, in both UI modes. VENDOR_LIST names are editor
+  labels, not display text (**Observed**, base data: `weapon vendor UC big city` is the only vendor list of template `weapon vendor UC big`, whose `layout interior`
+  "Weapon Shop" names the Heng shop it houses).
   Meitou (`PlayerInterface.BuildingSelect.cs`): the header word (Normal, Broken, or a site's construction state); the condition rows as above, the bar
   in the yellow layer, a finished building's progress being its target (Meitou models no building damage) and the target of a world building or door
   the sum of its BUILDING record's materials; the player's own site gets Dismantle (the furniture text when anything stands in it, else "Are you sure?"; Yes dismantles it at once, `ConfirmDismantle`;
@@ -875,7 +876,8 @@ hinting remains **Unknown**.
 ### Map
 
 MapScreen (ctor `140490210`) in the Overview's MAP tab: `MapImage` (`GUI_Map.dds`) on a 4096² `MapScrollView` canvas. **Verified** by reading the
-decompile unless marked; Meitou's adapter is `PlayerInterface.Map.cs`.
+decompile unless marked; Meitou's adapter is `PlayerInterface.Map.cs`. Zoomed out, the original shows no scroll bars (**Observed**, vanilla screenshot);
+whether they show zoomed in is **Unknown**. Meitou pans the map itself and never shows them: the client takes the bars' room.
 
 - **Projection:** the image spans world X and Z −147456…147456, world (0, 0) at its centre, +X right, **+Z down** (`14048cf70`; also checked by drawing
   the placed towns on `GUI_Map.dds`: Shark lands in the swamp, Stoat in the Great Desert, Mongrel on the Fog Islands).
@@ -1053,6 +1055,8 @@ unless marked; Meitou: `PlayerInterface.Squads.cs`, commands in `SquadManagement
 - **Holding an item** (**Observed**, Ghidra decompile of `kenshi_x64.exe`; one item on the mouse at a time, `MouseInventory` `FUN_14070e640`):
   - Input: the item sections hook only pressed (`FUN_140716800`) and released (`FUN_1407169a0`); no double click, no inventory keys, no quantity dialog. Shift = `DAT_142133449`,
     Ctrl = `DAT_142133448` (key flags `FUN_14082b010`).
+  - While held (**Verified**, `FUN_140713560` keeps the item at `MouseInventory+0x30` and its source section, found by name, at `+0x70`; `FUN_140749160` adds that item to the
+    section's sum whenever it is recomputed): the item still weighs on its owner. Meitou: `Inventory.ContentWeight(HeldItem)`.
   - Left press with nothing held (`FUN_1407139a0`): the section must be enabled; for a building's window the [trading range](economy.md#trading-range) ("Out of trading range.",
     `gui_notrade`). Cell = (pointer - grid origin) / cell, clamped. Locked (shackles) items do not lift. In a trade an item flagged equipped on a non-player owner: "That's not for sale.".
     A single unit, or Shift or Ctrl held: the whole stack lifts; otherwise one unit is split off and the rest stays. `Item_Lift`; the grab offset is kept, clamped so the pointer stays at
@@ -1141,7 +1145,7 @@ unless marked; Meitou: `PlayerInterface.Squads.cs`, commands in `SquadManagement
   Total Weight `W/M` (**Observed** in the exe, checked on three characters of the owner's save against the original): both truncated; M = strength × its injury multiplier +
   `encumbrance base`, without `carry weight mult` (that only enters the encumbrance factor, [character-stats](character-stats.md)). A melee weapon weighs by its level, manufacturer and
   material (`WeaponStats`: the larger of `weight kg` × the maker's weight mod and 40 × blunt × `weight mult` × `weapon inventory weight mult`; a Falling Sun 30 kg), armour by its
-  coverage ([Item tooltip](#6-inventory-trade-dialogue-build)). **Unknown**: +30 while carrying a person and the backpack factor outside the backpack slot (not built); one character
+  coverage ([Item tooltip](#6-inventory-trade-dialogue-build)). W includes `carry person weight` while carrying someone (Character `+0x348`, **Verified** `FUN_1405d4260`: the same sum as the carried-weight function `FUN_1405c89d0`, [carry-loot](carry-loot.md)); one character
   reads 124 where the original reads 126, cause not found.
 - **Trader window** (code `PlayerInterface.Trade.cs`):
   - Layout: `Kenshi_InventoryTraderWindow` (**Verified**: `FUN_140155ee0`, class `TraderInventoryLayout`, names the file; created by `FUN_1406e6af0` for a trading character or building).
@@ -1177,11 +1181,11 @@ unless marked; Meitou: `PlayerInterface.Squads.cs`, commands in `SquadManagement
     - *Own windows only* (owner of the player's faction): a blueprint (RESEARCH-type item) is learned and used up ("Research already known" / "Failed to learn from blueprint: Technology
       requirements not met"); a MAP_ITEM reveals its places ("{1,num} location(s) added to the map." and used up, else "You already know all these locations, no new information can be
       learned."); money (item function 14) gives "{1,num} cats added." and is removed (money moved across a player / non-player window boundary converts the same way). Otherwise inside its own
-      inventory: a grid item goes to its matching slot (equipped), a worn one to the grid; failing that the own limbs window, then the own bag window.
+      inventory: a grid item goes to its matching slot (equipped), a worn one to the grid; failing that the own limbs window, then the own bag window. An item in the open bag goes to its matching slot, else to the main grid (**Observed**, `FUN_140714a20` calls the move `FUN_140713d20` with the character itself as target before trying the bag; Meitou `QuickMove`, issue 315).
     - Meitou: `PlayerInterface.InventoryRightClick` buys or sells one unit (Shift all); a bought weapon goes into a free `back` then `hip` cell and armour into its empty slot
       (`InventoryCommands.TryEquip`), the rest of the stack and everything else into the first free cell; a stolen item a non-fence shop may catch asks the prompt above (`TradeItemView.FenceOdds`).
       Window to window (loot, container, storage) the units go by `InventoryCommands.MoveInto` (the open bag window first, then slots, then the main grid). Own windows only: `ReadMapItem`, else
-      `QuickMoveItem` (money, equip / take off, prosthetic onto its stump, main grid to the open bag, a blueprint read: [blueprints](buildings-production.md#blueprints)). Owner tag: `HeldItems.MarkFor` clears `StolenFrom` when the item goes to a member of that faction; marking it is the theft rules above.
+      `QuickMoveItem` (money, equip / take off, prosthetic onto its stump, main grid to the open bag and back, a blueprint read: [blueprints](buildings-production.md#blueprints)). Owner tag: `HeldItems.MarkFor` clears `StolenFrom` when the item goes to a member of that faction; marking it is the theft rules above.
   - Reference screenshot (**Observed**, 2026-10-17, from a video): `Money:` label left and `c.442,269` right in the money box, stock icons at their footprints with plain counts bottom
     right, a vertical scrollbar, no other panels; the HUD stays. The character panel reads `Disguise: None`. Its text boxes and empty cells are dark, where the install's skins draw parchment; the cause (a UI mod or setting) is **Unknown**.
 - **Character trading window** (`CharacterTradingWindow` `FUN_14072a880`, rows `FUN_14072a070`; DA 41 / 42 / 43 / 48, [economy 12](economy.md#12-slaves-prisoners-animals); code
@@ -1466,8 +1470,18 @@ Code: `UiTooltips` (data, layout), `PlayerInterface.Tooltips.cs` (hover runtime,
   stats' multipliers as two decimals, **Observed** reading), `Blood loss` (the record's bleed multiplier), the signed percent rows (`Armour penetration`, `Damage vs`), the attack, defence and indoors modifiers and the weight in whole kg;
   for armour the weight class; for a prosthetic (`FUN_1407a9080`, **Verified**) its grade (from its `level`), `-Max HP`, `-----STATS-----`, a row per stat multiplier not 1 at that level as int((m - 1) x 100) `+N%` / `N%`, `-Unarmed damage bonus` when not 0 and a `----------------` rule (Buyback and Stolen marks sit after the grade); the weight; `Value` and `Sell value` with the mark-up while trading (none on a buyback price, an exact refund), outside a trade the prices with no trader (no town or culture factor); `Avg. Price` for a trade item and, while trading, its `Price mark-up`; `Charges` and `Quality`
   as above (quality whenever it is not 1: a new ITEM carries its record's `quality`, **Verified** `FUN_14075faf0` line "quality" read for record type ITEM, default 100 for the other kinds; base-game ITEMs are 1 except 20-100 on some tools and kits; a record without the field is **Unknown**); last, every non-armour item's description, and a weapon's model, manufacturer or crafter rows (the model's colour by the six weapon level bands above; Meitou has five grade colours, Specialist and Masterwork share the last). **Not shown (Unknown data or format):**
-  the grade-scaled skill lines (armour's other rows: `ArmourTooltip`, [Item tooltip](#6-inventory-trade-dialogue-build)),
-  containers' and limbs' own rows (`FUN_1407aa090`, `FUN_1407a9080`).
+  the grade-scaled skill lines (armour's other rows: `ArmourTooltip`, [Item tooltip](#6-inventory-trade-dialogue-build)).
+- **Backpack rows** (CONTAINER, `FUN_1407aa090`, **Verified** decompile; constants and colour tags from `.rdata`): the name (Title), then ` (` + `empty` + `)` when its inventory
+  (vfunc `0x160`) holds no items; `Buyback`, `Stolen`; `-Weight` `{1,num} kg` (#140806 both) of int(vfunc `0x248`, the shared getter of Item `+0x120`): the bag's own weight,
+  without its contents (**Verified**: the section sum below adds them apart); the prices; `------------` (12 dashes, no tag); `-Encumbrance reduction` (Good) `{1,num}%` (Title) of
+  int((1 - `encumbrance effect`) × 100), the field read as 0 when not positive; `-Combat skills bonus` (#140806) only when the int is not 0, `{1,num}` Bad or Good `+`;
+  then `-Athletics effect`, `-Combat speed effect`, `-Stealth skill effect`, `-Dodge skill effect` (Main) from `athletics mult`, `combat speed mult` and twice `stealth mult`
+  (negative read as 1), each `FUN_14079d450`(v, 1): `{1,num=fix,p=2}` + `x`, Bad below 1, Good above, Main at 1. The description follows (second tooltip function).
+  Meitou: `ContainerRows`, the name suffix by `BagItems`, the weight `weight kg`.
+- **Section weight** (`FUN_140749160`, **Verified** decompile): a section's weight (`+0xb0`) is the sum of its items' vfunc `0x250` (count × `+0x120`); a CONTAINER (type `0x2e`)
+  adds its contents (`FUN_1407473d0`, the sum of its inventory's section weights) times `encumbrance effect` only when the section is named `backpack_attach`, in full anywhere
+  else (main grid, a storage, the ground, a bag in a bag); then × the section's multiplier `+0xac`. The item on the mouse still counts in the section it was lifted from
+  ([Holding an item](#6-inventory-trade-dialogue-build)). Meitou: `ItemInstance.Weight`, `Inventory.ContentWeight(HeldItem)`.
 - **HUD texts** (**Verified**, the type 0 setter's callers `FUN_14072b540` and `FUN_14072d3b0`): per widget `OrdersBlockButton` (defensive mode, "gain 20 to his melee defense skill"), `OrdersHoldButton` ("HOLD POSITION ..."),
   `OrdersPassiveButton` ("In non-combat mode ..."), `OrdersChaseButton` (the Jobs toggle: "If this is disabled then the character won't do any of the jobs listed."), `OrdersTauntButton`, `OrdersRangedButton`,
   `OrdersSneakButton` (two strings joined by a line break), `OrdersMedicButton`, `OrdersRescueButton`, `OrdersProspectButton`, `ShortcutInventoryButton` ("Open character inventory"), `ShortcutStatsButton` ("Open

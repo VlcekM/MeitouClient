@@ -217,7 +217,12 @@ static class TracedSunShaders
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
-            // The penumbra filter's input (PenumbraFilter): the visibility, and where blocked the penumbra's radius at the receiver.
+            // The penumbra filter's input (PenumbraFilter): the visibility, and where blocked the penumbra's radius at the receiver. A pixel the sun does not light (no traced
+            // pixel, or turned away from the sun: its term is 0) is no receiver (alpha -1): the filter neither reads it nor spreads it, or a ripple's far slope, unasked and so
+            // "lit", would light its sunward neighbours inside a shadow, and a caster's dark side the ground at its foot.
+            uvec4 surface = texelFetch(uSurface, px, 0);
+            vec3 term = texelFetch(uTerm, px, 0).rgb;
+            if ((surface.w & 65536u) == 0u || max(term.r, max(term.g, term.b)) < 1e-5) { imageStore(uOut, px, vec4(1.0, 1.0, 1.0, -1.0)); return; }
             vec2 v = visibility(px);
             imageStore(uOut, px, vec4(v.xxx, v.y * p.eye.w));
         }

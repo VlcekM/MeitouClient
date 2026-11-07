@@ -224,6 +224,10 @@ Combat runs and blood decals/debris are wired on Metal, including luckyren Mode.
 atmosphere-lit native path (MEP-3); the Hub/desert gameplay check passed, with explicit bone/limb visibility still an
 optional luckyren check.
 
+Ground severed limbs, stuck bolts and an animal's held limb (`mouth` point) are not Metal code: `WorldFrame.Draw` (`CollectBolts`, `DrawSceneLate`),
+`UpdateBlood`/`UpdateBuildings` and `DebrisRenderer` are shared. Both draw-list sources (`FillDrawList`, the no-HUD `FillWorldDrawList`) build each
+`CharacterInstance` through `GameHost.Drawn`, so they carry the same bolts, mouth, stance, build and blood. **Observed** in code only; not run on macOS.
+
 ### Changes
 
 - Change `GameHost.SetUpBlood(GpuContext context)` to accept `IGpuContext`; the renderers it

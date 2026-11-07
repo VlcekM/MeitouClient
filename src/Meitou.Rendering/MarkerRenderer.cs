@@ -101,10 +101,11 @@ public sealed unsafe class MarkerRenderer : IDisposable
     public float Strength { get; set; }
     /// <summary>This frame's stealth arrows, replaced whole each frame (empty: none; ignored without <c>arrow.mesh</c>).</summary>
     public Arrow[] Arrows { get; set; } = [];
-    /// <summary>Where the rotation marker (<c>rotate.mesh</c>, docs/game/ui-input.md) lies flat while the camera turns; null: not shown.</summary>
-    public Vector3? RotationAt { get; set; }
-    /// <summary>The rotation marker's scale (max(3, 0.06 x the camera's distance)).</summary>
-    public float RotationScale { get; set; } = 3;
+    /// <summary>
+    /// Whether the rotation marker (<c>rotate.mesh</c>, docs/game/ui-input.md) shows while the camera turns: flat, 1 unit over the pivot of the camera the frame is
+    /// drawn with, scaled max(3, 0.06 x its distance), so it keeps with the view (a followed character moves the pivot every frame, between the rig's ticks).
+    /// </summary>
+    public bool Rotation { get; set; }
 
     MarkerRenderer(IGpuContext gpu, float[] data, (int, int) marker, (int, int) arrow, (int, int) ring)
     {
@@ -187,27 +188,21 @@ public sealed unsafe class MarkerRenderer : IDisposable
     }
 
     /// <summary>Whether anything is to be drawn this frame.</summary>
-    public bool Active => Strength > 0 && marker.Count > 0 || Arrows.Length > 0 && arrow.Count > 0 || RotationAt is not null && ring.Count > 0;
+    public bool Active => Strength > 0 && marker.Count > 0 || Arrows.Length > 0 && arrow.Count > 0 || Rotation && ring.Count > 0;
 
     /// <summary>
     /// Draws over the finished <paramref name="picture"/> (after the tone map, so the colours come out as the material gives them, whatever the
     /// exposure): the visible parts, then the parts behind the scene, each fragment sorted by the scene's <paramref name="sceneDepthTexture"/>
     /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used). The markers are drawn multisampled into targets of their own
     /// (their own depth hides their far sides), resolved, and blended over the picture. Depth is clamped, so a marker beyond the far plane is drawn whole.
+    /// <paramref name="camera"/> is the view the scene was drawn from.
     /// </summary>
     public void Record(GpuTexture picture, int width, int height, GpuTexture sceneDepthTexture, int renderWidth, int renderHeight,
-        Matrix4x4 sceneViewProjection, Vector3 eye, Vector3 sunDirection)
+        Matrix4x4 sceneViewProjection, WorldCamera camera, Vector3 sunDirection)
     {
         if (!Active || width <= 0 || height <= 0) return;
         idleSince = 0;
-        if (msColour is null || msColour.Desc.Width != width || msColour.Desc.Height != height)
-        {
-            ReleaseTargets();
-            var sampled = samples > 1 ? TextureUse.TransferSrc : TextureUse.Sampled;
-            msColour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Samples: samples, Use: TextureUse.ColourTarget | sampled, Name: "markers colour"));
-            msDepth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Samples: samples, Use: TextureUse.DepthTarget, Name: "markers depth"));
-            resolved = samples > 1 ? gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "markers resolved")) : msColour;
-        }
+        EnsureTargets(width, height);
         var arrows = Arrows;
         var cmd = gpu.BeginNative("markers");
         var viewport = new PixelViewport(0, 0, width, height, 0, 1);
@@ -218,52 +213,76 @@ public sealed unsafe class MarkerRenderer : IDisposable
             Depth = t.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear },
         };
         cmd.BeginRendering(t.Rendering);
-        var vp = Matrix4x4.CreateTranslation(eye) * sceneViewProjection;
+        var vp = Matrix4x4.CreateTranslation(camera.Eye) * sceneViewProjection;
         program.Set(viewProjection, in vp);
         program.Set(sun, sunDirection);
         program.Set(depthScale, renderWidth / (float)width, renderHeight / (float)height);
         program.Bind(sceneDepth, new SampledTexture(Nearest(), sceneDepthTexture.View()));
-        var premultiplied = new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
-        for (int pass = 0; pass < 2; pass++)
-        {
-            bool hidden = pass == 1;
-            var state = DrawState.For(t.Formats, gpu.DepthClamp, cull: CullMode.Back, depthTest: true, depthWrite: !hidden,
-                compare: DepthConvention.SceneCompare, blend: premultiplied, depthClamp: gpu.DepthClamp, front: FrontFaceDirection.Ccw);
-            program.Set(hiddenPass, hidden ? 1 : 0);
-            state.Record(cmd, t);
-            cmd.BindPipeline(segment.Get(state, t.Formats, vertexSource));
-            bindings[0] = new GpuBufferBinding(vertices.Handle, 0);
-            bindings[1] = new GpuBufferBinding(vertices.Handle, 12);
-            cmd.BindVertexBuffers(0, bindings);
-            if (Strength > 0 && marker.Count > 0)
-            {
-                var c = hidden ? Hidden : Visible;
-                Draw(cmd, marker, At - eye, Matrix4x4.Identity, new Vector4(c.X, c.Y, c.Z, c.W * Strength));
-            }
-            // The rotation marker's colour has alpha 0: only its opaque visible pass shows.
-            if (!hidden && RotationAt is { } pivot && ring.Count > 0)
-                Draw(cmd, ring, pivot - eye, Matrix4x4.CreateScale(RotationScale), Visible);
-            if (arrow.Count > 0)
-                foreach (var a in arrows)
-                    Draw(cmd, arrow, a.At - eye, ArrowScale * PointAlong(a.Direction), new Vector4(a.Colour, hidden ? ArrowHiddenAlpha : 1));
-        }
+        for (int pass = 0; pass < 2; pass++) RecordPass(cmd, t, camera, arrows, hidden: pass == 1);
         cmd.EndRendering();
         cmd.Order();
         if (samples > 1)
         {
-            cmd.Resolve(msColour, resolved!);
+            cmd.Resolve(msColour, resolved);
             cmd.Order();
         }
+        Composite(cmd, picture, viewport);
+        gpu.EndNative(cmd);
+    }
+
+    static readonly BlendState Premultiplied = new(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
+
+    /// <summary>The multisampled targets and the resolved picture at <paramref name="width"/> × <paramref name="height"/>, made again when the size changes.</summary>
+    [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(msColour), nameof(msDepth), nameof(resolved))]
+    void EnsureTargets(int width, int height)
+    {
+        if (msColour is not null && msDepth is not null && resolved is not null &&
+            msColour.Desc.Width == width && msColour.Desc.Height == height) return;
+        ReleaseTargets();
+        var sampled = samples > 1 ? TextureUse.TransferSrc : TextureUse.Sampled;
+        msColour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Samples: samples, Use: TextureUse.ColourTarget | sampled, Name: "markers colour"));
+        msDepth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Samples: samples, Use: TextureUse.DepthTarget, Name: "markers depth"));
+        resolved = samples > 1 ? gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "markers resolved")) : msColour;
+    }
+
+    /// <summary>One of the two passes: the parts in front of the scene, or (<paramref name="hidden"/>) those behind it.</summary>
+    void RecordPass(IGpuCommandList cmd, PassTargets t, WorldCamera camera, Arrow[] arrows, bool hidden)
+    {
+        var eye = camera.Eye;
+        var state = DrawState.For(t.Formats, gpu.DepthClamp, cull: CullMode.Back, depthTest: true, depthWrite: !hidden,
+            compare: DepthConvention.SceneCompare, blend: Premultiplied, depthClamp: gpu.DepthClamp, front: FrontFaceDirection.Ccw);
+        program.Set(hiddenPass, hidden ? 1 : 0);
+        state.Record(cmd, t);
+        cmd.BindPipeline(segment.Get(state, t.Formats, vertexSource));
+        bindings[0] = new GpuBufferBinding(vertices.Handle, 0);
+        bindings[1] = new GpuBufferBinding(vertices.Handle, 12);
+        cmd.BindVertexBuffers(0, bindings);
+        if (Strength > 0 && marker.Count > 0)
+        {
+            var c = hidden ? Hidden : Visible;
+            Draw(cmd, marker, At - eye, Matrix4x4.Identity, new Vector4(c.X, c.Y, c.Z, c.W * Strength));
+        }
+        // The rotation marker's colour has alpha 0: only its opaque visible pass shows. It rides the drawn pivot, not the rig's last tick (FUN_1406b0f90's
+        // marker is a child of the camera's pivot node).
+        if (!hidden && Rotation && ring.Count > 0)
+            Draw(cmd, ring, camera.Target + Vector3.UnitY - eye, Matrix4x4.CreateScale(MathF.Max(3, camera.Distance * 0.06f)), Visible);
+        if (arrow.Count > 0)
+            foreach (var a in arrows)
+                Draw(cmd, arrow, a.At - eye, ArrowScale * PointAlong(a.Direction), new Vector4(a.Colour, hidden ? ArrowHiddenAlpha : 1));
+    }
+
+    /// <summary>The resolved markers blended over <paramref name="picture"/>.</summary>
+    void Composite(IGpuCommandList cmd, GpuTexture picture, PixelViewport viewport)
+    {
         var over = PassTargets.Of(picture, null).At(viewport);
         cmd.BeginRendering(over.Rendering);
         composite.Bind(markerImage, new SampledTexture(Nearest(), resolved!.View()));
-        var overState = DrawState.For(over.Formats, gpu.DepthClamp, blend: premultiplied);
+        var overState = DrawState.For(over.Formats, gpu.DepthClamp, blend: Premultiplied);
         overState.Record(cmd, over);
         cmd.BindPipeline(compositeSegment.Get(overState, over.Formats, null));
         composite.Flush(cmd);
         cmd.Draw(3);
         cmd.EndRendering();
-        gpu.EndNative(cmd);
     }
 
     void Draw(IGpuCommandList cmd, (int First, int Count) mesh, Vector3 relative, Matrix4x4 turn, Vector4 c)

@@ -43,7 +43,7 @@ public sealed partial class FloorSurfaces
         foreach (var s in surfaces)
         {
             if (s.Floor > floor || point.X < s.Min.X || point.X > s.Max.X || point.Z < s.Min.Y || point.Z > s.Max.Y) continue;
-            for (int i = 0; i + 2 < s.Corners.Length; i += 3)
+            foreach (int i in s.Grid.At(new Vector2(point.X, point.Z)))
             {
                 var a = s.Corners[i]; var b = s.Corners[i + 1]; var c = s.Corners[i + 2];
                 if (RayTriangle(origin, -Vector3.UnitY, a, b, c) is not { } t || t >= nearest) continue;

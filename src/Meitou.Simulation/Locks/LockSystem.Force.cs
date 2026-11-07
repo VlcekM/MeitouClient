@@ -80,15 +80,15 @@ public sealed partial class LockSystem
             {
                 c.ForcingLock = null;
                 if (Picking.Break(world, s, f, Crimes)) BruteForced(world, s, c, f.Kind == FixtureKind.Cage ? f.Occupant : CharacterId.None);
-                else if (c.IsPlayer) world.Post($"{c.Name}: I'm not strong enough to do that");
+                else if (c.IsPlayer) Say(world, c, "I'm not strong enough to do that");
                 continue;
             }
-            if (Lockpicking.BestTool(c) is null) { c.ForcingLock = null; if (c.IsPlayer) world.Post($"{c.Name}: I don't have any tools"); continue; }
+            if (Lockpicking.BestTool(c) is null) { c.ForcingLock = null; if (c.IsPlayer) Say(world, c, "I don't have any tools"); continue; }
             if (Picking.CutLock(world, s, f, world.TickSeconds, Crimes))
             {
                 c.ForcingLock = null;
                 world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
-                if (c.IsPlayer) world.Post($"{c.Name}: Shackles broken!");
+                if (c.IsPlayer) Say(world, c, "Shackles broken!");
             }
         }
     }

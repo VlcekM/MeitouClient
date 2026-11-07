@@ -34,11 +34,11 @@ public sealed class PostOptions
     /// <summary>Meitou switch (<c>gihybrid</c>; docs/render-gi.md "Hybrid GI"), off by default: nothing it holds has been seen on a GPU. <c>--gi-hybrid</c> picks among its parts.</summary>
     public bool GiHybrid;
     /// <summary>The parts of <see cref="GiHybrid"/>: <c>relocate</c>, probes moved out of geometry; <c>clouds</c>, the cloud shadows at the probes' hits and in the light shafts;
-    /// <c>near</c>, the traced near field (<c>Gi.GiNearField</c>).</summary>
-    public bool GiRelocate = true, GiCloudShadows = true, GiNearField = true;
+    /// <c>cache</c>, the traced world-space radiance cache (<c>Gi.GiCache</c>).</summary>
+    public bool GiRelocate = true, GiCloudShadows = true, GiCache = true;
     public bool GiRelocating => GiHybrid && GiRelocate;
     public bool GiCloudShadowing => GiHybrid && GiCloudShadows;
-    public bool GiNearFielding => GiHybrid && GiNearField;
+    public bool GiCaching => GiHybrid && GiCache;
     /// <summary>Meitou switch (<c>ssr</c>; docs/render-gi.md "Reflections"): the sky's reflection on glossy surfaces replaced by what they mirror, and occluded on all that take the
     /// GI resolve; off by default, also in the Meitou preset.</summary>
     public bool Ssr;
@@ -194,25 +194,25 @@ public sealed class PostOptions
         ParticleDivisor = other.ParticleDivisor; Exposure = other.Exposure; ToneMap = other.ToneMap; ToneMix = other.ToneMix; Grade = other.Grade;
         HeatHazeStrength = other.HeatHazeStrength; NightGradeStrength = other.NightGradeStrength; BloomStrength = other.BloomStrength;
         MeitouHeatHaze = other.MeitouHeatHaze; ToneMapping = other.ToneMapping; NightGrade = other.NightGrade; Bloom = other.Bloom; Ssr = other.Ssr;
-        GiHybrid = other.GiHybrid; GiRelocate = other.GiRelocate; GiCloudShadows = other.GiCloudShadows; GiNearField = other.GiNearField;
+        GiHybrid = other.GiHybrid; GiRelocate = other.GiRelocate; GiCloudShadows = other.GiCloudShadows; GiCache = other.GiCache;
         MotionBlur = other.MotionBlur; MotionBlurShutter = other.MotionBlurShutter; CameraEffectsEverywhere = other.CameraEffectsEverywhere;
         DepthOfField = other.DepthOfField; DofAperture = other.DofAperture;
         Gtao = other.Gtao; GtaoQuality = other.GtaoQuality;
         LampShadows = other.LampShadows; LampShadowLamps = other.LampShadowLamps;
     }
 
-    /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>, <c>clouds</c>, <c>near</c>).</summary>
+    /// <summary><c>--gi-hybrid &lt;parts&gt;</c>: the switch on with these parts only (comma list: <c>relocate</c>, <c>clouds</c>, <c>cache</c>).</summary>
     void SetGiHybrid(string parts)
     {
-        GiRelocate = GiCloudShadows = GiNearField = false;
+        GiRelocate = GiCloudShadows = GiCache = false;
         foreach (var part in parts.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
             switch (part)
             {
                 case "relocate": GiRelocate = true; break;
                 case "clouds": GiCloudShadows = true; break;
-                case "near": GiNearField = true; break;
-                default: throw new ArgumentException($"unknown --gi-hybrid part '{part}' (relocate, clouds, near)");
+                case "cache": GiCache = true; break;
+                default: throw new ArgumentException($"unknown --gi-hybrid part '{part}' (relocate, clouds, cache)");
             }
         }
         GiHybrid = true;
@@ -252,7 +252,7 @@ public sealed class PostOptions
         $"lamp shadows {(LampShadows ? $"{LampShadowLamps} lamps" : "off")}, " +
         $"gi hybrid {(GiHybrid ? GiHybridParts : "off")}, upscaler {Upscale.Describe()}";
 
-    string GiHybridParts => string.Join(' ', new[] { GiRelocate ? "relocate" : "", GiCloudShadows ? "clouds" : "", GiNearField ? "near" : "" }.Where(p => p.Length > 0));
+    string GiHybridParts => string.Join(' ', new[] { GiRelocate ? "relocate" : "", GiCloudShadows ? "clouds" : "", GiCache ? "cache" : "" }.Where(p => p.Length > 0));
 }
 
 /// <summary>The tone curve of the composite (docs/render-post.md "Tone map and grading").</summary>

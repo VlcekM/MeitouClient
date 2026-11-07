@@ -51,6 +51,7 @@ sealed partial class PlayerInterface
             dialogueRequestHandled = request.Id;
             if (request.Kind == DialogueRequestKind.CharacterEditor) OpenEditor(Meitou.Simulation.Editing.EditKind.Surgery, [request.Player], request.Npc, paid: true);
             else if (request.Kind == DialogueRequestKind.RecruitEditor) OpenEditor(Meitou.Simulation.Editing.EditKind.Recruit, [request.Player]);
+            else if (request.Kind == DialogueRequestKind.AnimalEditor) OpenEditor(Meitou.Simulation.Editing.EditKind.Recruit, request.Characters);
         }
     }
 
@@ -66,7 +67,7 @@ sealed partial class PlayerInterface
         // The choices are drawn as buttons, so the player box's template scroll bar would only be an empty track.
         foreach (var bar in faithfulScreens.Layout("dialogue").Find("PlayerDialog")?.Children.Where(w => w.Type == "ScrollBar") ?? []) b.HiddenWidgets.Add(bar);
         b.NativeScroll.Add("PlayerDialog");   // the choices are drawn against the box, not scrolled by its canvas
-        b.Text["MoneyLabelText"] = "Money:";
+        b.Text["MoneyLabelText"] = Loc.Tr("Money:");
         b.Text["MoneyAmountText"] = "c." + talk.PlayerMoney.ToString("N0", CultureInfo.InvariantCulture);
     }
 

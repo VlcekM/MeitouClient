@@ -425,7 +425,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             float off = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), spot);
             return off <= Ai.AiSystem.TurretSlack || ((n.Flags & (ushort)MoveFlags.AnyPath) == 0 && off <= Ai.AiSystem.TurretSlack + Settings.SettleReach);
         }
-        // A rock: inside its bounds box scaled 1.2, or within its use range of the box's centre (the original measures to its position marker; a rock's origin can lie off its pile).
+        // A rock: inside its footprint scaled 1.2, or within its use range of the box's centre (the original measures to its position marker; a rock's origin can lie off its pile).
         if (naturalBounds.TryGetValue(site.Id, out var rock))
             return rock.Touches(n.Position) || SiteReach.Within(n, Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), rock.Flat), m.Data.UseRange);
         // The machine's use range (UseableStuff::getReachRange).
@@ -434,8 +434,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
 
     /// <summary>
     /// The X/Z gap from <paramref name="from"/> to a site (<see cref="SiteReach.Gap"/>). A rock's BUILDING footprint is not scaled like the rock, so a rock is measured to its mesh's
-    /// bounds box as placed (engine choice for the original's 1.2 x bounds box of a foliage building; a circle of its longest half-extent left miners standing off a long rock's
-    /// side), else to its position.
+    /// footprint as placed (engine choice for the original's 1.2 x bounds box of a foliage building, which also wants a movement flag; a circle of its longest
+    /// half-extent left miners standing off a long rock's side), else to its position.
     /// </summary>
     float GapTo(BuildSite site, Vector3 from)
     {

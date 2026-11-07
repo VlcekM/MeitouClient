@@ -17,6 +17,14 @@ public sealed partial class SaveFolder
     /// <summary>Meitou's folder of code-mod sidecar files (docs/formats/save.md "Mod data"); the original game's own files never go there.</summary>
     public const string ModDataDirectory = "meitou-mods";
     const string ModDataExtension = ".dat";
+    /// <summary>
+    /// The code mods the save was made with (docs/formats/save.md "Mod data"); not a sidecar, its extension keeps it out of
+    /// <see cref="ModDataFiles"/>.
+    /// </summary>
+    public const string ModEnvironmentName = ModDataDirectory + "/environment.json";
+
+    /// <summary>Meitou's own folder of the level editor's session edits (docs/game/level-editor.md "In the game save"); the original ignores it.</summary>
+    public const string LevelEditsDirectory = "meitou-level-edits";
 
     const char Backslash = (char)92;
 
@@ -80,6 +88,18 @@ public sealed partial class SaveFolder
     static bool IsModDataName(string name) =>
         name.StartsWith(ModDataDirectory + "/", StringComparison.Ordinal) && name.EndsWith(ModDataExtension, StringComparison.Ordinal)
         && name.IndexOf('/', ModDataDirectory.Length + 1) < 0;
+    /// <summary>The zones that have a level-edits file (<see cref="LevelEditsDirectory"/>), with the file's name.</summary>
+    public IEnumerable<(ZoneCoordinate Zone, string Name)> LevelEditFiles
+    {
+        get
+        {
+            foreach (var n in Names)
+                if (LevelEditsNamePattern().Match(n) is { Success: true } m)
+                    yield return (new ZoneCoordinate(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value)), n);
+        }
+    }
+
+    public static string LevelEditsName(ZoneCoordinate zone) => $"{LevelEditsDirectory}/zone.{zone.X}.{zone.Y}.zone";
 
     public static string ZoneName(ZoneCoordinate zone) => $"{ZoneDirectory}/zone.{zone.X}.{zone.Y}.zone";
 
@@ -93,6 +113,9 @@ public sealed partial class SaveFolder
     }
 
     static string Normalize(string name) => name.Replace(Backslash, '/').TrimStart('/');
+
+    [GeneratedRegex(@"^meitou-level-edits/zone\.(\d+)\.(\d+)\.zone$", RegexOptions.IgnoreCase)]
+    private static partial Regex LevelEditsNamePattern();
 
     [GeneratedRegex(@"^zone/zone\.(\d+)\.(\d+)\.zone$", RegexOptions.IgnoreCase)]
     private static partial Regex ZoneNamePattern();

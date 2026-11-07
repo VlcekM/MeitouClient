@@ -185,7 +185,7 @@ static class GiShaders
 
         """;
 
-    /// <summary>What a shader that shades ray hits needs (the probe trace, <see cref="GiNearShaders.Trace"/>): the vertex fetches, the ambient lookups, the cut-out test and the lamps' shadow rays. Needs its names in scope: <c>geometries</c>, <c>maps</c>, <c>origin</c>, <c>uScene</c>.</summary>
+    /// <summary>What a shader that shades ray hits needs (the probe trace, <see cref="GiCacheShaders.Trace"/>): the vertex fetches, the ambient lookups, the cut-out test and the lamps' shadow rays. Needs its names in scope: <c>geometries</c>, <c>maps</c>, <c>origin</c>, <c>uScene</c>.</summary>
     internal static readonly string HitFunctions = $$"""
         {{HitBuffers}}
 

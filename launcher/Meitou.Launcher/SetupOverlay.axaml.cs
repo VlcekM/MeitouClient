@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Meitou.Content;
@@ -73,13 +74,15 @@ public sealed partial class SetupOverlay : UserControl
     {
         if (RendererHint is null) return;
         bool vulkan = MacSupport.VulkanAvailable;
-        string effective = MacSupport.Resolve(config.Renderer);
-        RendererHint.Text = config.Renderer switch
+        string effective = MacSupport.Resolve(config.Renderer) == "metal" ? "Metal" : "Vulkan";
+        string hint = config.Renderer switch
         {
-            "auto" => $"Auto: {(effective == "metal" ? "Metal" : "Vulkan")}" + (vulkan ? " (Vulkan loader found)." : MacSupport.MetalAvailable ? " (no Vulkan loader)." : "."),
+            "auto" => vulkan ? "Auto: {1} (Vulkan loader found)." : MacSupport.MetalAvailable ? "Auto: {1} (no Vulkan loader)." : "Auto: {1}.",
             "metal" => MacSupport.MetalAvailable ? "Metal (native)." : "Metal is not available on this Mac; Auto uses Vulkan.",
             _ => vulkan ? "Vulkan (MoltenVK loader found)." : "Vulkan loader not found; choose Auto/Metal, or install it later in Settings.",
         };
+        // Inlines, not Text: a translation pass would put back the first hint it saw.
+        RendererHint.Inlines = [new Run(LauncherText.Translate(hint, effective))];
     }
 
     async void BrowseKenshi_Click(object? sender, RoutedEventArgs e)
@@ -108,13 +111,17 @@ public sealed partial class SetupOverlay : UserControl
     {
         if (KenshiBox.Text is { } typed && typed != install?.Root) SetKenshi(typed);
         var folder = (InstallBox.Text ?? "").Trim().Trim('"');
-        if (folder.Length == 0 || !Path.IsPathFullyQualified(folder)) { Problem.Text = "Choose a full path for the install folder."; return; }
+        if (folder.Length == 0 || !Path.IsPathFullyQualified(folder))
+        {
+            Problem.Text = LauncherText.Translate("Choose a full path for the install folder.");
+            return;
+        }
         var previous = LauncherConfig.InstallDirectory;
         IsEnabled = false;
         try
         {
             Directory.CreateDirectory(folder);
-            Problem.Text = "Moving installed versions…";
+            Problem.Text = LauncherText.Translate("Moving installed versions…");
             await Task.Run(() => Releases.MoveInstalled(previous, folder));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

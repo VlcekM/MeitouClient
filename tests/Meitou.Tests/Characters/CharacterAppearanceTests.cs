@@ -103,4 +103,29 @@ public class CharacterAppearanceTests
         Assert.Equal(source.Record.Vector3s, target.Record.Vector3s);
         Assert.Equal(other.StringId, target.Record.StringId);
     }
+
+    /// <summary>A prosthetic built from a <see cref="LoadoutLimb"/> shows its item's colour, else the wearer's scheme, like clothing (docs/characters.md "Clothing colours", #279).</summary>
+    [Fact]
+    [Slow]
+    public void A_prosthetic_limb_takes_its_item_colour_else_the_wearers_scheme()
+    {
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, "Kenshi install not found");
+        var db = Database(install);
+        var faction = db.OfType(FcsRecordType.FACTION).First(f => Meitou.Data.Gameplay.ItemColours.Of(db, f) is not null);
+        var scheme = Meitou.Data.Gameplay.ItemColours.Of(db, faction)!;
+        var own = db.OfType(FcsRecordType.COLOR_DATA).First(c => c.StringId != scheme.StringId);
+        var prosthetic = db.OfType(FcsRecordType.LIMB_REPLACEMENT).First(l => Meitou.Data.Gameplay.ItemColours.Of(db, l) is null && l.GetPath("mesh").Length > 0);
+        var race = db.OfType(FcsRecordType.RACE).First(r => r.Name == "Greenlander");
+        var loadout = CharacterGenerator.Generate(db, install.Root, race, 1, female: false, faction);
+        loadout.Limbs[0] = new LoadoutLimb(2, prosthetic, 0, own);
+        loadout.Limbs[1] = new LoadoutLimb(2, prosthetic);
+
+        var look = CharacterAppearance.Build(db, install.Root, race.StringId, new CharacterOptions { Loadout = loadout });
+
+        var limbs = look.Parts.Where(p => p.Record == prosthetic).ToList();
+        Assert.Equal(2, limbs.Count);
+        Assert.Equal(own.StringId, limbs[0].Colour?.StringId);
+        Assert.Equal(scheme.StringId, limbs[1].Colour?.StringId);
+    }
 }

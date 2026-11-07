@@ -54,6 +54,9 @@ public static class SaveLoader
 
         var camera = save.Camera;
         var loaded = new LoadedSave { Source = save, Clock = new SaveClock(camera.Day, camera.Hour, camera.Minute) };
+        // The world's clock is the save's from the start: the first tick (run before the host sets it) makes the zones' saved platoons, whose absolute hours (a shop's
+        // next restock) are read against it.
+        world.GameHours = camera.Day * 24 + loaded.Clock.HourOfDay;
         // The CAMERA's mods list names the data files the save was made with (without extension; gamedata.base as "base", docs/formats/save.md).
         var running = new HashSet<string>(data.Db.Files.Select(f => f == "gamedata.base" ? "base" : Path.GetFileNameWithoutExtension(f)), StringComparer.OrdinalIgnoreCase);
         foreach (var mod in camera.Record.References.GetValueOrDefault("mods") ?? [])

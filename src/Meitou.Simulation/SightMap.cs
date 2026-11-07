@@ -374,7 +374,10 @@ public sealed class SightMap
     /// <summary>In no building at all, neither inside nor on top (the original's location type 0xb, outdoors).</summary>
     public bool Outdoors(int slot) => !Known(slot) || place[slot] < 0;
 
-    /// <summary>The floor the character at <paramref name="at"/> stands on in its building (the original's <c>getFloor</c>); 0 outdoors or on top.</summary>
+    /// <summary>
+    /// The floor the character at <paramref name="at"/> (its last-tick position) stands on in its building (the original's <c>getFloor</c>); 0 outdoors or on top. Worked out on first
+    /// ask after the character moved and kept; the parallel looks ask it too, and any worker writes the same value.
+    /// </summary>
     public int FloorOf(int slot, Vector3 at)
     {
         if (!Inside(slot)) return 0;

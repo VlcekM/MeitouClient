@@ -30,6 +30,18 @@ public sealed class Inventory(int width, int height)
         return w;
     }
 
+    /// <summary>
+    /// <see cref="ContentWeight()"/> with the item on the mouse when it was lifted from this inventory: the original keeps counting a held item in the section it came from
+    /// (<c>FUN_140749160</c>), times the worn bag's factor when that is the bag's contents.
+    /// </summary>
+    public float ContentWeight(HeldItem? held)
+    {
+        float w = ContentWeight();
+        if (held is null || held.Grid != this || InventoryCommands.IsLimbSection(held.Section)) return w;
+        float factor = held.Section == "backpack_content" ? Backpack?.ContentsFactor ?? 1 : 1;
+        return w + held.Item.Weight * factor;
+    }
+
     /// <summary>First cell where a w x h footprint fits among the items of <paramref name="section"/>, or false.</summary>
     public bool FindCell(string section, int w, int h, out int x, out int y)
     {
@@ -107,10 +119,16 @@ public sealed class Inventory(int width, int height)
         int limit = inv.LimitOf(item);
         if (limit > 1)
             foreach (var other in inv.Items)
-                if (other.Section == section && other.Record == item.Record && other.Quality == item.Quality && other.Mark == item.Mark && other.Death == item.Death && other.Unique == item.Unique
-                    && other.Contents is null && other.Quantity < limit) return true;
+                if (other.Section == section && SameStack(other, item) && other.Contents is null && other.Quantity < limit) return true;
         return inv.FindCell(section, item.Width, item.Height, out _, out _);
     }
+
+    /// <summary>
+    /// Whether two items may share a stack: same record, material and quality (as <see cref="InventoryCommands.Stackable"/>, <c>FUN_140715560</c>), stolen mark, death and unique
+    /// flags. The material keeps blueprints of different researches apart: they share their look record (#354).
+    /// </summary>
+    static bool SameStack(ItemInstance a, ItemInstance b) => a.Record == b.Record && a.MaterialId == b.MaterialId && a.Quality == b.Quality && a.Mark == b.Mark
+        && a.Death == b.Death && a.Unique == b.Unique;
 
     /// <summary>
     /// The original's auto-add into one section (<c>FUN_14074c8b0</c>): tops up the stacks of <paramref name="section"/> first, then takes the first free cells row by row from the top, left to
@@ -128,7 +146,7 @@ public sealed class Inventory(int width, int height)
         if (limit <= 1) return false;
         foreach (var other in into.Items)
         {
-            if (ReferenceEquals(other, item) || other.Record != item.Record || other.Quality != item.Quality || other.Mark != item.Mark || other.Death != item.Death || other.Unique != item.Unique || other.Contents is not null
+            if (ReferenceEquals(other, item) || !SameStack(other, item) || other.Contents is not null
                 || (section is null ? other.Section is not ("main" or "backpack_content") : other.Section != section)) continue;
             var (kept, coming) = (other.Buyback, item.Buyback);
             if (kept is null ? coming is not null && !dropReceipt : coming is null || !kept.Joins(coming)) continue;

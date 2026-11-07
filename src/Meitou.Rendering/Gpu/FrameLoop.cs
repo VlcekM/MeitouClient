@@ -35,6 +35,11 @@ public sealed unsafe partial class GpuContext
     /// <summary>Diagnostic (issue #108), <c>MEITOU_DIAG_IDLE=1</c>: every frame waits for all frames in flight before it begins (the CPU never records
     /// while the GPU runs an earlier frame).</summary>
     public static readonly bool DiagIdle = Environment.GetEnvironmentVariable("MEITOU_DIAG_IDLE") == "1";
+    /// <summary>Diagnostic (issue #319), <c>MEITOU_DIAG_NO_MATERIAL_CACHE=1</c>: the terrain material cache starts off (every pixel shades the layers).</summary>
+    public static readonly bool DiagNoMaterialCache = Environment.GetEnvironmentVariable("MEITOU_DIAG_NO_MATERIAL_CACHE") == "1";
+    /// <summary>Diagnostic (issue #319), <c>MEITOU_DIAG_NO_GROW=1</c>: the terrain near layer arrays and the grass store keep the size they were made
+    /// with (no growth for kept places or a longer grass distance).</summary>
+    public static readonly bool DiagNoGrow = Environment.GetEnvironmentVariable("MEITOU_DIAG_NO_GROW") == "1";
 
     /// <summary>The first and the pre-frame-end timestamps of the frame submitted last (--log-spikes or MEITOU_PASS_STATS=1 only; the profiler keeps them to read the pre-frame GPU time when the frame has completed).</summary>
     internal (QuerySlot Begin, QuerySlot PreEnd) LastFrameStamps { get; private set; }
