@@ -21,7 +21,7 @@ public sealed record BirdFlockData
     public float GroundHeight { get; init; }
     public float GroundStrength { get; init; }
     public float ContourStrength { get; init; }
-    /// <summary><c>distance</c>: read as a squared radius round the camera (<b>Unknown</b>: the unit).</summary>
+    /// <summary><c>distance</c>: a radius in world units round the camera controller (<b>Verified</b>, <c>FUN_140260620</c>).</summary>
     public float Distance { get; init; }
     public bool Flocking { get; init; }
     public bool Circling { get; init; }
