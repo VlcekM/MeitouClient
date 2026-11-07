@@ -329,15 +329,27 @@ sealed partial class PlayerInterface
         {
             var job = lead!.Jobs[i];
             if (job.Type == Meitou.Data.Gameplay.Ai.TaskType._SLAVE_OBEDIENCE && obedienceJob < 0) obedienceJob = i;
-            string text = Loc.Tr(Meitou.Simulation.Production.PermaJobs.Text(job.Type) ?? job.Type.ToString());
-            if (job.Site is { } id && session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { } site) text += ": " + SiteName(site);
-            else if (job.Site is { } dummyId && session.CurrentSnapshot.Dummies.FirstOrDefault(d => d.Id == dummyId) is { } dummy) text += ": " + (buildHost?.ItemName(dummy.Record) ?? dummy.Record);
-            jobs.Add(new("job:" + i.ToString(CultureInfo.InvariantCulture), text));
+            jobs.Add(new("job:" + i.ToString(CultureInfo.InvariantCulture), JobRowText(job)));
         }
         b.Lists["JobsPanel"] = jobs;
         if (jobs.Count > 0) b.Hidden.Add("JobsPanelInfo");
         // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an order").
         else b.Text["JobsPanelInfo"] = "[" + Loc.Tr("No jobs assigned") + "]\n[" + Loc.Tr("To add jobs, hold shift key when giving an order") + "]";
+    }
+
+    /// <summary>
+    /// A jobs row: the type's text and the building it targets. The engineer works every site, not the one it was ordered on, so its row is plain
+    /// "Engineer" (<b>Observed</b> in the original by players, #348/#353).
+    /// </summary>
+    string JobRowText(Meitou.Simulation.Production.PermaJob job)
+    {
+        string text = Loc.Tr(Meitou.Simulation.Production.PermaJobs.Text(job.Type) ?? job.Type.ToString());
+        if (job.Type == Meitou.Data.Gameplay.Ai.TaskType.JOB_BUILDER) return text;
+
+        if (job.Site is { } id && session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { } site) return text + ": " + SiteName(site);
+        if (job.Site is { } dummyId && session.CurrentSnapshot.Dummies.FirstOrDefault(d => d.Id == dummyId) is { } dummy)
+            return text + ": " + (buildHost?.ItemName(dummy.Record) ?? dummy.Record);
+        return text;
     }
 
     /// <summary>The X at the right end of each jobs row (the original's remove button, its tutorial: "remove a job at any time by pressing the X button").</summary>
