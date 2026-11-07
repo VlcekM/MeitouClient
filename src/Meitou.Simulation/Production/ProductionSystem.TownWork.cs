@@ -138,8 +138,7 @@ public sealed partial class ProductionSystem
         float skill = m.Data.Stat > 0 ? Effective(cold, stat) : -1;
         float s = skill < 0 ? 1 : Lerp(0.5f, 1.4f, skill / 100);
         cold.Operating = ProduceStep(world, m, s, dt);
-        if (m.Data.Stat > 0) cold.UseSkill(stat, world.Tick);
-        if (m.Data.Stat > 0 && cold.Stats is { } stats && cold.Race is { } race) xp.Continuous(stats, race, stat, dt, OperateXp(m.Data.Stat));
+        OperatingXp(world, cold, m.Data.Stat, dt);
     }
 
     /// <summary>

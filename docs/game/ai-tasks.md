@@ -1202,6 +1202,9 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   unary minus; **Observed** native 1.0.68 save: bench at XZ (-50595, -1005), yaw 0, table behind, seated yaw 1.5509452 rad). Meitou's Fixes switch
   "Bench facing" (on by default) turns it 180° instead; off gives the original's. With none found, the seat's facing. Layout stool rotations are arbitrary (Observed: the Hub's
   Storm House, up to 161° off their table).
+- Seat XP (**Verified**, `FUN_14035bc90`): each update calls the operating XP `FUN_1408c7250` with the functionality's `stat used` for every function but 7 (BF_TRAINING),
+  so a seat with a stat trains it while sat on, uncapped. No base-game seat sets one (dumped: gamedata.base, Newwworld, rebirth, Dialogue); mods do (CBT Gym Training Tools: thrones and chairs with strength 1, athletics 17,
+  toughness 21, `output rate` 1). Meitou: `ProductionSystem.OperatingXp` for the player's seat jobs; NPC town sitters get none (not modelled).
 - **24 Wandering** (`FUN_140998040`): the nearest town (squared XZ distance from the character, its own town included) of any type but a nest marker (type 8): the town list search
   `FUN_140927f10` is called with type filter 10 ("any"), which still skips type 8 unless the filter is 8 (**Verified**); list A holds `atATown`, so it is dropped while in a town.
   Meitou (`AiSystem.TargetFor`) skips `TownType.NestMarker`.

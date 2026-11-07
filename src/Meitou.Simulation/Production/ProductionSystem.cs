@@ -725,11 +725,12 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 Train(ref n, cold, site, m, dt);
                 continue;
             }
-            // A chair (an order or an implicit job): sat on, no work.
+            // A chair or throne (an order or an implicit job): sat on, no work; its stat used trains as at any machine (mods' gym seats).
             if (!m.Data.Operable)
             {
                 if (IsSeat(m) && SeatOccupied(world, site)) { End(world, i); continue; }
                 Settle(world, ref n, cold, site, m);
+                OperatingXp(world, cold, m.Data.Stat, dt);
                 continue;
             }
             // An automatic machine (the 152 job): its hauler fills its inputs and carries its output away; the machine works by itself.
@@ -756,13 +757,22 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             else if (m.Farm is not null) worked = HarvestStep(world, m, skill, s, dt) || Tended(m);
             else worked = ProduceStep(world, m, s, dt);
             cold.Operating = worked;
-            // Operating trains the stat (Observed, FUN_1408c7250: 0.5, farming x1.5, through the continuous entry), every frame at the machine.
-            if (m.Data.Stat > 0) cold.UseSkill(stat, world.Tick);
-            if (m.Data.Stat > 0 && cold.Stats is { } stats && cold.Race is { } race) xp.Continuous(stats, race, stat, dt, OperateXp(m.Data.Stat));
+            OperatingXp(world, cold, m.Data.Stat, dt);
         }
         PowerTick(world, dt);
         if (research.Queue.Count > 0 && contributions > 0) research.Touch();
         world.Machines.Touch();
+    }
+
+    /// <summary>
+    /// Operating trains <paramref name="stat"/> (<c>stat used</c>; none at 0) every frame at the machine: <c>Task_OperateMachine</c>'s update (<c>FUN_14035bc90</c>, <b>Verified</b>) calls
+    /// <c>FUN_1408c7250</c> for every function but BF_TRAINING, seats included (<b>Observed</b> amounts, <see cref="OperateXp"/>, through the continuous entry).
+    /// </summary>
+    void OperatingXp(World world, CharacterCold cold, int stat, float dt)
+    {
+        if (stat <= 0) return;
+        cold.UseSkill((StatsEnumerated)stat, world.Tick);
+        if (cold.Stats is { } stats && cold.Race is { } race) xp.Continuous(stats, race, (StatsEnumerated)stat, dt, OperateXp(stat));
     }
 
     /// <summary>The operating XP amount of a stat (<b>Observed</b>, <c>FUN_1408c7250</c>): 0.5, stats 10 and 37 0.1, 11 1, 24 3, 35 1.2 (0.8 falling into the farming case), 12 (farming) 0.75.</summary>
