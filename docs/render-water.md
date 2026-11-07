@@ -106,6 +106,12 @@ Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam,
   units under water, 30 units/s walk): a bow wave, a V of ripples spreading behind and foam along the legs' path.
 - **Shallow water**: a body's push is scaled by sqrt(3 / the column's depth) (0.5 to 3 units), so a step in ankle-deep water splashes and rings as
   visibly as in deep water; its churn foam fills the displaced water too, and the field's foam shows through the water's fade at the waterline.
+- **Foot splashes** (`GameHost.Splashes`): each ground event of a foot (the game's footstep timing, [audio](audio.md#characters-footsteps-combat-voices) "Ground effect") whose bone
+  is at most 6 units under the water, over ground under the water (not a floor), adds a splash to the next step: a crown 0.8 units high (rising at 10 units/s) on a ring of
+  radius 1.6 to 1.9 units round a hollow, which runs out as a ring wave, and foam (0.75 to 0.98) over 2 radii, thickest at the crown; strength 0.5 to 1 by the
+  character's speed (full at 50 units/s), less for a deeper bone. Where the water does not reach the ankle bone (no game splash there) the biome's shallowest
+  `water effects` system is fired too. At most 32 splashes wait for a step. The field's foam (and the contact foam) is as thick on dark water as on clear
+  (only its colour changes), unlike the water's own foam.
 - **Foam**: renewed in a 1.2-unit ring where a moving body cuts the surface (by the rate it displaces water) and where the slope passes 0.45 (full at 0.9, at most 0.7);
   spreads a little and fades to a third in 2.5 s.
 - **Shading**: written each frame into an RGBA16F storage image (height, slopes, foam; one level); the water's vertex stage adds the height where its vertices are under 3 texels apart, the
@@ -119,7 +125,7 @@ Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam,
   a depth not finite is land; every state value is bounded (height ±4 units, rate ±200, foam 0..1) and one not finite is reset to 0 when read and
   written, and the water reads a bad texel as calm, so no single fault spreads through the field or raises the water over the land (it once drew the
   whole window black).
-- **Unknown**: capsules from axis-aligned pick boxes are rough for bones slanted in the binding pose; no splash particles; objects and projectiles do not push the water;
+- **Unknown**: capsules from axis-aligned pick boxes are rough for bones slanted in the binding pose; the foam does not drift with the water; objects and projectiles do not push the water;
   the fixed wave speed cap gives shallow-water (non-dispersive) wakes in deep water too, not the 19.5-degree Kelvin wedge.
 
 ## Safe work skips

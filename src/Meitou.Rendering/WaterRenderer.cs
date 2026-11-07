@@ -1001,12 +1001,13 @@ public sealed unsafe class WaterRenderer : IDisposable
                 a1 = mix(a1, r1, rw); a2 = mix(a2, r2, rw);
                 amount = max(amount, rw * (0.02 + 0.55 * rapid));
             }
+            float touched = 0.0;
             #ifdef WATER_CONTACT
             float contact = 0.0;
             if (!swash && outside <= 0.0 && dist < ContactFar)
             {
                 contact = contactFoam(thick, floorDepth, toEyeDir.y, a1.g);
-                amount = max(amount, max(contact, ripple.a) * (1.0 - smoothstep(ContactFar - ContactFade, ContactFar, dist)));
+                touched = max(contact, ripple.a) * (1.0 - smoothstep(ContactFar - ContactFade, ContactFar, dist));
             }
             #endif
             // Every foam pattern is in the world at fixed scales, so zooming never changes its size or shape. Detail finer than a pixel is filtered (the
@@ -1021,6 +1022,8 @@ public sealed unsafe class WaterRenderer : IDisposable
             // Dark and coloured water foams less (a thinner, more broken lace), and the foam takes its colour: white only on clear water, a dirty
             // grey-brown on black water, rust on red.
             amount *= mix(0.7, 1.0, clean);
+            // Foam churned up by what moves in the water (a splash, a wake, a rock's surge) is as thick on dark water as on clear: only its colour changes.
+            amount = max(amount, touched);
             float foam = smoothstep(0.95 - amount, 1.25 - amount, pattern);
             if (surfAmount > 0.0)
             {

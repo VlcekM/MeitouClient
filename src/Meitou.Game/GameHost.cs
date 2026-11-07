@@ -608,6 +608,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         UpdateBlood();
         UpdateTrails();
         UpdateWakes();
+        UpdateSplashes();
         UpdateModHits();
         Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Blood, "blood marks");
         birdAspect = width / (float)Math.Max(height, 1);
