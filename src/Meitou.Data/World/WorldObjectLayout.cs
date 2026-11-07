@@ -146,6 +146,16 @@ public static class WorldObjectLayout
     }
 
     /// <summary>
+    /// Variant <paramref name="n"/> (1-based) of a mesh an item with <c>number of meshes</c> above 1 names (docs/game/factions-squads-towns.md "Nest furniture"): the file name with its
+    /// last character replaced by the number (<c>bone1.mesh</c> -> <c>bone7.mesh</c>), no folder; the name itself when it has no stem.
+    /// </summary>
+    public static string MeshVariant(string mesh, int n)
+    {
+        string bare = Path.GetFileNameWithoutExtension(mesh.Replace('\\', '/'));
+        return bare.Length == 0 ? mesh : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{bare[..^1]}{n}.mesh");
+    }
+
+    /// <summary>
     /// The mesh a loose item is drawn with: its <c>ground mesh</c>, else its <c>mesh</c>, else <c>steel1.mesh</c> (<c>FUN_140760300</c>, <b>Verified</b>). Not modelled: a weapon that exists bare
     /// takes its <c>bare sword</c> in place of <c>mesh</c> there (the flag from a save's <c>bare weapon</c>; for a drop <b>Unknown</b>).
     /// </summary>

@@ -573,7 +573,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
     [lo, hi], clamped, so lo when lo > hi), scale v2 × 0.01 (v2 0: 1). A NEST_ITEM without `physics file`: a point within `size radius`, then `cluster min`
     to `cluster max` meshes, each within `cluster range` × scale of the one before, yaw random, scale ± 0.1, its `ground mesh` (else `mesh`); with
     `number of meshes` n > 1 the bare name less its last character plus an int in [1, n] (`FUN_14092bdc0`: `bone1.mesh`, 6 → `bone1`..`bone6`). Drawn
-    only (a static batch). With a `physics file` (`Beak Thing Egg`): as many real items within `cluster range` of the entry's point, each persisted to
+    only (a static batch); every variant takes the item's own `material`, as the named mesh does (engine reading: the data names only the first). With a `physics file` (`Beak Thing Egg`): as many real items within `cluster range` of the entry's point, each persisted to
     the nest. Then the item's own `cluster` list from the last one placed (v0 to v1 clusters within v2; the egg's `Bone Fragment=15,0,0` is 15).
   - `loot spawn` (VENDOR_LIST): the list for the nest's faction (`FUN_1409592a0`), v0 to v1 items rolled as an item slot's (`FUN_1409540d0`), each at
     a point within `size radius` snapped to the navmesh, none below height 1; persisted to the nest.
