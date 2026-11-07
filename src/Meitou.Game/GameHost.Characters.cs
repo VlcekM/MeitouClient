@@ -193,8 +193,25 @@ sealed partial class GameHost
         {
             WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Mouth = MouthOf(c),
             Scale = c.Scale, DrawDistanceScale = c.DrawDistanceScale, Hidden = hidden, FullRateAnimation = fullRate, Bones = bones,
-            Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts,
+            Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts, Face = FaceFor(c, look, hidden),
         };
+
+    Meitou.Data.Characters.FaceWeights?[] facesBySlot = [];
+
+    /// <summary>
+    /// The shape-key weights the mods' face controllers give the character this frame (docs/face-shape-keys.md); null without controllers, for a hidden character
+    /// or a look without shape keys (not built yet, or a body mesh with no poses).
+    /// </summary>
+    Meitou.Data.Characters.FaceWeights? FaceFor(CharacterSnapshot c, Meitou.Data.Characters.CharacterAppearance look, bool hidden)
+    {
+        if (mods is not { WantsFaces: true } || hidden || gpu.Characters?.FaceKeys(look) is not { Count: > 0 } keys) return null;
+        ref var slot = ref Slot(ref facesBySlot, c.Id.Slot);
+        var face = slot ??= new Meitou.Data.Characters.FaceWeights();
+        face.Clear();
+        face.Available = keys;
+        mods.UpdateFace(new Meitou.Modding.FaceFrame(c, (session.ShownTick + session.SimulationAlpha) * session.Simulation.TickSeconds, Vector3.Distance(camera.Eye, c.Position)), face);
+        return face;
+    }
 
     /// <summary>A character's key in the draw list: stable while it exists, new for every world (the renderer keeps its poses by it).</summary>
     long DrawKey(CharacterId id) => (((long)id.Slot << 32 | (uint)id.Generation) + 1) | (long)worldEpoch << 56;

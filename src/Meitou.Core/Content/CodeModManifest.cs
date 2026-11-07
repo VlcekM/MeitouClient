@@ -85,6 +85,7 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
             LoadAfter = ReadLoadAfter(root, id),
             Incompatible = ReadIncompatible(root, id),
             GameVersion = ReadGameVersion(root),
+            PortOf = root.TryGetProperty("portOf", out var port) && port.ValueKind == JsonValueKind.String ? port.GetString() : null,
         };
     }
 
