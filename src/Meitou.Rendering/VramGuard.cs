@@ -8,7 +8,8 @@ namespace Meitou.Rendering;
 /// Past that point the driver fails allocations or resets the device (a TDR): the world's streaming has no other limit than the ranges.
 /// <list type="bullet">
 /// <item>It samples the memory in use of the budget a few times a second (<see cref="Tick"/>). At <see cref="High"/> (90%) it enters
-/// <see cref="Pressure"/>: <see cref="Streaming"/> goes false (no new zone layouts, grass pages, textures or mesh uploads are started),
+/// <see cref="Pressure"/>: <see cref="Streaming"/> goes false (no new zone layouts, grass pages, textures or mesh uploads are started, but for the zones and
+/// meshes within <see cref="NearReach"/> of the camera),
 /// the caches evict what has been idle for a couple of seconds instead of a minute, and <see cref="RangeScale"/> falls by about 12% every
 /// 0.75 s (down to <see cref="MinScale"/>) while the use stays high: every renderer multiplies the ranges it draws and streams to by it.
 /// The farthest things leave first because the ranges they were in end first.</item>
@@ -64,6 +65,16 @@ public sealed class VramGuard
     public bool Pressure => pressure;
     /// <summary>New zones, pages, textures and uploads may be started (false under <see cref="Pressure"/>).</summary>
     public bool Streaming => !pressure;
+
+    /// <summary>
+    /// How far round the camera zones are still laid out and object meshes still decoded under <see cref="Pressure"/> (world units): a card that never gets back
+    /// under <see cref="Low"/> would otherwise never load the town the player stands in (#336). The range clamp's floor (<see cref="MinScale"/> of the default
+    /// object distance) is about this.
+    /// </summary>
+    public const float NearReach = 3000;
+
+    /// <summary>Whether what lies within <see cref="NearReach"/> may start loading: always, but under pressure only while the use is under <see cref="PriorityCeiling"/>.</summary>
+    public bool StreamsNear => !pressure || Fraction < PriorityCeiling;
     /// <summary>The last sample, as a fraction of the budget.</summary>
     public double Fraction => budget == 0 ? 0 : (double)used / budget;
     /// <summary>The driver's device-local budget at the last sample (0 until one is taken, or when unknown).</summary>

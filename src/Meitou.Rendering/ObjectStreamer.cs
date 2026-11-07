@@ -85,8 +85,10 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     /// <summary>Zones laid out at once.</summary>
     public int MaxJobs { get; set; } = 3;
-    /// <summary>No new zone layouts are started (memory pressure, <see cref="VramGuard"/>); the ones in flight are taken in.</summary>
+    /// <summary>No new zone layouts are started (memory pressure, <see cref="VramGuard"/>) but within <see cref="PausedReach"/>; the ones in flight are taken in.</summary>
     public bool Paused { get; set; }
+    /// <summary>While <see cref="Paused"/>, zones this near the eye are still laid out (<see cref="VramGuard.NearReach"/>; 0: none).</summary>
+    public float PausedReach { get; set; }
 
     /// <summary>
     /// The world's landmarks as one pseudo-zone (null: landmarks are off, they stay in their zones). Placements that are landmarks are left out of the
@@ -345,15 +347,17 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
             try { Add(task.Result); }
             catch (AggregateException e) { Console.WriteLine($"warning   zone {coordinate}: {e.InnerException?.Message ?? e.Message}"); }
         }
-        var wanted = new List<(ZoneCoordinate Coordinate, float Distance)>();
+        var wanted = new List<(ZoneCoordinate Coordinate, float Rank, float Distance)>();
         foreach (var (coordinate, x0, z0) in populated)
         {
             if (zones.ContainsKey(coordinate) || jobs.ContainsKey(coordinate)) continue;
-            if (NearZone(x0, z0, eye) <= range) wanted.Add((coordinate, RankZone(x0, z0, eye, range)));
+            float distance = NearZone(x0, z0, eye);
+            if (distance <= range) wanted.Add((coordinate, RankZone(x0, z0, eye, range), distance));
         }
-        foreach (var (coordinate, _) in wanted.OrderBy(w => w.Distance))
+        foreach (var (coordinate, _, distance) in wanted.OrderBy(w => w.Rank))
         {
-            if (jobs.Count >= (covered ? Math.Max(MaxJobs, BackgroundWork.Threads) : MaxJobs) || Paused || WaitForLandmarks) break;
+            if (jobs.Count >= (covered ? Math.Max(MaxJobs, BackgroundWork.Threads) : MaxJobs) || WaitForLandmarks) break;
+            if (Paused && distance > PausedReach) continue;
             var landmarkClass = Landmarks;
             var extra = staged;
             jobs[coordinate] = BackgroundWork.Run(() =>

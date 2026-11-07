@@ -446,6 +446,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         bool unlimited = budgetMs > 1e8;
         float streamRange = (NoDistant ? RealRange : Math.Max(RealRange, DistantReach)) + WorldLayout.ZoneSize * 0.5f;
         streamer.Paused = guard is { Streaming: false };
+        streamer.PausedReach = guard is { StreamsNear: true } ? VramGuard.NearReach : 0;
         if (landmarkTask is { IsCompleted: true } collected)
         {
             landmarkTask = null;
