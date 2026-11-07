@@ -35,6 +35,8 @@ sealed class GameOptions
     public string? SandboxMode;
     /// <summary><c>--sandbox-races</c>: one character of every person race (a CHARACTER record listing only that race) in rings round the pair, whatever n is.</summary>
     public bool SandboxRaces;
+    /// <summary><c>--sandbox-animals</c>: one animal of every race the ANIMAL_CHARACTER records use, in the rings.</summary>
+    public bool SandboxAnimals;
     /// <summary><c>--terrain-sandbox [x,z]</c>: the empty world round a flat spot whose ground is a field of tiles, one per ground texture (GroundRelief.FieldCentre).</summary>
     public (float X, float Z)? TerrainSandbox;
     /// <summary>The terrain sandbox's default spot: the flattest 2000-unit square of the heightmap found (16 cm of relief, 0.25% slope; docs/render-terrain.md "Ground relief").</summary>
@@ -99,6 +101,7 @@ sealed class GameOptions
           --sandbox [n]              animation sandbox: no world, a flat 1000x1000 wireframe floor (lines every 10, bold every 100) with 1 character (n = 2: two facing each other 30 units apart; more: the rest idle in rings round them, up to 1000); Z/X/C walk/run/free, [ ] fixed speed, P patrol, G fight, Y follow; works with --screenshot --ticks
           --sandbox-character <name> the CHARACTER or ANIMAL_CHARACTER record the sandbox spawns (default: the first member of the default new-game start)
           --sandbox-mode <list>      the sandbox hero's start, comma-separated: walk, run or free, a fixed speed in u/s, patrol (the 400-unit patrol), fight (the G key, with --sandbox 2), e.g. run,patrol (with --move-to or --screenshot)
+          --sandbox-animals          the sandbox adds one animal of every race the ANIMAL_CHARACTER records use (the first record of each), in the rings; the log lists them
           --sandbox-races            the sandbox adds one character of every person race (the first CHARACTER record listing only that race) in rings round the pair, whatever n is; the log lists them
           --terrain-sandbox [cliffs] [x,z]  the empty world round a flat spot (default the flattest found) whose ground is a field of 200-unit tiles, one per ground texture
                                      (cliffs: 100-unit tiles of every cliff texture on a 45-degree face),
@@ -177,6 +180,7 @@ sealed class GameOptions
                 case "--sandbox-character": g.SandboxCharacter = Next(); break;
                 case "--sandbox-mode": g.SandboxMode = Next(); break;
                 case "--sandbox-races": g.SandboxRaces = true; break;
+                case "--sandbox-animals": g.SandboxAnimals = true; break;
                 case "--terrain-sandbox":
                     g.TerrainSandbox = TerrainSandboxSpot;
                     if (i + 1 < args.Length && args[i + 1] == "cliffs") (g.TerrainSandbox, g.TerrainSandboxCliffs, i) = (CliffSandboxSpot, true, i + 1);
