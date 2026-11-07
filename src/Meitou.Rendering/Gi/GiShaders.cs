@@ -802,9 +802,9 @@ static class GiShaders
     public const float ReflectionRange = 4000;
 
     /// <summary>
-    /// The reflections' rays (docs/render-gi.md "Reflections"): one per texel of <c>uHit</c> whose march (<see cref="SsrShaders.March"/>) did not settle it, the same ray,
-    /// from the block's first glossy pixel, against the traced scene, its hit lit as a probe ray's. Writes a below 0 (<see cref="SsrShaders.Shade"/>): the trace
-    /// proved the sky open past what it stored. Traced light has no characters, grass or water, and no specular.
+    /// The reflections' rays (docs/render-gi.md "Reflections"): one per glossy texel of <c>uHit</c>, the march's ray (<see cref="SsrShaders.March"/>) from the block's first
+    /// glossy pixel, against the traced scene and its characters, its hit lit as a probe ray's: a hit replaces the march (world space first); a miss keeps what the march
+    /// found (grass, water and particles are not traced) and proves the sky open past it. Writes a below 0 (<see cref="SsrShaders.Shade"/>). No specular at the hits.
     /// </summary>
     public static readonly string Reflect = $$"""
         #version 460
@@ -821,8 +821,7 @@ static class GiShaders
         {
             vec4 eye, right, up, back;
             vec4 view;         // xy: tan(fov/2) * aspect, tan(fov/2), zw: near, far
-            vec4 sizes;        // xy: the render size, z: the block's size, w: the lobe's spread
-            vec4 frame;        // x: the frame
+            vec4 sizes;        // xy: the render size, z: the block's size
         } cam;
         {{DepthConvention.Glsl}}
         {{SsrShaders.Common}}
@@ -832,7 +831,6 @@ static class GiShaders
             ivec2 cell = ivec2(gl_GlobalInvocationID.xy);
             if (any(greaterThanEqual(cell, imageSize(uHit)))) return;
             vec4 marched = imageLoad(uHit, cell);
-            if (marched.a >= 0.99) return;
             uvec4 surface;
             ivec2 px = ssrPick(cell * int(cam.sizes.z), int(cam.sizes.z), ivec2(cam.sizes.xy), surface);
             if (px.x < 0) return;
@@ -844,12 +842,11 @@ static class GiShaders
             vec2 ndc = (vec2(px) + 0.5) / cam.sizes.xy * 2.0 - 1.0;
             vec3 surfacePoint = cam.eye.xyz + (cam.right.xyz * ndc.x * cam.view.x + cam.up.xyz * ndc.y * cam.view.y - cam.back.xyz) * z;
             vec3 surfaceNormal = ssrNormal(surface);
-            uint seed = ssrSeed(px, uint(cam.frame.x));
-            vec3 dir = ssrDirection(surfaceNormal, normalize(cam.eye.xyz - surfacePoint), gloss, seed, cam.sizes.w);
+            vec3 dir = ssrDirection(surfaceNormal, normalize(cam.eye.xyz - surfacePoint), gloss);
             vec3 world = surfacePoint + surfaceNormal * (1.0 + z * 0.001);
 
             rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask}}, world - origin.xyz, 0.0, dir, {{F(ReflectionRange)}});
+            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsCullBackFacingTrianglesEXT, {{TracedSunShaders.GiMask | TracedSunShaders.Characters}}, world - origin.xyz, 0.0, dir, {{F(ReflectionRange)}});
             TRACE(rq)
             if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT)
             {
@@ -861,10 +858,8 @@ static class GiShaders
             Geometry g = geometries[record];
             float env = lightDir.w;
         {{HitShade}}
-            float reach = (1.0 - smoothstep(0.75, 1.0, t / {{F(ReflectionRange)}})) * (1.0 - marched.a);
-            float share = marched.a + reach;
-            vec3 seen = (marched.rgb * marched.a + colour * (sun + ambient + lamps) * reach) / max(share, 1e-4);
-            imageStore(uHit, cell, vec4(seen, -1.0 - share));
+            float reach = 1.0 - smoothstep(0.75, 1.0, t / {{F(ReflectionRange)}});
+            imageStore(uHit, cell, vec4(colour * (sun + ambient + lamps), -1.0 - reach));
         }
         """;
 

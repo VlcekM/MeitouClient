@@ -81,13 +81,33 @@ static class GiCacheShaders
             vec3 ahead = za > 0.0 ? positionAt(a, za) - p : vec3(1e9), behind = zb > 0.0 ? p - positionAt(b, zb) : vec3(1e9);
             return dot(ahead, ahead) < dot(behind, behind) ? ahead : behind;
         }
+        vec3 towardsEye(vec3 g, vec3 p) { return dot(g, vEye.xyz - p) < 0.0 ? -g : g; }
+        vec3 planeNormal(vec3 a, vec3 b, vec3 p)
+        {
+            vec3 g = cross(a, b);
+            float size = dot(g, g);
+            return size < 1e-12 || size > 1e30 ? vec3(0.0) : towardsEye(g / sqrt(size), p);
+        }
+        // The surface's flat normal from the depth, on the side with the smaller step. Where it turns more than 45 degrees from the lit fragment's own normal (an edge
+        // the step rule got wrong: a silhouette, a crest, a pixel-thin part), the plane through one neighbour along each axis nearest that normal; none near it, the
+        // fragment's normal itself. So no texel takes the light of a plane it is not on.
         vec3 flatNormal(ivec2 px, vec3 p, vec3 shading)
         {
-            vec3 g = cross(sideStep(px, p, ivec2(1, 0)), sideStep(px, p, ivec2(0, 1)));
-            float size = dot(g, g);
-            if (size < 1e-12 || size > 1e30) return shading;
-            g /= sqrt(size);
-            return dot(g, vEye.xyz - p) < 0.0 ? -g : g;
+            vec3 g = planeNormal(sideStep(px, p, ivec2(1, 0)), sideStep(px, p, ivec2(0, 1)), p);
+            if (dot(g, shading) >= 0.7071) return g;
+            ivec2 last = ivec2(vSize.zw) - 1;
+            vec3 best = shading;
+            float fit = 0.7071;
+            for (int k = 0; k < 4; k++)
+            {
+                ivec2 ox = ivec2((k & 1) == 0 ? 1 : -1, 0), oy = ivec2(0, (k & 2) == 0 ? 1 : -1);
+                ivec2 a = clamp(px + ox, ivec2(0), last), b = clamp(px + oy, ivec2(0), last);
+                float za = depthAt(a), zb = depthAt(b);
+                if (za <= 0.0 || zb <= 0.0 || a == px || b == px) continue;
+                vec3 c = planeNormal(positionAt(a, za) - p, positionAt(b, zb) - p, p);
+                if (dot(c, shading) > fit) { best = c; fit = dot(c, shading); }
+            }
+            return best;
         }
         // False: nothing in the block takes the probes, or it is past the cache's end.
         bool texelSurface(ivec2 low, out vec3 p, out vec3 n, out bool interior)
@@ -352,6 +372,14 @@ static class GiCacheShaders
             return min(colour * (sun + ambient + lamps), vec3(cacheReach.y));
         }
 
+        // A subset traced again whose light moved by more than {{F(GiCache.ChangeShare * 100)}} % of the cell's (the same directions: in a still scene it does not move at all): a
+        // lamp switched, a sudden sun. The cell then keeps this subset alone and fills the others again over the next frames, instead of fading the change in over the ring.
+        bool changed(vec3 before, vec3 now, vec3 mean, bool held)
+        {
+            const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
+            return held && abs(dot(now - before, lum)) > {{F(GiCache.ChangeShare)}} * dot(mean, lum) + 1e-3;
+        }
+
         shared vec3 partial[{{GiCache.RaysPerCell}}];
 
         // Ray i of subset k: a Fibonacci lattice of the subset's rays, shifted by the subset (R2) and by the cell; every subset is stratified, and they interleave.
@@ -380,8 +408,8 @@ static class GiCacheShaders
             uint seed = cacheMix(uint(cell.coord.x) * 73856093u ^ uint(cell.coord.y) * 19349663u ^ uint(cell.coord.z) * 83492791u ^ uint(cell.coord.w));
             vec2 shift = vec2(cacheMix(seed), cacheMix(seed ^ 0x68bc21ebu)) / 4294967296.0;
             uint mask = uint(cell.normal.w);
-            // A new cell traces its first subsets at once (the ones before this frame's, which the frames after do not repeat).
-            int subsets = mask == 0u ? {{GiCache.FirstSubsets}} : 1;
+            // A new (or just changed) cell traces its first subsets at once (the ones before this frame's, which the frames after do not repeat).
+            int subsets = bitCount(mask) < {{GiCache.FirstSubsets}} ? {{GiCache.FirstSubsets}} : 1;
             for (int j = 0; j < subsets; j++)
             {
                 uint k = (vFrame.z + RING - uint(j)) % RING;
@@ -392,7 +420,12 @@ static class GiCacheShaders
                     if (i < stride) partial[i] += partial[i + stride];
                     barrier();
                 }
-                if (i == 0u) ring[slot * RING + k] = packLight(partial[0] / float(gl_WorkGroupSize.x));
+                if (i == 0u)
+                {
+                    vec3 traced = partial[0] / float(gl_WorkGroupSize.x);
+                    if (subsets == 1 && changed(unpackLight(ring[slot * RING + k]), traced, cell.light.rgb, (mask & (1u << k)) != 0u)) mask = 0u;
+                    ring[slot * RING + k] = packLight(traced);
+                }
                 mask |= 1u << k;
                 barrier();
             }

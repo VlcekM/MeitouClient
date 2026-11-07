@@ -23,6 +23,8 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
     public const int RaysPerCell = 32;
     /// <summary>The subsets a new cell traces in its first frame; from as many on the resolve takes it fully.</summary>
     public const int FirstSubsets = 4;
+    /// <summary>A subset traced again whose light moved by more than this share of the cell's drops the cell's other subsets (a sudden change of light), which are traced again.</summary>
+    public const float ChangeShare = 0.25f;
     /// <summary>The finest cell's size.</summary>
     public const float FinestCell = 4;
     /// <summary>Cells across the picture's height at most (the cell size grows with the eye distance to keep about this many), in powers of two from <see cref="FinestCell"/>.</summary>

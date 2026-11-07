@@ -11,8 +11,7 @@ public sealed unsafe partial class PostProcess
     sealed class SsrMarchPass : GiPass
     {
         public readonly SamplerSlot Scene;
-        public readonly UniformHandle Ssr;
-        public SsrMarchPass(GpuContext gpu) : base(gpu, SsrShaders.March, "post ssr march") => (Scene, Ssr) = (P.Sampler("uScene"), P.Uniform("uSsr"));
+        public SsrMarchPass(GpuContext gpu) : base(gpu, SsrShaders.March, "post ssr march") => Scene = P.Sampler("uScene");
     }
 
     sealed class SsrShadePass : GiPass
@@ -75,15 +74,11 @@ public sealed unsafe partial class PostProcess
         ssrLow = Make(batch, w, h, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post ssr low");
     }
 
-    /// <summary>The lobe's spread with an upscaler to average the frames, the mirror direction without one; the frame, wrapped for the shaders' float.</summary>
-    (float Spread, float Frame) SsrSampling => (Temporal ? 1 : 0, frameIndex & 1023);
-
     void RunSsrMarch()
     {
         var m = ssrMarch ??= new SsrMarchPass(Gpu);
         SetGiView(m);
         Bind(m.P, m.Scene, sceneColour);
-        m.P.Set(m.Ssr, SsrSampling.Spread, SsrSampling.Frame);
         Draw(m.P, ssrHit!);
     }
 
@@ -104,7 +99,7 @@ public sealed unsafe partial class PostProcess
         var rot = viewRotation;
         return new GiProbes.ReflectionFrame(ssrHit!.Texture, giAlbedo!.Texture, sceneDepth!.Texture, eyeNow,
             new(rot.M11, rot.M21, rot.M31), new(rot.M12, rot.M22, rot.M32), ViewWindow.BackFor(rot, fovNow, aspectNow),
-            ViewWindow.Tan(tanY * aspectNow, tanY), planes, width, height, giDivisor, SsrSampling.Spread, SsrSampling.Frame);
+            ViewWindow.Tan(tanY * aspectNow, tanY), planes, width, height, giDivisor);
     }
 
     void DisposeReflections()

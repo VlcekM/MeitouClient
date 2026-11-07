@@ -554,12 +554,12 @@ internal sealed unsafe class GiProbes : IDisposable
 
     /// <summary>What <see cref="TraceReflections"/> reads of the post chain's frame: the march's texels, the surfaces, the depth and their camera.</summary>
     public readonly record struct ReflectionFrame(GpuTexture Hit, GpuTexture Surface, GpuTexture Depth, Vector3 Eye, Vector3 Right, Vector3 Up, Vector3 Back,
-        Vector2 Tan, Vector2 Planes, int Width, int Height, int Divisor, float Spread, float Frame);
+        Vector2 Tan, Vector2 Planes, int Width, int Height, int Divisor);
 
     [StructLayout(LayoutKind.Sequential)]
     struct ReflectionCamera
     {
-        public Vector4 Eye, Right, Up, Back, View, Sizes, Frame;
+        public Vector4 Eye, Right, Up, Back, View, Sizes;
     }
 
     /// <summary>
@@ -608,8 +608,7 @@ internal sealed unsafe class GiProbes : IDisposable
         {
             Eye = new Vector4(frame.Eye, 0), Right = new Vector4(frame.Right, 0), Up = new Vector4(frame.Up, 0), Back = new Vector4(frame.Back, 0),
             View = new Vector4(frame.Tan, frame.Planes.X, frame.Planes.Y),
-            Sizes = new Vector4(frame.Width, frame.Height, frame.Divisor, frame.Spread),
-            Frame = new Vector4(frame.Frame, 0, 0, 0),
+            Sizes = new Vector4(frame.Width, frame.Height, frame.Divisor, 0),
         };
         var block = ctx.Frame.Constants.Write<ReflectionCamera>(new ReadOnlySpan<ReflectionCamera>(&camera, 1), 256);
         return new DescriptorBufferInfo(ctx.Device.BufferAt(block.Handle.Index), block.Offset, (ulong)sizeof(ReflectionCamera));
