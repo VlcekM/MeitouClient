@@ -533,6 +533,10 @@ public sealed class PopulationSettings
     public float NestsMultiplier { get; init; } = 1;
     /// <summary>Radius a homeless squad wanders in round the spot it was made (engine choice: the original's AI packages are not decoded).</summary>
     public float HomelessHomeRadius { get; init; } = 300;
+    /// <summary>Lowest terrain a homeless squad's spot may stand on (<c>FUN_1408f4d70</c>, <b>Verified</b>: 95, five under the water level).</summary>
+    public float SpawnMinTerrainHeight { get; init; } = 95;
+    /// <summary>The height the original's terrain lookup answers where it has none (<c>FUN_1409b32f0</c>).</summary>
+    public const float NoTerrain = -99;
     /// <summary>Least distance of a homeless squad's spot from a player character (6.2, Observed: 1382.4 from the view position).</summary>
     public float HomelessPlayerDistance { get; init; } = 1382.4f;
     /// <summary>Least distance of a nest squad's spot from a player character (6.3: sqrt(1250) = 35.4 from the view point; 36 as the roaming pools use).</summary>

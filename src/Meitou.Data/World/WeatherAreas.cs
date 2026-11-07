@@ -18,6 +18,8 @@ public sealed class WeatherAreas
     public const string RelativePath = "newland/land/areasmap.tga";
 
     readonly int[] colours;
+    int[]? pixels;
+    int pixelSide;
 
     /// <param name="colours">Row-major (z, then x), 64 × 64 entries, 0xRRGGBB.</param>
     public WeatherAreas(int[] colours)
@@ -47,7 +49,31 @@ public sealed class WeatherAreas
                 var (r, g, b, _) = image[x * pw + pw / 2, z * ph + ph / 2];
                 colours[z * Cells + x] = r << 16 | g << 8 | b;
             }
-        return new WeatherAreas(colours);
+        var areas = new WeatherAreas(colours);
+        if (image.Width == image.Height)
+        {
+            areas.pixelSide = image.Width;
+            areas.pixels = new int[image.Width * image.Height];
+            for (int z = 0; z < image.Height; z++)
+                for (int x = 0; x < image.Width; x++)
+                {
+                    var (r, g, b, _) = image[x, z];
+                    areas.pixels[z * image.Width + x] = r << 16 | g << 8 | b;
+                }
+        }
+        return areas;
+    }
+
+    /// <summary>
+    /// The colour (0xRRGGBB) of the map's own pixel at a world position, as the spawn code reads it (<c>FUN_1408f4d70</c>, <b>Verified</b>: the pixel is
+    /// <c>trunc((coordinate + 147465) / (294930 / width))</c> per axis, clamped to the image; black means no group). Null when the map keeps no pixels.
+    /// </summary>
+    public int? PixelColourAt(float x, float z)
+    {
+        if (pixels is null) return null;
+        float span = Cells * CellSize / pixelSide;
+        int px = Math.Clamp((int)((x + CameraOrigin) / span), 0, pixelSide - 1), pz = Math.Clamp((int)((z + CameraOrigin) / span), 0, pixelSide - 1);
+        return pixels[pz * pixelSide + px];
     }
 
     /// <summary>The cell holding a world position (may lie outside 0..63 for positions off the map).</summary>

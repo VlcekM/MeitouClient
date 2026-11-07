@@ -55,6 +55,12 @@ public sealed class BiomeMap
 {
     readonly int[] cells;
 
+    /// <summary>The areas map the cells were painted from (null: none, or built from cells alone).</summary>
+    public WeatherAreas? Areas { get; private init; }
+
+    /// <summary>Whether the areas map's own pixel at a world position is painted (not black), the spawn spot test of <c>FUN_1408f4d70</c>; true when the map keeps no pixels.</summary>
+    public bool Painted(float x, float z) => Areas?.PixelColourAt(x, z) is not { } colour || colour != 0;
+
     public BiomeMap(IReadOnlyList<BiomeGroupData> groups, int[] cellGroups)
     {
         if (cellGroups.Length != WeatherAreas.Cells * WeatherAreas.Cells) throw new ArgumentException("Expected 64 x 64 cells.", nameof(cellGroups));
@@ -81,7 +87,7 @@ public sealed class BiomeMap
         for (int z = 0; z < WeatherAreas.Cells; z++)
             for (int x = 0; x < WeatherAreas.Cells; x++)
                 cells[z * WeatherAreas.Cells + x] = areas is not null && byColour.TryGetValue(areas.ColourOf(x, z), out int g) ? g : none;
-        return new BiomeMap(groups, cells);
+        return new BiomeMap(groups, cells) { Areas = areas };
     }
 
     public static BiomeMap Create(GameDatabase db, WeatherAreas? areas) => Create(BiomeGroupData.LoadAll(db), areas);
