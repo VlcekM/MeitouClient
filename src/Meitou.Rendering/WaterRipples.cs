@@ -444,10 +444,12 @@ public sealed unsafe class WaterRipples : IDisposable
                 float ring;
                 float now = taken(p, column, ring);
                 float change = clamp(now - took, -BodyDepth, BodyDepth);
-                h += Push_ * change;
+                // In shallow water the same step is a far larger share of the water there: its splash and rings are as visible as in deep water.
+                float shallow = sqrt(BodyDepth / max(min(column, BodyDepth), 0.5));
+                h += Push_ * change * shallow;
                 // Churned in a thin ring where a moving body cuts the surface, the more the faster it pushes the water aside.
                 float churn = abs(change) / pc.sourceDt;
-                foam = max(foam, clamp(churn * 0.03, 0.0, 0.85) * ring);
+                foam = max(foam, clamp(churn * 0.03 * shallow, 0.0, 0.9) * max(ring, 0.6 * step(0.02, abs(change))));
                 took = now;
             }
             float c2 = Gravity * clamp(column, SlowDepth, FastDepth);
@@ -460,7 +462,7 @@ public sealed unsafe class WaterRipples : IDisposable
             h *= exp(-pc.dt * SpongeRate * 0.25 * sponge);
             // Foam where the waves steepen, fading, spreading a little.
             vec2 slope = vec2(e.x - we.x, n.x - so.x) / (2.0 * Texel);
-            foam = max(foam, 0.7 * smoothstep(0.45, 0.9, length(slope)) * smoothstep(0.5, 2.0, column));   // no crest foam in a film
+            foam = max(foam, 0.7 * smoothstep(0.45, 0.9, length(slope)) * smoothstep(0.15, 0.8, column));   // none where the film is too thin to carry a crest
             foam = mix(foam, (n.z + so.z + e.z + we.z) * 0.25, min(pc.dt * 2.0, 1.0)) * exp(-pc.dt * 1.1 / FoamLife);
             b[at(i)] = pack(sane(vec4(h, v, foam, took)));
         }

@@ -958,8 +958,8 @@ public sealed unsafe class WaterRenderer : IDisposable
                     b1 = textureGrad(uFoamMap, q * 0.009, gx * 0.009, gy * 0.009).rg;
                     b2 = textureGrad(uFoamMap, q * 0.027 + 0.37, gx * 0.027, gy * 0.027).rg;
                     mat2 turnA = mat2(0.8, 0.6, -0.6, 0.8), turnB = mat2(-0.28, 0.96, -0.96, -0.28);
-                    fine = textureGrad(uFoamMap, turnA * q * 0.045 + 0.61, turnA * gx * 0.045, turnA * gy * 0.045).r * 0.6
-                         + textureGrad(uFoamMap, turnB * q * 0.113 + 0.23, turnB * gx * 0.113, turnB * gy * 0.113).r * 0.4;
+                    fine = textureGrad(uFoamMap, turnA * q * 0.027 + 0.61, turnA * gx * 0.027, turnA * gy * 0.027).r * 0.5
+                         + textureGrad(uFoamMap, turnB * q * 0.045 + 0.23, turnB * gx * 0.045, turnB * gy * 0.045).r * 0.5;
                 }
                 float gw = s.g + (clump - 0.5) * 0.22, dw = s.dist + (clump - 0.5) * 36.0;
                 float crestAt = dw - s.len * (gw - 0.5);   // the distance of the crest this point trails (or leads)
@@ -1009,11 +1009,15 @@ public sealed unsafe class WaterRenderer : IDisposable
                 amount = max(amount, max(contact, ripple.a) * (1.0 - smoothstep(ContactFar - ContactFade, ContactFar, dist)));
             }
             #endif
+            // Every foam pattern is in the world at fixed scales, so zooming never changes its size or shape. Detail finer than a pixel is filtered (the
+            // texture's mips), and the finest octave, the bubbles' walls (0.17 units), is faded out by the pixel's footprint rather than the eye's distance.
+            float footprint = max(length(dpx), length(dpy));
+            float bubbleShow = 1.0 - smoothstep(0.12, 0.3, footprint);
             float bubbles = 0.0;
-            if (uLean < 0.5 || dist < 600.0)
-                bubbles = textureGrad(uFoamMap, p * 0.06 - drift * 2.0, dpx * 0.06 - driftDx * 2.0, dpy * 0.06 - driftDy * 2.0).b * (1.0 - smoothstep(150.0, 600.0, dist));
-            float rims = smoothstep(80.0, 400.0, dist);   // near the eye the texture's rims and cells read as cracks and bricks
-            float pattern = (a1.g * 0.6 + a2.g * 0.4) * mix(0.95, 0.7, rims) + max(a1.r, a2.r) * 0.45 * rims + bubbles * 0.08 * rims;
+            if (bubbleShow > 0.0)
+                bubbles = textureGrad(uFoamMap, p * 0.06 - drift * 2.0, dpx * 0.06 - driftDx * 2.0, dpy * 0.06 - driftDy * 2.0).b * bubbleShow;
+            // The blotches and the finer lace only (rims of 0.8 to 1.7 units); the coarser lace (cells of 2.5 to 5 units) read as bricks and cracks up close.
+            float pattern = (a1.g * 0.6 + a2.g * 0.4) * 0.8 + a2.r * 0.3 + bubbles * 0.08;
             // Dark and coloured water foams less (a thinner, more broken lace), and the foam takes its colour: white only on clear water, a dirty
             // grey-brown on black water, rust on red.
             amount *= mix(0.7, 1.0, clean);
@@ -1032,12 +1036,12 @@ public sealed unsafe class WaterRenderer : IDisposable
                 float wear = 0.2 + age * 0.4;   // even fresh whitewater has holes
                 float surf = surfAmount * mix(0.7, 1.0, clean);
                 // The rims also fray its edges, which stay crisp (a narrow threshold) rather than soft blobs.
-                // Up close the fine rims; further out (where they average away to a flat white) the texture's larger rims, which only read as cells near.
-                float rims = mix(fine, max(b1.r, b2.r), smoothstep(40.0, 150.0, dist));
+                // The bubble rims at fixed world scales (cells of 0.5 to 1.7 units, two networks turned against each other); far away the mips average them.
+                float rims = fine;
                 float cover = smoothstep(0.95 - surf + wear, 1.03 - surf + wear + 0.05 * age, lace + (rims - 0.3) * 0.35);
                 // Inside, the foam's density follows its texture (bubbles, streaks), so even dense whitewater is never a flat white sheet.
                 float texture_ = rims * 0.5 + b2.g * 0.25 + streak * 0.25;
-                foam = max(foam, cover * mix(0.2, 1.0, smoothstep(0.25, 0.7, texture_)));
+                foam = max(foam, min(cover * mix(0.3, 1.2, clamp(texture_, 0.0, 1.0)), 1.0));   // linear, so the filtered (distant) foam keeps the same mean
             }
             foam *= mix(0.8, 0.92, clean);
             // The shadow receiver takes derivatives, so it runs here and not inside the foam's branch, and only within 8000 units (where it is
@@ -1065,7 +1069,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             // film does not cut them with a line; smoothstep, so no band shows at either end.
             float edge = thick >= 0.0 ? smoothstep(0.0, 1.0, min(thick / max(swash ? 0.5 : 2.0, thicknessError(dist)), thick * max(toEyeDir.y, 0.02) / (swash ? 0.2 : 0.6))) : 1.0;
             #ifdef WATER_CONTACT
-            edge = max(edge, contact * foam);   // the foam stays up to the line it clings to, where the water itself has faded out
+            edge = max(edge, max(contact, ripple.a) * foam);   // the foam stays up to the line it clings to, where the water itself has faded out
             #endif
             // Wet sand, behind the swash and under its front: darker and glossy, drying out until the next wave, faded out over the edge of its band.
             // The sand dries in patches after the backwash (a slow noise sets which patch dries first), and the wet line fades out over a soft band.
