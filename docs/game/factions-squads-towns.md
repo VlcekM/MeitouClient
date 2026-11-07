@@ -23,7 +23,8 @@ flag. A unique with no entry counts as alive, so a new game answers by the data 
 v0..v1, reversed range givesv0. Apply size multiplier/truncation/min1 unless dont-multiply.
 Create leader role2, random choosefrom then squad role0/squad2 role1, animals/animals2, slaves
 as recursive squads (**Verified** `FUN_140583a10`: after the recursive call every member of the slave squad from index 0, the leader included, gets member
-type 4 through `FUN_1406215c0` (status `+0x25c`), whatever the slave template says; the squad's leader pointer is not touched), prisoners into available home cages. First member can become leader.
+type 4 through `FUN_1406215c0` (status `+0x25c`), whatever the slave template says, then its head is shaven, the owner set and `setChainedMode(true)` puts
+locked shackles on it; the squad's leader pointer is not touched), prisoners into available home cages. First member can become leader.
 **Prisoners** (`FUN_140583a10`, **Observed**): only with a home building; its cages (`BuildingFinder_CagesWithinBuilding`) are counted, then each `prisoners` entry makes a
 platoon of the entry's `faction` (else the owner's) whose members each go into a random remaining cage (`FUN_140330600`, lock set) with `Character+0x190 = 9999999` (meaning
 **Unknown**); with no cage left, one member is removed and placing stops. A housed trader that made prisoner or slave squads still stocks its home containers ([economy](economy.md#building-shops-observed-decompile)).

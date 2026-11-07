@@ -736,7 +736,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     /// <summary>
     /// A squad's <c>slaves</c> (the squad factory's recursive slave squads, role 4; docs/game/factions-squads-towns.md "Squad factory"): each planned slave squad is made as a squad of its
-    /// template's <c>faction</c> (else the owner's), every member a slave (state 1) of the owner squad's faction. <b>Engine choices</b>: they are made at the owner squad's spot; with a
+    /// template's <c>faction</c> (else the owner's), every member a slave (state 1) of the owner squad's faction, shaven and chained (<b>Verified</b>). <b>Engine choices</b>: they are made at the owner squad's spot; with a
     /// home building, each goes into a random free cage of it (their package's goal is Slave get in Cage, which Meitou does not act out), those left over stand by the owner squad.
     /// Each obeys the owner squad (job 187: its Slave AI Goals, <see cref="CharacterCold.SlaveMaster"/>).
     /// </summary>
@@ -766,6 +766,9 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 if (table.Cold(id.Slot) is not { } c) continue;
                 // Every member, the leader too, gets member type 4 after the recursive squad is made (FUN_140583a10); the squad's leader pointer stays.
                 (c.SlaveState, c.SlaveOwner, c.SlaveMaster, c.Role) = (1, squad.Faction, squad.Id, (int)SquadRole.Slave);
+                // Then shaven and chained (FUN_140583a10: shaveHead, setChainedMode), so the owner's watchers see a processed slave and leave it be (#356).
+                if (c.Fighter is not { IsAnimal: true }) c.Shaved = true;
+                assembly.Chain(c);
                 if (cages.Count == 0) continue;
                 int pick = Rng.Int(Rng.Hash(world.Seed, ownerKey, RngPurpose.Spawn, SeedSalts.SlaveCage + (ulong)picks++), cages.Count);
                 world.Fixtures.Imprison(world, id, cages[pick]);

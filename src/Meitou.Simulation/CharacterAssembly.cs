@@ -125,6 +125,26 @@ sealed class CharacterAssembly(PopulationData data)
             if (item.ColourId.Length == 0 && item.Section != "main") item.ColourId = scheme.StringId;
     }
 
+    /// <summary>
+    /// <c>Character::setChainedMode</c> (<c>FUN_14032e590</c>, <b>Verified</b> by decompile): a character wearing no locked shackles gets a new pair, <c>SHACKLES</c> (Prisoner Shackles, boots)
+    /// while its boots section is enabled, else <c>SHACKLES-BODY</c> (Hive Prisoner Shackles, body; Meitou reads a disabled boots section as the race's <c>no shoes</c>), worn and locked
+    /// (the ARMOUR's lock). What it wore in that slot goes into its inventory (engine choice, as <see cref="Locks.LockSystem"/>'s putting on).
+    /// </summary>
+    public void Chain(CharacterCold c)
+    {
+        if (c.Inventory is not { } inv || Locks.LockSystem.WornShackles(c) is not null) return;
+        if (data.Items.Create(c.Race?.NoShoes == true ? "SHACKLES-BODY" : Kidnap.CaptiveSystem.ShacklesRecord, 1) is not { } shackles) return;
+        if (inv.Items.FirstOrDefault(i => i.Section == shackles.EquipmentSection) is { } worn)
+        {
+            var (section, x, y) = (worn.Section, worn.X, worn.Y);
+            inv.Items.Remove(worn);
+            worn.Section = "main";
+            if (!inv.Add(worn)) { (worn.Section, worn.X, worn.Y) = (section, x, y); inv.Items.Add(worn); }
+        }
+        if (!Items.InventoryCommands.TryEquip(inv, shackles)) return;
+        RefreshEquipment(c);
+    }
+
     public void RefreshEquipment(CharacterCold cold)
     {
         if (cold.Inventory is not { } inventory) return;
