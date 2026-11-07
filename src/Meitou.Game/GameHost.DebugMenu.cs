@@ -15,12 +15,12 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard, Explode }
+    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard, Explode, ExplodeClick }
 
     static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)", "Max out skills", "Damage (cut)",
-        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)", "Explode at target",
+        "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)", "Explode at target", "Explode on click",
     ];
 
     /// <summary>The cheat rows' sections, in the order shown (and walked by Up / Down).</summary>
@@ -28,7 +28,7 @@ sealed partial class GameHost
     [
         ("Character", [DebugRow.Teleport, DebugRow.Heal, DebugRow.HealFully, DebugRow.MaxSkills, DebugRow.Godmode, DebugRow.ClearBounties]),
         ("World / Spawn", [DebugRow.SpawnNpc, DebugRow.GiveItem, DebugRow.Money, DebugRow.UnlockResearch]),
-        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard, DebugRow.Explode]),
+        ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard, DebugRow.Explode, DebugRow.ExplodeClick]),
     ];
 
     /// <summary>The menu's rows in display order: (section title when the row starts a section, row number: a cheat, a mod row, or <see cref="DebugRowCount"/> + the tool's index).</summary>
@@ -142,6 +142,69 @@ sealed partial class GameHost
         session.Camera.Place(new Vector2(x, z), view.Yaw, view.Pitch, view.Distance);
     }
 
+    // ---- Explode on click ----
+
+    /// <summary>The "Explode on click" switch (F10 Combat row, console <c>explode-click</c>): the world it was switched on in and the explode flags used for each click.</summary>
+    World? explodeClickWorld;
+    string explodeClickArgs = "";
+    bool ExplodeClickOn => explodeClickWorld is not null && ReferenceEquals(explodeClickWorld, session.World);
+
+    /// <summary>
+    /// <paramref name="field"/> is empty (toggle) or <c>[on|off] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>. While on, a left click on the ground blows it up (<see cref="DebugExplodeApply"/>)
+    /// and the click is consumed; the switch is the world's, so it is off after another game loads.
+    /// </summary>
+    string SetExplodeClick(string field)
+    {
+        const string usage = "usage: explode-click [on|off] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
+        bool? on = null;
+        var kept = new List<string>();
+        var words = field.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < words.Length; i++)
+        {
+            float value;
+            string w = words[i].ToLowerInvariant();
+            if (w is "on" or "1" or "true") on = true;
+            else if (w is "off" or "0" or "false") on = false;
+            else if (w == "--squad") kept.Add("--squad");
+            else if (w is "--radius" or "--force" or "--damage" && i + 1 < words.Length && float.TryParse(words[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+                && value >= (w == "--radius" ? 0.01f : 0) && value <= (w == "--radius" ? 500 : w == "--force" ? 1000 : 10000))
+            { kept.Add(w); kept.Add(words[++i]); }
+            else return DebugFail(usage);
+        }
+        bool turnOn = on ?? (kept.Count > 0 || !ExplodeClickOn);
+        if (turnOn)
+        {
+            explodeClickWorld = session.World;
+            if (kept.Count > 0 || !ExplodeClickOn) explodeClickArgs = string.Join(' ', kept);
+            player.WorldClick = ExplodeClickPress;
+            return $"explode-click on{(explodeClickArgs.Length > 0 ? " (" + explodeClickArgs + ")" : "")}: a left click on the ground explodes it (game unpaused only); explode-click off ends it";
+        }
+        explodeClickWorld = null;
+        player.WorldClick = null;
+        return "explode-click off";
+    }
+
+    /// <summary>A left press on the world while the switch is on (called by the player interface after the interface widgets declined it): explodes the ground point. False lets the click act normally.</summary>
+    bool ExplodeClickPress(Vector3? ground)
+    {
+        if (!ExplodeClickOn) return false;
+        if (debugMenuOpen || ConsoleOpen) return false;   // clicks on the F10 menu and the console are theirs
+        if (ground is not { } at) return true;
+        debugStatus = DebugExplodeApply(session.World, string.Create(CultureInfo.InvariantCulture, $"{at.X} {at.Z} {explodeClickArgs}"), session.World.Tick);
+        return true;
+    }
+
+    /// <summary>The hint while the switch is on.</summary>
+    void DrawExplodeClickHint(DebugOverlay o, int width, int height)
+    {
+        string text = $"explode-click ON: left click = explode{(explodeClickArgs.Length > 0 ? " (" + explodeClickArgs + ")" : " (r=15)")}. Switch off: explode-click off"
+            + (session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
+        float w = text.Length * o.CharWidth + 20, x = (width - w) / 2;
+        o.Rect(x, 8, x + w, 8 + o.LineHeight + 12, DebugOverlay.PanelColour);
+        o.Text(text, x + 10, 12, new Vector4(1f, 0.9f, 0.4f, 1));
+        o.Flush(width, height);
+    }
+
     /// <summary>The hint while the Map tab is open and "Teleport on map" is on: the state, how to switch it off and the last result.</summary>
     void DrawMapPickHint(DebugOverlay o, int width, int height)
     {
@@ -159,7 +222,7 @@ sealed partial class GameHost
     bool DebugIsTool(int row) => row >= DebugRowCount;
 
     bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField
-        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.Explode));
+        : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.Explode or DebugRow.ExplodeClick));
 
     /// <summary>The rows that open the body part list.</summary>
     bool DebugPicksPart(int row) => !DebugIsTool(row) && (DebugRow)row is DebugRow.Damage or DebugRow.ForceHits or DebugRow.ClearBounties;
@@ -402,6 +465,8 @@ sealed partial class GameHost
                 return DebugGuardApply(world, field, tick);
             case DebugRow.Explode:
                 return DebugExplodeApply(world, field, tick);
+            case DebugRow.ExplodeClick:
+                return SetExplodeClick(field);
             case DebugRow.UnlockResearch:
                 world.Commands.Enqueue(new DebugUnlockResearch { Tick = tick });
                 return "every research finished";
@@ -497,6 +562,7 @@ sealed partial class GameHost
                         break;
                     case DebugRow.ForceHits: value = popData?.BodyOptions.ForcedHitPart?.Name ?? "off"; rowOn = popData?.BodyOptions.ForcedHitPart is not null; break;
                     case DebugRow.Godmode: value = OnOff(world.Player.Godmode); rowOn = world.Player.Godmode; break;
+                    case DebugRow.ExplodeClick: rowOn = ExplodeClickOn; value = ExplodeClickOn ? $"on{(explodeClickArgs.Length > 0 ? ", " + explodeClickArgs : "")}" : "off"; break;
                     case DebugRow.Guard: rowOn = world.Player.Guard; value = world.Player.Guard ? $"on, {world.Player.GuardRadius:0.#} m{(world.Player.GuardAnimals ? ", animals" : "")}" : "off"; break;
                 }
             if (DebugPicksPart(i) && current && debugParts is null) value += (value.Length > 0 ? "   " : "") + ((DebugRow)i == DebugRow.ClearBounties ? "Enter/Right: pick the faction" : "Enter/Right: pick the body part");

@@ -25,6 +25,9 @@ sealed partial class PlayerInterface
         return SurfaceMoveHit?.Invoke(origin, direction, distance) ?? room ?? terrain;
     }
 
+    /// <summary>Debug: called with the ground point under the cursor (null when none) on a left press that no widget took; true consumes the press (the host's "Explode on click").</summary>
+    public Func<Vector3?, bool>? WorldClick { get; set; }
+
     /// <summary>The picking ray through a pixel: the near-plane point and the unit direction.</summary>
     public (Vector3 Origin, Vector3 Direction)? Ray(Vector2 pixel)
     {

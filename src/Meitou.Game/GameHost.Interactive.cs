@@ -835,6 +835,7 @@ sealed partial class GameHost
                     }
                     if (debugMenuOpen) DrawDebugMenu(overlay, size.X, size.Y, statsVisible ? menuTop : panelsBottom, atRight: statsVisible);
                     if (player.MapPick is not null && player.MapTabShown) DrawMapPickHint(overlay, size.X, size.Y);
+                    if (ExplodeClickOn) DrawExplodeClickHint(overlay, size.X, size.Y);
                     if (inspectorMenuOpen) DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
                     if (interiorEditorOpen) DrawInteriorEditor(overlay, size.X, size.Y, panelsBottom);
                     if (ConsoleOpen) DrawConsole(overlay, size.X, size.Y);
