@@ -1,6 +1,9 @@
+using System.Globalization;
 using System.Numerics;
+using Meitou.Data.Ui;
 using Meitou.Rendering;
 using Meitou.Simulation;
+using Meitou.Ui;
 
 namespace Meitou.Game;
 
@@ -119,6 +122,30 @@ sealed partial class PlayerInterface
         var hovered = chosen.Target is null ? PickBuildingAt(mouse) : null;
         return pointer = (snapshot.Tick, mouse, CtrlHeld, AltHeld, chosen.Name, chosen.Target, hovered);
     }
+
+    /// <summary>
+    /// The chance label over the <c>knockout</c> pointer (docs/game/ui-input.md "Pointer chance label", <c>FUN_1406ea070</c>): the stealth KO chance of the pointed character as
+    /// int(f x 100) "%", f the chance / 100 clamped to 0..1, coloured (1 - f, f, 0), its middle on the mouse's x and its bottom 32 pixels at 1080 above it. None without a sneaking
+    /// selected character (the chance is published for the pointed one only then). Shown whatever draws the pointer (the Hardware mouse too).
+    /// </summary>
+    void AddPointerChance(List<UiControl> controls)
+    {
+        if (uiPainter is not { } painter || Point() is not { Name: "knockout", Target: { } id }) return;
+        if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.StealthKoChance is not { } chance) return;
+
+        float f = Math.Clamp(chance * 0.01f, 0, 1);
+        var lines = new List<TooltipLine> { new("", ((int)(f * 100)).ToString(CultureInfo.InvariantCulture) + "%") };
+        string colour = string.Create(CultureInfo.InvariantCulture, $"{1 - f:0.###} {f:0.###} 0");
+        float minimum = TitleOpen ? 0 : StandardPixels;
+        var width = UiTooltips.Arrange(lines, TooltipKind.Floating, Width, Height, mouse, null,
+            (text, wrap) => painter.MeasureText(TooltipFont, text, Height, wrap, minimum) is var s ? new(s.Width, s.Height) : default).Panel.Width;
+
+        var bottomRight = new Vector2(mouse.X + width / 2, mouse.Y - PointerChanceRise * Height / 1080f);
+        PlaceTooltip(controls, painter, lines, TooltipKind.Floating, null, "pointer-chance", bottomRight, [colour]);
+    }
+
+    /// <summary>The original's 32 pixels (x its UI scale) between the mouse and the chance label's bottom edge.</summary>
+    const float PointerChanceRise = 32;
 
     /// <summary>Draws the pointer <paramref name="name"/> at <paramref name="at"/> (framebuffer pixels) over everything drawn so far; nothing without the UI painter.</summary>
     public void DrawPointer(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)

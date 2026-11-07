@@ -311,6 +311,7 @@ sealed partial class PlayerInterface
         controls.InsertRange(0, [.. nameTags, .. dialogLayer]);
 
         AddBuildReadout(controls);
+        AddPointerChance(controls);
         AddContextMenu(controls);
         AddFeedbackButton(controls);
     }

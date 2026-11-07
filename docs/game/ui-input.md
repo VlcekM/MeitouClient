@@ -258,6 +258,23 @@ the [quick right click's table](#quick-right-click-on-a-character) (pointer give
 `invisible`). Interface → Hardware mouse (`HardwareMouse` in meitou.user.json, default off as the game's `hardware_mouse`; settings.cfg is
 not read) shows the Windows cursor instead, applied at once.
 
+### Pointer chance label
+
+**Verified** (decompile of `FUN_1406e4820`, `FUN_1406ea070`, `FUN_1406e4f50`): the pointer setter `FUN_1406e4820` also keeps a lead and a target handle (GUI manager
+`+0x2f0` / `+0x310`) and raises a flag (`+0x2e8`) that the plain setter `FUN_1406e3d60` clears, so any other pointer hides the label. Its callers: the character
+hover `FUN_1407fb410` with `knockout` (0x19; the lead is the nearest selected, no label with nothing selected) and `lockpick` (0xf, a prisoner), and the building
+hover `FUN_1407fc6e0` with `lockpick`. The GUI manager's frame update `FUN_1406ea070` (from the frame loop `FUN_140788a00`) shows, while the flag is set, a
+DatapanelGUI on the `Popup` layer with one row, empty key and value `{1,num}%` = int(f x 100):
+- `knockout`: f = the stealth KO chance (`FUN_1408852f0(lead, target, 1)`, [combat](combat.md#stealth-knock-out)) x 0.01, clamped to 0..1.
+- `lockpick`: f = the lock's pick chance with the lead's lockpicking, clamped to 0..1; the minimum lockpick chance is not applied (only the verb list `FUN_1407f65e0` does).
+- Colour (1 - f, f, 0). Its middle on the mouse x, its bottom 32 x `+0x40` above the mouse y. The text is computed on showing and then once a second (a 1 s
+  timer run down by frame time). **Observed**: `+0x40` is a size over the `Kenshi_UI.png` height (`FUN_1406e3c30`; the size global is unidentified), and the
+  globals read as the mouse x / y are written by `FUN_140829e00` among others.
+
+Meitou (`PlayerInterface.AddPointerChance`): the `knockout` label, from the pointed character's published `StealthKoChance` (the selection's first sneaking
+member, not the nearest), as a floating tooltip 32 px at 1080 above the mouse, recomputed every frame (engine choices); drawn with the Hardware mouse too.
+The `lockpick` label is not built.
+
 ### Character picking
 
 **Observed** (`FUN_140800250`): the original picks characters with the same physics ray as buildings ([building picking](#building-picking-and-selection)): hits in groups 0, 1,
