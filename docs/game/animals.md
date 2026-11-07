@@ -90,7 +90,9 @@ from the start.
   merged data: 43 animals, e.g. Bonedog 1 Animal Skin / 4 Animal Teeth / 3 Raw Meat; Pet Dog, Settler's Pup, Pack Beast Dead none).
 - Added when a new character's inventory is set up, after the `inventory` list (`Character::vfunc_88` `FUN_140622e80`, called last
   by both setup functions, not for an inventory loaded from a save); entries below 1 skipped; each item gets the byte `+0x138`
-  set (**Observed**, decompile).
+  set (**Observed**, decompile). `FUN_140622e80` adds them only when its second argument is 0; the animal setup `FUN_14062a130` passes its own second argument
+  through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). What that argument is, and whether it is
+  why the player's own animals have none (#341), is **Unknown**.
 - `+0x138` is the saved item key `death` (read/written by `FUN_140761550` / `FUN_1407609e0`) (**Observed**). In saves these items
   take ordinary grid cells beside carried goods, each entry one stack of its whole quantity whatever the item's `stackable`
   (Electrical Components 4, Iron Plates 6, `stackable` 1), and a stack of the same record without the flag stays a separate stack
