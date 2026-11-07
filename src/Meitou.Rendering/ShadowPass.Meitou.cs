@@ -420,6 +420,19 @@ public sealed unsafe partial class ShadowPass
         Put(data, OriginAt, new Vector4(origin, 1));
         Put(data, ForwardAt, new Vector4(Vector3.Normalize(view.Forward), cascades.Length));
         Put(data, AtlasAt, new Vector4(atlasSize, atlasSize, 0, 1));   // x, y: one layer (no virtual atlas: cascade i is layer i); w: the Meitou receiver
+        PutMaps(ms, origin, toSun, range, blockers);
+        Upload(data);
+        meitouBlock.Set(ms);
+        volumePublished = false;
+        // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).
+        if (terrainMap?.Sampled is not null) boundTerrain = terrainMap.Sampled;
+        if (blockers) blockerPublished = true;
+    }
+
+    /// <summary>The Meitou block's shared part: the filter's noise and range, the terrain map, the landmark map and the traced flag.</summary>
+    void PutMaps(float[] ms, Vector3 origin, Vector3 toSun, float range, bool blockers)
+    {
+        float sunTan = MathF.Tan(SunAngle * 0.5f);
         const int P = MeitouShadowShaders.ParamsOffset;
         float noise = Temporal ? meitouFrame % 64 * 5.588238f : 0;
         Put(ms, P, new Vector4(noise, range, range * 0.85f, range * 0.55f));
@@ -442,15 +455,87 @@ public sealed unsafe partial class ShadowPass
             landmarkPublished = true;
         }
         ms[P + 15] = TracedCascades;   // uMsFlags.w
+    }
+
+    /// <summary>Froxels of the traced sun's visibility volume: across, up, depth slices (exponential from <see cref="VolumeNear"/> to the shadows' range).</summary>
+    public const int VolumeWidth = 192, VolumeHeight = 108, VolumeSlices = 64;
+    const float VolumeNear = 2;
+    GpuTexture? volume;
+    SampledTexture volumeSampled;
+    bool volumePublished;
+
+    /// <summary>The traced sun's visibility volume while the sun is traced (layer per depth slice, RGBA8, red the sun's visibility at each froxel's centre); null otherwise.</summary>
+    public GpuTexture? TracedVolume => TracedCascades > 0 ? volume : null;
+    /// <summary>The volume's camera: position relative to the eye to its clip (row-vector), the eye, its basis and tangents, its slices' near and far.</summary>
+    public Matrix4x4 VolumeToClip { get; private set; }
+    public Vector3 VolumeEye { get; private set; }
+    public (Vector3 Right, Vector3 Up, Vector3 Forward, float TanX, float TanY) VolumeBasis { get; private set; }
+    public (float Near, float Far) VolumeRange => (VolumeNear, TracedDepth);
+
+    /// <summary>
+    /// The traced sun (<see cref="TracedWhole"/>): no cascade is drawn. The terrain and landmark maps go on; the receivers that do not trace (shafts, lit dust, foam, the skin's light
+    /// entry, the reflection, impostors) read the visibility volume a ray pass fills (<see cref="Gi.TracedSunVolume"/>) through the blocker binding, its camera in cascade 0's slots.
+    /// </summary>
+    void RenderTraced(ShadowView view, Vector3 toSun, LandmarkCasters? landmarks)
+    {
+        var watch = Stopwatch.StartNew();
+        Array.Clear(PhaseMs);
+        meitouValid = false;   // back to the cascades: every one drawn again
+        timer.Begin();
+        if (coarse is not null) terrainMap ??= new TerrainShadowMap(Gpu, coarse, coarseSize);
+        terrainMap?.Update(toSun);
+        UpdateLandmarks(view, toSun, landmarks);
+        timer.End();
+        EnsureVolume();
+        float far = Math.Max(EffectiveRange, VolumeNear * 4);
+        var forward = Vector3.Normalize(view.Forward);
+        var right = Vector3.Normalize(Vector3.Cross(forward, view.Up));
+        var up = Vector3.Cross(right, forward);
+        float tanY = MathF.Tan(view.FieldOfViewY * 0.5f);
+        VolumeBasis = (right, up, forward, tanY * view.Aspect, tanY);
+        VolumeToClip = Matrix4x4.CreateLookAt(Vector3.Zero, forward, up) * Matrix4x4.CreatePerspectiveFieldOfView(view.FieldOfViewY, view.Aspect, VolumeNear, far);
+        VolumeEye = view.Eye;
+        Cascades = [];
+        TracedCascades = 1;
+        TracedDepth = far;
+        PublishTraced(view, toSun, far);
+        CpuMs = watch.Elapsed.TotalMilliseconds;
+        cpuSamples.Add(CpuMs);
+    }
+
+    void EnsureVolume()
+    {
+        if (volume is not null) return;
+        volume = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, VolumeWidth, VolumeHeight, Layers: VolumeSlices, Kind: TextureKind.Texture2DArray,
+            Use: TextureUse.Sampled | TextureUse.Storage, Name: "traced sun volume"));
+        volumeSampled = Sampled(volume, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
+    }
+
+    /// <summary>
+    /// The receiver blocks with no cascade (count 0): cascade 0's tile is the volume's camera (eye-relative position to its clip), slice 0 (near, far, slices, 1: the volume is on), slice 1
+    /// (towards the sun, a froxel's height per unit of depth); the terrain and landmark maps as ever.
+    /// </summary>
+    void PublishTraced(ShadowView view, Vector3 toSun, float far)
+    {
+        var data = new float[ReceiverBytes / 4];
+        var ms = new float[MeitouShadowShaders.BlockBytes / 4];
+        Put(data, 0, VolumeToClip);
+        Put(data, LightAt, Matrix4x4.Identity);
+        Put(data, OriginAt, new Vector4(view.Eye, 1));
+        Put(data, ForwardAt, new Vector4(Vector3.Normalize(view.Forward), 0));
+        Put(data, AtlasAt, new Vector4(atlasSize, atlasSize, 0, 1));
+        Put(ms, 0, new Vector4(VolumeNear, far, VolumeSlices, 1));
+        Put(ms, 4, new Vector4(toSun, 2 * VolumeBasis.TanY / VolumeHeight));
+        PutMaps(ms, view.Eye, toSun, far, false);
         Upload(data);
         meitouBlock.Set(ms);
-        // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).
-        if (terrain) boundTerrain = terrainMap!.Sampled;
-        if (blockers) blockerPublished = true;
+        if (terrainMap?.Sampled is not null) boundTerrain = terrainMap.Sampled;
+        volumePublished = true;
     }
 
     void DisposeMeitou()
     {
+        volume?.Dispose();
         terrainMap?.Dispose();
         boundTerrain = null;
         blocker?.Dispose();

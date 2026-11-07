@@ -394,6 +394,13 @@ static partial class WorldFrame
             // Traced, the objects cast as far as the cascades reached (the probes see them too).
             gi.Range = gpu.Traced && gpu.Shadow is { } reach ? Math.Max(Gi.GiScene.ProbeRange, reach.Settings.Range) : Gi.GiScene.ProbeRange;
             gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps, gpu.Characters);
+            // The traced sun's volume for what draws no traced pixel, before anything reads it (the reflection first).
+            if (gpu.Traced && gpu.Shadow is { TracedVolume: not null } volumeShadow && gpu.Post is { } volumePost)
+            {
+                gpu.TracedSunVolume ??= new Gi.TracedSunVolume(volumePost.Gpu);
+                gpu.TracedSunVolume.Run(gi, volumeShadow, f.Light.SunDirection);
+                StageClock.Sub("traced sun volume");
+            }
             StageClock.Sub("gi scene");
             gpu.Probes?.Update(gi, f.Eye, heights, gpu.Lamps, gpu.FogVolumes, gpu.Objects?.GiInteriorFocus(f.Camera.Target));
             StageClock.Sub("gi blend");

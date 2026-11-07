@@ -111,6 +111,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         // The sun's visibility at a point of the air: one bilinear compare in the first cascade that holds it (1 beyond them).
         float particleSun(vec3 w)
         {
+            if (uShadowAtlas.w > 0.5 && msVolumeOn()) return msVolumeAt(w);   // the traced sun's volume (no cascades)
             int c = shadowCascade(w);
             if (c < 0) return 1.0;
             vec3 tile = (uShadowTile[c] * vec4(w - uShadowOrigin.xyz, 1.0)).xyz;

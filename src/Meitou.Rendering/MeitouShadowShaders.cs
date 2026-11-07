@@ -55,6 +55,27 @@ static class MeitouShadowShaders
         uniform sampler2DArray uShadowBlocker;   // the cascades' depth at half resolution, nearest of each 2 × 2 (raw, for the blocker search), a layer per cascade
         uniform sampler2DShadow uShadowLandmark;   // the landmarks' depth along the sun (comparison)
 
+        // The traced sun's visibility volume (ShadowPass.RenderTraced): no cascade (uShadowForward.w 0) and uMsSlice[0].w 1. Cascade 0's tile takes the position relative to the
+        // eye to the volume's clip, uMsSlice[0] holds (near, far, slices, 1), uMsSlice[1] (towards the sun, a froxel's height per unit of depth); the slices are uShadowBlocker's
+        // layers, one ray to the sun at each froxel's centre (Gi.TracedSunVolume). Outside it: lit (the terrain and landmark maps still shade).
+        bool msVolumeOn() { return int(uShadowForward.w) == 0 && uMsSlice[0].w > 0.5 && uShadowOrigin.w > 0.5; }
+        float msVolumeAt(vec3 world)
+        {
+            vec4 c = uShadowTile[0] * vec4(world - uShadowOrigin.xyz, 1.0);
+            if (c.w <= uMsSlice[0].x) return 1.0;
+            vec2 uv = c.xy / c.w * 0.5 + 0.5;
+            if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return 1.0;
+            float s = log(c.w / uMsSlice[0].x) / log(uMsSlice[0].y / uMsSlice[0].x) * uMsSlice[0].z - 0.5;
+            if (s > uMsSlice[0].z - 0.5) return 1.0;
+            s = max(s, 0.0);
+            float s0 = floor(s);
+            float a = textureLod(uShadowBlocker, vec3(uv, s0), 0.0).r;
+            float b = textureLod(uShadowBlocker, vec3(uv, min(s0 + 1.0, uMsSlice[0].z - 1.0)), 0.0).r;
+            return mix(a, b, s - s0);
+        }
+        // A surface's: looked up a froxel and a half towards the sun, so the froxels half inside the surface itself do not shade it.
+        float msVolumeSurface(vec3 world, float depth) { return msVolumeAt(world + uMsSlice[1].xyz * max(depth, 1.0) * uMsSlice[1].w * 1.5); }
+
         // The terrain's own shadow beyond the cascades: a world point is shadowed by the land towards the sun when it lies below the
         // top of that land's shadow (precomputed per sun direction, TerrainShadowMap), softened by the occluder's distance.
         float msTerrain(vec3 world, float depth)
@@ -186,6 +207,7 @@ static class MeitouShadowShaders
             // The traced sun's term (ShadowPass.TracedWhole) takes no cascade: the rays hold everything the cascades held, the terrain and landmark maps stay.
             if (depth < uMsParams.y && !msTraced)
             {
+                if (msVolumeOn()) csm = msVolumeSurface(world, depth);   // traced, for what draws no traced pixel (impostors, the reflection, foam, skin entry)
                 int count = int(uShadowForward.w);
                 for (int c = 0; c < {{ShadowSettings.MaxCascades}}; c++)
                 {

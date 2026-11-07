@@ -53,6 +53,8 @@ static class TracedSunShaders
         }
         """;
     const byte Solids = Objects | Foliage | SmallFoliage | Characters;
+    /// <summary>What the visibility volume's rays see besides the terrain (<see cref="TracedSunVolume"/>): every solid the surfaces' rays see; no grass (a ray from the air).</summary>
+    public const byte VolumeSolids = Solids;
 
     /// <summary>
     /// The fine terrain grid (smooth, 8 apart: <see cref="GiScene"/>) is asked from a point this many units above the surface, plus a share of the distance, along the whole ray:
@@ -200,8 +202,8 @@ static class TracedSunShaders
 
     /// <summary>Taps of the penumbra filter's disc: a sunflower of this many points, the same every frame.</summary>
     public const int PenumbraTaps = 16;
-    /// <summary>Pixels: the farthest a blocker is looked for round a pixel, and the widest penumbra radius.</summary>
-    public const float PenumbraSearch = 12, PenumbraMax = 16;
+    /// <summary>Pixels: the farthest a blocker is looked for round a pixel, and the narrowest and widest penumbra radius.</summary>
+    public const float PenumbraSearch = 12, PenumbraMin = 1, PenumbraMax = 16;
 
     /// <summary>
     /// The penumbra filter (no history: the same picture every frame): the hard shadow of the rays to the sun's centre softened by the sun's real disc. Round each traced pixel the
@@ -273,8 +275,8 @@ static class TracedSunShaders
             if (count == 0.0) { imageStore(uOut, px, vec4(raw.r)); return; }
 
             // The penumbra across, in pixels: the disc's diameter at the mean blocker's distance over the pixel's width.
-            float radius = min(p.size.z * (blockers / count) / footprint, {{F(PenumbraMax)}});
-            if (radius < 0.75) { imageStore(uOut, px, vec4(raw.r)); return; }
+            // At least a pixel: a contact shadow's edge, narrower than a pixel, is anti-aliased over one (a ramp the jittered frames move, not a stair).
+            float radius = clamp(p.size.z * (blockers / count) / footprint, {{F(PenumbraMin)}}, {{F(PenumbraMax)}});
             float sum = raw.r, weight = 1.0;
             for (int k = 0; k < {{PenumbraTaps}}; k++)
             {
