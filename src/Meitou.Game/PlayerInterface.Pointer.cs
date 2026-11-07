@@ -12,7 +12,7 @@ sealed partial class PlayerInterface
     bool pointerOverUi;
     // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and every RepickTicks ticks while only the
     // world moves (the picks walk every character, item and building near the ray: 0.5 ms).
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, SelectedBuilding? Building) pointer = (-1, default, false, false, "arrow", null, null);
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (SelectedBuilding Building, float T)? Building) pointer = (-1, default, false, false, "arrow", null, null);
     Matrix4x4 pointerView;
     const long RepickTicks = 3;
 
@@ -24,16 +24,23 @@ sealed partial class PlayerInterface
     public string PointerName => Point().Name;
 
     /// <summary>
-    /// The character under the cursor for the hover outline and its colour: the one a right click would act on, in the colour of that order (attack red, treat
+    /// The character under the cursor (within <see cref="OutlineReach"/> of the eye) for the hover outline and its colour: the one a right click would act on, in the colour of that order (attack red, treat
     /// green, talk gold, carry or loot blue), else any character under the cursor in white; null over the interface or nobody.
     /// </summary>
-    public (CharacterId Id, Vector4 Colour)? HoverTarget => Point() is { Target: { } id } p ? (id, PointerColour(p.Name)) : null;
+    public (CharacterId Id, Vector4 Colour)? HoverTarget => Point() is { Target: { } id } p && WithinOutlineReach(id) ? (id, PointerColour(p.Name)) : null;
+
+    /// <summary>How far from the eye a hovered character or building is still outlined (engine choice; the pointer and the click reach farther).</summary>
+    public const float OutlineReach = 2000;
+
+    bool WithinOutlineReach(CharacterId id) =>
+        session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c && Vector3.DistanceSquared(Eye, where(c)) <= OutlineReach * OutlineReach;
 
     /// <summary>
-    /// The building under the cursor (no character there, as a left click picks it) for the building outline: its placement key, floor and the colour of what a right
+    /// The building under the cursor within <see cref="OutlineReach"/> along the ray (no character there, as a left click picks it) for the building outline: its placement key, floor and the colour of what a right
     /// click on it would do, as <see cref="HoverTarget"/>'s; null over the interface or none.
     /// </summary>
-    public (string Key, float Floor, Vector4 Colour)? HoverBuilding => Point() is { Building: { } b } p ? (b.Instance, b.Position.Y, PointerColour(p.Name)) : null;
+    public (string Key, float Floor, Vector4 Colour)? HoverBuilding =>
+        Point() is { Building: { } b } p && b.T <= OutlineReach ? (b.Building.Instance, b.Building.Position.Y, PointerColour(p.Name)) : null;
 
     /// <summary>The outline colour for the order a pointer shows: attack red, treat green, talk gold, carry or loot blue, else white.</summary>
     static Vector4 PointerColour(string pointer) => pointer switch
@@ -76,7 +83,7 @@ sealed partial class PlayerInterface
     bool Hostile(CharacterId id) => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c || Hostile(c);
     bool Hostile(CharacterSnapshot c) => c.HostileToPlayer;
 
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, SelectedBuilding? Building) Point()
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (SelectedBuilding Building, float T)? Building) Point()
     {
         if (mapDrag is not null) return (-1, mouse, CtrlHeld, AltHeld, "hand", null, null);   // the map's pan
         if (UiVisible && pointerOverUi || UiCapturesPointer || ContextMenuOpen || ModalOpen || dragging || settingsOpen || TitleOpen)
@@ -109,7 +116,7 @@ sealed partial class PlayerInterface
             chosen.Name = "attk";
         session.World.Player.Pointed = chosen.Target ?? CharacterId.None;
         pointerView = ViewProjection;
-        var hovered = chosen.Target is null ? PickBuilding(mouse) : null;
+        var hovered = chosen.Target is null ? PickBuildingAt(mouse) : null;
         return pointer = (snapshot.Tick, mouse, CtrlHeld, AltHeld, chosen.Name, chosen.Target, hovered);
     }
 

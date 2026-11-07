@@ -62,7 +62,10 @@ sealed partial class PlayerInterface
             Record: site.Record);
 
     /// <summary>The nearest building under the pixel, a site of the player's or a level-data one, when the ray meets it before the ground.</summary>
-    SelectedBuilding? PickBuilding(Vector2 pixel)
+    SelectedBuilding? PickBuilding(Vector2 pixel) => PickBuildingAt(pixel)?.Building;
+
+    /// <summary><see cref="PickBuilding"/> with the distance along the ray.</summary>
+    (SelectedBuilding Building, float T)? PickBuildingAt(Vector2 pixel)
     {
         if (Ray(pixel) is not { } ray) return null;
         // A visible bed takes the click over the house around it, as a plain building is no right-click candidate (PickAt); a nearer object site or rock still wins.
@@ -71,9 +74,10 @@ sealed partial class PlayerInterface
         {
             var bed = bedHit.Bed;
             if (session.CurrentSnapshot.Buildings.FirstOrDefault(s => bed.Id == s.Id + "@bed0") is { } bedSite)
-                return SiteBuilding(bedSite);
-            return new(buildHost?.ItemName(bed.Record) ?? bed.Record, null, FactionName?.Invoke(bed.Owner), null,
+                return (SiteBuilding(bedSite), bedHit.T);
+            var spot = new SelectedBuilding(buildHost?.ItemName(bed.Record) ?? bed.Record, null, FactionName?.Invoke(bed.Owner), null,
                 null, bed.Id, bed.Position, null, Record: bed.Record);
+            return (spot, bedHit.T);
         }
         float limit = GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
         float bestT = limit;
@@ -105,8 +109,8 @@ sealed partial class PlayerInterface
             bestT = inner.T;
             best = SiteBuilding(inner.Site);
         }
-        if (PickRockAt(pixel) is { } rock && rock.T < bestT) best = RockBuilding(rock.Rock);
-        return best;
+        if (PickRockAt(pixel) is { } rock && rock.T < bestT) (best, bestT) = (RockBuilding(rock.Rock), rock.T);
+        return best is { } found ? (found, bestT) : null;
     }
 
     /// <summary>
