@@ -204,16 +204,18 @@ public class AiTests(ITestOutputHelper output)
     /// The synthetic town with two buildings: a shop (a shopkeeper node, two beds) east of the centre and a house (three beds,
     /// <paramref name="bedGap"/> apart) west of it.
     /// </summary>
-    static PopulationData WithHomes(GameDatabase db, out TownBuilding shop, out TownBuilding house, float bedGap = 10)
+    static PopulationData WithHomes(GameDatabase db, out TownBuilding shop, out TownBuilding house, float bedGap = 10, bool chair = false)
     {
         Vector3 At(float dx, float dz) => new(Centre.X + dx, 300, Centre.Z + dz);
         shop = new TownBuilding("shop", "b-shop", "Shop", At(80, 0), 0, true, false,
             [new HomeSpot(HomeSpotKind.Shopkeeper, At(80, 12), 0), new HomeSpot(HomeSpotKind.Bed, At(90, 0), 0), new HomeSpot(HomeSpotKind.Bed, At(90, -10), 0)]);
-        house = new TownBuilding("house", "b-house", "House", At(-80, 0), 0, false, false,
+        List<HomeSpot> spots =
             [
                 new HomeSpot(HomeSpotKind.Bed, At(-90, 0), 0), new HomeSpot(HomeSpotKind.Bed, At(-90, bedGap), 0),
                 new HomeSpot(HomeSpotKind.Bed, At(-90, 2 * bedGap), 0),
-            ]);
+            ];
+        if (chair) spots.Add(new HomeSpot(HomeSpotKind.Chair, At(-70, -10), 0));   // a piece 43 Staying home sits on
+        house = new TownBuilding("house", "b-house", "House", At(-80, 0), 0, false, false, spots);
         return PopulationData.Create(db, [new TownPlacement("inst", "30-t", Centre, null)], buildings: new Dictionary<string, List<TownBuilding>> { ["inst"] = [shop, house] });
     }
 
@@ -508,6 +510,64 @@ public class AiTests(ITestOutputHelper output)
         Assert.All(sleepers, c => Assert.True(c.Ai!.CommitUntil > world.GameHours, $"commitment {c.Ai.CommitUntil}"));
         world.RunTicks(300);
         Assert.All(sleepers, c => Assert.Equal((Meitou.Simulation.Locks.HeldState.Bed, (TaskType?)null), (c.InSomething, c.Ai!.Goal?.Task.Type)));
+    }
+
+    /// <summary>
+    /// A seated character weighs its captive goals (docs/simulation.md "Captives", weighed by the AI): a workmaster on its home's chair under 43
+    /// Staying home, with a slave that obeys its squad up, stays seated while 43's commitment runs, then gets up and starts its 188 shout job, as the
+    /// original's chooser weighs 188 against the seated goal. Catches the AI that did not see the captive goals and renewed 43, so Rebirth's
+    /// workmasters the AI seated at home sat there all hour.
+    /// </summary>
+    [Fact]
+    public void A_workmaster_seated_at_home_gets_up_to_work_its_slaves_once_staying_home_runs_out()
+    {
+        var stay = Task("150-t", TaskType.STAY_IN_HOME, TaskPriority.NonUrgent);
+        var work = Task("151-t", TaskType.WORK_THE_SLAVES, TaskPriority.NonUrgent);
+        var package = Rec("152-t", FcsRecordType.AI_PACKAGE, "Workmasters");
+        package.References["Leader AI Goals"] = [Ref("150-t", 0, 100, 0), Ref("151-t", 0, 100, 0)];
+        // The others patrol the town (an empty list would take the leader's).
+        package.References["Squad AI Goals"] = package.References["Squad2 AI Goals"] = [Ref("101-t", 0, 100, 0)];
+        var db = SyntheticTown.Database(2, extra: [.. Records(), stay, work, package],
+            changePatrol: p => p.References["AI packages"] = [Ref("152-t", 0)]);
+        var data = WithHomes(db, out _, out var house, chair: true);
+        using var world = Town(1, out _, data, null);
+        var captives = world.SystemOf<Meitou.Simulation.Kidnap.CaptiveSystem>()!;
+        world.RunTicks(31);
+        var squad = world.Squads.All.Single(s => s.TemplateId == "10-t" && s.Ai!.Home == house);
+        var mind = world.Characters.Cold(squad.Leader.Slot)!.Ai!;
+        for (int t = 0; t < 3000 && world.Characters.Next[squad.Leader.Slot].Task != (byte)CharacterTask.Rest; t++) world.RunTicks(1);
+        Assert.Equal((CharacterTask.Rest, TaskType.STAY_IN_HOME, AiBehaviour.Sit),
+            ((CharacterTask)world.Characters.Next[squad.Leader.Slot].Task, mind.Goal?.Task.Type, mind.Behaviour));
+
+        // A slave that obeys the workmaster's squad comes; 43's commitment runs an hour more.
+        ObeyingSlave(world, squad, house.Position + new Vector3(0, 0, 30));
+        mind.CommitUntil = world.GameHours + 1;
+        bool Shouts() => captives.Jobs.Any(j => j.Kind == Meitou.Simulation.Kidnap.CaptiveJobKind.Shout && j.Worker == squad.Leader);
+        world.RunTicks(61);
+        Assert.False(Shouts());
+        Assert.Equal(CharacterTask.Rest, (CharacterTask)world.Characters.Next[squad.Leader.Slot].Task);
+
+        mind.CommitUntil = world.GameHours;
+        world.RunTicks(61);
+        Assert.True(Shouts());
+        Assert.Equal(TaskType.WORK_THE_SLAVES, mind.Goal?.Task.Type);
+    }
+
+    /// <summary>
+    /// A slave of a squad of its own (idle: no goals) that obeys <paramref name="master"/>, as a town's slave squads obey their workmasters.
+    /// </summary>
+    static CharacterId ObeyingSlave(SimWorld world, Squad master, Vector3 at)
+    {
+        var board = new Blackboard([new(0, new AiPackage { Id = "p", Name = "p", Roles = [[], [], [], [], []] })]);
+        board.Update();
+        var own = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = master.Faction, Ai = board };
+        world.Squads.Add(own);
+        var slave = new Meitou.Tests.Combat.Combatant { Name = "slave" }.MakeCold();
+        (slave.Ai, slave.SquadId, slave.Faction) = (new AiMind { Squad = own }, own.Id, master.Faction);
+        (slave.SlaveState, slave.SlaveOwner, slave.SlaveMaster) = (1, master.Faction, master.Id);
+        own.Leader = world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15 }, slave, world.Tick);
+        own.Members.Add(own.Leader);
+        return own.Leader;
     }
 
     /// <summary>A character's world for the planner: in bed or not, at the node or not; nothing drawn, carried or attacking; the rest held true.</summary>

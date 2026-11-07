@@ -1165,6 +1165,12 @@ failed walks mark the cage unreachable for the faction; its own faction's shut d
 A job's walk is its own, run as the job's row (`CaptiveSystem.WalksOwn`): one the worker was on when the job started, its AI's or an errand's, is replaced at once, as a
 goal taken up ends the plan before it ([precedence](game/ai-tasks.md#precedence)). **Observed** (KenshiOracle state 0.5 hold, Rebirth, N = 1): the workmasters take their
 gather jobs while walking home under 43, and a job that waited on that walk reached its cage only after about 90 of the hold's 110 s.
+- **Weighed by the AI** (`CaptiveSystem.Offers.cs`, `AiBehaviour.Captive`): the sweep takes a free member's first goal that finds a target, unscored. A member awake but
+  not free (resting on a seat the AI gave it: a home chair under 43, a bar seat, a throne; in a job; on another system's duty) keeps, on its sweep turn and when its job
+  ends, the captive goals in its hours whose job would start (`TryStart` as a probe: nothing drawn, fetched, said or remembered) with the original's desire (188 and 192
+  0.25 x the platoon's slave list, the limb play and chase their own, the rest 1; `AiMind.CaptiveOffers`, hashed, not saved). Its think weighs them with its other goals
+  ([precedence](game/ai-tasks.md#precedence): a seated goal's commitment holds its tier, then scores at most 0.05). One that wins gets it up, and the AI's serial step
+  starts that goal's job on the state of now (`SendGoalJobs`; none: it chooses again). Sleepers are not offered any (engine choice).
 - **Kill** (135; the desire reads the town and creates its timer first, whatever the worker carries; its plan then draws a weapon, `DrawWeapon`: one in a back or hip slot, else a melee weapon of its inventory put in a free slot, else the goal does not plan): when the kill timer of the town the worker stands in (else its squad's: engine reading) has run out or all the faction's cages there are held; the best occupied cage by the cage finder's weights
   and usable test (`FindCage` in its occupied mode over `CageCandidates`: the worker's town, else its faction's nearest, plus its home's; x100 own faction, x100 home building; another faction's cage only when `CanUse` passes), not a robot. At the cage it holds `chop down static` (`CharacterCold.ActionClip`, which the animation system plays for an idle character) and strikes once per
   clip length at 0.55 of it (`CombatSystem.Execute`: the weapon packet landed through armour, no defence, no crime) until the captive dies. Events 10 (on picking) and 11 (each blow).

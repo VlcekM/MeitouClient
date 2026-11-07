@@ -185,8 +185,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 if (j.PlayerSide && table.TryResolveNext(j.Worker, out int w)) (j.LastTask, j.LastGoal) = (table.Next[w].Task, table.Next[w].Goal);
                 k++;
             }
-            else jobs.RemoveAt(k);
+            else
+            {
+                jobs.RemoveAt(k);
+                ended.Add(j.Worker);
+            }
         }
+        OfferAfterJobs(world);
         // Each character is looked at once in SweepEveryTicks, on its slot's turn (slot mod the period), so the sweep spreads over the ticks instead of
         // landing on one (8-11 ms a sweep with ~1,400 characters loaded, docs/simulation.md "Spread sweeps"; the original runs its AI updates 8 characters
         // a frame in turn, FUN_140786e30).
@@ -396,35 +401,51 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             foreach (var member in squad.Members)
             {
                 if (jobs.Count >= Settings.MaxJobs || started >= maxNew) return;
-                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || !Free(world, slot)) continue;
-                var cold = table.Cold(slot)!;
-                // An obeying slave takes its master squad's Slave AI Goals instead of its own lists, as the AI's goal pick does (job 187).
-                var roles = AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, member, cold)];
-                for (int g = 0; g < roles.Count; g++)
-                {
-                    if (!roles[g].InWindow(hour)) continue;
-                    if (TryStart(world, squad, board, slot, cold, roles[g].Task.Type) is { } job)
-                    {
-                        jobs.Add(job);
-                        cold.Engaged = true;
-                        Note(world, CaptiveEventKind.Started, job);
-                        started++;
-                        break;
-                    }
-                }
-                // The race's own AI Goals (Character::setupAI loads them for every NPC; their window is always open).
-                if (!cold.Engaged && cold.Ai is { RaceGoals: { Count: > 0 } raceGoals })
-                    foreach (var goal in raceGoals)
-                        if (TryStart(world, squad, board, slot, cold, goal.Task.Type) is { } job)
-                        {
-                            jobs.Add(job);
-                            cold.Engaged = true;
-                            Note(world, CaptiveEventKind.Started, job);
-                            started++;
-                            break;
-                        }
+                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every)) continue;
+                bool free = Free(world, slot);
+                if (free && StartFirst(world, squad, board, slot, hour)) started++;
+                // A free member the start found nothing for has nothing to offer either.
+                else if (free) ClearOffers(world, slot);
+                else KeepOffers(world, squad, board, slot, hour);
             }
         }
+    }
+
+    /// <summary>
+    /// Starts the job of the first of the member's goals in their hours that finds a target, unscored: its role's list, then its race's; false when
+    /// none does.
+    /// </summary>
+    bool StartFirst(World world, Squad squad, Blackboard board, int slot, int hour)
+    {
+        var cold = world.Characters.Cold(slot)!;
+        var roles = RolesOf(world, squad, board, slot, cold);
+        for (int g = 0; g < roles.Count; g++)
+            if (roles[g].InWindow(hour) && Start(world, squad, board, slot, cold, roles[g])) return true;
+        // The race's own AI Goals (Character::setupAI loads them for every NPC; their window is always open).
+        if (cold.Engaged || cold.Ai is not { RaceGoals: { Count: > 0 } race }) return false;
+        for (int g = 0; g < race.Count; g++)
+            if (Start(world, squad, board, slot, cold, race[g])) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// The member's role list: an obeying slave takes its master squad's Slave AI Goals instead of its own lists, as the AI's goal pick does (job
+    /// 187).
+    /// </summary>
+    static IReadOnlyList<AiGoal> RolesOf(World world, Squad squad, Blackboard board, int slot, CharacterCold cold) =>
+        AiSystem.ObeyedRoles(world, squad, cold) ?? board.Roles[(int)AiSystem.RoleOf(squad, world.Characters.IdOf(slot), cold)];
+
+    /// <summary>
+    /// Starts the job of <paramref name="goal"/> when it finds a target (<see cref="TryStart"/>); its offers go.
+    /// </summary>
+    bool Start(World world, Squad squad, Blackboard board, int slot, CharacterCold cold, AiGoal goal)
+    {
+        if (TryStart(world, squad, board, slot, cold, goal.Task.Type) is not { } job) return false;
+        jobs.Add(job);
+        cold.Engaged = true;
+        cold.Ai?.CaptiveOffers.Clear();
+        Note(world, CaptiveEventKind.Started, job);
+        return true;
     }
 
     static readonly HashSet<TaskType> JobRows = [.. Enum.GetValues<CaptiveJobKind>().Select(RowOf)];
@@ -458,8 +479,12 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         _ => TaskType.CHASE_ALLY_DOGS_WITH_MOUTH_LIMBS,
     };
 
-    /// <summary>A job for goal <paramref name="type"/> of the member in <paramref name="slot"/>, when the goal is one of the captive goals and it finds a target (null otherwise).</summary>
-    CaptiveJob? TryStart(World world, Squad squad, Blackboard board, int slot, CharacterCold cold, TaskType type)
+    /// <summary>
+    /// A job for goal <paramref name="type"/> of the member in <paramref name="slot"/>, when the goal is one of the captive goals and it finds a
+    /// target (null otherwise). With <paramref name="probe"/> it only tells whether the job would start: nothing is drawn, fetched, said or
+    /// remembered (the kill rate's town timer is still created, as its desire does).
+    /// </summary>
+    CaptiveJob? TryStart(World world, Squad squad, Blackboard board, int slot, CharacterCold cold, TaskType type, bool probe = false)
     {
         int site = board.Town;
         switch (type)
@@ -468,12 +493,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 site = FateTown(world, slot, board);
                 // The desire reads the town and creates its timer before any other test; the weapon is the plan's equip step (FateJob), not a condition of the goal.
                 if (site < 0 || !KillDue(world, site, cold) || combat is null) return null;
-                return FateJob(world, slot, cold, board, site, CaptiveJobKind.Kill);
+                return FateJob(world, slot, cold, board, site, CaptiveJobKind.Kill, probe);
             case TaskType.EAT_A_RANDOM_CAGE_OCCUPANT:
-                return FateJob(world, slot, cold, board, FateTown(world, slot, board), CaptiveJobKind.Eat);   // no town test: the finder falls back to the nearest town
+                // No town test: the finder falls back to the nearest town.
+                return FateJob(world, slot, cold, board, FateTown(world, slot, board), CaptiveJobKind.Eat, probe);
             case TaskType.EAT_A_RANDOM_CAGE_OCCUPANT_MEASURED_RATE:
                 site = FateTown(world, slot, board);
-                return site < 0 || !KillDue(world, site, cold) ? null : FateJob(world, slot, cold, board, site, CaptiveJobKind.Eat);
+                return site < 0 || !KillDue(world, site, cold) ? null : FateJob(world, slot, cold, board, site, CaptiveJobKind.Eat, probe);
             case TaskType.EAT_A_RANDOM_DEAD_BODY:
             case TaskType.EAT_A_RANDOM_KO_BODY:
                 return BodyToEat(world, slot, cold, dead: type == TaskType.EAT_A_RANDOM_DEAD_BODY) is >= 0 and var meal
@@ -484,7 +510,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                     ? new CaptiveJob { Kind = CaptiveJobKind.Worship, Worker = world.Characters.IdOf(slot), Captive = shrine.Occupant, Cage = shrine.Id, Faction = cold.Faction }
                     : null;
             case TaskType.ANIMAL_FETCH_A_LIMB:
-                if (cold.Fighter is { IsAnimal: true }) Fetch(world, slot, cold);
+                if (!probe && cold.Fighter is { IsAnimal: true }) Fetch(world, slot, cold);   // it picks the limb up itself: no job
                 return null;
             case TaskType.PLAY_BECAUSE_I_HAVE_A_LIMB_IN_MOUTH:
                 return cold.Fighter is { IsAnimal: true } && Plays(world, cold)
@@ -516,21 +542,24 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             case TaskType.CAPTURE_NEW_SLAVES:
             case TaskType.CARRY_WOUNDED_SLAVES:
             case TaskType.WORK_THE_SLAVES:
-                return TryStartSlaveWork(world, squad, slot, cold, type);
+                return TryStartSlaveWork(world, squad, slot, cold, type, probe);
             default:
                 return TryStartLogistics(world, squad, board, slot, cold, type);
         }
     }
 
-    CaptiveJob? FateJob(World world, int slot, CharacterCold cold, Blackboard board, int site, CaptiveJobKind kind)
+    CaptiveJob? FateJob(World world, int slot, CharacterCold cold, Blackboard board, int site, CaptiveJobKind kind, bool probe = false)
     {
-        if (FateTarget(world, slot, cold, board.OwnHome?.Key, out bool fresh) is not { } cage || kind == CaptiveJobKind.Kill && !DrawWeapon(cold)) return null;
+        if (FateTarget(world, slot, cold, board.OwnHome?.Key, out bool fresh, remember: !probe) is not { } cage) return null;
+        if (kind == CaptiveJobKind.Kill && !(probe ? HasWeaponToDraw(cold) : DrawWeapon(cold))) return null;
         var table = world.Characters;
         var worker = table.IdOf(slot);
+        var job = new CaptiveJob { Kind = kind, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = site };
+        if (probe) return job;
         // A fresh choice has the occupant say "marked for death" to the one who picked it (event 10, FUN_1408d0d90; every character has a dialogue state, so the original's test for one never fails).
         if (fresh) world.Defer(new Dialogue.DialogueEvent(cage.Occupant, worker, MarkedForDeath) { Tick = world.Tick + 1 });
         if (kind == CaptiveJobKind.Eat) cold.DrawnWeapon = WeaponKinds.None;   // 220's B list: !hasWeaponEquipped
-        return new CaptiveJob { Kind = kind, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = site };
+        return job;
     }
 
     /// <summary>
@@ -556,6 +585,14 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         cold.DrawnWeapon = CombatSystem.MeleeDrawn(armed);
         return true;
     }
+
+    /// <summary>
+    /// Whether <see cref="DrawWeapon"/> finds a weapon, drawing nothing: one in a weapon slot, else a weapon carried elsewhere (taken as fitting a
+    /// free slot).
+    /// </summary>
+    static bool HasWeaponToDraw(CharacterCold cold) =>
+        cold.Fighter is { } fighter && cold.Inventory is { } inv
+        && (!fighter.Unarmed || inv.All().Any(i => i.Type == FcsRecordType.WEAPON && !InventoryCommands.IsEquipmentSection(i.Section)));
 
     /// <summary>The ANIMATION records the jobs hold (<c>Task_KillPrisoner</c>, <c>Task_EatPrisoner</c>, <c>Task_ProcessNewSlave</c>, <b>Observed</b>).</summary>
     public const string ChopClip = "chop down static", EatClip = "eat", ProcessClip = "medic";
@@ -598,7 +635,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// as it is (no weighting, no robot test, <paramref name="fresh"/> false: no event 10); once it holds none the memory is cleared and the search runs again. <b>Engine choice</b>: a dead occupant counts as
     /// none (the jobs work live captives only), and a remembered cage another job works is no target this ask.
     /// </summary>
-    Fixture? FateTarget(World world, int slot, CharacterCold cold, string? home, out bool fresh)
+    Fixture? FateTarget(World world, int slot, CharacterCold cold, string? home, out bool fresh, bool remember = true)
     {
         fresh = false;
         var table = world.Characters;
@@ -606,13 +643,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (mind?.FateCage is { } id)
         {
             if (world.Fixtures.Find(id) is { } kept && OccupantSlot(world, kept) is >= 0 and var held) return Taken(kept.Id) || Busy(table.IdOf(held)) ? null : kept;
-            mind.FateCage = null;
+            if (remember) mind.FateCage = null;
         }
         var candidate = world.Fixtures.CageCandidates(world, data, cold, table.Next[slot].Position);
         var best = world.Fixtures.FindCage(world, cold, table.Next[slot].Position, home,
             f => !candidate(f) || Taken(f.Id) || OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s)), occupied: true);
         if (best is null) return null;
-        if (mind is not null) mind.FateCage = best.Id;
+        if (mind is not null && remember) mind.FateCage = best.Id;
         fresh = true;
         return table.Cold(table.TryResolveNext(best.Occupant, out int o) ? o : slot)!.Race is { IsRobot: true } ? null : best;
     }

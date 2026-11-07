@@ -159,8 +159,11 @@ public sealed partial class CaptiveSystem
         cold is { Medical: { Incapacitated: false, Standing: true } m, Race: not null, InCombat: false, IsImprisoned: false } && cold.Carrying.IsNone && cold.CarriedBy.IsNone
         && (m.ArmWorks(left: true) || m.ArmWorks(left: false));
 
-    /// <summary>A job for goals 167 / 168 / 188, null when the member finds no target (or cannot carry one).</summary>
-    CaptiveJob? TryStartSlaveWork(World world, Squad squad, int slot, CharacterCold cold, TaskType type)
+    /// <summary>
+    /// A job for goals 167 / 168 / 188, null when the member finds no target (or cannot carry one); <paramref name="probe"/> as
+    /// <see cref="TryStart"/>'s.
+    /// </summary>
+    CaptiveJob? TryStartSlaveWork(World world, Squad squad, int slot, CharacterCold cold, TaskType type, bool probe = false)
     {
         var table = world.Characters;
         var worker = table.IdOf(slot);
@@ -188,6 +191,9 @@ public sealed partial class CaptiveSystem
                 // Row 170 (the lift 168 plans through) wants !22: a victim that needs first aid is treated first (row 25, with a kit and an arm), else the plan fails and nothing is lifted.
                 if (!capture && v >= 0 && table.Cold(v) is { } hurt && FirstAid.FirstAidSystem.NeedsFirstAid(world, hurt))
                 {
+                    // A probe counts the goal as started: its plan treats first, which the start does.
+                    if (probe)
+                        return new CaptiveJob { Kind = CaptiveJobKind.Carry, Worker = worker, Captive = table.IdOf(v), Cage = "", Faction = cold.Faction };
                     FirstAid.FirstAidSystem.TreatBeforeLift(world, slot, v);
                     return null;
                 }

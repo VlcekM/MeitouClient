@@ -539,6 +539,26 @@ public sealed class AiMind
     public float MedicScore { get; set; }
     /// <summary>The think chose the Medic goal: the serial step of the same tick starts the treatment (<see cref="FirstAid.FirstAidSystem.SendGoalTreatments"/>) and clears it (not hashed).</summary>
     public bool MedicAsk { get; set; }
+    /// <summary>
+    /// The captive goals (<see cref="AiBehaviour.Captive"/>) whose job would start, each with the original's desire, found on the character's last
+    /// captive sweep turn or at the end of its job (<see cref="Kidnap.CaptiveSystem"/>). Kept for a character awake that the sweep does not take
+    /// (seated, in a job, on a duty), so its think weighs them. Not saved; hashed while set.
+    /// </summary>
+    public List<(TaskType Type, float Desire)> CaptiveOffers { get; } = [];
+    /// <summary>
+    /// The think chose a captive goal: the serial step of the same tick starts its job (<see cref="Kidnap.CaptiveSystem.SendGoalJobs"/>) and clears
+    /// it (not hashed).
+    /// </summary>
+    public bool CaptiveAsk { get; set; }
+
+    /// <summary>The desire kept for the captive goal <paramref name="type"/> (<see cref="CaptiveOffers"/>); 0 without one.</summary>
+    public float CaptiveDesire(TaskType type)
+    {
+        foreach (var (t, d) in CaptiveOffers)
+            if (t == type) return d;
+        return 0;
+    }
+
     /// The Assault order a dialogue attack effect gave this character (<c>FUN_140680560</c> cases 6, 0x37 and 0x39 order goal 101, or 248 for 0x37, on the effect's target): the member of the target's squad
     /// it attacks, picked again whenever it is free (<see cref="AiSystem.AssaultTargetFor"/>); none when it has no such order. Not saved; hashed while set.
     /// </summary>
@@ -618,6 +638,15 @@ public sealed class AiMind
         if (!FollowTarget.IsNone) hasher.Add(FollowTarget);
         if (!AssaultTarget.IsNone) hasher.Add(AssaultTarget);
         if (MedicScore != 0) { hasher.Add(MedicPatient); hasher.Add(MedicScore); }
+        if (CaptiveOffers.Count > 0)
+        {
+            hasher.Add(0x434F6666);   // "COff"
+            foreach (var (t, d) in CaptiveOffers)
+            {
+                hasher.Add((int)t);
+                hasher.Add(d);
+            }
+        }
         if (!ForcedAssault.IsNone) { hasher.Add(0x466F7241); hasher.Add(ForcedAssault); }
         if (GuardVisitorAt is { } visitor) { hasher.Add(0x47756172); hasher.Add(visitor); }
         if (FightFrom != 0) hasher.Add(FightFrom);

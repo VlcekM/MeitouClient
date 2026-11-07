@@ -214,4 +214,69 @@ public class SlaveListTests
             Assert.Contains(log.Events, e => e.Npc == watcher && e.Target == slave && e.Event == (shaven ? CaptiveSystem.RecapturedSlave : CaptiveSystem.IntroducingNewSlave));
         }
     }
+
+    /// <summary>
+    /// At its first slow world, seats <paramref name="who"/> as 43 Staying home does on a chair (task Rest, a goal's provenance; its AI behaviour Sit
+    /// is the test's) and lets the captive sweep see it; once <see cref="Up"/> is set, stands it up (inside the tick, where a task holds).
+    /// </summary>
+    sealed class HomeSitter(Func<CharacterId> who) : ITickSystem
+    {
+        bool seated, stood;
+
+        public bool Up { get; set; }
+
+        public void SlowWorld(SimWorld world)
+        {
+            if (!world.Characters.TryResolveNext(who(), out int slot)) return;
+            if (!seated)
+            {
+                seated = true;
+                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Rest, TaskType.STAY_IN_HOME, TaskSource.Goal));
+                world.Characters.Cold(slot)!.Engaged = false;
+            }
+            else if (Up && !stood)
+            {
+                stood = true;
+                TaskStart.Stand(world.Characters, slot);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A seated member's sweep turn only finds out which captive goals would start (docs/simulation.md "Captives", weighed by the AI): an eater on
+    /// its chair with a captive in the cage keeps 139 as an offer for its think, and remembers no cage, sheathes nothing, has no "marked for death"
+    /// line said and starts no job. Once it stands, the sweep starts the job, which does all of these. Catches a probe with the job start's side
+    /// effects, which would pick and announce a victim for every seated eater, every sweep.
+    /// </summary>
+    [Fact]
+    public void A_seated_eater_is_offered_its_goal_and_nothing_is_drawn_said_or_remembered_until_it_stands()
+    {
+        var eater = CharacterId.None;
+        var sitter = new HomeSitter(() => eater);
+        var (world, captive, city, cage) = Town(sitter);
+        using var _ = world;
+        var squad = NewSquad(world, city, Board([], [], [Goal(TaskType.EAT_A_RANDOM_CAGE_OCCUPANT)], [], []));
+        var prisoner = Member(world, NewSquad(world, city, Board([], [], [], [], [])), cage.Position);
+        Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
+        // Held off the sweep until it sits (HomeSitter).
+        eater = Member(world, squad, cage.Position + new Vector3(60, 0, 0),
+            c => (c.Ai!.Behaviour, c.DrawnWeapon, c.Engaged) = (AiBehaviour.Sit, Meitou.Data.Gameplay.WeaponKinds.Katana, true));
+        var cold = world.Characters.Cold(eater.Slot)!;
+        for (int t = 0; t < 61; t++)
+        {
+            world.RunTicks(1);
+            Assert.Equal(0, world.DeferredCount);
+        }
+        Assert.Equal(CharacterTask.Rest, (CharacterTask)world.Characters.Next[eater.Slot].Task);
+        Assert.Equal([(TaskType.EAT_A_RANDOM_CAGE_OCCUPANT, 1f)], cold.Ai!.CaptiveOffers);
+        Assert.Equal((null, Meitou.Data.Gameplay.WeaponKinds.Katana), (cold.Ai.FateCage, cold.DrawnWeapon));
+        Assert.DoesNotContain(captive.Log, e => e.Worker == eater);
+
+        sitter.Up = true;
+        world.RunTicks(31);
+        Assert.Contains(captive.Log,
+            e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Eat } && e.Worker == eater && e.Captive == prisoner);
+        Assert.Equal((cage.Id, Meitou.Data.Gameplay.WeaponKinds.None), (cold.Ai.FateCage, cold.DrawnWeapon));
+        Assert.Empty(cold.Ai.CaptiveOffers);
+    }
 }
