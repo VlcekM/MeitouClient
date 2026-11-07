@@ -134,8 +134,8 @@ static void UseVisitors(ModContext c) => c.Dependency<VisitorsMod>("settlement.v
 ## Launcher
 
 - A code mod's row reads "Requires ...", "Loads after ...", "Incompatible with ...", "Built for Meitou ..." and, as "Will not load:", each
-  refusal of [Rules](#rules) (`CodeModChecks.Check`), plus a bad manifest. Mods set to data only count as not loading. Rechecked when a mod
-  is toggled, moved or allowed; a preset, a save's list or Arrange rechecks once after all rows moved.
+  refusal of [Rules](#rules) (`CodeModChecks.Check`), plus a bad manifest. With Trust code mods off, code mods count as not loading. Rechecked
+  when a mod is toggled or moved or the box changes; a preset, a save's list or Arrange rechecks once after all rows moved.
 - Preliminary: DLLs, the entry type and initialization are checked only at start. `gameVersion` is checked only by the game.
 - **Arrange**: one graph of every constraint between **enabled** mods: code `dependencies` (optional ones too), `loadAfter` and FCS `.mod`
   header `dependencies`. Each mod keeps its place unless a mod it needs comes later; that mod moves up to just before it (its own

@@ -67,6 +67,7 @@ public sealed partial class MainWindow : Window
         ArgumentsBox.Text = config.LaunchArguments;
         SteamRow.IsVisible = OperatingSystem.IsWindows();
         SteamBox.IsChecked = config.LaunchAsSteamKenshi;
+        TrustCodeModsBox.IsChecked = config.TrustCodeMods;
         RendererRow.IsVisible = OperatingSystem.IsMacOS();
         RendererMetalItem.IsVisible = MacSupport.MetalAvailable;
         if (!MacSupport.MetalAvailable && config.Renderer == "metal") config.Renderer = "auto";
@@ -522,16 +523,12 @@ public sealed partial class MainWindow : Window
     List<CodeModEntry> DependencyEntries() =>
         [.. mods.Select(m => m.Code with { Enabled = m.Enabled, HeaderDependencies = m.Mod.Header?.Dependencies })];
 
-    // The mods that may run code at start: all but those set to data only and not allowed since (undecided ones are asked at Play).
-    HashSet<string> RunsCode()
-    {
-        var trusted = game.GetStrings(TrustedCodeModsKey).ToHashSet(StringComparer.Ordinal);
-        var dataOnly = config.DataOnlyCodeMods.Where(n => !trusted.Contains(n)).ToHashSet(StringComparer.Ordinal);
-        return mods.Select(m => m.Name).Where(n => !dataOnly.Contains(n)).ToHashSet(StringComparer.Ordinal);
-    }
+    // The mods that may run code at start: all of them with Trust code mods on, else only those without code.
+    HashSet<string> RunsCode() =>
+        mods.Where(m => config.TrustCodeMods || !m.Mod.HasCode).Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
 
     // One graph of the enabled mods' code and .mod header dependencies; the proposed order is shown and applied only when accepted, and is not
-    // saved until Save or Play. A contradiction is shown and changes nothing.
+    // saved once accepted. A contradiction is shown and changes nothing.
     async void ArrangeMods_Click(object? sender, RoutedEventArgs e)
     {
         if (!ModsReady()) return;
@@ -1291,8 +1288,8 @@ public sealed partial class MainWindow : Window
         if (continueSave && (save = await ContinueTarget(install)) is null) return;
         if (!SaveMods()) return;
         if (graphicsSave?.IsEnabled == true) SaveGame();
-        await AskForCodeMods();
-        if (running is { HasExited: false }) return;   // a second click while the question was open started the game already
+        WriteCodeModTrust();
+        if (running is { HasExited: false }) return;   // a second click while the save was checked started the game already
 
         var start = GameStartInfo(exe, install);
         var steamAppIdFiles = SetUpSteamAppId(start, exe, install);

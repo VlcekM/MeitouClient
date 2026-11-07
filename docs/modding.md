@@ -53,7 +53,7 @@ Folder: `mods/MyMod/MyMod.mod` (the data mod, may be empty of records), `meitou.
 
 A workshop DLL is arbitrary code running as the user, as with RE_Kenshi. No sandboxing: .NET has none. The game loads a code mod's code
 only when its mod name is in `trustedCodeMods` of `meitou.user.json` (`UserConfig.TrustedCodeMods`); otherwise its data loads, its
-code does not, and the game shows a notice. The launcher's Play asks for each enabled code mod not yet allowed ([launcher](launcher.md)).
+code does not, and the game shows a notice. The launcher's **Trust code mods** box (on by default) allows every code mod in its list, or none ([launcher](launcher.md)).
 The game itself cannot ask: mods initialize on the boot worker before the interface exists.
 
 ## Loading

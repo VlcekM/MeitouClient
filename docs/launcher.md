@@ -262,12 +262,10 @@ interpolated string, which no translation could match.
   `SaveCamera.Mods` on 22 of the owner's saves (0 to 180 mods).
 - A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)), unless it
   also has `meitou.json`: then only the code-mod note shows.
-- A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)). Play asks about the enabled code mods not decided
-  yet; the Code mods button asks about every code mod in the list, so a choice can be changed or revoked; Trust all beside it allows
-  every code mod in the list without asking. The
-  question has a box per mod (ticked: allowed now) and three answers: Data only all, Trust all, Apply (the ticks). Escape decides
-  nothing. Allowed names go to `trustedCodeMods` in `meitou.user.json` (kept by game releases since 2026-10-20, which keep unknown
-  keys); data-only names go to the launcher's `DataOnlyCodeMods`, so Play does not ask about them again.
+- A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)). The **Trust code mods** box (`TrustCodeMods`, on
+  by default) decides for all of them: on, every code mod in the list is added to `trustedCodeMods` in `meitou.user.json` (kept by
+  game releases since 2026-10-20, which keep unknown keys); off, that list is emptied and they load as data only. Written when the
+  box changes and before each Play.
 - A code mod's row lists what it requires, loads after and conflicts with, and each refusal the game would make without its code
   (preliminary: DLLs and initialization are checked only at start); **Arrange** proposes an
   order meeting the enabled mods' code and `.mod` header dependencies, applied only when accepted and saved only by Save or Play; a
