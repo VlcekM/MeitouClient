@@ -102,9 +102,9 @@ static class LampShadowShaders
         vec4 lostLight(ivec2 px)
         {
             uvec4 surface = texelFetch(uAlbedo, px, 0);
-            if ((surface.w & 256u) == 0u) return vec4(0.0);
+            if ((surface.w & 256u) == 0u) return vec4(0.0, 0.0, 0.0, -1.0);   // no receiver: the penumbra filter leaves it out
             float z = depthAt(px);
-            if (z <= 0.0) return vec4(0.0);
+            if (z <= 0.0) return vec4(0.0, 0.0, 0.0, -1.0);
             vec3 world = positionAt(px, z);
             vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
             vec3 diffuse = vec3(0.0), specular = vec3(0.0);

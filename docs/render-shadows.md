@@ -83,8 +83,11 @@ and skip 3 footprints plus 0.5. Queries, each after the last missed:
 - grass (`0x20`), only as far as the ray can stay under the tallest blade, fading out by amount (not noise) over the last quarter of its reach.
 
 **Penumbra** (`PenumbraFilter`, shared with the lamps, no history): the rays write, where blocked, the penumbra's radius at the receiver (the sun's tangent 0.00465, the real
-0.267 degrees, times the blocker's distance; KenshiNative's 0.015 widened far penumbrae threefold). A row pass takes the mean radius of 16 fixed sunflower taps within 12
-pixels on the pixel's own surface (within its plane), in pixels, at least 1 and at most 16, and averages along the row with a box whose end taps weigh their fraction; a
+0.267 degrees, times the blocker's distance; KenshiNative's 0.015 widened far penumbrae threefold). A pixel the light does not reach (turned away from it: its term is 0, or no traced
+pixel) is no receiver: the filter keeps it and no neighbour reads it. Read as lit (no ray is asked there), a ripple's far slopes lit their sunward neighbours inside a
+shadow and a caster's dark side lit the ground at its foot (**Observed** in play: lit crests in a building's shadow on displaced dunes, a lit band along the building's
+foot, a lit rim round a character's boots). A row pass takes the mean radius of 16 fixed sunflower taps within 12 pixels on the pixel's own surface (within the plane
+the depth shows, not the shading normal a relief or a trail tilts), in pixels, at least 1 and at most 16, and averages along the row with a box whose end taps weigh their fraction; a
 column pass does the same at that radius. The weights are continuous, so a wide penumbra is a smooth ramp: the former 16-tap disc with taps rounded to pixels left bands
 along wide penumbrae (**Observed** in play). The one-pixel least radius anti-aliases contact edges (the rays alone stair-stepped them under DLSS, **Observed** in play); the
 rays leave from the jittered pixel's own depth, so the upscaler sees the edge move with its jitter. A still view gives the same mask every frame; under motion nothing

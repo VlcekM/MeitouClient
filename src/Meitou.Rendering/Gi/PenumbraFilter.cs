@@ -13,7 +13,7 @@ readonly record struct PenumbraTargets(GpuTexture Depth, GpuTexture Surface, Gpu
 /// <summary>
 /// The penumbra filter of the traced shadows (docs/render-shadows.md "Traced sun", docs/render-lights.md "Traced lamp shadows"), the same every frame (no history): the rays' hard
 /// result (rgb) softened by its light's size. The rays write, where they are blocked, the penumbra's radius at the receiver in world units (alpha: the light's angular radius times
-/// the blocker's distance). A horizontal pass finds the blockers' mean radius among taps on the pixel's own surface, takes it to pixels (at least <see cref="MinRadius"/>, which
+/// the blocker's distance; -1 where the pixel is no receiver: it is kept and no neighbour reads it). A horizontal pass finds the blockers' mean radius among taps on the pixel's own surface (its plane from the depth), takes it to pixels (at least <see cref="MinRadius"/>, which
 /// anti-aliases a contact edge), and averages along the row with a box whose ends are fractional; a vertical pass does the same along the column at that radius. The weights are
 /// continuous, so a wide penumbra is a smooth ramp, not a staircase of tap counts. Render thread only.
 /// </summary>
@@ -44,19 +44,24 @@ sealed unsafe class PenumbraFilter : IDisposable
             return h.xyz / h.w;
         }
 
-        vec3 octDir(vec2 e)
-        {
-            vec3 d = vec3(e.x, 1.0 - abs(e.x) - abs(e.y), e.y);
-            if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
-            return normalize(d);
-        }
-
         bool inside(ivec2 q) { return all(greaterThanEqual(q, ivec2(0))) && all(lessThan(q, ivec2(p.size.xy))); }
 
-        // A tap on the pixel's own surface: written to the surface target and within the plane's tolerance.
+        // The drawn surface's plane from the depth (the neighbours of the smaller step): the geometry, not the shading normal, which a relief, a trail or a normal map
+        // tilts until a caster's side or a leg lies in "its" plane.
+        vec3 plane(ivec2 px, vec3 at)
+        {
+            ivec2 last = ivec2(p.size.xy) - 1;
+            vec3 l = at - pointAt(clamp(px - ivec2(1, 0), ivec2(0), last)), r = pointAt(clamp(px + ivec2(1, 0), ivec2(0), last)) - at;
+            vec3 d = at - pointAt(clamp(px - ivec2(0, 1), ivec2(0), last)), u = pointAt(clamp(px + ivec2(0, 1), ivec2(0), last)) - at;
+            vec3 g = cross(dot(r, r) < dot(l, l) ? r : l, dot(u, u) < dot(d, d) ? u : d);
+            float len = length(g);
+            return len > 1e-8 ? g / len : vec3(0.0, 1.0, 0.0);
+        }
+
+        // A tap on the pixel's own surface: a receiver (alpha not -1) within the plane's tolerance.
         bool onSurface(ivec2 q, vec3 at, vec3 n, float tolerance)
         {
-            if (!inside(q) || texelFetch(uSurface, q, 0).w == 0u) return false;
+            if (!inside(q) || texelFetch(uIn, q, 0).a < 0.0) return false;
             return abs(dot(pointAt(q) - at, n)) < tolerance;
         }
 
@@ -81,12 +86,11 @@ sealed unsafe class PenumbraFilter : IDisposable
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (!inside(px)) return;
             vec4 c = texelFetch(uIn, px, 0);
-            uvec4 surface = texelFetch(uSurface, px, 0);
             bool rows = p.size.w < 0.5;
-            if (surface.w == 0u) { imageStore(uOut, px, vec4(c.rgb, 0.0)); return; }
+            if (c.a < 0.0) { imageStore(uOut, px, c); return; }   // no receiver: kept, and left out of its neighbours
             vec3 at = pointAt(px);
             float footprint = length(at) * p.size.z;
-            vec3 n = octDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
+            vec3 n = plane(px, at);
             float radius = rows ? searchRadius(px, at, n, footprint, c.a) : c.a;
             if (radius <= 0.0) { imageStore(uOut, px, vec4(c.rgb, 0.0)); return; }
             ivec2 axis = rows ? ivec2(1, 0) : ivec2(0, 1);
