@@ -255,10 +255,11 @@ sealed partial class PlayerInterface
             [UiSlots.Squad] = FaithfulSlot("SquadPanel"),
         };
         if (hud) controls.AddRange(uiHost.Arrange(UiMode, Width, Height, b, slots));
-        squadBarRow = 0;   // no bar, no scrolling
+        squadBarRow = 0;
         if (controls.FirstOrDefault(c => c.Name == "SquadPanel") is { } squadPanel) AddSquadPortraits(controls, squadPanel.Bounds);
         AddHudText(controls);
         AddJobRowParts(controls);
+        if (hud) AddJobScrollBar(controls);
         if (hud) AddTutorialPanel(controls);
         AddScreens(controls);
         return controls;
@@ -362,6 +363,13 @@ sealed partial class PlayerInterface
                 faithfulScreens.SetTab("overview", "TabsMain", tab);
             }
             UpdateMenuPause();
+            return true;
+        }
+        if (c.Action.StartsWith("hud-jobs:", StringComparison.Ordinal) || c.Action.StartsWith("hud-squad:", StringComparison.Ordinal))
+        {
+            string key = c.Action.StartsWith("hud-jobs:", StringComparison.Ordinal) ? "JobsPanel" : "SquadPanel";
+            if (c.Name.EndsWith("-thumb", StringComparison.Ordinal)) ScrollThumbDown(key, c, p);
+            else HudScrollAction(c.Action);
             return true;
         }
         uiHost.Dispatch(c);

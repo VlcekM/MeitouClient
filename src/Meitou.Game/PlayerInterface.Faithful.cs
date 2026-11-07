@@ -140,6 +140,7 @@ sealed partial class PlayerInterface
         if (InventoryWheel(p, steps)) return true;
         if (MapWheel(p, steps)) return true;
         if (!faithfulScreens.Contains(p) && SquadBarWheel(p, steps)) return true;
+        if (JobsWheel(p, steps)) return true;
         if (SquadsWheel(p, steps)) return true;
         if (FactionWheel(p, steps)) return true;
         if (ResearchWheel(p, steps)) return true;
@@ -384,9 +385,49 @@ sealed partial class PlayerInterface
         {
             ["LineSkin"] = "Kenshi_ConnectBarSkin", ["LineHeight"] = ((int)(24 * Height / 1080f)).ToString(CultureInfo.InvariantCulture),
         };
+        b.ScrollOffsets["JobsPanel"] = inventoryScroll.GetValueOrDefault("JobsPanel");
         if (jobs.Count > 0) b.Hidden.Add("JobsPanelInfo");
         // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an order").
         else b.Text["JobsPanelInfo"] = "[" + Loc.Tr("No jobs assigned") + "]\n[" + Loc.Tr("To add jobs, hold shift key when giving an order") + "]";
+    }
+
+    bool JobsWheel(Vector2 p, float steps)
+    {
+        if (!inventoryViews.TryGetValue("JobsPanel", out var view) || !view.View.Contains(p.X, p.Y)) return false;
+        float line = 24 * Height / 1080f;
+        inventoryScroll["JobsPanel"] = Math.Clamp(inventoryScroll.GetValueOrDefault("JobsPanel") - steps * line, 0, view.Maximum);
+        return true;
+    }
+
+    void AddJobScrollBar(List<UiControl> controls)
+    {
+        int panelIndex = controls.FindIndex(c => c.Name == "JobsPanel");
+        if (panelIndex < 0) return;
+        var panel = controls[panelIndex];
+        float line = MyGuiPresentation.Num(panel.Properties, "ListLine", 24 * Height / 1080f);
+        float maximum = MyGuiPresentation.Num(panel.Properties, "ScrollMax");
+        if (maximum <= 0) { inventoryViews.Remove("JobsPanel"); inventoryTracks.Remove("JobsPanel"); return; }
+        float scroll = Math.Clamp(inventoryScroll.GetValueOrDefault("JobsPanel"), 0, maximum);
+        inventoryScroll["JobsPanel"] = scroll;
+        float barWidth = 17 * InventoryScale;
+        var view = panel.Bounds with { Width = Math.Max(0, panel.Bounds.Width - barWidth) };
+        inventoryViews["JobsPanel"] = (view, maximum);
+        for (int i = 0; i < controls.Count; i++)
+            if (controls[i].Properties.GetValueOrDefault("ListOwner") == "JobsPanel" || controls[i].Name.StartsWith("JobsPanel@row", StringComparison.Ordinal))
+                controls[i] = controls[i] with { Bounds = controls[i].Bounds with { Width = Math.Max(0, controls[i].Bounds.Width - barWidth) }, Clip = controls[i].Clip?.Intersect(view) ?? view };
+        AddScrollBar("JobsPanel", controls, new(panel.Bounds.X + panel.Bounds.Width - barWidth, panel.Bounds.Y, barWidth, panel.Bounds.Height),
+            view.Height, view.Height + maximum, scroll, maximum, panel.Clip, "hud-jobs");
+    }
+
+    void HudScrollAction(string action)
+    {
+        string[] parts = action.Split(':');
+        if (parts.Length != 3 || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float direction)) return;
+        string key = parts[0] == "hud-jobs" ? "JobsPanel" : "SquadPanel";
+        if (!inventoryViews.TryGetValue(key, out var view)) return;
+        float delta = parts[1] == "page" ? view.View.Height : 24 * Height / 1080f;
+        inventoryScroll[key] = Math.Clamp(inventoryScroll.GetValueOrDefault(key) - direction * delta, 0, view.Maximum);
+        if (key == "SquadPanel") squadBarScroll = inventoryScroll[key];
     }
 
     /// <summary>
