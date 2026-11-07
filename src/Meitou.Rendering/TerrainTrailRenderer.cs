@@ -35,8 +35,8 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     public const int Side = 2048, Snap = 64;
     public const float Texel = 0.25f;
 
-    /// <summary>A full mark's depth in world units (8 cm).</summary>
-    public const float Depth = 0.8f;
+    /// <summary>A full mark's depth in world units (12 cm).</summary>
+    public const float Depth = 1.2f;
 
     /// <summary>How far from the camera's target marks are kept: the window's half side, less the snap it can lag by.</summary>
     public const float Reach = (Side / 2 - Snap) * Texel;
