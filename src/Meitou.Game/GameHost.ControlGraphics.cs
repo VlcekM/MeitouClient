@@ -33,6 +33,11 @@ sealed partial class GameHost
             string label = args[0].StartsWith(SettingsMenu.SwitchKeyPrefix, StringComparison.Ordinal) ? args[0][SettingsMenu.SwitchKeyPrefix.Length..] : args[0], value = args[1];
             var toggleHits = Matches(panel.Toggles, t => t.Label, label);
             var sliderHits = Matches(panel.Sliders, s => s.Label, label);
+            // An exact label wins over substrings in the other list ("Light shafts" the switch, not its sliders).
+            bool exactToggle = toggleHits.Any(t => t.Label.Equals(label, StringComparison.OrdinalIgnoreCase));
+            bool exactSlider = sliderHits.Any(s => s.Label.Equals(label, StringComparison.OrdinalIgnoreCase));
+            if (exactToggle && !exactSlider) sliderHits.Clear();
+            if (exactSlider && !exactToggle) toggleHits.Clear();
             if (toggleHits.Count + sliderHits.Count != 1)
             {
                 con.Error(toggleHits.Count + sliderHits.Count == 0 ? $"gfx: no switch or slider matches \"{label}\""
