@@ -220,7 +220,7 @@ public sealed class DevConsole
             CompletionArgs = [];
         }
         var candidates = found.Distinct().Take(500).ToList();
-        if (candidates.Count == 0) return;
+        if (candidates.Count == 0) { Print(typed.Length == 0 ? "no completions here" : $"no matches for '{typed}'"); return; }
         string fill;
         if (candidates.Count == 1) fill = Quote(candidates[0], close: true) + " ";
         else
