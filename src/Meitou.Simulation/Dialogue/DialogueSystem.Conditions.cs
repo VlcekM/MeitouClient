@@ -11,7 +11,7 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// One condition (<c>FUN_140676950</c>, docs/game/dialogue.md "Conditions"): <c>who</c> 0 tests the speaker, any other value the target. Yes/no conditions pass when the computed
     /// answer equals value &gt; 0; counts compare by <c>compare by</c> (Num3: 1 &lt;, 2 &gt;, else ==; Num2: 1 &lt;, else &gt;=). Conditions whose inputs Meitou does not have
-    /// (building locks, town wall locks, strength ratings, head counts, training equipment) compute "no".
+    /// (town wall locks, strength ratings, head counts, training equipment) compute "no".
     /// </summary>
     bool Condition(World world, Conversation c, DialogueCondition dc, CharacterId me, CharacterCold mc, CharacterId other)
     {
@@ -35,14 +35,14 @@ public sealed partial class DialogueSystem
         if (dc.Condition == 12) return Num3(world.Research.TechLevel);   // the research manager's tech level (*(*(game + 0x38) + 8), FUN_140676950), whatever the subject
         if (s is null)
         {
-            // No player character at all: the faction-level test (FUN_140671530) against the player's faction; everything else passes. Not DC 11 (the speaker's own platoon, not built).
+            // No player character at all: the faction-level test (FUN_140671530) against the player's faction; everything else passes; DC 11 is the speaker's own squad's.
             int player = world.Player.Faction;
             return dc.Condition switch
             {
                 1 => Num2(player == mc.Faction ? 100 : relations.Contains(mc.Faction) && relations.Contains(player) ? (int)relations.Get(mc.Faction, player) : 0),
                 2 => Num2(world.Player.Money),
                 3 => Num2((int)relations.GlobalTrust(player)),
-                11 => !b,
+                11 => Bool(HouseLocked(world, mc)),
                 _ => true,
             };
         }
@@ -70,6 +70,7 @@ public sealed partial class DialogueSystem
             case 4 or 5:
                 return Bool(Cold(world, s.Carrying) is { } body && (body.Medical?.Dead ?? false) == (dc.Condition == 5) && (body.Bounties?.BookedAmount(data.Relations, meF) ?? 0) > 0);
             case 9: return Bool(s.SquadId >= 0 && world.Squads.Find(s.SquadId) is { } sq && data.Db.Find(sq.TemplateId)?.GetBool("is trader") == true);   // the template's flag, not its stock
+            case 11: return Bool(HouseLocked(world, mc));   // the speaker's squad, whatever `who` says
             case 14: return Bool(s.IsImprisoned);
             case 16:
             {
@@ -152,6 +153,14 @@ public sealed partial class DialogueSystem
             default: return Bool(false);
         }
     }
+
+    /// <summary>
+    /// DC 11 BUILDING_IS_CLOSED_AND_SECURED (<c>FUN_140676950</c> case 0xb): the speaker's squad's "house locked" flag (<c>homelok</c>, <c>FUN_140791ba0</c> +0xe8), which
+    /// Meitou keeps per home building (<see cref="Locks.LockSystem.IsHouseLocked"/>).
+    /// </summary>
+    static bool HouseLocked(World world, CharacterCold mc) =>
+        mc.SquadId >= 0 && world.Squads.Find(mc.SquadId) is { } squad && (squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key is { } home
+        && world.SystemOf<Locks.LockSystem>()?.IsHouseLocked(world, home) == true;
 
     /// <summary>
     /// The subject a condition about a missing target takes (<c>FUN_140676950</c>): the character the player has selected that is nearest to <paramref name="me"/> (<c>FUN_1407f4ba0</c>: squared

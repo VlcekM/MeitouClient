@@ -424,7 +424,7 @@ Talk menu's dry run is picking.
 | 7 / 8 IMPRISONED_BY_TARGET / OTHER | S caged (in-something state 2) by Me's faction (7) or another (8); when S is Me, by the target's faction; no target: !B | Bool |
 | 9 IS_A_TRADER | S's SQUAD_TEMPLATE has `is trader`, whatever the squad stocks (`FUN_1405cff70`, [who trades](economy.md#who-trades)) | Bool |
 | 10 FACTION_RANK | the player's rank in Me's faction ([faction rank](factions-squads-towns.md#32-faction-rank)), any `who` | Num3 |
-| 11 BUILDING_IS_CLOSED_AND_SECURED | Me's squad's "house locked" flag (`homelok`, platoon AI object `+0xe8` via `FUN_140791ba0`: Character `+0x658` -> `+0x78` -> `+0xf8`), the byte state 87 reads and Task_LockDoor sets ([locks](locks.md#doors); **Verified**: case 0xb of `FUN_140676950`, setter `FUN_1407933a0`); not built | Bool |
+| 11 BUILDING_IS_CLOSED_AND_SECURED | Me's squad's "house locked" flag (`homelok`, platoon AI object `+0xe8` via `FUN_140791ba0`: Character `+0x658` -> `+0x78` -> `+0xf8`), the byte state 87 reads and Task_LockDoor sets ([locks](locks.md#doors); **Verified**: case 0xb of `FUN_140676950`, setter `FUN_1407933a0`), whatever `who` says; Meitou reads its home's flag, `LockSystem.IsHouseLocked` | Bool |
 | 12 PLAYER_TECH_LEVEL | the research manager's tech level, `*(*(game + 0x38) + 8)` (**Observed**; the manager's level is the one [research](buildings-production.md#research) raises, 1 at the start), any `who` | Num3 |
 | 13 NUM_DIALOG_EVENT_REPEATS | Me's counter for the current event | Num3 |
 | 14 IS_IMPRISONED | S is caged | Bool |
@@ -583,7 +583,7 @@ bubble (`FUN_140725f30`) uses Kenshi_StandardFont_Large or _Medium, sits 4 units
 ## Unknowns
 
 T_WHOLE_SQUAD fan-out; how a childless closing line is shown in a player conversation; `isDialogDelivered`; where `crowd trigger`'s %
-is read; DA 44-46; the KO event mask; the interjector pick rule; DC 77's cap and quantity; what DC 11's flag, DC 21/22's rating and DC 39's
+is read; DA 44-46; the KO event mask; the interjector pick rule; DC 77's cap and quantity; what DC 21/22's rating and DC 39's
 counters hold; DA 15's lists, 58's field; the speech timer's unit; the unnamed short-term tags 1 and 5 (in the grudge mask).
 
 ## Meitou design
@@ -597,5 +597,5 @@ home building, else its town, else its home centre, DA 52 a run to the speaker, 
 conversation lasts; then the AI takes over (engine readings of tasks 280, 19, 67, 164). DA 28: a new NPC squad keeps the old one's template and home radius, no town, and gets a
 fresh AI mind. DA 56: loaded squads only, an attack order instead of task 29. DA 54 opens every door of the nearest gate
 building. DA 13 / 14 use `PlayerRelations.DeclareWar` / `EndWar`. "Regards as friendly" leaves out the uniform disguise. DA 5 / DC 3 use the faction global trust (`FactionRelations.GlobalTrust`, saved as `meitou global trust`); DC 12 reads `ResearchState.TechLevel`, DC 74 the highest `PopulationSystem.TownLevel` over the player's outposts, DC 73 that of the outpost within the player-town extent of the speaker (engine reading of "current town"). Not built: DA 15, 17,
-39, 58; DC 11, 21/22, 39, 49, 57, 58, 70 (inputs Meitou lacks: AI flags, the strength float, perception counters, wall tests, training equipment; the decompile facts are in the table above);
+39, 58; DC 21/22, 39, 49, 57, 58, 70 (inputs Meitou lacks: the strength float, perception counters, wall tests, training equipment; the decompile facts are in the table above);
 event 25, 31 (betrayal), 36 from the witness function, the witness cases' extra tests.
