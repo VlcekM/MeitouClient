@@ -469,7 +469,8 @@ no interior floors (a part without collision cannot be clicked, as in the origin
 collision reach below the ground; without the limit the ray, after meeting the ground, found them and the pointer showed the hammer on bare ground beside a building). The character selection stays. The HUD panels show the building as in
 [ui-screens](ui-screens.md#selected-building) (the simulation publishes the selected building's doors, `InspectBuildingCommand`); no outline
 is drawn (as the original). Selecting or inspecting a character clears it, Shift
-included (the original keeps the slot); a site that disappears clears it. Selecting plays the building's select sound ([audio](../audio.md#interface)). A house is not focused as its first door, but its panels list the
+included (the original keeps the slot); a site that disappears clears it. A left click on the ground (no character or building picked) clears it too
+(Advanced → Click away deselects, `DeselectBuildings`, default on; off keeps it, as the original). Selecting plays the building's select sound ([audio](../audio.md#interface)). A house is not focused as its first door, but its panels list the
 first door's lines before the house's, as the door's panel does ([ui-screens](ui-screens.md#selected-building)). World (town) buildings act through their
 fixtures: containers (town storages included, `search` / `scavenge` / `lockpick`), beds, cages and doors are picked, pointed at and ordered like the player's. Not built: the
 machines of a town building (crafting and research benches, generators, a town turret for the player, the furniture of a bought house): machines exist only for the sites of `World.Buildings` (player-built ones and town ruins taken over),

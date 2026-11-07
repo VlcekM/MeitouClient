@@ -296,6 +296,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 Inspect(CharacterId.None);
                 return;
             }
+            if (hit is null && other is null && DeselectBuildings) SetBuilding(null);
             Select(hit is { } id ? new[] { id } : [], shift, toggle: true);
             if (other is { } stranger) Inspect(stranger);
             else if (!shift || hit is not null) Inspect(CharacterId.None);

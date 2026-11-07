@@ -485,6 +485,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Hover outline", () => config.HoverOutline, v => config.HoverOutline = v, Remaster: true, OnOff: true)));
             result.Add(new("Building outline", "Outline and tint the selected building like a character under the cursor, except while its interior is shown.",
                 Toggle: new("Building outline", () => config.BuildingOutline, v => config.BuildingOutline = v, Remaster: true, OnOff: true)));
+            result.Add(new("Click away deselects", "A left click on the ground ends the selection of the selected building and closes its panels. In the game the building stays selected.",
+                Toggle: new("Click away deselects", () => config.DeselectBuildings, v => player.DeselectBuildings = config.DeselectBuildings = v, Remaster: true, OnOff: true)));
             result.Add(new("luckyren Mode", "A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying everywhere. Its gear falls to the ground around the spot.",
                 Toggle: new("luckyren Mode", () => config.LuckyrenMode, v => config.LuckyrenMode = v),
                 Picture: SettingsMenuArt.LuckyrenImage));
@@ -771,6 +773,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         TutorialsChanged?.Invoke(true);
         config.HoverOutline = true;
         config.BuildingOutline = true;
+        player.DeselectBuildings = config.DeselectBuildings = true;
         config.LuckyrenMode = false;
         config.GroundItemLimit = global::Meitou.Simulation.Items.GroundItems.DefaultLimit;
         player.SetUiMode(UiMode.Meitou);

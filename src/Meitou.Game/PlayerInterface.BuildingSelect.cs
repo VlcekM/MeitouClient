@@ -19,6 +19,9 @@ sealed partial class PlayerInterface
 
     SelectedBuilding? selectedBuilding;
 
+    /// <summary>A left click on the ground ends the building's selection (Advanced settings "Click away deselects"); false: it stays, as in the game.</summary>
+    public bool DeselectBuildings { get; set; } = true;
+
     /// <summary>The selected building's instance (a level building's placement key, a site's id), null when none: the building the interior editor shows.</summary>
     public string? SelectedBuildingKey => selectedBuilding?.Instance;
 
