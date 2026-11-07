@@ -2,6 +2,13 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.8.0
+
+- **The mod list saves itself**: ticking, unticking or dragging a mod, Select all / none, a preset, Arrange and From save write
+  `mods.cfg` at once, so the game always loads what the list shows. The Save mod list button is gone.
+- **Trust code mods**: one checkbox on the Mods page, on by default, lets every code mod run its own C# code; off, they load as
+  data only. It replaces the question at Play and the Code mods dialog.
+
 ## v1.7.0
 
 - **Code-mod dependencies** on the Mods page: each code mod's row shows what it requires, loads after, is incompatible with and
