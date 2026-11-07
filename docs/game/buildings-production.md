@@ -773,7 +773,9 @@ to `FUN_140836b70`: contribution k of the frame is x 0.6^k (counter `+0x174`, cl
   research load zero it (**Verified**, `FUN_140834390`, `FUN_140836cb0`, `FUN_1408360f0`). Available (`FUN_1408333b0`): not `blueprint only`, not finished or queued,
   `level` <= tech level, requirements met leniently (`FUN_140832fa0` with its flag set, **Verified**: a RESEARCH finished, another record
   unlocked, or else that record's own `requirements` all met strictly, one level, an empty list passing; blueprint learning `FUN_1402b65d0`
-  checks strictly), grouped by `category`.
+  checks strictly), grouped by `category`. The research window's queue click (`FUN_1404976c0`) checks leniently too (**Verified**, disassembly: flags 1, 1;
+  "Cannot research '{1}'. Requirements not met." otherwise), so a research one unfinished requirement away queues and completes: base Tech Level 2 needs the research
+  Small House, which needs nothing (#363). The fourth flag's extra test (`+0xd8` set, `FUN_140832e50`, only when global `+0x2a0` is set) is **Unknown**; Meitou skips it.
 - **Queue** (`FUN_1408348a0`): needs `level` <= bench level (`FUN_140830a30` names the missing level) and the cost
   paid (`FUN_1408343c0`): `cost` items (of the repetition, below) summed over the inventories of the
   player's research benches (**Verified**: `FUN_14082e750` runs a `BuildingFinderNearestAllies_Function` at the position of the camera focus node
