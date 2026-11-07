@@ -40,8 +40,30 @@ public sealed unsafe class ParticleRenderer : IDisposable
         uniform vec4 uLitVertex;                    // x 1: lit (Meitou fog switch), z the glow towards the sun
         uniform vec3 uParticleEye;                  // the eye in the world (the positions are relative to it)
         out vec3 vHazeMul, vHazeAdd;                // the haze and the fog volumes in front of the corner: colour * mul + add
-        out vec3 vWorld;                            // the corner in the world (the sun's shadow)
+        out float vSun;                             // the sun's visibility through the sprite's volume (the same at every corner)
         out float vGlow;                            // the light scattered forward when the sprite is seen towards the sun
+
+        // The sun's visibility averaged through a sprite's volume: eight bilinear compares at the corners of a cube half its size about its centre, each
+        // in the first cascade that holds it (1 beyond them). Read at each fragment of the flat quad, the shadow printed the outline of every tree and
+        // rock on every sprite, so overlapping dust showed blurred copies of them at the sprites' depths.
+        float particleSun(vec3 centre, float size)
+        {
+            float lit = 0.0;
+            for (int i = 0; i < 8; i++)
+            {
+                vec3 w = centre + (vec3(i & 1, (i >> 1) & 1, (i >> 2) & 1) - 0.5) * (0.5 * size);
+                int c = shadowCascade(w);
+                if (c < 0)
+                {
+                    lit += 1.0;
+                    continue;
+                }
+                vec3 tile = (uShadowTile[c] * vec4(w - uShadowOrigin.xyz, 1.0)).xyz;
+                lit += shadowCascadeLayer(tile.xy, c, tile.z);
+            }
+            return lit * 0.125;
+        }
+
         void main()
         {
             vec3 position = aPositionRotation.xyz;
@@ -49,11 +71,13 @@ public sealed unsafe class ParticleRenderer : IDisposable
             float height = aHeight.x;
             vSoft = clamp(0.25 * max(width, height), 2.0, 300.0);
             vec2 q = (aCorner - uAnchor) * vec2(width, height);
+            vec2 middle = -uAnchor * vec2(width, height);   // the quad's centre, as q
             vec3 right, up;
             if (uMode == 0)
             {
                 float c = cos(aPositionRotation.w), s = sin(aPositionRotation.w);
                 q = vec2(c * q.x - s * q.y, s * q.x + c * q.y);
+                middle = vec2(c * middle.x - s * middle.y, s * middle.x + c * middle.y);
                 right = uCameraRight;
                 up = uCameraUp;
             }
@@ -81,13 +105,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
             vDepth = gl_Position.w;
             vUv = vec2(aCorner.x + 0.5, 0.5 - aCorner.y);
             vColour = vec4(aColour.rgb * uColourScale.rgb, aColour.a * uColourScale.a);
-            vWorld = uParticleEye + world;
             vHazeMul = vec3(1.0);
             vHazeAdd = vec3(0.0);
+            vSun = 1.0;
             vGlow = 1.0;
             if (uLitVertex.x > 0.5)
             {
-                atmoApplyCoefficients(uParticleEye, vWorld, vHazeMul, vHazeAdd);
+                vSun = particleSun(uParticleEye + position + right * middle.x + up * middle.y, max(width, height));
+                atmoApplyCoefficients(uParticleEye, uParticleEye + world, vHazeMul, vHazeAdd);
                 // And the placed fog volumes and the effects' fog spheres in front of it, blended over that as the game blends them over the hazed scene
                 // (the sprites came after them, so a dust cloud behind a fog bank showed through it).
                 float dist = length(world);
@@ -101,21 +126,13 @@ public sealed unsafe class ParticleRenderer : IDisposable
         }
         """;
 
-    static readonly string Fragment = "#version 330 core\n" + ShadowShaders.Functions + """
-
+    static readonly string Fragment = """
+        #version 330 core
         in vec2 vUv;
         in vec3 vHazeMul, vHazeAdd;
-        in vec3 vWorld;
+        in float vSun;
         in float vGlow;
         uniform vec4 uLitFragment;                  // x 1: lit (Meitou fog switch), y how much of the light the sun's shadow takes, z 0 alpha blend, 1 additive, 2 neither
-        // The sun's visibility at a point of the air: one bilinear compare in the first cascade that holds it (1 beyond them).
-        float particleSun(vec3 w)
-        {
-            int c = shadowCascade(w);
-            if (c < 0) return 1.0;
-            vec3 tile = (uShadowTile[c] * vec4(w - uShadowOrigin.xyz, 1.0)).xyz;
-            return shadowCascadeLayer(tile.xy, c, tile.z);
-        }
         in vec4 vColour;
         in float vDepth;
         in float vSoft;
@@ -138,8 +155,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
             {
                 if (uLitFragment.z < 0.5)
                 {
-                    float sun = particleSun(vWorld);
-                    c.rgb *= (1.0 - uLitFragment.y * (1.0 - sun)) * mix(1.0, vGlow, sun);
+                    c.rgb *= (1.0 - uLitFragment.y * (1.0 - vSun)) * mix(1.0, vGlow, vSun);
                     c.rgb = c.rgb * vHazeMul + vHazeAdd;
                 }
                 else c.rgb *= vHazeMul;

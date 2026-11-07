@@ -126,12 +126,14 @@ nearest or farthest depth written to an R32F target beside it.
 **Observed** (the Eye's storm, quarter-size particles): the row of dark beads where the dust meets a dune ridge is fainter.
 The game's sprites are flat (texture × colour × vertex colour × the material's ambient factor) and not fogged, so a dust cloud had one
 brightness in sun and in shade, near and far, and showed through fog banks. With the same switch Meitou lights alpha sprites
-(`ParticleRenderer.Lit`): the sun's visibility at each fragment (one bilinear compare in its cascade) takes the light shafts' darkening
+(`ParticleRenderer.Lit`): the sun's visibility through each sprite's volume (eight bilinear compares at a cube half its size about its
+centre, one value per sprite) takes the light shafts' darkening
 (the sun's share of the light) where it is shadowed, a glow towards the sun (1 + 0.5 cos⁸) where it is not, then the haze and the
 placed fog volumes in front of each corner (`atmoApplyCoefficients`, `fogVolumesAccumulate`) as `colour · mul + add`; additive
 sprites take only the haze's and the volumes' `mul`. **Observed** (mec-tou-nu save): distant clouds fade into the haze like the land
 behind them, dust over shaded slopes darker; mec-tou-nu2 (Skinner's Roam, a fog bank): the dark dust that showed through it gone;
-the Hub at 14:00 within 0.7/255 (99th percentile).
+the Hub at 14:00 within 0.7/255 (99th percentile). Read per fragment instead, the shadow printed each tree's and rock's outline on
+every flat sprite: **Observed** (2026-11-07, dust over a cliff and a canyon, shafts off) as blurred, offset tree silhouettes in the dust.
 The Metal chain has no copy: its sprites stay hard-edged.
 
 Fog shading rate (`FogShadingRate`): build tile rates from completed scene depth/fog; frame N's
