@@ -7,7 +7,9 @@ gameplay water stays Y100. Evolution follows the game clock and stops paused.
 ## Surface and waves
 
 Faithful: flat surface and game shading/reflection rules. Meitou: camera-centred polar grid,
-default256 segments; `--water-grid 128` reduces geometry with visible quality differences.
+default256 segments; `--water-grid 128` reduces geometry with visible quality differences. The grid's triangles are drawn from
+the outer rings in (the eye's fan last): the water writes no depth, so a displaced crest in front of water further out must be drawn after it,
+else the water behind a wave showed through it.
 Three256² FFT cascades cover250/47/9m tiles with separate wave-number bands. JONSWAP wind spectrum,
 mirror-conjugate coefficients and normalized directional spreading; zero/Nyquist/out-of-band
 modes excluded. Evolve omega=sqrt(g*k), quantized to2pi/600s; modulo clock keeps phases precise.
@@ -34,7 +36,8 @@ came from, thinned by land and walls beside its way (0.1 each, not those ahead),
 break distance from the local floor slope); past the break and in a film their height is held to 0.78 of the depth. Per-wave size noise rides with the
 wave. The breaker face's glow shows only within 80 units of the break (along the whole swell it drew a band ahead of every crest).
 Surf foam lies where noise clumps and blotches in the wave's frame pass a narrow threshold
-(rising with its age, holes even when fresh, frayed by the rims), shaded by two turned networks of fine bubble rims (4.5 and 11.3 per 100 units); no cells. The waterline: no still foam
+(rising with its age, holes even when fresh, frayed by the rims), shaded by two turned networks of fine bubble rims (4.5 and 11.3 per 100 units) within 40 units of the eye, the foam
+texture's larger rims from 150 units (fine rims average away to a flat white there; the large ones only read as cells near). The waterline: no still foam
 ring (an exposed shore gets a little with each wave). On the swash the foam's lace rides the sheet: shifted by level / beach slope along the
 waves' way, so it runs up with the uprush and back with the backwash; the sand behind dries in patches (two noises, 9 and 23 units) over the wave's cycle. Contact foam needs 2.5 to 4.5 units of standing (the ground relief made false lines). The water's
 edge fades over 2 units along the ray and 0.6 of depth, whichever is longer (0.5 and 0.2 for the swash), smoothstepped. Ponds and sheltered water: the
@@ -106,6 +109,10 @@ Meitou look, not in the game; the `contactfoam` switch (Tab "Water contact foam,
   5 us for the write-out; 19 to 35 us for the 3 steps of a 1/30 s frame (about half that per frame at 60 fps). The water fragment's extra cost (one bilinear fetch and
   a few operations) is **Unknown**, not measured apart. Nothing runs while the switch is off, no water lies in the window, the nearest water in view is past 1200
   units, or no body has been in the water for 20 game seconds (the field is then left as it is). The depth map is baked again every 120 frames (terrain streaming).
+- **Faults**: a body capsule not finite, with a radius outside 0..30 units or far from the window is dropped (counted at exit, the first one logged);
+  a depth not finite is land; every state value is bounded (height ±4 units, rate ±200, foam 0..1) and one not finite is reset to 0 when read and
+  written, and the water reads a bad texel as calm, so no single fault spreads through the field or raises the water over the land (it once drew the
+  whole window black).
 - **Unknown**: capsules from axis-aligned pick boxes are rough for bones slanted in the binding pose; no splash particles; objects and projectiles do not push the water;
   the fixed wave speed cap gives shallow-water (non-dispersive) wakes in deep water too, not the 19.5-degree Kelvin wedge.
 

@@ -38,6 +38,8 @@ internal static class ShoreTravel
     /// </summary>
     public static void Bake(float[] depth, float[] dist, int n, float texel, float x0, float z0, IReadOnlyList<(Vector2 A, Vector2 B)>? walls, float[] travel, float[] swell)
     {
+        for (int k = 0; k < n * n; k++)
+            if (!float.IsFinite(depth[k])) depth[k] = -1;   // a height that is not a number is land: it cannot spread through the march
         var blocked = Walls(walls, n, texel, x0, z0);
         float seedDepth = SeedDepth(depth, blocked);
         var settled = new bool[n * n];
@@ -67,6 +69,11 @@ internal static class ShoreTravel
             if (float.IsInfinity(travel[k])) travel[k] = Plane(k, n, texel, x0, z0);
         Soften(travel, blocked, n, 16);
         Soften(swell, blocked, n, 2);
+        for (int k = 0; k < n * n; k++)
+        {
+            if (!float.IsFinite(travel[k])) travel[k] = Plane(k, n, texel, x0, z0);
+            if (!float.IsFinite(swell[k])) swell[k] = 0;
+        }
     }
 
     /// <summary>

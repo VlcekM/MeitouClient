@@ -130,6 +130,12 @@ public sealed unsafe class WaterRipples : IDisposable
         var max = new Vector2(float.MinValue);
         foreach (var c in parts)
         {
+            // A pose with a broken bone (not finite, or absurd) pushes nothing: one bad value would spread over the whole field.
+            if (!Sane(c))
+            {
+                if (dropped++ == 0) Console.WriteLine($"water     ripples: dropped a body capsule ({c.A} to {c.B}, radius {c.Radius}): not finite or absurd");
+                continue;
+            }
             if (capsules == MaxCapsules) break;
             int at = MaxGroups * 2 + capsules * 2;
             bodies[at] = new Vector4(c.A, c.Radius);
@@ -143,6 +149,17 @@ public sealed unsafe class WaterRipples : IDisposable
         bodies[groups * 2 + 1] = new Vector4(groupStart, capsules - groupStart, 0, 0);
         groups++;
     }
+
+    /// <summary>A capsule the field can take: finite, a radius over 0 and under <see cref="MaxRadius"/>, and within the window's reach of its centre.</summary>
+    bool Sane(in WaterBody c) =>
+        float.IsFinite(c.A.X) && float.IsFinite(c.A.Y) && float.IsFinite(c.A.Z) && float.IsFinite(c.B.X) && float.IsFinite(c.B.Y) && float.IsFinite(c.B.Z)
+        && c.Radius > 0 && c.Radius < MaxRadius && Vector3.DistanceSquared(c.A, focus) < 4 * Reach * Reach && Vector3.DistanceSquared(c.A, c.B) < MaxRadius * MaxRadius * 16;
+
+    /// <summary>Capsules dropped by <see cref="Sane"/> (reported at the end).</summary>
+    long dropped;
+
+    /// <summary>The thickest capsule a body may have (units): a box larger than this is a broken pose or mesh, not a limb.</summary>
+    const float MaxRadius = 30;
 
     /// <summary>
     /// The frame's work, before the scene: the window moved to the focus (the depth map baked again from <paramref name="heights"/> when it moved), the steps of game time
@@ -189,7 +206,8 @@ public sealed unsafe class WaterRipples : IDisposable
             for (int i = 0; i < DepthSide; i++)
             {
                 float wx = (dx + i + 0.5f) * DepthTexel, wz = (dz + j + 0.5f) * DepthTexel;
-                float d = Math.Max(WorldWater.Height - heights.HeightAt(wx, wz), 0);
+                float d = WorldWater.Height - heights.HeightAt(wx, wz);
+                d = float.IsFinite(d) ? Math.Max(d, 0) : 0;
                 anyWater |= d > 0;
                 depths[Wrap(dz + j, DepthSide) * DepthSide + Wrap(dx + i, DepthSide)] = d;
             }
@@ -394,7 +412,15 @@ public sealed unsafe class WaterRipples : IDisposable
             return min(sum, top);
         }
 
-        vec4 load(ivec2 i) { uvec2 u = a[at(i)]; return vec4(unpackHalf2x16(u.x), unpackHalf2x16(u.y)); }
+        // Bounds of the state (height, rate, foam, water taken): a value outside them, or not finite, is a fault, and is dropped to 0 (one bad cell
+        // spread through the Laplacian would take the whole field, and the water drawn from it, with it).
+        const vec4 Low = vec4(-4.0, -200.0, 0.0, 0.0), High = vec4(4.0, 200.0, 1.0, BodyDepth);
+        vec4 sane(vec4 x)
+        {
+            bvec4 bad = bvec4(isnan(x.x) || isinf(x.x), isnan(x.y) || isinf(x.y), isnan(x.z) || isinf(x.z), isnan(x.w) || isinf(x.w));
+            return any(bad) ? vec4(0.0) : clamp(x, Low, High);
+        }
+        vec4 load(ivec2 i) { uvec2 u = a[at(i)]; return sane(vec4(unpackHalf2x16(u.x), unpackHalf2x16(u.y))); }
         uvec2 pack(vec4 s) { return uvec2(packHalf2x16(s.xy), packHalf2x16(s.zw)); }
 
         void advance(ivec2 i, ivec2 w)
@@ -402,6 +428,7 @@ public sealed unsafe class WaterRipples : IDisposable
             vec4 s = load(i);
             vec2 p = (vec2(w) + 0.5) * Texel;
             float column = depthAt(p);
+            if (isnan(column) || isinf(column)) column = 0.0;
             if (column <= 0.0)
             {
                 b[at(i)] = uvec2(0u);   // land: the waves stop at the shore
@@ -435,7 +462,7 @@ public sealed unsafe class WaterRipples : IDisposable
             vec2 slope = vec2(e.x - we.x, n.x - so.x) / (2.0 * Texel);
             foam = max(foam, 0.7 * smoothstep(0.45, 0.9, length(slope)) * smoothstep(0.5, 2.0, column));   // no crest foam in a film
             foam = mix(foam, (n.z + so.z + e.z + we.z) * 0.25, min(pc.dt * 2.0, 1.0)) * exp(-pc.dt * 1.1 / FoamLife);
-            b[at(i)] = pack(vec4(h, v, foam, took));
+            b[at(i)] = pack(sane(vec4(h, v, foam, took)));
         }
 
         void main()
@@ -458,6 +485,7 @@ public sealed unsafe class WaterRipples : IDisposable
 
     public void Dispose()
     {
+        if (dropped > 0) Console.WriteLine($"water     ripples: {dropped} body capsules dropped (not finite or absurd)");
         if (GpuTimed > 0)
             Console.WriteLine(string.Create(System.Globalization.CultureInfo.InvariantCulture,
                 $"water     ripples: gpu us per frame {GpuMicroseconds / GpuTimed:F1}, of which steps {StepMicroseconds / GpuTimed:F1} ({(double)StepsTimed / GpuTimed:F2} a frame; {GpuTimed} timed)"));

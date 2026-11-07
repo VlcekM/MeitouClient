@@ -496,6 +496,14 @@ public sealed unsafe class WaterRenderer : IDisposable
 
         // Where p is in the ripples' image, and how much of the field shows there (fading out over the window's last 12 units).
         vec2 rippleUv(vec2 p) { return (p - uRippleWindow.xy) * uRippleShape.y + uRippleWindow.zw; }
+        // The field's texel, bounded: a value not finite reads as calm water (never a hole or a raised sheet over the land).
+        vec4 rippleAt(vec2 p, float lod)
+        {
+            vec4 r = textureLod(uRippleMap, rippleUv(p), lod);
+            if (isnan(r.x) || isnan(r.y) || isnan(r.z) || isnan(r.w) || isinf(r.x) || isinf(r.y) || isinf(r.z) || isinf(r.w)) return vec4(0.0);
+            return clamp(r, vec4(-4.0, -2.0, -2.0, 0.0), vec4(4.0, 2.0, 2.0, 1.0));
+        }
+
         float rippleWeight(vec2 p)
         {
             vec2 d = abs(p - uRippleWindow.xy);
@@ -538,7 +546,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             #ifdef WATER_CONTACT
             // The interactive waves' height, only where the vertices are close enough to carry it (further out the fragment's normals do).
             float rw = r < 1.0e5 ? rippleWeight(p) * (1.0 - smoothstep(1.0, 3.0, max(r, 1.0) * uGridStep / uRippleShape.z)) : 0.0;
-            if (rw > 0.0) w.y += textureLod(uRippleMap, rippleUv(p), 0.0).r * rw;
+            if (rw > 0.0) w.y += rippleAt(p, 0.0).r * rw;
             #endif
             vBase = p;
             vWorld = w;
@@ -783,7 +791,7 @@ public sealed unsafe class WaterRenderer : IDisposable
             if (rippleW > 0.0)
             {
                 // The field has one level: where a pixel spans several of its texels the waves are smaller than it, and fade out (the foam stays).
-                ripple = textureLod(uRippleMap, rippleUv(p), 0.0) * rippleW;
+                ripple = rippleAt(p, 0.0) * rippleW;
                 ripple.xyz *= 1.0 - smoothstep(1.5, 4.0, max(length(dpx), length(dpy)) / uRippleShape.z);
             }
             slope -= ripple.yz;
@@ -961,7 +969,7 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // Along the shore the breakers break harder in some stretches than others, and not at all in a few.
                 float stretch = smoothstep(0.2, 0.75, textureGrad(uFoamMap, p * 0.0011, dpx * 0.0011, dpy * 0.0011).g);
                 float surfFoam = max(max(burst * 1.3, bore * 0.9), max(trail * 1.1, feather * 0.6)) * min(s.size * 1.1, 1.3) * mix(0.275, 1.0, s.brk);
-                surfAmount = min(surfFoam * surfZone * (0.525 + 0.725 * stretch) * (0.825 + 0.4 * clump) * 1.5, 0.95);   // capped: the lace shows through even the thickest whitewater
+                surfAmount = min(surfFoam * surfZone * (0.525 + 0.725 * stretch) * (0.825 + 0.4 * clump) * 1.65, 0.95);   // capped: the lace shows through even the thickest whitewater
             }
             // At the waterline of an exposed shore a little foam comes in with each wave and wears off before the next (a pond's edge has none: it stood still).
             amount = max(amount, (1.0 - smoothstep(0.0, 4.0, abs(s.dist))) * 0.3 * s.open * (1.0 - sinceCrest) * fade);
@@ -1014,11 +1022,13 @@ public sealed unsafe class WaterRenderer : IDisposable
                 // networks of bubble rims, turned and scaled against each other so neither reads as cells (one network, large, read as bricks and cracks up close),
                 // which only shade it, so even the densest whitewater is not a flat white sheet.
                 float lace = smoothstep(0.15, 0.9, clump) * 0.45 + b1.g * 0.35 + b2.g * 0.2;
-                float wear = 0.3 + age * 0.45;   // even fresh whitewater has holes
+                float wear = 0.2 + age * 0.4;   // even fresh whitewater has holes
                 float surf = surfAmount * mix(0.7, 1.0, clean);
                 // The rims also fray its edges, which stay crisp (a narrow threshold) rather than soft blobs.
-                float cover = smoothstep(0.95 - surf + wear, 1.03 - surf + wear + 0.05 * age, lace + (fine - 0.3) * 0.3);
-                foam = max(foam, cover * mix(0.5, 1.0, fine * 0.5 + b2.g * 0.5));
+                // Up close the fine rims; further out (where they average away to a flat white) the texture's larger rims, which only read as cells near.
+                float rims = mix(fine, max(b1.r, b2.r), smoothstep(40.0, 150.0, dist));
+                float cover = smoothstep(0.95 - surf + wear, 1.03 - surf + wear + 0.05 * age, lace + (rims - 0.3) * 0.35);
+                foam = max(foam, cover * mix(0.5, 1.0, rims * 0.6 + b2.g * 0.4));
             }
             foam *= mix(0.8, 0.92, clean);
             // The shadow receiver takes derivatives, so it runs here and not inside the foam's branch, and only within 8000 units (where it is
@@ -1341,10 +1351,12 @@ public sealed unsafe class WaterRenderer : IDisposable
             }
         var indices = new List<uint>(segments * 3 + (radii.Count - 1) * segments * 6);
         uint V(int ring, int s) => (uint)(1 + ring * segments + (s % segments));
-        for (int s = 0; s < segments; s++) indices.AddRange([0u, V(0, s + 1), V(0, s)]);
-        for (int ring = 0; ring + 1 < radii.Count; ring++)
+        // Far rings first, the eye's fan last: the water writes no depth, so where a displaced crest stands in front of water further out the nearer
+        // triangle must come later to cover it (drawn near first, the water behind a wave showed through it).
+        for (int ring = radii.Count - 2; ring >= 0; ring--)
             for (int s = 0; s < segments; s++)
                 indices.AddRange([V(ring, s), V(ring, s + 1), V(ring + 1, s + 1), V(ring, s), V(ring + 1, s + 1), V(ring + 1, s)]);
+        for (int s = 0; s < segments; s++) indices.AddRange([0u, V(0, s + 1), V(0, s)]);
         return (positions, indices.ToArray());
     }
 
