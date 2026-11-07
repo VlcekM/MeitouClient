@@ -216,21 +216,23 @@ sealed partial class GameHost
             con.Print($"bandits-loot {(session.World.Player.BanditsLoot ? "on" : "off")}");
         });
 
-        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]]", "--aggro: also arm the spawn (weapon item, default Katana) and order it to attack the lead of the squad (test aid for fights); spawn a hostile character (default record 'Dust Bandit') at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); --ko / --dead leave a body to test loot, carry and first aid on", (args, con) =>
+        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|id|name>]", "--faction: the faction of the spawn (default the one its record lists; player: the player's faction, so it can be selected and ordered and fights nobody of the squad; a faction id or name); --aggro: also arm the spawn (weapon item, default Katana) and order it to attack the lead of the squad (test aid for fights); spawn a hostile character (default record 'Dust Bandit') at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); --ko / --dead leave a body to test loot, carry and first aid on", (args, con) =>
         {
             if (!loaded(con)) return;
             bool dead = args.Contains("--dead", StringComparer.OrdinalIgnoreCase), ko = false;
             var plain = new List<string>();
             bool aggro = false;
+            string? factionName = null;
             string weapon = "Katana";
             for (int a = 0; a < args.Count; a++)
             {
                 if (args[a].Equals("--dead", StringComparison.OrdinalIgnoreCase)) continue;
                 if (args[a].Equals("--aggro", StringComparison.OrdinalIgnoreCase)) { aggro = true; if (a + 1 < args.Count && !args[a + 1].StartsWith("--")) weapon = args[++a]; continue; }
                 if (args[a].Equals("--ko", StringComparison.OrdinalIgnoreCase)) { ko = true; continue; }
+                if (args[a].Equals("--faction", StringComparison.OrdinalIgnoreCase) && a + 1 < args.Count) { factionName = args[++a]; continue; }
                 plain.Add(args[a]);
             }
-            if (plain.Count < 2 || !Num(plain[0], out float x) || !Num(plain[1], out float z) || (ko && dead) || (aggro && (ko || dead))) { con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]]"); return; }
+            if (plain.Count < 2 || !Num(plain[0], out float x) || !Num(plain[1], out float z) || (ko && dead) || (aggro && (ko || dead))) { con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|id|name>]"); return; }
             string record = plain.Count > 2 ? string.Join(' ', plain.Skip(2)) : "Dust Bandit";
             if (DebugRecord(record, character: true) is not { } npc) { con.Error($"spawn-at: no character record matches '{record}'"); return; }
             string? weaponId = null;
@@ -240,7 +242,7 @@ sealed partial class GameHost
                 weaponId = w.Id;
             }
             var before = new HashSet<CharacterId>(player.ControlCharactersNear(x, z).Select(c => c.Id));
-            session.World.Commands.Enqueue(new DebugSpawn(npc.Id, new System.Numerics.Vector2(x, z)) { Tick = session.World.Tick });
+            session.World.Commands.Enqueue(new DebugSpawn(npc.Id, new System.Numerics.Vector2(x, z), factionName) { Tick = session.World.Tick });
             var pending = new ControlSpawn(currentControlId ?? "0", before, x, z, ko, dead, Stopwatch.GetTimestamp() + 5 * Stopwatch.Frequency) { Aggro = aggro, Weapon = weaponId };
             if (session.Simulation.IsPaused)
             {
@@ -265,7 +267,7 @@ sealed partial class GameHost
         error = "the character did not appear";
         if (s.Found.IsNone)
         {
-            var hits = player.ControlCharactersNear(s.X, s.Z).Where(c => !c.Player && !s.Before.Contains(c.Id) && c.Dist < 300).OrderBy(c => c.Dist).ToList();
+            var hits = player.ControlCharactersNear(s.X, s.Z).Where(c => !s.Before.Contains(c.Id) && c.Dist < 300).OrderBy(c => c.Dist).ToList();
             if (hits.Count == 0) return false;
             s.Found = hits[0].Id;
         }

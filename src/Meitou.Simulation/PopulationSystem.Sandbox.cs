@@ -46,6 +46,41 @@ public sealed partial class PopulationSystem
         return id;
     }
 
+    /// <summary>
+    /// A <see cref="DebugSpawn"/>: in <see cref="DebugSpawn.Faction"/> when it names one ("player": the player's faction, so the character can be selected and ordered; else a faction id or name),
+    /// else in the faction its record lists (the first hostile one for a record that lists none).
+    /// </summary>
+    void SpawnDebug(World world, DebugSpawn spawn)
+    {
+        int variant = ++debugSpawns;
+        if (spawn.Faction is { Length: > 0 } name)
+        {
+            if (name.Equals("player", StringComparison.OrdinalIgnoreCase))
+            {
+                SpawnSandbox(world, spawn.Record, spawn.At, player: true, variant: variant);
+                return;
+            }
+            int named = FactionNamed(name);
+            if (named >= 0)
+            {
+                SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: named);
+                return;
+            }
+        }
+        int own = data.Db.Find(spawn.Record)?.GetReferences("faction").Select(f => data.FactionIndex(f.TargetStringId)).FirstOrDefault(i => i >= 0) ?? -1;
+        SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: own >= 0 ? own : null);
+    }
+
+    /// <summary>The position of the faction with this record id or name (any case), or -1.</summary>
+    public int FactionNamed(string name)
+    {
+        int byId = data.FactionIndex(name);
+        if (byId >= 0) return byId;
+        for (int i = 0; i < data.Factions.Count; i++)
+            if (data.Factions[i].Name.Equals(name, StringComparison.OrdinalIgnoreCase) || data.Factions[i].BaseName.Equals(name, StringComparison.OrdinalIgnoreCase)) return i;
+        return -1;
+    }
+
     /// <summary><see cref="SpawnSandbox"/>'s faction: <paramref name="faction"/>, else the player's, else (an NPC) the first faction hostile to the player's.</summary>
     int SandboxFaction(bool player, int? faction)
     {

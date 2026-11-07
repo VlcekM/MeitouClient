@@ -97,7 +97,7 @@ c help                                # one usage line per command; `c help <nam
 | `mouse` | `mouse <x> <y>` |
 | `observe` | `observe [--radius <m>] [--full] \| observe --brief [--changed]` |
 | `operate` | `operate <building id>` |
-| `order` | `order move <x> <z> [--queue] [--wait <s> [--stuck <s>]] \| order attack <id>` |
+| `order` | `order move <x> <z> [--queue] [--wait <s> [--stuck <s>]] [--id <c:slot.gen>] \| order attack <id>` (`--id`: that one character, whatever its faction, an NPC or an animal, instead of the selection; not with `--wait`) |
 | `path-check` | `path-check <x1> <z1> <x2> <z2> \| path-check --id <c:slot.gen> <x> <z>` |
 | `pause` | `pause` |
 | `pickup` | `pickup <item id \| nearest>` |
@@ -114,7 +114,7 @@ c help                                # one usage line per command; `c help <nam
 | `screenshot` | `screenshot <png path>` |
 | `select` | `select <id...> \| select --squad \| select --none  [--add]` |
 | `spawn` | `spawn "<character record>"` |
-| `spawn-at` | `spawn-at <x> <z> [record] [--ko \| --dead]` |
+| `spawn-at` | `spawn-at <x> <z> [record] [--ko \| --dead] [--aggro [weapon]] [--faction <player\|id\|name>]` (faction: by default the one the record lists, a record without one the first faction hostile to the player; `player` puts it in the player's faction so it fights nobody of the squad; an id or a name forces that faction) |
 | `speed` | `speed <0\|1\|2\|5>` |
 | `stance` | `stance block\|hold\|passive\|ranged\|taunt\|sneak\|jobs [on\|off]` |
 | `state` | `state` |

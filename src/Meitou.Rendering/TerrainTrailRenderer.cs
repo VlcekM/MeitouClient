@@ -35,8 +35,8 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     public const int Side = 2048, Snap = 64;
     public const float Texel = 0.25f;
 
-    /// <summary>A full mark's depth in world units (8 cm).</summary>
-    public const float Depth = 0.8f;
+    /// <summary>A full mark's depth in world units (12 cm).</summary>
+    public const float Depth = 1.2f;
 
     /// <summary>How far from the camera's target marks are kept: the window's half side, less the snap it can lag by.</summary>
     public const float Reach = (Side / 2 - Snap) * Texel;
@@ -132,10 +132,13 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             return length(q - vec2(0.0, mix(-0.42, 0.38, t))) - mix(0.17, 0.26, t);
         }
 
+        // A foot or paw print: the shape's edge and depth carry the image's noise (a ragged edge, a print pressed a little deeper in one place), the same for every stamp on that ground.
         void shape(float d, float strength)
         {
-            float press = smoothstep(0.02, -0.12, d);
-            float rim = exp(-pow((d - 0.07) / 0.07, 2.0)) * 0.3;
+            float n = vnoise(8.0), m = vnoise(16.0);
+            d += (n - 0.5) * 0.07 + (m - 0.5) * 0.04;
+            float press = smoothstep(0.02, -0.12, d) * (0.85 + 0.15 * n);
+            float rim = exp(-pow((d - 0.07) / 0.07, 2.0)) * 0.3 * (0.7 + 0.6 * m);
             fragColour = vec4((rim - press) * strength, 0.0, 0.0, smoothstep(0.26, 0.14, d));
         }
 

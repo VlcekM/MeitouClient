@@ -348,6 +348,15 @@ sealed partial class PlayerInterface
         return true;
     }
 
+    /// <summary>A move order for one character of any faction (an NPC, an animal), given straight to the world; false with the reason when it does not exist.</summary>
+    public bool ControlMoveCharacter(CharacterId id, float x, float z, bool queued, out string message)
+    {
+        if (ControlCharacter(id) is null) { message = $"refused: no character {CharacterKey(id)}"; return false; }
+        session.World.Commands.Enqueue(new MoveOrder([id], new Vector3(x, ground(x, z), z)) { Tick = session.World.Tick, Queued = queued });
+        message = $"move issued to {CharacterKey(id)} at {x:0.#} {z:0.#}{(queued ? " (queued)" : "")}";
+        return true;
+    }
+
     /// <summary>An attack order on a character (the quick right click's <see cref="Meitou.Simulation.Combat.AttackOrder"/>); false with the reason when it cannot be given.</summary>
     public bool ControlAttack(CharacterId target, out string message)
     {
