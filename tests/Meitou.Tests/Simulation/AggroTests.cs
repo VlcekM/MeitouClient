@@ -421,6 +421,28 @@ public class AggroTests
         Assert.False(senses.Knows(target), "dropped once its life is over");
     }
 
+    /// <summary>
+    /// Playing dead (docs/game/ragdolls.md "Playing dead"): a knocked-out raider with a villager in view and no ally lies on once its knockout ends, and gets up once the villager is down.
+    /// Catches a downed character's senses fading to zero enemies, so it always read safe and never played dead.
+    /// </summary>
+    [Fact]
+    public void A_knocked_out_character_plays_dead_while_an_enemy_is_in_view()
+    {
+        using var a = Make(5, 1, settings: new AggroSettings { AttackOnSight = false });
+        var o = new Vector2(2000, 2000);
+        var raider = a.Squad(Raiders, o, o).Members[0];
+        var villager = a.Squad(Villagers, o + new Vector2(0, 60), o + new Vector2(0, 60)).Members[0];   // straight ahead of the raider (yaw 0 faces +Z)
+        a.World.RunTicks(40);
+        var medical = a.World.Characters.Cold(raider.Slot)!.Medical!;
+        medical.KnockOut(3f);
+        for (int t = 0; t < 2000 && medical.Incapacitated && !medical.PlayingDead; t++) a.World.RunTick();
+        Assert.True(medical.PlayingDead, "lies on while the villager is in view");
+
+        a.World.Characters.Cold(villager.Slot)!.Medical!.KnockOut(1000f);
+        for (int t = 0; t < 200 && medical.Incapacitated; t++) a.World.RunTick();
+        Assert.False(medical.Incapacitated, "gets up once the enemy is down");
+    }
+
     // The shop scenarios (docs/game/ai-tasks.md "Combat goals"): 0 the town (the shop's; it hates the bandits), 1 bandits (they hate nobody, so they start no fight), 2 drifters.
     const int Town = 0, Bandits = 1, Drifters = 2;
 
