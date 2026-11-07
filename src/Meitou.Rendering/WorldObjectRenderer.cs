@@ -1013,7 +1013,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             {
                 if (!InteriorView.ContainsKey(room.PlacementId) || construction is { } sites && sites.ContainsKey(room.PlacementId)) continue;
                 var p = new Vector3(target.X, Math.Clamp(target.Y, room.YMin, room.YMax), target.Z);
-                if (room.Contains(p, 64) && room.Covered(p)) return p;
+                if (room.Contains(p, 64) && room.Covered(p, InteriorDebug.CoverIgnoresHiddenFloors && InteriorView.TryGetValue(room.PlacementId, out int shown) ? shown : int.MaxValue)) return p;
             }
         return null;
     }
@@ -1029,6 +1029,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     bool InteriorHidden(PlacedMesh p)
     {
+        if (InteriorDebug.HideMesh is { } hide && p.Kind == PlacedKind.BuildingPart && p.MeshPath.Contains(hide, StringComparison.OrdinalIgnoreCase)) return true;
         if (p.Kind != PlacedKind.BuildingPart) return false;
         if (p.DoorIndex >= 0 && !p.Interior) return false;
         if (InteriorView.Count == 0 || !p.Interior && (p.Floor == 0 || AllFloors)) return p.Interior;
@@ -1168,7 +1169,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
         // A shadow pass keeps what the floor view hides above the viewed floor, so a lower floor stays shaded under its ceiling (docs/render-objects.md
         // "Closed interiors"): only a closed building's interior parts stay out.
-        if ((depthPass ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
+        if ((depthPass && !InteriorDebug.ShadowsLeaveOutHidden ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
         if (inst.Placed.DoorIndex >= 0) PoseDoor(inst, gpu);
         if (inst.Placed.Joints is not null) PoseJoints(inst, gpu);
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;

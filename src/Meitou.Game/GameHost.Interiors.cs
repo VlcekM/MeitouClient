@@ -54,6 +54,7 @@ sealed partial class GameHost
         foreach (var c in characters)
             if (c.IsPlayer && objects.InteriorAt(DrawnPosition(c), InsideMargin) is { } building && interiorView.TryAdd(building.PlacementId, viewedFloor))
                 viewed.Add(building);
+        ApplyForcedInteriorView(objects);
         HoldLeftOpen(objects);
         objects.InteriorView = interiorView;
         objects.CutIntoViewed = config.FixPartsInBuildings;        objects.HiddenItems = hiddenGroundKeys;
