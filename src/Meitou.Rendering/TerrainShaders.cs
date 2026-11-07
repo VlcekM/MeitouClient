@@ -408,9 +408,42 @@ static partial class TerrainShaders
         uniform sampler2D uTrails;     // the marks' height: 0 untouched, -1 pressed in full, above 0 a rim; texel = world mod side
         uniform vec4 uTrailWindow;     // the window's centre x, z, half its side, 1 / its side
         uniform float uTrailDepth;     // a full mark's depth in world units
+        uniform sampler2D uTrailsFine; // the fine image: x the height, y 1 where a mark was recorded; its window below (half 0: none)
+        uniform vec4 uTrailFineWindow;
 
-        // The marks' height at xz in world units (the repeat sampler wraps it).
-        float trailHeightAt(vec2 xz) { return textureLod(uTrails, xz * uTrailWindow.w, 0.0).r * uTrailDepth; }
+        // The fine image at uv (a cubic B-spline through four bilinear reads, so no texel shows in the normals the marks give).
+        vec2 trailFineAt(vec2 uv)
+        {
+            vec2 size = vec2(textureSize(uTrailsFine, 0));
+            vec2 x = uv * size - 0.5;
+            vec2 i = floor(x);
+            vec2 f = x - i;
+            vec2 w0 = (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0;
+            vec2 w1 = (4.0 - 6.0 * f * f + 3.0 * f * f * f) / 6.0;
+            vec2 w2 = (1.0 + 3.0 * f + 3.0 * f * f - 3.0 * f * f * f) / 6.0;
+            vec2 w3 = f * f * f / 6.0;
+            vec2 g0 = w0 + w1, g1 = w2 + w3;
+            vec2 h0 = (i - 0.5 + w1 / g0) / size, h1 = (i + 1.5 + w3 / g1) / size;
+            return g0.y * (g0.x * textureLod(uTrailsFine, vec2(h0.x, h0.y), 0.0).rg + g1.x * textureLod(uTrailsFine, vec2(h1.x, h0.y), 0.0).rg)
+                 + g1.y * (g0.x * textureLod(uTrailsFine, vec2(h0.x, h1.y), 0.0).rg + g1.x * textureLod(uTrailsFine, vec2(h1.x, h1.y), 0.0).rg);
+        }
+
+        // The marks' height at xz in world units (the repeat sampler wraps it): the coarse image, with the fine one over it where it has recorded a mark, fading out at its window's edge.
+        float trailHeightAt(vec2 xz)
+        {
+            float h = textureLod(uTrails, xz * uTrailWindow.w, 0.0).r;
+            if (uTrailFineWindow.z > 0.0)
+            {
+                vec2 d = abs(xz - uTrailFineWindow.xy);
+                float inside = 1.0 - smoothstep(0.8 * uTrailFineWindow.z, 0.95 * uTrailFineWindow.z, max(d.x, d.y));
+                if (inside > 0.0)
+                {
+                    vec2 f = trailFineAt(xz * uTrailFineWindow.w);
+                    h = mix(h, f.x, clamp(f.y, 0.0, 1.0) * inside);
+                }
+            }
+            return h * uTrailDepth;
+        }
 
         // 1 inside the window, fading to 0 at its edge: the strips the window is about to clear are never shown.
         float trailEdge(vec2 xz)
@@ -1435,7 +1468,7 @@ static partial class TerrainShaders
             // a texel and a bit) so fine marks do not shimmer, and pressed ground a little darker, which is what shows of them from afar.
             if (trailShown > 0.0)
             {
-                float e = clamp(max(length(texDx.xz), length(texDy.xz)), 0.35, 2.0);
+                float e = clamp(max(length(texDx.xz), length(texDy.xz)), 0.08, 2.0);
                 float hx = trailHeightAt(trailPoint + vec2(e, 0.0)) - trailHeightAt(trailPoint - vec2(e, 0.0));
                 float hz = trailHeightAt(trailPoint + vec2(0.0, e)) - trailHeightAt(trailPoint - vec2(0.0, e));
                 shadingNormal = normalize(shadingNormal - vec3(hx, 0.0, hz) * 0.5 / e * trailShown);
@@ -1611,6 +1644,8 @@ static partial class TerrainShaders
             float trailDepth;
             float trailMesh;
             vec4 trailWindow;
+            uint trailFine;
+            vec4 trailFineWindow;
         } terrain;
 
         """;
@@ -1651,7 +1686,7 @@ static partial class TerrainShaders
         ["uFieldTiles"] = "utextures2D[terrain.fieldTiles]", ["uFieldOrigin"] = "terrain.fieldOrigin", ["uFieldTile"] = "terrain.fieldTile",
         ["uFieldColumns"] = "terrain.fieldColumns", ["uFieldCount"] = "terrain.fieldCount", ["uMaxDepth"] = "terrain.maxDepth", ["uTargetSlope"] = "terrain.targetSlope", ["uScaleFollow"] = "terrain.scaleFollow", ["uCliffScale"] = "terrain.cliffScale", ["uRefine"] = "terrain.refine", ["uPixelScale"] = "terrain.pixelScale", ["uBroadCut"] = "terrain.broadCut", ["uReliefQuality"] = "terrain.reliefQuality",
         ["uBakeAlbedo"] = "textures2DArray[terrain.bakeAlbedo]", ["uBakeNormal"] = "textures2DArray[terrain.bakeNormal]", ["uBakeLevels"] = "terrain.bakeLevels", ["uBakeOrigin"] = "terrain.bakeOrigin", ["uBakeReach"] = "terrain.bakeReach",
-        ["uTrails"] = "textures2D[terrain.trails]", ["uTrailDepth"] = "terrain.trailDepth", ["uTrailMesh"] = "terrain.trailMesh", ["uTrailWindow"] = "terrain.trailWindow",
+        ["uTrails"] = "textures2D[terrain.trails]", ["uTrailDepth"] = "terrain.trailDepth", ["uTrailMesh"] = "terrain.trailMesh", ["uTrailWindow"] = "terrain.trailWindow", ["uTrailsFine"] = "textures2D[terrain.trailFine]", ["uTrailFineWindow"] = "terrain.trailFineWindow",
     };
 
     const string DerivativeControl = "#extension GL_ARB_derivative_control : require\n";
@@ -1873,7 +1908,7 @@ static partial class TerrainShaders
 
 /// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
 /// are 32-bit (0 / 1).</summary>
-[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 976)]
+[System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 1008)]
 struct TerrainConstants
 {
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
@@ -1956,6 +1991,8 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(952)] public float TrailDepth;
     [System.Runtime.InteropServices.FieldOffset(956)] public float TrailMesh;
     [System.Runtime.InteropServices.FieldOffset(960)] public System.Numerics.Vector4 TrailWindow;
+    [System.Runtime.InteropServices.FieldOffset(976)] public uint TrailFine;
+    [System.Runtime.InteropServices.FieldOffset(992)] public System.Numerics.Vector4 TrailFineWindow;
 }
 
 /// <summary>The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[4]</c>): x, z of the first texel's corner, the texel, the side (0: not valid).</summary>

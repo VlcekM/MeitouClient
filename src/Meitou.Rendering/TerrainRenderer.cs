@@ -711,7 +711,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             Colour = standIn2D, Ground = standIn2D, WorldColour = standIn2D, Region = lastRegion, CellGrid = lastCellGrid,
             TessDetail = GroundRelief.TessDetail, RockRound = RockSmoothing.Roundness,   // the tessellation stages, the casters' too
             ReliefQuality = GroundRelief.Quality,
-            FieldTiles = standInUInt, Trails = standIn2D,
+            FieldTiles = standInUInt, Trails = standIn2D, TrailFine = standIn2D,
         };
         if (material)
         {
