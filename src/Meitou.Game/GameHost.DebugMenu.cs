@@ -69,6 +69,9 @@ sealed partial class GameHost
     {
         /// <summary>A plain on / off row: Left turns it off, Right on (Enter and Space flip it); other rows flip or cycle on every one of the four keys.</summary>
         public bool IsSwitch { get; init; }
+
+        /// <summary>A stepped row (the time of day): Left steps back, Right, Enter and Space forward; its state is a value, not on / off.</summary>
+        public Action<int>? Step { get; init; }
     }
 
     static string OnOff(bool on) => on ? "on" : "off";
@@ -76,6 +79,7 @@ sealed partial class GameHost
     /// <summary>The tool rows below the cheats: each opens a tool or switches an overlay; a new tool adds its row here (tools first, then the Overlays section).</summary>
     DebugTool[] DebugTools => debugTools ??=
     [
+        new("World", "Time of day (Left/Right: -/+ 1 h)", "", DebugTimeText, () => { }) { Step = DebugStepTime },
         new("Tools", "Pick & collision inspector...", "", () => "", () => { debugMenuOpen = false; inspectorMenuOpen = true; }),
         new("Tools", "Interior editor...", "", () => "", OpenInteriorEditor),
         new("Tools", "Level editor...", "Shift+F12", () => "", OpenLevelEditor),
@@ -90,6 +94,19 @@ sealed partial class GameHost
             () => { if (profiler is not null) profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3); }),
     ];
     DebugTool[]? debugTools;
+
+    /// <summary>The settings window's "Time of day" slider (the same setter as its Advanced page), null where the loop has none.</summary>
+    Meitou.Rendering.Slider? DebugTimeSlider => settingsPanel?.Sliders.FirstOrDefault(s => s.Label == "Time of day");
+
+    string DebugTimeText() => DebugTimeSlider is { } s ? s.Display : "n/a";
+
+    /// <summary>Moves the time of day to the next (<paramref name="hours"/> 1) or previous (-1) whole hour, wrapping round midnight.</summary>
+    void DebugStepTime(int hours)
+    {
+        if (DebugTimeSlider is not { } s) return;
+        float h = s.Get(), whole = hours > 0 ? MathF.Floor(h + 1e-3f) + hours : MathF.Ceiling(h - 1e-3f) + hours;
+        s.Set((whole % 24 + 24) % 24);
+    }
 
     /// <summary>
     /// The "Teleport on map" switch, level-triggered: on, every left click on the open Map tab sends the selected characters (else the lead) to the clicked spot, and the camera there, until it is
@@ -281,6 +298,7 @@ sealed partial class GameHost
             case EngineKey.Down: debugRow = DebugStep(1); break;
             case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right when DebugIsTool(debugRow):
                 var tool = DebugTools[debugRow - DebugRowCount];
+                if (tool.Step is { } step) { step(key == EngineKey.Left ? -1 : 1); break; }
                 // Left means off and Right on, so Left then Right never ends up flipping a switch twice.
                 if (tool.IsSwitch && key is EngineKey.Left or EngineKey.Right && (tool.State() == "on") == (key == EngineKey.Right)) break;
                 tool.Switch();
@@ -583,7 +601,7 @@ sealed partial class GameHost
             {
                 var tool = DebugTools[i - DebugRowCount];
                 string state = tool.State();
-                bool toolOn = tool.IsSwitch ? state == "on" : state is not ("" or "off");
+                bool toolOn = tool.Step is null && (tool.IsSwitch ? state == "on" : state is not ("" or "off"));
                 if (toolOn) onNames.Add(DebugShortName(tool.Label));
                 lines.Add((mark + DebugColumns(tool.Label, tool.Key, state), false, current && debugParts is null, toolOn));
                 continue;

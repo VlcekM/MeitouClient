@@ -58,6 +58,26 @@ sealed partial class GameHost
             controlData = JsonSerializer.Serialize(new { label = s.Label, value = s.Get() });
         });
 
+        add("debug-menu", "debug-menu open|close|key <Up|Down|Left|Right|Enter|Space|Escape|Backspace> [count]", "drive the F10 debug menu as its keys do (a key repeated count times); replies with the highlighted row and its value", (args, con) =>
+        {
+            if (args.Count == 0) { con.Error("usage: debug-menu open|close|key <name> [count]"); return; }
+            switch (args[0].ToLowerInvariant())
+            {
+                case "open": debugMenuOpen = true; break;
+                case "close": debugMenuOpen = false; break;
+                case "key" when args.Count >= 2 && Enum.TryParse<Meitou.Engine.Input.Key>(args[1], true, out var key):
+                    int count = args.Count >= 3 && int.TryParse(args[2], out int n) ? Math.Clamp(n, 1, 200) : 1;
+                    if (!debugMenuOpen) { con.Error("debug-menu: open it first"); return; }
+                    for (int i = 0; i < count; i++) DebugMenuKey(key);
+                    break;
+                default: con.Error("usage: debug-menu open|close|key <name> [count]"); return;
+            }
+            string label = DebugIsTool(debugRow) ? DebugTools[debugRow - DebugRowCount].Label : debugRow < DebugLabels.Length ? DebugLabels[debugRow] : $"mod row {debugRow}";
+            string value = DebugIsTool(debugRow) ? DebugTools[debugRow - DebugRowCount].State() : "";
+            con.Print($"{(debugMenuOpen ? "open" : "closed")}: {label} = {value}  {debugStatus}");
+            controlData = JsonSerializer.Serialize(new { open = debugMenuOpen, row = debugRow, label, value, status = debugStatus });
+        });
+
         // An exact label wins over substrings, so "Shadows" is not ambiguous with "Cloud shadows".
         static List<T> Matches<T>(IEnumerable<T> items, Func<T, string> labelOf, string label)
         {
