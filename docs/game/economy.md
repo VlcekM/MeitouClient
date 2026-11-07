@@ -139,9 +139,10 @@ Goal 118/119 shoppers: the sale is `FUN_14074a630`, called by [`FUN_1409a14b0`](
 - **Restock** (`ActivePlatoon::vfunc_4` calls `FUN_1404ff5e0(platoon, 0)` once `inventory refresh time` passes): the home branch skips a building whose interior object's `+0x10` is set
   (meaning **Unknown**); the first fill passes 1 and never skips.
 - Meitou, non-traders (`TradeSystem.FillHome`, engine choices): the stock rolls as a building shop's, then each unit goes into the first stock container with room (their own grids and
-  stack bonus), what fits nowhere is lost, the containers are unlocked, the purse is untouched; refilled every `vendors refresh time` only while the containers hold nothing but unique items ([artifacts](#artifacts)).
+  stack bonus), what fits nowhere is lost, the containers holding something are locked, the empty ones unlocked, the purse is untouched; refilled every `vendors refresh time` only while the containers hold nothing but unique items ([artifacts](#artifacts)).
 - **Containers** (`FUN_1409562f0`): the home's interior objects whose functionality is 2 BF_RESOURCE_STORAGE, 9 BF_SHOP or 13 BF_GENERAL_STORAGE and that have an inventory.
-  The filler unlocks their locks, sorts them (key **Unknown**), optionally clears them, puts special items first, then the vendor items; what fits nowhere is destroyed.
+  The filler unlocks their locks, sorts them (key **Unknown**), optionally clears them, puts special items first, then the vendor items; what fits nowhere is destroyed; then
+  `FUN_1409565e0` locks each that holds something.
 - **Special items** (`FUN_140958740`, **Verified**): on a refresh with specials, the template's `special items` (ITEM, 34 templates) and then its `special map items` (MAP_ITEM, 10), both when both exist: v0 of each,
   in stacks of at most the record's raw `stackable` (a map item too; the stack limit of 1 for map items is not used here), flagged unique with their quantity, offered to the building inventories first; what fits nowhere is destroyed. Meitou: on a squad's first fill, into
   the stock before the vendor items; the unique flag is not modelled.
@@ -214,8 +215,8 @@ places an object, and whose template Meitou housed there ([town residents](facti
 draw in placement order; an entry of 0 or fewer units is skipped. A building with no interior objects is no candidate, as in the original; what goes to a building in another town's centre zone is placed, but a save made before
 that zone is visited writes no file for it, so loses it. Items flagged unique (`ItemInstance.Unique`) do not stack with others; a shop
 fill and `FillHome` keep them, and a building shop takes its containers' items into its stock when it is made and gives its unique items back to them when its squad is
-dropped or made afresh; once nobody of its squad is alive the shop closes and its whole stock goes back into the containers, which a save keeps with the building. Not modelled: the shop fill's container choice and relocking,
-so the containers of a stocked home end up unlocked after its first fill; and an import of a save that has no state for a placed town (a mod's town added since) gives that town
+dropped or made afresh; once nobody of its squad is alive the shop closes and its whole stock goes back into the containers, which a save keeps with the building. Not modelled: the shop fill's container choice; after a fill each
+stock container holding something is locked (`FUN_1409565e0`: lock byte `+0x20` set when the inventory is not empty, **Observed**, #328). Not modelled either: an import of a save that has no state for a placed town (a mod's town added since) gives that town
 no artifacts, as Meitou adds no state for a town a loaded save lacks. Tests: `ArtifactTests`, `TownArtifactTests`.
 
 ## Crimes, bounties and prisoners

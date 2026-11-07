@@ -507,16 +507,17 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
             foreach (var box in boxes)
                 if (box.Contents!.Add(item)) break;
         foreach (var box in boxes)
-            if (box.Lock is { } l) l.Locked = false;
+            if (box.Lock is { } l) l.Locked = box.Contents!.Items.Count > 0;   // FUN_1409565e0 locks the filled ones
     }
 
     void Refill(World world, Squad squad, Shop shop, SquadTemplate template)
     {
         squad.Money = ShopFiller.Fill(shop, template, Market(world), data, world.Seed, (ulong)squad.Id, specials: shop.Fills == 0);
-        // The building filler unlocks the stock containers it fills (FUN_14095b210).
+        // The building filler unlocks the stock containers it fills (FUN_14095b210), then locks each that holds something (FUN_1409565e0, #328).
         if (shop.Building is not null && squad.HomeBuilding is { } home)
             foreach (var f in home.Fixtures)
-                if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Lock is { } l) l.Locked = false;
+                if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Lock is { } l)
+                    l.Locked = shop.RegionOf(f.Id, out var region) && shop.Stock.Items.Any(region.Holds);
         shop.NextRestockTick = world.Tick + (long)(template.VendorsRefreshTime / BodySystem.HoursPerTick);
     }
 
