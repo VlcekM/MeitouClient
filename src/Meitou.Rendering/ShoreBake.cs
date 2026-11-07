@@ -10,6 +10,7 @@ namespace Meitou.Rendering;
 /// <item><b>Distance</b>: the signed distance to the waterline in world units, positive over water (terrain under
 /// <see cref="WorldWater.Height"/>), negative over land, clamped to ±<see cref="MaxDistance"/>.</item>
 /// <item><b>Exposure</b>: 0 (a pond, a narrow bay, a channel) to 1 (open sea), see <see cref="ExposureRule"/>.</item>
+/// <item><b>Travel</b> and <b>Swell</b>: the shore waves' arrival time and what is left of them (<see cref="ShoreTravel"/>).</item>
 /// </list>
 /// Texel (i, j) is centred on world (<see cref="X0"/> + (i + 0.5)·Texel, <see cref="Z0"/> + (j + 0.5)·Texel), so a texture of the grid sampled at
 /// uv = (p − (X0, Z0)) / (Size·Texel) with linear filtering reads the same values as <see cref="Sample"/>.
@@ -36,9 +37,9 @@ internal sealed class ShoreGrid
     public const float IsletAreaLow = MathF.PI * 250f * 250f, IsletAreaHigh = MathF.PI * 450f * 450f;
     public const string IsletRule = "x smoothstep(pi 250^2, pi 450^2, area of the nearest shore's land mass)";
 
-    public ShoreGrid(int size, float texel, float x0, float z0, float maxDistance, float[] distance, float[] exposure)
+    public ShoreGrid(int size, float texel, float x0, float z0, float maxDistance, float[] distance, float[] exposure, float[] travel, float[] swell)
     {
-        (Size, Texel, X0, Z0, MaxDistance, Distance, Exposure) = (size, texel, x0, z0, maxDistance, distance, exposure);
+        (Size, Texel, X0, Z0, MaxDistance, Distance, Exposure, Travel, Swell) = (size, texel, x0, z0, maxDistance, distance, exposure, travel, swell);
     }
 
     public int Size { get; }
@@ -50,22 +51,25 @@ internal sealed class ShoreGrid
     /// <summary>Signed distance, row-major (row = Z).</summary>
     public float[] Distance { get; }
     public float[] Exposure { get; }
+    /// <summary>The shore waves' arrival time (seconds) and the share of their height left (0 to 1), row-major (<see cref="ShoreTravel"/>).</summary>
+    public float[] Travel { get; }
+    public float[] Swell { get; }
     public float X1 => X0 + Size * Texel;
     public float Z1 => Z0 + Size * Texel;
 
-    /// <summary>The grid as the texture's texels: (distance, exposure) pairs, row-major.</summary>
+    /// <summary>The grid as the texture's texels: (distance, exposure, travel, swell), row-major.</summary>
     public float[] Interleaved()
     {
-        var rg = new float[Size * Size * 2];
-        InterleaveInto(rg);
-        return rg;
+        var rgba = new float[Size * Size * 4];
+        InterleaveInto(rgba);
+        return rgba;
     }
 
-    /// <summary>The same into an array of Size · Size · 2 floats the caller keeps from bake to bake.</summary>
-    public void InterleaveInto(float[] rg)
+    /// <summary>The same into an array of Size · Size · 4 floats the caller keeps from bake to bake.</summary>
+    public void InterleaveInto(float[] rgba)
     {
-        if (rg.Length != Size * Size * 2) throw new ArgumentException("the array has to hold Size * Size texels", nameof(rg));
-        for (int k = 0; k < Size * Size; k++) (rg[2 * k], rg[2 * k + 1]) = (Distance[k], Exposure[k]);
+        if (rgba.Length != Size * Size * 4) throw new ArgumentException("the array has to hold Size * Size texels", nameof(rgba));
+        for (int k = 0; k < Size * Size; k++) (rgba[4 * k], rgba[4 * k + 1], rgba[4 * k + 2], rgba[4 * k + 3]) = (Distance[k], Exposure[k], Travel[k], Swell[k]);
     }
 
     /// <summary>
@@ -104,7 +108,8 @@ internal static class ShoreBake
     /// crossing points (8SSEDT: two sweeps carrying the nearest crossing point, O(N²), near-exact), then smoothed with one 3×3 binomial
     /// Gaussian so the gradient has no kinks. The height sampling, sign and smoothing are parallel over rows; the sweeps run on one thread.
     /// </summary>
-    public static ShoreGrid Bake(Func<float, float, float> height, float cx, float cz, int size = 1024, float texel = 10f, float maxDistance = ShoreGrid.DefaultMaxDistance, Scratch? scratch = null)
+    public static ShoreGrid Bake(Func<float, float, float> height, float cx, float cz, int size = 1024, float texel = 10f, float maxDistance = ShoreGrid.DefaultMaxDistance, Scratch? scratch = null,
+        IReadOnlyList<(Vector2 A, Vector2 B)>? walls = null)
     {
         (cx, cz) = SnapCentre(cx, cz, texel);
         float x0 = cx - size * 0.5f * texel, z0 = cz - size * 0.5f * texel;
@@ -160,7 +165,16 @@ internal static class ShoreBake
         Smooth(dist, tmp, n);
         var exposure = Exposure(dist, n, texel, maxDistance, IsletBlocks(s, seeds, n, texel, scratch), Scratch.Get(ref scratch.Exposure, n * n));
         Relax(dist, Scratch.Get(ref scratch.Wide, n * n), tmp, n, texel);
-        return new ShoreGrid(n, texel, x0, z0, maxDistance, dist, exposure);
+        var travel = Scratch.Get(ref scratch.Travel, n * n);
+        var swell = Scratch.Get(ref scratch.Swell, n * n);
+        bool shore = dist.AsSpan().ContainsAnyExcept(dist[0]);
+        if (shore) ShoreTravel.Bake(s, dist, n, texel, x0, z0, walls, travel, swell);
+        else
+        {
+            Array.Clear(travel);
+            Array.Clear(swell);
+        }
+        return new ShoreGrid(n, texel, x0, z0, maxDistance, dist, exposure, travel, swell);
     }
 
     /// <summary>
@@ -248,7 +262,7 @@ internal static class ShoreBake
     /// </summary>
     internal sealed class Scratch
     {
-        internal float[]? S, Dist, Tmp, Exposure, Wide;
+        internal float[]? S, Dist, Tmp, Exposure, Wide, Travel, Swell;
         internal Seed[]? Seeds;
         internal int[]? Label, Stack;
 

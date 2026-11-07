@@ -21,15 +21,29 @@ exposure, with breaker/swash/foam envelopes, rather than bottom-slope distance a
 Game normal maps remain with reduced near strength. Shore-field bakes/publishing must not stall
 frames; retain ready textures until replacements finish. RiverFlowBake derives channel flow from
 heights because source flowmap RG does not follow channels; suppress ocean/surf in river channels.
-Shore waves (Meitou look, not in the game): offshore the baked distance is eased towards a ~105-unit Gaussian blur of itself (three
-10-texel box passes) from 40 to 250 units out, not within 32 texels of the field's edge (`ShoreBake.Relax`); the exact distance creases
-where the nearest shore switches (a bay's middle, off a point or a pier), and the crests that follow its lines kinked there while their
-foam's frame flipped along a straight seam. Where the field's slope over 24 units is under about 0.8 (two fronts meeting) a crest keeps
-30% of its size. Along each crest its size varies 0.5 to 1 (240-unit noise, a pattern of its own per wave). Each wave's run-up varies
-0.55 to 1 along the beach (70-unit tongues) and the wet line 0.7 to 1; the swash front's foam band wanders from 0.04 to 0.3 of the
-run-up (40-unit noise), thins in over its edge and takes the finer lace without the cell holes (a tiled pattern on the sand).
-**Observed** (Bark lake by the pier, offscreen sequences): the straight seam is gone and crests bend and fade there; swash close-ups
-**Unknown** (no swash on sand was caught in the test views). River coverage and biome scum are incomplete; object-contact foam and character wakes are the off-by-default [switch below](#contact-foam-wakes-and-ripples).
+### Shore waves
+
+Meitou look, not in the game. One swell from a fixed direction (`ShoreTravel.Direction`, the same everywhere, so no weather or moved field moves a crest)
+arrives as a plane wave over water deeper than 60 units and runs on at c = 22·sqrt(depth/60) units/s (depth clamped to 1..60; 14 over the beach, for the
+run-up). Its arrival time is a first-arrival (Dijkstra, 8 neighbours) march over the shore field's grid, 250 units inland at most, softened by 16 binomial
+passes so crests round where two arrivals meet; the walls and posts standing in the water (`BuildingFootprints.PlaneCut`: the level buildings' collision cut at
+Y 100, rasterised every quarter texel) block it, so crests stop at a wall and bend round its ends. What is left of the swell (0..1) is the mean of the texels it
+came from, thinned by land and walls beside its way (0.1 each, not those ahead), so narrow inlets and lees hold less. Both go in the shore field's B and A
+(RGBA32F). The shader's phase is the wave count at (clock − arrival): a wave every 8 s on average, in sets of seven over which the period swings ±20%
+(`waveCount`; the clock wraps at 4096 sets); the local wavelength is c times that period. Breakers break where the depth is 1/0.78 of their height (the
+break distance from the local floor slope); past the break and in a film their height is held to 0.78 of the depth. Per-wave size noise rides with the
+wave. The breaker face's glow shows only within 80 units of the break (along the whole swell it drew a band ahead of every crest).
+Surf foam lies where noise clumps and blotches in the wave's frame pass a narrow threshold
+(rising with its age, holes even when fresh, frayed by the rims), shaded by two turned networks of fine bubble rims (4.5 and 11.3 per 100 units); no cells. The waterline: no still foam
+ring (an exposed shore gets a little with each wave). On the swash the foam's lace rides the sheet: shifted by level / beach slope along the
+waves' way, so it runs up with the uprush and back with the backwash; the sand behind dries in patches (two noises, 9 and 23 units) over the wave's cycle. Contact foam needs 2.5 to 4.5 units of standing (the ground relief made false lines). The water's
+edge fades over 2 units along the ray and 0.6 of depth, whichever is longer (0.5 and 0.2 for the swash), smoothstepped. Ponds and sheltered water: the
+normal map's slopes ×0.3 and the open sea's waves ×0.08 (by exposure), so their sun glint stays small; the far glitter keeps its mean only (its mask showed
+the foam texture's cells, still, in a band of distance); the swash's sun glint ×0.25. **Observed** (offscreen sequences, Bark lake): crests come in from the open water, bend into the
+bay and stop at the pier. Cost **Observed** (viewer bench, 2560x1440 with the default upscaler, RTX, Bark beach, 400 frames): the water stage 0.28 to 0.31 ms;
+the bake 260 ms on its worker. **Unknown**: piers whose collision is posts block a little of the swell; the one fixed direction leaves lee shores calm.
+
+River coverage and biome scum are incomplete; object-contact foam and character wakes are the off-by-default [switch below](#contact-foam-wakes-and-ripples).
 
 ## Shading and reflection
 
