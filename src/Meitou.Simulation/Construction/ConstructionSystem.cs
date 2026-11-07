@@ -645,12 +645,13 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     static bool IsWork(byte task) => task is (byte)CharacterTask.Build or (byte)CharacterTask.Dismantle or (byte)CharacterTask.DeliverMaterials or (byte)CharacterTask.FetchMaterials;
 
     /// <summary>
-    /// A character that can work a site: awake, not carrying or carried. A fight is no gate: an order's new task ends it (<see cref="TaskStart.Start"/>; docs/game/combat.md "Fight lifecycle
-    /// and orders"), and a fight that starts ends the work the same way. Nor is a cage: rows 2, 95, 96 and 125 do not register the imprisoned or chained repertoire
-    /// (<see cref="TaskStart.Eligible"/>), and a caging ends the task (<see cref="Locks.FixtureRegistry.Imprison"/>).
+    /// A character that can work a site: awake, not carried. Carrying someone is no gate: rows 2, 95 and 96 need nothing of it (docs/game/ai-tasks.md "Planner"; #361). A fight is
+    /// none either: an order's new task ends it (<see cref="TaskStart.Start"/>; docs/game/combat.md "Fight lifecycle and orders"), and a fight that starts ends the work the same way.
+    /// Nor is a cage: rows 2, 95, 96 and 125 do not register the imprisoned or chained repertoire (<see cref="TaskStart.Eligible"/>), and a caging ends the task
+    /// (<see cref="Locks.FixtureRegistry.Imprison"/>).
     /// </summary>
     static bool Able(CharacterCold cold) =>
-        cold.Medical is not { Incapacitated: true } && cold.CarriedBy.IsNone && cold.Carrying.IsNone;
+        cold.Medical is not { Incapacitated: true } && cold.CarriedBy.IsNone;
 
     /// <summary>State 38 <c>hasOneWorkingArm</c>, which the Building (2) and Repairing (95) rows need and no row provides (<b>Observed</b>, docs/game/ai-tasks.md "Planner"): an order or the engineer job (125) cannot start without it.</summary>
     public static bool HasWorkingArm(CharacterCold cold) => cold.Medical is not { } arms || arms.ArmWorks(left: true) || arms.ArmWorks(left: false);
