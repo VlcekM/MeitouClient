@@ -34,6 +34,8 @@
     <ProjectReference Include="../Meitou.Navigation/Meitou.Navigation.csproj" />
     <!-- Code mods (docs/modding.md); brings 0Harmony.dll into the build. -->
     <ProjectReference Include="../Meitou.Modding/Meitou.Modding.csproj" />
+    <!-- The bundled ports of RE_Kenshi plugin mods (docs/modding.md "Ports"): built first, copied to compat/<name>/ below, never referenced (the mod loader loads them). -->
+    <ProjectReference Include="../Meitou.Compat.CharactersEmotions/Meitou.Compat.CharactersEmotions.csproj" ReferenceOutputAssembly="false" Private="false" />
     <ProjectReference Include="..\Meitou.Rendering\Meitou.Rendering.csproj" />
     <ProjectReference Include="..\Meitou.Rendering.Display\Meitou.Rendering.Display.csproj" />
     <!-- The Metal backend (macOS only: SharpMetal P/Invokes /usr/lib/libobjc.A.dylib), so the Windows build never sees it. -->
@@ -85,6 +87,21 @@
         <_Parameter1>GitTag</_Parameter1>
         <_Parameter2>$(BuildGitTag)</_Parameter2>
       </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+  <!-- The bundled port's DLL and manifest, beside the game under compat/CharactersEmotions (ModHost.BundledPorts), not among the game's own assemblies. -->
+  <ItemGroup>
+    <None Include="../Meitou.Compat.CharactersEmotions/meitou.json" Link="compat/CharactersEmotions/meitou.json"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+  <!-- The DLL from wherever the port project built it (its own bin, or the -o folder a build was given): asked of the project, not assumed. -->
+  <Target Name="BundledPortDll" BeforeTargets="AssignTargetPaths">
+    <MSBuild Projects="../Meitou.Compat.CharactersEmotions/Meitou.Compat.CharactersEmotions.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="BundledPortOutput" />
+    </MSBuild>
+    <ItemGroup>
+      <None Include="@(BundledPortOutput)" Link="compat/CharactersEmotions/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
     </ItemGroup>
   </Target>
 

@@ -306,7 +306,7 @@ internal sealed unsafe partial class CharacterRenderer
                 BoneBase = (uint)l.BoneBase,
                 Material = (uint)part.Material.Slot,
                 Flags = (interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
-                MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
+                MorphBase = part.Morphed ? l.MorphBase : 0,
             };
             if (motionPass)
             {
@@ -509,7 +509,7 @@ internal sealed unsafe partial class CharacterRenderer
             BoneBase = (uint)l.BoneBase,
             Material = (uint)part.Material.Slot,
             Flags = (l.Interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
-            MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
+            MorphBase = part.Morphed ? l.MorphBase : 0,
             PreviousModel = motion ? f.PreviousModel : default,
         };
         float lod = f.Lod * bias;

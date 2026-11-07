@@ -52,7 +52,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         public required ObjectMaterialSet Materials;
         public required int Level;
         public required bool Town;
-        /// <summary>Back faces culled: the instances are <c>interior</c> parts (docs/formats/zones.md "Interior view"; the game culls building parts' back faces, so a room's ceiling vanishes seen from above).</summary>
+        /// <summary>Back faces culled: the instances are building parts (docs/render-objects.md "Back faces"; the game culls every building part but a FOLIAGE material, so a room's ceiling vanishes seen from above).</summary>
         public bool BackCull;
         /// <summary>The placement ghost: 0 not, 1 valid (green), 2 invalid (red), 3 queued (blue) (<see cref="BatchKind.Ghost"/>).</summary>
         public int Ghost;
@@ -1234,8 +1234,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         bool cut = depthPass ? shadowCuts.Count > 0 && CutsShadow(inst)
             : InteriorCut is { Active: true } mask && (inst.Placed.Kind == PlacedKind.MapFeature ? mask.Overlaps(inst.Centre, inst.Radius) : CutsIntoViewed(inst, mask));
         if (selecting is not null && Selects(inst.Placed, selecting))
-            selectionDraws.Add(new(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, inst.Centre, inst.Radius));
-        AddLevels(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, highlight, cut);
+            selectionDraws.Add(new(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior || inst.Placed.Kind == PlacedKind.BuildingPart, site, inst.Centre, inst.Radius));
+        AddLevels(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior || inst.Placed.Kind == PlacedKind.BuildingPart, site, highlight, cut);
     }
 
     /// <summary>Adds an instance at its LOD level: two batches while blending levels, the upper level taking [0, t·w) of the dither range and the lower [t·w, w).</summary>

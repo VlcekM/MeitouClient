@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The native port of the Workshop plugin mod "Characters Emotions" (docs/compat-characters-emotions.md): a Meitou code mod shipped in the game's compat folder, loaded
+    when CharactersEmotions.mod is enabled. The game supplies every Meitou assembly (Private=false), so the output is this one DLL.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>Meitou.Compat.CharactersEmotions</RootNamespace>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Meitou.Core/Meitou.Core.csproj" Private="false" ExcludeAssets="runtime" />
+    <ProjectReference Include="../Meitou.Data/Meitou.Data.csproj" Private="false" ExcludeAssets="runtime" />
+    <ProjectReference Include="../Meitou.Simulation/Meitou.Simulation.csproj" Private="false" ExcludeAssets="runtime" />
+    <ProjectReference Include="../Meitou.Modding/Meitou.Modding.csproj" Private="false" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="meitou.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

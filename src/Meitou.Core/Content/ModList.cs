@@ -156,7 +156,8 @@ public static class ModList
     }
 }
 
-public enum ModSource { Local, Workshop }
+/// <summary><see cref="Bundled"/>: a code mod shipped with the game in its <c>compat</c> folder, the native port of a data mod.</summary>
+public enum ModSource { Local, Workshop, Bundled }
 
 /// <summary>A mod on disk: its name (the <c>.mod</c> file's stem), file and source.</summary>
 public sealed class ModInfo(string name, string path, ModSource source)
@@ -169,6 +170,9 @@ public sealed class ModInfo(string name, string path, ModSource source)
     public string Name { get; } = name;
     public string Path { get; } = path;
     public ModSource Source { get; } = source;
+
+    /// <summary>For a <see cref="ModSource.Bundled"/> port: the data mod it ports (its folder holds the files the port reads, such as INI files).</summary>
+    public ModInfo? PortOf { get; init; }
     public string Folder => System.IO.Path.GetDirectoryName(Path)!;
 
     /// <summary>An RE_Kenshi plugin mod: its data loads in Meitou, its DLLs do not. Checked on first use.</summary>
