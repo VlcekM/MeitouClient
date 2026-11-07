@@ -105,7 +105,9 @@ public sealed partial class DialogueSystem
             case 43: return Bool(SquadOf(world, subjectId).All(m => Cold(world, m)?.Medical?.Incapacitated != false));
             case 44: return Bool(s.Medical?.Dead == true);
             case 45: return Bool(s.Appearance?.Female == true);
-            case 46: return b && Cold(world, s.Carrying) is { Medical.Dead: false, NpcClass: FundamentalType.Adventurer or FundamentalType.Bandit or FundamentalType.Slave or FundamentalType.Civilian };
+            // Carrying nobody it is the value's negation (value 0 true); carrying someone only value 1 can pass (FUN_140676950 case 0x2e).
+            case 46: return Cold(world, s.Carrying) is not { } carried ? !b
+                : b && carried is { Medical.Dead: false, NpcClass: FundamentalType.Adventurer or FundamentalType.Bandit or FundamentalType.Slave or FundamentalType.Civilian };
             case 47: return Num2(s.Bounties?.BookedAmount(data.Relations, meF) ?? 0);
             case 48: return Bool(s.Fighter is { IsAnimal: false, Weapon: null });
             case 50: return Bool(world.Squads.Find(mc.SquadId)?.Ai is { } board && board.MissionTarget == subjectId);
