@@ -2,6 +2,11 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.9.0
+
+- **Code mods just run**: an enabled code mod runs its own C# code, as in RimWorld; there is nothing to allow first. The Trust code
+  mods checkbox is gone.
+
 ## v1.8.0
 
 - **The mod list saves itself**: ticking, unticking or dragging a mod, Select all / none, a preset, Arrange and From save write
