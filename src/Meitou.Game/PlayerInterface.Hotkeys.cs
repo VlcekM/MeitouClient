@@ -73,7 +73,7 @@ sealed partial class PlayerInterface
         else if (Bound(InputAction.StopMovement, key)) Say(new StopCommand(SelectedIds()) { Tick = session.World.Tick });
         else if (OrderHotkey(key) is { } order) ExecuteUiAction("order." + order, "");
         else if (Bound(InputAction.CycleRunSpeed, key)) ExecuteUiAction("runspeed.1", "");   // the right speed arrow (FUN_140722630)
-        // Medic and Rescue: one search each, with Shift the job (58 / 148) added to the lists, as their buttons.
+        // Medic and Rescue: one search each, with Shift the job (58, with 57 for a squad with a robot / 148) added to the lists, as their buttons.
         else if (Bound(InputAction.Medic, key)) Say(new Meitou.Simulation.FirstAid.MedicJobCommand(SelectedIds(), shift) { Tick = session.World.Tick });
         else if (Bound(InputAction.Rescue, key)) Say(new Meitou.Simulation.Carrying.RescueJobCommand(SelectedIds(), shift) { Tick = session.World.Tick });
         else if (Bound(InputAction.Prospect, key)) ExecuteUiAction("prospect", "");

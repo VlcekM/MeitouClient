@@ -138,13 +138,17 @@ selection the first entry of a list at PlayerInterface+0x2c0 (**Unknown** which)
 first); dead counts as not living (the original's test `FUN_1406215b0` is **Unknown**).
 
 Meitou's first aid and rest bindings (2026-10-13, `PlayerInterface`, engine choices; simulation side in [simulation.md](../simulation.md#bodies)). The original's own: `medic` (NUM7, event 0x1f) and `rescue` (NUM8, 0x20) are
-orders-panel toggles forwarded to FUN_1407226e0 (the Medic and Rescue buttons of the panel, [ui-screens.md](ui-screens.md#4-hud-mainbargui)), which dispatch orders 58 and 148: one-shot, or a job with Shift ([perma-jobs](ai-tasks.md#perma-jobs), **Observed**); the targeted order is the context menu
+orders-panel toggles forwarded to FUN_1407226e0 (the Medic and Rescue buttons of the panel, [ui-screens.md](ui-screens.md#4-hud-mainbargui)), which dispatch orders 58 and 148: one-shot, or a job with Shift ([perma-jobs](ai-tasks.md#perma-jobs), **Observed**).
+The Medic button (`FUN_1407fac20`, **Verified** by decompile) then also dispatches 57 Robotics the same way when a member of the active squad (`FUN_1407f5520`) is of a robot race
+(race byte `+0x7c`) or holds an item of function 12 (robot kit) in its own inventory list (`FUN_14004b84e`, flat: not the backpack's contents); the slots (character vfunc `0xd0` race,
+`0x160` inventory) are the ones the [medic finder](ai-tasks.md#medic-jobs) uses. So a Shift press lists Medic then Robotics. Without Shift both are non-queued one-shots, the 57 given last (its
+call's arguments are lost in the decompile, so whether it replaces the 58 is **Unknown**); 57's finder takes every patient 58's does plus robots. Meitou: one look with the Robotics finder. The targeted order is the context menu
 verb 25 "First Aid" (pointer mode 1 `med`, [pointers](#mouse-pointers); Meitou's context menu also provides it). Meitou binds both to the numpad as the original and keeps `H` / `J` as aliases (section 4):
 
 | Input | Effect |
 |---|---|
 | right click on a character with something to bandage (own or not, as the menu's First Aid; the quick click only on the player's own) | the selected characters treat it (`TreatOrder`); a lone selected character on itself treats itself |
-| NUM7, `H` | Medic for the selection: each looks for a patient once; with Shift the medic job (58) is added to their lists |
+| NUM7, `H` | Medic for the selection: each looks for a patient once; with Shift the medic job (58) is added to their lists, and robotics (57) when the active squad has a robot (above) |
 | `L` | the selection rests (sits down; **no binding in the original**); any move order or `R` ends it |
 
 | Input | Effect |

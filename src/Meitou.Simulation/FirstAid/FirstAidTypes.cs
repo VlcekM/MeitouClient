@@ -17,8 +17,9 @@ public sealed record SplintOrder(IReadOnlyList<CharacterId> Medics, CharacterId 
 public sealed record RestOrder(IReadOnlyList<CharacterId> Characters) : OrderCommand;
 
 /// <summary>
-/// The Medic button for the characters (the selection when the list is empty), the original's order 58 <c>JOB_MEDIC</c> (docs/game/ai-tasks.md "Perma-jobs"): with
-/// <see cref="Job"/> (Shift) it is added to their job lists, where an idle character with a kit treats hurt squad mates by itself; else each looks for a patient once.
+/// The Medic button for the characters (the selection when the list is empty), the original's order 58 <c>JOB_MEDIC</c>, plus 57 <c>JOB_REPAIR_ROBOT</c> when the active squad has a robot
+/// (docs/game/ui-input.md, "Perma-jobs" in ai-tasks.md): with <see cref="Job"/> (Shift) they are added to their job lists, where an idle character with a kit treats hurt squad mates by
+/// itself; else each looks for a patient once.
 /// </summary>
 public sealed record MedicJobCommand(IReadOnlyList<CharacterId> Characters, bool Job = true) : OrderCommand;
 

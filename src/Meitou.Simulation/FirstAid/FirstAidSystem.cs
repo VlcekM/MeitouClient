@@ -68,19 +68,55 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                         if (table.TryResolveNext(id, out int slot)) PlayerOrders.Give(world, slot, new OrderEntry(TaskType.REST, this), rest.Queued);
                     break;
                 case MedicJobCommand job:
-                    foreach (var id in Who(world, job.Characters))
-                    {
-                        if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
-                        if (job.Job) Production.PermaJobs.Add(cold, TaskType.JOB_MEDIC, Production.PermaJob.Untargeted(TaskType.JOB_MEDIC));
-                        else PlayerOrders.Give(world, slot, new OrderEntry(TaskType.None, this) { Detail = MedicButton }, job.Queued);   // the button: one look for a patient
-                    }
+                    PressMedic(world, job);
                     break;
             }
         }
     }
 
+    /// <summary>
+    /// The Medic button (<c>FUN_1407fac20</c>, <b>Verified</b>; docs/game/ui-input.md): Medic 58 for the characters, and Robotics 57 too when the active squad has a robot (<see cref="SquadNeedsRobotics"/>).
+    /// With Shift each becomes a job (58 first); else one look for a patient, with the Robotics finder when 57 was given (its finder takes everyone the Medic's does, robots too).
+    /// </summary>
+    void PressMedic(World world, MedicJobCommand job)
+    {
+        var table = world.Characters;
+        bool robotics = SquadNeedsRobotics(world);
+        foreach (var id in Who(world, job.Characters))
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
+            if (!job.Job)
+            {
+                var detail = robotics ? RoboticsButton : MedicButton;
+                PlayerOrders.Give(world, slot, new OrderEntry(TaskType.None, this) { Detail = detail }, job.Queued);   // the button: one look for a patient
+                continue;
+            }
+            Production.PermaJobs.Add(cold, TaskType.JOB_MEDIC, Production.PermaJob.Untargeted(TaskType.JOB_MEDIC));
+            if (robotics) Production.PermaJobs.Add(cold, TaskType.JOB_REPAIR_ROBOT, Production.PermaJob.Untargeted(TaskType.JOB_REPAIR_ROBOT));
+        }
+    }
+
+    /// <summary>
+    /// Whether the Medic button gives Robotics 57 too (<c>FUN_1407fac20</c>, <b>Verified</b>): a member of the player's active squad (<see cref="Dialogue.DialogueSystem.ActiveSquad"/>) is of a
+    /// robot race or holds an item of function 12 (a robot repair kit) in its own inventory, the backpack's contents not searched (<c>FUN_14004b84e</c> on the flat item list).
+    /// </summary>
+    static bool SquadNeedsRobotics(World world)
+    {
+        if (Dialogue.DialogueSystem.ActiveSquad(world) is not { } squad) return false;
+        var table = world.Characters;
+        foreach (var member in squad.Members)
+        {
+            if (!table.TryResolveNext(member, out int slot) || table.Cold(slot) is not { } cold) continue;
+            if (cold.Race?.IsRobot == true) return true;
+            if (cold.Inventory is { } inventory && inventory.Items.Exists(item => item.ItemFunction == ItemInfo.RobotKitFunction)) return true;
+        }
+        return false;
+    }
+
     /// <summary>The <see cref="OrderEntry.Detail"/> of the Medic button's one-shot order (the job's finder looked at once, then a First aid 25).</summary>
     static readonly object MedicButton = new();
+    /// <summary>The same with Robotics 57 given too: the look takes robots as well.</summary>
+    static readonly object RoboticsButton = new();
 
     /// <summary>
     /// First aid 25 and Splint 249 need the patient alive (else the order leaves the queue) and an able medic with a kit (a medkit or a robot kit anyone of its squad near it carries; its own splint kit),
@@ -90,7 +126,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     {
         var table = world.Characters;
         var cold = table.Cold(slot)!;
-        if (order.Detail == MedicButton) return cold.IsPlayer ? OrderCheck.Run : OrderCheck.Gone;
+        if (order.Detail == MedicButton || order.Detail == RoboticsButton) return cold.IsPlayer ? OrderCheck.Run : OrderCheck.Gone;
         if (order.Row == TaskType.REST) return CanAct(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         if (!table.TryResolveNext(order.Target, out int patient) || table.Cold(patient)!.Medical is not { Dead: false }) return OrderCheck.Gone;
         if (cold is not { Race: not null, Stats: not null } || !CanAct(cold)) return OrderCheck.Blocked();
@@ -103,9 +139,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
 
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
-        if (order.Detail == MedicButton)
+        if (order.Detail == MedicButton || order.Detail == RoboticsButton)
         {
-            HealSomeone(world, slot, SquadGoals.Of(world), robotics: false, TaskSource.Order);
+            HealSomeone(world, slot, SquadGoals.Of(world), robotics: order.Detail == RoboticsButton, TaskSource.Order);
             return;
         }
         if (order.Row == TaskType.REST)

@@ -1292,7 +1292,8 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
   `FUN_140626f50` passes it back as toggle 15); the orders panel's `OrdersChaseButton` (captioned JOBS) is this switch.
 - **Finders of the jobs** (**Verified** registrations in `FUN_140319a60`, finder thunks resolved; readings **Observed**; "sensed" = the
   character's sensed list `FUN_140853960(include, exclude)`, whose bits are **Unknown**):
-  - 58 Medic / 57 Robotics: `FUN_14099f690` with a flag (58: 0, 57: 1; [Medic jobs](#medic-jobs)). Desire `FUN_140998410` (both, and 250).
+  - 58 Medic / 57 Robotics: `FUN_14099f690` with a flag (58: 0, 57: 1; [Medic jobs](#medic-jobs)). Desire `FUN_140998410` (both, and 250). The Medic button gives 57 with 58 for a
+    squad with a robot ([ui-input](ui-input.md#6-event-dispatch)).
   - 250 Splint Rigging: `FUN_14099e240` ([Medic jobs](#medic-jobs)).
   - 16 Attacking enemies: `FUN_14059f3a0` ([Combat goals](#combat-goals)); it searches only while the AI's +0xbc (`numEnemies`,
     [senses](perception.md#senses)) is nonzero, which is also the condition of the kind-2 job pass above.
