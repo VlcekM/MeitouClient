@@ -1,0 +1,174 @@
+using System.Globalization;
+using System.Numerics;
+using System.Runtime.InteropServices;
+using Meitou.Rendering.Gpu;
+using Meitou.Rendering.Gpu.Core;
+using Silk.NET.Vulkan;
+
+namespace Meitou.Rendering.Gi;
+
+/// <summary>The penumbra filter's inputs, all at the render size: the scene depth and surface target, the rays' result, a scratch target and the output (RGBA16F).</summary>
+readonly record struct PenumbraTargets(GpuTexture Depth, GpuTexture Surface, GpuTexture Raw, GpuTexture Scratch, GpuTexture Filtered, int Width, int Height);
+
+/// <summary>
+/// The penumbra filter of the traced shadows (docs/render-shadows.md "Traced sun", docs/render-lights.md "Traced lamp shadows"), the same every frame (no history): the rays' hard
+/// result (rgb) softened by its light's size. The rays write, where they are blocked, the penumbra's radius at the receiver in world units (alpha: the light's angular radius times
+/// the blocker's distance). A horizontal pass finds the blockers' mean radius among taps on the pixel's own surface, takes it to pixels (at least <see cref="MinRadius"/>, which
+/// anti-aliases a contact edge), and averages along the row with a box whose ends are fractional; a vertical pass does the same along the column at that radius. The weights are
+/// continuous, so a wide penumbra is a smooth ramp, not a staircase of tap counts. Render thread only.
+/// </summary>
+sealed unsafe class PenumbraFilter : IDisposable
+{
+    /// <summary>Taps of the blocker search (a sunflower within <see cref="Search"/> pixels); pixels: the search's reach and the narrowest and widest radius.</summary>
+    const int SearchTaps = 16;
+    const float Search = 12, MinRadius = 1, MaxRadius = 16;
+
+    static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
+
+    static readonly string Source = $$"""
+        #version 460
+        layout(local_size_x = 8, local_size_y = 8) in;
+        layout(set = 0, binding = 0) uniform sampler2D uDepth;
+        layout(set = 0, binding = 1) uniform usampler2D uSurface;
+        layout(set = 0, binding = 2) uniform sampler2D uIn;
+        layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D uOut;
+        layout(set = 0, binding = 5, std140) uniform Params
+        {
+            mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
+            vec4 size;         // width, height, a pixel's width per unit of depth, the pass (0 along rows, then 1 along columns)
+        } p;
+
+        vec3 pointAt(ivec2 px)
+        {
+            vec4 h = p.inverse * vec4((vec2(px) + 0.5) / p.size.xy * 2.0 - 1.0, texelFetch(uDepth, px, 0).r, 1.0);
+            return h.xyz / h.w;
+        }
+
+        vec3 octDir(vec2 e)
+        {
+            vec3 d = vec3(e.x, 1.0 - abs(e.x) - abs(e.y), e.y);
+            if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
+            return normalize(d);
+        }
+
+        bool inside(ivec2 q) { return all(greaterThanEqual(q, ivec2(0))) && all(lessThan(q, ivec2(p.size.xy))); }
+
+        // A tap on the pixel's own surface: written to the surface target and within the plane's tolerance.
+        bool onSurface(ivec2 q, vec3 at, vec3 n, float tolerance)
+        {
+            if (!inside(q) || texelFetch(uSurface, q, 0).w == 0u) return false;
+            return abs(dot(pointAt(q) - at, n)) < tolerance;
+        }
+
+        // The penumbra's radius in pixels from the blockers round the pixel (0: none within the search).
+        float searchRadius(ivec2 px, vec3 at, vec3 n, float footprint, float own)
+        {
+            float sum = own, count = own > 0.0 ? 1.0 : 0.0;
+            float tolerance = max(0.25, footprint * {{F(Search)}} * 0.5);
+            for (int k = 0; k < {{SearchTaps}}; k++)
+            {
+                float r = sqrt((float(k) + 0.5) / {{SearchTaps}}.0), a = float(k) * 2.39996323;
+                ivec2 q = px + ivec2(round(vec2(cos(a), sin(a)) * r * {{F(Search)}}));
+                if (!onSurface(q, at, n, tolerance)) continue;
+                float spread = texelFetch(uIn, q, 0).a;
+                if (spread > 0.0) { sum += spread; count += 1.0; }
+            }
+            return count == 0.0 ? 0.0 : clamp(sum / count / footprint, {{F(MinRadius)}}, {{F(MaxRadius)}});
+        }
+
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+            if (!inside(px)) return;
+            vec4 c = texelFetch(uIn, px, 0);
+            uvec4 surface = texelFetch(uSurface, px, 0);
+            bool rows = p.size.w < 0.5;
+            if (surface.w == 0u) { imageStore(uOut, px, vec4(c.rgb, 0.0)); return; }
+            vec3 at = pointAt(px);
+            float footprint = length(at) * p.size.z;
+            vec3 n = octDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
+            float radius = rows ? searchRadius(px, at, n, footprint, c.a) : c.a;
+            if (radius <= 0.0) { imageStore(uOut, px, vec4(c.rgb, 0.0)); return; }
+            ivec2 axis = rows ? ivec2(1, 0) : ivec2(0, 1);
+            int reach = int(ceil(radius));
+            vec3 sum = c.rgb;
+            float weight = 1.0;
+            for (int k = 1; k <= {{(int)MaxRadius}}; k++)
+            {
+                if (k > reach) break;
+                float w = clamp(radius + 0.5 - float(k), 0.0, 1.0);
+                float tolerance = max(0.25, footprint * (float(k) * 0.5 + 1.0));
+                for (int side = -1; side <= 1; side += 2)
+                {
+                    ivec2 q = px + axis * (k * side);
+                    if (!onSurface(q, at, n, tolerance)) continue;
+                    sum += texelFetch(uIn, q, 0).rgb * w;
+                    weight += w;
+                }
+            }
+            imageStore(uOut, px, vec4(sum / weight, radius));
+        }
+        """;
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct Params
+    {
+        public Matrix4x4 Inverse;
+        public Vector4 Size;
+    }
+
+    readonly GpuContext ctx;
+    readonly GpuProgram program;
+    readonly GpuComputePipeline pipeline;
+    readonly GpuSampler sampler;
+
+    public PenumbraFilter(GpuContext ctx)
+    {
+        this.ctx = ctx;
+        program = ctx.Shaders.Compute(Source, "penumbra filter",
+        [
+            (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.CombinedImageSampler),
+            (4, DescriptorType.StorageImage), (5, DescriptorType.UniformBuffer),
+        ]);
+        pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(program, "penumbra filter"));
+        sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+            TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+    }
+
+    /// <summary>
+    /// Both passes into <paramref name="cmd"/>, after the rays (a full barrier before each pass and after the last). <paramref name="inverse"/>: NDC, jittered as the frame was, to the
+    /// position relative to the eye; <paramref name="pixelSlope"/>: a pixel's width per unit of depth.
+    /// </summary>
+    public void Run(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope)
+    {
+        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0);
+        cmd.Barrier(BarrierBatch.Full);
+        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1);
+        cmd.Barrier(BarrierBatch.Full);
+    }
+
+    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass)
+    {
+        var parameters = new Params { Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass) };
+        var constants = ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
+        DescriptorImageInfo Sampled(GpuTexture texture) => new(ctx.Device.SamplerAt(sampler.Index), ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
+        var images = stackalloc DescriptorImageInfo[4];
+        images[0] = Sampled(t.Depth);
+        images[1] = Sampled(t.Surface);
+        images[2] = Sampled(input);
+        images[3] = new DescriptorImageInfo(default, ctx.Device.ViewAt(output.View().Index), ImageLayout.General);
+        var uniform = new DescriptorBufferInfo(ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(Params));
+        var writes = stackalloc WriteDescriptorSet[5];
+        for (int i = 0; i < 3; i++) writes[i] = Image((uint)i, DescriptorType.CombinedImageSampler, &images[i]);
+        writes[3] = Image(4, DescriptorType.StorageImage, &images[3]);
+        writes[4] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &uniform };
+        cmd.BindPipeline(pipeline);
+        cmd.PushDescriptors(program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 5), GpuBindPoint.Compute);
+        cmd.Dispatch((uint)((t.Width + 7) / 8), (uint)((t.Height + 7) / 8));
+    }
+
+    static WriteDescriptorSet Image(uint binding, DescriptorType type, DescriptorImageInfo* info) =>
+        new() { SType = StructureType.WriteDescriptorSet, DstBinding = binding, DescriptorCount = 1, DescriptorType = type, PImageInfo = info };
+
+    public void Dispose() => ctx.Shaders.Dispose(program);
+}

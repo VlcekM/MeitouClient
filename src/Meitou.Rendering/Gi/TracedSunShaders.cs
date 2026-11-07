@@ -53,6 +53,8 @@ static class TracedSunShaders
         }
         """;
     const byte Solids = Objects | Foliage | SmallFoliage | Characters;
+    /// <summary>What the visibility volume's rays see besides the terrain (<see cref="TracedSunVolume"/>): every solid the surfaces' rays see; no grass (a ray from the air).</summary>
+    public const byte VolumeSolids = Solids;
 
     /// <summary>
     /// The fine terrain grid (smooth, 8 apart: <see cref="GiScene"/>) is asked from a point this many units above the surface, plus a share of the distance, along the whole ray:
@@ -60,6 +62,8 @@ static class TracedSunShaders
     /// the ground at a cliff's foot see the sun through the cliff. The coarse grid (160 apart) is asked from 320 along the ray.
     /// </summary>
     const float FineTerrainLift = 3, FineTerrainLiftPerUnit = 0.002f, CoarseTerrainBlind = 320;
+    /// <summary>World units: the most the drawn ground's relief displaces it from the heightmap (GroundRelief's max depth at the deepest setting), what <c>terrainOrigin</c> takes back.</summary>
+    const float ReliefAmplitude = 12;
 
     static string F(float v) => v.ToString("0.0########", CultureInfo.InvariantCulture);
 
@@ -83,7 +87,7 @@ static class TracedSunShaders
         layout(set = 0, binding = 6, std140) uniform Params
         {
             mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
-            vec4 eye;          // xyz: the eye relative to the traced origin
+            vec4 eye;          // xyz: the eye relative to the traced origin, w: the tangent of the sun's radius (the penumbra's spread per unit of blocker distance)
             vec4 sun;          // xyz: towards the sun, w: the ray's length
             vec4 size;         // width, height, the frame, a pixel's width per unit of depth
             vec4 grass;        // x: how far from the eye grass is traced (0: none), y: the blades' tallest, z: what a blade's own ray does not see of other blades, w: the fade past that
@@ -145,6 +149,21 @@ static class TracedSunShaders
             return HIT_T(q);
         }
 
+        // Where the terrain grids are asked from: the ground displaced by the relief (up to its amplitude above or below the fine grid) is taken back to the grid's height, so a
+        // raised crest does not see over a ridge its trough is shadowed by (the grid holds no relief: the relief shades itself, GroundRelief); then lifted by the grid's error.
+        // Anything farther from the grid (a roof, a wall's top) leaves from where it is.
+        vec3 terrainOrigin(vec3 o, float dist)
+        {
+            vec3 lift = vec3(0.0, {{F(FineTerrainLift)}} + dist * {{F(FineTerrainLiftPerUnit)}}, 0.0);
+            rayQueryEXT q;
+            rayQueryInitializeEXT(q, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT, {{(int)TerrainFine}}u, o + vec3(0.0, {{F(ReliefAmplitude)}}, 0.0), 0.0,
+                vec3(0.0, -1.0, 0.0), {{F(2 * ReliefAmplitude)}});
+            while (rayQueryProceedEXT(q)) { }
+            if (!BLOCKED(q)) return o + lift;
+            float grid = o.y + {{F(ReliefAmplitude)}} - rayQueryGetIntersectionTEXT(q, true);
+            return vec3(o.x, grid, o.z) + lift;
+        }
+
         // Grass: only as far as a ray can stay under the tallest blade. A blade's own ray (card) does not see the blades within the blind range, where the drawn card has swayed from
         // its traced copy or stands on its twin; past it the blades count from halfway through the fade.
         float grassBlocks(vec3 o, vec3 dir, float tMin, bool card)
@@ -179,8 +198,12 @@ static class TracedSunShaders
             float tMin = card ? max(clearance, 0.5 + pixel * 3.0) : blade ? max(pixel * 2.0, 0.25) : clearance;
 
             float t = solidBlocks(o, dir, tMin);
-            if (t <= 0.0) t = terrainBlocks(o + vec3(0.0, {{F(FineTerrainLift)}} + dist * {{F(FineTerrainLiftPerUnit)}}, 0.0), dir, {{(int)TerrainFine}}u, 0.0, interior);
-            if (t <= 0.0) t = terrainBlocks(o, dir, {{(int)TerrainCoarse}}u, {{F(CoarseTerrainBlind)}}, interior);
+            if (t <= 0.0)
+            {
+                vec3 ground = terrainOrigin(o, dist);
+                t = terrainBlocks(ground, dir, {{(int)TerrainFine}}u, 0.0, interior);
+                if (t <= 0.0) t = terrainBlocks(ground, dir, {{(int)TerrainCoarse}}u, {{F(CoarseTerrainBlind)}}, interior);
+            }
             // Grass fades out over the last quarter of its reach, by how much it takes, not by noise.
             if (t <= 0.0 && dist < p.grass.x)
             {
@@ -194,96 +217,9 @@ static class TracedSunShaders
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy);
             if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
-            imageStore(uOut, px, vec4(visibility(px), 0.0, 0.0));
-        }
-        """;
-
-    /// <summary>Taps of the penumbra filter's disc: a sunflower of this many points, the same every frame.</summary>
-    public const int PenumbraTaps = 16;
-    /// <summary>Pixels: the farthest a blocker is looked for round a pixel, and the widest penumbra radius.</summary>
-    public const float PenumbraSearch = 12, PenumbraMax = 16;
-
-    /// <summary>
-    /// The penumbra filter (no history: the same picture every frame): the hard shadow of the rays to the sun's centre softened by the sun's real disc. Round each traced pixel the
-    /// blockers of the taps on its own surface (within a plane tolerance) give a mean blocker distance, the penumbra is that times the disc's diameter, and the mask is averaged over
-    /// a disc of that width on screen (PCSS's rule on the traced mask). A pixel with no blocker round it keeps its ray.
-    /// </summary>
-    public static readonly string Filter = $$"""
-        #version 460
-        layout(local_size_x = 8, local_size_y = 8) in;
-        layout(set = 0, binding = 0) uniform sampler2D uDepth;
-        layout(set = 0, binding = 1) uniform usampler2D uSurface;
-        layout(set = 0, binding = 2) uniform sampler2D uRaw;
-        layout(set = 0, binding = 4, rgba16f) uniform writeonly image2D uOut;
-        layout(set = 0, binding = 5, std140) uniform Params
-        {
-            mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
-            vec4 size;         // width, height, the tangent of the sun's radius, a pixel's width per unit of depth
-        } p;
-
-        vec3 pointAt(ivec2 px)
-        {
-            vec4 h = p.inverse * vec4((vec2(px) + 0.5) / p.size.xy * 2.0 - 1.0, texelFetch(uDepth, px, 0).r, 1.0);
-            return h.xyz / h.w;
-        }
-
-        vec3 octDir(vec2 e)
-        {
-            vec3 d = vec3(e.x, 1.0 - abs(e.x) - abs(e.y), e.y);
-            if (d.y < 0.0) d.xz = (1.0 - abs(d.zx)) * vec2(d.x >= 0.0 ? 1.0 : -1.0, d.z >= 0.0 ? 1.0 : -1.0);
-            return normalize(d);
-        }
-
-        // Tap k of the sunflower, radius 1.
-        vec2 tap(int k)
-        {
-            float r = sqrt((float(k) + 0.5) / {{PenumbraTaps}}.0), a = float(k) * 2.39996323;
-            return vec2(cos(a), sin(a)) * r;
-        }
-
-        // Whether a tap's point lies on the pixel's surface: within the tolerance of its plane, and traced.
-        bool onSurface(ivec2 q, vec3 at, vec3 n, float tolerance)
-        {
-            if (any(lessThan(q, ivec2(0))) || any(greaterThanEqual(q, ivec2(p.size.xy)))) return false;
-            if ((texelFetch(uSurface, q, 0).w & 65536u) == 0u) return false;
-            return abs(dot(pointAt(q) - at, n)) < tolerance;
-        }
-
-        void main()
-        {
-            ivec2 px = ivec2(gl_GlobalInvocationID.xy);
-            if (px.x >= int(p.size.x) || px.y >= int(p.size.y)) return;
-            vec2 raw = texelFetch(uRaw, px, 0).rg;
-            uvec4 surface = texelFetch(uSurface, px, 0);
-            if ((surface.w & 65536u) == 0u) { imageStore(uOut, px, vec4(raw.r)); return; }
-            vec3 at = pointAt(px);
-            float footprint = length(at) * p.size.w;
-            vec3 n = octDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
-            float tolerance = max(0.25, footprint * {{F(PenumbraSearch)}} * 0.5);
-
-            // The blockers round the pixel on its own surface.
-            float blockers = raw.g, count = raw.g > 0.0 ? 1.0 : 0.0;
-            for (int k = 0; k < {{PenumbraTaps}}; k++)
-            {
-                ivec2 q = px + ivec2(round(tap(k) * {{F(PenumbraSearch)}}));
-                if (!onSurface(q, at, n, tolerance)) continue;
-                float t = texelFetch(uRaw, q, 0).g;
-                if (t > 0.0) { blockers += t; count += 1.0; }
-            }
-            if (count == 0.0) { imageStore(uOut, px, vec4(raw.r)); return; }
-
-            // The penumbra across, in pixels: the disc's diameter at the mean blocker's distance over the pixel's width.
-            float radius = min(p.size.z * (blockers / count) / footprint, {{F(PenumbraMax)}});
-            if (radius < 0.75) { imageStore(uOut, px, vec4(raw.r)); return; }
-            float sum = raw.r, weight = 1.0;
-            for (int k = 0; k < {{PenumbraTaps}}; k++)
-            {
-                ivec2 q = px + ivec2(round(tap(k) * radius));
-                if (!onSurface(q, at, n, max(0.25, footprint * radius * 0.5))) continue;
-                sum += texelFetch(uRaw, q, 0).r;
-                weight += 1.0;
-            }
-            imageStore(uOut, px, vec4(sum / weight));
+            // The penumbra filter's input (PenumbraFilter): the visibility, and where blocked the penumbra's radius at the receiver.
+            vec2 v = visibility(px);
+            imageStore(uOut, px, vec4(v.xxx, v.y * p.eye.w));
         }
         """;
 

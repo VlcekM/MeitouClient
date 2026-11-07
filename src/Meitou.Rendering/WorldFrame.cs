@@ -832,6 +832,7 @@ static partial class WorldFrame
         /// <summary>Whether this frame's sun is traced (<see cref="WorldFrame.BeginFrame"/>; docs/render-shadows.md "Traced sun").</summary>
         public bool Traced;
         internal Gi.TracedSunPass? TracedSun;
+        internal Gi.TracedSunVolume? TracedSunVolume;
         /// <summary>The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.</summary>
         public PostProcess? Post;
         /// <summary>The chain <see cref="WorldFrame.Draw"/> runs: <see cref="Post"/> on Vulkan (also when a host sets only that), the host's seam chain on Metal.</summary>
@@ -871,6 +872,7 @@ static partial class WorldFrame
             GiDebugPass?.Dispose();
             GiNear?.Dispose();
             TracedSun?.Dispose();
+            TracedSunVolume?.Dispose();
             ProbeGi?.Dispose();
             Probes?.Dispose();
             Lamps?.Dispose();

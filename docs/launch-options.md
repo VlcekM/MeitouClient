@@ -128,7 +128,7 @@ Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.
 | `--orbit-step <deg>` | degrees | | With `--screenshot`: the camera orbits this much per frame (upscaler motion vectors). |
 | `--wireframe` | | off | Wireframe view. |
 | `--debug <n>` | 1 or 2 | off | 1: blend-map slot weights; 2: layer weights. |
-| `--debug-shadows <n>` | 1 to 3 | off | 1: the four cascade maps; 2: shadow term by cascade; 3: term multiplied over the picture. |
+| `--debug-shadows <n>` | 1 to 4 | off | 1: the four cascade maps; 2: shadow term by cascade; 3: term multiplied over the picture; 4: the traced sun (blue cascades, green lit, red shadowed) and a log line on why a frame traces. |
 | `--help` / `-h` | | | Print the usage. |
 
 ### Time, weather, audio and content

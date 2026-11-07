@@ -109,7 +109,7 @@ must use the full-resolution path. [Fog volumes](formats/fogfeatures.md), [shaft
 
 ## Contact shadows
 
-The `contact` switch (`PostOptions.ContactShadows`, Meitou, off by default: a screen-space guess, kept for GPUs without ray queries): its own full-screen pass at the render size (`PostProcessShaders.Contact`, `ApplyContactShadows`,
+The `contact` switch (`PostOptions.ContactShadows`, Meitou, off by default: a screen-space guess, kept for GPUs without ray queries; never with the sun shadows Off or traced, `PostProcess.SunShadowed`): its own full-screen pass at the render size (`PostProcessShaders.Contact`, `ApplyContactShadows`,
 after the occlusion in `ApplySsao`) marches the depth 10 steps, 8 units towards the light, and multiplies what the surface keeps into the scene colour. A hit takes `0.85` x the sun's share of the surface's light (`sun / (sun + ambient)`, with the shadow cascades and cloud shadow in the
 sun term), so it stops at the ambient level, and there is none in cascade shadow, under clouds or at night. Fades out from 1500 to 2500 units.
 Independent of the occlusion (SSAO, GTAO or none). Takes the occlusion's air and water visibility, not its half size, blur or reduced strength on characters' own

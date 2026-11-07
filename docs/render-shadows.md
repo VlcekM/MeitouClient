@@ -49,8 +49,9 @@ terrain -0.1 ms, screenshots within 7 levels.
 
 ## Traced sun
 
-Enhancement `traced`, off by default; the sun-shadow setting's `Traced` (`SunShadowMode` Off | Cascades | Traced, `SunShadows.Get/Set`: Off draws no maps and traces nothing,
-the sun shaded by clouds and the ground's relief alone; the shafts and lit dust then see no shadow). From KenshiNative's traced sun (`knSunShadowRay`, `kn_grass_card.hlsl`).
+Enhancement `traced`, off by default; the sun-shadow setting's `Traced` (`SunShadowMode` Off | Cascades | Traced, `SunShadows.Get/Set`). Off draws no maps and traces
+nothing: every receiver reads lit (surfaces, impostors, the reflection, foam, the lit dust), the light shafts and the contact shadows do not run, the clouds' shadow and the
+ground's relief self-shadow stay, and the probes' sun term keeps its own rays (the GI is not a shadow setting). From KenshiNative's traced sun (`knSunShadowRay`, `kn_grass_card.hlsl`).
 `TracedSunPass`, `TracedSunShaders`, `TracedGrass`, `TracedCharacters`, `PostProcess.TracedSun`, `kenshiLight`.
 
 Runs when the `gi` scene and the GI resolve run, on the Meitou shadows, with ray queries and storage for RGBA16F (`WorldFrame.BeginFrame`); else the frame is the cascades'.
@@ -61,23 +62,33 @@ falls; with it the log prints every 120th frame whether the frame traces and why
 (`ShadowPass.TracedWhole`), and writes it, shadowless but for clouds, relief, the terrain map and the landmark map (the cascades left out, `msTraced`), to a third scene
 attachment (RGBA16F, location 2, `WithAlbedo`), before the haze. Bit 16 of the surface target (RGBA32UI) marks such a pixel, bits 17-18 its receiver (0 solid, 1 grass,
 2 foliage, 3 character). After the characters, before `CaptureScene` (refraction sees the sun), a compute pass traces one ray a pixel into an RGBA16F mask (visibility,
-blocker distance), the penumbra filter softens it, and a fullscreen pass adds term x mask x the haze's multiplier (`atmoApplyCoefficients`). The cascades are still drawn for
-what reads them: the light shafts, the lit dust, the water's foam, the skin's light entry, the reflection, impostors; water writes no traced pixel.
+blocker distance), the penumbra filter softens it, and a fullscreen pass adds term x mask x the haze's multiplier (`atmoApplyCoefficients`).
+
+**No cascades.** Traced, the shadow pass draws no cascade (`ShadowPass.RenderTraced`): it keeps the terrain and landmark maps and publishes the receiver blocks with no cascade.
+What draws no traced pixel reads the **visibility volume** instead (`Gi.TracedSunVolume`, after the traced scene's update, before the reflection): 192 x 108 froxels of the view
+x 64 slices exponential in depth from 2 to the shadows' range, one ray to the sun's centre from each froxel's centre (solids, characters, both terrain grids; no grass), RGBA8,
+the same every frame. It sits in the blocker binding (`uShadowBlocker`, unused without cascades), its camera in cascade 0's tile matrix and slices 0-1 (`msVolumeOn`,
+`msVolumeAt`; a surface reads it a froxel and a half towards the sun, `msVolumeSurface`). Readers: the light shafts (`shaftShadow`), the lit dust (`particleSun`), and through
+`kenshiShadowMeitou` the water's foam, the skin's light entry, impostors and the reflection (outside the view's volume: lit, but for the terrain and landmark maps).
 
 **Rays** go to the sun's centre, the same every frame (no noise for the upscaler to average, no history to trail). There is no receiver identity as in KenshiNative's
 G-buffer, so what it skips by name is skipped along the ray. Solids leave the plane the depth shows by half a pixel's footprint, slope-scaled; cards leave from the sun's face
 and skip 3 footprints plus 0.5. Queries, each after the last missed:
 - objects (as far as the shadows' range, at least the probes' 6000), foliage, small foliage (`0x10`: radius 6 and up within 3000), characters (`0x40`), alpha-tested in
   candidates; a part an object's material cuts reports candidates through `ForceNoOpaque`;
-- the fine terrain grid from a point 3 units (+0.2 % of the distance) above the surface, along the whole ray: the grid is not the drawn ground (displacement, curved outline),
-  and the 24-unit blind range it had let the ground at a cliff's foot see the sun through the cliff; the coarse grid (`0x08`) from 320 along the ray. Back faces are skipped
-  as the probes skip them, but not from interiors (bit 9);
+- the fine terrain grid along the whole ray from the grid's own height under the point (a ray down within the relief's 12-unit amplitude; a point farther from the grid, a
+  roof, leaves from where it is), lifted 3 units (+0.2 % of the distance): the grid holds no relief and not the curved outline, so a crest the relief raised must not see
+  over a ridge its trough is shadowed by (**Observed** in play: lit ripple crests inside a dune's shadow), and the 24-unit blind range it had let the ground at a cliff's
+  foot see the sun through the cliff; the coarse grid (`0x08`) from 320 along the ray. Back faces are skipped as the probes skip them, but not from interiors (bit 9);
 - grass (`0x20`), only as far as the ray can stay under the tallest blade, fading out by amount (not noise) over the last quarter of its reach.
 
-**Penumbra** (`TracedSunShaders.Filter`, no history): round each traced pixel 24 fixed sunflower taps within 12 pixels on its own surface (within its plane by half the search
-footprint) give a mean blocker distance; the penumbra radius is that times the sun's tangent (0.00465, the real 0.267 degrees; KenshiNative's 0.015 widened far penumbrae
-threefold), at most 16 pixels, and the mask is averaged over 24 taps of that disc on the same surface. A pixel with no blocker round it keeps its ray. A still view gives the
-same mask every frame; under motion nothing trails. Contact hardening follows from the blocker distance.
+**Penumbra** (`PenumbraFilter`, shared with the lamps, no history): the rays write, where blocked, the penumbra's radius at the receiver (the sun's tangent 0.00465, the real
+0.267 degrees, times the blocker's distance; KenshiNative's 0.015 widened far penumbrae threefold). A row pass takes the mean radius of 16 fixed sunflower taps within 12
+pixels on the pixel's own surface (within its plane), in pixels, at least 1 and at most 16, and averages along the row with a box whose end taps weigh their fraction; a
+column pass does the same at that radius. The weights are continuous, so a wide penumbra is a smooth ramp: the former 16-tap disc with taps rounded to pixels left bands
+along wide penumbrae (**Observed** in play). The one-pixel least radius anti-aliases contact edges (the rays alone stair-stepped them under DLSS, **Observed** in play); the
+rays leave from the jittered pixel's own depth, so the upscaler sees the edge move with its jitter. A still view gives the same mask every frame; under motion nothing
+trails. Contact hardening follows from the blocker distance.
 
 **Characters** are in the rays (`TracedCharacters`, [render-lights](render-lights.md#traced-lamp-shadows)): the nearest 128 within 4000 whose shadow can be in view, at the level the
 colour pass draws, skinned with the frame's palettes, so a surface's ray leaves the same triangles it drew and a body shadows itself only where it does (armour layers, hair over
@@ -100,9 +111,9 @@ GI sees them; an object's texture tile is not read in the alpha test. The penumb
 surface keeps its hard edge there. **Unknown**: the saw-toothed terrain shadows reported on displaced dunes were not reproduced offscreen (dunes round the siwa-test6 save at
 06:00-07:00 and 18:24); the fine grid was 16 apart over the heightmap's 18 (bilinear facets), now 8 apart through a Catmull-Rom surface. **Observed** costs: see Measured.
 
-**Observed** (RTX 4090, 1920 x 1080 with DLSS; the GPU shared with another job, runs varied 2-4x): rays 0.05-0.43 ms, penumbra filter 0.08-0.39 ms (most in a close-up,
-where penumbrae are widest); the cascades, still drawn, 0.5-1.3 ms. With a still camera the frame-to-frame change is DLSS's own: 0.12/255 mean and 0.11 % of pixels over 4,
-traced or cascades alike (siwa-test6, six frames).
+**Observed** (RTX 4090, 1920 x 1080 with DLSS, the median GPU frame time of 36, a still camera, shafts on). Cascades / traced / Off: the Hub at 17:12
+2.47 / 2.08 / 1.71 ms, the siwa-test6 close-up 2.34 / 2.37 / 1.94, dunes at 06:24 2.04 / 1.62 / 1.34. Traced passes (an earlier run): rays and penumbra 0.07-0.10 ms,
+the volume 0.09-0.11 ms, a close-up character 0.06 ms. With a still camera the frame-to-frame change is DLSS's own (0.09-0.16/255 mean), traced or cascades alike.
 
 ## Validation and limits
 

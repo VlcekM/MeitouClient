@@ -89,6 +89,7 @@ static class LightShaftShaders
             int count = int(uShadowForward.w);
             if (!meitou || depth < uMsParams.y)
             {
+                if (meitou && msVolumeOn()) lit = msVolumeAt(world);   // the traced sun's volume (no cascades)
                 for (int c = 0; c < {{ShadowSettings.MaxCascades}}; c++)
                 {
                     if (c >= count) break;

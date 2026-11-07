@@ -408,7 +408,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { sceneColour, sceneDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[0].Soft, lowTargets[1].Accum, lowTargets[1].Depth, lowTargets[1].Soft, softDepth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, lampLost, ssrHit, ssrLow, shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory, tracedTerm, tracedMask, tracedFiltered }.OfType<Target2D>();
+        new[] { sceneColour, sceneDepth, motion, upscaleDepth, reactive, historyA, historyB, aoA, aoB, aoMask, ldr, ldrFxaa, smaaEdges, smaaWeights, luminance, adaptA, adaptB, lowTargets[0].Accum, lowTargets[0].Depth, lowTargets[0].Soft, lowTargets[1].Accum, lowTargets[1].Depth, lowTargets[1].Soft, softDepth, rateDistance, rateImage, neutralRate, giAlbedo, giLow, lampLost, ssrHit, ssrLow, shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory, tracedTerm, tracedMask, tracedScratch, tracedFiltered, lampScratch, lampFiltered }.OfType<Target2D>();
 
     void Free()
     {
@@ -418,7 +418,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         rateBuiltFrame = long.MinValue;
         aoA = aoB = aoMask = ldr = ldrFxaa = smaaEdges = smaaWeights = luminance = adaptA = adaptB = null;
         foreach (var l in lowTargets) l.Accum = l.Depth = l.Soft = null;
-        tracedTerm = tracedMask = tracedFiltered = giAlbedo = giLow = lampLost = ssrHit = ssrLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
+        tracedTerm = tracedMask = tracedScratch = tracedFiltered = lampScratch = lampFiltered = giAlbedo = giLow = lampLost = ssrHit = ssrLow = shaftInjected = shaftLight = shaftScatter = shaftRaw = shaftHistory = softDepth = null;
         FreeBloom();
         FreeMotionBlur();
         FreeDepthOfField();
@@ -1019,9 +1019,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// The contact shadows over the scene now, whatever the occlusion (SSAO, GTAO or none; docs/render-post.md "Contact shadows"), at the render size, so the
     /// characters keep theirs in full and their fine detail.
     /// </summary>
+    /// <summary>The sun casts shadows this frame (set by the world frame): false with the sun shadows Off (<see cref="SunShadowMode"/>), when the contact shadows have nothing to add to.</summary>
+    public bool SunShadowed { get; set; } = true;
+
     void ApplyContactShadows()
     {
-        if (!Options.ContactShadows || !haveScene || sceneColour is null || sceneDepth is null) return;
+        // Not with the sun shadows Off (no shadow at all), nor traced (the rays hold the contact shadows: they would only add a screen-space guess).
+        if (!Options.ContactShadows || !SunShadowed || TracedSun || !haveScene || sceneColour is null || sceneDepth is null) return;
         var c = contactPass ??= new ContactPass(Gpu);
         float tanY = MathF.Tan(fovY * 0.5f);
         Bind(c.P, c.Depth, sceneDepth);

@@ -78,7 +78,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
         g.Publish(MeitouShadowShaders.Block, meitouBlock.Binding);
         // The terrain shadow map with its own sampler (linear, clamped; TerrainShadowMap).
         g.Publish("uShadowTerrain", () => boundTerrain ?? default);
-        g.Publish("uShadowBlocker", () => blockerPublished ? blockerSampled : default);
+        // Traced, the binding carries the sun's visibility volume instead (ShadowPass.Traced: no cascades, so no blocker map).
+        g.Publish("uShadowBlocker", () => volumePublished ? volumeSampled : blockerPublished ? blockerSampled : default);
         g.Publish("uShadowLandmark", () => landmarkPublished ? landmarkSampled : default);   // the landmark shadow map (comparison, linear, clamped)
     }
 
@@ -161,6 +162,7 @@ public sealed unsafe partial class ShadowPass : IDisposable
         TracedCascades = 0;
         TracedDepth = 0;
         if (!Enabled || (sunHeight ?? toSun.Y) < MinSunHeight || toSun.LengthSquared() < 1e-8f) { Disable(); return; }
+        if (Meitou && TracedWhole) { RenderTraced(view, Vector3.Normalize(toSun), landmarks); return; }
         if (Meitou) { RenderMeitou(view, Vector3.Normalize(toSun), draw, landmarks, prepare); return; }
         meitouValid = false;
         var watch = Stopwatch.StartNew();

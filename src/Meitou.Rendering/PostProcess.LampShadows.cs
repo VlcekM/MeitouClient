@@ -25,7 +25,10 @@ public sealed unsafe partial class PostProcess
     Gi.LampShadowPass? lampShadowTrace;
     LampShadowApplyPass? lampShadowApply;
     LampShadowFloorPass? lampShadowFloor;
-    Target2D? lampLost;
+    Target2D? lampLost, lampScratch, lampFiltered;
+
+    /// <summary>NDC, jittered as the scene was drawn, to the position relative to the eye (set by the world frame before the scene; the penumbra filters reconstruct with it).</summary>
+    internal Matrix4x4 SceneToEye { get; set; }
 
     /// <summary>Takes the occluded lamps' diffuse light off the scene. <paramref name="scene"/> must hold this frame's traced scene.</summary>
     internal void RunLampShadows(Gi.GiScene? scene, WorldLamps? lamps)
@@ -36,13 +39,15 @@ public sealed unsafe partial class PostProcess
 
         MarkScene();
         var lost = lampLost ??= MakeLampLost();
+        var scratch = lampScratch ??= MakeLampLost();
+        var filtered = lampFiltered ??= MakeLampLost();
         CloseSegment();
         var trace = lampShadowTrace ??= new Gi.LampShadowPass(Gpu, Options.LampShadowLamps);
-        trace.Run(scene, lamps, depth.Texture, surface.Texture, lost.Texture, LampShadowViewNow());
+        trace.Run(scene, lamps, depth.Texture, surface.Texture, lost.Texture, scratch.Texture, filtered.Texture, LampShadowViewNow(), SceneToEye);
 
         var a = lampShadowApply ??= new LampShadowApplyPass(Gpu);
         SetGiView(a);
-        Bind(a.P, a.Lost, lost);
+        Bind(a.P, a.Lost, filtered);
         a.P.ApplyGlobals();   // the haze's uniforms
         Draw(a.P, colour.Attachment, colour.Format, width, height, width, height, LampShadowState);
         var floor = lampShadowFloor ??= new LampShadowFloorPass(Gpu);
