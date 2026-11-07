@@ -437,9 +437,12 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   the eyes with no length limit, so distance never matters. The melee callers are the CombatClass target setters (`FUN_140665580`, `FUN_140665650`,
   `FUN_1406681e0`; the deciding state `FUN_14060c8b0` sets the target at the pick, before any chase), the swing start (`FUN_1402b4570`, flag clear)
   and the stealth knock-out (`FUN_14034cd80`). A shooter never comes here: the ranged controller's target setter (`FUN_1404371f0`) only sends "stop"
-  to the old target (its one other call, `FUN_1405c68a0`, drives the shooter's own movement object), and a bolt hit (`FUN_140439c90`) calls the shot handler `FUN_140999d50`, which senses the shooter, tags it and replans a target
-  whose fight is off, but leaves one getting up (+0x278) alone, with no knock-down roll (**Verified**, decompile; the only writer of 10.0 to +0x4f8 is
-  `FUN_140999f00`). So crossbowmen picking or shooting a character that gets up never knock it down. Meitou: `CombatSystem.Alerts`, taken by
+  to the old target (the shot handler with its flag clear, `FUN_1406657d0` only; its one other call, `FUN_1405c68a0`, drives the shooter's own movement object), so the
+  new target learns nothing at the pick. Each shot fired (`FUN_14043a730`) and each bolt hit (`FUN_140439c90`) calls the shot handler `FUN_140999d50` on the target with
+  the flag set: the forced sense of the shooter with the alarm flag (`FUN_140858f40`, 1), sneaking off (`FUN_1405ca9a0`, 0), the squad's TEMP_ENEMY tag
+  (`FUN_1406744a0`, 4), and with its fight off (+0x130) and not getting up (+0x278) a replan; no knock-down roll and no stand from staying low (**Verified**, decompile; the only writer of 10.0 to +0x4f8 is
+  `FUN_140999f00`). So crossbowmen picking or shooting a character that gets up never knock it down, and a target learns of a shooter at its first shot. Meitou:
+  `CombatSystem.Alerts` for a melee attacker, the first shot since the pick for a shooter (`RetaliationSystem.AlertsNow`; the bowman's alert adds `AggroSystem.Alarm`), taken by
   `RetaliationSystem` the same tick (it ends sneaking, makes the attacker a threat of the target at once, `AggroSystem.Force`, and asks an NPC's AI to think at the next tick); same place by `SightMap.PlaceOf`, same floor as within 20 units of height inside, a terrain and
   building line between the eyes; aware = fighting the attacker or hit by it (engine readings). The 10% knock-down: `CombatSystem.UnderAttackGettingUp`, from the alert of
   an attacker not in ranged mode (`CombatSlot.Ranged`) and from a landed melee blow outside a fight; a bolt's stagger skips it. A landed blow or bolt on an NPC with its fight off, not getting up, asks its AI to think again (`CombatSystem.HitReplan`).

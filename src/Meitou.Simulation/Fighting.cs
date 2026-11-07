@@ -327,8 +327,12 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     public const int CheckEveryTicks = 15;
 
     readonly List<int> guards = [];
-    /// <summary>Per attacker slot: the target (slot, generation) it last took and whether that target has been alerted (<see cref="CombatSystem.Alerts"/>).</summary>
+    /// <summary>
+    /// Per attacker slot: the target (slot, generation) it last took, the tick it was taken, and whether that target has been alerted (<see cref="CombatSystem.Alerts"/>,
+    /// or a shot for a shooter).
+    /// </summary>
     int[] alertSlot = [], alertGeneration = [];
+    long[] alertTick = [];
     bool[] alerted = [], justAlerted = [];
 
     readonly List<(int Foe, List<CharacterId> Joiners)> byFoe = [];
@@ -515,6 +519,49 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         }
     }
 
+    /// <summary>
+    /// Whether attacker <paramref name="a"/> alerts its target <paramref name="t"/> this pass: a melee fighter on taking it (<see cref="CombatSystem.Alerts"/>); a shooter only
+    /// once it has fired at it since (its target setter alerts nobody; the shot calls the victim's shot handler, docs/game/combat.md "Being targeted"). The state read lags a
+    /// tick, so a shot of the tick before the target was seen counts.
+    /// </summary>
+    bool AlertsNow(World world, int a, int t, in CombatSlot st)
+    {
+        if (!st.Ranged) return combat.Alerts(world, a, t);
+        return st.Shots > 0 && st.ShotTick >= alertTick[a] - 1;
+    }
+
+    /// <summary>
+    /// The target's side of an alert (<c>AI::underMeleeAttack</c> for a melee attacker, the shot handler <c>FUN_140999d50</c> for a shooter): it senses the attacker (seen),
+    /// stops sneaking, its squad tags the attacker TEMP_ENEMY, and with its fight off it replans. Only a melee attacker makes one staying low stand and rolls the knock-down
+    /// of one getting up.
+    /// </summary>
+    void Alert(World world, int a, int t, bool melee)
+    {
+        var aggro = world.SystemOf<AggroSystem>();
+        aggro?.Force(world, t, a);
+        // The shot handler's forced sense carries the alarm flag (the bolt hit's FUN_140999d50 call does the same, CombatSystem's bolt hit).
+        if (!melee) aggro?.Alarm(world, world.Characters.IdOf(t), world.Characters.IdOf(a));
+        world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, t, a);
+        if (world.Characters.Cold(t) is not { } tc) return;
+
+        tc.Orders &= ~CharacterOrders.Sneak;
+        bool gettingUp = CharacterFacts.GettingUp(tc, world.Tick);
+        if (melee)
+        {
+            // Under melee attack (Character +0x2b0) one staying low stands.
+            if (tc.Medical is { } medical) medical.StayingLow = false;
+            combat.UnderAttackGettingUp(world, t, tc, (ulong)(uint)a);
+        }
+
+        // With its fight off it replans, unless it is getting up or is player-side and moving (docs/game/combat.md "Being targeted"): an NPC's AI thinks at the next tick,
+        // where its Self preservation takes the attacker up.
+        if (!tc.InCombat && !gettingUp && !(tc.IsPlayer && world.Characters.Next[t].Velocity.LengthSquared() > 1))
+        {
+            DecisionSystem.Request(tc);
+            if (tc.Ai is { } mind) mind.Replan = true;
+        }
+    }
+
     public void SlowWorld(World world)
     {
         var table = world.Characters;
@@ -524,6 +571,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             int size = Math.Max(table.HighWater, alertSlot.Length * 2);
             Array.Resize(ref alertSlot, size);
             Array.Resize(ref alertGeneration, size);
+            Array.Resize(ref alertTick, size);
             Array.Resize(ref alerted, size);
             Array.Resize(ref justAlerted, size);
         }
@@ -543,32 +591,15 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             {
                 alertSlot[a] = t;
                 alertGeneration[a] = next[t].Generation;
+                alertTick[a] = world.Tick;
                 alerted[a] = false;
             }
             if (!alerted[a])
             {
-                if (!combat.Alerts(world, a, t)) continue;
+                var st = combat.StateOf(new CharacterId(a, next[a].Generation));
+                if (!AlertsNow(world, a, t, st)) continue;
                 alerted[a] = justAlerted[a] = fresh = true;
-                // The alert ends the target's sneaking, puts the attacker in its senses (seen) and its squad tags the attacker TEMP_ENEMY (AI::underMeleeAttack).
-                world.SystemOf<AggroSystem>()?.Force(world, t, a);
-                world.SystemOf<Dialogue.DialogueSystem>()?.TagEnemy(world, t, a);
-                if (table.Cold(t) is { } tc)
-                {
-                    tc.Orders &= ~CharacterOrders.Sneak;
-                    // Under melee attack (Character +0x2b0) one staying low stands.
-                    if (tc.Medical is { } medical) medical.StayingLow = false;
-                    bool gettingUp = CharacterFacts.GettingUp(tc, world.Tick);
-                    // Only a melee pick rolls the knock-down: a shooter's target setter calls the shot handler, which has none (docs/game/combat.md "Being targeted").
-                    bool melee = !combat.StateOf(new CharacterId(a, next[a].Generation)).Ranged;
-                    if (melee) combat.UnderAttackGettingUp(world, t, tc, (ulong)(uint)a);
-                    // With its fight off it replans, unless it is getting up or is player-side and moving (docs/game/combat.md "Being targeted"): an NPC's AI thinks at the next tick,
-                    // where its Self preservation takes the attacker up.
-                    if (!tc.InCombat && !gettingUp && !(tc.IsPlayer && next[t].Velocity.LengthSquared() > 1))
-                    {
-                        DecisionSystem.Request(tc);
-                        if (tc.Ai is { } mind) mind.Replan = true;
-                    }
-                }
+                Alert(world, a, t, !st.Ranged);
             }
             OfferSelf(table, a, t);
         }
