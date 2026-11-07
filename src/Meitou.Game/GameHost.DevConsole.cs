@@ -172,7 +172,7 @@ sealed partial class GameHost
         }
         ConsoleCommand Self(string name) => c.Find(name)!;
 
-        Add("help", "help [command]", "list the commands with their usage, or show one command's usage and description (an unknown name lists the close ones)", (args, con) =>
+        Add("help", "help [command]", "list the commands with their usage, show one command's usage and description, or (no exact name) search names, usage and descriptions for the word", (args, con) =>
         {
             bool channel = con.Tap is not null;   // the control channel gets the short list and the structured reply
             if (args.Count > 1) { con.Error("usage: help [command]"); return; }
@@ -192,11 +192,18 @@ sealed partial class GameHost
                 con.Print($"{one.Usage}\n{one.Help}");
                 return;
             }
+            // No exact name: search the names, usage and description text for the word (case-insensitive).
+            var found = con.Commands.Where(x => x.Name.Contains(name, StringComparison.OrdinalIgnoreCase) || x.Usage.Contains(name, StringComparison.OrdinalIgnoreCase) || x.Help.Contains(name, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.Name.Contains(name, StringComparison.OrdinalIgnoreCase) ? 0 : 1).ToList();
+            if (found.Count > 0)
+            {
+                if (channel) controlData = System.Text.Json.JsonSerializer.Serialize(new { commands = found.Select(x => new { name = x.Name, usage = x.Usage }) });
+                foreach (var cmd in found) con.Print($"{cmd.Usage}  -  {cmd.Help}");
+                return;
+            }
             var names = con.Commands.Select(x => x.Name).ToList();
-            var close = names.Where(n => n.StartsWith(name, StringComparison.Ordinal) || n.Contains(name, StringComparison.Ordinal) || name.Contains(n, StringComparison.Ordinal)).ToList();
-            if (close.Count == 0) close = [.. names.Where(n => HelpDistance(n, name) <= 2)];
-            if (close.Count == 0) close = [.. names.Where(n => HelpDistance(n, name) <= 3)];
-            con.Error($"unknown command '{args[0]}'" + (close.Count > 0 ? "; close names: " + string.Join(", ", close.Take(8)) : "; help lists them all"));
+            var close = names.Where(n => HelpDistance(n, name) <= 2).ToList();
+            con.Error($"nothing matches '{args[0]}'" + (close.Count > 0 ? "; close names: " + string.Join(", ", close.Take(8)) : "; help lists all commands"));
         }, (i, typed) => i == 0 ? c.Commands.Select(x => x.Name).Where(n => n.StartsWith(typed, StringComparison.OrdinalIgnoreCase)) : []);
 
         Add("clear", "clear", "empty the scrollback", (_, con) => con.Clear());
