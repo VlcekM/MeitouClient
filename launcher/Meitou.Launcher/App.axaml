@@ -202,7 +202,8 @@
       <Setter Property="BorderThickness" Value="0,0,0,1" />
       <Setter Property="Padding" Value="2,2,2,10" />
     </Style>
-    <Style Selector="Border.header TextBlock">
+    <!-- The bar's own TextBlocks only, not the text inside a button on it -->
+    <Style Selector="Border.header > TextBlock, Border.header > DockPanel > TextBlock, Border.header > Panel > DockPanel > TextBlock">
       <Setter Property="Foreground" Value="{StaticResource PaperLight}" />
       <Setter Property="FontSize" Value="24" />
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -211,6 +212,13 @@
       <Setter Property="FontSize" Value="13" />
       <Setter Property="FontWeight" Value="Medium" />
       <Setter Property="Foreground" Value="{StaticResource Quiet}" />
+    </Style>
+    <!-- A small plate button at the bar's right end; overhangs the padding so the bar keeps its height -->
+    <Style Selector="Border.header Button.aside">
+      <Setter Property="Padding" Value="12,4" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Margin" Value="0,-4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <!-- What an empty list says, in the middle of the room it would have filled -->
     <Style Selector="TextBlock.empty">
@@ -621,7 +629,7 @@
       <Setter Property="Margin" Value="0,-8" />
       <Setter Property="CornerRadius" Value="10" />
     </Style>
-    <!-- Over the header's large pale TextBlock style (later style wins) -->
+    <!-- Black on white, smaller than the window's text -->
     <Style Selector="Button.kofi TextBlock">
       <Setter Property="Foreground" Value="Black" />
       <Setter Property="FontSize" Value="13" />

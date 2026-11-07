@@ -193,7 +193,8 @@
         <DockPanel x:Name="ModsPage" IsVisible="False">
           <Border DockPanel.Dock="Top" Classes="header" Margin="0,0,0,10">
             <DockPanel>
-              <TextBlock x:Name="ModCount" DockPanel.Dock="Right" Classes="aside" />
+              <Button DockPanel.Dock="Right" Classes="aside" Content="Refresh" Click="RefreshMods_Click"
+                      ToolTip.Tip="List the mods folder and the Steam workshop items again" />
               <TextBlock Text="Mods" />
             </DockPanel>
           </Border>
@@ -207,7 +208,6 @@
             <StackPanel Orientation="Horizontal" Spacing="6">
               <Button Content="Select all" Click="SelectAll_Click" />
               <Button Content="Select none" Click="SelectNone_Click" />
-              <Button Content="Refresh" Click="RefreshMods_Click" />
               <Button Content="Arrange" Click="ArrangeMods_Click"
                       ToolTip.Tip="Propose an order where each enabled mod loads after the mods it needs; nothing moves until you accept" />
             </StackPanel>

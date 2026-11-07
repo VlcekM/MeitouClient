@@ -147,7 +147,7 @@ public sealed partial class MainWindow : Window
         LauncherText.TranslateTree(this, originalUiText);
         ShowBuiltTexts();
         foreach (var row in mods) row.LanguageChanged();
-        if (modsReady) ShowModCount();
+        if (modsReady) ShowDependencyProblems();
         ShowReleases();
         PopulateLanguageOptions(install);
     }
@@ -479,7 +479,6 @@ public sealed partial class MainWindow : Window
         modsReady = false;
         mods.Clear();
         ModsEmpty.IsVisible = false;
-        ModCount.Text = Tr("Loading");
         var gameInstall = install;
         List<(ModEntry Entry, CodeModEntry Code)> entries;
         try
@@ -495,27 +494,19 @@ public sealed partial class MainWindow : Window
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             if (load != modsLoad) return;
-            ModCount.Text = "";
             ModsEmpty.IsVisible = true;
             ModsEmpty.Text = Tr("Could not read the mods: {1}", e.Message);
             return;
         }
         if (load != modsLoad) return;
         foreach (var (entry, code) in entries) mods.Add(new ModRow(entry.Mod, entry.Enabled, code));
-        // Only a toggle changes the count and the checks; the checks' own Notes changes must not start them again.
-        foreach (var row in mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ShowModCount(); };
+        // Only a toggle changes the checks; the checks' own Notes changes must not start them again.
+        foreach (var row in mods) row.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(ModRow.Enabled)) ShowDependencyProblems(); };
         modsReady = true;
-        ShowModCount();
+        ShowDependencyProblems();
         ModsEmpty.IsVisible = mods.Count == 0;
         ModsEmpty.Text = Tr(gameInstall is null ? "Set the Kenshi folder in Settings to list its mods."
             : "No mods found in Kenshi's mods folder or among its Steam workshop items.");
-    }
-
-    void ShowModCount()
-    {
-        if (checksSuspended) return;
-        ModCount.Text = mods.Count == 0 ? Tr("No mods found") : Tr("{1} of {2} enabled", mods.Count(m => m.Enabled), mods.Count);
-        ShowDependencyProblems();
     }
 
     // The code-mod rules the game applies at start that need no code (docs/modding-dependencies.md "Launcher"), shown on each row as the list
@@ -737,7 +728,7 @@ public sealed partial class MainWindow : Window
     /// Puts the named mods first, in this order and with these flags, and the others after them, disabled; answers the enabled names not on disk.
     /// </summary>
     /// <remarks>
-    /// The count and the dependency check are held while rows move and run once at the end, synchronously (Arrange reads the result).
+    /// The dependency check is held while rows move and runs once at the end, synchronously (Arrange reads the result).
     /// </remarks>
     List<string> ApplyOrder(IEnumerable<(string Name, bool Enabled)> order)
     {
@@ -760,7 +751,7 @@ public sealed partial class MainWindow : Window
         {
             checksSuspended = false;
         }
-        ShowModCount();
+        ShowDependencyProblems();
         return missing;
     }
 
