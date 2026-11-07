@@ -223,10 +223,11 @@ sealed partial class PlayerInterface
 
     /// <summary>
     /// The idle stance the editor shows a character in: its draft's <c>idle stance</c> (the original's preview plays the chosen stance; the world's idles are the
-    /// simulation's), or null while the editor is closed or has no draft of it.
+    /// simulation's), or null while the editor is closed or has no draft of it. An animal keeps the simulation's idle: the stance is a human clip its skeleton lacks,
+    /// and it stood frozen in its binding pose (#337).
     /// </summary>
     public string? EditorIdle(CharacterId id) =>
-        EditorOpen && editor!.Drafts.TryGetValue(id, out var draft) && draft.Record.Strings.GetValueOrDefault("idle stance") is { Length: > 0 } stance ? stance : null;
+        EditorOpen && !editor!.Animals.Contains(id) && editor.Drafts.TryGetValue(id, out var draft) && draft.Record.Strings.GetValueOrDefault("idle stance") is { Length: > 0 } stance ? stance : null;
 
     /// <summary>The preview look being prepared for a character (the host lists it hidden, so the renderer builds it), or null.</summary>
     public CharacterAppearance? EditorPending(CharacterId id) => EditorOpen && previews.TryGetValue(id, out var entry) ? entry.Pending : null;

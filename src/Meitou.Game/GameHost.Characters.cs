@@ -326,6 +326,8 @@ sealed partial class GameHost
                 poses[i] = new CharacterPose(layer.Name, time, weight);
             }
             if (player.EditorIdle(c.Id) is { } stance) poses = EditorStancePoses(c.Id, stance);
+            // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
+            else if (player.IsEditorAnimal(c.Id)) poses = [.. poses.Select(p => p with { Time = EditorClipTime(p.Animation, (float)realTime.Elapsed.TotalSeconds) })];
             // The Meitou editor's bar (GameHost.EditorBar.cs): the shown character stands in it, the others sit on its seats.
             if (inBar is { } place)
             {
