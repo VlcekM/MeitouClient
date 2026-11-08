@@ -65,7 +65,7 @@ public class TimeTests
         }
 
         // The speed-scaled simulation clock owes the same ticks however the time is split, at every speed.
-        foreach (double speed in SimulationClock.Speeds)
+        foreach (double speed in SimulationClock.DefaultSpeeds)
         {
             var one = new SimulationClock(maxTicksPerFrame: 1_000_000);
             one.SetSpeed(speed);

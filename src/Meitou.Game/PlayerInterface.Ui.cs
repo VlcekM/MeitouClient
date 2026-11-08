@@ -155,7 +155,7 @@ sealed partial class PlayerInterface
         b.Text["MoneyLabelText"] = "Money";
         // The bounty panel draws its own Bounty: line over the widget (PlayerInterface.HudText.cs).
         b.Properties["BountyText"] = new Dictionary<string, string> { ["SkipCaption"] = "true" };
-        for (int i = 0; i < ButtonSpeeds.Length; i++) b.Actions[$"TimeSpeedButton{i + 1}"] = $"meitou:speed.{i}";
+        for (int i = 0; i < SpeedButtons; i++) b.Actions[$"TimeSpeedButton{i + 1}"] = $"meitou:speed.{i}";
         b.Actions["ShortcutInventoryButton"] = "meitou:inventory";
         b.Actions["ShortcutStatsButton"] = "meitou:stats";
         b.Actions["ShortcutHelpButton"] = "meitou:help";
@@ -428,7 +428,7 @@ sealed partial class PlayerInterface
         IReadOnlyList<UiControl> controls = ArrangeUi();
         if (cameraGrid) DrawCameraGrid(overlay, width, height);
         if (UiMode == UiMode.Faithful && LoadBar is { Visible: true } bar) controls = [.. controls, .. bar.Controls(uiResources, width, height)];
-        uiPainter?.Draw(controls, width, height, mouse, $"meitou:speed.{Array.IndexOf(ButtonSpeeds, session.Simulation.Speed)}",
+        uiPainter?.Draw(controls, width, height, mouse, SpeedButtonAction,
             minimumTextPixels: TitleOpen ? 0 : StandardPixels, pass: pass);
     }
 
@@ -440,7 +440,7 @@ sealed partial class PlayerInterface
         var controls = new List<UiControl>();
         AddSpeech(controls);
         if (controls.Count == 0) return;
-        uiPainter?.Draw(controls, width, height, mouse, $"meitou:speed.{Array.IndexOf(ButtonSpeeds, session.Simulation.Speed)}", minimumTextPixels: StandardPixels);
+        uiPainter?.Draw(controls, width, height, mouse, SpeedButtonAction, minimumTextPixels: StandardPixels);
         overlay.Flush(width, height);
     }
 

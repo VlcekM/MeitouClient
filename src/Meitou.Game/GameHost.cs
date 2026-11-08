@@ -150,6 +150,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             },
             systems: systems, walkability: walkability);
         session.World.BenchFacingFix = config.FixBenchFacing;
+        session.Simulation.SetFastSpeeds(config.FastSpeed, config.FastestSpeed);
         if (gpu.Characters is { } nearChars) session.World.NearRadius = nearChars.NearReach;   // every drawn character steps every tick (docs/simulation.md "Far cadence")
         BootPlayer(display, interactive);
     }

@@ -10,7 +10,7 @@ Control: 30 Hz real time, input/UI/camera continue while paused. The interface's
 crafting/research queues, squads, inventory, shops, building settings, the Stop order and every order, [order queue](#order-queue)) apply between ticks while paused
 (`World.ApplyPausedInterfaceCommands`); orders only set tasks, nobody moves or fights until the next tick. Simulation: 1/30 s game time;
 accumulate `min(realDt, 0.05)*speed` (the original's cap before the speed multiplier, slows below 20 fps, [game loop](game/game-loop.md#frame-clocks), **Verified**
-`FUN_14082ac70`), speeds 0/1/2/5. A safety budget of `2*speed` ticks per frame stays above that cap (engine choice; a larger one let a heavy world snowball); excess is dropped and
+`FUN_14082ac70`), speeds 0/1/2/5 (the 2 and 5 are Advanced settings, 1.5-4x and 5-20x in half steps). A safety budget of `ceil(2*speed)` ticks per frame stays above that cap (engine choice; a larger one let a heavy world snowball); excess is dropped and
 `AchievedSpeed` reports it. Control ticks precede simulation ticks; a speed change applies
 to the entire frame. `WorldSession` rejects unequal world/clock tick lengths, owns snapshots,
 clocks, input and camera, and disposes systems/services. Of a frame's ticks only the last two publish

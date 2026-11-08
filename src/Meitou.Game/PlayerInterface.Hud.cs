@@ -13,8 +13,8 @@ enum MessageTone { Normal, Player, System }
 sealed partial class PlayerInterface
 {
 
-    /// <summary>Pause, then the clock's speeds.</summary>
-    static readonly double[] ButtonSpeeds = [0, .. SimulationClock.Speeds];
+    /// <summary>The speed buttons: pause, then the clock's three speeds.</summary>
+    const int SpeedButtons = 4;
     const float Margin = 10, Pad = 6;
 
     public float HudBottom => 48;
@@ -117,7 +117,21 @@ sealed partial class PlayerInterface
 
     void PressButton(int index)
     {
-        session.Simulation.SetSpeed(ButtonSpeeds[index]);   // the pause button (0) never resumes; only the pause key does
+        session.Simulation.SetSpeed(ButtonSpeed(index));   // the pause button (0) never resumes; only the pause key does
+    }
+
+    /// <summary>The speed of speed button <paramref name="index"/>: 0 for the pause, else the clock's speed at that step.</summary>
+    double ButtonSpeed(int index) => index == 0 ? 0 : session.Simulation.Speeds[index - 1];
+
+    /// <summary>The lit speed button's action: the button whose speed is the clock's (none for a console speed off the steps).</summary>
+    string SpeedButtonAction
+    {
+        get
+        {
+            double speed = session.Simulation.Speed;
+            int index = speed == 0 ? 0 : session.Simulation.StepOf(speed) is var i and >= 0 ? i + 1 : -1;
+            return $"meitou:speed.{index}";
+        }
     }
 
     /// <summary>The selected characters of the current snapshot, found once per snapshot (the HUD box is asked for on every hit test).</summary>

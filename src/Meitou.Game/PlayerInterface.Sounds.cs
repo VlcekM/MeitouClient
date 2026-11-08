@@ -119,11 +119,11 @@ sealed partial class PlayerInterface
         if (UiSound is null) return;
         if (action.StartsWith("speed:", StringComparison.Ordinal))
         {
-            // Game_Speed is a state; the exe sets it and posts for 1, 2 and 5 only (140787e40).
+            // Game_Speed is a state; the exe sets it and posts for 1, 2 and 5 only (140787e40), its three speed buttons; Meitou posts per button, whatever its speed.
             int index = int.Parse(action[6..], CultureInfo.InvariantCulture);
-            if (index > 0 && ButtonSpeeds[index] is var speed && (speed == 1 || speed == 2 || speed == 5))
+            if (index is > 0 and < SpeedButtons)
             {
-                string name = speed == 1 ? "Normal" : speed == 2 ? "x2" : "x4";
+                string name = index == 1 ? "Normal" : index == 2 ? "x2" : "x4";
                 Sound("Game_Speed_" + name, "Game_Speed", name, state: true);
                 speedSounded = true;
             }

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.RegularExpressions;
 using Meitou.Data.Ui;
 using Meitou.Engine.Input;
+using Meitou.Engine.Time;
 using Meitou.Rendering;
 using AudioSettings = Meitou.Audio.AudioSettings;
 
@@ -115,6 +116,18 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     Slider HarpoonLimitSlider => harpoonLimitSlider ??= new("Harpoon limit", global::Meitou.Simulation.Combat.RangedTuning.MinStuckLimit, global::Meitou.Simulation.Combat.RangedTuning.MaxStuckLimit, () => (config.Gameplay ??= new()).HarpoonLimit,
         v => SetGameplay((config.Gameplay ?? new()) with { HarpoonLimit = Math.Clamp((int)MathF.Round(v), global::Meitou.Simulation.Combat.RangedTuning.MinStuckLimit, global::Meitou.Simulation.Combat.RangedTuning.MaxStuckLimit) }), "0", Logarithmic: true,
         Faithful: global::Meitou.Simulation.Combat.RangedTuning.DefaultStuckLimit);
+    Slider? fastSpeedSlider, fastestSpeedSlider;
+    Slider FastSpeedSlider => fastSpeedSlider ??= TimeSpeed("Fast speed", SimulationClock.MinFastSpeed, SimulationClock.MaxFastSpeed, 1, () => config.FastSpeed, v => config.FastSpeed = v);
+    Slider FastestSpeedSlider => fastestSpeedSlider ??= TimeSpeed("Fastest speed", SimulationClock.MinFastestSpeed, SimulationClock.MaxFastestSpeed, 2,
+        () => config.FastestSpeed, v => config.FastestSpeed = v);
+
+    /// <summary>A speed button's game speed, in half steps, applied to the running clock at once.</summary>
+    Slider TimeSpeed(string label, double min, double max, int step, Func<double> get, Action<double> set) =>
+        new(label, (float)min, (float)max, () => (float)get(), v =>
+        {
+            set(Math.Clamp(Math.Round(v * 2) / 2, min, max));
+            TimeSpeedsChanged?.Invoke();
+        }, "0.#", Text: v => $"{v:0.#}x", Faithful: (float)SimulationClock.DefaultSpeeds[step]);
     Slider? groundItemsSlider;
     Slider GroundItemsSlider => groundItemsSlider ??= new("Dropped items kept", 16, global::Meitou.Simulation.Items.GroundItems.MaxLimit, () => config.GroundItemLimit,
         v => config.GroundItemLimit = Math.Clamp((int)MathF.Round(v), 1, global::Meitou.Simulation.Items.GroundItems.MaxLimit), "0", Logarithmic: true,
@@ -171,6 +184,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     public Action? ResetTutorials { get; init; }
     /// <summary>The door auto-close switch changed (<see cref="UserConfig.DoorsCloseBehind"/>).</summary>
     public Action<bool>? DoorsCloseChanged { get; init; }
+    /// <summary>The fast speeds changed (<see cref="UserConfig.FastSpeed"/>, <see cref="UserConfig.FastestSpeed"/>).</summary>
+    public Action? TimeSpeedsChanged { get; init; }
     /// <summary>Applies a new camera rotation speed (<see cref="UserConfig.CameraRotateSpeed"/>) to the camera.</summary>
     public Action<float>? CameraRotateSpeedChanged { get; init; }
     /// <summary>A camera option other than the rotation speed changed (invert X / Y, move speed, zoom speed; <see cref="UserConfig.ApplyCamera"/>).</summary>
@@ -479,6 +494,9 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Decapitation", () => config.Decapitation, v => { config.Decapitation = v; GameplayChanged?.Invoke(); }, Remaster: true, OnOff: true)));
             result.Add(new("Advanced ragdolls", "A character knocked down or killed by a blow falls with its own momentum and is pushed away from the hit, harder the heavier the blow and most at the part that was struck, its arms and legs flung by it, and a cut-off head flies the same way. Limp bodies have joints that ease to a stop and a slight muscle tone, so they settle into natural poses. In the game a body drops where it stood, its joints stopping hard.",
                 Toggle: new("Advanced ragdolls", () => config.AdvancedRagdolls, v => { config.AdvancedRagdolls = v; GameplayChanged?.Invoke(); }, Remaster: true)));
+            result.Add(new(FastSpeedSlider.Label, "The game speed of the second speed button (two arrows) and its key (the game: 2x).", Slider: FastSpeedSlider));
+            result.Add(new(FastestSpeedSlider.Label, "The game speed of the third speed button (three arrows) and its key (the game: 5x). "
+                + "High speeds need a fast processor; when it cannot keep up the game runs slower than chosen.", Slider: FastestSpeedSlider));
             result.Add(new("Pause after loading", "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
                 Toggle: new("Pause after loading", () => config.PauseOnLoad, v => config.PauseOnLoad = v, OnOff: true)));
             result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
@@ -777,6 +795,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         player.DeselectBuildings = config.DeselectBuildings = true;
         config.LuckyrenMode = false;
         config.GroundItemLimit = global::Meitou.Simulation.Items.GroundItems.DefaultLimit;
+        (config.FastSpeed, config.FastestSpeed) = (SimulationClock.DefaultSpeeds[1], SimulationClock.DefaultSpeeds[2]);
+        TimeSpeedsChanged?.Invoke();
         player.SetUiMode(UiMode.Meitou);
         player.SpeedUnit = config.SpeedUnit = SpeedUnit.Mph;
         player.Floaters = config.Floaters = FloaterMode.Simple;

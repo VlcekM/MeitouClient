@@ -476,9 +476,14 @@ sealed partial class GameHost
             con.Print(interfaceHidden ? "interface hidden" : "interface shown");
         });
 
-        Add("speed", "speed <0|1|2|5>", "set the game speed (0 pauses)", (args, con) =>
+        Add("speed", "speed <0|1|2|5>", "set the game speed (0 pauses; 2 and 5 are the default fast speeds, Advanced settings)", (args, con) =>
         {
-            if (args.Count != 1 || !double.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double v) || (v != 0 && Array.IndexOf(Meitou.Engine.Time.SimulationClock.Speeds, v) < 0)) { con.Error("usage: speed <0|1|2|5>"); return; }
+            var speeds = session.Simulation.Speeds;
+            if (args.Count != 1 || !double.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double v) || (v != 0 && !speeds.Contains(v)))
+            {
+                con.Error($"usage: speed <0|{string.Join('|', speeds.Select(s => s.ToString(CultureInfo.InvariantCulture)))}>");
+                return;
+            }
             session.Simulation.SetSpeed(v);
             con.Print($"speed {v}");
         });

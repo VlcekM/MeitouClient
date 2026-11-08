@@ -181,6 +181,9 @@ sealed class UserConfig
     public bool DeselectBuildings { get; set; } = true;
     /// <summary>A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying (Advanced settings; an easter egg, off by default, not part of the all Faithful / all Meitou switches; docs/game/luckyren.md).</summary>
     public bool LuckyrenMode { get; set; }
+    /// <summary>The second and third speed buttons' (and keys') game speeds (Advanced settings; the game's 2 and 5 by default; <see cref="Meitou.Engine.Time.SimulationClock.SetFastSpeeds"/>).</summary>
+    public double FastSpeed { get; set; } = Meitou.Engine.Time.SimulationClock.DefaultSpeeds[1];
+    public double FastestSpeed { get; set; } = Meitou.Engine.Time.SimulationClock.DefaultSpeeds[2];
     /// <summary>How many items dropped in play stay on the ground before the oldest goes (Advanced settings; <see cref="Meitou.Simulation.Items.GroundItems.Limit"/>).</summary>
     public int GroundItemLimit { get; set; } = Meitou.Simulation.Items.GroundItems.DefaultLimit;
     /// <summary>The <c>--sandbox</c> debug panel at the top right is folded to its button (a down arrow); a click on the button toggles it.</summary>

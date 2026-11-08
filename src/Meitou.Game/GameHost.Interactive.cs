@@ -138,6 +138,7 @@ sealed partial class GameHost
                 GunnerFacingChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.GunnerFacesBarrel = on; },
                 PunchReachChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.PunchReachFix = on; },
                 BenchFacingChanged = on => session.World.BenchFacingFix = on,
+                TimeSpeedsChanged = () => session.Simulation.SetFastSpeeds(config.FastSpeed, config.FastestSpeed),
                 DoorsCloseChanged = on => { foreach (var locks in session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on; },
                 AudioChanged = AudioSettingsChanged,
                 GameplayChanged = ApplyGameplay,
