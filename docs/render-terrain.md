@@ -252,6 +252,7 @@ or save change, and marks are lost when the window moves past them. Vulkan host 
   (about 3 us each); the GPU draws a few quads.
 - **Shape**: body stadia draw as two passes after the other marks (all rims, then all cores), so parts of one body that overlap leave one bowl, not ridges. Edge, depth and rim
   are modulated by value noise fixed to the image's texels (4, 16 and 64 texel cells), so every stamp on the same ground gets the same irregularity: no flicker, no seams between sweeps.
+- **Animals' prints** (`TrailKind.Paw`, the stamp's `paw`): a pad and four toes melted together, the toes the way the body moves; a sole is a two-legged body's only, so a dog's long flat contact is a paw too. **Observed** (siwa-test6, a Bonedog walking a cleared lane, top-down): one paw per footfall, toes forward (a disc read as a ring pressed into the sand). The shape is Meitou's: the game has no prints.
 - **Ground** (`GroundSurfaces`, the footsteps' GroundType at the mark): sand, mud and snow in full, dirt at 0.45, nothing else. A mark under a low building floor is stamped but hidden.
 - **Shading** (colour programs built with `TERRAIN_TRAILS`; `TerrainRenderer.MakeTrailed`, the switch off: none of it is in the program): the slopes over the pixel's footprint
   tilt the shading normal, and pressed ground is up to 15% darker. Patches only, fading from n.y 0.7 to 0.55.

@@ -195,14 +195,16 @@ sealed partial class GameHost
     static TrailStamp PrintOf(in ContactPatch patch, Vector2 heading, float depth, bool upright, bool animal)
     {
         if (!upright) return new TrailStamp(patch.At, patch.Along, patch.Length, patch.Width, depth, TrailKind.Press);
-        if (patch.Flat && (patch.Length > SoleAspect * patch.Width || Partial(patch, upright, animal)))
+        // Soles are a two-legged body's: an animal's long flat contact (a dog's hock on the ground) is a paw too.
+        if (!animal && patch.Flat && (patch.Length > SoleAspect * patch.Width || Partial(patch, upright, animal)))
         {
             // Heel to toe: the way the foot bone points to its toe; without one, its axis turned to the way the body moves.
             var along = patch.Toe != Vector2.Zero ? patch.Toe : Vector2.Dot(patch.Along, heading) < 0 ? -patch.Along : patch.Along;
             return new TrailStamp(patch.At, along, patch.Length, patch.Length * SoleWidth, depth, TrailKind.Foot);
         }
         float size = MathF.Max(patch.Width, 0.8f) * PawPerWidth;
-        return new TrailStamp(patch.At, patch.Along, size, size, depth, TrailKind.Paw);
+        // Its toes the way the body moves (its axis is no guide: a paw's capsule lies any way round).
+        return new TrailStamp(patch.At, heading != Vector2.Zero ? heading : patch.Along, size, size, depth, TrailKind.Paw);
     }
 
     /// <summary>

@@ -156,6 +156,21 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             fragColour = vec4((rim - press) * strength, 1.0, 0.0, smoothstep(0.3, 0.16, d));
         }
 
+        // An animal's print, its toes towards +y: a pad and four toes melted together (a perfect disc read as a ring pressed into the sand).
+        float paw(vec2 p)
+        {
+            float d = (length((p - vec2(0.0, -0.20)) / vec2(0.40, 0.31)) - 1.0) * 0.31;
+            for (int i = 0; i < 4; i++)
+            {
+                vec2 toe = vec2(i < 2 ? 0.16 : 0.42, i < 2 ? 0.40 : 0.16) * vec2((i & 1) == 0 ? 1.0 : -1.0, 1.0);
+                float t = length((p - toe) / vec2(0.13, 0.17)) - 1.0;
+                t *= 0.13;
+                float h = clamp(0.5 + 0.5 * (t - d) / 0.05, 0.0, 1.0);
+                d = mix(t, d, h) - 0.05 * h * (1.0 - h);
+            }
+            return d;
+        }
+
         void main()
         {
             float strength = vStamp.x;
@@ -170,7 +185,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
                 float ends = smoothstep(1.0, 0.6, abs(vUv.y));
                 fragColour = vec4((rim - smoothstep(0.72, 0.35, across)) * strength, 1.0, 0.0, ends * smoothstep(1.0, 0.88, across));
             }
-            else if (kind == 1) shape(length(vUv) - 0.6, strength);
+            else if (kind == 1) shape(paw(vUv), strength);
             else shape(sole(vUv), strength);
         }
         """;
