@@ -74,12 +74,15 @@ sealed partial class GameHost
         add("place-item", "place-item \"<item>\" <x> <z> [yawDegrees] [y] [qty]", "lay a loose item on the ground at X Z (height: the terrain unless y is given as an absolute world height, e.g. a floor)", (args, con) =>
         {
             if (!loaded(con)) return;
+            IReadOnlyList<string> rest = args;
+            var exact = TakeGrade(ref rest);
+            args = rest;
             float yaw = 0, y = float.NaN, q = 1;
             if (args.Count < 3 || args.Count > 6 || !Num(args[1], out float x) || !Num(args[2], out float z) || (args.Count > 3 && !Num(args[3], out yaw)) || (args.Count > 4 && !Num(args[4], out y)) || (args.Count > 5 && !Num(args[5], out q)))
             { con.Error("usage: place-item \"<item>\" <x> <z> [yawDegrees] [y] [qty]"); return; }
             if (DebugRecord(args[0], character: false) is not { } item) { con.Error($"no item record matches '{args[0]}'"); return; }
             if (float.IsNaN(y)) y = gpu.Terrain.HeightAt(x, z);
-            session.World.Commands.Enqueue(new DebugPlaceItem(item.Id, Math.Clamp((int)q, 1, 1000), new Vector3(x, y, z), yaw * MathF.PI / 180f) { Tick = session.World.Tick });
+            session.World.Commands.Enqueue(new DebugPlaceItem(item.Id, Math.Clamp((int)q, 1, 1000), new Vector3(x, y, z), yaw * MathF.PI / 180f) { Tick = session.World.Tick, Exact = exact });
             con.Print($"placed {item.Name} ({item.Id}) at {x:F1} {y:F1} {z:F1}");
         });
 

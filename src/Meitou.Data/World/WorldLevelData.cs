@@ -298,6 +298,8 @@ public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, s
         (exterior ? ExteriorLayout : InteriorLayout) ?? state?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
     /// <summary>A loose item's mesh and scale when not its record's own (a nest's numbered debris piece, docs/game/factions-squads-towns.md "Nest furniture").</summary>
     public string? ItemMesh { get; init; }
+    /// <summary>A loose weapon's model (its instance's <c>material sid</c>, a MATERIAL_SPECS_WEAPON): its look instead of the resolver's pick; null or empty for none.</summary>
+    public string? ItemMaterial { get; init; }
     public float ItemScale { get; init; } = 1;
     readonly string? key;
 

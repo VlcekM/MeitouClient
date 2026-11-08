@@ -289,11 +289,12 @@ sealed partial class GameHost
         {
             bool equipFlag = args.Any(a => a.Equals("--equip", StringComparison.OrdinalIgnoreCase));
             if (equipFlag) args = [.. args.Where(a => !a.Equals("--equip", StringComparison.OrdinalIgnoreCase))];
+            var exact = TakeGrade(ref args);
             if (!Need(args, 1, 3, Self("give"))) return;
             int quantity = 1, quality = 0;
             if (args.Count > 1 && !int.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out quantity)) { con.Error($"give: quantity '{args[1]}' is not a whole number"); return; }
             if (args.Count > 2 && !int.TryParse(args[2], NumberStyles.None, CultureInfo.InvariantCulture, out quality)) { con.Error($"give: quality '{args[2]}' is not a whole number"); return; }
-            Report(con, DebugGive(args[0], quantity, quality, equipFlag));
+            Report(con, DebugGive(args[0], quantity, quality, equipFlag, exact));
             // A paused game takes no tick: apply the give now so the reply (and a build right after) already sees the item.
             if (!debugFailed) session.ApplyPausedCommandsNow();
         }, (i, typed) => i == 0 ? ConsoleMatch(ConsoleRecordNames(character: false), typed) : []);

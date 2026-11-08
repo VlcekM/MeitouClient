@@ -310,7 +310,8 @@ sealed class WorldObjects : IDisposable
                 {
                     // A loose item (GameHost.GroundItems): its one mesh, at its absolute height.
                     var at = new Vector3(b.Position.X, b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y, b.Position.Z);
-                    if (WorldObjectLayout.Item(record, b.InstanceId, at, b.Rotation, b.ItemMesh, b.ItemScale) is { } item)
+                    var model = b.ItemMaterial is { Length: > 0 } modelId && db.Find(modelId) is { Type: Meitou.Data.Fcs.FcsRecordType.MATERIAL_SPECS_WEAPON } spec ? spec : null;
+                    if (WorldObjectLayout.Item(record, b.InstanceId, at, b.Rotation, b.ItemMesh, b.ItemScale, model) is { } item)
                         result.Items.Add(item);
                     continue;
                 }

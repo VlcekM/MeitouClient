@@ -82,7 +82,7 @@ c help                                # one usage line per command; `c help <nam
 | `follow` | `follow <id> [--guard]` |
 | `debug-menu` | `debug-menu open\|close\|key <Up\|Down\|Left\|Right\|Enter\|Space\|Escape\|Backspace> [count]` (drives the F10 menu as its keys do; replies with the highlighted row and its value) |
 | `gfx` | `gfx [label [value]]` (the settings window's graphics switches and sliders: list, or set one as a click would; `gfx "Time of day" 14`) |
-| `give` | `give "<item record>" [qty] [quality] [--equip]` |
+| `give` | `give "<item record>" [qty] [quality] [--equip] [--maker <id|name>] [--model <id|name>] [--level <n>]` (a weapon of an exact manufacturer, MATERIAL_SPECS_WEAPON model and level: its look and stats) |
 | `ground-items` | `ground-items <x> <z> <radius>` |
 | `heal` | `heal` |
 | `help` | `help [command]` |
@@ -109,7 +109,7 @@ c help                                # one usage line per command; `c help <nam
 | `pause` | `pause` |
 | `pickup` | `pickup <item id \| nearest>` |
 | `place-building` | `place-building <building record id or name> <x> <z> [yawDegrees] [heightAboveGround] [--interior <layout>] [--exterior <layout>]` |
-| `place-item` | `place-item "<item>" <x> <z> [yawDegrees] [y] [qty]` |
+| `place-item` | `place-item "<item>" <x> <z> [yawDegrees] [y] [qty] [--maker <id|name>] [--model <id|name>] [--level <n>]` (same grade flags as `give`) |
 | `root-probe` | `root-probe [--id c:slot.gen] [--at x z] [length] [directions]` (read-only: root-motion step from a spot in N headings, wall slide and end-point refusal) |
 | `root-log` | `root-log on\|off\|dump` (log of every shortened root-motion step) |
 | `root-scan` | `root-scan <x> <z> <radius> [spacing] [length]` (counts free/slid/cut/refused root steps over a grid) |

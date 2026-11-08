@@ -553,8 +553,25 @@ sealed partial class GameHost
     }
 
 
+    /// <summary>Takes <c>--maker x</c>, <c>--model x</c> and <c>--level n</c> out of <paramref name="args"/>; null when none is given.</summary>
+    static DebugWeaponGrade? TakeGrade(ref IReadOnlyList<string> args)
+    {
+        string? maker = null, model = null;
+        int? level = null;
+        var rest = new List<string>();
+        for (int i = 0; i < args.Count; i++)
+        {
+            if (i + 1 < args.Count && args[i].Equals("--maker", StringComparison.OrdinalIgnoreCase)) maker = args[++i];
+            else if (i + 1 < args.Count && args[i].Equals("--model", StringComparison.OrdinalIgnoreCase)) model = args[++i];
+            else if (i + 1 < args.Count && args[i].Equals("--level", StringComparison.OrdinalIgnoreCase) && int.TryParse(args[i + 1], out int n)) { level = n; i++; }
+            else rest.Add(args[i]);
+        }
+        args = rest;
+        return maker is null && model is null && level is null ? null : new DebugWeaponGrade(maker, model, level);
+    }
+
     /// <summary>Puts items on the first selected character (the menu's Give item row; the console's <c>give</c>): the record by name, the quantity 1 to 1000, the quality 0 to 100.</summary>
-    string DebugGive(string name, int quantity, int quality, bool equip = false)
+    string DebugGive(string name, int quantity, int quality, bool equip = false, DebugWeaponGrade? exact = null)
     {
         debugFailed = false;
         var selected = player.ControlOrderers().ToArray();
@@ -562,7 +579,7 @@ sealed partial class GameHost
         quantity = Math.Clamp(quantity, 1, 1000);
         quality = Math.Clamp(quality, 0, 100);
         if (DebugRecord(name, character: false) is not { } item) return DebugFail($"no item record matches '{name}'");
-        session.World.Commands.Enqueue(new DebugGiveItem(selected[0], item.Id, quantity, quality) { Tick = session.World.Tick, Equip = equip });
+        session.World.Commands.Enqueue(new DebugGiveItem(selected[0], item.Id, quantity, quality) { Tick = session.World.Tick, Equip = equip, Exact = exact });
         if (scene.Database is { } db && db.Find(item.Id)?.Type == Meitou.Data.Fcs.FcsRecordType.WEAPON && DebugGiveItem.Grade(db, quality) is { } grade)
             return $"gave {quantity} x {grade.Name} {item.Name} (level {grade.Level})";
         return $"gave {quantity} x {item.Name}{(DebugHasQuality(item.Id) ? $" (quality {quality})" : "")}";
