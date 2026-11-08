@@ -60,17 +60,12 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The pick chance (0..1, no minimum) of a lock of <paramref name="level"/> at <paramref name="at"/> for the selected character nearest it; null with nobody selected.</summary>
-    float? LockChance(Vector3 at, int level)
-    {
-        CharacterSnapshot? lead = null;
-        float nearest = float.MaxValue;
-        foreach (var c in Selected())
-        {
-            float d = Vector3.DistanceSquared(c.Position, at);
-            if (d < nearest) (lead, nearest) = (c, d);
-        }
-        return lead is null ? null : Meitou.Simulation.Locks.Lockpicking.Chance(level, lead.LockpickSkill);
-    }
+    float? LockChance(Vector3 at, int level) =>
+        NearestSelected(at, Selected()) is { } lead ? Meitou.Simulation.Locks.Lockpicking.Chance(level, lead.LockpickSkill) : null;
+
+    /// <summary>The one of <paramref name="candidates"/> nearest <paramref name="at"/>; null when there is none.</summary>
+    static CharacterSnapshot? NearestSelected(Vector3 at, IEnumerable<CharacterSnapshot> candidates) =>
+        candidates.MinBy(c => Vector3.DistanceSquared(c.Position, at));
 
     static (string Caption, float? Chance) SplitChance(string caption) =>
         caption.IndexOf('\t') is var tab and >= 0 && float.TryParse(caption.AsSpan(tab + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out float c) ? (caption[..tab], c) : (caption, null);
@@ -259,7 +254,9 @@ sealed partial class PlayerInterface
         bool onTurret = Selected().LastOrDefault() is { Turret: not null };
         bool hostile = Hostile(target);
         if (session.World.CanTalk(id, selection[0])) verbs.Add(("Talk To", () => Say(new Meitou.Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = session.World.Tick })));
-        if (target.IsTrader && !hostile) verbs.Add(("Trade", () => Say(new Meitou.Simulation.Trading.OpenTrade(selection[0], id) { Tick = session.World.Tick })));
+        // The customer is the selected character nearest the trader that stands (as the quick order's lead), not the first selected.
+        if (target.IsTrader && !hostile && NearestSelected(target.Position, Selected().Where(c => !c.Down)) is { } customer)
+            verbs.Add(("Trade", () => Say(new Meitou.Simulation.Trading.OpenTrade(customer.Id, id) { Tick = session.World.Tick })));
         if (onTurret)
         {
             // The lead mans a turret: the attacks give way to Shoot At (235), which sends every selected gunner's fire at the target.

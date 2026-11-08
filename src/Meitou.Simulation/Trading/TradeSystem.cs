@@ -109,7 +109,7 @@ public sealed class TradeSettings
     public float PassRange { get; init; } = 1000;
     /// <summary>Ticks between looks at the squads for new shops and due restocks (engine choice: half a game second).</summary>
     public int CheckEveryTicks { get; init; } = 15;
-    /// <summary>Game seconds the customer has to reach the trader before the opening is dropped (engine choice).</summary>
+    /// <summary>Game seconds the customer may spend not moving on its walk to the trader before the opening is dropped (engine choice, <see cref="Dialogue.WalkUp"/>).</summary>
     public float ApproachSeconds { get; init; } = 60;
 }
 
@@ -140,7 +140,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     CharacterId customer = CharacterId.None, trader = CharacterId.None;
     bool open, traderWandered;
     TradeSession session = new();
-    long approachUntil;
+    readonly Dialogue.WalkUp approach;
     TradeView? view;
 
     public TradeSystem(PopulationData data, TradeSettings? settings = null)
@@ -148,6 +148,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         this.data = data;
         assembly = new(data);
         Settings = settings ?? new TradeSettings();
+        approach = new(Settings.ApproachSeconds);
     }
 
     public TradeSettings Settings { get; }
@@ -166,7 +167,6 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                     Close(world);
                     customer = o.Customer;
                     trader = o.Trader;
-                    approachUntil = world.Tick + (long)(Settings.ApproachSeconds / world.TickSeconds);
                     if (Parties(world, out _, out int stocked)) StockFor(world, stocked);
                     if (!Resolve(world, out int c, out int t, out _))
                     {
@@ -177,7 +177,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                         break;
                     }
                     Hold(world, t);
-                    if (!InReach(world, c, t)) world.Defer(new MoveOrder([customer], world.Characters.Next[t].Position) { Tick = world.Tick + 1 });
+                    approach.Begin(world, customer, c, t);
                     break;
                 case CloseTrade:
                     Close(world);
@@ -208,7 +208,7 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
                 open = true;
                 Hold(world, t);
             }
-            else if (open || world.Tick >= approachUntil) Close(world);   // walked away, or never arrived
+            else if (open || !approach.Follow(world, customer, c, t)) Close(world);   // walked away, or gave up the walk (another order, or stuck)
             else Hold(world, t);
         }
         RefreshView(world);

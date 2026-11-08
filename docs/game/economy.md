@@ -634,7 +634,7 @@ Meitou's reading: [simulation, slave trading](../simulation.md#arrest-and-jail).
   manufacturer form a set, a weapon outside it logs "No valid manufacturer found for weapon" and is dropped, an empty set skips the whole weapons branch); other lists are not gated.
 - **The FACTION field names of the armour vendor quality chances** (`armors 0..5` in section 9.2): read as the ints `armors 0` .. `armors 5`, falling back to the editor defaults; not
   checked against the data.
-- **Opening a trade**: Meitou opens it in talk range and passes it to the character whose window a buy or sell uses within 1000 ([simulation](../simulation.md#trade)); the original's direct Trade order's distance is not traced.
+- **Opening a trade**: Meitou walks the customer up as a Talk (`WalkUp`, [dialogue](dialogue.md#player-conversation)), opens it in talk range and passes it to the character whose window a buy or sell uses within 1000 ([simulation](../simulation.md#trade)); the original's direct Trade order's distance is not traced.
 
 ## Expression reference
 
