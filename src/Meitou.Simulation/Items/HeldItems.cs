@@ -495,8 +495,9 @@ public sealed partial class PlayerSystem
         var mark = item.Mark;
         int before = item.Quantity;
         (item.Death, item.Mark) = (false, MarkFor(world, held, taker, overwrite: true));
+        // A whole stack that fits goes in as the item itself, its quantity unchanged: only the result tells it apart from nothing fitting.
         bool all = into.Add(item);
-        if (item.Quantity == before)
+        if (!all && item.Quantity == before)
         {
             (item.Death, item.Mark) = (death, mark);
             world.Post("No room for that item.");
