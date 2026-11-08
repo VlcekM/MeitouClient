@@ -230,7 +230,11 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   United Cities start at -100 only with Bloodraiders, Cannibals, Rebel Farmers, Grass Pirates, Gorillo Bandits and Yabuta Outlaws (Holy
   Nation also Holy Nation Outlaws); at -10 with Starving and Dust Bandits; at 0 with the other bandit factions (**Verified** by probe of
   the merged data). Fights lower relations ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)), so a
-  bandit faction a town keeps fighting can drop to hostile. The only BANDIT-type target rule found is the player's Shoot first gunners
+  bandit faction a town keeps fighting can drop to hostile. A Dust Bandit squad (the player at -10, not hostile) starts its fight through its
+  event 3 / 66 lines ([dialogue](dialogue.md)); `Bandit mugging one liner`, `bandit fight picking new target in wilds` and `Bandit Revenge` need
+  the speaker outside a non-player town (DC 31 false), `Give us your stuff!` the target, so inside a town's radius (the Hub: 2500) only
+  `Bandit hold up 1` can fire (20 % a check, 50 % permanent; **Verified** by probe of the merged data; Meitou headless on a save at the Hub's
+  edge: no attack until the boss's patrol left the circle, then the one liner and the fight). The only BANDIT-type target rule found is the player's Shoot first gunners
   ([squad AI options](ai-tasks.md#squad-ai-options)).
 
 ### The attack-on-sight tests
