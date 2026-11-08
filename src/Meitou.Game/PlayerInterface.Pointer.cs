@@ -177,16 +177,16 @@ sealed partial class PlayerInterface
         => uiPainter?.DrawPointer(name, at, width, height, pass);
 
     /// <summary>
-    /// Draws the pointer <paramref name="name"/> beside the Windows cursor at <paramref name="at"/> (the enhanced Hardware mouse), <see cref="BesideOffset"/> at 1080 right of and below it;
-    /// nothing for <c>arrow</c>, the walk or no order.
+    /// Draws the pointer <paramref name="name"/> to the right of the Windows cursor at <paramref name="at"/> (the enhanced Hardware mouse): its left edge <see cref="BesideOffset"/>
+    /// right of the mouse, its middle 14 px below it (both at 1080); nothing for <c>arrow</c>, the walk or no order.
     /// </summary>
     public void DrawPointerBeside(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
-        if (name != "arrow") uiPainter?.DrawPointerBeside(name, at, BesideOffset * height / 1080f, width, height, pass);
+        if (name != "arrow") uiPainter?.DrawPointerBeside(name, at + BesideOffset * (height / 1080f), width, height, pass);
     }
 
-    /// <summary>How far right of and below the mouse the enhanced Hardware mouse draws the action's pointer, at 1080 (clear of the Windows arrow; engine choice).</summary>
-    const float BesideOffset = 20;
+    /// <summary>Where the enhanced Hardware mouse puts the middle of the action pointer's left edge, from the mouse at 1080: just clear of the Windows arrow (engine choice).</summary>
+    static readonly Vector2 BesideOffset = new(14, 14);
 
     /// <summary>
     /// Whether the enhanced Hardware mouse shows the hand for the pointer <paramref name="name"/>: an order a right click would give (not the walk, the map's pan or

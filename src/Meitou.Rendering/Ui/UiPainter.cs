@@ -819,13 +819,13 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// Draws the pointer <paramref name="name"/> with its top left <paramref name="offset"/> pixels right of and below <paramref name="mouse"/>, beside a cursor the window system
-    /// draws (the enhanced Hardware mouse); nothing for an unknown name.
+    /// Draws the pointer <paramref name="name"/> with the middle of its left edge on <paramref name="leftMiddle"/>, beside a cursor the window system draws (the enhanced
+    /// Hardware mouse); nothing for an unknown name.
     /// </summary>
-    public void DrawPointerBeside(string name, Vector2 mouse, float offset, int width, int height, DebugOverlay.OverlayPass? pass = null)
+    public void DrawPointerBeside(string name, Vector2 leftMiddle, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
         if (Pointer(name) is { } pointer)
-            DrawPointerImage(pointer, new(MathF.Round(mouse.X + offset), MathF.Round(mouse.Y + offset), pointer.Width, pointer.Height), width, height, pass);
+            DrawPointerImage(pointer, new(MathF.Round(leftMiddle.X), MathF.Round(leftMiddle.Y - pointer.Height / 2), pointer.Width, pointer.Height), width, height, pass);
     }
 
     MyGuiPointer? Pointer(string name)

@@ -261,8 +261,8 @@ the [quick right click's table](#quick-right-click-on-a-character) (pointer give
 `lift`, Alt `search`; otherwise, over the interface, the settings panel or the loading screen, `arrow`. The free camera hides it (as mode 0's
 `invisible`). Interface → Hardware mouse (`HardwareMouse` in meitou.user.json, default off as the game's `hardware_mouse`; settings.cfg is
 not read) shows the Windows cursor instead, applied at once. Under it, shown only while Hardware mouse is on, Enhanced hardware mouse
-(`EnhancedHardwareMouse`, default on; Meitou only) draws the pointer for the order beside the Windows cursor, its top left 20 px at 1080 right of and
-below the mouse (none for `arrow`: the walk, the interface, no order), and turns the cursor into the system hand over an enabled button
+(`EnhancedHardwareMouse`, default on; Meitou only) draws the pointer for the order beside the Windows cursor, its left edge 14 px at 1080 right of the
+mouse and its middle 14 px below it, by the arrow's lower half (none for `arrow`: the walk, the interface, no order), and turns the cursor into the system hand over an enabled button
 (`Button` or a control with an action), a settings-panel widget, or an order pointer other than `hand` and `invalidmove`. With frame generation the
 beside icon is part of the interface, so it trails the cursor by a held-back frame.
 
