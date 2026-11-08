@@ -54,6 +54,14 @@ the requested mode outright with it (after the AI package's mode and the carrier
 takes the larger of the result and an explicit task mode when both are not 4 (so it never lowers an explicit mode); the carrier rule raises walk to jog (mode 0 to 1) in both. Meitou (`MovementSystem`, `Squad.ForceSpeed`): the raise
 every NPC member's walk or jog mode gets (the rule both readers share); lowering by the selector is not applied (**Unknown** which of the two a given walk uses in Meitou's single mode). The slave rule is not modelled here.
 
+### Running after a moving target
+
+Task_Move's update (`FUN_140354600`, Task_Move vtable `0x10`, **Verified**) runs every frame. It re-aims at its target (`FUN_1405c68a0`, which applies the mover's own mode),
+then, when the target is a character (vfunc `0x20` = 1) whose current speed (Character vfunc `0x48` `FUN_1405c83d0`: the mover's `+0xb8`) is above 20 (`DAT_141683188`),
+sets the mover to mode 2, run. The mode setter (`FUN_140665150`, CharMovement vfunc `0xa8`) gives `+0xbc` the race walk speed for 0, 55 for 1, 999 for 2 and 3.
+**Observed** (Frida on 1.0.65, Rebirth): workmasters run after a jogging slave and walk again once it stops. Meitou: `SpeedMode.Chasing`, used by the Shout job's
+walk to its slave (188, `move_on_free_will` toward it). Meitou's other walks aim at positions; which of them the original makes a Task_Move toward a character is **Unknown**.
+
 ### Bodies in the way
 
 Which character states block or push a living character's movement (path walking, the animation-driven root-motion step, the fight repulsion). Soft avoidance only: the nav agent holds a list of the
