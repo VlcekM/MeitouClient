@@ -89,7 +89,8 @@ sealed partial class PlayerInterface
         if (faithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;
         // Delete or Backspace deletes the save selected in the load, save or import window (LoadSaveWindow::keyPressed, docs/game/ui-screens.md "Deleting a save").
         if (key is Meitou.Engine.Input.Key.Delete or Meitou.Engine.Input.Key.Backspace && faithfulScreens.OpenScreens is [.., "load" or "save" or "import"] && selectedSlot is { } doomed) { AskDeleteSave(doomed); return true; }
-        if (key == Meitou.Engine.Input.Key.Tab && faithfulScreens.FocusNext(shift)) return true;
+        // Tab bound to a window key (Inventory, Character...) opens it on a window with a box; the traversal keeps modal windows (#383).
+        if (key == Meitou.Engine.Input.Key.Tab && (faithfulScreens.HasModal || !WindowKey(key)) && faithfulScreens.FocusNext(shift)) return true;
         if (key == Meitou.Engine.Input.Key.Enter && faithfulScreens.Submit()) return true;
         if (key == Meitou.Engine.Input.Key.Space && faithfulScreens.ActivateFocused()) return true;
         // The list or combo box last clicked takes the MyGUI ListBox keys (docs/formats/mygui.md "Widget runtime").

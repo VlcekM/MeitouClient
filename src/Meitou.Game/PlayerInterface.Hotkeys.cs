@@ -26,6 +26,10 @@ sealed partial class PlayerInterface
     /// <summary>Whether <paramref name="key"/> is one of <paramref name="action"/>'s bindings.</summary>
     bool Bound(InputAction action, EngineKey key) => session.Bindings.Get(action).Contains(Binding.Of(key));
 
+    /// <summary>Whether <paramref name="key"/> opens a window: inventory, character, help, map, faction, research or crafting.</summary>
+    bool WindowKey(EngineKey key) => Bound(InputAction.ToggleInventory, key) || Bound(InputAction.ToggleCharacterStats, key) || Bound(InputAction.ToggleHelp, key)
+        || Bound(InputAction.ToggleMap, key) || Bound(InputAction.ToggleFaction, key) || Bound(InputAction.ToggleResearch, key) || Bound(InputAction.ToggleCrafting, key);
+
     /// <summary>Whether <paramref name="key"/> is bound to a game-view hotkey (the host then keeps it from the cinema's numpad keys).</summary>
     public bool IsHotkey(EngineKey key) => HotkeyActions.Any(a => Bound(a, key));
 

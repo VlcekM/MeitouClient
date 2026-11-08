@@ -120,6 +120,8 @@ sealed partial class PlayerInterface
         }
         else b.Hidden.Add("CraftingPanel");
         b.TemplateScale = InventoryScale;
+        // The layout's OutputText is an editable EditBox; it is a status line, so read-only here: a click or Tab gave it the keys and typing went into it (#383).
+        b.Properties["OutputText"] = new Dictionary<string, string> { ["ReadOnly"] = "true" };
         if (m is null) return;
         for (int k = 0; k < 2; k++)
         {
