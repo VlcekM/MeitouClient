@@ -46,6 +46,10 @@ sealed partial class PlayerInterface
     public bool FeedbackSending { get; set; }
     /// <summary>The form's ticks and Discord name: the host hands in the saved ones and saves them on a send.</summary>
     public FeedbackSettings FeedbackPrefs { get; set; } = new();
+    /// <summary>The tag of a newer Meitou than the running one (<see cref="LatestRelease"/>), or null: the form says so and Send asks first.</summary>
+    public string? FeedbackNewer { get; set; }
+    /// <summary>The player chose to send from this older version anyway (until the form is opened again).</summary>
+    bool feedbackOldConfirmed;
     /// <summary>The button during play (<see cref="UserConfig.FeedbackButton"/>); off, it still shows on the title and with the game menu open.</summary>
     public bool FeedbackButtonInPlay { get; set; } = true;
 
@@ -122,6 +126,7 @@ sealed partial class PlayerInterface
         feedbackHasNav = navmesh;
         feedbackSaveMissing = saveMissing;
         if (!FeedbackSending) { feedbackStatus = ""; feedbackStatusError = false; }
+        feedbackOldConfirmed = false;
         faithfulScreens.SetText(FeedbackScreen, FeedbackDiscordBox, FeedbackPrefs.DiscordName);
         faithfulScreens.Open(FeedbackScreen);
         UpdateMenuPause();
@@ -162,8 +167,9 @@ sealed partial class PlayerInterface
         b.Text["lb" + FeedbackSaveTick] = feedbackSaveMissing is null ? "Save the game now and attach the save" : $"Attach a save ({feedbackSaveMissing})";
         b.Text["lb" + FeedbackLogTick] = "Attach log.txt (it can show folder names, such as your user name)";
         b.Text["lb" + FeedbackDiscordTick] = "Include my Discord name";
-        b.Text["StatusText"] = feedbackStatus;
-        if (feedbackStatusError) b.Properties["StatusText"] = new Dictionary<string, string> { ["TextColour"] = BadColour };
+        bool old = feedbackStatus.Length == 0 && FeedbackNewer is not null;
+        b.Text["StatusText"] = old ? $"You are on {BuildVersion.Tag}; {FeedbackNewer} is out. Please check whether this still happens there first." : feedbackStatus;
+        if (feedbackStatusError || old) b.Properties["StatusText"] = new Dictionary<string, string> { ["TextColour"] = BadColour };
         b.Text["SendButton"] = UpperCaption(FeedbackSending ? "Sending" : "Send");
         b.Text["CancelButton"] = UpperCaption("Close");
         Enable("CancelButton", FeedbackLogTick, FeedbackDiscordTick);
@@ -189,7 +195,21 @@ sealed partial class PlayerInterface
         else if (e.Widget == FeedbackLogTick) FeedbackPrefs.Log = !FeedbackPrefs.Log;
         else if (e.Widget == FeedbackDiscordTick) FeedbackPrefs.Discord = !FeedbackPrefs.Discord;
         else if (e.Widget == FeedbackDiscordBox && e.Action == "text") FeedbackPrefs.DiscordName = e.Text;
-        else if (e.Widget == "SendButton" && !FeedbackSending && FeedbackValues().Title.Length > 0) ScreenAction?.Invoke(new(FeedbackScreen, "SendButton", "feedback-send"));
+        else if (e.Widget == "SendButton" && !FeedbackSending && FeedbackValues().Title.Length > 0) SendFeedbackOrAsk();
         UpdateMenuPause();
+    }
+
+    /// <summary>Send, but from an older version than the newest only once the player has been asked to try the newest one first.</summary>
+    void SendFeedbackOrAsk()
+    {
+        void Send() => ScreenAction?.Invoke(new(FeedbackScreen, "SendButton", "feedback-send"));
+        if (FeedbackNewer is not { } newer || feedbackOldConfirmed)
+        {
+            Send();
+            return;
+        }
+
+        Confirm("Newer version out", $"You are playing {BuildVersion.Tag}, and {newer} is out. It may already be fixed there: please update and check "
+            + "whether it still happens before sending.", () => { feedbackOldConfirmed = true; Send(); }, "Send anyway", cancel: "Cancel");
     }
 }

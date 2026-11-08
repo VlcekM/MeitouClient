@@ -43,6 +43,13 @@ app.MapGet("/summary", async (Store store, Roadmap roadmap, HttpResponse respons
     return new Summary(window.Since, await store.Summary(window));
 });
 
+// Public: the newest game versions (full release, and any kind), for the game's feedback form; GitHub is read at most every 10 minutes.
+app.MapGet("/latest", async (Roadmap roadmap, HttpResponse response) =>
+{
+    response.Headers.CacheControl = "public, max-age=300";
+    return (await roadmap.Window()).Latest;
+});
+
 // Public: the status changes the reports suggest; a person approves them on the roadmap.
 app.MapGet("/proposals", async (Store store, Roadmap roadmap) =>
     Roadmap.Propose(await roadmap.Rows(), await store.Summary(await roadmap.Window())));
@@ -153,6 +160,7 @@ sealed record Refused(string Error);
 [JsonSerializable(typeof(Refused))]
 [JsonSerializable(typeof(RoadmapFile))]
 [JsonSerializable(typeof(List<GithubRelease>))]
+[JsonSerializable(typeof(Latest))]
 [JsonSerializable(typeof(FeedbackBody))]
 [JsonSerializable(typeof(FeedbackCreated))]
 [JsonSerializable(typeof(FeedbackIssue))]

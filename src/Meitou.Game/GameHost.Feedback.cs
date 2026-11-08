@@ -30,6 +30,8 @@ sealed partial class GameHost
     Task<byte[]>? feedbackNavPicture;
     /// <summary>The navmesh screenshot was tried for this form (it may have failed), so a send goes on without waiting for it again.</summary>
     bool feedbackNavTried;
+    /// <summary>The check for a newer Meitou, started when the form opens (<see cref="LatestRelease"/>).</summary>
+    Task<string?>? feedbackNewer;
 
     void FeedbackAction(MyGuiEvent e)
     {
@@ -60,6 +62,8 @@ sealed partial class GameHost
         feedbackNavTried = false;
         bool inGame = FeedbackInGame;
         feedbackLocation = inGame ? CameraLocation() : null;
+        player.FeedbackNewer = null;
+        feedbackNewer = LatestRelease.NewerThan(BuildVersion.Tag);
         player.OpenFeedback(rgba is not null, inGame && nav is not null && navOverlayRenderer is not null, inGame ? null : "only in a game");
     }
 
@@ -135,6 +139,11 @@ sealed partial class GameHost
         }
         else if (feedbackSend is not null && Volatile.Read(ref feedbackStatus) is var status && status != feedbackStatusShown)
             player.FeedbackProgress(feedbackStatusShown = status);
+        if (feedbackNewer is { IsCompleted: true } checkedNewer)
+        {
+            feedbackNewer = null;
+            player.FeedbackNewer = checkedNewer.IsCompletedSuccessfully ? checkedNewer.Result : null;
+        }
         StepFeedbackNav();
         if (!feedbackSendRequested) return;
         feedbackSendRequested = false;

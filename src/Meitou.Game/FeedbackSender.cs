@@ -24,7 +24,7 @@ readonly record struct FeedbackResult(int Number, string? Url, string? Error);
 static class FeedbackSender
 {
     /// <summary>The reports service, as the launcher's <c>ReportsUrl</c>.</summary>
-    const string ServiceUrl = "https://gear-pastry-chorus.cloudovna.app";
+    internal const string ServiceUrl = "https://gear-pastry-chorus.cloudovna.app";
     /// <summary>The service's limit for the zipped save.</summary>
     const long SaveMax = 95_000_000;
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(30) };

@@ -18,8 +18,12 @@ sealed record GithubRelease(
 /// Which reports count: none from before <see cref="Since"/>, and a Broken one only while no full release came out after its build
 /// (<see cref="Builds"/> and <see cref="Published"/> pair each game release's version with its publish time; a build that is not a
 /// release, such as a self-built one, is dated by the report itself). <see cref="NewestFull"/> is null before any full release.
+/// <see cref="Latest"/>: the newest game versions, for the game's feedback form.
 /// </summary>
-sealed record Window(DateTimeOffset Since, DateTimeOffset? NewestFull, string[] Builds, DateTimeOffset[] Published);
+sealed record Window(DateTimeOffset Since, DateTimeOffset? NewestFull, string[] Builds, DateTimeOffset[] Published, Latest Latest);
+
+/// <summary>The version (no <c>v</c>) of the newest full game release and of the newest game release of any kind, nightlies included; null for none.</summary>
+sealed record Latest(string? Release, string? Any);
 
 /// <summary>
 /// The roadmap's rows (from the site, so reports can only name a real row) and the report window: reports older than two full game
@@ -27,11 +31,11 @@ sealed record Window(DateTimeOffset Since, DateTimeOffset? NewestFull, string[] 
 /// </summary>
 sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> log)
 {
-    static readonly TimeSpan RowsFor = TimeSpan.FromMinutes(10), ReleasesFor = TimeSpan.FromHours(1);
+    static readonly TimeSpan RowsFor = TimeSpan.FromMinutes(10), ReleasesFor = TimeSpan.FromMinutes(10);
     readonly SemaphoreSlim gate = new(1, 1);
     Dictionary<string, RoadmapRow> rows = [];
     DateTimeOffset rowsAt = DateTimeOffset.MinValue, releasesAt = DateTimeOffset.MinValue;
-    Window window = new(DateTimeOffset.UtcNow.AddDays(-90), null, [], []);
+    Window window = new(DateTimeOffset.UtcNow.AddDays(-90), null, [], [], new(null, null));
 
     public async Task<IReadOnlyDictionary<string, RoadmapRow>> Rows()
     {
@@ -97,8 +101,9 @@ sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> lo
             var game = (await response.Content.ReadFromJsonAsync(ReportsJson.Default.ListGithubRelease) ?? [])
                 .Where(r => r.Tag.StartsWith('v') && !r.Draft && r.Published is not null).ToList();
             var full = game.Where(r => !r.Prerelease).OrderByDescending(r => r.Published).ToList();
+            var latest = new Latest(full.FirstOrDefault()?.Tag[1..], game.MaxBy(r => r.Published)?.Tag[1..]);
             window = new(full.Count >= 2 ? full[1].Published!.Value : DateTimeOffset.MinValue, full.FirstOrDefault()?.Published,
-                game.Select(r => r.Tag[1..]).ToArray(), game.Select(r => r.Published!.Value).ToArray());
+                game.Select(r => r.Tag[1..]).ToArray(), game.Select(r => r.Published!.Value).ToArray(), latest);
             releasesAt = DateTimeOffset.UtcNow;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
