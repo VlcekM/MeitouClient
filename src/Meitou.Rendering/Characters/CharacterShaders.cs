@@ -292,6 +292,43 @@ static class CharacterShaders
                 }
             return lit / total;
         }
+        // The sky's visibility (CharacterRenderer.Studio): the share of the sphere's spiral directions, weighted by the normal, from which nothing of the
+        // character hides the point, each read in its tile of the sky atlas (cutRanges[1]: its bindless index, the directions, the radius, a tile's pixels).
+        float studioSky(vec3 world, vec3 n)
+        {
+            if (view.cutRanges[1].y < 0.5) return 1.0;
+            uint atlas = uint(view.cutRanges[1].x + 0.5);
+            int count = int(view.cutRanges[1].y + 0.5);
+            float radius = view.cutRanges[1].z, tile = view.cutRanges[1].w;
+            float texel = 2.0 * radius / tile;
+            vec3 p = world - view.cutRanges[0].xyz + n * (2.0 * texel);
+            float open = 0.0, total = 0.0;
+            for (int i = 0; i < count; i++)
+            {
+                float y = 1.0 - (float(i) + 0.5) * 2.0 / float(count), r = sqrt(max(1.0 - y * y, 0.0)), phi = float(i) * 2.39996323;
+                vec3 d = vec3(cos(phi) * r, y, sin(phi) * r);
+                float w = max(dot(n, d), 0.0);
+                if (w <= 0.0) continue;
+                vec3 up = abs(d.y) > 0.95 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+                vec3 xa = normalize(cross(up, d)), ya = cross(d, xa);
+                vec3 q = p + d * (1.5 * texel);
+                vec2 uv = vec2(dot(xa, q), dot(ya, q)) / radius * 0.5 + 0.5;
+                float z = (2.0 * radius - dot(d, q)) / (4.0 * radius);
+                vec2 base = (vec2(float(i % 8), float(i / 8)) + clamp(uv, 0.0, 1.0)) * tile - 0.5;
+                ivec2 b = ivec2(floor(base));
+                vec2 f = fract(base);
+                float lit = 0.0;
+                for (int k = 0; k < 4; k++)
+                {
+                    ivec2 o = ivec2(k & 1, k >> 1);
+                    float stored = texelFetch(textures2D[nonuniformEXT(atlas)], b + o, 0).r;
+                    lit += (z <= stored ? 1.0 : 0.0) * ((o.x == 0 ? 1.0 - f.x : f.x) * (o.y == 0 ? 1.0 - f.y : f.y));
+                }
+                open += w * lit;
+                total += w;
+            }
+            return total > 0.0 ? open / total : 1.0;
+        }
         float studioOcclusion()
         {
             if (view.cutVolumes == 0u) return 1.0;
@@ -493,9 +530,11 @@ static class CharacterShaders
                 vec3 h = normalize(l + v);
                 float diff = max(dot(n, l), 0.0);
                 float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.6;
-                colour = albedo * (sky * studioOcclusion() + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
+                // The sky's light where the character leaves it open (the large shapes: a hood over the face), the screen's occlusion for the folds.
+                float skyOpen = studioSky(vWorld, n) * mix(1.0, studioOcclusion(), 0.6);
+                colour = albedo * (sky * skyOpen + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
                 if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade;
-                {{(Environment.GetEnvironmentVariable("MEITOU_STUDIO_DEBUG") == "1" ? "colour = vec3(shade, studioOcclusion(), max(dot(n, l), 0.0));" : "")}}
+                {{(Environment.GetEnvironmentVariable("MEITOU_STUDIO_DEBUG") == "1" ? "colour = vec3(shade, studioSky(vWorld, n), studioOcclusion());" : "")}}
             }
             // The editor's stage (CharacterRenderer.DrawStage, a fog distance of -2): the game's rtt.hlsl (AtmosphereShaders.stageLight); -3 the same unclamped (Meitou's stage and
             // portraits, which also take the Meitou skin; the game's stage keeps its plain N.L).

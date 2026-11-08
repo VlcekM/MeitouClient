@@ -162,14 +162,17 @@ Studio (`previewsun`, Meitou, on by default; `CharacterRenderer.Studio`): enhanc
 whatever the hour. Per view: the character's depth from the sun into a 2048 px map (an orthographic box round its sphere, the matrix relative to the
 sphere's centre), its depth from the camera, a horizon-based occlusion from that depth (8 directions of 6 steps out to an eighth of the sphere, a fixed
 4 x 4 turn the supersampling averages), then its colour in the shader's studio model (fog distance -4): a warm sun (shadowed, 4 x 4 compare, a
-normal and light offset of a texel or two), a cool sky over warm sand (the ground's bounce), the occlusion on the sky and bounce only. The depth draws
+normal and light offset of a texel or two), a cool sky over warm sand (the ground's bounce), the sky's visibility and the occlusion on the sky and bounce only.
+The sky's visibility is the large-scale occlusion the hybrid GI gives in the world (a hood over the face): the character's depth from 32 directions of a
+Fibonacci spiral over the whole sphere (384 px tiles of one atlas, the matrices rebuilt in the shader), each point taking the share of directions,
+weighted by its normal, from which nothing of the character hides it (2 x 2 compare a direction); the screen's occlusion adds the folds at 0.6. The depth draws
 are the colour shader at fog distance -5, returning after its cut-outs. The map and occlusion indices and the map's matrix ride the view block's
 interior-cut fields (`cutPad`, `cutVolumes`, `cutRanges[0]`, `cutPlanes[0..3]`), which characters never read. The sun: portraits from the camera's
-right and front, about 15 degrees up; the stage from the camera's front right, about 35 degrees up, whichever way the editor turns the camera.
+right and front, about 16 degrees above the level (the camera is at the head's height: the way to it already climbs); the stage from the camera's front right, about 35 degrees up, whichever way the editor turns the camera.
 The map is drawn with the camera's levels of detail. Its lookup takes clip y -1 as the first row (the viewport is not flipped). `MEITOU_STUDIO_DEBUG=1`
-draws the terms instead (red the sun's share, green the occlusion, blue N.L). **Observed** (sandbox, `editor` console command, overhead and camera
+draws the terms instead (red the sun's share, green the sky's visibility, blue the screen's occlusion). **Observed** (sandbox, `editor` console command, overhead and camera
 suns): the hood shades the eyes, the mantle the shoulders under its edges, a held staff the skirt. Not there: the character's shadow on the stage's
-ground, and traced GI (the sky and the ground's bounce stand in).
+ground, and bounced light (the sky and the ground's bounce stand in).
 Atlas layout (Meitou): squad members take cells 0-29; the conversation window's speaker and player
 character take the last two (30, 31) while a conversation is open.
 Item icons (`CharacterRenderer.Icons.cs`) are the same: an item's mesh drawn through the item shader into a texture of its own, as a pseudo-instance that the world and shadow views skip;

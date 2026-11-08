@@ -18,11 +18,14 @@ public static class PreviewStudio
 internal sealed unsafe partial class CharacterRenderer
 {
     const int StudioShadowSize = 2048;
+    /// <summary>The sky's visibility: the character's depth from this many directions over the whole sphere (a Fibonacci spiral, CharacterShaders'
+    /// studioSky makes the same), each in a tile of this many pixels, this many tiles across.</summary>
+    const int StudioSkyDirections = 32, StudioSkyTile = 384, StudioSkyColumns = 8;
     /// <summary>The fog distance of the studio's colour draw and of its depth draws (CharacterShaders).</summary>
     const float StudioColour = -4, StudioDepth = -5;
 
-    GpuTexture? studioShadowColour, studioShadowDepth, studioAo;
-    uint studioShadowIndex, studioAoIndex;
+    GpuTexture? studioShadowColour, studioShadowDepth, studioAo, studioSkyColour, studioSkyDepth;
+    uint studioShadowIndex, studioAoIndex, studioSkyIndex;
     StudioAoPass? studioAoPass;
 
     bool StudioOn => look.Enhanced && look.Studio;
@@ -46,6 +49,9 @@ internal sealed unsafe partial class CharacterRenderer
         // The camera's eye picks the levels of detail, so the map holds the meshes the picture shows (a coarser level from the sun's distance shaded its own finer one).
         DrawStudioDepth(index, Matrix4x4.CreateTranslation(-centre) * lightRelative, centre + toSun * (radius * 2), eye, studioShadowColour!, studioShadowDepth!, StudioShadowSize, StudioShadowSize, "studio shadow");
 
+        // The sky's visibility: the depth from every direction of the spiral, at the camera's levels of detail.
+        DrawStudioSky(index, centre, radius, eye);
+
         // The camera's depth, then the occlusion from it.
         DrawStudioDepth(index, viewProjection, eye, eye, colour, depth, width, height, "studio depth");
         RunStudioAo(depth, width, height, projection, radius);
@@ -54,6 +60,7 @@ internal sealed unsafe partial class CharacterRenderer
         v.CutPad = studioShadowIndex;
         v.CutVolumes = studioAoIndex;
         v.CutRanges[0] = new Vector4(centre, 2 * radius / StudioShadowSize);
+        v.CutRanges[1] = new Vector4(studioSkyIndex, StudioSkyDirections, radius, StudioSkyTile);
         v.CutPlanes[0] = new Vector4(lightRelative.M11, lightRelative.M12, lightRelative.M13, lightRelative.M14);
         v.CutPlanes[1] = new Vector4(lightRelative.M21, lightRelative.M22, lightRelative.M23, lightRelative.M24);
         v.CutPlanes[2] = new Vector4(lightRelative.M31, lightRelative.M32, lightRelative.M33, lightRelative.M34);
@@ -68,6 +75,51 @@ internal sealed unsafe partial class CharacterRenderer
         studioShadowDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent32f, StudioShadowSize, StudioShadowSize,
             Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "studio shadow"));
         studioShadowIndex = Gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(StudioNearest(), studioShadowDepth.View()));
+    }
+
+    /// <summary>The spiral's direction <paramref name="i"/> of <see cref="StudioSkyDirections"/> (towards the sky), as the shader's studioSky makes it.</summary>
+    static Vector3 StudioSkyDirection(int i)
+    {
+        float y = 1 - (i + 0.5f) * 2 / StudioSkyDirections, r = MathF.Sqrt(MathF.Max(1 - y * y, 0)), phi = i * 2.39996323f;
+        return new Vector3(MathF.Cos(phi) * r, y, MathF.Sin(phi) * r);
+    }
+
+    /// <summary>The character's depth from each spiral direction into its tile of the sky atlas: orthographic boxes round its sphere, their matrices as
+    /// the shader's studioSky rebuilds them (look-at from the direction twice the radius out, up +Y or +Z near the poles, depth 0 to 4 radii).</summary>
+    void DrawStudioSky(int index, Vector3 centre, float radius, Vector3 lodEye)
+    {
+        if (studioSkyDepth is null)
+        {
+            int w = StudioSkyTile * StudioSkyColumns, h = StudioSkyTile * ((StudioSkyDirections + StudioSkyColumns - 1) / StudioSkyColumns);
+            studioSkyColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h, Use: TextureUse.ColourTarget, Name: "studio sky colour"));
+            studioSkyDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent32f, w, h, Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "studio sky"));
+            studioSkyIndex = Gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(StudioNearest(), studioSkyDepth.View()));
+        }
+        var cmd = Gpu.BeginNative("studio sky");
+        var target = PassTargets.Of(studioSkyColour, studioSkyDepth);
+        cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
+        Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
+        cmd.Clear(true, default, true, 1, new PixelRect(0, 0, (uint)target.Width, (uint)target.Height));
+        int was = portraitLive;
+        portraitLive = index;
+        try
+        {
+            for (int i = 0; i < StudioSkyDirections; i++)
+            {
+                var d = StudioSkyDirection(i);
+                var up = MathF.Abs(d.Y) > 0.95f ? Vector3.UnitZ : Vector3.UnitY;
+                var matrix = Matrix4x4.CreateTranslation(-centre) * Matrix4x4.CreateLookAt(d * (radius * 2), Vector3.Zero, up)
+                    * Matrix4x4.CreateOrthographicOffCenter(-radius, radius, -radius, radius, 0, radius * 4);
+                int x = i % StudioSkyColumns * StudioSkyTile, y = i / StudioSkyColumns * StudioSkyTile;
+                var rect = new PixelRect(x, y, StudioSkyTile, StudioSkyTile);
+                Gpu.SetPassViewport(new PixelViewport(x, y, StudioSkyTile, StudioSkyTile, 0, 1), rect);
+                DrawView(new ViewConstants { ViewProjection = matrix, Eye = centre + d * (radius * 2), FogDistance = StudioDepth }, lodEye, []);
+            }
+        }
+        finally { portraitLive = was; }
+        Gpu.EndHostPass(cmd);
+        cmd.EndRendering();
+        Gpu.EndNative(cmd);
     }
 
     GpuSampler StudioNearest() => Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
@@ -109,6 +161,10 @@ internal sealed unsafe partial class CharacterRenderer
     {
         if (studioShadowDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, studioShadowIndex);
         if (studioAo is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, studioAoIndex);
+        if (studioSkyDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, studioSkyIndex);
+        studioSkyColour?.Dispose();
+        studioSkyDepth?.Dispose();
+        (studioSkyColour, studioSkyDepth) = (null, null);
         studioShadowColour?.Dispose();
         studioShadowDepth?.Dispose();
         studioAo?.Dispose();
