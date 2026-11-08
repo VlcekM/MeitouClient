@@ -19,6 +19,16 @@ drop-in replacement that runs original content and mods unchanged.
   narration, progress diaries, completed plans, merge history or raw benchmark logs. Keep one
   authoritative description per fact and link to it; Git retains historical implementation details.
 
+## Layout
+
+- `src`: Core (shared with the launcher), Data (formats and pure rules), Simulation (the headless world: never references Game), Game
+  (the executable `MeitouClient`). Tests, tools and the viewer reference Game. Metal code compiles where `MeitouMetal` is set (macOS).
+- Folders are feature slices and the namespace follows the folder (`Simulation/Population` is `Meitou.Simulation.Population`); a
+  project's kernel types sit at its root. `Game/Mods` keeps `Meitou.Modding` until the mod contract moves to Simulation.
+- Never name a folder like a type: the namespace captures the name (`World`, `Orders`, `Inventory` are types).
+- Don't add partial files to a class: a feature with state of its own is its own class. `partial` is for platform splits
+  (`GameHost.Metal.cs`); the existing partial hosts are being broken up.
+
 ## Game assets
 
 - Never commit original game files or content dumps. `.gitignore` blocks asset extensions.

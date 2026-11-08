@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds libamd_fidelityfx_vk.so, which FSR 3 upscaling and frame generation on Linux load (src/Meitou.Rendering/Upscalers): an unofficial
+# Builds libamd_fidelityfx_vk.so, which FSR 3 upscaling and frame generation on Linux load (src/Meitou.Game/Rendering/Upscalers): an unofficial
 # Linux build of AMD's FidelityFX SDK 1.1.4 (MIT), made from AMD's source at the pinned tag plus tools/patches/fidelityfx-sdk-1.1.4-linux.patch.
 # The source is cloned at the pinned commit (checked) and built in a temporary folder; neither it nor the result is in the repository.
 # AMD's LICENSE.txt is copied beside the library as LICENSE-FidelityFX.txt. Needs git, cmake, ninja, g++, glslangValidator and the Vulkan

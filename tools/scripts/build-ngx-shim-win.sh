@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds meitou_ngx.dll, which DLSS on Windows (and under Proton) loads when frame generation is on (src/Meitou.Rendering/Upscalers/Ngx.cs): the NGX
+# Builds meitou_ngx.dll, which DLSS on Windows (and under Proton) loads when frame generation is on (src/Meitou.Game/Rendering/Upscalers/Ngx.cs): the NGX
 # client library of NVIDIA's DLSS SDK, its static nvsdk_ngx_s.lib (static C runtime) linked as is into a DLL that exports the functions Ngx.cs calls
 # (no source of ours). The library is downloaded at the pinned SDK version and checked against its SHA-256; neither it nor the result is in the
 # repository. Cross-built on Linux: needs curl, clang-cl, lld-link, and the Microsoft C runtime and Windows SDK import libraries, which

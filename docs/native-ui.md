@@ -3,7 +3,7 @@
 UI mode (--ui/Tab) is independent of graphics. Both modes use the installed MyGUI layouts,
 skins and fonts for the in-game HUD, windows and Escape menu. Meitou customises the title,
 scene transitions and settings; Faithful retains their original presentation where implemented.
-Vulkan paints both, choice persisted. `Meitou.Ui` has no window/GPU/simulation dependency.
+Vulkan paints both, choice persisted. `Meitou.Game.Ui` uses no window, GPU or simulation types.
 Host supplies snapshot text/availability and actions that enqueue commands. Extensions receive
 read-only binding copies, never mutable world. [MyGUI](formats/mygui.md), [parity](faithful-ui-parity.md).
 

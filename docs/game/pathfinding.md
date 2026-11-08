@@ -1,7 +1,7 @@
 # Pathfinding and movement
 
 Kenshi NavMesh/Havok/CharMovement research, scoped binary/log/file evidence below. Runtime uses
-our DotRecast builder (`Meitou.Navigation`), not proprietary Havok SDK. [Collision](../formats/collision.md),
+our DotRecast builder (`Meitou.Simulation.Navigation`), not proprietary Havok SDK. [Collision](../formats/collision.md),
 [terrain](../formats/terrain.md), [stats](character-stats.md), [simulation](../simulation.md#navmesh).
 
 ## Space and tile layout
@@ -876,7 +876,7 @@ The original labels the walkable ground by the gates (**Verified** structure, de
 - **Readers in play**: the spawn-inside-walls repair of a squad's activation (`FUN_1404ffad0`, **Verified**, [factions](factions-squads-towns.md#town-residents)); DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS ([gates](locks.md#cutting-and-breaking-285--185-cut-286--186-break)), the run-away score
   ([combat](combat.md)). Wall termites reads the pass's town list but is disabled ([walls](buildings-production.md#walls)).
 
-Meitou (`Meitou.Navigation/NavGateRegions`, engine reading): gates are buildings with `is wall gate` or a BF_GATE functionality
+Meitou (`Meitou.Simulation/Navigation/NavGateRegions`, engine reading): gates are buildings with `is wall gate` or a BF_GATE functionality
 (`TownBuildings.IsGate`); their door polygons (named by the building, `ZoneNavMesh.DoorIds`) are the boundaries. From each polygon beside a gate's door
 polygons a flood spreads over kept polygons, across zone links, never into a gate's door; it is a walled region (codes from 1, gates in instance id order)
 when it stays within 4000 (X/Z) of its start, under 200 000 polygons and away from the loaded world's edge, else code 0, as is every polygon no flood

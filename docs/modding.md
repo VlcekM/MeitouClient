@@ -3,7 +3,7 @@
 **Status: implemented, code-mod API version 2 (1 still runs; 2 adds [dependencies](modding-dependencies.md)).** Meitou's own in-process loader,
 Lib.Harmony shipped by the game as the sanctioned patching library, and a registration surface kept to the cases where a patch would silently
 break an invariant. No BepInEx.
-The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Modding` (contract and
+The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Game/Mods` (contract and
 loader), `GameHost.Mods.cs` (host wiring), `SimulationExtensions` (engine hooks).
 
 ## Why this shape
@@ -21,8 +21,10 @@ loader), `GameHost.Mods.cs` (host wiring), `SimulationExtensions` (engine hooks)
 
 ## Writing a mod
 
-A class library for `net10.0` referencing the release's `Meitou.Modding.dll`, `Meitou.Simulation.dll`, `Meitou.Core.dll`,
-`Meitou.Data.dll` (and `Meitou.Ui.dll` for interface work) and `0Harmony.dll`, all with `Private="false"`: the game supplies them.
+A class library for `net10.0` referencing the release's `MeitouClient.dll` (the game: the mod contract `Meitou.Modding`, the interface
+`Meitou.Game.Ui`), `Meitou.Simulation.dll`, `Meitou.Core.dll`, `Meitou.Data.dll` and `0Harmony.dll`, all with `Private="false"`: the game
+supplies them. Releases after v0.17.1 ship these four Meitou assemblies, not the earlier eleven, and most namespaces follow folders
+(`Meitou.Simulation.Population`, `Meitou.Game.Rendering.Terrain`): a code mod built against v0.17.1 or earlier must be rebuilt.
 
 ```csharp
 public sealed class MyMod : IMod
@@ -73,7 +75,9 @@ is the consent, as in RimWorld: the game loads every enabled code mod's code, wi
 - Constraint: the game stays a JIT publish, never `PublishTrimmed`, `PublishAot` or single-file. **Verified**
   (`tools/scripts/package-release.ps1`): the game publishes self-contained with `Meitou.*.dll` beside the executable, and `meitou-tools`
   with it. **Observed** (2026-11-04, win-x64 publish of the three programs into one folder): `0Harmony.dll` and `Meitou.Modding.dll` are
-  there, the game's 228 files are byte-identical to a game-only publish, and the published `meitou-tools.exe mod-check` runs.
+  there, the game's 228 files are byte-identical to a game-only publish, and the published `meitou-tools.exe mod-check` runs. Since the four-project layout
+  (2026-11-08) the viewer and `meitou-tools` reference the game and bring copies of its runtimeconfig and deps, so the game publishes last;
+  **Observed** (win-x64, tools then game into one folder): `MeitouClient.runtimeconfig.json` is the game's own.
 
 ## Lifecycle
 

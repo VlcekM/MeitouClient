@@ -1,7 +1,7 @@
 # Audio
 
 How Kenshi drives its sound, and how Meitou plays it. The bank and WEM formats are in [formats/wwise-bnk.md](formats/wwise-bnk.md); this
-page is the runtime: what the game sends to Wwise, and Meitou's player (`src/Meitou.Audio`). Only the ambience (biome beds, weather beds) and the music
+page is the runtime: what the game sends to Wwise, and Meitou's player (`src/Meitou.Game/Audio`). Only the ambience (biome beds, weather beds) and the music
 play from the games' own rules (in the viewer and the game); the player also does pause ducking, game objects with 3D positions, attenuation and reverb,
 and the game's settings menu has the audio sliders. The game also plays the interior ambience and the building emitters (campfires, torches, water tanks). The characters (footsteps, combat, voices) and the interface sound too, as do the sky beams (effect emitters), the robot spiders and the movement of manned turrets.
 
@@ -210,7 +210,7 @@ From the same trace (**Verified**; hashes in [wwise-bnk.md](formats/wwise-bnk.md
 (DoorMaterial 0 Wood, 1 `Mechanical_Metal`, 2 `Gate`). On the door's object: `Door_Open` when it starts to open (state 0 to 2), `Door_Close` when it starts to close (1 to 3), `Door_Shut` when closing ends (3 to 0) **and**
 when opening ends (2 to 1), and `Break` for doors and walls whose integrity falls to 0 (`DoorStuff::vfunc_62`, `WallBuilding::vfunc_62`; see **Break** below). Turrets post `Turret_Mvt_Start` / `Turret_Mvt_Stop` (`TurretBuilding::vfunc_28`) and the
 gun's shot sounds on the building's object (see **Turrets**). `UI_Generator` (`FarmBuilding::vfunc_161`), the `Building_*` build-mode sounds and `Building_Click` (select sound) belong to the interface.
-**Meitou:** door sounds as above (`Meitou.Audio.DoorSounds`, fed each frame by `GameHost.UpdateDoorSounds` from the snapshot's doors, which carry each door's
+**Meitou:** door sounds as above (`Meitou.Game.Audio.DoorSounds`, fed each frame by `GameHost.UpdateDoorSounds` from the snapshot's doors, which carry each door's
 position, record and broken flag). A door object takes the leaf's centre, else its building's origin. A door missing from the snapshot is closed, since the
 snapshot leaves out plainly closed doors. A door seen for the first time is assumed to have been closed (if it is opening) or open (if it is closing); one at rest is taken as it is, so a load is quiet. Doors over 3000 units from the eye are skipped
 (**engine choice**; the exe posts for every door). The `--quit-after` log counts the door sounds.
@@ -307,12 +307,12 @@ through one helper (`FUN_1405c9a70(char, event, maxSqDist)`): **dropped when the
   dust only where the slot's min speed is 0 (**Observed**). **Not in Meitou**, for footsteps or farms: `ParticleRenderer.Burst` can fire a system, but how a one-shot EFFECT instance
   maps onto it, the `+0x1a9` flag and the v0 slot shift are **Unknown**.
 
-Meitou (`CharacterSounds`, `AnimationSoundEvents`, `GroundSurfaces` in `Meitou.Audio`; `GameHost.AudioCharacters.cs`): characters within 1100 units of the eye get an object (dropped past 1400, or when they leave the snapshot);
+Meitou (`CharacterSounds`, `AnimationSoundEvents`, `GroundSurfaces` in `Meitou.Game.Audio`; `GameHost.AudioCharacters.cs`): characters within 1100 units of the eye get an object (dropped past 1400, or when they leave the snapshot);
 the host hands each character's place, facing, speed (horizontal distance between the last two snapshots over the tick) and animation layers (`AnimationLayer.Length` and `.Definition`, added to the snapshot) every frame.
 Combat facts come from `World.Sounds`, a display-only queue the host sets while audio runs (blocks, hits, shots, bolt hits and sticks, characters going down, fighters taking up a fight); nothing in the simulation reads it, so
 it is outside the state hash. Overlay tiles for the ground load on a worker (6 kept).
 
-Building floors in Meitou (`BuildingFloors` in `Meitou.Rendering`, `FloorSurfaces.HighestBelow`, `CharacterSounds.Floor`, `GameHost.AudioFloors.cs`; display only, nothing reaches the simulation). For a moving character within the
+Building floors in Meitou (`BuildingFloors` in `Meitou.Game.Rendering.Objects`, `FloorSurfaces.HighestBelow`, `CharacterSounds.Floor`, `GameHost.AudioFloors.cs`; display only, nothing reaches the simulation). For a moving character within the
 surface limit (120,000 squared; the exe has none for buildings, but footsteps sound only within 200 units), asked again after it moved a unit: the placed, undestroyed BUILDINGs of the zones within 400 units (X/Z of the building's
 position) are listed on a worker; a building's floor collision (`FloorSurfaces.For`: ordinary and stairs parts, groups 9..12 and 15..18) is made on a worker when a character first comes within 400 units. The highest floor
 triangle under the feet and at most 20 above them is the hit, taken when within 4 units below the feet (engine choice: the sim stands on the navigation mesh); the highest across buildings wins. The character is "in a
@@ -370,7 +370,7 @@ and MAP_ITEM by `inventory sound` (`Backpack`, `Building_Material`, `Fabric`, `F
 `Armor_Plating`, `Blueprints`, `Meat`); LIMB_REPLACEMENT `Robotic_Component`. The `Notifications` bank also has `Raid` and `Under_Attack` and three unresolved values the exe never passes. **Unknown:** the MyGUI events behind
 Hover and Slider; whether the editor's speed reset posts `Game_Speed_Normal`; what Wwise does for a NULL switch value.
 
-Meitou (`UiSounds` in `Meitou.Audio`, `PlayerInterface.Sounds.cs`, `GameHost.AudioUi.cs`): the host plays what `PlayerInterface.UiSound` receives. Hooks: `ExecuteUiAction` (HUD actions), `FaithfulAction` (the original screens' widgets),
+Meitou (`UiSounds` in `Meitou.Game.Audio`, `PlayerInterface.Sounds.cs`, `GameHost.AudioUi.cs`): the host plays what `PlayerInterface.UiSound` receives. Hooks: `ExecuteUiAction` (HUD actions), `FaithfulAction` (the original screens' widgets),
 the commands `Say` sends (orders, item moves, trades, dialogue choices; `AddJob` and the Shift Medic / Rescue commands as `Permanent_Job`), and a poll in `Draw` for windows opening and closing, the title button under the pointer, the speed keys (F2 to F4, when the clock moves to a new speed without a button), a building of the player's finishing
 (`Building_Complete`) and a research finished or a building unlocked by a blueprint (`Thing_Complete`, one a frame; the sim also queues `DismantleDone` for a finished dismantle and `BountyPaid` for a reward, played as `Thing_Complete` / `Bounty_Fulfilled`).
 The prospecting, research tab and biome sounds are posted where the exe posts them: the HUD's Prospect action when it gives the task (`Prospect_Click`), the results window opening (`Prospect_Results`, in the poll), a type list pick in the overview (`Research_Tab`),
@@ -386,7 +386,7 @@ building menu's Lock Doors / Unlock Doors verb (all the doors at once; `Build_Lo
 
 ## Meitou's player
 
-`src/Meitou.Audio`: `AudioSystem` wires these together for a host (the viewer, the game); any missing part (no exe library, no device) leaves the
+`src/Meitou.Game/Audio`: `AudioSystem` wires these together for a host (the viewer, the game); any missing part (no exe library, no device) leaves the
 host running without sound.
 
 - `WwiseCodebookLibrary.Load` reads the codebook library from `%LOCALAPPDATA%\Meitou\audio\codebooks.bin` (72 KB), made from the exe the

@@ -36,7 +36,7 @@ THE SOFTWARE.
 
 ## AMD FidelityFX SDK
 
-`src/Meitou.Rendering/Upscalers/FsrUpscaler.cs` declares the FidelityFX API's type constants, flags and
+`src/Meitou.Game/Rendering/Upscalers/FsrUpscaler.cs` declares the FidelityFX API's type constants, flags and
 structures following the SDK's public headers (`ffx_api.h`, `ffx_api_types.h`, `ffx_upscale.h`, SDK v1.1.4). The
 FidelityFX library itself (`amd_fidelityfx_vk.dll`, or `libamd_fidelityfx_vk.so`) is not part of this repository; it is
 loaded at run time when the user provides it. The Linux `libamd_fidelityfx_vk.so` is an unofficial build of SDK 1.1.4
@@ -69,7 +69,7 @@ THE SOFTWARE.
 
 ## NVIDIA Streamline
 
-`src/Meitou.Rendering/Upscalers/Streamline.cs` and `DlssUpscaler.cs` declare Streamline's structures, enums and
+`src/Meitou.Game/Rendering/Upscalers/Streamline.cs` and `DlssUpscaler.cs` declare Streamline's structures, enums and
 entry points following its public headers (Streamline 2.14.16). The Streamline libraries and NVIDIA's DLSS runtime
 (`nvngx_dlss.dll`) are not part of this repository; they are included in the Windows release zip under NVIDIA's
 licences (`licenses/NVIDIA`), and a build from source loads them at run time when the user provides them (see
@@ -99,7 +99,7 @@ THE SOFTWARE.
 
 ## NVIDIA DLSS (NGX)
 
-`src/Meitou.Rendering/Upscalers/Ngx.cs` and `NgxDlssUpscaler.cs` declare, in our own code, the interface needed to call
+`src/Meitou.Game/Rendering/Upscalers/Ngx.cs` and `NgxDlssUpscaler.cs` declare, in our own code, the interface needed to call
 NGX's documented Vulkan API on Linux: entry point signatures, structure layouts and parameter names. The interface
 identifiers (entry point and parameter names, constants such as the API version) are restated from NVIDIA's DLSS SDK
 headers (NVIDIA RTX SDKs license); no other header text and no SDK file is part of this repository. That API comes from
@@ -121,19 +121,19 @@ Used as packages (not copied into this repository); each is distributed under it
 | Package | Used by | License |
 | --- | --- | --- |
 | StbImageSharp 2.30.16 | `Meitou.Data` (PNG/TGA/JPG/BMP textures) | Unlicense OR MIT |
-| Silk.NET.Windowing, .Input 2.23.0 (and their Silk.NET dependencies: Core, Maths, GLFW, Input/Windowing Common and Glfw) | `src/Meitou.Rendering.Display`, `src/Meitou.Game`, `tools/Meitou.ModelViewer` | MIT |
+| Silk.NET.Windowing, .Input 2.23.0 (and their Silk.NET dependencies: Core, Maths, GLFW, Input/Windowing Common and Glfw) | `src/Meitou.Game/Rendering/Display`, `src/Meitou.Game`, `tools/Meitou.ModelViewer` | MIT |
 | Ultz.Native.GLFW 3.4.0 (ships `glfw3.dll`) | `tools/Meitou.ModelViewer`, via Silk.NET | Zlib |
-| Silk.NET.Vulkan, .Vulkan.Extensions.KHR, .Vulkan.Extensions.EXT 2.23.0 | `src/Meitou.Rendering` | MIT |
-| Silk.NET.Shaderc 2.23.0 | `src/Meitou.Rendering` (GLSL to SPIR-V at run time) | MIT |
-| Silk.NET.Shaderc.Native 2.23.0 (ships `shaderc_shared.dll`: Google's shaderc with glslang and SPIRV-Tools) | `src/Meitou.Rendering` | Apache-2.0 (shaderc, SPIRV-Tools); glslang under its own BSD-3-Clause / MIT-style terms |
-| StbTrueTypeSharp 1.26.12 | `src/Meitou.Rendering` (debug overlay text from a system monospace font, else the installed game's Exo2 SemiBold, kerning pairs of UI fonts; no font is shipped) | Public domain |
-| FreeTypeSharp 3.1.0 (ships `freetype.dll`, `libfreetype.so`, `libfreetype.dylib`: FreeType 2.13.2) | `src/Meitou.Rendering` (UI font rasterisation and hinting). Portions of this software are copyright The FreeType Project (www.freetype.org). All rights reserved. | MIT (FreeTypeSharp); FreeType License (FTL) or GPLv2, used here under the FTL |
+| Silk.NET.Vulkan, .Vulkan.Extensions.KHR, .Vulkan.Extensions.EXT 2.23.0 | `src/Meitou.Game/Rendering` | MIT |
+| Silk.NET.Shaderc 2.23.0 | `src/Meitou.Game/Rendering` (GLSL to SPIR-V at run time) | MIT |
+| Silk.NET.Shaderc.Native 2.23.0 (ships `shaderc_shared.dll`: Google's shaderc with glslang and SPIRV-Tools) | `src/Meitou.Game/Rendering` | Apache-2.0 (shaderc, SPIRV-Tools); glslang under its own BSD-3-Clause / MIT-style terms |
+| StbTrueTypeSharp 1.26.12 | `src/Meitou.Game/Rendering` (debug overlay text from a system monospace font, else the installed game's Exo2 SemiBold, kerning pairs of UI fonts; no font is shipped) | Public domain |
+| FreeTypeSharp 3.1.0 (ships `freetype.dll`, `libfreetype.so`, `libfreetype.dylib`: FreeType 2.13.2) | `src/Meitou.Game/Rendering` (UI font rasterisation and hinting). Portions of this software are copyright The FreeType Project (www.freetype.org). All rights reserved. | MIT (FreeTypeSharp); FreeType License (FTL) or GPLv2, used here under the FTL |
 | Avalonia, Avalonia.Desktop, Avalonia.Themes.Fluent 12.1.4 (with SkiaSharp and HarfBuzzSharp) | `launcher/Meitou.Launcher` (UI) | MIT |
 | Velopack 1.2.161 | `launcher/Meitou.Launcher` (install and self-update) | MIT |
 | Markdig 1.4.2 | `launcher/Meitou.Launcher` (news posts) | BSD-2-Clause |
-| NVorbis 0.10.5 | `src/Meitou.Data`, `src/Meitou.Audio`, `launcher/Meitou.Launcher` (news video sound) | MIT |
-| Silk.NET.OpenAL.Soft.Native 1.23.1 (ships OpenAL Soft: `soft_oal.dll`, `libopenal.so`, `libopenal.dylib`) | `src/Meitou.Audio`, `launcher/Meitou.Launcher` (news video sound; a separate library, loaded at run time) | LGPL-2.1-or-later (OpenAL Soft) |
-| Lib.Harmony 2.4.3 (ships `0Harmony.dll` with MonoMod, Mono.Cecil and Iced merged in; notices under [Harmony](#harmony)) | `src/Meitou.Modding`, `src/Meitou.Game` (code mods patch the game through it) | MIT |
+| NVorbis 0.10.5 | `src/Meitou.Data`, `src/Meitou.Game/Audio`, `launcher/Meitou.Launcher` (news video sound) | MIT |
+| Silk.NET.OpenAL.Soft.Native 1.23.1 (ships OpenAL Soft: `soft_oal.dll`, `libopenal.so`, `libopenal.dylib`) | `src/Meitou.Game/Audio`, `launcher/Meitou.Launcher` (news video sound; a separate library, loaded at run time) | LGPL-2.1-or-later (OpenAL Soft) |
+| Lib.Harmony 2.4.3 (ships `0Harmony.dll` with MonoMod, Mono.Cecil and Iced merged in; notices under [Harmony](#harmony)) | `src/Meitou.Game` (Mods/; code mods patch the game through it) | MIT |
 
 The DDS reader and decoder (`src/Meitou.Data/Textures/`) are written from Microsoft's public DDS and
 block-compression documentation; no code is taken from other implementations.
@@ -279,7 +279,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## DotRecast
 
-`src/Meitou.Navigation/` uses the DotRecast NuGet packages `DotRecast.Core` and `DotRecast.Recast`
+`src/Meitou.Simulation/Navigation/` uses the DotRecast NuGet packages `DotRecast.Core` and `DotRecast.Recast`
 (version 2026.3.1) for voxelisation and polygon-mesh generation; it is a port of Recast Navigation.
 
 ```

@@ -1,9 +1,10 @@
 # Engine architecture
 
-Projects: Core installation; Data clean-room readers/typed game data; Simulation headless world;
-Navigation own navmesh; Engine WorldSession/time/input/camera; Rendering Vulkan/content/streaming;
-Rendering.Display window/device/presenter; Game host/UI; ModelViewer debug world/atlas; Tools surveys.
-GPU and simulation ownership stay separate. [Simulation contracts](simulation.md),
+Projects: Core installation, settings, localisation (shared with the launcher); Data clean-room readers, typed game data and pure rules;
+Simulation the headless world (systems, `Navigation/` own navmesh, saving, `Session/` tick clocks, `WorldBoot`), which never references Game;
+Game the executable `MeitouClient` (`Host/` WorldSession/input/camera, `Rendering/` Vulkan/content/streaming with `Display/` and `Metal/`,
+`Audio/`, `Ui/`, `Mods/` the code-mod loader); ModelViewer debug world/atlas; Tools surveys and mod-check. Folders are feature slices and
+namespaces follow them. GPU and simulation ownership stay separate. [Simulation contracts](simulation.md),
 [native renderer](renderer-native.md), [viewer controls](viewer.md).
 
 ## Loop, input and camera
@@ -24,7 +25,8 @@ settings and current key list belong in viewer. Quicksave F5/loadF9; cinematic F
 
 ## Host and loading
 
-GameHost partials own boot/interactive/offscreen, characters, saving, transitions, duel and battle;
+`WorldBoot` reads a world's content on a worker with no window (navmesh, towns' buildings, population data, ragdoll rigs, animations);
+GameHost adds the code mods and the systems. GameHost partials own boot/interactive/offscreen, characters, saving, transitions, duel and battle;
 PlayerInterface owns picking/HUD/panels/commands. StandardSystems supplies order. NavAdapter
 bridges Navigation; never let UI/rendering duplicate simulation state.
 GUI executable attaches a caller's console; folder prompt creates its own when necessary.

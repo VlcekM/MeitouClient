@@ -6,7 +6,7 @@ Labels as in [../README.md](../README.md).
 
 Sources: `kenshi_x64.exe` (the camera rig's set-up, its input, zoom, pitch, pan and ground-clearance steps, the settings loader;
 decompiled outside the repository on 2026-10-05 and 2026-10-17), the install's `settings.cfg` and `controls.cfg`, `fcs.def`.
-Implemented as facts in `Meitou.Data.World.KenshiCamera` and `Meitou.Engine.Cameras.StrategyCamera`. Nothing here was compared
+Implemented as facts in `Meitou.Data.World.KenshiCamera` and `Meitou.Game.Host.Cameras.StrategyCamera`. Nothing here was compared
 against the running game; the signs and rates come from reading the code.
 
 ## The strategy camera (Verified: `kenshi_x64.exe`)

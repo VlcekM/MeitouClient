@@ -98,7 +98,7 @@ Sources: the configured Kenshi install's `data/gui/`, the existing
   - `TabWidth` is the tab's advance in pixels (0: eight spaces). `Distance` is the gap
     between glyphs in MyGUI's own texture (default 1): no layout effect. Inline `#RRGGBB`
     colour codes are handled by `TextView` (Meitou: `MyGuiTextTags`, [Inline colour tags](../game/ui-screens.md#inline-colour-tags)).
-- Meitou draws text through `UiFont` (`src/Meitou.Rendering/Ui/`): FreeType 2.13.2 (via
+- Meitou draws text through `UiFont` (`src/Meitou.Game/Rendering/Ui/`): FreeType 2.13.2 (via
   FreeTypeSharp), one face per file, one size per `UiFont`, glyphs rasterised into an atlas
   on demand (any code point, UTF-16 pairs as one), the atlas grows to 2048 square and then
   starts over; text geometry caches are dropped when it moves. Measuring, wrapping and

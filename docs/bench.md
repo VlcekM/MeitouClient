@@ -1,7 +1,7 @@
 # Benchmarking
 
 The world viewer's offscreen harness measures frame cost and visual effects of runtime switches.
-Implementation: `WorldApp.Bench.cs`, `src/Meitou.Rendering/Bench/`, `BenchHarnessTests`.
+Implementation: `WorldApp.Bench.cs`, `src/Meitou.Game/Rendering/Bench/`, `BenchHarnessTests`.
 Options: [viewer.md](viewer.md).
 
 ## Runs

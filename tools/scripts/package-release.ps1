@@ -81,7 +81,7 @@ if ($windows) {
     # The viewer loads Streamline only when started with DLSS chosen (the game loads it on every startup).
     Set-Content -Path (Join-Path $stage "meitou-viewer-dlss.bat") -Encoding ASCII -Value "@`"%~dp0meitou-viewer.exe`" --world --town `"The Hub`" --upscaler dlss %*`r`n@if errorlevel 1 pause"
 
-    # NVIDIA Streamline 2.14.16 (the headers src/Meitou.Rendering/Upscalers/Streamline.cs follows): the production (signed) plugins of bin/x64,
+    # NVIDIA Streamline 2.14.16 (the headers src/Meitou.Game/Rendering/Upscalers/Streamline.cs follows): the production (signed) plugins of bin/x64,
     # not bin/x64/development, and the DLSS runtime. Loaded next to the exe (Streamline.cs).
     $sl = Get-Archive "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.16/streamline-sdk-v2.14.16.zip"
     # DLSS frame generation adds sl.dlss_g, its model nvngx_dlssg and Reflex (sl.reflex, sl.pcl), loaded only when the setting picks it (Streamline.cs).

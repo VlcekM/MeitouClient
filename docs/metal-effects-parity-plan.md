@@ -90,12 +90,12 @@ Work items:
 
 Likely files:
 
-- `src/Meitou.Game/MetalPostChain.cs` (`MarkParticleDraws`, `MarkParticles`, `BuildShadingRate`, `RunGiResolve`,
+- `src/Meitou.Game/Rendering/Metal/MetalPostChain.cs` (`MarkParticleDraws`, `MarkParticles`, `BuildShadingRate`, `RunGiResolve`,
   `End`)
-- `src/Meitou.Rendering/PostTaa.cs` (sun motion, particle coverage, velocity)
-- `src/Meitou.Rendering/PostComposite.cs` (SMAA if ported)
-- `src/Meitou.Rendering/PostProcess.cs` and `PostProcess.Merged.cs` (reference behavior and shared helpers)
-- `src/Meitou.Rendering/ParticleRenderer.cs` (`DrawCoverage`, `HasCoverage`)
+- `src/Meitou.Game/Rendering/Post/PostTaa.cs` (sun motion, particle coverage, velocity)
+- `src/Meitou.Game/Rendering/Post/PostComposite.cs` (SMAA if ported)
+- `src/Meitou.Game/Rendering/Post/PostProcess.cs` and `PostProcess.Merged.cs` (reference behavior and shared helpers)
+- `src/Meitou.Game/Rendering/Particles/ParticleRenderer.cs` (`DrawCoverage`, `HasCoverage`)
 
 Acceptance:
 
@@ -130,10 +130,10 @@ Work items:
 
 Likely files:
 
-- `src/Meitou.Rendering/ReflectionPass.cs`
-- `src/Meitou.Rendering/WorldFrame.cs`
-- `src/Meitou.Metal/MetalContext.cs` and `src/Meitou.Rendering/Gpu/{IGpuContext,GpuContext}.cs`
-- `src/Meitou.Rendering/Characters/CharacterRenderer*.cs`
+- `src/Meitou.Game/Rendering/Frame/ReflectionPass.cs`
+- `src/Meitou.Game/Rendering/Frame/WorldFrame.cs`
+- `src/Meitou.Game/Rendering/Metal/MetalContext.cs` and `src/Meitou.Game/Rendering/Gpu/{IGpuContext,GpuContext}.cs`
+- `src/Meitou.Game/Rendering/Characters/CharacterRenderer*.cs`
 
 Acceptance:
 
@@ -152,7 +152,7 @@ table. The debris diffuse map gets a stable bindless index per loaded texture; t
 lighting and per-part cut-out state travel in one 128-byte push block. Metal no longer has a debris-specific lighting
 approximation.
 
-The sampler-budget helper is `src/Meitou.Rendering/Gpu/Shaders/SamplerBudget.cs`: it counts a stage's direct samplers
+The sampler-budget helper is `src/Meitou.Game/Rendering/Gpu/Shaders/SamplerBudget.cs`: it counts a stage's direct samplers
 outside the native bindless set and fails with the shader's name instead of an opaque Metal pipeline error. Debris and
 water use it at program creation; both have 0 direct fragment samplers.
 

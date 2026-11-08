@@ -1,6 +1,6 @@
 # Character renderer
 
-`Meitou.Rendering.CharacterRenderer` partials: core content/material/lifetime; Draw cull/LOD/batches;
+`Meitou.Game.Rendering.Characters.CharacterRenderer` partials: core content/material/lifetime; Draw cull/LOD/batches;
 Motion previous state; Portraits offscreen portraits; Stats diagnostic rings. Inputs are
 interpolated simulation snapshots and data appearances, not simulation-owned GPU resources.
 Game assembly rules: [characters](characters.md), [animation](animation.md).

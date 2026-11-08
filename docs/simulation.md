@@ -577,7 +577,7 @@ is not stopped, and an unwalkable result falls back to its own step.
 
 ## Navmesh
 
-Own DotRecast builder/cache (`Meitou.Navigation`), not Havok runtime. Default cells 2, height 1,
+Own DotRecast builder/cache (`Meitou.Simulation.Navigation`), not Havok runtime. Default cells 2, height 1,
 48-cell tiles (a building interior is one tile), agent height 18/max climb 5 (two cells connect over a shared free space of 18 − 5); ground/water/door
 areas. A* checks portal clearance (radius per wall end, default radius 4), water factor and doors. `NavAdapter` exposes simulation interfaces;
 `ZoneGate` holds population until ready. Collision and world placement rules:
@@ -813,7 +813,7 @@ when the host passes `CharacterRigs` (the game does; tests and goldens do not). 
   get-up blend); the renderer poses with it. While `Whole`, the character's position follows the root.
 - **Scene**: 32-unit tiles round each moving ragdoll, terrain sampled every 4 units (the heightmap's samples are 18 apart; the Bepu mesh build is nearly all of a tile's
   cost, 0.45 ms at 2-unit cells, **Observed**), plus building
-  collision from `Meitou.Navigation.RagdollGeometry` (per zone on a worker, doors and passable parts
+  collision from `Meitou.Simulation.Navigation.RagdollGeometry` (per zone on a worker, doors and passable parts
   skipped, ≤16 zones) and the map features' collision (rocks, cliff blocks, Rebirth's statue: each triangle in the zone its
   centre lies in, as features reach past a building's 600; outdoor bodies hit group 14, the features' group (**Verified**,
   [pathfinding](game/pathfinding.md#own-builder) "Map features"). **Observed** (`meitou-tools navmesh --ragdoll`): map
@@ -1464,9 +1464,9 @@ The first snapshot after a load carries every site, so the host seam needs nothi
 `Meitou.Game/GameHost.Building.cs` (diff, overlays, rebuilds, repath), `PlayerInterface.Build.cs` (Kenshi_BuildWindow,
 ghost, commands), `Building/PlacementCheck.cs`, `Building/BuildMenu.cs` (categories and groups from
 `BuildingBuildData` and `UnlockedBuildings`), `KeyMap.cs` (build map), `PlayerInterface.ContextMenu.cs` and
-`PlayerInterface.Picking.cs` (site verbs), `GameHost.Interactive.cs` (hook), `Meitou.Engine` if needed,
-`Meitou.Ui/*`; `Meitou.Rendering/WorldObjects.cs`, `ObjectStreamer.cs` and the object shader plumbing;
-`Meitou.Navigation/NavSystem.cs`, `NavMeshService.cs`, `ZoneGeometryGatherer*.cs`, new `NavRuntimeBuildings.cs`.
+`PlayerInterface.Picking.cs` (site verbs), `GameHost.Interactive.cs` (hook), `Meitou.Game/Host` if needed,
+`Meitou.Game/Ui/*`; `Meitou.Game/Rendering/Objects/WorldObjects.cs`, `ObjectStreamer.cs` and the object shader plumbing;
+`Meitou.Simulation/Navigation/NavSystem.cs`, `NavMeshService.cs`, `ZoneGeometryGatherer*.cs`, new `NavRuntimeBuildings.cs`.
 
 ## Production
 
