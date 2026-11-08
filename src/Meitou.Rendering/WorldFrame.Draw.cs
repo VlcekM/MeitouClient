@@ -381,6 +381,8 @@ static partial class WorldFrame
             lamps.Moving.Clear();
             gpu.Characters?.CollectLamps(lamps.Moving);   // the lanterns characters carry, where this update posed them
         }
+        // With the lamps traced the rays stop their light at the walls: the room's hull would only trim the wall round a door into a dark polygon.
+        if (gpu.Lamps is { } hull) hull.RoomMargin = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } ? WorldLamps.TracedRoomMargin : WorldLamps.RoomSurfaceMargin;
         gpu.Lamps?.Update(f.Eye, gpu.Objects, WorldLights.DaylightFactor(f.Hour, f.Scene.Clock.Sunrise, f.Scene.Clock.Sunset));
 
         // The traced scene of the global illumination: its acceleration structures for this eye (docs/render-gi.md).

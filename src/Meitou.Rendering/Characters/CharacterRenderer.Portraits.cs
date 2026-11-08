@@ -130,13 +130,13 @@ internal sealed unsafe partial class CharacterRenderer
             {
                 int size = portraitHdr.Desc.Width;
                 var constants = new ViewConstants { ViewProjection = pose.View * pose.Projection, Eye = pose.Eye, LightDir = pose.Light };
-                // The studio (previewsun): its sun from the front on the camera's right, about 16 degrees up, its shadow and occlusion drawn first.
+                // The studio (previewsun): its sun from the front on the camera's right, about 50 degrees up (a brim shades the face under it, as the sun in play does), its shadow and occlusion drawn first.
                 if (StudioOn)
                 {
                     // Level: the camera is at the head's height, above the body's centre, so the way to it already climbs.
                     var toEye = Vector3.Normalize(new Vector3(pose.Eye.X - live[index].Centre.X, 0, pose.Eye.Z - live[index].Centre.Z));
                     var right = Vector3.Normalize(Vector3.Cross(toEye, Vector3.UnitY));
-                    constants = StudioView(index, constants.ViewProjection, pose.Projection, pose.Eye, 0.85f * toEye - 0.45f * right + 0.3f * Vector3.UnitY,
+                    constants = StudioView(index, constants.ViewProjection, pose.Projection, pose.Eye, 0.6f * toEye - 0.35f * right + 0.85f * Vector3.UnitY,
                         portraitHdr, portraitHdrDepth!, size, size);
                 }
                 var cmd = Gpu.BeginNative("portrait");

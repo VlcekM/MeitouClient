@@ -168,8 +168,8 @@ Fibonacci spiral over the whole sphere (384 px tiles of one atlas, the matrices 
 weighted by its normal, from which nothing of the character hides it (2 x 2 compare a direction); the screen's occlusion adds the folds at 0.6. The depth draws
 are the colour shader at fog distance -5, returning after its cut-outs. The map and occlusion indices and the map's matrix ride the view block's
 interior-cut fields (`cutPad`, `cutVolumes`, `cutRanges[0]`, `cutPlanes[0..3]`), which characters never read. The sun: portraits from the camera's
-right and front, about 16 degrees above the level (the camera is at the head's height: the way to it already climbs); the stage fixed to the character (the shadows stay while the editor's camera turns round it): from the right of its first
-view (yaw 0, its front), about 45 degrees to the side and 35 up.
+right and front, about 50 degrees above the level, so a brim shades the face under it (the camera is at the head's height: the way to it already climbs); the stage fixed to the character (the shadows stay while the editor's camera turns round it): from the right of its first
+view (yaw 0, its front), to the side and about 55 up.
 The stage's platform (`WorldObjectRenderer.DrawStageProp`, the objects' shader, `StudioShaders`) takes the same view: lit by the studio's sun, it
 receives the character's shadow and the sky's occlusion round the feet (its `cutVolumes` left 0: the objects read it as their shadow cut; the
 centre made eye-relative like its positions). The platform casts too: the host's `StageCasters` draws it

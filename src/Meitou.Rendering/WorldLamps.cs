@@ -19,7 +19,9 @@ internal sealed class WorldLamps : IDisposable
     public const float CellSize = 128;
     internal const int MaxRoomEdges = 32, DataWidth = 5 + MaxRoomEdges;
     // Allow for the small offset between collision masks and visible wall/floor surfaces.
-    const float RoomSurfaceMargin = 0.5f;
+    internal const float RoomSurfaceMargin = 0.5f, TracedRoomMargin = 100000f;
+    /// <summary>How far past an interior lamp's room hull its light still reaches (set each frame): <see cref="RoomSurfaceMargin"/>, or <see cref="TracedRoomMargin"/> when the lamps are traced.</summary>
+    public float RoomMargin { get; set; } = RoomSurfaceMargin;
 
     readonly IGpuContext ctx;
     readonly Task<WorldLight[]> loading;
@@ -220,13 +222,13 @@ internal sealed class WorldLamps : IDisposable
             dataValues[row + 2] = new Vector4(l.Direction, MathF.Cos(outer * 0.5f));
             dataValues[row + 3] = new Vector4(MathF.Cos(inner * 0.5f), l.Falloff > 0 ? l.Falloff : 1, room?.Footprint.Length ?? 0, Emitter(l.PlacementId));
             if (room is null) continue;
-            dataValues[row + 4] = new Vector4(room.YMin - RoomSurfaceMargin, room.YMax + RoomSurfaceMargin, 0, 0);
+            dataValues[row + 4] = new Vector4(room.YMin - RoomMargin, room.YMax + RoomMargin, 0, 0);
             for (int e = 0; e < room.Footprint.Length; e++)
             {
                 var at = room.Footprint[e];
                 var edge = room.Footprint[(e + 1) % room.Footprint.Length] - at;
                 var inward = Vector2.Normalize(new Vector2(-edge.Y, edge.X));
-                dataValues[row + 5 + e] = new Vector4(inward, -Vector2.Dot(inward, at) + RoomSurfaceMargin, 0);
+                dataValues[row + 5 + e] = new Vector4(inward, -Vector2.Dot(inward, at) + RoomMargin, 0);
             }
         }
 
