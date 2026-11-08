@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The Metal backend's host: the game's sky drawn by Metal in a window of its own (the proof the shaders, the uniform model and the
+       present work on Metal). Where the game has no Metal backend (MeitouMetal, Directory.Build.props: not macOS) it only says so. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <AssemblyName>meitou-metal-host</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(MeitouMetal)' == 'true'">
+    <Compile Remove="NoMetal.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MeitouMetal)' != 'true'">
+    <Compile Remove="Program.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Meitou.Game\Meitou.Game.csproj" />
+  </ItemGroup>
+</Project>

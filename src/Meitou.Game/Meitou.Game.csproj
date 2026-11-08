@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The game executable: boots into the world with the Kenshi camera (docs/engine.md). -->
+  <!-- The game executable: boots into the world with the Kenshi camera (docs/engine.md). Everything the player sees, hears and touches lives here:
+       the host (Host/), the renderers and their GPU layer (Rendering/: Gpu/ the Vulkan device and shader compiler, Display/ the window, Upscalers/
+       FSR and DLSS, Metal/ the macOS backend; docs/renderer-native.md), audio (Audio/), the MyGUI host (Ui/) and the code-mod loader (Mods/,
+       docs/modding.md). The simulation below it never references this project. -->
 
   <PropertyGroup>
     <!-- Windowed: no console window opens with the game; a terminal that starts it still gets its output (GameConsole). -->
@@ -23,26 +26,39 @@
   <ItemGroup>
     <PackageReference Include="Silk.NET.Input" Version="2.23.0" />
     <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.OpenAL" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" />
+    <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
+    <PackageReference Include="FreeTypeSharp" Version="3.1.0" />
+    <PackageReference Include="Silk.NET.Vulkan" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Shaderc" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Shaderc.Native" Version="2.23.0" />
+    <!-- The one Harmony every code mod patches through (docs/modding.md "Loading"): 0Harmony.dll with MonoMod merged in. -->
+    <PackageReference Include="Lib.Harmony" Version="2.4.3" />
   </ItemGroup>
+
+  <!-- The Metal backend (Rendering/Metal): the engine's GLSL through shaderc to SPIR-V and spirv-cross to MSL; compiled where MeitouMetal is set
+       (Directory.Build.props: macOS), so the Windows build never sees SharpMetal. -->
+  <ItemGroup Condition="'$(MeitouMetal)' == 'true'">
+    <PackageReference Include="SharpMetal" Version="1.1.0" />
+    <PackageReference Include="Silk.NET.SPIRV.Cross" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.SPIRV.Cross.Native" Version="2.23.0" />
+    <EmbeddedResource Include="Rendering/Metal/Gi/ProbeGi.metal" LogicalName="Meitou.Metal.Gi.ProbeGi.metal" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(MeitouMetal)' != 'true'">
+    <Compile Remove="Rendering/Metal/**" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(MeitouMetal)' == 'true'">
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Meitou.Audio\Meitou.Audio.csproj" />
     <ProjectReference Include="..\Meitou.Core\Meitou.Core.csproj" />
     <ProjectReference Include="..\Meitou.Data\Meitou.Data.csproj" />
-    <ProjectReference Include="../Meitou.Ui/Meitou.Ui.csproj" />
-    <ProjectReference Include="..\Meitou.Engine\Meitou.Engine.csproj" />
-    <ProjectReference Include="../Meitou.Navigation/Meitou.Navigation.csproj" />
-    <!-- Code mods (docs/modding.md); brings 0Harmony.dll into the build. -->
-    <ProjectReference Include="../Meitou.Modding/Meitou.Modding.csproj" />
-    <ProjectReference Include="..\Meitou.Rendering\Meitou.Rendering.csproj" />
-    <ProjectReference Include="..\Meitou.Rendering.Display\Meitou.Rendering.Display.csproj" />
-    <!-- The Metal backend (macOS only: SharpMetal P/Invokes /usr/lib/libobjc.A.dylib), so the Windows build never sees it. -->
-    <ProjectReference Include="..\Meitou.Metal\Meitou.Metal.csproj" Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
+    <ProjectReference Include="..\Meitou.Simulation\Meitou.Simulation.csproj" />
   </ItemGroup>
-
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
-    <DefineConstants>$(DefineConstants);MEITOU_METAL</DefineConstants>
-  </PropertyGroup>
 
   <ItemGroup>
     <RuntimeHostConfigurationOption Include="System.GC.HeapCount" Value="4" />
@@ -50,6 +66,8 @@
     <RuntimeHostConfigurationOption Include="System.GC.NoAffinitize" Value="true" />
     <!-- Gen0 budget at most 16 MB: the default let ~1 GB pile up between collections, and each gen0/gen1 paused every thread 20-190 ms (docs/engine.md "GC"). -->
     <RuntimeHostConfigurationOption Include="System.GC.Gen0MaxBudget" Value="16777216" />
+    <!-- The window icon: the two moons, 256 x 256 raw RGBA (assets/branding). -->
+    <EmbeddedResource Include="../../assets/branding/meitou-256.rgba" LogicalName="meitou-256.rgba" />
     <!-- The Meitou title's wordmark (TitleLogo). -->
     <EmbeddedResource Include="../../assets/branding/kenshi-logo.png" LogicalName="kenshi-logo.png" />
     <!-- The picture under the luckyren Mode setting (SettingsMenuArt). -->

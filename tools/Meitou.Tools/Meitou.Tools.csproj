@@ -6,13 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Meitou.Core\Meitou.Core.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Data\Meitou.Data.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Navigation\Meitou.Navigation.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Audio\Meitou.Audio.csproj" />
-    <!-- mod-check: the simulation with the enabled code mods (docs/modding.md "Determinism check"). -->
-    <ProjectReference Include="../../src/Meitou.Simulation/Meitou.Simulation.csproj" />
-    <ProjectReference Include="../../src/Meitou.Modding/Meitou.Modding.csproj" />
+    <!-- The game: audio surveys need its Wwise player; mod-check runs the simulation with the enabled code mods (docs/modding.md "Determinism check"). -->
+    <ProjectReference Include="..\..\src\Meitou.Game\Meitou.Game.csproj" />
   </ItemGroup>
 
 </Project>

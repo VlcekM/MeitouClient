@@ -38,7 +38,8 @@ New-Item -ItemType Directory -Force $stage, $Cache | Out-Null
 # packaging, so git describe would still find the previous tag.
 $numeric = if ($Version -match '^\d+(\.\d+){1,3}') { $Matches[0] } else { "0.0.0" }
 # meitou-tools joins them for modders: mod-check runs a save with code mods and compares the runs (docs/modding.md "Determinism check").
-$projects = @("src/Meitou.Game/Meitou.Game.csproj", "tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj", "tools/Meitou.Tools/Meitou.Tools.csproj")
+# The game goes last: the viewer and meitou-tools reference it and bring copies of its runtimeconfig and deps, which its own publish then replaces.
+$projects = @("tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj", "tools/Meitou.Tools/Meitou.Tools.csproj", "src/Meitou.Game/Meitou.Game.csproj")
 foreach ($project in $projects) {
     dotnet publish (Join-Path $root $project) -c Release -r $Rid --self-contained true `
         -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -p:BuildGitTag=v$Version -o $stage

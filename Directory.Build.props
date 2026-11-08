@@ -9,6 +9,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Product>MeitouClient</Product>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+    <!-- The Metal backend (src/Meitou.Game/Rendering/Metal) compiles on macOS only (SharpMetal P/Invokes libobjc); -p:MeitouMetal=true compiles it elsewhere. -->
+    <MeitouMetal Condition="'$(MeitouMetal)' == ''">$([MSBuild]::IsOSPlatform('OSX'))</MeitouMetal>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MeitouMetal)' == 'true'">
+    <DefineConstants>$(DefineConstants);MEITOU_METAL</DefineConstants>
   </PropertyGroup>
 
 </Project>

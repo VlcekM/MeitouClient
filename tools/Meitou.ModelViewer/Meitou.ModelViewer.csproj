@@ -19,11 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Meitou.Core\Meitou.Core.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Data\Meitou.Data.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Rendering\Meitou.Rendering.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Rendering.Display\Meitou.Rendering.Display.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Audio\Meitou.Audio.csproj" />
+    <!-- The game's renderers, window and audio. -->
+    <ProjectReference Include="..\..\src\Meitou.Game\Meitou.Game.csproj" />
   </ItemGroup>
 
   <ItemGroup>

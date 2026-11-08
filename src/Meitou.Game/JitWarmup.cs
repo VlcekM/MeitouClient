@@ -16,8 +16,11 @@ static class JitWarmup
     /// <summary>Threads compiling: the first frames call the rendering code within seconds of the start, and one thread took 7-8 s for all of it.</summary>
     const int Threads = 3;
 
-    // The order the game first calls them in: the simulation (the world ticks during the loading), the rendering (the first frames), the host, then the rest.
-    static readonly string[] Order = ["Meitou.Simulation", "Meitou.Rendering", "MeitouClient"];
+    // The order the game first calls them in: the simulation (the world ticks during the loading), the game's rendering (the first frames), the host, then the rest.
+    static readonly string[] Order = ["Meitou.Simulation", "MeitouClient"];
+
+    /// <summary>The game's renderers: compiled before the rest of the game's code, as the first frames call them.</summary>
+    const string RenderingNamespace = "Meitou.Rendering";
 
     static readonly ConcurrentQueue<MethodBase> queue = new();
     static readonly Stopwatch watch = new();
@@ -50,6 +53,8 @@ static class JitWarmup
             Type[] types;
             try { types = assembly.GetTypes(); }
             catch (ReflectionTypeLoadException e) { types = [.. e.Types.OfType<Type>()]; }
+
+            types = [.. types.OrderBy(t => t.Namespace?.StartsWith(RenderingNamespace, StringComparison.Ordinal) == true ? 0 : 1)];
             foreach (var type in types)
             {
                 if (type.ContainsGenericParameters) continue;

@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- The headless world: the systems, navigation (Navigation/), saving and the tick clocks (Session/). It references no window, GPU,
+       audio or UI code, so it runs in tests, tools and a future server without the game (docs/engine.md). -->
   <ItemGroup>
     <Using Include="Meitou.Localisation" />
   </ItemGroup>
@@ -9,8 +11,11 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Meitou.Tests" />
+    <InternalsVisibleTo Include="meitou-tools" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="BepuPhysics" Version="2.4.0" />
+    <PackageReference Include="DotRecast.Core" Version="2026.3.1" />
+    <PackageReference Include="DotRecast.Recast" Version="2026.3.1" />
   </ItemGroup>
 </Project>
