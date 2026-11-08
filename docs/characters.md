@@ -162,6 +162,15 @@ texture or part mesh; `items` resolves each worn ARMOUR/CONTAINER's material (7,
 animals (animals.md). Samurai Clothpants' `color samurai armour nopaint faction painted` has `dont colorise` false, so a worn pair takes the wearer's faction scheme (a
 white second colour for Bounty Hunters), which paints the colour map's second region white over the light texture. **Verified** (decompile `FUN_140536210`): the original reads `paint factor 1/2` from the item's record (`+0x78`, 0 for every item) and the colour map from the material (`+0xb0`); the colours come from the colour record at `+0xb8`, so the inputs are ours. **Observed** (controlled scene, siwa-test6 at 13:00, four people side by side in Bloodraiders): the pants draw textured and tinted red, so the white pair of Trak is his stored white scheme, not a render fault.
 
+### Characters that cannot be drawn
+
+A look whose body mesh is empty cannot be built (`CharacterContent.Build` returns null, cached for that look): its characters are never drawn, with no error in play (their position, markers and ground
+trails still exist). **Observed** (a 664-mod save, `draw-state`): 6 of 760 characters (a shop guard, bar patron, samurai and bounty captains) were undrawn this way, all of race `Hive Scout Drone`
+`16-HiverScoutmesh.mod`, a RACE record left as a stub (no mesh, texture or ragdoll field) because the mod that defines it is not loaded. How the original treats such a race is **Unknown**.
+Meitou's rule (`CharacterAppearance.Build`): a race with no mesh for the character's gender takes the other gender's mesh, else the default race's look (`Greenlander`) with a note; the character
+keeps its own race for everything else. A look that still fails to build prints one `characters a look failed to build ...` line with the cause and is marked by the debug square
+(`GameHost.DrawMarkers`) like a character with no look. Reproduce with `spawn-at <x> <z> --race "Hive Scout Drone"` and `draw-state`.
+
 ### Clothing colours
 
 Each item instance carries a COLOR_DATA (save key `color sid`). **Observed** (decompile, KenshiLib 1ce4a16 names: `Item::Item`, `AppearanceBase::createAttachedObject`

@@ -196,6 +196,18 @@ public sealed class CharacterAppearance
         string g = female ? "female" : "male";
 
         string bodyMesh = character?.GetPath("mesh") is { Length: > 0 } own ? own : race.GetPath($"{g} mesh");
+        // A race with no body mesh (a mod's record left as a stub when the mod that defines it is not loaded) would leave its characters undrawn: the other gender's mesh, else the default race's.
+        if (bodyMesh.Length == 0)
+        {
+            string other = female ? "male" : "female";
+            if (race.GetPath($"{other} mesh").Length > 0) { notes.Add($"race '{race.Name}' has no {g} mesh: the {other} one is used"); (female, g) = (!female, other); }
+            else if (Find(db, CharacterGenerator.DefaultRaceId, FcsRecordType.RACE) is { } shown && shown.GetPath($"{g} mesh").Length > 0)
+            {
+                notes.Add($"race '{race.Name}' has no body mesh: drawn as '{shown.Name}'");
+                race = shown;
+            }
+            bodyMesh = character?.GetPath("mesh") is { Length: > 0 } own2 ? own2 : race.GetPath($"{g} mesh");
+        }
         var head = (body?.HeadId is { } hid ? db.Find(hid) : null)
             ?? Pick(db, race.GetReferences($"heads {g}"), random, r => Math.Max(r.Values.Value0, 1));
 

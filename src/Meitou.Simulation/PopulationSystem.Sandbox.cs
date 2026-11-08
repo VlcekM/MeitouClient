@@ -17,18 +17,18 @@ public sealed partial class PopulationSystem
     /// Before the first tick or in the serial Inputs phase; only the sandbox, the game's <c>--crowd</c> test, its <c>--duel</c> and the F10 debug menu call it.
     /// </summary>
     /// <summary>The look <see cref="SpawnSandbox"/> gives a character (the same arguments, <paramref name="faction"/> the one it ends up with): the duel picks variants that wear a helmet.</summary>
-    public CharacterAppearance? SandboxLook(ulong seed, string recordId, bool player, int variant, int faction)
+    public CharacterAppearance? SandboxLook(ulong seed, string recordId, bool player, int variant, int faction, string? race = null)
     {
         ulong key = Rng.Mix(SeedSalts.PlayerStart ^ Rng.StableHash(recordId) ^ (player ? 1UL : 2UL) ^ ((ulong)variant << 8));
-        return data.Appearances?.Create(recordId, data.Factions[faction].Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF));
+        return data.Appearances?.Create(recordId, data.Factions[faction].Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF), null, race);
     }
 
-    public CharacterId SpawnSandbox(World world, string recordId, Vector2 at, bool player, float yaw = 0, int variant = 0, int? faction = null)
+    public CharacterId SpawnSandbox(World world, string recordId, Vector2 at, bool player, float yaw = 0, int variant = 0, int? faction = null, string? race = null)
     {
         int chosen = SandboxFaction(player, faction);
         // An animal (ANIMAL_CHARACTER) has its species' shared look (nothing rolled); it is an adult (age 1).
         bool animal = data.Db.Find(recordId) is { Type: Meitou.Data.Fcs.FcsRecordType.ANIMAL_CHARACTER };
-        CharacterAppearance? look = SandboxLook(world.Seed, recordId, player, variant, chosen);
+        CharacterAppearance? look = SandboxLook(world.Seed, recordId, player, variant, chosen, race);
         var member = new MemberPlan(recordId, SquadRole.Leader, 0, default, animal, 1);
         var template = new SquadTemplate { Id = "sandbox " + recordId, Name = data.Db.Find(recordId)?.Name ?? recordId };
         var plan = new SquadPlan(template, [member], [], []);
@@ -57,18 +57,18 @@ public sealed partial class PopulationSystem
         {
             if (name.Equals("player", StringComparison.OrdinalIgnoreCase))
             {
-                SpawnSandbox(world, spawn.Record, spawn.At, player: true, variant: variant);
+                SpawnSandbox(world, spawn.Record, spawn.At, player: true, variant: variant, race: spawn.Race);
                 return;
             }
             int named = FactionNamed(name);
             if (named >= 0)
             {
-                SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: named);
+                SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: named, race: spawn.Race);
                 return;
             }
         }
         int own = data.Db.Find(spawn.Record)?.GetReferences("faction").Select(f => data.FactionIndex(f.TargetStringId)).FirstOrDefault(i => i >= 0) ?? -1;
-        SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: own >= 0 ? own : null);
+        SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: variant, faction: own >= 0 ? own : null, race: spawn.Race);
     }
 
     /// <summary>The position of the faction with this record id or name (any case), or -1.</summary>

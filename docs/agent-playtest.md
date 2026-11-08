@@ -84,6 +84,7 @@ c help                                # one usage line per command; `c help <nam
 | `gfx` | `gfx [label [value]]` (the settings window's graphics switches and sliders: list, or set one as a click would; `gfx "Time of day" 14`) |
 | `give` | `give "<item record>" [qty] [quality] [--equip]` |
 | `ground-items` | `ground-items <x> <z> <radius>` |
+| `draw-state` | `draw-state [--missing]` (every character: race, body mesh, whether its look built (`built`, `FAILED` = never drawn, `unbuilt`), hidden indoors, and what the renderer did with it last update: tiny-culled, not live, or live with its frustum/fog tests, off-screen, bad bones, parts shown) |
 | `heal` | `heal` |
 | `help` | `help [command]` |
 | `hud` | `hud hide\|show` |
@@ -124,7 +125,7 @@ c help                                # one usage line per command; `c help <nam
 | `screenshot` | `screenshot <png path>` |
 | `select` | `select <id...> \| select --squad \| select --none  [--add]` |
 | `spawn` | `spawn "<character record>"` |
-| `spawn-at` | `spawn-at <x> <z> [record] [--ko \| --dead] [--aggro [weapon]] [--faction <player\|id\|name>]` (faction: by default the one the record lists, a record without one the first faction hostile to the player; `player` puts it in the player's faction so it fights nobody of the squad; an id or a name forces that faction) |
+| `spawn-at` | `spawn-at <x> <z> [record] [--ko \| --dead] [--aggro [weapon]] [--faction <player\|id\|name>] [--race <race name\|id>]` (`--race` draws it as that RACE, e.g. a stub race with no meshes; faction: by default the one the record lists, a record without one the first faction hostile to the player; `player` puts it in the player's faction so it fights nobody of the squad; an id or a name forces that faction) |
 | `speed` | `speed <0\|1\|2\|5>` |
 | `stance` | `stance block\|hold\|passive\|ranged\|taunt\|sneak\|jobs [on\|off]` |
 | `state` | `state` |

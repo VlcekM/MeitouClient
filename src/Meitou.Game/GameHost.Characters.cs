@@ -452,7 +452,7 @@ sealed partial class GameHost
         var current = session.CurrentSnapshot;
         foreach (var c in current.Characters)
         {
-            if (c.Appearance is not null) continue;
+            if (c.Appearance is not null && gpu.Characters?.AssetState(c.Appearance) != "FAILED") continue;   // no look, or one the renderer could not build
             var clip = Vector4.Transform(new Vector4(c.Position + new Vector3(0, 10, 0), 1), view);
             if (clip.W <= 0.1f) continue;
             float x = (clip.X / clip.W * 0.5f + 0.5f) * width, y = (0.5f - clip.Y / clip.W * 0.5f) * height;

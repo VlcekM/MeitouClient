@@ -216,13 +216,13 @@ sealed partial class GameHost
             con.Print($"bandits-loot {(session.World.Player.BanditsLoot ? "on" : "off")}");
         });
 
-        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|id|name>]", "--faction: the faction of the spawn (default the one its record lists; player: the player's faction, so it can be selected and ordered and fights nobody of the squad; a faction id or name); --aggro: also arm the spawn (weapon item, default Katana) and order it to attack the lead of the squad (test aid for fights); spawn a hostile character (default record 'Dust Bandit') at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); --ko / --dead leave a body to test loot, carry and first aid on", (args, con) =>
+        add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|id|name>] [--race <race name|id>]", "--race: draws the character's race as that RACE (a stub race with no meshes tests the undrawable look); --faction: the faction of the spawn (default the one its record lists; player: the player's faction, so it can be selected and ordered and fights nobody of the squad; a faction id or name); --aggro: also arm the spawn (weapon item, default Katana) and order it to attack the lead of the squad (test aid for fights); spawn a hostile character (default record 'Dust Bandit') at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); --ko / --dead leave a body to test loot, carry and first aid on", (args, con) =>
         {
             if (!loaded(con)) return;
             bool dead = args.Contains("--dead", StringComparer.OrdinalIgnoreCase), ko = false;
             var plain = new List<string>();
             bool aggro = false;
-            string? factionName = null;
+            string? factionName = null, raceName = null;
             string weapon = "Katana";
             for (int a = 0; a < args.Count; a++)
             {
@@ -230,6 +230,7 @@ sealed partial class GameHost
                 if (args[a].Equals("--aggro", StringComparison.OrdinalIgnoreCase)) { aggro = true; if (a + 1 < args.Count && !args[a + 1].StartsWith("--")) weapon = args[++a]; continue; }
                 if (args[a].Equals("--ko", StringComparison.OrdinalIgnoreCase)) { ko = true; continue; }
                 if (args[a].Equals("--faction", StringComparison.OrdinalIgnoreCase) && a + 1 < args.Count) { factionName = args[++a]; continue; }
+                if (args[a].Equals("--race", StringComparison.OrdinalIgnoreCase) && a + 1 < args.Count) { raceName = args[++a]; continue; }
                 plain.Add(args[a]);
             }
             if (plain.Count < 2 || !Num(plain[0], out float x) || !Num(plain[1], out float z) || (ko && dead) || (aggro && (ko || dead))) { con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]] [--faction <player|id|name>]"); return; }
@@ -241,8 +242,14 @@ sealed partial class GameHost
                 if (DebugRecord(weapon, character: false) is not { } w) { con.Error($"spawn-at: no item record matches '{weapon}'"); return; }
                 weaponId = w.Id;
             }
+            string? raceId = null;
+            if (raceName is not null)
+            {
+                if (scene.Database is not { } raceDb || Meitou.Data.Characters.CharacterAppearance.Find(raceDb, raceName, Meitou.Data.Fcs.FcsRecordType.RACE) is not { } race) { con.Error($"spawn-at: no race matches '{raceName}'"); return; }
+                raceId = race.StringId;
+            }
             var before = new HashSet<CharacterId>(player.ControlCharactersNear(x, z).Select(c => c.Id));
-            session.World.Commands.Enqueue(new DebugSpawn(npc.Id, new System.Numerics.Vector2(x, z), factionName) { Tick = session.World.Tick });
+            session.World.Commands.Enqueue(new DebugSpawn(npc.Id, new System.Numerics.Vector2(x, z), factionName, raceId) { Tick = session.World.Tick });
             var pending = new ControlSpawn(currentControlId ?? "0", before, x, z, ko, dead, Stopwatch.GetTimestamp() + 5 * Stopwatch.Frequency) { Aggro = aggro, Weapon = weaponId };
             if (session.Simulation.IsPaused)
             {
