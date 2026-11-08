@@ -1118,7 +1118,7 @@ what it wore there going into its inventory (engine choice; `DialogueSystem.Chai
 
 `SmellSystem` (serial `SlowWorld`, every 30 ticks; facts: [perception](game/perception.md#blood-smell)): each zone's blood target is its corpses with flies, its
 position their centroid ((0, 0) without corpses), an unloaded zone dropped once its target is 0; the value rises 1/60 and falls 1/240 per game second. Corpses get flies 4 game hours after
-death while the weather there acts on no one (`BodySystem.Flies`, `CharacterCold.HasFlies`; none in a world without weather). The host draws the effect and plays the sound at them (`GameHost.CorpseFlies`). An animal squad whose package lists 176 hunts
+death while the weather there acts on no one (`BodySystem.Flies`, `CharacterCold.HasFlies`; none in a world without weather). The host draws the effect and plays the sound at them (`CorpseFlies`). An animal squad whose package lists 176 hunts
 the zone with the best value (own x1, neighbour x0.8, other x0.5) above its ANIMAL_CHARACTER `smell blood`, keeps it while the value holds, and its members run to the
 position. Engine: every loaded zone is a candidate; a hunter stops within 50.
 

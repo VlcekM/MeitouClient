@@ -1,14 +1,14 @@
 using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Post;
-using Meitou.Game.Rendering.Upscalers;
 using Silk.NET.Input;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Rendering.Upscalers;
 
-sealed partial class GameHost
+/// <summary>The host's side of frame generation: the generator for the swapchain, the settings' and fps counter's lines on it, and the system pointer it needs.</summary>
+static class FrameGenerationSetup
 {
     /// <summary>The frame generator for the display's swapchain (the Frame generation setting, where it could be honoured), or null; made on the first frame.</summary>
-    static IFrameGenerator? CreateFrameGenerator(VulkanDisplay display)
+    internal static IFrameGenerator? CreateFrameGenerator(VulkanDisplay display)
     {
         string? why = null;
         IFrameGenerator? generator = null;
@@ -19,7 +19,7 @@ sealed partial class GameHost
     }
 
     /// <summary>The settings' line on frame generation: the loaded one's state, or the setting's change that waits for a restart.</summary>
-    static string FrameGenerationState(VulkanDisplay display, FrameGenerationMethod loaded, FrameGenerationMethod now)
+    internal static string FrameGenerationState(VulkanDisplay display, FrameGenerationMethod loaded, FrameGenerationMethod now)
     {
         bool available = loaded == FrameGenerationMethod.Dlss ? display.DlssFrameGeneration : display.FrameGeneration;
         if (now != loaded) return $"{FrameGenerationName(now)} after a restart";
@@ -36,11 +36,11 @@ sealed partial class GameHost
     };
 
     /// <summary>The stats panel's note on the frames shown per rendered one.</summary>
-    static string FrameGenerationShown(IFrameGenerator? generator) =>
+    internal static string FrameGenerationShown(IFrameGenerator? generator) =>
         generator is { Enabled: true } ? $" rendered, x{FramesShownPerRendered(generator)} shown" : "";
 
     /// <summary>The fps counter (Ctrl+F9): the frames shown per second, with frame generation also the rendered ones; and a rendered frame's time.</summary>
-    static string FpsCounterText(int frames, double seconds, IFrameGenerator? generator)
+    internal static string FpsCounterText(int frames, double seconds, IFrameGenerator? generator)
     {
         double rendered = frames / seconds;
         double ms = seconds * 1000 / frames;
@@ -62,7 +62,7 @@ sealed partial class GameHost
     /// changes, or a system cursor. While frame generation runs the window system draws it: in a frame it would reach the screen a held-back frame late and, as part of the
     /// interface, be interpolated between frames.
     /// </summary>
-    sealed class SystemPointer
+    internal sealed class SystemPointer
     {
         string? shown;
         StandardCursor standard = StandardCursor.Default;

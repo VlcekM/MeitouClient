@@ -36,9 +36,9 @@ sealed partial class GameHost
     Task? saveWrite;
 
     // What the world was loaded from: the next capture carries the save's records the world does not model through (null for a world that started new).
-    LoadedSave? loadedSave;
+    internal LoadedSave? loadedSave;
     // Counts the worlds the host has had: part of a character's key in the draw list, so a new world's characters never take over the renderer's per-character state of the old one's.
-    int worldEpoch;
+    internal int worldEpoch;
     // Results of the write worker, shown on the next frame (the HUD is drawn by the main thread only).
     readonly ConcurrentQueue<(string Text, bool Error)> saveNotices = [];
     IReadOnlyList<string>? saveDataFiles;
@@ -96,7 +96,7 @@ sealed partial class GameHost
     }
 
     /// <summary>The system list and its order are <see cref="StandardSystems"/>'(docs/simulation.md "Threading"); built again for each world.</summary>
-    Meitou.Simulation.StandardSystemSet BuildSystems(bool interactive, PopulationData? data = null, NewGameSettings? settings = null) =>
+    internal Meitou.Simulation.StandardSystemSet BuildSystems(bool interactive, PopulationData? data = null, NewGameSettings? settings = null) =>
         Meitou.Simulation.StandardSystems.Build(data ?? popData!, simWalkability!, new Meitou.Simulation.StandardSystemOptions
         {
             // The sandbox compares motion with the original on characters standing still: a hostile foe there must not start a fight by itself. The duel and the battle script their fights.
@@ -126,7 +126,7 @@ sealed partial class GameHost
             AnimationBlendRate = popData!.Bodies.Constants.AnimationBlendRate,
             Ragdolls = characterRigs,
             RagdollEnvironment = ragdollGeometry,
-            Extensions = mods?.Simulation,
+            Extensions = modding.mods?.Simulation,
         });
 
     /// <summary>Once per frame, between ticks: the notices of the write worker, the requests of the keys, the autosave, a finished read. <paramref name="realDt"/>: the frame's real seconds.</summary>
@@ -199,9 +199,9 @@ sealed partial class GameHost
             game = SaveCapture.Capture(world, popData!, new SaveClock((int)clock.Day, clock.Hour, clock.Minute), loadedSave, CaptureOptions(), prepared);
             difficulty.Write(game.Camera);
             WriteWeather(game, (int)clock.Day, clock.HourOfDay);
-            WriteDecals(game);
+            bloodDecals.WriteDecals(game);
             player.WriteBiome(game.Camera);
-            CaptureModData(world, game);
+            modding.CaptureModData(world, game);
             WriteLevelEdits(game);
         }
         catch (Exception e)
@@ -352,7 +352,7 @@ sealed partial class GameHost
             session.ReplaceWorld(built.Systems, world =>
             {
                 loaded = SaveLoader.Load(world, read.Result, data, loadOptions ?? new SaveLoadOptions { Appearances = data.Appearances });
-                RestoreModData(world, read.Result);
+                modding.RestoreModData(world, read.Result);
                 if (world.Squads.Find(world.Player.Squad) is { Members.Count: > 0 } squad)
                 {
                     world.Player.Selection.Clear();
@@ -374,10 +374,10 @@ sealed partial class GameHost
         loadedSave = loaded;
         preparedBase = null;
         worldEpoch++;
-        NoticeModChanges(read.Result);
+        modding.NoticeModChanges(read.Result);
         pendingLevelEdits = read.Result.LevelEdits;   // replayed once the host has met the new world (UpdateBuildings)
         var world = session.World;
-        BloodForNewWorld(read.Result.Decals);
+        bloodDecals.BloodForNewWorld(read.Result.Decals);
         session.Clock.SetTime(loaded!.Clock.Day, loaded.Clock.HourOfDay);
         // The regions' weather the save holds (docs/formats/save.md "BIOMES"); a save without (an old Meitou one) keeps the schedule rolled from day 0.
         if (ActiveWeather is { } weather && read.Result.Biomes is { } biomes && SaveWeather.Read(biomes) is { Count: > 0 } regions)

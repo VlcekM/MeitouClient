@@ -171,13 +171,13 @@ sealed partial class GameHost
         Meitou.Data.Characters.BonePose? bones, bool hidden, bool fullRate) =>
         new(DrawKey(c.Id), look, position, yaw, poses)
         {
-            WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = BoltsOf(c), Mouth = MouthOf(c),
+            WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, BackDrawn = c.BackDrawn, Shots = c.CrossbowShots, Bolts = debris.BoltsOf(c), Mouth = debris.MouthOf(c),
             Scale = c.Scale, DrawDistanceScale = c.DrawDistanceScale, Hidden = hidden, FullRateAnimation = fullRate, Bones = bones,
             Build = c.Build, Rotation = rotation, Blood = c.BloodAmounts,
         };
 
     /// <summary>A character's key in the draw list: stable while it exists, new for every world (the renderer keeps its poses by it).</summary>
-    long DrawKey(CharacterId id) => (((long)id.Slot << 32 | (uint)id.Generation) + 1) | (long)worldEpoch << 56;
+    internal long DrawKey(CharacterId id) => (((long)id.Slot << 32 | (uint)id.Generation) + 1) | (long)worldEpoch << 56;
 
     /// <summary>
     /// The portraits for the renderer to draw this frame: the squad bar's and the squads screen's members, the character trading window's rows and the conversation's two in
@@ -240,7 +240,7 @@ sealed partial class GameHost
     void AddDistant(CharacterDrawList list, CharacterSnapshot c)
     {
         var look = HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
-        CutHead(c, look);
+        decapitation.CutHead(c, look);
         bool hidden = hiddenIndoors.Contains(c.Id);
         list.Distant.Add(new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale, Hidden = hidden, Build = c.Build });
         if (heldPending is not null) list.Distant.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, c.Position, DrawnYaw(c), []) { Hidden = true });
@@ -248,12 +248,12 @@ sealed partial class GameHost
     // By character slot, what the draw list hands the renderer, refilled every frame instead of made anew (the renderer reads them only in that frame's update):
     // the poses, the stuck bolts and the ragdoll between ticks.
     CharacterPose[]?[] posesBySlot = [];
-    StuckBoltMesh[]?[] boltsBySlot = [];
+    internal StuckBoltMesh[]?[] boltsBySlot = [];
     // The ragdoll's two alternate, so a blended one is a new object to the renderer each frame (it poses a ragdoll again only for other bones).
     Meitou.Data.Characters.BonePose?[] ragdollsBySlot = [], spareRagdollsBySlot = [];
 
     /// <summary><paramref name="slots"/>[<paramref name="slot"/>], the array grown to hold it.</summary>
-    static ref T? Slot<T>(ref T?[] slots, int slot) where T : class
+    internal static ref T? Slot<T>(ref T?[] slots, int slot) where T : class
     {
         if (slot >= slots.Length) Array.Resize(ref slots, Math.Max(slot + 1, slots.Length * 2));
         return ref slots[slot];
@@ -336,7 +336,7 @@ sealed partial class GameHost
             if (c.Id == sandboxHero && sandboxPicker?.Pose() is { } forced) poses = forced;   // the sandbox drop-down loops a picked clip on the hero
             var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
             var look = player.EditorPreview(c.Id, c.Appearance) ?? held;
-            if (editing is null) CutHead(c, look);
+            if (editing is null) decapitation.CutHead(c, look);
             var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             var bones = !posed ? null : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot));
             bool hidden = inBar is null && hiddenIndoors.Contains(c.Id);
@@ -350,7 +350,7 @@ sealed partial class GameHost
             else if (heldPending is not null)
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });
         }
-        if (editing is null) AddHeads(list);
+        if (editing is null) decapitation.AddHeads(list);
         else AddEditorCrowd(list);
     }
 

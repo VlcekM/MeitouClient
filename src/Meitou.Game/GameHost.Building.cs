@@ -50,7 +50,7 @@ sealed partial class GameHost
             buildingsRevision = snapshot.BuildingsRevision;
             nestBuildingsRevision = snapshot.NestBuildingsRevision;
         }
-        UpdateCorpseFlies();
+        corpseFlies.UpdateCorpseFlies();
         // A lit building's lamps burn at its power share (granted / demand, 1 for one that draws nothing): dark without supply (docs/formats/lights.md "When a light is on").
         if (ActiveLamps is { } lamps && litBuildings.Count > 0)
             foreach (var m in snapshot.Machines)

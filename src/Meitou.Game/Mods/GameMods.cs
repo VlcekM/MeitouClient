@@ -1,21 +1,21 @@
 using System.Collections.Concurrent;
 using System.Numerics;
+using Meitou.Game;
 using Meitou.Game.Host;
-using Meitou.Modding;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Population;
 
-namespace Meitou.Game;
+namespace Meitou.Modding;
 
 /// <summary>
-/// Code mods (docs/modding.md): loaded and initialized once in <see cref="BootSimulation"/>, after the data and before the first world's systems; their simulation
-/// extensions go into every <see cref="BuildSystems"/>, their interface extensions and notices to the interface, their debug rows to the F10 menu, and their
+/// Code mods (docs/modding.md): loaded and initialized once in <see cref="GameHost.BootSimulation"/>, after the data and before the first world's systems; their simulation
+/// extensions go into every <see cref="GameHost.BuildSystems"/>, their interface extensions and notices to the interface, their debug rows to the F10 menu, and their
 /// systems' save data into and out of the save's sidecar files.
 /// </summary>
-sealed partial class GameHost
+sealed class GameMods(GameHost host)
 {
-    ModHost? mods;
+    internal ModHost? mods;
     // With code mods enabled the JIT warm-up starts only once they are initialized: a method compiled before a Harmony patch keeps any inlined copy
     // of the target.
     bool warmupAfterMods;
@@ -25,13 +25,13 @@ sealed partial class GameHost
     readonly List<CombatHit> frameHits = [];
 
     /// <summary>Starts the JIT warm-up now, or (with code mods enabled) once they are initialized.</summary>
-    void StartWarmup()
+    internal void StartWarmup()
     {
-        if (ModHost.EnabledCodeMods(install).Count > 0) warmupAfterMods = true;
+        if (ModHost.EnabledCodeMods(host.install).Count > 0) warmupAfterMods = true;
         else JitWarmup.Start();
     }
 
-    void StartDeferredWarmup()
+    internal void StartDeferredWarmup()
     {
         if (!warmupAfterMods) return;
         warmupAfterMods = false;
@@ -39,17 +39,17 @@ sealed partial class GameHost
     }
 
     /// <summary>Loads the enabled code mods and runs their initialization; on the boot worker.</summary>
-    void StartMods(Meitou.Data.GameDatabase db, PopulationData data)
+    internal void StartMods(Meitou.Data.GameDatabase db, PopulationData data)
     {
-        var (enabled, disabled) = ModHost.CodeMods(install);
+        var (enabled, disabled) = ModHost.CodeMods(host.install);
         if (enabled.Count == 0) return;
         Console.WriteLine($"mods      {enabled.Count} code mod(s) enabled; Harmony {ModHost.HarmonyVersion}, code-mod API {ModApi.Version}");
-        mods = ModHost.Load(new ModHostOptions(enabled, db, data, () => session?.World,
-            id => config.ModSettings.TryGetValue(id, out var saved) ? saved : null, RunningVersion(), disabled));
+        mods = ModHost.Load(new ModHostOptions(enabled, db, data, () => host.session?.World,
+            id => host.config.ModSettings.TryGetValue(id, out var saved) ? saved : null, RunningVersion(), disabled));
     }
 
     /// <summary>The mods' interface extensions and their load notices, for a new interface.</summary>
-    void ConnectModUi(PlayerInterface ui)
+    internal void ConnectModUi(PlayerInterface ui)
     {
         if (mods is null) return;
         mods.RegisterUi(ui.RegisterUiExtension);
@@ -60,10 +60,10 @@ sealed partial class GameHost
     /// Once a frame, after the blood: the combat hits the world published since the last frame to the mods' feeds (docs/modding.md "Hit feed"). A new
     /// world gets a new queue, so the old world's hits never reach it.
     /// </summary>
-    void UpdateModHits()
+    internal void UpdateModHits()
     {
         if (mods is not { WantsCombatHits: true }) return;
-        var world = session.World;
+        var world = host.session.World;
         if (!ReferenceEquals(hitsFor, world))
         {
             hitsFor = world;
@@ -89,10 +89,10 @@ sealed partial class GameHost
     /// The save data of the world's mod systems and the code mods running (<c>meitou-mods/environment.json</c>) into the save being captured; between
     /// ticks. A game without code mods writes the environment only over a save that had one, so it then records that none run.
     /// </summary>
-    void CaptureModData(World world, Meitou.Data.Save.SaveGame game)
+    internal void CaptureModData(World world, Meitou.Data.Save.SaveGame game)
     {
         mods?.CaptureSaveData(world, game.ModData);
-        if (mods is not null || game.ModEnvironment is not null || loadedSave?.Source.ModEnvironment is not null)
+        if (mods is not null || game.ModEnvironment is not null || host.loadedSave?.Source.ModEnvironment is not null)
             game.ModEnvironment = CurrentModEnvironment().ToJson();
     }
 
@@ -100,7 +100,7 @@ sealed partial class GameHost
     /// After a load: what changed in the code mods since the save was made, as notices (docs/modding-dependencies.md "Saves"). Never refuses and
     /// never throws: it runs after the world is replaced, so a fault here would cut the rest of the load short.
     /// </summary>
-    void NoticeModChanges(Meitou.Data.Save.SaveGame save)
+    internal void NoticeModChanges(Meitou.Data.Save.SaveGame save)
     {
         try
         {
@@ -123,34 +123,34 @@ sealed partial class GameHost
         foreach (var line in saved.ChangesTo(CurrentModEnvironment()))
         {
             Console.WriteLine($"mods      save: {line}");
-            player.Notice(line, true);
+            host.player.Notice(line, true);
         }
     }
 
     /// <summary>The save's mod data into the systems of the world just loaded from it; between ticks, before the first.</summary>
-    void RestoreModData(World world, Meitou.Data.Save.SaveGame save) => mods?.RestoreSaveData(world, save.ModData);
+    internal void RestoreModData(World world, Meitou.Data.Save.SaveGame save) => mods?.RestoreSaveData(world, save.ModData);
 
-    IReadOnlyList<ModDebugCommand> ModDebugRows => mods?.DebugCommands ?? [];
+    internal IReadOnlyList<ModDebugCommand> ModDebugRows => mods?.DebugCommands ?? [];
 
-    int DebugRowCount => DebugLabels.Length + ModDebugRows.Count;
+    internal int DebugRowCount => GameHost.DebugLabels.Length + ModDebugRows.Count;
 
-    string DebugLabel(int row)
+    internal string DebugLabel(int row)
     {
-        if (row < DebugLabels.Length) return DebugLabels[row];
-        var command = ModDebugRows[row - DebugLabels.Length];
+        if (row < GameHost.DebugLabels.Length) return GameHost.DebugLabels[row];
+        var command = ModDebugRows[row - GameHost.DebugLabels.Length];
         return $"{command.Label} [{command.Owner}]";
     }
 
-    void EnsureDebugFields()
+    internal void EnsureDebugFields()
     {
-        while (debugFields.Count < DebugRowCount) debugFields.Add("");
+        while (host.debugFields.Count < DebugRowCount) host.debugFields.Add("");
     }
 
     /// <summary>A mod's debug row: its handler with the field, the selection and the camera target; a throw shows as the status line.</summary>
-    string ModDebugApply(int row, string field, CharacterId[] selected, Vector3 here, long tick)
+    internal string ModDebugApply(int row, string field, CharacterId[] selected, Vector3 here, long tick)
     {
         var command = ModDebugRows[row];
-        var context = new DebugCommandContext(field, selected, here, tick, session.World.Commands.Enqueue);
+        var context = new DebugCommandContext(field, selected, here, tick, host.session.World.Commands.Enqueue);
         try { return command.Run(context) ?? ""; }
         catch (Exception e)
         {

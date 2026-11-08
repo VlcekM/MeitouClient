@@ -850,7 +850,7 @@ public sealed partial class UiPainter : IDisposable
 
     /// <summary>
     /// The pointer <paramref name="name"/> as a picture of its own at the size it is drawn (<see cref="DrawPointer"/>'s), with its hot spot, for a cursor the
-    /// window system draws (frame generation: GameHost.FrameGeneration.cs); null for an unknown name or an unreadable texture.
+    /// window system draws (frame generation: FrameGenerationSetup); null for an unknown name or an unreadable texture.
     /// </summary>
     public (RgbaImage Image, int HotX, int HotY)? PointerImage(string name)
     {

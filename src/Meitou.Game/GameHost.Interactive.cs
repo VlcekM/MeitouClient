@@ -24,6 +24,7 @@ using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Display;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using Meitou.Game.Rendering.Upscalers;
 using EngineKey = Meitou.Game.Host.Input.Key;
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
@@ -41,7 +42,7 @@ sealed partial class GameHost
         int initialFpsLimit = fpsLimit;
         VulkanDisplay.RayTracing = o.WantsRayTracing;
         // The game's methods compiled ahead, from now on (with code mods: once they are initialized), behind the loading.
-        if (!g.NoPrecompile) StartWarmup();
+        if (!g.NoPrecompile) modding.StartWarmup();
         // The world's files are read on a worker from here on: while the window and the device are made, then behind the loading screen.
         var sceneRead = LoadScene is { } readScene ? Task.Run(readScene) : null;
         sound.BeginAudio();
@@ -141,8 +142,8 @@ sealed partial class GameHost
             {
                 UpscalerStatus = () => gpu.Post?.ActiveUpscaler ?? "Off",
                 // The loaded frame generation's state; a change it cannot follow shows as pending until the restart.
-                FrameGenerationStatus = () => FrameGenerationState(display, frameGenerationAtStart, config.FrameGenerationMethod),
-                ModSettings = () => mods?.Settings ?? [],
+                FrameGenerationStatus = () => FrameGenerationSetup.FrameGenerationState(display, frameGenerationAtStart, config.FrameGenerationMethod),
+                ModSettings = () => modding.mods?.Settings ?? [],
                 AttackSlotsChanged = slots => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots); },
                 LateDefencesChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on; },
                 GunnerFacingChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.GunnerFacesBarrel = on; },
@@ -555,7 +556,7 @@ sealed partial class GameHost
         };
         Meitou.Game.Rendering.Frame.UiLayer? uiLayer = null;
         Meitou.Game.Rendering.Upscalers.IFrameGenerator? frameGen = null;
-        var systemPointer = new SystemPointer();
+        var systemPointer = new FrameGenerationSetup.SystemPointer();
         bool frameGenTried = false;
         double drawTotal = 0, gpuSum = 0, statsTimer = 0;
         int gpuSamples = 0, statsFrames = 0;
@@ -591,7 +592,7 @@ sealed partial class GameHost
             fpsWindowFrames++;
             if (fpsWindow >= 0.1)
             {
-                fpsText = FpsCounterText(fpsWindowFrames, fpsWindow, frameGen);
+                fpsText = FrameGenerationSetup.FpsCounterText(fpsWindowFrames, fpsWindow, frameGen);
                 fpsWindow = 0;
                 fpsWindowFrames = 0;
             }
@@ -750,7 +751,7 @@ sealed partial class GameHost
                 if (!frameGenTried)
                 {
                     frameGenTried = true;
-                    frameGen = CreateFrameGenerator(display);
+                    frameGen = FrameGenerationSetup.CreateFrameGenerator(display);
                 }
                 bool frameGenWanted = !Covered && !screenshotRequested && !feedbackShotRequested && takeFile is null;
                 frameGen?.BeginFrame(frameGenWanted, size.X, size.Y);
@@ -933,7 +934,7 @@ sealed partial class GameHost
                 // Once a second: the frame and the simulation, then the renderer's sections.
                 stats.Clear();
                 stats.Add("Performance");
-                stats.Add($"  frame rate    {statsFrames / statsTimer:0} fps{FrameGenerationShown(frameGen)}, {(display.VSync ? "vsync" : fpsLimit > 0 ? $"limit {fpsLimit}" : "uncapped")}; graphics card {(gpuSamples > 0 ? $"{gpuSum / gpuSamples:0.0}" : "-")} ms a frame");
+                stats.Add($"  frame rate    {statsFrames / statsTimer:0} fps{FrameGenerationSetup.FrameGenerationShown(frameGen)}, {(display.VSync ? "vsync" : fpsLimit > 0 ? $"limit {fpsLimit}" : "uncapped")}; graphics card {(gpuSamples > 0 ? $"{gpuSum / gpuSamples:0.0}" : "-")} ms a frame");
                 long ticks = session.Simulation.TotalTicks - statsTicks;
                 statsTicks = session.Simulation.TotalTicks;
                 stats.Add($"  simulation    {ticks / statsTimer:0} ticks/s, {session.CurrentSnapshot.Characters.Count} characters, {session.Simulation.DroppedTicks} ticks dropped since the start");

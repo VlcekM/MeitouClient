@@ -435,7 +435,7 @@ sealed class GameSound(GameHost host)
 
         UpdateEmitters();
         UpdateEffectEmitters(worldEmitters!);
-        host.UpdateCorpseFlyEmitters(worldEmitters!);
+        host.corpseFlies.UpdateCorpseFlyEmitters(worldEmitters!);
         worldEmitters!.Update(eye);
         doorSounds!.FixBreak = host.config.FixDoorBreak;
         UpdateDoorSounds(eye);

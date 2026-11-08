@@ -39,6 +39,13 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config, Meitou.Data.Gameplay.NewGameStart? start)
 {
+    internal readonly AssetLocator assets = assets;
+    internal BloodDecals bloodDecals = null!;
+    internal Debris debris = null!;
+    internal Decapitation decapitation = null!;
+    internal CorpseFlies corpseFlies = null!;
+    internal GameMods modding = null!;
+
     internal readonly GameInstall install = install;
     internal WorldScene scene = scene;
     internal readonly WorldOptions o = o;
@@ -119,6 +126,11 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
 
     public int Run()
     {
+        bloodDecals = new(this);
+        debris = new(this);
+        decapitation = new(this);
+        corpseFlies = new(this);
+        modding = new(this);
         sound = new(this);
         try
         {
@@ -179,7 +191,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// The simulation's side of <see cref="Boot"/>, on a worker (it reads the game data and the scene's level data and makes no GPU resource): the world's content
     /// (<see cref="WorldBoot"/>), the code mods and the systems. Returns the walkability, the systems and the game constants for the session.
     /// </summary>
-    (Meitou.Simulation.IWalkability Walkability, IReadOnlyList<Meitou.Simulation.ITickSystem> Systems, Meitou.Data.Gameplay.GameConstants? Constants) BootSimulation(
+    internal (Meitou.Simulation.IWalkability Walkability, IReadOnlyList<Meitou.Simulation.ITickSystem> Systems, Meitou.Data.Gameplay.GameConstants? Constants) BootSimulation(
         Meitou.Data.World.GroundHeights heights, bool interactive)
     {
         // The simulation samples the CPU heightmap (immutable, any thread), not the renderer's terrain.
@@ -198,7 +210,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             animationLengths = boot.AnimationLengths;
             animationLibrary = boot.AnimationLibrary;
             popData = boot.Data;
-            StartMods(gameDb, boot.Data);
+            modding.StartMods(gameDb, boot.Data);
             townPlacements = boot.Towns;
             saveLevels = levels;
             walkability = simWalkability = boot.Walkability;
@@ -209,7 +221,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             systems = built.Systems;
             constants = boot.Data.Bodies.Constants;
         }
-        StartDeferredWarmup();
+        modding.StartDeferredWarmup();
         return (walkability, systems, constants);
     }
 
@@ -232,7 +244,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// </summary>
     void ConfigurePlayerInterface(PlayerInterface ui)
     {
-        ConnectModUi(ui);
+        modding.ConnectModUi(ui);
         ui.FixLoadButton = config.FixLoadButton;
         ui.SaveInUse = folder => session.World.Player.Exists && saveInUse is { } used && string.Equals(Path.GetFullPath(used), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase);
         ui.DeleteSave = folder =>
@@ -348,7 +360,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         // The region (BIOME_GROUP) under a point, for the biome banner.
         player.RegionAt = (x, z) => gpu.Weather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
         player.Markers = gpu.Markers ??= MarkerRenderer.Create(context, assets.Find);
-        SetUpBlood(context);
+        bloodDecals.SetUpBlood(context);
         gpu.HoverOutline ??= new HoverOutlineRenderer(context);
         gpu.NavmeshOverlay ??= new NavmeshOverlayRenderer(context);
         navOverlayRenderer = gpu.NavmeshOverlay;
@@ -375,7 +387,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.DataProblems = (scene.Database?.Issues.Count ?? 0) + (scene.Objects?.Levels.Problems().Count ?? 0);
         if (scene.Database is { } db)
         {
-            player.Mods = ModReport.Build(install, db, mods?.Refused);
+            player.Mods = ModReport.Build(install, db, modding.mods?.Refused);
             LogMods(player.Mods);
         }
         if (OpensOnTitle(interactive)) player.ShowTitle();
@@ -582,8 +594,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             weather.GameSpeed = (float)(sim.Speed > 0 ? sim.Speed : sim.LastNonZeroSpeed);
         }
         Meitou.Game.Rendering.Profiling.StageClock.Lap(Meitou.Game.Rendering.Profiling.StageClock.Host);   // the profiler: the host's frame so far, then the blood marks apart from the terrain's update
-        UpdateBlood();
-        UpdateModHits();
+        bloodDecals.UpdateBlood();
+        modding.UpdateModHits();
         Meitou.Game.Rendering.Profiling.StageClock.Lap(Meitou.Game.Rendering.Profiling.StageClock.Blood, "blood marks");
         birdAspect = width / (float)Math.Max(height, 1);
         UpdateBirds();

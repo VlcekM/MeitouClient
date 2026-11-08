@@ -1,15 +1,15 @@
 using System.Numerics;
-using Meitou.Game.Audio;
 using Meitou.Data.World;
+using Meitou.Game.Audio;
 using Meitou.Simulation;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Effects;
 
 /// <summary>
 /// Corpse flies (docs/game/character-stats.md "Corpses"; <c>Character::periodicUpdate</c>, <b>Verified</b>): a corpse the simulation gave flies shows the EFFECT
 /// <c>55393-Newwworld.mod</c> "Fly-Particle" and plays the AMBIENT_SOUND <c>95425-sfx.mod</c> "Corpse Flies" at its place, both following it, until it loses them.
 /// </summary>
-sealed partial class GameHost
+sealed class CorpseFlies(GameHost host)
 {
     const string FlyEffectId = "55393-Newwworld.mod", FlySoundId = "95425-sfx.mod";
     /// <summary>A carried corpse's flies are placed again once it moved this far (units).</summary>
@@ -26,17 +26,17 @@ sealed partial class GameHost
     static string FlyKey(CharacterId id) => $"flies/{id}";
 
     /// <summary>Once a frame with the buildings: the effect at each corpse with flies, gone with them.</summary>
-    void UpdateCorpseFlies()
+    internal void UpdateCorpseFlies()
     {
-        if (!ReferenceEquals(flyRecordsFor, scene.Database))
+        if (!ReferenceEquals(flyRecordsFor, host.scene.Database))
         {
-            flyRecordsFor = scene.Database;
-            flyEffect = scene.Database?.Find(FlyEffectId);
-            flySound = scene.Database?.Find(FlySoundId) is { } sound ? AmbientSound.From(sound) : null;
+            flyRecordsFor = host.scene.Database;
+            flyEffect = host.scene.Database?.Find(FlyEffectId);
+            flySound = host.scene.Database?.Find(FlySoundId) is { } sound ? AmbientSound.From(sound) : null;
         }
-        var particles = gpu?.Particles;
+        var particles = host.gpu?.Particles;
         flyCorpsesSeen.Clear();
-        foreach (var c in session.CurrentSnapshot.Characters)
+        foreach (var c in host.session.CurrentSnapshot.Characters)
         {
             if (!c.HasFlies) continue;
             flyCorpsesSeen.Add(c.Id);
@@ -53,7 +53,7 @@ sealed partial class GameHost
         {
             flyCorpses.Remove(id);
             particles?.RemoveBuildingEffects(FlyKey(id));
-            sound.worldEmitters?.Remove(FlyKey(id));
+            host.sound.worldEmitters?.Remove(FlyKey(id));
         }
     }
 

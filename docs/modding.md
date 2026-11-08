@@ -4,7 +4,7 @@
 Lib.Harmony shipped by the game as the sanctioned patching library, and a registration surface kept to the cases where a patch would silently
 break an invariant. No BepInEx.
 The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Game/Mods` (contract and
-loader), `GameHost.Mods.cs` (host wiring), `SimulationExtensions` (engine hooks).
+loader), `GameMods` (host wiring), `SimulationExtensions` (engine hooks).
 
 ## Why this shape
 

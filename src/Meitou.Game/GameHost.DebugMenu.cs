@@ -5,6 +5,7 @@ using Meitou.Data.Fcs;
 using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Rendering.Profiling;
+using Meitou.Modding;
 using Meitou.Simulation;
 using EngineKey = Meitou.Game.Host.Input.Key;
 
@@ -19,7 +20,7 @@ sealed partial class GameHost
 {
     enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard, ExplodeLevel, Explode, ExplodeClick }
 
-    static readonly string[] DebugLabels =
+    internal static readonly string[] DebugLabels =
     [
         "Teleport selected here", "Spawn NPC (hostile)", "Give item (name x5 q80)", "Money (+/- cats)", "Heal", "  Heal fully (restore limbs)", "Max out skills", "Damage (cut)",
         "Force hits to", "Damage multiplier", "Unlock all research", "Clear bounties", "Godmode (all players)", "Guard (kill + heal in radius)", "Explosion level", "Explode at target", "Explode on click",
@@ -33,15 +34,15 @@ sealed partial class GameHost
         ("Combat", [DebugRow.Damage, DebugRow.ForceHits, DebugRow.DamageMultiplier, DebugRow.Guard, DebugRow.ExplodeLevel, DebugRow.Explode, DebugRow.ExplodeClick]),
     ];
 
-    /// <summary>The menu's rows in display order: (section title when the row starts a section, row number: a cheat, a mod row, or <see cref="DebugRowCount"/> + the tool's index).</summary>
+    /// <summary>The menu's rows in display order: (section title when the row starts a section, row number: a cheat, a mod row, or <see cref="GameMods.DebugRowCount"/> + the tool's index).</summary>
     List<(string? Header, int Row)> DebugLayout()
     {
         var layout = new List<(string?, int)>();
         foreach (var (title, rows) in DebugCheatSections)
             for (int k = 0; k < rows.Length; k++) layout.Add((k == 0 ? title : null, (int)rows[k]));
-        for (int m = DebugLabels.Length; m < DebugRowCount; m++) layout.Add((m == DebugLabels.Length ? "Mods" : null, m));
+        for (int m = DebugLabels.Length; m < modding.DebugRowCount; m++) layout.Add((m == DebugLabels.Length ? "Mods" : null, m));
         if (debugToolsOn)
-            for (int t = 0; t < DebugTools.Length; t++) layout.Add((t == 0 || DebugTools[t].Section != DebugTools[t - 1].Section ? DebugTools[t].Section : null, DebugRowCount + t));
+            for (int t = 0; t < DebugTools.Length; t++) layout.Add((t == 0 || DebugTools[t].Section != DebugTools[t - 1].Section ? DebugTools[t].Section : null, modding.DebugRowCount + t));
         return layout;
     }
 
@@ -49,7 +50,7 @@ sealed partial class GameHost
     const int DebugLabelWidth = 30, DebugKeyWidth = 10;
 
     // The rows' typed text: the vanilla rows', then one per code mod row (EnsureDebugFields).
-    readonly List<string> debugFields = ["", "", "", "1000", "", "", "", "20", "", "1", "", "", ""];
+    internal readonly List<string> debugFields = ["", "", "", "1000", "", "", "", "20", "", "1", "", "", ""];
     readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> debugMatches = [];
     bool debugMenuOpen;
     int debugRow;
@@ -233,11 +234,11 @@ sealed partial class GameHost
         o.Flush(width, height);
     }
 
-    /// <summary>The rows of the menu: the cheats, the code mods' rows (<see cref="DebugRowCount"/>), then the tool rows.</summary>
-    int DebugMenuRows => DebugRowCount + (debugToolsOn ? DebugTools.Length : 0);
-    bool DebugIsTool(int row) => row >= DebugRowCount;
+    /// <summary>The rows of the menu: the cheats, the code mods' rows (<see cref="GameMods.DebugRowCount"/>), then the tool rows.</summary>
+    int DebugMenuRows => modding.DebugRowCount + (debugToolsOn ? DebugTools.Length : 0);
+    bool DebugIsTool(int row) => row >= modding.DebugRowCount;
 
-    bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? ModDebugRows[row - DebugLabels.Length].HasField
+    bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? modding.ModDebugRows[row - DebugLabels.Length].HasField
         : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick));
 
     /// <summary>The rows that open the body part list.</summary>
@@ -253,7 +254,7 @@ sealed partial class GameHost
 
     void DebugMenuKey(EngineKey key)
     {
-        EnsureDebugFields();
+        modding.EnsureDebugFields();
         string field = DebugIsTool(debugRow) ? "" : debugFields[debugRow];
         if (debugParts is { } parts)
         {
@@ -282,7 +283,7 @@ sealed partial class GameHost
             case EngineKey.Up: debugRow = DebugStep(-1); break;
             case EngineKey.Down: debugRow = DebugStep(1); break;
             case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right when DebugIsTool(debugRow):
-                var tool = DebugTools[debugRow - DebugRowCount];
+                var tool = DebugTools[debugRow - modding.DebugRowCount];
                 // Left means off and Right on, so Left then Right never ends up flipping a switch twice.
                 if (tool.IsSwitch && key is EngineKey.Left or EngineKey.Right && (tool.State() == "on") == (key == EngineKey.Right)) break;
                 tool.Switch();
@@ -325,7 +326,7 @@ sealed partial class GameHost
 
     void DebugMenuText(char c)
     {
-        EnsureDebugFields();
+        modding.EnsureDebugFields();
         if (DebugHasField(debugRow) && !char.IsControl(c)) debugFields[debugRow] += c;
     }
 
@@ -459,7 +460,7 @@ sealed partial class GameHost
         var selected = player.ControlOrderers().ToArray();
         var targets = DebugTargets();
         var here = at ?? session.Camera.Current.Target;
-        if ((int)row >= DebugLabels.Length) return ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
+        if ((int)row >= DebugLabels.Length) return modding.ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
         switch (row)
         {
             case DebugRow.Teleport:
@@ -575,7 +576,7 @@ sealed partial class GameHost
         // Each line: its text, the row it belongs to (-1 for a section title and a part list line), and whether it is the highlighted one.
         var lines = new List<(string Text, bool Title, bool Highlight, bool On)>();
         var onNames = new List<string>();
-        EnsureDebugFields();
+        modding.EnsureDebugFields();
         foreach (var (header, i) in DebugLayout())
         {
             if (header is not null) lines.Add((header, true, false, false));
@@ -583,7 +584,7 @@ sealed partial class GameHost
             string mark = current && debugParts is null ? "> " : "  ";
             if (DebugIsTool(i))
             {
-                var tool = DebugTools[i - DebugRowCount];
+                var tool = DebugTools[i - modding.DebugRowCount];
                 string state = tool.State();
                 bool toolOn = tool.IsSwitch ? state == "on" : state is not ("" or "off");
                 if (toolOn) onNames.Add(DebugShortName(tool.Label));
@@ -614,8 +615,8 @@ sealed partial class GameHost
                     case DebugRow.Guard: rowOn = world.Player.Guard; value = world.Player.Guard ? $"on, {world.Player.GuardRadius:0.#} m{(world.Player.GuardAnimals ? ", animals" : "")}" : "off"; break;
                 }
             if (DebugPicksPart(i) && current && debugParts is null) value += (value.Length > 0 ? "   " : "") + ((DebugRow)i == DebugRow.ClearBounties ? "Enter/Right: pick the faction" : "Enter/Right: pick the body part");
-            if (rowOn) onNames.Add(DebugShortName(DebugLabel(i)) + ((DebugRow)i == DebugRow.DamageMultiplier && i < DebugLabels.Length ? $" x{popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}" : ""));
-            lines.Add((mark + DebugColumns(DebugLabel(i), "", value), false, current && debugParts is null, rowOn));
+            if (rowOn) onNames.Add(DebugShortName(modding.DebugLabel(i)) + ((DebugRow)i == DebugRow.DamageMultiplier && i < DebugLabels.Length ? $" x{popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}" : ""));
+            lines.Add((mark + DebugColumns(modding.DebugLabel(i), "", value), false, current && debugParts is null, rowOn));
             if (DebugPicksPart(i) && current && debugParts is { } parts)
                 for (int k = 0; k < parts.Length; k++)
                     lines.Add(((k == debugPart ? "    > " : "      ") + parts[k].Name, false, k == debugPart, false));

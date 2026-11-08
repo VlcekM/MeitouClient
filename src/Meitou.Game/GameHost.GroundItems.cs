@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
+using Meitou.Game.Effects;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
 
@@ -28,8 +29,8 @@ sealed partial class GameHost
         {
             ActiveObjects?.RemoveRuntime(GroundId(id));
             shownGround.Remove(id);
-            falls.RemoveAll(f => f.Ground.Id == id);
-            restLimbs.Remove(id);
+            debris.falls.RemoveAll(f => f.Ground.Id == id);
+            debris.restLimbs.Remove(id);
             groundPoses.Remove(id);
             hiddenGround.Remove(id);
             hiddenGroundKeys.Remove(GroundId(id));
@@ -40,11 +41,11 @@ sealed partial class GameHost
             if (!shownGround.Add(g.Id)) continue;
             var (rotation, y) = g.Dropped ? LaidFlat(g) : (g.Rotation, g.Position.Y);
             groundPoses[g.Id] = (new Vector3(g.Position.X, y, g.Position.Z), rotation, GroundId(g.Id));
-            if (LimbLookOf(g.Record) is not null)
+            if (debris.LimbLookOf(g.Record) is not null)
             {
                 // A severed limb is drawn by the debris renderer (its SeveredLimb look: skin tone and blood), falling and at rest.
                 if (g.Fall is { } cut && StartFall(g, cut, rotation, y)) continue;
-                RestLimb(g, rotation, y);
+                debris.RestLimb(g, rotation, y);
                 continue;
             }
             if (g.Fall is { } stump && StartFall(g, stump, rotation, y)) continue;   // shown once it has landed (UpdateFalls)
@@ -53,14 +54,14 @@ sealed partial class GameHost
     }
 
     /// <summary>The placement of a ground item: its record's mesh at its place, turned by <paramref name="rotation"/> and set at height <paramref name="y"/>.</summary>
-    void ShowGround(GroundItemSnapshot g, Quaternion rotation, float y) =>
+    internal void ShowGround(GroundItemSnapshot g, Quaternion rotation, float y) =>
         ActiveObjects?.AddRuntime(new BuildingPlacement(WorldLayout.ZoneOf(g.Position.X, g.Position.Z), GroundId(g.Id), g.Record, g.Position, rotation, null, y) { Key = GroundId(g.Id) });
 
     /// <summary>
     /// The ground items above the shown floor of a building in the interior view (game: <c>FUN_1409fb540</c>, as a character there): not picked and without a label; the renderer leaves
     /// their placements out by <see cref="hiddenGroundKeys"/>, a limb's debris is left out here.
     /// </summary>
-    readonly HashSet<int> hiddenGround = [];
+    internal readonly HashSet<int> hiddenGround = [];
 
     /// <summary>The placement keys of <see cref="hiddenGround"/>, the renderer's <c>WorldObjectRenderer.HiddenItems</c>: drawing and picking share one answer.</summary>
     readonly HashSet<string> hiddenGroundKeys = [];
@@ -180,20 +181,20 @@ sealed partial class GameHost
     }
 
     /// <summary>
-    /// A severed limb drops from its stump (docs/simulation.md "Ground items", docs/formats/collision.md "Item physics"): <see cref="UpdateFalls"/> lets it fall from the
+    /// A severed limb drops from its stump (docs/simulation.md "Ground items", docs/formats/collision.md "Item physics"): <see cref="Debris.UpdateFalls"/> lets it fall from the
     /// stump's bone, sampled once its character is drawn, with gravity from rest, drifts it across to where the simulation put it and tips it flat on landing. Engine choice:
     /// the drift and the hanging pose are not the original's physics. False when the item has no mesh to fall with (it is then shown at rest).
     /// </summary>
-    bool StartFall(GroundItemSnapshot g, FallSource stump, Quaternion lying, float y)
+    internal bool StartFall(GroundItemSnapshot g, FallSource stump, Quaternion lying, float y)
     {
         if (scene.Database?.Find(g.Record) is not { } record || WorldObjectLayout.ItemMesh(record) is not { Length: > 0 } mesh) return false;
-        if (gpu.Debris?.Extent(mesh, null, LimbLookOf(g.Record)) is null) return false;   // the debris renderer draws only meshes it has loaded
+        if (gpu.Debris?.Extent(mesh, null, debris.LimbLookOf(g.Record)) is null) return false;   // the debris renderer draws only meshes it has loaded
         // Hanging: the mesh's long axis down, turned by the item's yaw (the same yaw the rest pose keeps).
         var yaw = new Quaternion(0, g.Rotation.Y, 0, g.Rotation.W);
-        var hang = BoundsOf(g.Record) is { } box ? Turn(LongAxis(box.Max - box.Min), -Vector3.UnitY) : Quaternion.Identity;
-        falls.Add(new FallingLimb
+        var hang = BoundsOf(g.Record) is { } box ? Debris.Turn(LongAxis(box.Max - box.Min), -Vector3.UnitY) : Quaternion.Identity;
+        debris.falls.Add(new Debris.FallingLimb
         {
-            Ground = g, Mesh = mesh, Look = ToneOf(LimbLookOf(g.Record), g), Stump = stump, Rest = new Vector3(g.Position.X, y, g.Position.Z), RestY = y,
+            Ground = g, Mesh = mesh, Look = Debris.ToneOf(debris.LimbLookOf(g.Record), g), Stump = stump, Rest = new Vector3(g.Position.X, y, g.Position.Z), RestY = y,
             Hanging = Quaternion.Normalize(Quaternion.Concatenate(hang, yaw)), Lying = lying,
         });
         return true;
@@ -205,8 +206,8 @@ sealed partial class GameHost
     void ForgetGroundItems()
     {
         shownGround.Clear();
-        falls.Clear();
-        restLimbs.Clear();
+        debris.falls.Clear();
+        debris.restLimbs.Clear();
         groundPoses.Clear();
         hiddenGround.Clear();
         hiddenGroundKeys.Clear();

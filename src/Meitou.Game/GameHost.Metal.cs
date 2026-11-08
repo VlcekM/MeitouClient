@@ -1,3 +1,5 @@
+using Meitou.Game.Rendering.Upscalers;
+
 #if MEITOU_METAL
 // Metal exists on macOS only; the file is compiled only there (the csproj's MEITOU_METAL constant).
 #pragma warning disable CA1416
@@ -295,7 +297,7 @@ sealed partial class GameHost
         worldGpu.PostChain = postChain;
         gpu = worldGpu;
         // The combat aftermath's renderers and store exist before a loaded save's decals are read and before the first frame.
-        SetUpBlood(ctx);
+        bloodDecals.SetUpBlood(ctx);
         // Native Metal GI is experimental and opt-in: on this M1 Pro it could freeze the machine during a save load.
         // Keep the unfinished path out of normal launches; --no-gi still wins, and F10 can turn it off after it is on.
         bool metalGi = o.Gi && Environment.GetEnvironmentVariable("MEITOU_METAL_GI") is "1" or "true";
@@ -547,7 +549,7 @@ sealed partial class GameHost
             {
                 UpscalerStatus = UpscalerStatusText,
                 GameplayChanged = ApplyGameplay,
-                ModSettings = () => mods?.Settings ?? [],
+                ModSettings = () => modding.mods?.Settings ?? [],
                 AttackSlotsChanged = slots => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots); },
                 LateDefencesChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on; },
                 TimeSpeedsChanged = () => session.Simulation.SetFastSpeeds(config.FastSpeed, config.FastestSpeed),
@@ -846,7 +848,7 @@ sealed partial class GameHost
         bool shiftDown = false, statsVisible = false, frameStatsVisible = showFrameStats, screenshotNow = false, gpuCaptureRequested = false;
         Vector2? lastMouse = null;
         var windowCursor = Silk.NET.Input.CursorMode.Normal;
-        var systemPointer = new SystemPointer();
+        var systemPointer = new FrameGenerationSetup.SystemPointer();
         Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1),
             window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
         bool Held(SilkKey a, SilkKey b) => input.Keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
@@ -1392,8 +1394,8 @@ sealed partial class GameHost
             // effects, the particles and the post chain, then the overlays over the finished picture. The Metal chain fills the
             // seam's Vulkan-only gaps (no reflection, GI, low-resolution particles or fog-rate target).
             gpu.GameHours = session.Clock.HoursSinceStart;
-            UpdateBlood();
-            UpdateModHits();
+            bloodDecals.UpdateBlood();
+            modding.UpdateModHits();
             if (characters is not null)
             {
                 characters.Look = Meitou.Game.Rendering.Characters.PreviewLook.Of(o.Post);
