@@ -91,6 +91,13 @@ public enum AiBehaviour : byte
     /// stance's crouched byte is set once it passes 0.9 or cleared under 0.1 (<see cref="AnimationSystem"/>). The base data lists neither goal; modded packages may.
     /// </summary>
     Crouch = 24,
+    /// <summary>
+    /// A captive goal (slave work, gathering, processing, the prisoner's fate and the rest that <see cref="Kidnap.CaptiveSystem"/> runs as jobs;
+    /// docs/simulation.md "Captives"): its sweep starts the job for a member the AI holds that stands free. Any other member awake weighs the goal at
+    /// the desire its last sweep turn or job's end kept (<see cref="AiMind.CaptiveOffers"/>), as the original's chooser weighs it against its other
+    /// goals; the think asks for the job (<see cref="AiMind.CaptiveAsk"/>) and the serial step starts it.
+    /// </summary>
+    Captive = 25,
 }
 
 /// <summary>The engine's table from <see cref="TaskType"/> to <see cref="AiBehaviour"/>, and the TaskData display text (docs/game/ai-tasks.md "TaskData registry", Verified) of the types it acts out.</summary>
@@ -170,6 +177,8 @@ public static class TaskBehaviours
     {
         var a = new AiBehaviour[TypeCount];
         foreach (var (type, e) in Table) a[(int)type] = e.Behaviour;
+        // The captive goals: acted out by their jobs, so no display text of their own here.
+        foreach (var type in Kidnap.CaptiveSystem.GoalTypes) a[(int)type] = AiBehaviour.Captive;
         return a;
     }
 
