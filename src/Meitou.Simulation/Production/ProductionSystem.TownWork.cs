@@ -116,7 +116,7 @@ public sealed partial class ProductionSystem
             ref var n = ref table.Next[i];
             var mind = cold.Ai!;
             var building = mind.WorkOperate ?? mind.CollectFrom ?? mind.FillTo!;
-            if (!Able(cold) || mind.Behaviour != Ai.AiBehaviour.Work || !AtTownWork(n, building)) continue;
+            if (!Able(cold) || mind.Behaviour != Ai.AiBehaviour.Work || !AtTownWork(n, building, mind.WorkRange)) continue;
             if ((world.Machines.Find(TownWorkId(building)) ?? TownWork(world, building, mind.WorkOwner)) is not { } m || !Live(world, m)) continue;
             if (mind.FillTo is not null) FillInputs(world, cold, m);
             else if (mind.CollectFrom is not null) TakeOutput(world, cold, m);
@@ -124,11 +124,8 @@ public sealed partial class ProductionSystem
         }
     }
 
-    bool AtTownWork(in CharacterHot n, TownBuilding building)
-    {
-        float dx = n.Position.X - building.Position.X, dz = n.Position.Z - building.Position.Z;
-        return dx * dx + dz * dz <= Ai.AiSystem.WorkReach * Ai.AiSystem.WorkReach * 1.5f * 1.5f && (CharacterTask)n.Task is CharacterTask.Idle or CharacterTask.Rest;
-    }
+    static bool AtTownWork(in CharacterHot n, TownBuilding building, float reach) =>
+        Ai.AiSystem.AtWork(in n, building.Position, reach) && (CharacterTask)n.Task is CharacterTask.Idle or CharacterTask.Rest;
 
     /// <summary>One worker's frame at a town producer: <see cref="ProduceStep"/> at the worker's skill, and the operating XP (the same lines as a player's operator).</summary>
     void TownOperate(World world, int slot, CharacterCold cold, Machine m, float dt)

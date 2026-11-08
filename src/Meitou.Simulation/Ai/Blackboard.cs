@@ -526,6 +526,8 @@ public sealed class AiMind
     public string? WorkFunctionality { get; set; }
     /// <summary>Its work building's functionality <c>hunger rate</c> (1 by default), what <c>Task_OperateMachine</c> gives its operator. Set with <see cref="WorkClip"/>, so not hashed.</summary>
     public float WorkHungerRate { get; set; } = 1;
+    /// <summary>How near it must come to the building it walks to for its work (<see cref="AiSystem.WorkRangeOf"/>). Set with that building each think, so not hashed.</summary>
+    public float WorkRange { get; set; } = AiSystem.WorkReach;
     /// <summary>Its first think puts it where its plan's walk ends (<see cref="Squad.Resume"/>: back from its town's time unloaded); cleared by that think.</summary>
     public bool Resume { get; set; }
     /// <summary>Where the serial step puts it this tick (set by the think that took <see cref="Resume"/> up); null otherwise.</summary>

@@ -122,8 +122,6 @@ public static class ObedientSlave
 /// </summary>
 sealed class ObedientJobs : IJobSource, ITaskHandler
 {
-    /// <summary>How near a worker stands to its building (units; the AI's, <c>Task_OperateMachine</c>'s <c>use range</c> is not read).</summary>
-    const float WorkReach = 30;
     /// <summary>The x1.25 of the goal running now (docs/game/ai-tasks.md "Desire and commitment").</summary>
     const float Continuity = 1.25f;
     /// <summary>A walk that ends short of the building this many times gives it up for another pick.</summary>
@@ -134,6 +132,8 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         public required TownBuilding Building;
         public required string Clip;
         public string? Functionality;
+        /// <summary>How near it must come to the building (<see cref="AiSystem.WorkRangeOf"/>).</summary>
+        public float Range = AiSystem.WorkReach;
         public int Epoch;
         public int Fails;
     }
@@ -251,7 +251,9 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
             case TaskType.IDLE:
                 return run.Runs(task);
             default:
-                return works.TryGetValue(world.Characters.IdOf(slot), out var spot) && run.Runs(task) && (task == CharacterTask.GoTo || cold.ActionClip == spot.Clip);
+                // A walk held off by the building short of it is over once it stands within twice the reach (AiSystem.AtWork): StartWork then sets it working.
+                return works.TryGetValue(world.Characters.IdOf(slot), out var spot) && run.Runs(task)
+                    && (task == CharacterTask.GoTo ? !AiSystem.AtWork(in world.Characters.Next[slot], spot.Building.Position, spot.Range) : cold.ActionClip == spot.Clip);
         }
     }
 
@@ -262,24 +264,24 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         if (world.SystemOf<AiSystem>() is not { } ai) return;
         var at = TownPoint(world, slot, cold);
         bool again = works.TryGetValue(id, out var spot) && cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == type;
-        if (again && table.Next[slot].Task == (byte)CharacterTask.Idle && cold.Running!.Task == CharacterTask.GoTo)
+        if (again && AiSystem.AtWork(in table.Next[slot], spot!.Building.Position, spot.Range))
         {
-            // The walk ended: at the building it works, short of it the walk is asked again, a few times.
-            if (Near(table.Next[slot].Position, spot!.Building)) { Work(world, slot, k, type); return; }
-            if (++spot.Fails < MaxFails) { Walk(world, slot, k, type, spot.Building); return; }
+            Work(world, slot, k, type);
+            return;
+        }
+        // The walk ended short of the building: it is asked again, a few times.
+        if (again && table.Next[slot].Task == (byte)CharacterTask.Idle && cold.Running!.Task == CharacterTask.GoTo && ++spot!.Fails < MaxFails)
+        {
+            Walk(world, slot, k, type, spot.Building);
+            return;
         }
         // A new pick: another roll each time it starts working anew.
         int epoch = spot is null ? 0 : spot.Epoch + 1;
         if (ai.WorkAt(world, id, at, epoch) is not { } found) return;
-        works[id] = new WorkSpot { Building = found.Building, Clip = found.Clip, Functionality = found.Functionality, Epoch = epoch };
-        if (Near(table.Next[slot].Position, found.Building)) Work(world, slot, k, type);
+        float range = ai.WorkRangeOf(found.Building);
+        works[id] = new WorkSpot { Building = found.Building, Clip = found.Clip, Functionality = found.Functionality, Range = range, Epoch = epoch };
+        if (AiSystem.AtWork(in table.Next[slot], found.Building.Position, range)) Work(world, slot, k, type);
         else Walk(world, slot, k, type, found.Building);
-    }
-
-    static bool Near(Vector3 at, TownBuilding building)
-    {
-        float dx = building.Position.X - at.X, dz = building.Position.Z - at.Z;
-        return dx * dx + dz * dz <= WorkReach * WorkReach;
     }
 
     static void Walk(World world, int slot, int k, TaskType type, TownBuilding building) =>
@@ -296,7 +298,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         if (request.Task == CharacterTask.GoTo)
         {
             MovementSystem.GoTo(table, slot, request.Goal!.Value, request.Mode ?? cold.RunSpeed);
-            cold.ArriveWithin = WorkReach;
+            cold.ArriveWithin = works.TryGetValue(table.IdOf(slot), out var aim) ? aim.Range : AiSystem.WorkReach;
             return;
         }
         MovementSystem.Stop(table, slot);

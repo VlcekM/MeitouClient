@@ -382,7 +382,8 @@ public class AiTests(ITestOutputHelper output)
         var workers = Workers(world);
         Assert.True(workers.Count >= 3, $"{workers.Count} members on 189");
         Assert.All(workers, w => Assert.Same(quarry, w.Mind.WorkPost));
-        Assert.All(workers, w => Assert.InRange(Off(world, w.Id, quarry.Position), 0, 35));
+        // Within the reach of a building without a functionality, doubled once stopped (AiSystem.AtWork): the last to come stop behind the first.
+        Assert.All(workers, w => Assert.InRange(Off(world, w.Id, quarry.Position), 0, 2 * AiSystem.WorkReach));
     }
 
     /// <summary>

@@ -590,8 +590,31 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>The BuildingFunction bits a worker looks for (mask <c>0x41a</c> of <c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c>, read as bits, <b>Observed</b>): MINE, RESEARCH, REFINERY, CRAFTING.</summary>
     const int WorkFunctions = 0x41a;
 
-    /// <summary>How near a worker's building it stands (units; engine choice: the functionality's <c>use range</c> is not read for the town's buildings).</summary>
+    /// <summary>How near a worker stands to a building without a functionality <c>use range</c> (units, engine choice).</summary>
     internal const float WorkReach = 30;
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, float> workRanges = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// How near a worker must come to its building's position: the functionality's <c>use range</c> (the original's <c>UseableStuff</c> reach, <c>maxUseRange</c>,
+    /// docs/game/buildings-production.md "Work distance"), <see cref="WorkReach"/> for a building without one.
+    /// </summary>
+    internal float WorkRangeOf(TownBuilding b) => workRanges.GetOrAdd(b.BuildingId, id =>
+        data.Db.Find(id)?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId) is { } function
+            ? function.GetFloat("use range", WorkReach)
+            : WorkReach);
+
+    /// <summary>
+    /// A worker is at its building within <paramref name="reach"/> of the building's position, or twice that once it has stopped (the original's arrival doubles the reach of a
+    /// character that is not moving, docs/game/buildings-production.md "Work distance"), so one held off by the building's collision short of the reach has arrived there.
+    /// </summary>
+    internal static bool AtWork(in CharacterHot n, Vector3 building, float reach)
+    {
+        float dx = n.Position.X - building.X, dz = n.Position.Z - building.Z;
+        bool stopped = n.Velocity.X * n.Velocity.X + n.Velocity.Z * n.Velocity.Z <= 1;
+        float r = stopped ? 2 * reach : reach;
+        return dx * dx + dz * dz <= r * r;
+    }
 
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> workClips = new(StringComparer.Ordinal);
 
@@ -1133,8 +1156,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 }
                 var stepAt = StepBuilding(mind, board.Town);
                 Vector3? working = stepAt is not null && stepAt != mind.WorkBuilding ? new Vector3(stepAt.Position.X, float.NaN, stepAt.Position.Z) : mind.Target;
+                var aimed = stepAt is not null && stepAt != mind.WorkBuilding ? stepAt : mind.WorkBuilding;
+                mind.WorkRange = aimed is null ? WorkReach : WorkRangeOf(aimed);
                 if (working is not { } workAt) Become(world, slot, CharacterTask.Idle);
-                else if (GoToSpot(world, slot, mind, Flat(workAt), GiveUp.Target, SpeedMode.Walk, WorkReach))
+                else if (ArrivedAtWork(in n, mind, workAt) || GoToSpot(world, slot, mind, Flat(workAt), GiveUp.Target, SpeedMode.Walk, mind.WorkRange))
                 {
                     // At the building: facing it, at its work clip.
                     Become(world, slot, CharacterTask.Idle);
@@ -1439,6 +1464,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Vector2.Dot(normal, leafCentre - building) < 0) normal = -normal;
         Vector2 a = leafCentre + normal * 15, b = leafCentre - normal * 15;
         return a + (a - b) * 1.1f;
+    }
+
+    /// <summary>At its work building (<see cref="AtWork"/>): the walk there is over.</summary>
+    static bool ArrivedAtWork(in CharacterHot n, AiMind mind, Vector3 building)
+    {
+        if (!AtWork(in n, building, mind.WorkRange)) return false;
+        mind.Walking = false;
+        mind.FailedWalks = 0;
+        return true;
     }
 
     bool GoToSpot(World world, int slot, AiMind mind, Vector2 target, GiveUp giveUp, byte mode, float slack = 0, float? height = null)
