@@ -8,8 +8,12 @@ public static class VendorUpscalers
     /// <summary>Meitou's own DLSS project id (any GUID; engine type custom) and engine version, the same for Streamline and NGX.</summary>
     internal const string DlssProjectId = "6e8a8f8c-6f1b-4b8e-9a51-6b2d5c9b4e21", DlssEngineVersion = "0.3";
 
-    /// <summary>MEITOU_DLSS_PRESET: DLSS's render preset for every mode (0 default; the letters from 1, e.g. 11 = K, 5 = E): Streamline and NGX number them alike.</summary>
-    internal static readonly uint DlssPreset = uint.TryParse(Environment.GetEnvironmentVariable("MEITOU_DLSS_PRESET"), out var p) ? p : 0;
+    /// <summary>MEITOU_DLSS_PRESET: DLSS's render preset for every mode over the settings' (0 default; the letters from 1, e.g. 11 = K, 5 = E): Streamline and NGX
+    /// number them alike.</summary>
+    static readonly uint? DlssPresetOverride = uint.TryParse(Environment.GetEnvironmentVariable("MEITOU_DLSS_PRESET"), out var p) ? p : null;
+
+    /// <summary>The preset DLSS runs: MEITOU_DLSS_PRESET when set, else the settings' <paramref name="chosen"/>.</summary>
+    internal static uint DlssPreset(uint chosen) => DlssPresetOverride ?? chosen;
 
     /// <summary>The folder of the DLSS runtime (Streamline's DLLs on Windows, the DLSS model on Linux): <c>MEITOU_DLSS_PATH</c>, else the older
     /// <c>MEITOU_STREAMLINE_PATH</c>; null when neither is set (the executable's folder is searched either way).</summary>

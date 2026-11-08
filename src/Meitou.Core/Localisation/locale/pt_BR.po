@@ -483,6 +483,12 @@ msgstr "Nitidez do upscaler"
 msgid "Sharpen the image after resolution reconstruction."
 msgstr "Aumenta a nitidez da imagem após a reconstrução da resolução."
 
+msgid "DLSS preset"
+msgstr "Predefinição do DLSS"
+
+msgid "Which DLSS model runs. Default picks one per render scale; L and M ghost less than K, L at the highest cost."
+msgstr "Qual modelo do DLSS é usado. O padrão escolhe um por escala de renderização; L e M deixam menos rastros que K, L com o maior custo."
+
 msgid "Quality preset"
 msgstr "Predefinição de qualidade"
 

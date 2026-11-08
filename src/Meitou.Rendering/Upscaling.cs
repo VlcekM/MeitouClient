@@ -23,6 +23,11 @@ public sealed class UpscaleOptions
     public float Sharpness = 0.3f;
     /// <summary>Set on the command line: the saved settings don't override it.</summary>
     public bool Explicit;
+    /// <summary>DLSS's render preset for every mode, Streamline's and NGX's number (0 their default, 10 = J .. 13 = M; <see cref="DlssPresets"/>).</summary>
+    public uint DlssPreset;
+
+    /// <summary>The DLSS presets the settings offer: the defaults (K at Quality, Balanced and DLAA, M at Performance, L at Ultra Performance) and the transformer ones.</summary>
+    public static readonly (string Name, uint Number)[] DlssPresets = [("Default", 0), ("J", 10), ("K", 11), ("L", 12), ("M", 13)];
 
     /// <summary>The quality modes' scales, FSR's and DLSS's shared ratios (1.5, 1.7, 2, 3 per axis).</summary>
     public static readonly (string Name, float Scale)[] Modes =
@@ -47,7 +52,10 @@ public sealed class UpscaleOptions
         return (Math.Max((int)MathF.Round(width * s), 1), Math.Max((int)MathF.Round(height * s), 1));
     }
 
-    public void CopyFrom(UpscaleOptions other) { Kind = other.Kind; Preferred = other.Preferred; Scale = other.Scale; Sharpness = other.Sharpness; }
+    public void CopyFrom(UpscaleOptions other)
+    {
+        (Kind, Preferred, Scale, Sharpness, DlssPreset) = (other.Kind, other.Preferred, other.Scale, other.Sharpness, other.DlssPreset);
+    }
 
     public string Describe() => Kind == UpscalerKind.Off && EffectiveScale >= 1 ? "off" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Kind.ToString().ToLowerInvariant()} at {EffectiveScale:0.###}");
 }
@@ -93,12 +101,15 @@ public static class Jitter
 /// (GL row 0 is the first row of the image), so "up" in them is +row; <see cref="Motion"/> holds, per render pixel, the screen-space
 /// motion in UV units from the previous frame to this one without the jitter (previous UV = UV − motion; RG of an RGBA16F);
 /// <see cref="Depth"/> is an R32F 0..1 depth of one D3D-style projection with <see cref="Near"/> and <see cref="Far"/> (1 = far, not inverted);
-/// <see cref="JitterPixels"/> is the offset the projection was moved by, in render pixels along +column and +row.
+/// <see cref="JitterPixels"/> is the offset the projection was moved by, in render pixels along +column and +row; <see cref="Exposure"/>, when given,
+/// is a 1 x 1 R32F holding what the composite multiplies the colour by before its tone map (null: the upscaler measures its own).
 /// </summary>
 public sealed record UpscaleInputs
 {
     public required Gpu.GpuTexture Colour, Depth, Motion, Output;
-    public Gpu.GpuTexture? Reactive;
+    public Gpu.GpuTexture? Reactive, Exposure;
+    /// <summary>DLSS's render preset (<see cref="UpscaleOptions.DlssPreset"/>).</summary>
+    public uint Preset;
     public required int RenderWidth, RenderHeight, DisplayWidth, DisplayHeight;
     public required Vector2 JitterPixels;
     public required float Near, Far, FieldOfView, DeltaSeconds, Sharpness;

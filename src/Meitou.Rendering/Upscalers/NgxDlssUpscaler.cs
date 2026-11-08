@@ -7,8 +7,8 @@ namespace Meitou.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA DLSS Super Resolution through <see cref="Ngx"/> directly (Linux, and Windows with frame generation; <see cref="DlssUpscaler"/> is the Streamline path on Windows otherwise).
-/// One DLSS feature per (mode, render size, display size), remade when they change; per frame the four images (colour, depth, motion,
-/// output) and the water hint go in as <c>NVSDK_NGX_Resource_VK</c>, with the jitter, motion scale and reset, and the evaluation is
+/// One DLSS feature per (mode, render size, display size, preset, exposure given), remade when they change; per frame the four images (colour, depth,
+/// motion, output), the exposure and the water hint go in as <c>NVSDK_NGX_Resource_VK</c>, with the jitter, motion scale and reset, and the evaluation is
 /// recorded into the <see cref="GpuContext"/>'s frame. Conventions as for FSR (<see cref="UpscaleInputs"/>): images are bottom-up and
 /// jitter/motion share their frame, so the jitter goes through as is and motion (UV, previous to current) is scaled by −render size
 /// (NGX: render pixels, current towards previous).
@@ -33,7 +33,7 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
     readonly GpuContext ctx;
     readonly void* parameters;
     void* feature;
-    (int Mode, int RenderWidth, int RenderHeight, int DisplayWidth, int DisplayHeight) options;
+    (int Mode, int RenderWidth, int RenderHeight, int DisplayWidth, int DisplayHeight, uint Preset, bool AutoExposure) options;
     bool failed;
 
     public UpscalerKind Kind => UpscalerKind.Dlss;
@@ -57,8 +57,6 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
         Console.WriteLine($"upscaler  DLSS through NGX ({Ngx.LibraryName})");
         return new NgxDlssUpscaler(ngx, ctx, parameters);
     }
-
-    static uint Preset => VendorUpscalers.DlssPreset;
 
     /// <summary>NVSDK_NGX_PerfQuality_Value for a render scale (DLAA 1, quality 1/1.5, balanced 1/1.72, performance 1/2, ultra performance 1/3).</summary>
     static int Mode(float scale) => scale switch
@@ -86,7 +84,8 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
     public bool Dispatch(UpscaleInputs i)
     {
         if (failed) return false;
-        var wanted = (Mode(i.RenderWidth / (float)i.DisplayWidth), i.RenderWidth, i.RenderHeight, i.DisplayWidth, i.DisplayHeight);
+        var wanted = (Mode(i.RenderWidth / (float)i.DisplayWidth), i.RenderWidth, i.RenderHeight, i.DisplayWidth, i.DisplayHeight,
+            VendorUpscalers.DlssPreset(i.Preset), i.Exposure is null);
         if (feature != null && options != wanted) Release();
 
         var list = (CommandList)ctx.BeginNative("dlss upscale");
@@ -101,12 +100,14 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
             var motion = Resource(i.Motion);
             var output = Resource(i.Output, output: true);
             var hint = i.Reactive is null ? default : Resource(i.Reactive);
+            var exposure = i.Exposure is null ? default : Resource(i.Exposure);
             NgxParameters.SetPointer(p, "Color\0"u8, &colour);
             NgxParameters.SetPointer(p, "Depth\0"u8, &depth);
             NgxParameters.SetPointer(p, "MotionVectors\0"u8, &motion);
             NgxParameters.SetPointer(p, "Output\0"u8, &output);
             NgxParameters.SetPointer(p, "TransparencyMask\0"u8, null);
-            NgxParameters.SetPointer(p, "ExposureTexture\0"u8, null);
+            // Our exposure when given: the feature was made without auto exposure then (Create).
+            NgxParameters.SetPointer(p, "ExposureTexture\0"u8, i.Exposure is null ? null : &exposure);
             // The water mask as DLSS's bias towards the current frame (as FSR's reactive mask); DLSS 310's transformer presets ignore it.
             NgxParameters.SetPointer(p, "DLSS.Input.Bias.Current.Color.Mask\0"u8, i.Reactive is null ? null : &hint);
             NgxParameters.SetFloat(p, "Jitter.Offset.X\0"u8, i.JitterPixels.X);
@@ -127,6 +128,7 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
             NgxParameters.SetPointer(p, "MotionVectors\0"u8, null);
             NgxParameters.SetPointer(p, "Output\0"u8, null);
             NgxParameters.SetPointer(p, "DLSS.Input.Bias.Current.Color.Mask\0"u8, null);
+            NgxParameters.SetPointer(p, "ExposureTexture\0"u8, null);
             if (rc != Ngx.ResultSuccess) return Fail($"NVSDK_NGX_VULKAN_EvaluateFeature failed ({rc:x})");
         }
         finally
@@ -136,7 +138,7 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
         return true;
     }
 
-    bool Create(nint cb, (int Mode, int RenderWidth, int RenderHeight, int DisplayWidth, int DisplayHeight) o)
+    bool Create(nint cb, (int Mode, int RenderWidth, int RenderHeight, int DisplayWidth, int DisplayHeight, uint Preset, bool AutoExposure) o)
     {
         var p = parameters;
         NgxParameters.SetUInt(p, "CreationNodeMask\0"u8, 1);
@@ -146,14 +148,14 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
         NgxParameters.SetUInt(p, "OutWidth\0"u8, (uint)o.DisplayWidth);
         NgxParameters.SetUInt(p, "OutHeight\0"u8, (uint)o.DisplayHeight);
         NgxParameters.SetInt(p, "PerfQualityValue\0"u8, o.Mode);
-        NgxParameters.SetInt(p, "DLSS.Feature.Create.Flags\0"u8, FlagHdr | FlagMotionLowRes | FlagAutoExposure);
+        NgxParameters.SetInt(p, "DLSS.Feature.Create.Flags\0"u8, FlagHdr | FlagMotionLowRes | (o.AutoExposure ? FlagAutoExposure : 0));
         NgxParameters.SetInt(p, "DLSS.Enable.Output.Subrects\0"u8, 0);
-        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.DLAA\0"u8, Preset);
-        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.Quality\0"u8, Preset);
-        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.Balanced\0"u8, Preset);
-        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.Performance\0"u8, Preset);
-        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.UltraPerformance\0"u8, Preset);
-        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.UltraQuality\0"u8, Preset);
+        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.DLAA\0"u8, o.Preset);
+        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.Quality\0"u8, o.Preset);
+        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.Balanced\0"u8, o.Preset);
+        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.Performance\0"u8, o.Preset);
+        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.UltraPerformance\0"u8, o.Preset);
+        NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.UltraQuality\0"u8, o.Preset);
         void* handle;
         int rc = ngx.CreateFeature(ctx.Device.Device.Handle, cb, Ngx.FeatureSuperSampling, p, &handle);
         if (rc != Ngx.ResultSuccess) return Fail($"NVSDK_NGX_VULKAN_CreateFeature1 failed ({rc:x})");

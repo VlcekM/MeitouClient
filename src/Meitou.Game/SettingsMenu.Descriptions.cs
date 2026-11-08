@@ -18,6 +18,7 @@ sealed partial class SettingsMenu
         "Metal upscaling" => "The preset sets the render scale; MetalFX temporal is the default and spatial is an alternative. Native is the fallback when MetalFX is unavailable.",
         "Render scale" => "Internal rendering resolution relative to the window.",
         "Upscaler sharpness" => "Sharpen the image after resolution reconstruction.",
+        "DLSS preset" => "Which DLSS model runs. Default picks one per render scale; L and M ghost less than K, L at the highest cost.",
         "Object draw distance" => "Maximum distance at which objects remain visible.",
         "Landmark distance" => "Keep large wrecks, towers and landmarks visible farther away.",
         "Distant towns" => "How many surrounding zones can display distant towns.",

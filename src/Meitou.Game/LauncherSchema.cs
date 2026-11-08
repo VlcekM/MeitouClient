@@ -33,6 +33,7 @@ static class LauncherSchema
         Graphics(WorldFrame.UpscalerSliders[0], 0, 5, 1, 3) with { Name = "Anti-aliasing/upscaling", Labels = ["Off", "FXAA", "SMAA", "TAA", "FSR", "DLSS"] },
         Graphics(WorldFrame.UpscalerSliders[1], 0.33f, 1, 0.01f, Percent(UpscaleOptions.DefaultScale)) with { Scale = 100, Suffix = " %", Modes = RenderScaleModes() },
         Graphics(WorldFrame.UpscalerSliders[2], 0, 1, 0.01f, 0.5f) with { Format = "0.00" },
+        Graphics(WorldFrame.DlssPresetSlider, 0, UpscaleOptions.DlssPresets.Length - 1, 1, 0) with { Labels = [.. UpscaleOptions.DlssPresets.Select(p => p.Name)] },
         // World
         Graphics(WorldFrame.ObjectDistanceSlider, 1000, 400000, 100, Enhancements.MeitouObjectDistance) with { Logarithmic = true },
         Graphics(WorldFrame.LandmarkDistanceSlider, 1000, 400000, 100, Enhancements.MeitouLandmarkDistance) with { Logarithmic = true },

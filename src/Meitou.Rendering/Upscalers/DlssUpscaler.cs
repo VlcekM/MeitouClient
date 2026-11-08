@@ -8,7 +8,7 @@ namespace Meitou.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA DLSS Super Resolution through <see cref="Streamline"/> (which must have been initialised before the device and attached to it).
-/// Per frame: a frame token, the camera constants, the four tagged images (depth, motion, colour in, colour out) and the evaluation,
+/// Per frame: a frame token, the camera constants, the tagged images (depth, motion, colour in, colour out, the exposure and water hint when given) and the evaluation,
 /// recorded into the <see cref="GpuContext"/>'s frame. The DLSS mode follows the render scale (DLAA at 1); the render size stays ours.
 /// Conventions as for FSR (<see cref="UpscaleInputs"/>): our images are bottom-up, so the matrices given to DLSS have their y flipped
 /// to describe the picture as stored (row 0 at clip y = +1, as DLSS assumes), and motion is scaled by −1 (DLSS: towards the previous position).
@@ -46,14 +46,15 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         public byte UseAutoExposure, AlphaUpscalingEnabled;
     }
 
-    const uint FeatureDlss = 0, BufferDepth = 0, BufferMotionVectors = 1, BufferScalingInputColor = 3, BufferScalingOutputColor = 4, BufferBiasCurrentColorHint = 29;
+    const uint FeatureDlss = 0, BufferDepth = 0, BufferMotionVectors = 1, BufferScalingInputColor = 3, BufferScalingOutputColor = 4, BufferExposure = 13,
+        BufferBiasCurrentColorHint = 29;
     const int ValidUntilEvaluate = 2;
 
     readonly Streamline sl;
     readonly GpuContext ctx;
     readonly ViewportHandle* viewport;
     uint frameIndex;
-    (uint Mode, int Width, int Height) options = (uint.MaxValue, 0, 0);
+    (uint Mode, int Width, int Height, uint Preset, bool AutoExposure) options = (uint.MaxValue, 0, 0, 0, false);
     (int Width, int Height) named;
     bool failed;
 
@@ -78,8 +79,6 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     }
 
     /// <summary>DLSS's mode for a render scale (its presets: DLAA 1, quality 1/1.5, balanced 1/1.72, performance 1/2, ultra performance 1/3).</summary>
-    static uint Preset => VendorUpscalers.DlssPreset;
-
     static uint Mode(float scale) => scale switch
     {
         >= 0.99f => 6,   // eDLAA
@@ -107,22 +106,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
 
     public bool Dispatch(UpscaleInputs i)
     {
-        if (failed) return false;
-        uint mode = Mode(i.RenderWidth / (float)i.DisplayWidth);
-        if (options != (mode, i.DisplayWidth, i.DisplayHeight))
-        {
-            var o = new DlssOptions
-            {
-                StructType = Streamline.DlssOptionsType, StructVersion = 3,
-                Mode = mode, OutputWidth = (uint)i.DisplayWidth, OutputHeight = (uint)i.DisplayHeight,
-                PreExposure = 1, ExposureScale = 1, ColorBuffersHdr = 1, UseAutoExposure = 1,
-                // MEITOU_DLSS_PRESET: Streamline's preset number for every mode (0 default, 1..15 = A..O), e.g. 5 (E, CNN) for the water hint.
-                DlaaPreset = Preset, QualityPreset = Preset, BalancedPreset = Preset, PerformancePreset = Preset, UltraPerformancePreset = Preset,
-            };
-            int rc = sl.DlssSetOptions(viewport, &o);
-            if (rc != 0) return Fail($"slDLSSSetOptions failed ({rc})");
-            options = (mode, i.DisplayWidth, i.DisplayHeight);
-        }
+        if (failed || !SetOptions(i)) return false;
 
         // The render size moves within a mode (0.89 and 0.83 are both Quality), so the name follows it, not the options.
         if (named != (i.RenderWidth, i.RenderHeight))
@@ -131,6 +115,34 @@ public sealed unsafe class DlssUpscaler : IUpscaler
             Name = $"dlss {i.RenderWidth}x{i.RenderHeight}";
         }
 
+        return Evaluate(i);
+    }
+
+    /// <summary>The DLSS options for this frame's mode, display size, preset and exposure, set again when one of them changes (a preset picked in the settings
+    /// applies at once).</summary>
+    bool SetOptions(UpscaleInputs i)
+    {
+        // Streamline's preset number for every mode (0 default, 1..15 = A..O). Our exposure when given (DLSS's own measure is its fallback).
+        uint mode = Mode(i.RenderWidth / (float)i.DisplayWidth), preset = VendorUpscalers.DlssPreset(i.Preset);
+        bool autoExposure = i.Exposure is null;
+        if (options == (mode, i.DisplayWidth, i.DisplayHeight, preset, autoExposure)) return true;
+
+        var o = new DlssOptions
+        {
+            StructType = Streamline.DlssOptionsType, StructVersion = 3,
+            Mode = mode, OutputWidth = (uint)i.DisplayWidth, OutputHeight = (uint)i.DisplayHeight,
+            PreExposure = 1, ExposureScale = 1, ColorBuffersHdr = 1, UseAutoExposure = (byte)(autoExposure ? 1 : 0),
+            DlaaPreset = preset, QualityPreset = preset, BalancedPreset = preset, PerformancePreset = preset, UltraPerformancePreset = preset,
+            UltraQualityPreset = preset,
+        };
+        int rc = sl.DlssSetOptions(viewport, &o);
+        if (rc != 0) return Fail($"slDLSSSetOptions failed ({rc})");
+        options = (mode, i.DisplayWidth, i.DisplayHeight, preset, autoExposure);
+        return true;
+    }
+
+    bool Evaluate(UpscaleInputs i)
+    {
         nint token;
         uint index = frameIndex++;
         int r = sl.GetNewFrameToken(&token, &index);
@@ -165,17 +177,19 @@ public sealed unsafe class DlssUpscaler : IUpscaler
             var motion = Resource(i.Motion, (uint)ImageLayout.General);
             var colour = Resource(i.Colour, (uint)ImageLayout.General);
             var output = Resource(i.Output, (uint)ImageLayout.General);
-            bool hint = i.Reactive is not null;
-            var reactive = hint ? Resource(i.Reactive!, (uint)ImageLayout.General) : default;
-            var tags = stackalloc ResourceTag[5];
-            tags[0] = Tag(&depth, BufferDepth);
-            tags[1] = Tag(&motion, BufferMotionVectors);
-            tags[2] = Tag(&colour, BufferScalingInputColor);
-            tags[3] = Tag(&output, BufferScalingOutputColor);
+            var reactive = i.Reactive is null ? default : Resource(i.Reactive, (uint)ImageLayout.General);
+            var exposure = i.Exposure is null ? default : Resource(i.Exposure, (uint)ImageLayout.General);
+            var tags = stackalloc ResourceTag[6];
+            uint count = 0;
+            tags[count++] = Tag(&depth, BufferDepth);
+            tags[count++] = Tag(&motion, BufferMotionVectors);
+            tags[count++] = Tag(&colour, BufferScalingInputColor);
+            tags[count++] = Tag(&output, BufferScalingOutputColor);
             // The water mask as DLSS's bias towards the current frame (lerp(history, current, bias); NGX's "Bias.Current.Color.Mask"), as FSR's
             // reactive mask. Observed: the CNN presets (e.g. E) use it, DLSS 310's default transformer preset ignores it.
-            if (hint) tags[4] = Tag(&reactive, BufferBiasCurrentColorHint);
-            r = sl.SetTagForFrame(token, viewport, tags, hint ? 5u : 4u, cb.Handle);
+            if (i.Reactive is not null) tags[count++] = Tag(&reactive, BufferBiasCurrentColorHint);
+            if (i.Exposure is not null) tags[count++] = Tag(&exposure, BufferExposure);
+            r = sl.SetTagForFrame(token, viewport, tags, count, cb.Handle);
             if (r != 0) return Fail($"slSetTagForFrame failed ({r})");
             void* input = viewport;
             r = sl.EvaluateFeature(FeatureDlss, token, &input, 1, cb.Handle);

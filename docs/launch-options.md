@@ -295,7 +295,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_DLSS_PATH` | `src/Meitou.Rendering/Upscalers/VendorUpscalers.cs` | Folder of the DLSS runtime: the Streamline DLLs on Windows, the DLSS model and `libmeitou_ngx.so` on Linux. |
 | `MEITOU_STREAMLINE_PATH` | `src/Meitou.Rendering/Upscalers/VendorUpscalers.cs` | Older name of `MEITOU_DLSS_PATH`, read when that is unset. |
 | `MEITOU_FFX_PATH` | `src/Meitou.Rendering/Upscalers/FsrUpscaler.cs` | Path to the FidelityFX library (FSR). |
-| `MEITOU_DLSS_PRESET` | `src/Meitou.Rendering/Upscalers/VendorUpscalers.cs` | Overrides the DLSS preset number. |
+| `MEITOU_DLSS_PRESET` | `src/Meitou.Rendering/Upscalers/VendorUpscalers.cs` | Overrides the DLSS preset number (the settings' DLSS preset otherwise). |
 | `MEITOU_NGX_LOG` | `src/Meitou.Rendering/Upscalers/Ngx.cs` | `1` prints NGX's whole log (DLSS on Linux). |
 | `MEITOU_DLSS` | `src/Meitou.Rendering/Upscalers/Ngx.cs` | `0` keeps NGX from loading (no DLSS on Linux; the game uses TAA). |
 | `MEITOU_BENCH_ONLY` | `src/Meitou.Game/GameHost.PlayBench.cs` | Comma list of `--play-bench` segments to run (e.g. `settle,zoom`). |

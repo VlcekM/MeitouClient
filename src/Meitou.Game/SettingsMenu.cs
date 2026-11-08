@@ -220,7 +220,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     internal static string Section(string label)
     {
         if (label is "Time of day" or "Time speed") return "Advanced";
-        if (label is "VSync" or "Full screen" or MetalPresetSlider || WorldFrame.UpscalerSliders.Contains(label) || label == WorldFrame.FilteringSlider || label == WorldFrame.TextureQualitySlider) return "Display";
+        if (label is "VSync" or "Full screen" or MetalPresetSlider || WorldFrame.UpscalerSliders.Contains(label) || label == WorldFrame.DlssPresetSlider
+            || label == WorldFrame.FilteringSlider || label == WorldFrame.TextureQualitySlider) return "Display";
         return GraphicsSection(label, false);
     }
 

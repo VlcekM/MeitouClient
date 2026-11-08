@@ -1287,6 +1287,8 @@ static partial class WorldFrame
     /// <summary>The upscaler sliders' labels (the game keeps command-line upscaler options over the saved ones).</summary>
     // The anti-aliasing slider's label changes with its numbering ("0 off" 2026-10-09, SMAA 2026-10-19), so a value saved under an old one is not misread.
     public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS", "Render scale (upscaler)", "Upscaler sharpness"];
+    /// <summary>DLSS's render preset (<see cref="UpscaleOptions.DlssPresets"/>); not an upscaler option of the command line, so the saved one always applies.</summary>
+    public const string DlssPresetSlider = "DLSS preset";
 
     /// <summary>The anti-aliasing slider's value for the options: 0 none, 1 FXAA, 2 SMAA, 3.. the upscaler kinds (TAA, FSR, DLSS).</summary>
     public const string FilteringSlider = "Anisotropic filtering (texture filtering)";
@@ -1593,6 +1595,7 @@ static partial class WorldFrame
             return up.Kind == UpscalerKind.Off && v < 1 ? scale + " (no upscaler: plain scaling)" : scale;
         }));
         sliders.Add(new Slider(UpscalerSliders[2], 0, 1, () => up.Sharpness, v => up.Sharpness = v, "0.00"));
+        sliders.Add(DlssPresetSliderFor(up));
 
         // The weather's particles (docs/render-post.md "Particles"): off, forced to a quarter or half of the render size, by sprite size (the Meitou
         // default), or all full size (as the game).
@@ -1605,6 +1608,16 @@ static partial class WorldFrame
         sliders.Add(new Slider(ParticleSliders[1], 0.1f, 1, () => g.ParticleDensity, v => g.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
 
         AddLookSliders(sliders, post.Options);
+    }
+
+    /// <summary>The DLSS preset as a slider over <see cref="UpscaleOptions.DlssPresets"/>; a number not among them (a hand-edited setting) shows as the default.</summary>
+    static Slider DlssPresetSliderFor(UpscaleOptions up)
+    {
+        var presets = UpscaleOptions.DlssPresets;
+        int At(float v) => Math.Clamp((int)MathF.Round(v), 0, presets.Length - 1);
+
+        return new Slider(DlssPresetSlider, 0, presets.Length - 1, () => Math.Max(Array.FindIndex(presets, p => p.Number == up.DlssPreset), 0),
+            v => up.DlssPreset = presets[At(v)].Number, "0", Text: v => presets[At(v)].Name);
     }
 
     /// <summary>

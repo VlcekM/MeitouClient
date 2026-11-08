@@ -488,6 +488,12 @@ msgstr "放大锐度"
 msgid "Sharpen the image after resolution reconstruction."
 msgstr "分辨率重建之后对画面做锐化。"
 
+msgid "DLSS preset"
+msgstr "DLSS 预设"
+
+msgid "Which DLSS model runs. Default picks one per render scale; L and M ghost less than K, L at the highest cost."
+msgstr "使用哪个 DLSS 模型。默认按渲染比例选择；L 和 M 的拖影比 K 少，其中 L 开销最大。"
+
 msgid "Quality preset"
 msgstr "画质预设"
 

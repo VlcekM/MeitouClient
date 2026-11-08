@@ -55,6 +55,11 @@ scaled by −render size; inputs need sampled use, the output storage use, all l
 **Observed** (Linux, DLSS 310.9.16, RTX 4080 SUPER): preset 0 (`MEITOU_DLSS_PRESET` unset) gives the guide's defaults,
 K for Quality, M for Performance, L for Ultra Performance: each headless screenshot is byte-identical to the one with
 that preset set and differs from K's (repeat runs are identical).
+The Display page's "DLSS preset" picks Default, J, K, L or M (Streamline/NGX 0, 10..13; `UpscaleOptions.DlssPresets`), applied at once
+(Streamline: options set again; NGX: feature remade); `MEITOU_DLSS_PRESET` overrides it. DLSS gets our exposure, not its own measure: a 1 x 1
+R32F (`PostProcess.UpscaleExposure.cs`) holding the composite's scale, `Exposure` x 0.55 / last frame's adapted luminance (the adaptation runs
+after the upscaler), tagged as Streamline's exposure buffer (13) / NGX's `ExposureTexture`, auto exposure off. NVIDIA's guide names auto exposure
+as a cause of ghosting in high-contrast scenes; the effect on foliage ghosting here is **Unknown** (not yet compared in play).
 
 ## Frame generation
 

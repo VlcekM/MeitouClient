@@ -1259,11 +1259,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             bool covered = Particles is { HasCoverage: true };
             if (covered) Stamp("velocity");
             if (covered) RunCoverage(reactive!, ColorMask.R, clear: WaterHeight is null);
+            var exposure = external.Kind == UpscalerKind.Dlss ? WriteUpscaleExposure() : null;
             CloseSegment();   // the vendor upscaler records its own segment
             if (covered) Stamp("particle coverage");
             done = external.Dispatch(new UpscaleInputs
             {
                 Colour = sceneColour!.Texture, Depth = upscaleDepth!.Texture, Motion = motion!.Texture, Output = output.Texture, Reactive = WaterHeight is null && !covered ? null : reactive!.Texture,
+                Exposure = exposure?.Texture, Preset = Options.Upscale.DlssPreset,
                 RenderWidth = width, RenderHeight = height, DisplayWidth = displayWidth, DisplayHeight = displayHeight,
                 JitterPixels = JitterPixels, Near = UpscaleNear, Far = UpscaleFar, FieldOfView = ViewWindow.FieldOfView(fovNow),
                 DeltaSeconds = Math.Clamp(dt, 0.001f, 0.25f), Sharpness = Options.Upscale.Sharpness, Reset = reset,
@@ -1643,6 +1645,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeSceneLayers();
         DisposeLateParticles();
         DisposeMerged();
+        DisposeUpscaleExposure();
         DisposeBloom();
         Hiz?.Dispose();
         foreach (var p in new FullscreenProgram[] { ssao, ssaoMask, blur, luminancePass, adaptPass, compositePass, fxaaPass, hazePass, velocityPass, cloudMotionPass, taaPass, fogPass, particleDepthPass, particleSoftDepthPass, particleCompositePass, particleCoveragePass }) p.P.Dispose();
