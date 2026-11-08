@@ -64,10 +64,10 @@ public interface IWalkability
     /// </summary>
     Vector3? FloorNear(float x, float z, float y, float slack) => ScanFloor(this, x, z, y, slack);
 
-    /// <summary>The search of <see cref="FloorNear"/>, for an implementation that keeps its answers.</summary>
-    static Vector3? ScanFloor(IWalkability walk, float x, float z, float y, float slack)
+    /// <summary>The search of <see cref="FloorNear"/>, for an implementation that keeps its answers; uncached out to <paramref name="reach"/> for a wider one.</summary>
+    static Vector3? ScanFloor(IWalkability walk, float x, float z, float y, float slack, float reach = FloorSearch)
     {
-        for (float r = 0; r <= FloorSearch; r += 2)
+        for (float r = 0; r <= reach; r += 2)
             for (int k = 0; k < (r == 0 ? 1 : 8); k++)
             {
                 float px = x + r * MathF.Cos(k * MathF.PI / 4), pz = z + r * MathF.Sin(k * MathF.PI / 4);

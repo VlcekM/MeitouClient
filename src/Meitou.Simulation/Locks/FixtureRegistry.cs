@@ -1160,14 +1160,34 @@ public sealed partial class FixtureRegistry
         return false;
     }
 
-    /// <summary>Gets a character out of its bed (the original's <c>FUN_140345620</c>): the bed is free and the state cleared; it stands where it lay.</summary>
+    /// <summary>
+    /// Gets a character out of its bed (the original's <c>FUN_140345620</c>): the bed is free and the state cleared; it stands where it lay, or beside the bed when the bed cuts
+    /// the floor away under it (<see cref="StandBeside"/>).
+    /// </summary>
     public bool LeaveBed(World world, CharacterId sleeper)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(sleeper, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c) return false;
         if (c.InWhat is { } id && Find(id) is { } bed && bed.Occupant == sleeper) bed.Occupant = CharacterId.None;
         Clear(c);
+        StandBeside(world, s);
         return true;
+    }
+
+    /// <summary>How far round its lie spot one getting out of bed looks for floor (engine choice: a bunk on a deck leaves a hole of 16 or more round its use node).</summary>
+    const float BedFloorReach = 40;
+
+    /// <summary>
+    /// A bed's furniture cuts a hole in the floor's navmesh, and its use node may lie well inside it: a sleeper left there would stand on the storey or ground below
+    /// (engine choice; how the original's body finds the floor is not mapped). It is put on the nearest floor point at its own height instead.
+    /// </summary>
+    static void StandBeside(World world, int slot)
+    {
+        var at = world.Characters.Next[slot].Position;
+        if (world.Walkability.FloorNear(at.X, at.Z, at.Y, MovementSystem.FloorSlack) is not null) return;
+        if (IWalkability.ScanFloor(world.Walkability, at.X, at.Z, at.Y, MovementSystem.FloorSlack, BedFloorReach) is not { } floor) return;
+
+        world.Characters.Next[slot].Position = floor;   // only the place: an order that got it up keeps its task and path
     }
 
     /// <summary>
