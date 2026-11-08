@@ -1,8 +1,11 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Weather;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Player;
 
 /// <summary>
 /// The toggles of the HUD's orders panel (docs/game/ui-screens.md section 4), per character. Saved as the GAMESTATE_CHARACTER stance bools of the player's characters

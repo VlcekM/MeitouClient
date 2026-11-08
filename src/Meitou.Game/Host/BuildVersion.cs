@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 static class BuildVersion
 {

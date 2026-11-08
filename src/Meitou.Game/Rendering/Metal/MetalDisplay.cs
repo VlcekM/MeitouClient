@@ -7,11 +7,11 @@ using SharpMetal.Metal;
 using SharpMetal.ObjectiveCCore;
 using SharpMetal.QuartzCore;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// The window and the Metal swapchain: a GLFW window with a CAMetalLayer on its content view, presented by Metal. The
-/// mirror of the Vulkan display (Meitou.Rendering.Display.VulkanDisplay) for the Metal path.
+/// mirror of the Vulkan display (Meitou.Game.Rendering.Display.VulkanDisplay) for the Metal path.
 /// </summary>
 public sealed unsafe class MetalDisplay : IDisposable
 {

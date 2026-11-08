@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Numerics;
+using Meitou.Game.DevTools;
 using Meitou.Simulation;
 using Meitou.Simulation.Locks;
 
@@ -99,7 +100,7 @@ sealed partial class GameHost
             if (!loaded(con)) return;
             LevelEditsFollowWorld();
             if (scene.Database is not { } db) { con.Error("no database"); return; }
-            var footprints = siteFootprints ??= new Meitou.Navigation.BuildingFootprints(install, db, null);
+            var footprints = siteFootprints ??= new Meitou.Simulation.Navigation.BuildingFootprints(install, db, null);
             var items = new List<(string Key, string Id, Vector2[] Hull)>();
             foreach (var p in levelEdits.Added)
             {

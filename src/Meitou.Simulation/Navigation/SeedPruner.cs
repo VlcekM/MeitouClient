@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The original generator keeps only the regions within 4 units of a seed point (regionPruningSettings, minRegionArea 1e8 makes every region "too small" otherwise),

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// The parts' material records, one growing storage buffer (binding 7 of the characters' frame) that keeps each <see cref="PartMaterial"/>'s record in a slot of

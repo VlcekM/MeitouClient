@@ -1,11 +1,10 @@
 using System.Runtime.InteropServices;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
 using SharpMetal.Metal;
 using SharpMetal.MetalFX;
 using SharpMetal.ObjectiveCCore;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// Apple's temporal upscaler, on the Metal path. It is deliberately small: <see cref="PostTaa"/> already runs the

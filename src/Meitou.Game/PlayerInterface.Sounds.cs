@@ -1,7 +1,8 @@
 using System.Globalization;
-using Meitou.Audio;
+using Meitou.Game.Audio;
 using Meitou.Simulation;
-using Meitou.Ui;
+using Meitou.Game.Ui;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Game;
 

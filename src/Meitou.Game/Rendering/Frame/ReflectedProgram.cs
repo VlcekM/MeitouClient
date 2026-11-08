@@ -1,8 +1,8 @@
 using System.Numerics;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Shaders;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// A native program with its vertex inputs from the reflection: the layout and buffers a GL vertex array feeds it, as VkGl feeds a GL

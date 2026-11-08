@@ -5,9 +5,10 @@ using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Ui;
+using Meitou.Game.Editor;
 using Meitou.Simulation;
 using Meitou.Simulation.Editing;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 
@@ -41,7 +42,7 @@ sealed partial class PlayerInterface
         /// <summary>The camera's orbit, the character it was last set for, and the button dragging it (with where the pointer was last).</summary>
         public EditorOrbit Orbit { get; } = new();
         public CharacterId OrbitCharacter;
-        public (Meitou.Engine.Input.MouseButton Button, Vector2 Last)? Drag;
+        public (Meitou.Game.Host.Input.MouseButton Button, Vector2 Last)? Drag;
     }
 
     EditorSession? editor;
@@ -232,7 +233,7 @@ sealed partial class PlayerInterface
     /// <summary>The preview look being prepared for a character (the host lists it hidden, so the renderer builds it), or null.</summary>
     public CharacterAppearance? EditorPending(CharacterId id) => EditorOpen && previews.TryGetValue(id, out var entry) ? entry.Pending : null;
 
-    /// <summary>The ImageBox texture name of the renderer's stage picture (<see cref="Meitou.Rendering.Characters.CharacterRenderer.StageTexture"/>).</summary>
+    /// <summary>The ImageBox texture name of the renderer's stage picture (<see cref="Meitou.Game.Rendering.Characters.CharacterRenderer.StageTexture"/>).</summary>
     public const string StageTexture = "meitou:stage";
     Func<string, string?>? findAsset;
     string? groundFile;
@@ -250,7 +251,7 @@ sealed partial class PlayerInterface
         // A sand colour first, so the window is covered before the ground texture is decoded.
         backdrop.Add(new("editor-base", "Widget", all, "", "", "", true, new Dictionary<string, string>(), new Vector4(0.42f, 0.40f, 0.34f, 1), Pickable: false));
         if (groundFile.Length > 0 && painter.IconReady(groundFile))
-            backdrop.Add(new("editor-ground", "ImageBox", all, "", "", "", true, new Dictionary<string, string> { ["ImageTexture"] = Meitou.Rendering.Ui.UiPainter.IconTexture(groundFile) }, Vector4.Zero, Pickable: false));
+            backdrop.Add(new("editor-ground", "ImageBox", all, "", "", "", true, new Dictionary<string, string> { ["ImageTexture"] = Meitou.Game.Rendering.Ui.UiPainter.IconTexture(groundFile) }, Vector4.Zero, Pickable: false));
         if (painter.HasTexture(StageTexture))
             backdrop.Add(new("editor-stage", "ImageBox", all, "", "", "", true, new Dictionary<string, string> { ["ImageTexture"] = StageTexture, ["ImageFlipV"] = "true" }, Vector4.Zero, Pickable: false));
         return backdrop;
@@ -280,7 +281,7 @@ sealed partial class PlayerInterface
     bool OverEditorScene(Vector2 p) => faithfulScreens.OpenScreens[^1] == "editor" && faithfulScreens.HitTest(p) is { Control.Name: "modal" };
 
     /// <summary>A mouse button pressed away from the editor's panels starts turning the camera; false when the press belongs to a panel.</summary>
-    bool EditorPointerDown(Meitou.Engine.Input.MouseButton button, Vector2 p)
+    bool EditorPointerDown(Meitou.Game.Host.Input.MouseButton button, Vector2 p)
     {
         if (!EditorOpen || !UiVisible || editor is not { } s || !OverEditorScene(p)) return false;
         s.Drag = (button, p);
@@ -295,7 +296,7 @@ sealed partial class PlayerInterface
         return true;
     }
 
-    void EditorPointerUp(Meitou.Engine.Input.MouseButton button)
+    void EditorPointerUp(Meitou.Game.Host.Input.MouseButton button)
     {
         if (editor?.Drag is { } drag && drag.Button == button) editor.Drag = null;
     }

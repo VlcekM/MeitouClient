@@ -1,4 +1,8 @@
 using Meitou.Data.Fcs;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Items;
 

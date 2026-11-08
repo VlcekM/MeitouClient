@@ -2,7 +2,7 @@ using System.Numerics;
 using DotRecast.Core.Numerics;
 using DotRecast.Recast;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Tests.Navigation;
 

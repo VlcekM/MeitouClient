@@ -6,9 +6,13 @@ using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
 /// The simple colour model the world view's sky had before the atmosphere (<c>--simple-sky</c>, key B): zenith and horizon colours
@@ -1221,7 +1225,7 @@ sealed class SkyProg : IDisposable
     public readonly UniformHandle[] Planet;
     public readonly SkyColourHandles Colours;
     public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, CloudsSmooth, CloudsTileSmooth, VolumeImage;
-    public readonly Meitou.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, CloudsInfo;
+    public readonly Meitou.Game.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, CloudsInfo;
 
     public SkyProg(IGpuContext gpu, string vertex, string fragment, string name)
     {

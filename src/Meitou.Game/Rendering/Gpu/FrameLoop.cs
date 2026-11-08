@@ -1,9 +1,10 @@
 using System.Diagnostics;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Profiling;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The frame loop (phase 8 stage 3, docs/renderer-native.md 8.9): the context begins and submits frames itself. A frame is two primary

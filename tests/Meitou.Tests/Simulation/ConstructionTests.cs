@@ -10,6 +10,8 @@ using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 using Meitou.Simulation.Saving;
 using static Meitou.Tests.Bodies.BodyFixtures;
 using SimWorld = Meitou.Simulation.World;

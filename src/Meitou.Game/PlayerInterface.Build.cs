@@ -2,14 +2,15 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Ui;
-using EngineKey = Meitou.Engine.Input.Key;
-using Meitou.Engine.Input;
+using EngineKey = Meitou.Game.Host.Input.Key;
+using Meitou.Game.Host.Input;
 using Meitou.Data.World;
 using Meitou.Game.Building;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Objects;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
-using Meitou.Ui;
+using Meitou.Game.Ui;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Game;
 
@@ -500,8 +501,8 @@ sealed partial class PlayerInterface
     {
         if (building is null || buildHost is not { } host || uiPainter is not { } painter) return null;
         if (host.IconFile(building.Id) is { } file)
-            return painter.IconReady(file) ? new() { ["ImageTexture"] = Meitou.Rendering.Ui.UiPainter.IconTexture(file), ["Caption"] = "" } : null;
-        string rendered = Meitou.Rendering.Ui.UiPainter.RenderedBuildingIconTexture(building.Id);
+            return painter.IconReady(file) ? new() { ["ImageTexture"] = Meitou.Game.Rendering.Ui.UiPainter.IconTexture(file), ["Caption"] = "" } : null;
+        string rendered = Meitou.Game.Rendering.Ui.UiPainter.RenderedBuildingIconTexture(building.Id);
         return painter.RenderedIconReady(rendered) ? new() { ["ImageTexture"] = rendered, ["ImageFlipV"] = "true", ["Caption"] = "" } : null;
     }
 
@@ -799,7 +800,7 @@ sealed partial class PlayerInterface
             storageWithInventory = pending.Site.Id;
             SetBuilding(SiteBuilding(pending.Site));
         }
-        else if (waited > 2 && selected.All(c => c.Task != Meitou.Simulation.CharacterTask.GoTo)) storageOpening = null;   // they stopped short: another order was given
+        else if (waited > 2 && selected.All(c => c.Task != Meitou.Simulation.Movement.CharacterTask.GoTo)) storageOpening = null;   // they stopped short: another order was given
     }
 
     /// <summary>Once a frame: a site press held long enough opens its menu.</summary>

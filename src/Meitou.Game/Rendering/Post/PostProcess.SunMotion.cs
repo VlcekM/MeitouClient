@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
 /// The sun's own motion in the upscalers' motion vectors (docs/render-post.md "Sun motion"). The sky's motion is the camera's alone, so while the clock runs

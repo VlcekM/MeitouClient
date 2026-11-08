@@ -6,6 +6,7 @@ using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;

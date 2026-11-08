@@ -4,7 +4,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.World;
 using Meitou.Simulation.Bodies;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 internal sealed partial class ZoneGeometryGatherer
 {

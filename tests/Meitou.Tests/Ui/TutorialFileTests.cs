@@ -1,4 +1,5 @@
 using Meitou.Game;
+using Meitou.Game.Tutorials;
 
 namespace Meitou.Tests.Ui;
 

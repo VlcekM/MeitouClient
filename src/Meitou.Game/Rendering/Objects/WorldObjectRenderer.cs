@@ -4,10 +4,15 @@ using Meitou.Data;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
-using SamplerInfo = Meitou.Rendering.Gpu.Shaders.SamplerInfo;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using SamplerInfo = Meitou.Game.Rendering.Gpu.Shaders.SamplerInfo;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// Draws the world's placed objects (docs/render-objects.md): buildings, map features and distant towns.
@@ -1376,7 +1381,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         readonly IGpuContext ctx;
         public readonly GpuProgram P;
         readonly int[] locations;
-        readonly Meitou.Rendering.Gpu.Shaders.ScalarKind[] kinds;
+        readonly Meitou.Game.Rendering.Gpu.Shaders.ScalarKind[] kinds;
         /// <summary>The program's own input locations (below the instance rows): 0 .. Own − 1.</summary>
         public readonly int Own;
         VertexLayout? last;
@@ -1415,8 +1420,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
                     ? a.Buffer
                     : ctx.ConstantVertexAttributes
-                    ? new GpuBufferBinding(ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Rendering.Gpu.Shaders.ScalarKind.Float))
-                    : new GpuBufferBinding(ctx.DummyVertexArray(input >= 0 ? kinds[input] : Meitou.Rendering.Gpu.Shaders.ScalarKind.Float), 0);
+                    ? new GpuBufferBinding(ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float))
+                    : new GpuBufferBinding(ctx.DummyVertexArray(input >= 0 ? kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float), 0);
             }
             return result;
         }

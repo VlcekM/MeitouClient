@@ -1,7 +1,10 @@
 using System.Numerics;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>What <see cref="IWorldPostChain.ObjectMotion"/> gets: the scene's depth sampler (<see cref="DepthConvention"/>), its planes, the jitter
 /// in NDC, and the render height over twice the tangent of half the field of view (pixels per unit at distance 1; 0: unknown).</summary>

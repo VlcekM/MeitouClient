@@ -1,6 +1,7 @@
 using Meitou.Data.Textures;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Bench;
 
 /// <summary>The picture comparison of the A/B mode: counts of differing pixels and a heat map. Pure, tested without a GPU.</summary>
 public static class PictureDiff

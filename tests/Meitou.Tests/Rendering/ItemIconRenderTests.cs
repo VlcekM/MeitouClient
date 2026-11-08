@@ -2,10 +2,9 @@ using Meitou.Content;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
-using Meitou.Rendering;
-using Meitou.Rendering.Characters;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 
 namespace Meitou.Tests.Rendering;
 

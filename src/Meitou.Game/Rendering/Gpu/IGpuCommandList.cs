@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// A command list being recorded (docs/renderer-native.md 2.7): the commands the renderers state, in

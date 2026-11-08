@@ -1,7 +1,9 @@
 using System.Numerics;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 public sealed unsafe partial class FoliageRenderer
 {

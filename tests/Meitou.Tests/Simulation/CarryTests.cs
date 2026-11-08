@@ -4,7 +4,10 @@ using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Carrying;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 using SimWorld = Meitou.Simulation.World;
 using static Meitou.Tests.Bodies.BodyFixtures;
 

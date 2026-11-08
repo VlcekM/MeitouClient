@@ -1,4 +1,5 @@
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.FirstAid;
 
 namespace Meitou.Simulation.Ai;

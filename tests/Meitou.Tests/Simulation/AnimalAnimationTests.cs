@@ -4,6 +4,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Ogre;
 using Meitou.Simulation;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Tests.Simulation;
 

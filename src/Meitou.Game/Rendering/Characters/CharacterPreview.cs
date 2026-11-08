@@ -1,7 +1,9 @@
 using System.Numerics;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// How the editor's stage and the squad portraits are finished (docs/character-renderer.md "Meitou stage and portraits"). Faithful (<see cref="Enhanced"/> false): drawn

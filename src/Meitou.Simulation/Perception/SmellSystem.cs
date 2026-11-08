@@ -1,8 +1,12 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Perception;
 
 /// <summary>One zone's blood smell (<c>ZoneSmell</c> channel 0, docs/game/perception.md "Blood smell"): the current value and where its sources are.</summary>
 public readonly record struct ZoneBlood(float Value, Vector2 Position);

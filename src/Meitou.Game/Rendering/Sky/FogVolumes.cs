@@ -1,8 +1,11 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Shadows;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
 /// The placed fog volumes of <c>fogfeatures.dat</c> (docs/formats/fogfeatures.md): the swamp's ground fog, the Fog Islands', the Vain's red

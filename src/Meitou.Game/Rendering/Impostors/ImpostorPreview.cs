@@ -1,11 +1,15 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Ogre;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
 /// The impostor check (docs/impostors.md, "Preview"), native (phase 8 stage 2): draws instances of one mesh either as meshes, with the world's

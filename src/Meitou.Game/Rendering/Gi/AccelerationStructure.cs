@@ -1,11 +1,11 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gi;
+namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>One triangle geometry of a bottom-level build: positions (three floats at the start of each vertex) and 32-bit indices, both
 /// reached by device address (buffers made with <see cref="BufferUse.RayInput"/>).</summary>

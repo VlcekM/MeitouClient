@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Profiling;
 
 /// <summary>
 /// <c>--log-spikes</c>: for every frame whose GPU time is over <see cref="Factor"/> times the median of the last

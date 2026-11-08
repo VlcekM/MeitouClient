@@ -1,7 +1,8 @@
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Shaders;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The GL-to-Vulkan rules that decide pixels: formats, blend factors, compare functions, wrap modes, swizzles, vertex attribute

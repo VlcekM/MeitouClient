@@ -2,8 +2,10 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Bodies;
 
 /// <summary>
 /// The HUD stats panel's lines with their tooltips (<c>FUN_140892120</c>) and the extended lines' tooltips (<c>FUN_140895350</c>), docs/game/ui-screens.md section 4 "Stat tooltips".

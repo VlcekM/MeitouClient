@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Bench;
 
 /// <summary>Mean, median and tail of one metric over the frames of one side (<c>N</c> samples; NaN values are skipped).</summary>
 public sealed record MetricStats(int N, double Mean, double Median, double P95, double P99, double Max, double Sd);

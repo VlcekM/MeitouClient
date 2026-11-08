@@ -1,5 +1,5 @@
 using System.Numerics;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Tests.Navigation;
 

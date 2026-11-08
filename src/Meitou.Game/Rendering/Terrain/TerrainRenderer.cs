@@ -1,10 +1,14 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>Switches for drawing the world (keys in <see cref="WorldApp"/>).</summary>
 public sealed class WorldRenderOptions

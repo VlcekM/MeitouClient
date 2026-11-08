@@ -4,7 +4,7 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The on-disk cache of built zone meshes, in our own format, keyed by the zone's building hash and the build settings

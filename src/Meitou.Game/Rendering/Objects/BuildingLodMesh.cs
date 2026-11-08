@@ -1,9 +1,11 @@
 using System.Numerics;
 using Meitou.Data.Ogre;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>A mesh as a worker thread decoded it: level 0's vertices and indices, the LOD levels, and the meshes of manual levels.</summary>
 sealed class DecodedObjectMesh

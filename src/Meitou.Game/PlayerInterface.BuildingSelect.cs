@@ -1,8 +1,8 @@
 ﻿using System.Globalization;
 using System.Text;
 using System.Numerics;
-using Meitou.Rendering;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
 
 namespace Meitou.Game;
 
@@ -88,7 +88,7 @@ sealed partial class PlayerInterface
             bestT = nearest.T;
             best = SiteBuilding(nearest.Site);
         }
-        Meitou.Navigation.PlacedBuilding? level = null;
+        Meitou.Simulation.Navigation.PlacedBuilding? level = null;
         if (buildHost is { } host)
             foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, limit))
             {
@@ -117,7 +117,7 @@ sealed partial class PlayerInterface
     /// Whether a site met behind a level building's hit stands inside that building and the view shows it there (furniture in a bought house): the level building is tested against its
     /// whole collision, roof included, while the original passes a building's hidden roof and upper floors in the interior view (docs/game/ui-input.md "Building picking and selection").
     /// </summary>
-    bool SiteShownInside((Vector3 Origin, Vector3 Direction) ray, Meitou.Navigation.PlacedBuilding level, (Meitou.Simulation.Construction.BuildingSnapshot Site, float T) site) =>
+    bool SiteShownInside((Vector3 Origin, Vector3 Direction) ray, Meitou.Simulation.Navigation.PlacedBuilding level, (Meitou.Simulation.Construction.BuildingSnapshot Site, float T) site) =>
         !level.Plot && !Hidden(ray, site.T) && AboveViewedFloor?.Invoke(site.Site.Position) != true
         && level.Footprint.Gap(level.Placement.Position, level.Placement.Rotation, new Vector2(site.Site.Position.X, site.Site.Position.Z)) == 0;
 
@@ -216,7 +216,7 @@ sealed partial class PlayerInterface
         // A rock (slot 113): the player's faction once a player character has worked it, else its owner nofac's name ("No Faction"; its town NO_TOWN is explored, not secret).
         string? owner = focus.Owner;
         if (own && !player)
-            owner = inspected is { Owner: >= 0 and var by } ? FactionName?.Invoke(by) : RecordName?.Invoke(Meitou.Simulation.SquadManagement.DismissFallbackFaction);
+            owner = inspected is { Owner: >= 0 and var by } ? FactionName?.Invoke(by) : RecordName?.Invoke(Meitou.Simulation.Factions.SquadManagement.DismissFallbackFaction);
         return (new(detail?.Bed?.Name ?? focus.Name, mine ? FactionName?.Invoke(session.World.Player.Faction) ?? "" : owner ?? "", TitleColour, TitleColour), [.. state], [.. stats], status, bad, [.. extended]);
     }
 

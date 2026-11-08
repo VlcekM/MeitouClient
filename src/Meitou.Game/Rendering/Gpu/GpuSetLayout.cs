@@ -1,4 +1,6 @@
-namespace Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>The stages a program's slot is read in (the engine's words; the backend maps them).</summary>
 [Flags]

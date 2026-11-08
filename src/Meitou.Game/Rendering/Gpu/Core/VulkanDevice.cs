@@ -6,7 +6,7 @@ using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 
-namespace Meitou.Rendering.Gpu.Core;
+namespace Meitou.Game.Rendering.Gpu.Core;
 
 /// <summary>A buffer the backend made: its buffer, and the allocation behind it (null when the buffer is not the allocator's).</summary>
 public readonly record struct BufferEntry(Silk.NET.Vulkan.Buffer Buffer, BufferAllocation? Allocation);

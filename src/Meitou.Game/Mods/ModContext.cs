@@ -2,7 +2,8 @@ using HarmonyLib;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Simulation;
-using Meitou.Ui;
+using Meitou.Game.Ui;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Modding;
 

@@ -1,4 +1,5 @@
 using Meitou.Simulation;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Tests.Simulation;
 

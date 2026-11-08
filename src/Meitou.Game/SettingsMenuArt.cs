@@ -1,6 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Textures;
-using Meitou.Rendering.Ui;
+using Meitou.Game.Rendering.Ui;
 
 namespace Meitou.Game;
 

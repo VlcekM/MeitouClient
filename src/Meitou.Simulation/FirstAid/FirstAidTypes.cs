@@ -1,3 +1,5 @@
+using Meitou.Simulation.Player;
+
 namespace Meitou.Simulation.FirstAid;
 
 /// <summary>

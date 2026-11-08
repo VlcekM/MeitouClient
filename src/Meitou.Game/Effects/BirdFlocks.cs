@@ -1,9 +1,9 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Objects;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Effects;
 
 /// <summary>A world object that draws birds of one WILDLIFE_BIRDS kind to it (a record's <c>bird attractor</c> reference: <paramref name="Range"/> its first value, <paramref name="Max"/> its second).</summary>
 public readonly record struct BirdAttractor(object Key, string Kind, Vector3 Position, int Range, int Max);

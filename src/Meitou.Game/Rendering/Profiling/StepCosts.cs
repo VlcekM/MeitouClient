@@ -1,4 +1,6 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Terrain;
+
+namespace Meitou.Game.Rendering.Profiling;
 
 /// <summary>
 /// What steps of each kind have cost lately (an exponential average, so one stall - a collection, a slow driver call - is forgotten after a few

@@ -3,8 +3,12 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Kidnap;
 

@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Text.RegularExpressions;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The world camera as a hex string, for putting two viewers (e.g. two builds being compared) at the same spot: the viewer's Ctrl+C copies

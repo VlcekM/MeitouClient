@@ -1,7 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Objects;
 
 namespace Meitou.Tests.Rendering;
 

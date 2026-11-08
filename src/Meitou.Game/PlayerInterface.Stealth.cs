@@ -1,7 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Game;
 

@@ -1,8 +1,10 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// The character editor's platform (docs/characters.md "Character editor", Preview): the original stands the edited characters on a building part in its own scene; here

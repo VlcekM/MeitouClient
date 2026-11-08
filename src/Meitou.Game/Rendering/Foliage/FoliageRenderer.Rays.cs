@@ -1,7 +1,8 @@
 using System.Numerics;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>The foliage in the ray-traced scene of the global illumination (docs/render-gi.md "Foliage"): the instances big enough to matter.</summary>
 public sealed partial class FoliageRenderer

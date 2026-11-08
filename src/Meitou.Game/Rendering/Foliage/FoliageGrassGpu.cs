@@ -1,12 +1,13 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Profiling;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>A view's tables in the frame's constants, written by the CPU per view: the zones' patch ranges and the patch rows.</summary>
 public readonly record struct GrassTables(Transient Zones, int ZoneCount, Transient Patches, int PatchCount);

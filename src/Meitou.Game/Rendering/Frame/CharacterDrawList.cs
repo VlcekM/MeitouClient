@@ -1,7 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Characters;
+using Meitou.Game.Rendering.Objects;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>One animation to pose a character with: the skeleton animation's name, its time in seconds and its blend weight.</summary>
 public readonly record struct CharacterPose(string Animation, float Time, float Weight);

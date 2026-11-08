@@ -4,7 +4,12 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Crime;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
+using Meitou.Simulation.Towns;
 
 namespace Meitou.Simulation.Locks;
 

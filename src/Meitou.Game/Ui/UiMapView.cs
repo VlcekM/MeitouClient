@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Ui;
 
-namespace Meitou.Ui;
+namespace Meitou.Game.Ui;
 
 /// <summary>Map pan/zoom in normalized texture coordinates. Projection is supplied by the game's adapter.</summary>
 public sealed class UiMapView

@@ -1,9 +1,12 @@
 using System.Numerics;
 using Meitou.Data.Ui;
 using Meitou.Data.World;
-using Meitou.Rendering;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Editor;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Sky;
 using Meitou.Simulation;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Game;
 

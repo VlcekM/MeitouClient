@@ -1,12 +1,12 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-using Meitou.Rendering.Gpu.Core;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>What a foliage cull dispatch needs of the previous frame's depth pyramid (<see cref="HizPyramid.ViewFor"/>): the buffer and the
 /// vec4s <see cref="FoliageShaders"/>' <c>ViewData.hz</c> and <c>hzOff</c> hold (<see cref="Vectors"/>).</summary>

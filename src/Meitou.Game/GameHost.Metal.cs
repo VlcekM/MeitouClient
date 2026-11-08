@@ -10,23 +10,34 @@ using Meitou.Data.Particles;
 using Meitou.Data.Save;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
-using Meitou.Engine;
-using Meitou.Engine.Cameras;
-using Meitou.Engine.Input;
-using Meitou.Engine.Time;
-using Meitou.Metal;
-using Meitou.Metal.Gi;
-using Meitou.Rendering;
-using Meitou.Rendering.Characters;
-using Meitou.Rendering.Display;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Ui;
+using Meitou.Game.DevTools;
+using Meitou.Game.Host;
+using Meitou.Game.Host.Cameras;
+using Meitou.Game.Host.Input;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Settings;
+using Meitou.Game.Title;
+using Meitou.Game.Tutorials;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
+using Meitou.Simulation.Session;
+using Meitou.Game.Rendering.Metal;
+using Meitou.Game.Rendering.Metal.Gi;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Display;
+using Meitou.Game.Rendering.Gpu;
 using Meitou.Simulation;
 using Meitou.Simulation.Editing;
 using Meitou.Simulation.Saving;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
-using EngineKey = Meitou.Engine.Input.Key;
+using EngineKey = Meitou.Game.Host.Input.Key;
 using SilkKey = Silk.NET.Input.Key;
 
 namespace Meitou.Game;
@@ -380,7 +391,7 @@ sealed partial class GameHost
         {
             population.ZoneGate = zone => nav.Walkability.World.Contains(zone);
             var around = playerSquad is not null ? session.World.Characters.Previous[playerSquad.Leader.Slot].Position : session.Focus;
-            var zones = Meitou.Simulation.ZoneActivation.ZonesAround(around, 0);
+            var zones = Meitou.Simulation.Population.ZoneActivation.ZonesAround(around, 0);
             var watch = Stopwatch.StartNew();
             Task.WaitAll([.. zones.Select(z => (Task)nav.LoadZone(z))]);
             foreach (var z in zones) navZones[z] = Stopwatch.GetTimestamp();
@@ -432,8 +443,8 @@ sealed partial class GameHost
             hud.CreateUiPainter(overlay, assets.Find);
             ConfigurePlayerInterface(hud);
             if (IsSandbox)
-                hud.ReservedKeys.UnionWith([Meitou.Engine.Input.Key.Z, Meitou.Engine.Input.Key.X, Meitou.Engine.Input.Key.C,
-                    Meitou.Engine.Input.Key.Y, Meitou.Engine.Input.Key.P, Meitou.Engine.Input.Key.G]);
+                hud.ReservedKeys.UnionWith([Meitou.Game.Host.Input.Key.Z, Meitou.Game.Host.Input.Key.X, Meitou.Game.Host.Input.Key.C,
+                    Meitou.Game.Host.Input.Key.Y, Meitou.Game.Host.Input.Key.P, Meitou.Game.Host.Input.Key.G]);
             // A double click on a far squad member flies there (Advanced settings "Character flights"); the third press
             // ends the flight on that member. With the setting off PlayerInterface centres on them instead.
             hud.FlyTo = id =>
@@ -511,14 +522,14 @@ sealed partial class GameHost
         void ApplyCameraRotateSpeed(float speed) => session.Camera.Settings.RotateSpeedX = session.Camera.Settings.RotateSpeedY =
             Math.Clamp(speed, UserConfig.MinCameraRotateSpeed, UserConfig.MaxCameraRotateSpeed);
         ApplyCameraRotateSpeed(config.CameraRotateSpeed);
-        config.EdgeScroll ??= Meitou.Audio.AudioSystem.Setting(install, "Edge scrolling", 1) != 0;
-        config.Tutorials ??= Meitou.Audio.AudioSystem.Setting(install, "tutorials", 1) != 0;
+        config.EdgeScroll ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Edge scrolling", 1) != 0;
+        config.Tutorials ??= Meitou.Game.Audio.AudioSystem.Setting(install, "tutorials", 1) != 0;
         config.SeedCamera(install);
         config.ApplyCamera(session.Camera.Settings);
         KeyMap.SwapButtons = config.SwapMouseButtons == true;
         hud?.FontSize = config.FontSize ?? Meitou.Data.Ui.KenshiFontSize.DefaultSetting;
-        config.MovementMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
-        config.RotationMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
+        config.MovementMarker ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
+        config.RotationMarker ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
         if (hud is not null) (hud.MovementMarker, hud.RotationMarker) = (config.MovementMarker == true, config.RotationMarker == true);
         tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
         tutorials.Enabled = config.Tutorials == true;
@@ -541,13 +552,13 @@ sealed partial class GameHost
                 LateDefencesChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on; },
                 TimeSpeedsChanged = () => session.Simulation.SetFastSpeeds(config.FastSpeed, config.FastestSpeed),
                 DoorsCloseChanged = on => { foreach (var locks in session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on; },
-                AnimalsPickUpChanged = on => { foreach (var players in session.World.Systems.OfType<Meitou.Simulation.PlayerSystem>()) players.AnimalsPickUp = on; },
+                AnimalsPickUpChanged = on => { foreach (var players in session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on; },
                 BenchFacingChanged = on => session.World.BenchFacingFix = on,
                 TutorialsChanged = on => { if (tutorials is { } t) t.Enabled = on; },
                 ResetTutorials = () => tutorials?.Reset(),
                 OffscreenChanged = () =>
                 {
-                    foreach (var population in session.World.Systems.OfType<Meitou.Simulation.PopulationSystem>())
+                    foreach (var population in session.World.Systems.OfType<Meitou.Simulation.Population.PopulationSystem>())
                         (population.KeepRoamers, population.OffscreenFights, population.OffscreenHealing, population.CampaignAncestorsOnce, population.KeepWild, population.ResidentSchedule) =
                             (config.KeepRoamers, config.OffscreenFights, config.OffscreenHealing, config.CampaignAncestorsOnce, config.KeepWild, config.ResidentSchedule);
                     foreach (var production in session.World.Systems.OfType<Meitou.Simulation.Production.ProductionSystem>()) production.UnloadedProduction = config.UnloadedProduction;
@@ -974,7 +985,7 @@ sealed partial class GameHost
                 if (KeyMap.Map(button) is not { } mapped) return;
                 var at = Pixels(mouse.Position);
                 if (settings?.Visible == true) { settings.MouseDown(at, mapped); return; }
-                bool select = PlayerButton(mapped) == Meitou.Engine.Input.MouseButton.Left;
+                bool select = PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left;
                 if (hud is { UiVisible: true } && select && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
                 if (hud is { UiVisible: true } && select && SandboxToggleClick(at)) return;
                 // PlayerInterface sees every click: it takes the HUD's controls, selects, starts a drag box or gives a move order.
@@ -1385,10 +1396,10 @@ sealed partial class GameHost
             UpdateModHits();
             if (characters is not null)
             {
-                characters.Look = Meitou.Rendering.Characters.PreviewLook.Of(o.Post);
+                characters.Look = Meitou.Game.Rendering.Characters.PreviewLook.Of(o.Post);
                 if (hud is not null)
                 {
-                    hud.PortraitSize = Meitou.Rendering.Characters.CharacterRenderer.PortraitSizeFor(characters.Look);
+                    hud.PortraitSize = Meitou.Game.Rendering.Characters.CharacterRenderer.PortraitSizeFor(characters.Look);
                     SyncIconLook();
                 }
             }

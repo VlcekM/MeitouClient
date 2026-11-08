@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Text;
 using System.Text.Json;
+using Meitou.Game.DevTools;
 using Meitou.Simulation;
 
 namespace Meitou.Game;
@@ -299,7 +300,7 @@ sealed partial class GameHost
                     Yaw0 = strat.Yaw, Pitch0 = strat.Pitch, Dist0 = strat.Distance, Pitch1 = movePitch ?? strat.Pitch, Dist1 = moveZoom ?? strat.Distance,
                 };
                 mv.Yaw1 = moveYawBy is { } by ? mv.Yaw0 + by
-                    : moveYaw is { } ya ? mv.Yaw0 + Meitou.Engine.Time.Interp.WrapAngle(ya - mv.Yaw0)
+                    : moveYaw is { } ya ? mv.Yaw0 + Meitou.Simulation.Session.Interp.WrapAngle(ya - mv.Yaw0)
                     : mv.Yaw0;
                 if (controlDir is not null) { mv.Id = currentControlId; controlReplyDeferred = true; }
                 cameraMove = mv;
@@ -452,7 +453,7 @@ sealed partial class GameHost
                     var m = w.Mesh(slot);
                     for (int p = 0; p < m.PolygonCount; p++)
                     {
-                        if (m.Areas[p] != Meitou.Navigation.NavArea.Door) continue;
+                        if (m.Areas[p] != Meitou.Simulation.Navigation.NavArea.Door) continue;
                         var c = Vector3.Zero;
                         foreach (int vi in m.Polygons[p]) c += m.Vertices[vi];
                         c /= m.Polygons[p].Length;

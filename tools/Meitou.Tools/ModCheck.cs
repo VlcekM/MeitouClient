@@ -5,6 +5,8 @@ using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Modding;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 
 /// <summary>

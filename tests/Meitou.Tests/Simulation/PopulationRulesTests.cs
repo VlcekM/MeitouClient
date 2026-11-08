@@ -5,6 +5,7 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 using Meitou.Simulation.Dialogue;
 using Meitou.Simulation;
+using Meitou.Simulation.Population;
 using static Meitou.Tests.Simulation.SyntheticTown;
 
 namespace Meitou.Tests.Simulation;

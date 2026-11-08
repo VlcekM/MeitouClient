@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 [Flags]
 public enum TextureUse { Sampled = 1, Storage = 2, ColourTarget = 4, DepthTarget = 8, TransferSrc = 16, TransferDst = 32, ShadingRate = 64 }

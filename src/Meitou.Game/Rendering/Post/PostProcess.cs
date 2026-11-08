@@ -1,14 +1,18 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Text;
 
 using Meitou.Data.Ogre;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Vk = Silk.NET.Vulkan;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
 /// The world view's frame buffer and post-processing chain. The scene is drawn into an RGBA16F framebuffer

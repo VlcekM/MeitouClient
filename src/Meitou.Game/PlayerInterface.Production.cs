@@ -2,11 +2,11 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Ui;
-using Meitou.Rendering.Ui;
+using Meitou.Game.Rendering.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Production;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 

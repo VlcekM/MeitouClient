@@ -1,14 +1,17 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Diagnostics;
 using System.Numerics;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// The sun's shadow map as the game's CSM mode draws it (docs/formats/shadows.md): four cascades fitted by <see cref="ShadowCascades"/>

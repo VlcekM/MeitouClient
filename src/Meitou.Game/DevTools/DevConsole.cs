@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Meitou.Game;
+namespace Meitou.Game.DevTools;
 
 /// <summary>One console command: <see cref="Run"/> gets the arguments (quotes already removed) and prints through the console. <see cref="Complete"/> lists what Tab may fill in for an argument.</summary>
 /// <param name="Name">What is typed first, lower case.</param>

@@ -1,4 +1,6 @@
-namespace Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+
+namespace Meitou.Game.Rendering.Gpu.Shaders;
 
 public enum ScalarKind { Float, Int, UInt, Bool }
 

@@ -1,5 +1,6 @@
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Perception;
 
 namespace Meitou.Simulation.Bodies;
 

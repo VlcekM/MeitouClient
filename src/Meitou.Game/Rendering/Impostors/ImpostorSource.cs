@@ -4,8 +4,9 @@ using System.Security.Cryptography;
 using System.Text;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Foliage;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
 /// The material settings of one mesh's parts, as <see cref="FoliageRenderer"/> builds them from the FOLIAGE_MESH record (its <c>AssetFor</c>;

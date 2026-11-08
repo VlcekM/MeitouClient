@@ -2,7 +2,9 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
 using Meitou.Simulation;
-using Meitou.Ui;
+using Meitou.Game.Ui;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Game;
 

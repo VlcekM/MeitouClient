@@ -1,5 +1,5 @@
 using Meitou.Data.Gameplay.Combat;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Objects;
 using Meitou.Simulation;
 
 namespace Meitou.Game;

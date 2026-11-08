@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>A door as the sounds need it: where it is, its record's <c>door type</c> (DoorMaterial 0 Wood, 1 Mechanical, 2 Gate), its motion (0 closed, 1 open, 2 opening, 3 closing) and whether it is broken.</summary>
 public readonly record struct DoorSoundState(Vector3 Position, int Type, int Motion, bool Broken);

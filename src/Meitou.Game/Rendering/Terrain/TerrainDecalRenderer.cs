@@ -2,9 +2,11 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// The blood on the ground (docs/game/blood-decals.md): the decal cells nearest the eye within the game's <c>Decal Range</c>, up to <see cref="FaithfulSlots"/> or <see cref="MaxSlots"/>, each drawn into

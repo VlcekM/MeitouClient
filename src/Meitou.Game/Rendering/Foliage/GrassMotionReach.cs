@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// How far from the eye a swaying blade's own motion is worth drawing for the upscalers (<c>grass-velocity</c>, docs/render-foliage.md "Grass motion vectors"). A blade's top

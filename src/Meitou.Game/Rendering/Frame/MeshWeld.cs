@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The <c>weld</c> switch's Meitou side: meshes are welded as they load (<see cref="Meitou.Data.Ogre.OgreMeshWeld"/>): the corners split only by per-face

@@ -5,9 +5,14 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Combat;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Production;
 

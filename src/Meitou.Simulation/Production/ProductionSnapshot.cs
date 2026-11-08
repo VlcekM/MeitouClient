@@ -1,5 +1,6 @@
 using Meitou.Simulation.Items;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Production;
 

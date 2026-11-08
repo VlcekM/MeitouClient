@@ -3,7 +3,7 @@ using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Ui;
 using Meitou.Data.World;
 using Meitou.Game.Building;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 

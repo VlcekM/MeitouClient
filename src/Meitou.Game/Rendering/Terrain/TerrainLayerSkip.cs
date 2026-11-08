@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// The terrain's cliff weight threshold (docs/render-terrain.md, "Layer weight threshold"): the cliff layer (two projections, diffuse and normal, 4 of the

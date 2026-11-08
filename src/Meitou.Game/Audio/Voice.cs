@@ -1,4 +1,4 @@
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// One playing WEM: reads a short clip's samples decoded once and shared (<see cref="PcmCache"/>), a long one's Ogg Vorbis stream as it goes (NVorbis); loops it, resamples it to the output rate with the pitch, runs it

@@ -73,9 +73,9 @@ sealed partial class GameHost
     }
 
     // By character slot, the last answer of the test above (asked again once the character moves; a slot's new character only inherits a place's answer).
-    Meitou.Rendering.WorldObjectRenderer.InteriorMemo[] interiorMemos = [];
+    Meitou.Game.Rendering.Objects.WorldObjectRenderer.InteriorMemo[] interiorMemos = [];
 
-    ref Meitou.Rendering.WorldObjectRenderer.InteriorMemo InteriorMemo(int slot)
+    ref Meitou.Game.Rendering.Objects.WorldObjectRenderer.InteriorMemo InteriorMemo(int slot)
     {
         if (slot >= interiorMemos.Length) Array.Resize(ref interiorMemos, Math.Max(slot + 1, interiorMemos.Length * 2));
         return ref interiorMemos[slot];
@@ -97,7 +97,7 @@ sealed partial class GameHost
     /// floor shown (<see cref="held"/>), and one past it (the timer runs only while the building is complete, a construction site stays open: <c>FUN_14054a790</c> reads the owner's is-complete byte, <b>Verified</b>), or no longer loaded (unloaded, removed, destroyed), closes. Game time is the simulation's (it stops while
     /// paused and runs faster at higher speeds); a time ahead of now (a loaded save's clock went back) closes at once.
     /// </summary>
-    void HoldLeftOpen(Meitou.Rendering.WorldObjectRenderer objects)
+    void HoldLeftOpen(Meitou.Game.Rendering.Objects.WorldObjectRenderer objects)
     {
         held.Clear();
         expired.Clear();
@@ -121,7 +121,7 @@ sealed partial class GameHost
     /// While the camera follows a character: a new follow sets the viewed floor to the character's floor, and so does a change of that floor later; a PageUp /
     /// PageDown in between stays until then (game: FUN_1407f5400 and the per-frame FUN_140801630). Outside a building a character is on floor 0.
     /// </summary>
-    void FollowFloor(Meitou.Rendering.WorldObjectRenderer objects)
+    void FollowFloor(Meitou.Game.Rendering.Objects.WorldObjectRenderer objects)
     {
         var follow = player?.Follow;
         if (follow is not { } id || session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c)

@@ -1,9 +1,10 @@
 using System.Runtime.InteropServices;
 
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Shadows;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The CPU side of the native model's sets (docs/renderer-native.md 2.6 and 3.3, <see cref="NativeShaders"/>): makes native programs with the

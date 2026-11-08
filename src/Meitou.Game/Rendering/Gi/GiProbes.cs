@@ -1,11 +1,16 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering.Gi;
+namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
 /// The probe GI (docs/render-gi.md "Probes"): <see cref="Cascades"/> camera-centred grids of <see cref="Columns"/> × <see cref="Columns"/> probe

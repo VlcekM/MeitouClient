@@ -3,7 +3,7 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Tests.Rendering;
 

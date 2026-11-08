@@ -8,10 +8,21 @@ using Meitou.Data.Ogre;
 using Meitou.Data.Particles;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Bench;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Rendering.Water;
 using Vk = Silk.NET.Vulkan;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 sealed class WorldOptions
 {

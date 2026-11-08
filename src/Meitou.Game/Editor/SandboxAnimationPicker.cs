@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using System.Numerics;
 using Meitou.Data.Gameplay;
-using Meitou.Rendering;
-using EngineKey = Meitou.Engine.Input.Key;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Overlays;
+using EngineKey = Meitou.Game.Host.Input.Key;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Editor;
 
 /// <summary>
 /// The sandbox's animation drop-down (docs/simulation.md "Sandbox"): a button on the sandbox panel with the hero's forced animation ("simulation" when none);

@@ -1,5 +1,6 @@
 using System.Numerics;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
 using Meitou.Tests.World;
 
 namespace Meitou.Tests.Rendering;

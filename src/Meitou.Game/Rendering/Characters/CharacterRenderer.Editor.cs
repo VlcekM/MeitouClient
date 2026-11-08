@@ -1,9 +1,10 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// The character editor's view of the character being edited (<see cref="CharacterRenderer.StageRequest"/>): the character by its draw-list key, the size of the picture

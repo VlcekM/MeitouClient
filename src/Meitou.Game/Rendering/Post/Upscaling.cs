@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>How the scene gets from its render size to the display: drawn at full size, edges smoothed by FXAA (off), or temporally reconstructed from
 /// jittered frames at a render scale (the built-in TAA, AMD FSR, NVIDIA DLSS). docs/engine.md "Upscaling".</summary>
@@ -124,7 +124,7 @@ public sealed record UpscaleInputs
     public float Aspect;
 }
 
-/// <summary>An upscaler outside the post-processing chain's own TAA, backed by a vendor library (Meitou.Rendering.Upscalers).</summary>
+/// <summary>An upscaler outside the post-processing chain's own TAA, backed by a vendor library (Meitou.Game.Rendering.Upscalers).</summary>
 public interface IUpscaler : IDisposable
 {
     UpscalerKind Kind { get; }

@@ -1,4 +1,7 @@
 using System.Runtime.CompilerServices;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation;
 

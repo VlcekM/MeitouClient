@@ -4,11 +4,12 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Gameplay.Combat;
 using Meitou.Data.Ui;
-using Meitou.Rendering.Ui;
+using Meitou.Game.Rendering.Ui;
 using Meitou.Simulation;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Trading;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 

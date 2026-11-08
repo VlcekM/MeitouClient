@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Locks;
 

@@ -1,10 +1,10 @@
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
-using static Meitou.Rendering.Upscalers.SlTypes;
+using static Meitou.Game.Rendering.Upscalers.SlTypes;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
-namespace Meitou.Rendering.Upscalers;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA Streamline (MIT; the signed <c>sl.interposer.dll</c>, <c>sl.common.dll</c>, <c>sl.dlss.dll</c> and NVIDIA's <c>nvngx_dlss.dll</c>, with frame

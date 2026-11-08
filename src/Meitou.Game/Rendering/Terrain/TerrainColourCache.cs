@@ -6,7 +6,7 @@ using Meitou.Data;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// The terrain colour tiles (<c>overlaymaps/colour.X.Z.png</c>) as BC3 mip chains for the colour window (docs/render-terrain.md, "Colour window"):

@@ -3,6 +3,8 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Save;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 using static Meitou.Tests.Simulation.SyntheticTown;
 using SimWorld = Meitou.Simulation.World;

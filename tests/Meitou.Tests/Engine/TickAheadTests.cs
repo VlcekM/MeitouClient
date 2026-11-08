@@ -1,5 +1,5 @@
 using System.Numerics;
-using Meitou.Engine;
+using Meitou.Game.Host;
 
 namespace Meitou.Tests.Engine;
 

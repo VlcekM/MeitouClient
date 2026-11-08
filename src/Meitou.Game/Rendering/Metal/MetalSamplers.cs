@@ -1,8 +1,8 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// One Metal sampler per description, for the device's lifetime (the twin of <c>SamplerCache</c>): the same

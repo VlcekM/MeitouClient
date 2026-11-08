@@ -1,8 +1,9 @@
 using System.Numerics;
 using Meitou.Simulation;
+using Meitou.Simulation.Towns;
 using Meitou.Threading;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>Who is asking for a path: the footprint radius (a portal must leave the radius clear at each end on a wall) and what the ground costs them.</summary>
 public sealed record NavAgent

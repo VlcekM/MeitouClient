@@ -1,4 +1,8 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
 /// GLSL of the placed fog volumes (docs/formats/fogfeatures.md "How the game draws them"): the game's <c>fog_planes_fs</c>, <c>fog_sphere_fs</c>

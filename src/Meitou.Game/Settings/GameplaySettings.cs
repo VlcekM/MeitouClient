@@ -2,7 +2,7 @@ using Meitou.Content;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Settings;
 
 /// <summary>
 /// The original's Gameplay options page (docs/formats/settings.md "Gameplay"): the population and difficulty sliders, the two drop-downs and the autosave, plus the harpoon limit, with

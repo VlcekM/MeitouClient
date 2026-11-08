@@ -1,6 +1,9 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering.Gi;
+namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
 /// A backend-owned ray-traced probe GI. Vulkan's <see cref="GiProbes"/> and Metal's native implementation share the

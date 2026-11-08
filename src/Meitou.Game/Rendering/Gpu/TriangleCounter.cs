@@ -1,7 +1,9 @@
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Bench;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The bench's triangle size histogram (<c>--bench-tris</c>, docs/bench.md "Triangle size histogram"): while <see cref="Begin"/> is in effect the

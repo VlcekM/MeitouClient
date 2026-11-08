@@ -3,7 +3,7 @@ using System.Numerics;
 using Meitou.Data.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Dialogue;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 
@@ -93,10 +93,10 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The number keys pick a choice while the panel is open (engine convenience).</summary>
-    bool DialogueKey(Meitou.Engine.Input.Key key)
+    bool DialogueKey(Meitou.Game.Host.Input.Key key)
     {
         if (!faithfulScreens.IsOpen("dialogue") || session.CurrentSnapshot.Conversation is not { } talk) return false;
-        int index = key - Meitou.Engine.Input.Key.D1;
+        int index = key - Meitou.Game.Host.Input.Key.D1;
         if (index < 0 || index > 8) return false;
         if (index < talk.Choices.Count) Say(new DialogueChoice(index) { Tick = session.World.Tick });
         return true;

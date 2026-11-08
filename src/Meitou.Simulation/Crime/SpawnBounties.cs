@@ -1,4 +1,5 @@
 using Meitou.Data;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Crime;
 

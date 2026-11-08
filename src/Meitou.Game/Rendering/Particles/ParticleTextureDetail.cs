@@ -1,6 +1,6 @@
 using Meitou.Data.Textures;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Particles;
 
 /// <summary>
 /// How many pixels across a particle texture needs on screen to keep its detail (<see cref="ParticleRenderer"/>'s low-resolution targets): its side divided

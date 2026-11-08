@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
 /// The Meitou water's wave spectrum (<see cref="OceanWaves"/>, docs/render-water.md "Meitou water"): Tessendorf's statistical ocean, the initial

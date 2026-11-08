@@ -1,6 +1,6 @@
 using Meitou.Data.Audio;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// Buses (docs/audio.md#buses-pause-and-reverb): the bus gain chain with action-driven offsets that fade (the pause ducking), and the auxiliary

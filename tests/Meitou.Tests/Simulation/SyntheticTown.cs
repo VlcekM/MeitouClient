@@ -3,6 +3,7 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
 using Meitou.Simulation;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;

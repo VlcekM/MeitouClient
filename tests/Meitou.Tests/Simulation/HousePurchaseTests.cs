@@ -6,6 +6,8 @@ using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 using static Meitou.Tests.Gameplay.EconomyTests;
 using SimWorld = Meitou.Simulation.World;

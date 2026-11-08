@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Metal;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// One stage's argument buffer layout, read from the MSL: the members' offsets in entries (8 bytes each) and the arrays each

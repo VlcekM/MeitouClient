@@ -1,6 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Game;
 
@@ -66,7 +68,7 @@ sealed partial class GameHost
                 if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
             SnapshotPlayerTowns();
                 loadedSave = null; preparedBase = null; saveInUse = null; worldEpoch++;
-                session.Clock.SetTime(Meitou.Engine.Time.GameClock.DefaultStartDay, Meitou.Engine.Time.GameClock.DefaultStartHour);
+                session.Clock.SetTime(Meitou.Simulation.Session.GameClock.DefaultStartDay, Meitou.Simulation.Session.GameClock.DefaultStartHour);
                 var lead = session.World.Characters.Previous[spawned!.Leader.Slot].Position;
                 var view = session.Camera.Current;
                 session.Camera.Place(new Vector2(lead.X, lead.Z), view.Yaw, view.Pitch, view.Distance);

@@ -1,4 +1,4 @@
-using Meitou.Engine.Input;
+using Meitou.Game.Host.Input;
 
 namespace Meitou.Tests.Engine;
 

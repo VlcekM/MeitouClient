@@ -1,9 +1,9 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
 /// The shore distance field round the camera (docs/render-water.md "Shore distance field"): a <see cref="Size"/>² RG32F texture of

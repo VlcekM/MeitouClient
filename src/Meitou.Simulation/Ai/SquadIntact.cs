@@ -1,4 +1,7 @@
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Ai;
 

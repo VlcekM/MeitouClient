@@ -3,7 +3,7 @@ using Meitou.Data.Ui;
 using StbTrueTypeSharp;
 using static FreeTypeSharp.FT;
 
-namespace Meitou.Rendering.Ui;
+namespace Meitou.Game.Rendering.Ui;
 
 /// <summary>
 /// The process-wide FreeType library and one face per font file, shared by every size of it (each <see cref="UiFont"/> owns an

@@ -1,5 +1,5 @@
 using System.Numerics;
-using Meitou.Audio;
+using Meitou.Game.Audio;
 using Meitou.Data;
 using Meitou.Data.Gameplay.Combat;
 using Meitou.Simulation;

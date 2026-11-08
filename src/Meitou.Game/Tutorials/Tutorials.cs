@@ -1,4 +1,4 @@
-namespace Meitou.Game;
+namespace Meitou.Game.Tutorials;
 
 /// <summary>
 /// What the tutorial triggers look at, filled by the interface at each poll (docs/game/ui-screens.md "Tutorials"). "PCs" are the player's characters; the building

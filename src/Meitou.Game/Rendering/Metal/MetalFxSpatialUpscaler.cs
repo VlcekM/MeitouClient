@@ -1,8 +1,8 @@
-using Meitou.Rendering;
 using SharpMetal.Metal;
 using SharpMetal.MetalFX;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// MetalFX's spatial upscaler: one color frame, no depth or motion history. It is a different algorithm from

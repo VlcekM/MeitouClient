@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu.Core;
+namespace Meitou.Game.Rendering.Gpu.Core;
 
 /// <summary>
 /// N frames in flight. Each slot has a transient command pool, one primary command buffer, a fence and a deletion

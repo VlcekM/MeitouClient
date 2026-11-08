@@ -1,6 +1,9 @@
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Trading;
 
 namespace Meitou.Simulation.Saving;

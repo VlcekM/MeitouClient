@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// Area ids of the navmesh builder. They are Recast area ids, so where two surfaces meet in one column the larger id wins:

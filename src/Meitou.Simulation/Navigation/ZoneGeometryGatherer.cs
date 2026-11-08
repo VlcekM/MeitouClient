@@ -5,7 +5,7 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>BUILDING <c>path mode</c> (FCS PathMode).</summary>
 internal enum PathMode { Ignore = 0, Projected = 1, Obstacle = 2, Walkable = 3 }

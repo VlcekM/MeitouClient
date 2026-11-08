@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Meitou.Data.Textures;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// One feedback report as the host hands it over: the form, the game's details, the screenshot and the navmesh screenshot being encoded, the camera's location, the save being written (a temporary

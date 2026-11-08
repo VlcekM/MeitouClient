@@ -1,8 +1,10 @@
 using System.Numerics;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Overlays;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>The outlined characters drawn alone into masks of their own, one per colour, for the hover outline (<see cref="HoverOutlineRenderer"/>, docs/game/ui-input.md "Hover outline").</summary>
 internal sealed unsafe partial class CharacterRenderer

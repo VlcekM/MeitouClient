@@ -3,7 +3,7 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Economy;
 using Meitou.Data.World;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// The camps (docs/game/factions-squads-towns.md "Nest furniture"): what a nest, or a town with <c>spawn in town centre</c>, scatters at its place (<see cref="NestFurniture"/>).

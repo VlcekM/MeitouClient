@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// How stretched a mesh part's texture is: the world length one unit of texture coordinate spans, taken where it is at its largest

@@ -1,12 +1,14 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Diagnostics;
 using System.Numerics;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// The Meitou shadows (the <c>shadows</c> enhancement, docs/formats/shadows.md "Meitou shadows"): the same cascade array and caster draws as the

@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
 /// The Meitou water's foam pattern (<see cref="WaterRenderer"/>): a tileable lace of bubble rims, baked at load. Two octaves of cellular noise

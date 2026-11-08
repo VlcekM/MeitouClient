@@ -2,8 +2,13 @@ using Meitou.Data.World;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// The foliage shaders (docs/render-foliage.md).

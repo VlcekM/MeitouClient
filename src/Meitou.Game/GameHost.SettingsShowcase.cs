@@ -1,6 +1,8 @@
-using Meitou.Rendering;
-using Meitou.Rendering.Display;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Host;
+using Meitou.Game.Rendering.Display;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Overlays;
 
 namespace Meitou.Game;
 

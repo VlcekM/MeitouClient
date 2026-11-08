@@ -1,4 +1,8 @@
 using System.Numerics;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Items
 {
@@ -10,7 +14,7 @@ namespace Meitou.Simulation.Items
     }
 }
 
-namespace Meitou.Simulation
+namespace Meitou.Simulation.Player
 {
     /// <summary>
     /// Picking up loose items (docs/simulation.md "Ground items"): walk to the item, then into the inventory (<see cref="Items.Inventory.Add"/>), or a message when it has no room. The

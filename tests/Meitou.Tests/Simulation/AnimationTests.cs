@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Simulation;
+using Meitou.Simulation.Movement;
 using Meitou.Tests.Bodies;
 using SimWorld = Meitou.Simulation.World;
 

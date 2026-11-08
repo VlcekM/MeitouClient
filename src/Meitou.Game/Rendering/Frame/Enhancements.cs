@@ -1,4 +1,7 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Terrain;
+
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// One feature that can look as the game ships it (<b>Faithful</b>) or with Meitou's improvement (<b>Meitou</b>, the

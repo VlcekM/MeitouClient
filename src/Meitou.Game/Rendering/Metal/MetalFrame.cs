@@ -1,11 +1,11 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
 using SharpMetal.ObjectiveCCore;
 using SharpMetal.QuartzCore;
 using System.Runtime.InteropServices;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// The frame being recorded, on Metal (docs/resource-layer.md): a slot ring over the display's drawables —

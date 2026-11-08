@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The buildings the player placed (docs/simulation.md "Buildings", host seam): one thread-safe overlay on the level data's placements, shared by every

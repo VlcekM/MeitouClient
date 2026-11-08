@@ -1,4 +1,6 @@
-namespace Meitou.Rendering.Characters;
+using Meitou.Game.Rendering.Frame;
+
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// The character textures' memory governor (an engine choice, not the game's): twice a second, over 90% of the cache's mark every texture is

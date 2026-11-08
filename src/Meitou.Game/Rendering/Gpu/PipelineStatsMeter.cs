@@ -1,7 +1,9 @@
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Bench;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Profiling;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The bench's triangles per pass (<c>--bench-tris</c>, docs/bench.md "Triangles per pass"): pipeline statistics queries (input assembly

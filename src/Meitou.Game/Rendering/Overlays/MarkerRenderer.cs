@@ -1,11 +1,12 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Ogre;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Overlays;
 
 /// <summary>
 /// The game's <c>debug_marker</c> entities, in the material's two passes: the visible part lit as <c>Basic_Lit_VP</c> lights it (contrast 0.5)

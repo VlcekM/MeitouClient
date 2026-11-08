@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The interior join sweep (docs/game/pathfinding.md "Join sweep"): per original interior group, whether the original connects it to the exterior (mesh

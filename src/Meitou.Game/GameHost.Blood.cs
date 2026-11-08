@@ -1,12 +1,14 @@
 using System.Collections.Concurrent;
 using System.Numerics;
-using Meitou.Audio;
+using Meitou.Game.Audio;
 using Meitou.Data.Fcs;
 using Meitou.Data.Ogre;
 using Meitou.Data.Save;
 using Meitou.Data.World;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Terrain;
 using Meitou.Simulation;
 
 namespace Meitou.Game;

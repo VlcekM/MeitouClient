@@ -1,6 +1,6 @@
 using Meitou.Data.Gameplay.Combat;
 using Meitou.Simulation.Combat;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 

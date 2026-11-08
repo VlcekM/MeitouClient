@@ -1,7 +1,10 @@
 using System.Numerics;
 using Meitou.Data.World;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Perception;
 
 /// <summary>The indoor volume and the lights of a town's building, from the level data (the host's; null on <see cref="PopulationData"/>: everyone stays outdoors and unlit).</summary>
 public interface ISightSource

@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// The pure rules of the foliage <c>screen-lod</c> switch (docs/render-foliage.md, "Screen-size LOD"): when the triangles of a foliage mesh are so small on the screen that

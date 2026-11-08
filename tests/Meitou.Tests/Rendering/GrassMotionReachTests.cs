@@ -1,4 +1,5 @@
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Foliage;
+
 
 namespace Meitou.Tests.Rendering;
 

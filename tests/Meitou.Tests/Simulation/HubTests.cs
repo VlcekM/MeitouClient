@@ -5,6 +5,9 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 using Meitou.Simulation;
 using Xunit.v3;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;

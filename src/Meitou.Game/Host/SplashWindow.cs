@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// The splash shown from the start of the program until the game window draws its first loading frame (docs/engine.md "Loading"): nothing can be drawn with

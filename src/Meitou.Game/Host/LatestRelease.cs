@@ -1,7 +1,7 @@
 using System.Text.Json.Nodes;
 using Meitou.Content;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// Whether a newer Meitou is out than the running one, for the feedback form (docs/play-reports.md "Feedback"): the reports service's

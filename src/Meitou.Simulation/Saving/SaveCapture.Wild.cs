@@ -5,6 +5,8 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Save;
 using Meitou.Data.World;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Saving;
 

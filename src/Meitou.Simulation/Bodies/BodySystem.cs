@@ -4,9 +4,13 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Bodies;
 
 /// <summary>
 /// The bodies of the characters (stage 7, docs/game/character-stats.md): every tick it runs each living character's <see cref="MedicalState.Tick"/> (blood,

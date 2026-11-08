@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Player;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;

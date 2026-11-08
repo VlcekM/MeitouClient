@@ -1,4 +1,6 @@
-namespace Meitou.Simulation;
+using Meitou.Simulation.Factions;
+
+namespace Meitou.Simulation.Ai;
 
 /// <summary>
 /// The squads' goal list kept across ticks: an entry (worker, sub-target) is refreshed to <see cref="Seconds"/> by every update of the duty that makes it (<c>FUN_140269ff0</c> from the first

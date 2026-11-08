@@ -1,6 +1,6 @@
-using Meitou.Rendering;
-using Meitou.Rendering.Display;
-using Meitou.Rendering.Upscalers;
+using Meitou.Game.Rendering.Display;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Upscalers;
 using Silk.NET.Input;
 
 namespace Meitou.Game;

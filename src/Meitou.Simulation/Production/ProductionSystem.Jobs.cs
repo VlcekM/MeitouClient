@@ -2,7 +2,13 @@ using Meitou.Data.Gameplay.Ai;
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Combat;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Production;
 

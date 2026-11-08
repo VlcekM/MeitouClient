@@ -1,4 +1,6 @@
-namespace Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+
+namespace Meitou.Game.Rendering.Gpu.Shaders;
 
 /// <summary>Options for <see cref="GlslProgramCompiler.Compile"/>. They are part of the cache key.</summary>
 public sealed record ShaderCompileOptions

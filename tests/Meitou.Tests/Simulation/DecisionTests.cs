@@ -3,11 +3,16 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation;
+using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Carrying;
+using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.FirstAid;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
 
 namespace Meitou.Tests.Simulation;

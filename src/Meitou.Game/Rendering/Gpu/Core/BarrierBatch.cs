@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu.Core;
+namespace Meitou.Game.Rendering.Gpu.Core;
 
 /// <summary>
 /// Barriers to record at once: memory dependencies only (the layouts stay GENERAL,

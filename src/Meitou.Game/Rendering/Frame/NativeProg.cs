@@ -1,6 +1,7 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// A native program of the foliage with its vertex inputs from the reflection: the layout and buffers a GL vertex array feeds it, as VkGl
@@ -11,7 +12,7 @@ internal sealed class NativeProg : IDisposable
     readonly IGpuContext ctx;
     public readonly GpuProgram P;
     readonly int[] locations;
-    readonly Meitou.Rendering.Gpu.Shaders.ScalarKind[] kinds;
+    readonly Meitou.Game.Rendering.Gpu.Shaders.ScalarKind[] kinds;
     /// <summary>The program's own input locations (below the instance rows): 0 .. Own − 1.</summary>
     public readonly int Own;
     VertexLayout? last;
@@ -50,8 +51,8 @@ internal sealed class NativeProg : IDisposable
             result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
                 ? a.Buffer
                 : ctx.ConstantVertexAttributes
-                        ? new GpuBufferBinding(ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Rendering.Gpu.Shaders.ScalarKind.Float))
-                        : new GpuBufferBinding(ctx.DummyVertexArray(input >= 0 ? kinds[input] : Meitou.Rendering.Gpu.Shaders.ScalarKind.Float), 0);
+                        ? new GpuBufferBinding(ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float))
+                        : new GpuBufferBinding(ctx.DummyVertexArray(input >= 0 ? kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float), 0);
         }
         return result;
     }

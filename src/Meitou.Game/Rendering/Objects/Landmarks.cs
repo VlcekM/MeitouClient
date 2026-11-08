@@ -2,8 +2,9 @@ using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// Which placed objects are landmarks (docs/renderer-native.md 8.19): meshes so large in the world that they are worth drawing across the whole map

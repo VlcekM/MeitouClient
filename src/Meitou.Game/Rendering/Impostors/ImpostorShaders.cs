@@ -1,8 +1,12 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>The C# side of <see cref="ImpostorShaders.PushMembers"/> (std430 push constants, 80 bytes). GLSL bools are 32-bit (0 / 1).</summary>
 [StructLayout(LayoutKind.Explicit, Size = 80)]
@@ -71,7 +75,7 @@ public static class ImpostorShaders
     /// <summary>The sampling functions (GLSL 3.30; no uniforms of their own).</summary>
     public const string Functions = """
 
-        // ---- impostors (Meitou.Rendering.Impostors.ImpostorShaders, docs/impostors.md) ----
+        // ---- impostors (Meitou.Game.Rendering.Impostors.ImpostorShaders, docs/impostors.md) ----
         // A fixed number in [0, 1) per instance (a hash of its world position): where it stands in the range fade, so a crowd thins out
         // instance by instance and no instance flickers while it moves over the pixels (docs/impostors.md section 12).
         float instanceFadeKey(vec3 position)

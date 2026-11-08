@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// Relief on the ground (docs/render-terrain.md, "Ground relief"), a Meitou look the game does not have: each terrain layer gets a height map

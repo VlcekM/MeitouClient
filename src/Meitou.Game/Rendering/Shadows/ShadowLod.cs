@@ -1,4 +1,5 @@
-namespace Meitou.Rendering;
+
+namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// Coarser casters in the far shadow cascades (the <c>shadow-coarse</c> A/B switch; docs/render-shadows.md "Coarse casters in the far cascades"). A far

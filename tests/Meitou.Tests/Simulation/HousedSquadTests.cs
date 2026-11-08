@@ -2,6 +2,7 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;

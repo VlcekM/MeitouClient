@@ -2,19 +2,30 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
-using Meitou.Engine;
-using Meitou.Engine.Cameras;
-using Meitou.Engine.Input;
-using Meitou.Engine.Time;
-using Meitou.Rendering;
-using Meitou.Rendering.Characters;
+using Meitou.Game.DevTools;
+using Meitou.Game.Host;
+using Meitou.Game.Host.Cameras;
+using Meitou.Game.Host.Input;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Tutorials;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
+using Meitou.Simulation.Session;
+using Meitou.Game.Rendering.Characters;
 using Meitou.Simulation;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Display;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Display;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
-using EngineKey = Meitou.Engine.Input.Key;
-using EngineButton = Meitou.Engine.Input.MouseButton;
+using EngineKey = Meitou.Game.Host.Input.Key;
+using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
 using SilkButton = Silk.NET.Input.MouseButton;
 
@@ -139,7 +150,7 @@ sealed partial class GameHost
                 BenchFacingChanged = on => session.World.BenchFacingFix = on,
                 TimeSpeedsChanged = () => session.Simulation.SetFastSpeeds(config.FastSpeed, config.FastestSpeed),
                 DoorsCloseChanged = on => { foreach (var locks in session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on; },
-                AnimalsPickUpChanged = on => { foreach (var players in session.World.Systems.OfType<Meitou.Simulation.PlayerSystem>()) players.AnimalsPickUp = on; },
+                AnimalsPickUpChanged = on => { foreach (var players in session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on; },
                 AudioChanged = AudioSettingsChanged,
                 GameplayChanged = ApplyGameplay,
                 SkinRaceList = scene.Database is { } raceDb ? CharacterRenderer.PersonRaces(raceDb) : [],
@@ -150,7 +161,7 @@ sealed partial class GameHost
                 ResetTutorials = () => tutorials?.Reset(),
                 OffscreenChanged = () =>
                 {
-                    foreach (var population in session.World.Systems.OfType<Meitou.Simulation.PopulationSystem>())
+                    foreach (var population in session.World.Systems.OfType<Meitou.Simulation.Population.PopulationSystem>())
                         (population.KeepRoamers, population.OffscreenFights, population.OffscreenHealing, population.CampaignAncestorsOnce, population.KeepWild, population.ResidentSchedule) = (config.KeepRoamers, config.OffscreenFights, config.OffscreenHealing, config.CampaignAncestorsOnce, config.KeepWild, config.ResidentSchedule);
                     foreach (var production in session.World.Systems.OfType<Meitou.Simulation.Production.ProductionSystem>()) production.UnloadedProduction = config.UnloadedProduction;
                 },
@@ -158,14 +169,14 @@ sealed partial class GameHost
         void ApplyCameraRotateSpeed(float speed) => session.Camera.Settings.RotateSpeedX = session.Camera.Settings.RotateSpeedY =
             Math.Clamp(speed, UserConfig.MinCameraRotateSpeed, UserConfig.MaxCameraRotateSpeed);
         ApplyCameraRotateSpeed(config.CameraRotateSpeed);
-        config.EdgeScroll ??= Meitou.Audio.AudioSystem.Setting(install, "Edge scrolling", 1) != 0;
-        config.Tutorials ??= Meitou.Audio.AudioSystem.Setting(install, "tutorials", 1) != 0;
+        config.EdgeScroll ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Edge scrolling", 1) != 0;
+        config.Tutorials ??= Meitou.Game.Audio.AudioSystem.Setting(install, "tutorials", 1) != 0;
         config.SeedCamera(install);
         config.ApplyCamera(session.Camera.Settings);
         KeyMap.SwapButtons = config.SwapMouseButtons == true;
         player.FontSize = config.FontSize ?? Meitou.Data.Ui.KenshiFontSize.DefaultSetting;
-        config.MovementMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
-        config.RotationMarker ??= Meitou.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
+        config.MovementMarker ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
+        config.RotationMarker ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
         (player.MovementMarker, player.RotationMarker) = (config.MovementMarker == true, config.RotationMarker == true);
         tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
         tutorials.Enabled = config.Tutorials == true;
@@ -542,8 +553,8 @@ sealed partial class GameHost
                     strategy: actions.Pressed(InputAction.ToggleFreeCamera));
             }
         };
-        Meitou.Rendering.UiLayer? uiLayer = null;
-        Meitou.Rendering.Upscalers.IFrameGenerator? frameGen = null;
+        Meitou.Game.Rendering.Frame.UiLayer? uiLayer = null;
+        Meitou.Game.Rendering.Upscalers.IFrameGenerator? frameGen = null;
         var systemPointer = new SystemPointer();
         bool frameGenTried = false;
         double drawTotal = 0, gpuSum = 0, statsTimer = 0;
@@ -735,7 +746,7 @@ sealed partial class GameHost
                     Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "headless backbuffer")));
                 gpu.Post!.Target = backbuffer;
                 // Frame generation (the one loaded at start-up): made on the first frame; wanted except under the loading screen and for saved pictures.
-                if (frameGen is Meitou.Rendering.Upscalers.FrameGeneration && display.FrameGenerationLayer is null) { frameGen.Dispose(); frameGen = null; }   // the layer fell back to the plain swapchain
+                if (frameGen is Meitou.Game.Rendering.Upscalers.FrameGeneration && display.FrameGenerationLayer is null) { frameGen.Dispose(); frameGen = null; }   // the layer fell back to the plain swapchain
                 if (!frameGenTried)
                 {
                     frameGenTried = true;
@@ -745,7 +756,7 @@ sealed partial class GameHost
                 frameGen?.BeginFrame(frameGenWanted, size.X, size.Y);
                 gpu.Post!.FrameGen = frameGen;
                 // The interface draws into a transparent layer of its own, laid over the backbuffer just before the present.
-                uiLayer ??= new Meitou.Rendering.UiLayer(display.Context);
+                uiLayer ??= new Meitou.Game.Rendering.Frame.UiLayer(display.Context);
                 var uiTarget = uiLayer.Clear(size.X, size.Y);
                 if (overlay is not null) overlay.Target = uiTarget;
                 profiler?.BeginFrame();
@@ -772,7 +783,7 @@ sealed partial class GameHost
                     DrawWorld(size.X, size.Y);
                     tickAhead = false;
                 }
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiWorldEnd);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiWorldEnd);
                 // MEITOU_DIAG_SUBMIT=1 (issue #108): the world submitted and finished before the interface draws, and the interface before the present.
                 if (GpuContext.DiagSubmit) display.Context.SubmitAndWait();
                 // The sky arrival's fade to and from black, over the world and under everything else.
@@ -794,9 +805,9 @@ sealed partial class GameHost
                 player.UiVisible = ui && !g.NoPopulation;
                 screenshotRequested = false;
                 if (ui && overlay is not null && !g.NoPopulation) DrawMarkers(overlay, size.X, size.Y);
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiMarkers);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiMarkers);
                 if (!g.NoPopulation && !covered && panel?.Visible != true) player.Steer();
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiSteer);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiSteer);
                 if (ui && overlay is not null && !g.NoPopulation)
                 {
                     player.Draw(overlay, size.X, size.Y);
@@ -804,7 +815,7 @@ sealed partial class GameHost
                 else if (interfaceHidden && !cinema.Clean && !take && !covered && overlay is not null && !g.NoPopulation) player.DrawSpeechOnly(overlay, size.X, size.Y);
                 if (ui && overlay is not null && IsSandbox) DrawSandbox(overlay, size.X, size.Y);
                 if (ui && overlay is not null && IsBattle) DrawBattleCounter(overlay, size.X, size.Y);
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiHud);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiHud);
                 // The debug overlays are left out of saved pictures: the statistics at the top left, the key list below them, the profiler.
                 if (ui && overlay is not null && !shot && !feedbackShot)
                 {
@@ -819,7 +830,7 @@ sealed partial class GameHost
                         panelsBottom = top + h - 8;   // the panels add their own 16 px margin
                     }
                     // The terrain sandbox: the texture field's tile under the camera.
-                    if (Meitou.Rendering.GroundRelief.FieldCentre is not null && gpu.Terrain.FieldLabelAt(camera.Target.X, camera.Target.Z) is { } tileLabel)
+                    if (Meitou.Game.Rendering.Terrain.GroundRelief.FieldCentre is not null && gpu.Terrain.FieldLabelAt(camera.Target.X, camera.Target.Z) is { } tileLabel)
                     {
                         float w = tileLabel.Length * overlay.CharWidth + 12, h = overlay.LineHeight + 8, top = panelsBottom + 8;
                         overlay.Rect(8, top, 8 + w, top + h, DebugOverlay.PanelColour);
@@ -845,9 +856,9 @@ sealed partial class GameHost
                     profiler?.Draw(overlay, size.X, size.Y);
                     profiler?.DrawVram(overlay, size.X, size.Y);
                 }
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiDebug);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiDebug);
                 if (ui && !feedbackShot) panel?.Draw(size.X, size.Y);
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiSettings);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiSettings);
                 // Over everything: the letterbox and the cinema's editor (F6, also with F7); the game hides its status line.
                 if (overlay is not null && !covered) cinema.Draw(overlay, size.X, size.Y, shot || take || feedbackShot || (interfaceHidden && !cinema.EditorVisible), showStatus: false);
                 // The character boxes and paths (F11's tickboxes, also F10's Overlays rows), on top of everything; both stay once ticked, with the statistics hidden too.
@@ -856,7 +867,7 @@ sealed partial class GameHost
                     if (characterBoxes && gpu.Characters is { } boxed) DrawCharacterBoxes(overlay, boxed, camera, size.X, size.Y);
                     if (walkPaths) DrawWalkPaths(overlay, session.CurrentSnapshot, camera, size.X, size.Y);
                 }
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiCinema);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiCinema);
                 // The loading screen over the whole frame while a scene loads or the world warms up.
                 if (covered && loading is not null && loadingOverlay is not null)
                 {
@@ -866,7 +877,7 @@ sealed partial class GameHost
                         loading.Draw(size.X, size.Y, background: false);
                 }
                 else loading?.ReleaseWhenGone();
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiLoading);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiLoading);
                 // The mouse pointer over everything, as the original's Pointer layer; never in saved pictures. What the right button would do picks it,
                 // the arrow over the settings panel, the cinema's editor and the loading screen. The free camera hides it (the original's `invisible`);
                 // Hardware mouse shows Windows' cursor instead; enhanced, the action's pointer beside it and the hand over what a click acts on. With frame generation the window system draws the game's pointer (SystemPointer): in a frame it would
@@ -890,10 +901,10 @@ sealed partial class GameHost
                 }
                 // World and interface into the top-down picture the window shows (and a screenshot reads). With frame generation on this frame the window shows the
                 // world alone (the backbuffer, flipped by the present) and the layer lays the interface over every frame, generated ones too.
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiPointer);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiPointer);
                 bool generating = frameGen is not null && frameGen.Finish(backbuffer, uiTarget);
                 var finalPicture = generating && frameGen!.PresentsWorldAlone ? null : uiLayer.Composite(backbuffer);
-                Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiComposite);
+                Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiComposite);
                 if (GpuContext.DiagSubmit) display.Context.SubmitAndWait();
                 display.Present(finalPicture);
                 profiler?.EndFrame();
@@ -959,8 +970,8 @@ sealed partial class GameHost
         profiler?.Flush();
         if (SpikeLog.Enabled) SpikeLog.PrintSummary();
         if (spikeGc is not null) PrintAllocations(spikeGc);
-        if (Meitou.Navigation.NavQuery.Stats is { Searches: > 0 } paths)
-            Console.WriteLine($"paths     {paths.Searches} searches, {paths.Expanded / paths.Searches} polygons each on average, {paths.Exhausted} ran to the limit of {Meitou.Navigation.NavQuery.MaxIterations}");
+        if (Meitou.Simulation.Navigation.NavQuery.Stats is { Searches: > 0 } paths)
+            Console.WriteLine($"paths     {paths.Searches} searches, {paths.Expanded / paths.Searches} polygons each on average, {paths.Exhausted} ran to the limit of {Meitou.Simulation.Navigation.NavQuery.MaxIterations}");
         profiler?.Dispose();
         player.DisposeUi();
         EndLoadingScreen();
@@ -1084,8 +1095,8 @@ sealed partial class GameHost
         var (adapted, _) = post.ReadExposure();
         if (!float.IsNaN(adapted)) post.HoldExposure(adapted, n * n * (warm + 1) + 2);
         var live = post.Target;
-        using var tile = context.CreateTexture(new Meitou.Rendering.Gpu.TextureDesc(Meitou.Rendering.Gpu.InternalFormat.Rgba8, tw, th,
-            Use: Meitou.Rendering.Gpu.TextureUse.ColourTarget | Meitou.Rendering.Gpu.TextureUse.TransferSrc | Meitou.Rendering.Gpu.TextureUse.Sampled, Name: "screenshot tile"));
+        using var tile = context.CreateTexture(new Meitou.Game.Rendering.Gpu.TextureDesc(Meitou.Game.Rendering.Gpu.InternalFormat.Rgba8, tw, th,
+            Use: Meitou.Game.Rendering.Gpu.TextureUse.ColourTarget | Meitou.Game.Rendering.Gpu.TextureUse.TransferSrc | Meitou.Game.Rendering.Gpu.TextureUse.Sampled, Name: "screenshot tile"));
         var picture = new byte[n * width * n * height * 4];
         post.Target = tile;
         try
@@ -1279,6 +1290,6 @@ sealed partial class GameHost
             foreach (var line in population.TakeTownLog()) Console.WriteLine($"town      {line}");
         if (population is not null)
             foreach (var w in population.TakeWildLog())
-                Console.WriteLine($"wild      tick {w.Tick}: {w.Squad} ({w.Members}) from the {(w.Kind == Meitou.Simulation.WildKind.Nest ? "nest" : "sector of")} {w.Place}");
+                Console.WriteLine($"wild      tick {w.Tick}: {w.Squad} ({w.Members}) from the {(w.Kind == Meitou.Simulation.Population.WildKind.Nest ? "nest" : "sector of")} {w.Place}");
     }
 }

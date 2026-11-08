@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
 
-namespace Meitou.Ui;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// Keyboard side of the host: the edit boxes' clipboard (MyGUI 3.2.2 <c>EditBox</c>, docs/game/ui-input.md "Edit boxes") and Tab / Shift+Tab / Enter / Space over the top window's edit boxes and buttons.

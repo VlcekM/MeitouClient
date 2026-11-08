@@ -1,4 +1,6 @@
-namespace Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+
+namespace Meitou.Game.Rendering.Gpu.Shaders;
 
 /// <summary>
 /// The Metal fragment-stage sampler budget. Metal exposes 16 direct combined-image-sampler slots to a fragment stage; a native-model

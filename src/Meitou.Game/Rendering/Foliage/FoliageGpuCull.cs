@@ -1,13 +1,16 @@
 using Meitou.Data.World;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>A run of at most <see cref="FoliageShaders.CullChunk"/> instances of one group (std430, 32 bytes): where they are in the
 /// instance arena, and the group's range for the view as the CPU computed it (<see cref="FoliageGroupRange"/>). <see cref="Flags"/> 0 for

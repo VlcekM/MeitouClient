@@ -1,4 +1,4 @@
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// Actions that must not run until every frame that could name their resource has left the ring. Kept separate from

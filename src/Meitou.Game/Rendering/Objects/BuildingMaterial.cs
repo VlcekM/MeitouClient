@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// The look of a building part from the MATERIAL_SPEC the game gives it (docs/formats/runtime-materials.md: StaticObject

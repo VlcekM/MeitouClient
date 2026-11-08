@@ -1,8 +1,9 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Shaders;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// Frame-global resources by GLSL name (docs/renderer-native.md 4.3): the textures, uniform blocks and loose uniform values that reach every

@@ -1,4 +1,4 @@
-using Meitou.Audio;
+using Meitou.Game.Audio;
 
 namespace Meitou.Game;
 

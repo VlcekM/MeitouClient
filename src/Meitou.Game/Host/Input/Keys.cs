@@ -1,4 +1,4 @@
-namespace Meitou.Engine.Input;
+namespace Meitou.Game.Host.Input;
 
 /// <summary>Keyboard keys as the engine names them (the host maps its windowing library's keys to these).</summary>
 public enum Key

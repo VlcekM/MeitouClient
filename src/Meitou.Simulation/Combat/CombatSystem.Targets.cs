@@ -1,4 +1,8 @@
 using System.Numerics;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Combat;
 

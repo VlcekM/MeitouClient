@@ -1,9 +1,13 @@
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Game;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Title;
 using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Vulkan;
@@ -32,7 +36,7 @@ public class LoadingSkyTests
                 Sky = new SkyRenderer(context) { MeitouStars = true },
                 Post = new PostProcess(context, options) { InstantAdaptation = true },
             };
-            using var target = context.CreateTexture(new TextureDesc(Meitou.Rendering.Gpu.InternalFormat.Rgba8, 320, 180,
+            using var target = context.CreateTexture(new TextureDesc(Meitou.Game.Rendering.Gpu.InternalFormat.Rgba8, 320, 180,
                 Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "loading sky test"));
             gpu.Post.Target = target;
             int worldCallbacks = 0;

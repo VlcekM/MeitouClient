@@ -1,4 +1,7 @@
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Crime;
 

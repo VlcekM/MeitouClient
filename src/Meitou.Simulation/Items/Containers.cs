@@ -1,4 +1,7 @@
 using System.Numerics;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Items
 {
@@ -12,7 +15,7 @@ namespace Meitou.Simulation.Items
     public sealed record CloseContainer : SimCommand;
 }
 
-namespace Meitou.Simulation
+namespace Meitou.Simulation.Player
 {
     /// <summary>
     /// Opening a container of a building's interior (docs/game/locks.md "Containers"): a character walks up to it, its inventory shows in a window beside the character's, and items are

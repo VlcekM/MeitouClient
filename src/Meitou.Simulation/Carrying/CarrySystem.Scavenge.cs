@@ -2,8 +2,13 @@ using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Dialogue;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Carrying;
 

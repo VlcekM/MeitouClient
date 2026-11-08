@@ -1,9 +1,10 @@
-using Meitou.Rendering.Gpu.Core;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Shaders;
 using Silk.NET.Vulkan;
 using Sampler = Silk.NET.Vulkan.Sampler;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>The arrays of the bindless set (set 0 of the native model, docs/renderer-native.md 2.6), by binding number. The integer arrays
 /// (<see cref="UTexture2D"/>, <see cref="ITexture2D"/>) take textures of UINT and SINT formats, which a float sampler may not read.</summary>

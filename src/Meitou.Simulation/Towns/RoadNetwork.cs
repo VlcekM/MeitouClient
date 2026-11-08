@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Towns;
 
 /// <summary>
 /// The road network off-screen squads travel by (docs/game/factions-squads-towns.md "Off-screen world", roads): each ROAD with 2 points or more and a

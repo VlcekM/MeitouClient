@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Movement;
 
 /// <summary>What a character is doing (<see cref="CharacterHot.Task"/>). The first tasks of the movement stage; the AI packages replace them later.</summary>
 public enum CharacterTask : byte

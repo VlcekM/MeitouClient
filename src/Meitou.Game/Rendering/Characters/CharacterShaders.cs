@@ -1,8 +1,9 @@
 ﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// The character programs, native GLSL 450 on the native model's sets (docs/renderer-native.md 3.3; docs/character-renderer.md): set 0's

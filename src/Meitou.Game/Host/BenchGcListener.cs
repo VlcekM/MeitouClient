@@ -1,6 +1,6 @@
 using System.Diagnostics.Tracing;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// The play benchmark's view of the garbage collector (GameHost.PlayBench.cs), from the runtime's own events in process: the allocation samples by type

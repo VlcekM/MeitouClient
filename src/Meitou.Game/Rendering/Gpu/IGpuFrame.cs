@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The frame's neutral surface (docs/resource-layer.md): what a renderer may ask of the frame regardless of

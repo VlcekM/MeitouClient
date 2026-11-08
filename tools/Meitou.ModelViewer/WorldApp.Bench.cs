@@ -2,9 +2,16 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using static Meitou.Rendering.WorldFrame;
+using Meitou.Game.Rendering.Bench;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 
@@ -14,7 +21,7 @@ static partial class WorldApp
     /// The benchmark harness (<c>--bench-frames</c>, <c>--ab</c>; docs/bench.md "Benchmark harness"): measures a fixed view, alternating the two sides of one
     /// switch when asked, and writes per-stage statistics (mean, median, p95, p99, max for each side and the paired difference) as a table and JSON.
     /// </summary>
-    static int Bench(Meitou.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static int Bench(Meitou.Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         var context = display.Context;
         var post = gpu.Post!;
@@ -65,8 +72,8 @@ static partial class WorldApp
             AbToggles.Register("lod-far", () => grassPass.LodFar, v => grassPass.LodFar = v, "generated rock levels: the pixel tolerance growing with the distance (needs lod on)");
             AbToggles.Register("foliage-meshes", () => grassPass.DrawMeshes, v => grassPass.DrawMeshes = v, "foliage meshes and impostors, not the TERRAIN-mode rocks");
             AbToggles.Register("foliage-prepass", () => FoliagePrepass.Enabled, v => FoliagePrepass.Enabled = v, "the main view's foliage meshes drawn as a depth prepass (the fade dither and the cut-out) and then the colour with no discard and the depth test EQUAL; B: the colour once, as before");
-            AbToggles.Register("impostor-prepass", () => Meitou.Rendering.Impostors.ImpostorPrepass.Enabled, v => Meitou.Rendering.Impostors.ImpostorPrepass.Enabled = v, "the main view's billboards drawn as a depth prepass (the fade, the frame pick, the cut-out) and then the lighting with no discard and the depth test EQUAL; B: the lighting for every pixel that passes, as before");
-            AbToggles.Register("impostor-quad", () => Meitou.Rendering.Impostors.ImpostorQuad.Enabled, v => Meitou.Rendering.Impostors.ImpostorQuad.Enabled = v, "billboards drawn as the rectangle that holds the mesh's bounding box seen from the eye; B: the square of the bounding sphere's silhouette, as before");
+            AbToggles.Register("impostor-prepass", () => Meitou.Game.Rendering.Impostors.ImpostorPrepass.Enabled, v => Meitou.Game.Rendering.Impostors.ImpostorPrepass.Enabled = v, "the main view's billboards drawn as a depth prepass (the fade, the frame pick, the cut-out) and then the lighting with no discard and the depth test EQUAL; B: the lighting for every pixel that passes, as before");
+            AbToggles.Register("impostor-quad", () => Meitou.Game.Rendering.Impostors.ImpostorQuad.Enabled, v => Meitou.Game.Rendering.Impostors.ImpostorQuad.Enabled = v, "billboards drawn as the rectangle that holds the mesh's bounding box seen from the eye; B: the square of the bounding sphere's silhouette, as before");
             AbToggles.Register("card-trim", () => grassPass.CardTrim, v => grassPass.CardTrim = v, "alpha-tested foliage cards drawn cut to the opaque outline of their texture; B: the whole cards");
             AbToggles.Register("screen-lod", () => grassPass.ScreenLod, v => grassPass.ScreenLod = v, "foliage by the size of its triangles on the screen: generated levels sooner and billboards sooner where the triangles are under 1.5 px2; B: levels by deviation, billboards at the impostor distance");
             AbToggles.Register("grass-velocity", () => grassPass.GrassVelocityCull, v => grassPass.GrassVelocityCull = v, "the grass's own motion vectors only for blades that move 0.5 px a frame or more, the camera reprojection for the rest; B: every blade redrawn in the motion pass");
@@ -526,7 +533,7 @@ static partial class WorldApp
     /// One still of each side from the start camera (no time advance: the frame clock stays where it was, the same number of frames is drawn for
     /// each so the upscaler's jitter phase and the caches agree), their PNGs, the differing pixels and a heat map.
     /// </summary>
-    static PictureDiffResult StillPictures(Meitou.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h,
+    static PictureDiffResult StillPictures(Meitou.Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h,
         AbToggles.Toggle toggle, (Vector3 Target, float Yaw, float Pitch, float Distance) start, bool moved, float clock, string stem, Func<long, bool, double> frame)
     {
         var context = display.Context;
@@ -551,7 +558,7 @@ static partial class WorldApp
                 EndFrame(context);
                 context.Finish();
             }
-            return Meitou.Rendering.FramebufferCapture.Read(context, target, w, h);
+            return Meitou.Game.Rendering.Frame.FramebufferCapture.Read(context, target, w, h);
         }
         var pa = Still(true);
         var pb = Still(false);

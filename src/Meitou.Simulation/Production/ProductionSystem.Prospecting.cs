@@ -1,6 +1,9 @@
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Production;
 

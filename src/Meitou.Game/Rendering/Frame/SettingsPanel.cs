@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Overlays;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// One slider: a value between <see cref="Min"/> and <see cref="Max"/>, read and written through the callbacks. <see cref="Faithful"/> and <see cref="Meitou"/>, when known,

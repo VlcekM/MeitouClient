@@ -1,6 +1,7 @@
 using System.Globalization;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>Which post-processing the world view runs, and its parameters. Presets: <c>meitou</c> (default: the game's chain plus Meitou's switches), <c>kenshi</c> (the game's chain) and <c>off</c>; single effects go on top with their options and keys.</summary>
 public sealed class PostOptions

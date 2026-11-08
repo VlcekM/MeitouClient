@@ -1,4 +1,4 @@
-namespace Meitou.Engine.Time;
+namespace Meitou.Simulation.Session;
 
 /// <summary>
 /// Fixed simulation step decoupled from rendering: the host feeds real frame time to <see cref="Advance"/>, which says how many

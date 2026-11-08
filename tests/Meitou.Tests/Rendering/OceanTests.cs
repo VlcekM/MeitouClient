@@ -1,9 +1,9 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Water;
 
 namespace Meitou.Tests.Rendering;
 

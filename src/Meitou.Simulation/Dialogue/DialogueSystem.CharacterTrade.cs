@@ -1,6 +1,10 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Dialogue;
 

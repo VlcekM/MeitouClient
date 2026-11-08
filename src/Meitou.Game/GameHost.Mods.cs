@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Numerics;
+using Meitou.Game.Host;
 using Meitou.Modding;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Game;
 

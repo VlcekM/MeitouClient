@@ -1,6 +1,14 @@
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
+using Meitou.Simulation.Weather;
 
 namespace Meitou.Simulation;
 

@@ -1,9 +1,9 @@
 using System.Globalization;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// GLSL of the Meitou shadows (the <c>shadows</c> enhancement; docs/formats/shadows.md, "Meitou shadows"): the receiver

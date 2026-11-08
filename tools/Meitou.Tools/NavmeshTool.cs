@@ -4,7 +4,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 
 /// <summary>
 /// <c>meitou-tools navmesh</c>: gathers one zone's navmesh input, builds the mesh (exterior and building interiors) and writes debug files

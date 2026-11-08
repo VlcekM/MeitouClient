@@ -1,4 +1,6 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+
+namespace Meitou.Game.Rendering.Bench;
 
 /// <summary>
 /// The benchmark harness's runtime switches (<c>--ab &lt;name&gt;</c>, docs/bench.md "Benchmark harness"): a name, how to read it and how to set it.

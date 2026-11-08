@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// Which of the wanted cascade redraws a Meitou shadow frame really does. The near cascades (cascade 0, about 0.2 ms; with five cascades also cascade 1,

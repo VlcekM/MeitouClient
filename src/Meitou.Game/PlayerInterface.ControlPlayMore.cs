@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
 using Meitou.Simulation.Production;
 using Meitou.Simulation.Trading;
 

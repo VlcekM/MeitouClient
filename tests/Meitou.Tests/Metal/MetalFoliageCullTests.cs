@@ -2,9 +2,8 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.World;
-using Meitou.Metal;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Metal;
 
 namespace Meitou.Tests.MetalBackend;

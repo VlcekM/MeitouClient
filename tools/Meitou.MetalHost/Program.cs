@@ -5,13 +5,14 @@ using System.Runtime.InteropServices;
 using Meitou.Content;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Meitou.Metal;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Metal;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 using SharpMetal.Metal;
 using SharpMetal.ObjectiveCCore;
+using Meitou.Game.Rendering.Sky;
 
 var hour = 12f;
 var frames = 300;

@@ -7,8 +7,9 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Game.Host;
 
-namespace Meitou.Game;
+namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// <c>--wiki-export &lt;dir&gt;</c>: writes the agent wiki's generated files (zones, towns, factions, squads, npcs, items, buildings as JSON) from the

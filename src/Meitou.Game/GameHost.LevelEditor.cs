@@ -1,7 +1,7 @@
 using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Game.Building;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Objects;
 using Meitou.Simulation;
 
 namespace Meitou.Game;

@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Simulation;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Effects;
 
 /// <summary>The "Show damage floaters" option (the original's <c>floaters</c>: Off 0, Simple info 1, Full info 2).</summary>
 enum FloaterMode { Off, Simple, Full }

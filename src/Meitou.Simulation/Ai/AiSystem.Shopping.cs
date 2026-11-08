@@ -1,4 +1,5 @@
 using Meitou.Data.World;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Trading;
 
 namespace Meitou.Simulation.Ai;

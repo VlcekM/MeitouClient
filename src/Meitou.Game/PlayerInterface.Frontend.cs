@@ -3,7 +3,8 @@ using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Save;
 using Meitou.Data.Ui;
-using Meitou.Ui;
+using Meitou.Game.Title;
+using Meitou.Game.Ui;
 using System.Globalization;
 
 namespace Meitou.Game;

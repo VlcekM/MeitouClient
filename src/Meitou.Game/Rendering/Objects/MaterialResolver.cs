@@ -3,7 +3,7 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Ogre;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>Where a surface's alpha comes from. Values follow the fcs.def descriptions (docs/viewer.md).</summary>
 public enum AlphaSource { None, DiffuseAlpha, NormalAlpha, DiffuseChannel }

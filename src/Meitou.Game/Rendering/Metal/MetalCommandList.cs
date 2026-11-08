@@ -1,12 +1,12 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
 using SharpMetal.ObjectiveCCore;
 using SharpMetal.QuartzCore;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// A command list being recorded, on Metal (docs/renderer-native.md 2.7): the engine's words onto a Metal
@@ -479,7 +479,7 @@ public sealed class MetalCommandList : IGpuCommandList
         bool computePass = point == GpuBindPoint.Compute;
         if (computePass) _ = ComputeEncoder();
         else if (render.NativePtr == IntPtr.Zero) throw new InvalidOperationException("BindBindlessTable outside a rendering");
-        if (set != Rendering.NativeShaders.BindlessSet) throw new InvalidOperationException($"the Metal backend's table is set {Rendering.NativeShaders.BindlessSet} (asked for {set})");
+        if (set != Frame.NativeShaders.BindlessSet) throw new InvalidOperationException($"the Metal backend's table is set {Frame.NativeShaders.BindlessSet} (asked for {set})");
         var backend = ctx.Shaders.Backend(program);
         int slot = ctx.Frame.Slot;
         if (computePass)

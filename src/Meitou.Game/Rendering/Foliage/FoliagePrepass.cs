@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// The depth prepass for the foliage meshes (docs/render-foliage.md "Depth prepass"): in the main view the trees' and bushes' depth is drawn first with

@@ -3,8 +3,10 @@ using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
 using Meitou.Data.Ogre;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// Generated mesh levels for placed objects and buildings (the <c>object-lod-gen</c> A/B switch; docs/render-objects.md, "Generated levels"). Most building parts ship with no

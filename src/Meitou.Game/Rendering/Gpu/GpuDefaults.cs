@@ -1,8 +1,9 @@
-using Meitou.Rendering.Gpu.Core;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Shaders;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// What GL reads where nothing is bound, shared by VkGl and the native API (docs/renderer-native.md 3.2): a vertex buffer holding GL's

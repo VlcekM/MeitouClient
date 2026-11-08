@@ -1,13 +1,13 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Vk = Silk.NET.Vulkan;
 
-using Meitou.Rendering.Gpu.Core;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
 /// The merged post passes (<c>post-merge</c>, docs/render-post.md "Merged passes"): the per-pixel full-screen passes that only read a depth or a colour and write a small

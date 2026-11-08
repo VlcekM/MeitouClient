@@ -2,15 +2,15 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
-using Meitou.Rendering;
-using Meitou.Rendering.Display;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Display;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Profiling;
 
 namespace Meitou.ModelViewer;
 
 /// <summary>
 /// The frame cost breakdown (docs/engine.md "Frame cost breakdown"; <c>MEITOU_PASS_STATS=1</c>, off otherwise): at every stage boundary of the
-/// frame (<see cref="Meitou.Rendering.StageClock"/>: the stage laps, the shadow cascades, the parts of the foliage and post passes) it takes the
+/// frame (<see cref="Meitou.Game.Rendering.Profiling.StageClock"/>: the stage laps, the shadow cascades, the parts of the foliage and post passes) it takes the
 /// render thread's time, the difference of the native counters since the previous boundary (<see cref="GpuStats.Running"/>, the context's
 /// fence wait and submit, the presenter's acquire and present) and a GPU timestamp, and sums them per row over the frames after the first
 /// <c>MEITOU_PASS_STATS_SKIP</c> (default 60). A stage is a row; its parts are rows under it (their time is part of the stage's; what is left

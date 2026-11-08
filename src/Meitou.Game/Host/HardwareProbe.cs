@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// <c>--recommend-preset &lt;file&gt;</c> (docs/launcher.md "Graphics"): looks at the GPU the game would pick (a headless Vulkan device), the memory and

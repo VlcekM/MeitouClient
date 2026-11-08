@@ -4,7 +4,7 @@ using Meitou.Content;
 using Meitou.Data.Havok;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>How an edge of the original's navmesh ends: shared with a face of its tile, joined to a neighbouring tile, or the mesh's end.</summary>
 public enum OriginalEdge : byte { Inner, TileBorder, End }

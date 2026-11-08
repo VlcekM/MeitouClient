@@ -2,10 +2,10 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Rendering;
-using Meitou.Rendering.Ui;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Ui;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// The loading screen drawn while the game starts and between scenes (docs/engine.md "Loading", docs/game/ui-screens.md "Loading screen"). <see cref="Faithful"/>:

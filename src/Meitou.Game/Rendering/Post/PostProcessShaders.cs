@@ -1,4 +1,8 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Sky;
+
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>GLSL for the world view's post-processing chain (written from the public techniques, not from Kenshi's shaders).</summary>
 static class PostProcessShaders

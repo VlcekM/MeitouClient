@@ -4,6 +4,8 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Economy;
 using Meitou.Data.World;
+using Meitou.Simulation.Population;
+using Meitou.Simulation.Towns;
 using Meitou.Simulation.Trading;
 
 namespace Meitou.Simulation.Items;

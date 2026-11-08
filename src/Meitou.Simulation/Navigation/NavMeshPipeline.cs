@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>Builds a zone's complete mesh: the exterior, then every building interior, joined.</summary>
 internal static class NavMeshPipeline

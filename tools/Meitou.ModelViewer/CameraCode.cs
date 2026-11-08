@@ -1,6 +1,6 @@
-using Meitou.Rendering;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.ModelViewer;
 

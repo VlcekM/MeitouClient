@@ -5,7 +5,7 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>A building's collision footprint on the ground plane (docs/game/buildings-production.md "Placement"): the convex hull of its collision shapes' X/Z, in the building's own space.</summary>
 /// <param name="Hull">Counter-clockwise, scale applied, no rotation or position.</param>

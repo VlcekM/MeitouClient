@@ -3,9 +3,12 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Title;
 
 /// <summary>
 /// The Meitou title's view: a spot of the real world in the Okran's Pride region, drawn by the world's own renderers, with a wanderer

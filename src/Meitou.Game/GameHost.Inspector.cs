@@ -1,6 +1,6 @@
 using System.Numerics;
-using Meitou.Rendering;
-using EngineKey = Meitou.Engine.Input.Key;
+using Meitou.Game.Rendering.Overlays;
+using EngineKey = Meitou.Game.Host.Input.Key;
 
 namespace Meitou.Game;
 

@@ -4,6 +4,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Locks;
 

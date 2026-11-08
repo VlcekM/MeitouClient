@@ -3,6 +3,8 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 using Meitou.Tests.Simulation;
 using static Meitou.Tests.Save.SaveSamples;

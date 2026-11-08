@@ -1,10 +1,9 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Upscalers;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>Streamline's PC Latency markers (sl_pcl.h PCLMarker): where a rendered frame is, for Reflex.</summary>
 public enum PclMarker : uint { SimulationStart = 0, SimulationEnd = 1, RenderSubmitStart = 2, RenderSubmitEnd = 3, PresentStart = 4, PresentEnd = 5 }

@@ -5,7 +5,7 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// What a character's sounds depend on, read once from its look (docs/audio.md "Characters"): the voice switch value, the creature class, whether its race goes barefoot

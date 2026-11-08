@@ -3,6 +3,8 @@ using System.Numerics;
 using System.Text.Json;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Game;
 

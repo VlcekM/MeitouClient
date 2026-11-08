@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Rendering.Ui;
+using Meitou.Game.Rendering.Ui;
 using Meitou.Simulation.Dialogue;
 
 namespace Meitou.Game;

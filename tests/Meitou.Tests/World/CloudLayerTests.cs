@@ -1,6 +1,5 @@
 using Meitou.Content;
 using Meitou.Data.Ogre;
-using Meitou.Rendering;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 

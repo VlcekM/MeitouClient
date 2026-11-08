@@ -28,7 +28,7 @@ sealed partial class PlayerInterface
     /// <summary>Counts up whenever <see cref="InspectorGeometry"/> changed, so the host uploads it only then.</summary>
     public int InspectorRevision { get; private set; }
 
-    /// <summary>The geometry to draw (positions relative to <c>Origin</c>, <c>Meitou.Rendering.NavmeshOverlayRenderer</c> layout: 7 floats a vertex).</summary>
+    /// <summary>The geometry to draw (positions relative to <c>Origin</c>, <c>Meitou.Game.Rendering.Overlays.NavmeshOverlayRenderer</c> layout: 7 floats a vertex).</summary>
     public (Vector3 Origin, float[] Fill, float[] Edges) InspectorGeometry { get; private set; } = (Vector3.Zero, [], []);
 
     string inspectorKey = "";

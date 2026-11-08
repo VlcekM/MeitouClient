@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
 /// The CPU half of a bake (docs/impostors.md, "Filtering"): takes the rendered rows of frames (each frame rendered at 2x the frame size with

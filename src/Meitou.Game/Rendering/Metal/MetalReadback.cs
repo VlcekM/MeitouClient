@@ -1,6 +1,6 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>A host-readable Metal buffer (shared storage): the GPU writes it with a blit, the CPU reads it once the frame has completed.</summary>
 sealed unsafe class MetalReadback : IGpuReadback

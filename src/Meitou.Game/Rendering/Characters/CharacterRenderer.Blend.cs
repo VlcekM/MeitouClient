@@ -1,7 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Characters;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// The character editor's glide between two looks (<see cref="CharacterInstance.BlendFrom"/>): the asset of the new look is drawn with the mix of its own values and those

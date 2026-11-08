@@ -1,5 +1,6 @@
+using Meitou.Game.Host;
+using Meitou.Game.Rendering.Frame;
 using Meitou.Modding;
-using Meitou.Rendering;
 
 namespace Meitou.Game;
 

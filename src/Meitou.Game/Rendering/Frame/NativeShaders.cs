@@ -3,9 +3,14 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The native model's shader text (docs/renderer-native.md 3.3, step O): the prelude every native program starts with, and the native

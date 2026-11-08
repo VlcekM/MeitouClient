@@ -1,7 +1,8 @@
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>One vertex input: the shader location, its format, the stride of its buffer (0 = a constant, GL's disabled attribute) and the
 /// input rate. Each location has its own binding (binding number = location), as in VkGl.</summary>

@@ -1,4 +1,4 @@
-namespace Meitou.Engine.Time;
+namespace Meitou.Simulation.Session;
 
 /// <summary>
 /// The game clock (docs/game/game-loop.md "The clock", Verified): game seconds since the start, from which come the day count, the

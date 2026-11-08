@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// Where a screenshot goes (docs/game/ui-input.md "Screenshots", the frame-end callback <c>FUN_14082b6e0</c>, <b>Verified</b>): <c>_screens/screenshot_&lt;n&gt;.&lt;format&gt;</c> in the install folder,

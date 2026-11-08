@@ -1,8 +1,9 @@
-using Meitou.Rendering.Gpu.Core;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Shaders;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>The device doesn't have what the native renderer requires (owner decision 1).</summary>
 public sealed class GpuFeatureException(string message) : Exception(message);

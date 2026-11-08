@@ -1,12 +1,13 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using Meitou.Audio;
+using Meitou.Game.Audio;
 using Meitou.Data.Characters;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Combat;
 using Meitou.Data.Fcs;
 using Meitou.Simulation;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Game;
 
@@ -103,7 +104,7 @@ sealed partial class GameHost
             if (previousById.TryGetValue(c.Id, out var before))
             {
                 position = Vector3.Lerp(before.Position, c.Position, alpha);
-                yaw = Meitou.Engine.Time.Interp.LerpAngle(before.Yaw, c.Yaw, alpha);
+                yaw = Meitou.Simulation.Session.Interp.LerpAngle(before.Yaw, c.Yaw, alpha);
                 speed = new Vector2(c.Position.X - before.Position.X, c.Position.Z - before.Position.Z).Length() / tick;
             }
             position += CarriedOffset(c, yaw);

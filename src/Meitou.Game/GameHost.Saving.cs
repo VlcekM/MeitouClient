@@ -4,7 +4,13 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Save;
 using Meitou.Data.World;
+using Meitou.Game.Host;
+using Meitou.Game.Settings;
+using Meitou.Game.Title;
+using Meitou.Game.Tutorials;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 
 namespace Meitou.Game;
@@ -56,7 +62,7 @@ sealed partial class GameHost
     }
 
     // The footprints a worker's reach of a building is measured to (docs/game/buildings-production.md "Work distance").
-    Meitou.Navigation.BuildingFootprints? siteFootprints;
+    Meitou.Simulation.Navigation.BuildingFootprints? siteFootprints;
 
     /// <summary>
     /// The X/Z gap from a point to a site's footprint hull (its collision, else for a building without it the hull of its parts' bounds); null while the record is being read, or
@@ -65,7 +71,7 @@ sealed partial class GameHost
     float? SiteEdgeGap(Meitou.Simulation.Construction.BuildSite site, Vector2 point)
     {
         if (scene.Database is not { } db) return null;
-        var footprints = siteFootprints ??= new Meitou.Navigation.BuildingFootprints(install, db, null);
+        var footprints = siteFootprints ??= new Meitou.Simulation.Navigation.BuildingFootprints(install, db, null);
         if (!footprints.Ready(site.Record)) return null;
         return (footprints.Of(site.Record) ?? footprints.Plot(site.Record))?.Gap(site.Position, site.Rotation, point);
     }
@@ -81,10 +87,10 @@ sealed partial class GameHost
     {
         var gameplay = Gameplay;
         if (popData is { } data) (data.BodyOptions.Dismemberment, data.BodyOptions.Decapitation, data.BodyOptions.AdvancedRagdolls) = (gameplay.Dismemberment, config.Decapitation, config.AdvancedRagdolls);
-        foreach (var population in session.World.Systems.OfType<Meitou.Simulation.PopulationSystem>())
+        foreach (var population in session.World.Systems.OfType<Meitou.Simulation.Population.PopulationSystem>())
             (population.Settings.SquadSizeMultiplier, population.Settings.PopulationMultiplier, population.Settings.RaidSizeMult, population.Settings.RaidFrequencyMult) =
                 (gameplay.SquadSize, gameplay.Population, gameplay.RaidSize, gameplay.RaidFrequency);
-        foreach (var population in session.World.Systems.OfType<Meitou.Simulation.PopulationSystem>()) population.Settings.FastZoneHopping = gameplay.FastZoneHopping;
+        foreach (var population in session.World.Systems.OfType<Meitou.Simulation.Population.PopulationSystem>()) population.Settings.FastZoneHopping = gameplay.FastZoneHopping;
         foreach (var ai in session.World.Systems.OfType<Meitou.Simulation.Ai.AiSystem>()) ai.Settings.TownAttacks = gameplay.TownAttacks;
         foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.StuckLimit = gameplay.HarpoonLimit;
     }
@@ -99,7 +105,7 @@ sealed partial class GameHost
                 & ~(IsBattle && g.BattleNoFear ? Meitou.Simulation.StandardParts.Flee : Meitou.Simulation.StandardParts.None),
             // NPCs that see a player character say a line as a speech bubble (docs/game/dialogue.md "Ambient conversations"); the sandbox, the duel and the battle stay silent.
             Dialogue = new Meitou.Simulation.Dialogue.DialogueSettings { AmbientEvents = !IsSandbox && !IsDuel && !IsBattle, Censored = () => config.Censorship },
-            Population = new Meitou.Simulation.PopulationSettings
+            Population = new Meitou.Simulation.Population.PopulationSettings
             {
                 Background = interactive && !IsDuel && !IsBattle, KeepRoamers = config.KeepRoamers, OffscreenFights = config.OffscreenFights, OffscreenHealing = config.OffscreenHealing,
                 CampaignAncestorsOnce = config.CampaignAncestorsOnce, KeepWild = config.KeepWild, ResidentSchedule = config.ResidentSchedule,

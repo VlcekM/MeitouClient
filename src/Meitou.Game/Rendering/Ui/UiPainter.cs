@@ -2,10 +2,11 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Textures;
 using Meitou.Data.Ui;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Overlays;
 
-namespace Meitou.Rendering.Ui;
+namespace Meitou.Game.Rendering.Ui;
 
 /// <summary>Native alpha-composited MyGUI atlas slices and styled native control frames.</summary>
 public sealed partial class UiPainter : IDisposable

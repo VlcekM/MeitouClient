@@ -2,8 +2,9 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Factions;
 
 /// <summary>
 /// Which WORLD_EVENT_STATE records hold (the population's own answers them live, <see cref="WorldStates"/>). A <c>world state</c> list entry passes when its state's answer is

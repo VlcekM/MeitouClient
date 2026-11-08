@@ -1,9 +1,10 @@
 using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// Generated mesh levels of one foliage mesh (docs/formats/foliage.md, "Generated levels"). The game ships no LOD levels for these meshes; the levels are

@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering.Gi;
+namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
 /// Which probes the fog hides (docs/render-gi.md "Probes in the fog"). A probe only matters through the surfaces that read it: a pixel's or a

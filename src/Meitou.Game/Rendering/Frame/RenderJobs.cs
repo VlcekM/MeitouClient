@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// Fork-join for the render thread's parallel loops (foliage culling): a few dedicated threads above normal priority that the render thread

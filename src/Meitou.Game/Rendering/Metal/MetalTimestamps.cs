@@ -1,6 +1,6 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// The frame's timestamps on Metal: slots are handed out (the renderers' bookkeeping works unchanged), but

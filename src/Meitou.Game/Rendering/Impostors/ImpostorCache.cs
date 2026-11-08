@@ -1,6 +1,7 @@
 using System.Globalization;
+using Meitou.Game.Rendering.Foliage;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>What one <see cref="ImpostorCache.Maintain"/> pass did.</summary>
 public readonly record struct ImpostorCacheMaintenance(int Files, long Bytes, int Stale, int Evicted, long BytesAfter);

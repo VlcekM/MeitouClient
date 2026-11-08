@@ -3,7 +3,7 @@ using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Simulation.Construction;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>A building a nest stood up round itself (a TOWN's <c>debris building</c>): its id, BUILDING record and where it stands.</summary>
 public sealed record NestPiece(string Id, string Record, Vector3 Position, Quaternion Rotation);

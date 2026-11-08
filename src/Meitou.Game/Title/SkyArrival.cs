@@ -1,7 +1,7 @@
 using System.Numerics;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Title;
 
 /// <summary>
 /// Presentation-only flight through the sky; the simulation clock and camera rig never change. From the title the hour runs forward to the

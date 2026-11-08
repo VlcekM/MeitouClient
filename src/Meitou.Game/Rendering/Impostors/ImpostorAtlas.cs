@@ -3,7 +3,7 @@ using System.Numerics;
 using System.Text;
 using Meitou.Data;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>The maps of an atlas (docs/impostors.md, "Maps").</summary>
 public enum ImpostorMap

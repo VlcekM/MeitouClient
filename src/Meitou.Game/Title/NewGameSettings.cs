@@ -1,7 +1,8 @@
 using Meitou.Data.Save;
 using Meitou.Simulation;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Title;
 
 /// <summary>
 /// Per-world difficulty options, saved under the original's CAMERA floats and bools, a missing key taking its default (<c>GameplayOptions</c> save <c>FUN_1403ee910</c>,

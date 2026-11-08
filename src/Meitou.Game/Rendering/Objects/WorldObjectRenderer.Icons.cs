@@ -2,10 +2,13 @@ using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// The build window's pictures of buildings the game would draw (docs/game/ui-screens.md "Building icons"), made here when its saved picture is not at hand: the building's
@@ -31,7 +34,7 @@ public sealed unsafe partial class WorldObjectRenderer
         public bool Framed;
         public Matrix4x4 Model, View, Projection;
         public Vector3 Anchor;
-        public global::Meitou.Rendering.Gpu.GpuTexture? Colour, Depth;
+        public global::Meitou.Game.Rendering.Gpu.GpuTexture? Colour, Depth;
         public SampledTexture Sampled;
         /// <summary>Nothing to draw (no parts, no bounds): the window shows none.</summary>
         public bool Failed;
@@ -48,7 +51,7 @@ public sealed unsafe partial class WorldObjectRenderer
     /// The drawn picture of the BUILDING <paramref name="record"/> (upside down, as the renderer's targets are: show it flipped) once it exists; asking starts it being made from
     /// <paramref name="parts"/> (laid out at the origin, unrotated). Any thread.
     /// </summary>
-    public bool TryGetBuildingIcon(string record, IReadOnlyList<PlacedMesh> parts, out (global::Meitou.Rendering.Gpu.GpuTexture Texture, SampledTexture Sampled) icon)
+    public bool TryGetBuildingIcon(string record, IReadOnlyList<PlacedMesh> parts, out (global::Meitou.Game.Rendering.Gpu.GpuTexture Texture, SampledTexture Sampled) icon)
     {
         if (!buildingIcons.TryGetValue(record, out var entry))
         {

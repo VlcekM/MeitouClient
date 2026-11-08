@@ -1,4 +1,6 @@
 using System.Numerics;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Perception;
 
 namespace Meitou.Simulation.Combat;
 

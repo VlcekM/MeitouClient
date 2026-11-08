@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
 /// The tight billboard quad (docs/render-foliage.md "Foliage cost in the orbit"): a billboard spans the rectangle that holds the outline of the mesh's bounding box

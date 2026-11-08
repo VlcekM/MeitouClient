@@ -1,7 +1,8 @@
 using System.Numerics;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>The terrain material cache's switch (docs/render-terrain.md "Material cache"): the A/B <c>terrain-material-cache</c> (B: every pixel shades the layers);
 /// <c>MEITOU_DIAG_NO_MATERIAL_CACHE=1</c> starts it off.</summary>

@@ -3,8 +3,11 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
-using Meitou.Rendering;
+using Meitou.Game.DevTools;
+using Meitou.Game.Host;
+using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
+using Meitou.Simulation.Population;
 using SilkKey = Silk.NET.Input.Key;
 
 namespace Meitou.Game;

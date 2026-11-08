@@ -1,6 +1,7 @@
 using System.Diagnostics;
+using Meitou.Game.Rendering.Profiling;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// Where the time of an upload step goes (<c>--log-spikes</c> only; otherwise every call is a branch on a flag): per thread, the

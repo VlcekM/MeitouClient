@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using Meitou.Data.Textures;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// Where the alpha-tested part of a texture is (docs/render-foliage.md, "Card trimming"): grids of cells, one cell per texel of the decoded level (at most 512 on a side).

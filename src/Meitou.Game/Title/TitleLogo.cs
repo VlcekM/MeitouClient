@@ -1,6 +1,6 @@
 using Meitou.Data.Textures;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Title;
 
 /// <summary>
 /// The brush-stroke Kenshi wordmark for the Meitou title: <c>assets/branding/kenshi-logo.png</c>, embedded in the game. The game ships no

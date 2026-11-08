@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 
-namespace Meitou.Rendering.Upscalers;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA NGX, the runtime behind DLSS that Streamline wraps on Windows. On Linux it is the only DLSS path; on Windows (and Proton) it is used instead

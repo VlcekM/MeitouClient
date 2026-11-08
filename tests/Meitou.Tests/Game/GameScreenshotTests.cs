@@ -1,4 +1,5 @@
 using Meitou.Game;
+using Meitou.Game.Host;
 
 namespace Meitou.Tests.Game;
 

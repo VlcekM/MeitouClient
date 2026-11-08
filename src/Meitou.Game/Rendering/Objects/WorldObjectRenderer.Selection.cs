@@ -1,9 +1,12 @@
 using System.Numerics;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// The outlined buildings (the selected and the hovered one; Meitou only, docs/game/ui-input.md "Hover outline"): the main view's colour pass keeps its draws of each

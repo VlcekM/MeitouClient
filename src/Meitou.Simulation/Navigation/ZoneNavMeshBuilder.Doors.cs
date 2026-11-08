@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 internal static partial class ZoneNavMeshBuilder
 {

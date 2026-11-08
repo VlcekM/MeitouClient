@@ -3,9 +3,12 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Game.Title;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Editor;
 
 /// <summary>
 /// The Meitou UI's character editor scene (docs/characters.md "Character editor", Meitou): a copy of The Hub's Storm House bar, its walls, furniture and lamps,
@@ -57,7 +60,7 @@ sealed class EditorBar
     public IReadOnlyList<(Vector3 Position, float Yaw, string Clip)> Seats { get; }
     /// <summary>The bar's own people: a CHARACTER record (with its template's faction, if any), where it is, its yaw, the clip it holds and the seed of its rolled look.</summary>
     public IReadOnlyList<(string Record, string? Faction, Vector3 Position, float Yaw, string Clip, int Seed)> Crowd { get; }
-    /// <summary>The staged ground and shrubs round the bar (<see cref="Meitou.Rendering.WorldObjectRenderer.Staged"/>).</summary>
+    /// <summary>The staged ground and shrubs round the bar (<see cref="Meitou.Game.Rendering.Objects.WorldObjectRenderer.Staged"/>).</summary>
     public IReadOnlyList<PlacedMesh> Ground { get; }
     /// <summary>Where the room's neutral fill light hangs (<see cref="FillShare"/>).</summary>
     public Vector3 FillAt { get; }

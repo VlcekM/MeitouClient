@@ -1,4 +1,6 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>Independent procedural cloud ray marcher and history filter; no original-game shader code.</summary>
 public static class VolumetricCloudShaders

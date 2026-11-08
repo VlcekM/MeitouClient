@@ -1,3 +1,5 @@
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Bodies;
 using System.Collections.Concurrent;
@@ -7,8 +9,10 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Towns;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 public interface IAppearanceSource
 {

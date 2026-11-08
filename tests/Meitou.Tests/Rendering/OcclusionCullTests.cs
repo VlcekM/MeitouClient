@@ -1,6 +1,7 @@
 using System.Numerics;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
 namespace Meitou.Tests.Rendering;
 
@@ -219,9 +220,9 @@ public class HizPyramidGpuTests
     public unsafe void The_kernels_build_the_least_and_greatest_distance_of_every_block_at_every_level()
     {
         Silk.NET.Vulkan.Vk.GetApi();
-        Meitou.Rendering.Gpu.Core.VulkanDevice? d;
-        try { d = Meitou.Rendering.Gpu.Core.VulkanDevice.Create(new Meitou.Rendering.Gpu.Core.VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
-        catch (Exception e) when (e is Meitou.Rendering.Gpu.Core.VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException) { d = null; }
+        Meitou.Game.Rendering.Gpu.Core.VulkanDevice? d;
+        try { d = Meitou.Game.Rendering.Gpu.Core.VulkanDevice.Create(new Meitou.Game.Rendering.Gpu.Core.VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
+        catch (Exception e) when (e is Meitou.Game.Rendering.Gpu.Core.VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException) { d = null; }
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
         foreach (var (w, h) in new[] { (1000, 700), (1280, 720), (63, 37), (4, 4), (2049, 513) })
         {
@@ -237,16 +238,16 @@ public class HizPyramidGpuTests
             }
             var levels = HizPyramid.Levels(w, h);
             int total = levels.Sum(l => l.W * l.H);
-            using (var ctx = new Meitou.Rendering.Gpu.GpuContext(d!))
+            using (var ctx = new Meitou.Game.Rendering.Gpu.GpuContext(d!))
             {
                 ctx.EnsureFrame();
-                var desc = new Meitou.Rendering.Gpu.TextureDesc(InternalFormat.R32f, w, h, Use: Meitou.Rendering.Gpu.TextureUse.Sampled | Meitou.Rendering.Gpu.TextureUse.TransferDst, Name: "hiz test depth");
+                var desc = new Meitou.Game.Rendering.Gpu.TextureDesc(InternalFormat.R32f, w, h, Use: Meitou.Game.Rendering.Gpu.TextureUse.Sampled | Meitou.Game.Rendering.Gpu.TextureUse.TransferDst, Name: "hiz test depth");
                 using var depthTexture = ctx.Frame.PreFrame.CreateTexture(desc);
                 var region = new PixelRect(0, 0, (uint)w, (uint)h);
                 ctx.Uploads.Write(depthTexture, 0, 0, region, System.Runtime.InteropServices.MemoryMarshal.AsBytes(depth.AsSpan()));
                 using var hiz = new HizPyramid(ctx);
                 hiz.Build(ctx.Frame.PreFrame, depthTexture, planes, w, h, Vector3.Zero, Matrix4x4.Identity, 0.8f, 16f / 9);
-                using var readback = Meitou.Rendering.Gpu.ReadbackBuffer.Create(ctx, (ulong)total * 8, "hiz readback");
+                using var readback = Meitou.Game.Rendering.Gpu.ReadbackBuffer.Create(ctx, (ulong)total * 8, "hiz readback");
                 ctx.Frame.PreFrame.CopyBuffer(hiz.Storage!.Handle, readback.Handle, new GpuBufferCopy(0, 0, (ulong)total * 8));
                 ctx.EndFrame();
                 d!.Frames.WaitAll();

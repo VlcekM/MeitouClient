@@ -21,7 +21,7 @@ public class BodyInstallTests
         Assert.Equal(10, character.GetInt("stats randomise"));
         Assert.False(character.Floats.ContainsKey("stats randomise"));
         var race = db.Find(character.GetReferences("race").First().TargetStringId)!;
-        var factory = new Meitou.Simulation.BodyFactory(db);
+        var factory = new Meitou.Simulation.Bodies.BodyFactory(db);
         var a = factory.Create(race, character, 123, 1).Stats;
         var b = factory.Create(race, character, 123, 2).Stats;
         Assert.NotEqual(a[StatsEnumerated.MeleeAttack], b[StatsEnumerated.MeleeAttack]);

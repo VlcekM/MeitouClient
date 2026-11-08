@@ -1,8 +1,9 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Ui;
+using Meitou.Game.Rendering.Overlays;
 
-namespace Meitou.Rendering.Ui;
+namespace Meitou.Game.Rendering.Ui;
 
 /// <summary>
 /// Painted controls kept across frames: what a control added to the overlay pass (its quads and glyphs, their textures and clips), its opaque area and

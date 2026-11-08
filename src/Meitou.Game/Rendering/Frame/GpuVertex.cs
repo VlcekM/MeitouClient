@@ -1,8 +1,8 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The vertex layouts of the mesh buffers: <see cref="Vertex"/> packed at upload (the CPU keeps the float layout). Normals, tangents and weights lie

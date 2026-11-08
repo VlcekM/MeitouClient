@@ -4,7 +4,7 @@ using Meitou.Data.Ogre;
 using Meitou.Data.Physics;
 using Meitou.Data.World;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 public sealed partial class WorldObjectRenderer
 {

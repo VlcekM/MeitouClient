@@ -1,3 +1,5 @@
+using Meitou.Simulation.Factions;
+
 namespace Meitou.Simulation.Dialogue;
 
 /// <summary>

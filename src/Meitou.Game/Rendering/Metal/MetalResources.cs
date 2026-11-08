@@ -1,7 +1,7 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Metal;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// The backend's own objects behind the engine's handles (docs/resource-layer.md). Every table starts at

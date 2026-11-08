@@ -27,7 +27,7 @@ static class AudioTool
 
     /// <summary>
     /// <c>audio render &lt;seconds&gt; &lt;out.wav&gt; [banks and events...] [name=value parameters] [group:state states]</c>: plays events through
-    /// <see cref="Meitou.Audio.WwisePlayer"/> offline (no sound card) and writes the mix; a word ending in <c>.bnk</c> loads that bank first.
+    /// <see cref="Meitou.Game.Audio.WwisePlayer"/> offline (no sound card) and writes the mix; a word ending in <c>.bnk</c> loads that bank first.
     /// An event word may carry a place, an object and a time: <c>Footsteps@500,0,0~3</c> posts it at second 3 on a new game object at (500, 0, 0),
     /// <c>Stop_Emitter#1~9</c> on object 1001 (<c>#1</c> names it; <c>Start_Emitter@50,0,0#1</c> places it), while <c>Pause_Game~10</c> posts it on the music object (100) at second 10; <c>@listener=x,y,z[,fx,fy,fz]</c> puts the listener there (facing -z by
     /// default). Prints the level each second, with the left and right levels.
@@ -40,8 +40,8 @@ static class AudioTool
             return 2;
         }
         if (Library(install) is not { } library) return 1;
-        const int rate = Meitou.Audio.AudioSystem.SampleRate;
-        using var player = new Meitou.Audio.WwisePlayer(library, AudioDirectory(install), rate);
+        const int rate = Meitou.Game.Audio.AudioSystem.SampleRate;
+        using var player = new Meitou.Game.Audio.WwisePlayer(library, AudioDirectory(install), rate);
         var loads = new List<Task>();
         var events = new List<(double At, string Event, ulong Object)>();
         ulong nextObject = 2000;
@@ -67,7 +67,7 @@ static class AudioTool
                     at = double.Parse(word[(tilde + 1)..], ci);
                     word = word[..tilde];
                 }
-                ulong obj = Meitou.Audio.AudioSystem.MusicObject;
+                ulong obj = Meitou.Game.Audio.AudioSystem.MusicObject;
                 if (word.LastIndexOf('#') is var hash and >= 0)
                 {
                     obj = 1000 + ulong.Parse(word[(hash + 1)..], ci);
@@ -76,7 +76,7 @@ static class AudioTool
                 if (word.IndexOf('@') is var pos and >= 0)
                 {
                     var n = word[(pos + 1)..].Split(',').Select(x => float.Parse(x, ci)).ToArray();
-                    if (obj == Meitou.Audio.AudioSystem.MusicObject) obj = nextObject++;
+                    if (obj == Meitou.Game.Audio.AudioSystem.MusicObject) obj = nextObject++;
                     player.SetPosition(obj, new System.Numerics.Vector3(n[0], n[1], n[2]));
                     word = word[..pos];
                 }
@@ -88,9 +88,9 @@ static class AudioTool
         int nextEvent = 0;
         int total = (int)(seconds * rate);
         var all = new float[total * 2];
-        var block = new float[Meitou.Audio.AudioOutput.BlockFrames * 2];
+        var block = new float[Meitou.Game.Audio.AudioOutput.BlockFrames * 2];
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        for (int at = 0; at < total; at += Meitou.Audio.AudioOutput.BlockFrames)
+        for (int at = 0; at < total; at += Meitou.Game.Audio.AudioOutput.BlockFrames)
         {
             for (; nextEvent < events.Count && events[nextEvent].At <= (double)at / rate; nextEvent++)
             {
@@ -99,9 +99,9 @@ static class AudioTool
                 else player.Post(name, obj);
             }
             Array.Clear(block);
-            player.Mix(block, Meitou.Audio.AudioOutput.BlockFrames);
+            player.Mix(block, Meitou.Game.Audio.AudioOutput.BlockFrames);
             Array.Copy(block, 0, all, at * 2, Math.Min(block.Length, (total - at) * 2));
-            if ((at / Meitou.Audio.AudioOutput.BlockFrames) % 43 == 0)
+            if ((at / Meitou.Game.Audio.AudioOutput.BlockFrames) % 43 == 0)
             {
                 var (instances, voices, _, clips) = player.Stats;
                 int from = Math.Max(0, at - rate), to = at;

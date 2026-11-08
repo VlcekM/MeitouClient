@@ -1,6 +1,6 @@
 using Meitou.Data.World;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// An immutable copy of the terrain's height sources (the whole-world coarse grid and the streamed fine window with its fade band), taken on the

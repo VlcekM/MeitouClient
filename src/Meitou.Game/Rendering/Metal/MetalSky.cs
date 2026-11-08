@@ -1,13 +1,14 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Shaders;
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
 using SharpMetal.ObjectiveCCore;
 using Silk.NET.SPIRV;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// The game's sky on Metal: the engine's own GLSL, compiled by the engine's own compiler (shaderc) and cross-compiled to

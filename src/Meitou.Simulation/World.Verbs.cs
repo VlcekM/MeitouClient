@@ -1,4 +1,6 @@
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation;
 

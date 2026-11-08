@@ -1,7 +1,8 @@
 using System.Globalization;
 using System.Numerics;
 using System.Text.Json;
-using Meitou.Navigation;
+using Meitou.Game.DevTools;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation.Locks;
 
 namespace Meitou.Game;

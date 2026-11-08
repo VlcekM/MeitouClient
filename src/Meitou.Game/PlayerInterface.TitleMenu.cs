@@ -3,6 +3,7 @@ using System.Numerics;
 using Meitou.Data.Save;
 using Meitou.Data.Textures;
 using Meitou.Data.Ui;
+using Meitou.Modding;
 
 namespace Meitou.Game;
 

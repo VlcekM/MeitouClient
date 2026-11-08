@@ -3,7 +3,8 @@ using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Objects;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
 
@@ -51,7 +52,7 @@ sealed partial class GameHost
                 var spec = item.GetReferences("material").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(r => r is not null);
                 string? Name(string key) => spec?.GetPath(key) is { Length: > 0 } p ? Path.GetFileName(p.Replace('\\', '/')) : null;
                 if (Name("texture map") is { } diffuse)
-                    look = new LimbLook(diffuse, Name("color map"), Vector3.Zero, CharacterAppearance.Rgb(owner.GetInt("blood colour", 0x800000) & 0xFFFFFF), owner.StringId, Meitou.Rendering.Characters.CharacterRenderer.SkinByDefault(owner), Name("normal map"));
+                    look = new LimbLook(diffuse, Name("color map"), Vector3.Zero, CharacterAppearance.Rgb(owner.GetInt("blood colour", 0x800000) & 0xFFFFFF), owner.StringId, Meitou.Game.Rendering.Characters.CharacterRenderer.SkinByDefault(owner), Name("normal map"));
             }
         }
         return limbLooks[record] = look;

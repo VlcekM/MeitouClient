@@ -6,7 +6,7 @@ using Meitou.Data.Gameplay.Economy;
 using Meitou.Data.World;
 using Meitou.Simulation.Items;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// The towns' artifacts (docs/game/economy.md "Artifacts"): each town's list, made for a new game (<see cref="Artifacts.Plan"/>) or read from a loaded save's town states, and given

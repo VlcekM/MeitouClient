@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Meitou.Content;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>Optional Steamworks lifetime for the Steam copy of Kenshi. No Steam binaries are shipped with Meitou.</summary>
 sealed unsafe class SteamSession : IDisposable

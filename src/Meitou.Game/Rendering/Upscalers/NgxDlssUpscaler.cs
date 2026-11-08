@@ -1,9 +1,9 @@
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
 using System.Runtime.InteropServices;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Rendering.Upscalers;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA DLSS Super Resolution through <see cref="Ngx"/> directly (Linux, and Windows with frame generation; <see cref="DlssUpscaler"/> is the Streamline path on Windows otherwise).
@@ -69,7 +69,7 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
     };
 
     /// <summary>An image for NGX; only the output is written (read-write).</summary>
-    VkResource Resource(Meitou.Rendering.Gpu.GpuTexture texture, bool output = false)
+    VkResource Resource(Meitou.Game.Rendering.Gpu.GpuTexture texture, bool output = false)
     {
         var d = texture.Desc;
         return new VkResource

@@ -1,5 +1,5 @@
 using System.Numerics;
-using Meitou.Rendering.Impostors;
+using Meitou.Game.Rendering.Impostors;
 
 namespace Meitou.Tests.Rendering;
 

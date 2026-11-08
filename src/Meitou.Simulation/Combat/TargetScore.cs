@@ -1,3 +1,5 @@
+using Meitou.Simulation.Player;
+
 namespace Meitou.Simulation.Combat;
 
 /// <summary>One candidate of a fight target choice, as <see cref="TargetScore.Score"/> weighs it.</summary>

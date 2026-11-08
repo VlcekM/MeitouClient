@@ -1,5 +1,6 @@
 using System.Diagnostics;
-using Meitou.Ui;
+using Meitou.Game.Host;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 
@@ -85,7 +86,7 @@ sealed partial class GameHost
         FinishNavUnload();
         long now = Stopwatch.GetTimestamp();
         var loads = new List<Task>();
-        foreach (var z in Meitou.Simulation.ZoneActivation.ZonesAround(camera.Target, 1))
+        foreach (var z in Meitou.Simulation.Population.ZoneActivation.ZonesAround(camera.Target, 1))
         {
             if (!navZones.ContainsKey(z)) loads.Add(nav.LoadZone(z));
             navZones[z] = now;

@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// A height map recovered from a tiling normal map (docs/render-terrain.md, "Ground relief"): the normal's slopes integrated in the frequency domain

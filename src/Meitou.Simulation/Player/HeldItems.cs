@@ -1,8 +1,10 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Player;
 
 /// <summary>
 /// The item on the mouse (docs/game/ui-screens.md section 6 "Holding an item"; the original's <c>MouseInventory</c>, <b>Observed</b> by decompile): one item at a time is lifted out of a window

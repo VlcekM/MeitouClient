@@ -2,7 +2,7 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The navigation of a running game in one object, for the simulation host: the <see cref="Walkability"/> to hand to the simulation (replacing the

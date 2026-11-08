@@ -2,9 +2,11 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Save;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// The <c>bloodsurfaces</c> switch (docs/game/blood-decals.md "Blood on surfaces"): the blood marks also land on walls, buildings, floors and other static objects. Each mark is

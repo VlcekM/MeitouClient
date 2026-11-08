@@ -2,7 +2,7 @@ using System.Numerics;
 using Meitou.Data.World;
 using Meitou.Simulation.Locks;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The gate codes of a <see cref="NavWorld"/> (docs/game/pathfinding.md "Gate codes"; the original's gate-code pass floods its navmesh from the gates, <c>FUN_1402ed460</c>).

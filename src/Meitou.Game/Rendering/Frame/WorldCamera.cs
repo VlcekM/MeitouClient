@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// Camera for the world view, Y up: orbits a target point (left drag), looks around from the eye (right drag),

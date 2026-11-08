@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
 
-namespace Meitou.Ui;
+namespace Meitou.Game.Ui;
 
 /// <summary>The colour a tooltip text takes: the palette the original's inline colour tags name (<c>data/gui/colours/kenshi_colours.xml</c>); the host maps each to its UI mode's colour.</summary>
 public enum TooltipTone { Default, Main, Ink, Title, Bad, BadBright, Good, Grey, GreyBright, Cyan, Grade0, Grade1, Grade2, Grade3, Grade4 }

@@ -8,6 +8,7 @@ using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 using static Meitou.Tests.Save.SaveSamples;
 using SimWorld = Meitou.Simulation.World;

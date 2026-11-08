@@ -1,15 +1,17 @@
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using Meitou.Rendering;
-using Meitou.Rendering.Gi;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gi;
+using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
 using SharpMetal.ObjectiveCCore;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Metal.Gi;
+namespace Meitou.Game.Rendering.Metal.Gi;
 
 /// <summary>
 /// Native Metal probe GI: terrain plus the nearby world objects traced as a small TLAS, one probe

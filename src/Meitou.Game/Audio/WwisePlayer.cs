@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data.Audio;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// Plays Wwise banks the way the game's events ask (docs/audio.md): a good-enough interpreter of the bank hierarchy, not a copy of Wwise.

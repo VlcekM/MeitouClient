@@ -3,7 +3,7 @@ using Meitou.Data;
 using Meitou.Data.World;
 using Meitou.Simulation.Locks;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Towns;
 
 /// <summary>
 /// The town node map the original's bar squads are put at (<c>FUN_1409fcd20</c> via <c>FUN_14038b000</c>): per door of a building two "Node Guardpost" nodes (<c>FUN_14038b650</c>, called

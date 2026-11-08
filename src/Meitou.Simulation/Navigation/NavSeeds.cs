@@ -2,7 +2,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary><c>navtiles/seeds.def</c>: float3 records, absolute positions (Kenshi units), bucketed by zone.</summary>
 internal static class NavSeeds

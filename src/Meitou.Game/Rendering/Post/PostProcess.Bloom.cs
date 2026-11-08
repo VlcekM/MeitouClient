@@ -1,6 +1,6 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
 /// Meitou bloom (the <c>bloom</c> switch; docs/render-post.md "Bloom"): the scene convolved with a point spread function and mixed into it by the

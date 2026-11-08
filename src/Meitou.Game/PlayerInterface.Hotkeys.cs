@@ -1,6 +1,7 @@
-using Meitou.Engine.Input;
+using Meitou.Game.Host.Input;
 using Meitou.Simulation;
-using EngineKey = Meitou.Engine.Input.Key;
+using Meitou.Simulation.Player;
+using EngineKey = Meitou.Game.Host.Input.Key;
 
 namespace Meitou.Game;
 

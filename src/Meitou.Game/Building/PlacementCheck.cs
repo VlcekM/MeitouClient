@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
 

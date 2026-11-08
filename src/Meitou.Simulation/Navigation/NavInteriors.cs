@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Numerics;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// Building interiors: each building with an interior mask is built as its own small mesh (<see cref="ZoneGeometryGatherer.GatherInterior"/>) and put into

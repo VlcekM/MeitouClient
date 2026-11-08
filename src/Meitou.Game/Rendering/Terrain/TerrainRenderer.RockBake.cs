@@ -1,11 +1,13 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Impostors;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Impostors;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// The impostor bake of TERRAIN-mode rocks (docs/impostors.md section 13): the terrain's own mesh material, drawn into the baker's targets. The rock's

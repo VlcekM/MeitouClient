@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>A polygon of a loaded zone: the zone's slot in the <see cref="NavWorld"/> and the polygon's index.</summary>
 public readonly record struct NavRef(int Zone, int Polygon)

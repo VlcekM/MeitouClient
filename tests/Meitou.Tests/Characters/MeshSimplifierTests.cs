@@ -1,6 +1,6 @@
 using System.Numerics;
-using Meitou.Rendering;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Tests.Characters;
 

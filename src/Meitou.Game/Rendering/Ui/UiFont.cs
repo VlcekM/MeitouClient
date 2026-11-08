@@ -1,10 +1,10 @@
 using FreeTypeSharp;
 using Meitou.Data.Ui;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
 using static FreeTypeSharp.FT;
 
-namespace Meitou.Rendering.Ui;
+namespace Meitou.Game.Rendering.Ui;
 
 /// <summary>How a <see cref="UiFont"/> is made (docs/formats/mygui.md "Fonts").</summary>
 /// <param name="Path">The font file.</param>

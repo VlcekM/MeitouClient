@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Profiling;
 
 /// <summary>
 /// Per-stage render-thread time of one frame (for <c>--fly-benchmark</c> and the <see cref="FrameProfiler"/>); <see cref="Lap"/> costs

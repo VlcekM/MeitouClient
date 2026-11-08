@@ -4,10 +4,11 @@ using System.Text;
 using Silk.NET.Vulkan;
 using StbTrueTypeSharp;
 
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Ui;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Ui;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Overlays;
 
 /// <summary>
 /// Text panels drawn over the frame (the viewer's frame statistics and key list). Text is rasterised from a monospace

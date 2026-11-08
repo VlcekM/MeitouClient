@@ -2,8 +2,9 @@ using System.Numerics;
 using Meitou.Data.Characters;
 using Meitou.Data.Gameplay;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Player;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Movement;
 
 /// <summary>
 /// The animations a character plays: weighted clips (the movement blend by speed, an idle, a combat technique, a hit reaction) that cross-fade at

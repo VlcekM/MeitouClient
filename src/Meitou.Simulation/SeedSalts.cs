@@ -1,3 +1,5 @@
+using Meitou.Simulation.Population;
+
 namespace Meitou.Simulation;
 
 /// <summary>

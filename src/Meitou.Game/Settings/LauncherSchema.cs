@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Host;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Post;
 using Meitou.Settings;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Settings;
 
 /// <summary>
 /// The settings the launcher's Graphics page shows (docs/launcher.md "Graphics"), written by <c>--settings-schema &lt;file&gt;</c> into each

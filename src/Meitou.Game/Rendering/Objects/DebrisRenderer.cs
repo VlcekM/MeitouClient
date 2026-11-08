@@ -2,10 +2,13 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// One loose mesh in the world: its file, its size and where it is (rotation and translation, the mesh's middle at the translation); <paramref name="Stretch"/> lengthens

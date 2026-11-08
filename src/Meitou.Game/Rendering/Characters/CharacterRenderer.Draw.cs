@@ -1,13 +1,17 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data;
 using Meitou.Data.Ogre;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
 using Vk = Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 internal sealed unsafe partial class CharacterRenderer
 {

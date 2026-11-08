@@ -3,9 +3,11 @@ using System.Globalization;
 using System.Numerics;
 using System.Text;
 
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using static Meitou.Rendering.WorldFrame;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Terrain;
+using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 
@@ -16,7 +18,7 @@ static partial class WorldApp
     /// loaded point at 60 frames per second of wall time, as the interactive viewer would, and prints frame-time percentiles, the worst frames with the
     /// time each streaming stage took on the render thread, and the resident memory.
     /// </summary>
-    static int FlyBenchmark(Meitou.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static int FlyBenchmark(Meitou.Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         var context = display.Context;
         var centre = camera.Target;
@@ -117,7 +119,7 @@ static partial class WorldApp
         if (gpu.Shadow is { Meitou: true } meitouShadow) Console.WriteLine($"shadows   meitou schedule (cascade redraws over the {meitouShadow.MeitouFrames} frames): {meitouShadow.DescribeMeitou()}");
         // Wave 4 (docs/renderer-native.md 9.3): the recording jobs' own CPU time per stage, summed over the threads that ran them; the stage
         // times above are the render thread's wall time (including any wait for the jobs), so the two do not add up.
-        Console.WriteLine($"jobs      record mode {Meitou.Rendering.Gpu.Recording.Mode} ({RenderJobs.Threads} threads); summed cpu mean ms: " +
+        Console.WriteLine($"jobs      record mode {Meitou.Game.Rendering.Gpu.Recording.Mode} ({RenderJobs.Threads} threads); summed cpu mean ms: " +
             string.Join(", ", StageClock.Names.Select((n, k) => (n, k)).Where(x => jobSums[x.k] > 0).Select(x => $"{x.n} {jobSums[x.k] / o.FlyBenchmark:0.00}")));
         if (gpu.Particles is { } fx)
             Console.WriteLine($"particles per frame over the flight: simulation {fx.MeanMilliseconds.Simulation:0.00} ms (background threads), main thread waited {fx.MeanMilliseconds.Wait:0.00} ms; update {fx.MeanMainThreadMilliseconds.Update:0.00} ms, draw {fx.MeanMainThreadMilliseconds.Draw:0.00} ms (waiting included, of which filling instance buffers {fx.CollectMilliseconds:0.00} ms); {fx.ActiveUnits} units simulated, {fx.DrawnUnits} drawn");
@@ -182,7 +184,7 @@ static partial class WorldApp
     /// MEITOU_PASS_STATS=1: the pass meter's table and CSV lines, then one more frame with <see cref="WorldFrame.DetailedStats"/> on for what each
     /// pass drew (instances, calls, per cascade and per foliage step: the same lines the screenshot path prints).
     /// </summary>
-    static void ReportPasses(PassMeter meter, Meitou.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static void ReportPasses(PassMeter meter, Meitou.Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         meter.Report(Console.Out);
         meter.Dispose();

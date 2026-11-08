@@ -6,10 +6,13 @@ using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
 /// Water as the game places it (docs/formats/terrain.md, "Water"): one surface at <see cref="WorldWater.Height"/>

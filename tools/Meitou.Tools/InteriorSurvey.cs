@@ -3,7 +3,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 
 /// <summary>
 /// <c>meitou-tools navmesh --survey-interiors zones|towns [--name text] [--png dir] [--section x,z] [--border]</c>: for every building interior of

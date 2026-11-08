@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Locks;
 

@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Shadows;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 public sealed unsafe partial class FoliageRenderer
 {
@@ -54,7 +56,7 @@ public sealed unsafe partial class FoliageRenderer
     public float ScreenLodMultiple { get; set; } = 2f;
 
     /// <summary>The render's pixels per radian for the screen-size rules: the main camera's, or a 1080-line picture's with the 50 degree field of view before the first frame.</summary>
-    float ScreenLodPixelsPerRadian => LodPixelsPerRadian > 0 ? LodPixelsPerRadian : Meitou.Rendering.Impostors.ImpostorClass.ReferenceHeight / (2 * MathF.Tan(25 * MathF.PI / 180));
+    float ScreenLodPixelsPerRadian => LodPixelsPerRadian > 0 ? LodPixelsPerRadian : Meitou.Game.Rendering.Impostors.ImpostorClass.ReferenceHeight / (2 * MathF.Tan(25 * MathF.PI / 180));
 
     /// <summary>The deviations the cull and <see cref="LevelNeeded"/> use for a level set in the view being drawn: with <see cref="ScreenLod"/> in a colour view the ones that count the size of the triangles.</summary>
     float[] LevelErrors(RockLod lod) => ScreenLod && lodActive && !lodView.Ortho ? lod.Effective(LodTolerance, ScreenLodTriPixels, ScreenLodMultiple) : lod.Relative;

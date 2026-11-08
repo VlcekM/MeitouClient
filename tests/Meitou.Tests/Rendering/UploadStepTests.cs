@@ -1,4 +1,5 @@
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Terrain;
+
 
 namespace Meitou.Tests.Rendering;
 

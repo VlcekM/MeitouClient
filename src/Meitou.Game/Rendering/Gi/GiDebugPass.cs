@@ -1,12 +1,14 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering.Gi;
+namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
 /// The global illumination's debug view (<c>--gi-debug &lt;mode&gt;</c>, docs/render-gi.md "Debug views"): <see cref="GiShaders.Debug"/> over the scene

@@ -1,7 +1,9 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Simulation;
+using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;

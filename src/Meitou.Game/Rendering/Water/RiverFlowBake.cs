@@ -1,6 +1,6 @@
 using Meitou.Data.World;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
 /// The Meitou water's river map, baked at load from the whole-world heights (docs/formats/terrain.md "Flow map", docs/render-water.md "Meitou water").

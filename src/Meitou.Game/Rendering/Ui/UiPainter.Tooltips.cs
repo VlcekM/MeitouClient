@@ -1,6 +1,7 @@
 using Meitou.Data.Ui;
+using Meitou.Game.Rendering.Overlays;
 
-namespace Meitou.Rendering.Ui;
+namespace Meitou.Game.Rendering.Ui;
 
 /// <summary>Text measuring for layouts that must fit what <see cref="Draw"/> will paint (the tooltips).</summary>
 public sealed partial class UiPainter

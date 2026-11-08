@@ -2,7 +2,7 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Gameplay;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>A <c>debris</c> mesh a nest lays round itself (drawn only, no item): its NEST_ITEM, the mesh, where it lies, its turn and scale.</summary>
 public sealed record NestMesh(string Record, string Mesh, Vector3 Position, float Yaw, float Scale);

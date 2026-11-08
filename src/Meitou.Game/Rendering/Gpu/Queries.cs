@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>A timestamp handed out by <see cref="QueryArena.Allocate"/>: the frame it belongs to and its index in that slot's pool.</summary>
 public readonly record struct QuerySlot(long Frame, int Slot, uint Index)

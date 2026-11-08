@@ -1,8 +1,9 @@
 using System.Numerics;
 using Meitou.Data.Characters;
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Factions;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 public sealed partial class PopulationSystem
 {

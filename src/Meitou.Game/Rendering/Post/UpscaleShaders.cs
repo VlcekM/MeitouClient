@@ -1,4 +1,7 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Sky;
+
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>GLSL for temporal upscaling (written from the public techniques: Karis 2014, Salvi 2016, Jimenez 2016), run with <see cref="PostProcessShaders.Vertex"/>.</summary>
 static class UpscaleShaders

@@ -2,8 +2,13 @@ using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>A town a campaign aims at or comes from: a placed town (<see cref="Site"/>, a position in the population's sites) or a player town (<see cref="PlayerTown"/>, its number).</summary>
 public readonly record struct CampaignTown(int Site, int PlayerTown)

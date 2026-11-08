@@ -1,3 +1,13 @@
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
+
 namespace Meitou.Simulation;
 
 /// <summary>A contiguous range of slots handed to one task of a parallel phase.</summary>

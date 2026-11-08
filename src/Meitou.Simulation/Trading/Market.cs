@@ -4,6 +4,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Economy;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Trading;
 

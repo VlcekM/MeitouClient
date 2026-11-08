@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Navigation;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Game;
 

@@ -1,8 +1,10 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
-using Meitou.Rendering.Gpu;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
 /// The impostor program in the native model (<see cref="ImpostorShaders.VertexNative"/>, <see cref="ImpostorShaders.FragmentNative"/>): six

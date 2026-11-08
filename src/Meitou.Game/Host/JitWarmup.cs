@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// Compiles the Meitou assemblies' methods ahead of their first call, on three background threads below normal priority from the start of the game (docs/bench.md
@@ -20,7 +20,7 @@ static class JitWarmup
     static readonly string[] Order = ["Meitou.Simulation", "MeitouClient"];
 
     /// <summary>The game's renderers: compiled before the rest of the game's code, as the first frames call them.</summary>
-    const string RenderingNamespace = "Meitou.Rendering";
+    const string RenderingNamespace = "Meitou.Game.Rendering";
 
     static readonly ConcurrentQueue<MethodBase> queue = new();
     static readonly Stopwatch watch = new();

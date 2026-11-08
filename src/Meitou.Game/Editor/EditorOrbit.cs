@@ -1,4 +1,4 @@
-namespace Meitou.Game;
+namespace Meitou.Game.Editor;
 
 /// <summary>
 /// The character editor's camera (docs/characters.md "Character editor", Preview): it orbits the character, dragged with a mouse button and zoomed with the wheel, and starts

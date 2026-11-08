@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// The terrain's colour after the occluders (docs/render-terrain.md, "Terrain colour after the occluders"): the main view draws the terrain's depth first

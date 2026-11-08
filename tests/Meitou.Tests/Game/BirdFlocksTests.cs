@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Game;
-using Meitou.Rendering;
+using Meitou.Game.Effects;
 
 namespace Meitou.Tests.Game;
 

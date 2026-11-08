@@ -1,6 +1,6 @@
 using Meitou.Data.World;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>What the ambience follows each frame (docs/audio.md "What the game sends").</summary>
 public readonly record struct AmbienceInput

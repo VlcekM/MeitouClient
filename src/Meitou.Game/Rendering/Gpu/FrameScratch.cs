@@ -1,6 +1,7 @@
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// Device memory per frame slot for what a frame's compute passes write and its draws read (the GPU cull's per-view outputs, the grass
@@ -125,7 +126,7 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
         if (s.Capacity + size > Cap) return false;
         if (MayGrow is { } may && !may(size)) return false;
         try { s.Buffers.Add(DeviceBuffer.Create(ctx, size, use, $"{name} {slot}")); }
-        catch (Meitou.Rendering.Gpu.Core.VulkanException) { return false; }
+        catch (Meitou.Game.Rendering.Gpu.Core.VulkanException) { return false; }
         s.Capacity += size;
         return true;
     }

@@ -2,9 +2,10 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Characters;
 using Meitou.Data.Ogre;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// The face and body poses (Ogre morph targets) of a mesh as sparse per-vertex slots (docs/character-renderer.md, "Face poses"): the vertices any pose moves

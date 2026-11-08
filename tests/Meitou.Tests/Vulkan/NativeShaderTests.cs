@@ -1,8 +1,11 @@
 using System.Runtime.InteropServices;
 
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Terrain;
 
 namespace Meitou.Tests.Vulkan;
 

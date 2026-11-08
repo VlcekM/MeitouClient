@@ -1,4 +1,5 @@
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Perception;
 
 namespace Meitou.Simulation.Ai;
 

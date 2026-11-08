@@ -1,11 +1,12 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
-using static Meitou.Rendering.Upscalers.FfxApi;
+using Meitou.Game.Rendering.Post;
+using static Meitou.Game.Rendering.Upscalers.FfxApi;
 
-namespace Meitou.Rendering.Upscalers;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>One frame's inputs to frame generation: the post chain's depth and motion (bottom-up, as for the upscalers: see <see cref="UpscaleInputs"/>) and the camera
 /// (<see cref="ViewToClip"/> and <see cref="ClipToPreviousClip"/> as in <see cref="UpscaleInputs"/>).</summary>

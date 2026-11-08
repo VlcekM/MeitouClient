@@ -1,4 +1,6 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Post;
+
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
 /// The pure rules of the fog shading rate (<c>fog-vrs</c>, docs/render-post.md "Fog shading rate"): where the fog (the placed volumes, the haze and the weather's fog) hides what is

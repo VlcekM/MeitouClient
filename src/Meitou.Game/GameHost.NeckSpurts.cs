@@ -3,7 +3,7 @@ using Meitou.Data.Characters;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Particles;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Post;
 
 namespace Meitou.Game;
 

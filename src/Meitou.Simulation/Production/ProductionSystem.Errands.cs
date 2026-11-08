@@ -1,8 +1,10 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Production;
 

@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// The cap over a headless body's neck (Meitou decapitation, docs/game/character-stats.md "Decapitation (Meitou)"): no race has a stump mesh for the head, so it is made

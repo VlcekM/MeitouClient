@@ -1,6 +1,6 @@
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
-namespace Meitou.Rendering.Upscalers;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Post;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>The vendor upscalers on a <see cref="GpuContext"/>, for <see cref="PostProcess.UpscalerFactory"/>: null (and a note why) when one is not available.</summary>
 public static class VendorUpscalers

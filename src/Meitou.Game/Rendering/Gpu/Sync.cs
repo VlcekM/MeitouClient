@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>How a pass uses a resource (docs/renderer-native.md 2.9). The backend turns it into its own masks; a
 /// combination says what one side of a dependency reads or writes (the stages are merged).</summary>

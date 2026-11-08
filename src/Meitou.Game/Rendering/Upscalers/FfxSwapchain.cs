@@ -1,9 +1,9 @@
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 using Semaphore = Silk.NET.Vulkan.Semaphore;
 
-namespace Meitou.Rendering.Upscalers;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
 /// The swapchain of AMD's FSR 3 frame-interpolation layer (<c>ffxProvider_FrameGenerationSwapChain_VK</c> of <c>amd_fidelityfx_vk.dll</c>, FidelityFX SDK

@@ -6,7 +6,7 @@ using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Gameplay.Economy;
 using Meitou.Data.World;
 
-namespace Meitou.Game;
+namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// The second layer of <c>--wiki-export</c> (docs/agent-playtest.md, "The wiki"): town detail (buildings, houses for sale, the shops and their stock), town overrides

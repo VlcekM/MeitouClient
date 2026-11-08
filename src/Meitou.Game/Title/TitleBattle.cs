@@ -1,11 +1,13 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Title;
 
 /// <summary>A presentation-only road skirmish. Its world has no population streaming, needs, crimes or save connection.</summary>
 sealed class TitleBattle : IDisposable
@@ -89,7 +91,7 @@ sealed class TitleBattle : IDisposable
                     old.Weight + (layer.Weight - old.Weight) * alpha);
             }).ToArray();
             list.Add(new CharacterInstance(long.MinValue + 2 + i, c.Appearance, position,
-                Meitou.Engine.Time.Interp.LerpAngle(before.Yaw, c.Yaw, alpha), poses)
+                Meitou.Simulation.Session.Interp.LerpAngle(before.Yaw, c.Yaw, alpha), poses)
                 { WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, Shots = c.CrossbowShots, Scale = c.Scale * DisplayScale, FullRateAnimation = true });
         }
     }

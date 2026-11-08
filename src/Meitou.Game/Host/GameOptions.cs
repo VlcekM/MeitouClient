@@ -1,6 +1,7 @@
 using System.Globalization;
+using Meitou.Game.DevTools;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>Game-only options; everything else is the world options shared with the viewer (<see cref="WorldOptions"/>).</summary>
 sealed class GameOptions

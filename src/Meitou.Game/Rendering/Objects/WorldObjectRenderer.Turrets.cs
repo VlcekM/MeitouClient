@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// How far a turret's turning parts have turned (<see cref="WorldObjectRenderer.Turrets"/>): <see cref="PartIds"/> are the BUILDING_PART records of its joints (<see cref="TurnJoint.PartId"/>), <see cref="Angles"/>

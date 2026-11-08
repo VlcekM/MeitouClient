@@ -4,9 +4,13 @@ using Meitou.Content;
 using Meitou.Data.Ogre;
 using Meitou.Data.Particles;
 using Meitou.Data.Textures;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Water;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Particles;
 
 /// <summary>
 /// ParticleUniverse particles as instanced billboards (docs/formats/particle-universe.md "Drawing"): the weather's effect groups and the map's

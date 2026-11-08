@@ -1,6 +1,8 @@
 using System.Numerics;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Factions;
 
 /// <summary>The editor's SquadMemberType, the role a member plays in its squad (docs/game/factions-squads-towns.md section 5.1).</summary>
 public enum SquadRole { Squad1 = 0, Squad2 = 1, Leader = 2, Slave = 4 }

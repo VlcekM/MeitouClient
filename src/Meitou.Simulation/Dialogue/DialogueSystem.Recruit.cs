@@ -1,5 +1,9 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Dialogue;
 

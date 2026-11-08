@@ -1,6 +1,6 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Tests.World;
 

@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Ui;
 
-namespace Meitou.Ui;
+namespace Meitou.Game.Ui;
 
 public sealed record MyGuiEvent(string Screen, string Widget, string Action, string Text = "", float Value = 0);
 public sealed record MyGuiScreenFrame(string Id, IReadOnlyList<UiControl> Controls);

@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The bindless table as the renderers see it (docs/resource-layer.md): the arrays of textures a shader

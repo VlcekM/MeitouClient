@@ -1,11 +1,12 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
 using Vk = Silk.NET.Vulkan;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
 /// The merged scene layers (docs/render-post.md "Merged scene layers"): with <see cref="MergeLayers"/> the light shafts' apply, the fog volumes and the

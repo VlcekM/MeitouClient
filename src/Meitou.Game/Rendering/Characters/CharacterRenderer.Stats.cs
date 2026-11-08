@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Numerics;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 internal sealed unsafe partial class CharacterRenderer
 {

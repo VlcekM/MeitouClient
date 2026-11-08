@@ -1,8 +1,9 @@
 using System.Diagnostics;
 using System.Text.Json;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Ui;
+using Meitou.Game.DevTools;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 
@@ -470,7 +471,7 @@ sealed partial class GameHost
     }
 
     /// <summary>One clickable widget for ui-tree / ui-click: its label, screen-pixel bounds, widget id (screen/name), the screen it is on and how to press it.</summary>
-    sealed record ControlWidget(string Label, float X, float Y, float W, float H, string Id, string Screen, Action Click, Meitou.Rendering.Slider? Slider = null);
+    sealed record ControlWidget(string Label, float X, float Y, float W, float H, string Id, string Screen, Action Click, Meitou.Game.Rendering.Frame.Slider? Slider = null);
 
     /// <summary>The clickable widgets of the screen on top: the settings window while it is open, else the faithful screens (title, pause menu, load/save, windows) and the world HUD.</summary>
     List<ControlWidget> ControlWidgets()

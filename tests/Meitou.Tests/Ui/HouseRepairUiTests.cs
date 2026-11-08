@@ -3,14 +3,15 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Ogre;
 using Meitou.Data.Ui;
-using Meitou.Engine;
-using Meitou.Engine.Input;
+using Meitou.Game.Host;
+using Meitou.Game.Host.Input;
 using Meitou.Game;
 using Meitou.Game.Building;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
 using Meitou.Tests.Simulation;
 
@@ -45,7 +46,7 @@ public class HouseRepairUiTests
         };
         ui.Eye = new(100, 80, 0);
         ui.ViewProjection = Matrix4x4.CreateLookAt(ui.Eye, house.Position + new Vector3(0, 8, 0), Vector3.UnitY)
-            * Meitou.Rendering.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
+            * Meitou.Game.Rendering.Frame.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
         try
         {
             var point = new Vector2(800, 450);

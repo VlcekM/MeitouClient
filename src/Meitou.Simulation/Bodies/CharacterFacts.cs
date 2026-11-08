@@ -1,8 +1,13 @@
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Dialogue;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Bodies;
 
 /// <summary>
 /// One member per predicate of the original, named after it and citing the original function, so that a fact the simulation and the UI both need has one definition. Merge by

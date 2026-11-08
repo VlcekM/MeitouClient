@@ -1,10 +1,10 @@
 using System.Numerics;
-using Meitou.Engine.Cameras;
-using Meitou.Engine.Input;
-using Meitou.Engine.Time;
+using Meitou.Game.Host.Cameras;
+using Meitou.Game.Host.Input;
+using Meitou.Simulation.Session;
 using Meitou.Simulation;
 
-namespace Meitou.Engine;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// A running world: what is loaded (the region around <see cref="Focus"/>), the two clocks, the game clock, the input and the

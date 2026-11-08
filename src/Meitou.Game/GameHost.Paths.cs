@@ -1,5 +1,6 @@
 using System.Numerics;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
 
 namespace Meitou.Game;

@@ -1,8 +1,10 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Kidnap;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Ai;
 

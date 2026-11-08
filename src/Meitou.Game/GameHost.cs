@@ -3,19 +3,30 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.Ogre;
-using Meitou.Engine;
-using Meitou.Engine.Cameras;
-using Meitou.Engine.Input;
-using Meitou.Engine.Time;
-using Meitou.Rendering;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Effects;
+using Meitou.Game.Host;
+using Meitou.Game.Host.Cameras;
+using Meitou.Game.Host.Input;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Settings;
+using Meitou.Modding;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
+using Meitou.Simulation.Session;
+using Meitou.Game.Rendering.Characters;
 using Meitou.Simulation;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Display;
+using Meitou.Game.Rendering.Display;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
-using EngineKey = Meitou.Engine.Input.Key;
-using EngineButton = Meitou.Engine.Input.MouseButton;
+using EngineKey = Meitou.Game.Host.Input.Key;
+using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
 using SilkButton = Silk.NET.Input.MouseButton;
 
@@ -35,17 +46,17 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// <summary>The native splash shown since the program started; closed when the game window first shows.</summary>
     public IDisposable? Splash { get; init; }
     WorldSession session = null!;   // disposed with the host (Run)
-    Meitou.Simulation.PopulationSystem? population;
+    Meitou.Simulation.Population.PopulationSystem? population;
     /// <summary>The fights started by faction hostility (printed to the log); null in the sandbox and without the population.</summary>
     // The game data the world was built from, kept to build the next world of a quickload (GameHost.Saving.cs).
-    Meitou.Simulation.PopulationData? popData;
+    Meitou.Simulation.Population.PopulationData? popData;
     IReadOnlyList<Meitou.Data.World.TownPlacement> townPlacements = [];
     // The level data, for the zone files and town handles of a save (null in the sandbox and the duel).
     Meitou.Data.World.WorldLevelData? saveLevels;
     Meitou.Simulation.IWalkability? simWalkability;
     Meitou.Data.Characters.CharacterRigs? characterRigs;
-    Meitou.Navigation.RagdollGeometry? ragdollGeometry;
-    Meitou.Navigation.NavSystem? nav;
+    Meitou.Simulation.Navigation.RagdollGeometry? ragdollGeometry;
+    Meitou.Simulation.Navigation.NavSystem? nav;
     /// <summary>Zones whose mesh went live since the last <see cref="Meitou.Simulation.RepathCommand"/> (filled on the nav thread, under its own lock).</summary>
     readonly HashSet<Meitou.Data.World.ZoneCoordinate> navReady = [];
     long lastRepath;
@@ -57,7 +68,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     const double NavCacheSeconds = 120;
     const int NavCacheZones = 60;
     PlayerInterface player = null!;
-    Meitou.Simulation.Squad? playerSquad;
+    Meitou.Simulation.Factions.Squad? playerSquad;
     WorldFrame.Gpu gpu = null!;
     /// <summary>This run uses the native Metal loop: the shared world object exists, but its Vulkan post/loading path does not drive it.</summary>
     bool metalRenderer = false;   // set by the Metal loop (GameHost.Metal.cs, macOS builds only)
@@ -77,8 +88,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     WorldCamera camera = null!;
     WorldRenderOptions render = null!;
     readonly Stopwatch realTime = Stopwatch.StartNew();
-    Meitou.Rendering.Upscalers.Streamline? streamline;
-    Meitou.Rendering.Upscalers.Ngx? ngx;
+    Meitou.Game.Rendering.Upscalers.Streamline? streamline;
+    Meitou.Game.Rendering.Upscalers.Ngx? ngx;
     bool screenshotRequested;
     /// <summary>Frames in a row that could not be drawn while a control screenshot waits; at 30 the screenshot is answered with an error.</summary>
     int shotNoFrame;
@@ -135,7 +146,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         });
         gpu = WorldFrame.CreateGpu(context, install, scene, assets, o, interactive, LoadingStep, AwaitLoading);
         if (!o.NoParticles) titleParticleFactory = () => ParticleRenderer.Create(context, assets, gpu.Particles?.Library);
-        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline, ngx);
+        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Game.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline, ngx);
         (camera, render) = WorldFrame.Setup(scene, o);
         render.Grid = IsFlat;
         LoadingStep("people");
@@ -348,7 +359,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
         ConfigurePlayerInterface(player);
         player.LevelHost = MakeLevelEditorServices();
-        if (IsSandbox) player.ReservedKeys.UnionWith([Meitou.Engine.Input.Key.Z, Meitou.Engine.Input.Key.X, Meitou.Engine.Input.Key.C, Meitou.Engine.Input.Key.Y, Meitou.Engine.Input.Key.P, Meitou.Engine.Input.Key.G]);
+        if (IsSandbox) player.ReservedKeys.UnionWith([Meitou.Game.Host.Input.Key.Z, Meitou.Game.Host.Input.Key.X, Meitou.Game.Host.Input.Key.C, Meitou.Game.Host.Input.Key.Y, Meitou.Game.Host.Input.Key.P, Meitou.Game.Host.Input.Key.G]);
         player.ConfigureFrontend(scene.Database,
             () => Meitou.Data.Save.SaveCatalog.Scan(Meitou.Simulation.Saving.QuickSave.DefaultRoot, install.SaveDirectory,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")),
@@ -364,7 +375,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         {
             // The squad is placed on the mesh, and a still has its town at once: wait for the zones round the start (a cold build is about 2 s, then cached).
             var watch = Stopwatch.StartNew();
-            var zones = Meitou.Simulation.ZoneActivation.ZonesAround(scene.Focus, 0);
+            var zones = Meitou.Simulation.Population.ZoneActivation.ZonesAround(scene.Focus, 0);
             LoadingStep("navmesh");
             AwaitLoading(Task.WhenAll(zones.Select(z => (Task)nav.LoadZone(z))));
             foreach (var z in zones) navZones[z] = Stopwatch.GetTimestamp();
@@ -461,7 +472,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         // Dropping zones republishes the whole mesh (tens of ms): it runs on the pool, one batch at a time, and a zone being dropped is loaded again once that is done.
         if (navUnloading.Count > 0 && navUnload.IsCompleted) { navUnloading = []; relabelGates = true; }
         if (wait) FinishNavUnload();
-        var pending = new List<Task<Meitou.Navigation.NavZoneReady>>();
+        var pending = new List<Task<Meitou.Simulation.Navigation.NavZoneReady>>();
         // The population's zones, and those the walkers' long routes lead into (NavmeshWalkability.RouteZones).
         foreach (var z in population.ActiveZones.Concat(nav.Walkability.RouteZones(TimeSpan.FromSeconds(30))))
         {
@@ -497,15 +508,15 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
 
     /// <summary>The navmesh changed since the gate codes were made (a zone went live or was dropped).</summary>
     bool relabelGates;
-    Task<Meitou.Navigation.NavGateRegions>? gateLabelling;
-    Meitou.Navigation.NavGateRegions? gateRegions;
+    Task<Meitou.Simulation.Navigation.NavGateRegions>? gateLabelling;
+    Meitou.Simulation.Navigation.NavGateRegions? gateRegions;
     object? gateRegionsFor;
 
     /// <summary>
     /// Keeps the simulation's gate codes (docs/game/pathfinding.md "Gate codes") up to date: labels the loaded meshes on the pool after they changed, one labelling at a time, and
     /// hands each result to the world (again to a new world) as a <see cref="Meitou.Simulation.Locks.GateRegionsCommand"/>.
     /// </summary>
-    void UpdateGateRegions(Meitou.Navigation.NavSystem navSystem)
+    void UpdateGateRegions(Meitou.Simulation.Navigation.NavSystem navSystem)
     {
         if (gateLabelling is { IsCompleted: true } done)
         {
@@ -539,8 +550,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         // The stage and the portraits finished as the world is (a change of the options redraws the portraits).
         if (gpu.Characters is { } previews)
         {
-            previews.Look = Meitou.Rendering.Characters.PreviewLook.Of(o.Post);
-            player.PortraitSize = Meitou.Rendering.Characters.CharacterRenderer.PortraitSizeFor(previews.Look);
+            previews.Look = Meitou.Game.Rendering.Characters.PreviewLook.Of(o.Post);
+            player.PortraitSize = Meitou.Game.Rendering.Characters.CharacterRenderer.PortraitSizeFor(previews.Look);
             SyncIconLook();
         }
         if (!player.EditorOpen) ClearEditorBar();
@@ -562,13 +573,13 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             weather.Paused = sim.IsPaused || skyArrival is not null;
             weather.GameSpeed = (float)(sim.Speed > 0 ? sim.Speed : sim.LastNonZeroSpeed);
         }
-        Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Host);   // the profiler: the host's frame so far, then the blood marks apart from the terrain's update
+        Meitou.Game.Rendering.Profiling.StageClock.Lap(Meitou.Game.Rendering.Profiling.StageClock.Host);   // the profiler: the host's frame so far, then the blood marks apart from the terrain's update
         UpdateBlood();
         UpdateModHits();
-        Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Blood, "blood marks");
+        Meitou.Game.Rendering.Profiling.StageClock.Lap(Meitou.Game.Rendering.Profiling.StageClock.Blood, "blood marks");
         birdAspect = width / (float)Math.Max(height, 1);
         UpdateBirds();
-        Meitou.Rendering.StageClock.Lap(Meitou.Rendering.StageClock.Birds, "birds");
+        Meitou.Game.Rendering.Profiling.StageClock.Lap(Meitou.Game.Rendering.Profiling.StageClock.Birds, "birds");
         UpdateWeatherSource();
         UpdateInteriorView();
         // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds. The clock moves in whole
@@ -587,7 +598,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         if (tickAhead) NoteAheadTick();
     }
 
-    Meitou.Game.BirdFlocks? birds;
+    Meitou.Game.Effects.BirdFlocks? birds;
     Meitou.Data.Gameplay.BiomeMap? birdAreas;
     double birdClock = double.NaN;
 
@@ -600,8 +611,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             var kinds = Meitou.Data.Gameplay.BirdFlockData.LoadAll(db);
             try { birdAreas = Meitou.Data.Gameplay.BiomeMap.Create(Meitou.Data.Gameplay.BiomeGroupData.LoadAll(db), Meitou.Data.World.WeatherAreas.Load(install)); }
             catch (Exception e) when (e is IOException or FormatException) { birdAreas = null; }
-            birds = new Meitou.Game.BirdFlocks(kinds, birdHeights.HeightAt, GroupIdOfCell);
-            birdStep = new Meitou.Game.BirdThread(() => birds.Update(birdDt, birdEye, birdFocus, birdPlanes));
+            birds = new Meitou.Game.Effects.BirdFlocks(kinds, birdHeights.HeightAt, GroupIdOfCell);
+            birdStep = new Meitou.Game.Effects.BirdThread(() => birds.Update(birdDt, birdEye, birdFocus, birdPlanes));
 
         }
         // The step runs beside the frame: its flocks are shown one frame late (the original's thread is as loose), and a step still running when the next frame starts is left to finish.
@@ -630,8 +641,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         }
     }
 
-    readonly Meitou.Rendering.TerrainHeights birdHeights = new();
-    Meitou.Game.BirdThread? birdStep;
+    readonly Meitou.Game.Rendering.Terrain.TerrainHeights birdHeights = new();
+    Meitou.Game.Effects.BirdThread? birdStep;
     bool birdStarted;
     float birdDt;
     Vector3 birdEye, birdFocus;
@@ -640,7 +651,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     long birdBuildingsRevision = -1;
     object? birdAttractorsFor;
     Task<List<(string Key, Meitou.Data.GameRecord Record, Vector3 Position)>>? birdLevelSources;
-    readonly List<Meitou.Game.BirdAttractor> birdBuildingAttractors = [], birdLevelAttractors = [];
+    readonly List<Meitou.Game.Effects.BirdAttractor> birdBuildingAttractors = [], birdLevelAttractors = [];
 
     /// <summary>
     /// The <c>bird attractor</c> references of the objects the original registers them for (<c>FUN_140263700</c>, on a building's, map feature's or animal's creation):
@@ -672,7 +683,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 if (building.Complete && db.Find(building.Record) is { } record) AddBirdAttractors(birdBuildingAttractors, building.Id, record, building.Position);
             changed = true;
         }
-        var animals = new List<Meitou.Game.BirdAttractor>();
+        var animals = new List<Meitou.Game.Effects.BirdAttractor>();
         foreach (var c in snapshot.Characters)
             if (c.Animal && db.Find(c.RecordId) is { } animal) AddBirdAttractors(animals, c.Id, animal, c.Position);
         if (changed || animals.Count > 0 || birdHadAnimals) birds!.SetAttractors([.. birdBuildingAttractors, .. birdLevelAttractors, .. animals]);
@@ -681,10 +692,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
 
     bool birdHadAnimals;
 
-    void AddBirdAttractors(List<Meitou.Game.BirdAttractor> into, object owner, Meitou.Data.GameRecord record, Vector3 at)
+    void AddBirdAttractors(List<Meitou.Game.Effects.BirdAttractor> into, object owner, Meitou.Data.GameRecord record, Vector3 at)
     {
         foreach (var link in record.GetReferences("bird attractor"))
-            into.Add(new Meitou.Game.BirdAttractor((owner, link.TargetStringId), link.TargetStringId, at, link.Values.Value0, link.Values.Value1));
+            into.Add(new Meitou.Game.Effects.BirdAttractor((owner, link.TargetStringId), link.TargetStringId, at, link.Values.Value0, link.Values.Value1));
     }
 
     string? GroupIdOfCell(int cx, int cz) => birdAreas is { } areas && areas.GroupOf(cx, cz) is >= 0 and var g ? areas.Groups[g].Id : null;
@@ -692,7 +703,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// <summary>The view's six planes, normals inwards and normalised (Ogre's cached frustum planes, as the birds' distance test takes them).</summary>
     Vector4[] BirdFrustum()
     {
-        var planes = Meitou.Rendering.WorldCamera.FrustumPlanes(camera.View * camera.Projection(birdAspect, camera.Near, camera.ViewDistance));
+        var planes = Meitou.Game.Rendering.Frame.WorldCamera.FrustumPlanes(camera.View * camera.Projection(birdAspect, camera.Near, camera.ViewDistance));
         for (int i = 0; i < planes.Length; i++) planes[i] /= new Vector3(planes[i].X, planes[i].Y, planes[i].Z).Length();
         return planes;
     }

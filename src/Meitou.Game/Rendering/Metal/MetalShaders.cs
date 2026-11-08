@@ -1,11 +1,11 @@
 using System.Text.RegularExpressions;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Shaders;
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
 using Silk.NET.SPIRV;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// The backend's own artifacts of a program (the twin of <c>VulkanProgram</c>): the MSL libraries and
@@ -166,7 +166,7 @@ public sealed class MetalShaders : IGpuShaders
     internal static uint TableSamplerId(int kind) => TableTotal + TableTextureId(kind);
 
     /// <summary>The MSL's <c>[[id]]</c> of a kind's first texture array and first sampler array (the set's base plus the binding).</summary>
-    internal static uint TableTextureBinding(int kind) => (uint)(SetStride * Rendering.NativeShaders.BindlessSet) + TablePrefix[kind];
+    internal static uint TableTextureBinding(int kind) => (uint)(SetStride * Frame.NativeShaders.BindlessSet) + TablePrefix[kind];
     internal static uint TableSamplerBinding(int kind) => TableTextureBinding(kind) + TableTotal;
 
     /// <summary>Which array a member at an argument buffer id is: its kind and whether it is the sampler array (null: not the table's).</summary>
@@ -198,10 +198,10 @@ public sealed class MetalShaders : IGpuShaders
         uint[] cap = TableCapacity, prefix = TablePrefix;
         for (int k = 0; k < cap.Length; k++)
         {
-            string decl = $"layout(set = {Rendering.NativeShaders.BindlessSet}, binding = {k}) uniform {BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[];";
+            string decl = $"layout(set = {Frame.NativeShaders.BindlessSet}, binding = {k}) uniform {BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[];";
             // A stage that does not include the table's text (the host's test programs) has nothing to rewrite.
             if (!glsl.Contains(decl)) continue;
-            glsl = glsl.Replace(decl, $"layout(set = {Rendering.NativeShaders.BindlessSet}, binding = {prefix[k]}) uniform {BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[{cap[k]}];");
+            glsl = glsl.Replace(decl, $"layout(set = {Frame.NativeShaders.BindlessSet}, binding = {prefix[k]}) uniform {BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[{cap[k]}];");
         }
         return glsl;
     }
@@ -297,7 +297,7 @@ public sealed class MetalShaders : IGpuShaders
             PushConstantBytes = pc, NeutralSets = [GpuSetLayout.Written([]), .. extraSets],
         };
         var threads = LocalSize(glsl);
-        var msl = MslTranslator.Translate(code, "compute_main", ExecutionModel.GLCompute, argumentBufferSet: Rendering.NativeShaders.BindlessSet);
+        var msl = MslTranslator.Translate(code, "compute_main", ExecutionModel.GLCompute, argumentBufferSet: Frame.NativeShaders.BindlessSet);
         if (Environment.GetEnvironmentVariable("MEITOU_METAL_DUMP") is { } dump)
         {
             Directory.CreateDirectory(dump);
@@ -339,9 +339,9 @@ public sealed class MetalShaders : IGpuShaders
         bool bindless = Array.Exists(setLayouts, l => ReferenceEquals(l, GpuSetLayout.Bindless));
         if (bindless) { vs = RewriteBindless(vs); fs = RewriteBindless(fs); }
         var v = SpirvPatch.RemapBindings(Compiler.CompileNative(vs, fragment: false), VertexBlockBase, 0, SetStride);
-        if (bindless) v = SpirvPatch.BindlessFetchImages(v, Rendering.NativeShaders.BindlessSet, TableTotal);
+        if (bindless) v = SpirvPatch.BindlessFetchImages(v, Frame.NativeShaders.BindlessSet, TableTotal);
         var f = SpirvPatch.RemapBindings(Compiler.CompileNative(fs, fragment: true), 0, 0, SetStride);
-        if (bindless) f = SpirvPatch.BindlessFetchImages(f, Rendering.NativeShaders.BindlessSet, TableTotal);
+        if (bindless) f = SpirvPatch.BindlessFetchImages(f, Frame.NativeShaders.BindlessSet, TableTotal);
         if (Environment.GetEnvironmentVariable("MEITOU_METAL_DUMP") is { } dir)
         {
             Directory.CreateDirectory(dir);
@@ -359,7 +359,7 @@ public sealed class MetalShaders : IGpuShaders
             Index = programs.Count, Name = name, Model = ShaderModel.Native, VertexCode = v, FragmentCode = f,
             VertexReflection = rv, FragmentReflection = rf, PushConstantBytes = pushConstantBytes, NeutralSets = setLayouts,
         };
-        uint? tableSet = bindless ? Rendering.NativeShaders.BindlessSet : null;
+        uint? tableSet = bindless ? Frame.NativeShaders.BindlessSet : null;
         var vertexMsl = MslTranslator.Translate(v, "vertex_main", ExecutionModel.Vertex, argumentBufferSet: tableSet);
         var fragmentMsl = MslTranslator.Translate(f, "fragment_main", ExecutionModel.Fragment, argumentBufferSet: tableSet);
         if (Environment.GetEnvironmentVariable("MEITOU_METAL_DUMP") is { } dump)

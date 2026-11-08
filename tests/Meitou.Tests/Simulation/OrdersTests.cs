@@ -3,6 +3,8 @@ using Meitou.Data.Fcs;
 using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 using Meitou.Tests.Combat;
 using static Meitou.Tests.Bodies.BodyFixtures;
 using static Meitou.Tests.Combat.CombatFixtures;

@@ -1,9 +1,13 @@
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.Ogre;
-using Meitou.Rendering;
+using Meitou.Game.DevTools;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Settings;
+using Meitou.Game.Title;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 static class Program
 {
@@ -127,8 +131,8 @@ static class Program
             }
             game.NoPopulation = true;
             (world.X, world.Z, world.Town, world.Zone) = (field.X, field.Z, null, null);
-            Meitou.Rendering.GroundRelief.FieldCentre = new Vector2(field.X, field.Z);
-            Meitou.Rendering.GroundRelief.FieldCliffs = game.TerrainSandboxCliffs;
+            Meitou.Game.Rendering.Terrain.GroundRelief.FieldCentre = new Vector2(field.X, field.Z);
+            Meitou.Game.Rendering.Terrain.GroundRelief.FieldCliffs = game.TerrainSandboxCliffs;
             (world.NoFoliage, world.NoObjects) = (true, true);   // the ground alone: no grass, rocks or scattered objects over the tiles
             world.Weather ??= "Default";
             if (!rest.Contains("--time")) world.Hour = 10;
@@ -183,11 +187,11 @@ static class Program
                 return 2;
             }
             // Load the world round the place the squad will stand: the start's town drawn with the world's seed, as StartPlayer draws it.
-            var at = Meitou.Simulation.PopulationSystem.StartPlace(
-                Meitou.Simulation.PopulationData.Create(db, Meitou.Data.World.WorldLevelData.Load(install).Towns()), game.Seed, start).Centre;
+            var at = Meitou.Simulation.Population.PopulationSystem.StartPlace(
+                Meitou.Simulation.Population.PopulationData.Create(db, Meitou.Data.World.WorldLevelData.Load(install).Towns()), game.Seed, start).Centre;
             (world.X, world.Z) = (at.X, at.Y);
             world.Town = null;
-            if (!rest.Contains("--time")) world.Hour = (float)Meitou.Engine.Time.GameClock.DefaultStartHour;
+            if (!rest.Contains("--time")) world.Hour = (float)Meitou.Simulation.Session.GameClock.DefaultStartHour;
             Console.WriteLine($"new game  {start.Name}: {start.Money} cats, {start.Squad.Count} squad link(s), at {at.X:0}, {at.Y:0}");
         }
         Meitou.Data.Save.SaveGame? save = null;

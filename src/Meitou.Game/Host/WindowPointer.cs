@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 using Silk.NET.GLFW;
 using Silk.NET.Windowing;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// Where the mouse pointer is in the game window right now, asked of the OS rather than taken from the last mouse event, so a pointer that has

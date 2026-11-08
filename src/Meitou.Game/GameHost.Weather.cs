@@ -1,6 +1,6 @@
 using Meitou.Data.Particles;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Sky;
 using Meitou.Simulation;
 
 namespace Meitou.Game;

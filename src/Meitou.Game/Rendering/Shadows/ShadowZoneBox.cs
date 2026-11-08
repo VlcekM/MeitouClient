@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// The switch for the foliage's shadow-cascade work list tested by zone against the cascade's own planes (docs/render-shadows.md "The cascade work

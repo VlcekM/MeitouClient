@@ -2,6 +2,7 @@ using System.Numerics;
 using Meitou.Data.World;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Production;
 

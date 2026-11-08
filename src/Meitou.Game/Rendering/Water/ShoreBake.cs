@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
 /// The shore distance field's CPU bake (no GPU; docs/render-water.md "Shore distance field"). A square grid of <see cref="Size"/>² texels of

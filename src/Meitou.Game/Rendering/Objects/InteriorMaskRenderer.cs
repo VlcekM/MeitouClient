@@ -2,11 +2,12 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// The interior cut (docs/render-interior-cut.md): the <c>interior mask</c> meshes of the buildings near the eye drawn into a depth range of the

@@ -1,6 +1,10 @@
 using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 
 namespace Meitou.Simulation.Editing;

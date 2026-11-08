@@ -1,8 +1,9 @@
 using System.Numerics;
-using Meitou.Rendering;
+using Meitou.Game.Host;
+using Meitou.Game.Rendering.Frame;
 using Meitou.Simulation;
 
-namespace Meitou.Game;
+namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// Numpad / in the game (docs/viewer.md "Squad tour"): the camera flies from squad member to squad member in portrait order, keeping the

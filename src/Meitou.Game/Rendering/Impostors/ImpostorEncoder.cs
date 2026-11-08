@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Textures;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
 /// Block compression of the atlas levels: BC3 for the albedo and coverage (<see cref="EncodeBc3"/>), BC5 for the two-channel

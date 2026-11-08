@@ -1,8 +1,9 @@
 using Silk.NET.GLFW;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering.Display;
+namespace Meitou.Game.Rendering.Display;
 
 /// <summary>
 /// Borderless full screen for the viewer and the game (Alt+Enter, the Tab panel, the viewer's F2 editor button): the window loses its border and covers its monitor, so

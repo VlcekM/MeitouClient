@@ -1,7 +1,9 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// A population pool of a town or nest (docs/game/factions-squads-towns.md "Off-screen world"): its desired max (save key <c>popd</c> / <c>popd2</c>), its current max

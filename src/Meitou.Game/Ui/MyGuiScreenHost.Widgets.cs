@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
 
-namespace Meitou.Ui;
+namespace Meitou.Game.Ui;
 
 /// <summary>A key a focused list (or combo box) handles: MyGUI ListBox / ComboBox <c>onKeyButtonPressed</c>.</summary>
 public enum UiListKey { Up, Down, PageUp, PageDown, Home, End, Accept }

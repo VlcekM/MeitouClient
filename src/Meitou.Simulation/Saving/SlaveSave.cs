@@ -1,5 +1,6 @@
 using Meitou.Data.Fcs;
 using Meitou.Data.Save;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Saving;
 

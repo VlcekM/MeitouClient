@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Simulation.Factions;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Movement;
 
 /// <summary>The FACTION <c>squad formation</c> values (<c>fcs_enums.def</c> SquadFormation).</summary>
 public enum SquadFormation { Random = 0, Caravan = 1, Military = 2 }

@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using Meitou.Data.Gameplay.Dialogue;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation;
 

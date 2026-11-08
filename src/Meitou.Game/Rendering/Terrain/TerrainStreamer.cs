@@ -2,8 +2,10 @@ using System.Diagnostics;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Profiling;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// GL work cut into steps (a slab of a texture, a swap) that run a few at a time on the render thread, so streaming

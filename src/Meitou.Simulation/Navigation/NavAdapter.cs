@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Simulation;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The simulation's <see cref="IWalkability"/> over the navmesh (<see cref="NavSystem"/>): the only place the simulation knows the navigation

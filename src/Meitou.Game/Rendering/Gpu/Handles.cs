@@ -1,5 +1,6 @@
-using Meitou.Rendering.Gpu.Shaders;
-namespace Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Shaders;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>What a view covers (the engine's words; the backend maps it to its own).</summary>
 public enum GpuViewType { Texture2D, Texture2DArray, Cube }

@@ -8,7 +8,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// The zones the original keeps loaded (docs/game/character-stats.md "Corpses", <b>Verified</b>): the camera's 3 x 3 block and the box round the player's characters.

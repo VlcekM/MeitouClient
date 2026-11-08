@@ -3,7 +3,11 @@ using Meitou.Data.Characters;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
+using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Combat;
 

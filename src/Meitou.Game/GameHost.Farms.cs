@@ -64,7 +64,7 @@ sealed partial class GameHost
         }
     }
 
-    FarmLook? MakeFarm(Meitou.Data.GameDatabase db, Meitou.Rendering.WorldObjectRenderer objects, BuildingSnapshot site)
+    FarmLook? MakeFarm(Meitou.Data.GameDatabase db, Meitou.Game.Rendering.Objects.WorldObjectRenderer objects, BuildingSnapshot site)
     {
         if (!farmData.TryGetValue(site.Record, out var data))
             farmData[site.Record] = data = db.Find(site.Record) is { } r ? MachineData.From(db, r)?.Farm : null;

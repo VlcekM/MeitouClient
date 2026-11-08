@@ -1,6 +1,6 @@
 using Silk.NET.OpenAL;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// The sound card, through OpenAL Soft: one streaming stereo source fed by a thread that asks <see cref="fill"/> for the next block of

@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Save;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Saving;
 

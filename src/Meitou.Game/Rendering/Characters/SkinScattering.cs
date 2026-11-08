@@ -1,6 +1,6 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// The Meitou <c>skin</c> switch's table (docs/character-renderer.md "Skin"): Penner's pre-integrated skin diffuse, the sun's N·L term of a sphere of skin of radius r

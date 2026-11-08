@@ -1,8 +1,9 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Ogre;
+using Meitou.Game.Rendering.Foliage;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>The viewer's vertex: Ogre's per-source buffers deinterleaved into one fixed layout.</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]

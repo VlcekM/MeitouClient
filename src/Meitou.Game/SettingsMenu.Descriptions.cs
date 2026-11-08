@@ -1,5 +1,5 @@
-using Meitou.Engine.Input;
-using Meitou.Rendering;
+using Meitou.Game.Host.Input;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game;
 

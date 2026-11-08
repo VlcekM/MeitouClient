@@ -1,7 +1,9 @@
 using System.Globalization;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Shadows;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
 /// GLSL of the world view's sky, light and haze in the game's own terms (docs/formats/sky.md, docs/formats/lighting.md): SkyX's

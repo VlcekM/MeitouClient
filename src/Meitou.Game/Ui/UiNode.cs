@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Ui;
 
-namespace Meitou.Ui;
+namespace Meitou.Game.Ui;
 
 /// <summary>Pixels plus a fraction of the available parent dimension. No browser/CSS dependency.</summary>
 public readonly record struct UiLength(float Pixels, float Fraction = 0)

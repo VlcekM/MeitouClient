@@ -1,6 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Characters;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Rendering.Characters;
 using Meitou.Simulation;
 using Meitou.Simulation.Editing;
 

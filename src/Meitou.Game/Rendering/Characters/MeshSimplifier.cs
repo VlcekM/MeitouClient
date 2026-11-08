@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// Reduces a triangle list by edge collapses chosen by quadric error, for the mesh levels a character mesh does not ship with

@@ -1,12 +1,14 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Gameplay;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>An inventory icon wanted: the item's record, its <c>material sid</c> ("" none) and the COLOR_DATA it is dyed with ("" undyed), the ids the game's saved icons are named by.</summary>
 public readonly record struct IconKey(string Record, string Material, string Colour = "");

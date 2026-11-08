@@ -3,6 +3,8 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Save;
 using Meitou.Data.World;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
 
 namespace Meitou.Simulation.Saving;

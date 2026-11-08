@@ -1,6 +1,7 @@
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Profiling;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// Copies data into device buffers and textures through the frame's upload command buffer, which the host submits ahead of the frame's own
@@ -104,7 +105,7 @@ public sealed unsafe class UploadBatch : IGpuUploadBatch
 {
     readonly GpuContext ctx;
     readonly bool immediate;
-    readonly List<Meitou.Rendering.Gpu.Core.BufferAllocation> staging = [];
+    readonly List<Meitou.Game.Rendering.Gpu.Core.BufferAllocation> staging = [];
 
     internal UploadBatch(GpuContext ctx)
     {
@@ -151,7 +152,7 @@ public sealed unsafe class UploadBatch : IGpuUploadBatch
 
     (Silk.NET.Vulkan.Buffer Buffer, ulong Offset) Stage(ReadOnlySpan<byte> data)
     {
-        var b = ctx.Device.Allocator.CreateBuffer((ulong)data.Length, BufferUsageFlags.TransferSrcBit, Meitou.Rendering.Gpu.Core.MemoryKind.Upload, "upload staging");
+        var b = ctx.Device.Allocator.CreateBuffer((ulong)data.Length, BufferUsageFlags.TransferSrcBit, Meitou.Game.Rendering.Gpu.Core.MemoryKind.Upload, "upload staging");
         staging.Add(b);
         data.CopyTo(new Span<byte>((void*)b.Mapped, data.Length));
         return (b.Buffer, 0);

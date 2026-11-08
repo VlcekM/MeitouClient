@@ -6,8 +6,10 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation;
 

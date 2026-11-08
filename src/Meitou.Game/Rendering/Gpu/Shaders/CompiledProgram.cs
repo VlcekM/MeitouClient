@@ -1,4 +1,6 @@
-namespace Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+
+namespace Meitou.Game.Rendering.Gpu.Shaders;
 
 /// <summary>A linked-by-name vertex and fragment pair as SPIR-V, with reflection of both stages.</summary>
 public sealed class CompiledProgram

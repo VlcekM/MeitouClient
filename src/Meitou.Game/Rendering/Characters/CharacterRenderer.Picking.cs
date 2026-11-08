@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// A box round part of a mesh for picking, in the bind pose's model space: the vertices whose strongest weight is <see cref="Bone"/> (-1: an unskinned

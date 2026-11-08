@@ -1,7 +1,8 @@
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The frame being recorded (docs/renderer-native.md 2.2): its number and slot, the primary command list, per-frame constants, timestamps,

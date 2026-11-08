@@ -1,5 +1,5 @@
-using Meitou.Rendering;
-using Meitou.Rendering.Impostors;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Impostors;
 
 namespace Meitou.Tests.Rendering;
 

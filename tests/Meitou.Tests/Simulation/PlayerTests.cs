@@ -1,6 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;

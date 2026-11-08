@@ -2,9 +2,11 @@ using System.Diagnostics;
 using System.Numerics;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
 /// The seam's post chain for a backend whose targets are top-down: the game's exposure, tone map and grade

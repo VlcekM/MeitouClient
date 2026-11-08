@@ -1,4 +1,6 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Sky;
+
+namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// The shadow range's cap from a placed fog block (<see cref="FogVolumes.ShadowHideDistance"/>), steadied against the hide radius moving with the eye

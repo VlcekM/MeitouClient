@@ -1,11 +1,12 @@
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
-using Meitou.Rendering.Upscalers;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Upscalers;
 using Silk.NET.Core.Native;
 using Silk.NET.Vulkan;
 using Silk.NET.Windowing;
 
-namespace Meitou.Rendering.Display;
+namespace Meitou.Game.Rendering.Display;
 
 /// <summary>
 /// The window and the GPU behind the renderers: a Vulkan device, the native <see cref="GpuContext"/> they draw with and,
@@ -174,7 +175,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
 
     /// <summary>Shows the frame (headless: just submits it). The backbuffer stays intact until the next frame, so a screenshot of it is read after this.
     /// With <paramref name="topDown"/> the window shows that finished picture (row 0 the top) instead of the flipped backbuffer.</summary>
-    public void Present(Meitou.Rendering.Gpu.GpuTexture? topDown = null)
+    public void Present(Meitou.Game.Rendering.Gpu.GpuTexture? topDown = null)
     {
         Streamline?.Marker(PclMarker.RenderSubmitEnd);
         Streamline?.Marker(PclMarker.PresentStart);

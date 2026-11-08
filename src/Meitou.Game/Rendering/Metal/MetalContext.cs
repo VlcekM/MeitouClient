@@ -1,13 +1,13 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Shaders;
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
 using SharpMetal.ObjectiveCCore;
 using SharpMetal.QuartzCore;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// The Metal device as the renderers see it (docs/resource-layer.md): the second implementation of
@@ -153,7 +153,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         this.device = device;
         this.queue = queue;
         this.presentFormat = presentFormat;
-        Meitou.Rendering.DepthConvention.Reversed = false;   // Metal keeps the conventional scene depth (docs/renderer-native.md)
+        Meitou.Game.Rendering.Frame.DepthConvention.Reversed = false;   // Metal keeps the conventional scene depth (docs/renderer-native.md)
         // Metal supports 2x/4x (and 8x on some discrete Macs) for the colour and depth targets the reflection uses. Ask the
         // device rather than assuming 4: the same reflection pass must fall back cleanly on a Mac without MSAA support.
         int supportedSamples = 1;

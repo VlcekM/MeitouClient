@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>How <see cref="FoliageCardTrimmer"/> decides (docs/render-foliage.md, "Card trimming").</summary>
 public sealed record FoliageCardTrimOptions

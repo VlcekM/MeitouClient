@@ -1,8 +1,9 @@
 using System.Numerics;
 using Meitou.Data.World;
 using Meitou.Simulation;
+using Meitou.Simulation.Towns;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// <see cref="IWalkability"/> over the loaded zone meshes. Where a zone's mesh is not there yet (it is built on a worker thread,

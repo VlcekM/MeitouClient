@@ -1,7 +1,8 @@
 using System.Numerics;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// Streams the world's objects by zone: the zones within a range of the eye are laid out on worker threads

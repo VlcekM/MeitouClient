@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Profiling;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// A guest's native segment, prepared on the render thread and recorded later, on any thread (docs/renderer-native.md 6.2, wave 4).

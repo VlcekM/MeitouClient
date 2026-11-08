@@ -1,5 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Dialogue;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Dialogue;
 

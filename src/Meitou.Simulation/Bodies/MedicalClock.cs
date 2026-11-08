@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Bodies;
 
 /// <summary>
 /// The camera the world is looked at through, passed by the host once a frame (nothing is on screen without it, as in a headless world): where the eye is, which way it looks, the vertical field of

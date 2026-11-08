@@ -1,7 +1,9 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
 using Meitou.Game;
-using Meitou.Rendering;
+using Meitou.Game.Host;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Settings;
 using Meitou.Settings;
 
 namespace Meitou.Tests.Gameplay;

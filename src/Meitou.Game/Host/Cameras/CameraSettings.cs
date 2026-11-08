@@ -1,6 +1,6 @@
 using Meitou.Data.World;
 
-namespace Meitou.Engine.Cameras;
+namespace Meitou.Game.Host.Cameras;
 
 /// <summary>Tunables of the cameras. Speeds the game's settings define are named after them; the rest are engine choices.</summary>
 public sealed class CameraSettings

@@ -1,8 +1,10 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Objects;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// The GPU grass (docs/renderer-native.md 5.4 and 5.6.2): two compute kernels that decide, per view, which (page, patch) draws exist, how

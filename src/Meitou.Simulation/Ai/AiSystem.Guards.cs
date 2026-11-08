@@ -1,6 +1,9 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Ai;
 

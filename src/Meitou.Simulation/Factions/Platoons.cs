@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Factions;
 
 /// <summary>Where a roaming squad is in its life (docs/game/game-loop.md "Factions and squads": a platoon is active or unloaded).</summary>
 public enum PlatoonState : byte

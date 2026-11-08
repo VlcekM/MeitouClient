@@ -1,8 +1,12 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Aggro;
 
 /// <summary>
 /// NPC squads running away from a lost fight (docs/simulation.md "Fleeing"; the original's facts in docs/game/perception.md "Fleeing"). All work is serial

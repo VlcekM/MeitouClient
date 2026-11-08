@@ -10,12 +10,18 @@ using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 
-using Meitou.Rendering;
-using Meitou.Rendering.Display;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
-using Meitou.Rendering.Upscalers;
-using static Meitou.Rendering.WorldFrame;
+using Meitou.Game.Rendering.Bench;
+using Meitou.Game.Rendering.Display;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Rendering.Upscalers;
+using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 
@@ -89,7 +95,7 @@ static partial class WorldApp
     /// <summary>Ends the frame (submits it).</summary>
     static void EndFrame(GpuContext context) => context.EndFrame();
 
-    static unsafe int Screenshot(Meitou.Rendering.Display.VulkanDisplay display, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
+    static unsafe int Screenshot(Meitou.Game.Rendering.Display.VulkanDisplay display, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         var context = display.Context;
         using var gpu = CreateGpu(context, install, scene, assets, o, interactive: false);
@@ -270,7 +276,7 @@ static partial class WorldApp
         SettingsPanel? panel = null;
         FrameProfiler? profiler = null;
         PassMeter? meter = null;
-        Meitou.Audio.AudioSystem? audio = null;
+        Meitou.Game.Audio.AudioSystem? audio = null;
         bool statsVisible = false, fpsVisible = false;
         string fpsText = "";
         double fpsWindowMs = 0;
@@ -294,7 +300,7 @@ static partial class WorldApp
             meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             if (!o.NoAudio)
             {
-                audio = Meitou.Audio.AudioSystem.TryCreate(install, Meitou.Audio.AudioSystem.AmbientVolumeSetting(install), out var audioError);
+                audio = Meitou.Game.Audio.AudioSystem.TryCreate(install, Meitou.Game.Audio.AudioSystem.AmbientVolumeSetting(install), out var audioError);
                 if (audio is not null) audio.Player.Gain = MathF.Pow(10, o.AudioGainDb / 20);
                 Console.WriteLine(audio is not null ? $"audio     {audio.DeviceName}, ambience and music from the Wwise banks{(o.AudioGainDb != 0 ? $", gain {o.AudioGainDb:+0.#;-0.#} dB" : "")} (--no-audio turns it off)" : $"audio     off: {audioError}");
             }

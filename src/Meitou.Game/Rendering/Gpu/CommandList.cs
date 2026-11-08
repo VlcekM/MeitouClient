@@ -1,13 +1,14 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Core;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.EXT;
 using Silk.NET.Vulkan.Extensions.KHR;
 using Buffer = Silk.NET.Vulkan.Buffer;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>An attachment of a <see cref="RenderingDesc"/>: a view in GENERAL layout, its load op and clear value (stores always). The depth
 /// clear defaults to 1 (conventional targets rely on it); scene-convention targets pass <see cref="DepthConvention.Clear"/>.</summary>

@@ -5,7 +5,7 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>Where a zone's mesh came from.</summary>
 public enum NavMeshOrigin { Cache, Built }

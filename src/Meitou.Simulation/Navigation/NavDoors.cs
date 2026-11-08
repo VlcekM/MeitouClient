@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The run-time state of doors, shared by every query: a door is named by its building's <see cref="Meitou.Data.World.BuildingKey"/> (zone and instance id; the

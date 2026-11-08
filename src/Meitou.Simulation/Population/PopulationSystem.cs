@@ -1,3 +1,5 @@
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Bodies;
 using System.Collections.Concurrent;
@@ -7,8 +9,12 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Weather;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>Makes the drawable half of a character (rolled by <see cref="CharacterGenerator"/>); null when it cannot be made.</summary>
 

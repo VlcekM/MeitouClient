@@ -1,6 +1,6 @@
 #if MEITOU_METAL
-using Meitou.Metal;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Metal;
+using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Metal;
 using SharpMetal.ObjectiveCCore;
 

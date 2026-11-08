@@ -1,8 +1,10 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering.Gi;
+namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
 /// The GI resolve (docs/render-gi.md "Resolve"): the probes read once per pixel of a lower-resolution target after the scene instead of in every

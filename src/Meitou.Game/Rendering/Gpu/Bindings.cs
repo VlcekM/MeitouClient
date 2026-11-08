@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>What a program's slot is bound to (the kinds the engine's programs ask for).</summary>
 public enum GpuBindingKind : int

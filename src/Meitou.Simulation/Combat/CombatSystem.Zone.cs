@@ -3,6 +3,8 @@ using System.Runtime.CompilerServices;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Combat;
 

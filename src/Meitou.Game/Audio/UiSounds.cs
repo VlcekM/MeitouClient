@@ -1,7 +1,7 @@
 using Meitou.Data;
 using Meitou.Data.Fcs;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// One interface sound (docs/audio.md "Interface"): an event on the GUI object, with the switch (or state) the game sets first. <see cref="Item"/> is the record id of an inventory

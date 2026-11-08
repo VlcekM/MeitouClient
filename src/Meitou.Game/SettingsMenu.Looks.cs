@@ -3,8 +3,9 @@ using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using Meitou.Data.Ui;
-using Meitou.Engine.Input;
-using Meitou.Rendering;
+using Meitou.Game.Host;
+using Meitou.Game.Host.Input;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game;
 

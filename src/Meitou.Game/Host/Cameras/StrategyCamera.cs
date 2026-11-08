@@ -1,9 +1,9 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Engine.Input;
-using Meitou.Engine.Time;
+using Meitou.Game.Host.Input;
+using Meitou.Simulation.Session;
 
-namespace Meitou.Engine.Cameras;
+namespace Meitou.Game.Host.Cameras;
 
 /// <summary>
 /// The game's strategy camera (docs/formats/camera.md, Verified against <c>kenshi_x64.exe</c>): a pivot with the camera on a boom behind

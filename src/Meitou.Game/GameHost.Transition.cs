@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using Meitou.Game.Title;
 
 namespace Meitou.Game;
 
@@ -173,7 +174,7 @@ sealed partial class GameHost
         {
             // Streaming allocates after Boot's collection: retire its uploads and compact before exposing the menu.
             titleWarmFinalized = true;
-            Meitou.Rendering.WorldFrame.FinishLoading(display.Context);
+            Meitou.Game.Rendering.Frame.WorldFrame.FinishLoading(display.Context);
             smoothSeconds = 0;
             return;
         }
@@ -188,7 +189,7 @@ sealed partial class GameHost
         ReportLoading($"the view warmed up in {warmSeconds:0.0} s");
     }
 
-    /// <summary>Whether a character is one the loading screen waits for (within the renderer's <see cref="Meitou.Rendering.Characters.CharacterRenderer.LoadingReach"/> of its focus).</summary>
+    /// <summary>Whether a character is one the loading screen waits for (within the renderer's <see cref="Meitou.Game.Rendering.Characters.CharacterRenderer.LoadingReach"/> of its focus).</summary>
     bool InLoadingReach(Meitou.Simulation.CharacterSnapshot c) => gpu.Characters is not { LoadingFocus: { } f } r
         || Vector2.DistanceSquared(new Vector2(c.Position.X, c.Position.Z), f) <= r.LoadingReach * r.LoadingReach;
 
@@ -196,7 +197,7 @@ sealed partial class GameHost
     /// Whether the loading screen still waits for a character's look: one in its reach whose drawn look is not prepared. An operator's tool look, once prepared, is
     /// the drawn one (<see cref="HeldLook"/>) and its plain look is listed no more, so that may never be built.
     /// </summary>
-    bool AwaitsLook(Meitou.Simulation.CharacterSnapshot c, Meitou.Rendering.Characters.CharacterRenderer characters) =>
+    bool AwaitsLook(Meitou.Simulation.CharacterSnapshot c, Meitou.Game.Rendering.Characters.CharacterRenderer characters) =>
         c.Appearance is { } look && InLoadingReach(c) && !characters.IsPrepared(look) && !HeldPrepared(look, c.HeldTool, characters);
 
     void AdvanceSkyArrival(double seconds)

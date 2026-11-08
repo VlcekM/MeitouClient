@@ -3,8 +3,9 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
+using Meitou.Simulation.Factions;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// The homeless squads of the loaded area sectors after they are made (docs/game/factions-squads-towns.md "Homeless squads"), at every roaming look (2 s):

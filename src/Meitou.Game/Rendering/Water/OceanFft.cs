@@ -1,11 +1,12 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Profiling;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Water;
 
 /// <summary>The push constants all three ocean kernels declare (std430, 48 bytes).</summary>
 [StructLayout(LayoutKind.Sequential)]

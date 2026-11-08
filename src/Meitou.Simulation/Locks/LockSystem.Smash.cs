@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Locks;
 

@@ -1,4 +1,5 @@
 using Meitou.Simulation;
+using Meitou.Simulation.Ai;
 
 namespace Meitou.Tests.Simulation;
 

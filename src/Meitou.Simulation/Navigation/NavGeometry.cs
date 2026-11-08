@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The small plane geometry the gatherer, builder, pruner and queries share. Each expression is evaluated exactly as it was where it lived before

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
 /// The geometry of a far billboard ("impostor") atlas (docs/impostors.md): a grid of <c>Grid × Grid</c> orthographic views of a mesh,

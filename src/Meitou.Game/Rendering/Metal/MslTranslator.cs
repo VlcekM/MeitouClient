@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using Silk.NET.SPIRV;
 using Silk.NET.SPIRV.Cross;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// SPIR-V to Metal Shading Language, in process: the step between the engine's shader compiler (shaderc, which makes SPIR-V)

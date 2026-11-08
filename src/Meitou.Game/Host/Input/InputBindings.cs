@@ -1,4 +1,4 @@
-namespace Meitou.Engine.Input;
+namespace Meitou.Game.Host.Input;
 
 /// <summary>What the player can ask for; keys and buttons are bound to these (<see cref="InputBindings"/>).</summary>
 public enum InputAction

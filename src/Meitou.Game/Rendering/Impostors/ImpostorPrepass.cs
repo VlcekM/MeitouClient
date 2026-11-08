@@ -1,4 +1,6 @@
-namespace Meitou.Rendering.Impostors;
+using Meitou.Game.Rendering.Foliage;
+
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
 /// The depth prepass for the billboards (docs/render-foliage.md "Foliage cost in the orbit"), the foliage meshes' prepass (<see cref="FoliagePrepass"/>) for the trees

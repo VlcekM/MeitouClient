@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// Which top mip levels of a texture the picture can never sample, from how near the texture is used (docs/renderer-native.md 8.12).

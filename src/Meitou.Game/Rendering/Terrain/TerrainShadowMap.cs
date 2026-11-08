@@ -2,11 +2,11 @@ using System.Diagnostics;
 using System.Numerics;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Shadows;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// The terrain's shadow over the whole world for the Meitou shadows (beyond the cascades' range): for the sun's direction, per sample

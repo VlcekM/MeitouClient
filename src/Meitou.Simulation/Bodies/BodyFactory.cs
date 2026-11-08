@@ -4,7 +4,7 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Bodies;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Bodies;
 
 /// <summary>
 /// Makes the body of a character from its records (docs/game/character-stats.md "Building a character's stats"): the stats from the STATS record the

@@ -1,11 +1,11 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Meitou.Data.Textures;
 
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 using Vk = Silk.NET.Vulkan;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// Reads a target back into a picture file (screenshots; always PNG). Native (docs/renderer-native.md 7.5, 8.9): the frame so far is submitted and waited for

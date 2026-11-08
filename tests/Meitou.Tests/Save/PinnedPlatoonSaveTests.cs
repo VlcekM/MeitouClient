@@ -2,6 +2,8 @@ using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Save;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 using Meitou.Tests.Simulation;
 using static Meitou.Tests.Save.SaveSamples;

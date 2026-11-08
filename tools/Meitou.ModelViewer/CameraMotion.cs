@@ -1,7 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Frame;
 
-using Meitou.Rendering;
-using static Meitou.Rendering.WorldFrame;
+using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 

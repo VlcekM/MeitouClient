@@ -1,9 +1,9 @@
-using EngineKey = Meitou.Engine.Input.Key;
-using EngineButton = Meitou.Engine.Input.MouseButton;
+using EngineKey = Meitou.Game.Host.Input.Key;
+using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
 using SilkButton = Silk.NET.Input.MouseButton;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>The windowing library's keys and buttons as the engine's (null for the ones the engine has no name for).</summary>
 static class KeyMap

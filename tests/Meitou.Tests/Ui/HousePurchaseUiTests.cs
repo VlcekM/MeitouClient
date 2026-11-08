@@ -4,12 +4,13 @@ using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Ogre;
 using Meitou.Data.Ui;
-using Meitou.Engine;
-using Meitou.Engine.Input;
+using Meitou.Game.Host;
+using Meitou.Game.Host.Input;
 using Meitou.Game;
 using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Player;
 using Meitou.Tests.Simulation;
 
 namespace Meitou.Tests.Ui;

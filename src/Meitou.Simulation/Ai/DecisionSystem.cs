@@ -1,6 +1,8 @@
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Ai;
 
 /// <summary>The steps of the original's chooser (<c>AITaskSytem::chooseGoal</c> <c>FUN_140510ef0</c>, docs/game/ai-tasks.md "Precedence"), in the order they are tried.</summary>
 public enum DecisionStep : byte

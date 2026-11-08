@@ -2,7 +2,7 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Localisation;
 
-namespace Meitou.Game;
+namespace Meitou.Modding;
 
 /// <summary>
 /// One line of the Settings MODS page: a mod in load order with the header of its file and the data problems found in it, or a

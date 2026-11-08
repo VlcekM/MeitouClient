@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.World;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Locks;
 

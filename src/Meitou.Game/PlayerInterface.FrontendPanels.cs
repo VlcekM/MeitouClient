@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Ui;
 
 namespace Meitou.Game;
 

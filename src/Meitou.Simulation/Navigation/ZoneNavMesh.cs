@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// A built navigation mesh of one zone: convex polygons (up to six vertices, counter-clockwise seen from above) with their areas and neighbours.

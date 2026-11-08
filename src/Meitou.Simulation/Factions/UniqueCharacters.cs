@@ -2,7 +2,7 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Save;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Factions;
 
 /// <summary>A unique character's state (docs/game/factions-squads-towns.md "Unique characters", <c>NPC is</c> values): 1 is also the state of one never made.</summary>
 public enum UniqueState : byte { Dead = 0, Alive = 1, Imprisoned = 2 }

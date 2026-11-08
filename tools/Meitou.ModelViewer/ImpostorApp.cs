@@ -6,14 +6,12 @@ using Meitou.Data;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
-using Meitou.Rendering;
-using Meitou.Rendering.Display;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Impostors;
+using Meitou.Game.Rendering.Display;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Impostors;
 using Silk.NET.Vulkan;
-using GpuTexture = Meitou.Rendering.Gpu.GpuTexture;
+using GpuTexture = Meitou.Game.Rendering.Gpu.GpuTexture;
 
-using Meitou.Rendering.Gpu.Core;
 
 namespace Meitou.ModelViewer;
 

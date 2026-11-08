@@ -2,6 +2,7 @@ using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Game;
 
@@ -117,7 +118,7 @@ sealed partial class GameHost
     /// <summary>The standing camps' debris meshes (<see cref="WorldSnapshot.NestMeshes"/>) as runtime item placements, by place: the ones gone are taken out, the new ones put in.</summary>
     void DiffNestMeshes(WorldSnapshot snapshot)
     {
-        var current = new Dictionary<string, Meitou.Simulation.NestMesh>(StringComparer.Ordinal);
+        var current = new Dictionary<string, Meitou.Simulation.Population.NestMesh>(StringComparer.Ordinal);
         foreach (var m in snapshot.NestMeshes) current.TryAdd(NestMeshId(m), m);
         foreach (string id in shownNestMeshes.Where(id => !current.ContainsKey(id)).ToArray())
         {
@@ -133,7 +134,7 @@ sealed partial class GameHost
         }
     }
 
-    static string NestMeshId(Meitou.Simulation.NestMesh m) =>
+    static string NestMeshId(Meitou.Simulation.Population.NestMesh m) =>
         string.Create(System.Globalization.CultureInfo.InvariantCulture, $"nestmesh:{m.Mesh}@{m.Position.X:F1},{m.Position.Z:F1}");
 
     /// <summary>
@@ -223,7 +224,7 @@ sealed partial class GameHost
     Building.BuildServices? MakeBuildServices()
     {
         if (scene.Database is not { } db) return null;
-        var footprints = new Meitou.Navigation.BuildingFootprints(install, db, IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels);
+        var footprints = new Meitou.Simulation.Navigation.BuildingFootprints(install, db, IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels);
         var parts = new Dictionary<string, IReadOnlyList<Meitou.Data.World.PlacedMesh>>(StringComparer.Ordinal);
         var icons = new Meitou.Data.Gameplay.Construction.BuildingIcons(Path.Combine(install.DataDirectory, "icons", "buildings"));
         IReadOnlyList<Meitou.Data.Gameplay.Construction.PlacementTown>? towns = null;
@@ -237,7 +238,7 @@ sealed partial class GameHost
         // The world's resources for the mine and farm readout, remade when a new game or a load replaces the population data. The check and the popup ask for the same ghost
         // each frame: the last answer is kept.
         var machines = new Dictionary<string, Meitou.Data.Gameplay.Construction.MachineData?>(StringComparer.Ordinal);
-        (Meitou.Simulation.PopulationData Data, Meitou.Data.Gameplay.Construction.ResourceField Field)? field = null;
+        (Meitou.Simulation.Population.PopulationData Data, Meitou.Data.Gameplay.Construction.ResourceField Field)? field = null;
         (string Record, System.Numerics.Vector3 At, Meitou.Data.Gameplay.Construction.PlacementReadout? Readout)? lastReadout = null;
         Meitou.Data.Gameplay.Construction.PlacementReadout? Readout(string record, System.Numerics.Vector3 at)
         {

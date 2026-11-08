@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Bench;
 
 /// <summary>
 /// The pure parts of the bench's triangle size histogram (docs/bench.md "Triangles per pass", <c>--bench-tris</c>): the fine area bins the

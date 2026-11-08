@@ -2,8 +2,9 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Factions;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// Town residents in their buildings (docs/game/factions-squads-towns.md "Town residents"): which building each resident entry's squads get, and where in it they

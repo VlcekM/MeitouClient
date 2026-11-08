@@ -1,6 +1,8 @@
 using System.Numerics;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Bodies;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Perception;
 
 /// <summary>The tags of a sense entry (the original's tag word, entry +0x30, docs/game/perception.md "Sense tags"): the bits the readers test.</summary>
 [Flags]

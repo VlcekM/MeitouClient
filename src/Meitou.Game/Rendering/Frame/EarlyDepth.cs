@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The switch for the objects', rocks' and foliage meshes' early depth test (docs/render-objects.md "Early depth test"): a fragment shader that can

@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Xml.Linq;
 using Meitou.Data.Ui;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Tests.Ui;
 

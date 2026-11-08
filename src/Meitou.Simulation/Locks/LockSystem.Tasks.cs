@@ -1,5 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Locks;
 

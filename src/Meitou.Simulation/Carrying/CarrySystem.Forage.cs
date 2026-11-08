@@ -1,6 +1,11 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Combat;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 using Meitou.Simulation.Production;
 
 namespace Meitou.Simulation.Carrying;

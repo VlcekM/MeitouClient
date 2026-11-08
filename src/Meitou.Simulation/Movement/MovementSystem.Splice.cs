@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Movement;
 
 /// <summary>
 /// Splicing a long route (docs/game/pathfinding.md "Long routes", engine choice): when zones along a walker's path go live, or it reaches the provisional part, it asks

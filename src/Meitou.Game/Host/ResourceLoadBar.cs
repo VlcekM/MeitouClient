@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Ui;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// The original's background-loading bar (the resource loader's update, <c>FUN_14044bf40</c>; docs/game/ui-screens.md "Background loading bar"): a

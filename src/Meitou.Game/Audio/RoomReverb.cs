@@ -1,4 +1,4 @@
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// A stereo room reverb standing in for the banks' Wwise RoomVerb effects (docs/audio.md#reverb): the plug-in is closed source, so this is a

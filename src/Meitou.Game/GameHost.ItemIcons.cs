@@ -1,6 +1,6 @@
 using Meitou.Data.Gameplay;
-using Meitou.Rendering.Characters;
-using Meitou.Rendering.Ui;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Ui;
 
 namespace Meitou.Game;
 

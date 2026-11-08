@@ -1,5 +1,5 @@
 using System.Globalization;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 
 namespace Meitou.ModelViewer;
 

@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The programs the engine's shaders compile to (the seam's surface, docs/resource-layer.md): the GLSL

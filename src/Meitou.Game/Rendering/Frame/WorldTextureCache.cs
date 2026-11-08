@@ -1,15 +1,16 @@
 using System.Buffers;
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
-using GpuTexture = Meitou.Rendering.Gpu.GpuTexture;
+using GpuTexture = Meitou.Game.Rendering.Gpu.GpuTexture;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Profiling;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// A texture of the world view's objects and foliage: not resident until its file is decoded (in the background) and uploaded. Reading

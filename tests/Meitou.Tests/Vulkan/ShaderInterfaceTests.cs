@@ -1,4 +1,4 @@
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Gpu.Shaders;
 
 namespace Meitou.Tests.Vulkan;
 

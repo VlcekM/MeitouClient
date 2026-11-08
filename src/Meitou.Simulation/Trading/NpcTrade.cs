@@ -1,3 +1,4 @@
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using TownBuilding = Meitou.Data.World.TownBuilding;
 

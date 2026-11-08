@@ -1,8 +1,8 @@
 using System.Numerics;
-using Meitou.Engine.Input;
-using Meitou.Engine.Time;
+using Meitou.Game.Host.Input;
+using Meitou.Simulation.Session;
 
-namespace Meitou.Engine.Cameras;
+namespace Meitou.Game.Host.Cameras;
 
 /// <summary>
 /// The free camera (the game's <c>toggle_fps_camera</c>, docs/formats/camera.md: flies with a velocity, only kept a little above

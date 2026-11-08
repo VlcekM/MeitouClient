@@ -1,4 +1,5 @@
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Ai;
 
 namespace Meitou.Simulation.Kidnap;
 

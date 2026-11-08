@@ -1,6 +1,6 @@
 using System.Numerics;
-using Meitou.Engine.Cameras;
-using Meitou.Engine.Input;
+using Meitou.Game.Host.Cameras;
+using Meitou.Game.Host.Input;
 
 namespace Meitou.Tests.Engine;
 

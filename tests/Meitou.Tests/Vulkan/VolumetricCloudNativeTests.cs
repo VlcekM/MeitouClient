@@ -1,8 +1,10 @@
 using System.Numerics;
-using Meitou.Rendering;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Sky;
 using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Vulkan;
@@ -26,7 +28,7 @@ public class VolumetricCloudNativeTests
                     sky.CloudDensityInput = 0.5f;
                     sky.Eye = new Vector3(-50000, 2000, 3000);
                     sky.Prepare(Vector3.Normalize(new Vector3(0.3f, 0.8f, 0.2f)), sky.Eye.Y, 50000);
-                    using var target = ctx.CreateTexture(new TextureDesc(Meitou.Rendering.Gpu.InternalFormat.Rgba8, 96, 64,
+                    using var target = ctx.CreateTexture(new TextureDesc(Meitou.Game.Rendering.Gpu.InternalFormat.Rgba8, 96, 64,
                         Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "cloud test picture"));
                     var view = Matrix4x4.CreateLookAt(Vector3.Zero, Vector3.Normalize(new Vector3(0, 0.4f, -1)), Vector3.UnitY);
                     var vp = view * DepthConvention.Perspective(1.0f, 1.5f, 1, 1000);

@@ -1,5 +1,7 @@
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Bodies;
 

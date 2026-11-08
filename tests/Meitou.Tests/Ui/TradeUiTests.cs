@@ -3,11 +3,13 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Ogre;
 using Meitou.Data.Ui;
-using Meitou.Engine;
-using Meitou.Engine.Input;
+using Meitou.Game.Host;
+using Meitou.Game.Host.Input;
 using Meitou.Game;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Player;
 using Meitou.Simulation.Trading;
 using Meitou.Tests.Simulation;
 

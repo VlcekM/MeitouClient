@@ -2,9 +2,11 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Ui;
-using Meitou.Engine.Input;
+using Meitou.Game.Host.Input;
 using Meitou.Simulation;
-using Meitou.Ui;
+using Meitou.Game.Ui;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Game;
 
@@ -59,11 +61,11 @@ sealed partial class PlayerInterface
     {
         uiInput++;
         if (!UiVisible) return false;
-        if (key == Meitou.Engine.Input.Key.Escape && CancelInventoryDrag()) return true;
+        if (key == Meitou.Game.Host.Input.Key.Escape && CancelInventoryDrag()) return true;
         // toggle_camera_grid (Shift+; fixed: a binding carries no modifier, and ; alone is the free camera's).
-        if (shift && key == Meitou.Engine.Input.Key.Semicolon && !faithfulScreens.HasKeyboardFocus) { cameraGrid = !cameraGrid; return true; }
-        if (key == Meitou.Engine.Input.Key.Escape && LevelEscape()) return true;
-        if (key == Meitou.Engine.Input.Key.Escape)
+        if (shift && key == Meitou.Game.Host.Input.Key.Semicolon && !faithfulScreens.HasKeyboardFocus) { cameraGrid = !cameraGrid; return true; }
+        if (key == Meitou.Game.Host.Input.Key.Escape && LevelEscape()) return true;
+        if (key == Meitou.Game.Host.Input.Key.Escape)
         {
             if (advancedOpen && faithfulScreens.OpenScreens.LastOrDefault() == "new-game") { advancedOpen = false; return true; }
             // The bare title: Esc hides the credits and quits at once, no confirmation (FUN_14082b010 sets the quit flag unless FUN_140914a90 closed a title
@@ -88,17 +90,17 @@ sealed partial class PlayerInterface
         }
         if (faithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;
         // Delete or Backspace deletes the save selected in the load, save or import window (LoadSaveWindow::keyPressed, docs/game/ui-screens.md "Deleting a save").
-        if (key is Meitou.Engine.Input.Key.Delete or Meitou.Engine.Input.Key.Backspace && faithfulScreens.OpenScreens is [.., "load" or "save" or "import"] && selectedSlot is { } doomed) { AskDeleteSave(doomed); return true; }
+        if (key is Meitou.Game.Host.Input.Key.Delete or Meitou.Game.Host.Input.Key.Backspace && faithfulScreens.OpenScreens is [.., "load" or "save" or "import"] && selectedSlot is { } doomed) { AskDeleteSave(doomed); return true; }
         // Tab bound to a window key (Inventory, Character...) opens it on a window with a box; the traversal keeps modal windows (#383).
-        if (key == Meitou.Engine.Input.Key.Tab && (faithfulScreens.HasModal || !WindowKey(key)) && faithfulScreens.FocusNext(shift)) return true;
-        if (key == Meitou.Engine.Input.Key.Enter && faithfulScreens.Submit()) return true;
-        if (key == Meitou.Engine.Input.Key.Space && faithfulScreens.ActivateFocused()) return true;
+        if (key == Meitou.Game.Host.Input.Key.Tab && (faithfulScreens.HasModal || !WindowKey(key)) && faithfulScreens.FocusNext(shift)) return true;
+        if (key == Meitou.Game.Host.Input.Key.Enter && faithfulScreens.Submit()) return true;
+        if (key == Meitou.Game.Host.Input.Key.Space && faithfulScreens.ActivateFocused()) return true;
         // The list or combo box last clicked takes the MyGUI ListBox keys (docs/formats/mygui.md "Widget runtime").
         if (key switch
             {
-                Meitou.Engine.Input.Key.Up => UiListKey.Up, Meitou.Engine.Input.Key.Down => UiListKey.Down, Meitou.Engine.Input.Key.PageUp => UiListKey.PageUp,
-                Meitou.Engine.Input.Key.PageDown => UiListKey.PageDown, Meitou.Engine.Input.Key.Home => UiListKey.Home, Meitou.Engine.Input.Key.End => UiListKey.End,
-                Meitou.Engine.Input.Key.Enter => UiListKey.Accept, _ => (UiListKey?)null,
+                Meitou.Game.Host.Input.Key.Up => UiListKey.Up, Meitou.Game.Host.Input.Key.Down => UiListKey.Down, Meitou.Game.Host.Input.Key.PageUp => UiListKey.PageUp,
+                Meitou.Game.Host.Input.Key.PageDown => UiListKey.PageDown, Meitou.Game.Host.Input.Key.Home => UiListKey.Home, Meitou.Game.Host.Input.Key.End => UiListKey.End,
+                Meitou.Game.Host.Input.Key.Enter => UiListKey.Accept, _ => (UiListKey?)null,
             } is { } listKey && faithfulScreens.ListKey(listKey)) return true;
         if (DialogueKey(key)) return true;
         // A modal screen (the menu, a message box, the character editor) takes the keys, except the host's own: quicksave / quickload, the screenshot and the debug overlays.

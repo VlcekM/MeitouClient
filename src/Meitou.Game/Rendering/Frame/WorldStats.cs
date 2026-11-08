@@ -1,8 +1,9 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The renderer's sections of the F11 statistics panel in the game and the viewer (what is drawn, memory, the camera and the weather;

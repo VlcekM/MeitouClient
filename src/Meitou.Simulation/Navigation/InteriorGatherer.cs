@@ -3,7 +3,7 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>A building with an interior to build in <paramref name="Zone"/> (its own zone, or a neighbour its interior reaches over the border): its placement and record.</summary>
 internal sealed record InteriorSite(BuildingPlacement Placement, GameRecord Record, Vector3 Position, bool Destroyed, ZoneCoordinate Zone);

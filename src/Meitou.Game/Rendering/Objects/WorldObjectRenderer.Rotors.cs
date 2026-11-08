@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// The parts that turn by themselves (<see cref="RotorSpec"/>, the original's <c>RotatingEnt</c>; docs/game/buildings-production.md "Rotating parts", docs/render-objects.md "Rotating parts"). A part's state

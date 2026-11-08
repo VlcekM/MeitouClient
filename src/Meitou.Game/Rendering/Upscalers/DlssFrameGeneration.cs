@@ -1,10 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
-using static Meitou.Rendering.Upscalers.SlTypes;
+using Meitou.Game.Rendering.Gpu;
+using static Meitou.Game.Rendering.Upscalers.SlTypes;
 
-namespace Meitou.Rendering.Upscalers;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA DLSS frame generation (DLSS-G) through <see cref="Streamline"/>: Streamline owns the real swapchain (<see cref="Streamline.SwapchainHooks"/>) and, at

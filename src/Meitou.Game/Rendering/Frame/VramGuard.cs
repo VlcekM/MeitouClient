@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// Keeps the device-local memory in use under the driver's budget (VK_EXT_memory_budget) when the draw ranges ask for more than the card has.

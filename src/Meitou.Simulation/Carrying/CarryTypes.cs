@@ -1,3 +1,7 @@
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+
 namespace Meitou.Simulation.Carrying;
 
 /// <summary>

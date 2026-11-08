@@ -1,4 +1,4 @@
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
 /// The lamps' GLSL (docs/render-lights.md), shared by the world's lighting (<c>kenshiLight</c>) and the probe trace. It needs the declarations

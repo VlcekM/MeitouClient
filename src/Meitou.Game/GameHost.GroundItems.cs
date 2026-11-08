@@ -15,7 +15,7 @@ sealed partial class GameHost
     long groundRevision = -1;
     readonly HashSet<int> shownGround = [];
 
-    static string GroundId(int id) => Meitou.Rendering.WorldObjectRenderer.GroundKeyPrefix + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    static string GroundId(int id) => Meitou.Game.Rendering.Objects.WorldObjectRenderer.GroundKeyPrefix + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Once a frame with <see cref="UpdateBuildings"/>, after a new world's runtime placements were cleared.</summary>
     void UpdateGroundItems(WorldSnapshot snapshot)

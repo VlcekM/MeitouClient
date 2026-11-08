@@ -1,6 +1,6 @@
 using Meitou.Simulation.Bodies;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Bodies;
 
 /// <summary>Adds a character's stats and medical state to the state hash (the body classes themselves know nothing of it).</summary>
 static class BodyHash

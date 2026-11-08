@@ -1,4 +1,6 @@
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Ai;
 

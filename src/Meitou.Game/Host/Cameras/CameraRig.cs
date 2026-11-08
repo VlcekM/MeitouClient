@@ -1,9 +1,9 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Engine.Input;
-using Meitou.Engine.Time;
+using Meitou.Game.Host.Input;
+using Meitou.Simulation.Session;
 
-namespace Meitou.Engine.Cameras;
+namespace Meitou.Game.Host.Cameras;
 
 /// <summary>
 /// Owns the strategy camera and the free camera, switches between them on <see cref="InputAction.ToggleFreeCamera"/>, updates the

@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Modding;
 

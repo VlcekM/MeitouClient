@@ -1,8 +1,10 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
 /// The sun's own motion in the temporal upscalers' motion vectors, shared by the Vulkan chain (<see cref="PostProcess"/>)

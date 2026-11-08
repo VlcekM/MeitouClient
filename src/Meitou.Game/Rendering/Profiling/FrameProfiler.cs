@@ -1,9 +1,10 @@
 using System.Globalization;
 using System.Numerics;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Overlays;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Profiling;
 
 /// <summary>
 /// Where the frame time goes, per <see cref="StageClock"/> stage: the render thread's time (stopwatch laps) and the GPU's (a

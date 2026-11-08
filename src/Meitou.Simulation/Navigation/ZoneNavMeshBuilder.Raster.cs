@@ -1,7 +1,7 @@
 using DotRecast.Core;
 using DotRecast.Recast;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 internal static partial class ZoneNavMeshBuilder
 {

@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Items;
 

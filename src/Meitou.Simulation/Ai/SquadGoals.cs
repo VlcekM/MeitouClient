@@ -1,4 +1,6 @@
-namespace Meitou.Simulation;
+using Meitou.Simulation.Factions;
+
+namespace Meitou.Simulation.Ai;
 
 /// <summary>What a squad member works on: a character (a body to lift or loot, a patient, a captive) or a place (a machine or a cage, by its id).</summary>
 public readonly record struct GoalTarget(CharacterId Body, string? Place)

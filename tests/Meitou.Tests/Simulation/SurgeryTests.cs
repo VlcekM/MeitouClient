@@ -6,6 +6,7 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 using Meitou.Simulation;
 using Meitou.Simulation.Editing;
+using Meitou.Simulation.Population;
 using static Meitou.Tests.Simulation.SyntheticTown;
 using SimWorld = Meitou.Simulation.World;
 

@@ -2,7 +2,7 @@ using System.Numerics;
 using System.Text;
 using Meitou.Content;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Tests.World;
 

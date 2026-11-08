@@ -5,7 +5,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// What a character walks on, for the footsteps' <c>Surface_Material</c> switch (docs/audio.md "Footsteps"): the GroundType the BIOMES record under the point names for the

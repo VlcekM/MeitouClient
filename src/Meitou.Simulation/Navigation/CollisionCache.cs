@@ -3,7 +3,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.Physics;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>One shape of a collision file, triangulated once in Kenshi's Y-up axes (the exporter-to-Ogre map applied, the shape's pose applied).</summary>
 internal sealed class PreparedShape(CollisionShapeKind kind, Vector3[] vertices, int[] indices, bool isConvex)

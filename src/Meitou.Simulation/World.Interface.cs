@@ -1,3 +1,6 @@
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Player;
+
 namespace Meitou.Simulation;
 
 public sealed partial class World

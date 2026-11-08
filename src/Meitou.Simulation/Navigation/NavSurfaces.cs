@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The walkable collision triangles of a zone's buildings and foliage (exterior and interiors), kept beside the navmesh for heights. The mesh's

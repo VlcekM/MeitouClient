@@ -1,6 +1,7 @@
 using System.Text;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering.Gpu.Shaders;
+namespace Meitou.Game.Rendering.Gpu.Shaders;
 
 /// <summary>A small SPIR-V parser: just enough of the word stream to describe a shader's resources and interface.</summary>
 public static class SpirvReflection

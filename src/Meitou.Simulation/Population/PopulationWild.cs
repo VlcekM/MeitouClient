@@ -2,8 +2,10 @@ using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Player;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>What fills a wild site: the homeless squads of an area sector (6.2) or the roaming pool of a nest (6.3).</summary>
 public enum WildKind : byte { Sector, Nest }

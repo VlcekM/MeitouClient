@@ -1,6 +1,6 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Profiling;
 
 /// <summary>
 /// GPU time of a pass from two native timestamps (the frame's <see cref="QueryArena"/>), written where the frame's commands are going

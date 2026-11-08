@@ -1,7 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
+using Meitou.Simulation.Factions;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 public sealed partial class PopulationSystem
 {
@@ -29,7 +30,7 @@ public sealed partial class PopulationSystem
             {
                 Id = world.Platoons.NextId(), Origin = p.Origin, TemplateId = p.TemplateId, Faction = p.Faction, Key = p.Key ^ (ulong)(squad.Members.Count + 1) * 0x9E3779B97F4A7C15UL,
                 Size = 1, Position = new Vector2(at.X, at.Z), State = PlatoonState.Loaded, DwellLeft = 5,
-                Persistent = PersistentPlatoon(p) || Meitou.Simulation.UniqueCharacters.IsUnique(data.Db.Find(cold.RecordId)),
+                Persistent = PersistentPlatoon(p) || Meitou.Simulation.Factions.UniqueCharacters.IsUnique(data.Db.Find(cold.RecordId)),
             };
             string package = cold.SlaveState == 1 ? SlaveOnlyPackage : CapturedPackage;
             var made = new Squad

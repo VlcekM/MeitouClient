@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The frame's timestamp queries as the seam sees them (docs/resource-layer.md): slots are handed out while

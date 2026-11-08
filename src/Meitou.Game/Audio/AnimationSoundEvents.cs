@@ -1,7 +1,7 @@
 using Meitou.Data;
 using Meitou.Data.Fcs;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// One sound riding on an animation (an ANIMATION_EVENT record the way the original's <c>AnimationSFXEvent</c> keeps it, docs/audio.md "Footsteps and animation events"):

@@ -1,4 +1,6 @@
-namespace Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Terrain;
+
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>A vertex attribute of an interleaved mesh vertex: its location, component count and byte offset; floats, or with
 /// <paramref name="Integer"/> unsigned bytes read as integers.</summary>

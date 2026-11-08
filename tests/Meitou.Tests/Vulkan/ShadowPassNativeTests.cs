@@ -1,8 +1,8 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Shadows;
 
 namespace Meitou.Tests.Vulkan;
 

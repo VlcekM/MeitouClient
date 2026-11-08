@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// The game's point emitters (docs/audio.md "Point emitters", from the exe's emitter class <c>FUN_140259a80</c> and its update <c>FUN_140258cb0</c>): a looping sound attached to a

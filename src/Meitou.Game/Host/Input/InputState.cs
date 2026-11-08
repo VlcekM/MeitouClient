@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Engine.Input;
+namespace Meitou.Game.Host.Input;
 
 /// <summary>
 /// What the host fed since the previous tick, read by one tick: which keys and buttons are down, which went down or up since the

@@ -1,9 +1,9 @@
 using System.Globalization;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
 /// GLSL of the sun shadows (docs/formats/shadows.md): the receiver term <c>kenshiShadow</c> that the lighting multiplies the sun by, the

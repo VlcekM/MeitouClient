@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Movement;
 
 /// <summary>A path wanted by one character.</summary>
 public readonly record struct PathRequest(long Id, CharacterId Character, Vector3 From, Vector3 To, float Radius = 0, WaterCost Water = default, float RoadPreference = 0);

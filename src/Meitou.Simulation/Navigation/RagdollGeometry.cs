@@ -5,7 +5,7 @@ using Meitou.Data;
 using Meitou.Data.World;
 using Meitou.Simulation.Ragdolls;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// What ragdolls fall onto in the world: the terrain heightmap, and the collision of the buildings and map features (<see cref="ZoneGeometryGatherer.RagdollTriangles"/>), gathered per zone on a

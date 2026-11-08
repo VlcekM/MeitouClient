@@ -1,8 +1,8 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Sky;
 
 public sealed unsafe partial class SkyRenderer
 {

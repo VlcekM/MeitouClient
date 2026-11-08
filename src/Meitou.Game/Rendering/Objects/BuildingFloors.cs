@@ -1,7 +1,8 @@
 using System.Numerics;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>One placed building's floors for the footstep surface and the camera: its two ground materials and its floor collision, made on a worker when first needed.</summary>
 sealed class BuildingFloor

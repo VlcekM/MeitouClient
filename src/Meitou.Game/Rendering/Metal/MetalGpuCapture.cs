@@ -1,7 +1,7 @@
 using SharpMetal.Foundation;
 using SharpMetal.Metal;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// A one-shot programmatic Metal frame capture (<see cref="MTLCaptureManager"/>): commands recorded while it is active

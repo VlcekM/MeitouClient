@@ -7,7 +7,7 @@ using Meitou.Data.Gameplay.Combat;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
 
-namespace Meitou.Game;
+namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// The third layer of <c>--wiki-export</c> (docs/agent-playtest.md, "The wiki"): item stats (weapons, crossbows, armour, other items with their blueprints), the research tree,

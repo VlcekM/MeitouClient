@@ -1,3 +1,5 @@
+using Meitou.Simulation.Player;
+
 namespace Meitou.Simulation.Items;
 
 /// <summary>Whose items an item window shows: a character's inventory (the player's, or the open loot's body), the open trade's stock, or a building's machine or container.</summary>

@@ -7,10 +7,17 @@ using Meitou.Data;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Impostors;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Impostors;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// Kenshi's foliage around the camera (docs/render-foliage.md; the rules in docs/formats/foliage.md): trees, bushes, rocks

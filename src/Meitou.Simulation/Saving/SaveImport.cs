@@ -3,6 +3,8 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Save;
 using Meitou.Data.World;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Saving;
 

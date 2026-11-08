@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// The live kept sets of the loaded zones. Each cached mesh is pruned by its own seeds only (so it does not depend on what else was loaded); when the loaded

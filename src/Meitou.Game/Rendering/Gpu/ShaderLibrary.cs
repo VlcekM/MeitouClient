@@ -1,9 +1,10 @@
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu.Core;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Shaders;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>The descriptor model a <see cref="GpuProgram"/> follows (docs/renderer-native.md 3).</summary>
 public enum ShaderModel

@@ -1,7 +1,8 @@
 using System.Numerics;
 using System.Text.Json;
+using Meitou.Game.Rendering.Overlays;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>The keys the cinema answers to (named as Silk.NET.Input's, so a host maps one with <c>Enum.TryParse(key.ToString(), out CinemaKey k)</c>).</summary>
 enum CinemaKey

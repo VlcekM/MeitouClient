@@ -2,9 +2,13 @@ using Meitou.Data.Gameplay.Ai;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using Meitou.Data.World;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Player;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Movement;
 
 /// <summary>
 /// Movement on the walkability stand-in (docs/game/pathfinding.md "Movement") and the first tasks: wander within the squad's home

@@ -1,10 +1,11 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
-using Meitou.Rendering.Gpu;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
+using Meitou.Game.Rendering.Gpu;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Rendering.Upscalers;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
 /// AMD FSR 3.1 upscaling through the FidelityFX API (<c>amd_fidelityfx_vk.dll</c>, MIT, from the FidelityFX SDK 1.1.x; never in the
@@ -166,7 +167,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
         _ => 0,
     };
 
-    ApiResource Resource(Meitou.Rendering.Gpu.GpuTexture texture, bool output)
+    ApiResource Resource(Meitou.Game.Rendering.Gpu.GpuTexture texture, bool output)
     {
         var d = texture.Desc;
         return new ApiResource

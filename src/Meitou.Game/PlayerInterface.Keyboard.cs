@@ -1,5 +1,5 @@
-using Meitou.Ui;
-using EngineKey = Meitou.Engine.Input.Key;
+using Meitou.Game.Ui;
+using EngineKey = Meitou.Game.Host.Input.Key;
 
 namespace Meitou.Game;
 

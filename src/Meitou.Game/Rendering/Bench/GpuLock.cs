@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Bench;
 
 /// <summary>
 /// <c>%TEMP%\meitou-gpu.lock</c>: bench runs hold it while they measure (not while they load) so concurrent runs queue instead of disturbing each

@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.World;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
 /// Hooks the weather scheduler (<see cref="WeatherWorld"/>, docs/formats/weather.md) to the frame: the host sets the game day, speed and paused flag, <see cref="Update"/>

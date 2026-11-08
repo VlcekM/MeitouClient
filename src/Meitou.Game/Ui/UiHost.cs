@@ -1,6 +1,6 @@
 using Meitou.Data.Ui;
 
-namespace Meitou.Ui;
+namespace Meitou.Game.Ui;
 
 public sealed record UiDiagnostic(string Extension, string Operation, Exception Error);
 public sealed record UiActionContext(UiFrameContext Frame, string Argument);

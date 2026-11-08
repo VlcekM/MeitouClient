@@ -1,8 +1,8 @@
 using System.Numerics;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Shaders;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// A uniform block on the CPU: the engine's default uniform block, written with the engine's own scatter (the std140

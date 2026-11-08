@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation;
 
 namespace Meitou.Tests.Navigation;

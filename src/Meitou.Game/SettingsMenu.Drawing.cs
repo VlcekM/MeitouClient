@@ -1,7 +1,9 @@
 using System.Numerics;
 using System.Globalization;
 using Meitou.Data.Ui;
-using Meitou.Rendering;
+using Meitou.Game.Host;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Overlays;
 
 namespace Meitou.Game;
 
@@ -363,7 +365,7 @@ sealed partial class SettingsMenu
     static readonly Vector4 FaithfulInk = new(0.62f, 0.66f, 0.70f, 1);
 
     /// <summary>A notch under a slider's track at <paramref name="value"/>, in the colour of its side of the Faithful | Meitou switch.</summary>
-    void RemasterMark(Meitou.Rendering.Slider slider, float value, UiRect track, Vector4 ink)
+    void RemasterMark(Meitou.Game.Rendering.Frame.Slider slider, float value, UiRect track, Vector4 ink)
     {
         float x = MathF.Round(track.X + slider.FractionOf(value) * track.Width), w = MathF.Max(2, MathF.Round(2 * scale));
         Rect(new(x - w / 2, track.Y + track.Height + scale, w, MathF.Round(4 * scale)), ink with { W = 0.9f }, viewport);

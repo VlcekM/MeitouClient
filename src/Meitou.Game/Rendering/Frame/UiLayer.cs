@@ -1,6 +1,7 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The interface's own picture: the overlays draw into <see cref="Texture"/> (transparent, display size, premultiplied alpha) instead of the

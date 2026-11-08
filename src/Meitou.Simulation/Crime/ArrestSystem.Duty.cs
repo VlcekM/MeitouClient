@@ -1,5 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Crime;
 

@@ -1,5 +1,16 @@
 using System.Numerics;
 using Meitou.Data.Characters;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
+using Meitou.Simulation.Towns;
+using Meitou.Simulation.Weather;
 
 namespace Meitou.Simulation;
 
@@ -122,7 +133,7 @@ public sealed class CharacterCold
     public long LastSplice { get; set; }
     /// <summary>Belongs to the player's faction: can be selected and ordered.</summary>
     public bool IsPlayer { get; set; }
-    /// <summary>The order queue (<see cref="Simulation.OrderQueue"/>, <see cref="PlayerOrders"/>): the order in hand first, then the queued ones (Shift); changed only by the character's own partition or a serial phase.</summary>
+    /// <summary>The order queue (<see cref="Meitou.Simulation.Player.OrderQueue"/>, <see cref="PlayerOrders"/>): the order in hand first, then the queued ones (Shift); changed only by the character's own partition or a serial phase.</summary>
     public OrderQueue OrderQueue { get; } = new();
     /// <summary>
     /// The height a move order was given at (the clicked ground), for the goal <see cref="GoalHeightAt"/>: it picks the floor where floors are stacked.
@@ -398,7 +409,7 @@ public sealed class CharacterCold
     public Carrying.LootStart LootFlags { get; set; }
     /// <summary>The rescue job (148 <c>FIND_AND_RESCUE_IF_THERES_BEDS</c>, NUM8) is in <see cref="Jobs"/>: an idle character picks up a downed member of its faction by itself.</summary>
     public bool RescueJob => Jobs.Exists(j => j.Type == Meitou.Data.Gameplay.Ai.TaskType.FIND_AND_RESCUE_IF_THERES_BEDS);
-    /// <summary>The orders panel's toggles (<see cref="Simulation.Orders"/>); the player's characters only.</summary>
+    /// <summary>The orders panel's toggles (<see cref="Meitou.Simulation.Player.Orders"/>); the player's characters only.</summary>
     public CharacterOrders Orders { get; set; } = CharacterOrders.Jobs;
     /// <summary>
     /// The point the Hold order holds (CharStats +0x130): where Hold was turned on, then, while on Hold, the destination of the running ground move order (its own or a queued

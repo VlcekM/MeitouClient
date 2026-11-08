@@ -1,8 +1,10 @@
 using Meitou.Data.World;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>A view the cull tests spheres against: its frustum planes (xyz normal, w offset) and their normals' lengths, computed once per view.</summary>
 public sealed class FoliageCullView

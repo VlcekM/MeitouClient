@@ -1,4 +1,4 @@
-namespace Meitou.Engine.Time;
+namespace Meitou.Simulation.Session;
 
 /// <summary>Lerp helpers for drawing between two tick states.</summary>
 public static class Interp

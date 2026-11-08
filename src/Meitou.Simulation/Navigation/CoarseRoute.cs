@@ -4,7 +4,7 @@ using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Threading;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// Long trips across zones whose navmesh is not loaded (a move order on the map): A* over a coarse grid of the whole world built from the terrain

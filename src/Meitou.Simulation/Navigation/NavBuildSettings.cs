@@ -1,4 +1,4 @@
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>Parameters of the zone navmesh builder (Kenshi units; docs/game/pathfinding.md, "What our builder needs").</summary>
 public sealed record NavBuildSettings

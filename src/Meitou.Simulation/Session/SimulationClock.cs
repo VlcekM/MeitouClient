@@ -1,4 +1,4 @@
-namespace Meitou.Engine.Time;
+namespace Meitou.Simulation.Session;
 
 /// <summary>
 /// The world's clock: how many simulation ticks a frame owes (docs/simulation.md "Time model", owner decisions 1 and 2). One tick is

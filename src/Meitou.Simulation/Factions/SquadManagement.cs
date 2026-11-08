@@ -1,8 +1,12 @@
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Factions;
 
 /// <summary>A change to the player's squads (docs/game/ui-screens.md "Squads tab"), applied by <see cref="SquadManagement"/>.</summary>
 public abstract record SquadCommand : SimCommand;

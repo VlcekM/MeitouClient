@@ -2,19 +2,18 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
-using Meitou.Engine;
-using Meitou.Engine.Cameras;
-using Meitou.Engine.Input;
-using Meitou.Engine.Time;
-using Meitou.Rendering;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Host.Input;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Settings;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Session;
+using Meitou.Game.Rendering.Characters;
 using Meitou.Simulation;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Display;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
-using EngineKey = Meitou.Engine.Input.Key;
-using EngineButton = Meitou.Engine.Input.MouseButton;
+using EngineKey = Meitou.Game.Host.Input.Key;
+using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
 using SilkButton = Silk.NET.Input.MouseButton;
 
@@ -32,11 +31,11 @@ sealed partial class GameHost
     /// <summary>The settings' <c>npc range</c>, read once (the drawing takes it once too; reading settings.cfg every frame cost 0.09 ms).</summary>
     float? npcRange;
 
-    /// <summary>Tells the world the camera it is looked at through, every frame (the update flag of <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/> and the sensing hooks, <see cref="Meitou.Simulation.MedicalClock"/>).</summary>
+    /// <summary>Tells the world the camera it is looked at through, every frame (the update flag of <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/> and the sensing hooks, <see cref="Meitou.Simulation.Bodies.MedicalClock"/>).</summary>
     void SendView()
     {
         if (IsBattle) return;
-        session.World.Commands.Enqueue(new Meitou.Simulation.CameraViewCommand(camera.Eye, camera.Forward, camera.FieldOfView, viewAspect, npcRange ??= GameplaySettings.NpcRange(install)) { Tick = session.World.Tick });
+        session.World.Commands.Enqueue(new Meitou.Simulation.Bodies.CameraViewCommand(camera.Eye, camera.Forward, camera.FieldOfView, viewAspect, npcRange ??= GameplaySettings.NpcRange(install)) { Tick = session.World.Tick });
     }
 
     /// <summary>Tells the world where the camera looks, when it has moved enough to matter (the zones follow it).</summary>
@@ -92,7 +91,7 @@ sealed partial class GameHost
         foreach (var k in now.Characters)
         {
             if (k.Id != body.CarriedBy) continue;
-            return previousById.TryGetValue(k.Id, out var before) ? Meitou.Engine.Time.Interp.LerpAngle(DrawnYaw(before), DrawnYaw(k), alpha) : DrawnYaw(k);
+            return previousById.TryGetValue(k.Id, out var before) ? Meitou.Simulation.Session.Interp.LerpAngle(DrawnYaw(before), DrawnYaw(k), alpha) : DrawnYaw(k);
         }
         return fallback;
     }
@@ -134,7 +133,7 @@ sealed partial class GameHost
                 if (!Reanchored(found, c))
                 {
                     position = Vector3.Lerp(found.Position, c.Position, alpha);
-                    yaw = Meitou.Engine.Time.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
+                    yaw = Meitou.Simulation.Session.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
                 }
             }
             Quaternion? rotation = null;
@@ -297,7 +296,7 @@ sealed partial class GameHost
                 if (!Reanchored(found, c))
                 {
                     position = Vector3.Lerp(found.Position, c.Position, alpha);
-                    yaw = Meitou.Engine.Time.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
+                    yaw = Meitou.Simulation.Session.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
                 }
             }
             Quaternion? rotation = null;
@@ -373,7 +372,7 @@ sealed partial class GameHost
     }
 
     /// <summary>Whether the look with the operator's tool (<see cref="HeldLook"/>) is made and prepared: then it is the one drawn.</summary>
-    bool HeldPrepared(Meitou.Data.Characters.CharacterAppearance look, string? tool, Meitou.Rendering.Characters.CharacterRenderer characters) =>
+    bool HeldPrepared(Meitou.Data.Characters.CharacterAppearance look, string? tool, Meitou.Game.Rendering.Characters.CharacterRenderer characters) =>
         tool is not null && heldLooks.TryGetValue(look, out var byTool) && byTool.TryGetValue(tool, out var held) && characters.IsPrepared(held);
 
     /// <summary>

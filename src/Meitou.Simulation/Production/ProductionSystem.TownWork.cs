@@ -3,6 +3,7 @@ using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.World;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Production;
 

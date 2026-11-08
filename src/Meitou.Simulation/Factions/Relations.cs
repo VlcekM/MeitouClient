@@ -1,6 +1,7 @@
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Factions;
 
 /// <summary>
 /// Relation changes with the game's messages (docs/game/factions-squads-towns.md sections 3.3 to 3.5). Serial phases only: the table is shared world state.

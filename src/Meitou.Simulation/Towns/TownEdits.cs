@@ -1,6 +1,7 @@
 using Meitou.Data.World;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Towns;
 
 /// <summary>
 /// Town buildings added and taken away while the world runs (the level editor, docs/game/level-editor.md "Simulation side"), on the simulation thread at a tick boundary

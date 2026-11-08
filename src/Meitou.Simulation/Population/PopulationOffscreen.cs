@@ -1,8 +1,10 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// The Meitou side of two off-screen switches (docs/simulation.md "Off-screen tier"); the original does neither, nothing changes off screen there

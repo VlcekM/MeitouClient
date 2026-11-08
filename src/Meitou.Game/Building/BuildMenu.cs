@@ -1,7 +1,7 @@
 using System.Globalization;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Objects;
 
 namespace Meitou.Game.Building;
 

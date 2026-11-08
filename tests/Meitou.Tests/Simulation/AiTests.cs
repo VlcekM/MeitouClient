@@ -3,10 +3,14 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Ai;
 using Meitou.Data.World;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using static Meitou.Tests.Simulation.SyntheticTown;
 using SimWorld = Meitou.Simulation.World;
 

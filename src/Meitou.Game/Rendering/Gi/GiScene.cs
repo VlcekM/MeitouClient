@@ -1,10 +1,15 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering.Gi;
+namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>What a traced hit reads of its geometry (48 bytes, <c>GiShaders.Geometry</c>): the vertex positions (three floats at the start of each
 /// vertex, <see cref="Stride"/> apart) and the triangle's three 32-bit indices, by device address.</summary>

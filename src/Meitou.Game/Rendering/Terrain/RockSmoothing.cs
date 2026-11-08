@@ -1,6 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// The rocks' smoothing (docs/render-terrain.md, "Rocks"), a Meitou look the game does not have: the TERRAIN-mode meshes' facets. Many of them are

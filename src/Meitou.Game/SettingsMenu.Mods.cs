@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Globalization;
 using Meitou.Data.Ui;
 using Meitou.Localisation;
+using Meitou.Modding;
 
 namespace Meitou.Game;
 

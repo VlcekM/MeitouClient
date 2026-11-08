@@ -1,6 +1,7 @@
 using Meitou.Data.Fcs;
 using Meitou.Data.Save;
 using Meitou.Game;
+using Meitou.Game.Title;
 using static Meitou.Tests.Save.SaveSamples;
 
 namespace Meitou.Tests.Gameplay;

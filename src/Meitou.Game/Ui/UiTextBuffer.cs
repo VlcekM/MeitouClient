@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Meitou.Ui;
+namespace Meitou.Game.Ui;
 
 /// <summary>The keys an edit box answers (MyGUI 3.2 EditBox); <see cref="Copy"/> and later go through the host's clipboard.</summary>
 public enum UiEditKey { Left, Right, Home, End, Backspace, Delete, SelectAll, Up, Down, PageUp, PageDown, DocumentStart, DocumentEnd, Undo, Redo, Copy, Cut, Paste }

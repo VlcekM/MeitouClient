@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// How loading measures distance from a free camera high above the land (engine choice, docs/renderer-streaming.md "Eye height"): the eye's height over

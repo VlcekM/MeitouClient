@@ -1,14 +1,19 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Diagnostics;
 using System.Numerics;
 using Meitou.Data.World;
 
-using Meitou.Rendering.Gpu;
-using GpuTexture = Meitou.Rendering.Gpu.GpuTexture;
+using Meitou.Game.Rendering.Gpu;
+using GpuTexture = Meitou.Game.Rendering.Gpu.GpuTexture;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Rendering.Water;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// Planar reflection of the scene for the water (docs/formats/terrain.md, "Water"; the game does the same with a 512Â²

@@ -3,7 +3,7 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.World;
 using Meitou.Simulation.Bodies;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Weather;
 
 /// <summary>
 /// What the weather does to characters (docs/formats/weather.md "Effects on characters"; the character's weather update <c>FUN_1405cf790</c>, <b>Verified</b> by

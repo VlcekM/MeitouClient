@@ -1,7 +1,7 @@
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using SharpMetal.Metal;
 
-namespace Meitou.Metal;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// GL's vocabulary on Metal (the twin of GlConventions, which maps it to Vulkan): pixel formats, filters,

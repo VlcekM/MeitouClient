@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
 /// The Meitou water's clock-driven parameters besides the open waves (<see cref="OceanWaves"/>; <see cref="WaterRenderer"/>, docs/render-water.md

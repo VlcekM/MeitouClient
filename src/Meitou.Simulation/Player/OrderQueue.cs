@@ -1,8 +1,11 @@
 using System.Collections;
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Movement;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Player;
 
 /// <summary>
 /// An order command (docs/simulation.md "Order queue"): the characters it names get it as an <see cref="OrderEntry"/> in their <see cref="CharacterCold.OrderQueue"/>. The paused interface applies

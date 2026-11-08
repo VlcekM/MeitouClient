@@ -1,10 +1,9 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Rendering.Characters;
 using Meitou.Simulation;
 using Meitou.Simulation.Dialogue;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 

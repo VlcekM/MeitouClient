@@ -1,4 +1,9 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+
+namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
 /// GLSL for the world view's terrain (OpenGL 3.3 core). The layer model follows the facts in

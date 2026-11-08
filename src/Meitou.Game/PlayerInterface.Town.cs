@@ -2,7 +2,7 @@ using System.Numerics;
 using Meitou.Data.Ui;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Production;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 

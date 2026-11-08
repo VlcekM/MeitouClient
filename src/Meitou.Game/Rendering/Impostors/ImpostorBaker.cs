@@ -1,15 +1,20 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Ogre;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
-using GpuTexture = Meitou.Rendering.Gpu.GpuTexture;
+using GpuTexture = Meitou.Game.Rendering.Gpu.GpuTexture;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>The decoded meshes of a source and the sphere its frames cover.</summary>
 public sealed class ImpostorMeshes

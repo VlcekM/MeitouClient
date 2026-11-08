@@ -6,9 +6,11 @@ using Meitou.Data.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Production;
 using Meitou.Simulation.Trading;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 

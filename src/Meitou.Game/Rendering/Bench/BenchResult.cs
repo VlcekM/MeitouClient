@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Bench;
 
 /// <summary>One side of a run: its metrics (<c>gpu:terrain</c>, <c>cpu:total</c>, <c>post:ssao</c>, <c>frame</c>...) in ms, and the main view's counts per frame.</summary>
 public sealed class BenchConfig

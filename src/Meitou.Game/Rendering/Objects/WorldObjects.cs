@@ -3,8 +3,9 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>What <see cref="WorldObjects.BuildZone"/> made of one zone.</summary>
 sealed class ZoneObjects

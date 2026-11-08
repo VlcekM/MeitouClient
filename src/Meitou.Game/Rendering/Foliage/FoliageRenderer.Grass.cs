@@ -3,9 +3,13 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// The grass pages' storage and the GPU grass path (docs/renderer-native.md 5.4 and 5.6.2). Every page's blades sit in one arena

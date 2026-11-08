@@ -2,7 +2,8 @@ using Meitou.Data.World;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Tests.Rendering;
 

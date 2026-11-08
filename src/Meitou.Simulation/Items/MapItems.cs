@@ -1,5 +1,7 @@
 using Meitou.Data;
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Items;
 

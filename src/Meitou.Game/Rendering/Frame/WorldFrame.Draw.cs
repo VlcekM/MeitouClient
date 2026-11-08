@@ -2,9 +2,15 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary><see cref="Draw"/>: one world frame, a method per profiler stage (<see cref="StageClock"/>), in the order they run.</summary>
 static partial class WorldFrame

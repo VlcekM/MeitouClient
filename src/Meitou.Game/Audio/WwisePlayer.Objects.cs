@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data.Audio;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// Game objects and the listener (docs/audio.md#3d-positioning). A game object is a number the host picks (the game uses 100 for the music and

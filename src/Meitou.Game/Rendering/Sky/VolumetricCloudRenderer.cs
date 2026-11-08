@@ -1,12 +1,13 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 using Vk = Silk.NET.Vulkan;
 
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>Half-resolution clouds, independent view histories and a world-space sun-transmission map.</summary>
 public sealed class VolumetricCloudRenderer : IDisposable

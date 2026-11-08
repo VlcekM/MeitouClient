@@ -1,8 +1,10 @@
 using System.Globalization;
 
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
 /// GLSL of the Meitou light shafts (the <c>shafts</c> switch; docs/render-shafts.md): the haze and the weather's fog darkened where the sun's light

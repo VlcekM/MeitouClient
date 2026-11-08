@@ -5,9 +5,10 @@ using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Ogre;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
 /// The test harness behind <c>--crowd N</c> (docs/character-renderer.md): N characters generated with <see cref="CharacterGenerator"/> from the

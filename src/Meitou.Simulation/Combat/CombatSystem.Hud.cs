@@ -1,6 +1,8 @@
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Combat;
 

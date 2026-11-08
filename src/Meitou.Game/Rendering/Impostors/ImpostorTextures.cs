@@ -1,9 +1,10 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
-using Meitou.Rendering.Gpu;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
-using GpuTexture = Meitou.Rendering.Gpu.GpuTexture;
+using GpuTexture = Meitou.Game.Rendering.Gpu.GpuTexture;
 
-namespace Meitou.Rendering.Impostors;
+namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
 /// An atlas on the GPU (phase 8 stage 2, docs/impostors.md "Runtime"): one native texture per map with the baked levels (the chain stops at
@@ -102,7 +103,7 @@ public sealed class ImpostorTextures : IDisposable
         for (int i = 0; i < 2; i++)
         {
             try { made[i] = gpu.CreateTextureOffThread(descs[i]); }
-            catch (Meitou.Rendering.Gpu.Core.VulkanException) { }   // no memory now: the constructor makes it (or fails) on the render thread
+            catch (Meitou.Game.Rendering.Gpu.Core.VulkanException) { }   // no memory now: the constructor makes it (or fails) on the render thread
         }
         return made;
     }

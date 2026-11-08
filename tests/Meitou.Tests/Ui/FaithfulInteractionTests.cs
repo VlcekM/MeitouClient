@@ -4,13 +4,15 @@ using Meitou.Data;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Ogre;
 using Meitou.Data.Ui;
-using Meitou.Engine;
-using Meitou.Engine.Input;
+using Meitou.Game.Host;
+using Meitou.Game.Host.Input;
 using Meitou.Game;
+using Meitou.Game.Title;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Player;
 using Meitou.Tests.Simulation;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Tests.Ui;
 
@@ -193,7 +195,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         {
             var eye = new Vector3(0, 6, -14);
             ui.Eye = eye;
-            ui.ViewProjection = Matrix4x4.CreateLookAt(eye, new(0, 1, 0), Vector3.UnitY) * Meitou.Rendering.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
+            ui.ViewProjection = Matrix4x4.CreateLookAt(eye, new(0, 1, 0), Vector3.UnitY) * Meitou.Game.Rendering.Frame.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
             var at = ui.Project(new Vector3(3, 1, 0))!.Value;
             ui.MouseDown(MouseButton.Right, at, false);
             ui.Steer(); Assert.False(ui.ContextMenuOpen);   // not held long enough yet

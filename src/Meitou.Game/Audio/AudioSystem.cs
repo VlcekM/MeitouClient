@@ -3,7 +3,7 @@ using Meitou.Content;
 using Meitou.Data.Audio;
 using Meitou.Data.World;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// The player's audio options (the original's <c>settings.cfg</c> keys, docs/formats/settings.md#audio): the six category volumes (0..1, the

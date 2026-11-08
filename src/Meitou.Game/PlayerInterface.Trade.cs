@@ -4,7 +4,6 @@ using Meitou.Data.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Trading;
-using Meitou.Ui;
 
 namespace Meitou.Game;
 

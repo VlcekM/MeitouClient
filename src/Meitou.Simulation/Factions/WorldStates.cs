@@ -3,7 +3,7 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Factions;
 
 /// <summary>
 /// The WORLD_EVENT_STATEs answered live, as the original's <c>FUN_1409a7e00</c> (docs/game/factions-squads-towns.md "Unique characters", queries): a state holds when every

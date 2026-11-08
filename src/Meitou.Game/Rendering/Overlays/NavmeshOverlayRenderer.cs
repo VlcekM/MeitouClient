@@ -1,8 +1,10 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Sky;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Overlays;
 
 /// <summary>
 /// A debug view of the navigation mesh (Meitou only, docs/game/pathfinding.md "Meitou debug view"): translucent polygons and their edges over the finished picture,

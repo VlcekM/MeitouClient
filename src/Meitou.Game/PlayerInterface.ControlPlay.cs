@@ -6,6 +6,7 @@ using Meitou.Data.Gameplay.Construction;
 using Meitou.Game.Building;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Game;
 

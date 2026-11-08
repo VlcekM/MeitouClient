@@ -1,6 +1,10 @@
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Ai;
 
 /// <summary>
 /// The task repertoires a character plans with (<c>FUN_14060e840</c>, <b>Verified</b>, docs/game/ai-tasks.md "Planner"): the AI's mode flags are tested in the order 4 imprisoned,

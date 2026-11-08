@@ -1,7 +1,7 @@
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// What a pass draws into (<see cref="GpuContext.CurrentTargets"/>): its attachments, their formats and size, and the viewport and scissor its

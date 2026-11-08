@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Audio;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>The listener: where the camera's ears are and which way they face (<see cref="WwisePlayer.SetListener"/>).</summary>
 public readonly record struct Listener(Vector3 Position, Vector3 Front, Vector3 Up)

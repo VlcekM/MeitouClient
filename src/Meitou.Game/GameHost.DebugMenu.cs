@@ -2,9 +2,11 @@ using System.Globalization;
 using System.Numerics;
 using System.Text.RegularExpressions;
 using Meitou.Data.Fcs;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Profiling;
 using Meitou.Simulation;
-using EngineKey = Meitou.Engine.Input.Key;
+using EngineKey = Meitou.Game.Host.Input.Key;
 
 namespace Meitou.Game;
 

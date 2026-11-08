@@ -1,6 +1,6 @@
 using Silk.NET.Vulkan;
 
-namespace Meitou.Rendering.Gpu.Core;
+namespace Meitou.Game.Rendering.Gpu.Core;
 
 public enum MemoryKind
 {

@@ -1,8 +1,8 @@
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 using Sampler = Silk.NET.Vulkan.Sampler;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// GL's sampler state as a value (docs/renderer-native.md 2.4). <see cref="FromGl"/> is the rule VkGl used in <c>SamplerFor</c>, moved here

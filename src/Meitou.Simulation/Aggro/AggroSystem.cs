@@ -1,8 +1,16 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Perception;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
+using Meitou.Simulation.Weather;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Aggro;
 
 /// <summary>Settings of the <see cref="AggroSystem"/> (docs/simulation.md "Hostility and relations"; the original's figures in docs/game/perception.md).</summary>
 public sealed record AggroSettings

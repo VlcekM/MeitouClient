@@ -1,7 +1,7 @@
 using System.Numerics;
-using Meitou.Engine.Time;
+using Meitou.Simulation.Session;
 
-namespace Meitou.Engine.Cameras;
+namespace Meitou.Game.Host.Cameras;
 
 /// <summary>
 /// One tick's camera, in the viewer's conventions (Y up, right handed; <c>tools/Meitou.ModelViewer/WorldCamera.cs</c>): the eye is

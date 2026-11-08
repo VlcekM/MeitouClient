@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Meitou.Data.World;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// The game's music rules (docs/audio.md "Music", from the exe's audio manager): the music of the region under the camera's pivot is only

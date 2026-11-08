@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
 /// <summary>
 /// MeitouClient.exe is a windowed (GUI subsystem) program, so starting it opens no console window. Its output always goes to log.txt

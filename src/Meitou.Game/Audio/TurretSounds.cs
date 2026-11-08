@@ -1,7 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Combat;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// A turret building as the aim needs it: where it stands and faces (0 along +Z, turning towards +X), its <c>scale</c>, its turning speed in radians per second (<paramref name="AimSpeed"/>: the

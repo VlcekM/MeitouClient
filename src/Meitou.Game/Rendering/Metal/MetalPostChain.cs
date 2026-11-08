@@ -1,11 +1,13 @@
 #if MEITOU_METAL
 using System.Diagnostics;
 using System.Numerics;
-using Meitou.Metal;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Metal;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Post;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
 /// Metal's slice of the shared post-chain seam: <see cref="PostComposite"/> (exposure, tone map, grade, fog volumes, SSAO, shafts,

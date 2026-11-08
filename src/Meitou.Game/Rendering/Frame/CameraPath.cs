@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>A saved camera for <see cref="CameraPath"/>: where the eye is, where it looks, the orbit distance, the lens and the time of day.</summary>
 public readonly record struct CameraShot(Vector3 Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour)

@@ -1,4 +1,6 @@
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Tests.Simulation;
 

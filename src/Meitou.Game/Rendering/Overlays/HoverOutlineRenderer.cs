@@ -1,9 +1,12 @@
 using System.Numerics;
-using Meitou.Rendering.Characters;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Sky;
 using Vk = Silk.NET.Vulkan;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Overlays;
 
 /// <summary>One outline mask: what is outlined in one colour, drawn alone (<see cref="CharacterRenderer.DrawHoverMasks"/>, <see cref="WorldObjectRenderer.DrawSelectionMask"/>).</summary>
 /// <param name="Colour">Its colour target, alpha 1 where something outlined is.</param>

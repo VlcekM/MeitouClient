@@ -1,6 +1,6 @@
 using Meitou.Data.Audio;
 
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>
 /// The music engine of <see cref="WwisePlayer"/> (docs/formats/wwise-bnk.md#playback-semantics): a music switch picks a playlist by the

@@ -1,8 +1,12 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
+using Meitou.Game.Host;
 using Meitou.Simulation;
-using Meitou.Ui;
+using Meitou.Game.Ui;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Weather;
 
 namespace Meitou.Game;
 

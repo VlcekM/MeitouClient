@@ -7,8 +7,9 @@ using Meitou.Data.Gameplay.Combat;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Population;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Bodies;
 
 /// <summary>
 /// The spawn-time assembly of a character: from its CHARACTER record and race it gets <c>Race</c>, <c>Stats</c>, <c>Medical</c>, <c>Inventory</c>,

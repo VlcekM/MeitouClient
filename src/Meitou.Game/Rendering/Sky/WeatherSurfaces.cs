@@ -3,9 +3,10 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
 /// The weather's frame-wide surface values (docs/formats/weather.md "Rain and wetness", "Dust"): the game's shared parameters <c>wetness</c>,

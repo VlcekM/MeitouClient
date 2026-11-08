@@ -1,7 +1,7 @@
 using System.Numerics;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The scene depth's convention, in one place (docs/renderer-native.md): clip depth is 0..1 on both backends (no GL mapping), and on

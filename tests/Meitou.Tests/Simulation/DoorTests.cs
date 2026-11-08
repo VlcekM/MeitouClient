@@ -2,11 +2,13 @@ using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Physics;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Population;
 using static Meitou.Tests.Bodies.BodyFixtures;
 using SimWorld = Meitou.Simulation.World;
 

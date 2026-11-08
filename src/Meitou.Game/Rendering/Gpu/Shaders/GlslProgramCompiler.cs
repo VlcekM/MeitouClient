@@ -4,8 +4,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Silk.NET.Core.Contexts;
 using Silk.NET.Shaderc;
+using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Rendering.Gpu.Shaders;
+namespace Meitou.Game.Rendering.Gpu.Shaders;
 
 /// <summary>
 /// Compiles the renderers' GLSL 3.30 programs (a vertex and a fragment shader linked by name, loose uniforms) to SPIR-V for Vulkan 1.3

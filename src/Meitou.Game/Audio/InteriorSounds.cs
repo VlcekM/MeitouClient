@@ -1,4 +1,4 @@
-namespace Meitou.Audio;
+namespace Meitou.Game.Audio;
 
 /// <summary>The building under the camera's pivot, as the interior ambience needs it (<see cref="Meitou.Data.World.InteriorVolume"/>'s fields).</summary>
 /// <param name="Id">The building's instance id: what tells one building from the next.</param>

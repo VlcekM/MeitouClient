@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Rendering.Characters;
 
 namespace Meitou.Tests.Characters;
 

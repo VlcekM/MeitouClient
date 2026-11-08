@@ -1,7 +1,7 @@
 using System.Globalization;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Ui;
-using Meitou.Rendering.Ui;
+using Meitou.Game.Rendering.Ui;
 
 namespace Meitou.Game;
 
@@ -16,7 +16,7 @@ sealed partial class PlayerInterface
     public int PendingIconFiles => uiPainter?.PendingIconFiles ?? 0;
 
     /// <summary>The records' names with the item icons the renderer is drawing (<see cref="UiPainter.RenderedIcons"/>): the host connects it to the character renderer.</summary>
-    public void SetRenderedIcons(Func<string, (Meitou.Rendering.Gpu.GpuTexture Texture, Meitou.Rendering.Gpu.SampledTexture Sampled)?>? lookup) { if (uiPainter is not null) uiPainter.RenderedIcons = lookup; }
+    public void SetRenderedIcons(Func<string, (Meitou.Game.Rendering.Gpu.GpuTexture Texture, Meitou.Game.Rendering.Gpu.SampledTexture Sampled)?>? lookup) { if (uiPainter is not null) uiPainter.RenderedIcons = lookup; }
 
     /// <summary>
     /// An item icon filling <paramref name="area"/> with its quantity in the corner, or a name while the icon loads. <paramref name="tip"/> is what its hover tooltip lists (the name only when null).

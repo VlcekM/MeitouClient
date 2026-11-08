@@ -6,7 +6,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.World;
 using Meitou.Simulation.Locks;
 
-namespace Meitou.Navigation;
+namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// Where a building's doors are: the box of door i's collision (the shapes the navmesh paints as the door, docs/game/pathfinding.md) in the building's frame, scaled by the

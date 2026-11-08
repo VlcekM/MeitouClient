@@ -1,9 +1,9 @@
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
 using System.Runtime.InteropServices;
-using static Meitou.Rendering.Upscalers.SlTypes;
+using Meitou.Game.Rendering.Post;
+using static Meitou.Game.Rendering.Upscalers.SlTypes;
 
-namespace Meitou.Rendering.Upscalers;
+namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA DLSS Super Resolution through <see cref="Streamline"/> (which must have been initialised before the device and attached to it).

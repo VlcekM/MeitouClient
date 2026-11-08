@@ -1,4 +1,5 @@
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Settings;
 using Meitou.Settings;
 
 namespace Meitou.Game;

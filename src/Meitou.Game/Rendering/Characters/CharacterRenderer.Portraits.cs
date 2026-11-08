@@ -1,9 +1,10 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Meitou.Data.Characters;
 using System.Numerics;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering.Characters;
+namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>A portrait the host wants this frame: the character by its draw-list key, the atlas cell to draw it in, and the number that turns its camera.</summary>
 public readonly record struct PortraitRequest(long Key, int Cell, uint Serial);

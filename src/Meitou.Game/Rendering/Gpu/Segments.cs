@@ -1,4 +1,4 @@
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// Segments (docs/renderer-native.md 8.9): the frame's command list handed to a renderer, with full barriers around its native

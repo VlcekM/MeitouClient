@@ -1,4 +1,8 @@
-namespace Meitou.Rendering.Gi;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Sky;
+
+namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>The global illumination's shaders (docs/render-gi.md).</summary>
 static class GiShaders
@@ -161,7 +165,7 @@ static class GiShaders
         #extension GL_EXT_buffer_reference_uvec2 : require
         #extension GL_EXT_scalar_block_layout : require
         layout(local_size_x = {{rays}}) in;
-        {{Meitou.Rendering.Gpu.BindlessTable.Declarations(1)}}
+        {{Meitou.Game.Rendering.Gpu.BindlessTable.Declarations(1)}}
 
         layout(set = 0, binding = 0) uniform accelerationStructureEXT uScene;
         struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint pad1; uint pad2; };

@@ -2,7 +2,8 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
 using Meitou.Simulation;
-using Meitou.Ui;
+using Meitou.Game.Ui;
+using Meitou.Simulation.Player;
 
 namespace Meitou.Game;
 
@@ -82,7 +83,7 @@ sealed partial class PlayerInterface
         if (factionDraft is not { } draft || faithfulScreens.Focus is { Screen: "overview", Widget: FactionNameBox }) return;
         factionDraft = null;
         if (FactionNameTaken?.Invoke(draft) == true) { MessageBox("Faction Name", "This faction name already exists"); return; }
-        Say(new Meitou.Simulation.RenameFactionCommand(draft) { Tick = session.World.Tick });
+        Say(new Meitou.Simulation.Player.RenameFactionCommand(draft) { Tick = session.World.Tick });
     }
 
     /// <summary>

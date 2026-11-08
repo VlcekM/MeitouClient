@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 
@@ -194,6 +194,6 @@ sealed partial class PlayerInterface
     /// </summary>
     public bool PointsAtClickable(string name) => name is not ("arrow" or "hand" or "invalidmove") || UiVisible && pointerOverButton;
 
-    /// <summary>The pointer <paramref name="name"/> as a picture with its hot spot, for the window system to draw (<see cref="Meitou.Rendering.Ui.UiPainter.PointerImage"/>).</summary>
+    /// <summary>The pointer <paramref name="name"/> as a picture with its hot spot, for the window system to draw (<see cref="Meitou.Game.Rendering.Ui.UiPainter.PointerImage"/>).</summary>
     public (Meitou.Data.Textures.RgbaImage Image, int HotX, int HotY)? PointerImage(string name) => uiPainter?.PointerImage(name);
 }

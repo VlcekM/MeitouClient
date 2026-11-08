@@ -1,4 +1,6 @@
-namespace Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+
+namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// How much video memory the impostor atlases may hold (docs/impostors.md section 10, renderer-native.md 8.16). The default follows the card:

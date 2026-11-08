@@ -1,5 +1,5 @@
 using System.Numerics;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Tests.World;
 

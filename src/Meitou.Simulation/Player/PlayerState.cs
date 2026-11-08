@@ -1,4 +1,11 @@
-namespace Meitou.Simulation;
+using Meitou.Simulation.Ai;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Combat;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
+
+namespace Meitou.Simulation.Player;
 
 /// <summary>
 /// The player in the world (docs/game/ui-input.md section 7, economy.md): the faction that is theirs, their money and the characters
@@ -70,7 +77,7 @@ public sealed class PlayerState
     /// Replaced, never changed in place, so a snapshot may hold it. Not hashed: it follows from positions and nothing in the simulation reads it.
     /// </summary>
     public TownKnowledge[] Towns { get; private set; } = [];
-    /// <summary>The squad AI options of the overview's AI tab that Meitou runs (<see cref="Simulation.SquadAi"/>); saved as CAMERA bools (<see cref="SquadAiKeys"/>).</summary>
+    /// <summary>The squad AI options of the overview's AI tab that Meitou runs (<see cref="Meitou.Simulation.Player.SquadAi"/>); saved as CAMERA bools (<see cref="SquadAiKeys"/>).</summary>
     public SquadAi SquadAi { get; set; } = SquadAi.Defaults;
     /// <summary>
     /// The new-game option "Bandits loot the player" (global <c>142133598</c>, CAMERA bool <c>bl</c>, default on; docs/game/carry-loot.md "NPC looting"): off, NPCs loot none of the player's

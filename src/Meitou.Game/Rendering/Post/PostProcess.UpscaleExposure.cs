@@ -1,9 +1,10 @@
-using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Runtime.InteropServices;
 
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
 /// DLSS's exposure (docs/render-post.md "Frame contract"): the scale the composite gives the colour before its tone map, written into a 1 x 1 R32F ahead of the

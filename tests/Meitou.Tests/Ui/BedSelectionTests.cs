@@ -7,12 +7,15 @@ using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Ogre;
 using Meitou.Data.Ui;
 using Meitou.Data.World;
-using Meitou.Engine;
-using Meitou.Engine.Input;
+using Meitou.Game.Host;
+using Meitou.Game.Host.Input;
 using Meitou.Game;
 using Meitou.Game.Building;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using Meitou.Tests.Simulation;
 
 namespace Meitou.Tests.Ui;
@@ -61,7 +64,7 @@ public class BedSelectionTests
         };
         ui.Eye = new(100, 80, 0);
         ui.ViewProjection = Matrix4x4.CreateLookAt(ui.Eye, bed.Position + new Vector3(0, 0.5f, 0), Vector3.UnitY)
-            * Meitou.Rendering.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
+            * Meitou.Game.Rendering.Frame.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
         try
         {
             ui.SetBuilding(new("Bar", "House", "Owner", "Town", null, house.Key, house.Position, null, Record: house.BuildingId));

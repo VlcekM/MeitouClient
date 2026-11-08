@@ -1,5 +1,7 @@
-using Meitou.Rendering.Gpu.Shaders;
-namespace Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Profiling;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The seam between the renderers and a graphics API (docs/resource-layer.md): what the renderers

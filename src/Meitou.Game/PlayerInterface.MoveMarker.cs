@@ -1,5 +1,5 @@
 using System.Numerics;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Overlays;
 
 namespace Meitou.Game;
 
@@ -36,7 +36,7 @@ sealed partial class PlayerInterface
         if (Markers is null) return;
         // The rotation marker: while the rotate button is held (FUN_1406b0f90); the renderer lays it over the pivot of the camera it draws with, which a followed
         // character moves every frame. Not in the free camera, which turns about its own eye, nor under the title or the editor, whose views are not the rig's.
-        bool orbitHeld = session.Bindings.Get(Meitou.Engine.Input.InputAction.Orbit).Any(session.Input.IsHeld);
+        bool orbitHeld = session.Bindings.Get(Meitou.Game.Host.Input.InputAction.Orbit).Any(session.Input.IsHeld);
         Markers.Rotation = orbitHeld && RotationMarker && !session.Camera.IsFree && !TitleOpen && !EditorOpen;
         if (Markers is not { Strength: > 0 } marker) return;
         double speed = session.Simulation.Speed;

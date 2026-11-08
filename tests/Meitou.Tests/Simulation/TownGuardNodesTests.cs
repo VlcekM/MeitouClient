@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Simulation;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Towns;
 
 namespace Meitou.Tests.Simulation;
 

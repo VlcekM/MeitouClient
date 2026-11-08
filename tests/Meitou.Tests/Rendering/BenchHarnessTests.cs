@@ -1,4 +1,7 @@
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Bench;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Post;
+
 
 namespace Meitou.Tests.Rendering;
 

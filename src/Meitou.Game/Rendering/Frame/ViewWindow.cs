@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Meitou.Rendering;
+namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The part of the full view the world frame draws: a tiled screenshot (<c>screens.cfg</c> <c>multiplier</c> n, docs/game/ui-input.md "Screenshots") draws n x n tiles, each with the camera frustum offset

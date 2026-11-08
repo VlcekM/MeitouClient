@@ -1,4 +1,5 @@
 using Meitou.Data.World;
+using Meitou.Simulation.Weather;
 
 namespace Meitou.Simulation;
 

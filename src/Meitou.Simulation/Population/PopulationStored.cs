@@ -1,7 +1,10 @@
 using System.Numerics;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 
-namespace Meitou.Simulation;
+namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// Town squads kept as their characters (docs/simulation.md "Population"): when a town unloads, each squad it made becomes a pinned <see cref="Platoon"/> holding a

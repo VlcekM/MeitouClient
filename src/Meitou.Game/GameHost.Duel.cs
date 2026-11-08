@@ -3,6 +3,7 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Game;
 
@@ -149,7 +150,7 @@ sealed partial class GameHost
         session.ReplaceWorld(built.Systems, world => DuelSetup(world, built.Population!));
         population = built.Population;
         worldEpoch++;
-        session.Clock.SetTime(o.Day ?? Meitou.Engine.Time.GameClock.DefaultStartDay, duelHour);
+        session.Clock.SetTime(o.Day ?? Meitou.Simulation.Session.GameClock.DefaultStartDay, duelHour);
         session.Simulation.ResetPhase();
         // The fight before the lap, headless; the last tick publishes the snapshot (the frame draws the pair at once).
         do session.World.RunTick();

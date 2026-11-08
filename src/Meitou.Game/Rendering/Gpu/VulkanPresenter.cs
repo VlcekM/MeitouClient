@@ -1,11 +1,12 @@
 using System.Diagnostics;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 using Silk.NET.Vulkan.Extensions.KHR;
-using Meitou.Rendering.Upscalers;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Upscalers;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
-namespace Meitou.Rendering.Gpu;
+namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// Shows <see cref="Backbuffer"/> in a window: a swapchain on the device's surface, and at the end of each frame a blit of the backbuffer
