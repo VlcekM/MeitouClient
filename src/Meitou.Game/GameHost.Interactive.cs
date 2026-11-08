@@ -44,7 +44,7 @@ sealed partial class GameHost
         if (!g.NoPrecompile) StartWarmup();
         // The world's files are read on a worker from here on: while the window and the device are made, then behind the loading screen.
         var sceneRead = LoadScene is { } readScene ? Task.Run(readScene) : null;
-        BeginAudio();
+        sound.BeginAudio();
         var frameGenerationAtStart = config.FrameGenerationMethod;   // read at start-up only: a change in the settings waits for a restart
         using var display = new VulkanDisplay(headless ? null : WindowOptions.Default with
         {
@@ -99,7 +99,7 @@ sealed partial class GameHost
                 scene = ownedScene = loaded;
             }
             Boot(display, interactive: true);
-            AttachAudio();
+            sound.AttachAudio();
             BeginWarm();
         }
         catch (LoadingCancelledException)
@@ -151,7 +151,7 @@ sealed partial class GameHost
                 TimeSpeedsChanged = () => session.Simulation.SetFastSpeeds(config.FastSpeed, config.FastestSpeed),
                 DoorsCloseChanged = on => { foreach (var locks in session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on; },
                 AnimalsPickUpChanged = on => { foreach (var players in session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on; },
-                AudioChanged = AudioSettingsChanged,
+                AudioChanged = sound.AudioSettingsChanged,
                 GameplayChanged = ApplyGameplay,
                 SkinRaceList = scene.Database is { } raceDb ? CharacterRenderer.PersonRaces(raceDb) : [],
                 SkinRacesChanged = () => { if (gpu.Characters is { } chars) chars.SkinRaces = config.SkinRaces; },
@@ -656,7 +656,7 @@ sealed partial class GameHost
             ResumeAfterCreation();
             if (!cinemaHolds) ApplyTitleCamera();
             BenchLap(3);
-            UpdateAudio(dt);
+            sound.UpdateAudio(dt);
             BenchLap(4);
             if (TitleVisible && !warming) titleBattle?.Advance(frameDt);
             if (skyArrival is not null)
@@ -950,9 +950,9 @@ sealed partial class GameHost
             }
             totalFrames++;
             if (g.QuitAfter is { } quitAfter && now >= quitAfter) { Console.WriteLine($"profile   {session.CurrentSnapshot.Characters.Count} characters in the snapshot, {session.CurrentSnapshot.Characters.Count(c => c.Appearance is not null)} drawable; per frame: simulation advance {advanceTotal / Math.Max(totalFrames, 1):0.000} ms ({session.Simulation.TotalTicks} ticks, {advanceTotal / Math.Max(session.Simulation.TotalTicks, 1):0.000} ms per tick), host draw-list fill {fillTotal / Math.Max(fillCalls, 1):0.000} ms, world draw cpu {drawTotal / Math.Max(totalFrames, 1):0.00} ms, {(gpu.Characters is { } chars ? chars.Statistics() : "no characters")}");
-                if (audio is not null) Console.WriteLine($"audio     {audio.StatsLine()}");
-                if (audio is not null) Console.WriteLine($"audio     world: {WorldAudioStats()}");
-                if (audio is not null) Console.WriteLine($"audio     characters: {CharacterAudioStats()}, {UiAudioStats()}");
+                if (sound.audio is not null) Console.WriteLine($"audio     {sound.audio.StatsLine()}");
+                if (sound.audio is not null) Console.WriteLine($"audio     world: {sound.WorldAudioStats()}");
+                if (sound.audio is not null) Console.WriteLine($"audio     characters: {sound.CharacterAudioStats()}, {sound.UiAudioStats()}");
                 if (menuFrames > 0) Console.WriteLine($"menu      {menuFrames} visible frames in {menuFrameSeconds:0.0} s: {menuFrames / menuFrameSeconds:0} fps, {menuSlowFrames} frames over 100 ms, longest {menuLongestFrame * 1000:0.0} ms");
                 Console.WriteLine($"smoke     {totalFrames} frames in {now:0.0} s: {totalFrames / now:0} fps on average, {session.Ticks.TotalTicks} control ticks, {session.Simulation.TotalTicks} simulation ticks, game time {session.Clock.TimeText}"); quit = true; }
             if (!display.VSync && fpsLimit > 0)

@@ -144,7 +144,7 @@ sealed partial class GameHost
     Func<string, int>? cameraFloorOf;
 
     /// <summary>How far (units) outside the indoor hull a character still counts as inside (engine choice: the feet stand on the floor at the hull's bottom).</summary>
-    const float InsideMargin = 2;
+    internal const float InsideMargin = 2;
 
     /// <summary>
     /// Where a click ray first comes down onto a walkable navmesh surface clear of the terrain (a wall top, a ramp, a deck) within <paramref name="distance"/>;

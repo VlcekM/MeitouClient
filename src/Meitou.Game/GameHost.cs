@@ -25,6 +25,7 @@ using Meitou.Simulation;
 using Meitou.Game.Rendering.Display;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using Meitou.Game.Audio;
 using EngineKey = Meitou.Game.Host.Input.Key;
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
@@ -38,6 +39,12 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config, Meitou.Data.Gameplay.NewGameStart? start)
 {
+    internal readonly GameInstall install = install;
+    internal WorldScene scene = scene;
+    internal readonly WorldOptions o = o;
+    internal readonly UserConfig config = config;
+    internal GameSound sound = null!;
+
     /// <summary>The save the run starts in (<c>--load</c>), loaded at the end of <see cref="Boot"/> through the menu's load path; null for a new world.</summary>
     public Meitou.Data.Save.SaveGame? StartSave { get; init; }
     /// <summary>Reads the world in the interactive run, on a worker behind the loading screen (the host owns the scene then); null: the scene was given.</summary>
@@ -45,11 +52,11 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     WorldScene? ownedScene;
     /// <summary>The native splash shown since the program started; closed when the game window first shows.</summary>
     public IDisposable? Splash { get; init; }
-    WorldSession session = null!;   // disposed with the host (Run)
+    internal WorldSession session = null!;   // disposed with the host (Run)
     Meitou.Simulation.Population.PopulationSystem? population;
     /// <summary>The fights started by faction hostility (printed to the log); null in the sandbox and without the population.</summary>
     // The game data the world was built from, kept to build the next world of a quickload (GameHost.Saving.cs).
-    Meitou.Simulation.Population.PopulationData? popData;
+    internal Meitou.Simulation.Population.PopulationData? popData;
     IReadOnlyList<Meitou.Data.World.TownPlacement> townPlacements = [];
     // The level data, for the zone files and town handles of a save (null in the sandbox and the duel).
     Meitou.Data.World.WorldLevelData? saveLevels;
@@ -67,9 +74,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     readonly Dictionary<Meitou.Data.World.ZoneCoordinate, long> navZones = [];
     const double NavCacheSeconds = 120;
     const int NavCacheZones = 60;
-    PlayerInterface player = null!;
+    internal PlayerInterface player = null!;
     Meitou.Simulation.Factions.Squad? playerSquad;
-    WorldFrame.Gpu gpu = null!;
+    internal WorldFrame.Gpu gpu = null!;
     /// <summary>This run uses the native Metal loop: the shared world object exists, but its Vulkan post/loading path does not drive it.</summary>
     bool metalRenderer = false;   // set by the Metal loop (GameHost.Metal.cs, macOS builds only)
     // Fallback services for a host whose renderers are not in WorldFrame.Gpu yet (the shared title, audio and save code asks through these).
@@ -79,13 +86,13 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     CharacterRenderer? hostCharacters = null;
     WorldLamps? hostLamps = null;
     Func<float, float, float>? hostGround = null;
-    WorldWeather? ActiveWeather => gpu is null ? fallbackWeather : gpu.Weather ?? fallbackWeather;
-    WorldObjectRenderer? ActiveObjects => gpu is null ? hostObjects : gpu.Objects ?? hostObjects;
+    internal WorldWeather? ActiveWeather => gpu is null ? fallbackWeather : gpu.Weather ?? fallbackWeather;
+    internal WorldObjectRenderer? ActiveObjects => gpu is null ? hostObjects : gpu.Objects ?? hostObjects;
     FoliageRenderer? ActiveFoliage => gpu is null ? hostFoliage : gpu.Foliage ?? hostFoliage;
     CharacterRenderer? ActiveCharacters => gpu is null ? hostCharacters : gpu.Characters ?? hostCharacters;
     WorldLamps? ActiveLamps => gpu is null ? hostLamps : gpu.Lamps ?? hostLamps;
-    float ActiveGround(float x, float z) => hostGround?.Invoke(x, z) ?? (gpu is null ? 0 : gpu.Terrain.HeightAt(x, z));
-    WorldCamera camera = null!;
+    internal float ActiveGround(float x, float z) => hostGround?.Invoke(x, z) ?? (gpu is null ? 0 : gpu.Terrain.HeightAt(x, z));
+    internal WorldCamera camera = null!;
     WorldRenderOptions render = null!;
     readonly Stopwatch realTime = Stopwatch.StartNew();
     Meitou.Game.Rendering.Upscalers.Streamline? streamline;
@@ -98,9 +105,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     bool animClock;
     // Draw-list state (GameHost.Characters.cs): the previous snapshot indexed by id, and the last camera focus sent to the world.
     WorldSnapshot? indexedFor;
-    readonly Dictionary<CharacterId, CharacterSnapshot> previousById = [];
+    internal readonly Dictionary<CharacterId, CharacterSnapshot> previousById = [];
     Meitou.Data.Gameplay.AnimationLengths? animationLengths;
-    Meitou.Data.Gameplay.AnimationLibrary? animationLibrary;
+    internal Meitou.Data.Gameplay.AnimationLibrary? animationLibrary;
     Vector3 lastFocus;
     bool sentFocus;
     // Profile of the interactive run (printed by --quit-after).
@@ -112,6 +119,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
 
     public int Run()
     {
+        sound = new(this);
         try
         {
 #if MEITOU_METAL
@@ -124,7 +132,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             }
             return o.Screenshot is not null ? Screenshot() : Interactive();
         }
-        finally { DisposeAudio(); DisposeTitleScene(); session?.Dispose(); nav?.Dispose(); ragdollGeometry?.Dispose(); ownedScene?.Dispose(); }
+        finally { sound.DisposeAudio(); DisposeTitleScene(); session?.Dispose(); nav?.Dispose(); ragdollGeometry?.Dispose(); ownedScene?.Dispose(); }
     }
 
     /// <summary>The start opens on the title (no start, save, sandbox or duel was asked for).</summary>

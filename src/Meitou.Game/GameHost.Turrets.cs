@@ -18,7 +18,7 @@ sealed partial class GameHost
     World? turretPosesWorld;
 
     /// <summary>Once a frame, with the buildings.</summary>
-    void UpdateTurretPoses(WorldSnapshot snapshot)
+    internal void UpdateTurretPoses(WorldSnapshot snapshot)
     {
         if (gpu?.Objects is not { } objects || scene.Database is not { } db) return;
         if (!ReferenceEquals(turretPosesWorld, session.World))

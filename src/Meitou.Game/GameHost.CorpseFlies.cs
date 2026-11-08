@@ -53,12 +53,12 @@ sealed partial class GameHost
         {
             flyCorpses.Remove(id);
             particles?.RemoveBuildingEffects(FlyKey(id));
-            worldEmitters?.Remove(FlyKey(id));
+            sound.worldEmitters?.Remove(FlyKey(id));
         }
     }
 
     /// <summary>With the world audio: the Corpse Flies emitter at each corpse that has its effect.</summary>
-    void UpdateCorpseFlyEmitters(WorldEmitters emitters)
+    internal void UpdateCorpseFlyEmitters(WorldEmitters emitters)
     {
         if (flySound is not { } sound) return;
         foreach (var (id, at) in flyCorpses)

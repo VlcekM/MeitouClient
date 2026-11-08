@@ -61,7 +61,7 @@ sealed partial class GameHost
         }
         metalRenderer = true;
         // The banks and the output device load on a worker while the window, the world and the renderers are made.
-        BeginAudio();
+        sound.BeginAudio();
         var loaded = LoadScene is not null ? LoadScene() : scene;
         if (loaded is null)
         {
@@ -565,7 +565,7 @@ sealed partial class GameHost
                 },
                 CameraRotateSpeedChanged = ApplyCameraRotateSpeed,
                 CameraChanged = () => config.ApplyCamera(session.Camera.Settings),
-                AudioChanged = AudioSettingsChanged,
+                AudioChanged = sound.AudioSettingsChanged,
             };
             // The saved graphics values are the same keys the Vulkan panel uses. The Metal display choices have their own
             // config fields, and a command-line upscaler/scale stays explicit for this run.
@@ -637,7 +637,7 @@ sealed partial class GameHost
             }
         }
         // The audio device is up before the first frame; the title theme starts here when the menu is open.
-        AttachAudio();
+        sound.AttachAudio();
         SettingsPanel CreateMetalSettings()
         {
             var sliders = new List<Slider>();
@@ -1247,7 +1247,7 @@ sealed partial class GameHost
                     if (hud is not null) ApplyTitleCamera();
                     ApplySkyArrival();
                 }
-                if (!Covered) UpdateAudio(dt);
+                if (!Covered) sound.UpdateAudio(dt);
                 UpdateNav();
                 UpdateNavOverlay();
                 // Diagnostic isolation for the far-travel freeze: skip the runtime building/ground-item/lamps diff.

@@ -86,7 +86,7 @@ sealed partial class GameHost
             }
         }
         var centre = m.Position + new Vector3(0, BurstHeight, 0);
-        characterSounds?.Burst(centre);
+        sound.characterSounds?.Burst(centre);
         if (bleeds && gpu.Particles is { } particles)
         {
             var recolour = BloodRecolour(m.Colour);
@@ -371,7 +371,7 @@ sealed partial class GameHost
             store.Add(TerrainDecalType.Splash, p.Position, new Vector2(p.Velocity.X, p.Velocity.Z), 0.12f, p.Colour, TerrainDecalStore.NewLife, bloodRandom);
         if (!p.Landed && p.Flesh)
         {
-            characterSounds?.Splat(p.Position);
+            sound.characterSounds?.Splat(p.Position);
             if (p.Colour != 0) gpu.Particles?.Burst(BurstSplash, p.Position, Quaternion.Identity, 0.15f, 1.3f, 1.5f, p.Recolour);
         }
         p.Landed = true;

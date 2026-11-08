@@ -31,7 +31,7 @@ sealed partial class GameHost
             SettleNewWorld();
             DisposeTitleScene(); // re-read the latest Continue save after the campaign or its character appearances changed
             player.ShowMainMenu();
-            AudioMainMenu();
+            sound.AudioMainMenu();
             return null;
         }));
     }
@@ -49,7 +49,7 @@ sealed partial class GameHost
         var nextData = nextDifficulty.Apply(popData!, Gameplay.Dismemberment);
         // A fresh seed per game, as the original rolls its names and squads anew each time (docs/characters.md "Names"); --seed keeps one.
         ulong seed = g.SeedGiven ? g.Seed : (ulong)Random.Shared.NextInt64(1, long.MaxValue);
-        AudioGameStarts();
+        sound.AudioGameStarts();
         StartSceneLoad(player.TitleOpen, null,
             Stage("build", () =>
             {

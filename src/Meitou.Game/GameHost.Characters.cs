@@ -68,7 +68,7 @@ sealed partial class GameHost
     /// <summary>The facing a character is drawn at: its drawn body's, which follows the facing at a limited rate (<see cref="CharacterSnapshot.DrawYaw"/>).</summary>
     static float DrawnYaw(CharacterSnapshot c) => float.IsNaN(c.DrawYaw) ? c.Yaw : c.DrawYaw;
 
-    void IndexPrevious()
+    internal void IndexPrevious()
     {
         var previous = session.PreviousSnapshot;
         if (ReferenceEquals(indexedFor, previous)) return;
@@ -101,7 +101,7 @@ sealed partial class GameHost
         before is { } b ? new(Vector3.Lerp(b.Offset, now.Offset, alpha), Quaternion.Slerp(b.Rotation, now.Rotation, alpha)) : now;
 
     /// <summary>A carried body has its carrier's position; it is drawn at <see cref="CharacterSnapshot.Carry"/> from it, where its ragdoll is posed too.</summary>
-    static Vector3 CarriedOffset(CharacterSnapshot c, float yaw) => c.Carry is { } carry ? carry.World(Vector3.Zero, yaw).Position : Vector3.Zero;
+    internal static Vector3 CarriedOffset(CharacterSnapshot c, float yaw) => c.Carry is { } carry ? carry.World(Vector3.Zero, yaw).Position : Vector3.Zero;
 
     /// <summary>Fills the renderer's list from the last two snapshots, interpolated by the simulation's alpha.</summary>
     void FillDrawList(CharacterDrawList list)

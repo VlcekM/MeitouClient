@@ -265,7 +265,7 @@ sealed partial class GameHost
         readingFolder = folder;
         Task<SaveGame>? read = null;
         string summary = "";
-        AudioGameStarts();
+        sound.AudioGameStarts();
         PreparedSystems? prepared = null;
         StartSceneLoad(player.TitleOpen, null,
             Stage("read", () => read = Task.Run(() => SaveGame.Load(SaveFolder.Open(folder), ReadArrivalHour))),
@@ -289,7 +289,7 @@ sealed partial class GameHost
         Task<SaveGame>? read = null;
         PreparedSystems? prepared = null;
         string summary = "";
-        AudioGameStarts();
+        sound.AudioGameStarts();
         StartSceneLoad(player.TitleOpen, null,
             Stage("read", () => read = Task.Run(() =>
             {
