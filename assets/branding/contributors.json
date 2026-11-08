@@ -8,8 +8,8 @@
     "areas": "New game, Linux, Picking"
   },
   "rockchinq": {
-    "commits": 12,
-    "areas": "Towns, trading, New game"
+    "commits": 13,
+    "areas": "Town houses, Town repairs, Shopkeeper routines, Trading and buyback, Character stats, New-game options, Build orders"
   },
   "hazzael": {
     "commits": 6,
@@ -24,8 +24,8 @@
     "areas": "Metal rendering, Materials, Seat interaction, Mesh paths"
   },
   "crockmr": {
-    "commits": 26,
-    "areas": "Slaves, Prisoners, Saves"
+    "commits": 30,
+    "areas": "Guard posts, Slaver jobs, Sleep goals, Medical treatment, Prisoner cages, Save loading, Squads"
   },
   "dmlen": {
     "commits": 1,
