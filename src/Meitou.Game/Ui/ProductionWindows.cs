@@ -704,7 +704,7 @@ sealed class ProductionWindows(PlayerInterface player)
         return true;
     }
 
-    /// <summary>A description DatapanelGUI's lines (<see cref="PlayerInterface.AddDatapanel"/>'s geometry): rows of 0.94 / (int)(55 x its height / the screen's) of its height from 0.03 of it down.</summary>
+    /// <summary>A description DatapanelGUI's lines (<see cref="Title.FrontendScreens.AddDatapanel"/>'s geometry): rows of 0.94 / (int)(55 x its height / the screen's) of its height from 0.03 of it down.</summary>
     void DatapanelLines(List<UiControl> controls, string panel, IReadOnlyList<PlayerInterface.HudLine> lines)
     {
         if (controls.FirstOrDefault(c => c.Name == panel) is not { } host) return;

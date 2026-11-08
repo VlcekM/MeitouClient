@@ -211,7 +211,7 @@ sealed class TitleMenu(PlayerInterface player)
     /// <summary>The save card's lines, from the newest save: "Save · Day N · Place" and "Squad · c.N · M members" (the squad when it is not the save's name).</summary>
     (string Line, string Meta) ContinueText()
     {
-        if (player.slots.FirstOrDefault() is not { } slot) return ("", "");
+        if (player.frontend.slots.FirstOrDefault() is not { } slot) return ("", "");
         if (continueInfo.Folder != slot.Folder || continueInfo.Modified != slot.ModifiedUtc)
         {
             SaveSlotInfo? info = null;

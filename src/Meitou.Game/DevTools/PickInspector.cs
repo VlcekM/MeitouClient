@@ -82,7 +82,7 @@ sealed class PickInspector(PlayerInterface player)
     internal void AddInspectorPanel(List<UiControl> controls)
     {
         if (!InspectorOn || player.Ray(player.mouse) is not { } ray) return;
-        var ground = player.GroundHit(ray.Origin, ray.Direction);
+        var ground = player.picking.GroundHit(ray.Origin, ray.Direction);
         float limit = ground is { } g ? Vector3.Distance(ray.Origin, g) : 6000;
         var buildings = InspectBuildings(ray, limit);
         var hits = buildings.Where(b => b.Hit is { } t && t < limit).OrderBy(b => b.Hit).ToList();

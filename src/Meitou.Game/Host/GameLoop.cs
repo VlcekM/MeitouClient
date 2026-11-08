@@ -437,7 +437,7 @@ sealed class GameLoop(GameHost host)
     {
         if (e.Action == "save") host.saves.saveRequestedFolder = Meitou.Data.Save.SaveCatalog.Folder(Meitou.Simulation.Saving.QuickSave.DefaultRoot, e.Text);
         else if (e.Action == "load") host.saves.loadRequestedFolder = e.Text;
-        else if (e.Action == "import") host.saves.importRequested = (e.Text, host.player.ImportFlags);
+        else if (e.Action == "import") host.saves.importRequested = (e.Text, host.player.frontend.ImportFlags);
         else if (e.Action == "new-game") host.newGame.newGameRequested = e.Text;
         else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) host.feedbackCapture.FeedbackAction(e);
         else if (e.Action == "main-menu") host.newGame.mainMenuRequested = true;
@@ -1020,9 +1020,9 @@ sealed class GameLoop(GameHost host)
         bool outlines = !host.session.Camera.IsFree && !host.agentChannel.interfaceHidden && !cinema.Clean && !host.screenshotRequested && takeFile is null;
         bool outlining = host.config.HoverOutline && outlines;
         if (outlining && highlighting)
-            host.gpu.HoverKeys = [.. host.player.HighlightTargets(host.camera.Target, PlayerInterface.HighlightRadius).Select(t => (host.DrawKey(t.Id), t.Colour))];
+            host.gpu.HoverKeys = [.. host.player.pointerPanel.HighlightTargets(host.camera.Target, PointerView.HighlightRadius).Select(t => (host.DrawKey(t.Id), t.Colour))];
         else
-            host.gpu.HoverKeys = outlining && pointerWorld && host.player.HoverTarget is { } hover ? [(host.DrawKey(hover.Id), hover.Colour)] : [];
+            host.gpu.HoverKeys = outlining && pointerWorld && host.player.pointerPanel.HoverTarget is { } hover ? [(host.DrawKey(hover.Id), hover.Colour)] : [];
         host.gpu.OutlinedBuildings = outlines && host.config.BuildingOutline ? host.player.buildingSelection.OutlinedBuildings(hover: pointerWorld) : [];
     }
 
@@ -1219,17 +1219,17 @@ sealed class GameLoop(GameHost host)
         var cursorMode = orbitAnchor is not null ? Silk.NET.Input.CursorMode.Disabled
             : (host.config.HardwareMouse || byWindow) && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
         if (cursorMode != windowCursor) pointerMouse.Cursor.CursorMode = windowCursor = cursorMode;
-        string pointerName = pointer.OverWorld ? host.player.PointerName : "arrow";
+        string pointerName = pointer.OverWorld ? host.player.pointerPanel.PointerName : "arrow";
         bool enhanced = host.config.HardwareMouse && host.config.EnhancedHardwareMouse && !freeLook;
-        bool hand = enhanced && (pointer.OverWorld ? host.player.PointsAtClickable(pointerName) : panel?.OverClickable(pointer.At) == true);
+        bool hand = enhanced && (pointer.OverWorld ? host.player.pointerPanel.PointsAtClickable(pointerName) : panel?.OverClickable(pointer.At) == true);
         if (byWindow)
         {
             systemPointer.Show(pointerMouse.Cursor, host.player, pointerName);
             return;
         }
         systemPointer.Standard(pointerMouse.Cursor, hand ? Silk.NET.Input.StandardCursor.Hand : Silk.NET.Input.StandardCursor.Default);
-        if (!host.config.HardwareMouse && !freeLook) host.player.DrawPointer(pointerName, pointer.At, size.X, size.Y);
-        else if (enhanced) host.player.DrawPointerBeside(pointerName, pointer.At, size.X, size.Y);
+        if (!host.config.HardwareMouse && !freeLook) host.player.pointerPanel.DrawPointer(pointerName, pointer.At, size.X, size.Y);
+        else if (enhanced) host.player.pointerPanel.DrawPointerBeside(pointerName, pointer.At, size.X, size.Y);
     }
 
     /// <summary>

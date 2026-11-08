@@ -24,7 +24,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         var resources = OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install));
         var ui = new PlayerInterface(session, (_, _) => 0, c => c.Position) { Width = 1600, Height = 900 };
         ui.LoadUi(UiMode.Faithful, name => resources.Find(name));
-        ui.ConfigureFrontend(SyntheticTown.Database(), () => [], ""); return ui;
+        ui.frontend.ConfigureFrontend(SyntheticTown.Database(), () => [], ""); return ui;
     }
     static Vector2 Centre(UiControl c) => new(c.Bounds.X + c.Bounds.Width / 2, c.Bounds.Y + c.Bounds.Height / 2);
     static void Click(PlayerInterface ui, string name) => ui.MouseDown(MouseButton.Left, Centre(ui.UiFrame.Last(c => c.Name == name)), false);
@@ -36,7 +36,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         var ui = Ui(session);
         try
         {
-            int height = 720; ui.Width = 1280; ui.Height = height; ui.ShowTitle();
+            int height = 720; ui.Width = 1280; ui.Height = height; ui.frontend.ShowTitle();
             Click(ui, "NewGameButton");
             float closedY = ui.UiFrame.Last(c => c.Name == "BeginButton").Bounds.Y;
             Click(ui, "AdvancedButton");
@@ -93,7 +93,7 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         {
             // The Meitou title uses the world and keeps the new-game dialogs and mode switching functional.
             ui.SetUiMode(UiMode.Meitou);
-            ui.ShowTitle();
+            ui.frontend.ShowTitle();
             Assert.True(session.Simulation.RequestedPause);
             Assert.Contains(ui.UiFrame, c => c.Name == "MeitouTitle");
             Assert.DoesNotContain(ui.UiFrame, c => c.Properties.GetValueOrDefault("ImageResource") == "Kenshi_TitleScreen");
@@ -103,16 +103,16 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "BeginButton");
             ui.SetUiMode(UiMode.Faithful);
             Assert.Contains(ui.UiFrame, c => c.Properties.GetValueOrDefault("ImageResource") == "Kenshi_TitleScreen");
-            ui.CloseFrontend();
+            ui.frontend.CloseFrontend();
             Assert.False(session.Simulation.RequestedPause);
-            ui.ShowTitle(); Assert.True(session.Simulation.RequestedPause);
+            ui.frontend.ShowTitle(); Assert.True(session.Simulation.RequestedPause);
             Click(ui, "NewGameButton"); Assert.Contains(ui.UiFrame, c => c.Name == "BeginButton" && c.Enabled);
             Click(ui, "BeginButton"); Assert.Equal("new-game", request!.Action); Assert.False(session.World.Player.Exists);
             ui.UiKey(Key.Escape); Click(ui, "ExitButton");
             Assert.Contains(ui.UiFrame, c => c.Name == "ButtonA");
             Click(ui, "ButtonB"); Assert.Equal("new-game", request.Action);
             Click(ui, "ExitButton"); Click(ui, "ButtonA"); Assert.Equal("exit", request.Action);
-            ui.CloseFrontend(); Assert.False(session.Simulation.RequestedPause);
+            ui.frontend.CloseFrontend(); Assert.False(session.Simulation.RequestedPause);
             // In play the Esc menu's Exit offers the main menu, quit and cancel.
             ui.UiKey(Key.Escape); Click(ui, "ExitGameButton"); Assert.Contains(ui.UiFrame, c => c.Name == "ButtonC" && c.Enabled);
             Click(ui, "ButtonA"); Assert.Equal("main-menu", request.Action);
@@ -198,16 +198,16 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             ui.ViewProjection = Matrix4x4.CreateLookAt(eye, new(0, 1, 0), Vector3.UnitY) * Meitou.Game.Rendering.Frame.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
             var at = ui.Project(new Vector3(3, 1, 0))!.Value;
             ui.MouseDown(MouseButton.Right, at, false);
-            ui.Steer(); Assert.False(ui.ContextMenuOpen);   // not held long enough yet
-            Thread.Sleep(TimeSpan.FromSeconds(PlayerInterface.ContextHoldSeconds + 0.05));
-            ui.Steer(); Assert.True(ui.ContextMenuOpen);
+            ui.Steer(); Assert.False(ui.contextMenuWindow.ContextMenuOpen);   // not held long enough yet
+            Thread.Sleep(TimeSpan.FromSeconds(ContextMenuWindow.ContextHoldSeconds + 0.05));
+            ui.Steer(); Assert.True(ui.contextMenuWindow.ContextMenuOpen);
             Assert.Contains(ui.UiFrame, c => c.Name == "context-title" && c.Caption == "Stranger");
             Assert.Equal(0, session.World.Commands.Count);   // the hold gave no quick order
             // The rows act on the release (the original's eventMouseButtonReleased): the held button let go over the first verb gives it and closes the menu.
             var verb = Centre(ui.UiFrame.Last(c => c.Name == "context-verb-0"));
             ui.MouseMove(verb);
             ui.MouseUp(MouseButton.Right, verb, false);
-            Assert.False(ui.ContextMenuOpen);
+            Assert.False(ui.contextMenuWindow.ContextMenuOpen);
             Assert.Contains(session.World.Commands.TakeDue(long.MaxValue), c => c is Meitou.Simulation.Combat.AttackOrder a && a.Target == other);
         }
         finally { ui.DisposeUi(); }

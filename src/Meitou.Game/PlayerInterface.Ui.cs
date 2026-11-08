@@ -28,7 +28,7 @@ sealed partial class PlayerInterface
     IDisposable? uiRegistration;
     internal UiPainter? uiPainter;
     internal UiPainter? SettingsPainter => uiPainter;
-    bool settingsOpen;
+    internal bool settingsOpen;
     internal void SetSettingsOpen(bool value) { settingsOpen = value; if (value) inventoryWindows.CancelInventoryDrag(); UpdateMenuPause(); }
     internal MyGuiScreenHost faithfulScreens = null!;
     public event Action<MyGuiEvent>? ScreenAction;
@@ -69,7 +69,7 @@ sealed partial class PlayerInterface
         {
             var layout = MyGuiReader.ReadLayout(resolve(file + ".layout") ?? throw new FileNotFoundException(file));
             if (id is "new-game" or "import") layout = AdvancedOptions.WithAdvancedPanel(layout, MyGuiReader.ReadLayout(resolve("Kenshi_AdvancedOptionsWindow.layout") ?? throw new FileNotFoundException("Kenshi_AdvancedOptionsWindow.layout")));
-            if (id == "load") layout = WithSaveFilter(layout);
+            if (id == "load") layout = FrontendScreens.WithSaveFilter(layout);
             if (id == "editor") (characterEditor.editorLayout, characterEditor.editorRowsShape) = (layout, "");
             if (id == "inventory") tradeWindows.characterInventoryLayout = layout;
             if (id == "leveleditor") layout = LevelEditorPanel.LevelEditorBar(layout);
@@ -226,8 +226,8 @@ sealed partial class PlayerInterface
         var controls = ArrangedBase(hud);
         AddFrameControls(controls, hud);
         var top = MyGuiPresentation.HitTest(controls, mouse.X, mouse.Y);
-        pointerOverUi = faithfulScreens.Contains(mouse) || top is not null;
-        pointerOverButton = top is { Enabled: true } && (top.Type == "Button" || top.Action.Length > 0);
+        pointerPanel.pointerOverUi = faithfulScreens.Contains(mouse) || top is not null;
+        pointerPanel.pointerOverButton = top is { Enabled: true } && (top.Type == "Button" || top.Action.Length > 0);
         tooltipRuntime.AddHoverLabel(controls);
         inspector.AddInspectorPanel(controls);
         return controls;
@@ -283,7 +283,7 @@ sealed partial class PlayerInterface
             if (screen.Id == "editor") controls.AddRange(characterEditor.EditorBackdrop());
             controls.AddRange(screen.Controls.Where(c => UiMode == UiMode.Faithful ||
                 !c.Properties.TryGetValue("ImageResource", out var resource) || resource != "Kenshi_TitleScreen"));
-            if (screen.Id == "title" && UiMode == UiMode.Meitou && !showCredits) AddTitleMark(controls);
+            if (screen.Id == "title" && UiMode == UiMode.Meitou && !frontend.showCredits) AddTitleMark(controls);
         }
     }
 
@@ -323,8 +323,8 @@ sealed partial class PlayerInterface
         controls.InsertRange(0, [.. nameTags, .. dialogLayer]);
 
         build.AddBuildReadout(controls);
-        AddPointerChance(controls);
-        AddContextMenu(controls);
+        pointerPanel.AddPointerChance(controls);
+        contextMenuWindow.AddContextMenu(controls);
         feedbackPanel.AddFeedbackButton(controls);
     }
 
@@ -412,7 +412,7 @@ sealed partial class PlayerInterface
         else if (action == "extendedstats") infoExpanded = !infoExpanded;
         else if (action is "floor-up" or "floor-down") Floor?.Step(action == "floor-up" ? 1 : -1);
         else if (action == "build") build.ToggleBuildMode();
-        else if (action == "context") ContextAction(argument);
+        else if (action == "context") contextMenuWindow.ContextAction(argument);
         else if (action == "squad") Select(ActiveSquadMembers(), false);
         else if (action == "member")
         {
@@ -517,15 +517,15 @@ sealed partial class PlayerInterface
         // The title with one of its buttons pressed (its window or the credits, placed as from the title).
         if (panel.StartsWith("title-", StringComparison.Ordinal))
         {
-            ShowTitle();
+            frontend.ShowTitle();
             string button = panel[6..] switch { "load" => "LoadGameButton", "import" => "ImportGameButton", "new-game" => "NewGameButton", "exit" => "ExitButton", _ => "CreditsButton" };
-            HandleFrontendAction(new("title", button, button));
+            frontend.HandleFrontendAction(new("title", button, button));
             UpdateMenuPause(); return;
         }
         if (panel is "overview" or "overview-faction" or "menu" or "new-game" or "save" or "load" or "title")
         {
-            if (panel == "title") ShowTitle();
-            else if (panel is "save" or "load") OpenSlots(panel);
+            if (panel == "title") frontend.ShowTitle();
+            else if (panel is "save" or "load") frontend.OpenSlots(panel);
             else if (panel == "overview-faction") { faithfulScreens.Open("overview"); faithfulScreens.SetTab("overview", "TabsMain", FactionWindow.FactionTab); }
             else { faithfulScreens.Open(panel); if (panel == "overview") faithfulScreens.SetTab(panel, "TabsMain", 0); }
             UpdateMenuPause(); return;

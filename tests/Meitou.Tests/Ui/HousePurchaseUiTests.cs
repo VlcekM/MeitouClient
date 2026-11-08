@@ -36,7 +36,7 @@ public class HousePurchaseUiTests
         var resources = OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install));
         var ui = new PlayerInterface(session, (_, _) => 0, c => c.Position) { Width = 1600, Height = 900, FactionName = _ => "Nameless" };
         ui.LoadUi(mode, name => resources.Find(name));
-        ui.ConfigureFrontend(data.Db, () => [], "");
+        ui.frontend.ConfigureFrontend(data.Db, () => [], "");
         // Open to public needs an interior (docs/game/ui-screens.md "Selected building"); the fixture house has none of its own.
         ui.buildingSelection.BuildingData = id => Meitou.Data.Gameplay.Construction.BuildingBuildData.From(data.Db.Find(id)!) with { HasInterior = true };
         ui.buildingSelection.BuildTarget = id => ui.buildingSelection.BuildingData(id)?.Target;

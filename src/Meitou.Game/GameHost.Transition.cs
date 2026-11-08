@@ -224,7 +224,7 @@ sealed partial class GameHost
         indexedFor = null;
         previousById.Clear();
         player.Reset();
-        player.CloseFrontend();
+        player.frontend.CloseFrontend();
         OnWorldSettled();
     }
 

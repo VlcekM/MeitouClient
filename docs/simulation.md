@@ -1463,8 +1463,8 @@ The first snapshot after a load carries every site, so the host seam needs nothi
 (a comment). Host track:
 `Meitou.Game/BuildingSync` (diff, overlays, rebuilds, repath), `BuildMode` (Kenshi_BuildWindow,
 ghost, commands), `Building/PlacementCheck.cs`, `Building/BuildMenu.cs` (categories and groups from
-`BuildingBuildData` and `UnlockedBuildings`), `KeyMap.cs` (build map), `PlayerInterface.ContextMenu.cs` and
-`PlayerInterface.Picking.cs` (site verbs), `GameLoop` (hook), `Meitou.Game/Host` if needed,
+`BuildingBuildData` and `UnlockedBuildings`), `KeyMap.cs` (build map), `ContextMenuWindow` and
+`WorldPicking` (site verbs), `GameLoop` (hook), `Meitou.Game/Host` if needed,
 `Meitou.Game/Ui/*`; `Meitou.Game/Rendering/Objects/WorldObjects.cs`, `ObjectStreamer.cs` and the object shader plumbing;
 `Meitou.Simulation/Navigation/NavSystem.cs`, `NavMeshService.cs`, `ZoneGeometryGatherer*.cs`, new `NavRuntimeBuildings.cs`.
 

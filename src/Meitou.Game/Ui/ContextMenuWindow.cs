@@ -2,11 +2,10 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
 using Meitou.Game.Host.Input;
-using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Player;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The context menu (the original's ContextMenuGUI, <c>Kenshi_ContextMenu</c>; docs/game/ui-input.md "Context menu verbs"): holding the command (right) button on a target for
@@ -14,7 +13,7 @@ namespace Meitou.Game;
 /// verb gives it, anywhere else closes the menu (<see cref="ContextMenuRelease"/>). The verbs carry the original's labels and are listed in the original's order-number order (<see cref="VerbOrders"/>);
 /// one method per target kind builds them: characters here, containers and doors below, sites in BuildMode, rocks in FurnitureUse.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class ContextMenuWindow(PlayerInterface player)
 {
     /// <summary>How long the command button is held on a target before the menu opens (<b>Observed</b>: 0.2 s, FUN_140800250).</summary>
     public const double ContextHoldSeconds = 0.2;
@@ -57,13 +56,13 @@ sealed partial class PlayerInterface
     internal string PickLockCaption(Vector3 at, int level, bool building)
     {
         if (LockChance(at, level) is not { } chance) return "Pick Lock";
-        if (building && chance < (squadWindows.SquadLimits?.Invoke()?.MinimumLockpickChance ?? 0.05f)) chance = 0;
+        if (building && chance < (player.squadWindows.SquadLimits?.Invoke()?.MinimumLockpickChance ?? 0.05f)) chance = 0;
         return WithChance("Pick Lock", chance * 100);
     }
 
     /// <summary>The pick chance (0..1, no minimum) of a lock of <paramref name="level"/> at <paramref name="at"/> for the selected character nearest it; null with nobody selected.</summary>
-    float? LockChance(Vector3 at, int level) =>
-        NearestSelected(at, Selected()) is { } lead ? Meitou.Simulation.Locks.Lockpicking.Chance(level, lead.LockpickSkill) : null;
+    internal float? LockChance(Vector3 at, int level) =>
+        NearestSelected(at, player.Selected()) is { } lead ? Meitou.Simulation.Locks.Lockpicking.Chance(level, lead.LockpickSkill) : null;
 
     /// <summary>The one of <paramref name="candidates"/> nearest <paramref name="at"/>; null when there is none.</summary>
     static CharacterSnapshot? NearestSelected(Vector3 at, IEnumerable<CharacterSnapshot> candidates) =>
@@ -77,7 +76,7 @@ sealed partial class PlayerInterface
     /// <summary>The menu for <paramref name="verbs"/>, as the original fills it: an animals-only selection keeps only its orders, the rest sorted by order number; null when none is left.</summary>
     internal ContextMenu? Menu(string title, Vector2 at, List<(string Caption, Action Give)> verbs)
     {
-        var selected = Selected();
+        var selected = player.Selected();
         IEnumerable<(string Caption, Action Give)> kept = verbs;
         if (selected.Count > 0 && selected.All(TradeWindows.IsAnimal)) kept = kept.Where(v => OrderOf(v.Caption) is { } o && AnimalVerbOrders.Contains(o));
         var list = kept.Select((v, i) => (v, i)).OrderBy(x => OrderOf(x.v.Caption) ?? int.MaxValue).ThenBy(x => x.i).Select(x => x.v).ToList();
@@ -88,51 +87,51 @@ sealed partial class PlayerInterface
     /// The verbs the selection has for a character (<c>FUN_1407a6bc0</c>, docs/game/ui-input.md "Context menu verbs"), in the original's labels. Prisoners, carried bodies, the
     /// player's own, hostile and other characters each get their branch's verbs; then the medic verbs and the shackle verbs.
     /// </summary>
-    List<(string Caption, Action Give)> Verbs(CharacterSnapshot target)
+    internal List<(string Caption, Action Give)> Verbs(CharacterSnapshot target)
     {
         var verbs = new List<(string, Action)>();
-        var selection = SelectedIds();
+        var selection = player.SelectedIds();
         if (selection.Count == 0) return verbs;
         var id = target.Id;
         bool down = target.Down;   // vfunc 0x30, FUN_1405c9e10, from the snapshot
-        var carriers = Selected().Where(c => c.Carrying == id).Select(c => c.Id).ToArray();
+        var carriers = player.Selected().Where(c => c.Carrying == id).Select(c => c.Id).ToArray();
         // A carried body: carried by a selected character, its inventory (26, the branch's own verb) and Put Down (and Meitou's cage stand-ins); carried by someone not of the player's, nothing
         // (FUN_1407a6bc0 empties the list). No pick-up verb for a carried body: the non-hostile branches test +0x3d4, and a hostile one's Kidnap (246) cannot snatch.
         if (carriers.Length > 0)
         {
             if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
-            verbs.Add(("Put Down", () => Say(new Meitou.Simulation.Carrying.PutDownOrder(carriers) { Tick = session.World.Tick })));
+            verbs.Add(("Put Down", () => player.Say(new Meitou.Simulation.Carrying.PutDownOrder(carriers) { Tick = player.session.World.Tick })));
             // Meitou stand-in for the original's cage use (docs/simulation.md "Arrest and jail"): carry the body to the nearest free cage.
-            verbs.Add(("Put in Cage", () => Say(new Meitou.Simulation.Crime.PutInCageOrder(carriers) { Tick = session.World.Tick })));
+            verbs.Add(("Put in Cage", () => player.Say(new Meitou.Simulation.Crime.PutInCageOrder(carriers) { Tick = player.session.World.Tick })));
             // Meitou stand-in for the bed's own "Put in Bed" (FurnitureUse): carry the body to the bed the bed search finds.
-            verbs.Add(("Put in Bed", () => Say(new Meitou.Simulation.Locks.PutInBedOrder(carriers) { Tick = session.World.Tick })));
+            verbs.Add(("Put in Bed", () => player.Say(new Meitou.Simulation.Locks.PutInBedOrder(carriers) { Tick = player.session.World.Tick })));
             return verbs;
         }
-        if (!target.CarriedBy.IsNone && session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == target.CarriedBy) is not { IsPlayer: true }) return verbs;
+        if (!target.CarriedBy.IsNone && player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == target.CarriedBy) is not { IsPlayer: true }) return verbs;
         if (target.Prison is { } prison) PrisonerVerbs(verbs, target, prison, selection, down);
         else if (target.IsPlayer) OwnCharacterVerbs(verbs, target, selection, down);
         else OtherCharacterVerbs(verbs, target, selection, down);
         // The medic verbs, unless it is dead or a hostile one standing (the original: the lead's enemy test, vtable +0x3e8).
-        if (target.Body is { Dead: false } && (down || target.IsPlayer || !Hostile(target)))
+        if (target.Body is { Dead: false } && (down || target.IsPlayer || !player.pointerPanel.Hostile(target)))
         {
             // Repairs (60, the robot kit's need) and First Aid (25, the organic need) are separate tests (FUN_1407a6bc0 calls FUN_1407c05a0 with kind 1 then 0); one order serves both kits.
-            if (target.Body is { NeedsRepairs: true }) verbs.Add(("Repairs", () => Say(new Meitou.Simulation.FirstAid.TreatOrder(selection, id) { Tick = session.World.Tick })));
-            if (target.Body is { NeedsOrganicAid: true }) verbs.Add(("First Aid", () => Say(new Meitou.Simulation.FirstAid.TreatOrder(selection, id) { Tick = session.World.Tick })));
-            if (target.Body is { NeedsSplint: true }) verbs.Add(("Splint Injuries", () => Say(new Meitou.Simulation.FirstAid.SplintOrder(selection, id) { Tick = session.World.Tick })));
+            if (target.Body is { NeedsRepairs: true }) verbs.Add(("Repairs", () => player.Say(new Meitou.Simulation.FirstAid.TreatOrder(selection, id) { Tick = player.session.World.Tick })));
+            if (target.Body is { NeedsOrganicAid: true }) verbs.Add(("First Aid", () => player.Say(new Meitou.Simulation.FirstAid.TreatOrder(selection, id) { Tick = player.session.World.Tick })));
+            if (target.Body is { NeedsSplint: true }) verbs.Add(("Splint Injuries", () => player.Say(new Meitou.Simulation.FirstAid.SplintOrder(selection, id) { Tick = player.session.World.Tick })));
         }
         // Locked shackles (the original's verbs 201, 185, 186): pick the lock, saw them off with a tool, or break them by strength; the wearer's own or a mate's (another faction's: a crime).
         if (target.ShacklesLocked && target.Body is not { Dead: true })
         {
-            verbs.Add(("Unlock Shackles", () => Say(new Meitou.Simulation.Locks.ShackleOrder(Workers(), id, Meitou.Simulation.Locks.ShackleWork.Pick) { Tick = session.World.Tick })));
-            verbs.Add(("Use Tools", () => Say(new Meitou.Simulation.Locks.ShackleOrder(Workers(), id, Meitou.Simulation.Locks.ShackleWork.Cut) { Tick = session.World.Tick })));
-            verbs.Add(("Use Strength", () => Say(new Meitou.Simulation.Locks.ShackleOrder(Workers(), id, Meitou.Simulation.Locks.ShackleWork.Break) { Tick = session.World.Tick })));
+            verbs.Add(("Unlock Shackles", () => player.Say(new Meitou.Simulation.Locks.ShackleOrder(Workers(), id, Meitou.Simulation.Locks.ShackleWork.Pick) { Tick = player.session.World.Tick })));
+            verbs.Add(("Use Tools", () => player.Say(new Meitou.Simulation.Locks.ShackleOrder(Workers(), id, Meitou.Simulation.Locks.ShackleWork.Cut) { Tick = player.session.World.Tick })));
+            verbs.Add(("Use Strength", () => player.Say(new Meitou.Simulation.Locks.ShackleOrder(Workers(), id, Meitou.Simulation.Locks.ShackleWork.Break) { Tick = player.session.World.Tick })));
             // The wearer works its own shackles when it is selected, else the selection.
             IReadOnlyList<CharacterId> Workers() => selection.Contains(id) ? [id] : selection;
         }
         // Meitou stand-in for dragging shackles onto a down or caged character's armour slot: a selected character carrying some puts them on, locked.
-        if (target.CanBeShackled && Selected().Any(c => c.CarriesShackles))
-            verbs.Add(("Put on Shackles", () => Say(new Meitou.Simulation.Locks.PutShacklesOrder(Selected().Where(c => c.CarriesShackles).Select(c => c.Id).ToArray(), id) { Tick = session.World.Tick })));
-        return [.. verbs.Select(v => (v.Item1, squadWindows.JobOrOrder(v.Item1, id, v.Item2)))];   // Shift turns an order into a job (SquadPanel)
+        if (target.CanBeShackled && player.Selected().Any(c => c.CarriesShackles))
+            verbs.Add(("Put on Shackles", () => player.Say(new Meitou.Simulation.Locks.PutShacklesOrder(player.Selected().Where(c => c.CarriesShackles).Select(c => c.Id).ToArray(), id) { Tick = player.session.World.Tick })));
+        return [.. verbs.Select(v => (v.Item1, player.squadWindows.JobOrOrder(v.Item1, id, v.Item2)))];   // Shift turns an order into a job (SquadPanel)
     }
 
     /// <summary>
@@ -144,31 +143,31 @@ sealed partial class PlayerInterface
     void PrisonerVerbs(List<(string, Action)> verbs, CharacterSnapshot target, PrisonView prison, IReadOnlyList<CharacterId> selection, bool down)
     {
         var id = target.Id;
-        if (!down && session.World.CanTalk(id, selection[0])) verbs.Add(("Talk To", () => Say(new Meitou.Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = session.World.Tick })));
+        if (!down && player.session.World.CanTalk(id, selection[0])) verbs.Add(("Talk To", () => player.Say(new Meitou.Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = player.session.World.Tick })));
         // 26 unless it is the player's and selected: Trade for the player's own, else Loot (a pickpocket while it is awake).
         if (target.CanOpenInventory && !(target.IsPlayer && selection.Contains(id))) verbs.Add(InventoryVerb(target));
-        bool ownCage = prison.CageOwner == session.World.Player.Faction;
+        bool ownCage = prison.CageOwner == player.session.World.Player.Faction;
         // The player's own cage has Unlock (78) or Lock (77) by its lock (FUN_1407a6bc0), worked from outside.
         if (ownCage && prison.CageId is { } own)
-            verbs.Add((prison.Locked ? "Unlock" : "Lock", () => Say(new Meitou.Simulation.Locks.DoorLockOrder([], own, !prison.Locked) { Tick = session.World.Tick })));
+            verbs.Add((prison.Locked ? "Unlock" : "Lock", () => player.Say(new Meitou.Simulation.Locks.DoorLockOrder([], own, !prison.Locked) { Tick = player.session.World.Tick })));
         if (prison.Locked)
         {
-            if (!down && !ownCage) verbs.Add((prison.LockLevel < 0 ? "Pick Lock" : PickLockCaption(target.Position, prison.LockLevel, false), () => Say(new Meitou.Simulation.Locks.PickLockOrder(selection, id) { Tick = session.World.Tick })));
+            if (!down && !ownCage) verbs.Add((prison.LockLevel < 0 ? "Pick Lock" : PickLockCaption(target.Position, prison.LockLevel, false), () => player.Say(new Meitou.Simulation.Locks.PickLockOrder(selection, id) { Tick = player.session.World.Tick })));
             // Another faction's locked cage also has Use Tools and Use Strength (285, 286; FUN_1407a6bc0 tests the lock and owner, not the occupant), worked from outside.
             if (prison.CageId is { } cage && !ownCage)
             {
-                verbs.Add(("Use Tools", () => Say(new Meitou.Simulation.Locks.ForceLockOrder([], cage, Meitou.Simulation.Locks.LockForce.Tools) { Tick = session.World.Tick })));
-                verbs.Add(("Use Strength", () => Say(new Meitou.Simulation.Locks.ForceLockOrder([], cage, Meitou.Simulation.Locks.LockForce.Strength) { Tick = session.World.Tick })));
+                verbs.Add(("Use Tools", () => player.Say(new Meitou.Simulation.Locks.ForceLockOrder([], cage, Meitou.Simulation.Locks.LockForce.Tools) { Tick = player.session.World.Tick })));
+                verbs.Add(("Use Strength", () => player.Say(new Meitou.Simulation.Locks.ForceLockOrder([], cage, Meitou.Simulation.Locks.LockForce.Strength) { Tick = player.session.World.Tick })));
             }
             // The player's own cage frees its prisoner while locked too (the release unlocks it); never a dead or knocked-out one (Set Free wants a conscious target, precondition 125).
             if (!selection.Contains(id) && !down && target.CarriedBy.IsNone && ownCage)
-                verbs.Add(("Set Free", () => Say(new Meitou.Simulation.Locks.SetFreeOrder([], id) { Tick = session.World.Tick })));
+                verbs.Add(("Set Free", () => player.Say(new Meitou.Simulation.Locks.SetFreeOrder([], id) { Tick = player.session.World.Tick })));
         }
-        else if (selection.Contains(id)) { if (!down) verbs.Add(("Escape", () => Say(new Meitou.Simulation.Locks.GetOutOrder([id]) { Tick = session.World.Tick }))); }
+        else if (selection.Contains(id)) { if (!down) verbs.Add(("Escape", () => player.Say(new Meitou.Simulation.Locks.GetOutOrder([id]) { Tick = player.session.World.Tick }))); }
         else if (target.CarriedBy.IsNone)
         {
             // Its cage the player's: Set Free (110) and the pick-up verb; another faction's: the pick-up verb alone (the cage's own menu has Set Free).
-            if (ownCage && !down) verbs.Add(("Set Free",() => Say(new Meitou.Simulation.Locks.SetFreeOrder([], id) { Tick = session.World.Tick })));
+            if (ownCage && !down) verbs.Add(("Set Free",() => player.Say(new Meitou.Simulation.Locks.SetFreeOrder([], id) { Tick = player.session.World.Tick })));
             verbs.Add(PickUpVerb(target));
         }
     }
@@ -183,13 +182,13 @@ sealed partial class PlayerInterface
         var id = target.Id;
         if (selection.Contains(id))
         {
-            if (target.StayingLow) verbs.Add(("Stand Up", () => Say(new StandUpCommand(selection) { Tick = session.World.Tick })));
+            if (target.StayingLow) verbs.Add(("Stand Up", () => player.Say(new StandUpCommand(selection) { Tick = player.session.World.Tick })));
             return;
         }
         // Bodyguard (45): follows and defends the target; with Shift it is the Bodyguard job (SquadPanel).
-        verbs.Add(("Bodyguard", () => Say(new FollowOrder(selection, id) { Guard = true, Tick = session.World.Tick })));
-        verbs.Add(("Follow", () => Say(new FollowOrder(selection, id) { Tick = session.World.Tick })));
-        if (target.CarriedBy.IsNone && (down || target.Carrying.IsNone)) verbs.Add(("Pick Up", () => Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = session.World.Tick })));
+        verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.session.World.Tick })));
+        verbs.Add(("Follow", () => player.Say(new FollowOrder(selection, id) { Tick = player.session.World.Tick })));
+        if (target.CarriedBy.IsNone && (down || target.Carrying.IsNone)) verbs.Add(("Pick Up", () => player.Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = player.session.World.Tick })));
         if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
     }
 
@@ -197,10 +196,10 @@ sealed partial class PlayerInterface
     (string, Action) InventoryVerb(CharacterSnapshot target)
     {
         var id = target.Id;
-        void Open() => Say(new Meitou.Simulation.Carrying.OpenLootOrder([], id) { Tick = session.World.Tick });
+        void Open() => player.Say(new Meitou.Simulation.Carrying.OpenLootOrder([], id) { Tick = player.session.World.Tick });
         // With Shift the verb is an order on the target like any other: Trade on an own character (a character hand, not a building) falls through to the TaskData lookup of order 26, so it adds the
         // Foraging animals job like Loot does (FUN_1407fa650, Verified), not the window.
-        return (target.IsPlayer ? "Trade" : "Loot", () => squadWindows.OrderOrJob(Meitou.Data.Gameplay.Ai.TaskType.LOOT_TARGET, id, Open));
+        return (target.IsPlayer ? "Trade" : "Loot", () => player.squadWindows.OrderOrJob(Meitou.Data.Gameplay.Ai.TaskType.LOOT_TARGET, id, Open));
     }
 
     /// <summary>
@@ -211,14 +210,14 @@ sealed partial class PlayerInterface
     void ThrowOutVerb(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection)
     {
         var id = target.Id;
-        if (Selected().LastOrDefault() is { } lead && session.World.VerbFactsOf(lead.Id, id) is { Town: Meitou.Simulation.TownOwnership.Player } facts)
+        if (player.Selected().LastOrDefault() is { } lead && player.session.World.VerbFactsOf(lead.Id, id) is { Town: Meitou.Simulation.TownOwnership.Player } facts)
         {
             if (facts.InsideWalls && !facts.LeadRegards)
-                verbs.Add(("Throw out of town", () => Say(new Meitou.Simulation.Production.AddOrderJob(selection, Meitou.Data.Gameplay.Ai.TaskType.PICKUP_INTRUDERS_TOWN, id) { Tick = session.World.Tick })));
+                verbs.Add(("Throw out of town", () => player.Say(new Meitou.Simulation.Production.AddOrderJob(selection, Meitou.Data.Gameplay.Ai.TaskType.PICKUP_INTRUDERS_TOWN, id) { Tick = player.session.World.Tick })));
             return;
         }
         if (!target.InPlayerBuilding) return;
-        verbs.Add(("Throw out of home",() => Say(new Meitou.Simulation.Production.AddOrderJob(selection, Meitou.Data.Gameplay.Ai.TaskType.PICKUP_INTRUDERS, id) { Tick = session.World.Tick })));
+        verbs.Add(("Throw out of home",() => player.Say(new Meitou.Simulation.Production.AddOrderJob(selection, Meitou.Data.Gameplay.Ai.TaskType.PICKUP_INTRUDERS, id) { Tick = player.session.World.Tick })));
     }
 
     /// <summary>
@@ -235,7 +234,7 @@ sealed partial class PlayerInterface
             if (!target.CarriedBy.IsNone) return;   // no pick-up verb or Throw out of home for a carried body
             verbs.Add(PickUpVerb(target));
             if (target.StealthKoChance is { } downChance)   // 228 on a down character too (FUN_1407a6bc0:583-594)
-                verbs.Add((WithChance("Stealth KO", downChance), () => Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = session.World.Tick })));
+                verbs.Add((WithChance("Stealth KO", downChance), () => player.Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = player.session.World.Tick })));
             ThrowOutVerb(verbs, target, selection);
             return;
         }
@@ -246,40 +245,40 @@ sealed partial class PlayerInterface
             verbs.Add(PickUpVerb(target));
             ThrowOutVerb(verbs, target, selection);
             if (target.StealthKoChance is { } koChance)
-                verbs.Add((WithChance("Stealth KO", koChance), () => Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = session.World.Tick })));
-            if (Hostile(target)) return;
-            verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Unprovoked = true })));
-            verbs.Add(("Bodyguard", () => Say(new FollowOrder(selection, id) { Guard = true, Tick = session.World.Tick })));
-            if (session.World.CanTalk(id, selection[0])) verbs.Add(("Talk To", () => Say(new Meitou.Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = session.World.Tick })));
+                verbs.Add((WithChance("Stealth KO", koChance), () => player.Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = player.session.World.Tick })));
+            if (player.pointerPanel.Hostile(target)) return;
+            verbs.Add(("Attack Unprovoked", () => player.Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = player.session.World.Tick, Picked = true, Unprovoked = true })));
+            verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.session.World.Tick })));
+            if (player.session.World.CanTalk(id, selection[0])) verbs.Add(("Talk To", () => player.Say(new Meitou.Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = player.session.World.Tick })));
             return;
         }
-        bool onTurret = Selected().LastOrDefault() is { Turret: not null };
-        bool hostile = Hostile(target);
-        if (session.World.CanTalk(id, selection[0])) verbs.Add(("Talk To", () => Say(new Meitou.Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = session.World.Tick })));
+        bool onTurret = player.Selected().LastOrDefault() is { Turret: not null };
+        bool hostile = player.pointerPanel.Hostile(target);
+        if (player.session.World.CanTalk(id, selection[0])) verbs.Add(("Talk To", () => player.Say(new Meitou.Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = player.session.World.Tick })));
         // The customer is the selected character nearest the trader that stands (as the quick order's lead), not the first selected.
-        if (target.IsTrader && !hostile && NearestSelected(target.Position, Selected().Where(c => !c.Down)) is { } customer)
-            verbs.Add(("Trade", () => Say(new Meitou.Simulation.Trading.OpenTrade(customer.Id, id) { Tick = session.World.Tick })));
+        if (target.IsTrader && !hostile && NearestSelected(target.Position, player.Selected().Where(c => !c.Down)) is { } customer)
+            verbs.Add(("Trade", () => player.Say(new Meitou.Simulation.Trading.OpenTrade(customer.Id, id) { Tick = player.session.World.Tick })));
         if (onTurret)
         {
             // The lead mans a turret: the attacks give way to Shoot At (235), which sends every selected gunner's fire at the target.
-            var gunners = Selected().Where(c => c.Turret is not null).Select(c => c.Id).ToArray();
-            verbs.Add(("Shoot At", () => Say(new Meitou.Simulation.Combat.ShootAtOrder(gunners, id) { Tick = session.World.Tick })));
+            var gunners = player.Selected().Where(c => c.Turret is not null).Select(c => c.Id).ToArray();
+            verbs.Add(("Shoot At", () => player.Say(new Meitou.Simulation.Combat.ShootAtOrder(gunners, id) { Tick = player.session.World.Tick })));
             return;
         }
         if (target.StealthKoChance is { } chance)
-            verbs.Add((WithChance("Stealth KO", chance), () => Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = session.World.Tick })));
+            verbs.Add((WithChance("Stealth KO", chance), () => player.Say(new Meitou.Simulation.Carrying.StealthKoOrder(selection, id) { Tick = player.session.World.Tick })));
         if (hostile)
         {
             // Fighting back at someone attacking the squad is defence, not an assault on its faction (as the quick order).
             verbs.Add(("Attack All", () => AttackAll(selection, target)));
-            verbs.Add(("Attack Target", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Defensive = target.FightsPlayer })));
+            verbs.Add(("Attack Target", () => player.Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = player.session.World.Tick, Picked = true, Defensive = target.FightsPlayer })));
             return;
         }
-        verbs.Add(("Attack Unprovoked", () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = session.World.Tick, Picked = true, Unprovoked = true })));
-        verbs.Add(("Bodyguard", () => Say(new FollowOrder(selection, id) { Guard = true, Tick = session.World.Tick })));
-        verbs.Add(("Follow", () => Say(new FollowOrder(selection, id) { Tick = session.World.Tick })));
-        if (!target.IsDiplomat && Selected().LastOrDefault() is { } lead && session.World.VerbFactsOf(lead.Id, id) is { RegardsLead: true })
-            verbs.Add(("Pick Up", () => Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = session.World.Tick })));   // a plain 225 here: never Kidnap (FUN_1407a6bc0)
+        verbs.Add(("Attack Unprovoked", () => player.Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = player.session.World.Tick, Picked = true, Unprovoked = true })));
+        verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.session.World.Tick })));
+        verbs.Add(("Follow", () => player.Say(new FollowOrder(selection, id) { Tick = player.session.World.Tick })));
+        if (!target.IsDiplomat && player.Selected().LastOrDefault() is { } lead && player.session.World.VerbFactsOf(lead.Id, id) is { RegardsLead: true })
+            verbs.Add(("Pick Up", () => player.Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = player.session.World.Tick })));   // a plain 225 here: never Kidnap (FUN_1407a6bc0)
     }
 
     /// <summary>How far from the clicked enemy Attack All looks for the others (an engine choice: the original's order 16 is "Attacking enemies", whose reach is <b>Unknown</b>).</summary>
@@ -291,8 +290,8 @@ sealed partial class PlayerInterface
     /// </summary>
     void AttackAll(IReadOnlyList<CharacterId> selection, CharacterSnapshot clicked)
     {
-        var snapshot = session.CurrentSnapshot;
-        var foes = snapshot.Characters.Where(c => c.Id == clicked.Id || StandingHostile(c) && Vector3.Distance(c.Position, clicked.Position) <= AttackAllRadius).ToList();
+        var snapshot = player.session.CurrentSnapshot;
+        var foes = snapshot.Characters.Where(c => c.Id == clicked.Id || player.pointerPanel.StandingHostile(c) && Vector3.Distance(c.Position, clicked.Position) <= AttackAllRadius).ToList();
         var groups = new Dictionary<CharacterId, List<CharacterId>>();
         foreach (var id in selection)
         {
@@ -302,7 +301,7 @@ sealed partial class PlayerInterface
             list.Add(id);
         }
         foreach (var (foeId, attackers) in groups)
-            Say(new Meitou.Simulation.Combat.AttackOrder(attackers, foeId) { Tick = session.World.Tick, Defensive = foes.First(f => f.Id == foeId).FightsPlayer });
+            player.Say(new Meitou.Simulation.Combat.AttackOrder(attackers, foeId) { Tick = player.session.World.Tick, Defensive = foes.First(f => f.Id == foeId).FightsPlayer });
     }
 
     /// <summary>
@@ -314,15 +313,15 @@ sealed partial class PlayerInterface
     (string, Action) PickUpVerb(CharacterSnapshot target)
     {
         var id = target.Id;
-        if (target.Prison is null && Selected().LastOrDefault() is { } lead && KidnapOffered(lead, target))
-            return (WithChance("Kidnap", target.KidnapChance ?? 100), () => Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = session.World.Tick, Kidnap = true }));
-        return ("Pick Up", () => Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = session.World.Tick }));
+        if (target.Prison is null && player.Selected().LastOrDefault() is { } lead && KidnapOffered(lead, target))
+            return (WithChance("Kidnap", target.KidnapChance ?? 100), () => player.Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = player.session.World.Tick, Kidnap = true }));
+        return ("Pick Up", () => player.Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = player.session.World.Tick }));
     }
 
     /// <summary>The pick-up verb's Kidnap branch (<c>FUN_140796f80</c>); without the world's facts (no population) it is not offered.</summary>
     bool KidnapOffered(CharacterSnapshot lead, CharacterSnapshot target)
     {
-        if (target.Faction == lead.Faction || session.World.VerbFactsOf(lead.Id, target.Id) is not { } facts) return false;
+        if (target.Faction == lead.Faction || player.session.World.VerbFactsOf(lead.Id, target.Id) is not { } facts) return false;
         if (facts.Town != Meitou.Simulation.TownOwnership.Other || facts.NotReal) return false;
         if (facts.RegardsLead && !facts.SquadTrader && !target.WarParty) return false;
         return facts.Bounty < 1 && !facts.Bandit;
@@ -336,14 +335,14 @@ sealed partial class PlayerInterface
     internal List<(string Caption, Action Give)> ContainerVerbs(Meitou.Simulation.Locks.ContainerSpot container)
     {
         var verbs = new List<(string, Action)>();
-        if (SelectedIds().Count == 0) return verbs;
-        bool own = container.Owner == session.World.Player.Faction;
+        if (player.SelectedIds().Count == 0) return verbs;
+        bool own = container.Owner == player.session.World.Player.Faction;
         if (!container.Locked) verbs.Add((own ? "Inventory" : "Loot", () => OpenContainer(container.Id, true)));
         else
         {
             if (!own && container.Owner >= 0) verbs.Add((PickLockCaption(container.Position, container.Level, true), () => OpenContainer(container.Id, true)));
-            verbs.Add(("Use Tools", () => Say(new Meitou.Simulation.Locks.ForceLockOrder([], container.Id, Meitou.Simulation.Locks.LockForce.Tools) { Tick = session.World.Tick })));
-            verbs.Add(("Use Strength", () => Say(new Meitou.Simulation.Locks.ForceLockOrder([], container.Id, Meitou.Simulation.Locks.LockForce.Strength) { Tick = session.World.Tick })));
+            verbs.Add(("Use Tools", () => player.Say(new Meitou.Simulation.Locks.ForceLockOrder([], container.Id, Meitou.Simulation.Locks.LockForce.Tools) { Tick = player.session.World.Tick })));
+            verbs.Add(("Use Strength", () => player.Say(new Meitou.Simulation.Locks.ForceLockOrder([], container.Id, Meitou.Simulation.Locks.LockForce.Strength) { Tick = player.session.World.Tick })));
         }
         return verbs;
     }
@@ -351,8 +350,8 @@ sealed partial class PlayerInterface
     /// <summary>The open order for a container (Alt: another faction's locked one is picked, a shop's taken from).</summary>
     internal void OpenContainer(string id, bool alt)
     {
-        production.closedMachine = null;   // a container whose window was closed opens again when it is asked for (the sim may not have dropped it yet, e.g. while paused)
-        Say(new Meitou.Simulation.Items.OpenContainerOrder([], id, alt) { Tick = session.World.Tick });
+        player.production.closedMachine = null;   // a container whose window was closed opens again when it is asked for (the sim may not have dropped it yet, e.g. while paused)
+        player.Say(new Meitou.Simulation.Items.OpenContainerOrder([], id, alt) { Tick = player.session.World.Tick });
     }
 
     /// <summary>
@@ -362,35 +361,35 @@ sealed partial class PlayerInterface
     internal List<(string Caption, Action Give)> DoorVerbs((Meitou.Simulation.Locks.DoorPick Door, bool Locked) pick)
     {
         var verbs = new List<(string, Action)>();
-        if (SelectedIds().Count == 0) return verbs;
+        if (player.SelectedIds().Count == 0) return verbs;
         var door = pick.Door;
-        bool own = door.Owner == session.World.Player.Faction;
+        bool own = door.Owner == player.session.World.Player.Faction;
         // A broken door is repaired (95, the building branch of FUN_1407fc6e0); the job of Shift is not built (the Engineer job works sites only).
-        if (furniture.DoorBroken(door))
+        if (player.furniture.DoorBroken(door))
         {
-            if (own) verbs.Add(("Repair", () => Say(new Meitou.Simulation.Construction.BuildOrder([], door.Id) { Tick = session.World.Tick })));
+            if (own) verbs.Add(("Repair", () => player.Say(new Meitou.Simulation.Construction.BuildOrder([], door.Id) { Tick = player.session.World.Tick })));
             return verbs;
         }
         if (pick.Locked)
         {
-            if (own) verbs.Add(("Unlock", () => Say(new Meitou.Simulation.Locks.DoorLockOrder([], door.Id, false) { Tick = session.World.Tick })));
-            else verbs.Add((PickLockCaption(door.Position, session.CurrentSnapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Level, true), () => Say(new Meitou.Simulation.Locks.DoorOrder([], door.Id, true) { Tick = session.World.Tick })));
-            verbs.Add(("Use Tools", () => Say(new Meitou.Simulation.Locks.ForceLockOrder([], door.Id, Meitou.Simulation.Locks.LockForce.Tools) { Tick = session.World.Tick })));
-            verbs.Add(("Use Strength", () => Say(new Meitou.Simulation.Locks.ForceLockOrder([], door.Id, Meitou.Simulation.Locks.LockForce.Strength) { Tick = session.World.Tick })));
-            verbs.Add(("Smash", () => Say(new Meitou.Simulation.Locks.ForceLockOrder([], door.Id, Meitou.Simulation.Locks.LockForce.Smash) { Tick = session.World.Tick })));
+            if (own) verbs.Add(("Unlock", () => player.Say(new Meitou.Simulation.Locks.DoorLockOrder([], door.Id, false) { Tick = player.session.World.Tick })));
+            else verbs.Add((PickLockCaption(door.Position, player.session.CurrentSnapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Level, true), () => player.Say(new Meitou.Simulation.Locks.DoorOrder([], door.Id, true) { Tick = player.session.World.Tick })));
+            verbs.Add(("Use Tools", () => player.Say(new Meitou.Simulation.Locks.ForceLockOrder([], door.Id, Meitou.Simulation.Locks.LockForce.Tools) { Tick = player.session.World.Tick })));
+            verbs.Add(("Use Strength", () => player.Say(new Meitou.Simulation.Locks.ForceLockOrder([], door.Id, Meitou.Simulation.Locks.LockForce.Strength) { Tick = player.session.World.Tick })));
+            verbs.Add(("Smash", () => player.Say(new Meitou.Simulation.Locks.ForceLockOrder([], door.Id, Meitou.Simulation.Locks.LockForce.Smash) { Tick = player.session.World.Tick })));
             return verbs;
         }
-        if (own) verbs.Add(("Lock", () => Say(new Meitou.Simulation.Locks.DoorLockOrder([], door.Id, true) { Tick = session.World.Tick })));
-        bool open = session.CurrentSnapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Motion is Meitou.Simulation.Locks.DoorMotion.Open or Meitou.Simulation.Locks.DoorMotion.Opening;
-        verbs.Add((open ? "Close" : "Open", () => Say(new Meitou.Simulation.Locks.DoorOrder([], door.Id) { Tick = session.World.Tick })));
+        if (own) verbs.Add(("Lock", () => player.Say(new Meitou.Simulation.Locks.DoorLockOrder([], door.Id, true) { Tick = player.session.World.Tick })));
+        bool open = player.session.CurrentSnapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Motion is Meitou.Simulation.Locks.DoorMotion.Open or Meitou.Simulation.Locks.DoorMotion.Opening;
+        verbs.Add((open ? "Close" : "Open", () => player.Say(new Meitou.Simulation.Locks.DoorOrder([], door.Id) { Tick = player.session.World.Tick })));
         return verbs;
     }
 
     /// <summary>A right press on a character with verbs starts the hold timer (true); the quick order, if any, waits for the release.</summary>
-    bool ContextPress(Vector2 p, Action? quick)
+    internal bool ContextPress(Vector2 p, Action? quick)
     {
-        if (PickWhere(p, _ => true) is not { } id) return false;
-        return ContextPressOn(p, at => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } target ? Menu(target.Name, at, Verbs(target)) : null, quick);
+        if (player.picking.PickWhere(p, _ => true) is not { } id) return false;
+        return ContextPressOn(p, at => player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } target ? Menu(target.Name, at, Verbs(target)) : null, quick);
     }
 
     /// <summary>
@@ -405,7 +404,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Once a frame: a press held long enough opens the menu.</summary>
-    void UpdateContextMenu()
+    internal void UpdateContextMenu()
     {
         if (contextPending is not { } pending || System.Diagnostics.Stopwatch.GetElapsedTime(pending.Since).TotalSeconds < pending.Hold) return;
         contextPending = null;
@@ -413,7 +412,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The right button let go: a press released before the menu opened gives the quick order.</summary>
-    void ContextRelease()
+    internal void ContextRelease()
     {
         if (contextPending is not { } pending) return;
         contextPending = null;
@@ -425,17 +424,17 @@ sealed partial class PlayerInterface
     /// release handler tests none), and the menu closes. The menu opens on the held command button and closes when that button is let go, so the right release always ends it;
     /// a left release over a row acts, elsewhere nothing (the menu stays while the command button is held). True when the event was the menu's.
     /// </summary>
-    bool ContextMenuRelease(MouseButton button, Vector2 p)
+    internal bool ContextMenuRelease(MouseButton button, Vector2 p)
     {
         if (contextMenu is null) return false;
-        var row = UiVisible ? MyGuiPresentation.HitTest(ArrangeUi(), p.X, p.Y) : null;
-        if (row is { Action: "meitou:context" }) { interfaceSounds.SoundForAction("context", row.Argument); ContextAction(row.Argument); return true; }
+        var row = player.UiVisible ? MyGuiPresentation.HitTest(player.ArrangeUi(), p.X, p.Y) : null;
+        if (row is { Action: "meitou:context" }) { player.interfaceSounds.SoundForAction("context", row.Argument); ContextAction(row.Argument); return true; }
         if (button != MouseButton.Right) return false;   // another button's release still ends what its press began (a drag, a window move)
         CloseContextMenu();
         return true;
     }
 
-    void ContextAction(string argument)
+    internal void ContextAction(string argument)
     {
         var menu = contextMenu;
         contextMenu = null;
@@ -455,14 +454,14 @@ sealed partial class PlayerInterface
     /// The menu as the original lays it out: a floating panel an eighth of the screen wide, the name on top, a button per verb, beside the cursor and kept on screen. When a verb has a
     /// chance, every button keeps the layout's width and the chance shows beside it as "N%", red at 0 to green at 100 (<c>ContextMenuGUI::show</c>); else the buttons fill the row.
     /// </summary>
-    void AddContextMenu(List<UiControl> controls)
+    internal void AddContextMenu(List<UiControl> controls)
     {
         if (contextMenu is not { } menu) return;
         // Kenshi_ContextMenu: Root 0.125 x 0.0685 of the screen for the title and one option, the title 47.3 % of that height, an option the rest; in an option the button at
         // x 0.0208 w 0.7917 and the Value box at x 0.8125 w 0.1875, both y 0.0513 h 0.8974.
-        float w = MathF.Max(200, Width * 0.125f), full = MathF.Max(64, Height * 0.0685185f);
+        float w = MathF.Max(200, player.Width * 0.125f), full = MathF.Max(64, player.Height * 0.0685185f);
         float titleH = full * 0.472973f, optionH = full - titleH, h = titleH + optionH * menu.Verbs.Count + 6;
-        float x = Math.Clamp(menu.At.X + 12, 0, Math.Max(0, Width - w)), y = Math.Clamp(menu.At.Y, 0, Math.Max(0, Height - h));
+        float x = Math.Clamp(menu.At.X + 12, 0, Math.Max(0, player.Width - w)), y = Math.Clamp(menu.At.Y, 0, Math.Max(0, player.Height - h));
         var ink = new Vector4(0.86f, 0.82f, 0.71f, 1);
         bool chances = menu.Verbs.Any(v => SplitChance(v.Caption).Chance is not null);
         float buttonW = chances ? w * 0.791667f : w * (1 - 2 * 0.0208333f);
@@ -490,17 +489,17 @@ sealed partial class PlayerInterface
     internal bool OpenSceneMenu(string kind, Vector3 near)
     {
         CloseContextMenu();
-        var snap = session.CurrentSnapshot;
+        var snap = player.session.CurrentSnapshot;
         (string Title, Vector3 At, List<(string Caption, Action Give)> Verbs)? found = kind switch
         {
             "character" => snap.Characters.Where(c => !c.IsPlayer).OrderBy(c => Vector3.DistanceSquared(c.Position, near)).Select(c => (c.Name, c.Position, Verbs(c))).FirstOrDefault(),
             "door" => snap.DoorPicks.OrderBy(d => Vector3.DistanceSquared(d.Position, near))
                 .Select(d => (Loc.Tr("Door"), d.Position, DoorVerbs((d, snap.Doors.GetValueOrDefault((d.Building, d.Door)).Locked)))).FirstOrDefault(),
             "container" => snap.Containers.OrderBy(c => Vector3.DistanceSquared(c.Position, near)).Select(c => (c.Record, c.Position, ContainerVerbs(c))).FirstOrDefault(),
-            "cage" => snap.Cages.OrderBy(c => Vector3.DistanceSquared(c.Position, near)).Select(c => (Loc.Tr("Cage"), c.Position, furniture.CageVerbs(c))).FirstOrDefault(),
+            "cage" => snap.Cages.OrderBy(c => Vector3.DistanceSquared(c.Position, near)).Select(c => (Loc.Tr("Cage"), c.Position, player.furniture.CageVerbs(c))).FirstOrDefault(),
             _ => null,
         };
-        if (found is not { } f || f.Verbs is null || Project(f.At) is not { } px) return false;
+        if (found is not { } f || f.Verbs is null || player.Project(f.At) is not { } px) return false;
         contextMenu = Menu(f.Title, px, f.Verbs);
         System.Console.WriteLine($"scene     menu {kind} '{f.Title}' at {f.At.X:0}, {f.At.Z:0}: {string.Join(" | ", f.Verbs.Select(v => v.Caption))}");
         return contextMenu is not null;

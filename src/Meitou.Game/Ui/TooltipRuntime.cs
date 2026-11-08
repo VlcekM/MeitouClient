@@ -45,7 +45,7 @@ sealed class TooltipRuntime(PlayerInterface player)
 
     /// <summary>
     /// The mouse-over tooltip of the control under the pointer. Characters get none: the original shows no name or goal over a character under the cursor (they appear in the
-    /// information panel after a click; the character is only outlined, <see cref="PlayerInterface.HoverTarget"/>).
+    /// information panel after a click; the character is only outlined, <see cref="PointerView.HoverTarget"/>).
     /// </summary>
     internal void AddHoverLabel(List<UiControl> controls)
     {

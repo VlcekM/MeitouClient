@@ -31,7 +31,7 @@ sealed class NewGameLaunch(GameHost host)
             host.saves.loadedSave = null; host.saves.preparedBase = null; host.saves.saveInUse = null; host.saves.worldEpoch++;
             host.SettleNewWorld();
             host.titleScreen.DisposeTitleScene(); // re-read the latest Continue save after the campaign or its character appearances changed
-            host.player.ShowMainMenu();
+            host.player.frontend.ShowMainMenu();
             host.sound.AudioMainMenu();
             return null;
         }));

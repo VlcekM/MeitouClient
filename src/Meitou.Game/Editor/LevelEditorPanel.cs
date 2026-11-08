@@ -142,7 +142,7 @@ sealed class LevelEditorPanel(PlayerInterface player)
     internal bool LevelClearAt(Vector2 p)
     {
         if (!levelBuild || levelHost is not { } host || player.Ray(p) is not { } ray) return false;
-        var groundPoint = player.GroundHit(ray.Origin, ray.Direction);
+        var groundPoint = player.picking.GroundHit(ray.Origin, ray.Direction);
         if (groundPoint is { } g && player.build.buildQueue.FindLastIndex(q => q.Hull is { } hull && Inside(hull, new Vector2(g.X, g.Z))) is >= 0 and var queued)
         {
             player.interfaceSounds.Sound("Building_Undo");
@@ -153,7 +153,7 @@ sealed class LevelEditorPanel(PlayerInterface player)
         string? best = null;
         foreach (var b in host.Added())
             if (player.build.buildHost?.Placement.Footprint(b.BuildingId) is { } footprint && b.WorldY is { } y
-                && player.BuildingRayT(ray, footprint.Place(b.Position, b.Rotation), footprint.YMin, footprint.YMax, b.BuildingId, b.Position, y, b.Rotation) is { } t && t < bestT)
+                && player.picking.BuildingRayT(ray, footprint.Place(b.Position, b.Rotation), footprint.YMin, footprint.YMax, b.BuildingId, b.Position, y, b.Rotation) is { } t && t < bestT)
                 (bestT, best) = (t, b.Key);
         if (best is null && player.buildingSelection.PickBuilding(p) is { SiteId: null, Record: not null } level) best = level.Instance;
         if (best is null) DropPlacementChoice();

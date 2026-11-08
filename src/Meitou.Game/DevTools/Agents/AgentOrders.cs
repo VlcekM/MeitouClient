@@ -194,8 +194,8 @@ sealed class AgentOrders(PlayerInterface player)
             w.WriteNumberValue(pixel.Y);
             w.WriteEndArray();
             var ray = player.Ray(pixel);
-            var terrain = ray is { } r ? player.MoveHit(r.Origin, r.Direction) : null;
-            if (player.PickWhereAt(pixel, _ => true) is { } hit && ControlCharacter(hit.Id) is { } c)
+            var terrain = ray is { } r ? player.picking.MoveHit(r.Origin, r.Direction) : null;
+            if (player.picking.PickWhereAt(pixel, _ => true) is { } hit && ControlCharacter(hit.Id) is { } c)
             {
                 w.WriteString("kind", "character");
                 w.WriteString("id", CharacterKey(c.Id));
@@ -280,7 +280,7 @@ sealed class AgentOrders(PlayerInterface player)
                 if (character is not null)
                 {
                     // Occluded: what a click at the rect's centre takes first is not this character (or the centre is under the HUD).
-                    var front = player.PickWhereAt(centre, _ => true);
+                    var front = player.picking.PickWhereAt(centre, _ => true);
                     bool occluded = front is null || front.Value.Id != character.Id;
                     w.WriteBoolean("occluded", occluded);
                     if (front is { } f && f.Id != character.Id) w.WriteString("front", CharacterKey(f.Id));

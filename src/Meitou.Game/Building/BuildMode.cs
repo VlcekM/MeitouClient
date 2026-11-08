@@ -89,7 +89,7 @@ sealed class BuildMode(PlayerInterface player)
             buildDiscarded = false;
             player.inventoryWindows.CloseInventoryWindows();
             player.faithfulScreens.Open("build");
-            player.CloseContextMenu();
+            player.contextMenuWindow.CloseContextMenu();
             if (player.session.Simulation.Speed != 0) { player.session.Simulation.Pause(); buildPausedGame = true; }   // a player pause: the speed buttons and the pause key resume it
         }
         else
@@ -196,9 +196,9 @@ sealed class BuildMode(PlayerInterface player)
         wallPieces.Clear();
         wallEndSnap = ghostSnap = null;
         if (wallLine is { } line && line.Master != CurrentBuilding()) wallLine = null;
-        if (wallLine is { } active && !player.pointerOverUi && player.Ray(player.mouse) is { } lineRay && player.GroundHit(lineRay.Origin, lineRay.Direction) is { } lineEnd)
+        if (wallLine is { } active && !player.pointerPanel.pointerOverUi && player.Ray(player.mouse) is { } lineRay && player.picking.GroundHit(lineRay.Origin, lineRay.Direction) is { } lineEnd)
             LayWall(host, active, lineEnd);
-        else if (wallLine is null && CurrentBuilding() is { } building && !player.pointerOverUi && player.Ray(player.mouse) is { } ray && player.GroundHit(ray.Origin, ray.Direction) is { } terrainHit)
+        else if (wallLine is null && CurrentBuilding() is { } building && !player.pointerPanel.pointerOverUi && player.Ray(player.mouse) is { } ray && player.picking.GroundHit(ray.Origin, ray.Direction) is { } terrainHit)
         {
             // A building's floor before the terrain: the ghost stands on it, level.
             var floorHit = building.LinksTogether ? null : host.Placement.FloorAlong(ray.Origin, ray.Direction, Vector3.Distance(ray.Origin, terrainHit));
@@ -577,7 +577,7 @@ sealed class BuildMode(PlayerInterface player)
         BuildingSnapshot? best = null;
         // Only what the ray meets before the ground counts, as in PickBuilding and the original's raycast (terrain ends the walk): a building's hull and collision reach below the ground,
         // and the part of the ray that has gone through the ground must not find them (the pointer showed the hammer on bare ground beside a building).
-        float ground = player.GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : float.MaxValue, bestT = ground;
+        float ground = player.picking.GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : float.MaxValue, bestT = ground;
         var hits = new List<(BuildingSnapshot Site, float T)>();
         foreach (var site in player.session.CurrentSnapshot.Buildings)
         {
@@ -586,9 +586,9 @@ sealed class BuildMode(PlayerInterface player)
             var bounds = host.Placement.Footprint(site.Record);
             if (bounds is null && player.production.Machine(site.Id)?.Function is TownBuildings.ChairFunction or TownBuildings.ThroneFunction && host.Parts(site.Record).Count == 0) continue;
             float? t = bounds is { } footprint
-                ? player.BuildingRayT(ray, footprint.Place(site.Position, yaw), footprint.YMin, footprint.YMax, site.Record, site.Position, site.Position.Y, yaw)
-                : host.Placement.Plot(site.Record) is { } plot ? PlayerInterface.PlotT(ray, plot.Place(site.Position, yaw), ground < float.MaxValue ? ground : null)
-                : PlayerInterface.RaySegment(ray.Origin, ray.Direction, site.Position, site.Position + new Vector3(0, 16, 0), 12);
+                ? player.picking.BuildingRayT(ray, footprint.Place(site.Position, yaw), footprint.YMin, footprint.YMax, site.Record, site.Position, site.Position.Y, yaw)
+                : host.Placement.Plot(site.Record) is { } plot ? WorldPicking.PlotT(ray, plot.Place(site.Position, yaw), ground < float.MaxValue ? ground : null)
+                : WorldPicking.RaySegment(ray.Origin, ray.Direction, site.Position, site.Position + new Vector3(0, 16, 0), 12);
             if (t is not { } hit || hit >= ground) continue;
             hits.Add((site, hit));
             if (hit < bestT) (bestT, best) = (hit, site);
@@ -742,14 +742,14 @@ sealed class BuildMode(PlayerInterface player)
         else if (player.production.Machine(pending.Site.Id) is { Function: Meitou.Data.World.ObjectRanges.TurretFunction })
             player.Say(new Meitou.Simulation.Production.UseTurretOrder(player.SelectedIds(), pending.Site.Id) { Tick = player.session.World.Tick });   // the original's order 146 USE_TURRET
         else if (player.production.Machine(pending.Site.Id) is { IsStorage: true } or { Function: MachineData.ItemFurnaceFunction }) OpenStorage(pending.Site);
-        else if (!SiteIsObject(pending.Site) && player.Ray(pending.At) is { } ray && player.MoveHit(ray.Origin, ray.Direction) is { } hit)
+        else if (!SiteIsObject(pending.Site) && player.Ray(pending.At) is { } ray && player.picking.MoveHit(ray.Origin, ray.Direction) is { } hit)
         {
             // A finished plain building's quick right click is a move to the point under the cursor (the original: order 29 MOVE_CUS_ORDERED). The original's target is the building
             // hit's x, z at the terrain height, which the path's goal snap puts on the floor inside or the ground outside; a pick that went on through the roof or wall to the
             // terrain beyond takes that point instead, so the character goes in rather than to the ground behind. A building floor the pick found (a site with an interior,
             // the hidden roof above it nearer) stays: the terrain under the roof hit lay below the floor.
             float distance = Vector3.Distance(ray.Origin, hit);
-            if (player.BuildingMoveHit?.Invoke(ray.Origin, ray.Direction, distance + 1) is null && PickSiteAt(pending.At) is { } at && at.Site.Id == pending.Site.Id && at.T + 1 < distance)
+            if (player.picking.BuildingMoveHit?.Invoke(ray.Origin, ray.Direction, distance + 1) is null && PickSiteAt(pending.At) is { } at && at.Site.Id == pending.Site.Id && at.T + 1 < distance)
             {
                 var p = ray.Origin + ray.Direction * at.T;
                 hit = new Vector3(p.X, player.ground(p.X, p.Z), p.Z);
@@ -802,10 +802,10 @@ sealed class BuildMode(PlayerInterface player)
     /// <summary>Once a frame: a site press held long enough opens its menu.</summary>
     void UpdateSite()
     {
-        if (sitePending is not { } pending || System.Diagnostics.Stopwatch.GetElapsedTime(pending.Since).TotalSeconds < PlayerInterface.ContextHoldSeconds) return;
+        if (sitePending is not { } pending || System.Diagnostics.Stopwatch.GetElapsedTime(pending.Since).TotalSeconds < ContextMenuWindow.ContextHoldSeconds) return;
         sitePending = null;
         if (player.session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == pending.Site.Id) is not { } site) return;
-        player.contextMenu = player.Menu(SiteName(site), pending.At, SiteVerbs(site));
+        player.contextMenuWindow.contextMenu = player.contextMenuWindow.Menu(SiteName(site), pending.At, SiteVerbs(site));
     }
 
     /// <summary>A site the quick Build order and the hammer pointer apply to: unfinished, except a purchased town ruin, which needs the held menu's Repair until reconstruction starts.</summary>
@@ -832,7 +832,7 @@ sealed class BuildMode(PlayerInterface player)
     }
 
     /// <summary>Something more specific than a building lies under the pixel: a character, an item on the ground, a container, a door or a resource rock. A plain building gives way to it.</summary>
-    bool SomethingInsideAt(Vector2 p) => player.PickWhere(p, _ => true) is not null || player.groundItemPicks.PickGroundItem(p) is not null || player.furniture.PickContainer(p) is not null || player.furniture.PickDoor(p) is not null || player.furniture.PickRock(p) is not null || player.furniture.PickBed(p) is not null || player.furniture.PickDummyAt(p) is not null || player.furniture.PickSeat(p) is not null;
+    bool SomethingInsideAt(Vector2 p) => player.picking.PickWhere(p, _ => true) is not null || player.groundItemPicks.PickGroundItem(p) is not null || player.furniture.PickContainer(p) is not null || player.furniture.PickDoor(p) is not null || player.furniture.PickRock(p) is not null || player.furniture.PickBed(p) is not null || player.furniture.PickDummyAt(p) is not null || player.furniture.PickSeat(p) is not null;
 
     // The resource popup over a mine's, well's or farm's ghost (docs/game/buildings-production.md "Placement", <c>FUN_1404d9ea0</c>): the resource with its value, and for a farm the crop
     // yield and the environment, each value red to green. Drawn as a floating tooltip with its bottom centred over the top of the ghost's collision box (the original's popup sits above the

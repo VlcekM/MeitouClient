@@ -126,7 +126,7 @@ sealed class DevConsoleHost(GameHost host)
     // ---- commands
 
     /// <summary>The world point under the cursor (terrain, a floor or a wall top, as a move order picks it), else null.</summary>
-    Vector3? ConsoleCursorPoint() => host.player.Ray(consolePointer) is { } ray ? host.player.MoveHit(ray.Origin, ray.Direction) : null;
+    Vector3? ConsoleCursorPoint() => host.player.Ray(consolePointer) is { } ray ? host.player.picking.MoveHit(ray.Origin, ray.Direction) : null;
 
     /// <summary>Names of the character or item records, sorted, for Tab completion.</summary>
     List<string> ConsoleRecordNames(bool character)

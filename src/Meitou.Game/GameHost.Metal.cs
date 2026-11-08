@@ -470,19 +470,19 @@ sealed partial class GameHost
                 hud.SetUiTexture(PortraitBar.PortraitTexture, atlas, sampled);
             }
             itemIconFiles.ConnectItemIcons();
-            hud.ConfigureFrontend(scene.Database,
+            hud.frontend.ConfigureFrontend(scene.Database,
                 () => SaveCatalog.Scan(QuickSave.DefaultRoot, install.SaveDirectory,
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")),
                 assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "");
             // The picks the interface asks the host for: the drawn character meshes, the buildings' floors and their closed shells.
-            hud.MeshHit = (id, origin, direction) => characters?.RayHit(DrawKey(id), origin, direction);
+            hud.picking.MeshHit = (id, origin, direction) => characters?.RayHit(DrawKey(id), origin, direction);
             hud.Floor = (() => interiors.viewedFloor, interiors.StepFloor);
-            hud.BuildingMoveHit = (origin, direction, distance) => objects?.MoveHit(origin, direction, interiors.viewedFloor, distance);
-            hud.SurfaceMoveHit = interiors.SurfaceMoveHit;
-            hud.ClosedBuildingHit = (origin, direction, distance) => objects?.ClosedBuildingHit(origin, direction, distance);
+            hud.picking.BuildingMoveHit = (origin, direction, distance) => objects?.MoveHit(origin, direction, interiors.viewedFloor, distance);
+            hud.picking.SurfaceMoveHit = interiors.SurfaceMoveHit;
+            hud.picking.ClosedBuildingHit = (origin, direction, distance) => objects?.ClosedBuildingHit(origin, direction, distance);
             hud.stealthView.HiddenInWorld = interiors.hiddenIndoors.Contains;
             hud.stealthView.DrawnHead = id => characters?.BonePosition(DrawKey(id), "Bip01 Head");
-            hud.ShownInteriorHit = (origin, direction, distance) => objects?.ShownInteriorHit(origin, direction, distance);
+            hud.picking.ShownInteriorHit = (origin, direction, distance) => objects?.ShownInteriorHit(origin, direction, distance);
             hud.furniture.AboveViewedFloor = interiors.AboveViewedFloor;
             hud.groundItemPicks.GroundItemShape = groundItemSync.GroundShape;
             hud.groundItemPicks.GroundItemHidden = groundItemSync.hiddenGround.Contains;
@@ -613,7 +613,7 @@ sealed partial class GameHost
                 else if (e.Widget == "OptionsButton" && settings is not null) settings.Visible = true;
                 else if (e.Widget == "ExitGameButton" || e.Action == "exit") quit = true;
             };
-            if (showTitle) hud.ShowTitle();
+            if (showTitle) hud.frontend.ShowTitle();
         }
         // --load starts in the save: the same swap the menu's load uses, with the world already read around its camera.
         if (hud is not null && StartSave is { } startSave)
@@ -1092,7 +1092,7 @@ sealed partial class GameHost
         void ApplyStillPanel(string? panelName)
         {
             if (player is null) return;
-            if (g.TitlePreview) player.ShowTitle();
+            if (g.TitlePreview) player.frontend.ShowTitle();
             else if (hud is not null && panelName is not ("trade" or "talk"))
                 hud.ShowUiPanel(panelName is "hud-expanded" or "edited" ? null : panelName, panelName == "hud-expanded");
             if (hud is not null) titleScreen.ApplyTitleCamera();
@@ -1347,9 +1347,9 @@ sealed partial class GameHost
             if (outlining)
             {
                 if (highlighting)
-                    hoverKeys.AddRange(hud!.HighlightTargets(camera.Target, PlayerInterface.HighlightRadius)
+                    hoverKeys.AddRange(hud!.pointerPanel.HighlightTargets(camera.Target, PointerView.HighlightRadius)
                         .Select(t => (DrawKey(t.Id), t.Colour)));
-                else if (hud!.HoverTarget is { } hover)
+                else if (hud!.pointerPanel.HoverTarget is { } hover)
                     hoverKeys.Add((DrawKey(hover.Id), hover.Colour));
             }
             gpu.HoverKeys = hoverKeys;
@@ -1488,18 +1488,18 @@ sealed partial class GameHost
                     bool freeLook = pointerWorld && session.Camera.IsFree;
                     var cursorMode = config.HardwareMouse && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
                     if (cursorMode != windowCursor) pointerMouse.Cursor.CursorMode = windowCursor = cursorMode;
-                    string pointerName = pointerWorld ? hud.PointerName : "arrow";
+                    string pointerName = pointerWorld ? hud.pointerPanel.PointerName : "arrow";
                     bool enhanced = config.HardwareMouse && config.EnhancedHardwareMouse && !freeLook;
-                    bool hand = enhanced && (pointerWorld ? hud.PointsAtClickable(pointerName) : settings?.OverClickable(pointerAt) == true);
+                    bool hand = enhanced && (pointerWorld ? hud.pointerPanel.PointsAtClickable(pointerName) : settings?.OverClickable(pointerAt) == true);
                     systemPointer.Standard(pointerMouse.Cursor, hand ? Silk.NET.Input.StandardCursor.Hand : Silk.NET.Input.StandardCursor.Default);
                     if (!config.HardwareMouse && !freeLook)
                     {
-                        hud.DrawPointer(pointerName, pointerAt, size.X, size.Y, overlayPass);
+                        hud.pointerPanel.DrawPointer(pointerName, pointerAt, size.X, size.Y, overlayPass);
                         wrote = true;
                     }
                     else if (enhanced && pointerName != "arrow")
                     {
-                        hud.DrawPointerBeside(pointerName, pointerAt, size.X, size.Y, overlayPass);
+                        hud.pointerPanel.DrawPointerBeside(pointerName, pointerAt, size.X, size.Y, overlayPass);
                         wrote = true;
                     }
                 }

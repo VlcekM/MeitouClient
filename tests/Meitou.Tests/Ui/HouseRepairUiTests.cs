@@ -7,6 +7,7 @@ using Meitou.Game.Host;
 using Meitou.Game.Host.Input;
 using Meitou.Game;
 using Meitou.Game.Building;
+using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Items;
@@ -52,21 +53,21 @@ public class HouseRepairUiTests
             var point = new Vector2(800, 450);
             ui.MouseMove(point);
             _ = ui.UiFrame; // Arrange hover hit testing for the new mouse position, as the host does each frame.
-            Assert.Equal("arrow", ui.PointerName);
+            Assert.Equal("arrow", ui.pointerPanel.PointerName);
             ui.MouseDown(MouseButton.Right, point, shift);
             ui.MouseUp(MouseButton.Right, point, shift);
-            Assert.False(ui.ContextMenuOpen);
+            Assert.False(ui.contextMenuWindow.ContextMenuOpen);
             var quick = world.Commands.TakeDue(long.MaxValue);
             Assert.DoesNotContain(quick, c => c is BuildOrder or AddJob);
             ui.MouseDown(MouseButton.Right, point, shift);
-            Thread.Sleep(TimeSpan.FromSeconds(PlayerInterface.ContextHoldSeconds + 0.05));
+            Thread.Sleep(TimeSpan.FromSeconds(ContextMenuWindow.ContextHoldSeconds + 0.05));
             ui.Steer();
-            Assert.True(ui.ContextMenuOpen);
+            Assert.True(ui.contextMenuWindow.ContextMenuOpen);
             var repair = Assert.Single(ui.UiFrame, c => c.Name.StartsWith("context-verb-", StringComparison.Ordinal) && c.Caption == "Repair");
             Assert.DoesNotContain(ui.UiFrame, c => c.Name.StartsWith("context-verb-", StringComparison.Ordinal) && c.Caption == "Dismantle");
             point = new Vector2(repair.Bounds.X + repair.Bounds.Width / 2, repair.Bounds.Y + repair.Bounds.Height / 2);
             ui.MouseDown(MouseButton.Left, point, shift); ui.MouseUp(MouseButton.Left, point, shift);
-            Assert.False(ui.ContextMenuOpen);
+            Assert.False(ui.contextMenuWindow.ContextMenuOpen);
             var commands = world.Commands.TakeDue(long.MaxValue);
             Assert.Equal(house.Key, Assert.Single(commands.OfType<BuildOrder>()).Site);
             Assert.Equal(shift ? 1 : 0, commands.OfType<AddJob>().Count());
@@ -78,7 +79,7 @@ public class HouseRepairUiTests
             point = new Vector2(800, 450);
             ui.MouseMove(point);
             _ = ui.UiFrame; // Arrange hover hit testing for the new mouse position, as the host does each frame.
-            Assert.Equal("build", ui.PointerName);
+            Assert.Equal("build", ui.pointerPanel.PointerName);
             ui.MouseDown(MouseButton.Right, point, shift);
             ui.MouseUp(MouseButton.Right, point, shift);
             Assert.Equal(house.Key, Assert.Single(world.Commands.TakeDue(long.MaxValue).OfType<BuildOrder>()).Site);

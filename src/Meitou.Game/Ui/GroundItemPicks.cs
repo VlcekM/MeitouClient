@@ -45,7 +45,7 @@ sealed class GroundItemPicks(PlayerInterface player)
         (int, float)? best = null;
         float bestT = float.MaxValue;
         foreach (var g in player.session.CurrentSnapshot.GroundItems)
-            if (GroundItemHidden?.Invoke(g.Id) != true && shapeOf(g) is { } shape && RayNears(ray, shape.Mesh, shape.At, shape.Rotation) && PlayerInterface.RayMesh(ray, shape.Mesh, shape.At, shape.Rotation) is { } t && t < bestT && !player.Hidden(ray, t))
+            if (GroundItemHidden?.Invoke(g.Id) != true && shapeOf(g) is { } shape && RayNears(ray, shape.Mesh, shape.At, shape.Rotation) && WorldPicking.RayMesh(ray, shape.Mesh, shape.At, shape.Rotation) is { } t && t < bestT && !player.Hidden(ray, t))
                 (best, bestT) = ((g.Id, t), t);
         return best;
     }
@@ -96,7 +96,7 @@ sealed class GroundItemPicks(PlayerInterface player)
     }
 
     /// <summary>
-    /// The name label over each ground item within <see cref="PlayerInterface.HighlightRadius"/> of the focus while the Highlight key is held: the original's <c>Kenshi_ItemDropLabel</c>
+    /// The name label over each ground item within <see cref="PointerView.HighlightRadius"/> of the focus while the Highlight key is held: the original's <c>Kenshi_ItemDropLabel</c>
     /// (<b>Verified</b>), a <c>Kenshi_GenericTextBoxFlatSmallSkin</c> 0.0259 of the screen high and fitted to the name, centred in Kenshi_StandardFont_Medium; plate and text
     /// in the item's <see cref="ItemLabelColour"/>, both green (<c>...Selected</c>, #66ff66) for the one the pointer picks, the plate red for a stolen one. Labels that would overlap the nearer
     /// one's are lifted above it, and hidden ones are skipped (engine choices).
@@ -109,7 +109,7 @@ sealed class GroundItemPicks(PlayerInterface player)
         var near = new List<(Meitou.Simulation.Items.GroundItemSnapshot Item, float Distance, Vector2 At)>();
         foreach (var g in player.session.CurrentSnapshot.GroundItems)
         {
-            if (g.Name.Length == 0 || GroundItemHidden?.Invoke(g.Id) == true || Vector3.DistanceSquared(focus, g.Position) > PlayerInterface.HighlightRadius * PlayerInterface.HighlightRadius) continue;
+            if (g.Name.Length == 0 || GroundItemHidden?.Invoke(g.Id) == true || Vector3.DistanceSquared(focus, g.Position) > PointerView.HighlightRadius * PointerView.HighlightRadius) continue;
             var middle = g.Position + new Vector3(0, 0.5f, 0);
             if (player.Project(middle) is not { } at || player.Ray(at) is not { } ray) continue;
             float distance = Vector3.Distance(ray.Origin, middle);

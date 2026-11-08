@@ -279,7 +279,7 @@ sealed class TradeWindows(PlayerInterface player)
             shownCharacterTrade = trade.Id;
             characterTradeCloseSent = false;
             characterTradeTicked.Clear();
-            player.CloseContextMenu();
+            player.contextMenuWindow.CloseContextMenu();
             player.faithfulScreens.ResetScroll(CharacterTradeScreen);
             player.faithfulScreens.Open(CharacterTradeScreen);
             return;

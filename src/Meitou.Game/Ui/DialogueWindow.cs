@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Simulation;
 using Meitou.Simulation.Dialogue;
 
 namespace Meitou.Game.Ui;
@@ -35,7 +34,7 @@ sealed class DialogueWindow(PlayerInterface player)
         {
             conversationShown = true;
             conversationEndSent = false;
-            player.CloseContextMenu();
+            player.contextMenuWindow.CloseContextMenu();
             player.faithfulScreens.Open("dialogue");
             player.UpdateMenuPause();
         }

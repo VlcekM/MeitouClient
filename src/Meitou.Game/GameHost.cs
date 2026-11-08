@@ -313,9 +313,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     void ConfigurePlayerInterface(PlayerInterface ui)
     {
         modding.ConnectModUi(ui);
-        ui.FixLoadButton = config.FixLoadButton;
-        ui.SaveInUse = folder => session.World.Player.Exists && saves.saveInUse is { } used && string.Equals(Path.GetFullPath(used), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase);
-        ui.DeleteSave = folder =>
+        ui.frontend.FixLoadButton = config.FixLoadButton;
+        ui.frontend.SaveInUse = folder => session.World.Player.Exists && saves.saveInUse is { } used && string.Equals(Path.GetFullPath(used), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase);
+        ui.frontend.DeleteSave = folder =>
         {
             try { Directory.Delete(folder, recursive: true); return null; }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return "Failed to delete save: " + e.Message; }
@@ -423,7 +423,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.ShowNames = config.ShowNames;
         player.Floaters = config.Floaters;
         player.FeedbackButtonInPlay = config.FeedbackButton;
-        player.FixLoadButton = config.FixLoadButton;
+        player.frontend.FixLoadButton = config.FixLoadButton;
         player.buildingSelection.DeselectBuildings = config.DeselectBuildings;
         // The region (BIOME_GROUP) under a point, for the biome banner.
         player.biomeBanner.RegionAt = (x, z) => gpu.Weather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
@@ -433,22 +433,22 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         gpu.NavmeshOverlay ??= new NavmeshOverlayRenderer(context);
         debugOverlays.navOverlayRenderer = gpu.NavmeshOverlay;
         gpu.InspectorOverlay ??= new NavmeshOverlayRenderer(context);
-        player.MeshHit = (id, origin, direction) => gpu.Characters?.RayHit(DrawKey(id), origin, direction);
+        player.picking.MeshHit = (id, origin, direction) => gpu.Characters?.RayHit(DrawKey(id), origin, direction);
         player.Floor = (() => interiors.viewedFloor, interiors.StepFloor);
         player.stealthView.HiddenInWorld = interiors.hiddenIndoors.Contains;
         player.stealthView.DrawnHead = id => gpu.Characters?.BonePosition(DrawKey(id), "Bip01 Head");
         player.furniture.AboveViewedFloor = interiors.AboveViewedFloor;
         player.groundItemPicks.GroundItemShape = groundItemSync.GroundShape;
         player.groundItemPicks.GroundItemHidden = groundItemSync.hiddenGround.Contains;
-        player.BuildingMoveHit = (origin, direction, distance) => gpu.Objects?.MoveHit(origin, direction, interiors.viewedFloor, distance);
-        player.SurfaceMoveHit = interiors.SurfaceMoveHit;
-        player.ClosedBuildingHit = (origin, direction, distance) => gpu.Objects?.ClosedBuildingHit(origin, direction, distance);
-        player.ShownInteriorHit = (origin, direction, distance) => gpu.Objects?.ShownInteriorHit(origin, direction, distance);
+        player.picking.BuildingMoveHit = (origin, direction, distance) => gpu.Objects?.MoveHit(origin, direction, interiors.viewedFloor, distance);
+        player.picking.SurfaceMoveHit = interiors.SurfaceMoveHit;
+        player.picking.ClosedBuildingHit = (origin, direction, distance) => gpu.Objects?.ClosedBuildingHit(origin, direction, distance);
+        player.picking.ShownInteriorHit = (origin, direction, distance) => gpu.Objects?.ShownInteriorHit(origin, direction, distance);
         player.furniture.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
         ConfigurePlayerInterface(player);
         player.levelEditorPanel.LevelHost = levelEditorHost.MakeLevelEditorServices();
         if (sandbox.IsSandbox) player.ReservedKeys.UnionWith([Meitou.Game.Host.Input.Key.Z, Meitou.Game.Host.Input.Key.X, Meitou.Game.Host.Input.Key.C, Meitou.Game.Host.Input.Key.Y, Meitou.Game.Host.Input.Key.P, Meitou.Game.Host.Input.Key.G]);
-        player.ConfigureFrontend(scene.Database,
+        player.frontend.ConfigureFrontend(scene.Database,
             () => Meitou.Data.Save.SaveCatalog.Scan(Meitou.Simulation.Saving.QuickSave.DefaultRoot, install.SaveDirectory,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")),
             assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "");
@@ -458,7 +458,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             player.titleMenu.Mods = ModReport.Build(install, db, modding.mods?.Refused);
             LogMods(player.titleMenu.Mods);
         }
-        if (OpensOnTitle(interactive)) player.ShowTitle();
+        if (OpensOnTitle(interactive)) player.frontend.ShowTitle();
         if (nav is not null && (start is not null || !interactive))
         {
             // The squad is placed on the mesh, and a still has its town at once: wait for the zones round the start (a cold build is about 2 s, then cached).

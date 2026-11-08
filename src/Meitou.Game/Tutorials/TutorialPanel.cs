@@ -424,7 +424,7 @@ sealed class TutorialPanel(PlayerInterface player)
             InCannibalCage = facts.InCannibalCage,
             Sneaking = sneak,
             // The steal pointer (cursor 0x15): a selection over another faction's ground item.
-            StealCursor = player.SelectedIds().Count > 0 && !player.pointerOverUi && player.groundItemPicks.StealsGroundItem(player.mouse),
+            StealCursor = player.SelectedIds().Count > 0 && !player.pointerPanel.pointerOverUi && player.groundItemPicks.StealsGroundItem(player.mouse),
             SelectedHasBounty = inspected is { IsPlayer: false, Bounties.Count: > 0 },
             Hungry = hungry,
             PlayingDead = playingDead,

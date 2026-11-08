@@ -45,13 +45,13 @@ sealed class BuildingSelection(PlayerInterface player)
 
     /// <summary>
     /// The buildings to outline (docs/game/ui-input.md "Hover outline"): the selected one in white, then, with <paramref name="hover"/>, the one under the cursor
-    /// (<see cref="PlayerInterface.HoverBuilding"/>) unless it is the selected one; each with its placement key and its floor (the height it stands at, where the outline stops).
+    /// (<see cref="PointerView.HoverBuilding"/>) unless it is the selected one; each with its placement key and its floor (the height it stands at, where the outline stops).
     /// </summary>
     public List<(string Key, float Floor, Vector4 Colour)> OutlinedBuildings(bool hover)
     {
         var list = new List<(string Key, float Floor, Vector4 Colour)>(2);
-        if (selectedBuilding is { } b) list.Add((b.Instance, b.Position.Y, PlayerInterface.WhiteOutline));
-        if (hover && player.HoverBuilding is { } h && h.Key != selectedBuilding?.Instance) list.Add(h);
+        if (selectedBuilding is { } b) list.Add((b.Instance, b.Position.Y, PointerView.WhiteOutline));
+        if (hover && player.pointerPanel.HoverBuilding is { } h && h.Key != selectedBuilding?.Instance) list.Add(h);
         return list;
     }
 
@@ -79,7 +79,7 @@ sealed class BuildingSelection(PlayerInterface player)
                 null, bed.Id, bed.Position, null, Record: bed.Record);
             return (spot, bedHit.T);
         }
-        float limit = player.GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
+        float limit = player.picking.GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
         float bestT = limit;
         SelectedBuilding? best = null;
         var site = player.build.PickSiteAt(pixel);
@@ -96,8 +96,8 @@ sealed class BuildingSelection(PlayerInterface player)
                 if (player.levelEditorPanel.levelHost?.IsCleared(b.Key) == true) continue;   // the level editor cleared it
                 float y = b.WorldY ?? player.ground(b.Position.X, b.Position.Z) + b.Position.Y;
                 var hull = candidate.Footprint.Place(b.Position, b.Rotation);
-                float? hit = candidate.Plot ? PlayerInterface.PlotT(ray, hull, limit < 6000 ? limit : null)
-                    : player.BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax, b.BuildingId, b.Position, y, b.Rotation);
+                float? hit = candidate.Plot ? WorldPicking.PlotT(ray, hull, limit < 6000 ? limit : null)
+                    : player.picking.BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax, b.BuildingId, b.Position, y, b.Rotation);
                 if (hit is not { } t || t >= bestT) continue;
                 bestT = t;
                 level = candidate;

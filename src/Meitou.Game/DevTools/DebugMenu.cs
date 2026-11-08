@@ -185,11 +185,11 @@ sealed class DebugMenu(GameHost host)
         {
             explodeClickWorld = host.session.World;
             if (kept.Count > 0 || !ExplodeClickOn) explodeClickArgs = string.Join(' ', kept);
-            host.player.WorldClick = ExplodeClickPress;
+            host.player.picking.WorldClick = ExplodeClickPress;
             return $"explode-click on{(explodeClickArgs.Length > 0 ? " (" + explodeClickArgs + ")" : "")}: a left click on the ground explodes it (game unpaused only); explode-click off ends it";
         }
         explodeClickWorld = null;
-        host.player.WorldClick = null;
+        host.player.picking.WorldClick = null;
         return "explode-click off";
     }
 

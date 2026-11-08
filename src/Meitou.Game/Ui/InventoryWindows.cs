@@ -363,7 +363,7 @@ sealed class InventoryWindows(PlayerInterface player)
                 return;
             default:
                 // Given to a character: no sound; dropped on the ground: Character_Drop_Ground (FUN_1407136a0).
-                if (player.PickWhere(p, _ => true) is { } who && h.From != ItemOwner.Of(who)) SayHeld(new GiveHeld(who) { Tick = player.session.World.Tick });
+                if (player.picking.PickWhere(p, _ => true) is { } who && h.From != ItemOwner.Of(who)) SayHeld(new GiveHeld(who) { Tick = player.session.World.Tick });
                 else
                 {
                     SayHeld(new DropHeld { Tick = player.session.World.Tick });

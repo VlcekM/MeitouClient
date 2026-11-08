@@ -1,5 +1,6 @@
 using Meitou.Data.Ui;
 using Meitou.Game.Host;
+using Meitou.Game.Title;
 
 namespace Meitou.Game.Ui;
 
@@ -104,7 +105,7 @@ sealed class FeedbackPanel(PlayerInterface player)
         float scale = player.Height / 1080f, w = 150 * scale, h = 36 * scale;
         var b = new UiBindings();
         b.Positions[FeedbackButton] = feedbackButtonBounds = new(player.Width - w - 8 * scale, 8 * scale, w, h);
-        b.Text[FeedbackButton] = PlayerInterface.UpperCaption("Feedback");
+        b.Text[FeedbackButton] = FrontendScreens.UpperCaption("Feedback");
         b.Actions[FeedbackButton] = "feedback-open";
         controls.AddRange(MyGuiPresentation.Arrange(feedbackButtonLayout, player.Width, player.Height, b, player.uiResources.Layers));
     }
@@ -157,7 +158,7 @@ sealed class FeedbackPanel(PlayerInterface player)
     {
         void Enable(params string[] names) { foreach (string name in names) { b.Disabled.Remove(name); b.Actions[name] = name; } }
         void Tick(string name, bool on) => b.Properties[name] = new Dictionary<string, string> { ["StateSelected"] = on ? "true" : "false", ["Checked"] = on ? "true" : "false" };
-        b.Text["Root"] = PlayerInterface.UpperCaption("Send feedback");
+        b.Text["Root"] = FrontendScreens.UpperCaption("Send feedback");
         b.Text["lbIntro"] = "Tell us what went wrong or what you think. It becomes a public issue on GitHub, with your Meitou version and load order.";
         b.Text["lbTitleBox"] = "Title";
         b.Text["lbBodyBox"] = "What happened";
@@ -169,8 +170,8 @@ sealed class FeedbackPanel(PlayerInterface player)
         bool old = feedbackStatus.Length == 0 && FeedbackNewer is not null;
         b.Text["StatusText"] = old ? $"You are on {BuildVersion.Tag}; {FeedbackNewer} is out. Please check whether this still happens there first." : feedbackStatus;
         if (feedbackStatusError || old) b.Properties["StatusText"] = new Dictionary<string, string> { ["TextColour"] = PlayerInterface.BadColour };
-        b.Text["SendButton"] = PlayerInterface.UpperCaption(FeedbackSending ? "Sending" : "Send");
-        b.Text["CancelButton"] = PlayerInterface.UpperCaption("Close");
+        b.Text["SendButton"] = FrontendScreens.UpperCaption(FeedbackSending ? "Sending" : "Send");
+        b.Text["CancelButton"] = FrontendScreens.UpperCaption("Close");
         Enable("CancelButton", FeedbackLogTick, FeedbackDiscordTick);
         if (!FeedbackSending && player.faithfulScreens.GetText(FeedbackScreen, FeedbackTitleBox).Trim().Length > 0) Enable("SendButton");
         if (feedbackHasShot) Enable(FeedbackShotTick);

@@ -48,6 +48,6 @@ sealed partial class PlayerInterface
         tutorialWindow.tutorialShown, session.Simulation.Speed, session.Simulation.IsPaused, hud, CtrlHeld, AltHeld, feedbackPanel.ShotWithoutMenus);
 
     /// <summary>The base shows something that moves on real time or with the camera: it is arranged every frame.</summary>
-    bool UiAnimating => TitleOpen || characterEditor.EditorOpen || showCredits || biomeBanner.biomeShown || worldMap.mapShown || portraitBar.portraitFlashes.Count > 0 || tutorialWindow.tutorialFlashes.Count > 0
+    bool UiAnimating => TitleOpen || characterEditor.EditorOpen || frontend.showCredits || biomeBanner.biomeShown || worldMap.mapShown || portraitBar.portraitFlashes.Count > 0 || tutorialWindow.tutorialFlashes.Count > 0
         || faithfulScreens.CapturesPointer;
 }

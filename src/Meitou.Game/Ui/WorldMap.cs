@@ -288,7 +288,7 @@ sealed class WorldMap(PlayerInterface player)
     internal bool InventoryRightClick(Vector2 p, bool shift)
     {
         if (!player.UiVisible) return false;
-        if (player.confirmation is not null) return true;   // an open question (the fencing prompt) swallows the click, as the original's pending state does
+        if (player.frontend.confirmation is not null) return true;   // an open question (the fencing prompt) swallows the click, as the original's pending state does
         if (player.faithfulScreens.HitTest(p) is not { } picked || !picked.Control.Enabled) return false;
         var trade = player.session.CurrentSnapshot.Trade;
         if (trade is not null && picked.Control.Properties.TryGetValue("TradeItem", out var stockIndex))

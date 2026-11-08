@@ -185,7 +185,7 @@ sealed class ScreenshotScenes(GameHost host)
                 host.DrawWorld(w, h);
                 overlay.Target = target;
                 host.UpdateView(w, h);
-                if (host.g.TitlePreview) host.player.ShowTitle(); else if (showPanel) host.player.ShowUiPanel(panelName is "hud-expanded" or "edited" ? null : panelName, panelName == "hud-expanded");
+                if (host.g.TitlePreview) host.player.frontend.ShowTitle(); else if (showPanel) host.player.ShowUiPanel(panelName is "hud-expanded" or "edited" ? null : panelName, panelName == "hud-expanded");
                 host.player.Draw(overlay, w, h);
                 display.EndFrame();
                 Thread.Sleep(5);
@@ -195,15 +195,15 @@ sealed class ScreenshotScenes(GameHost host)
             {
                 overlay.Target = target;
                 host.UpdateView(w, h);
-                if (host.g.TitlePreview) host.player.ShowTitle(); else if (showPanel) host.player.ShowUiPanel(panelName is "hud-expanded" or "edited" ? null : panelName, panelName == "hud-expanded");
+                if (host.g.TitlePreview) host.player.frontend.ShowTitle(); else if (showPanel) host.player.ShowUiPanel(panelName is "hud-expanded" or "edited" ? null : panelName, panelName == "hud-expanded");
                 host.player.Draw(overlay, w, h);
                 if (host.sandbox.IsSandbox && !host.g.UiShowcase) host.sandbox.DrawSandbox(overlay, w, h);
                 if (host.battle.IsBattle && !host.g.UiShowcase) host.battle.DrawBattleCounter(overlay, w, h);
                 if (host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is { } me && host.player.Project(host.DrawnPosition(me) + new Vector3(0, 1, 0)) is { } px)
                 {
-                    var picked = host.player.Pick(px);
+                    var picked = host.player.picking.Pick(px);
                     var ray = host.player.Ray(px + new Vector2(0, 60));
-                    var hit = ray is { } r ? host.player.GroundHit(r.Origin, r.Direction) : null;
+                    var hit = ray is { } r ? host.player.picking.GroundHit(r.Origin, r.Direction) : null;
                     Console.WriteLine($"pickcheck pixel {px.X:0}, {px.Y:0} picks {(picked is { } id && id == me.Id ? "the leader" : "NOTHING")}; ground 60 px lower: {(hit is { } gh ? $"{gh.X:0}, {gh.Z:0} (leader at {me.Position.X:0}, {me.Position.Z:0})" : "no hit")}");
                 }
             }
@@ -377,7 +377,7 @@ sealed class ScreenshotScenes(GameHost host)
             {
                 overlay.Target = target;
                 host.UpdateView(w, h);
-                if (scene == "menu" && lead is not null && !host.player.OpenSceneMenu(SceneMenus[f], lead.Position)) Console.WriteLine($"scene     menu {SceneMenus[f]}: none on screen");
+                if (scene == "menu" && lead is not null && !host.player.contextMenuWindow.OpenSceneMenu(SceneMenus[f], lead.Position)) Console.WriteLine($"scene     menu {SceneMenus[f]}: none on screen");
                 host.player.Draw(overlay, w, h);
             }
             display.EndFrame();

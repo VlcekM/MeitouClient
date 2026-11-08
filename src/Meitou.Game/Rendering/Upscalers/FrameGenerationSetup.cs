@@ -71,7 +71,7 @@ static class FrameGenerationSetup
         {
             if (name == shown) return;
             shown = name;
-            if (player.PointerImage(name) is not { } pointer)
+            if (player.pointerPanel.PointerImage(name) is not { } pointer)
             {
                 cursor.Type = CursorType.Standard;
                 cursor.StandardCursor = standard = StandardCursor.Default;

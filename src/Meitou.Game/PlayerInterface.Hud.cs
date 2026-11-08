@@ -109,7 +109,7 @@ sealed partial class PlayerInterface
         selected = [];
         buildingSelection.selectedBuilding = null;
         Follow = null;
-        CloseContextMenu();
+        contextMenuWindow.CloseContextMenu();
     }
 
     internal bool OverHud(Vector2 p) => ContainsUi(p);

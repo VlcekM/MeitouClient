@@ -71,14 +71,14 @@ sealed partial class PlayerInterface
             // window; hiding the credits does not count as closing one). With a title window open the generic Esc below closes it.
             if (faithfulScreens.IsOpen("title") && faithfulScreens.OpenScreens.Count == 1)
             {
-                showCredits = false;
+                frontend.showCredits = false;
                 ScreenAction?.Invoke(new("menu", "ExitGameButton", "exit"));
                 return true;
             }
             // The editor stays under the game menu (the original's Esc in the editor; it has no cancel: CONFIRM closes it).
             if (characterEditor.EditorOpen && faithfulScreens.OpenScreens[^1] == "editor") { faithfulScreens.Open("menu"); UpdateMenuPause(); return true; }
             // Esc presses the last button of the top message box (Return the first, docs/game/ui-input.md section 5).
-            if (faithfulScreens.IsOpen("message")) HandleFrontendAction(new("message", CancelButton, CancelButton));
+            if (faithfulScreens.IsOpen("message")) frontend.HandleFrontendAction(new("message", frontend.CancelButton, frontend.CancelButton));
             // While looting, one Esc closes the looter's and the body's windows together (their bags follow); the loot closes with its window.
             else if (faithfulScreens.IsOpen("loot") && faithfulScreens.OpenScreens[^1] is "inventory" or "bag" or "loot" or "loot-bag") { faithfulScreens.Close("loot"); faithfulScreens.Close("inventory"); }
             // So does trading: one Esc closes the trader with the customer's windows, whichever of them was clicked last (closing the trader ends the trade).
@@ -89,7 +89,7 @@ sealed partial class PlayerInterface
         }
         if (faithfulScreens.HasKeyboardFocus && EditFocusKey(key, ctrl, shift)) return true;
         // Delete or Backspace deletes the save selected in the load, save or import window (LoadSaveWindow::keyPressed, docs/game/ui-screens.md "Deleting a save").
-        if (key is Meitou.Game.Host.Input.Key.Delete or Meitou.Game.Host.Input.Key.Backspace && faithfulScreens.OpenScreens is [.., "load" or "save" or "import"] && selectedSlot is { } doomed) { AskDeleteSave(doomed); return true; }
+        if (key is Meitou.Game.Host.Input.Key.Delete or Meitou.Game.Host.Input.Key.Backspace && faithfulScreens.OpenScreens is [.., "load" or "save" or "import"] && frontend.selectedSlot is { } doomed) { frontend.AskDeleteSave(doomed); return true; }
         // Tab bound to a window key (Inventory, Character...) opens it on a window with a box; the traversal keeps modal windows (#383).
         if (key == Meitou.Game.Host.Input.Key.Tab && (faithfulScreens.HasModal || !gameHotkeys.WindowKey(key)) && faithfulScreens.FocusNext(shift)) return true;
         if (key == Meitou.Game.Host.Input.Key.Enter && faithfulScreens.Submit()) return true;
@@ -158,7 +158,7 @@ sealed partial class PlayerInterface
         if (e.Screen == "editor") characterEditor.EditorAction(e);
         else if (e.Screen == "file") characterEditor.FileDialogAction(e);
         else if (e.Screen == FeedbackPanel.FeedbackScreen) feedbackPanel.FeedbackFormAction(e);
-        else if (HandleFrontendAction(e)) UpdateMenuPause();
+        else if (frontend.HandleFrontendAction(e)) UpdateMenuPause();
         else if (e.Screen == "stats" && e.Action == "select") selectedStat = e.Text;
         else if (e.Screen == "stats" && e.Action.StartsWith("stat:", StringComparison.Ordinal)) selectedStat = e.Action[5..];
         else if (e.Screen == "build") build.BuildAction(e);
@@ -190,7 +190,7 @@ sealed partial class PlayerInterface
         var lead = pinned || id == "limbs" ? inventoryWindows.WindowCharacter(screen) : id is "inventory" or "bag" ? inventoryWindows.InventoryOwner() : Selected().FirstOrDefault();
         foreach (var button in layout.Widgets.Where(w => w.Type == "Button" && !w.Properties.ContainsKey("TemplateEvent"))) b.Disabled.Add(button.Name);
         if (id == FeedbackPanel.FeedbackScreen) { feedbackPanel.BindFeedbackScreen(b); return b; }
-        if (BindFrontend(id, b)) return b;
+        if (frontend.BindFrontend(id, b)) return b;
         if (id == "editor") { characterEditor.BindEditor(b); return b; }
         if (id == "file") { characterEditor.BindFileDialog(b); return b; }
         else if (id == "trader") tradeWindows.BindTraderScreen(b);
@@ -282,9 +282,9 @@ sealed partial class PlayerInterface
     {
         if (id == "title") { if (UiMode == UiMode.Meitou) titleMenu.MeitouTitleMenu(controls); titleMenu.AddDataProblems(controls); return; }
         if (id == "stats") { statsWindow.AddStatsContent(controls); return; }
-        if (id == "new-game") { AddStartLines(controls); advancedOptions.AddAdvancedContent(controls); return; }
-        if (id == "message") { StyleMessageBox(controls); return; }
-        if (id is "load" or "import" or "save" && UiMode == UiMode.Faithful) { AddSlotInfo(controls); if (id == "import") advancedOptions.AddAdvancedContent(controls, "import"); return; }
+        if (id == "new-game") { frontend.AddStartLines(controls); advancedOptions.AddAdvancedContent(controls); return; }
+        if (id == "message") { frontend.StyleMessageBox(controls); return; }
+        if (id is "load" or "import" or "save" && UiMode == UiMode.Faithful) { frontend.AddSlotInfo(controls); if (id == "import") advancedOptions.AddAdvancedContent(controls, "import"); return; }
         if (id == "editor") { characterEditor.AddEditorContent(controls); return; }
         if (id == "build") { build.AddBuildContent(controls); return; }
         if (id == "dialogue") { dialogueWindow.AddDialogueChoices(controls); return; }

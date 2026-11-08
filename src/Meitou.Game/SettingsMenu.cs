@@ -465,7 +465,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 Toggle: new("Wind stops", () => config.FixWindStop, v => config.FixWindStop = v, Remaster: true, OnOff: true)));
             result.Add(new("Load button", "The load window's Load button works only once a save that can be read is selected. "
                 + "The game keeps it live: with nothing selected a click does nothing, and an unreadable save fails to load.",
-                Toggle: new("Load button", () => config.FixLoadButton, v => player.FixLoadButton = config.FixLoadButton = v, Remaster: true, OnOff: true)));
+                Toggle: new("Load button", () => config.FixLoadButton, v => player.frontend.FixLoadButton = config.FixLoadButton = v, Remaster: true, OnOff: true)));
             result.Add(new("Turret gunners turn", "A turret's gunner turns with the gun, facing where it aims. "
                 + "In the game the gunner keeps facing the turret, so once the gun swings toward a target the gunner looks off to the side.",
                 Toggle: new("Turret gunners turn", () => config.FixGunnerFacing, v => { config.FixGunnerFacing = v; GunnerFacingChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
@@ -789,7 +789,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);
         config.FixDoorBreak = config.FixAmbienceSuffix = config.FixWindStop = true;
-        player.FixLoadButton = config.FixLoadButton = true;
+        player.frontend.FixLoadButton = config.FixLoadButton = true;
         config.FixGunnerFacing = true;
         GunnerFacingChanged?.Invoke(true);
         config.FixPunchReach = true;
