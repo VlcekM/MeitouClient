@@ -138,8 +138,11 @@ h -= 0.05 dt `bodypart degeneration rate` ChanceOfDeath degMult D 1.2 with D = c
 when h + b > 0; degMult lerps 1.7..0.03 by toughness and is 0 for a non-vital robotic part (robot race or limb replacement)
 and in any bed. Healing: while h < M, b > 0 and the limb is not crushed (state 3), min(b, 0.05 dt `heal rate mult` R), x250
 on a robotic part, moves from b to h. R = M/100 x the organic rate (robotic for a robot race or a replacement); a stump
-(state 1) has base HP 5 and R = 2 x the organic rate without M/100. Repair (a repair bed) moves 0.05 dt `resting heal rate
-mult` x its rate from w into b. Rig is held under 50 - (h - s); s falls 0.05 dt `stun recovery rate` `heal rate mult` R.
+(state 1) has base HP 5 and R = 2 x the organic rate without M/100. Repair (a repair bed): 0.05 dt `resting heal
+rate mult` x its rate comes off w (down to 0) and goes into b, held to at most M - h; with w at 0 it still goes into b, so the bed
+treats untreated damage too (**Observed**: a skeleton's limbs with wear only, damage only and both each gained HP at the same rate in a
+Skeleton Repair Bed, the last keeping its untreated gap until its wear was gone).
+Rig is held under 50 - (h - s); s falls 0.05 dt `stun recovery rate` `heal rate mult` R.
 
 ### Beds (`FUN_140652000`, **Verified** decompile)
 
