@@ -245,7 +245,7 @@ public class ProductionTests
         public ProductionSystem Production { get; }
         public List<string> Sites { get; } = [];
 
-        public Rig(GameDatabase db, GameConstants constants, string[] records, int threads = 1, bool snapshots = false)
+        public Rig(GameDatabase db, GameConstants constants, string[] records, int threads = 1, bool snapshots = false, int town = 1)
         {
             Items = new ItemFactory(db, constants);
             var walk = new OpenGroundWalkability(SyntheticTown.Ground);
@@ -259,8 +259,7 @@ public class ProductionTests
                 // 30 apart: a character at one building is within the trading range (40) of the next.
                 var p = At + new Vector3(i * 30, 0, 0);
                 string id = World.Buildings.NewId(WorldLayout.ZoneOf(p.X, p.Z));
-                World.Buildings.Add(new BuildSite { Id = id, Record = records[i], Position = p, Owner = PlayerFaction, Materials = [],
-                        Complete = true });
+                World.Buildings.Add(new BuildSite { Id = id, Record = records[i], Position = p, Owner = PlayerFaction, Town = town, Materials = [], Complete = true });
                 Sites.Add(id);
             }
         }
@@ -581,6 +580,28 @@ public class ProductionTests
         rig.World.RunTicks(ticks);
 
         Assert.Equal(charge - ticks * rig.World.TickSeconds, battery.Charge, 0.01f);
+    }
+
+    /// <summary>A complete machine whose saved town is unresolved does not create Meitou's town power grid.</summary>
+    [Fact]
+    public void A_no_town_machine_does_not_join_a_power_grid()
+    {
+        using var rig = new Rig(Database(), Constants, [Generator, Lamp, Battery], town: 0);
+        rig.World.RunTick();
+        var generator = rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!;
+        generator.Inputs[0].Count = 10;
+        rig.World.RunTicks(2);
+        Assert.Equal(0, rig.Machine(1).Granted);
+        Assert.False(rig.Machine(2).OnGrid);
+    }
+
+    /// <summary>A complete research bench with an unresolved town does not contribute its level.</summary>
+    [Fact]
+    public void A_no_town_research_bench_does_not_raise_the_global_bench_level()
+    {
+        using var rig = new Rig(Database(), Constants, [Bench], town: 0);
+        rig.World.RunTick();
+        Assert.Equal(0, rig.World.Research.BenchLevel);
     }
 
     // ------------------------------------------------------------------ ore
