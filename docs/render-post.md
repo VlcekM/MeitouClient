@@ -119,7 +119,8 @@ NVIDIA's DLSS-G through Streamline 2.14.16 (Windows; `Upscalers/DlssFrameGenerat
   the interface layer (premultiplied RGBA8, `UIColorAndAlpha`) copied flipped at the display size. The window shows the finished picture.
   User interface recomposition on; `eRetainResourcesWhenOff`; mode off under the loading screen and for screenshots.
 - **State:** `slDLSSGGetState` about once a second; status failures (resolution too low, Reflex not detected, constants invalid ...) are logged
-  when they change. `numFramesActuallyPresented` counts from the previous call; the stats panel shows it per second beside the rendered rate.
+  when they change. `numFramesActuallyPresented` is the frames presented for the last rendered one (1 = none generated, 2 = one), not a count
+  since the previous call; the stats panel shows it as `x2 shown` beside the rendered rate.
 - **Loaded and off** (**Observed**, play bench idle/orbit/pan, 2560x1440 window at render scale 1.0, GPU-bound, RTX 4070, 3 interleaved pairs,
   2026-11-08): mean frame 11.2 / 12.7 / 11.6 ms not loaded against 11.4 / 13.0 / 10.8 loaded with the mode off: +0.2-0.3 ms at most, within noise;
   the render thread's `driver-wait` +0.14 ms (Reflex). Under CPU-bound frames (1920x1080 at 0.67) run-to-run noise (±50%) hid any difference.

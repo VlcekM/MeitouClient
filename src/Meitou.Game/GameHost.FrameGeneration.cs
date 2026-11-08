@@ -27,11 +27,11 @@ sealed partial class GameHost
         return available ? "active" : "unavailable (see the log), plain swapchain in use";
     }
 
-    /// <summary>The stats panel's note on the frames shown: DLSS reports what it presented, FSR 3 shows two per rendered frame.</summary>
+    /// <summary>The stats panel's note on the frames shown per rendered one: DLSS reports what it presented, FSR 3 shows two.</summary>
     static string FrameGenerationShown(IFrameGenerator? generator) => generator switch
     {
-        DlssFrameGeneration { Enabled: true, PresentedPerSecond: > 0 } dlss => $" rendered, {dlss.PresentedPerSecond:0} shown",
-        { Enabled: true } => " (x2 shown with frame generation)",
+        DlssFrameGeneration { Enabled: true, PresentedPerRendered: > 0 } dlss => $" rendered, x{dlss.PresentedPerRendered} shown",
+        { Enabled: true } => " rendered, x2 shown",
         _ => "",
     };
 

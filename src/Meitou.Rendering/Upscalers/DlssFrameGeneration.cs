@@ -36,8 +36,8 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
     public bool Enabled { get; private set; }
     /// <summary>The window shows the finished picture; DLSS-G is told which part is interface.</summary>
     public bool PresentsWorldAlone => false;
-    /// <summary>Frames Streamline presented per second (rendered and generated) over the last state read, about once a second; 0 before the first.</summary>
-    public float PresentedPerSecond { get; private set; }
+    /// <summary>Frames Streamline presented for the last rendered one (1: none generated, 2: one), at the last state read about once a second; 0 before it.</summary>
+    public uint PresentedPerRendered { get; private set; }
 
     DlssFrameGeneration(GpuContext ctx, Streamline sl)
     {
@@ -179,12 +179,10 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         long now = Stopwatch.GetTimestamp();
         long elapsed = now - lastStateTicks;
         if (elapsed < Stopwatch.Frequency) return;
-        bool first = lastStateTicks == 0;
         lastStateTicks = now;
         var state = new DlssgState { StructType = DlssgStateType, StructVersion = 4 };
         if (sl.DlssgGetState(viewport, &state, null) != 0) return;
-        // The count runs from the previous read, so the first one says nothing per second.
-        PresentedPerSecond = first ? 0 : state.NumFramesActuallyPresented * (float)Stopwatch.Frequency / elapsed;
+        PresentedPerRendered = state.NumFramesActuallyPresented;
         if (state.Status == lastStatus) return;
         lastStatus = state.Status;
         Console.WriteLine($"frame generation  DLSS state: {StatusText(state.Status)}; up to {state.NumFramesToGenerateMax} generated per rendered frame, "
