@@ -1344,8 +1344,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     bool sharpenAfter;
 
     /// <summary>Motion vectors, then the vendor upscaler or TAA into the history; returns the display-size picture.</summary>
+    IUpscaler? retired;
+
     Target2D RunUpscale()
     {
+        if (retired is not null) { retired.Dispose(); retired = null; }
         bool reset = !historyValid || !previousValid || Vector3.Distance(eyeNow, previousEye) > 5000;
         float dt = (float)frameClock.Elapsed.TotalSeconds;
         frameClock.Restart();
@@ -1401,7 +1404,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             {
                 Console.WriteLine($"upscaler  {external.Name} failed; using TAA from now on");
                 unavailable.Add(external.Kind);
-                external.Dispose();
+                retired = external;   // not freed now: the frame already holds the commands the failed call recorded; it is freed at the start of the next one
                 External = null;
                 warnedFallback = true;
             }
@@ -1765,6 +1768,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     public void Dispose()
     {
         External?.Dispose();
+        retired?.Dispose();
         Free();
         DisposeShadingRate();
         DisposeShafts();

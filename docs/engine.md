@@ -183,6 +183,7 @@ Own GLSL compiles through bundled shaderc, explicit native resource/state record
 secondary jobs. [Native API](renderer-native.md).
 
 Single-sample jittered HDR reconstruction, separate near/far depth, unjittered reflection/shadows.
+**Observed** (RTX 4090, shared with other processes): Streamline returns result 39 (`eWarnOutOfVRAM`, with the log line "Exceeded VRAM budget") from `slEvaluateFeature` when the card runs short of memory; the call still records and runs. Meitou took it for a failure, freed DLSS under the recorded frame and the next fence wait said `ErrorDeviceLost` (seen after 30 DLSS/off toggles with other games on the card). Now result 39 counts as success (logged once), and a real failure retires the upscaler at the start of the next frame, not under the frame that holds its commands. 60 toggles with enough memory never failed and did not grow the memory in use (the `vram` control command).
 FSR Vulkan SDK1.1.4 runtime DLL; Streamline2.14.16 manual hook, initialize before Vulkan, request
 features and proxy present; when it reports DLSS unsupported (any non-NVIDIA GPU) it is shut down at
 once. **Observed** (#55, RX 6600): on AMD `slInit` still loads `sl.common`, whose Vulkan hooks warn

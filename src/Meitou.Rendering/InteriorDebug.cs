@@ -11,4 +11,7 @@ public static class InteriorDebug
 
     /// <summary>Parts whose mesh path contains this text are treated as hidden by the floor view (to find which part draws a surface), or null.</summary>
     public static string? HideMesh;
+
+    /// <summary>Colour batches are drawn in the order they were met, not nearest first (to find out whether coplanar parts depend on the draw order).</summary>
+    public static bool NoObjectSort;
 }

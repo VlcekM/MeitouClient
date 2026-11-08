@@ -286,6 +286,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_FORCE_INTEGRATED` | `src/Meitou.Rendering/Gpu/Core/VulkanDevice.cs` | `1`: treat any GPU as integrated (budgets for integrated GPUs). |
 | `MEITOU_VRAM_BUDGET_MB` | `src/Meitou.Rendering/Gpu/Core/VulkanDevice.cs` | Caps the video memory reported, for testing the memory guard. |
 | `MEITOU_VK_VALIDATION` | `src/Meitou.Rendering/Gpu/Core/VulkanDeviceOptions.cs` | `1` validation; `sync` adds synchronisation checks; `gpu` adds GPU-assisted checks; `0` off. Unset: caller's default. |
+| `MEITOU_DLSS_FAIL_AT` | `src/Meitou.Rendering/Upscalers/DlssUpscaler.cs` | Test hook: `n` reports a DLSS failure after the n-th evaluation was recorded, to exercise the fallback to TAA. |
 | `MEITOU_DIAG_SUBMIT` | `src/Meitou.Rendering/Gpu/FrameLoop.cs`, `src/Meitou.Game/GameHost.Interactive.cs` | `1`: diagnostic (issue #108): the world is submitted and waited for before the interface draws, and the interface before the present. Slower frames. |
 | `MEITOU_DIAG_IDLE` | `src/Meitou.Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #108): each frame waits for every frame in flight before it begins. Slower frames. |
 | `MEITOU_DIAG_NO_MATERIAL_CACHE` | `src/Meitou.Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #319): the terrain material cache starts off; every pixel shades the layers. |
