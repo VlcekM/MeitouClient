@@ -11,10 +11,11 @@ public readonly record struct FallSource(CharacterId Character, string Bone, lon
 /// <summary>
 /// An item lying in the world, as the host draws it (docs/simulation.md "Ground items"): a saved one by its whole <see cref="Rotation"/>, a <see cref="Dropped"/> one turned by it
 /// about Y and laid flat on the ground by the host. <see cref="Type"/>, <see cref="Level"/> and <see cref="Quality"/> are the item's, for its label's grade colour, <see cref="OwnedBy"/> <see cref="GroundItem.OwnedBy"/>.
-/// <see cref="Fall"/> is set for a severed limb, which the host drops from its stump.
+/// <see cref="Fall"/> is set for a severed limb, which the host drops from its stump. <see cref="Material"/> is the item's <c>material sid</c> (a weapon's model: its look).
+
 /// </summary>
 public readonly record struct GroundItemSnapshot(int Id, string Record, string Name, Vector3 Position, Quaternion Rotation, bool Dropped,
-    Meitou.Data.Fcs.FcsRecordType Type = default, int Level = 0, float Quality = 0, int OwnedBy = -1, FallSource? Fall = null);
+    Meitou.Data.Fcs.FcsRecordType Type = default, int Level = 0, float Quality = 0, int OwnedBy = -1, FallSource? Fall = null, string Material = "");
 
 /// <summary>One loose item: where it lies and how it is turned (a saved item's whole rotation, written back as read; a dropped one turned about Y).</summary>
 public sealed record GroundItem(int Id, ItemInstance Item, Vector3 Position, Quaternion Rotation)
@@ -117,7 +118,7 @@ public sealed class GroundItems
     /// <summary>The items as published, made again only when <see cref="Revision"/> changed.</summary>
     internal IReadOnlyList<GroundItemSnapshot> Published()
     {
-        if (publishedAt != Revision) (published, publishedAt) = ([.. items.Select(i => new GroundItemSnapshot(i.Id, i.Item.Record, i.Item.Name, i.Position, i.Rotation, i.Dropped, i.Item.Type, i.Item.Level, i.Item.Quality, i.OwnedBy, i.Fall))], Revision);
+        if (publishedAt != Revision) (published, publishedAt) = ([.. items.Select(i => new GroundItemSnapshot(i.Id, i.Item.Record, i.Item.Name, i.Position, i.Rotation, i.Dropped, i.Item.Type, i.Item.Level, i.Item.Quality, i.OwnedBy, i.Fall, i.Item.MaterialId))], Revision);
         return published;
     }
     IReadOnlyList<GroundItemSnapshot> published = [];

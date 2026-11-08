@@ -95,6 +95,9 @@ public sealed record DebugDamageMultiplier(float Multiplier) : DebugCommand;
 /// </summary>
 public sealed record DebugGiveItem(CharacterId Character, string Record, int Quantity, int Quality = 0) : DebugCommand
 {
+    /// <summary>A weapon's exact grade (maker, model, level) in place of the <see cref="Grade"/> of its quality; null: by quality.</summary>
+    public DebugWeaponGrade? Exact { get; init; }
+
     /// <summary>Wear the unit even when its armour slot is taken: the worn item goes to the grids; with no room nothing changes and nothing is dropped (a message says so). A backpack goes into the attach slot when it is free.</summary>
     public bool Equip { get; init; }
 
@@ -156,8 +159,32 @@ public sealed record DebugSpawn(string Record, Vector2 At, string? Faction = nul
 /// </summary>
 public sealed record DebugPlaceBuilding(string Town, TownBuilding Building) : DebugCommand;
 
+/// <summary>A weapon's maker (WEAPON_MANUFACTURER) and model (MATERIAL_SPECS_WEAPON) by record id or name, and its level; unset parts keep the item's.</summary>
+public sealed record DebugWeaponGrade(string? Maker, string? Model, int? Level)
+{
+    /// <summary>Sets <paramref name="item"/>'s company, material and level; false (with the reason in <paramref name="error"/>) when a record is not found.</summary>
+    public bool Apply(GameDatabase db, Items.ItemInstance item, out string error)
+    {
+        error = "";
+        GameRecord? maker = null, model = null;
+        if (Maker is { Length: > 0 } && (maker = Find(db, Maker, FcsRecordType.WEAPON_MANUFACTURER)) is null) { error = $"no WEAPON_MANUFACTURER '{Maker}'"; return false; }
+        if (Model is { Length: > 0 } && (model = Find(db, Model, FcsRecordType.MATERIAL_SPECS_WEAPON)) is null) { error = $"no MATERIAL_SPECS_WEAPON '{Model}'"; return false; }
+        if (maker is not null) item.CompanyId = maker.StringId;
+        if (model is not null) item.MaterialId = model.StringId;
+        if (Level is { } level) item.Level = level;
+        return true;
+    }
+
+    static GameRecord? Find(GameDatabase db, string key, FcsRecordType type) =>
+        db.Find(key) is { } r && r.Type == type ? r : db.Records.Values.FirstOrDefault(x => x.Type == type && x.BaseName.Equals(key, StringComparison.OrdinalIgnoreCase));
+}
+
 /// <summary>Lays a loose item of record <see cref="Record"/> (<see cref="Quantity"/> in a stack) on the ground at <see cref="At"/> turned <see cref="Yaw"/> radians (agent-playtest control channel: place-item).</summary>
-public sealed record DebugPlaceItem(string Record, int Quantity, Vector3 At, float Yaw) : DebugCommand;
+public sealed record DebugPlaceItem(string Record, int Quantity, Vector3 At, float Yaw) : DebugCommand
+{
+    /// <summary>A weapon's exact grade (the console's <c>--maker</c>, <c>--model</c>, <c>--level</c>).</summary>
+    public DebugWeaponGrade? Exact { get; init; }
+}
 
 /// <summary>Puts items into the inventory of the container fixture <see cref="Container"/> (agent-playtest control channel: container-put); what does not fit is reported.</summary>
 public sealed record DebugPutItem(string Container, string Record, int Quantity) : DebugCommand;
@@ -362,7 +389,11 @@ static class DebugCheats
                 TownEdits.Clear(world, data, clear.Key);
                 break;
             case DebugPlaceItem lay when data is not null:
-                if (data.Items.Create(lay.Record, lay.Quantity) is { } laid) world.GroundItems.Place(laid, lay.At, lay.Yaw, null, -1);
+                if (data.Items.Create(lay.Record, lay.Quantity) is { } laid)
+                {
+                    if (lay.Exact?.Apply(data.Db, laid, out string bad) == false) { world.Post(bad); break; }
+                    world.GroundItems.Place(laid, lay.At, lay.Yaw, null, -1);
+                }
                 else world.Post($"No item record {lay.Record}.");
                 break;
             case DebugPutItem put when data is not null:
@@ -452,7 +483,11 @@ static class DebugCheats
             case DebugGiveItem give when data is not null:
                 if (!table.TryResolveNext(give.Character, out int owner) || table.Cold(owner)?.Inventory is not { } inventory) break;
                 if (data.Items.Create(give.Record, give.Quantity) is not { } item) { world.Post($"No item record {give.Record}."); break; }
-                if (item.Type == FcsRecordType.ARMOUR) (item.Quality, item.Level) = (Math.Clamp(give.Quality, 0, 100), Math.Clamp(give.Quality, 0, 100));
+                if (give.Exact is { } exact && item.Type is FcsRecordType.WEAPON or FcsRecordType.CROSSBOW)
+                {
+                    if (!exact.Apply(data.Db, item, out string bad)) { world.Post(bad); break; }
+                }
+                else if (item.Type == FcsRecordType.ARMOUR) (item.Quality, item.Level) = (Math.Clamp(give.Quality, 0, 100), Math.Clamp(give.Quality, 0, 100));
                 else if (item.Type == FcsRecordType.WEAPON && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
                     (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
                 else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
