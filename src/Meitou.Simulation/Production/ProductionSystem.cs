@@ -903,7 +903,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         {
             m.LastOperators = m.Operators;
             m.Operators = 0;
-            if (m.Data.IsResearch && Site(world, m.Site) is { Complete: true } site && site.Owner == world.Player.Faction)
+            if (m.Data.IsResearch && Site(world, m.Site) is { Complete: true } site && site.Owner == world.Player.Faction && site.Town != 0)
                 bench = Math.Max(bench, m.Data.TechLevel);
         }
 

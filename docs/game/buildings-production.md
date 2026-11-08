@@ -261,6 +261,8 @@ shows the first failing message in this order (**Verified** unless marked):
   `default resident` / `residents override`) runs from `ZoneManager::loadPhase2` (`FUN_140a0e760`) only for towns whose faction
   lacks the player flag (FACTION `+0x250`) (**Verified** by decompile and its only caller).
 - **Unresolved building towns** (**Verified**, `FUN_140555650`, `FUN_1402a14b0` / `FUN_1402a1750`, `FUN_1406bd000`): the saved `town` handle is resolved as a handle; when its town was removed or never existed, the building stores the canonical null town. It is not reassigned by position on first use, a tick, another placement or dismantling. It is absent from the player-town panel and town ownership association until a later placement operation assigns it.
+
+  **Power** (**Verified**, `FUN_14092d850`): the power manager advances frames from the registered town list; `NO_TOWN` is not a frame. Thus an unresolved building town does not share a grid with other unresolved buildings or contribute to a town's power/battery totals. Production's complete-building tick and the exact input/output effect of the missing town remain **Unknown** from the traced call chain.
 - **Centre, radius and placement-time merge** (**Verified** by decompile, `Town::reassessTownPosition` `FUN_1405488f0`, via `TownList::reassessTownPositions`
   `FUN_14054d080`; called on placement commit `FUN_1404d72a0`, dismantle `FUN_1402a2860` / `FUN_14054fea0` and town merge
   `FUN_140931840`): a player town's centre (+0x48) becomes a weighted mean of its buildings' position markers (two building
@@ -790,6 +792,11 @@ Meitou: the *Production far away* switch ([simulation](../simulation.md)); Faith
 zones keeps its stamp and catches up when its zone is active again; generators burn no fuel unloaded).
 
 ## Research
+
+**Null-town bench** (**Verified**, research contribution `FUN_14029b8d0`): the original's research-building tick
+requires the building's town pointer to resolve before it contributes to the global research manager. A complete
+player research bench whose saved town resolves to `NO_TOWN` therefore does not raise the research bench level.
+Meitou applies the same `Town != 0` gate; the research state itself remains global.
 
 `ResearchBuilding::vfunc_150` (`FUN_14029b8d0`, **Observed**): an operator of a player-owned bench posts event 8 with
 `outputRate x upgrade x health x powerSat x s` (s from `stat used` 4, science); the dispatcher `FUN_1407b65b0` passes it
