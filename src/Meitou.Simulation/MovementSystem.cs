@@ -910,6 +910,16 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     static bool AskedToStandStill(in CharacterHot n, CharacterCold cold, long tick) =>
         cold.StandStillUntil > tick && !cold.IsPlayer && !cold.InCombat && !cold.Fleeing && cold.CarriedBy.IsNone && n.Task != (byte)CharacterTask.Attack;
 
+    /// <summary>
+    /// The original's update time of a character out of view (<b>Verified</b>, docs/game/game-loop.md "Update time off screen"): the time the mover integrates since
+    /// the character's last update (<c>+0xc0</c>, handed to the mover as <c>+0xc4</c>) gets the frame time once in the character loop (<c>FUN_140786e30</c>) and
+    /// again in the visibility pass (<c>FUN_1405c9f60</c>) while the character is not in view (<c>+0x1a9</c>), so it moves twice as far. In view, or in a
+    /// world with no camera (<see cref="World.View"/> null, as headless and tests), the time is the tick's.
+    /// </summary>
+    public const float OffViewTime = 2;
+
+    static float OffViewTimeFactor(World world, Vector3 at) => world.View is { } view && !MedicalClock.OnScreen(view, at) ? OffViewTime : 1;
+
     public void Move(World world, Partition part)
     {
         var table = world.Characters;
@@ -919,7 +929,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         for (int i = part.Start; i < part.End; i++)
         {
             if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
-            float dt = world.StepSeconds(i);   // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
+            // A far character's step covers the ticks since its last (the far cadence, World.StepTicks); one off screen moves on twice the time.
+            float dt = world.StepSeconds(i) * OffViewTimeFactor(world, prev[i].Position);
             ref readonly var p = ref prev[i];
             ref var n = ref next[i];
             var cold = table.Cold(i)!;

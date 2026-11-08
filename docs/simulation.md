@@ -558,6 +558,8 @@ New move orders preserve reusable paths; attack pursuit reschedules target paths
 hold translation while facing changes. Original speeds/encumbrance and research are in
 [pathfinding.md](game/pathfinding.md); footprint clearance/water costs come from nav queries.
 Heights use the character's (or clicked) Y to pick stacked floors; long paths have a provisional tail.
+A character out of the camera's view steps on twice the tick time, as the original's off-screen update time does
+([game loop](game/game-loop.md#update-time-off-screen)); without a camera (`World.View` null) the time is the tick's.
 A walk's end is `CharacterCold.WalkEnd`: `Finished` (the path followed to its last point), `Failed` (no path, blocked past the limit, stopped at a locked door) or `None` (still walking, or another system stopped it); the AI's arrival reads it ([isAtLocation](game/ai-tasks.md#planner)).
 Squad followers follow the original ([squads travelling together](game/pathfinding.md#squads-travelling-together)): `Formation.Layout` gives each
 member a slot by its faction's `squad formation` (`World.FactionFormations`, RANDOM without data), kept in `Squad.FormationSlots` and rebuilt in
