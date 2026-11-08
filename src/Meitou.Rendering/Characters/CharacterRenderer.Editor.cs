@@ -97,14 +97,9 @@ internal sealed unsafe partial class CharacterRenderer
             var projection = perspective * Matrix4x4.CreateTranslation(r.ShiftX, 0, 0);
             var light = Vector3.Normalize(Vector3.TransformNormal(StageLight, l.World));
             // The studio (previewsun): the stage's light raised to a sun, its shadow and occlusion drawn first.
-            if (StudioOn)
-            {
-                // The studio's sun from the camera's right, about 45 degrees to the side and 35 up (the character's shadow shows on the platform), whichever way the editor turns the camera (in the character's
-                // frame it came from the side, and the skirt shaded the legs).
-                var toEye = Vector3.Normalize(new Vector3(eye.X - l.Centre.X, 0, eye.Z - l.Centre.Z));
-                var leftOfCamera = Vector3.Cross(toEye, Vector3.UnitY);
-                light = Vector3.Normalize(0.6f * toEye - 0.62f * leftOfCamera + 0.6f * Vector3.UnitY);
-            }
+            // The studio's sun, fixed to the character (the editor's camera turns round it, the shadows stay): as seen from the editor's first view
+            // (yaw 0, in front: the character's +z), from the right about 45 degrees to the side and 35 up.
+            if (StudioOn) light = Vector3.Normalize(Vector3.TransformNormal(StudioStageSun, l.World));
             Matrix4x4.Decompose(l.World, out _, out var facing, out _);
             StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
             StageStudio = null;
@@ -163,6 +158,8 @@ internal sealed unsafe partial class CharacterRenderer
 
     /// <summary>The stage's light direction (towards the light) in the character's frame: the original's (-3, 2, -3) on the stage, where the character faces the stage's -z.</summary>
     static readonly Vector3 StageLight = new(3, 2, 3);
+    /// <summary>The studio's sun on the stage (Meitou, previewsun), in the character's frame (+z its front, the editor's yaw 0; +x the right of a camera there; the editor's first view keeps the light it had from the camera).</summary>
+    static readonly Vector3 StudioStageSun = new(0.62f, 0.6f, 0.6f);
 
     /// <summary>
     /// The eye and the pivot it looks at, in the world: the pivot is 12 units above the feet (the original's stage root is 12 below the camera rig's pivot, whatever the
