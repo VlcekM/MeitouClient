@@ -179,7 +179,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         {
             Disguise(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);
             Spot(world, Math.Max(1, Settings.SpotEveryTicks) * world.TickSeconds);
+            UpdateStatusTowns(world);
             DropFreedOutsideTowns(world);
+            EscapeFarFromOwner(world);
         }
         BountyDuty(world);
         for (int k = 0; k < _arrests.Count;)
@@ -200,15 +202,51 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     }
 
     /// <summary>
-    /// A freed character stops being freed once it is out of every town: the status update <c>FUN_1405a4f50</c> clears status <c>+0xea</c> on each update while the status object's current town
-    /// (<c>+0x88</c>) is null (<b>Verified</b>). The town is the one the point stands in (<see cref="Ai.AiSystem.TownAt"/>, the same stand-in as the disguise tests); without town data the flag stays.
+    /// Each living character's status town (<see cref="CharacterCold.StatusTown"/>), written before the status tests as <c>FUN_1405a51e0</c> does before <c>FUN_1405a4f50</c>
+    /// (<b>Verified</b>). The original runs it in each character's AI update, at a cadence that is <b>Unknown</b>; here on the spotting pass. Without town data nothing changes.
     /// </summary>
-    void DropFreedOutsideTowns(World world)
+    void UpdateStatusTowns(World world)
     {
         if (Towns is not { } data) return;
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
-            if (table.Next[s].Alive && table.Cold(s) is { Freed: true } c && AiSystem.TownAt(data, world, table.Next[s].Position).IsNone) c.Freed = false;
+            if (table.Next[s].Alive && table.Cold(s) is { } c) c.StatusTown = AiSystem.StatusTownAt(data, world, table.Next[s].Position, c.StatusTown);
+    }
+
+    /// <summary>
+    /// A freed character stops being freed once it is out of every town: the status update <c>FUN_1405a4f50</c> clears status <c>+0xea</c> on each update while the status object's current town
+    /// (<c>+0x88</c>, <see cref="CharacterCold.StatusTown"/>) is null (<b>Verified</b>). Without town data the flag stays.
+    /// </summary>
+    void DropFreedOutsideTowns(World world)
+    {
+        if (Towns is null) return;
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+            if (table.Next[s].Alive && table.Cold(s) is { Freed: true } c && c.StatusTown.IsNone) c.Freed = false;
+    }
+
+    /// <summary>The squared distance from its owner past which a slave outside every town escapes (<c>DAT_1416f016c</c>, <b>Verified</b>; about 3536).</summary>
+    public const float EscapeDistanceSquared = 12_500_000f;
+
+    /// <summary>
+    /// A slave far from its owner outside every town escapes: the same status update <c>FUN_1405a4f50</c> sets slave state 2 through the
+    /// setter for a slave (state 1) while the status object's current town (<c>+0x88</c>) is null and its squared distance to the owner is
+    /// above <see cref="EscapeDistanceSquared"/> (<b>Verified</b>; the town is <see cref="CharacterCold.StatusTown"/>). The owner is the master squad's leader
+    /// (<see cref="Kidnap.ObedientSlave.OwnerOf"/>, Meitou's stand-in for the owner handle); a slave without one is left alone (the
+    /// original's path for an owner handle that resolves to nothing is <b>Unknown</b>).
+    /// </summary>
+    void EscapeFarFromOwner(World world)
+    {
+        if (Towns is null) return;
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (!table.Next[s].Alive || table.Cold(s) is not { SlaveState: 1 } c || !c.StatusTown.IsNone) continue;
+            if (Kidnap.ObedientSlave.OwnerOf(world, c) is not { } owner || owner.Slot == s) continue;
+
+            var at = table.Next[s].Position;
+            if (Vector3.DistanceSquared(at, table.Next[owner.Slot].Position) > EscapeDistanceSquared) FixtureRegistry.TagEscaped(world, c);
+        }
     }
 
     bool Busy(CharacterId id)

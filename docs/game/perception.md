@@ -224,7 +224,7 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   reading, "while the 8 bytes at `+0x110` are zero", was wrong: that function never reads `+0x110`), and by a pending crime set through the wrapper `FUN_140852e10` when the setter
   succeeds (callers: police hit, caught stealing, fencing, kidnapping seen, uniform theft, body put-down; not through the direct setter `FUN_140852c80`, e.g. attack orders and
   looting; **Verified**). Saved as the short key `tn` (`FUN_140626580`/`FUN_140626830`; the loader zeroes it first). Meitou `CharacterCold.Freed`: set by all three, not by
-  a kidnap victim's release; cleared outside towns (`ArrestSystem`, the point-in-town stand-in) and by `SetPending(viaWrapper)` for the first four callers; saved as `tn`;
+  a kidnap victim's release; cleared outside towns (`ArrestSystem`, by the [status town](carry-loot.md#the-status-town)) and by `SetPending(viaWrapper)` for the first four callers; saved as `tn`;
   `FUN_1408569a0` is left out. Whether the original's status `+0x88` is already set when a loaded character first updates (else a loaded flag dies at once) is **Unknown**.
 - So attack on sight is relations only: no fundamental-type BANDIT rule (**Observed**). In the base data the Shek Kingdom, Holy Nation and
   United Cities start at -100 only with Bloodraiders, Cannibals, Rebel Farmers, Grass Pirates, Gorillo Bandits and Yabuta Outlaws (Holy
