@@ -1,62 +1,21 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
+using Meitou.Game.Editor;
 using Meitou.Game.Host;
 using Meitou.Simulation;
-using Meitou.Game.Ui;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Weather;
-using Meitou.Game.Editor;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The HUD's text panels as the original fills them (docs/game/ui-screens.md section 4): the name bar, the state lines, the stats lines, the medical header and
 /// rows. The original builds a list of lines inside each empty text widget, a label from 3 % of its width and a value right-aligned to 96 %, one row per line.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class HudPanels(PlayerInterface player)
 {
-    // The palette of data/gui/colours/kenshi_colours.xml (Verified): Main, Secondary (the text default), Title, Bad, Good, Alert; a mod's file replaces it (MyGuiColours.LoadPalette).
-    internal static string MainColour => MyGuiColours.Named("Main", "afa68b");
-    internal static string TitleColour => MyGuiColours.Named("Title", "492620");
-    internal static string BadColour => MyGuiColours.Named("Bad", "59231a");
-    internal static string GoodColour => MyGuiColours.Named("Good", "a8b774");
-    internal static string GreyColour => MyGuiColours.Named("Greyed", "444444");
-    /// <summary>The palette's BadBright: the editor's race stats below 1 (<c>FUN_1405ee0c0</c>, <c>#bf4834</c>).</summary>
-    internal static string BadBrightColour => MyGuiColours.Named("BadBright", "bf4834");
-    internal static string AlertColour => MyGuiColours.Named("Alert", "000000");
-
-    /// <summary>The stats panel's labels (MARTIAL ARTS, STRENGTH, ...): the grey of the orders buttons' text, not Main (docs/game/ui-screens.md).</summary>
-    internal static readonly string StatLabelColour = "0.4 0.380392 0.356863";
-
-    /// <summary>Resolves a faction (a position in the world's faction list) to its name; the host sets it.</summary>
-    public Func<int, string?>? FactionName { get; set; }
-
-    /// <summary>
-    /// A line of a text panel: label and value, each with its colour (null: the text default). With <paramref name="Action"/> the value is a <c>Kenshi_Button2</c> button (the
-    /// DataPanel's button lines): over the right <paramref name="ButtonWidth"/> of the row (the original's width argument), or across the whole row when there is no label.
-    /// <paramref name="TooltipRows"/> is a key / value tooltip (the original's <c>lektor&lt;StringPair&gt;</c> lists, each text with an optional leading colour tag) in place of <paramref name="Tooltip"/>.
-    /// </summary>
-    internal readonly record struct HudLine(string Label, string Value, string? LabelColour = null, string? ValueColour = null, string? Tooltip = null, string? Action = null,
-        float ButtonWidth = 0.5f, IReadOnlyList<(string Key, string Value)>? TooltipRows = null)
-    {
-        /// <summary>The line's tooltip user strings (the HUD's Fixed tooltip), null for none; a text tooltip wins over rows.</summary>
-        public Dictionary<string, string>? TipProperties => Tooltip is { Length: > 0 } tip ? UiTooltips.TextProperties(Loc.Tr(tip), "fixed")
-            : TooltipRows is { Count: > 0 } rows ? UiTooltips.RowProperties(rows, "fixed") : null;
-    }
-
-    /// <summary>A medical panel row: its name, the green, yellow and red layers' fractions, the number, the arrows, the robot layer and the row's tooltip (the <c>LifeBarNTooltip</c> widget).</summary>
-    internal readonly record struct MedicalRow(string Name, float Green, float Yellow, float Red, string Value, string Arrows, bool Robot, string? Tooltip = null)
-    {
-        /// <summary>The splint layer's fraction (the green plus the splint, at most 1); shown only where it is beyond the green.</summary>
-        public float White { get; init; }
-        /// <summary>The Crushed layer at full width: a stump or a crushed limb (the row setter <c>FUN_140721a70</c>'s limb states 1 and 3).</summary>
-        public bool Crushed { get; init; }
-        /// <summary>A key / value tooltip in place of <see cref="Tooltip"/> (the Hunger row's).</summary>
-        public IReadOnlyList<(string Key, string Value)>? TooltipRows { get; init; }
-    }
-
     /// <summary>The goal line for a character the AI is not running (the player's orders, a fight, a job): what its movement task is, else Aimless.</summary>
     static string TaskText(CharacterTask task) => task switch
     {
@@ -118,32 +77,32 @@ sealed partial class PlayerInterface
     /// section 4): Dead; caged, the cage lock's "Locked (lvl: N)" or "(Unlocked...)" (no State line in a cage without a lock); Unconscious / Rebooting; Sleeping in a bed; Defensive; Normal; each
     /// with its tooltip; the ranged controller's line comes between Sleeping and Defensive. The weather notice replaces it while it lasts.
     /// </summary>
-    static HudLine[] StateLines(CharacterSnapshot lead, SpeedUnit unit)
+    static PlayerInterface.HudLine[] StateLines(CharacterSnapshot lead, SpeedUnit unit)
     {
         var body = lead.Body;
         string? state, colour = null, tooltip = null;
-        if (body is { Dead: true }) (state, colour, tooltip) = (Loc.Tr("Dead"), BadColour, Loc.Tr("This guy is dead and gone."));
+        if (body is { Dead: true }) (state, colour, tooltip) = (Loc.Tr("Dead"), PlayerInterface.BadColour, Loc.Tr("This guy is dead and gone."));
         else if (lead.Prison is { } prison)
             (state, colour, tooltip) = prison.LockLevel < 0 ? (null, null, null)
-                : prison.Locked ? (Loc.Tr("Locked (lvl: {1,num})", prison.LockLevel), BadColour, Loc.Tr("You are locked in a cage.\nThe lock has a difficulty level of {1,num}.", prison.LockLevel))
-                : (Loc.Tr("(Unlocked...)"), GoodColour, Loc.Tr("The cage you are in is UNLOCKED.\nNobody knows this but you, you can escape any time you want."));
+                : prison.Locked ? (Loc.Tr("Locked (lvl: {1,num})", prison.LockLevel), PlayerInterface.BadColour, Loc.Tr("You are locked in a cage.\nThe lock has a difficulty level of {1,num}.", prison.LockLevel))
+                : (Loc.Tr("(Unlocked...)"), PlayerInterface.GoodColour, Loc.Tr("The cage you are in is UNLOCKED.\nNobody knows this but you, you can escape any time you want."));
         else if (body is { Unconscious: true })
-            (state, colour, tooltip) = (Loc.Tr(lead.Hud?.Robot == true ? "Rebooting" : "Unconscious"), BadColour, Loc.Tr("This guy is unconscious and probably needs medical attention and rest."));
+            (state, colour, tooltip) = (Loc.Tr(lead.Hud?.Robot == true ? "Rebooting" : "Unconscious"), PlayerInterface.BadColour, Loc.Tr("This guy is unconscious and probably needs medical attention and rest."));
         else if (lead.InBed) (state, tooltip) = (Loc.Tr("Sleeping"), Loc.Tr("Sleeping..."));
         else if (lead.RangedLine is { } ranged)
             // FUN_140438640: "Aiming..." / "Reloading..." and " [loaded/shots]"; an unpowered gun's "No Power!" (Bad) replaces the word.
             (state, colour) = (Loc.Tr(ranged.NoPower ? "No Power!" : ranged.Reloading ? "Reloading..." : "Aiming...")
-                + $" [{ranged.Loaded.ToString(CultureInfo.InvariantCulture)}/{ranged.Shots.ToString(CultureInfo.InvariantCulture)}]", ranged.NoPower ? BadColour : null);
+                + $" [{ranged.Loaded.ToString(CultureInfo.InvariantCulture)}/{ranged.Shots.ToString(CultureInfo.InvariantCulture)}]", ranged.NoPower ? PlayerInterface.BadColour : null);
         else if ((lead.Orders & CharacterOrders.Block) != 0)
             (state, tooltip) = (Loc.Tr("Defensive"), Loc.Tr("In defensive combat mode the character will not even try to attack, focusing entirely on defense for a +20 skill bonus."));
         else state = Loc.Tr("Normal");
         if (body is not { Dead: true } && lead.Prison is null && lead.WeatherNotice != WeatherNotice.None)
         {
             (state, tooltip) = WeatherText(lead.WeatherNotice, lead.WeatherNoticeProtection);
-            colour = lead.WeatherNoticeProtection > 0.9f && lead.WeatherNotice is not (WeatherNotice.AcidWater or WeatherNotice.AcidFeet) ? GoodColour : BadColour;
+            colour = lead.WeatherNoticeProtection > 0.9f && lead.WeatherNotice is not (WeatherNotice.AcidWater or WeatherNotice.AcidFeet) ? PlayerInterface.GoodColour : PlayerInterface.BadColour;
         }
-        HudLine[] rest = [new(Loc.Tr("Goal:"), lead.Activity ?? TaskText(lead.Task), Tooltip: Loc.Tr("Current goal of this character.")), EncumbranceLine(lead)];
-        HudLine[] lines = state is null ? rest : [new(Loc.Tr("State:"), state, ValueColour: colour, Tooltip: tooltip), .. rest];
+        PlayerInterface.HudLine[] rest = [new(Loc.Tr("Goal:"), lead.Activity ?? TaskText(lead.Task), Tooltip: Loc.Tr("Current goal of this character.")), EncumbranceLine(lead)];
+        PlayerInterface.HudLine[] lines = state is null ? rest : [new(Loc.Tr("State:"), state, ValueColour: colour, Tooltip: tooltip), .. rest];
         return body is { Dead: true } || lead.Hud?.Skill is not { } skill ? lines : [.. lines, SkillLine(skill, unit)];
     }
 
@@ -151,12 +110,12 @@ sealed partial class PlayerInterface
     /// The Encumbrance line: (1 - f) x 100 % of the encumbrance factor f, Bad from 50 %, with the original's rows (<c>FUN_1405d4260</c> panel 3, docs/game/ui-screens.md):
     /// the percent with the burden word, Athletics XP, Strength XP (when the extended stats are known), Run Speed Penalty and Stealth Penalty (both the same percent).
     /// </summary>
-    static HudLine EncumbranceLine(CharacterSnapshot lead)
+    static PlayerInterface.HudLine EncumbranceLine(CharacterSnapshot lead)
     {
         float factor = Math.Clamp(lead.Hud?.Encumbrance ?? 1, 0, 1);
         int load = (int)((1 - factor) * 100);
         string percent = load.ToString(CultureInfo.InvariantCulture) + "%";
-        string word = lead.Body is { Dead: true } ? Loc.Tr("Dead") : BurdenText(factor).Text[1..];
+        string word = lead.Body is { Dead: true } ? Loc.Tr("Dead") : InventoryLayout.BurdenText(factor).Text[1..];
         var rows = new List<(string, string)> { (TipTitle + Loc.Tr("Encumbrance:"), (load >= 50 ? TipBad : TipTitle) + percent + " (" + word + ")") };
         if (lead.Hud?.Extended is { } e)
         {
@@ -166,24 +125,24 @@ sealed partial class PlayerInterface
         string penalty = (load >= 50 ? TipBad : "") + percent;
         rows.Add((Loc.Tr("Run Speed Penalty:"), penalty));
         rows.Add((Loc.Tr("Stealth Penalty:"), penalty));
-        return new(Loc.Tr("Encumbrance:"), percent, ValueColour: load >= 50 ? BadColour : null, TooltipRows: rows);
+        return new(Loc.Tr("Encumbrance:"), percent, ValueColour: load >= 50 ? PlayerInterface.BadColour : null, TooltipRows: rows);
     }
 
     /// <summary>
     /// The state panel's "Current Skill" line: the job's skill by the editor's stat names (<c>FUN_140888440</c>) and its level (<c>{1,num=fix,p=0}</c>), Bad when penalised;
     /// a fallback keeps its own label; Swimming shows the swim speed like the run speed.
     /// </summary>
-    static HudLine SkillLine(CurrentSkillView skill, SpeedUnit unit)
+    static PlayerInterface.HudLine SkillLine(CurrentSkillView skill, SpeedUnit unit)
     {
         string label = skill.Label is { } own ? Loc.Tr(own) : CharacterEditorPanel.EditorStatName(skill.Stat);
-        string? colour = skill.Penalised ? BadColour : null;
+        string? colour = skill.Penalised ? PlayerInterface.BadColour : null;
         string value = skill.Speed ? SpeedText(skill.Value, unit) : skill.Accuracy is not null ? Degrees(skill.Value) : Num(skill.Value);
         if (skill.Base is { } trained && (int)skill.Value != (int)trained)
         {
             // FUN_140889710: the value and its change from the trained level, the whole text Bad when lower and Good when higher.
             int change = (int)skill.Value - (int)trained;
             value = change < 0 ? $"{(int)skill.Value} ({change})" : $"{(int)skill.Value} (+{change})";
-            colour = change < 0 ? BadColour : GoodColour;
+            colour = change < 0 ? PlayerInterface.BadColour : PlayerInterface.GoodColour;
         }
         (string, string)[]? tip = skill.Terms is { } terms ? SkillTip(label, terms) : skill.Accuracy is { } a ? AccuracyTip(a)
             : skill.Damage is { } damage ? [(Loc.Tr("Damage:"), Num(damage))] : skill.Stealth is { } s ? StealthTip(s, unit)
@@ -286,22 +245,19 @@ sealed partial class PlayerInterface
     /// The stats lines: the value the character fights with, then its change from the trained value in brackets, the whole value Bad when it is lower and Good
     /// when higher. The labels show upper case and in Main on the panel's dark side (<b>Observed</b> in the original; where the case comes from is <b>Unknown</b>).
     /// </summary>
-    internal static HudLine[] StatsLines(CharacterSnapshot lead) => lead.Hud is not { } hud ? [] : [.. hud.Stats.Select(s =>
+    internal static PlayerInterface.HudLine[] StatsLines(CharacterSnapshot lead) => lead.Hud is not { } hud ? [] : [.. hud.Stats.Select(s =>
     {
-        if (s.Text is { } word) return new HudLine(Loc.Tr(s.Label).ToUpperInvariant(), word, StatLabelColour, TooltipRows: s.Tip);
+        if (s.Text is { } word) return new PlayerInterface.HudLine(Loc.Tr(s.Label).ToUpperInvariant(), word, PlayerInterface.StatLabelColour, TooltipRows: s.Tip);
         int value = (int)s.Value, change = value - (int)s.Base;
         string text = change == 0 ? value.ToString(CultureInfo.InvariantCulture) : change < 0 ? $"{value} ({change})" : $"{value} (+{change})";
-        return new HudLine(Loc.Tr(s.Label).ToUpperInvariant(), text, StatLabelColour, change < 0 ? BadColour : change > 0 ? GoodColour : null, TooltipRows: s.Tip);
+        return new PlayerInterface.HudLine(Loc.Tr(s.Label).ToUpperInvariant(), text, PlayerInterface.StatLabelColour, change < 0 ? PlayerInterface.BadColour : change > 0 ? PlayerInterface.GoodColour : null, TooltipRows: s.Tip);
     })];
-
-    /// <summary>The unit of the run speed in the information panel (Interface settings; the game shows mph).</summary>
-    public SpeedUnit SpeedUnit { get; set; }
 
     /// <summary>
     /// The extended lines (shown when the information panel is expanded; <c>FUN_140895350</c>, docs/game/ui-screens.md section 4): the XP rates, the KO point, the run
     /// speed in mph (units per second x 0.22369362; km/h x 0.36) with its change from the unhurt run value in brackets (Bad either way, <c>FUN_140888fb0</c>), and the hunger rate.
     /// </summary>
-    internal static HudLine[] ExtendedLines(CharacterSnapshot lead, SpeedUnit unit = SpeedUnit.Mph)
+    internal static PlayerInterface.HudLine[] ExtendedLines(CharacterSnapshot lead, SpeedUnit unit = SpeedUnit.Mph)
     {
         if (lead.Hud?.Extended is not { } e) return [];
         static string Percent(float f) => ((int)(f * 100)).ToString(CultureInfo.InvariantCulture) + "%";
@@ -313,7 +269,7 @@ sealed partial class PlayerInterface
         return [new(Loc.Tr("Athletics XP:"), Percent(e.AthleticsXp), TooltipRows: tips?.Athletics), new(Loc.Tr("Strength XP:"), Percent(e.StrengthXp), TooltipRows: tips?.Strength),
             new(Loc.Tr("Toughness XP:"), ((int)e.ToughnessXp).ToString(CultureInfo.InvariantCulture) + "x", TooltipRows: tips?.Toughness),
             new(Loc.Tr("KO point:"), ((int)e.KoPoint).ToString(CultureInfo.InvariantCulture), Tooltip: TooltipRuntime.KoPointTip(e.KoPoint)),
-            new(Loc.Tr("Run speed:"), run, ValueColour: change != 0 ? BadColour : null, TooltipRows: tips is null ? null : RunTip(e, tips, lead.Hud.Encumbrance, change != 0 ? ProductionWindows.BadTag + run : run, factor, suffix)),
+            new(Loc.Tr("Run speed:"), run, ValueColour: change != 0 ? PlayerInterface.BadColour : null, TooltipRows: tips is null ? null : RunTip(e, tips, lead.Hud.Encumbrance, change != 0 ? ProductionWindows.BadTag + run : run, factor, suffix)),
             new(Loc.Tr("Hunger Rate:"), Percent(e.HungerRate), TooltipRows: tips?.Hunger)];
     }
 
@@ -372,23 +328,23 @@ sealed partial class PlayerInterface
         int w = WoundSeverity(parts ?? [], hud?.KoPoint ?? hud?.Extended?.KoPoint);
         float bleeding = hud?.Bleeding ?? 0;
         (string, string?, string) Word(string word, string? colour, string tip) => (Loc.Tr(word), colour, Loc.Tr(tip));
-        if (body.Dead) return Word("Dead", BadColour, "Gone forever. RIP.");
-        if (body.BeingEaten) return Word("BEING EATEN ALIVE!!", BadColour, "Something is eating you alive! AAAAAAHHHHHHHHHH!!");
-        if (body.Blood <= 0 && w == 1) return Word("Dying", BadColour, "Severe limb damage has now led to critical blood loss. You will die without medical attention.");
-        if (w == 3) return Word("Dying", BadColour, "If you don't get medical attention, you will die.");
-        if (body.KoTimer > 0) return ($"{Loc.Tr(robot ? "Rebooting" : "Unconscious")} ({(int)body.KoTimer})", BadColour, Loc.Tr("Knocked out cold."));
+        if (body.Dead) return Word("Dead", PlayerInterface.BadColour, "Gone forever. RIP.");
+        if (body.BeingEaten) return Word("BEING EATEN ALIVE!!", PlayerInterface.BadColour, "Something is eating you alive! AAAAAAHHHHHHHHHH!!");
+        if (body.Blood <= 0 && w == 1) return Word("Dying", PlayerInterface.BadColour, "Severe limb damage has now led to critical blood loss. You will die without medical attention.");
+        if (w == 3) return Word("Dying", PlayerInterface.BadColour, "If you don't get medical attention, you will die.");
+        if (body.KoTimer > 0) return ($"{Loc.Tr(robot ? "Rebooting" : "Unconscious")} ({(int)body.KoTimer})", PlayerInterface.BadColour, Loc.Tr("Knocked out cold."));
         if (body.Unconscious && body.Coma && w == 0)
             return Word("Recovery coma", null, "You've suffered too much damage. You won't be getting up again until all critical body parts have recovered above 0.");
-        if (body.PlayingDead) return Word("Playing dead...", MainColour, "This person has regained consciousness but is staying down, waiting for all the enemies to leave the area.");
+        if (body.PlayingDead) return Word("Playing dead...", PlayerInterface.MainColour, "This person has regained consciousness but is staying down, waiting for all the enemies to leave the area.");
         if (body.Blood <= 0 && body.Unconscious)
-            return bleeding > 0 ? Word("Bleeding out", BadColour, "Unconscious from blood loss and bleeding to death. Hope that the bleeding stops before it's too late.")
-                : Word("Blood loss KO", BadColour, "Unconscious from blood loss. It will recover over time, bed rest will help.");
-        if (body.Crawling) return Word("Crippled", BadColour, "Your legs are incapable of supporting you.");
-        if (body.RightArmDisabled && !body.Unconscious) return Word("Crippled arm", BadColour, "Your sword arm is crippled and you are unable to fight.");
-        if (w == 2) return Word("Critical", BadColour, "Critical injuries will continue to degenerate without medical attention.");
+            return bleeding > 0 ? Word("Bleeding out", PlayerInterface.BadColour, "Unconscious from blood loss and bleeding to death. Hope that the bleeding stops before it's too late.")
+                : Word("Blood loss KO", PlayerInterface.BadColour, "Unconscious from blood loss. It will recover over time, bed rest will help.");
+        if (body.Crawling) return Word("Crippled", PlayerInterface.BadColour, "Your legs are incapable of supporting you.");
+        if (body.RightArmDisabled && !body.Unconscious) return Word("Crippled arm", PlayerInterface.BadColour, "Your sword arm is crippled and you are unable to fight.");
+        if (w == 2) return Word("Critical", PlayerInterface.BadColour, "Critical injuries will continue to degenerate without medical attention.");
         if (w == 1) return Word("Limb trauma", null, "One or more limbs have been seriously crippled by critical injury.");
-        if (body.StayingLow) return Word("Staying low", MainColour, "You are staying down, hoping to avoid drawing attention.");
-        if (body.Hunger < 1) return Word("Starving", BadColour, "You are starving to death. Get some food fast.");
+        if (body.StayingLow) return Word("Staying low", PlayerInterface.MainColour, "You are staying down, hoping to avoid drawing attention.");
+        if (body.Hunger < 1) return Word("Starving", PlayerInterface.BadColour, "You are starving to death. Get some food fast.");
         if (bleeding > 0) return Word("Bleeding", null, "Losing blood, will collapse if blood goes below 0.");
         // The slave and disguise record: blown (or an escaped slave discovered) while the cooldown runs, else a working disguise.
         if (disguise is { } d)
@@ -397,101 +353,42 @@ sealed partial class PlayerInterface
             {
                 int secs = (int)d.Blown;
                 string cooldown = "\n" + TooltipRuntime.MainTag + Loc.Tr(secs == 1 ? "Cooldown {1,num} second" : "Cooldown {1,num} seconds", secs);
-                return slaveState < 2 ? (Loc.Tr("Disguise Blown!"), BadColour, Loc.Tr("You've been discovered, somebody has seen through your disguise.") + cooldown)
-                    : (Loc.Tr("Discovered!"), BadColour, Loc.Tr("You've been discovered, somebody has noticed that you are an escaped slave.") + cooldown);
+                return slaveState < 2 ? (Loc.Tr("Disguise Blown!"), PlayerInterface.BadColour, Loc.Tr("You've been discovered, somebody has seen through your disguise.") + cooldown)
+                    : (Loc.Tr("Discovered!"), PlayerInterface.BadColour, Loc.Tr("You've been discovered, somebody has noticed that you are an escaped slave.") + cooldown);
             }
-            if (d.Works) return (Loc.Tr("In Disguise"), MainColour, Loc.Tr("You are currently disguised as {1}", d.Faction));
+            if (d.Works) return (Loc.Tr("In Disguise"), PlayerInterface.MainColour, Loc.Tr("You are currently disguised as {1}", d.Faction));
         }
         if (body.WorstPart < 0.7f) return Word("Wounded", null, "You are kind of healthy for now.");
         if (body.Hunger < 2)
-            return (hud?.Fed ?? 0) <= 0 ? Word("Hungry", BadColour, "You are hungry and suffering from malnutrition. Your stats and strength will be affected, you need to get some food as soon as possible.")
-                : Word("Malnourished", BadColour, "You are hungry and suffering from malnutrition, but you are fed and slowly recovering. Your stats and strength will be affected until you recover fully.");
+            return (hud?.Fed ?? 0) <= 0 ? Word("Hungry", PlayerInterface.BadColour, "You are hungry and suffering from malnutrition. Your stats and strength will be affected, you need to get some food as soon as possible.")
+                : Word("Malnourished", PlayerInterface.BadColour, "You are hungry and suffering from malnutrition, but you are fed and slowly recovering. Your stats and strength will be affected until you recover fully.");
         return body.WorstPart < 0.9f ? Word("Slightly Injured", null, "You are kind of healthy for now.") : Word("Normal", null, "You are kind of healthy for now.");
     }
 
-    /// <summary>Adds a text panel's lines over the arranged widget <paramref name="panel"/>: one row per line, the label from 3 % of the width, the value right-aligned to 96 %.</summary>
-    /// <summary>One row per line from <paramref name="top"/> down, the label left and the value right; the value takes <paramref name="valueFont"/> at <paramref name="valuePixels"/> when given.</summary>
-    internal void AddLines(List<UiControl> controls, string panel, IReadOnlyList<HudLine> lines, float rowHeight, float? fontPixels = null, string font = "Kenshi_StandardFont_Medium",
-        string? valueFont = null, float? valuePixels = null, float top = 0)
+    internal void AddHudText(List<UiControl> controls)
     {
-        if (controls.FirstOrDefault(c => c.Name == panel) is not { } host) return;
-        var area = host.Bounds;
-        var labelProperties = Face(font, fontPixels);
-        var valueProperties = valueFont is null ? labelProperties : Face(valueFont, valuePixels);
-        for (int i = 0; i < lines.Count; i++)
+        float row = 20 * player.Height / 1080f, sidePixels = player.StandardPixels;
+        if (player.buildingSelection.BuildingFocus() is { } focus)
         {
-            var tipProperties = lines[i].TipProperties;
-            var row = new UiRect(area.X + area.Width * 0.03f, area.Y + top + i * rowHeight, area.Width * 0.93f, rowHeight);
-            if (lines[i].Action is { } action)
-            {
-                // The button holds the value; the row's label (if any) stays text on its left.
-                float width = Math.Clamp(lines[i].ButtonWidth, 0.1f, 1);
-                var button = lines[i].Label.Length == 0 ? row : row with { X = row.X + row.Width * (1 - width), Width = row.Width * width };
-                var buttonProperties = new Dictionary<string, string>(valueProperties) { ["TextAlign"] = "Center", ["TextColour"] = lines[i].ValueColour ?? MyGuiColours.InkText };
-                if (lines[i].TipProperties is { } buttonTip) foreach (var pair in buttonTip) buttonProperties[pair.Key] = pair.Value;
-                // Kenshi_Button2 is a template (kenshi_templates.xml) whose root widget has the Kenshi_Button1Skin skin.
-                controls.Add(new($"{panel}-button-{i}", "Button", button with { Y = button.Y + 1, Height = button.Height - 2 }, Loc.Tr(lines[i].Value), action, "Kenshi_Button1Skin", true,
-                    buttonProperties, Vector4.Zero, Clip: host.Clip));
-                if (lines[i].Label.Length == 0) continue;
-            }
-            foreach (var (part, text, colour, align, properties) in new[] { ("label", lines[i].Label, lines[i].LabelColour, "Left Top", labelProperties),
-                ("value", lines[i].Action is null ? lines[i].Value : "", lines[i].ValueColour, "Right Top", valueProperties) })
-                if (text.Length > 0)
-                {
-                    var textProperties = new Dictionary<string, string>(properties) { ["TextAlign"] = align, ["TextColour"] = colour ?? MyGuiColours.TemplateInk(uiResources, "Kenshi_TextboxStandardText") };
-                    // A line with a tooltip is a mouse target (the HUD's own tooltip, anchored on its panel).
-                    if (tipProperties is not null) foreach (var pair in tipProperties) textProperties[pair.Key] = pair.Value;
-                    // A value beside a label keeps out of the label's column: a long one (a French weather notice) is cut short instead of running over the label.
-                    // A label beside a button keeps to its left: added after the button, a full-row label with a tooltip would take its clicks.
-                    var box = part == "value" && lines[i].Label.Length > 0 ? row with { X = row.X + row.Width * 0.35f, Width = row.Width * 0.65f }
-                        : lines[i].Action is not null ? row with { Width = row.Width * (1 - Math.Clamp(lines[i].ButtonWidth, 0.1f, 1)) } : row;
-                    controls.Add(new($"{panel}-{part}-{i}", "TextBox", box, Loc.Tr(text), "", "Kenshi_TextboxStandardText", true,
-                        textProperties, Vector4.Zero, Pickable: tipProperties is not null, Clip: host.Clip));
-                }
-        }
-
-        static Dictionary<string, string> Face(string name, float? pixels)
-        {
-            var properties = new Dictionary<string, string> { ["FontName"] = name };
-            if (pixels is { } p) properties["FontPixels"] = Math.Max(8, (int)MathF.Round(p)).ToString(CultureInfo.InvariantCulture);
-            return properties;
-        }
-    }
-
-    /// <summary>The information panel's and the medical rows' text (Faithful HUD; called after the layout is arranged).</summary>
-    /// <summary>The original's standard text at 1080 p: <c>Kenshi_StandardFont_Medium</c>, 20 pt at 50 dpi (docs/game/ui-screens.md).</summary>
-    internal const float StandardTextPixels = 20 * 50 / 72f;
-
-    /// <summary>
-    /// The standard text's em pixels at the window's height: the Faithful mode's as the original sizes its font at that scale (<see cref="UiPainter.StandardTextPixels"/>,
-    /// smaller than linear above 1080 lines), Meitou's the 1080-line size scaled.
-    /// </summary>
-    internal float StandardPixels => UiMode == UiMode.Faithful && uiPainter is { } painter ? painter.StandardTextPixels(Height) : StandardTextPixels * Height / 1080f;
-
-    void AddHudText(List<UiControl> controls)
-    {
-        float row = 20 * Height / 1080f, sidePixels = StandardPixels;
-        if (buildingSelection.BuildingFocus() is { } focus)
-        {
-            var (name, state, stats, _, _, extended) = buildingSelection.BuildingLines(focus);
-            AddLines(controls, "NameText", [name], row, sidePixels);
-            AddLines(controls, "StateText", state, row, sidePixels);
-            AddLines(controls, "StatsText", stats, row, sidePixels);
+            var (name, state, stats, _, _, extended) = player.buildingSelection.BuildingLines(focus);
+            player.AddLines(controls, "NameText", [name], row, sidePixels);
+            player.AddLines(controls, "StateText", state, row, sidePixels);
+            player.AddLines(controls, "StatsText", stats, row, sidePixels);
             // Section 7 ("Stats 2"): only a turret fills it (TurretBuilding slot 40: Workers and Efficiency).
-            if (infoExpanded) AddLines(controls, "ExtendedStatsText", extended, row, sidePixels);
+            if (player.infoExpanded) player.AddLines(controls, "ExtendedStatsText", extended, row, sidePixels);
             AddMedicalText(controls, sidePixels);
             return;
         }
-        if (Lead() is not { } lead) return;
-        string faction = FactionName?.Invoke(lead.Faction) ?? "";
-        AddLines(controls, "NameText", [new(lead.Name, faction, TitleColour, TitleColour)], row, sidePixels);
-        AddLines(controls, "StateText", StateLines(lead, SpeedUnit), row, sidePixels);
-        if (lead.Bounties.Count > 0 || lead.Slave is not null || lead.Status is not null) AddLines(controls, "BountyText", [TooltipRuntime.StatusLine(lead) ?? TooltipRuntime.BountyLine(lead.Bounties)], row, sidePixels);
+        if (player.Lead() is not { } lead) return;
+        string faction = player.FactionName?.Invoke(lead.Faction) ?? "";
+        player.AddLines(controls, "NameText", [new(lead.Name, faction, PlayerInterface.TitleColour, PlayerInterface.TitleColour)], row, sidePixels);
+        player.AddLines(controls, "StateText", StateLines(lead, player.SpeedUnit), row, sidePixels);
+        if (lead.Bounties.Count > 0 || lead.Slave is not null || lead.Status is not null) player.AddLines(controls, "BountyText", [TooltipRuntime.StatusLine(lead) ?? TooltipRuntime.BountyLine(lead.Bounties)], row, sidePixels);
         // The base game draws the stats labels in the painted face (Observed: glyph shapes and widths match Sentencia at its resized 22 pt); the values
         // take the standard face, like the medical column's numbers.
-        AddLines(controls, "StatsText", StatsLines(lead), row, font: "Kenshi_PaintedTextFont_Medium", valueFont: "Kenshi_StandardFont_Medium", valuePixels: sidePixels);
-        if (infoExpanded) AddLines(controls, "ExtendedStatsText", ExtendedLines(lead, SpeedUnit).Select(line => line with
-            { Label = line.Label.ToUpperInvariant(), LabelColour = MainColour }).ToArray(), row, sidePixels);
+        player.AddLines(controls, "StatsText", StatsLines(lead), row, font: "Kenshi_PaintedTextFont_Medium", valueFont: "Kenshi_StandardFont_Medium", valuePixels: sidePixels);
+        if (player.infoExpanded) player.AddLines(controls, "ExtendedStatsText", ExtendedLines(lead, player.SpeedUnit).Select(line => line with
+            { Label = line.Label.ToUpperInvariant(), LabelColour = PlayerInterface.MainColour }).ToArray(), row, sidePixels);
         AddMedicalText(controls, sidePixels);
     }
 
@@ -510,12 +407,12 @@ sealed partial class PlayerInterface
                 new Dictionary<string, string> { ["FontPixels"] = pixels, ["TextAlign"] = "Center", ["TextColour"] = MyGuiColours.InkText }, Vector4.Zero, Pickable: false, Clip: host.Clip));
             if (arrows.Length > 0)
                 controls.Add(new($"{bar}-arrows", "TextBox", textBounds, arrows, "", "", true,
-                    new Dictionary<string, string> { ["FontPixels"] = pixels, ["TextAlign"] = "Right VCenter", ["TextColour"] = AlertColour }, Vector4.Zero, Pickable: false, Clip: host.Clip));
+                    new Dictionary<string, string> { ["FontPixels"] = pixels, ["TextAlign"] = "Right VCenter", ["TextColour"] = PlayerInterface.AlertColour }, Vector4.Zero, Pickable: false, Clip: host.Clip));
             int valueIndex = controls.FindIndex(c => c.Name == valueName);
             if (valueIndex >= 0)
             {
                 var value = controls[valueIndex];
-                float height = Math.Max(value.Bounds.Height, 20 * Height / 1080f);
+                float height = Math.Max(value.Bounds.Height, 20 * player.Height / 1080f);
                 controls[valueIndex] = value with { Bounds = value.Bounds with { Y = value.Bounds.Y + (value.Bounds.Height - height) / 2, Height = height },
                     Properties = new Dictionary<string, string>(value.Properties) { ["FontPixels"] = pixels } };
             }
@@ -527,7 +424,7 @@ sealed partial class PlayerInterface
 
     /// <summary>
     /// A bar's fraction in steps of 1/1024, about half a pixel of a bar on a 4K panel: hunger and blood creep every tick, and an unrounded fraction made the HUD's
-    /// bindings new each tick, so its cached layout (<see cref="ArrangeHud"/>) was made again for a change no one can see.
+    /// bindings new each tick, so its cached layout (<see cref="PlayerInterface.ArrangeHud"/>) was made again for a change no one can see.
     /// </summary>
     static float BarStep(float fraction) => MathF.Round(fraction * 1024) / 1024;
 
@@ -536,10 +433,10 @@ sealed partial class PlayerInterface
     /// its number in the value column. A part's bar is green to its flesh less stun, yellow to the bandage on top of that, red behind it to its maximum less stun (the lost
     /// part shows red) and white past the green by the splint; blood is green to its fraction of capacity; hunger (0..3) green to h - 2, yellow to h - 1, red to h.
     /// </summary>
-    void BindMedicalBars(UiBindings b, CharacterSnapshot? lead, IReadOnlyList<MedicalRow>? buildingRows = null)
+    internal void BindMedicalBars(UiBindings b, CharacterSnapshot? lead, IReadOnlyList<PlayerInterface.MedicalRow>? buildingRows = null)
     {
         medicalRows.Clear();
-        var rows = new List<MedicalRow>(buildingRows ?? []);
+        var rows = new List<PlayerInterface.MedicalRow>(buildingRows ?? []);
         if (buildingRows is null && lead?.Body is { } body)
         {
             var hud = lead.Hud;
@@ -566,7 +463,7 @@ sealed partial class PlayerInterface
             string hungerArrows = hud?.Fed > 0 ? ">   " : hunger < 2 ? "<!   " : lead.InBed ? "" : "<   ";
             if (hud is not { Robot: true })
             {
-                string tip = TooltipRuntime.HungerTip(hunger, body.Unconscious, ActiveSquadMembers().Count);
+                string tip = TooltipRuntime.HungerTip(hunger, body.Unconscious, player.ActiveSquadMembers().Count);
                 // The original's Hunger tooltip (FUN_14088a8f0) is the Hunger Rate rows (FUN_14088a2b0) with the sentence under them (#377).
                 rows.Add(new(Loc.Tr("Hunger"), hunger - 2, hunger - 1, hunger, ((int)(hunger * 100)).ToString(CultureInfo.InvariantCulture), hungerArrows, false, tip)
                     { TooltipRows = hud?.ExtendedTips is { } tips ? [.. tips.Hunger, (tip, "")] : null });
@@ -592,14 +489,14 @@ sealed partial class PlayerInterface
             if (r.Robot) b.Progress[name + "Robot"] = BarStep(Math.Max(r.Green, 0)); else b.Hidden.Add(name + "Robot");
             b.Text[name + "Datapanel"] = "";
             b.Text[name + "Value"] = r.Value;
-            b.Properties[name + "Value"] = new Dictionary<string, string> { ["TextAlign"] = "Center", ["TextColour"] = MyGuiColours.TemplateInk(uiResources, "Kenshi_TextboxStandardText") };
+            b.Properties[name + "Value"] = new Dictionary<string, string> { ["TextAlign"] = "Center", ["TextColour"] = MyGuiColours.TemplateInk(player.uiResources, "Kenshi_TextboxStandardText") };
             medicalRows.Add((name, r.Name, r.Arrows));
         }
         if (buildingRows is null && lead?.Body is not null)
         {
             var (word, colour, _) = HealthWord(lead);
             b.Text["HealthText"] = word;
-            b.Properties["HealthText"] = new Dictionary<string, string> { ["TextAlign"] = "Center", ["TextColour"] = colour ?? MyGuiColours.TemplateInk(uiResources, "Kenshi_TextboxStandardText") };
+            b.Properties["HealthText"] = new Dictionary<string, string> { ["TextAlign"] = "Center", ["TextColour"] = colour ?? MyGuiColours.TemplateInk(player.uiResources, "Kenshi_TextboxStandardText") };
         }
     }
 }

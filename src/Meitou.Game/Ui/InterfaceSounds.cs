@@ -7,7 +7,7 @@ namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The interface's sounds (docs/audio.md "Interface"). The original has no central click hook either: every handler posts its own sound, so this maps Meitou's actions to the same events
-/// (<see cref="PlayerInterface.ExecuteUiAction"/>, <see cref="PlayerInterface.FaithfulAction"/>, the commands <see cref="PlayerInterface.Say"/> sends) and watches the windows open and close once a frame (<see cref="PollUiSounds"/>).
+/// (<see cref="PlayerInterface.ExecuteUiAction"/>, <see cref="ScreenRouter.FaithfulAction"/>, the commands <see cref="PlayerInterface.Say"/> sends) and watches the windows open and close once a frame (<see cref="PollUiSounds"/>).
 /// The host plays what <see cref="UiSound"/> receives; nothing here changes the game.
 /// </summary>
 sealed class InterfaceSounds(PlayerInterface player)

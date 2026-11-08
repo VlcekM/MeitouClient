@@ -1571,7 +1571,7 @@ sealed partial class GameHost
             }
             // A panel's item icons are drawn after the frame that asks for them, and their textures stream in: let a UI still
             // wait for them (up to a bound), while an ordinary world still keeps its 40 frames. The simulation stays frozen.
-            int pendingIcons = (characters?.PendingIcons ?? 0) + (hud?.PendingIconFiles ?? 0);
+            int pendingIcons = (characters?.PendingIcons ?? 0) + (hud?.itemCells.PendingIconFiles ?? 0);
             bool pendingStillContent = pendingIcons > 0 || objects is { StagePropPending: true } || objects is { PendingBuildingIcons: > 0 };
             if (still)
             {

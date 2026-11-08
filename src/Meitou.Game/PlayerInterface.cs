@@ -13,6 +13,10 @@ using Meitou.Game.Tutorials;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Game.Building;
+using System.Globalization;
+using Meitou.Data.Gameplay.Combat;
+using Meitou.Data.Ui;
+using Meitou.Game.Rendering.Overlays;
 
 namespace Meitou.Game;
 
@@ -26,6 +30,15 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class PlayerInterface(WorldSession session, Func<float, float, float> ground, Func<CharacterSnapshot, Vector3> where)
 {
+    internal MessageRoller messageRoller => field ??= new(this);
+    internal HudPanels hudPanels => field ??= new(this);
+    internal OrdersPanel ordersPanel => field ??= new(this);
+    internal MoveMarker moveMarker => field ??= new(this);
+    internal InventoryLayout inventoryLayout => field ??= new(this);
+    internal ScrollBars scrollBars => field ??= new(this);
+    internal ItemCells itemCells => field ??= new(this);
+    internal ScreenRouter screenRouter => field ??= new(this);
+
     internal ContextMenuWindow contextMenuWindow => field ??= new(this);
     internal FrontendScreens frontend => field ??= new(this);
     internal WorldPicking picking => field ??= new(this);
@@ -84,6 +97,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
 
     /// <summary>Gives the interface a texture drawn at run time (the portrait atlas) under <paramref name="name"/>.</summary>
     public void SetUiTexture(string name, GpuTexture texture, SampledTexture sampled) => uiPainter?.SetTexture(name, texture, sampled);
+
+    /// <summary>
+    /// Queues a message for the message panel ("Discovered {1}", "Saved", or an error text in red); each shows for 4 s in turn. <paramref name="logText"/>: a longer
+    /// text for the message log (the overview's messages) when the panel's line is a summary of it.
+    /// </summary>
+    public void Notice(string text, bool error = false, string? logText = null) => messageRoller.QueueNotice(text, error, logText);
 
     /// <summary>A message box with only an Ok button.</summary>
     internal void MessageBox(string title, string text)
@@ -273,7 +292,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             else if (Ray(p) is { } ray && picking.MoveHit(ray.Origin, ray.Direction) is { } hit)
             {
                 Move(hit, shift);
-                PlaceMarker(hit);
+                moveMarker.PlaceMarker(hit);
                 (steering, steerTarget, steerTick) = (!shift, hit, session.World.Tick);
             }
             return true;
@@ -373,7 +392,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     {
         mouse = p;
         if (characterEditor.EditorPointerMove(p)) return;
-        if (ScrollThumbMove(p)) return;
+        if (scrollBars.ScrollThumbMove(p)) return;
         if (worldMap.MapPointerMove(p)) return;
         if (UiVisible && faithfulScreens.PointerMove(p)) return;
         if (dragFrom is { } from && !dragging && Vector2.Distance(from, p) >= DragThreshold) dragging = true;
@@ -391,7 +410,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (groundItemPicks.LabelAt(p) == labelled) groundItemPicks.LabelPickUp(labelled);
             return;
         }
-        if (button == MouseButton.Left) { worldMap.MapPickUp(p); inventoryWindows.InventoryPointerUp(p); JobDragEnd(p); squadWindows.SquadPointerUp(p, shift); faithfulScreens.PointerUp(); worldMap.mapDrag = null; }
+        if (button == MouseButton.Left) { worldMap.MapPickUp(p); inventoryWindows.InventoryPointerUp(p); ordersPanel.JobDragEnd(p); squadWindows.SquadPointerUp(p, shift); faithfulScreens.PointerUp(); worldMap.mapDrag = null; }
         if (button == MouseButton.Middle) worldMap.mapDrag = null;
         if (button == MouseButton.Right && memberPress is { } pressed)
         {
@@ -471,7 +490,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (!final) build.UpdateBuild();
         if (!steering || OverHud(mouse)) return;
         if (Ray(mouse) is not { } ray || picking.MoveHit(ray.Origin, ray.Direction) is not { } hit) return;
-        PlaceMarker(hit);   // the marker follows the cursor every frame; the order only once a tick
+        moveMarker.PlaceMarker(hit);   // the marker follows the cursor every frame; the order only once a tick
         if (!final && session.World.Tick == steerTick) return;
         if (final && session.World.Tick == steerTick && hit == steerTarget) return;
         Move(hit, queued: false);
@@ -524,4 +543,206 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         session.Camera.Place(new Vector2(c.Position.X, c.Position.Z), view.Yaw, view.Pitch, view.Distance);
         Follow = follow ? id : null;
     }
+
+    public float HudBottom => 48;
+
+    /// <summary>A MyGUI "r g b" colour as a <c>#rrggbb</c> tag.</summary>
+    internal static string Tag(string rgb)
+    {
+        var c = MyGuiColours.Parse(rgb, Vector4.One);
+        return $"#{(int)MathF.Round(c.X * 255):x2}{(int)MathF.Round(c.Y * 255):x2}{(int)MathF.Round(c.Z * 255):x2}";
+    }
+
+    /// <summary>Drops the transient state of the mouse (a drag box, a steering right click): the world it belonged to is gone.</summary>
+    public void Reset()
+    {
+        damageFloaters.floaters.Clear();
+        dragFrom = null;
+        dragging = false;
+        steering = false;
+        worldMap.mapDrag = null;
+        (inventoryWindows.held, inventoryWindows.liftPress, inventoryWindows.lifting, inventoryWindows.heldSerial) = (null, null, null, 0);
+        selectedFor = null;
+        selected = [];
+        buildingSelection.selectedBuilding = null;
+        Follow = null;
+        contextMenuWindow.CloseContextMenu();
+    }
+
+    internal bool OverHud(Vector2 p) => ContainsUi(p);
+
+    /// <summary>The selected characters of the current snapshot, found once per snapshot (the HUD box is asked for on every hit test).</summary>
+    internal IReadOnlyList<CharacterSnapshot> Selected()
+    {
+        var snapshot = session.CurrentSnapshot;
+        if (!ReferenceEquals(snapshot, selectedFor))
+        {
+            selected = [.. snapshot.Characters.Where(c => c.Selected)];
+            inspected = snapshot.Characters.FirstOrDefault(c => c.Inspected);
+            selectedFor = snapshot;
+        }
+        return selected;
+    }
+
+    WorldSnapshot? selectedFor;
+    IReadOnlyList<CharacterSnapshot> selected = [];
+    CharacterSnapshot? inspected;
+
+    /// <summary>The character the HUD panels describe: the other faction's character last clicked, else the first selected one (docs/game/ui-screens.md section 4). The selection stays whoever is inspected.</summary>
+    internal CharacterSnapshot? Lead() => Selected().FirstOrDefault() is { } first ? inspected ?? first : inspected;
+
+    /// <summary>The HUD and the drag box, over the finished picture.</summary>
+    public void Draw(DebugOverlay o, int width, int height, DebugOverlay.OverlayPass? pass = null)
+    {
+        interfaceSounds.PollUiSounds();
+        Width = width;
+        Height = height;
+        biomeBanner.PollBiome();
+        messageRoller.PollNotice();
+        prospecting.PollProspect();
+        tutorialWindow.PollTutorials();
+        stealthView.UpdateStealthArrows();
+        damageFloaters.DrawFloaters(o);
+        moveMarker.FadeMarker();
+
+        // The box.
+        if (dragging && dragFrom is { } from)
+        {
+            var edge = new Vector4(0.6f, 1f, 0.6f, 1);
+            o.Rect(MathF.Min(from.X, mouse.X), MathF.Min(from.Y, mouse.Y), MathF.Max(from.X, mouse.X), MathF.Max(from.Y, mouse.Y), new Vector4(0.4f, 1f, 0.5f, 0.12f));
+            o.Line(from.X, from.Y, mouse.X, from.Y, 1, edge);
+            o.Line(mouse.X, from.Y, mouse.X, mouse.Y, 1, edge);
+            o.Line(mouse.X, mouse.Y, from.X, mouse.Y, 1, edge);
+            o.Line(from.X, mouse.Y, from.X, from.Y, 1, edge);
+        }
+
+        DrawGameUi(o, width, height, pass);
+        o.Flush(width, height, null, pass);
+    }
+
+    // The palette of data/gui/colours/kenshi_colours.xml (Verified): Main, Secondary (the text default), Title, Bad, Good, Alert; a mod's file replaces it (MyGuiColours.LoadPalette).
+    internal static string MainColour => MyGuiColours.Named("Main", "afa68b");
+    internal static string TitleColour => MyGuiColours.Named("Title", "492620");
+    internal static string BadColour => MyGuiColours.Named("Bad", "59231a");
+    internal static string GoodColour => MyGuiColours.Named("Good", "a8b774");
+    internal static string GreyColour => MyGuiColours.Named("Greyed", "444444");
+    /// <summary>The palette's BadBright: the editor's race stats below 1 (<c>FUN_1405ee0c0</c>, <c>#bf4834</c>).</summary>
+    internal static string BadBrightColour => MyGuiColours.Named("BadBright", "bf4834");
+    internal static string AlertColour => MyGuiColours.Named("Alert", "000000");
+
+    /// <summary>The stats panel's labels (MARTIAL ARTS, STRENGTH, ...): the grey of the orders buttons' text, not Main (docs/game/ui-screens.md).</summary>
+    internal static readonly string StatLabelColour = "0.4 0.380392 0.356863";
+
+    /// <summary>Resolves a faction (a position in the world's faction list) to its name; the host sets it.</summary>
+    public Func<int, string?>? FactionName { get; set; }
+
+    /// <summary>
+    /// A line of a text panel: label and value, each with its colour (null: the text default). With <paramref name="Action"/> the value is a <c>Kenshi_Button2</c> button (the
+    /// DataPanel's button lines): over the right <paramref name="ButtonWidth"/> of the row (the original's width argument), or across the whole row when there is no label.
+    /// <paramref name="TooltipRows"/> is a key / value tooltip (the original's <c>lektor&lt;StringPair&gt;</c> lists, each text with an optional leading colour tag) in place of <paramref name="Tooltip"/>.
+    /// </summary>
+    internal readonly record struct HudLine(string Label, string Value, string? LabelColour = null, string? ValueColour = null, string? Tooltip = null, string? Action = null,
+        float ButtonWidth = 0.5f, IReadOnlyList<(string Key, string Value)>? TooltipRows = null)
+    {
+        /// <summary>The line's tooltip user strings (the HUD's Fixed tooltip), null for none; a text tooltip wins over rows.</summary>
+        public Dictionary<string, string>? TipProperties => Tooltip is { Length: > 0 } tip ? UiTooltips.TextProperties(Loc.Tr(tip), "fixed")
+            : TooltipRows is { Count: > 0 } rows ? UiTooltips.RowProperties(rows, "fixed") : null;
+    }
+
+    /// <summary>A medical panel row: its name, the green, yellow and red layers' fractions, the number, the arrows, the robot layer and the row's tooltip (the <c>LifeBarNTooltip</c> widget).</summary>
+    internal readonly record struct MedicalRow(string Name, float Green, float Yellow, float Red, string Value, string Arrows, bool Robot, string? Tooltip = null)
+    {
+        /// <summary>The splint layer's fraction (the green plus the splint, at most 1); shown only where it is beyond the green.</summary>
+        public float White { get; init; }
+        /// <summary>The Crushed layer at full width: a stump or a crushed limb (the row setter <c>FUN_140721a70</c>'s limb states 1 and 3).</summary>
+        public bool Crushed { get; init; }
+        /// <summary>A key / value tooltip in place of <see cref="Tooltip"/> (the Hunger row's).</summary>
+        public IReadOnlyList<(string Key, string Value)>? TooltipRows { get; init; }
+    }
+
+    /// <summary>The unit of the run speed in the information panel (Interface settings; the game shows mph).</summary>
+    public SpeedUnit SpeedUnit { get; set; }
+
+    /// <summary>Adds a text panel's lines over the arranged widget <paramref name="panel"/>: one row per line, the label from 3 % of the width, the value right-aligned to 96 %.</summary>
+    /// <summary>One row per line from <paramref name="top"/> down, the label left and the value right; the value takes <paramref name="valueFont"/> at <paramref name="valuePixels"/> when given.</summary>
+    internal void AddLines(List<UiControl> controls, string panel, IReadOnlyList<HudLine> lines, float rowHeight, float? fontPixels = null, string font = "Kenshi_StandardFont_Medium",
+        string? valueFont = null, float? valuePixels = null, float top = 0)
+    {
+        if (controls.FirstOrDefault(c => c.Name == panel) is not { } host) return;
+        var area = host.Bounds;
+        var labelProperties = Face(font, fontPixels);
+        var valueProperties = valueFont is null ? labelProperties : Face(valueFont, valuePixels);
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var tipProperties = lines[i].TipProperties;
+            var row = new UiRect(area.X + area.Width * 0.03f, area.Y + top + i * rowHeight, area.Width * 0.93f, rowHeight);
+            if (lines[i].Action is { } action)
+            {
+                // The button holds the value; the row's label (if any) stays text on its left.
+                float width = Math.Clamp(lines[i].ButtonWidth, 0.1f, 1);
+                var button = lines[i].Label.Length == 0 ? row : row with { X = row.X + row.Width * (1 - width), Width = row.Width * width };
+                var buttonProperties = new Dictionary<string, string>(valueProperties) { ["TextAlign"] = "Center", ["TextColour"] = lines[i].ValueColour ?? MyGuiColours.InkText };
+                if (lines[i].TipProperties is { } buttonTip) foreach (var pair in buttonTip) buttonProperties[pair.Key] = pair.Value;
+                // Kenshi_Button2 is a template (kenshi_templates.xml) whose root widget has the Kenshi_Button1Skin skin.
+                controls.Add(new($"{panel}-button-{i}", "Button", button with { Y = button.Y + 1, Height = button.Height - 2 }, Loc.Tr(lines[i].Value), action, "Kenshi_Button1Skin", true,
+                    buttonProperties, Vector4.Zero, Clip: host.Clip));
+                if (lines[i].Label.Length == 0) continue;
+            }
+            foreach (var (part, text, colour, align, properties) in new[] { ("label", lines[i].Label, lines[i].LabelColour, "Left Top", labelProperties),
+                ("value", lines[i].Action is null ? lines[i].Value : "", lines[i].ValueColour, "Right Top", valueProperties) })
+                if (text.Length > 0)
+                {
+                    var textProperties = new Dictionary<string, string>(properties) { ["TextAlign"] = align, ["TextColour"] = colour ?? MyGuiColours.TemplateInk(uiResources, "Kenshi_TextboxStandardText") };
+                    // A line with a tooltip is a mouse target (the HUD's own tooltip, anchored on its panel).
+                    if (tipProperties is not null) foreach (var pair in tipProperties) textProperties[pair.Key] = pair.Value;
+                    // A value beside a label keeps out of the label's column: a long one (a French weather notice) is cut short instead of running over the label.
+                    // A label beside a button keeps to its left: added after the button, a full-row label with a tooltip would take its clicks.
+                    var box = part == "value" && lines[i].Label.Length > 0 ? row with { X = row.X + row.Width * 0.35f, Width = row.Width * 0.65f }
+                        : lines[i].Action is not null ? row with { Width = row.Width * (1 - Math.Clamp(lines[i].ButtonWidth, 0.1f, 1)) } : row;
+                    controls.Add(new($"{panel}-{part}-{i}", "TextBox", box, Loc.Tr(text), "", "Kenshi_TextboxStandardText", true,
+                        textProperties, Vector4.Zero, Pickable: tipProperties is not null, Clip: host.Clip));
+                }
+        }
+
+        static Dictionary<string, string> Face(string name, float? pixels)
+        {
+            var properties = new Dictionary<string, string> { ["FontName"] = name };
+            if (pixels is { } p) properties["FontPixels"] = Math.Max(8, (int)MathF.Round(p)).ToString(CultureInfo.InvariantCulture);
+            return properties;
+        }
+    }
+
+    /// <summary>The information panel's and the medical rows' text (Faithful HUD; called after the layout is arranged).</summary>
+    /// <summary>The original's standard text at 1080 p: <c>Kenshi_StandardFont_Medium</c>, 20 pt at 50 dpi (docs/game/ui-screens.md).</summary>
+    internal const float StandardTextPixels = 20 * 50 / 72f;
+
+    /// <summary>
+    /// The standard text's em pixels at the window's height: the Faithful mode's as the original sizes its font at that scale (<see cref="UiPainter.StandardTextPixels"/>,
+    /// smaller than linear above 1080 lines), Meitou's the 1080-line size scaled.
+    /// </summary>
+    internal float StandardPixels => UiMode == UiMode.Faithful && uiPainter is { } painter ? painter.StandardTextPixels(Height) : StandardTextPixels * Height / 1080f;
+
+    internal float InventoryScale => Height / 1080f;
+    internal float InventoryCell => 25 * InventoryScale;
+
+    /// <summary>The renderer of the movement marker and the stealth arrows (null: none).</summary>
+    public MarkerRenderer? Markers { get; set; }
+
+    /// <summary>The `Movement marker` option: off, no move order puts the marker down (the original tests it where it shows the marker, <c>FUN_1407f2660</c>, <c>FUN_140800250</c>).</summary>
+    public bool MovementMarker { get; set; } = true;
+
+    /// <summary>The `Rotation marker` option: off, the marker on the pivot never shows (tested in the camera update <c>FUN_1406b0f90</c>).</summary>
+    public bool RotationMarker { get; set; } = true;
+
+    /// <summary>The ARMOUR record of an item, null for anything else (the host sets it).</summary>
+    public Func<string, ArmourData?>? ArmourOf { get; set; }
+    /// <summary>An item's Value and Sell value with no trader, and the Avg. Price of a trade item (null for others); the host sets it. Null: no prices for this item.</summary>
+    public Func<TooltipRuntime.ItemTip, (int Value, int Sell, int? Average)?>? PricesOf { get; set; }
+    /// <summary>The player faction's name (what the dialogue token PLAYERFACTION expands to); the host sets it.</summary>
+    public Func<string>? PlayerFactionName { get; set; }
+    /// <summary>The name of a record by string id (a body part of an armour's coverage); the host sets it.</summary>
+    public Func<string, string?>? RecordName { get; set; }
+
+    /// <summary>Counts the input the interface took (keys, clicks, text, the wheel): any of it can change what the base shows.</summary>
+    internal int uiInput;
 }

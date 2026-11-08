@@ -98,8 +98,8 @@ sealed class PortraitBar(PlayerInterface player)
     {
         if (squadBarRow <= 0 || !squadBarPage.Contains(p.X, p.Y)) return false;
         squadBarScroll -= MathF.Sign(steps) * squadBarRow;
-        if (player.inventoryViews.TryGetValue("SquadPanel", out var view))
-            squadBarScroll = player.inventoryScroll["SquadPanel"] = Math.Clamp(squadBarScroll, 0, view.Maximum);
+        if (player.scrollBars.inventoryViews.TryGetValue("SquadPanel", out var view))
+            squadBarScroll = player.scrollBars.inventoryScroll["SquadPanel"] = Math.Clamp(squadBarScroll, 0, view.Maximum);
         return true;
     }
 
@@ -135,16 +135,16 @@ sealed class PortraitBar(PlayerInterface player)
             columns = Math.Max(1, (int)(page.Width / size));
             rows = (members.Count + columns - 1) / columns;
             maximum = Math.Max(0, rows * size - page.Height);
-            squadBarScroll = Math.Clamp(player.inventoryScroll.GetValueOrDefault("SquadPanel"), 0, maximum);
-            player.inventoryScroll["SquadPanel"] = squadBarScroll;
-            player.inventoryViews["SquadPanel"] = (page, maximum);
-            player.AddScrollBar("SquadPanel", controls, new(page.X + page.Width, page.Y, barWidth, page.Height), page.Height,
+            squadBarScroll = Math.Clamp(player.scrollBars.inventoryScroll.GetValueOrDefault("SquadPanel"), 0, maximum);
+            player.scrollBars.inventoryScroll["SquadPanel"] = squadBarScroll;
+            player.scrollBars.inventoryViews["SquadPanel"] = (page, maximum);
+            player.scrollBars.AddScrollBar("SquadPanel", controls, new(page.X + page.Width, page.Y, barWidth, page.Height), page.Height,
                 page.Height + maximum, squadBarScroll, maximum, panel, "hud-squad");
         }
         else
         {
-            player.inventoryViews.Remove("SquadPanel");
-            player.inventoryTracks.Remove("SquadPanel");
+            player.scrollBars.inventoryViews.Remove("SquadPanel");
+            player.scrollBars.inventoryTracks.Remove("SquadPanel");
             squadBarScroll = 0;
         }
         squadBarPage = page;

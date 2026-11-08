@@ -59,7 +59,7 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void PlaceTradeWindows()
     {
-        var frames = player.faithfulScreens.Arrange(player.Width, player.Height, player.BindFaithfulScreen, player.AddFaithfulContent);
+        var frames = player.faithfulScreens.Arrange(player.Width, player.Height, player.screenRouter.BindFaithfulScreen, player.screenRouter.AddFaithfulContent);
         UiRect? Root(string screen) => frames.FirstOrDefault(f => f.Id == screen)?.Controls.FirstOrDefault(c => c.Type == "Window")?.Bounds;
         float margin = (int)(Math.Min(player.Width, player.Height) * 0.05f), x = margin;
         void Put(string id)
@@ -78,7 +78,7 @@ sealed class TradeWindows(PlayerInterface player)
         controls.FirstOrDefault(c => c.Name == "backpack_content")?.Name ?? controls.FirstOrDefault(c => c.Name == "main")?.Name
         ?? controls.Where(c => c.Skin.Contains("InventorySlot", StringComparison.Ordinal)).OrderByDescending(c => c.Bounds.Width * c.Bounds.Height).FirstOrDefault()?.Name;
 
-    string? TraderGrid(string screen) => GridIn(player.faithfulScreens.Arrange(player.Width, player.Height, player.BindFaithfulScreen, player.AddFaithfulContent).First(f => f.Id == screen).Controls);
+    string? TraderGrid(string screen) => GridIn(player.faithfulScreens.Arrange(player.Width, player.Height, player.screenRouter.BindFaithfulScreen, player.screenRouter.AddFaithfulContent).First(f => f.Id == screen).Controls);
 
     /// <summary>The trader's name in the caption, its ARRANGE button; the money line is added after arranging.</summary>
     internal void BindTraderScreen(UiBindings b)
@@ -185,7 +185,7 @@ sealed class TradeWindows(PlayerInterface player)
         foreach (var item in trade.Stock)
         {
             if (player.inventoryWindows.Lifted(ItemOwner.Stock, item.Index)) continue;
-            player.AddItemCell(controls, $"trade-item-{item.Index}",
+            player.itemCells.AddItemCell(controls, $"trade-item-{item.Index}",
                 new(area.X + item.X * area.Width / columns, area.Y + item.Y * area.Height / rows, item.Width * area.Width / columns, item.Height * area.Height / rows),
                 item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "TradeItem", item.Index, slot.Clip, charge: item.Charge, colour: item.Colour);
         }
@@ -471,15 +471,15 @@ sealed class TradeWindows(PlayerInterface player)
                 // The original opens both characters' bags with the window (the looted one's is open by default); OPEN BAG still toggles them afterwards. The looter's
                 // remembered OPEN BAG choice is kept: a bag opened here closes with the window.
                 if (player.inventoryWindows.InventoryOwner() is { } mine && player.inventoryWindows.bagOpen.Add(mine.Id)) lootOpenedBag = mine.Id;
-                player.PlaceWindowRow();
-                player.inventoryScroll.Remove("loot-bag");
+                player.inventoryLayout.PlaceWindowRow();
+                player.scrollBars.inventoryScroll.Remove("loot-bag");
             }
         }
         bool want = player.faithfulScreens.IsOpen("loot") && lootBagOpen && LootBody() is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } };
         if (want == player.faithfulScreens.IsOpen("loot-bag")) return;
-        if (!want) { player.faithfulScreens.Close("loot-bag"); if (player.faithfulScreens.IsOpen("loot")) player.PlaceWindowRow(); return; }
+        if (!want) { player.faithfulScreens.Close("loot-bag"); if (player.faithfulScreens.IsOpen("loot")) player.inventoryLayout.PlaceWindowRow(); return; }
         player.faithfulScreens.Open("loot-bag");
-        player.PlaceWindowRow();
+        player.inventoryLayout.PlaceWindowRow();
     }
 
     internal void BindLootScreen(string id, UiBindings b)

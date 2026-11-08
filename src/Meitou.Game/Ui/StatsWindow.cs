@@ -45,22 +45,22 @@ sealed class StatsWindow(PlayerInterface player)
         float scale = player.InventoryScale, rowHeight = 20 * scale;
         // The skill columns sit in Kenshi_GenericTextBoxSkin frames (the attributes column's frame has no text colour and keeps its grey).
         string statInk = MyGuiColours.TemplateInk(player.uiResources, "Kenshi_GenericTextBoxSkin");
-        for (int column = 0; column < PlayerInterface.StatPanels.Length; column++)
+        for (int column = 0; column < StatPanels.Length; column++)
         {
             string name = column == 0 ? "AttributesPanel" : $"Skills{column}Panel";
             if (controls.FirstOrDefault(c => c.Name == name) is not { } panel) continue;
             var clip = panel.Bounds.Intersect(panel.Clip ?? panel.Bounds);
             float y = panel.Bounds.Y;
-            for (int i = 0; i < PlayerInterface.StatPanels[column].Length; i++)
+            for (int i = 0; i < StatPanels[column].Length; i++)
             {
                 foreach (var heading in StatHeadings[column].Where(h => h.Before == i))
                 {
                     Text($"{name}-heading-{i}", "-" + Loc.Tr(heading.Caption) + "-", "Kenshi_StandardFont_Large", PlayerInterface.TitleColour, "Left VCenter", "", heading: true);
                     y += rowHeight;
                 }
-                var stat = PlayerInterface.StatPanels[column][i];
+                var stat = StatPanels[column][i];
                 string id = ((int)stat).ToString(CultureInfo.InvariantCulture), action = "stat:" + id;
-                string label = column == 0 ? PlayerInterface.StatLabel(stat).ToUpperInvariant() : PlayerInterface.StatLabel(stat);
+                string label = column == 0 ? StatLabel(stat).ToUpperInvariant() : StatLabel(stat);
                 string font = column == 0 ? "Kenshi_PaintedTextFont_Medium" : "Kenshi_StandardFont_Medium";
                 string colour = column == 0 ? "0.4 0.380392 0.356863" : statInk;
                 bool wrapLabel = stat is StatsEnumerated.FriendlyFire or StatsEnumerated.SmithingBow;
@@ -91,7 +91,7 @@ sealed class StatsWindow(PlayerInterface player)
 
     void AddStatDescription(List<UiControl> controls)
     {
-        if (!int.TryParse(player.selectedStat, out int selected) || selected <= 0 || selected >= StatsInfo.Count
+        if (!int.TryParse(selectedStat, out int selected) || selected <= 0 || selected >= StatsInfo.Count
             || controls.FirstOrDefault(c => c.Name == "Description1Panel") is not { } left
             || controls.FirstOrDefault(c => c.Name == "Description2Panel") is not { } right) return;
         var lead = player.Selected().FirstOrDefault();
@@ -115,7 +115,7 @@ sealed class StatsWindow(PlayerInterface player)
             Text(name, new(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, pixels == 18 ? 24 * scale : row), text, colour, pixels, leftClip);
             y += row;
         }
-        Line("stat-description-title", PlayerInterface.StatLabel(stat), PlayerInterface.TitleColour, 18);
+        Line("stat-description-title", StatLabel(stat), PlayerInterface.TitleColour, 18);
         Line("stat-affected-heading", statHelp.TextAt(681), PlayerInterface.MainColour);
         // The rows' numbers (FUN_1408b1250, HudView.StatReadouts), matched to the catalog's rows by their label, right-aligned on the row.
         var readouts = lead?.Hud?.StatReadouts?.GetValueOrDefault(stat) ?? [];
@@ -154,4 +154,32 @@ sealed class StatsWindow(PlayerInterface player)
         Text("stat-description-body", new(bar.X + 10 * scale, bar.Y + 28 * scale, bar.Width - 20 * scale, Math.Max(0, right.Bounds.Height - 36 * scale)),
             description, statInk, 14, rightClip, wrap: true);
     }
+
+    internal string selectedStat = ((int)StatsEnumerated.Katanas).ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The attributes and four skill columns, ordered as observed in the supplied original-game screenshot.
+    /// </summary>
+    internal static readonly StatsEnumerated[][] StatPanels =
+    [
+        [StatsEnumerated.Strength, StatsEnumerated.Toughness, StatsEnumerated.Dexterity, StatsEnumerated.Perception],
+        [StatsEnumerated.Katanas, StatsEnumerated.Sabres, StatsEnumerated.Hackers, StatsEnumerated.HeavyWeapons, StatsEnumerated.Blunt, StatsEnumerated.Polearms],
+        [StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Dodge, StatsEnumerated.MartialArts,
+            StatsEnumerated.Turrets, StatsEnumerated.Crossbows, StatsEnumerated.FriendlyFire],
+        [StatsEnumerated.Stealth, StatsEnumerated.Lockpicking, StatsEnumerated.Thieving, StatsEnumerated.Assassination, StatsEnumerated.Athletics, StatsEnumerated.Swimming],
+        [StatsEnumerated.Medic, StatsEnumerated.Engineering, StatsEnumerated.Robotics, StatsEnumerated.Science,
+            StatsEnumerated.SmithingWeapon, StatsEnumerated.SmithingArmour, StatsEnumerated.SmithingBow, StatsEnumerated.Labouring, StatsEnumerated.Farming, StatsEnumerated.Cooking],
+    ];
+
+    internal static string StatLabel(StatsEnumerated stat) => Loc.Tr(StatLabelEnglish(stat));
+
+    static string StatLabelEnglish(StatsEnumerated stat) => stat switch
+    {
+        StatsEnumerated.Thieving => "Thievery", StatsEnumerated.HeavyWeapons => "Heavy weapons",
+        StatsEnumerated.MeleeAttack => "Melee attack", StatsEnumerated.MeleeDefence => "Melee defence",
+        StatsEnumerated.SmithingWeapon => "Weapon smith", StatsEnumerated.SmithingArmour => "Armour smith",
+        StatsEnumerated.SmithingBow => "Crossbow smith", StatsEnumerated.FriendlyFire => "Precision shooting",
+        StatsEnumerated.MartialArts => "Martial arts",
+        StatsEnumerated.Medic => "Field medic", StatsEnumerated.Engineering => "Engineer", _ => stat.ToString(),
+    };
 }

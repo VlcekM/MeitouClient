@@ -1,42 +1,33 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
-sealed partial class PlayerInterface
+/// <summary>The inventory windows' geometry: where they open beside each other, their grids and the data panel's summary lines.</summary>
+sealed class InventoryLayout(PlayerInterface player)
 {
-    internal float InventoryScale => Height / 1080f;
-    internal float InventoryCell => 25 * InventoryScale;
-    internal readonly Dictionary<string, float> inventoryScroll = new(StringComparer.Ordinal);
-    internal readonly Dictionary<string, (UiRect View, float Maximum)> inventoryViews = new(StringComparer.Ordinal);
-    /// <summary>Per scrolled window, where its scrollbar's thumb runs and how tall it is (for dragging it).</summary>
-    internal readonly Dictionary<string, (UiRect Track, float Thumb)> inventoryTracks = new(StringComparer.Ordinal);
-    /// <summary>A scrollbar thumb being dragged: its window and where on the thumb it was taken.</summary>
-    internal (string Screen, float Grab)? scrollDrag;
-
-    void BindInventoryGeometry(string id, UiBindings b)
+    internal void BindInventoryGeometry(string id, UiBindings b)
     {
-        b.TemplateScale = InventoryScale;
-        if (id is "bag" or "loot-bag" && (id == "bag" ? inventoryWindows.InventoryOwner() : tradeWindows.LootBody())?.ItemGrid is { } bag)
-            b.Positions["Root"] = new(0, 0, bag.BagWidth * InventoryCell + 40 * InventoryScale,
-                Math.Min(Height * 0.8f, bag.BagHeight * InventoryCell + 108 * InventoryScale));
-        if (id == "trader") tradeWindows.BindTraderGeometry(b);
+        b.TemplateScale = player.InventoryScale;
+        if (id is "bag" or "loot-bag" && (id == "bag" ? player.inventoryWindows.InventoryOwner() : player.tradeWindows.LootBody())?.ItemGrid is { } bag)
+            b.Positions["Root"] = new(0, 0, bag.BagWidth * player.InventoryCell + 40 * player.InventoryScale,
+                Math.Min(player.Height * 0.8f, bag.BagHeight * player.InventoryCell + 108 * player.InventoryScale));
+        if (id == "trader") player.tradeWindows.BindTraderGeometry(b);
     }
 
     internal void PlaceBagWindow()
     {
-        if (faithfulScreens.IsOpen("loot")) PlaceWindowRow(); else PlaceInventoryBeside("bag", left: true);
+        if (player.faithfulScreens.IsOpen("loot")) PlaceWindowRow(); else PlaceInventoryBeside("bag", left: true);
     }
 
     /// <summary>The open windows' bounds by screen, as laid out now.</summary>
     Dictionary<string, UiRect> WindowRoots()
     {
         var roots = new Dictionary<string, UiRect>(StringComparer.Ordinal);
-        foreach (var f in faithfulScreens.Arrange(Width, Height, BindFaithfulScreen, AddFaithfulContent))
+        foreach (var f in player.faithfulScreens.Arrange(player.Width, player.Height, player.screenRouter.BindFaithfulScreen, player.screenRouter.AddFaithfulContent))
             if (f.Controls.FirstOrDefault(c => c.Type == "Window") is { } window) roots[f.Id] = window.Bounds;
         return roots;
     }
@@ -51,14 +42,14 @@ sealed partial class PlayerInterface
         var roots = WindowRoots();
         var row = new[] { "limbs", "bag", "inventory", "loot", "loot-bag" }.Where(roots.ContainsKey).ToArray();
         if (row.Length < 2) return;
-        float gap = 6 * InventoryScale;
+        float gap = 6 * player.InventoryScale;
         float total = row.Sum(s => roots[s].Width) + gap * (row.Length - 1);
-        if (total > Width) { gap -= (total - Width) / (row.Length - 1); total = Width; }
-        float x = (Width - total) / 2, y = (roots.TryGetValue("inventory", out var lead) ? lead : roots[row[0]]).Y, margin = 0.05f * Math.Min(Width, Height);
+        if (total > player.Width) { gap -= (total - player.Width) / (row.Length - 1); total = player.Width; }
+        float x = (player.Width - total) / 2, y = (roots.TryGetValue("inventory", out var lead) ? lead : roots[row[0]]).Y, margin = 0.05f * Math.Min(player.Width, player.Height);
         foreach (string screen in row)
         {
             var r = roots[screen];
-            faithfulScreens.SetOffset(screen, faithfulScreens.GetOffset(screen) + new Vector2(x - r.X, (screen == "limbs" ? margin : y) - r.Y));
+            player.faithfulScreens.SetOffset(screen, player.faithfulScreens.GetOffset(screen) + new Vector2(x - r.X, (screen == "limbs" ? margin : y) - r.Y));
             x += r.Width + gap;
         }
     }
@@ -70,26 +61,26 @@ sealed partial class PlayerInterface
     /// </summary>
     internal void PlaceLimbsWindow()
     {
-        if (faithfulScreens.IsOpen("loot")) { PlaceWindowRow(); return; }
+        if (player.faithfulScreens.IsOpen("loot")) { PlaceWindowRow(); return; }
         var roots = WindowRoots();
         UiRect? Root(string screen) => roots.TryGetValue(screen, out var r) ? r : null;
         if (Root("limbs") is not { } limbs || (Root("bag") ?? Root("inventory")) is not { } anchor) return;
-        float margin = 0.05f * Math.Min(Width, Height);
+        float margin = 0.05f * Math.Min(player.Width, player.Height);
         float x = anchor.X - limbs.Width;
         if (x < 0)
         {
             foreach (string screen in new[] { "inventory", "bag" })
-                if (faithfulScreens.IsOpen(screen)) faithfulScreens.SetOffset(screen, faithfulScreens.GetOffset(screen) + new Vector2(-x, 0));
+                if (player.faithfulScreens.IsOpen(screen)) player.faithfulScreens.SetOffset(screen, player.faithfulScreens.GetOffset(screen) + new Vector2(-x, 0));
             x = 0;
         }
-        faithfulScreens.SetOffset("limbs", faithfulScreens.GetOffset("limbs") + new Vector2(x - limbs.X, margin - limbs.Y));
+        player.faithfulScreens.SetOffset("limbs", player.faithfulScreens.GetOffset("limbs") + new Vector2(x - limbs.X, margin - limbs.Y));
     }
 
     /// <summary>
     /// The four prosthetic slots (<c>FUN_1400d04d0</c>, <c>FUN_1401534f0</c>, <b>Verified</b>): arms 2 x 6 cells, legs 2 x 7; a slot is enabled only for a stump or a fitted
     /// prosthetic, else drawn with the skin's disabled tile and refusing drops (the simulation's check).
     /// </summary>
-    void ArrangeLimbSlots(List<UiControl> controls, CharacterSnapshot lead)
+    internal void ArrangeLimbSlots(List<UiControl> controls, CharacterSnapshot lead)
     {
         for (int k = 0; k < 4; k++)
         {
@@ -101,10 +92,10 @@ sealed partial class PlayerInterface
             bool open = state is (int)Meitou.Simulation.Bodies.LimbState.Stump or (int)Meitou.Simulation.Bodies.LimbState.Replaced;
             controls[index] = slot with
             {
-                Bounds = slot.Bounds with { Width = 2 * InventoryCell, Height = (k < 2 ? 6 : 7) * InventoryCell },
+                Bounds = slot.Bounds with { Width = 2 * player.InventoryCell, Height = (k < 2 ? 6 : 7) * player.InventoryCell },
                 Properties = new Dictionary<string, string>(slot.Properties)
                 {
-                    ["TileSize"] = FormattableString.Invariant($"{InventoryCell} {InventoryCell}"),
+                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
                     ["State"] = open ? "normal" : "disabled",
                 },
             };
@@ -119,12 +110,12 @@ sealed partial class PlayerInterface
     {
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var window)) return;
-        faithfulScreens.SetOffset(id, faithfulScreens.GetOffset(id) + new Vector2(-window.X, (Height - window.Height) / 2 - window.Y));
+        player.faithfulScreens.SetOffset(id, player.faithfulScreens.GetOffset(id) + new Vector2(-window.X, (player.Height - window.Height) / 2 - window.Y));
         float left = new[] { "bag", "inventory" }.Where(roots.ContainsKey).Select(s => roots[s].X).DefaultIfEmpty(float.MaxValue).Min();
-        float push = window.Width + 6 * InventoryScale - left;
+        float push = window.Width + 6 * player.InventoryScale - left;
         if (push <= 0) return;
         foreach (string screen in new[] { "inventory", "bag" })
-            if (roots.ContainsKey(screen)) faithfulScreens.SetOffset(screen, faithfulScreens.GetOffset(screen) + new Vector2(push, 0));
+            if (roots.ContainsKey(screen)) player.faithfulScreens.SetOffset(screen, player.faithfulScreens.GetOffset(screen) + new Vector2(push, 0));
     }
 
     /// <summary>Puts window <paramref name="id"/> beside <paramref name="anchor"/>'s, moving the anchor in when the pair would not fit the screen.</summary>
@@ -132,20 +123,20 @@ sealed partial class PlayerInterface
     {
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var other) || !roots.TryGetValue(anchor, out var own)) return;
-        float gap = 6 * InventoryScale;
+        float gap = 6 * player.InventoryScale;
         float x = left ? own.X - other.Width - gap : own.X + own.Width + gap;
         // Make room for the pair before the screen host clamps either window to the viewport.
-        if (x < 0 || x + other.Width > Width)
+        if (x < 0 || x + other.Width > player.Width)
         {
-            float ownX = left ? Math.Min(Width - own.Width, other.Width + gap) : Math.Max(0, Width - other.Width - gap - own.Width);
-            faithfulScreens.SetOffset(anchor, faithfulScreens.GetOffset(anchor) + new Vector2(ownX - own.X, 0));
+            float ownX = left ? Math.Min(player.Width - own.Width, other.Width + gap) : Math.Max(0, player.Width - other.Width - gap - own.Width);
+            player.faithfulScreens.SetOffset(anchor, player.faithfulScreens.GetOffset(anchor) + new Vector2(ownX - own.X, 0));
             x = left ? ownX - other.Width - gap : ownX + own.Width + gap;
         }
-        faithfulScreens.SetOffset(id, faithfulScreens.GetOffset(id) + new Vector2(x - other.X, own.Y - other.Y));
+        player.faithfulScreens.SetOffset(id, player.faithfulScreens.GetOffset(id) + new Vector2(x - other.X, own.Y - other.Y));
     }
 
     /// <summary>The equipment slots disabled for the character (<see cref="CharacterSnapshot.ClosedSlots"/>): the skin's disabled (red) tile, and drops find no section there.</summary>
-    static void CloseSlots(List<UiControl> controls, CharacterSnapshot lead)
+    internal static void CloseSlots(List<UiControl> controls, CharacterSnapshot lead)
     {
         foreach (string section in lead.ClosedSlots)
         {
@@ -154,7 +145,7 @@ sealed partial class PlayerInterface
         }
     }
 
-    void ArrangeEquipmentGrid(List<UiControl> controls, InventoryView grid)
+    internal void ArrangeEquipmentGrid(List<UiControl> controls, InventoryView grid)
     {
         foreach (string section in new[] { "main", "backpack_attach", "back", "hip", "shirt", "head", "legs", "boots", "armour", "belt" })
         {
@@ -164,13 +155,13 @@ sealed partial class PlayerInterface
             var size = InventoryCommands.SectionSize(section);
             int columns = section == "main" ? grid.Width : size.Width;
             int rows = section == "main" ? grid.Height : size.Height;
-            var bounds = slot.Bounds with { Width = columns * InventoryCell, Height = rows * InventoryCell };
+            var bounds = slot.Bounds with { Width = columns * player.InventoryCell, Height = rows * player.InventoryCell };
             controls[index] = slot with
             {
                 Bounds = bounds,
                 Properties = new Dictionary<string, string>(slot.Properties)
                 {
-                    ["TileSize"] = FormattableString.Invariant($"{InventoryCell} {InventoryCell}"),
+                    ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
                     ["State"] = "normal",
                 },
             };
@@ -183,15 +174,15 @@ sealed partial class PlayerInterface
         int index = controls.FindIndex(c => c.Name == "backpack_content");
         var root = controls.FirstOrDefault(c => c.Type == "Window");
         if (index < 0 || root is null) return;
-        float scale = InventoryScale, cell = InventoryCell;
+        float scale = player.InventoryScale, cell = player.InventoryCell;
         var r = root.Bounds;
         float top = above * scale;
         var view = new UiRect(r.X + 18 * scale, r.Y + top, Math.Max(0, r.Width - 40 * scale), Math.Max(0, r.Height - top - below * scale));
         float maximum = Math.Max(0, rows * cell - view.Height);
         if (maximum < 0.01f) maximum = 0;
-        float scroll = Math.Clamp(inventoryScroll.GetValueOrDefault(id), 0, maximum);
-        inventoryScroll[id] = scroll;
-        inventoryViews[id] = (view, maximum);
+        float scroll = Math.Clamp(player.scrollBars.inventoryScroll.GetValueOrDefault(id), 0, maximum);
+        player.scrollBars.inventoryScroll[id] = scroll;
+        player.scrollBars.inventoryViews[id] = (view, maximum);
         var slot = controls[index];
         controls[index] = slot with
         {
@@ -200,77 +191,17 @@ sealed partial class PlayerInterface
         };
         int arrange = controls.FindIndex(c => c.Name == "ArrangeButton");
         if (arrange >= 0) controls[arrange] = controls[arrange] with { Bounds = new(r.X + (r.Width - 110 * scale) / 2, r.Y + r.Height - 44 * scale, 110 * scale, 32 * scale) };
-        if (maximum <= 0) { inventoryTracks.Remove(id); return; }
-        AddScrollBar(id, controls, new(r.X + r.Width - 22 * scale, view.Y, 17 * scale, view.Height), view.Height, rows * cell, scroll, maximum, root.Clip);
-    }
-
-    /// <summary>
-    /// A vertical scrollbar as the original's <c>Kenshi_ScrollBarV</c> template draws it in <paramref name="bar"/>: arrows at both ends, the track between them and a thumb
-    /// <c>MinTrackSize</c> (10) or more tall, sized to the visible share of the canvas. The arrows scroll by steps, a click on the track beside the thumb by a page, the thumb drags.
-    /// </summary>
-    internal void AddScrollBar(string id, List<UiControl> controls, UiRect bar, float visible, float canvas, float scroll, float maximum, UiRect? clip,
-        string prefix = "inventory-scroll")
-    {
-        float scale = InventoryScale;
-        void Part(string name, UiRect bounds, string skin, string action = "", bool pickable = false) => controls.Add(new(name, action.Length > 0 || pickable ? "Button" : "Widget", bounds, "", action, skin, true,
-            new Dictionary<string, string>(), Vector4.Zero, Pickable: action.Length > 0 || pickable, Clip: clip));
-        Part(prefix, bar, "Kenshi_TextBoxEmptySkin");
-        Part(prefix + "-up", new(bar.X, bar.Y + 2 * scale, bar.Width, 12 * scale), "Kenshi_SmallArrowUpSkin", prefix + ":1");
-        Part(prefix + "-down", new(bar.X, bar.Y + bar.Height - 14 * scale, bar.Width, 12 * scale), "Kenshi_SmallArrowDownSkin", prefix + ":-1");
-        var track = new UiRect(bar.X, bar.Y + 14 * scale, bar.Width, Math.Max(0, bar.Height - 28 * scale));
-        float thumb = Math.Clamp(track.Height * visible / Math.Max(1, canvas), Math.Min(10 * scale, track.Height), track.Height);
-        float top = track.Y + (track.Height - thumb) * scroll / maximum;
-        Part(prefix + "-page-up", new(track.X, track.Y, track.Width, top - track.Y), "", prefix + "-page:1");
-        Part(prefix + "-page-down", new(track.X, top + thumb, track.Width, track.Y + track.Height - top - thumb), "", prefix + "-page:-1");
-        Part(prefix + "-thumb", new(track.X, top, track.Width, thumb), "Kenshi_SmallBarSkin", pickable: true);
-        inventoryTracks[id] = (track, thumb);
-    }
-
-    /// <summary>Takes the thumb of a window's scrollbar under the pointer (true: taken).</summary>
-    internal bool ScrollThumbDown(string screen, UiControl picked, Vector2 p)
-    {
-        if (!picked.Name.EndsWith("-thumb", StringComparison.Ordinal) || !inventoryTracks.ContainsKey(screen)) return false;
-        scrollDrag = (screen, p.Y - picked.Bounds.Y);
-        return true;
-    }
-
-    /// <summary>Moves the dragged thumb's canvas so the thumb follows the pointer.</summary>
-    bool ScrollThumbMove(Vector2 p)
-    {
-        if (scrollDrag is not { } drag) return false;
-        if (!inventoryTracks.TryGetValue(drag.Screen, out var t) || !inventoryViews.TryGetValue(drag.Screen, out var view) || t.Track.Height <= t.Thumb) return true;
-        float share = Math.Clamp((p.Y - drag.Grab - t.Track.Y) / (t.Track.Height - t.Thumb), 0, 1);
-        inventoryScroll[drag.Screen] = share * view.Maximum;
-        return true;
-    }
-
-    bool InventoryWheel(Vector2 p, float steps)
-    {
-        if (faithfulScreens.HitTest(p) is not { } hit || !inventoryViews.TryGetValue(hit.Screen, out var view) || !view.View.Contains(p.X, p.Y)) return false;
-        ScrollInventory(hit.Screen, steps);
-        return true;
-    }
-
-    void ScrollInventory(string id, float steps)
-    {
-        if (inventoryViews.TryGetValue(id, out var view))
-            inventoryScroll[id] = Math.Clamp(inventoryScroll.GetValueOrDefault(id) - steps * InventoryCell * 3, 0, view.Maximum);
-    }
-
-    /// <summary>A click on the scrollbar track beside the thumb: a page (the visible height) up (1) or down (-1).</summary>
-    void ScrollInventoryPage(string id, float direction)
-    {
-        if (inventoryViews.TryGetValue(id, out var view))
-            inventoryScroll[id] = Math.Clamp(inventoryScroll.GetValueOrDefault(id) - direction * view.View.Height, 0, view.Maximum);
+        if (maximum <= 0) { player.scrollBars.inventoryTracks.Remove(id); return; }
+        player.scrollBars.AddScrollBar(id, controls, new(r.X + r.Width - 22 * scale, view.Y, 17 * scale, view.Height), view.Height, rows * cell, scroll, maximum, root.Clip);
     }
 
     /// <summary>The data panel's lines; an animal's window shows only the weight and burden rows (the original's animal inventory, observed).</summary>
-    void AddInventorySummary(List<UiControl> controls, CharacterSnapshot lead, bool animal = false)
+    internal void AddInventorySummary(List<UiControl> controls, CharacterSnapshot lead, bool animal = false)
     {
         string weight = ((int)(lead.ItemGrid?.TotalWeight ?? 0)).ToString(CultureInfo.InvariantCulture);   // truncated, as the original prints it
         if (lead.ItemGrid?.CarryCapacity is { } capacity) weight += "/" + ((int)capacity).ToString(CultureInfo.InvariantCulture);
         var (burdenWord, burdenColour) = BurdenText(lead.Hud?.Encumbrance ?? lead.ItemGrid?.Burden ?? 1);
-        AddLines(controls, "datapanel", InventorySummaryLines(lead, weight, burdenWord, burdenColour, animal), 20 * InventoryScale);
+        player.AddLines(controls, "datapanel", InventorySummaryLines(lead, weight, burdenWord, burdenColour, animal), 20 * player.InventoryScale);
     }
 
     /// <summary>
@@ -279,19 +210,19 @@ sealed partial class PlayerInterface
     /// (free: "-" greyed; a slave or escaped slave: its owner faction's name in Bad, no line without an owner) and Looks like slave (free: "-" greyed; else the level in percent, Bad above 10 %).
     /// A character of another faction has only the weight rows (and, for a trader, its money lines, not built).
     /// </summary>
-    List<HudLine> InventorySummaryLines(CharacterSnapshot lead, string weight, string burdenWord, string? burdenColour, bool animal)
+    List<PlayerInterface.HudLine> InventorySummaryLines(CharacterSnapshot lead, string weight, string burdenWord, string? burdenColour, bool animal)
     {
-        var lines = new List<HudLine> { new(Loc.Tr("Total Weight:"), weight), new("", burdenWord, ValueColour: burdenColour) };
+        var lines = new List<PlayerInterface.HudLine> { new(Loc.Tr("Total Weight:"), weight), new("", burdenWord, ValueColour: burdenColour) };
         if (animal || !lead.IsPlayer) return lines;
         lines.AddRange(DisguiseLines(lead.Disguise));
         if (lead.Slave is not { } slave)
         {
-            lines.Add(new(Loc.Tr("Slave of:"), "-", GreyColour, GreyColour, Loc.Tr("You are a free person.")));
-            lines.Add(new(Loc.Tr("Looks like slave:"), "-", GreyColour, GreyColour, Loc.Tr("You are no slave.")));
+            lines.Add(new(Loc.Tr("Slave of:"), "-", PlayerInterface.GreyColour, PlayerInterface.GreyColour, Loc.Tr("You are a free person.")));
+            lines.Add(new(Loc.Tr("Looks like slave:"), "-", PlayerInterface.GreyColour, PlayerInterface.GreyColour, Loc.Tr("You are no slave.")));
             return lines;
         }
-        if (slave.Owner.Length > 0) lines.Add(new(Loc.Tr("Slave of:"), slave.Owner, ValueColour: BadColour, Tooltip: Loc.Tr("The faction that owns you.")));
-        lines.Add(new(Loc.Tr("Looks like slave:"), Loc.Tr("{1,num}%", (int)(slave.Looks * 100)), ValueColour: slave.Looks > 0.1f ? BadColour : null,
+        if (slave.Owner.Length > 0) lines.Add(new(Loc.Tr("Slave of:"), slave.Owner, ValueColour: PlayerInterface.BadColour, Tooltip: Loc.Tr("The faction that owns you.")));
+        lines.Add(new(Loc.Tr("Looks like slave:"), Loc.Tr("{1,num}%", (int)(slave.Looks * 100)), ValueColour: slave.Looks > 0.1f ? PlayerInterface.BadColour : null,
             Tooltip: Loc.Tr("How much you look like an escaped slave. Based on how you are dressed/undressed. Wearing shackles and rags is a big giveaway. Try to avoid hanging around too long near people who may recognise you.")));
         return lines;
     }
@@ -302,7 +233,7 @@ sealed partial class PlayerInterface
     /// -50%, Someone knows me personally -80% (Bad, each multiplying the total), Disguise blown (seconds, Bad, total 0) and Total (Main). The second row: "-" at level 0, else the
     /// level in percent (Main) or Blown! (Bad) while blown.
     /// </summary>
-    static IEnumerable<HudLine> DisguiseLines(DisguiseView? disguise)
+    static IEnumerable<PlayerInterface.HudLine> DisguiseLines(DisguiseView? disguise)
     {
         if (disguise is not { Level: > 0 } d)
         {
@@ -329,8 +260,8 @@ sealed partial class PlayerInterface
             rows.Add((Loc.Tr("Disguise blown:"), ProductionWindows.BadTag + Loc.Tr(secs == 1 ? "{1,num} sec" : "{1,num} secs", secs)));
         }
         rows.Add((Loc.Tr("Total:"), $"{TooltipRuntime.MainTag}{Loc.Tr("{1,num}", (int)total)}%"));
-        yield return new(Loc.Tr("Disguise:"), d.Faction.Length > 0 ? d.Faction : Loc.Tr("None"), ValueColour: d.Faction.Length > 0 ? MainColour : null, TooltipRows: rows);
-        yield return d.Blown > 0 ? new("    ", Loc.Tr("Blown!"), ValueColour: BadColour) : new("    ", Loc.Tr("{1,num}%", (int)(d.Level * 100)), ValueColour: MainColour);
+        yield return new(Loc.Tr("Disguise:"), d.Faction.Length > 0 ? d.Faction : Loc.Tr("None"), ValueColour: d.Faction.Length > 0 ? PlayerInterface.MainColour : null, TooltipRows: rows);
+        yield return d.Blown > 0 ? new("    ", Loc.Tr("Blown!"), ValueColour: PlayerInterface.BadColour) : new("    ", Loc.Tr("{1,num}%", (int)(d.Level * 100)), ValueColour: PlayerInterface.MainColour);
     }
 
     /// <summary>
@@ -341,9 +272,9 @@ sealed partial class PlayerInterface
     {
         >= 0.95f => (Burden("Weightless"), null),
         >= 0.75f => (Burden("Lightweight"), null),
-        >= 0.5f => (Burden("Moderate"), MainColour),
-        >= 0.1f => (Burden("Heavy"), BadColour),
-        _ => (Burden("Overloaded"), BadColour),
+        >= 0.5f => (Burden("Moderate"), PlayerInterface.MainColour),
+        >= 0.1f => (Burden("Heavy"), PlayerInterface.BadColour),
+        _ => (Burden("Overloaded"), PlayerInterface.BadColour),
     };
 
     /// <summary>A burden word with the original's leading dash, the dash being the panel's and the word the catalog's ("Weightless" is a msgid).</summary>

@@ -791,10 +791,10 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         lines.AddRange(RaceStatLines(race).Select(l => (l.Label, l.Value, (bool?)l.Good)));
         float scale = player.Height / 1080f, row = 19.2f * scale;
         // A new race's list starts at its top (the original fills the panel anew).
-        if (editorStatsRace != race.StringId) { player.inventoryScroll.Remove(EditorStatsScroll); editorStatsRace = race.StringId; }
+        if (editorStatsRace != race.StringId) { player.scrollBars.inventoryScroll.Remove(EditorStatsScroll); editorStatsRace = race.StringId; }
         float maximum = Math.Max(0, lines.Count * row - area.Height);
         if (maximum < 0.01f) maximum = 0;
-        float scroll = Math.Clamp(player.inventoryScroll.GetValueOrDefault(EditorStatsScroll), 0, maximum);
+        float scroll = Math.Clamp(player.scrollBars.inventoryScroll.GetValueOrDefault(EditorStatsScroll), 0, maximum);
         // The panel's ScrollView (Kenshi_ScrollViewEmpty: its bars 20 pixels): the lines are laid out on a canvas the bar's width narrower than the panel; with the bar
         // (overflow) the canvas fills the client, without it the canvas sits 13 pixels in from the panel's left and top (Observed at 1440 lines, a Hive Prince's and a
         // skeleton's stats against the base game's: the same 355-pixel rows, 13 pixels right and down without the bar; the text 6 pixels above the panel's top).
@@ -812,10 +812,10 @@ sealed class CharacterEditorPanel(PlayerInterface player)
                 new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "Right Top",
                     ["TextColour"] = good is null ? PlayerInterface.MainColour : good.Value ? PlayerInterface.GoodColour : PlayerInterface.BadBrightColour }, Vector4.Zero, Pickable: false, Clip: clip));
         }
-        if (maximum <= 0) { player.inventoryViews.Remove(EditorStatsScroll); player.inventoryTracks.Remove(EditorStatsScroll); return; }
-        player.inventoryScroll[EditorStatsScroll] = scroll;
-        player.inventoryViews[EditorStatsScroll] = (area, maximum);
-        player.AddScrollBar(EditorStatsScroll, controls, new(area.X + width, area.Y, bar, area.Height), area.Height, lines.Count * row, scroll, maximum, host.Clip);
+        if (maximum <= 0) { player.scrollBars.inventoryViews.Remove(EditorStatsScroll); player.scrollBars.inventoryTracks.Remove(EditorStatsScroll); return; }
+        player.scrollBars.inventoryScroll[EditorStatsScroll] = scroll;
+        player.scrollBars.inventoryViews[EditorStatsScroll] = (area, maximum);
+        player.scrollBars.AddScrollBar(EditorStatsScroll, controls, new(area.X + width, area.Y, bar, area.Height), area.Height, lines.Count * row, scroll, maximum, host.Clip);
     }
 
     /// <summary>

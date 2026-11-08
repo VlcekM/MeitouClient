@@ -755,7 +755,7 @@ sealed class BuildMode(PlayerInterface player)
                 hit = new Vector3(p.X, player.ground(p.X, p.Z), p.Z);
             }
             player.Move(hit, player.SlowModifier);
-            player.PlaceMarker(hit);
+            player.moveMarker.PlaceMarker(hit);
         }
     }
 

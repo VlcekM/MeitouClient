@@ -241,11 +241,11 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
     [Fact]
     public void HudTextFollowsTheOriginalsRules()
     {
-        Assert.Equal("Normal", PlayerInterface.HealthWord(new BodyStatus(1, 0.9f, 3, false, false)).Text);
-        Assert.Equal("Slightly Injured", PlayerInterface.HealthWord(new BodyStatus(1, 0.77f, 2.2f, false, false)).Text);
-        Assert.Equal("Hungry", PlayerInterface.HealthWord(new BodyStatus(1, 1, 1.5f, false, false)).Text);
-        Assert.Equal("Wounded", PlayerInterface.HealthWord(new BodyStatus(1, 0.5f, 3, false, false)).Text);
-        Assert.Equal("Starving", PlayerInterface.HealthWord(new BodyStatus(1, 1, 0.5f, false, false)).Text);
+        Assert.Equal("Normal", HudPanels.HealthWord(new BodyStatus(1, 0.9f, 3, false, false)).Text);
+        Assert.Equal("Slightly Injured", HudPanels.HealthWord(new BodyStatus(1, 0.77f, 2.2f, false, false)).Text);
+        Assert.Equal("Hungry", HudPanels.HealthWord(new BodyStatus(1, 1, 1.5f, false, false)).Text);
+        Assert.Equal("Wounded", HudPanels.HealthWord(new BodyStatus(1, 0.5f, 3, false, false)).Text);
+        Assert.Equal("Starving", HudPanels.HealthWord(new BodyStatus(1, 1, 0.5f, false, false)).Text);
         // The race lists Right Leg, Left Arm, Left Leg, Head, Stomach, Right Arm, Chest; the panel shows head, torso, arms, legs, left before right.
         (string Name, BodyPartType Type, int Collapse)[] race = [("Right Leg", BodyPartType.Leg, 0x10), ("Left Arm", BodyPartType.Arm, 4), ("Left Leg", BodyPartType.Leg, 0x20),
             ("Head", BodyPartType.Head, 1), ("Stomach", BodyPartType.Torso, 1), ("Right Arm", BodyPartType.Arm, 2), ("Chest", BodyPartType.Torso, 1)];
@@ -253,11 +253,11 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         Assert.Equal(["Head", "Stomach", "Chest", "Left Arm", "Right Arm", "Left Leg", "Right Leg"], parts.OrderBy(p => p.MedicalOrder).Select(p => p.Name));
         var lead = new CharacterSnapshot(new CharacterId(0, 0), null, Vector3.Zero, 0, [])
             { Hud = new HudView(150, 150, 0, 1, [new("Strength:", 99.4f, 100), new("Toughness:", 100, 100), new("Dodge:", 105, 100)]) };
-        Assert.Equal(["STRENGTH: 99 (-1)", "TOUGHNESS: 100", "DODGE: 105 (+5)"], PlayerInterface.StatsLines(lead).Select(l => $"{l.Label} {l.Value}"));
+        Assert.Equal(["STRENGTH: 99 (-1)", "TOUGHNESS: 100", "DODGE: 105 (+5)"], HudPanels.StatsLines(lead).Select(l => $"{l.Label} {l.Value}"));
         var extended = lead;
         extended.Hud = lead.Hud! with { Extended = new ExtendedStats(1.5f, 0.25f, 3, -37.6f, 30, 40, 1.35f) };
         Assert.Equal(["Athletics XP: 150%", "Strength XP: 25%", "Toughness XP: 3x", "KO point: -37", "Run speed: 7 (-2) mph", "Hunger Rate: 135%"],
-            PlayerInterface.ExtendedLines(extended).Select(l => $"{l.Label} {l.Value}"));
+            HudPanels.ExtendedLines(extended).Select(l => $"{l.Label} {l.Value}"));
     }
 
     /// <summary>A click on another faction's character shows it in the HUD without selecting it (<see cref="InspectCommand"/>).</summary>

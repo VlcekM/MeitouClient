@@ -28,7 +28,7 @@ settings and current key list belong in viewer. Quicksave F5/loadF9; cinematic F
 `WorldBoot` reads a world's content on a worker with no window (navmesh, towns' buildings, population data, ragdoll rigs, animations);
 GameHost adds the code mods and the systems. GameHost partials keep boot, the Metal loop, loading, transitions and the character feed; each other feature is a class the host holds and makes in
 `CreateFeatures`: `GameLoop` (the Vulkan and headless run), `GameSound`, `GameSaves`, `TitleScreen`, the scenarios, `Host/WorldSync`, `Effects`, `DevTools`, `Editor`;
-PlayerInterface keeps the HUD core and commands; its windows, picking and pointer are classes it makes on first use (`Ui`, `Building`, `Title`, `Editor`). StandardSystems supplies order. NavAdapter
+PlayerInterface keeps the input entry points, selection, commands and shared UI helpers (core and `PlayerInterface.Ui.cs`); its windows, HUD panels, picking and pointer are classes it makes on first use (`Ui`, `Building`, `Title`, `Editor`). StandardSystems supplies order. NavAdapter
 bridges Navigation; never let UI/rendering duplicate simulation state.
 GUI executable attaches a caller's console; folder prompt creates its own when necessary.
 Native splash precedes Vulkan; worker loading and render-thread GPU steps keep the window

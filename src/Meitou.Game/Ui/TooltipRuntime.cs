@@ -49,7 +49,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// </summary>
     internal void AddHoverLabel(List<UiControl> controls)
     {
-        if (player.inventoryWindows.held is not null || player.jobDrag is not null || player.dragging || player.uiPainter is not { } painter) { HideTooltip(); return; }
+        if (player.inventoryWindows.held is not null || player.ordersPanel.jobDrag is not null || player.dragging || player.uiPainter is not { } painter) { HideTooltip(); return; }
         if (TooltipTarget(controls) is not { } hit) { HideTooltip(); return; }
         long now = Stopwatch.GetTimestamp();
         if (hit.Name != tipTarget)
@@ -460,7 +460,7 @@ sealed class TooltipRuntime(PlayerInterface player)
             var (_, _, _, status, _, _) = player.buildingSelection.BuildingLines(focus);
             if (BuildingStatusTip(status, player.production.Machine(focus.SiteId)) is { } tip) Add("HealthText", tip);
         }
-        else if (player.Lead() is { Body: not null } lead) Add("HealthText", PlayerInterface.HealthWord(lead).Tip);
+        else if (player.Lead() is { Body: not null } lead) Add("HealthText", HudPanels.HealthWord(lead).Tip);
     }
 
     // ---- item tooltips (the Item classes' vfunc_79: FUN_1407ae130 and its callees) ----
@@ -507,7 +507,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     static IEnumerable<TooltipLine> LimbRows(Meitou.Data.Gameplay.Bodies.LimbReplacement limb, int level)
     {
         int grade = ArmourTooltip.GradeOf(level);
-        yield return new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", PlayerInterface.GradeTone(grade));
+        yield return new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", GradeTone(grade));
         float t = Math.Clamp(level * 0.01f, 0, 1);
         yield return new("-Max HP", Number(MathF.Floor(limb.Hp(t))), TooltipTone.Title, TooltipTone.Ink);
         yield return new("-----STATS-----", "", TooltipTone.Grey);
@@ -516,7 +516,7 @@ sealed class TooltipRuntime(PlayerInterface player)
             float m = limb.Multiplier(stat, t);
             if (m == 1) continue;
             int percent = (int)((m - 1) * 100);
-            yield return new("-" + PlayerInterface.StatLabel(stat), (percent >= 1 ? "+" : "") + percent.ToString(CultureInfo.InvariantCulture) + "%", TooltipTone.Title, m < 1 ? TooltipTone.Bad : TooltipTone.Good);
+            yield return new("-" + StatsWindow.StatLabel(stat), (percent >= 1 ? "+" : "") + percent.ToString(CultureInfo.InvariantCulture) + "%", TooltipTone.Title, m < 1 ? TooltipTone.Bad : TooltipTone.Good);
         }
         if (limb.UnarmedDamageBonus(t) is not 0 and var unarmed)
             yield return new("-Unarmed damage bonus", unarmed.ToString(CultureInfo.InvariantCulture), TooltipTone.Title, unarmed < 0 ? TooltipTone.Bad : TooltipTone.Good);
@@ -621,15 +621,15 @@ sealed class TooltipRuntime(PlayerInterface player)
             lines.AddRange(BlueprintRows(research));
         }
         // Every grade line (weapon model, armour, crossbow, prosthetic) goes right under the name, as in the original.
-        if (model is not null) lines.Add(new(model, "", PlayerInterface.GradeTone(PlayerInterface.WeaponGrade(t.Level))));
+        if (model is not null) lines.Add(new(model, "", GradeTone(WeaponGrade(t.Level))));
         else if (type == Meitou.Data.Fcs.FcsRecordType.CROSSBOW)
         {
             int grade = ArmourTooltip.GradeOf(t.Level);
-            lines.Add(new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", PlayerInterface.GradeTone(grade)));
+            lines.Add(new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", GradeTone(grade)));
         }
         var combat = CombatOf?.Invoke();
         var armour = type == Meitou.Data.Fcs.FcsRecordType.ARMOUR ? combat?.Armour(t.Record) : null;
-        var armourHead = armour is not null ? ArmourTooltip.Head(armour, t.Level).Select(PlayerInterface.ArmourRow).ToList() : null;
+        var armourHead = armour is not null ? ArmourTooltip.Head(armour, t.Level).Select(ArmourRow).ToList() : null;
         var limbRows = type == Meitou.Data.Fcs.FcsRecordType.LIMB_REPLACEMENT ? LimbRows(Meitou.Data.Gameplay.Bodies.LimbReplacement.From(record!), t.Level).ToList() : null;
         if (armourHead is not null) { lines.Add(armourHead[0]); armourHead.RemoveAt(0); }
         if (limbRows is not null) { lines.Add(limbRows[0]); limbRows.RemoveAt(0); }
@@ -773,7 +773,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         }
         if (armour is not null)
         {
-            lines.AddRange(ArmourTooltip.Tail(armour, id => player.RecordName?.Invoke(id), t.Level).Select(PlayerInterface.ArmourRow));
+            lines.AddRange(ArmourTooltip.Tail(armour, id => player.RecordName?.Invoke(id), t.Level).Select(ArmourRow));
             // Then a blank row and the record's description; for a piece with a crafter's name another blank row, the heading and a paragraph naming the smith and the player's faction
             // (FUN_1407a33a0, Observed: docs/game/ui-screens.md "Item tooltip"). Paragraphs wrap at the tooltip's width without widening it.
             if (record?.GetString("description") is { Length: > 0 } description)
@@ -814,7 +814,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     {
         yield return new(" ");
         // MyGUI prints "##" as one '#'.
-        if (model is not null) yield return new("[" + Loc.Tr("Model ##").Replace("##", "#", StringComparison.Ordinal) + " " + model + "]", "", PlayerInterface.GradeTone(PlayerInterface.WeaponGrade(t.Level)));
+        if (model is not null) yield return new("[" + Loc.Tr("Model ##").Replace("##", "#", StringComparison.Ordinal) + " " + model + "]", "", GradeTone(WeaponGrade(t.Level)));
         if (t.Crafter.Length > 0)
         {
             string faction = player.PlayerFactionName?.Invoke() ?? "";
@@ -903,4 +903,18 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// <summary>The KO point line's tooltip (<c>FUN_140895350</c>).</summary>
     internal static string KoPointTip(float koPoint) =>
         Loc.Tr("When an injury to a body part goes below your KO point of {1,num} then you are down for good. Your body will enter a coma and won't regain consciousness until all critical body parts have healed above 0.", (int)koPoint);
+
+    /// <summary>The tone of a grade's name (<c>ItemGrade0</c> to <c>ItemGrade4</c> of kenshi_colours.xml; Specialist and Masterwork share the last).</summary>
+    internal static TooltipTone GradeTone(int grade) => grade switch { 0 => TooltipTone.Grade0, 1 => TooltipTone.Grade1, 2 => TooltipTone.Grade2, 3 => TooltipTone.Grade3, _ => TooltipTone.Grade4 };
+    /// <summary>A weapon's grade colour by its level (<c>FUN_1401625c0</c>, <b>Observed</b>): below 16, 36, 51, 66, up to 80, above 80.</summary>
+    internal static int WeaponGrade(int level) => level < 16 ? 0 : level < 36 ? 1 : level < 51 ? 2 : level < 66 ? 3 : level <= 80 ? 4 : 5;
+
+    /// <summary>An armour line (<see cref="ArmourTooltip"/>, docs/game/ui-screens.md "Item tooltip") as a tooltip row: a statistic's or effect's label in the title colour, a grade in its grade's colour, an effect's value in the bad colour below neutral and the good colour above.</summary>
+    internal static TooltipLine ArmourRow(ArmourTooltip.Line line) => line.Kind switch
+    {
+        ArmourTooltip.LineKind.Grade => new(line.Label, "", GradeTone(line.Grade)),
+        ArmourTooltip.LineKind.Stat => new(line.Label, line.Value, TooltipTone.Title, TooltipTone.Ink),
+        ArmourTooltip.LineKind.Effect => new(line.Label, line.Value, TooltipTone.Title, line.Grade < 0 ? TooltipTone.Bad : TooltipTone.Good),
+        _ => new(line.Label, line.Value, TooltipTone.Main, TooltipTone.Main),
+    };
 }

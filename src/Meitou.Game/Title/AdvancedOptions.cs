@@ -89,7 +89,7 @@ sealed class AdvancedOptions(PlayerInterface player)
             var option = NewGameSettings.Options[i];
             float y = area.Y + i * row;
             // The option's name shows its help (only the name column, so the pointer can go down the right side to the help's scroll bar).
-            if (new UiRect(area.X, y, labelWidth, row).Contains(player.mouse.X, player.mouse.Y) && advancedHelp != i) { advancedHelp = i; player.inventoryScroll.Remove(screen); }
+            if (new UiRect(area.X, y, labelWidth, row).Contains(player.mouse.X, player.mouse.Y) && advancedHelp != i) { advancedHelp = i; player.scrollBars.inventoryScroll.Remove(screen); }
             var label = Text();
             controls.Add(new($"advanced-label-{i}", "TextBox", new(area.X, y + 4 * s, labelWidth - 6 * s, row - 8 * s), Loc.Tr(option.Label), "", "Kenshi_GenericTextBoxFlatSkin", true, label, Vector4.Zero, Pickable: false));
             float left = area.X + labelWidth, right = area.X + area.Width - valueWidth - arrow;
@@ -106,7 +106,7 @@ sealed class AdvancedOptions(PlayerInterface player)
         {
             var tick = NewGameSettings.Ticks[i];
             float y = area.Y + (sliders + i) * row, box = Math.Min(row - 6 * s, 28 * s);
-            if (new UiRect(area.X, y, labelWidth, row).Contains(player.mouse.X, player.mouse.Y) && advancedHelp != sliders + i) { advancedHelp = sliders + i; player.inventoryScroll.Remove(screen); }
+            if (new UiRect(area.X, y, labelWidth, row).Contains(player.mouse.X, player.mouse.Y) && advancedHelp != sliders + i) { advancedHelp = sliders + i; player.scrollBars.inventoryScroll.Remove(screen); }
             controls.Add(new($"advanced-tick-label-{i}", "TextBox", new(area.X, y + 4 * s, labelWidth - 6 * s, row - 8 * s), Loc.Tr(tick.Label), "", "Kenshi_GenericTextBoxFlatSkin", true, Text(), Vector4.Zero, Pickable: false));
             string ticked = NewGameOptions.Ticked(i) ? "true" : "false";
             controls.Add(new($"advanced-tick-{i}", "Button", new(area.X + area.Width - valueWidth / 2 - box / 2, y + (row - box) / 2, box, box), "", $"advanced-tick:{i}", "Kenshi_TickBoxSkin", true,
@@ -125,14 +125,14 @@ sealed class AdvancedOptions(PlayerInterface player)
             float maximum = content > view.Height + 0.5f ? content - view.Height : 0;
             if (maximum > 0)
             {
-                float scroll = Math.Clamp(player.inventoryScroll.GetValueOrDefault(screen), 0, maximum);
-                player.inventoryScroll[screen] = scroll;
-                player.inventoryViews[screen] = (view, maximum);
+                float scroll = Math.Clamp(player.scrollBars.inventoryScroll.GetValueOrDefault(screen), 0, maximum);
+                player.scrollBars.inventoryScroll[screen] = scroll;
+                player.scrollBars.inventoryViews[screen] = (view, maximum);
                 shown = shown with { Bounds = view with { Width = view.Width - bar }, Properties = new Dictionary<string, string>(text) { ["TextScroll"] = scroll.ToString(CultureInfo.InvariantCulture) } };
                 controls.Add(shown);
-                player.AddScrollBar(screen, controls, new(view.X + view.Width - bar, view.Y, bar, view.Height), view.Height, content, scroll, maximum, footer.Clip);
+                player.scrollBars.AddScrollBar(screen, controls, new(view.X + view.Width - bar, view.Y, bar, view.Height), view.Height, content, scroll, maximum, footer.Clip);
             }
-            else { player.inventoryViews.Remove(screen); player.inventoryTracks.Remove(screen); controls.Add(shown); }
+            else { player.scrollBars.inventoryViews.Remove(screen); player.scrollBars.inventoryTracks.Remove(screen); controls.Add(shown); }
         }
     }
 }

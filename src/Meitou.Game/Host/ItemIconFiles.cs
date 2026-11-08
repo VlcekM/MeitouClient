@@ -56,7 +56,7 @@ sealed class ItemIconFiles(GameHost host)
         if (host.ActiveCharacters is not { } drawer || iconsEnhanced == drawer.EnhancedIcons) return;
         iconsEnhanced = drawer.EnhancedIcons;
         drawer.IconSaveDirectory = IconSaveDirectory(drawer.EnhancedIcons);
-        host.player.SetItemIcons(ItemIconsOfInstall(drawer.EnhancedIcons));
+        host.player.itemCells.SetItemIcons(ItemIconsOfInstall(drawer.EnhancedIcons));
     }
 
     /// <summary>
@@ -67,8 +67,8 @@ sealed class ItemIconFiles(GameHost host)
     {
         iconsEnhanced = null;
         SyncIconLook();
-        if (host.ActiveCharacters is null) host.player.SetItemIcons(ItemIconsOfInstall(false));
-        host.player.SetRenderedIcons(name =>
+        if (host.ActiveCharacters is null) host.player.itemCells.SetItemIcons(ItemIconsOfInstall(false));
+        host.player.itemCells.SetRenderedIcons(name =>
         {
             if (UiPainter.TryParseRenderedIcon(name, out string record, out string material, out string colour))
                 return host.ActiveCharacters is { } characters && characters.TryGetIcon(new IconKey(record, material, colour), out var icon) ? icon : null;

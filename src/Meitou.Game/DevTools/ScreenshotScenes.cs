@@ -180,7 +180,7 @@ sealed class ScreenshotScenes(GameHost host)
             if (panelName == "edited") { host.player.characterEditor.ShowcaseEdit(); host.session.AdvanceSimulation(host.session.Ticks.TickSeconds); }
             if (panelName == "building") { host.UpdateView(w, h); host.player.ShowUiPanel("building"); host.session.AdvanceSimulation(host.session.Ticks.TickSeconds); }
             // Item icons are drawn from the frame after a cell asks for them, and their textures stream in: show the panel until they are done.
-            for (int frames = 0; panelName is not null && overlay is not null && frames < 400 && (frames < 3 || host.gpu.Characters is { PendingIcons: > 0 } || host.gpu.Objects is { StagePropPending: true } || host.characterEditor.editorBar is not null && !host.characterEditor.editorBarReady || host.gpu.Objects is { PendingBuildingIcons: > 0 } || host.player.PendingIconFiles > 0); frames++)
+            for (int frames = 0; panelName is not null && overlay is not null && frames < 400 && (frames < 3 || host.gpu.Characters is { PendingIcons: > 0 } || host.gpu.Objects is { StagePropPending: true } || host.characterEditor.editorBar is not null && !host.characterEditor.editorBarReady || host.gpu.Objects is { PendingBuildingIcons: > 0 } || host.player.itemCells.PendingIconFiles > 0); frames++)
             {
                 host.DrawWorld(w, h);
                 overlay.Target = target;

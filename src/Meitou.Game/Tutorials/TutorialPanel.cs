@@ -358,7 +358,7 @@ sealed class TutorialPanel(PlayerInterface player)
         var wanted = WantedHighlight();
         // startHighlight: a new item starts at alpha 0, rising; endHighlight resets.
         if (wanted != highlightShown) (highlightShown, highlightAlpha, highlightDirection) = (wanted, 0, 1);
-        if (wanted == TutorialHighlight.None || HighlightBounds(wanted, controls, player.obedienceJob) is not { } box) return;
+        if (wanted == TutorialHighlight.None || HighlightBounds(wanted, controls, player.ordersPanel.obedienceJob) is not { } box) return;
         highlightAlpha += highlightDirection * dt * HighlightRate;
         if (highlightAlpha >= HighlightHigh) (highlightAlpha, highlightDirection) = (HighlightHigh, -1);
         else if (highlightAlpha <= HighlightLow && highlightDirection < 0) (highlightAlpha, highlightDirection) = (HighlightLow, 1);

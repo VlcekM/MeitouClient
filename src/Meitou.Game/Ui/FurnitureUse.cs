@@ -183,7 +183,7 @@ sealed class FurnitureUse(PlayerInterface player)
     }
 
     // Containers of a building's interior (docs/game/locks.md "Containers"): a right click on one sends the nearest selected character to open it (pointer <c>search</c>); its inventory
-    // then shows in the storage window the research bench uses (<c>PlayerInterface.Production.cs</c>), beside the character's.
+    // then shows in the storage window the research bench uses (<c>ProductionWindows</c>), beside the character's.
     /// <summary>Whether a place is above the floor shown in a building the player is in, where nothing is drawn (the host sets it; null: never).</summary>
     public Func<Vector3, bool>? AboveViewedFloor { get; set; }
 

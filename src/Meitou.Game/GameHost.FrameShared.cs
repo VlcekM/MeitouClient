@@ -4,6 +4,7 @@ using Meitou.Game.Host;
 using Meitou.Game.Host.Input;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Ui;
 
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 
@@ -98,7 +99,7 @@ sealed partial class GameHost
             player.Notice(message);
             if (devConsoleHost.explodeAsker is { } asker && message.StartsWith("Explode at ", StringComparison.Ordinal)) { asker.Print(message); devConsoleHost.explodeAsker = null; }
         }
-        foreach (var line in world.TakeSaid()) player.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
+        foreach (var line in world.TakeSaid()) player.messageRoller.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
         // Stealth knock-outs: the original's floating "*Thunk*" (a hit) or "Failed!" over the attacker, here as a notice.
         if (world.Systems.OfType<Meitou.Simulation.Carrying.CarrySystem>().FirstOrDefault() is { Knockouts.Count: > 0 } carry)
             foreach (var k in carry.TakeKnockouts())

@@ -92,7 +92,7 @@ sealed class InventoryWindows(PlayerInterface player)
         else if (lead is not null && lead.Id != pinnedFrom && !pinnedInventories.ContainsValue(lead.Id) && !player.faithfulScreens.IsOpen("inventory"))
         {
             player.faithfulScreens.Open("inventory");
-            if (pinnedInventories.FirstOrDefault(p => p.Value == pinnedFrom).Key is { } anchor) player.PlaceInventoryBeside("inventory", left: true, anchor: anchor);
+            if (pinnedInventories.FirstOrDefault(p => p.Value == pinnedFrom).Key is { } anchor) player.inventoryLayout.PlaceInventoryBeside("inventory", left: true, anchor: anchor);
             pinnedFrom = CharacterId.None;
         }
         var shown = pinnedInventories.Values.ToArray();
@@ -159,13 +159,13 @@ sealed class InventoryWindows(PlayerInterface player)
             return true;
         }
         if (player.faithfulScreens.HitTest(p) is not { } picked || !picked.Control.Enabled) return false;
-        if (player.ScrollThumbDown(picked.Screen, picked.Control, p)) return true;
+        if (player.scrollBars.ScrollThumbDown(picked.Screen, picked.Control, p)) return true;
         return LiftAt(picked.Screen, picked.Control, p);
     }
 
     internal void InventoryPointerUp(Vector2 p)
     {
-        player.scrollDrag = null;
+        player.scrollBars.scrollDrag = null;
         if (liftPress is not { } from) return;
         liftPress = null;
         // The release places the item it lifted once the pointer has moved (a drag); a click leaves it on the mouse for the next press.
@@ -382,7 +382,7 @@ sealed class InventoryWindows(PlayerInterface player)
             if (DropAt(player.mouse) is { Kind: DropKind.Section, Shows: true } spot)
                 controls.Add(new("held-target", "Widget", spot.Area, "", "", "", true, new Dictionary<string, string>(), new Vector4(1, 1, 1, 0.5f), Pickable: false, Clip: spot.Clip));
             float cell = player.InventoryCell;
-            player.AddItemCell(controls, "held-item", new(player.mouse.X - heldGrab.X * cell, player.mouse.Y - heldGrab.Y * cell, h.Width * cell, h.Height * cell),
+            player.itemCells.AddItemCell(controls, "held-item", new(player.mouse.X - heldGrab.X * cell, player.mouse.Y - heldGrab.Y * cell, h.Width * cell, h.Height * cell),
                 h.Record, h.Material, h.Name, h.Quantity, null, "HeldItem", 0, null, pickable: false, charge: h.Charge, colour: h.Colour);
         }
         player.tradeWindows.AddFencePrompt(controls);
@@ -392,8 +392,8 @@ sealed class InventoryWindows(PlayerInterface player)
     internal bool CancelInventoryDrag()
     {
         if (player.faithfulScreens.HasModal) return false;   // the open question (the fencing prompt) takes the key first
-        bool captured = held is not null || player.scrollDrag is not null || liftPress is not null;
-        player.scrollDrag = null;
+        bool captured = held is not null || player.scrollBars.scrollDrag is not null || liftPress is not null;
+        player.scrollBars.scrollDrag = null;
         liftPress = null;
         ReturnHeldItem();
         return captured;
@@ -436,7 +436,7 @@ sealed class InventoryWindows(PlayerInterface player)
         if (open && who?.Id == limbsOwner || who is null || !HasLimbWindow(who)) return;
         limbsOwner = who.Id;
         player.faithfulScreens.Open("limbs");
-        player.PlaceLimbsWindow();
+        player.inventoryLayout.PlaceLimbsWindow();
     }
 
     /// <summary>Once a frame: the limbs window closes with the window of the character it shows (the inventory, or the open loot), or when that window shows another character.</summary>
@@ -453,9 +453,9 @@ sealed class InventoryWindows(PlayerInterface player)
         var lead = InventoryOwner();
         bool want = player.faithfulScreens.IsOpen("inventory") && lead is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } } && bagOpen.Contains(lead.Id);
         if (want == player.faithfulScreens.IsOpen("bag")) return;
-        if (!want) { player.faithfulScreens.Close("bag"); if (player.tradeWindows.shownTrader.IsNone && player.faithfulScreens.IsOpen("loot")) player.PlaceWindowRow(); return; }
+        if (!want) { player.faithfulScreens.Close("bag"); if (player.tradeWindows.shownTrader.IsNone && player.faithfulScreens.IsOpen("loot")) player.inventoryLayout.PlaceWindowRow(); return; }
         player.faithfulScreens.Open("bag");
-        if (player.tradeWindows.shownTrader.IsNone) player.PlaceBagWindow(); else player.tradeWindows.PlaceTradeWindows();
+        if (player.tradeWindows.shownTrader.IsNone) player.inventoryLayout.PlaceBagWindow(); else player.tradeWindows.PlaceTradeWindows();
     }
 
     /// <summary>

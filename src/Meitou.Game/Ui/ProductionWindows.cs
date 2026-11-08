@@ -15,7 +15,7 @@ namespace Meitou.Game.Ui;
 /// <list type="bullet">
 /// <item>Selecting a complete machine of the player's opens its window at the left edge, vertically centred: a well or farm the original's <c>Kenshi_GenericBuildingWindow</c> (inputs in <c>in1</c> / <c>in2</c>,
 /// the output in <c>out</c>, their bars and texts), a research bench <c>Kenshi_InventoryResearchWindow</c> (its storage grid; the RESEARCH button opens the overview's research tab).
-/// Items are held with the mouse between the windows and the selected character's inventory (PlayerInterface.Inventory.cs), or moved with a right click (<see cref="PutInMachine"/>,
+/// Items are held with the mouse between the windows and the selected character's inventory (<see cref="InventoryWindows"/>), or moved with a right click (<see cref="PutInMachine"/>,
 /// <see cref="TakeFromMachine"/>).</item>
 /// <item>The site menu has Operate for a machine characters work; a quick right click on one gives it.</item>
 /// <item>The overview's research tab: TYPES lists the categories, BLUEPRINTS the research of the selected category that can be queued (a click queues it), QUEUE the queue (a click
@@ -66,13 +66,13 @@ sealed class ProductionWindows(PlayerInterface player)
         if (m is null || shownMachine == m.Site || closedMachine == m.Site) return;
         shownMachine = m.Site;
         string screen = MachineScreen(m);
-        player.inventoryScroll.Remove(screen);
+        player.scrollBars.inventoryScroll.Remove(screen);
         // The character's inventory opens with an order-driven container window (the original's order 26 opens the looter's own window and the target's together) and with a machine's; selecting
         // a selected machine, storage, bench or mined rock shows its window alone (the original's windows of a selected ore storage and electrical workbench have no inventory beside them).
         bool alone = !m.IsContainer && player.build.storageWithInventory != m.Site;
         if (!alone && player.Selected().Count > 0 && !player.faithfulScreens.IsOpen("inventory")) player.faithfulScreens.Open("inventory");
         player.faithfulScreens.Open(screen);
-        player.PlaceMachineWindow(screen);
+        player.inventoryLayout.PlaceMachineWindow(screen);
     }
 
     internal void BindMachineScreen(string id, UiBindings b)
@@ -146,7 +146,7 @@ sealed class ProductionWindows(PlayerInterface player)
             {
                 // A crafting bench's input: "Empty!" for an empty section with nothing taken in, else "OK" (a section holds only its ingredient here, so never "Invalid item!").
                 bool empty = input.Count <= 0 && input.Fill <= 0;
-                b.Text[$"Input{n}StatusText"] = empty ? "#afa68b" + Loc.Tr("Empty!") : PlayerInterface.TipGood + Loc.Tr("OK");
+                b.Text[$"Input{n}StatusText"] = empty ? "#afa68b" + Loc.Tr("Empty!") : HudPanels.TipGood + Loc.Tr("OK");
             }
             else b.Text[$"Input{n}StatusText"] = $"{input.Count.ToString(CultureInfo.InvariantCulture)}/{input.Capacity.ToString(CultureInfo.InvariantCulture)}";
             b.Progress[$"Input{n}ProgressBar"] = input.Fill;
@@ -201,7 +201,7 @@ sealed class ProductionWindows(PlayerInterface player)
     /// <summary>The faded picture of the item a slot expects (alpha 0.35), shown while the slot is empty.</summary>
     void AddItemGhost(List<UiControl> controls, string name, UiRect area, string record, string material, UiRect? clip)
     {
-        if (player.itemIcons?.Choose(record, material) is not { } choice || player.uiPainter is not { } painter) return;
+        if (player.itemCells.itemIcons?.Choose(record, material) is not { } choice || player.uiPainter is not { } painter) return;
         Dictionary<string, string>? image = null;
         if (choice is { Source: ItemIconSource.File, File: { } file } && painter.IconReady(file)) image = new() { ["ImageTexture"] = UiPainter.IconTexture(file) };
         else if (choice.Source == ItemIconSource.Render && UiPainter.RenderedIconTexture(record, material, choice.Colour) is { } rendered && painter.RenderedIconReady(rendered))
@@ -217,14 +217,14 @@ sealed class ProductionWindows(PlayerInterface player)
         if (id is "bench" or "storage")
         {
             if (m.Storage is not { } grid) return;
-            if (id == "storage") player.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
-            else player.ArrangeContainerGrid(id, controls, grid.Width, grid.Height);
+            if (id == "storage") player.inventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
+            else player.inventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height);
             if (controls.FirstOrDefault(c => c.Name == "backpack_content") is not { } slot) return;
             var area = slot.Bounds;
             foreach (var item in grid.Items)
             {
                 if (player.inventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 1000 + item.Index)) continue;
-                player.AddItemCell(controls, $"machine-item-{item.Index}",
+                player.itemCells.AddItemCell(controls, $"machine-item-{item.Index}",
                     new(area.X + item.X * area.Width / grid.Width, area.Y + item.Y * area.Height / grid.Height, item.Width * area.Width / grid.Width, item.Height * area.Height / grid.Height),
                     item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
                     slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour);
@@ -258,7 +258,7 @@ sealed class ProductionWindows(PlayerInterface player)
                         controls[i] = controls[i] with { Bounds = controls[i].Bounds with { Y = controls[i].Bounds.Y + dy }, Clip = clip };
             if (view.Count <= 0 && m.Craft is not null) AddItemGhost(controls, $"machine-{name}", b, view.Item, "", clip);
             if (view.Count <= 0 || player.inventoryWindows.Lifted(ItemOwner.AtSite(m.Site), code)) return;
-            player.AddItemCell(controls, $"machine-{name}", b, view.Item, "", view.Name, view.Count, null, "MachineItem", code, clip);
+            player.itemCells.AddItemCell(controls, $"machine-{name}", b, view.Item, "", view.Name, view.Count, null, "MachineItem", code, clip);
         }
         for (int k = 0; k < Math.Min(2, m.Inputs.Count); k++) Slot($"in{k + 1}", $"Input{k + 1}ProgressBar", m.Inputs[k], 10 + k);
         if (FurnaceGrid(m) is { } fg && m.Furnace is { } burn)
@@ -273,7 +273,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 foreach (var item in fg.Items)
                 {
                     if (player.inventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 1000 + item.Index)) continue;
-                    player.AddItemCell(controls, $"machine-item-{item.Index}",
+                    player.itemCells.AddItemCell(controls, $"machine-item-{item.Index}",
                         new(g.Bounds.X + item.X * player.InventoryCell, g.Bounds.Y + item.Y * player.InventoryCell, item.Width * player.InventoryCell, item.Height * player.InventoryCell),
                         item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index, g.Clip, charge: item.Charge, colour: item.Colour);
                 }
@@ -284,7 +284,7 @@ sealed class ProductionWindows(PlayerInterface player)
         {
             var ob = outSlot.Bounds;
             float side = MathF.Min(ob.Width, ob.Height);
-            player.AddItemCell(controls, "machine-out", new(ob.X, ob.Y, side, side), made.Record, made.Material, made.Name, made.Quantity, null, "MachineItem", 8, outSlot.Clip, colour: made.Colour);
+            player.itemCells.AddItemCell(controls, "machine-out", new(ob.X, ob.Y, side, side), made.Record, made.Material, made.Name, made.Quantity, null, "MachineItem", 8, outSlot.Clip, colour: made.Colour);
         }
         else if (m.Craft is { Done: [] } craft && CraftCurrent(craft) is { } current && controls.FirstOrDefault(c => c.Name == "out") is { } emptyOut)
         {
@@ -875,7 +875,7 @@ sealed class ProductionWindows(PlayerInterface player)
                 else if (guess.Quality >= 0)
                 {
                     int grade = Meitou.Simulation.Combat.ArmourTooltip.GradeOf(guess.Quality);
-                    rows.Add(new(Loc.Tr("-Predicted Result:"), PlayerInterface.Tag(TooltipRuntime.TipColour(PlayerInterface.GradeTone(grade), false)) + Loc.Tr(Meitou.Simulation.Combat.ArmourTooltip.GradeNames[grade])));
+                    rows.Add(new(Loc.Tr("-Predicted Result:"), PlayerInterface.Tag(TooltipRuntime.TipColour(TooltipRuntime.GradeTone(grade), false)) + Loc.Tr(Meitou.Simulation.Combat.ArmourTooltip.GradeNames[grade])));
                 }
                 if (guess.Critical >= 0) rows.Add(new(Loc.Tr("-Critical Success Chance:"), Loc.Tr("{1,num}%", guess.Critical)));
             }

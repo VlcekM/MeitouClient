@@ -518,7 +518,7 @@ sealed class AgentOrders(PlayerInterface player)
     }
 
     // The agent control channel's play API (docs/procedures/agent-play-api.md): <c>observe</c> (one JSON for a decision) and the thin wrappers that give the selection the game's own order commands
-    // (stop, follow, stance, pick up, loot, first aid, build, operate, research, craft). Every action goes out through PlayerInterface.PlayerInterface.Say as the same SimCommand the player's input gives;
+    // (stop, follow, stance, pick up, loot, first aid, build, operate, research, craft). Every action goes out through PlayerInterface.Say as the same SimCommand the player's input gives;
     // each returns false with the reason when the game would refuse it. Characters are selected with <c>select</c> first; the orders go to the selection.
     static double R1(double v) => Math.Round(v, 1);
     static double R2(double v) => Math.Round(v, 2);
@@ -1226,7 +1226,7 @@ sealed class AgentOrders(PlayerInterface player)
     }
 
     // More of the agent control channel's play API (docs/procedures/agent-play-api.md): work on a site, prospect (and the last prospecting as observe.resources), equip, carry, trade, and the kill counter.
-    // Same rules as PlayerInterface.ControlPlay.cs: the game's own commands, to the selection, refused with a reason.
+    // Same rules as the rest of the play API: the game's own commands, to the selection, refused with a reason.
     // ---- work on a site
 
     /// <summary>A <see cref="Meitou.Simulation.Construction.BuildOrder"/> on a site of yours (build it, or repair it when it is complete and damaged) for the selection.</summary>
