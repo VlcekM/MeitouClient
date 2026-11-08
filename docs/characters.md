@@ -169,12 +169,19 @@ white second colour for Bounty Hunters), which paints the colour map's second re
 
 ### Characters that cannot be drawn
 
-A look whose body mesh is empty cannot be built (`CharacterContent.Build` returns null, cached for that look): its characters are never drawn, with no error in play (their position, markers and ground
-trails still exist). **Observed** (a 664-mod save, `draw-state`): 6 of 760 characters (a shop guard, bar patron, samurai and bounty captains) were undrawn this way, all of race `Hive Scout Drone`
-`16-HiverScoutmesh.mod`, a RACE record left as a stub (no mesh, texture or ragdoll field) because the mod that defines it is not loaded. The original then shows a plain Greenlander (**Observed** by the user in play, not checked by RE).
-Meitou's rule (`CharacterAppearance.Build`): a race with no mesh for the character's gender takes the other gender's mesh, else the default race's look (`Greenlander`) with a note; the character
-keeps its own race for everything else. A look that still fails to build prints one `characters a look failed to build ...` line with the cause and is marked by the debug square
-(`GameHost.DrawMarkers`) like a character with no look. Reproduce with `spawn-at <x> <z> --race "Hive Scout Drone"` and `draw-state`.
+**Verified** (decompile of kenshi_x64.exe):
+- A character whose race id names no RACE record (`FUN_140074f00`) logs "Warning: Missing race: <id>. Using fallback.", takes
+  `17-gamedata.quack` (Greenlander) and rewrites its `race` reference to it; `FUN_140538360` (the appearance's race) falls back the same way.
+- A RACE record that exists without a mesh for the gender is not that case: the loader creates a record a mod only changes even when its base is
+  missing (fcs-mod.md "Merging"). `Appearance::chooseBodyMesh` (`FUN_14052cd20`) reads the race's mesh for the gender (`FUN_14006eaf0`) and, when it
+  is empty, returns `human_male.mesh` whatever the gender; there is no fall back to the other gender's mesh. The body is then made by
+  `createBody` (`FUN_140539ed0`), which only logs "Error: Character model for race '{1}' not found" when the entity cannot be made.
+Meitou (`CharacterAppearance.Build`) draws `human_male.mesh` the same way. **Observed** (a 664-mod save, `draw-state`): 6 of 760 characters were of race
+`Hive Scout Drone` `16-HiverScoutmesh.mod`, a stub left by `Animation - Collection Pack.mod` changing a record of a mod that is not loaded; before
+this rule they were never drawn (the look failed to build, cached, silently). A look that still fails to build prints one
+`characters a look failed to build ...` line and is marked by the debug square (`GameHost.DrawMarkers`). Reproduce with
+`spawn-at <x> <z> --race "Hive Scout Drone"` and `draw-state`. The race's texture names (empty here) are copied as they are into the character
+material's parameters (`FUN_140070790`, `diffuse` to `diffuseMap`), and `Character`'s `diffuseMap` in `character.material` names no default texture.
 
 ### Clothing colours
 
