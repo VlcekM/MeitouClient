@@ -91,6 +91,7 @@ c help                                # one usage line per command; `c help <nam
 | `interior-hide` | `interior-hide <mesh text | off>` (debug: building parts whose mesh path contains the text count as hidden by the floor view) |
 | `interior-debug` | `interior-debug <cover|shadow> <on|off>` (interior lighting debug switches; cover: the room-grid focus ignores surfaces above the viewed floor; shadow: shadow passes leave out what the view hides) |
 | `interior-view` | `interior-view <floor 0..3 | off>` (holds the interior view of the building over the camera target at a floor with no character inside; `state` lists it under `interior`) |
+| `object-sort` | `object-sort <on|off>` (debug: colour batches of objects drawn nearest first, the default, or in the order met) |
 | `kill` | `kill [--id <c:slot.gen>] \| kill --radius <m> [<x> <z>] [--animals]` |
 | `ko` | `ko [seconds] [--id <c:slot.gen>]` |
 | `layouts` | `layouts <building record id or name> [exterior]` |

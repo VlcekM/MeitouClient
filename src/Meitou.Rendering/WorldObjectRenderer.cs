@@ -1116,7 +1116,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             }
 
         // Nearest first: what a nearer batch covers fails the early depth test of the farther ones (the colour pass only; the depth passes have no shading to save).
-        if (SortNearestFirst && !depthPass) active.Sort(static (a, b) => a.Near.CompareTo(b.Near));
+        if (SortNearestFirst && !InteriorDebug.NoObjectSort && !depthPass) active.Sort(static (a, b) => a.Near.CompareTo(b.Near));
         // 2. The instances.
         UploadInstances();
 
