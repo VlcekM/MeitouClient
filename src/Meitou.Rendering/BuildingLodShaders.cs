@@ -89,6 +89,23 @@ static class BuildingLodShaders
             }
             """);
         f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", ScaffoldFunctions + "\nvoid main()\n{");
+        // The editor's studio (Meitou, previewsun; CharacterRenderer.Studio): the platform lit as the character on it, the character's shadow and its
+        // sky's occlusion on it (the view block's interior-cut fields: the native port leaves view.* and the bindless tables as they are).
+        f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", Characters.StudioShaders.Functions + "\nvoid main()\n{");
+        f = Literal(f, "if (uFogDistance < -1.5) colour = stageLight(albedo, n, v, normalize(uLightDir), glossLit, uFogDistance < -2.5);", """
+            if (uFogDistance < -3.5)
+            {
+                vec3 sl = normalize(uLightDir);
+                float shade = studioShadow(vWorld, n, sl);
+                vec3 sky = mix(vec3(0.30, 0.23, 0.16), vec3(0.30, 0.36, 0.46), smoothstep(-0.6, 0.8, n.y)) * studioSky(vWorld, n);
+                vec3 sh = normalize(sl + v);
+                float sd = max(dot(n, sl), 0.0);
+                float sspec = pow(max(dot(n, sh), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.6;
+                colour = albedo * (sky + sd * vec3(1.0, 0.92, 0.80) * 1.9 * shade) + sspec * sd * vec3(1.0, 0.92, 0.80) * 1.9 * shade;
+            """ + (Environment.GetEnvironmentVariable("MEITOU_STUDIO_DEBUG") == "1" ? "    colour = vec3(shade, studioSky(vWorld, n), 0.0);" : "") + """
+            }
+            else if (uFogDistance < -1.5) colour = stageLight(albedo, n, v, normalize(uLightDir), glossLit, uFogDistance < -2.5);
+            """);
         if (solid) f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;", "");
         else
             f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", CutVolumes + """

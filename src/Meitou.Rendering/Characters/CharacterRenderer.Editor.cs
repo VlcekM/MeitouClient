@@ -62,6 +62,8 @@ internal sealed unsafe partial class CharacterRenderer
     /// stage frame is turned half round from; null when no character was drawn.
     /// </summary>
     public (Matrix4x4 ViewProjection, Vector3 Eye, Vector3 Light, Matrix4x4 Feet)? StageView { get; private set; }
+    /// <summary>The last stage's studio view (Meitou, previewsun), which the platform is lit by (<c>WorldObjectRenderer.DrawStageProp</c>); null without the studio.</summary>
+    internal ViewConstants? StageStudio { get; private set; }
 
     /// <summary>
     /// Draws <see cref="StageRequest"/>'s character with its live pose (after <see cref="Update"/>, outside any pass), lit as the original's stage (<c>rtt.hlsl</c>, the shader's stage
@@ -70,7 +72,7 @@ internal sealed unsafe partial class CharacterRenderer
     public void DrawStage()
     {
         if (StageRequest is not { } r || r.Width <= 0 || r.Height <= 0) return;
-        StageView = null;
+        (StageView, StageStudio) = (null, null);
         if (stageColour is null || stageColour.Desc.Width != r.Width || stageColour.Desc.Height != r.Height) MakeStage(r.Width, r.Height);
         bool hdr = look.Enhanced;
         int scale = hdr ? StageScale(r.Width, r.Height) : 1;
@@ -97,17 +99,19 @@ internal sealed unsafe partial class CharacterRenderer
             // The studio (previewsun): the stage's light raised to a sun, its shadow and occlusion drawn first.
             if (StudioOn)
             {
-                // The studio's sun from the camera's front right, about 35 degrees up, whichever way the editor turns the camera (in the character's
+                // The studio's sun from the camera's right, about 45 degrees to the side and 35 up (the character's shadow shows on the platform), whichever way the editor turns the camera (in the character's
                 // frame it came from the side, and the skirt shaded the legs).
                 var toEye = Vector3.Normalize(new Vector3(eye.X - l.Centre.X, 0, eye.Z - l.Centre.Z));
                 var leftOfCamera = Vector3.Cross(toEye, Vector3.UnitY);
-                light = Vector3.Normalize(0.75f * toEye - 0.45f * leftOfCamera + 0.62f * Vector3.UnitY);
+                light = Vector3.Normalize(0.6f * toEye - 0.62f * leftOfCamera + 0.6f * Vector3.UnitY);
             }
             Matrix4x4.Decompose(l.World, out _, out var facing, out _);
             StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
+            StageStudio = null;
             constants = StudioOn
                 ? StudioView(index, view * projection, perspective, eye, light, stageHdr!, stageHdrDepth!, target.Width, target.Height)
                 : new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light, FogDistance = hdr ? -3 : -2 };
+            if (StudioOn) StageStudio = constants;
         }
         var cmd = Gpu.BeginNative("character stage");
         cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));

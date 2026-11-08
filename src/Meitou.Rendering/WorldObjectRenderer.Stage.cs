@@ -30,7 +30,8 @@ public sealed unsafe partial class WorldObjectRenderer
     /// Draws the stage's prop into <paramref name="colour"/> and <paramref name="depth"/>, which hold the character already (outside any pass): the stage's camera and light,
     /// the stage's lighting (a fog distance of -2) and no weather. Nothing while its mesh is not loaded.
     /// </summary>
-    public void DrawStageProp(GpuTexture colour, GpuTexture depth, Matrix4x4 viewProjection, Vector3 eye, Vector3 light, float fogDistance = -2)
+    /// <param name="studio">The characters, whose stage has a studio view this frame (Meitou, previewsun): the platform is lit by it.</param>
+    internal void DrawStageProp(GpuTexture colour, GpuTexture depth, Matrix4x4 viewProjection, Vector3 eye, Vector3 light, float fogDistance = -2, Characters.CharacterRenderer? studio = null)
     {
         if (stageInstance is not { Gpu: { } gpu, Materials: { } materials } inst) return;
         foreach (var b in batchMap.Values) b.Count = 0;
@@ -51,6 +52,16 @@ public sealed unsafe partial class WorldObjectRenderer
         Gpu.BeginHostPass(cmd, targets, DrawState.Scene(targets.Formats));
         Gpu.SetPassViewport(new PixelViewport(0, 0, targets.Width, targets.Height, 0, 1), new PixelRect(0, 0, (uint)targets.Width, (uint)targets.Height));
         var constants = new ViewConstants { ViewProjection = Matrix4x4.CreateTranslation(eye) * viewProjection, Eye = Vector3.Zero, LightDir = light, FogDistance = fogDistance };
+        // The studio: its shadow and sky fields, the platform drawn eye-relative as before; no shadow cut (the objects read cutVolumes as one).
+        if (studio?.StageStudio is { } sv)
+        {
+            constants = sv;
+            constants.ViewProjection = Matrix4x4.CreateTranslation(eye) * viewProjection;
+            constants.Eye = Vector3.Zero;
+            constants.CutVolumes = 0;
+            // Eye-relative like the platform's positions (vWorld here is the point less the eye).
+            constants.CutRanges[0] = new Vector4(new Vector3(sv.CutRanges[0].X, sv.CutRanges[0].Y, sv.CutRanges[0].Z) - eye, sv.CutRanges[0].W);
+        }
         PrepareDraws(iconOptions, wire: false);
         for (int d = 0; d < drawCount; d++) draws[d].Push.Spare = MeshSurface.NoWeather;
         RecordDraws(colourProg, wire: false, in constants, default);

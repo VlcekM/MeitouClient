@@ -168,11 +168,13 @@ Fibonacci spiral over the whole sphere (384 px tiles of one atlas, the matrices 
 weighted by its normal, from which nothing of the character hides it (2 x 2 compare a direction); the screen's occlusion adds the folds at 0.6. The depth draws
 are the colour shader at fog distance -5, returning after its cut-outs. The map and occlusion indices and the map's matrix ride the view block's
 interior-cut fields (`cutPad`, `cutVolumes`, `cutRanges[0]`, `cutPlanes[0..3]`), which characters never read. The sun: portraits from the camera's
-right and front, about 16 degrees above the level (the camera is at the head's height: the way to it already climbs); the stage from the camera's front right, about 35 degrees up, whichever way the editor turns the camera.
+right and front, about 16 degrees above the level (the camera is at the head's height: the way to it already climbs); the stage from the camera's right, about 45 degrees to the side and 35 up, whichever way the editor turns the camera.
+The stage's platform (`WorldObjectRenderer.DrawStageProp`, the objects' shader, `StudioShaders`) takes the same view: lit by the studio's sun, it
+receives the character's shadow and the sky's occlusion round the feet (its `cutVolumes` left 0: the objects read it as their shadow cut; the
+centre made eye-relative like its positions). The platform's own parts cast nothing (only the character is in the maps).
 The map is drawn with the camera's levels of detail. Its lookup takes clip y -1 as the first row (the viewport is not flipped). `MEITOU_STUDIO_DEBUG=1`
 draws the terms instead (red the sun's share, green the sky's visibility, blue the screen's occlusion). **Observed** (sandbox, `editor` console command, overhead and camera
-suns): the hood shades the eyes, the mantle the shoulders under its edges, a held staff the skirt. Not there: the character's shadow on the stage's
-ground, and bounced light (the sky and the ground's bounce stand in).
+suns): the hood shades the eyes, the mantle the shoulders under its edges, a held staff the skirt. Not there: bounced light (the sky and the ground's bounce stand in).
 Atlas layout (Meitou): squad members take cells 0-29; the conversation window's speaker and player
 character take the last two (30, 31) while a conversation is open.
 Item icons (`CharacterRenderer.Icons.cs`) are the same: an item's mesh drawn through the item shader into a texture of its own, as a pseudo-instance that the world and shadow views skip;

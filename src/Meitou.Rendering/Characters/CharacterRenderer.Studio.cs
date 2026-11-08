@@ -174,6 +174,89 @@ internal sealed unsafe partial class CharacterRenderer
 }
 
 /// <summary>
+/// The studio's GLSL (<see cref="CharacterRenderer"/>'s studio), for the character shader and the objects' (the editor's platform): the sun's shadow,
+/// the sky's visibility and the screen's occlusion, through the view block's interior-cut fields. The objects read <c>cutVolumes</c> as their shadow cut,
+/// so their studio views leave it 0 (no screen occlusion there).
+/// </summary>
+internal static class StudioShaders
+{
+    public const string Functions = """
+        // The studio (CharacterRenderer.Studio, Meitou previews): its sun's shadow map and occlusion through the view block's interior-cut fields, which the
+        // characters never use: cutPad the map's bindless index, cutPlanes[0..3] its matrix relative to cutRanges[0].xyz (w: a texel in world units),
+        // cutVolumes the occlusion's index (the preview's own pixels).
+        float studioShadow(vec3 world, vec3 n, vec3 l)
+        {
+            if (view.cutPad == 0u) return 1.0;
+            mat4 m = mat4(view.cutPlanes[0], view.cutPlanes[1], view.cutPlanes[2], view.cutPlanes[3]);
+            float texel = view.cutRanges[0].w;
+            float slope = 1.0 - clamp(dot(n, l), 0.0, 1.0);
+            vec4 c = m * vec4(world - view.cutRanges[0].xyz + n * (texel * (1.0 + 2.0 * slope)) + l * (texel * 1.5), 1.0);
+            vec3 q = c.xyz / c.w;
+            vec2 uv = q.xy * 0.5 + 0.5;   // the viewport is not flipped (GlConventions.VkViewport): clip y -1 is the map's first row
+            vec2 size = vec2(textureSize(textures2D[nonuniformEXT(view.cutPad)], 0));
+            vec2 base = uv * size - 0.5;
+            vec2 f = fract(base);
+            ivec2 b = ivec2(floor(base));
+            // 4 x 4 texels, each compared, weighted bilinearly at the edges: a soft edge of two texels.
+            float lit = 0.0, total = 0.0;
+            for (int y = -1; y <= 2; y++)
+                for (int x = -1; x <= 2; x++)
+                {
+                    ivec2 t = clamp(b + ivec2(x, y), ivec2(0), ivec2(size) - 1);
+                    float w = (x == -1 ? 1.0 - f.x : x == 2 ? f.x : 1.0) * (y == -1 ? 1.0 - f.y : y == 2 ? f.y : 1.0);
+                    float stored = texelFetch(textures2D[nonuniformEXT(view.cutPad)], t, 0).r;
+                    lit += (q.z <= stored ? 1.0 : 0.0) * w;
+                    total += w;
+                }
+            return lit / total;
+        }
+        // The sky's visibility (CharacterRenderer.Studio): the share of the sphere's spiral directions, weighted by the normal, from which nothing of the
+        // character hides the point, each read in its tile of the sky atlas (cutRanges[1]: its bindless index, the directions, the radius, a tile's pixels).
+        float studioSky(vec3 world, vec3 n)
+        {
+            if (view.cutRanges[1].y < 0.5) return 1.0;
+            uint atlas = uint(view.cutRanges[1].x + 0.5);
+            int count = int(view.cutRanges[1].y + 0.5);
+            float radius = view.cutRanges[1].z, tile = view.cutRanges[1].w;
+            float texel = 2.0 * radius / tile;
+            vec3 p = world - view.cutRanges[0].xyz + n * (2.0 * texel);
+            float open = 0.0, total = 0.0;
+            for (int i = 0; i < count; i++)
+            {
+                float y = 1.0 - (float(i) + 0.5) * 2.0 / float(count), r = sqrt(max(1.0 - y * y, 0.0)), phi = float(i) * 2.39996323;
+                vec3 d = vec3(cos(phi) * r, y, sin(phi) * r);
+                float w = max(dot(n, d), 0.0);
+                if (w <= 0.0) continue;
+                vec3 up = abs(d.y) > 0.95 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+                vec3 xa = normalize(cross(up, d)), ya = cross(d, xa);
+                vec3 q = p + d * (1.5 * texel);
+                vec2 uv = vec2(dot(xa, q), dot(ya, q)) / radius * 0.5 + 0.5;
+                float z = (2.0 * radius - dot(d, q)) / (4.0 * radius);
+                vec2 base = (vec2(float(i % 8), float(i / 8)) + clamp(uv, 0.0, 1.0)) * tile - 0.5;
+                ivec2 b = ivec2(floor(base));
+                vec2 f = fract(base);
+                float lit = 0.0;
+                for (int k = 0; k < 4; k++)
+                {
+                    ivec2 o = ivec2(k & 1, k >> 1);
+                    float stored = texelFetch(textures2D[nonuniformEXT(atlas)], b + o, 0).r;
+                    lit += (z <= stored ? 1.0 : 0.0) * ((o.x == 0 ? 1.0 - f.x : f.x) * (o.y == 0 ? 1.0 - f.y : f.y));
+                }
+                open += w * lit;
+                total += w;
+            }
+            return total > 0.0 ? open / total : 1.0;
+        }
+        float studioOcclusion()
+        {
+            if (view.cutVolumes == 0u) return 1.0;
+            return texelFetch(textures2D[nonuniformEXT(view.cutVolumes)], ivec2(gl_FragCoord.xy), 0).r;
+        }
+
+        """;
+}
+
+/// <summary>
 /// The studio's occlusion (<see cref="CharacterRenderer"/>'s studio): horizon-based, from the camera's depth alone, eight fixed directions of six steps out to
 /// the reach; deterministic (the previews are supersampled, so a fixed pattern averages out). 1 open, 0 closed; the background stays 1.
 /// </summary>
