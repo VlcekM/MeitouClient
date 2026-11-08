@@ -13,7 +13,7 @@ namespace Meitou.Simulation.FirstAid;
 /// Splint Rigging (250). Both pick the patient with the highest score = need x nearness (x the relation factor, x 0.05 for a patient another medic already works on); the medic itself is a candidate
 /// at its plain need. The give-up list (<c>AITaskSystem.pathFailures</c>, +0x218: targets the AI could not path to, 20 s) is <see cref="CharacterCold.Ignored"/>, filled by the combat chase and
 /// by the walk to a patient (<see cref="Schedule"/>). Engine stand-ins, because Meitou has no sensed list and no town walls: "sensed" is the medic's sight range, "seen or heard" always holds,
-/// the blackboard's marked-for-death cage is never set, "the same town and building" is <see cref="SightMap.PlaceOf"/>.
+/// the blackboard's marked-for-death cage is never set, "the same town and building" is <see cref="SightMap.LocationOf"/>.
 /// </summary>
 public sealed partial class FirstAidSystem
 {
@@ -355,7 +355,7 @@ public sealed partial class FirstAidSystem
                 // Chained to this very medic: accepted below slave state 2 whatever the rules above said; any other needs them (FUN_14099f690:273-283, Verified).
                 if (ChainedTo(world, table.IdOf(i), other) ? other.SlaveState >= 2 : !ok) continue;
                 if (!other.IsImprisoned && !SeenOrHeard(world, i, s)) continue;   // a free stranger must be seen or heard (:247-248)
-                if (world.Sight.PlaceOf(i) != world.Sight.PlaceOf(s)) continue;
+                if (world.Sight.LocationOf(i) != world.Sight.LocationOf(s)) continue;   // the location hands, on top included (FUN_14099f690, Verified)
                 float need = Need(world, i, s, organic, robotic);
                 if (need <= 0) continue;
                 float score = need * Nearness(world, i, cold, s);
@@ -392,8 +392,8 @@ public sealed partial class FirstAidSystem
                 if (score > bestScore) { best = s; bestScore = score; }
             }
 
-        // Pass 5 (FUN_14099f690, Verified): standing inside its squad's home building, the prisoners in that building's cages, flat weight; no other test on them.
-        if (HomeKey(world, cold) is { } homeKey && world.Sight.BuildingOf(i) == homeKey)
+        // Pass 5 (FUN_14099f690, Verified): in its squad's home building (its location, on top included), the prisoners in that building's cages, flat weight; no other test on them.
+        if (HomeKey(world, cold) is { } homeKey && world.Sight.LocationOf(i) is >= 0 and var at && world.Sight.PlaceKey(at) == homeKey)
             foreach (var f in world.Fixtures.OfBuilding(homeKey))
             {
                 if (f.Kind != FixtureKind.Cage || FixtureRegistry.IsFree(table, f) || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is null) continue;

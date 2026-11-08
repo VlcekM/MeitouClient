@@ -400,6 +400,12 @@ public sealed class SightMap
     /// <summary>The indoor volume (room index) the character stands in, -1 outdoors or on top of a building.</summary>
     public int PlaceOf(int slot) => Inside(slot) ? place[slot] : -1;
 
+    /// <summary>
+    /// The building the character is in, on top of it too (room index, -1 outdoors): the original's location (Character slot 59), which standing on top does not change
+    /// (the on-top flag is slot 60, read by the sight test only). The medic finder compares it (docs/game/ai-tasks.md "Medic jobs").
+    /// </summary>
+    public int LocationOf(int slot) => Known(slot) ? place[slot] : -1;
+
     /// <summary>The light level of the character (1 in daylight; see the class remarks).</summary>
     public float Light(int slot)
     {
