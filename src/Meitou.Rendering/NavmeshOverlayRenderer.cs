@@ -99,7 +99,7 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
     }
 
     /// <summary>Draws over the finished <paramref name="picture"/>, each fragment sorted against the scene's <paramref name="sceneDepthTexture"/>
-    /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used; <paramref name="sceneViewProjection"/> in <see cref="DepthConvention"/>).</summary>
+    /// (<paramref name="renderWidth"/> × <paramref name="renderHeight"/> of it used; <paramref name="sceneViewProjection"/> eye-relative (RenderOrigin), in <see cref="DepthConvention"/>).</summary>
     public void Record(GpuTexture picture, int width, int height, GpuTexture sceneDepthTexture, int renderWidth, int renderHeight,
         Matrix4x4 sceneViewProjection, Vector3 eye)
     {
@@ -107,7 +107,7 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         var cmd = gpu.BeginNative("navmesh overlay");
         var t = PassTargets.Of(picture, null).At(new PixelViewport(0, 0, width, height, 0, 1));
         cmd.BeginRendering(t.Rendering);
-        var vp = Matrix4x4.CreateTranslation(eye) * sceneViewProjection;
+        var vp = sceneViewProjection;
         program.Set(viewProjection, in vp);
         program.Set(offset, origin - eye);
         program.Set(depthScale, renderWidth / (float)width, renderHeight / (float)height);

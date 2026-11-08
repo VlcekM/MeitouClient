@@ -102,7 +102,7 @@ a step as the frame's alpha changed. Everything drawn between ticks now uses `In
 characters' drawn places and ragdoll bones, trails, wakes, bolts, the characters' sounds and the squad tour. Also: `WorldCamera` forms the eye in double, `Eye` being
 its float rounding (every system's origin) and `EyeResidual` the rest, which the characters' colour and motion views take as a translation (`RelativeRotation`),
 so an orbit or zoom round a fixed target moves the eye smoothly instead of by steps; the strategy camera's eye clearance lifts the target only for a shortfall
-over 0.001 (the ground read under the eye wavers by a few ten-thousandths frame to frame). Terrain and objects still use the float world view.
+over 0.001 (the ground read under the eye wavers by a few ten-thousandths frame to frame). Every other scene pass follows the same convention: [renderer-native.md "Render origin"](renderer-native.md#render-origin).
 
 ## Content, LOD and memory
 

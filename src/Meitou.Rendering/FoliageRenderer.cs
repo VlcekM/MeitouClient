@@ -1418,8 +1418,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>Draws the foliage seen from <paramref name="eye"/> through <paramref name="frustum"/>. Without <paramref name="grass"/> only the meshes (e.g. for a reflection).
     /// <paramref name="maxRange"/> caps every layer's range (the reflection).</summary>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true, float maxRange = float.PositiveInfinity)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, TerrainRenderer terrain, bool grass = true, float maxRange = float.PositiveInfinity,
+        Matrix4x4? relative = null)
     {
+        drawRelative = depthPass ? null : relative;
         DrawnInstances = 0;
         DrawnBlades = 0;
         DrawCalls = 0;
@@ -2338,7 +2340,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         int segment = SegmentId(depth ? DepthKind : prepass ? PrepassKind : equal ? EqualKind : ColourKind, p, targets, state);
         var job = meshJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, p, 0);
-        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance };
+        var view = new ViewConstants { ViewProjection = Projected(viewProjection, eye), Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance };
         if (!depth) InteriorMaskRenderer.Apply(ref view, InteriorCut);
         job.Frame = nativeFrame.Prepare(in view);
         // The GPU cull's compacted rows and one indirect draw per mesh draw (its batch's count and first instance), else this call's constants.
@@ -2614,7 +2616,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var targets = Gpu.CurrentTargets();
         var state = GrassState(Gpu, coverage);
         int segment = SegmentId(GrassKind, p, targets, state);
-        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
+        var view = new ViewConstants { ViewProjection = Projected(viewProjection, eye), Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
         if (!depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
         var job = grassJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, p, 0);
@@ -2708,10 +2710,33 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly List<MotionDraw> motionDraws = [];
 
     /// <summary>The scene camera for <see cref="DrawGrassMotion"/>: this frame's view-projection as drawn (jittered) and unjittered.</summary>
-    public void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum)
+    public void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum, Matrix4x4 relative, Matrix4x4 relativeUnjittered)
     {
         (motionViewProjection, motionUnjittered, motionEye, motionFrustum) = (viewProjection, unjittered, eye, frustum);
+        (motionRelative, motionRelativeUnjittered) = (relative, relativeUnjittered);
         motionCamera = true;
+    }
+
+    /// <summary>
+    /// The scene's view-projection for positions less <paramref name="eye"/> (the vertex stages project relative to the eye, docs/renderer-native.md
+    /// "Render origin"): the frame's precise one for the main view, else translation(eye) × <paramref name="viewProjection"/> (shadow casters, previews).
+    /// </summary>
+    Matrix4x4 Projected(Matrix4x4 viewProjection, Vector3 eye) => drawRelative ?? Matrix4x4.CreateTranslation(eye) * viewProjection;
+
+    /// <summary>The main view's relative view-projection for this <see cref="Draw"/> (null: a depth pass, which projects from its own camera).</summary>
+    Matrix4x4? drawRelative;
+    Matrix4x4 motionRelative, motionRelativeUnjittered, previousRelativeUnjittered;
+    Vector3 previousMotionEye;
+
+    /// <summary>Last frame's unjittered relative view-projection seen from this frame's eye (the eye's move put back in, in double).</summary>
+    Matrix4x4 PreviousRelative(bool havePreviousCamera)
+    {
+        var move = havePreviousCamera
+            ? new Vector3((float)((double)motionEye.X - previousMotionEye.X), (float)((double)motionEye.Y - previousMotionEye.Y), (float)((double)motionEye.Z - previousMotionEye.Z))
+            : Vector3.Zero;
+        var previous = Matrix4x4.CreateTranslation(move) * (havePreviousCamera ? previousRelativeUnjittered : motionRelativeUnjittered);
+        (previousRelativeUnjittered, previousMotionEye) = (motionRelativeUnjittered, motionEye);
+        return previous;
     }
 
     /// <summary>
@@ -2725,7 +2750,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         motionCamera = false;
         if (!Enabled || !DrawGrass) { havePrevious = false; return; }
         float time = SwayPhase(), previousTime = previousSwayPhase ?? time;
-        var previous = havePrevious ? previousUnjittered : motionUnjittered;
+        var previous = PreviousRelative(havePrevious);
         (previousSwayPhase, previousUnjittered, havePrevious) = (time, motionUnjittered, true);
         var eye = motionEye;
         // grass-velocity: blades whose own motion stays under the threshold are left to the camera reprojection; with no phase step nothing moves at all.
@@ -2794,7 +2819,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         cmd.SetDepthBias(drawState.BiasEnable, drawState.BiasConstant, drawState.BiasSlope);
         var view = new ViewConstants
         {
-            ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = eye, Time = time, PreviousTime = previousTime,
+            ViewProjection = motionRelative, PreviousViewProjection = previous, Eye = eye, Time = time, PreviousTime = previousTime,
             NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc,
         };
         nativeFrame.Bind(cmd, p, in view);

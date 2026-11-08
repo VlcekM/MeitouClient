@@ -591,7 +591,7 @@ static partial class WorldFrame
         {
             gpu.InteriorMask ??= new InteriorMaskRenderer(post.Context, objects);
             var projection = Jitter.Apply(camera.Projection(f.Aspect, camera.ClipNear, camera.ViewDistance), f.Jitter, f.RenderWidth, f.RenderHeight);
-            gpu.InteriorMask.Record(f.View * projection, f.Eye, post.RenderWidth, post.RenderHeight);
+            gpu.InteriorMask.Record(f.RelativeRotation * projection, f.Eye, post.RenderWidth, post.RenderHeight);
             objects.Masks = gpu.InteriorMask;
         }
         else gpu.InteriorMask?.Record(default, f.Eye, 0, 0);
@@ -627,7 +627,7 @@ static partial class WorldFrame
         if (surfaceBlood) DrawSurfaceBlood(ref f, s);
         DrawSceneCharacters(ref f, s);
         if (traced) TraceSun(ref f, s);
-        DrawWater(ref f, s.Near, s.Far, s.ViewProjection);
+        DrawWater(ref f, s.Near, s.Far, s.ViewProjection, f.RelativeRotation * s.Jittered);
         KeepParticleViews(ref f, s);
         CloseScene(f.Host);
     }
@@ -695,7 +695,7 @@ static partial class WorldFrame
         f.Host.Stage(6);
         terrain.FogCull = f.Gpu.FogVolumes;
         terrain.InteriorCut = f.Gpu.InteriorMask;
-        terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: TerrainLateColour.Enabled);
+        terrain.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, f.Light, defer: TerrainLateColour.Enabled, relative: f.RelativeRotation * s.Jittered);
         terrain.InteriorCut = null;
         terrain.FogCull = null;
         StageClock.Lap(6);
@@ -732,7 +732,7 @@ static partial class WorldFrame
             foliage.Occlusion = f.Post.OcclusionFor(f.Eye);
             foliage.InteriorCut = gpu.InteriorMask;
             foliage.PrepassView = true;
-            foliage.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain);
+            foliage.Draw(s.ViewProjection, f.Eye, s.Frustum, f.Render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, relative: f.RelativeRotation * s.Jittered);
             foliage.PrepassView = false;
             foliage.FogCull = null;
             foliage.Occlusion = default;
@@ -806,10 +806,11 @@ static partial class WorldFrame
         float near = f.Camera.Near;
         float close = Math.Min(0.5f, near * 0.5f);
         var closeProjection = f.Camera.Projection(f.Aspect, close, near);
-        f.ParticleView = s.ViewProjection;
-        f.ParticleClose = f.View * Jitter.Apply(closeProjection, f.Jitter, f.RenderWidth, f.RenderHeight);
-        f.ParticleLow = f.View * s.Projection;
-        f.ParticleLowClose = f.View * closeProjection;
+        // Eye-relative (the particles' positions are less f.Eye), from the precise eye (RelativeRotation).
+        f.ParticleView = f.RelativeRotation * s.Jittered;
+        f.ParticleClose = f.RelativeRotation * Jitter.Apply(closeProjection, f.Jitter, f.RenderWidth, f.RenderHeight);
+        f.ParticleLow = f.RelativeRotation * s.Projection;
+        f.ParticleLowClose = f.RelativeRotation * closeProjection;
         f.ParticleNear = near;
     }
 
@@ -824,7 +825,7 @@ static partial class WorldFrame
         if (post.Temporal && gpu.Foliage is { } swaying)
         {
             post.ObjectMotion ??= swaying.DrawGrassMotion;
-            swaying.SetMotionCamera(viewProjection, unjittered, f.Eye, frustum);
+            swaying.SetMotionCamera(viewProjection, unjittered, f.Eye, frustum, relative, relativeUnjittered);
         }
         gpu.Characters?.AttachMotion(post, gpu.Foliage, viewProjection, unjittered, f.Eye, frustum, relative, relativeUnjittered);
         gpu.Debris?.BeginMotion(post.Temporal);   // the loose pieces' (birds, bolts, thrown bones and limbs) motion rides the characters' pass
@@ -841,7 +842,7 @@ static partial class WorldFrame
     /// The "water" stage: transparent water refracts the scene and measures its depth through it (water that needs neither takes no copy or pass
     /// restart), then the water itself.
     /// </summary>
-    static void DrawWater(ref FrameState f, float near, float far, Matrix4x4 viewProjection)
+    static void DrawWater(ref FrameState f, float near, float far, Matrix4x4 viewProjection, Matrix4x4 relative)
     {
         var gpu = f.Gpu;
         var post = f.Post;
@@ -858,7 +859,7 @@ static partial class WorldFrame
         if (water && gpu.Water is { } drawn)
         {
             drawn.Overcast = Overcast(gpu);
-            drawn.Draw(viewProjection, f.Eye, f.Light, f.Colours, f.Time, f.Camera.ViewDistance * 1.5f, f.Reflecting ? gpu.Reflection : null);
+            drawn.Draw(viewProjection, f.Eye, f.Light, f.Colours, f.Time, f.Camera.ViewDistance * 1.5f, f.Reflecting ? gpu.Reflection : null, relative);
         }
         StageClock.Lap(9);
     }
@@ -970,16 +971,16 @@ static partial class WorldFrame
 
         // The movement marker and stealth arrows, in their materials' colours, like the game's debug_marker.
         if (gpu.Markers is { Active: true } marker && f.ParticleNear > 0 && post.Target is { } picture)
-            marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, camera, f.Sun);
+            marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, f.RelativeRotation * SceneProjection().Projection, camera, f.Sun);
         else gpu.Markers?.Idle();
 
         // The navmesh debug view (Meitou only).
         if (gpu.NavmeshOverlay is { Visible: true } navOverlay && post.Target is { } navPicture)
-            navOverlay.Record(navPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, eye);
+            navOverlay.Record(navPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, f.RelativeRotation * SceneProjection().Projection, eye);
 
         // The pick & collision inspector's hulls over the finished picture (Meitou only).
         if (gpu.InspectorOverlay is { Visible: true } debugOverlay && post.Target is { } debugPicture)
-            debugOverlay.Record(debugPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, eye);
+            debugOverlay.Record(debugPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, f.RelativeRotation * SceneProjection().Projection, eye);
 
         // The hover outline (Meitou only): the characters' masks drawn after the portraits, the selected building's from what the scene drew of it.
         if (gpu.HoverOutline is { } outline && post.Target is { } hoverPicture)

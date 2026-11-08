@@ -161,7 +161,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         return fragment.Insert(main.Index + main.Length, "\n" + Cut).Insert(main.Index, "uniform sampler2D uInteriorMask;\nuniform bool uInteriorCut;\n");
     }
 
-    /// <summary>Draws the masks of the buildings near <paramref name="eye"/> with the main view's <paramref name="viewProjection"/> into a target of the scene's size.</summary>
+    /// <summary>Draws the masks of the buildings near <paramref name="eye"/> with the main view's eye-relative <paramref name="viewProjection"/> (RenderOrigin) into a target of the scene's size.</summary>
     public void Record(Matrix4x4 viewProjection, Vector3 eye, int width, int height)
     {
         Active = false;
@@ -190,7 +190,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         var state = DrawState.For(t.Formats, gpu.DepthClamp, blend: blend, mask: ColorMask.R | ColorMask.A);
         state.Record(cmd, t);
         cmd.BindPipeline(segment.Get(state, t.Formats, vertexSource));
-        var relative = Matrix4x4.CreateTranslation(eye) * viewProjection;   // camera-relative placement keeps the precision far from the origin
+        var relative = viewProjection;   // eye-relative: camera-relative placement keeps the precision far from the origin
         foreach (var v in near)
         {
             var node = v.Node;

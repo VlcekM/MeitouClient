@@ -231,6 +231,13 @@ static partial class WorldApp
         }
         FramebufferCapture.SavePng(context, target, o.Screenshot!, w, h);
         Console.WriteLine($"saved     {Path.GetFullPath(o.Screenshot!)}");
+        for (int i = 1; i <= o.Sequence; i++)
+        {
+            Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance); EndFrame(context);
+            string file = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(o.Screenshot!))!, $"{Path.GetFileNameWithoutExtension(o.Screenshot!)}-{i:00}.png");
+            FramebufferCapture.SavePng(context, target, file, w, h);
+        }
+        if (o.Sequence > 0) Console.WriteLine($"saved     {o.Sequence} more frames");
         return 0;
     }
 

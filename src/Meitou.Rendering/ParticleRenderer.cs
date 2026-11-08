@@ -606,8 +606,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         long start = Stopwatch.GetTimestamp();
         PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor, late: lowViewProjection is not null);
         // The low-resolution draws' own matrices: unjittered when they are blended after the upscaler (PostProcess.ParticlesAfterUpscale), whose output is.
-        frameLowVp = lowViewProjection is { } lowVp ? Matrix4x4.CreateTranslation(eye) * lowVp : frameVp;
-        frameLowCloseVp = lowCloseViewProjection is { } lowClose ? Matrix4x4.CreateTranslation(eye) * lowClose : frameCloseVp;
+        frameLowVp = lowViewProjection ?? frameVp;
+        frameLowCloseVp = lowCloseViewProjection ?? frameCloseVp;
         long ticks = Stopwatch.GetTimestamp() - start;
         drawTotal += ticks;
         drawFrames++;
@@ -661,7 +661,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         draws.Clear();
         var frame = gpu.Frame;
         var forward = -new Vector3(view.M13, view.M23, view.M33);   // the view's -Z axis in the world
-        var planes = WorldCamera.FrustumPlanes(viewProjectionMatrix);
+        var planes = WorldCamera.FrustumPlanes(viewProjectionMatrix); // eye-relative: tested with positions less the eye
         var units = drawUnits;
         units.Clear();
         for (int gi = 0; gi < GroupCount; gi++)
@@ -674,7 +674,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 if (u.Radius != float.PositiveInfinity)
                 {
                     if (u.DistanceToCamera - u.Radius > DrawRange) continue;
-                    if (!InFrustum(planes, u.Position, u.Radius)) continue;
+                    if (!InFrustum(planes, u.Position - eye, u.Radius)) continue;
                 }
                 units.Add((u, g.Effect.Type is EffectType.CameraRain or EffectType.CameraAcidRain, g.Entry is null));
             }
@@ -742,9 +742,8 @@ public sealed unsafe class ParticleRenderer : IDisposable
         for (int i = 0; i < draws.Count; i++) divisorCounts[draws[i].Divisor]++;
         if (draws.Count == 0) return;
 
-        // Camera-relative positions: the matrix takes the eye back out (view and projection were built for world positions).
-        var vp = Matrix4x4.CreateTranslation(eye) * viewProjectionMatrix;
-        var closeVp = Matrix4x4.CreateTranslation(eye) * closeViewProjection;
+        // Camera-relative positions and matrices (the caller's are eye-relative: RenderOrigin).
+        var (vp, closeVp) = (viewProjectionMatrix, closeViewProjection);
         var right = new Vector3(view.M11, view.M21, view.M31);
         var up = new Vector3(view.M12, view.M22, view.M32);
         float ambient = Math.Clamp(sunDirection.Y * 5 + 0.2f, 0.1f, 1f);

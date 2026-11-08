@@ -48,7 +48,10 @@ public sealed class WorldCamera
     }
     public Vector3 Forward => -Back;
 
-    public Matrix4x4 View => Matrix4x4.CreateLookAt(Eye, Target, Vector3.UnitY);
+    /// <summary>Looks along <see cref="Forward"/> (at <see cref="Target"/>): the rotation from the angles, built at the origin, not from the float eye, whose rounding
+    /// steps would turn the view by up to half a float step over the distance (a quarter pixel at 15 units from the target at 50000) every time the eye
+    /// crosses one; nor from a look-at point beside the far eye (eye + forward rounds to the eye's float step, a turn of a few pixels).</summary>
+    public Matrix4x4 View => Matrix4x4.CreateTranslation(-Eye) * Matrix4x4.CreateLookAt(Vector3.Zero, Forward, Vector3.UnitY);
 
     public float Near => Math.Clamp(Math.Min(EyeClearance, Distance) * 0.25f, 0.5f, MaxNear);
     /// <summary>

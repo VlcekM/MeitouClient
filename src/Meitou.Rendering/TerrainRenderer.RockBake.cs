@@ -101,7 +101,7 @@ public sealed unsafe partial class TerrainRenderer
         Vector3 dir, Vector3 right, Vector3 up, int pass, ImpostorBaker.Part[] parts)
     {
         var p = RockBakeProgram();
-        var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = Vector3.UnitY, FogDistance = 0 };
+        var view = new ViewConstants { ViewProjection = RenderOrigin.ViewProjection(viewProjection, eye), Eye = eye, LightDir = Vector3.UnitY, FogDistance = 0 };
         var binding = nativeFrame.Prepare(in view);
         NativeFrame.Record(cmd, p.P, in binding);
         var constantsSlice = gpu.Frame.WriteConstants(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>([BakeConstants(row)])), uniformAlign);
