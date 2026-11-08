@@ -761,7 +761,7 @@ to now + 6 h and, only if the faction has no active campaign and no pending requ
   passes. So rolls (and redirects) only aim at a player town the player is at. Meitou: `TownActive`, the AI's `TownAt` (nearest town whose radius holds the character) for each
   player character, no zone test for a player town (its zone list is not modelled; the character keeps its own zone loaded). +0x128 is the count of the town's
   occupier set (+0x118, filled by [Package_OccupyTown](ai.md#package-classes); **Verified**: the town panel's "Hostile Occupiers:" line, `FUN_140922e60`).
-- Player town level (+0x388, `FUN_14048c200`, **Verified** by code; 0 for a new outpost; recomputed when towns merge, `FUN_140931840`, and in `FUN_1404d1870`):
+- Player town level (+0x388, `FUN_14048c200`, **Verified** by code; 0 for a new outpost; recomputed when towns merge, `FUN_140931840`, and in `FUN_1404d1870`). Placement-time reassessment merges overlapping same-owner towns: the smaller-radius town survives and receives the other town's buildings (`FUN_14054d080`, `FUN_140931840`, `FUN_140927060`):
   over the town's player buildings H = with an interior (Building +0x1f0) that are neither parts nor gateways, T = turrets (BF 12), G = gates (BF 21), R = the
   highest research functionality `tech level` (BF 3). 1 when R > 1, H > 1, G > 0 or T > 3; with G > 0, 2 when R > 3, H > 4 or T > 4, 3 when R > 3, H > 4 and T > 6. Sources: own towns except nests (and, for
   factions with `fundamental type` 1 or `offers bounties`, villages, points of interest, prisons, slave camps); the first source in list

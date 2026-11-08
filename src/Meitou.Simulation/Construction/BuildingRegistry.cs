@@ -314,24 +314,48 @@ public sealed partial class BuildingRegistry
     public BuildSite? Find(string id) => _byId.GetValueOrDefault(id);
 
     /// <summary>
-    /// The player towns (outposts), in creation order; never removed.
+    /// The player towns (outposts), in creation order.
     /// </summary>
     public IReadOnlyList<PlayerTown> Towns => _towns;
     /// <summary>
     /// The player town numbered <paramref name="number"/>; null when there is none.
     /// </summary>
-    public PlayerTown? FindTown(int number) => number > 0 && number <= _towns.Count ? _towns[number - 1] : null;
+    public PlayerTown? FindTown(int number) => number > 0 ? _towns.Find(t => t.Number == number) : null;
 
     /// <summary>
     /// Makes a player town with the next number.
     /// </summary>
     public PlayerTown AddTown(Vector3 position, int owner, string name = PlayerTown.DefaultName)
     {
-        var town = new PlayerTown { Number = _towns.Count + 1, Name = name, Position = position, Owner = owner };
+        int number = _towns.Count == 0 ? 1 : _towns.Max(t => t.Number) + 1;
+        var town = new PlayerTown { Number = number, Name = name, Position = position, Owner = owner };
         _towns.Add(town);
         Revision++;
         Version++;
         return town;
+    }
+
+    /// <summary>
+    /// Removes a town during save-load normalisation or an overlap merge.
+    /// </summary>
+    internal bool RemoveTown(PlayerTown town)
+    {
+        if (!_towns.Remove(town)) return false;
+
+        Revision++;
+        Version++;
+        return true;
+    }
+
+    /// <summary>
+    /// Moves every site assigned to <paramref name="from"/> to <paramref name="to"/>.
+    /// </summary>
+    internal void MoveTownBuildings(PlayerTown from, PlayerTown to)
+    {
+        foreach (var site in _sites)
+            if (site.Town == from.Number) site.Town = to.Number;
+
+        Version++;
     }
 
     /// <summary>

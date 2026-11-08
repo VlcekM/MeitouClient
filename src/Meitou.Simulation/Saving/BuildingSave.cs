@@ -70,14 +70,14 @@ public static class BuildingSave
     /// Reserves the ids of every <c>-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> building of the save (generated interiors share the pattern) and reads the
     /// player faction's into the world's registry, in zone and list order. Returns how many sites it made.
     /// </summary>
-    public static int Read(SaveGame save, World world, GameDatabase db, string playerFactionId, int playerIndex)
+    public static int Read(SaveGame save, World world, GameDatabase db, string playerFactionId, int playerIndex, PopulationData? population = null)
     {
         var reg = world.Buildings;
         ReserveIds(save, reg);
         var states = HeldSave.BuildingStates(save);
         var idOf = ParentIds(save, states, playerFactionId);
         var handles = save.BuildHandles();
-        var townOf = ReadTowns(save, world, playerFactionId, playerIndex);
+        var townOf = ReadTowns(save, world, playerFactionId, playerIndex, population);
         int made = 0;
         foreach (var zone in save.Zones.Values)
         {
@@ -208,37 +208,127 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// The player's outposts: the entries of <c>quick.save</c>'s town list whose GAMESTATE_TOWN is not a nest and is the player faction's, in list
-    /// order. Returns their numbers by the handle's C and CS parts (how a building's <c>town</c> handle names them).
+    /// The player's outposts from town-instance entries and player-faction level-town states.
     /// </summary>
-    static Dictionary<(int C, int CS), int> ReadTowns(SaveGame save, World world, string playerFactionId, int playerIndex)
+    static Dictionary<(int C, int CS), int> ReadTowns(SaveGame save, World world, string playerFactionId, int playerIndex,
+        PopulationData? population)
+    {
+        var byId = save.Quick.Records.ToDictionary(record => record.StringId, StringComparer.Ordinal);
+        var byInstance = new Dictionary<string, PlayerTown>(StringComparer.Ordinal);
+
+        if (save.TownInstanceList is { } list)
+            foreach (var instance in list.Instances)
+                ReadTownInstance(instance, byId, save, world, playerFactionId, playerIndex, byInstance);
+
+        ReadLevelTowns(save, population, world, playerFactionId, playerIndex, byInstance);
+        NormalizeTownOverlap(world);
+        return TownHandles(world);
+    }
+
+    static void ReadTownInstance(FcsInstance instance, Dictionary<string, FcsRecord> byId, SaveGame save, World world,
+        string playerFactionId, int playerIndex, Dictionary<string, PlayerTown> byInstance)
+    {
+        if (instance.IsRemoved) return;
+
+        var states = TownStates(instance, byId, save)
+            .Where(state => IsPlayerTown(state, instance, playerFactionId))
+            .ToList();
+        if (states.Count == 0) return;
+
+        var town = byInstance.GetValueOrDefault(instance.Id) ?? world.Buildings.AddTown(instance.Position, playerIndex);
+        byInstance[instance.Id] = town;
+        ApplyTownStates(town, instance.Id, instance.Position, states);
+    }
+
+    static IEnumerable<FcsRecord> TownStates(FcsInstance instance, Dictionary<string, FcsRecord> byId, SaveGame save)
+    {
+        var seen = new HashSet<FcsRecord>(ReferenceEqualityComparer.Instance);
+        foreach (var id in instance.States)
+            if (byId.GetValueOrDefault(id) is { RecordType: FcsRecordType.GamestateTown } state && seen.Add(state)) yield return state;
+
+        foreach (var state in save.Towns.Select(town => town.Record).Where(state => state.Strings.GetValueOrDefault("instance") == instance.Id))
+            if (seen.Add(state)) yield return state;
+    }
+
+    static bool IsPlayerTown(FcsRecord state, FcsInstance instance, string playerFactionId) =>
+        !state.Bools.GetValueOrDefault("is nest") &&
+        (state.Strings.GetValueOrDefault("faction") == playerFactionId ||
+            instance.Target == PlayerTown.Template && !state.Strings.ContainsKey("faction"));
+
+    static void ReadLevelTowns(SaveGame save, PopulationData? population, World world, string playerFactionId, int playerIndex,
+        Dictionary<string, PlayerTown> byInstance)
+    {
+        if (population is null) return;
+
+        foreach (var state in save.Towns.Where(town => !town.IsNest && town.FactionId == playerFactionId))
+        {
+            var site = population.Sites.FirstOrDefault(candidate => candidate.InstanceId == state.Instance);
+            var instance = save.TownInstanceList?.Instances.FirstOrDefault(candidate => candidate.Id == state.Instance);
+            if (state.Handle.IsNull || instance is null && site is null) continue;
+
+            var town = byInstance.GetValueOrDefault(state.Instance);
+            if (town is null)
+            {
+                town = world.Buildings.Towns.FirstOrDefault(candidate => candidate.SaveHandle is { } handle &&
+                    handle.C == state.Handle.C && handle.CS == state.Handle.CS);
+                town ??= world.Buildings.AddTown(instance?.Position ?? site!.Position, playerIndex);
+                byInstance[state.Instance] = town;
+            }
+
+            ApplyTownStates(town, state.Instance, instance?.Position ?? site!.Position, [state.Record]);
+        }
+    }
+
+    static void ApplyTownStates(PlayerTown town, string instanceId, Vector3 position, IEnumerable<FcsRecord> states)
+    {
+        town.SaveInstance = instanceId;
+        town.Position = position;
+        foreach (var state in states)
+        {
+            string name = TownName(state);
+            if (town.Name == PlayerTown.DefaultName && name.Length > 0) town.Name = name;
+            if (state.Bools.ContainsKey("public")) town.Public = state.Bools["public"];
+            if (state.Ints.ContainsKey("override")) town.Override = state.Ints["override"];
+
+            var hand = Hand.Read(state, "hand");
+            if (!hand.IsNull && town.SaveHandle is null) town.SaveHandle = hand;
+        }
+    }
+
+    static string TownName(FcsRecord state)
+    {
+        if (!state.Name.StartsWith(TownStatePrefix, StringComparison.Ordinal)) return "";
+
+        return state.Name[TownStatePrefix.Length..].TrimEnd();
+    }
+
+    internal static void NormalizeTownOverlap(World world)
+    {
+        foreach (var current in world.Buildings.Towns.ToList())
+        {
+            if (!world.Buildings.Towns.Contains(current)) continue;
+
+            var other = world.Buildings.Towns
+                .Where(town => town != current)
+                .MinBy(town => DistanceSquaredXz(current.Position, town.Position));
+            if (other is not null && DistanceSquaredXz(current.Position, other.Position) < other.Radius * other.Radius)
+                world.Buildings.RemoveTown(current);
+        }
+    }
+
+    static Dictionary<(int C, int CS), int> TownHandles(World world)
     {
         var map = new Dictionary<(int, int), int>();
-        if (save.TownInstanceList is not { } list) return map;
-
-        var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
-        foreach (var r in save.Quick.Records) byId[r.StringId] = r;
-        foreach (var instance in list.Instances)
-        {
-            if (instance.IsRemoved || instance.States.Count == 0 || !byId.TryGetValue(instance.States[0], out var state)) continue;
-            if (state.RecordType != FcsRecordType.GamestateTown || state.Bools.GetValueOrDefault("is nest")
-                || state.Strings.GetValueOrDefault("faction") != playerFactionId)
-                continue;
-
-            bool named = state.Name.StartsWith(TownStatePrefix, StringComparison.Ordinal) && state.Name.Length > TownStatePrefix.Length;
-            string name = named ? state.Name[TownStatePrefix.Length..] : PlayerTown.DefaultName;
-            var town = world.Buildings.AddTown(instance.Position, playerIndex, name);
-            town.SaveInstance = instance.Id;
-            town.Public = state.Bools.GetValueOrDefault("public");
-            var hand = Hand.Read(state, "hand");
-            if (!hand.IsNull)
-            {
-                town.SaveHandle = hand;
-                map.TryAdd((hand.C, hand.Cs), town.Number);
-            }
-        }
+        foreach (var town in world.Buildings.Towns)
+            if (town.SaveHandle is { } hand) map.TryAdd((hand.C, hand.CS), town.Number);
 
         return map;
+    }
+
+    static float DistanceSquaredXz(Vector3 a, Vector3 b)
+    {
+        float x = a.X - b.X, z = a.Z - b.Z;
+        return x * x + z * z;
     }
 
     #endregion

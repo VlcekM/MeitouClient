@@ -582,19 +582,33 @@ Meitou-only crime keys (`Saving/CrimeSave`, `LockSystem`, `FixtureRegistry`; the
 Towns made in play are saved in `quick.save` only, as entries of its one GAMESTATE_TOWN_INSTANCE_LIST (type 38, name "0",
 id `<n>-quick.save-INGAME`), written from the town manager's player-town list (+0x68) and nest list (+0x80)
 (`FUN_14092a6c0`). The level data's towns are not in it: their GAMESTATE_TOWN states are written separately
-(`FUN_14036b710`). **Observed**: the owner's five saves' lists hold only nests (127 and 150 entries), each with a
-`Nest state <name>` state (type-85 handle, no `instance` key); no save has an outpost.
+(`FUN_14036b710`). **Observed** in `Beep Fan Club 1/quick.save`: the list has 127 entries, including two
+`player_town_template` outposts and 125 nests; the outpost states are unnamed (`0`) and omit `faction`.
 
 An outpost's entry (**Verified** by code, `Town::vfunc_17` `14036eb20` with `FUN_140386d20`): id = the town's stored
 instance id, or a new `<n>-quick.save-INGAME` (kept on the town, so later saves reuse it); target = the town's TOWN
 record (`player_town_template`); position = the town's, absolute; quaternion (0, 0, 0, 0); state `<id>-S5e`. Its
 GAMESTATE_TOWN (`Town::vfunc_85` `140376b80` and the TownBase writer) is named `Town state <name>` and has the base
 towns' keys: `instance` = the entry id, `is nest` false, `building material`, `public` (Town +0x380, the [town panel](../game/ui-screens.md#town-panel)'s Open to public, false when made; **Verified**, `param_1[0x70]`; Meitou round-trips it as `PlayerTown.Public`), `plevel`,
-`replacementTown` (the string id of the TOWN in the town's place, "" none: [town overrides](../game/factions-squads-towns.md#town-overrides)), `trade goods`, `faction` = the player faction, `factions here<i>`, `discovered` / `explored` /
+`replacementTown` (the string id of the TOWN in the town's place, "" none: [town overrides](../game/factions-squads-towns.md#town-overrides)), `trade goods`, optionally `faction` = the player faction, `factions here<i>`, `discovered` / `explored` /
 `recently discovered`, `artifacts count`, the handle `hand*` (type 13 TOWN) and the population floats; plus int
 `override` (Town+0x51c, the player town's [reassessed radius](../game/buildings-production.md#placement); 0 when made), written only for a town
 whose faction is the player's. How the float is stored under an int key is **Unknown**; Meitou writes 0 and reassesses on load.
-Buildings name it by their `town` handle. Whether the loader takes the name from the record name is **Unknown**.
+Buildings name it by their `town` handle. **Verified** (`FUN_14092ae80`): removing an overlapping town does not rewrite those handles. A later town reassessment is not part of `loadGame` after this removal, so a building whose handle no longer resolves remains without a player-town assignment; Meitou maps that unresolved handle to town 0.
+
+**Verified** against `Beep Fan Club 1/quick.save` (2026-11-08): both outpost entries target `player_town_template`, and their `Town state` records have `instance` and `hand` but no `faction` key. `current` and `quicksave` were present as directories but contained no `quick.save`, so they could not be compared.
+
+**Verified** in the same save: the placed `Town state Drycoom` is a separate `GAMESTATE_TOWN` in `quick.save`, with `faction=204-gamedata.base`, an `instance` matching a level town placement, and a type-13 town handle. It is a player town even though it is not in the instance list; loading player-faction town states requires resolving that instance through the level-town data.
+
+**Verified** (native 1.0.68, `FUN_1403722d0`, `FUN_1403715c0`, `FUN_14036fc30`, `FUN_140934e10`, `FUN_140581770`): load-time ownership comes from the town's resolved faction/runtime state. `player_town_template` selects the normal outpost TOWN object but is not, by itself, an ownership comparison; a normal outpost may omit `faction` when the template/runtime association supplies it. A `player_town_template` state with another faction remains foreign.
+
+**Verified** (native 1.0.68, `FUN_140376b80`, `FUN_1403715c0`): `public` is a town-state bool. `override` is read and written when the runtime town has a faction handle/state; this is not restricted by comparing the serialized faction string to the player faction.
+
+**Verified** (native 1.0.68, `FUN_140373f00`, `FUN_1403728c0`, `FUN_1403722d0`, `FUN_14036b710`): the GAMESTATE_TOWN pass is independent of GAMESTATE_TOWN_INSTANCE_LIST. Without a town list, a state still loads when its `instance` resolves to a level/runtime town and it passes the nest and discovery checks.
+
+**Verified** (native 1.0.68, `FUN_1403728c0`, `FUN_1403722d0`): the loader considers every matching GAMESTATE_TOWN record associated with an instance, not only the instance's first state id.
+
+**Verified** (native 1.0.68, `FUN_14092ae80`, `FUN_140373f00`): overlap normalisation uses squared XZ distance and a strict `<` comparison against the radius squared of the nearest other non-nest town that is owned by the player faction (a candidate with another owner is skipped, so an NPC town never removes a player town). It removes the current town (the one iterated, which is the earlier of two in list order) and leaves the other; this function does not rewrite building `town` handles. `loadGame` calls this normalisation after the town-state passes and does not call the placement-time reassessment/merge path afterward. A building whose handle no longer resolves therefore remains unassigned; Meitou maps that unresolved handle to town 0.
 
 Meitou writes the level towns' pool keys (`pop`, `popd`, `pop2`, `popd2`, `tod`, `started`, `ded`) for every town it made or loaded pools for, and
 reads them back ([off-screen tier](../simulation.md#off-screen-tier)). `tod` is Meitou's game hours since the world was started or loaded (a loaded save restarts at 0); the original's unit is
