@@ -245,9 +245,9 @@ internal sealed unsafe partial class CharacterRenderer
             return;
         }
 
-        for (int i = 0; i < liveCount; i++)
+        int start = portraitLive >= 0 ? portraitLive : 0, end = portraitLive >= 0 ? portraitLive + 1 : liveCount;
+        for (int i = start; i < end; i++)
         {
-            if (portraitLive >= 0 && i != portraitLive && !(companyOn && companyLive.Contains(i))) continue;
             ref var l = ref live[i];
             if (portraitLive < 0 && (l.PortraitOnly || !FrustumTests.SphereVisible(frustum, l.Centre, l.Radius))) continue;
             if (!depthPass && portraitLive < 0 && FogCull?.Hidden(l.Centre, l.Radius, FogVolumes.CullKind.Characters) == true) continue;

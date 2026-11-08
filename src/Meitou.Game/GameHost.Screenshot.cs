@@ -188,7 +188,7 @@ sealed partial class GameHost
             if (panelName == "edited") { player.ShowcaseEdit(); session.AdvanceSimulation(session.Ticks.TickSeconds); }
             if (panelName == "building") { UpdateView(w, h); player.ShowUiPanel("building"); session.AdvanceSimulation(session.Ticks.TickSeconds); }
             // Item icons are drawn from the frame after a cell asks for them, and their textures stream in: show the panel until they are done.
-            for (int frames = 0; panelName is not null && overlay is not null && frames < 400 && (frames < 3 || gpu.Characters is { PendingIcons: > 0 } || gpu.Objects is { StagePropPending: true } || gpu.Objects is { PendingBuildingIcons: > 0 } || player.PendingIconFiles > 0); frames++)
+            for (int frames = 0; panelName is not null && overlay is not null && frames < 400 && (frames < 3 || gpu.Characters is { PendingIcons: > 0 } || gpu.Objects is { StagePropPending: true } || editorBar is not null && !editorBarReady || gpu.Objects is { PendingBuildingIcons: > 0 } || player.PendingIconFiles > 0); frames++)
             {
                 DrawWorld(w, h);
                 overlay.Target = target;

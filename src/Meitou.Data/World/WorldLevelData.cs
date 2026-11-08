@@ -311,6 +311,8 @@ public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, s
     public bool Contained { get; init; }
     /// <summary>The building it was placed in (<see cref="PlacedMesh.ContainerId"/>), when known.</summary>
     public string? ContainerId { get; init; }
+    /// <summary>Laid out the same wherever it stands: no town's material, its parts' variants chosen as at a fixed place (the character editor's bar).</summary>
+    public bool Standalone { get; init; }
 }
 
 /// <param name="TownId">String id of the placed <see cref="FcsRecordType.TOWN"/> record.</param>

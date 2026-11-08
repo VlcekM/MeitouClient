@@ -3,14 +3,11 @@ using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering.Characters;
 
-/// <summary>A lamp of the character editor's set: where it is, how far it reaches and its colour times its intensity.</summary>
-public readonly record struct StageLamp(Vector3 Position, float Radius, Vector3 Colour);
-
-/// <summary>The <c>previewsun</c> switch (Meitou): the editor's stage and the portraits lit by the studio's fixed sun, with its shadow and occlusion. <see cref="Bar"/>, the
-/// <c>editorbar</c> switch (Meitou, optional): the editor's set is a bar instead of the platform.</summary>
+/// <summary>The <c>previewsun</c> switch (Meitou): the editor's stage and the portraits lit by the studio's fixed sun, with its shadow and occlusion.</summary>
 public static class PreviewStudio
 {
     public static bool Sun { get; set; } = true;
+    /// <summary>The <c>editorbar</c> switch (Meitou, optional): the character editor shows the bar, drawn by the world's pipeline, instead of the platform.</summary>
     public static bool Bar { get; set; }
 }
 
@@ -28,10 +25,6 @@ internal sealed unsafe partial class CharacterRenderer
     const int StudioSkyDirections = 32, StudioSkyTile = 384, StudioSkyColumns = 8;
     /// <summary>The fog distance of the studio's colour draw and of its depth draws (CharacterShaders).</summary>
     const float StudioColour = -4, StudioDepth = -5;
-    /// <summary>The lamps the view block has room for (<c>cutPlanes</c> past the light's matrix, two each), the share of the studio's ambient left at night, and the lamps' strength.</summary>
-    const int MaxStudioLamps = Gi.StudioGi.MaxLamps;
-    internal const float StudioLampGain = 3.0f;
-    const float StudioNightAmbient = 0.12f;
 
     GpuTexture? studioShadowColour, studioShadowDepth, studioAo, studioSkyColour, studioSkyDepth;
     uint studioShadowIndex, studioAoIndex, studioSkyIndex;
@@ -41,10 +34,8 @@ internal sealed unsafe partial class CharacterRenderer
 
     /// <summary>What else casts into the stage's studio maps (the editor's platform, <c>WorldObjectRenderer.RecordStagePropDepth</c>): called inside each
     /// map's pass with its world view-projection and eye. The host sets it before <see cref="DrawStage"/>; the portraits have none.</summary>
-    internal Action<Matrix4x4, Vector3, bool>? StageCasters { get; set; }
-    Action<Matrix4x4, Vector3, bool>? studioCasters;
-    /// <summary>The set's traced light (the editor's bar; null elsewhere).</summary>
-    internal Gi.StudioGi? StageTraced { get; set; }
+    internal Action<Matrix4x4, Vector3>? StageCasters { get; set; }
+    Action<Matrix4x4, Vector3>? studioCasters;
 
     /// <summary>
     /// The studio's shadow and occlusion for <paramref name="index"/>'s character (posed as the caller has it) seen through <paramref name="viewProjection"/> into
@@ -69,12 +60,7 @@ internal sealed unsafe partial class CharacterRenderer
         DrawStudioSky(index, centre, radius, eye);
 
         // The camera's depth, then the occlusion from it.
-        companyOn = true;
         DrawStudioDepth(index, viewProjection, eye, eye, colour, depth, width, height, "studio depth");
-        companyOn = false;
-        // The set's traced light (the editor's bar): each lamp's visibility from this depth.
-        var traced = studioCasters is not null ? StageTraced : null;
-        traced?.TraceVisibility(depth, viewProjection, width, height, Math.Max(stageHdrScale, 1));
         RunStudioAo(depth, width, height, projection, radius);
 
         var v = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = toSun, FogDistance = StudioColour };
@@ -86,18 +72,6 @@ internal sealed unsafe partial class CharacterRenderer
         v.CutPlanes[1] = new Vector4(lightRelative.M21, lightRelative.M22, lightRelative.M23, lightRelative.M24);
         v.CutPlanes[2] = new Vector4(lightRelative.M31, lightRelative.M32, lightRelative.M33, lightRelative.M34);
         v.CutPlanes[3] = new Vector4(lightRelative.M41, lightRelative.M42, lightRelative.M43, lightRelative.M44);
-        // The set's lamps (the editor's bar): how many and the night's share of the studio's ambient, then two planes each from the fifth on.
-        if (StageLamps is { Count: > 0 } lamps && studioCasters is not null)
-        {
-            int count = Math.Min(lamps.Count, MaxStudioLamps);
-            v.CutRanges[2] = new Vector4(count, StudioNightAmbient, 0, 0);
-            for (int i = 0; i < count; i++)
-            {
-                v.CutPlanes[4 + 2 * i] = new Vector4(lamps[i].Position, lamps[i].Radius);
-                v.CutPlanes[5 + 2 * i] = new Vector4(lamps[i].Colour * StudioLampGain, 0);
-            }
-            traced?.Fill(ref v);
-        }
         return v;
     }
 
@@ -147,7 +121,7 @@ internal sealed unsafe partial class CharacterRenderer
                 var rect = new PixelRect(x, y, StudioSkyTile, StudioSkyTile);
                 Gpu.SetPassViewport(new PixelViewport(x, y, StudioSkyTile, StudioSkyTile, 0, 1), rect);
                 DrawView(new ViewConstants { ViewProjection = matrix, Eye = centre + d * (radius * 2), FogDistance = StudioDepth }, lodEye, []);
-                studioCasters?.Invoke(matrix, centre + d * (radius * 2), false);
+                studioCasters?.Invoke(matrix, centre + d * (radius * 2));
             }
         }
         finally { portraitLive = was; }
@@ -173,7 +147,7 @@ internal sealed unsafe partial class CharacterRenderer
         portraitLive = index;
         try { DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, FogDistance = StudioDepth }, lodEye, []); }
         finally { portraitLive = was; }
-        studioCasters?.Invoke(viewProjection, eye, companyOn);
+        studioCasters?.Invoke(viewProjection, eye);
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
         Gpu.EndNative(cmd);
@@ -215,7 +189,7 @@ internal sealed unsafe partial class CharacterRenderer
 /// </summary>
 internal static class StudioShaders
 {
-    public static readonly string Functions = """
+    public const string Functions = """
         // The studio (CharacterRenderer.Studio, Meitou previews): its sun's shadow map and occlusion through the view block's interior-cut fields, which the
         // characters never use: cutPad the map's bindless index, cutPlanes[0..3] its matrix relative to cutRanges[0].xyz (w: a texel in world units),
         // cutVolumes the occlusion's index (the preview's own pixels).
@@ -244,36 +218,6 @@ internal static class StudioShaders
                     total += w;
                 }
             return lit / total;
-        }
-        // The key lamp's shadow map on the set (the character's own shape): gone before the map's edge, which would otherwise cut it in a straight line; never full without the traced light to fill it.
-        float studioLampShadow(vec3 world, vec3 n, vec3 l, float least)
-        {
-            mat4 m = mat4(view.cutPlanes[0], view.cutPlanes[1], view.cutPlanes[2], view.cutPlanes[3]);
-            vec4 c = m * vec4(world - view.cutRanges[0].xyz, 1.0);
-            return mix(mix(least, 1.0, studioShadow(world, n, l)), 1.0, smoothstep(0.65, 0.95, max(abs(c.x), abs(c.y))));
-        }
-        // The set's traced light (Gi.StudioGi): the light arriving at a point from the probes; found 0: none there (not ready, or outside the grid).
-        vec4 studioGiTexel(ivec2 p) { return texelFetch(textures2D[nonuniformEXT(uint(view.cutPlanes[29].x + 0.5))], p, 0); }
-""" + Gi.StudioGi.Reading.Replace("GI_NAME", "studioProbes").Replace("GI_GRID", "view.cutPlanes[28]").Replace("GI_DIMS", "ivec3(view.cutPlanes[29].yzw + 0.5)").Replace("FETCH(", "studioGiTexel(") + """
-        vec3 studioGi(vec3 world, vec3 n, out float found)
-        {
-            found = 0.0;
-            return view.cutPlanes[29].x > 0.5 ? studioProbes(world, n, found) : vec3(0.0);
-        }
-        // Whether lamp i reaches this pixel (traced for the first eight); 1 past them or before the first trace.
-        float studioLampSeen(int i)
-        {
-            if (view.cutPlanes[30].x < 0.5 || i >= 8) return 1.0;
-            uint target = uint((i < 4 ? view.cutPlanes[30].x : view.cutPlanes[30].y) + 0.5);
-            vec2 size = vec2(textureSize(textures2D[nonuniformEXT(target)], 0)) * view.cutPlanes[30].z;
-            // A small cross of bilinear taps, two picture pixels of the trace apart: the lamp is not a point.
-            float seen = 0.0;
-            for (int k = 0; k < 5; k++)
-            {
-                vec2 o = k == 0 ? vec2(0.0) : vec2(k == 1 ? 2.0 : k == 2 ? -2.0 : 0.0, k == 3 ? 2.0 : k == 4 ? -2.0 : 0.0) * view.cutPlanes[30].z;
-                seen += textureLod(textures2D[nonuniformEXT(target)], (gl_FragCoord.xy + o) / size, 0.0)[i % 4];
-            }
-            return seen / 5.0;
         }
         // The sky's visibility (CharacterRenderer.Studio): the share of the sphere's spiral directions, weighted by the normal, from which nothing of the
         // character hides the point, each read in its tile of the sky atlas (cutRanges[1]: its bindless index, the directions, the radius, a tile's pixels).
@@ -313,23 +257,11 @@ internal static class StudioShaders
             return total > 0.0 ? open / total : 1.0;
         }
         // The studio's indirect light: a cool sky over warm sand by the normal's height. A share of it stays however closed the point is (light bounced in
-        // from everything the two maps do not hold), so a side the sun does not reach is dark, not black. Less of it at night (the set's lamps, cutRanges[2].y).
+        // from everything the two maps do not hold), so a side the sun does not reach is dark, not black.
         vec3 studioAmbient(vec3 n, float open)
         {
             vec3 sky = mix(vec3(0.30, 0.23, 0.16), vec3(0.30, 0.36, 0.46), smoothstep(-0.6, 0.8, n.y));
-            return sky * 2.2 * mix(0.3, 1.0, open) * (view.cutRanges[2].x > 0.5 ? view.cutRanges[2].y : 1.0);
-        }
-        // The set's lamps (the editor's bar): cutRanges[2].x of them, none elsewhere. Lamp i's light at a point (the world lamps' falloff) and the way to it.
-        int studioLamps() { return int(view.cutRanges[2].x + 0.5); }
-        vec3 studioLamp(int i, vec3 world, out vec3 l)
-        {
-            vec4 p = view.cutPlanes[4 + 2 * i];
-            vec3 to = p.xyz - world;
-            float d = length(to);
-            l = to / max(d, 1e-3);
-            float x = clamp(d / max(p.w, 1e-3), 0.0, 1.0);
-            float a = x < 0.649 ? 0.2 + 0.8 * (1.0 - x) * (1.0 - x) * (1.0 - x) : x < 0.8 ? 0.242 - 3.0 * (x - 0.6) * (x - 0.6) : 3.0 * (x - 1.0) * (x - 1.0);
-            return view.cutPlanes[5 + 2 * i].rgb * a;
+            return sky * 2.2 * mix(0.3, 1.0, open);
         }
         float studioOcclusion()
         {

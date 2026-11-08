@@ -321,11 +321,14 @@ sealed class WorldObjects : IDisposable
                 var state = b.StateId is not null && Levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
                 bool isDestroyed = b.DestroyedOverride ?? state?.GetBool("destroyed") ?? false;
                 if (isDestroyed) Interlocked.Increment(ref destroyed);
-                var town = Towns.TownOf(state, b.Position);
+                var town = b.Standalone ? null : Towns.TownOf(state, b.Position);
                 GameRecord? townMaterial;
                 lock (Towns) townMaterial = Towns.MaterialOf(town);
                 var position = new Vector3(b.Position.X, y, b.Position.Z);
-                var parts = WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(isDestroyed, townMaterial) { WithInterior = !isDestroyed, Identity = b.Key });
+                // A standalone placement is laid out at a fixed place (its X and Z seed the choice among part variants) and moved to its own afterwards.
+                var layAt = b.Standalone ? new Vector3(1, y, 0) : position;
+                int firstItem = result.Items.Count;
+                var parts = WorldObjectLayout.Building(db, record, b.InstanceId, layAt, b.Rotation, new BuildingState(isDestroyed, townMaterial) { WithInterior = !isDestroyed, Identity = b.Key });
                 // A destroyed building gets no interior view (game: the per-frame interior driver skips it).
                 if (!isDestroyed && InteriorVolume.For(db, record, b.Key, position, b.Rotation, interiorCollisions!, gateways: true) is { } interior) (interior.IsGateway ? result.GateHulls : result.Interiors).Add(interior);
                 // Resource buildings ("is foliage", no parts) are drawn by the foliage system as a FOLIAGE_MESH naming them as "building type".
@@ -350,7 +353,7 @@ sealed class WorldObjects : IDisposable
                     Interlocked.Increment(ref layouts);
                     foreach (var item in Layouts.Items(layout, b))
                     {
-                        var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);
+                        var (at, rotation) = BuildingLayouts.Place(layAt, b.Rotation, item);
                         var placed = WorldObjectLayout.Building(db, item.Building, $"{b.InstanceId}/{item.InstanceId}", at, rotation,
                             new BuildingState(false, townMaterial) { Identity = $"{b.Key}/{item.InstanceId}" });
                         bool insideOnly = !exterior && !item.Outside;
@@ -358,6 +361,12 @@ sealed class WorldObjects : IDisposable
                             result.Items.Add(p with { Floor = item.Floor, Interior = insideOnly, ParentPlacementId = b.Key });
                         if (placed.Count > 0) Interlocked.Increment(ref layoutObjects);
                     }
+                }
+                if (b.Standalone)
+                {
+                    var moved = Matrix4x4.CreateTranslation(position - layAt);
+                    for (int k = firstItem; k < result.Items.Count; k++) result.Items[k] = result.Items[k] with { Transform = result.Items[k].Transform * moved };
+                    continue;
                 }
                 // Towns without a baked distant mesh: the building's own distant mesh stands in for it far away (what the game's
                 // "generate distant towns" would batch).

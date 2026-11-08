@@ -758,6 +758,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public IReadOnlyDictionary<string, int> InteriorView { get; set; } = new Dictionary<string, int>();
 
+    /// <summary>While set, only placements whose id starts with this are drawn, cast or traced (the character editor's bar: the frame holds nothing of the world).</summary>
+    public string? Isolated { get; set; }
+    bool OutOfIsolation(PlacedMesh p) => Isolated is { } only && !p.PlacementId.StartsWith(only, StringComparison.Ordinal);
+
     /// <summary>The loose items (placement ids) above the shown floor of their building in the interior view: not drawn. Set by the game, which picks by the same answer.</summary>
     public IReadOnlySet<string> HiddenItems { get; set; } = new HashSet<string>();
 
@@ -1034,6 +1038,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     bool InteriorHidden(PlacedMesh p)
     {
+        if (OutOfIsolation(p)) return true;
         if (InteriorDebug.HideMesh is { } hide && p.Kind == PlacedKind.BuildingPart && p.MeshPath.Contains(hide, StringComparison.OrdinalIgnoreCase)) return true;
         if (p.Kind != PlacedKind.BuildingPart) return false;
         if (p.DoorIndex >= 0 && !p.Interior) return false;
@@ -1054,7 +1059,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>What <see cref="InteriorHidden"/> leaves out whatever the viewed floor: an interior part of a building not in the interior view.</summary>
     bool OutsideHidden(PlacedMesh p) =>
-        p.Kind == PlacedKind.BuildingPart && p.Interior && !InteriorView.ContainsKey(p.ParentPlacementId ?? p.PlacementId);
+        OutOfIsolation(p) || p.Kind == PlacedKind.BuildingPart && p.Interior && !InteriorView.ContainsKey(p.ParentPlacementId ?? p.PlacementId);
 
     /// <summary>
     /// Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>. The vertices are projected relative to the eye

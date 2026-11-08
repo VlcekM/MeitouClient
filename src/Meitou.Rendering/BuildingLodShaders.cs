@@ -103,23 +103,7 @@ static class BuildingLodShaders
                 vec3 sh = normalize(sl + v);
                 float sd = max(dot(n, sl), 0.0);
                 float sspec = pow(max(dot(n, sh), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.6;
-                if (studioLamps() > 0)
-                {
-                    // The set's lamps in place of the sun (the editor's bar): the first casts the shadow.
-                    float giFound;
-                    vec3 giLight = studioGi(vWorld, n, giFound);
-                    colour = albedo * (giFound > 0.0 ? giLight : sky);
-                    float lampShade = studioLampShadow(vWorld, n, sl, giFound > 0.0 ? 0.0 : 0.5);
-                    for (int lamp = 0; lamp < studioLamps(); lamp++)
-                    {
-                        vec3 ll;
-                        vec3 light = studioLamp(lamp, vWorld, ll) * (lamp == 0 ? lampShade : 1.0) * studioLampSeen(lamp);
-                        vec3 lh = normalize(ll + v);
-                        float ln = max(dot(n, ll), 0.0);
-                        colour += albedo * ln * light + pow(max(dot(n, lh), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.6 * ln * light;
-                    }
-                }
-                else colour = albedo * (sky + sd * vec3(1.0, 0.92, 0.80) * 1.9 * shade) + sspec * sd * vec3(1.0, 0.92, 0.80) * 1.9 * shade;
+                colour = albedo * (sky + sd * vec3(1.0, 0.92, 0.80) * 1.9 * shade) + sspec * sd * vec3(1.0, 0.92, 0.80) * 1.9 * shade;
             """ + (Environment.GetEnvironmentVariable("MEITOU_STUDIO_DEBUG") == "1" ? "    colour = vec3(shade, studioSky(vWorld, n), 0.0);" : "") + """
             }
             else if (uFogDistance < -1.5) colour = stageLight(albedo, n, v, normalize(uLightDir), glossLit, uFogDistance < -2.5);

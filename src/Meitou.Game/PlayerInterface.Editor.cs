@@ -75,6 +75,8 @@ sealed partial class PlayerInterface
     public IReadOnlyList<CharacterId> EditorCharacters => EditorOpen ? editor!.Characters : [];
     /// <summary>Whether the open editor lists <paramref name="id"/> as an animal (its page offers the name only).</summary>
     public bool IsEditorAnimal(CharacterId id) => EditorOpen && editor!.Animals.Contains(id);
+    /// <summary>The host draws the editor's scene in the world (the Meitou bar, <see cref="EditorBar"/>): the backdrop is left out.</summary>
+    public bool EditorInWorld { get; set; }
 
     /// <summary>
     /// Opens the editor for <paramref name="characters"/> (the start's squad at creation; one character at a surgeon). Animals are listed too, as the original's window
@@ -239,18 +241,15 @@ sealed partial class PlayerInterface
     /// The editor's scene behind its panels (the original's compositor <c>Kenshi_Character_Editor</c>): <c>SandyGround.dds</c> over the whole window, stretched as the original's full-screen
     /// quad is, and the character's picture on it. First in the screen's controls, so the panels draw over both.
     /// </summary>
-    /// <summary>The set is the night bar: a night behind it instead of the bare ground.</summary>
-    public bool EditorNight { get; set; }
-
     List<UiControl> EditorBackdrop()
     {
         var backdrop = new List<UiControl>();
-        if (uiPainter is not { } painter) return backdrop;
+        if (uiPainter is not { } painter || EditorInWorld) return backdrop;
         groundFile ??= findAsset?.Invoke("SandyGround.dds") ?? "";
         var all = new UiRect(0, 0, Width, Height);
         // A sand colour first, so the window is covered before the ground texture is decoded.
-        backdrop.Add(new("editor-base", "Widget", all, "", "", "", true, new Dictionary<string, string>(), EditorNight ? new Vector4(0.015f, 0.02f, 0.04f, 1) : new Vector4(0.42f, 0.40f, 0.34f, 1), Pickable: false));
-        if (!EditorNight && groundFile.Length > 0 && painter.IconReady(groundFile))
+        backdrop.Add(new("editor-base", "Widget", all, "", "", "", true, new Dictionary<string, string>(), new Vector4(0.42f, 0.40f, 0.34f, 1), Pickable: false));
+        if (groundFile.Length > 0 && painter.IconReady(groundFile))
             backdrop.Add(new("editor-ground", "ImageBox", all, "", "", "", true, new Dictionary<string, string> { ["ImageTexture"] = Meitou.Rendering.Ui.UiPainter.IconTexture(groundFile) }, Vector4.Zero, Pickable: false));
         if (painter.HasTexture(StageTexture))
             backdrop.Add(new("editor-stage", "ImageBox", all, "", "", "", true, new Dictionary<string, string> { ["ImageTexture"] = StageTexture, ["ImageFlipV"] = "true" }, Vector4.Zero, Pickable: false));

@@ -461,30 +461,8 @@ static class CharacterShaders
                 float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.6;
                 // The sky's light where the character leaves it open (the large shapes: a hood over the face), the screen's occlusion for the folds.
                 float skyOpen = studioSky(vWorld, n) * mix(1.0, studioOcclusion(), 0.6);
-                if (studioLamps() > 0)
-                {
-                    // The set's lamps in place of the sun: the first casts the shadow.
-                    // The room's bounced light, warm, closed off by the same occlusion: the side no lamp reaches is dark, not black.
-                    float giFound;
-                    vec3 giLight = studioGi(vWorld, n, giFound);
-                    // The probes' light, closed off only by the screen's occlusion: the world's characters take it the same, their own hat does not hide the room's bounce.
-                    colour = albedo * (giFound > 0.0 ? giLight * mix(0.55, 1.0, studioOcclusion()) + vec3(0.04) : studioAmbient(n, skyOpen) + vec3(0.32, 0.27, 0.20) * mix(0.35, 1.0, skyOpen));
-                    float lampShade = studioLampShadow(vWorld, n, l, giFound > 0.0 ? 0.45 : 0.5);
-                    for (int lamp = 0; lamp < studioLamps(); lamp++)
-                    {
-                        vec3 ll;
-                        vec3 light = studioLamp(lamp, vWorld, ll) * (lamp == 0 ? lampShade : 1.0) * studioLampSeen(lamp);
-                        vec3 lh = normalize(ll + v);
-                        float ln = max(dot(n, ll), 0.0);
-                        colour += albedo * skinDiffuse(n, smoothNormal, ll, curvature, skin, albedo) * light + pow(max(dot(n, lh), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.6 * ln * light;
-                        if (surfaceOn) colour += surfaceSpecular(ll) * light;
-                    }
-                }
-                else
-                {
-                    colour = albedo * (studioAmbient(n, skyOpen) + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
-                    if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade;
-                }
+                colour = albedo * (studioAmbient(n, skyOpen) + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
+                if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade;
                 {{(Environment.GetEnvironmentVariable("MEITOU_STUDIO_DEBUG") == "1" ? "colour = vec3(shade, studioSky(vWorld, n), studioOcclusion());" : "")}}
             }
             // The editor's stage (CharacterRenderer.DrawStage, a fog distance of -2): the game's rtt.hlsl (AtmosphereShaders.stageLight); -3 the same unclamped (Meitou's stage and

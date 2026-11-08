@@ -206,7 +206,7 @@ public static class Enhancements
             "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"),
         new("editorbar", "Character editor bar", "platform", "bar",
             () => Characters.PreviewStudio.Bar, v => Characters.PreviewStudio.Bar = v,
-            "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar instead, drawn the same way and lit by the same light as the platform",
+            "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with your graphics settings",
             optional: true),
     ];
 

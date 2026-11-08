@@ -585,8 +585,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             player.PortraitSize = Meitou.Rendering.Characters.CharacterRenderer.PortraitSizeFor(previews.Look);
             SyncIconLook();
         }
+        if (!player.EditorOpen) ClearEditorBar();
         if (TitleVisible) { DrawTitleWorld(width, height); return; }
-        if (player.EditorOpen) { DrawEditorStage(width, height); return; }
+        if (player.EditorOpen) { DrawEditorScene(width, height); return; }
         if (gpu.Characters is { StageRequest: not null } staged) staged.StageRequest = null;
         ClearEditorStage();
         double seconds = animClock ? animSeconds : realTime.Elapsed.TotalSeconds;

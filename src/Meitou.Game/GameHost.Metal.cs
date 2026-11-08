@@ -1197,7 +1197,7 @@ sealed partial class GameHost
                 // The merged character editor is shared with Vulkan: a new game opens it once the squad is in the snapshot, and the world resumes when it closes.
                 OpenPendingEditor();
                 ResumeAfterCreation();
-                if (hud is not { EditorOpen: true }) ClearEditorStage();
+                if (hud is not { EditorOpen: true }) { ClearEditorStage(); ClearEditorBar(); }
                 if (!tourHolds && hud is not null) ApplyTitleCamera();
                 // A flight puts the focus where it lands, so the towns there populate during the flight; otherwise the
                 // followed character's pivot is already in the rig.
@@ -1313,8 +1313,9 @@ sealed partial class GameHost
             double drawableWait = display.LastDrawableWaitMilliseconds;
             long recordStart = Stopwatch.GetTimestamp();
             var backbuffer = ctx.Backbuffer;
-            // The editor's scene: the character and its set drawn into the stage texture the interface shows over the world.
-            if (hud is { EditorOpen: true }) DrawEditorStage(size.X, size.Y);
+            // The editor's scene: in the Meitou UI the bar, drawn by the world pass below from the editor's camera (GameHost.EditorBar.cs); else the original's stage, the
+            // character and its platform drawn into the stage texture the interface shows over the world.
+            var editorBarFrame = hud is { EditorOpen: true } ? BeginEditorBar(size.X, size.Y) : null;
             // The still's objects are all resident before the first picture, as the Vulkan screenshot path settles them (its Settle
             // opens its own frame; here the frame is the first one's).
             if (frames == 0) { objects?.Settle(camera.Eye); foliage?.Settle(camera.Eye); }
@@ -1343,7 +1344,7 @@ sealed partial class GameHost
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.
             bool titleLook = hud is not null && TitleVisible;
-            float hour = presentationHour ?? (titleLook ? TitleHour : (float)session.Clock.HourOfDay);
+            float hour = editorBarFrame is not null ? EditorBarHour : presentationHour ?? (titleLook ? TitleHour : (float)session.Clock.HourOfDay);
             var aspect = size.X / (float)Math.Max(size.Y, 1);
             var eye = camera.Eye;
             var view = camera.View;
@@ -1410,6 +1411,7 @@ sealed partial class GameHost
                     fogVolumes.HidePlaced = savedHidePlaced;
                 }
             }
+            if (editorBarFrame is { } barFrame) EndEditorBar(barFrame, size.X, size.Y);
             // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (GameHost.Feedback.cs).
             bool feedbackShot = feedbackShotRequested && hud is not null && !still;
             if (hud is not null) hud.ShotWithoutMenus = feedbackShot;

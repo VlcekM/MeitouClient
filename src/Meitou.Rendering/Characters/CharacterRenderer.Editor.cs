@@ -21,12 +21,6 @@ internal sealed unsafe partial class CharacterRenderer
 {
     /// <summary>The character to draw into <see cref="StageTexture"/> this frame (the host sets it before <see cref="Update"/>, which also poses the character out of range); null: none.</summary>
     public EditorStageRequest? StageRequest { get; set; }
-    /// <summary>The set's lamps (the editor's bar; null: the studio's sun), the most telling first: the first casts the character's shadow.</summary>
-    public IReadOnlyList<StageLamp>? StageLamps { get; set; }
-    /// <summary>The draw keys of the others in the set, drawn with the character (null: nobody).</summary>
-    public IReadOnlyList<long>? StageCompany { get; set; }
-    /// <summary>The stage camera's far plane.</summary>
-    public float StageFar { get; set; } = 400;
 
     GpuTexture? stageColour, stageDepth;
     SampledTexture? stageSampled;
@@ -99,20 +93,17 @@ internal sealed unsafe partial class CharacterRenderer
             ref var l = ref live[index];
             (eye, var pivot) = StageCamera(in l, in r);
             var view = Matrix4x4.CreateLookAt(eye, pivot, Vector3.UnitY);
-            var perspective = Matrix4x4.CreatePerspectiveFieldOfView(r.FieldOfView, r.Width / (float)r.Height, 0.5f, StageFar);
+            var perspective = Matrix4x4.CreatePerspectiveFieldOfView(r.FieldOfView, r.Width / (float)r.Height, 0.5f, 400);
             var projection = perspective * Matrix4x4.CreateTranslation(r.ShiftX, 0, 0);
             var light = Vector3.Normalize(Vector3.TransformNormal(StageLight, l.World));
             // The studio (previewsun): the stage's light raised to a sun, its shadow and occlusion drawn first.
             // The studio's sun, fixed to the character (the editor's camera turns round it, the shadows stay): as seen from the editor's first view
             // (yaw 0, in front: the character's +z), from the right about 45 degrees to the side and 35 up.
             if (StudioOn) light = Vector3.Normalize(Vector3.TransformNormal(StudioStageSun, l.World));
-            // In a set with lamps the key light is the first of them, seen from the character.
-            if (StudioOn && StageLamps is { Count: > 0 } lamps && lamps[0].Position != l.Centre) light = Vector3.Normalize(lamps[0].Position - l.Centre);
             Matrix4x4.Decompose(l.World, out _, out var facing, out _);
             StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
             StageStudio = null;
             studioCasters = StageCasters;
-            MarkCompany();
             try
             {
                 constants = StudioOn
@@ -131,25 +122,12 @@ internal sealed unsafe partial class CharacterRenderer
         if (constants is { } c)
         {
             portraitLive = index;
-            companyOn = true;
             try { DrawView(c, eye, []); }
-            finally { portraitLive = -1; companyOn = false; }
+            finally { portraitLive = -1; }
         }
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
         Gpu.EndNative(cmd);
-    }
-
-    /// <summary>Whether a live index is one of <see cref="StageCompany"/>'s, and whether the view being drawn takes them (the colour and the camera's depth; the studio's light maps hold the character's sphere only).</summary>
-    readonly HashSet<int> companyLive = [];
-    bool companyOn;
-
-    void MarkCompany()
-    {
-        companyLive.Clear();
-        if (StageCompany is not { Count: > 0 } keys) return;
-        for (int i = 0; i < liveCount; i++)
-            if (keys.Contains(live[i].Key)) companyLive.Add(i);
     }
 
     /// <summary>The enhanced stage's picture into the stage picture (after the platform is drawn into <see cref="StageDrawTarget"/>); nothing for the original's.</summary>
