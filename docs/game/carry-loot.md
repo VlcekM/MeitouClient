@@ -89,6 +89,19 @@ exe: squad-level "someone carries" tests (`FUN_140288630`, `FUN_14028fdf0`, a cr
 put-down tasks, the FIND_BED desire and the Watching-slaves desire. **Verified** records: `carrying left arm only` (overlay, `override L arm`, every other bone deleted), `stand carrying left` (overlay, `override L arm`),
 `walk/jog carrying left` (upper, `override L arm`), `sword ready (carry)` (upper idle, carrying left, one weapon in hand).
 
+## Dropped item placement
+
+**Verified** (decompile, `Item::createItemEntityCallback` `FUN_1407626e0`, run when an item's entity is made; an item put in the world with the pose-kept flag `+0x1d9` false, as every drop: the character's drop calls `FUN_1405ca4a0` / `FUN_1405ca740` pass the identity orientation and flag 0, whatever the caller's pose): the item's position and orientation are **set again there** by its record type (`+0x13c`), the dropper's orientation is not used. The position is raised 25, a ray goes down 99 (`FUN_1409b6a90`) and the hit height is the ground; no hit uses the terrain height (`FUN_1409b1f80`), else the unraised point. The up-to-ground-normal turn `Q` is `Vector3.UnitY.getRotationTo(normal)` (no yaw).
+
+| Record type | Orientation | Height above the ground |
+|---|---|---|
+| WEAPON (2) | **planted**: the mesh turned about its own Z by `U(0.9, 1.1)` x pi (its +Y, the blade end, then points down, at most 18 degrees off vertical), then by `U(0, 2 pi)` about Y; the ground normal is not used | origin raised `U(0.5, 0.7)` x the mesh bounds' Y size |
+| ARMOUR (3), CONTAINER (46) | a quarter turn about -X (mesh Z up), then `Q` | half the bounds' Z size |
+| any other | `Q` | 0 |
+
+`U(a, b)` is `FUN_1409b1c80`, a uniform random float. Their body is static (the 4th argument of the body builder is `+0x1da == 0`), a weapon's from its `physics file` `.xml` when it names one, else a box of the mesh bounds; the weapon's ray mask leaves out groups 28 to 31 (`0x7f9e04`), the others' includes them (`0xf07f9e04`). Severed limbs set `+0x1d9` and `+0x1da` and keep the bone's pose with a dynamic body ([collision](../formats/collision.md#item-physics)). Why a weapon sticks in the ground (**Verified**, probe over the base game's records and their meshes): weapon meshes run along +Y with the grip near the origin (e.g. Mercenary Club Y -2.5 to 8.6, Polearm -5.9 to 14.8), so the turned mesh's blade end lies about 0.7 to 0.8 of its length below the origin, which the raise of 0.5 to 0.7 leaves 0 to 0.3 of the length below the ground; 283 of 309 ITEM meshes are thinnest in Y with the origin on their base, 120 of 142 ARMOUR and 14 of 16 CONTAINER meshes thinnest in Z.
+**Unknown**: whether a save load keeps the saved orientation (its call to the in-world setter, `FUN_14036f950`, shows only four arguments); Meitou draws the saved one. Meitou: `GameHost.PlacedPose` (a limb keeps `GameHost.LaidFlat`, engine choice); the random draws come from the item's id.
+
 ## Theft and witnesses
 
 **Observed** pending crime stores code, victim faction/handle, timer and booked state. Own/lawless
