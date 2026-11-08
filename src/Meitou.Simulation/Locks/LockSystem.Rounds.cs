@@ -54,7 +54,7 @@ public sealed class Round
 /// <see cref="ReleaseTimeout"/>, the system frees it in the jail faction's name; cages of factions that book none (slavers, bandits, the player's) are freed by a 211 holder or nobody.</item>
 /// <item><b>Lock-up</b> (155, 197): while a member's role list holds the goal in its hours, a free member that has it locks every door of the squad's home, door by door; 155 only
 /// once every member is inside (engine: within the home's extent) and, for both, no stranger is (<c>!strangers in house</c>). When no member's goal is in its hours any more,
-/// a free member unlocks what a round locked (<b>engine choice</b>: the morning unlock is not traced; the squad's "house locked" flag is kept here, not saved).</item>
+/// a free member with goal 86 walks to each door of the locked home, unlocks it and opens it.</item>
 /// <item><b>Wardens</b> (195): a free member with the goal in its hours locks the occupied, unlocked cages of its faction in its town (not one whose prisoner is being freed).</item>
 /// <item><b>Keys</b> (<b>engine choice</b>): a worker whose target is in a building shut by its own faction's (or its home's) locked doors unlocks them before it walks, standing,
 /// as the simulation does not know where a door is. An arrest's guard carrying a captive to a cage behind its own faction's shut doors has them opened at once.</item>
@@ -390,7 +390,8 @@ public sealed partial class LockSystem : IStateHashed
     }
 
     /// <summary>The place a round's worker goes to for a target: a lock-up from outside uses the door's outer point.</summary>
-    static Vector2 SpotOf(World world, Round round, Fixture f) => round.FromOutside ? OuterPoint(world, f) : Flat(f.Position);
+    static (Vector2 At, float Reach) RoundSpot(World world, Round round, Fixture f, Vector2 from) =>
+        round.Kind == RoundKind.UnlockDoors ? WorkSpot(world, f, from) : (round.FromOutside ? OuterPoint(world, f) : Flat(f.Position), round.Reach);
 
     /// <summary>The target's building is shut by doors the worker may open: its faction's, or its squad's home.</summary>
     static bool NeedsKeys(World world, Round round, CharacterCold c, Fixture f) =>
@@ -400,10 +401,10 @@ public sealed partial class LockSystem : IStateHashed
     {
         round.Phase = RoundPhase.Walk;
         round.Time = 0;
-        if (Distance(world, round, world.Characters.Next[worker], f) > round.Reach) TaskStart.StepTo(world.Characters, worker, SpotOf(world, round, f), SpeedMode.Walk);
+        var from = Flat(world.Characters.Next[worker].Position);
+        var (at, reach) = RoundSpot(world, round, f, from);
+        if (Vector2.Distance(from, at) > reach) TaskStart.StepTo(world.Characters, worker, at, SpeedMode.Walk);
     }
-
-    static float Distance(World world, Round round, in CharacterHot n, Fixture f) => Vector2.Distance(Flat(n.Position), SpotOf(world, round, f));
 
     /// <summary>One tick of a round; false when it is over.</summary>
     bool Step(World world, Round r)
@@ -436,8 +437,10 @@ public sealed partial class LockSystem : IStateHashed
             case RoundPhase.Walk:
             {
                 bool walking = n.Task == (byte)CharacterTask.GoTo;
-                float d = Distance(world, r, n, f);
-                if (d <= r.Reach || !walking && d <= WalkSlack)
+                var from = Flat(n.Position);
+                var (at, reach) = RoundSpot(world, r, f, from);
+                float d = Vector2.Distance(from, at);
+                if (d <= reach || r.Kind != RoundKind.UnlockDoors && !walking && d <= WalkSlack)
                 {
                     if (walking) TaskStart.Stand(table, w);
                     r.Phase = RoundPhase.Work;
@@ -450,19 +453,20 @@ public sealed partial class LockSystem : IStateHashed
                     if (f.Kind == FixtureKind.Cage) world.Fixtures.MarkUnreachable(world, f, r.Faction);
                     return End(world, r, fallback: true);
                 }
-                TaskStart.StepTo(table, w, new Vector2(f.Position.X, f.Position.Z), SpeedMode.Walk);
+                TaskStart.StepTo(table, w, at, SpeedMode.Walk);
                 return true;
             }
             case RoundPhase.Work:
                 r.Time += dt;
-                if (r.Time < LockWorkSeconds) return true;
+                if (r.Time < LockWorkSeconds || r.Kind == RoundKind.UnlockDoors && f.Motion == DoorMotion.Closing) return true;
                 Apply(world, r, f, wc);
                 world.EmitSound(r.Kind is RoundKind.LockDoors or RoundKind.LockCages ? SoundKind.Locked : SoundKind.Unlocked, w, n.Position);
                 if (++r.Index >= r.Targets.Length) return End(world, r, fallback: false, done: true);
                 var nextTarget = world.Fixtures.Find(r.Targets[r.Index]);
                 if (nextTarget is null) return End(world, r, fallback: false, done: true);
                 Walk(world, w, r, nextTarget);
-                if (r.Phase == RoundPhase.Walk && Distance(world, r, n, nextTarget) <= r.Reach) r.Phase = RoundPhase.Work;   // the next door is where it stands
+                var (nextAt, nextReach) = RoundSpot(world, r, nextTarget, Flat(n.Position));
+                if (Vector2.Distance(Flat(n.Position), nextAt) <= nextReach) r.Phase = RoundPhase.Work;   // the next door is where it stands
                 return true;
         }
         return true;
@@ -504,6 +508,7 @@ public sealed partial class LockSystem : IStateHashed
                 break;
             case RoundKind.UnlockDoors:
                 world.Fixtures.SetLocked(f, false);
+                FixtureRegistry.OpenDoor(f);
                 break;
             case RoundKind.LockCages:
                 if (!FixtureRegistry.IsFree(world.Characters, f) && f.Lock is { Locked: false }) world.Fixtures.SetLocked(f, true);
