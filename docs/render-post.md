@@ -181,6 +181,11 @@ values, widened by the layer at the nearest and farthest surface of the 3 x 3 re
 alone, a pixel beside an outline whose four all fell on one side (as the jitter decides) clamped its history to that side and the outline
 kept a one-pixel staircase (**Observed**, mec-tou-nu save, still camera: hard steps, then intermediate shades as the upscaler's own edge). One surface per pixel (the nearest of the 2 x 2, before) put a hard pixel edge back on the upscaler's smooth
 outline wherever a ridge stood in front of the dust: a staircase. Off an outline the four agree, so drifting dust does not trail.
+On an outline (`outlineLayer`) the upscaler's pixel C already mixes the near surface with the far one without its dust, so a plain mix of the
+layers at the two surfaces let the bare far colour through: a line of sky colour round every ridge in front of dust (user report, 2026-11-08).
+There the layer is chosen so that "over" C gives b (near layer over R) + (1 - b) (far layer over K): R and K the mean scene colours of the 3 x 3
+render pixels on each side (depth split at the geometric mean), b C's share of R (C projected on K → R; the bilinear share where R and K look
+alike). Its colour gains b (1 - b) (far alpha - near alpha) (R - K), floored so the result stays non-negative. **Observed** (user, DLSS, 2026-11-08): the outline gone.
 **Observed** (mec-tou-nu save, DLSS, 1600 x 900): flicker between frames in the dust (99.9th percentile of the second difference) still
 camera 6.5 → 2.5/255, 0.25°-a-frame orbit 25 → 20.5; turning 1.5° and panning 30 units a frame, no trails. A vendor upscaler that fails
 that frame gets them in the scene before the TAA. Effect units beyond 4000 units are stepped at 20 Hz, beyond 9000 at 10 Hz (the cost);

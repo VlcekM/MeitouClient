@@ -14,13 +14,14 @@ public sealed partial class PostProcess
 {
     sealed class LateParticlesPass : FullscreenProgram
     {
-        public readonly SamplerSlot AccumH, LowDepthH, AccumFarH, LowDepthFarH, AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ, Depth, History, Motion;
+        public readonly SamplerSlot AccumH, LowDepthH, AccumFarH, LowDepthFarH, AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ, Depth, Scene, Output, History, Motion;
         public readonly UniformHandle LowSizeH, LowSizeQ, Has, NearPlanes, Late, Target;
         public LateParticlesPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleLate, "post late particles")
         {
             (AccumH, LowDepthH, AccumFarH, LowDepthFarH) = (P.Sampler("uAccumH"), P.Sampler("uLowDepthH"), P.Sampler("uAccumFarH"), P.Sampler("uLowDepthFarH"));
             (AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ) = (P.Sampler("uAccumQ"), P.Sampler("uLowDepthQ"), P.Sampler("uAccumFarQ"), P.Sampler("uLowDepthFarQ"));
-            (Depth, History, Motion) = (P.Sampler("uDepth"), P.Sampler("uHistory"), P.Sampler("uMotion"));
+            (Depth, Scene, Output) = (P.Sampler("uDepth"), P.Sampler("uScene"), P.Sampler("uOutput"));
+            (History, Motion) = (P.Sampler("uHistory"), P.Sampler("uMotion"));
             (LowSizeH, LowSizeQ, Has, NearPlanes) = (P.Uniform("uLowSizeH"), P.Uniform("uLowSizeQ"), P.Uniform("uHas"), P.Uniform("uNearPlanes"));
             (Late, Target) = (P.Uniform("uLate"), P.Uniform("uTarget"));
         }
@@ -68,6 +69,8 @@ public sealed partial class PostProcess
         Bind(p.P, p.AccumFarQ, q ? quarter.AccumFar : null);
         Bind(p.P, p.LowDepthFarQ, q ? quarter.DepthFar : null);
         Bind(p.P, p.Depth, sceneDepth);
+        Bind(p.P, p.Scene, sceneColour);
+        Bind(p.P, p.Output, target);
         Bind(p.P, p.History, history ? lateParticlesLast : null);
         Bind(p.P, p.Motion, motion);
         p.P.Set(p.LowSizeH, (float)(half.Accum?.Width ?? 1), (float)(half.Accum?.Height ?? 1));

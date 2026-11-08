@@ -571,6 +571,8 @@ static class PostProcessShaders
         out vec4 fragColour;
         uniform sampler2D uAccumH, uLowDepthH, uAccumFarH, uLowDepthFarH, uAccumQ, uLowDepthQ, uAccumFarQ, uLowDepthFarQ;
         uniform sampler2D uDepth;               // the scene's depth at the render size
+        uniform sampler2D uScene;               // the scene's colour at the render size (the upscaler's input, no late particles)
+        uniform sampler2D uOutput;              // the upscaler's output at the display size (what the layer goes over)
         uniform sampler2D uHistory;             // last frame's result at the display size
         uniform sampler2D uMotion;              // the motion target (rg: this frame's place minus last frame's, 0..1 units)
         uniform vec2 uLowSizeH, uLowSizeQ;
@@ -622,6 +624,41 @@ static class PostProcessShaders
             return true;
         }
 
+        // The half and quarter values as one premultiplied layer, the quarter over the half (the order the scene took them in).
+        vec4 joined(vec4 h, vec4 q) { return vec4(h.rgb * (1.0 - q.a) + q.rgb, 1.0 - (1.0 - h.a) * (1.0 - q.a)); }
+
+        // The layer for an outline pixel, so that "over" the upscaler's output C gives b (ln over R) + (1 - b) (lf over K): R and K the mean scene colours of
+        // the render pixels round it on the near and the far side (z split at the geometric mean of zn and zf), b the near side's share of C (C projected on
+        // K -> R; the four's bilinear share where R and K look alike). C's outline pixels mix the near surface with the far one without its dust, and a plain
+        // mix of the two layers let that bare far colour through: the sky's colour round every ridge in front of dust.
+        vec4 outlineLayer(ivec2 b, ivec2 last, float zn, float zf, float z[4], float bil[4], vec4 ln, vec4 lf)
+        {
+            float split = sqrt(zn * zf);
+            vec3 r = vec3(0.0), k = vec3(0.0);
+            float nr = 0.0, nk = 0.0;
+            for (int y = -1; y <= 2; y++)
+                for (int x = -1; x <= 2; x++)
+                {
+                    if ((x == -1 || x == 2) && (y == -1 || y == 2)) continue;
+                    ivec2 q = clamp(b + ivec2(x, y), ivec2(0), last);
+                    vec3 c = texelFetch(uScene, q, 0).rgb;
+                    if (linearZ(texelFetch(uDepth, q, 0).r) < split) { r += c; nr += 1.0; }
+                    else { k += c; nk += 1.0; }
+                }
+            r /= max(nr, 1.0);
+            k /= max(nk, 1.0);
+            vec3 c = texelFetch(uOutput, ivec2(gl_FragCoord.xy), 0).rgb;
+            vec3 rk = r - k;
+            float share = 0.0;
+            for (int i = 0; i < 4; i++) share += z[i] < split ? bil[i] : 0.0;
+            float span = dot(rk, rk);
+            float beta = span > 1e-4 ? clamp(dot(c - k, rk) / span, 0.0, 1.0) : share;
+            vec4 l = mix(lf, ln, beta);
+            l.rgb += beta * (1.0 - beta) * (lf.a - ln.a) * rk;
+            l.rgb = max(l.rgb, -c * (1.0 - l.a));   // never below black over C
+            return l;
+        }
+
         void main()
         {
             vec2 rp = gl_FragCoord.xy * uLate.xy - 0.5 + uLate.zw;
@@ -660,26 +697,23 @@ static class PostProcessShaders
             vec4 sum = vec4(0.0), lo = vec4(1e30), hi = vec4(-1e30);
             for (int i = 0; i < 4; i++)
             {
-                // The quarter size over the half (the order the scene took them in), as one premultiplied layer.
-                vec4 l = vec4(h[i].rgb * (1.0 - qv[i].a) + qv[i].rgb, 1.0 - (1.0 - h[i].a) * (1.0 - qv[i].a));
+                vec4 l = joined(h[i], qv[i]);
                 sum += l * bil[i];
                 lo = min(lo, l);
                 hi = max(hi, l);
             }
             if (!one)
             {
-                // The range widened by the layer at the neighbourhood's nearest and farthest surfaces.
+                // The layer at the neighbourhood's nearest and farthest surfaces: this frame's value, split by the upscaler's own outline, and the range widened by them.
                 float ze[4] = float[4](zNear, zFar, zNear, zFar);
                 vec4 he[4], qe[4];
                 bool eh = uHas.x > 0.5 && layerAt(uAccumH, uLowDepthH, uAccumFarH, uLowDepthFarH, uLowSizeH, uHas.x, fc, ze, false, he);
                 bool eq = uHas.y > 0.5 && layerAt(uAccumQ, uLowDepthQ, uAccumFarQ, uLowDepthFarQ, uLowSizeQ, uHas.y, fc, ze, false, qe);
-                for (int i = 0; i < 2; i++)
-                {
-                    vec4 a = eh ? he[i] : vec4(0.0), q = eq ? qe[i] : vec4(0.0);
-                    vec4 l = vec4(a.rgb * (1.0 - q.a) + q.rgb, 1.0 - (1.0 - a.a) * (1.0 - q.a));
-                    lo = min(lo, l);
-                    hi = max(hi, l);
-                }
+                vec4 ln = joined(eh ? he[0] : vec4(0.0), eq ? qe[0] : vec4(0.0));
+                vec4 lf = joined(eh ? he[1] : vec4(0.0), eq ? qe[1] : vec4(0.0));
+                sum = outlineLayer(ivec2(b), last, zNear, zFar, z, bil, ln, lf);
+                lo = min(min(lo, sum), min(ln, lf));
+                hi = max(max(hi, sum), max(ln, lf));
             }
             if (one || uTarget.z < 0.5) { fragColour = sum; return; }   // one surface: the four agree, the filter would keep this frame's
 
