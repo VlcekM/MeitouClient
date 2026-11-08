@@ -9,16 +9,16 @@ using Meitou.Modding;
 using Meitou.Simulation;
 using EngineKey = Meitou.Game.Host.Input.Key;
 
-namespace Meitou.Game;
+namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// The debug menu (F10; Ctrl+F10 on Metal, where F10 is the settings panel; docs/game/ui-input.md "Debug menu"): cheats sent to the world as
 /// <see cref="DebugCommand"/>s. Up/Down pick a row, typing fills its field, Enter applies it, Esc or the close key closes; while open it takes every key.
 /// The rows are grouped in labelled sections (<see cref="DebugCheatSections"/>: Character, World / Spawn, Combat; then Mods for code mods' rows ([modding](docs/modding.md)); then Tools and Overlays, <see cref="DebugTools"/>, whose rows also take Space, Left and Right); Up and Down walk them in the order shown. Values sit in one column: typed fields, and on / off for switches. Teleport and spawn use the camera's target (the middle of the screen); heal, max skills and damage the selected characters, else the inspected one. Heal keeps lost limbs; its sub-row Heal fully gives them back. Godmode (all player characters; see <see cref="DebugGodmode"/>) is a switch, and so is Guard (<see cref="DebugGuard"/>: kills hostiles within 30 m of the lead and heals the player's characters; it switches itself off when a game loads). "Teleport on map" is a switch too: while on, a click on the open map sends the selected characters there. Clear bounties clears the selected characters' (else every player character's), all or one faction's.
 /// </summary>
-sealed partial class GameHost
+sealed class DebugMenu(GameHost host)
 {
-    enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard, ExplodeLevel, Explode, ExplodeClick }
+    internal enum DebugRow { Teleport, SpawnNpc, GiveItem, Money, Heal, HealFully, MaxSkills, Damage, ForceHits, DamageMultiplier, UnlockResearch, ClearBounties, Godmode, Guard, ExplodeLevel, Explode, ExplodeClick }
 
     internal static readonly string[] DebugLabels =
     [
@@ -40,9 +40,9 @@ sealed partial class GameHost
         var layout = new List<(string?, int)>();
         foreach (var (title, rows) in DebugCheatSections)
             for (int k = 0; k < rows.Length; k++) layout.Add((k == 0 ? title : null, (int)rows[k]));
-        for (int m = DebugLabels.Length; m < modding.DebugRowCount; m++) layout.Add((m == DebugLabels.Length ? "Mods" : null, m));
+        for (int m = DebugLabels.Length; m < host.modding.DebugRowCount; m++) layout.Add((m == DebugLabels.Length ? "Mods" : null, m));
         if (debugToolsOn)
-            for (int t = 0; t < DebugTools.Length; t++) layout.Add((t == 0 || DebugTools[t].Section != DebugTools[t - 1].Section ? DebugTools[t].Section : null, modding.DebugRowCount + t));
+            for (int t = 0; t < DebugTools.Length; t++) layout.Add((t == 0 || DebugTools[t].Section != DebugTools[t - 1].Section ? DebugTools[t].Section : null, host.modding.DebugRowCount + t));
         return layout;
     }
 
@@ -52,20 +52,20 @@ sealed partial class GameHost
     // The rows' typed text: the vanilla rows', then one per code mod row (EnsureDebugFields).
     internal readonly List<string> debugFields = ["", "", "", "1000", "", "", "", "20", "", "1", "", "", ""];
     readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> debugMatches = [];
-    bool debugMenuOpen;
+    internal bool debugMenuOpen;
     int debugRow;
     string debugStatus = "";
     /// <summary>
     /// The open row's sub-list (Enter or Right opens it, Esc or Left closes it). Damage and Force hits: "Random" or "Off", then the first target's parts as (template id, name);
     /// Clear bounties: "All factions", then each faction with a bounty as (faction index, name and total).
     /// </summary>
-    (string? Id, string Name)[]? debugParts;
+    internal (string? Id, string Name)[]? debugParts;
     int debugPart;
     // The overlays the menu's tool rows switch, also on their own keys (F11, Ctrl+F9, F12).
-    bool statsVisible, fpsVisible;
-    FrameProfiler? profiler;
+    internal bool statsVisible, fpsVisible;
+    internal FrameProfiler? profiler;
     /// <summary>Whether the Tools section is shown: the Vulkan game loop has these tools, the Metal one does not.</summary>
-    bool debugToolsOn;
+    internal bool debugToolsOn;
 
     /// <summary>A tool row: its section, label, key hint ("" for none), its state for the value column ("on", "off", a mode, "" for none) and what Enter does.</summary>
     readonly record struct DebugTool(string Section, string Label, string Key, Func<string> State, Action Switch)
@@ -80,13 +80,13 @@ sealed partial class GameHost
     DebugTool[] DebugTools => debugTools ??=
     [
         new("Tools", "Pick & collision inspector...", "", () => "", () => { debugMenuOpen = false; inspectorMenuOpen = true; }),
-        new("Tools", "Interior editor...", "", () => "", OpenInteriorEditor),
-        new("Tools", "Level editor...", "Shift+F12", () => "", OpenLevelEditor),
-        new("Tools", "Teleport on map...", "", () => OnOff(player.MapPickSticky), ToggleMapTeleport) { IsSwitch = true },
-        new("Overlays", "Navmesh view", "Shift+F11", () => navView.ToString().ToLowerInvariant(), ToggleNavOverlay),
+        new("Tools", "Interior editor...", "", () => "", host.interiorEditorHost.OpenInteriorEditor),
+        new("Tools", "Level editor...", "Shift+F12", () => "", host.levelEditorHost.OpenLevelEditor),
+        new("Tools", "Teleport on map...", "", () => OnOff(host.player.MapPickSticky), ToggleMapTeleport) { IsSwitch = true },
+        new("Overlays", "Navmesh view", "Shift+F11", () => host.debugOverlays.navView.ToString().ToLowerInvariant(), host.debugOverlays.ToggleNavOverlay),
         new("Overlays", "Frame statistics", "F11", () => OnOff(statsVisible), () => { statsVisible = !statsVisible; FoliageGpuCull.CountTriangles = statsVisible; }) { IsSwitch = true },
-        new("Overlays", "  Character boxes", "", () => OnOff(characterBoxes), () => characterBoxes = !characterBoxes) { IsSwitch = true },
-        new("Overlays", "  Walk paths", "", () => OnOff(walkPaths), () => walkPaths = !walkPaths) { IsSwitch = true },
+        new("Overlays", "  Character boxes", "", () => OnOff(host.debugOverlays.characterBoxes), () => host.debugOverlays.characterBoxes = !host.debugOverlays.characterBoxes) { IsSwitch = true },
+        new("Overlays", "  Walk paths", "", () => OnOff(host.debugOverlays.walkPaths), () => host.debugOverlays.walkPaths = !host.debugOverlays.walkPaths) { IsSwitch = true },
         new("Overlays", "Fps counter", "Ctrl+F9", () => OnOff(fpsVisible), () => fpsVisible = !fpsVisible) { IsSwitch = true },
         new("Overlays", "VRAM pie", "Ctrl+F12", () => OnOff(profiler?.ShowVram == true), () => { if (profiler is not null) profiler.ShowVram = !profiler.ShowVram; }) { IsSwitch = true },
         new("Overlays", "Profiler", "F12", () => (profiler?.Showing ?? FrameProfiler.Mode.Off).ToString().ToLowerInvariant(),
@@ -98,51 +98,51 @@ sealed partial class GameHost
     /// The "Teleport on map" switch, level-triggered: on, every left click on the open Map tab sends the selected characters (else the lead) to the clicked spot, and the camera there, until it is
     /// switched off (the menu row, or the console's <c>tpmap</c>). The state is the interface's (<see cref="PlayerInterface.MapPickSticky"/>); the map shows a hint with the last result while it is on.
     /// </summary>
-    void SetMapTeleport(bool on)
+    internal void SetMapTeleport(bool on)
     {
-        if (on) player.ArmMapPick(TeleportToMapPoint);
-        else player.DisarmMapPick();
+        if (on) host.player.ArmMapPick(TeleportToMapPoint);
+        else host.player.DisarmMapPick();
         mapTeleportNote = "";
         debugStatus = on ? "map teleport on: close this menu, open the map, click a spot" : "map teleport off";
     }
 
-    void ToggleMapTeleport() => SetMapTeleport(!player.MapPickSticky);
+    void ToggleMapTeleport() => SetMapTeleport(!host.player.MapPickSticky);
 
     /// <summary>The result of the last map click, shown in the map's hint.</summary>
     string mapTeleportNote = "";
 
     void TeleportToMapPoint(Vector3 at)
     {
-        var who = player.ControlOrderers();
+        var who = host.player.ControlOrderers();
         string lead = "";
         if (who.Count == 0)
         {
             // Nothing selected (a click in the world deselects): the switch still teleports, the lead.
-            if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is not { } first)
+            if (host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is not { } first)
             {
                 mapTeleportNote = "no player character to teleport";
-                session.World.Post("Teleport on map: " + mapTeleportNote);
+                host.session.World.Post("Teleport on map: " + mapTeleportNote);
                 return;
             }
-            session.World.Commands.Enqueue(new DebugTeleport([first.Id], at) { Tick = session.World.Tick });
+            host.session.World.Commands.Enqueue(new DebugTeleport([first.Id], at) { Tick = host.session.World.Tick });
             lead = $" (nothing selected: the lead, {first.Name})";
             debugStatus = mapTeleportNote = $"teleported 1 to {at.X:0}, {at.Z:0}{lead}";
-            session.World.Post("Teleport on map: " + mapTeleportNote);
+            host.session.World.Post("Teleport on map: " + mapTeleportNote);
         }
         else
         {
             debugStatus = DebugApply(DebugRow.Teleport, "", at: at);
             mapTeleportNote = debugStatus;
-            if (debugFailed) { session.World.Post("Teleport on map: " + mapTeleportNote); return; }
+            if (debugFailed) { host.session.World.Post("Teleport on map: " + mapTeleportNote); return; }
         }
         CentreCameraOn(at.X, at.Z);
     }
 
     /// <summary>Puts the camera's target on world X Z, keeping its angle and distance (the characters just teleported there; a followed one is followed on).</summary>
-    void CentreCameraOn(float x, float z)
+    internal void CentreCameraOn(float x, float z)
     {
-        var view = session.Camera.Current;
-        session.Camera.Place(new Vector2(x, z), view.Yaw, view.Pitch, view.Distance);
+        var view = host.session.Camera.Current;
+        host.session.Camera.Place(new Vector2(x, z), view.Yaw, view.Pitch, view.Distance);
     }
 
     // ---- Explode on click ----
@@ -152,7 +152,7 @@ sealed partial class GameHost
     string explodeClickArgs = "";
     /// <summary>The explosion level (1 to 5, F10 "Explosion level" row) used by <c>explode</c>, the F10 row and each click unless a <c>--level</c> says otherwise; 3 is normal. A click's normal level is larger than a plain explode's (<see cref="ExplodeLevels.Values"/>).</summary>
     int explodeLevel = ExplodeLevels.Normal;
-    bool ExplodeClickOn => explodeClickWorld is not null && ReferenceEquals(explodeClickWorld, session.World);
+    internal bool ExplodeClickOn => explodeClickWorld is not null && ReferenceEquals(explodeClickWorld, host.session.World);
 
     /// <summary>
     /// <paramref name="field"/> is empty (toggle) or <c>[on|off] [&lt;level 1-5&gt;] [--level &lt;1-5|name&gt;] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>. While on, a left click on the ground blows it up (<see cref="DebugExplodeApply"/>)
@@ -181,13 +181,13 @@ sealed partial class GameHost
         bool turnOn = on ?? (kept.Count > 0 || !ExplodeClickOn);
         if (turnOn)
         {
-            explodeClickWorld = session.World;
+            explodeClickWorld = host.session.World;
             if (kept.Count > 0 || !ExplodeClickOn) explodeClickArgs = string.Join(' ', kept);
-            player.WorldClick = ExplodeClickPress;
+            host.player.WorldClick = ExplodeClickPress;
             return $"explode-click on{(explodeClickArgs.Length > 0 ? " (" + explodeClickArgs + ")" : "")}: a left click on the ground explodes it (game unpaused only); explode-click off ends it";
         }
         explodeClickWorld = null;
-        player.WorldClick = null;
+        host.player.WorldClick = null;
         return "explode-click off";
     }
 
@@ -195,9 +195,9 @@ sealed partial class GameHost
     bool ExplodeClickPress(Vector3? ground)
     {
         if (!ExplodeClickOn) return false;
-        if (debugMenuOpen || ConsoleOpen) return false;   // clicks on the F10 menu and the console are theirs
+        if (debugMenuOpen || host.devConsoleHost.ConsoleOpen) return false;   // clicks on the F10 menu and the console are theirs
         if (ground is not { } at) return true;
-        debugStatus = DebugExplodeApply(session.World, string.Create(CultureInfo.InvariantCulture, $"{at.X} {at.Z} {explodeClickArgs}"), session.World.Tick, click: true);
+        debugStatus = DebugExplodeApply(host.session.World, string.Create(CultureInfo.InvariantCulture, $"{at.X} {at.Z} {explodeClickArgs}"), host.session.World.Tick, click: true);
         return true;
     }
 
@@ -210,12 +210,12 @@ sealed partial class GameHost
     }
 
     /// <summary>The hint while the switch is on.</summary>
-    void DrawExplodeClickHint(DebugOverlay o, int width, int height)
+    internal void DrawExplodeClickHint(DebugOverlay o, int width, int height)
     {
         int level = ExplodeClickLevel();
         var v = ExplodeLevels.Values(level, true);
         string text = $"explode-click ON: left click = explode, {ExplodeLevels.Label(level)} (r={v.Radius:0.#}, force {v.Force:0.#}, dmg {v.Damage:0.#}{(explodeClickArgs.Length > 0 ? ", then " + explodeClickArgs : "")}). Switch off: explode-click off"
-            + (session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
+            + (host.session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
         float w = text.Length * o.CharWidth + 20, x = (width - w) / 2;
         o.Rect(x, 8, x + w, 8 + o.LineHeight + 12, DebugOverlay.PanelColour);
         o.Text(text, x + 10, 12, new Vector4(1f, 0.9f, 0.4f, 1));
@@ -223,7 +223,7 @@ sealed partial class GameHost
     }
 
     /// <summary>The hint while the Map tab is open and "Teleport on map" is on: the state, how to switch it off and the last result.</summary>
-    void DrawMapPickHint(DebugOverlay o, int width, int height)
+    internal void DrawMapPickHint(DebugOverlay o, int width, int height)
     {
         string text = "Teleport on map: ON, every click teleports (F10 > Teleport on map or 'tpmap off' ends it)";
         string note = mapTeleportNote;
@@ -235,10 +235,10 @@ sealed partial class GameHost
     }
 
     /// <summary>The rows of the menu: the cheats, the code mods' rows (<see cref="GameMods.DebugRowCount"/>), then the tool rows.</summary>
-    int DebugMenuRows => modding.DebugRowCount + (debugToolsOn ? DebugTools.Length : 0);
-    bool DebugIsTool(int row) => row >= modding.DebugRowCount;
+    int DebugMenuRows => host.modding.DebugRowCount + (debugToolsOn ? DebugTools.Length : 0);
+    bool DebugIsTool(int row) => row >= host.modding.DebugRowCount;
 
-    bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? modding.ModDebugRows[row - DebugLabels.Length].HasField
+    bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? host.modding.ModDebugRows[row - DebugLabels.Length].HasField
         : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick));
 
     /// <summary>The rows that open the body part list.</summary>
@@ -252,9 +252,9 @@ sealed partial class GameHost
         return layout[((at < 0 ? 0 : at) + delta + layout.Count) % layout.Count].Row;
     }
 
-    void DebugMenuKey(EngineKey key)
+    internal void DebugMenuKey(EngineKey key)
     {
-        modding.EnsureDebugFields();
+        host.modding.EnsureDebugFields();
         string field = DebugIsTool(debugRow) ? "" : debugFields[debugRow];
         if (debugParts is { } parts)
         {
@@ -283,7 +283,7 @@ sealed partial class GameHost
             case EngineKey.Up: debugRow = DebugStep(-1); break;
             case EngineKey.Down: debugRow = DebugStep(1); break;
             case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right when DebugIsTool(debugRow):
-                var tool = DebugTools[debugRow - modding.DebugRowCount];
+                var tool = DebugTools[debugRow - host.modding.DebugRowCount];
                 // Left means off and Right on, so Left then Right never ends up flipping a switch twice.
                 if (tool.IsSwitch && key is EngineKey.Left or EngineKey.Right && (tool.State() == "on") == (key == EngineKey.Right)) break;
                 tool.Switch();
@@ -300,7 +300,7 @@ sealed partial class GameHost
             debugStatus = "select or inspect a character first";
             return null;
         }
-        var table = session.World.Characters;
+        var table = host.session.World.Characters;
         var body = table.TryResolveNext(first, out int slot) ? table.Cold(slot)?.Medical?.Parts : null;
         var parts = (body ?? []).Select(p => ((string?)p.Template.StringId, p.Template.Name.Length > 0 ? p.Template.Name : p.Template.StringId));
         return [(null, (DebugRow)debugRow == DebugRow.Damage ? "Random (as a blow)" : "Off (as a blow)"), .. parts];
@@ -309,8 +309,8 @@ sealed partial class GameHost
     /// <summary>The Clear bounties list: every faction with a bounty on the selected characters (else on any player character), with its total.</summary>
     (string? Id, string Name)[]? DebugBountyList()
     {
-        var table = session.World.Characters;
-        var selected = session.World.Player.Selection.ToArray();
+        var table = host.session.World.Characters;
+        var selected = host.session.World.Player.Selection.ToArray();
         var ledgers = new List<Meitou.Simulation.Crime.BountyLedger>();
         for (int s = 0; s < table.HighWater; s++)
             if (table.Next[s].Alive && table.Cold(s) is { Bounties: { } ledger } c && (selected.Length > 0 ? selected.Contains(table.IdOf(s)) : c.IsPlayer)) ledgers.Add(ledger);
@@ -324,22 +324,22 @@ sealed partial class GameHost
         return [(null, "All factions"), .. factions];
     }
 
-    void DebugMenuText(char c)
+    internal void DebugMenuText(char c)
     {
-        modding.EnsureDebugFields();
+        host.modding.EnsureDebugFields();
         if (DebugHasField(debugRow) && !char.IsControl(c)) debugFields[debugRow] += c;
     }
 
     /// <summary>Heal, max skills and damage: the selected characters, else the inspected one.</summary>
     CharacterId[] DebugTargets()
     {
-        var player = session.World.Player;
-        var selected = this.player.ControlOrderers().ToArray();   // includes a select issued this tick (--setup / --exec run commands in one frame)
+        var player = host.session.World.Player;
+        var selected = host.player.ControlOrderers().ToArray();   // includes a select issued this tick (--setup / --exec run commands in one frame)
         return selected.Length > 0 ? selected : player.Inspected.IsNone ? [] : [player.Inspected];
     }
 
     /// <summary>Set by <see cref="DebugFail"/> while <see cref="DebugApply"/> runs: the last action did not happen (the console prints it as an error).</summary>
-    bool debugFailed;
+    internal bool debugFailed;
 
     string DebugFail(string message)
     {
@@ -427,7 +427,7 @@ sealed partial class GameHost
         if (numbers.Count is not (0 or 2)) return DebugFail(usage);
         Vector2 at;
         string onName = "";
-        var snap = session.CurrentSnapshot;
+        var snap = host.session.CurrentSnapshot;
         if (numbers.Count == 2 && byId is null) at = new Vector2(numbers[0], numbers[1]);
         else
         {
@@ -452,15 +452,15 @@ sealed partial class GameHost
     /// The one implementation of the cheats, for the menu's rows and the dev console's commands (<see cref="debugFailed"/> says whether it worked). <paramref name="at"/> is where teleport and spawn go
     /// (the camera's target, the middle of the screen, without it).
     /// </summary>
-    string DebugApply(DebugRow row, string field, (string? Id, string Name) part = default, Vector3? at = null)
+    internal string DebugApply(DebugRow row, string field, (string? Id, string Name) part = default, Vector3? at = null)
     {
         debugFailed = false;
-        var world = session.World;
+        var world = host.session.World;
         long tick = world.Tick;
-        var selected = player.ControlOrderers().ToArray();
+        var selected = host.player.ControlOrderers().ToArray();
         var targets = DebugTargets();
-        var here = at ?? session.Camera.Current.Target;
-        if ((int)row >= DebugLabels.Length) return modding.ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
+        var here = at ?? host.session.Camera.Current.Target;
+        if ((int)row >= DebugLabels.Length) return host.modding.ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
         switch (row)
         {
             case DebugRow.Teleport:
@@ -524,16 +524,16 @@ sealed partial class GameHost
 
 
     /// <summary>Puts items on the first selected character (the menu's Give item row; the console's <c>give</c>): the record by name, the quantity 1 to 1000, the quality 0 to 100.</summary>
-    string DebugGive(string name, int quantity, int quality, bool equip = false)
+    internal string DebugGive(string name, int quantity, int quality, bool equip = false)
     {
         debugFailed = false;
-        var selected = player.ControlOrderers().ToArray();
+        var selected = host.player.ControlOrderers().ToArray();
         if (selected.Length == 0) return DebugFail("select a character first");
         quantity = Math.Clamp(quantity, 1, 1000);
         quality = Math.Clamp(quality, 0, 100);
         if (DebugRecord(name, character: false) is not { } item) return DebugFail($"no item record matches '{name}'");
-        session.World.Commands.Enqueue(new DebugGiveItem(selected[0], item.Id, quantity, quality) { Tick = session.World.Tick, Equip = equip });
-        if (scene.Database is { } db && db.Find(item.Id)?.Type == Meitou.Data.Fcs.FcsRecordType.WEAPON && DebugGiveItem.Grade(db, quality) is { } grade)
+        host.session.World.Commands.Enqueue(new DebugGiveItem(selected[0], item.Id, quantity, quality) { Tick = host.session.World.Tick, Equip = equip });
+        if (host.scene.Database is { } db && db.Find(item.Id)?.Type == Meitou.Data.Fcs.FcsRecordType.WEAPON && DebugGiveItem.Grade(db, quality) is { } grade)
             return $"gave {quantity} x {grade.Name} {item.Name} (level {grade.Level})";
         return $"gave {quantity} x {item.Name}{(DebugHasQuality(item.Id) ? $" (quality {quality})" : "")}";
     }
@@ -551,13 +551,13 @@ sealed partial class GameHost
         return (field, quantity, quality);
     }
 
-    bool DebugHasQuality(string record) => scene.Database?.Find(record) is { } r && DebugGiveItem.QualityTypes.Contains(r.Type);
+    bool DebugHasQuality(string record) => host.scene.Database?.Find(record) is { } r && DebugGiveItem.QualityTypes.Contains(r.Type);
 
     /// <summary>The character (or item) record a typed name means: its string id, the name exactly, else the shortest name containing it (ignoring case).</summary>
-    (string Id, string Name)? DebugRecord(string text, bool character)
+    internal (string Id, string Name)? DebugRecord(string text, bool character)
     {
         text = text.Trim();
-        if (text.Length == 0 || scene.Database is not { } db) return null;
+        if (text.Length == 0 || host.scene.Database is not { } db) return null;
         if (debugMatches.TryGetValue((character, text), out var cached)) return cached;
         bool Fits(FcsRecordType t) => character ? t is FcsRecordType.CHARACTER or FcsRecordType.ANIMAL_CHARACTER : DebugGiveItem.ItemTypes.Contains(t);
         var candidates = db.Records.Values.Where(r => Fits(r.Type));
@@ -569,14 +569,14 @@ sealed partial class GameHost
         return found;
     }
 
-    void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false)
+    internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false)
     {
-        var world = session.World;
-        var here = session.Camera.Current.Target;
+        var world = host.session.World;
+        var here = host.session.Camera.Current.Target;
         // Each line: its text, the row it belongs to (-1 for a section title and a part list line), and whether it is the highlighted one.
         var lines = new List<(string Text, bool Title, bool Highlight, bool On)>();
         var onNames = new List<string>();
-        modding.EnsureDebugFields();
+        host.modding.EnsureDebugFields();
         foreach (var (header, i) in DebugLayout())
         {
             if (header is not null) lines.Add((header, true, false, false));
@@ -584,7 +584,7 @@ sealed partial class GameHost
             string mark = current && debugParts is null ? "> " : "  ";
             if (DebugIsTool(i))
             {
-                var tool = DebugTools[i - modding.DebugRowCount];
+                var tool = DebugTools[i - host.modding.DebugRowCount];
                 string state = tool.State();
                 bool toolOn = tool.IsSwitch ? state == "on" : state is not ("" or "off");
                 if (toolOn) onNames.Add(DebugShortName(tool.Label));
@@ -604,19 +604,19 @@ sealed partial class GameHost
                 switch ((DebugRow)i)
                 {
                     case DebugRow.DamageMultiplier:
-                        float multiplier = popData?.BodyOptions.GlobalDamageMultiplier ?? 1;
+                        float multiplier = host.popData?.BodyOptions.GlobalDamageMultiplier ?? 1;
                         value += $"   now x{multiplier:0.##}";
                         rowOn = multiplier != 1;
                         break;
-                    case DebugRow.ForceHits: value = popData?.BodyOptions.ForcedHitPart?.Name ?? "off"; rowOn = popData?.BodyOptions.ForcedHitPart is not null; break;
+                    case DebugRow.ForceHits: value = host.popData?.BodyOptions.ForcedHitPart?.Name ?? "off"; rowOn = host.popData?.BodyOptions.ForcedHitPart is not null; break;
                     case DebugRow.ExplodeLevel: value = $"{explodeLevel} {ExplodeLevels.Names[explodeLevel - 1]}"; rowOn = explodeLevel != ExplodeLevels.Normal; break;
                     case DebugRow.Godmode: value = OnOff(world.Player.Godmode); rowOn = world.Player.Godmode; break;
                     case DebugRow.ExplodeClick: rowOn = ExplodeClickOn; value = ExplodeClickOn ? $"on{(explodeClickArgs.Length > 0 ? ", " + explodeClickArgs : "")}" : "off"; break;
                     case DebugRow.Guard: rowOn = world.Player.Guard; value = world.Player.Guard ? $"on, {world.Player.GuardRadius:0.#} m{(world.Player.GuardAnimals ? ", animals" : "")}" : "off"; break;
                 }
             if (DebugPicksPart(i) && current && debugParts is null) value += (value.Length > 0 ? "   " : "") + ((DebugRow)i == DebugRow.ClearBounties ? "Enter/Right: pick the faction" : "Enter/Right: pick the body part");
-            if (rowOn) onNames.Add(DebugShortName(modding.DebugLabel(i)) + ((DebugRow)i == DebugRow.DamageMultiplier && i < DebugLabels.Length ? $" x{popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}" : ""));
-            lines.Add((mark + DebugColumns(modding.DebugLabel(i), "", value), false, current && debugParts is null, rowOn));
+            if (rowOn) onNames.Add(DebugShortName(host.modding.DebugLabel(i)) + ((DebugRow)i == DebugRow.DamageMultiplier && i < DebugLabels.Length ? $" x{host.popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}" : ""));
+            lines.Add((mark + DebugColumns(host.modding.DebugLabel(i), "", value), false, current && debugParts is null, rowOn));
             if (DebugPicksPart(i) && current && debugParts is { } parts)
                 for (int k = 0; k < parts.Length; k++)
                     lines.Add(((k == debugPart ? "    > " : "      ") + parts[k].Name, false, k == debugPart, false));
@@ -723,4 +723,80 @@ sealed partial class GameHost
 
     /// <summary>One menu line after its 2-character marker: label, key hint and value, each in its own column so every value starts at the same place.</summary>
     static string DebugColumns(string label, string key, string value) => $"{label,-DebugLabelWidth} {key,-DebugKeyWidth} {value}".TrimEnd();
+
+    // The pick & collision inspector's menu (Meitou only, docs/viewer.md "Pick & collision inspector"). The F10 debug menu's Tools row opens it;
+    // it works like the F10 menu: Up/Down pick a row, Enter or Space switch it, Esc or Enter on Close closes, and while it is open it takes every key. What was switched on stays on
+    // after it closes, so the camera can fly about with the hulls drawn.
+    static readonly string[] InspectorLabels =
+    [
+        "Info panel (under the cursor, what a click selects)",
+        "Pick hull (what a click is tested against)",
+        "Collision shapes (each shape's own hull)",
+        "Collision mesh (the real triangles, selected building)",
+        "Navmesh (off / Meitou's / original / both)",
+        "Close",
+    ];
+
+    internal bool inspectorMenuOpen;
+    int inspectorRow;
+
+    bool InspectorValue(int row) => row switch
+    {
+        0 => host.player.InspectorPanel,
+        1 => host.player.InspectorHull,
+        2 => host.player.InspectorShapes,
+        3 => host.player.InspectorMesh,
+        _ => false,
+    };
+
+    internal void InspectorMenuKey(EngineKey key)
+    {
+        switch (key)
+        {
+            case EngineKey.Escape: inspectorMenuOpen = false; break;
+            case EngineKey.Up: inspectorRow = (inspectorRow + InspectorLabels.Length - 1) % InspectorLabels.Length; break;
+            case EngineKey.Down: inspectorRow = (inspectorRow + 1) % InspectorLabels.Length; break;
+            case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right: InspectorSwitch(inspectorRow); break;
+        }
+    }
+
+    void InspectorSwitch(int row)
+    {
+        switch (row)
+        {
+            case 0: host.player.InspectorPanel = !host.player.InspectorPanel; break;
+            case 1: host.player.InspectorHull = !host.player.InspectorHull; break;
+            case 2: host.player.InspectorShapes = !host.player.InspectorShapes; break;
+            case 3: host.player.InspectorMesh = !host.player.InspectorMesh; break;
+            case 4: host.debugOverlays.ToggleNavOverlay(); break;
+            default: inspectorMenuOpen = false; break;
+        }
+        host.player.InspectorChanged();
+    }
+
+    internal void DrawInspectorMenu(DebugOverlay o, int width, int height, float top)
+    {
+        var lines = new List<string>();
+        for (int i = 0; i < InspectorLabels.Length; i++)
+        {
+            string state = i < 4 ? (InspectorValue(i) ? "[x] " : "[ ] ") : i == 4 ? $"[{host.debugOverlays.navView.ToString().ToLowerInvariant()}] " : "    ";
+            lines.Add((i == inspectorRow ? "> " : "  ") + state + InspectorLabels[i]);
+        }
+        const string Hint = "Up/Down pick   Enter/Space switch   Esc close (switches stay on)";
+        var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
+        float pad = 10, x0 = 16, y0 = top + 16;
+        int chars = Math.Max(lines.Max(l => l.Length), Hint.Length);
+        float w = chars * o.CharWidth + 2 * pad, h = (lines.Count + 4) * o.LineHeight + 2 * pad;
+        o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
+        float y = y0 + pad;
+        o.Text("Pick & collision inspector", x0 + pad, y, DebugOverlay.TextColour);
+        y += 1.5f * o.LineHeight;
+        for (int i = 0; i < lines.Count; i++, y += o.LineHeight)
+        {
+            if (i == inspectorRow) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
+            o.Text(lines[i], x0 + pad, y, DebugOverlay.TextColour);
+        }
+        o.Text(Hint, x0 + pad, y + 0.5f * o.LineHeight, dim);
+        o.Flush(width, height);
+    }
 }

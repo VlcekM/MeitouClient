@@ -181,11 +181,11 @@ sealed partial class GameHost
             if (panelName == "trade" && player.UiFrame.FirstOrDefault(c => c.Name.StartsWith("trade-item-", StringComparison.Ordinal) && !c.Name.EndsWith("-background", StringComparison.Ordinal) && !c.Name.EndsWith("-icon", StringComparison.Ordinal)) is { } item)
                 player.MouseMove(new Vector2(item.Bounds.X + item.Bounds.Width / 2, item.Bounds.Y + item.Bounds.Height / 2));
             bool showPanel = panelName is not ("trade" or "talk");   // the trade and the conversation open their own windows; closing them would end them
-            if (panelName?.StartsWith("editor", StringComparison.Ordinal) == true) { player.ShowUiPanel(panelName); EditorCamera(); }
+            if (panelName?.StartsWith("editor", StringComparison.Ordinal) == true) { player.ShowUiPanel(panelName); characterEditor.EditorCamera(); }
             if (panelName == "edited") { player.ShowcaseEdit(); session.AdvanceSimulation(session.Ticks.TickSeconds); }
             if (panelName == "building") { UpdateView(w, h); player.ShowUiPanel("building"); session.AdvanceSimulation(session.Ticks.TickSeconds); }
             // Item icons are drawn from the frame after a cell asks for them, and their textures stream in: show the panel until they are done.
-            for (int frames = 0; panelName is not null && overlay is not null && frames < 400 && (frames < 3 || gpu.Characters is { PendingIcons: > 0 } || gpu.Objects is { StagePropPending: true } || editorBar is not null && !editorBarReady || gpu.Objects is { PendingBuildingIcons: > 0 } || player.PendingIconFiles > 0); frames++)
+            for (int frames = 0; panelName is not null && overlay is not null && frames < 400 && (frames < 3 || gpu.Characters is { PendingIcons: > 0 } || gpu.Objects is { StagePropPending: true } || characterEditor.editorBar is not null && !characterEditor.editorBarReady || gpu.Objects is { PendingBuildingIcons: > 0 } || player.PendingIconFiles > 0); frames++)
             {
                 DrawWorld(w, h);
                 overlay.Target = target;

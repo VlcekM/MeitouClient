@@ -24,11 +24,11 @@ sealed partial class GameHost
     Dictionary<string, BuildingBuildData>? buildData;
 
     /// <summary>The build fields of every BUILDING, by id (read once from the game database).</summary>
-    Dictionary<string, BuildingBuildData> BuildData() =>
+    internal Dictionary<string, BuildingBuildData> BuildData() =>
         buildData ??= scene.Database is { } db ? BuildingBuildData.LoadAll(db).GroupBy(b => b.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal) : [];
 
     /// <summary>Once a frame, before the world is drawn.</summary>
-    void UpdateBuildings()
+    internal void UpdateBuildings()
     {
         if (!ReferenceEquals(buildingsWorld, session.World))
         {
@@ -36,9 +36,9 @@ sealed partial class GameHost
             ForgetBuildings();
             buildingsWorld = session.World;
             // The old world's level edits leave the level data, the loaded save's own (if any) are put back.
-            LevelEditsFollowWorld();
-            if (pendingLevelEdits is { Count: > 0 } edits) ReplayLevelEdits(edits);
-            pendingLevelEdits = null;
+            levelEditorHost.LevelEditsFollowWorld();
+            if (levelEditorHost.pendingLevelEdits is { Count: > 0 } edits) levelEditorHost.ReplayLevelEdits(edits);
+            levelEditorHost.pendingLevelEdits = null;
         }
         var snapshot = session.CurrentSnapshot;
         UpdateRuins(snapshot);
@@ -195,7 +195,7 @@ sealed partial class GameHost
         nav.AddRuntimeBuilding(placement);   // the zones loaded are built again; UpdateNav sends the RepathCommand when one is ready
     }
 
-    void ForgetBuildings()
+    internal void ForgetBuildings()
     {
         ActiveObjects?.ClearRuntime();
         ActiveLamps?.ClearRuntime();

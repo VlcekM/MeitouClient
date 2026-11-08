@@ -7,7 +7,7 @@ using Meitou.Simulation;
 namespace Meitou.Game;
 
 /// <summary>
-/// The agent control channel's view of the world (docs/procedures/todo-faster-ingame-agent-tests.md; GameHost.ControlWorld.cs has the commands): entity lists, screen positions, picking and the selection and order calls.
+/// The agent control channel's view of the world (docs/procedures/todo-faster-ingame-agent-tests.md; AgentWorld has the commands): entity lists, screen positions, picking and the selection and order calls.
 /// Everything reads the published snapshot and the picking code the pointer uses; orders go out as the same <see cref="SimCommand"/>s the player's input gives. Entity ids: <c>c:&lt;slot&gt;.&lt;generation&gt;</c> for a character,
 /// <c>b:&lt;instance key&gt;</c> for a building (a site of the player's or a level-data building).
 /// </summary>

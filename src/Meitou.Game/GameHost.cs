@@ -26,6 +26,9 @@ using Meitou.Game.Rendering.Display;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 using Meitou.Game.Audio;
+using Meitou.Game.DevTools;
+using Meitou.Game.DevTools.Agents;
+using Meitou.Game.Editor;
 using EngineKey = Meitou.Game.Host.Input.Key;
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
@@ -39,6 +42,17 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config, Meitou.Data.Gameplay.NewGameStart? start)
 {
+    internal readonly GameOptions g = g;
+    internal AgentChannel agentChannel = null!;
+    internal AgentPlay agentPlay = null!;
+    internal AgentWorld agentWorld = null!;
+    internal DebugMenu debugMenu = null!;
+    internal DebugOverlays debugOverlays = null!;
+    internal DevConsoleHost devConsoleHost = null!;
+    internal CharacterEditorHost characterEditor = null!;
+    internal LevelEditorHost levelEditorHost = null!;
+    internal InteriorEditorHost interiorEditorHost = null!;
+
     internal readonly AssetLocator assets = assets;
     internal BloodDecals bloodDecals = null!;
     internal Debris debris = null!;
@@ -70,7 +84,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     Meitou.Simulation.IWalkability? simWalkability;
     Meitou.Data.Characters.CharacterRigs? characterRigs;
     Meitou.Simulation.Navigation.RagdollGeometry? ragdollGeometry;
-    Meitou.Simulation.Navigation.NavSystem? nav;
+    internal Meitou.Simulation.Navigation.NavSystem? nav;
     /// <summary>Zones whose mesh went live since the last <see cref="Meitou.Simulation.RepathCommand"/> (filled on the nav thread, under its own lock).</summary>
     readonly HashSet<Meitou.Data.World.ZoneCoordinate> navReady = [];
     long lastRepath;
@@ -82,10 +96,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     const double NavCacheSeconds = 120;
     const int NavCacheZones = 60;
     internal PlayerInterface player = null!;
-    Meitou.Simulation.Factions.Squad? playerSquad;
+    internal Meitou.Simulation.Factions.Squad? playerSquad;
     internal WorldFrame.Gpu gpu = null!;
     /// <summary>This run uses the native Metal loop: the shared world object exists, but its Vulkan post/loading path does not drive it.</summary>
-    bool metalRenderer = false;   // set by the Metal loop (GameHost.Metal.cs, macOS builds only)
+    internal bool metalRenderer = false;   // set by the Metal loop (GameHost.Metal.cs, macOS builds only)
     // Fallback services for a host whose renderers are not in WorldFrame.Gpu yet (the shared title, audio and save code asks through these).
     WorldWeather? fallbackWeather = null;
     WorldObjectRenderer? hostObjects = null;
@@ -96,15 +110,15 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     internal WorldWeather? ActiveWeather => gpu is null ? fallbackWeather : gpu.Weather ?? fallbackWeather;
     internal WorldObjectRenderer? ActiveObjects => gpu is null ? hostObjects : gpu.Objects ?? hostObjects;
     FoliageRenderer? ActiveFoliage => gpu is null ? hostFoliage : gpu.Foliage ?? hostFoliage;
-    CharacterRenderer? ActiveCharacters => gpu is null ? hostCharacters : gpu.Characters ?? hostCharacters;
-    WorldLamps? ActiveLamps => gpu is null ? hostLamps : gpu.Lamps ?? hostLamps;
+    internal CharacterRenderer? ActiveCharacters => gpu is null ? hostCharacters : gpu.Characters ?? hostCharacters;
+    internal WorldLamps? ActiveLamps => gpu is null ? hostLamps : gpu.Lamps ?? hostLamps;
     internal float ActiveGround(float x, float z) => hostGround?.Invoke(x, z) ?? (gpu is null ? 0 : gpu.Terrain.HeightAt(x, z));
     internal WorldCamera camera = null!;
-    WorldRenderOptions render = null!;
-    readonly Stopwatch realTime = Stopwatch.StartNew();
+    internal WorldRenderOptions render = null!;
+    internal readonly Stopwatch realTime = Stopwatch.StartNew();
     Meitou.Game.Rendering.Upscalers.Streamline? streamline;
     Meitou.Game.Rendering.Upscalers.Ngx? ngx;
-    bool screenshotRequested;
+    internal bool screenshotRequested;
     /// <summary>Frames in a row that could not be drawn while a control screenshot waits; at 30 the screenshot is answered with an error.</summary>
     int shotNoFrame;
     // The interactive run's animation clock (foliage sway, clouds, water): the frame steps, which are exact while the cinema records; off, the real time.
@@ -113,7 +127,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     // Draw-list state (GameHost.Characters.cs): the previous snapshot indexed by id, and the last camera focus sent to the world.
     WorldSnapshot? indexedFor;
     internal readonly Dictionary<CharacterId, CharacterSnapshot> previousById = [];
-    Meitou.Data.Gameplay.AnimationLengths? animationLengths;
+    internal Meitou.Data.Gameplay.AnimationLengths? animationLengths;
     internal Meitou.Data.Gameplay.AnimationLibrary? animationLibrary;
     Vector3 lastFocus;
     bool sentFocus;
@@ -126,6 +140,15 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
 
     public int Run()
     {
+        agentChannel = new(this);
+        agentPlay = new(this);
+        agentWorld = new(this);
+        debugMenu = new(this);
+        debugOverlays = new(this);
+        devConsoleHost = new(this);
+        characterEditor = new(this);
+        levelEditorHost = new(this);
+        interiorEditorHost = new(this);
         bloodDecals = new(this);
         debris = new(this);
         decapitation = new(this);
@@ -323,7 +346,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             if (popData is not { } d || d.Db.Find(record) is not { Type: Meitou.Data.Fcs.FcsRecordType.MAP_ITEM } map) return null;
             return [.. Meitou.Simulation.Items.MapItems.Reveals(d, map, session.CurrentSnapshot.Towns, session.World.Seed).Select(i => d.Sites[i].Town.Name)];
         };
-        ConfigureEditor(ui);
+        characterEditor.ConfigureEditor(ui);
     }
 
     /// <summary>The rest of <see cref="Boot"/> once the session exists: bindings, the player's interface, the start (a new game's squad, the sandbox, the duel), the camera, a <c>--load</c> save.</summary>
@@ -363,7 +386,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         bloodDecals.SetUpBlood(context);
         gpu.HoverOutline ??= new HoverOutlineRenderer(context);
         gpu.NavmeshOverlay ??= new NavmeshOverlayRenderer(context);
-        navOverlayRenderer = gpu.NavmeshOverlay;
+        debugOverlays.navOverlayRenderer = gpu.NavmeshOverlay;
         gpu.InspectorOverlay ??= new NavmeshOverlayRenderer(context);
         player.MeshHit = (id, origin, direction) => gpu.Characters?.RayHit(DrawKey(id), origin, direction);
         player.Floor = (() => viewedFloor, StepFloor);
@@ -378,7 +401,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.ShownInteriorHit = (origin, direction, distance) => gpu.Objects?.ShownInteriorHit(origin, direction, distance);
         player.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
         ConfigurePlayerInterface(player);
-        player.LevelHost = MakeLevelEditorServices();
+        player.LevelHost = levelEditorHost.MakeLevelEditorServices();
         if (IsSandbox) player.ReservedKeys.UnionWith([Meitou.Game.Host.Input.Key.Z, Meitou.Game.Host.Input.Key.X, Meitou.Game.Host.Input.Key.C, Meitou.Game.Host.Input.Key.Y, Meitou.Game.Host.Input.Key.P, Meitou.Game.Host.Input.Key.G]);
         player.ConfigureFrontend(scene.Database,
             () => Meitou.Data.Save.SaveCatalog.Scan(Meitou.Simulation.Saving.QuickSave.DefaultRoot, install.SaveDirectory,
@@ -574,11 +597,11 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             player.PortraitSize = Meitou.Game.Rendering.Characters.CharacterRenderer.PortraitSizeFor(previews.Look);
             SyncIconLook();
         }
-        if (!player.EditorOpen) ClearEditorBar();
+        if (!player.EditorOpen) characterEditor.ClearEditorBar();
         if (TitleVisible) { DrawTitleWorld(width, height); return; }
-        if (player.EditorOpen) { DrawEditorScene(width, height); return; }
+        if (player.EditorOpen) { characterEditor.DrawEditorScene(width, height); return; }
         if (gpu.Characters is { StageRequest: not null } staged) staged.StageRequest = null;
-        ClearEditorStage();
+        characterEditor.ClearEditorStage();
         double seconds = animClock ? animSeconds : realTime.Elapsed.TotalSeconds;
         if (gpu.Foliage is { } foliage && o.Screenshot is null) foliage.SwaySeconds = seconds;
         // The heat haze's gameTime: game hours since the start (it stops while paused, as in the game).

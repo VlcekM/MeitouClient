@@ -128,7 +128,7 @@ teleport, spawn, items, money, healing, skills and damage.
 
 ### Changes
 
-- Reuse `GameHost.DebugMenu.cs` directly:
+- Reuse `DebugMenu` directly:
   - add `debugMenuOpen` state to the Metal loop;
   - route keys and text to `DebugMenuKey` / `DebugMenuText` while open;
   - call `DrawDebugMenu` over the finished picture;

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Game;
+using Meitou.Game.DevTools;
 using Meitou.Game.Host;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
@@ -132,18 +133,18 @@ sealed class GameMods(GameHost host)
 
     internal IReadOnlyList<ModDebugCommand> ModDebugRows => mods?.DebugCommands ?? [];
 
-    internal int DebugRowCount => GameHost.DebugLabels.Length + ModDebugRows.Count;
+    internal int DebugRowCount => DebugMenu.DebugLabels.Length + ModDebugRows.Count;
 
     internal string DebugLabel(int row)
     {
-        if (row < GameHost.DebugLabels.Length) return GameHost.DebugLabels[row];
-        var command = ModDebugRows[row - GameHost.DebugLabels.Length];
+        if (row < DebugMenu.DebugLabels.Length) return DebugMenu.DebugLabels[row];
+        var command = ModDebugRows[row - DebugMenu.DebugLabels.Length];
         return $"{command.Label} [{command.Owner}]";
     }
 
     internal void EnsureDebugFields()
     {
-        while (host.debugFields.Count < DebugRowCount) host.debugFields.Add("");
+        while (host.debugMenu.debugFields.Count < DebugRowCount) host.debugMenu.debugFields.Add("");
     }
 
     /// <summary>A mod's debug row: its handler with the field, the selection and the camera target; a throw shows as the status line.</summary>

@@ -88,7 +88,7 @@ finished refine, a mismatched load, and `UnloadImpostor`/teardown (after the `Ne
 Cancel on window close. Helpers/services dispose/join with their owning scene/session.
 After warm-up, loading panels ease off the left/right edges over 0.7s while the loading image fades to the live scene and UI (Faithful: hidden at once, as the original).
 Input remains blocked through this reveal. A new game ends warm-up as soon as the squad's characters are drawable, skips the sky arrival and opens the
-character editor first (`GameHost.Editor`); once it closes, the loading screen returns and the world warms up as above. Sky loads dismiss only panels that were shown, keeping the sky flight visible.
+character editor first (`CharacterEditorHost`); once it closes, the loading screen returns and the world warms up as above. Sky loads dismiss only panels that were shown, keeping the sky flight visible.
 
 Meitou UI mode presents title controls over a live view of the real world; Faithful retains
 the original title image and loading screen. Advanced settings persist two independent scene-transition

@@ -12,7 +12,7 @@ sealed partial class GameHost
 {
     VulkanDisplay? loadingDisplay;
     DebugOverlay? loadingOverlay;
-    LoadingScreen? loading;
+    internal LoadingScreen? loading;
     // The steps of a start, in order, with their shown names and about how many seconds each takes (measured 2026-10-14 on an RTX 4070 machine, a cold start at
     // The Hub); the bar's share of a step is its time over the sum. The renderer's steps are named by WorldFrame.CreateGpu. "colourmap" comes only on a start
     // that has to encode the terrain colour cache (the first), so its share is kept small though it then takes the longest.
@@ -24,11 +24,11 @@ sealed partial class GameHost
         ("navmesh", "paths", 0.5), ("characters", "characters", 0.2), ("finishing", "finishing", 0.4), ("view", "the view", 1.2),
     ];
     // The steps of a load between scenes (GameHost.Transition.cs).
-    static readonly (string Step, string Label, double Seconds)[] SceneSteps =
+    internal static readonly (string Step, string Label, double Seconds)[] SceneSteps =
     [
         ("read", "the save", 0.6), ("build", "the world", 0.5), ("people", "people", 0.3), ("finishing", "finishing", 0.2), ("view", "the view", 1.2),
     ];
-    (string Step, string Label, double Seconds)[] loadingSteps = StartSteps;
+    internal (string Step, string Label, double Seconds)[] loadingSteps = StartSteps;
 
     /// <summary>The original's background-loading bar (Faithful UI mode), stepped once a drawn frame.</summary>
     readonly ResourceLoadBar loadBar = new();

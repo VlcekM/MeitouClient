@@ -73,9 +73,9 @@ sealed class GameOptions
     public string? Load;
     /// <summary><c>--continue</c>: start in the newest save (<see cref="Meitou.Content.SaveModList.Scan"/>), resolved into <see cref="Load"/> once the install is found.</summary>
     public bool Continue;
-    /// <summary><c>--control-dir</c> (or MEITOU_CONTROL_DIR): the folder an external agent writes console command lines to (<c>cmd</c>) and reads results from (<c>out</c>), see GameHost.Control.cs.</summary>
+    /// <summary><c>--control-dir</c> (or MEITOU_CONTROL_DIR): the folder an external agent writes console command lines to (<c>cmd</c>) and reads results from (<c>out</c>), see AgentChannel.</summary>
     public string? ControlDir;
-    /// <summary><c>--exec "a; b"</c> (alias <c>--setup</c>): console commands run once, in order, after the world has loaded and settled (GameHost.Control.cs); the first failing command stops the list and fails the run (exit code 3).</summary>
+    /// <summary><c>--exec "a; b"</c> (alias <c>--setup</c>): console commands run once, in order, after the world has loaded and settled (AgentChannel); the first failing command stops the list and fails the run (exit code 3).</summary>
     public string? Exec;
     /// <summary><c>--screenshot-after &lt;s&gt;</c>: once the setup is done, wait this many real seconds, save one frame (<see cref="ShotOut"/>) and quit.</summary>
     public double? ShotAfter;

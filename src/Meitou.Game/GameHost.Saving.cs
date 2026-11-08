@@ -23,11 +23,11 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    bool quickSaveRequested, quickLoadRequested;
+    internal bool quickSaveRequested, quickLoadRequested;
     // The autosave (docs/formats/save.md "Autosave"): real seconds run unpaused since the last one, and a save announced this frame and written the next.
     double autosaveSeconds;
     bool autosaveDue;
-    string? saveRequestedFolder, loadRequestedFolder, readingFolder;
+    internal string? saveRequestedFolder, loadRequestedFolder, readingFolder;
     // The tutorial manager (docs/game/ui-screens.md "Tutorials"), made with the interface; its file is in the working directory, as the game's.
     TutorialManager? tutorials;
     // The save the game in play came from or was last written to: the load window cannot delete it.
@@ -62,7 +62,7 @@ sealed partial class GameHost
     }
 
     // The footprints a worker's reach of a building is measured to (docs/game/buildings-production.md "Work distance").
-    Meitou.Simulation.Navigation.BuildingFootprints? siteFootprints;
+    internal Meitou.Simulation.Navigation.BuildingFootprints? siteFootprints;
 
     /// <summary>
     /// The X/Z gap from a point to a site's footprint hull (its collision, else for a building without it the hull of its parts' bounds); null while the record is being read, or
@@ -202,7 +202,7 @@ sealed partial class GameHost
             bloodDecals.WriteDecals(game);
             player.WriteBiome(game.Camera);
             modding.CaptureModData(world, game);
-            WriteLevelEdits(game);
+            levelEditorHost.WriteLevelEdits(game);
         }
         catch (Exception e)
         {
@@ -375,7 +375,7 @@ sealed partial class GameHost
         preparedBase = null;
         worldEpoch++;
         modding.NoticeModChanges(read.Result);
-        pendingLevelEdits = read.Result.LevelEdits;   // replayed once the host has met the new world (UpdateBuildings)
+        levelEditorHost.pendingLevelEdits = read.Result.LevelEdits;   // replayed once the host has met the new world (UpdateBuildings)
         var world = session.World;
         bloodDecals.BloodForNewWorld(read.Result.Decals);
         session.Clock.SetTime(loaded!.Clock.Day, loaded.Clock.HourOfDay);

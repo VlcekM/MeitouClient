@@ -1,3 +1,4 @@
+using Meitou.Game.Editor;
 using Meitou.Game.Rendering.Upscalers;
 
 #if MEITOU_METAL
@@ -495,7 +496,7 @@ sealed partial class GameHost
             moveMarker = MarkerRenderer.Create(ctx, assets.Find);
             hud.Markers = moveMarker;
             navOverlay = new NavmeshOverlayRenderer(ctx);
-            navOverlayRenderer = navOverlay;
+            debugOverlays.navOverlayRenderer = navOverlay;
             // The shared frame draw owns the overlays after the post chain now.
             worldGpu.Markers = moveMarker;
             worldGpu.NavmeshOverlay = navOverlay;
@@ -889,10 +890,10 @@ sealed partial class GameHost
                     if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } pickerKey) sandboxPicker.KeyDown(pickerKey);
                     return;
                 }
-                if (hud is not null && DebugToggle(key)) { debugMenuOpen = !debugMenuOpen; debugParts = null; return; }
-                if (debugMenuOpen)
+                if (hud is not null && DebugToggle(key)) { debugMenu.debugMenuOpen = !debugMenu.debugMenuOpen; debugMenu.debugParts = null; return; }
+                if (debugMenu.debugMenuOpen)
                 {
-                    if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } menuKey) DebugMenuKey(menuKey);
+                    if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } menuKey) debugMenu.DebugMenuKey(menuKey);
                     return;
                 }
                 if (key == SilkKey.F10 && settings is not null) { settings.Visible = !settings.Visible; return; }
@@ -903,7 +904,7 @@ sealed partial class GameHost
                     return;
                 }
                 // F11 lists the frame; F12 is the small frame-rate line (the profiler chart waits for Metal timestamps).
-                if (key == SilkKey.F11 && shiftDown) { ToggleNavOverlay(); return; }
+                if (key == SilkKey.F11 && shiftDown) { debugOverlays.ToggleNavOverlay(); return; }
                 if (key == SilkKey.F11) { statsVisible = !statsVisible; return; }
                 if (key == SilkKey.F12) { frameStatsVisible = !frameStatsVisible; return; }
                 if (key is SilkKey.F8 or SilkKey.PrintScreen) { screenshotNow = true; return; }
@@ -963,7 +964,7 @@ sealed partial class GameHost
                 if (Covered) return;
                 if (settings?.Visible == true) settings.TextInput(value);
                 else if (sandboxPicker is { Open: true }) sandboxPicker.TextInput(value);
-                else if (debugMenuOpen) DebugMenuText(value);
+                else if (debugMenu.debugMenuOpen) debugMenu.DebugMenuText(value);
                 else hud?.UiText(value);
             };
         }
@@ -1089,7 +1090,7 @@ sealed partial class GameHost
             if (panelName?.StartsWith("editor", StringComparison.Ordinal) == true && hud is not null)
             {
                 hud.ShowUiPanel(panelName);
-                EditorCamera();
+                characterEditor.EditorCamera();
             }
             return true;
         }
@@ -1104,7 +1105,7 @@ sealed partial class GameHost
         void KeepStillPanel(string? panelName)
         {
             if (player is null) return;
-            if (hud is not null && panelName?.StartsWith("editor", StringComparison.Ordinal) == true) EditorCamera();
+            if (hud is not null && panelName?.StartsWith("editor", StringComparison.Ordinal) == true) characterEditor.EditorCamera();
             if (hud is not null) ApplyTitleCamera();
         }
 
@@ -1210,12 +1211,12 @@ sealed partial class GameHost
                 {
                     SandboxFollowCamera();
                     FollowCamera();
-                    EditorCamera();
+                    characterEditor.EditorCamera();
                 }
                 // The merged character editor is shared with Vulkan: a new game opens it once the squad is in the snapshot, and the world resumes when it closes.
-                OpenPendingEditor();
-                ResumeAfterCreation();
-                if (hud is not { EditorOpen: true }) { ClearEditorStage(); ClearEditorBar(); }
+                characterEditor.OpenPendingEditor();
+                characterEditor.ResumeAfterCreation();
+                if (hud is not { EditorOpen: true }) { characterEditor.ClearEditorStage(); characterEditor.ClearEditorBar(); }
                 if (!tourHolds && hud is not null) ApplyTitleCamera();
                 // A flight puts the focus where it lands, so the towns there populate during the flight; otherwise the
                 // followed character's pivot is already in the rig.
@@ -1251,7 +1252,7 @@ sealed partial class GameHost
                 }
                 if (!Covered) sound.UpdateAudio(dt);
                 UpdateNav();
-                UpdateNavOverlay();
+                debugOverlays.UpdateNavOverlay();
                 // Diagnostic isolation for the far-travel freeze: skip the runtime building/ground-item/lamps diff.
                 if (Environment.GetEnvironmentVariable("MEITOU_METAL_NO_BUILDINGS") != "1") UpdateBuildings();
                 // The interior view (docs/formats/zones.md): the player's building opens, its upper floors and their characters are hidden.
@@ -1331,9 +1332,9 @@ sealed partial class GameHost
             double drawableWait = display.LastDrawableWaitMilliseconds;
             long recordStart = Stopwatch.GetTimestamp();
             var backbuffer = ctx.Backbuffer;
-            // The editor's scene: in the Meitou UI the bar, drawn by the world pass below from the editor's camera (GameHost.EditorBar.cs); else the original's stage, the
+            // The editor's scene: in the Meitou UI the bar, drawn by the world pass below from the editor's camera (CharacterEditorHost); else the original's stage, the
             // character and its platform drawn into the stage texture the interface shows over the world.
-            var editorBarFrame = hud is { EditorOpen: true } ? BeginEditorBar(size.X, size.Y) : null;
+            var editorBarFrame = hud is { EditorOpen: true } ? characterEditor.BeginEditorBar(size.X, size.Y) : null;
             // The still's objects are all resident before the first picture, as the Vulkan screenshot path settles them (its Settle
             // opens its own frame; here the frame is the first one's).
             if (frames == 0) { objects?.Settle(camera.Eye); foliage?.Settle(camera.Eye); }
@@ -1362,7 +1363,7 @@ sealed partial class GameHost
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.
             bool titleLook = hud is not null && TitleVisible;
-            float hour = editorBarFrame is not null ? EditorBarHour : presentationHour ?? (titleLook ? TitleHour : (float)session.Clock.HourOfDay);
+            float hour = editorBarFrame is not null ? CharacterEditorHost.EditorBarHour : presentationHour ?? (titleLook ? TitleHour : (float)session.Clock.HourOfDay);
             var aspect = size.X / (float)Math.Max(size.Y, 1);
             var eye = camera.Eye;
             var view = camera.View;
@@ -1429,7 +1430,7 @@ sealed partial class GameHost
                     fogVolumes.HidePlaced = savedHidePlaced;
                 }
             }
-            if (editorBarFrame is { } barFrame) EndEditorBar(barFrame, size.X, size.Y);
+            if (editorBarFrame is { } barFrame) characterEditor.EndEditorBar(barFrame, size.X, size.Y);
             // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (GameHost.Feedback.cs).
             bool feedbackShot = feedbackShotRequested && hud is not null && !still;
             if (hud is not null) hud.ShotWithoutMenus = feedbackShot;
@@ -1474,9 +1475,9 @@ sealed partial class GameHost
                         (16 + overlay.LineHeight) * textScale, DebugOverlay.TextColour, textScale);
                     wrote = true;
                 }
-                if (debugMenuOpen && hud is not null && !feedbackShot)
+                if (debugMenu.debugMenuOpen && hud is not null && !feedbackShot)
                 {
-                    DrawDebugMenu(overlay, size.X, size.Y, (hud.UiVisible ? hud.HudBottom : 0) + 8, "Ctrl+F10");
+                    debugMenu.DrawDebugMenu(overlay, size.X, size.Y, (hud.UiVisible ? hud.HudBottom : 0) + 8, "Ctrl+F10");
                     wrote = true;
                 }
                 if (settings?.Visible == true && !feedbackShot)

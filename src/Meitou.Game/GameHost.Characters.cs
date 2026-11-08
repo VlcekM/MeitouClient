@@ -12,6 +12,7 @@ using Meitou.Game.Rendering.Characters;
 using Meitou.Simulation;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using Meitou.Game.Editor;
 using EngineKey = Meitou.Game.Host.Input.Key;
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
@@ -78,7 +79,7 @@ sealed partial class GameHost
     }
 
     /// <summary>Where a character is drawn: between the last two snapshots, by the simulation's alpha (a carried body on its carrier's left shoulder).</summary>
-    Vector3 DrawnPosition(CharacterSnapshot c)
+    internal Vector3 DrawnPosition(CharacterSnapshot c)
     {
         IndexPrevious();
         var at = previousById.TryGetValue(c.Id, out var before) ? Vector3.Lerp(before.Position, c.Position, session.SimulationAlpha) : c.Position;
@@ -211,7 +212,7 @@ sealed partial class GameHost
 
     /// <summary>
     /// The edited character's poses: the chosen idle stance at its record's play speed, as the simulation plays it (0 for the stances: a held pose of a 1-frame clip;
-    /// 0.01 for squat; a mod's one-shot stance held at its last frame, <see cref="EditorClipTime"/>), cross-faded from the stances chosen before at the simulation's blend rate
+    /// 0.01 for squat; a mod's one-shot stance held at its last frame, <see cref="CharacterEditorHost.EditorClipTime"/>), cross-faded from the stances chosen before at the simulation's blend rate
     /// (<c>animation blend rate</c>).
     /// </summary>
     CharacterPose[] EditorStancePoses(CharacterId id, string stance)
@@ -228,7 +229,7 @@ sealed partial class GameHost
             if (weight <= 0) editorStances.RemoveAt(i);
             else editorStances[i] = (name, weight);
         }
-        return [.. editorStances.Select(s => new CharacterPose(s.Stance, EditorClipTime(s.Stance, (float)now), s.Weight))];
+        return [.. editorStances.Select(s => new CharacterPose(s.Stance, characterEditor.EditorClipTime(s.Stance, (float)now), s.Weight))];
     }
 
     readonly HashSet<CharacterId> fullRate = [];
@@ -264,7 +265,7 @@ sealed partial class GameHost
         var current = session.CurrentSnapshot;
         IndexPrevious();
         float alpha = session.SimulationAlpha;
-        // The character editor is a scene of its own (GameHost.Editor.cs): only the character being edited is posed and drawn.
+        // The character editor is a scene of its own (CharacterEditorHost): only the character being edited is posed and drawn.
         var editing = player.EditorFocus?.Character;
         player.FullRateCharacters(fullRate);
         // Beyond the renderer's reach a character needs its look and place only (to load it), not its poses or ragdoll; those go in the distant list, made again only
@@ -279,7 +280,7 @@ sealed partial class GameHost
         distantFor = reachOf is null ? default : distantKey;
         foreach (var c in current.Characters)
         {
-            var inBar = editing is { } shown ? EditorBarPlace(c.Id, shown) : null;
+            var inBar = editing is { } shown ? characterEditor.EditorBarPlace(c.Id, shown) : null;
             if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
             // The snapshot's place: a tick's motion is well inside InReach's margin.
             if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !portraitKeys.Contains(DrawKey(c.Id)) && c.Id != sandboxHero)
@@ -326,12 +327,12 @@ sealed partial class GameHost
             }
             if (player.EditorIdle(c.Id) is { } stance) poses = EditorStancePoses(c.Id, stance);
             // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
-            else if (player.IsEditorAnimal(c.Id)) poses = [.. poses.Select(p => p with { Time = EditorClipTime(p.Animation, (float)realTime.Elapsed.TotalSeconds) })];
-            // The Meitou editor's bar (GameHost.EditorBar.cs): the shown character stands in it, the others sit on its seats.
+            else if (player.IsEditorAnimal(c.Id)) poses = [.. poses.Select(p => p with { Time = characterEditor.EditorClipTime(p.Animation, (float)realTime.Elapsed.TotalSeconds) })];
+            // The Meitou editor's bar (CharacterEditorHost): the shown character stands in it, the others sit on its seats.
             if (inBar is { } place)
             {
                 (position, yaw, rotation) = (place.Position, place.Yaw, null);
-                if (place.Clip is { } clip) poses = [new CharacterPose(clip, EditorClipTime(clip, (float)realTime.Elapsed.TotalSeconds), 1)];
+                if (place.Clip is { } clip) poses = [new CharacterPose(clip, characterEditor.EditorClipTime(clip, (float)realTime.Elapsed.TotalSeconds), 1)];
             }
             if (c.Id == sandboxHero && sandboxPicker?.Pose() is { } forced) poses = forced;   // the sandbox drop-down loops a picked clip on the hero
             var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
@@ -351,7 +352,7 @@ sealed partial class GameHost
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });
         }
         if (editing is null) decapitation.AddHeads(list);
-        else AddEditorCrowd(list);
+        else characterEditor.AddEditorCrowd(list);
     }
 
     readonly System.Runtime.CompilerServices.ConditionalWeakTable<Meitou.Data.Characters.CharacterAppearance, Dictionary<string, Meitou.Data.Characters.CharacterAppearance>> heldLooks = new();

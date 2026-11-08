@@ -817,14 +817,14 @@ from the settings (`FUN_140dda150`, not traced). Meitou: building shapes walkabl
 
 ### Meitou debug view
 
-Shift+F11 in the game (`GameHost.NavOverlay.cs`, `NavmeshOverlayRenderer`) steps off, Meitou's mesh, the original's cached exterior tiles
+Shift+F11 in the game (`DebugOverlays`, `NavmeshOverlayRenderer`) steps off, Meitou's mesh, the original's cached exterior tiles
 (`OriginalNavTiles`, [tagfile](../formats/havok-tagfile.md#navmesh-tiles)), both; for the zones the walkers use now (`NavmeshWalkability.World`), 3 (original 4) units
 above the mesh, over the finished picture and fainter where the scene hides it. Meitou: polygons cyan (door polygons blue, seed-pruned red), mesh ends
 yellow. Original: polygons magenta, ends orange, edges joined to the next tile violet. Rebuilt on a worker when the world or view changes.
 **Observed** (Hub, zone 20.32): the original's polygons are large and simplified, building footprints are holes (interiors separate), and rock and cliff
 cuts follow the blocky 36-unit terrain grid (generator inputs, terrain). The original has no such view (`rebuild_navmesh` Ctrl+Shift+F11 only rebuilds).
 
-F11's `[ ] paths` checkbox (`GameHost.Paths.cs`) draws, over everything and still with F11 closed, the path of each selected or inspected character
+F11's `[ ] paths` checkbox (`DebugOverlays`) draws, over everything and still with F11 closed, the path of each selected or inspected character
 (`CharacterSnapshot.Path`, from its feet): navmesh legs green, the provisional long-range part (`PathExact`) orange, the next waypoint white, the end red.
 
 ### Dropped orders

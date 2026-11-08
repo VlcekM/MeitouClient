@@ -43,7 +43,7 @@ sealed partial class GameHost
         {
             case "fight":
             {
-                if (DebugRecord(g.SceneNpc, character: true) is not { } npc) { Console.WriteLine($"scene     no character record matches '{g.SceneNpc}'"); return null; }
+                if (debugMenu.DebugRecord(g.SceneNpc, character: true) is not { } npc) { Console.WriteLine($"scene     no character record matches '{g.SceneNpc}'"); return null; }
                 world.Commands.Enqueue(new Meitou.Simulation.DebugSpawn(npc.Id, new Vector2(at.X + 40, at.Z)) { Tick = tick });
                 world.Commands.Enqueue(new Meitou.Simulation.DebugSpawn(npc.Id, new Vector2(at.X + 40, at.Z + 25)) { Tick = tick });
                 Console.WriteLine($"scene     fight: two {npc.Name} spawned beside {leader.Name}");
@@ -77,7 +77,7 @@ sealed partial class GameHost
                 if (best?.Turret is not { } post) { Console.WriteLine("scene     no town turret within 5000"); return null; }
                 var forward = new Vector2(MathF.Sin(post.Yaw), MathF.Cos(post.Yaw));
                 var spot = new Vector2(post.Position.X, post.Position.Z) + forward * 250;
-                if (DebugRecord(g.SceneNpc, character: true) is { } npc)
+                if (debugMenu.DebugRecord(g.SceneNpc, character: true) is { } npc)
                     for (int k = 0; k < 3; k++)
                         world.Commands.Enqueue(new Meitou.Simulation.DebugSpawn(npc.Id, spot + new Vector2(k * 20, 0)) { Tick = tick });
                 world.Commands.Enqueue(new Meitou.Simulation.DebugTeleport(members, new Vector3(post.Position.X - forward.X * 120, post.Position.Y, post.Position.Z - forward.Y * 120)) { Tick = tick });

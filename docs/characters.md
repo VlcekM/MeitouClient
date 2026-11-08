@@ -323,7 +323,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   as the mix of the old and new values over 0.12 s, the interval of the throttled rebuild (`CharacterRenderer.Blend`): body shape, posture
   layers, face/body pose weights (morph set recomputed per frame in a scratch ring of `MorphArena`) and skin/hair colours; a look with another
   head, hair or clothes swaps at once. The original's own slider behaviour is **Unknown**.
-- **Meitou bar** (Meitou UI, both hosts; `EditorBar`, `GameHost.EditorBar`): instead of the stage, the world's renderers draw a copy of The Hub's intact
+- **Meitou bar** (Meitou UI, both hosts; `EditorBar`, `CharacterEditorHost`): instead of the stage, the world's renderers draw a copy of The Hub's intact
   Storm House with interior layout `Bar` (parts, furniture, lamps; a runtime placement keyed `meitou:editor-bar` whose state and layouts are read from
   the source's zone, `BuildingPlacement.StateZone`) 3000 above the highest ground round the edited character, in the interior view with every floor, at
   23:00 under a clear sky without weather particles, the water and its reflection off and the frame cut at 2500 (`WorldFrame.Gpu.ViewCap`: far plane and

@@ -12,7 +12,7 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    sealed class SceneLoad
+    internal sealed class SceneLoad
     {
         public readonly Queue<(string Step, Func<Task?> Run, bool DuringAscent)> Stages = new();
         public Task? Waiting;
@@ -24,12 +24,12 @@ sealed partial class GameHost
     /// <summary>A stage found the load cannot go on; the message is shown, the world as it was stays.</summary>
     sealed class SceneLoadFailed(string message) : Exception(message);
 
-    SceneLoad? sceneLoad;
+    internal SceneLoad? sceneLoad;
     SkyArrival? skyArrival;
     float? presentationHour;
     /// <summary>The hour of the save being read, set by the reading worker as soon as its CAMERA is read (NaN until then), for the sky arrival.</summary>
     float readHour = float.NaN;
-    bool warming;
+    internal bool warming;
     double smoothSeconds;
     double warmSeconds;
     double readySeconds;
@@ -45,7 +45,7 @@ sealed partial class GameHost
     const double GuardWait = 5;
 
     /// <summary>Loading, warm-up, arrival or the loading overlay's final reveal still blocks input.</summary>
-    bool Covered => sceneLoad is not null || warming || skyArrival is not null || loading is { Exiting: true };
+    internal bool Covered => sceneLoad is not null || warming || skyArrival is not null || loading is { Exiting: true };
 
     static (string Step, Func<Task?> Run, bool DuringAscent) Stage(string step, Func<Task?> run, bool duringAscent = false) => (step, run, duringAscent || step == "read");
 
@@ -97,7 +97,7 @@ sealed partial class GameHost
     }
 
     /// <summary>The world is drawn under the loading screen until its frames run smoothly.</summary>
-    void BeginWarm()
+    internal void BeginWarm()
     {
         if (gpu.Characters is { } characters) characters.LoadingFocus = null;   // an earlier warm-up cut short may have left it
         if (loading is null) { skyArrival?.Arrive(); return; }
@@ -111,7 +111,7 @@ sealed partial class GameHost
     }
 
     /// <summary>After a covered frame of <paramref name="seconds"/>: the warm-up ends after <see cref="SmoothRun"/> seconds of smooth frames in a row.</summary>
-    void CoveredFrame(double seconds)
+    internal void CoveredFrame(double seconds)
     {
         if (sceneLoad is { } load) load.Shown = true;
         // The frames under the cover count for the loading report (LoadingFrame counts the start's).
@@ -121,7 +121,7 @@ sealed partial class GameHost
         warmSeconds += seconds;
         // The Faithful title is the original's opaque picture: nothing of the world shows behind it, so its view is not warmed (the original loads the world only for
         // a game). The start's splash plays out first.
-        if (player.TitleOpen && player.UiMode == Meitou.Data.Ui.UiMode.Faithful && pendingCreation is null)
+        if (player.TitleOpen && player.UiMode == Meitou.Data.Ui.UiMode.Faithful && characterEditor.pendingCreation is null)
         {
             if (loading is { SplashPlaying: true }) return;
             warming = false;
@@ -147,7 +147,7 @@ sealed partial class GameHost
             if (guardSeconds - seconds < GuardWait)
                 Console.WriteLine($"loading   stopped waiting for content held back by memory pressure (VramGuard, {gpu.Guard!.Fraction * 100:0}% of the {gpu.Guard.BudgetBytes / 1048576} MB budget)");
         }
-        if (pendingCreation is not null && !TitleVisible && charactersReady)
+        if (characterEditor.pendingCreation is not null && !TitleVisible && charactersReady)
         {
             // A new game shows the character editor before the world: the loading screen lifts once the squad is drawable, no sky arrival, and the world's own warm-up
             // runs when the editor closes (ResumeAfterCreation).

@@ -78,7 +78,7 @@ sealed partial class GameHost
                 if (tutorials is { Fresh: true })
                     foreach (string hint in (string[])["Hold middle mouse button to rotate the camera", "Use mouse wheel to zoom", "Now create your first character. Use the 'Confirm' button when finished."])
                         player.Notice(hint);
-                pendingCreation = [.. spawned.Members];   // the start's characters are made in the editor first (docs/characters.md "Character editor")
+                characterEditor.pendingCreation = [.. spawned.Members];   // the start's characters are made in the editor first (docs/characters.md "Character editor")
                 return null;
             }));
         skyArrival?.ClimbAtOnce();

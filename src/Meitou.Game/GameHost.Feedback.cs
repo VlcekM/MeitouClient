@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Meitou.Game.DevTools;
 using Meitou.Game.Host;
 using Meitou.Game.Ui;
 
@@ -26,7 +27,7 @@ sealed partial class GameHost
     FeedbackNavStage feedbackNavStage;
     Task? feedbackNavLoad;
     long feedbackNavSince;
-    NavView feedbackNavRestore;
+    DebugOverlays.NavView feedbackNavRestore;
     /// <summary>The navmesh screenshot's PNG, encoded off the frame thread; null without one.</summary>
     Task<byte[]>? feedbackNavPicture;
     /// <summary>The navmesh screenshot was tried for this form (it may have failed), so a send goes on without waiting for it again.</summary>
@@ -65,7 +66,7 @@ sealed partial class GameHost
         feedbackLocation = inGame ? CameraLocation() : null;
         player.FeedbackNewer = null;
         feedbackNewer = LatestRelease.NewerThan(BuildVersion.Tag);
-        player.OpenFeedback(rgba is not null, inGame && nav is not null && navOverlayRenderer is not null, inGame ? null : "only in a game");
+        player.OpenFeedback(rgba is not null, inGame && nav is not null && debugOverlays.navOverlayRenderer is not null, inGame ? null : "only in a game");
     }
 
     /// <summary>The camera as text for the issue: what it looks at, where the eye is, and the heading (the numbers of the F11 statistics).</summary>
@@ -79,9 +80,9 @@ sealed partial class GameHost
     /// <summary>Starts the navmesh screenshot: Meitou's view on, the zones round the camera loading. False when there is no navmesh to draw.</summary>
     bool StartFeedbackNav()
     {
-        if (nav is null || navOverlayRenderer is not { } overlay) return false;
-        feedbackNavRestore = navView;
-        navView = NavView.Meitou;
+        if (nav is null || debugOverlays.navOverlayRenderer is not { } overlay) return false;
+        feedbackNavRestore = debugOverlays.navView;
+        debugOverlays.navView = DebugOverlays.NavView.Meitou;
         overlay.Visible = true;
         FinishNavUnload();
         long now = Stopwatch.GetTimestamp();
@@ -105,7 +106,7 @@ sealed partial class GameHost
         if (nav is null || waited > 30) { EndFeedbackNav(); return; }   // never held up for long: the report goes without it
         if (feedbackNavStage == FeedbackNavStage.Loading && (feedbackNavLoad!.IsCompleted || waited > 10)) feedbackNavStage = FeedbackNavStage.Drawing;
         if (feedbackNavStage == FeedbackNavStage.Drawing
-            && (navOverlayBuild is null && navOverlayShown == (nav.Walkability.World, NavView.Meitou) || waited > 20))
+            && (debugOverlays.navOverlayBuild is null && debugOverlays.navOverlayShown == (nav.Walkability.World, DebugOverlays.NavView.Meitou) || waited > 20))
         {
             feedbackNavStage = FeedbackNavStage.Capturing;
             feedbackShotRequested = true;
@@ -118,8 +119,8 @@ sealed partial class GameHost
         feedbackNavStage = FeedbackNavStage.None;
         feedbackNavTried = true;
         feedbackShotRequested = false;
-        navView = feedbackNavRestore;
-        if (navOverlayRenderer is { } overlay) overlay.Visible = navView != NavView.Off;
+        debugOverlays.navView = feedbackNavRestore;
+        if (debugOverlays.navOverlayRenderer is { } overlay) overlay.Visible = debugOverlays.navView != DebugOverlays.NavView.Off;
         feedbackSendRequested = true;
     }
 

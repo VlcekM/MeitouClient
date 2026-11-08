@@ -286,7 +286,7 @@ sealed partial class GameHost
             {
                 var world = session.World;
                 var at = LeaderAt();
-                if (DebugRecord(g.SceneNpc, character: true) is not { } npc) { Console.WriteLine($"bench     no character record matches '{g.SceneNpc}': no fight"); return; }
+                if (debugMenu.DebugRecord(g.SceneNpc, character: true) is not { } npc) { Console.WriteLine($"bench     no character record matches '{g.SceneNpc}': no fight"); return; }
                 for (int k = 0; k < 6; k++)
                     world.Commands.Enqueue(new DebugSpawn(npc.Id, new Vector2(at.X + 50 + 15 * (k % 3), at.Z - 20 + 20 * (k / 3))) { Tick = world.Tick });
                 Console.WriteLine($"bench     fight: six {npc.Name} spawned beside the squad");
