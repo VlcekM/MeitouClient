@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Data.Ogre;
 using Meitou.Rendering;
 using Meitou.Rendering.Impostors;
 using Meitou.Rendering.Gpu.Core;

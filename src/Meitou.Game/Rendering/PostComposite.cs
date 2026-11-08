@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Numerics;
+using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Rendering.Gpu;
 

@@ -31,6 +31,9 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
     readonly ConcurrentDictionary<string, Lazy<string?>> skeletonNames = new(StringComparer.OrdinalIgnoreCase);
     readonly ConcurrentDictionary<CharacterAppearance, Lazy<CharacterPoseSetup?>> setups = new(ReferenceEqualityComparer.Instance);
 
+    /// <summary>Rigs that find their files through <paramref name="assets"/>, as the characters' content does; one is shared by the simulation and the renderer.</summary>
+    public static CharacterRigs For(GameDatabase db, AssetLocator assets) => new(db, path => assets.FindMesh(path), name => assets.Find(name));
+
     public GameDatabase Database => db;
 
     /// <summary>The rig of the skeleton file <paramref name="name"/>, or null when it is not in the install.</summary>

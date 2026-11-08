@@ -3,6 +3,7 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Content;
+using Meitou.Data.Ogre;
 using Meitou.Data.World;
 using Meitou.Metal;
 using Meitou.Rendering;

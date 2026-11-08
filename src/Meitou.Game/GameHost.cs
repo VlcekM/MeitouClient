@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Data.Ogre;
 using Meitou.Engine;
 using Meitou.Engine.Cameras;
 using Meitou.Engine.Input;
@@ -155,20 +156,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         BootPlayer(display, interactive);
     }
 
-    /// <summary>Layouts of <paramref name="levels"/> read afresh (no scene objects to share), their furniture swapped as the placements were.</summary>
-    static Meitou.Data.World.BuildingLayouts LevelLayouts(Meitou.Data.GameDatabase gameDb, Meitou.Data.World.WorldLevelData levels)
-    {
-        var layouts = new Meitou.Data.World.BuildingLayouts(gameDb, levels.Interiors);
-        layouts.UseSwaps(levels);
-        return layouts;
-    }
-
-    /// <summary>The level data read afresh (no scene objects to share), with the factions' building swaps applied as the scene's are.</summary>
-    Meitou.Data.World.WorldLevelData LoadedLevels(Meitou.Data.GameDatabase gameDb) { var levels = Meitou.Data.World.WorldLevelData.Load(install, includeInteriors: true); Meitou.Data.World.BuildingSwapPass.ApplyBuildingSwaps(levels, gameDb); return levels; }
-
     /// <summary>
-    /// The simulation's side of <see cref="Boot"/>, on a worker (it reads the game data and the scene's level data and makes no GPU resource): the navmesh system, the
-    /// population's data and its systems. Returns the walkability, the systems and the game constants for the session.
+    /// The simulation's side of <see cref="Boot"/>, on a worker (it reads the game data and the scene's level data and makes no GPU resource): the world's content
+    /// (<see cref="WorldBoot"/>), the code mods and the systems. Returns the walkability, the systems and the game constants for the session.
     /// </summary>
     (Meitou.Simulation.IWalkability Walkability, IReadOnlyList<Meitou.Simulation.ITickSystem> Systems, Meitou.Data.Gameplay.GameConstants? Constants) BootSimulation(
         Meitou.Data.World.GroundHeights heights, bool interactive)
@@ -181,74 +171,41 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         {
             // The sandbox, the duel and the battle walk on open ground (the heightmap): the sandbox has no world, and the duel's spot may be a navmesh island the build prunes.
             // None has towns: their own characters are the only ones.
-            var levels = IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels ?? LoadedLevels(gameDb);
-            if (levels is not null)
-            {
-                // The homes' ruins and layouts before anything reads the levels (done already when the renderer read them).
-                Meitou.Data.World.ResidentRuins.Apply(gameDb, levels, scene.Objects?.Layouts ?? LevelLayouts(gameDb, levels));
-                nav = new Meitou.Navigation.NavSystem(install, gameDb, levels!, heights.HeightAt);
-                nav.ZoneReady += ready => { lock (navReady) navReady.Add(ready.Zone); };
-                walkability = new NavAdapter(nav.Walkability);
-                // The long-range grid built behind the loading: built by the first long route instead, it held the path threads ~3 s (issue #124).
-                var navForRoutes = nav;
-                _ = Task.Run(() => navForRoutes.Walkability.Coarse.Warm());
-                // Ragdolls land on the terrain and the buildings' collision (gathered per zone on a worker when a ragdoll comes near).
-                ragdollGeometry = new Meitou.Navigation.RagdollGeometry(install, gameDb, levels!, heights.HeightAt, nav.Runtime);
-            }
-            var towns = levels is null ? [] : levels.Towns().ToList();
-            // The wild (homeless squads and nests) needs the world's area sectors; the sandbox and the duel have none.
-            Meitou.Data.Gameplay.BiomeMap? biomes = null;
-            if (levels is not null)
-            {
-                try { biomes = Meitou.Data.Gameplay.BiomeMap.Create(gameDb, Meitou.Data.World.WeatherAreas.Load(install)); }
-                catch (Exception e) when (e is IOException or FormatException) { Console.Error.WriteLine($"population no areas map ({e.Message}): no wild squads"); }
-            }
-            // The towns' buildings with their beds and nodes: the AI's homes (docs/simulation.md "AI").
-            Dictionary<string, List<Meitou.Data.World.TownBuilding>>? buildings = null;
-            if (levels is not null)
-            {
-                var watch = System.Diagnostics.Stopwatch.StartNew();
-                var layouts = scene.Objects?.Layouts ?? LevelLayouts(gameDb, levels);
-                buildings = Meitou.Data.World.TownBuildings.Build(gameDb, levels, layouts, (x, z) => heights.HeightAt((float)x, (float)z));
-                Console.WriteLine($"homes     {buildings.Values.Sum(l => l.Count)} town buildings, {buildings.Values.Sum(l => l.Sum(b => b.Beds))} beds, " +
-                    $"{buildings.Values.Sum(l => l.Sum(b => b.Spots.Count - b.Beds))} nodes in {buildings.Count} towns ({watch.ElapsedMilliseconds} ms)");
-            }
-            var data = Meitou.Simulation.PopulationData.Create(gameDb, towns, new Meitou.Simulation.GeneratedAppearances(gameDb, install.Root),
-                bodyOptions: Meitou.Simulation.Bodies.BodyOptions.Default with { Dismemberment = Gameplay.Dismemberment, Decapitation = config.Decapitation, AdvancedRagdolls = config.AdvancedRagdolls }, biomes: biomes, buildings: buildings, roads: levels?.Roads(), townZones: levels?.TownZones(), level: levels?.Level);
-            if (levels is not null)
-            {
-                data.Layouts = scene.Objects?.Layouts ?? LevelLayouts(gameDb, levels);
-                data.Sight = new BuildingSight(install, gameDb, levels, data.Layouts);
-            }
-            if (nav is not null) nav.Walkability.Roads = data.Roads;   // one network for both: on-screen long routes take the roads as the off-screen squads do
-            // The mineable rocks for ore mines, from the foliage placement (read through the renderer's layout cache when it has the zone).
-            if (levels is not null)
-            {
-                var foliageCatalog = Meitou.Data.World.FoliageCatalog.Load(gameDb);
-                Meitou.Data.World.FoliageLayoutCache? layoutCache = null;
-                try { layoutCache = new Meitou.Data.World.FoliageLayoutCache(install, foliageCatalog, Meitou.Data.World.FoliageWorld.ReadTowns(gameDb, levels)); }
-                catch (IOException e) { Console.Error.WriteLine($"resource rocks without the layout cache: {e.Message}"); }
-                data.ResourceNodes = new Meitou.Data.Gameplay.Construction.FoliageResourceNodes(new Meitou.Data.World.FoliageWorld(install, gameDb, levels, foliageCatalog, cache: layoutCache), gameDb, name => assets.Find(name));
-            }
-            // One set of skeleton rigs for the ragdolls and the renderer, so a ragdoll starts from the drawn pose.
-            characterRigs = CharacterRenderer.CreateRigs(gameDb, assets);
-            animationLengths = Meitou.Data.Gameplay.AnimationLengths.Load(install.Root, gameDb, name => assets.Find(name));   // with the animals' own skeletons and the animation files
-            animationLibrary = Meitou.Data.Gameplay.AnimationLibrary.FromDatabase(gameDb);
-            popData = data;
-            StartMods(gameDb, data);
-            townPlacements = towns;
+            var levels = IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels ?? Meitou.Simulation.WorldBoot.LoadLevels(install, gameDb);
+            var boot = Meitou.Simulation.WorldBoot.Load(BootOptions(gameDb, heights, levels));
+            nav = boot.Nav;
+            ragdollGeometry = boot.RagdollGeometry;
+            characterRigs = boot.Rigs;
+            animationLengths = boot.AnimationLengths;
+            animationLibrary = boot.AnimationLibrary;
+            popData = boot.Data;
+            StartMods(gameDb, boot.Data);
+            townPlacements = boot.Towns;
             saveLevels = levels;
-            simWalkability = walkability;
+            walkability = simWalkability = boot.Walkability;
             var built = BuildSystems(interactive);
             population = built.Population;
             if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
             SnapshotPlayerTowns();
             systems = built.Systems;
-            constants = data.Bodies.Constants;
+            constants = boot.Data.Bodies.Constants;
         }
         StartDeferredWarmup();
         return (walkability, systems, constants);
     }
+
+    /// <summary>The world's content as this scene loads it: its levels and the renderer's layouts, the body settings, and the nav zones reported to the host.</summary>
+    Meitou.Simulation.WorldBootOptions BootOptions(Meitou.Data.GameDatabase gameDb, Meitou.Data.World.GroundHeights heights, Meitou.Data.World.WorldLevelData? levels) =>
+        new(install, gameDb, heights, assets)
+        {
+            Levels = levels,
+            Layouts = scene.Objects?.Layouts,
+            Bodies = Meitou.Simulation.Bodies.BodyOptions.Default with
+            {
+                Dismemberment = Gameplay.Dismemberment, Decapitation = config.Decapitation, AdvancedRagdolls = config.AdvancedRagdolls,
+            },
+            ZoneReady = ready => { lock (navReady) navReady.Add(ready.Zone); },
+        };
 
     /// <summary>
     /// The callbacks the interface asks the host for: the game data, the map, the build services, the tooltips and the character editor. Shared by the Vulkan

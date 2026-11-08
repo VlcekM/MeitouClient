@@ -41,7 +41,7 @@ public class ItemIconTests
         var folder = Path.Combine(install!.DataDirectory, "icons");
         (string Item, string Material)[] starters = [("2308-clothes_v1.mod", "2312-clothes_v1.mod"), ("52295-rebirth.mod", "914-gamedata.base")];
         Assert.SkipWhen(starters.Any(s => !File.Exists(Path.Combine(folder, $"{s.Item}.{s.Material}.png"))), "the game has not cached these starter icons");
-        var locator = new Meitou.Rendering.AssetLocator(install);
+        var locator = new Meitou.Data.Ogre.AssetLocator(install);
         var icons = new ItemIcons(InstallData.FullLoadOrder!, name => locator.FindInGroup(name, "Icons"), new ItemIconCache(folder));
         foreach (var (item, material) in starters)
         {

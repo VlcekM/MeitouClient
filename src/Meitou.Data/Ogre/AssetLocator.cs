@@ -1,8 +1,6 @@
 using Meitou.Content;
-using Meitou.Data;
-using Meitou.Data.Ogre;
 
-namespace Meitou.Rendering;
+namespace Meitou.Data.Ogre;
 
 /// <summary>
 /// Finds art files the way the viewer needs them: an existing absolute path; else the bare file name through the
@@ -75,4 +73,7 @@ public sealed class AssetLocator
     }
 
     public string Relative(string path) => Path.GetRelativePath(install.Root, path);
+
+    /// <summary>A character mesh the way Kenshi finds it: the bare file name through resources.cfg first, else <see cref="Find(string)"/> on the FCS path.</summary>
+    public string? FindMesh(string fcsPath) => Configured.Find(Path.GetFileName(fcsPath.Replace('\\', '/'))) ?? Find(fcsPath);
 }

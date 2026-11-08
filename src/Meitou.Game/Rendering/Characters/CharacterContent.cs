@@ -249,12 +249,10 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>Meshes are loaded by bare name (Kenshi reduces the path first), so resources.cfg's last location wins.</summary>
-    string? FindMesh(string fcsPath) => FindMesh(assets, fcsPath);
-
-    static string? FindMesh(AssetLocator assets, string fcsPath) => assets.Configured.Find(Path.GetFileName(fcsPath.Replace('\\', '/'))) ?? assets.Find(fcsPath);
+    string? FindMesh(string fcsPath) => assets.FindMesh(fcsPath);
 
     /// <summary>Rigs that find files as the characters' content does; the host makes one to share between the simulation and the renderer.</summary>
-    public static CharacterRigs CreateRigs(GameDatabase db, AssetLocator assets) => new(db, path => FindMesh(assets, path), name => assets.Find(name));
+    public static CharacterRigs CreateRigs(GameDatabase db, AssetLocator assets) => CharacterRigs.For(db, assets);
 
     /// <summary>Skeleton rigs and pose setups, shared with the simulation's ragdolls (<see cref="CharacterRenderer.Rigs"/>).</summary>
     public CharacterRigs Rigs { get; }

@@ -4,6 +4,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Fcs;
+using Meitou.Data.Ogre;
 using Meitou.Data.Particles;
 using Meitou.Data.World;
 

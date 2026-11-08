@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Content;
 using Meitou.Data;
+using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 

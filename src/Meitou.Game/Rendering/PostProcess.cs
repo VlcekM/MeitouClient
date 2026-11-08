@@ -2,6 +2,7 @@ using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Text;
 
+using Meitou.Data.Ogre;
 using Meitou.Rendering.Gpu;
 using Vk = Silk.NET.Vulkan;
 

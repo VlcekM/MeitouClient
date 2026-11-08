@@ -4,6 +4,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Fcs;
+using Meitou.Data.Ogre;
 using Meitou.Data.World;
 using Silk.NET.Input;
 using Silk.NET.Maths;

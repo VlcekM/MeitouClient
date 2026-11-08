@@ -1,5 +1,6 @@
 using System.Buffers;
 using InternalFormat = Meitou.Rendering.Gpu.InternalFormat;
+using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 
 using Meitou.Rendering.Gpu;

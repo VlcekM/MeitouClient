@@ -4,6 +4,7 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
+using Meitou.Data.Ogre;
 using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering.Characters;

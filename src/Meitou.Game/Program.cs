@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Content;
+using Meitou.Data.Ogre;
 using Meitou.Rendering;
 
 namespace Meitou.Game;

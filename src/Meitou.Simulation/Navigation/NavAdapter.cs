@@ -1,11 +1,10 @@
 using System.Numerics;
-using Meitou.Navigation;
 using Meitou.Simulation;
 
-namespace Meitou.Game;
+namespace Meitou.Navigation;
 
 /// <summary>
-/// The simulation's <see cref="IWalkability"/> over the navmesh (<see cref="NavSystem"/>): the only place the game knows the navigation
+/// The simulation's <see cref="IWalkability"/> over the navmesh (<see cref="NavSystem"/>): the only place the simulation knows the navigation
 /// types, so the navmesh track can change its side without touching the simulation. Paths take the character's footprint radius
 /// (RACE <c>pathfind footprint radius</c>); where a zone is not loaded yet the navmesh answers with its open-ground stand-in
 /// (<see cref="NavmeshWalkability"/>). Safe from any thread. It is also the world's door gate: locked buildings close their doors in the navmesh's door table.

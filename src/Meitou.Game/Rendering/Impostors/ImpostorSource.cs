@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
+using Meitou.Data.Ogre;
 using Meitou.Data.World;
 
 namespace Meitou.Rendering.Impostors;

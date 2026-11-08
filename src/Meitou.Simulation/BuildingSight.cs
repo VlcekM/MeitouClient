@@ -1,9 +1,8 @@
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
-using Meitou.Simulation;
 
-namespace Meitou.Game;
+namespace Meitou.Simulation;
 
 /// <summary>
 /// The simulation's rooms and lamps of the town buildings (<see cref="SightMap"/>): the building's indoor volume from its <c>interior mask</c> collision and its lights with those of

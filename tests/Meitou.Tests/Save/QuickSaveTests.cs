@@ -253,7 +253,7 @@ public class QuickSaveTests
         var db = InstallData.BaseGame!;
         var levels = InstallData.Levels!;
         var data = PopulationData.Create(db, levels.Towns(), new GeneratedAppearances(db, install!.Root));
-        var assets = new Meitou.Rendering.AssetLocator(install);
+        var assets = new Meitou.Data.Ogre.AssetLocator(install);
         var rigs = new Meitou.Data.Characters.CharacterRigs(db, p => assets.Configured.Find(Path.GetFileName(p.Replace('\\', '/'))) ?? assets.Find(p), n => assets.Find(n));
         var lengths = AnimationLengths.Load(install.Root, db);
         var walk = new OpenGroundWalkability((_, _) => 300);
