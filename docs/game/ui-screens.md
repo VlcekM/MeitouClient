@@ -1523,7 +1523,7 @@ Code: `UiTooltips` (data, layout), `PlayerInterface.Tooltips.cs` (hover runtime,
     else "Your {1} needs bandaging, but it's not urgent.". Then with 0 < h + d - s < 60 a line: "Your stats will be negatively affected." (`death`), "Your movement
     speed will be negatively affected." (leg), "Your combat and manual labour skills will be negatively affected." (arm); a leg when `FUN_140883fa0` is false "You
     won't be able to kick."; a lost limb's text becomes "This limb is gone forever.".
-  - Hunger (h, the stomach store +0x64): h > 2 "You are well fed and currently have no problem."; 1 < h ≤ 2 "You are suffering from malnutrition, Your stats and
+  - Hunger: the Hunger Rate rows (`FUN_14088a2b0`, below) first, then the sentence as a row of its own (**Verified**, decompile; Meitou does both). With h the stomach store (+0x64): h > 2 "You are well fed and currently have no problem."; 1 < h ≤ 2 "You are suffering from malnutrition, Your stats and
     strength will be affected, you need to get some food as soon as possible. Stat penalty is {1}" (`FUN_1406457e0`, `x` suffix, Bad), with food stored "You are
     suffering from malnutrition, but you have food so you are recovering. Stat penalty is {1}"; h ≤ 1 "You are starving to death. Get some food fast. When the red
     bar goes below {1} you will pass out. When it reaches zero, you die.", passed out (`FUN_140644320`) "You have passed out from starvation. You're all alone and

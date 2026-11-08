@@ -48,6 +48,8 @@ sealed partial class PlayerInterface
         public float White { get; init; }
         /// <summary>The Crushed layer at full width: a stump or a crushed limb (the row setter <c>FUN_140721a70</c>'s limb states 1 and 3).</summary>
         public bool Crushed { get; init; }
+        /// <summary>A key / value tooltip in place of <see cref="Tooltip"/> (the Hunger row's).</summary>
+        public IReadOnlyList<(string Key, string Value)>? TooltipRows { get; init; }
     }
 
     /// <summary>The goal line for a character the AI is not running (the player's orders, a fight, a job): what its movement task is, else Aimless.</summary>
@@ -558,8 +560,12 @@ sealed partial class PlayerInterface
             // '>' digesting, '<!' below 2, none in a bed, else '<'. Robot races have no Hunger row.
             string hungerArrows = hud?.Fed > 0 ? ">   " : hunger < 2 ? "<!   " : lead.InBed ? "" : "<   ";
             if (hud is not { Robot: true })
-                rows.Add(new(Loc.Tr("Hunger"), hunger - 2, hunger - 1, hunger, ((int)(hunger * 100)).ToString(CultureInfo.InvariantCulture), hungerArrows, false,
-                    HungerTip(hunger, body.Unconscious, ActiveSquadMembers().Count)));
+            {
+                string tip = HungerTip(hunger, body.Unconscious, ActiveSquadMembers().Count);
+                // The original's Hunger tooltip (FUN_14088a8f0) is the Hunger Rate rows (FUN_14088a2b0) with the sentence under them (#377).
+                rows.Add(new(Loc.Tr("Hunger"), hunger - 2, hunger - 1, hunger, ((int)(hunger * 100)).ToString(CultureInfo.InvariantCulture), hungerArrows, false, tip)
+                    { TooltipRows = hud?.ExtendedTips is { } tips ? [.. tips.Hunger, (tip, "")] : null });
+            }
         }
         for (int i = 1; i <= 9; i++)
         {
@@ -572,7 +578,8 @@ sealed partial class PlayerInterface
             if (r.White > Math.Max(r.Green, 0)) b.Progress[name + "White"] = BarStep(r.White);
             else b.Hidden.Add(name + "White");
             // The row's tooltip sits on its LifeBarNTooltip widget (FUN_1407228a0 sets a type 0 text there).
-            if (r.Tooltip is { Length: > 0 } tip) b.Properties[name + "Tooltip"] = UiTooltips.TextProperties(tip, "fixed");
+            if (r.TooltipRows is { Count: > 0 } tipRows) b.Properties[name + "Tooltip"] = UiTooltips.RowProperties(tipRows, "fixed");
+            else if (r.Tooltip is { Length: > 0 } tip) b.Properties[name + "Tooltip"] = UiTooltips.TextProperties(tip, "fixed");
             else b.Hidden.Add(name + "Tooltip");
             b.Progress[name + "Green"] = BarStep(Math.Max(r.Green, 0));
             b.Progress[name + "Yellow"] = BarStep(Math.Max(r.Yellow, 0));
