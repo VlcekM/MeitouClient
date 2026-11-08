@@ -443,6 +443,32 @@ public class AggroTests
         Assert.False(medical.Incapacitated, "gets up once the enemy is down");
     }
 
+    /// <summary>
+    /// Playing dead after a coma (docs/game/ragdolls.md "Playing dead"): a player's character downed by a vital part, with a raider in view, lies on when the part heals.
+    /// Catches a knockout with no timer ending on the healing tick unasked, from senses faded to zero enemies, so it always stood up.
+    /// </summary>
+    [Fact]
+    public void A_character_waking_from_a_coma_plays_dead_while_an_enemy_is_in_view()
+    {
+        using var a = Make(5, 1, settings: new AggroSettings { AttackOnSight = false });
+        var o = new Vector2(2000, 2000);
+        var mine = a.Squad(Player, o, o).Members[0];
+        a.Squad(Raiders, o + new Vector2(0, 60), o + new Vector2(0, 60));   // straight ahead (yaw 0 faces +Z)
+        var cold = a.World.Characters.Cold(mine.Slot)!;
+        cold.IsPlayer = true;
+        a.World.RunTicks(40);
+
+        var medical = cold.Medical!;
+        var vital = medical.Parts.First(p => p.IsVital);
+        vital.Stun = vital.Flesh + 60;
+        a.World.RunTicks(200);
+        Assert.True(medical.Incapacitated, "the vital part puts it down");
+
+        vital.Stun = 0;
+        for (int t = 0; t < 200 && medical.Incapacitated && !medical.PlayingDead; t++) a.World.RunTick();
+        Assert.True(medical.PlayingDead, "lies on while the raider is in view");
+    }
+
     // The shop scenarios (docs/game/ai-tasks.md "Combat goals"): 0 the town (the shop's; it hates the bandits), 1 bandits (they hate nobody, so they start no fight), 2 drifters.
     const int Town = 0, Bandits = 1, Drifters = 2;
 

@@ -697,7 +697,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
     /// <summary>
     /// A downed character the original's sense gate lets look (<c>FUN_1405d00b0</c>: the AI update runs once the medical get-up test passes): one playing dead, or (engine choice, as
-    /// <see cref="BodySystem.Schedule"/> decides on the waking tick from the last look) one whose knockout ends within two looks.
+    /// <see cref="BodySystem.Schedule"/> decides on the waking tick from the last look) one whose knockout ends within two looks or is held down until it looks
+    /// (<see cref="MedicalContext.GetUpUnasked"/>).
     /// </summary>
     static bool AwakeLying(World world, int slot, CharacterCold cold, int every)
     {
@@ -736,6 +737,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         b.threats.Clear();
         b.Enemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
         b.ThreatToMe = b.ThreatToAllies = 0;
+        b.Faded = false;
         var table = s.Table;
         var prev = table.Previous;
         var list = b.entries;
@@ -772,6 +774,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         b.threats.Clear();
         b.Enemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
         b.ThreatToMe = b.ThreatToAllies = 0;
+        b.Faded = true;
         var table = s.Table;
         var prev = table.Previous;
         var list = b.entries;

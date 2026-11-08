@@ -67,6 +67,8 @@ public sealed class SenseBlock
     /// <summary>The threat towards this character (+0x88, the AI's +0xb0) and towards characters of its faction (+0x8c): one per fighting threat (the original sums aggression, Meitou has none).</summary>
     public float ThreatToMe { get; internal set; }
     public float ThreatToAllies { get; internal set; }
+    /// <summary>The last look was a fade (<c>SensoryData::fade</c>: carried or knocked out), so the counts are zero, not sensed.</summary>
+    public bool Faded { get; internal set; }
 
     /// <summary>The entry of <paramref name="slot"/> (its generation), by binary search; -1 when none.</summary>
     public int IndexOf(int slot, int generation)

@@ -66,6 +66,12 @@ public readonly struct MedicalContext(GameConstants constants, BodyOptions optio
     public bool PlayDead { get; init; }
 
     /// <summary>
+    /// The get-up test could not be asked: the character's senses faded while it was knocked out (engine: the original asks on the waking frame, Meitou's look is staggered). A knockout
+    /// that ends keeps it down, still unconscious, until it has looked and <see cref="PlayDead"/> is decided (<see cref="BodySystem.Schedule"/>).
+    /// </summary>
+    public bool GetUpUnasked { get; init; }
+
+    /// <summary>
     /// The hunger level the character is kept at for free (character slot <c>0x348</c>, <c>FUN_1405c9ca0</c>, read by the hunger update <c>FUN_14064da70</c>; docs/game/character-stats.md
     /// "Free food"): below it, with an empty stomach, the stomach gets min(floor - hunger, 0.04). -10 (the default) for the player's characters: they must eat.
     /// </summary>

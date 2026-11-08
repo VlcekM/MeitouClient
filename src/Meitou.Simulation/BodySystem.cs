@@ -98,6 +98,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// <summary>Per slot: not safe to get up this tick (<see cref="MedicalContext.PlayDead"/>), from <see cref="Schedule"/>.</summary>
     bool[] playDead = [];
 
+    /// <summary>Per slot: the get-up test could not be asked this tick (<see cref="MedicalContext.GetUpUnasked"/>), from <see cref="Schedule"/>.</summary>
+    bool[] unasked = [];
+
     /// <summary>How often a character playing dead looks again whether it is safe (engine choice, in ticks; the first test, as its knockout ends, is at once).</summary>
     const int PlayDeadRecheckTicks = 15;
 
@@ -106,25 +109,35 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
 
     /// <summary>
     /// The update budgets' turns of this tick (<see cref="MedicalTimeBudget"/>); then who may not get up this tick: a knocked-out person (not an animal) whose knockout ends, or who
-    /// plays dead, when <see cref="SafeToGetUp"/> fails. Serial, from the last tick's state.
+    /// plays dead, when <see cref="SafeToGetUp"/> fails, and who is kept down until it has looked (<see cref="Unasked"/>). Serial, from the last tick's state.
     /// </summary>
     public void Schedule(World world)
     {
         medicalBudget.Run(world);
         var table = world.Characters;
         if (playDead.Length < table.HighWater) Array.Resize(ref playDead, table.HighWater);
+        if (unasked.Length < table.HighWater) Array.Resize(ref unasked, table.HighWater);
         var combat = world.SystemOf<Combat.CombatSystem>();
         for (int i = 0; i < table.HighWater; i++)
         {
             bool was = playDead[i];
-            playDead[i] = false;
+            playDead[i] = unasked[i] = false;
             if (!table.Previous[i].Alive || table.Cold(i) is not { Animal: null, Medical: { Unconscious: true, Dead: false, HasStatsObject: true } medical } cold) continue;
             if (medical.PlayingDead && was && (world.Tick + i) % PlayDeadRecheckTicks != 0) { playDead[i] = true; continue; }
-            // The window is the longest step Act may take (a far or skipped character's), so the knockout cannot end unasked.
+            if (Unasked(world, combat, i, cold)) { unasked[i] = true; continue; }
+            // The window is the longest step Act may take (a far or skipped character's), so a knockout on a timer is asked on the tick it ends.
             float step = Math.Max(world.SpeedSteps, world.StepTicks(i)) * world.TickSeconds;
             if (medical.PlayingDead || medical.WakesWithin(step + cold.MedicalBudgetSeconds)) playDead[i] = !SafeToGetUp(world, combat, i, cold);
         }
     }
+
+    /// <summary>
+    /// The get-up test cannot be asked yet (<see cref="MedicalContext.GetUpUnasked"/>): the knocked-out person's last look faded its senses, so the counts would always read safe. A
+    /// vital part or the blood ends a knockout on the tick it heals, which no window foresees; the character lies on until its next look (<c>AggroSystem.AwakeLying</c>). Not for one
+    /// whose look always fades (carried) or that needs no senses (a slave), nor without senses at all.
+    /// </summary>
+    static bool Unasked(World world, Combat.CombatSystem? combat, int me, CharacterCold cold) =>
+        combat is not null && !cold.Medical!.PlayingDead && cold.SlaveState != 1 && cold.CarriedBy.IsNone && CharacterFacts.Senses(world, me) is { Faded: true };
 
     /// <summary>
     /// <c>Character::isItSafeToGetUp</c> (docs/game/ragdolls.md "Playing dead", <b>Observed</b>): a slave, or no enemy sensed, or a conscious ally sensed.
@@ -208,6 +221,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
                 HungerFloor = HungerFloor(world, cold, medical),
                 HealMult = cold.InSomething == Locks.HeldState.Imprisoned ? 2 : 1,
                 PlayDead = i < playDead.Length && playDead[i],
+                GetUpUnasked = i < unasked.Length && unasked[i],
                 Still = Still(cold, in n),
                 UseHungerRate = UseHungerRate(cold, in n),
                 Idle = AmIdle(world, cold, medical, in n),
