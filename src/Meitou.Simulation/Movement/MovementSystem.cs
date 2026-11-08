@@ -1444,6 +1444,6 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     [InlineArray(MaxSeparationContributions)]
     struct Neighbours
     {
-        int first;
+        int _first;
     }
 }

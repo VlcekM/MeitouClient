@@ -19,10 +19,10 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalSky
 {
-    readonly MTLRenderPipelineState pipeline;
-    readonly MTLBuffer uniforms;
-    readonly MetalUniformBlock block;
-    readonly int binding;
+    readonly MTLRenderPipelineState _pipeline;
+    readonly MTLBuffer _uniforms;
+    readonly MetalUniformBlock _block;
+    readonly int _binding;
 
     /// <summary>Builds the sky's pipeline from the engine's GLSL (a vertex shader and a fragment shader).</summary>
     public MetalSky(MTLDevice device, string vertexGlsl, string fragmentGlsl)
@@ -45,28 +45,28 @@ public sealed class MetalSky
         attachment.PixelFormat = MTLPixelFormat.BGRA8Unorm;
         attachments.SetObject(attachment, 0);
         NSError error = default;
-        pipeline = device.NewRenderPipelineState(descriptor, ref error);
+        _pipeline = device.NewRenderPipelineState(descriptor, ref error);
         if (error.NativePtr != IntPtr.Zero)
             throw new InvalidOperationException($"the sky's pipeline failed: {error.LocalizedDescription}");
 
         var info = program.Fragment.DefaultBlock ?? throw new InvalidOperationException("the sky's fragment shader has no uniform block");
-        binding = info.Binding;
-        block = new MetalUniformBlock(program.Fragment, info.Size);
-        uniforms = device.NewBuffer((ulong)block.Size, MTLResourceOptions.ResourceStorageModeShared);
+        _binding = info.Binding;
+        _block = new MetalUniformBlock(program.Fragment, info.Size);
+        _uniforms = device.NewBuffer((ulong)_block.Size, MTLResourceOptions.ResourceStorageModeShared);
     }
 
     /// <summary>Draws the sky into an open render pass.</summary>
     public void Render(MTLRenderCommandEncoder encoder, in Matrix4x4 inverseViewProjection, SkyColours colours)
     {
-        block.Set("uInverseViewProjection", inverseViewProjection);
-        block.Set("uSkySun", colours.Sun);
-        block.Set("uSkyZenith", colours.Zenith);
-        block.Set("uSkyHorizon", colours.Horizon);
-        block.Set("uSkySunColour", colours.SunColour);
-        block.Set("uSkyTwilight", colours.Twilight);
-        Marshal.Copy(block.Bytes, 0, uniforms.Contents, block.Size);
-        encoder.SetRenderPipelineState(pipeline);
-        encoder.SetFragmentBuffer(uniforms, 0, (ulong)binding);
+        _block.Set("uInverseViewProjection", inverseViewProjection);
+        _block.Set("uSkySun", colours.Sun);
+        _block.Set("uSkyZenith", colours.Zenith);
+        _block.Set("uSkyHorizon", colours.Horizon);
+        _block.Set("uSkySunColour", colours.SunColour);
+        _block.Set("uSkyTwilight", colours.Twilight);
+        Marshal.Copy(_block.Bytes, 0, _uniforms.Contents, _block.Size);
+        encoder.SetRenderPipelineState(_pipeline);
+        encoder.SetFragmentBuffer(_uniforms, 0, (ulong)_binding);
         encoder.DrawPrimitives(MTLPrimitiveType.Triangle, 0, 3);
     }
 

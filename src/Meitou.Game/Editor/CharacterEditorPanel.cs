@@ -801,13 +801,13 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         // The panel's ScrollView (Kenshi_ScrollViewEmpty: its bars 20 pixels): the lines are laid out on a canvas the bar's width narrower than the panel; with the bar
         // (overflow) the canvas fills the client, without it the canvas sits 13 pixels in from the panel's left and top (Observed at 1440 lines, a Hive Prince's and a
         // skeleton's stats against the base game's: the same 355-pixel rows, 13 pixels right and down without the bar; the text 6 pixels above the panel's top).
-        const float Bar = 20, Inset = 13, Lift = 6;
-        float bar = maximum > 0 ? Bar : 0, width = area.Width - Bar, inset = maximum > 0 ? 0 : Inset;
+        const float barWidth = 20, edgeInset = 13, textLift = 6;
+        float bar = maximum > 0 ? barWidth : 0, width = area.Width - barWidth, inset = maximum > 0 ? 0 : edgeInset;
         var clip = area.Intersect(host.Clip ?? area);
         for (int i = 0; i < lines.Count; i++)
         {
             var (label, value, good) = lines[i];
-            var bounds = new UiRect(area.X + inset + width * 0.03f, area.Y + inset - Lift + i * row - scroll, width * 0.93f, row);
+            var bounds = new UiRect(area.X + inset + width * 0.03f, area.Y + inset - textLift + i * row - scroll, width * 0.93f, row);
             controls.Add(new($"editor-stat-{i}", "TextBox", bounds, label, "", "Kenshi_TextboxStandardText", true,
                 new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextColour"] = PlayerInterface.MainColour, ["TextAlign"] = "Left Top" },
                 Vector4.Zero, Pickable: false, Clip: clip));

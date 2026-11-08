@@ -9,24 +9,24 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 sealed class MetalTimestamps : IGpuTimestamps
 {
-    long frame;
-    int slot = -1;
-    int count;
+    long _frame;
+    int _slot = -1;
+    int _count;
 
-    public int Count => count;
+    public int Count => _count;
 
     internal void Begin(int frameSlot, long frameNumber)
     {
-        (slot, frame) = (frameSlot, frameNumber);
-        count = 0;
+        (_slot, _frame) = (frameSlot, frameNumber);
+        _count = 0;
     }
 
     internal void End() { }
 
     public QuerySlot Allocate()
     {
-        if (slot < 0) return default;
-        return new QuerySlot(frame, slot, (uint)count++);
+        if (_slot < 0) return default;
+        return new QuerySlot(_frame, _slot, (uint)_count++);
     }
 
     public bool TryRead(in QuerySlot q, out ulong nanoseconds)

@@ -62,6 +62,6 @@ drop-in replacement that runs original content and mods unchanged.
 - Get the user's explicit approval before adding tests, including new cases in existing tests.
   Explain briefly what they would catch and why existing coverage is insufficient; wait for approval.
 
-`dotnet build`, `dotnet test`, `dotnet run --project tools/Meitou.Tools`. Warnings are errors. Tests that need the game, a GPU or
+`dotnet build`, `dotnet test`, `dotnet run --project tools/Meitou.Tools`. Warnings are errors. Naming follows `.editorconfig` and the build enforces it (IDE1006): private fields `_camelCase`, private static `s_camelCase`, static readonly and non-private fields PascalCase, locals, parameters and local constants camelCase; Metal-only code is checked by the `-p:MeitouMetal=true` build. Tests that need the game, a GPU or
 long runs are marked `[Slow]`; tests that assert a timing are marked `[Bench]` (they fail on a loaded machine). The quick run while
 iterating is `dotnet test --filter "Category!=Slow&Category!=Bench"`; the full run before committing.

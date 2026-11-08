@@ -22,18 +22,19 @@ public class FoliageSizeTests
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var catalog = FoliageCatalog.Load(db);
         var assets = new AssetLocator(install!);
-        const FoliageSizeClass S = FoliageSizeClass.Small, M = FoliageSizeClass.Medium, L = FoliageSizeClass.Large;
+        const FoliageSizeClass sm = FoliageSizeClass.Small, md = FoliageSizeClass.Medium, lg = FoliageSizeClass.Large;
         var expected = new (string Name, FoliageSizeClass Class, bool LargeBillboard)[]
         {
-            ("Human_Skeleton_Part01", S, false), ("Robotics-Junk12", S, false), ("Bleached_Skull01", S, false),
-            ("FOLIAGE_Bouldersmall19", S, false), ("CactiTrumpet01", S, false), ("Thorny Plant Singles", S, false),
-            ("TechJunk04", M, false), ("TechRustyJunk_05", M, false), ("FOLIAGE_Boulder_GREY-01", M, false),
-            ("SageBrush", M, false), ("RuinBlocks_01", M, false), ("CacTreeTu_01", M, false),
-            ("HugeRuinWall04", L, true), ("Crumble-Building_Corner01", L, true), ("JunkSat01", L, true),
-            ("Rock01 Foliage-Rockstack01", L, true), ("FlatTop_Hoodoo04", L, true), ("Barkworm_Pillar01", L, true), ("ResourceRock-IRON01", L, true),
-            ("Foliage_CYPRUS-TYPE", L, false), ("CraggyTree", L, false), ("Thin Tree [Wide]", L, false), ("Roaming_Tree01", L, false),
-            ("FOLIAGE_Plant_Deep-Fir 01", L, false), ("Foliage_PINE_SCRAGGY01", L, false), ("Thin Craggy Tree", L, false),
-            ("FOLIAGE_DeadPineType", L, false), ("Giant_MultiLimbTree", L, true),
+            ("Human_Skeleton_Part01", sm, false), ("Robotics-Junk12", sm, false), ("Bleached_Skull01", sm, false),
+            ("FOLIAGE_Bouldersmall19", sm, false), ("CactiTrumpet01", sm, false), ("Thorny Plant Singles", sm, false),
+            ("TechJunk04", md, false), ("TechRustyJunk_05", md, false), ("FOLIAGE_Boulder_GREY-01", md, false),
+            ("SageBrush", md, false), ("RuinBlocks_01", md, false), ("CacTreeTu_01", md, false),
+            ("HugeRuinWall04", lg, true), ("Crumble-Building_Corner01", lg, true), ("JunkSat01", lg, true),
+            ("Rock01 Foliage-Rockstack01", lg, true), ("FlatTop_Hoodoo04", lg, true), ("Barkworm_Pillar01", lg, true),
+            ("ResourceRock-IRON01", lg, true),
+            ("Foliage_CYPRUS-TYPE", lg, false), ("CraggyTree", lg, false), ("Thin Tree [Wide]", lg, false), ("Roaming_Tree01", lg, false),
+            ("FOLIAGE_Plant_Deep-Fir 01", lg, false), ("Foliage_PINE_SCRAGGY01", lg, false), ("Thin Craggy Tree", lg, false),
+            ("FOLIAGE_DeadPineType", lg, false), ("Giant_MultiLimbTree", lg, true),
         };
         foreach (var (name, cls, large) in expected)
         {

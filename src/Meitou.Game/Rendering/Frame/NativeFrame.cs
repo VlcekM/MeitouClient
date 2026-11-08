@@ -197,7 +197,7 @@ unsafe struct FrameBinding
 {
     public const int MaxBindings = 10;
     [System.Runtime.CompilerServices.InlineArray(MaxBindings)]
-    public struct BindingArray { GpuBinding first; }
+    public struct BindingArray { GpuBinding _first; }
     /// <summary>Set 0's bindings: the uniform buffers 0 to 5 and the storage buffers after them.</summary>
     public BindingArray Bindings;
     public int Count;

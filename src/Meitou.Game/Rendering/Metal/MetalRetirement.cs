@@ -6,18 +6,18 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 internal sealed class DeferredReleaseQueue
 {
-    readonly List<(long Frame, Action Release)> items = [];
-    readonly object gate = new();
+    readonly List<(long Frame, Action Release)> _items = [];
+    readonly object _gate = new();
 
     public int Count
     {
-        get { lock (gate) return items.Count; }
+        get { lock (_gate) return _items.Count; }
     }
 
     public void Add(long frame, Action release)
     {
         ArgumentNullException.ThrowIfNull(release);
-        lock (gate) items.Add((frame, release));
+        lock (_gate) _items.Add((frame, release));
     }
 
     /// <summary>
@@ -28,15 +28,15 @@ internal sealed class DeferredReleaseQueue
     {
         List<Action>? run = null;
         int released = 0;
-        lock (gate)
+        lock (_gate)
         {
             int limit = force ? int.MaxValue : Math.Max(0, budget);
-            for (int i = 0; i < items.Count && released < limit;)
+            for (int i = 0; i < _items.Count && released < limit;)
             {
-                var item = items[i];
+                var item = _items[i];
                 if (!force && currentFrame - item.Frame < ringDepth) { i++; continue; }
                 (run ??= []).Add(item.Release);
-                items.RemoveAt(i);
+                _items.RemoveAt(i);
                 released++;
             }
         }

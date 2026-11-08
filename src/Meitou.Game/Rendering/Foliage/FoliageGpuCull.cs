@@ -45,7 +45,7 @@ public struct FoliageRockView
     public ResidentBits Resident;
 
     [System.Runtime.CompilerServices.InlineArray(8)]
-    public struct ResidentBits { uint first; }
+    public struct ResidentBits { uint _first; }
 }
 
 /// <summary>What a view tells the cull about generated mesh levels (<see cref="FoliageCullChunk.Lod"/>): a level is used while its deviation shows less than

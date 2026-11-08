@@ -531,7 +531,7 @@ struct CharacterMaterialRecord
 }
 
 [InlineArray(CharacterShaders.TextureSlotCount)]
-struct TextureSlots { uint first; }
+struct TextureSlots { uint _first; }
 
 /// <summary>The C# side of the push block (<c>flatColour</c>, <c>depthIndex</c>, <c>fill</c>, <c>skinLut</c>): 36 bytes. <c>DepthIndex</c> is the scene depth texture's bindless index in the motion pass and 0 otherwise.</summary>
 [StructLayout(LayoutKind.Sequential)]

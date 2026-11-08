@@ -15,13 +15,13 @@ namespace Meitou.Game.Rendering.Metal;
 /// declaration order (a member's <c>[[id(N)]]</c> names its binding, the position is its entry).</summary>
 internal sealed class MetalSetLayout
 {
-    readonly Dictionary<uint, uint[]> members = [];
+    readonly Dictionary<uint, uint[]> _members = [];
 
     public static MetalSetLayout Parse(string msl)
     {
         var layout = new MetalSetLayout();
         foreach (Match set in Regex.Matches(msl, @"struct\s+spvDescriptorSetBuffer(?<set>\d+)\s*\{(?<body>[^}]*)\}"))
-            layout.members[uint.Parse(set.Groups["set"].Value)] =
+            layout._members[uint.Parse(set.Groups["set"].Value)] =
             [
                 .. Regex.Matches(set.Groups["body"].Value, @"\[\[id\((?<id>\d+)\)\]\]").Select(m => uint.Parse(m.Groups["id"].Value)),
             ];
@@ -32,9 +32,9 @@ internal sealed class MetalSetLayout
     public static readonly MetalSetLayout Empty = new();
 
     /// <summary>The set's member ids in declaration order (empty when the stage does not read the set).</summary>
-    public uint[] Members(uint set) => members.TryGetValue(set, out var ids) ? ids : [];
+    public uint[] Members(uint set) => _members.TryGetValue(set, out var ids) ? ids : [];
 
-    public override string ToString() => string.Join("; ", members.OrderBy(m => m.Key).Select(m => $"{m.Key}: [{string.Join(",", m.Value)}]"));
+    public override string ToString() => string.Join("; ", _members.OrderBy(m => m.Key).Select(m => $"{m.Key}: [{string.Join(",", m.Value)}]"));
 }
 
 internal sealed class MetalProgram : IDisposable
@@ -214,12 +214,12 @@ public sealed class MetalShaders : IGpuShaders
         "0" or "false" => false,
         _ => null,
     };
-    readonly MTLDevice device;
-    readonly List<MetalProgram> programs = [];
+    readonly MTLDevice _device;
+    readonly List<MetalProgram> _programs = [];
 
     public MetalShaders(MTLDevice device)
     {
-        this.device = device;
+        this._device = device;
         if (FastMath is { } fast) Console.WriteLine($"metal     shaders fast math {fast.ToString().ToLowerInvariant()} (MEITOU_METAL_FAST_MATH)");
     }
 
@@ -228,7 +228,7 @@ public sealed class MetalShaders : IGpuShaders
     public GlslProgramCompiler Compiler { get; } = new(new ShaderCompileOptions { FragmentBindingBase = 0, UseDiskCache = false });
 
     /// <summary>The backend's identity of a program handle (the internals resolve through this).</summary>
-    internal MetalProgram Backend(GpuProgram program) => programs[program.Index];
+    internal MetalProgram Backend(GpuProgram program) => _programs[program.Index];
 
     public GpuProgram Legacy(string vertexGlsl, string fragmentGlsl, string name)
     {
@@ -261,7 +261,7 @@ public sealed class MetalShaders : IGpuShaders
         if (c.Fragment.DefaultBlock is not null) defaultSlots.Add(new GpuSlot(1, GpuSlotKind.UniformBuffer, GpuStage.Fragment, 1, OffsetAtBind: true));
         var info = new ProgramInfo
         {
-            Index = programs.Count, Name = name, Model = ShaderModel.Legacy, VertexCode = v, FragmentCode = f, Compiled = c,
+            Index = _programs.Count, Name = name, Model = ShaderModel.Legacy, VertexCode = v, FragmentCode = f, Compiled = c,
             VertexReflection = c.Vertex, FragmentReflection = c.Fragment,
             NeutralSets = [GpuSetLayout.Written([.. slots]), GpuSetLayout.Fixed([.. defaultSlots])],
         };
@@ -277,7 +277,7 @@ public sealed class MetalShaders : IGpuShaders
         }
         var vertexLibrary = Library(vertexMsl, name);
         var fragmentLibrary = Library(fragmentMsl, name);
-        programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
+        _programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
             fragmentLibrary, Function(fragmentLibrary, "fragment_main", name), fragmentMsl, false));
         return new GpuProgram(info.Index, info);
     }
@@ -293,7 +293,7 @@ public sealed class MetalShaders : IGpuShaders
         uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);
         var info = new ProgramInfo
         {
-            Index = programs.Count, Name = name, Model = ShaderModel.Compute, ComputeCode = code, ComputeReflection = r,
+            Index = _programs.Count, Name = name, Model = ShaderModel.Compute, ComputeCode = code, ComputeReflection = r,
             PushConstantBytes = pc, NeutralSets = [GpuSetLayout.Written([]), .. extraSets],
         };
         var threads = LocalSize(glsl);
@@ -305,7 +305,7 @@ public sealed class MetalShaders : IGpuShaders
             File.WriteAllText(Path.Combine(dump, $"{name}.comp.msl"), msl);
         }
         var library = Library(msl, name);
-        programs.Add(new MetalProgram(info, library, Function(library, "compute_main", name), msl, threads));
+        _programs.Add(new MetalProgram(info, library, Function(library, "compute_main", name), msl, threads));
         return new GpuProgram(info.Index, info);
     }
 
@@ -356,7 +356,7 @@ public sealed class MetalShaders : IGpuShaders
 
         var info = new ProgramInfo
         {
-            Index = programs.Count, Name = name, Model = ShaderModel.Native, VertexCode = v, FragmentCode = f,
+            Index = _programs.Count, Name = name, Model = ShaderModel.Native, VertexCode = v, FragmentCode = f,
             VertexReflection = rv, FragmentReflection = rf, PushConstantBytes = pushConstantBytes, NeutralSets = setLayouts,
         };
         uint? tableSet = bindless ? Frame.NativeShaders.BindlessSet : null;
@@ -370,7 +370,7 @@ public sealed class MetalShaders : IGpuShaders
         }
         var vertexLibrary = Library(vertexMsl, name);
         var fragmentLibrary = Library(fragmentMsl, name);
-        programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
+        _programs.Add(new MetalProgram(info, vertexLibrary, Function(vertexLibrary, "vertex_main", name), vertexMsl,
             fragmentLibrary, Function(fragmentLibrary, "fragment_main", name), fragmentMsl, bindless));
         return new GpuProgram(info.Index, info);
     }
@@ -382,7 +382,7 @@ public sealed class MetalShaders : IGpuShaders
         NSError error = default;
         var options = new MTLCompileOptions();
         if (FastMath is { } fast) options.FastMathEnabled = fast;
-        var library = device.NewLibrary((NSString)msl, options, ref error);
+        var library = _device.NewLibrary((NSString)msl, options, ref error);
         if (error.NativePtr != IntPtr.Zero)
             throw new InvalidOperationException($"{name}: the MSL did not compile: {error.LocalizedDescription}");
         return library;

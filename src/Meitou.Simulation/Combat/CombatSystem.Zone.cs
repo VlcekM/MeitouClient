@@ -16,13 +16,13 @@ public sealed partial class CombatSystem
     [InlineArray(ZoneCapacity)]
     struct ZoneSlots
     {
-        int first;
+        int _first;
     }
 
     [InlineArray(ZoneCapacity)]
     struct ZoneKeys
     {
-        float first;
+        float _first;
     }
 
     struct ZoneScan
@@ -206,10 +206,10 @@ public sealed partial class CombatSystem
     void ApplyZoneBuildings(World world, in Effect e)
     {
         int a = e.Target, blow = e.Arg & 0xff, left = (int)e.Position.X;
-        ref var A = ref _write[a];
-        if (A.CancelTick == (int)world.Tick || world.Characters.Cold(a) is not { Fighter: { } fighter, Stats: { } stats, Medical: { } medical } cold) return;
+        ref var aSlot = ref _write[a];
+        if (aSlot.CancelTick == (int)world.Tick || world.Characters.Cold(a) is not { Fighter: { } fighter, Stats: { } stats, Medical: { } medical } cold) return;
         var tech = _techniques[(int)e.Position.Y];
-        var zone = ZoneOf(world, a, A, cold, tech, blow);
+        var zone = ZoneOf(world, a, aSlot, cold, tech, blow);
         float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * medical.StatMultiplier(stat);
         float str = Eff(StatsEnumerated.Strength);
         var packet = Powered(fighter.Unarmed
@@ -253,7 +253,7 @@ public sealed partial class CombatSystem
                 StrikeWall(world, wall, f, a);
             }
         }
-        if ((e.Arg & 0x100) == 0 && A.AttackSeq == (int)e.Amount && A.AttackTech >= 0) A.LastOutcome = BlowOutcome.Hit;
+        if ((e.Arg & 0x100) == 0 && aSlot.AttackSeq == (int)e.Amount && aSlot.AttackTech >= 0) aSlot.LastOutcome = BlowOutcome.Hit;
     }
 
     readonly List<(float Key, string? Door, Construction.BuildSite? Wall)> _buildingScratch = [];

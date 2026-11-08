@@ -39,12 +39,12 @@ public sealed partial class CombatSystem
         if (e.Kind != BlowEffect) return;
         var table = world.Characters;
         int a = e.Source, d = e.Target, blow = e.Arg, seq = (int)e.Amount, now = (int)world.Tick;
-        ref var A = ref _write[a];
-        ref var D = ref _write[d];
+        ref var aSlot = ref _write[a];
+        ref var dSlot = ref _write[d];
         // A blow thrown in Act lands even when Act then ended or restarted the swing on the same tick (the original resolves it inside the swing update); only a hit, knock-out
         // or kill applied earlier this tick takes the swing away from its attacker. It carries its technique, and touches the attacker's swing only while that is still the one.
-        if (A.CancelTick == now) return;
-        bool live = A.AttackSeq == seq && A.AttackTech >= 0;
+        if (aSlot.CancelTick == now) return;
+        bool live = aSlot.AttackSeq == seq && aSlot.AttackTech >= 0;
         var ac = table.Cold(a);
         var dc = table.Cold(d);
         if (ac is null || dc is null || ac.Fighter is null || dc.Fighter is null || ac.Stats is null || dc.Stats is null || ac.Medical is null || dc.Medical is null || ac.Race is null || dc.Race is null) return;
@@ -53,36 +53,36 @@ public sealed partial class CombatSystem
         int direction = HitOutcomes.Facing(tech.DirectionOf(blow), HitOutcomes.Behind(table.Previous[a].Position, table.Previous[d].Position, table.Previous[d].Yaw));
 
         // The defender was in the attack zone when the blow arrived (Strike); its own block or dodge decides the outcome.
-        CombatTechnique? reaction = D.ReactTech >= 0 && !D.Down && now >= D.StunUntil ? _techniques[D.ReactTech] : null;
-        float progress = reaction is not null ? Math.Clamp((now - D.ReactStart) / (float)D.ReactTicks, 0, 1) : 0;
+        CombatTechnique? reaction = dSlot.ReactTech >= 0 && !dSlot.Down && now >= dSlot.StunUntil ? _techniques[dSlot.ReactTech] : null;
+        float progress = reaction is not null ? Math.Clamp((now - dSlot.ReactStart) / (float)dSlot.ReactTicks, 0, 1) : 0;
         var outcome = HitOutcomes.Decide(reaction, progress, direction);
 
-        if (live) A.LastOutcome = outcome;
-        else if (A.AttackSeq == seq) Pause(world, ref A, outcome, now);
+        if (live) aSlot.LastOutcome = outcome;
+        else if (aSlot.AttackSeq == seq) Pause(world, ref aSlot, outcome, now);
         // A blow that lands or is blocked takes the defender off the attacker's list of fighters it lets close in (attackImpactCheck → CombatClass::removeAttackerH on
         // the attacker's own list, docs/game/combat.md "Attack slots and circling"): a defender fighting the attacker asks again before its next swing.
-        if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked && D.TargetSlot == a && D.TargetGeneration == prev[a].Generation) D.Engaged = false;
+        if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked && dSlot.TargetSlot == a && dSlot.TargetGeneration == prev[a].Generation) dSlot.Engaged = false;
         switch (outcome)
         {
             case BlowOutcome.Missed:
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
             case BlowOutcome.Blocked:
-                A.Parried++;
-                D.Blocks++;
+                aSlot.Parried++;
+                dSlot.Blocks++;
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, XpEvent.Defended);
                 // A dodge technique that counts as a block (the base game's "Dodge back" rows are flagged both) is silent: it looks like a dodge, and the block impact sounds like a hit.
                 bool parry = IsParry(ac, dc, tech, blow);
-                if (!_techniques[D.ReactTech].IsDodge) Sound(world, SoundKind.Blocked, d, a, prev[d].Position, unarmed: !parry, robot: false);
+                if (!_techniques[dSlot.ReactTech].IsDodge) Sound(world, SoundKind.Blocked, d, a, prev[d].Position, unarmed: !parry, robot: false);
                 // A parry throws sparks at the parrying weapon (FUN_1404394f0, IsParry); a fist blow of a plain hand-to-hand impact does not.
-                if (!_techniques[D.ReactTech].IsDodge && parry) world.BlockSparks?.Enqueue(Id(world, d));
-                if (live) Stop(ref A, tech, blow);
+                if (!_techniques[dSlot.ReactTech].IsDodge && parry) world.BlockSparks?.Enqueue(Id(world, d));
+                if (live) Stop(ref aSlot, tech, blow);
                 Punch(world, a, ac, dc, tech, blow, 5);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
             case BlowOutcome.Dodged:
-                A.Evaded++;
-                D.Dodges++;
+                aSlot.Evaded++;
+                dSlot.Dodges++;
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
                 var dodgeStats = dc.Stats;
                 _xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge, 0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
@@ -110,18 +110,18 @@ public sealed partial class CombatSystem
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, seq, blow);
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
-        bool intended = observe && d == A.TargetSlot && prev[d].Generation == A.TargetGeneration;
+        bool intended = observe && d == aSlot.TargetSlot && prev[d].Generation == aSlot.TargetGeneration;
         var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, _combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
-        A.Landed++;
-        D.Taken++;
-        D.HitTick = now;
-        D.HitPart = part;
-        D.HitFrom = a;
-        D.HitHeavy = false;
+        aSlot.Landed++;
+        dSlot.Taken++;
+        dSlot.HitTick = now;
+        dSlot.HitPart = part;
+        dSlot.HitFrom = a;
+        dSlot.HitHeavy = false;
         // From behind (docs/animation.md "Hit reactions"): the attacker is more than 90 degrees off the defender's heading (yaw 0 along +Z, towards +X).
         var toAttacker = new Vector2(prev[a].Position.X - prev[d].Position.X, prev[a].Position.Z - prev[d].Position.Z);
-        D.HitBehind = toAttacker.X * MathF.Sin(prev[d].Yaw) + toAttacker.Y * MathF.Cos(prev[d].Yaw) < 0;
+        dSlot.HitBehind = toAttacker.X * MathF.Sin(prev[d].Yaw) + toAttacker.Y * MathF.Cos(prev[d].Yaw) < 0;
         bool knockout = false, death = false;
         foreach (var ev in events)
         {
@@ -145,16 +145,16 @@ public sealed partial class CombatSystem
         }
         if (dc.Medical.Incapacitated)
         {
-            D.Down = true;
-            D.AttackTech = -1;
-            D.CancelTick = now;
-            D.NextBlow = 0;
-            D.ReactTech = -1;
+            dSlot.Down = true;
+            dSlot.AttackTech = -1;
+            dSlot.CancelTick = now;
+            dSlot.NextBlow = 0;
+            dSlot.ReactTech = -1;
         }
-        else Stagger(world, ref D, d, dc, damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat), now, CombatRolls.BlowCounter(a, seq, blow, 0));
+        else Stagger(world, ref dSlot, d, dc, damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat), now, CombatRolls.BlowCounter(a, seq, blow, 0));
         GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
         Punch(world, a, ac, dc, tech, blow, 2);
-        Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: D.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race.IsRobot);
+        Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: dSlot.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race.IsRobot);
         Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce);
         if (knockout || death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce, part);
         if (death && world.Luckyren) dc.Burst = -new Vector2(toAttacker.X, toAttacker.Y);
@@ -202,11 +202,11 @@ public sealed partial class CombatSystem
     /// until the clip ends (the knockback is the clip's root motion). With no clip to play the swing is still cancelled, with a short pause. Takes effect at the next Act.
     /// A <paramref name="bolt"/> leaves one getting up alone with no knock-down roll (its shot handler <c>FUN_140999d50</c> has none).
     /// </summary>
-    void Stagger(World world, ref CombatSlot D, int d, CharacterCold dc, bool heavy, int now, ulong counter, bool bolt = false)
+    void Stagger(World world, ref CombatSlot dSlot, int d, CharacterCold dc, bool heavy, int now, ulong counter, bool bolt = false)
     {
         // Outside a fight (docs/game/combat.md "Stagger outside a fight"): one getting up is left alone; any other drops its task, which is planned again from its start,
         // unless it mans a turret (shooting at a live target).
-        bool outsideFight = D.TargetSlot < 0 && !dc.InCombat;
+        bool outsideFight = dSlot.TargetSlot < 0 && !dc.InCombat;
         if (outsideFight)
         {
             if (CharacterFacts.GettingUp(dc, now))
@@ -221,27 +221,27 @@ public sealed partial class CombatSystem
                 DecisionSystem.Request(dc);   // forceOrderInsert replans (the stumble is not modelled as an order)
             }
         }
-        bool stumbling = D.StumbleClip >= 0 && now < D.StunUntil;
-        D.HitHeavy = heavy && !stumbling;
+        bool stumbling = dSlot.StumbleClip >= 0 && now < dSlot.StunUntil;
+        dSlot.HitHeavy = heavy && !stumbling;
         if (stumbling && !heavy) return;
-        D.AttackTech = -1;
-        D.CancelTick = now;
-        D.NextBlow = 0;
-        D.ReactTech = -1;
-        string? part = D.HitPart >= 0 && D.HitPart < dc.Medical!.Parts.Count ? dc.Medical.Parts[D.HitPart].Template.StringId : null;
+        dSlot.AttackTech = -1;
+        dSlot.CancelTick = now;
+        dSlot.NextBlow = 0;
+        dSlot.ReactTech = -1;
+        string? part = dSlot.HitPart >= 0 && dSlot.HitPart < dc.Medical!.Parts.Count ? dc.Medical.Parts[dSlot.HitPart].Template.StringId : null;
         float roll = CombatRolls.Float(world.Seed, Rng.Key(world.Characters.IdOf(d)), CombatRoll.Stumble, counter);
-        if (part is not null && StumbleChooser?.Invoke(dc, part, D.HitHeavy, D.HitBehind ? 1 : 0, roll) is { } clip)
+        if (part is not null && StumbleChooser?.Invoke(dc, part, dSlot.HitHeavy, dSlot.HitBehind ? 1 : 0, roll) is { } clip)
         {
-            D.StumbleClip = clip.Clip;
-            D.StumbleStart = now;
-            D.BreakOutTick = now + Math.Max(1, (int)MathF.Round(CombatTuning.BreakOutSeconds / world.TickSeconds));
-            D.StunUntil = now + Math.Max(1, (int)MathF.Ceiling(clip.Seconds / world.TickSeconds));
-            D.PauseUntil = 0;   // the stumble state (8) ends the pause (FUN_14060cf60 clears +0x144)
-            dc.StaggeredUntil = D.StunUntil;
-            if (outsideFight && dc.Gunning is null) dc.StumbleTaskUntil = D.StunUntil;   // reported as Stumbling (147) meanwhile
-            D.ReadyTick = Math.Max(D.ReadyTick, D.StunUntil);
+            dSlot.StumbleClip = clip.Clip;
+            dSlot.StumbleStart = now;
+            dSlot.BreakOutTick = now + Math.Max(1, (int)MathF.Round(CombatTuning.BreakOutSeconds / world.TickSeconds));
+            dSlot.StunUntil = now + Math.Max(1, (int)MathF.Ceiling(clip.Seconds / world.TickSeconds));
+            dSlot.PauseUntil = 0;   // the stumble state (8) ends the pause (FUN_14060cf60 clears +0x144)
+            dc.StaggeredUntil = dSlot.StunUntil;
+            if (outsideFight && dc.Gunning is null) dc.StumbleTaskUntil = dSlot.StunUntil;   // reported as Stumbling (147) meanwhile
+            dSlot.ReadyTick = Math.Max(dSlot.ReadyTick, dSlot.StunUntil);
         }
-        else D.ReadyTick = Math.Max(D.ReadyTick, now + (int)MathF.Ceiling(CombatTuning.InterruptPause / world.TickSeconds));
+        else dSlot.ReadyTick = Math.Max(dSlot.ReadyTick, now + (int)MathF.Ceiling(CombatTuning.InterruptPause / world.TickSeconds));
     }
 
     /// <summary>

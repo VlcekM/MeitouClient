@@ -232,7 +232,7 @@ public sealed unsafe class HizPyramid : IDisposable
         public OffsetArray Offsets;
 
         [System.Runtime.CompilerServices.InlineArray(MaxLevels)]
-        public struct OffsetArray { uint first; }
+        public struct OffsetArray { uint _first; }
     }
 
     public void Dispose()

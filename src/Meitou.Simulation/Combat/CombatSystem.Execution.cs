@@ -36,10 +36,10 @@ public sealed partial class CombatSystem
         bool wasIncapacitated = medical.Incapacitated;
         var (part, damage, absorbed) = HitResolver.LandDetailed(medical, ctx, packet, armour, cover, toughness, false, false, _combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
-        ref var D = ref _write[d];
-        D.Taken++;
-        D.HitTick = (int)world.Tick;
-        D.HitPart = part;
+        ref var dSlot = ref _write[d];
+        dSlot.Taken++;
+        dSlot.HitTick = (int)world.Tick;
+        dSlot.HitPart = part;
         bool death = false;
         foreach (var ev in events)
         {
@@ -56,11 +56,11 @@ public sealed partial class CombatSystem
         }
         if (medical.Incapacitated)
         {
-            D.Down = true;
-            D.AttackTech = -1;
-            D.CancelTick = (int)world.Tick;
-            D.NextBlow = 0;
-            D.ReactTech = -1;
+            dSlot.Down = true;
+            dSlot.AttackTech = -1;
+            dSlot.CancelTick = (int)world.Tick;
+            dSlot.NextBlow = 0;
+            dSlot.ReactTech = -1;
         }
         var toAttacker = new Vector2(prev[a].Position.X - prev[d].Position.X, prev[a].Position.Z - prev[d].Position.Z);
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, unarmed: fighter.Unarmed, robot: ac.Race!.IsRobot);

@@ -164,7 +164,7 @@ public sealed class RagdollDefinition
             var normal = j.Normal - Vector3.Dot(j.Normal, axis) * axis;
             normal = normal.LengthSquared() > 1e-8f ? Vector3.Normalize(normal) : Perpendicular(axis);
             var basis = PhysicsAttachmentFile.FromColumns(normal, Vector3.Cross(axis, normal), axis);
-            var (A, B) = (bodies[a].Bind, bodies[b].Bind);
+            var (bindA, bindB) = (bodies[a].Bind, bodies[b].Bind);
             var anchor = j.Anchor * scale;
             float deg = MathF.PI / 180;
             joints.Add(new RagdollJoint
@@ -172,10 +172,10 @@ public sealed class RagdollDefinition
                 Type = j.Type,
                 A = a,
                 B = b,
-                OffsetA = A.Inverse().Apply(anchor),
-                OffsetB = B.Inverse().Apply(anchor),
-                BasisA = Quaternion.Normalize(Quaternion.Inverse(A.Rotation) * basis),
-                BasisB = Quaternion.Normalize(Quaternion.Inverse(B.Rotation) * basis),
+                OffsetA = bindA.Inverse().Apply(anchor),
+                OffsetB = bindB.Inverse().Apply(anchor),
+                BasisA = Quaternion.Normalize(Quaternion.Inverse(bindA.Rotation) * basis),
+                BasisB = Quaternion.Normalize(Quaternion.Inverse(bindB.Rotation) * basis),
                 SpringStiffness = j.Type == PhysicsJointType.Revolute && j.Spring1 is { Spring: > 0 } ? j.Spring1.Value.Spring : 0,
                 SpringDamper = j.Spring1?.Damper ?? 0,
                 SpringTarget = (j.Spring1?.Target ?? 0) * deg,

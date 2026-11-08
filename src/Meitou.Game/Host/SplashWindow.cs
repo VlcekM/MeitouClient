@@ -172,6 +172,8 @@ sealed unsafe partial class SplashWindow : IDisposable
         _created.Dispose();
     }
 
+    // The Win32 structures keep the field names of the Windows headers.
+#pragma warning disable IDE1006
     [StructLayout(LayoutKind.Sequential)]
     struct Wndclassexw
     {
@@ -194,6 +196,7 @@ sealed unsafe partial class SplashWindow : IDisposable
 
     [StructLayout(LayoutKind.Sequential)]
     struct Bitmapinfoheader { public uint biSize; public int biWidth, biHeight; public ushort biPlanes, biBitCount; public uint biCompression, biSizeImage; public int biXPelsPerMeter, biYPelsPerMeter; public uint biClrUsed, biClrImportant; }
+#pragma warning restore IDE1006
 
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial nint GetModuleHandleW(string? name);
     [LibraryImport("user32.dll")] private static partial ushort RegisterClassExW(Wndclassexw* wc);

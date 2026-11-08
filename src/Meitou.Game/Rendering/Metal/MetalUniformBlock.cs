@@ -10,20 +10,20 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed unsafe class MetalUniformBlock
 {
-    readonly byte[] bytes;
-    readonly ShaderReflection reflection;
+    readonly byte[] _bytes;
+    readonly ShaderReflection _reflection;
 
     public MetalUniformBlock(ShaderReflection reflection, int size)
     {
-        this.reflection = reflection;
-        bytes = new byte[size];
+        this._reflection = reflection;
+        _bytes = new byte[size];
     }
 
     /// <summary>The block's size in bytes.</summary>
-    public int Size => bytes.Length;
+    public int Size => _bytes.Length;
 
     /// <summary>The block's bytes, in the std140 layout the engine's reflection reports.</summary>
-    public byte[] Bytes => bytes;
+    public byte[] Bytes => _bytes;
 
     public void Set(string name, in Matrix4x4 value) { fixed (Matrix4x4* p = &value) Scatter(name, (byte*)p, 4, 4); }
 
@@ -35,7 +35,7 @@ public sealed unsafe class MetalUniformBlock
 
     void Scatter(string name, byte* source, int rows, int columns)
     {
-        var at = reflection.FindUniform(name) ?? throw new InvalidOperationException($"the shader has no uniform named {name}");
-        GlUniforms.Scatter(bytes, at, source, rows, columns, 1, false);
+        var at = _reflection.FindUniform(name) ?? throw new InvalidOperationException($"the shader has no uniform named {name}");
+        GlUniforms.Scatter(_bytes, at, source, rows, columns, 1, false);
     }
 }

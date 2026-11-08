@@ -18,7 +18,7 @@ public sealed unsafe class MetalFrame : IGpuFrame
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_retain")]
     static extern IntPtr Retain_objc_retain(IntPtr obj);
 
-    readonly MetalContext ctx;
+    readonly MetalContext _ctx;
 
     /// <summary>
     /// One constants chunk. A slice never moves when another allocation does not fit: the next chunk is used
@@ -33,16 +33,16 @@ public sealed unsafe class MetalFrame : IGpuFrame
         public ulong Size, Used;
     }
 
-    readonly List<Chunk> chunks = [];
-    Chunk current;
+    readonly List<Chunk> _chunks = [];
+    Chunk _current;
 
     internal MetalFrame(MetalContext ctx, int slot)
     {
-        this.ctx = ctx;
+        this._ctx = ctx;
         Slot = slot;
-        current = NewChunk(1 << 20);
+        _current = NewChunk(1 << 20);
         Commands = new MetalCommandList(ctx, $"frame {slot}", default);
-        preFrame = new MetalCommandList(ctx, $"preframe {slot}", default);
+        _preFrame = new MetalCommandList(ctx, $"preframe {slot}", default);
         States = new ResourceStates();
         Stats = new GpuStats();
     }
@@ -53,8 +53,8 @@ public sealed unsafe class MetalFrame : IGpuFrame
     public MetalCommandList Commands { get; }
     IGpuCommandList IGpuFrame.Commands => Commands;
 
-    readonly MetalCommandList preFrame;
-    MTLCommandBuffer preCommand;
+    readonly MetalCommandList _preFrame;
+    MTLCommandBuffer _preCommand;
     // The separate pre-frame command buffer is part of the opt-in Metal GPU-cull path. With the CPU cull, the
     // upstream pre-frame work (uploads, the ocean's FFT, impostor bakes) stays in the frame's own command list
     // as before the 2026-10-23 cull change: the extra command buffer is not needed and is one more ordering
@@ -72,35 +72,35 @@ public sealed unsafe class MetalFrame : IGpuFrame
 
     IGpuCommandList SeparatePreFrameList()
     {
-        if (preCommand.NativePtr == IntPtr.Zero)
+        if (_preCommand.NativePtr == IntPtr.Zero)
         {
-            preCommand = ctx.Queue.CommandBuffer();
-            Retain_objc_retain(preCommand.NativePtr);
-            preFrame.Rebind(preCommand);
-            preFrame.Invalidate();
+            _preCommand = _ctx.Queue.CommandBuffer();
+            Retain_objc_retain(_preCommand.NativePtr);
+            _preFrame.Rebind(_preCommand);
+            _preFrame.Invalidate();
         }
-        return preFrame;
+        return _preFrame;
     }
 
     /// <summary>Commits the pre-frame before the frame's own command buffer.</summary>
     internal void CommitPreFrame(bool wait = false)
     {
-        if (preCommand.NativePtr == IntPtr.Zero) return;
-        preFrame.Finish();
-        preCommand.Commit();
-        if (wait) preCommand.WaitUntilCompleted();
+        if (_preCommand.NativePtr == IntPtr.Zero) return;
+        _preFrame.Finish();
+        _preCommand.Commit();
+        if (wait) _preCommand.WaitUntilCompleted();
     }
 
     /// <summary>The slot's previous pre-frame has completed; release its wrapper.</summary>
     internal void ReleasePreFrame()
     {
-        if (preCommand.NativePtr != IntPtr.Zero) preCommand.Dispose();
-        preCommand = default;
+        if (_preCommand.NativePtr != IntPtr.Zero) _preCommand.Dispose();
+        _preCommand = default;
     }
 
     public ResourceStates States { get; }
     public GpuStats Stats { get; }
-    public IGpuTimestamps Timestamps => ctx.Timestamps;
+    public IGpuTimestamps Timestamps => _ctx.Timestamps;
 
     /// <summary>The command buffer this frame's commands are recorded into (the present pass continues it at <see cref="MetalContext.EndFrame"/>).</summary>
     internal MTLCommandBuffer Command { get; private set; }
@@ -120,36 +120,36 @@ public sealed unsafe class MetalFrame : IGpuFrame
     public unsafe Transient AllocateConstants(ulong size, ulong alignment = 16)
     {
         alignment = Math.Max(alignment, 1);
-        if (size == 0) return new Transient(current.Handle, current.Used, current.Pointer + current.Used, 0);
-        if (current.Size - current.Used < size + alignment)
-            current = NextChunk(size + alignment);
-        ulong offset = (current.Used + alignment - 1) / alignment * alignment;
-        if (current.Size - offset < size) current = NextChunk(size + alignment);
-        offset = (current.Used + alignment - 1) / alignment * alignment;
-        var pointer = current.Pointer + (nint)offset;
-        current.Used = offset + size;
+        if (size == 0) return new Transient(_current.Handle, _current.Used, _current.Pointer + _current.Used, 0);
+        if (_current.Size - _current.Used < size + alignment)
+            _current = NextChunk(size + alignment);
+        ulong offset = (_current.Used + alignment - 1) / alignment * alignment;
+        if (_current.Size - offset < size) _current = NextChunk(size + alignment);
+        offset = (_current.Used + alignment - 1) / alignment * alignment;
+        var pointer = _current.Pointer + (nint)offset;
+        _current.Used = offset + size;
         // Shared mode needs no flush (Managed's DidModifyRange); the GPU reads the memory as it is.
-        return new Transient(current.Handle, offset, pointer, size);
+        return new Transient(_current.Handle, offset, pointer, size);
     }
 
     Chunk NewChunk(ulong size)
     {
-        var shared = ctx.NewSharedBuffer(Math.Max(size, 1 << 20), $"frame constants {Slot}");
+        var shared = _ctx.NewSharedBuffer(Math.Max(size, 1 << 20), $"frame constants {Slot}");
         var chunk = new Chunk
         {
             Buffer = shared.Buffer,
-            Handle = ctx.RegisterBuffer(shared.Buffer, $"frame constants {Slot}"),
+            Handle = _ctx.RegisterBuffer(shared.Buffer, $"frame constants {Slot}"),
             Pointer = shared.Pointer,
             Size = shared.Size,
         };
-        chunks.Add(chunk);
+        _chunks.Add(chunk);
         return chunk;
     }
 
     Chunk NextChunk(ulong needed)
     {
         // Reuse a chunk with room left before making a new buffer; all chunks are reset at the frame's begin.
-        foreach (var chunk in chunks)
+        foreach (var chunk in _chunks)
             if (chunk.Size - chunk.Used >= needed) return chunk;
         return NewChunk(Math.Max(needed, 1 << 20));
     }
@@ -159,12 +159,12 @@ public sealed unsafe class MetalFrame : IGpuFrame
         // Drop the chunks this slot did not use in its previous frame. A busy frame can grow the ring to
         // hundreds of megabytes; after the camera leaves a town those chunks would otherwise stay for the
         // process lifetime even though no pass wants them.
-        for (int i = chunks.Count - 1; i >= 1; i--)
+        for (int i = _chunks.Count - 1; i >= 1; i--)
         {
-            if (chunks[i].Used != 0) continue;
-            var stale = chunks[i];
-            chunks.RemoveAt(i);
-            ctx.DeferDelete(() => ctx.ReleaseBuffer(stale.Handle));
+            if (_chunks[i].Used != 0) continue;
+            var stale = _chunks[i];
+            _chunks.RemoveAt(i);
+            _ctx.DeferDelete(() => _ctx.ReleaseBuffer(stale.Handle));
         }
         // The context retains this command for its slot (the queue's autorelease would otherwise end it after
         // one frame); the slot is reused only after the three-frame ring has advanced. A failed command is the
@@ -181,8 +181,8 @@ public sealed unsafe class MetalFrame : IGpuFrame
         command.Label = (NSString)$"Meitou frame {number}";
         Commands.Rebind(command);
         Drawable = drawable;
-        foreach (var chunk in chunks) chunk.Used = 0;
-        current = chunks[0];
+        foreach (var chunk in _chunks) chunk.Used = 0;
+        _current = _chunks[0];
         Commands.Invalidate();
         States.AssumeFullBarrier();
         Stats.Reset();
@@ -210,13 +210,13 @@ public sealed unsafe class MetalFrame : IGpuFrame
         ReleasePreFrame();
     }
 
-    internal int ChunkCount => chunks.Count;
+    internal int ChunkCount => _chunks.Count;
     internal long ChunkBytes
     {
-        get { long bytes = 0; foreach (var c in chunks) bytes += (long)c.Size; return bytes; }
+        get { long bytes = 0; foreach (var c in _chunks) bytes += (long)c.Size; return bytes; }
     }
     internal long ChunkUsedBytes
     {
-        get { long bytes = 0; foreach (var c in chunks) bytes += (long)c.Used; return bytes; }
+        get { long bytes = 0; foreach (var c in _chunks) bytes += (long)c.Used; return bytes; }
     }
 }

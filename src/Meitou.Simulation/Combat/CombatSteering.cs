@@ -112,9 +112,9 @@ public static class CombatSteering
     }
 
     [System.Runtime.CompilerServices.InlineArray(Gathered)]
-    struct NearSlots { int slot; }
+    struct NearSlots { int _slot; }
     [System.Runtime.CompilerServices.InlineArray(Gathered)]
-    struct NearDistances { float distance; }
+    struct NearDistances { float _distance; }
 
     struct Push
     {

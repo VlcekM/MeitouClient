@@ -13,10 +13,13 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
     CodeModVersion? Version, IReadOnlyList<CodeModDependency>? Dependencies)
 {
     /// <summary>The API 1 constructor, kept so mods compiled against API 1 still bind to it (docs/modding-dependencies.md "Compatibility").</summary>
+    // Named as the record's own parameters (and properties), which mods may pass by name.
+#pragma warning disable IDE1006
     public CodeModManifest(string Id, int ApiVersion, IReadOnlyList<string> Assemblies, string Entry)
         : this(Id, ApiVersion, Assemblies, Entry, null, null)
     {
     }
+#pragma warning restore IDE1006
 
     /// <summary>The API 1 deconstruction (four parts), kept beside the generated six-part one for mods compiled against API 1.</summary>
     public void Deconstruct(out string id, out int apiVersion, out IReadOnlyList<string> assemblies, out string entry)

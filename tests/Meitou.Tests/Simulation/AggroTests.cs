@@ -904,7 +904,7 @@ public class AggroTests
     internal static List<ulong> Hashes(int threads)
     {
         var (a, _, _, _, _, _) = Crossroads(11, threads);
-        using var _a = a;
+        using var owned = a;
         // A player character close to the raiders, who hate the player: it is attacked and defends itself; at tick 120 it is ordered onto a villager, an assault on the villagers.
         var me = a.PlayerCharacter(new Vector2(2000, 2080));
         var hashes = new List<ulong>();

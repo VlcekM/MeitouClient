@@ -42,8 +42,8 @@ namespace Meitou.Game;
 
 sealed partial class GameHost
 {
-    bool settleAfterWorldLoad;
-    bool worldHasRendered;
+    bool _settleAfterWorldLoad;
+    bool _worldHasRendered;
     /// <summary>
     /// The Metal path (macOS): the game boots without the Vulkan renderer and draws the world through the seam's recording model
     /// (native segments around the scene's host pass, guests inside it, the frame committed with the present). The loop is
@@ -1045,16 +1045,16 @@ sealed partial class GameHost
         if (WorldOptions.Screenshot is not null && WorldOptions.FlyToX is { } flyX && WorldOptions.FlyToZ is { } flyZ)
         {
             var start = Session.Camera.Current.Target;
-            const int Steps = 6;
-            for (int i = 1; i <= Steps; i++)
+            const int steps = 6;
+            for (int i = 1; i <= steps; i++)
             {
-                double t = i / (double)Steps;
+                double t = i / (double)steps;
                 float x = (float)(start.X + (flyX - start.X) * t), z = (float)(start.Z + (flyZ - start.Z) * t);
                 var view = Session.Camera.Current;
                 Session.Camera.Place(new Vector2(x, z), view.Yaw, view.Pitch, view.Distance);
                 ApplyCamera(Session.Camera.Current);
                 streamer?.Settle(Camera.Eye);
-                Console.WriteLine($"metal     fly-to {i}/{Steps}: {x:0}, {z:0}");
+                Console.WriteLine($"metal     fly-to {i}/{steps}: {x:0}, {z:0}");
             }
             if (streamer is { } flown) Console.WriteLine($"metal     fly-to settled: {flown.Describe()}");
         }
@@ -1318,9 +1318,9 @@ sealed partial class GameHost
                 ScreenshotScenes.PrepareStill(ctx, finish: false);
                 stillPrepared = true;
             }
-            if (settleAfterWorldLoad)
+            if (_settleAfterWorldLoad)
             {
-                settleAfterWorldLoad = false;
+                _settleAfterWorldLoad = false;
                 Console.WriteLine($"metal     settling objects and foliage at the loaded view");
                 objects?.Settle(Camera.Eye);
                 foliage?.Settle(Camera.Eye);
@@ -1525,7 +1525,7 @@ sealed partial class GameHost
             lastWait = drawableWait;
             lastRecord = Stopwatch.GetElapsedTime(recordStart).TotalMilliseconds;
             frames++;
-            worldHasRendered = true;
+            _worldHasRendered = true;
             // Once the terrain, object and foliage streamers have been quiet for two seconds, the large decode/upload
             // buffers are garbage. Compact at that idle point (at most once a minute) so the LOH does not keep them
             // for the rest of the session. Active streaming is never interrupted.
@@ -1656,7 +1656,7 @@ sealed partial class GameHost
         // A save load or a new game swaps the world after the first frame: force the object and foliage streamers
         // to settle at the new camera, as the first world does at frame 0. Otherwise they can stay empty until the
         // camera moves, even though the characters and the simulation are already there.
-        if (worldHasRendered) settleAfterWorldLoad = true;
+        if (_worldHasRendered) _settleAfterWorldLoad = true;
     }
 
     /// <summary>The backbuffer's picture as a PNG (the readback's rows are the picture's own: Metal draws right side up).</summary>

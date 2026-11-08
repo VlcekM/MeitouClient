@@ -450,10 +450,10 @@ struct ViewConstants
 }
 
 [System.Runtime.CompilerServices.InlineArray(4)]
-struct CutVolumeArray { Vector4 first; }
+struct CutVolumeArray { Vector4 _first; }
 
 [System.Runtime.CompilerServices.InlineArray(32)]
-struct CutPlaneArray { Vector4 first; }
+struct CutPlaneArray { Vector4 _first; }
 
 /// <summary>The C# side of <see cref="NativeShaders.MeshPushMembers"/> (std430 push constants, 128 bytes). GLSL bools are 32-bit (0 / 1).</summary>
 [StructLayout(LayoutKind.Explicit, Size = 128)]

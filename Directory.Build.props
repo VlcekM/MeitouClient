@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The .editorconfig rules raised to warning (naming, IDE1006) are checked by the build too, not only by the IDE. -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Product>MeitouClient</Product>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>

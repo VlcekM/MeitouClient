@@ -1883,14 +1883,14 @@ struct TerrainConstants
 [System.Runtime.CompilerServices.InlineArray(4)]
 struct BakeOrigins
 {
-    System.Numerics.Vector4 level;
+    System.Numerics.Vector4 _level;
 }
 
 /// <summary>The cells of <see cref="TerrainConstants.BloodCells"/>: column, row, layer (std140 <c>vec4[32]</c>).</summary>
 [System.Runtime.CompilerServices.InlineArray(TerrainDecalRenderer.MaxSlots)]
 struct BloodCells
 {
-    System.Numerics.Vector4 cell;
+    System.Numerics.Vector4 _cell;
 }
 
 /// <summary>The C# side of <see cref="TerrainShaders.PushMembers"/> (std430 push constants): a patch's <c>uNode</c> and <c>uMorph</c>.</summary>

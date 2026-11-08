@@ -510,13 +510,13 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     static string BuildCommandsText()
     {
-        const string Label = "#140806", Value = "#afa68b";
-        static string Row(string label, string value) => Label + Loc.Tr(label) + Value + " " + value;
+        const string labelColour = "#140806", valueColour = "#afa68b";
+        static string Row(string label, string value) => labelColour + Loc.Tr(label) + valueColour + " " + value;
         return string.Join('\n',
             Row("Place Building:", Loc.Tr("Left-Click")), Row("Clear Building:", Loc.Tr("Right-Click")),
             Row("Rotate:", Loc.Tr("{1} or {2} keys", "<>", ",.")), Row("Change Height:", Loc.Tr("{1} and {2}", "+", "-")),
             Row("Change Slope:", Loc.Tr("{1} and {2}", "[", "]")), Row("Undo:", Loc.Tr("Backspace")), Row("Cancel All:", Loc.Tr("Esc")),
-            Label + Loc.Tr("Press") + " " + Value + "[" + Loc.Tr("Confirm") + "]" + Label + " " + Loc.Tr("when finished"));
+            labelColour + Loc.Tr("Press") + " " + valueColour + "[" + Loc.Tr("Confirm") + "]" + labelColour + " " + Loc.Tr("when finished"));
     }
 
     /// <summary>The stats panel's lines, the failure message and the queue count, over the arranged window.</summary>

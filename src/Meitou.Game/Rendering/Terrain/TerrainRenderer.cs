@@ -1086,7 +1086,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     /// <summary>A mesh's own vertex buffers (locations 0 to 3: position, normal, and for the smoothed programs the tangent slot), bound with one call.</summary>
     [System.Runtime.CompilerServices.InlineArray(4)]
-    struct OwnVertices { GpuBufferBinding first; }
+    struct OwnVertices { GpuBufferBinding _first; }
 
     /// <summary>A mesh resolved for one program: the mesh it came from, its vertex layout and own vertex buffers (locations 0 up to the
     /// placements), its indices, and its pipelines for the last two segment states (the reflection's multisampled target alternates with the
