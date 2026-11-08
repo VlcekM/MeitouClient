@@ -37,6 +37,7 @@ public sealed partial class World
         : data is not null && data.TownAt(at) is >= 0 and var site && site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
 
     static readonly string[] ClosableSlots = ["head", "shirt", "boots"];
+    static readonly string[] MainGrid = ["main"];
 
     /// <summary>
     /// The build a character is drawn with: the normal maps follow the live stats, the bone shape is made once and rebuilt only while the character is of the player's faction
@@ -92,7 +93,8 @@ public sealed partial class World
     }
 
     // Out of Fill: a lambda capturing its locals would make the compiler allocate a closure on every character's fill, selected or not.
-    static string[] ClosedSlotsOf(CharacterCold cold) => [.. ClosableSlots.Where(slot => Items.InventoryCommands.SectionClosed(cold, slot))];
+    static string[] ClosedSlotsOf(CharacterCold cold) =>
+        [.. ClosableSlots.Where(slot => Items.InventoryCommands.SectionClosed(cold, slot)), .. Items.InventoryCommands.MainClosed(cold) ? MainGrid : []];
 
     static IReadOnlyList<HealthPartView> HealthPartsOf(Bodies.MedicalState health, RaceData anatomy) =>
         Array.AsReadOnly(health.Parts.Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp, p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb }).ToArray());

@@ -69,6 +69,8 @@ public sealed class StandardSystemOptions
     public Meitou.Simulation.Crime.ArrestSettings? Arrest { get; init; }
     /// <summary>Meitou (on; Faithful off): doors walkers opened close behind them (<see cref="Meitou.Simulation.Locks.LockSystem.DoorsCloseBehind"/>).</summary>
     public bool DoorsCloseBehind { get; init; } = true;
+    /// <summary>The player's animals pick up loose items into their bags (<see cref="PlayerSystem.AnimalsPickUp"/>; off by default).</summary>
+    public bool AnimalsPickUp { get; init; }
     public Meitou.Simulation.Kidnap.KidnapSettings? Kidnap { get; init; }
     public Meitou.Simulation.Kidnap.CaptiveSettings? Captives { get; init; }
     public Meitou.Simulation.Trading.TradeSettings? Trade { get; init; }
@@ -158,7 +160,7 @@ public static class StandardSystems
         MovementSystem? movement = null;
         CombatSystem? combat = null;
         if (Has(StandardParts.Population)) systems.Add(StandardParts.Population, population = new PopulationSystem(data, o.Population));
-        if (Has(StandardParts.Player)) systems.Add(StandardParts.Player, new PlayerSystem(data));
+        if (Has(StandardParts.Player)) systems.Add(StandardParts.Player, new PlayerSystem(data) { AnimalsPickUp = o.AnimalsPickUp });
         Meitou.Simulation.Ai.AiSystem? ai = null;
         if (Has(StandardParts.Ai)) systems.Add(StandardParts.Ai, ai = new Meitou.Simulation.Ai.AiSystem(data, o.Ai));
         if (Has(StandardParts.Pursuit | StandardParts.Combat | StandardParts.Retaliation | StandardParts.Flee))

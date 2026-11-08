@@ -22,6 +22,32 @@ public static class InventoryCommands
         "boots" => race.NoShoes || wearer.Medical is { } m && m.LimbPart(2) is { Limb: not Bodies.LimbState.Original } && m.LimbPart(3) is { Limb: not Bodies.LimbState.Original },
         _ => false,
     };
+
+    /// <summary>
+    /// An animal's main grid is shut (<c>CharacterAnimal</c> vtable slot 48, <c>FUN_1405cc630</c>, <b>Observed</b>: it enables <c>main</c> only when the flag at +0x5bc, taken to be dead,
+    /// is set, or the animal is not the player's and is down; the animal window then leaves the grid out, <c>FUN_14014f570</c>). Shut, it takes nothing put in by hand; what is in it
+    /// stays and can still be taken out (Meitou: earlier saves may hold items there). Not a <see cref="SectionClosed"/> section, which would empty it.
+    /// </summary>
+    public static bool MainClosed(CharacterCold? owner) =>
+        owner is not null && SquadRegistry.IsAnimal(owner) && owner.Medical is not { Dead: true } && (owner.IsPlayer || !CharacterFacts.Down(owner));
+
+    /// <summary>Whether <paramref name="wearer"/> may wear <paramref name="item"/> (null: no check): its race limits, an animal only what lists its race (<see cref="ItemInstance.WearableBy"/>).</summary>
+    static bool WearableBy(ItemInstance item, CharacterCold? wearer) => item.WearableBy(wearer?.Race?.StringId, wearer is not null && SquadRegistry.IsAnimal(wearer));
+
+    /// <summary>
+    /// Wears a bag in a free <c>backpack_attach</c> (Meitou: a picked-up bag that no grid takes, as worn gear that does not fit is; <see cref="TryEquip"/> leaves bags to the trade): a
+    /// CONTAINER the wearer may wear, while it wears none. False: nothing changed.
+    /// </summary>
+    public static bool TryWearBag(Inventory root, ItemInstance item, CharacterCold? wearer)
+    {
+        if (item.Type != Meitou.Data.Fcs.FcsRecordType.CONTAINER || item.Contents is null || item.Quantity != 1 || root.Backpack is not null || !WearableBy(item, wearer)) return false;
+        item.Section = "backpack_attach";
+        item.X = 0;
+        item.Y = 0;
+        root.Items.Add(item);
+        return true;
+    }
+
     /// <summary>
     /// <c>validateInventorySections</c> (<c>FUN_1406218f0</c>, character vtable slot 130; <b>Verified</b> body): a section <see cref="SectionClosed"/> for the character empties itself. The
     /// first worn boots of a character whose race may wear shoes are dropped in front of it (slot 53, <c>FUN_1405ca740</c>); every other item of a closed section is destroyed
@@ -68,7 +94,7 @@ public static class InventoryCommands
     /// </summary>
     public static bool TryEquip(Inventory root, ItemInstance item, CharacterCold? wearer = null)
     {
-        if (!item.WearableBy(wearer?.Race?.StringId) || item.Quantity != 1 || item.Width <= 0 || item.Height <= 0) return false;
+        if (!WearableBy(item, wearer) ||item.Quantity != 1 || item.Width <= 0 || item.Height <= 0) return false;
         string[] sections = item.Type is Meitou.Data.Fcs.FcsRecordType.WEAPON or Meitou.Data.Fcs.FcsRecordType.CROSSBOW ? ["back", "hip"]
             : item.Type is Meitou.Data.Fcs.FcsRecordType.ARMOUR or Meitou.Data.Fcs.FcsRecordType.ITEM && IsEquipmentSection(item.EquipmentSection) && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") ? [item.EquipmentSection] : [];
         foreach (string section in sections)
@@ -144,8 +170,8 @@ public static class InventoryCommands
         var size = section is "back" or "hip" ? SectionSize(section) : IsEquipmentSection(section) || IsLimbSection(section) ? (item.Width, item.Height) : (target?.Width ?? 0, target?.Height ?? 0);
         if (owner is null || target is null || !owner.Items.Contains(item) || x < 0 || y < 0 || item.Width <= 0 || item.Height <= 0 ||
             x > size.Item1 - item.Width || y > size.Item2 - item.Height || item.Quantity > target.LimitOf(item)) return false;
-        if ((IsEquipmentSection(section) || IsLimbSection(section)) && !item.WearableBy(wearer?.Race?.StringId)) return false;
-        if (SectionClosed(wearer, section)) return false;
+        if ((IsEquipmentSection(section) || IsLimbSection(section)) && !WearableBy(item, wearer)) return false;
+        if (SectionClosed(wearer, section) || section == "main" && MainClosed(wearer)) return false;
         if (IsEquipmentSection(section))
         {
             bool allowed = section switch
@@ -277,7 +303,7 @@ public static class InventoryCommands
             unit.Death = false;
             bool worn = false;
             bool placed = bagOnly ? into.Backpack?.Contents is { } only && only.AddTo("backpack_content", unit)
-                : bagFirst && into.Backpack?.Contents is { } bag && bag.AddTo("backpack_content", unit) || (worn = TryEquip(into, unit, wearer)) || into.AddTo("main", unit);
+                : bagFirst && into.Backpack?.Contents is { } bag && bag.AddTo("backpack_content", unit) || (worn = TryEquip(into, unit, wearer)) || !MainClosed(wearer) && into.AddTo("main", unit);
             if (!placed)
             {
                 unit.Death = death;

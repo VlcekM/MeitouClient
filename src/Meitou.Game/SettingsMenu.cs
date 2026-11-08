@@ -184,6 +184,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     public Action? ResetTutorials { get; init; }
     /// <summary>The door auto-close switch changed (<see cref="UserConfig.DoorsCloseBehind"/>).</summary>
     public Action<bool>? DoorsCloseChanged { get; init; }
+    public Action<bool>? AnimalsPickUpChanged { get; init; }
     /// <summary>The fast speeds changed (<see cref="UserConfig.FastSpeed"/>, <see cref="UserConfig.FastestSpeed"/>).</summary>
     public Action? TimeSpeedsChanged { get; init; }
     /// <summary>Applies a new camera rotation speed (<see cref="UserConfig.CameraRotateSpeed"/>) to the camera.</summary>
@@ -499,6 +500,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
                 + "High speeds need a fast processor; when it cannot keep up the game runs slower than chosen.", Slider: FastestSpeedSlider));
             result.Add(new("Pause after loading", "A save starts paused once it has loaded, so nothing happens before you look around. In the game it runs at once.",
                 Toggle: new("Pause after loading", () => config.PauseOnLoad, v => config.PauseOnLoad = v, OnOff: true)));
+            result.Add(new("Animals pick up items", "Your pack animals pick up an item you point them at, into the bag they wear (or wear a bag they pick up). Off, only people pick items up.",
+                Toggle: new("Animals pick up items", () => config.AnimalsPickUp, v => { config.AnimalsPickUp = v; AnimalsPickUpChanged?.Invoke(v); }, OnOff: true)));
             result.Add(new("Hover outline", "Outline and tint the character under the cursor, in the colour of what a right click would do.",
                 Toggle: new("Hover outline", () => config.HoverOutline, v => config.HoverOutline = v, Remaster: true, OnOff: true)));
             result.Add(new("Building outline", "Outline and tint the selected building, and the building under the cursor in the colour of what a right click would do, like a character under the cursor, "
@@ -766,6 +769,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         config.AdvancedRagdolls = true;
         DoorsCloseChanged?.Invoke(true);
         config.PauseOnLoad = false;
+        config.AnimalsPickUp = false;
+        AnimalsPickUpChanged?.Invoke(false);
         config.FixDoorBreak = config.FixAmbienceSuffix = config.FixWindStop = true;
         player.FixLoadButton = config.FixLoadButton = true;
         config.FixGunnerFacing = true;

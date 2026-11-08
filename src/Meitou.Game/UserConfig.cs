@@ -110,6 +110,8 @@ sealed class UserConfig
     public bool AdvancedRagdolls { get; set; } = true;
     /// <summary>A loaded or imported save starts paused (Advanced settings, a plain on/off switch outside the Faithful / Meitou sides; off by default: it runs at once, as in the game). <c>--load</c> is not paused.</summary>
     public bool PauseOnLoad { get; set; }
+    /// <summary>The player's animals pick up loose items into their bags (Advanced settings, a plain on/off switch; off by default; <c>PlayerSystem.AnimalsPickUp</c>).</summary>
+    public bool AnimalsPickUp { get; set; }
     /// <summary>Fixes of the game's own bugs (Fixes settings; on: fixed, off: as the game does; docs/audio.md): doors and gates sound when they break,
     /// a biome entered before its bank loads gets the right day or night ambience, and the wind bed stops when the wind does.</summary>
     public bool FixDoorBreak { get; set; } = true;

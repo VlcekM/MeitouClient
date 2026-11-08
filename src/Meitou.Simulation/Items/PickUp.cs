@@ -67,6 +67,15 @@ namespace Meitou.Simulation
         /// <summary>A walker takes the item within this distance of it (an engine choice).</summary>
         public const float PickUpReach = 15;
 
+        /// <summary>
+        /// The player's animals take a pick-up order on a loose item into their bags (the Advanced setting "Animals pick up items", off by default). The original's row 3 registers animals and its
+        /// pick-up puts any item but a limb into the inventory (docs/game/character-stats.md "Mouth"), so off is a Meitou choice; a limb for an animal's mouth is always taken.
+        /// </summary>
+        public bool AnimalsPickUp { get; set; }
+
+        /// <summary>Whether <paramref name="c"/> may take a pick-up order on <paramref name="item"/>: anyone but an animal, which only with <see cref="AnimalsPickUp"/> or a limb for its mouth.</summary>
+        bool MayPickUp(CharacterCold c, Items.ItemInstance item) => AnimalsPickUp || !SquadRegistry.IsAnimal(c) || Items.FeedSystem.IsMouthPickUp(c, item);
+
         static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
 
         void PickUpInput(World world, Items.PickUpItemOrder order)
@@ -80,7 +89,7 @@ namespace Meitou.Simulation
             foreach (var id in order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray())
             {
                 if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } c || !c.CarriedBy.IsNone
-                    || !TaskStart.Eligible(world, c, Meitou.Data.Gameplay.Ai.TaskType.PICKUP)) continue;
+                    || !TaskStart.Eligible(world, c, Meitou.Data.Gameplay.Ai.TaskType.PICKUP) || !MayPickUp(c, item.Item)) continue;
                 float d = Vector2.Distance(Flat(table.Next[s].Position), Flat(item.Position));
                 if (d < bestDistance) (best, bestDistance) = (s, d);
             }
@@ -145,9 +154,10 @@ namespace Meitou.Simulation
                 int before = item.Item.Quantity;
                 var mark = item.Item.Mark;
                 if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction) item.Item.StolenFrom = item.OwnedBy;
-                // What does not fit stays on the ground (Inventory.Add leaves it in the item); gear that does not fit is worn when its slot is free.
+                // What does not fit stays on the ground (Inventory.Add leaves it in the item); gear or a bag that does not fit is worn when its slot is free.
                 bool wear = false;
-                if (inventory.Add(item.Item) || item.Item.Quantity == before && (wear = Items.InventoryCommands.TryEquip(inventory, item.Item, c)))
+                if (Stow(inventory, item.Item, c) || item.Item.Quantity == before
+                    && (wear = Items.InventoryCommands.TryEquip(inventory, item.Item, c) || Items.InventoryCommands.TryWearBag(inventory, item.Item, c)))
                 {
                     world.GroundItems.Take(id);
                     // Task_Pickup: another faction's item taken inside a building is a Theft.
@@ -164,6 +174,10 @@ namespace Meitou.Simulation
                 }
             }
         }
+
+        /// <summary>A picked-up item into the grids (<see cref="Items.Inventory.Add"/>); a live animal's shut grid (<see cref="Items.InventoryCommands.MainClosed"/>) leaves only its bag.</summary>
+        static bool Stow(Items.Inventory inventory, Items.ItemInstance item, CharacterCold c) =>
+            !Items.InventoryCommands.MainClosed(c) ? inventory.Add(item) : inventory.Backpack?.Contents is { } bag && bag.AddTo("backpack_content", item);
 
         /// <summary>An animal's pick-up of a limb: into its mouth when it has the point, else nothing (no sound or message, the limb stays where it lies).</summary>
         static void TakeInMouth(World world, int slot, CharacterCold cold, Items.GroundItem item)

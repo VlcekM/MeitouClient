@@ -286,6 +286,7 @@ public sealed partial class PlayerSystem
         }
         string? refusal = InventoryCommands.SlotRefusal(target.Section, item.Type, item.EquipmentSection, item.Contents, item.WearableBy(target.Owner?.Race?.StringId, target.Owner is { } wearer && SquadRegistry.IsAnimal(wearer)));
         if (refusal is null && InventoryCommands.SectionClosed(target.Owner, target.Section)) refusal = "Can't wear that item.";
+        if (refusal is null && target.Section == "main" && InventoryCommands.MainClosed(target.Owner)) refusal = "";   // a live animal's grid (the original leaves it out of the window)
         if (refusal is null && target.Machine is { Data.IsStorage: true } storage && !storage.Data.Accepts(item.Record, item.Type)) refusal = "Invalid container type.";
         if (refusal is null && InventoryCommands.LimbSlotOf(target.Section) is >= 0 and var limbSlot
             && (data?.Items.Limb(item.Record)?.LimbSlot != limbSlot || target.Owner?.Medical?.LimbPart(limbSlot) is not { Limb: Bodies.LimbState.Stump or Bodies.LimbState.Replaced }))
