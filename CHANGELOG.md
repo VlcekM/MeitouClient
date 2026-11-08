@@ -3,6 +3,15 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.17.1
+
+- Version tag fixed: the build reports v0.17.1, so the feedback button and code mods' game version ranges see the right release (#379)
+- Faithful UI: scrollbars on the Jobs list and the squad portrait grid
+- Tab bound to Inventory opens it while a campfire's window is open; the campfire's output line no longer takes typing (#383)
+- The Hunger bar's tooltip shows the racial hunger rate and the other hunger rate factors, as in the original (#377)
+- Shopkeepers open their doors at opening time, not only unlock them
+- A guard on an open top floor bandages the prisoner caged beside it
+
 ## v0.17.0
 
 - Code mods: mods can ship C# code (meitou.json) with dependencies, load order, a settings page and save data; mod-check in meitou-tools
