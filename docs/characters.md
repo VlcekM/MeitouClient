@@ -166,7 +166,7 @@ white second colour for Bounty Hunters), which paints the colour map's second re
 
 A look whose body mesh is empty cannot be built (`CharacterContent.Build` returns null, cached for that look): its characters are never drawn, with no error in play (their position, markers and ground
 trails still exist). **Observed** (a 664-mod save, `draw-state`): 6 of 760 characters (a shop guard, bar patron, samurai and bounty captains) were undrawn this way, all of race `Hive Scout Drone`
-`16-HiverScoutmesh.mod`, a RACE record left as a stub (no mesh, texture or ragdoll field) because the mod that defines it is not loaded. How the original treats such a race is **Unknown**.
+`16-HiverScoutmesh.mod`, a RACE record left as a stub (no mesh, texture or ragdoll field) because the mod that defines it is not loaded. The original then shows a plain Greenlander (**Observed** by the user in play, not checked by RE).
 Meitou's rule (`CharacterAppearance.Build`): a race with no mesh for the character's gender takes the other gender's mesh, else the default race's look (`Greenlander`) with a note; the character
 keeps its own race for everything else. A look that still fails to build prints one `characters a look failed to build ...` line with the cause and is marked by the debug square
 (`GameHost.DrawMarkers`) like a character with no look. Reproduce with `spawn-at <x> <z> --race "Hive Scout Drone"` and `draw-state`.
