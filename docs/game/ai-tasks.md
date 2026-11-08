@@ -1235,7 +1235,8 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
   as a job to each selected character, then posts the Wwise event `Permanent_Job`; without Shift it is a one-shot order. Orders 0x2d, 0x111 and 0xdf
   are always added as jobs; Loot with Shift on a building adds 124 "Hauling to". The Medic and Rescue buttons dispatch 58 and 148 the same way:
   one-shot, or list entries with Shift. Meitou (`PlayerInterface.OrderOrJob`): with Shift, Attack Target and Attack Unprovoked add 16, First Aid
-  and Splint Injuries, Loot and Follow their jobs (`PermaJobs.Rules`); Bodyguard always adds 45 (+ 31).
+  and Splint Injuries, Loot and Follow their jobs (`PermaJobs.Rules`); Bodyguard always adds 45 (+ 31). The adder shows no animal test (**Observed**), so a mixed
+  selection's animals would take Medic, Rescue or machine jobs they never work; Meitou (`PermaJobs.Give`) gives an animal only 16, 45 and 31 (the animal menu's orders).
 - **Row fields** (**Verified**, `FUN_140319a60`; the 36 rows that set +4, all others leave it 0, **Observed**). +4 kind (2 = turret jobs), +8 several
   targets allowed, +0xc job type, +0x10 companion:
 

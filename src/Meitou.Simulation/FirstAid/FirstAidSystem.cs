@@ -91,8 +91,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                 PlayerOrders.Give(world, slot, new OrderEntry(TaskType.None, this) { Detail = detail }, job.Queued);   // the button: one look for a patient
                 continue;
             }
-            Production.PermaJobs.Add(cold, TaskType.JOB_MEDIC, Production.PermaJob.Untargeted(TaskType.JOB_MEDIC));
-            if (robotics) Production.PermaJobs.Add(cold, TaskType.JOB_REPAIR_ROBOT, Production.PermaJob.Untargeted(TaskType.JOB_REPAIR_ROBOT));
+            Production.PermaJobs.Give(cold, TaskType.JOB_MEDIC, Production.PermaJob.Untargeted(TaskType.JOB_MEDIC));
+            if (robotics) Production.PermaJobs.Give(cold, TaskType.JOB_REPAIR_ROBOT, Production.PermaJob.Untargeted(TaskType.JOB_REPAIR_ROBOT));
         }
     }
 

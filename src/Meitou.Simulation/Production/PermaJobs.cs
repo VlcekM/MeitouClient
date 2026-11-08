@@ -119,6 +119,14 @@ public static class PermaJobs
         return true;
     }
 
+    /// <summary>
+    /// A job the player gives (a button, Shift with an order): <see cref="Add"/>, except that an animal takes only the jobs of its own orders (<c>FUN_1407f23b0</c>'s set: attacking
+    /// enemies, bodyguard, staying close), so a mixed selection's animals get no Medic, Rescue or machine jobs they never work. <b>Engine rule</b>: the original's adder
+    /// (<c>FUN_1407f5a90</c>) shows no such test (<b>Observed</b>).
+    /// </summary>
+    public static bool Give(CharacterCold cold, TaskType ordered, PermaJob target) =>
+        (!SquadRegistry.IsAnimal(cold) || JobOf(ordered) is TaskType.ATTACK_ENEMIES or TaskType.BODYGUARD or TaskType.STAY_CLOSE_TO_TARGET) && Add(cold, ordered, target);
+
     static bool SameTarget(PermaJob a, PermaJob b) =>
         !a.Character.IsNone || !b.Character.IsNone ? a.Character == b.Character : a.Site is not null || b.Site is not null ? a.Site == b.Site : a.Saved == b.Saved;
 

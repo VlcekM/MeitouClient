@@ -231,7 +231,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                     foreach (var id in Who(world, job.Characters))
                     {
                         if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
-                        if (job.Job) Production.PermaJobs.Add(cold, TaskType.FIND_AND_RESCUE_IF_THERES_BEDS, Production.PermaJob.Untargeted(TaskType.FIND_AND_RESCUE_IF_THERES_BEDS));
+                        if (job.Job) Production.PermaJobs.Give(cold, TaskType.FIND_AND_RESCUE_IF_THERES_BEDS, Production.PermaJob.Untargeted(TaskType.FIND_AND_RESCUE_IF_THERES_BEDS));
                         else PlayerOrders.Give(world, slot, new OrderEntry(TaskType.None, this) { Detail = RescueButton }, job.Queued);   // the button: one look for a body
                     }
                     break;

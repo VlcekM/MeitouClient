@@ -23,7 +23,7 @@ public sealed partial class ProductionSystem
         if (Site(world, add.Site) is null) return;
         var table = world.Characters;
         foreach (var id in Who(world, add.Characters))
-            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold) PermaJobs.Add(cold, add.Type, new PermaJob(add.Type, add.Site));
+            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold) PermaJobs.Give(cold, add.Type, new PermaJob(add.Type, add.Site));
     }
 
     void AddOrderJobs(World world, AddOrderJob add)
@@ -37,10 +37,10 @@ public sealed partial class ProductionSystem
         foreach (var id in Who(world, add.Characters))
         {
             if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
-            if (!onCharacter) PermaJobs.Add(cold, ordered, PermaJob.Untargeted(ordered));
+            if (!onCharacter) PermaJobs.Give(cold, ordered, PermaJob.Untargeted(ordered));
             else if (id != add.Target && table.IsAlive(add.Target))
             {
-                PermaJobs.Add(cold, ordered, PermaJob.OfCharacter(ordered, add.Target));
+                PermaJobs.Give(cold, ordered, PermaJob.OfCharacter(ordered, add.Target));
                 // The order giver then drops what would close a circle back to the ordered character (FUN_1405c8c10), whether or not the job was new.
                 MovementSystem.BreakCircle(world, id);
             }
