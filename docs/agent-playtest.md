@@ -84,7 +84,7 @@ c help                                # one usage line per command; `c help <nam
 | `gfx` | `gfx [label [value]]` (the settings window's graphics switches and sliders: list, or set one as a click would; `gfx "Time of day" 14`) |
 | `give` | `give "<item record>" [qty] [quality] [--equip] [--maker <id or name>] [--model <id or name>] [--level <n>]` (a weapon of an exact manufacturer, MATERIAL_SPECS_WEAPON model and level: its look and stats) |
 | `ground-items` | `ground-items <x> <z> <radius>` |
-| `editor` | opens the character editor (the recruit form, appearance only) on the player squad's leader: pictures of the editor's stage |
+| `editor` | `editor [yawDegrees]` opens the character editor (the recruit form, appearance only) on the player squad's leader, or with it open turns its camera (0 in front, 180 behind): pictures of the editor's stage |
 | `draw-state` | `draw-state [--missing]` (every character: race, body mesh, whether its look built (`built`, `FAILED` = never drawn, `unbuilt`), hidden indoors, and what the renderer did with it last update: tiny-culled, not live, or live with its frustum/fog tests, off-screen, bad bones, parts shown) |
 | `heal` | `heal` |
 | `help` | `help [command]` |

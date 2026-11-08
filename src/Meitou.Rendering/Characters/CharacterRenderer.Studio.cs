@@ -254,6 +254,13 @@ internal static class StudioShaders
             }
             return total > 0.0 ? open / total : 1.0;
         }
+        // The studio's indirect light: a cool sky over warm sand by the normal's height. A share of it stays however closed the point is (light bounced in
+        // from everything the two maps do not hold), so a side the sun does not reach is dark, not black.
+        vec3 studioAmbient(vec3 n, float open)
+        {
+            vec3 sky = mix(vec3(0.30, 0.23, 0.16), vec3(0.30, 0.36, 0.46), smoothstep(-0.6, 0.8, n.y));
+            return sky * 2.2 * mix(0.3, 1.0, open);
+        }
         float studioOcclusion()
         {
             if (view.cutVolumes == 0u) return 1.0;

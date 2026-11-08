@@ -162,7 +162,7 @@ Studio (`previewsun`, Meitou, on by default; `CharacterRenderer.Studio`): enhanc
 whatever the hour. Per view: the character's depth from the sun into a 2048 px map (an orthographic box round its sphere, the matrix relative to the
 sphere's centre), its depth from the camera, a horizon-based occlusion from that depth (8 directions of 6 steps out to an eighth of the sphere, a fixed
 4 x 4 turn the supersampling averages), then its colour in the shader's studio model (fog distance -4): a warm sun (shadowed, 4 x 4 compare, a
-normal and light offset of a texel or two), a cool sky over warm sand (the ground's bounce), the sky's visibility and the occlusion on the sky and bounce only.
+normal and light offset of a texel or two), a cool sky over warm sand (the ground's bounce, `studioAmbient`: x2.2, 30 % of it staying however closed the point is, so a side the sun does not reach is dark, not black), the sky's visibility and the occlusion on the sky and bounce only.
 The sky's visibility is the large-scale occlusion the hybrid GI gives in the world (a hood over the face): the character's depth from 32 directions of a
 Fibonacci spiral over the whole sphere (384 px tiles of one atlas, the matrices rebuilt in the shader), each point taking the share of directions,
 weighted by its normal, from which nothing of the character hides it (2 x 2 compare a direction); the screen's occlusion adds the folds at 0.6. The depth draws

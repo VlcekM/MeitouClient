@@ -99,7 +99,7 @@ static class BuildingLodShaders
             {
                 vec3 sl = normalize(uLightDir);
                 float shade = studioShadow(vWorld, n, sl);
-                vec3 sky = mix(vec3(0.30, 0.23, 0.16), vec3(0.30, 0.36, 0.46), smoothstep(-0.6, 0.8, n.y)) * studioSky(vWorld, n);
+                vec3 sky = studioAmbient(n, studioSky(vWorld, n));
                 vec3 sh = normalize(sl + v);
                 float sd = max(dot(n, sl), 0.0);
                 float sspec = pow(max(dot(n, sh), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.6;

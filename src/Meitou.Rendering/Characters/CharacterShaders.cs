@@ -456,13 +456,12 @@ static class CharacterShaders
                 float shade = studioShadow(vWorld, n, l);
                 vec3 diffSkin = skinDiffuse(n, smoothNormal, l, curvature, skin, albedo);
                 // The sky above (cool) and the sunlit sand below (warm bounce), by the normal's height.
-                vec3 sky = mix(vec3(0.30, 0.23, 0.16), vec3(0.30, 0.36, 0.46), smoothstep(-0.6, 0.8, n.y));
                 vec3 h = normalize(l + v);
                 float diff = max(dot(n, l), 0.0);
                 float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.6;
                 // The sky's light where the character leaves it open (the large shapes: a hood over the face), the screen's occlusion for the folds.
                 float skyOpen = studioSky(vWorld, n) * mix(1.0, studioOcclusion(), 0.6);
-                colour = albedo * (sky * skyOpen + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
+                colour = albedo * (studioAmbient(n, skyOpen) + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
                 if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade;
                 {{(Environment.GetEnvironmentVariable("MEITOU_STUDIO_DEBUG") == "1" ? "colour = vec3(shade, studioSky(vWorld, n), studioOcclusion());" : "")}}
             }

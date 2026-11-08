@@ -16,6 +16,8 @@ sealed class EditorOrbit
         HeadStartElevation = 0, HeadMinElevation = -0.1f * MathF.PI, HeadMaxElevation = 0.25f * MathF.PI;
     /// <summary>The turn both views start at: in front of the character.</summary>
     public const float StartYaw = 0;
+    /// <summary>Debug: sets the camera's turn round the character (the console's <c>editor</c>).</summary>
+    public void SetYaw(float radians) => Yaw = radians;
     /// <summary>Radians a pixel of dragging turns, and the distance a wheel step moves (the head's zoom range is a third of the body's).</summary>
     public const float RadiansPerPixel = 0.008f, BodyStep = 1.5f, HeadStep = 0.5f;
 

@@ -268,6 +268,14 @@ sealed partial class PlayerInterface
     /// The editor's camera for the host: the character, the orbit and whether it is on the head. The orbit starts over when the tab changes between the body and the
     /// head (FACE and HAIR share one view) or the character changes, as the original's camera resets then.
     /// </summary>
+    /// <summary>Debug: turns the open editor's camera (false when it is closed).</summary>
+    public bool TurnEditor(float yaw)
+    {
+        if (EditorView() is null) return false;
+        editor!.Orbit.SetYaw(yaw);
+        return true;
+    }
+
     public (CharacterId Character, float Yaw, float Elevation, float Distance, bool Head)? EditorView()
     {
         if (!EditorOpen || editor is not { } s) return null;
