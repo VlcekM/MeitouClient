@@ -380,6 +380,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.MeshHit = (id, origin, direction) => gpu.Characters?.RayHit(DrawKey(id), origin, direction);
         player.Floor = (() => viewedFloor, StepFloor);
         player.HiddenInWorld = hiddenIndoors.Contains;
+        player.DrawnHead = id => gpu.Characters?.BonePosition(DrawKey(id), "Bip01 Head");
         player.AboveViewedFloor = AboveViewedFloor;
         player.GroundItemShape = GroundShape;
         player.GroundItemHidden = hiddenGround.Contains;

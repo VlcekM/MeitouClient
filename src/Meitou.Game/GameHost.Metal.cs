@@ -472,6 +472,7 @@ sealed partial class GameHost
             hud.SurfaceMoveHit = SurfaceMoveHit;
             hud.ClosedBuildingHit = (origin, direction, distance) => objects?.ClosedBuildingHit(origin, direction, distance);
             hud.HiddenInWorld = hiddenIndoors.Contains;
+            hud.DrawnHead = id => characters?.BonePosition(DrawKey(id), "Bip01 Head");
             hud.ShownInteriorHit = (origin, direction, distance) => objects?.ShownInteriorHit(origin, direction, distance);
             hud.AboveViewedFloor = AboveViewedFloor;
             hud.GroundItemShape = GroundShape;

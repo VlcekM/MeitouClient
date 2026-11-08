@@ -24,7 +24,7 @@ sealed partial class PlayerInterface
         foreach (var bubble in speech)
         {
             if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == bubble.Speaker) is not { } who) continue;
-            var head = where(who) + new Vector3(0, CharacterHeight + 4, 0);
+            var head = TagAnchor(who, where(who));
             float distance = Vector3.Distance(Eye, head) * (bubble.Large ? 0.5f : 0.75f);
             float alpha = Math.Clamp((2500 - distance) / 1500f, 0, 1);
             if (alpha <= 0 || Project(head) is not { } at) continue;

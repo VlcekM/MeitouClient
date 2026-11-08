@@ -63,7 +63,7 @@ sealed partial class PlayerInterface
             if (!c.IsPlayer || c.Name.Length == 0 || EditorOpen || c.CarriedBy != CharacterId.None || !c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
             var feet = where(c);
             if (Vector3.DistanceSquared(Eye, feet) >= NameTagRangeSquared) continue;
-            if (Project(feet + new Vector3(0, CharacterHeight + 4, 0)) is not { } head) continue;
+            if (Project(TagAnchor(c, feet)) is not { } head) continue;
             float x = head.X - width / 2, y = head.Y - 4 * scale - height;
             if (ShowNames) controls.Add(new($"nametag-{n}", "TextBox", new(x + width * 0.187192f, y, width * 0.655172f, height), c.Selected ? $"[{c.Name}]" : c.Name, "", "", true,
                 new Dictionary<string, string>
@@ -97,6 +97,28 @@ sealed partial class PlayerInterface
     /// <summary>Whether the world leaves a character undrawn (above the viewed floor, or inside a closed building): its tag shows only while it is selected.</summary>
     public Func<CharacterId, bool>? HiddenInWorld { get; set; }
 
+    /// <summary>Where a character's head was last drawn in the world (its <c>Bip01 Head</c>); null when it was not drawn.</summary>
+    public Func<CharacterId, Vector3?>? DrawnHead { get; set; }
+
+    /// <summary>
+    /// A drawn head this far above the feet or higher is upright (standing 17.4, on a chair 13.1); from <see cref="UprightHead"/> down to <see cref="LyingHead"/> the tag
+    /// moves over to the head (crouching 9.7, sitting on the ground 6.8, in a bed 7.4; heights of the clips' <c>Bip01 Head</c>, measured), so a sneaker's tag does not jump.
+    /// </summary>
+    const float UprightHead = 12, LyingHead = 8;
+
+    /// <summary>
+    /// The point a name tag, task bar or speech bubble stands on (Meitou's: the original's anchor is not mapped): over a standing character's height, or just over the drawn
+    /// head of one lying down, whose body its clip may lay away from its feet (a sleeper's from the bed's use node onto the mattress).
+    /// </summary>
+    Vector3 TagAnchor(CharacterSnapshot c, Vector3 feet)
+    {
+        var standing = feet + new Vector3(0, CharacterHeight + 4, 0);
+        if (DrawnHead?.Invoke(c.Id) is not { } head) return standing;
+
+        float lying = Math.Clamp((UprightHead - (head.Y - feet.Y)) / (UprightHead - LyingHead), 0, 1);
+        return Vector3.Lerp(standing, head + new Vector3(0, 4, 0), lying);
+    }
+
     /// <summary>The original's <c>Show names</c> option (<c>FUN_1406e2fd0</c>): off, the name tag keeps only its icons.</summary>
     public bool ShowNames { get; set; } = true;
     /// <summary>The <c>font size2</c> option: points added to every GUI font's default height (applied to the painter once it exists).</summary>
@@ -125,7 +147,7 @@ sealed partial class PlayerInterface
             if (c.Bar is not { } bar || c.CarriedBy != CharacterId.None) continue;
             var feet = where(c);
             if (Vector3.DistanceSquared(Eye, feet) >= NameTagRangeSquared) continue;
-            if (Project(feet + new Vector3(0, CharacterHeight + 4, 0)) is not { } head) continue;
+            if (Project(TagAnchor(c, feet)) is not { } head) continue;
             float x = head.X / Width - root.Position.Width / 2, y = (head.Y - 8 * scale - tag) / Height - root.Position.Height;
             AddTaskBar(controls, taskBarLayout, root, root.Position with { X = x, Y = y }, bar, $"taskbar-{n++}-");
         }
