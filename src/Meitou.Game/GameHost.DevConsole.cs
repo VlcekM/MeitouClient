@@ -17,6 +17,20 @@ sealed partial class GameHost
 {
     readonly DevConsole devConsole = new();
 
+    /// <summary>The <c>version --say</c> bubble waiting for its moment: the speaker picked when the command was typed, the text, and the <see cref="Stopwatch"/> timestamp it is due at.</summary>
+    (long DueTimestamp, CharacterId Speaker, string Text)? pendingVersionSay;
+
+    /// <summary>Once per frame (also while the console is open): enqueues the pending <c>version --say</c> bubble when it is due; dropped when no game is loaded, silently skipped when the speaker is gone or dead.</summary>
+    void PumpPendingSay()
+    {
+        if (pendingVersionSay is not { } pending) return;
+        if (Covered || player.TitleOpen) { pendingVersionSay = null; return; }
+        if (Stopwatch.GetTimestamp() < pending.DueTimestamp) return;
+        pendingVersionSay = null;
+        if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == pending.Speaker) is not { } speaker || speaker.Body is { Dead: true }) return;
+        session.World.Commands.Enqueue(new DebugSay(pending.Speaker, pending.Text) { Tick = session.World.Tick });
+    }
+
     /// <summary>The console that ran <c>explode</c> and waits for its result line (see <see cref="WorldNews"/>).</summary>
     DevConsole? explodeAsker;
     readonly Dictionary<bool, List<string>> consoleNames = [];
@@ -159,6 +173,7 @@ sealed partial class GameHost
         };
         foreach (var name in new[] { "follow", "loot", "firstaid", "carry" }) c.SetComplete(name, (i, typed) => i == 0 ? Characters(typed) : []);
         c.SetComplete("select", (_, typed) => Characters(typed));
+        c.SetComplete("version", (i, typed) => i == 0 ? Starting(["--say"], typed) : []);
         c.SetComplete("order", (i, typed) => i == 0 ? Starting(["move", "attack"], typed) : i == 1 && c.CompletionArgs is ["attack"] ? Characters(typed) : []);
         c.SetComplete("spawn-at", (i, typed) => i == 2 ? ConsoleMatch(ConsoleRecordNames(character: true), typed) : []);
         c.SetComplete("equip", (i, typed) => i == 0 ? ConsoleMatch(player.ControlCarriedItemNames(), typed) : []);
@@ -220,6 +235,21 @@ sealed partial class GameHost
         }, (i, typed) => i == 0 ? c.Commands.Select(x => x.Name).Where(n => n.StartsWith(typed, StringComparison.OrdinalIgnoreCase)) : []);
 
         Add("clear", "clear", "empty the scrollback", (_, con) => con.Clear());
+
+        Add("version", "version [--say]", "print the Meitou build tag and commit; --say also makes the selected character say it in game after 1 second", (args, con) =>
+        {
+            bool say = false;
+            if (args.Count > 1 || (args.Count == 1 && !(say = args[0].Equals("--say", StringComparison.OrdinalIgnoreCase)))) { con.Error("usage: version [--say]"); return; }
+            string text = $"Meitou {BuildVersion.Tag} ({BuildVersion.Commit})";
+            if (say)
+            {
+                if (Covered || player.TitleOpen) { con.Error("version: load a game first (no world is loaded yet)"); return; }
+                var lead = session.CurrentSnapshot.Characters.FirstOrDefault(ch => ch.IsPlayer && ch.Selected && ch.Body is not { Dead: true }) ?? session.CurrentSnapshot.Characters.FirstOrDefault(ch => ch.IsPlayer && ch.Body is not { Dead: true });
+                if (lead is null) { con.Error("version: no living squad member to speak"); return; }
+                pendingVersionSay = (Stopwatch.GetTimestamp() + Stopwatch.Frequency, lead.Id, text);
+            }
+            con.Print(text);
+        });
 
         // Every command that the F10 menu also has runs the menu's own DebugApply / DebugGive (GameHost.DebugMenu.cs), so there is one implementation; only kill is the console's.
         void Report(DevConsole con, string text, string? suffix = null)
