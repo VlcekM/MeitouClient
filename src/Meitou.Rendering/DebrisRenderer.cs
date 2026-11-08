@@ -50,6 +50,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         out vec3 vObjNormal;
         out float vCurvature;
         out vec4 vTangent;
+        out vec3 vColour;
         void main()
         {
             vec4 p = uModel * vec4(aPos, 1.0);
@@ -59,6 +60,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             vLocal = aPos;
             vObjNormal = aNormal;
             vCurvature = aColour.z;
+            vColour = aColour.rgb;
             vTangent = vec4(mat3(uModel) * aTangent.xyz, aTangent.w);
             gl_Position = uViewProjection * p;
         }
@@ -72,6 +74,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         in vec3 vObjNormal;
         in float vCurvature;
         in vec4 vTangent;
+        in vec3 vColour;
         out vec4 fragColour;
         uniform sampler2D uDiffuse;
         uniform sampler2D uLimbMask;     // a severed limb (uTextured 2; bit 4 set: it has a normal map): its skin-tone mask (an index in the bits of uAlphaThreshold),
@@ -81,7 +84,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         uniform uint uLimbSkin;          // its bindless index,
         uniform uint uLimbBlood;         // the blood colour as 8-bit RGB (above the low byte of uTextured)
         uniform uint uLimbTone;          // the cut character's skin tone as 8-bit RGB
-        uniform int uTextured;
+        uniform int uTextured;           // 1: textured (+ 8: times the vertex colour), 2: a limb
         uniform float uAlphaThreshold;   // > 0: the diffuse alpha is a cut-out, and the gloss fixed
         uniform vec3 uEye;
         uniform vec3 uLightDir;
@@ -109,6 +112,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             float cut = limb ? 0.0 : uAlphaThreshold;
             vec4 base = uTextured != 0 ? texture(uDiffuse, vUv) : vec4(0.78, 0.72, 0.62, 0.3);
             if (cut > 0.0 && base.a < cut) discard;
+            if (!limb && (uTextured & 8) != 0) base.rgb *= vColour;
             float gloss = cut > 0.0 ? 0.3 : clamp(base.a, 0.0, 1.0);
             if (limb)
             {
@@ -237,10 +241,10 @@ public sealed unsafe class DebrisRenderer : IDisposable
     }
 
     /// <summary>A loaded mesh: one buffer of vertices and one of indices, a draw per part.</summary>
-    sealed class Mesh(DeviceBuffer vertices, DeviceBuffer indices, (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold)[] parts, Vector3 extent)
+    sealed class Mesh(DeviceBuffer vertices, DeviceBuffer indices, (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold, bool Coloured)[] parts, Vector3 extent)
     {
         public readonly DeviceBuffer Vertices = vertices, Indices = indices;
-        public readonly (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold)[] Parts = parts;
+        public readonly (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold, bool Coloured)[] Parts = parts;
         public readonly Vector3 Extent = extent;
         /// <summary>A severed limb's: its skin-tone mask, the mesh's bounds middle in its own space (the vertices are moved by it).</summary>
         public DebrisTexture? Mask, Normal;
@@ -382,7 +386,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
                 var push = basePush;
                 push.Model = m;
                 push.Diffuse = part.Diffuse is { } diffuse ? diffuse.CachedIndex : standIn;
-                push.Textured = part.Diffuse is null ? 0 : 1;
+                push.Textured = part.Diffuse is null ? 0 : part.Coloured ? 1 | 8 : 1;   // 8: the diffuse times the vertex colour (COLOURING)
                 push.AlphaThreshold = part.AlphaThreshold;
                 if (mesh.Limb && piece.Limb is { } look)
                 {
@@ -433,12 +437,13 @@ public sealed unsafe class DebrisRenderer : IDisposable
         var centre = built.Center;
         var vertices = new List<Vertex>();
         var indices = new List<uint>();
-        var parts = new List<(uint, uint, int, DebrisTexture?, float)>();
+        var parts = new List<(uint, uint, int, DebrisTexture?, float, bool)>();
         foreach (var part in built.Parts)
         {
             var material = limb is null ? resolver?.Candidates(materialOf, new OgreSubMesh { MaterialName = part.MaterialName }).FirstOrDefault() : null;
             float threshold = material is { Alpha: AlphaSource.DiffuseAlpha } ? MathF.Max(material.AlphaThreshold, 0.5f) : 0;
-            parts.Add(((uint)indices.Count, (uint)part.Indices.Length, vertices.Count, Texture(diffuse ?? (limb is null ? material?.Diffuse : limb.Diffuse)), threshold));
+            parts.Add(((uint)indices.Count, (uint)part.Indices.Length, vertices.Count, Texture(diffuse ?? (limb is null ? material?.Diffuse : limb.Diffuse)), threshold,
+                material?.VertexColours ?? false));
             foreach (var v in part.Vertices) vertices.Add(limb is null ? v with { Position = v.Position - centre } : v);   // a limb keeps the mesh's own space (its blood mapping reads x)
             indices.AddRange(part.Indices);
         }

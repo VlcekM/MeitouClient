@@ -271,6 +271,8 @@ public sealed class MaterialResolver
                     Diffuse = Tex(spec, "texture map"), Normal = Tex(spec, "normal map"),
                     Alpha = type == 1 ? AlphaSource.NormalAlpha : AlphaSource.None, AlphaThreshold = type == 1 ? 0.5f : 0,
                     DoubleSided = type is 1 or 2, SpecularMult = spec.GetFloat("specular mult", 1),
+                    // A ground item takes COLOURING when its mesh has vertex colours (docs/formats/runtime-materials.md "Callers"); worn items never read this.
+                    VertexColours = true,
                 };
                 break;
             }
