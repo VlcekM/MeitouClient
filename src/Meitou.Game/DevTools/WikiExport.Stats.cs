@@ -161,8 +161,56 @@ static partial class WikiExport
         _ => ("function " + function, "not named in the data"),
     };
 
+    /// <summary>A building that makes an item: for a weapon the models it makes it in, and what one item takes.</summary>
+    sealed record MadeAt(GameRecord Building, string Kind, List<(string Model, int Level)> Models, IReadOnlyList<CraftInput> Inputs);
+
+    /// <summary>
+    /// Every crafting bench and refinery that makes each item (docs/game/buildings-production.md "Crafting", "Production"): a bench's recipe as <see cref="CraftBench.Recipe"/> draws it, a
+    /// refinery's <c>consumes</c> at v1 / 100 per item of its first <c>produces</c>. Farms, mines and research benches are left out.
+    /// </summary>
+    static Dictionary<string, List<MadeAt>> MadeAtIndex(GameDatabase db)
+    {
+        var constants = GameConstants.FromDatabase(db);
+        var index = new Dictionary<string, List<MadeAt>>(StringComparer.Ordinal);
+        List<MadeAt> Of(string item) => index.TryGetValue(item, out var l) ? l : index[item] = [];
+        foreach (var building in db.OfType(FcsRecordType.Building).Where(b => b.Name.Length > 0).OrderBy(b => b.StringId, StringComparer.Ordinal))
+        {
+            if (MachineData.From(db, building) is not { } machine) continue;
+            if (machine.Craft is { } bench)
+            {
+                foreach (var group in bench.Options.GroupBy(o => o.Item))
+                {
+                    var recipe = bench.Recipe(db, constants, group.First(), machine.Inputs);
+                    var models = group.Where(o => o.Model is not null).Select(o => (db.Find(o.Model!)?.Name ?? o.Model!, o.Level)).OrderBy(m => m.Level).ToList();
+                    Of(group.Key).Add(new MadeAt(building, "craft", models, recipe.Inputs));
+                }
+            }
+            else if (machine.Function == MachineData.RefineryFunction && machine.Output is { } output && machine.Inputs.Count > 0)
+                Of(output.Item).Add(new MadeAt(building, "refine", [], [.. machine.Inputs.Select(i => new CraftInput(i.Item, i.Rate))]));
+        }
+        return index;
+    }
+
+    /// <summary>The <c>madeAt</c> rows of an item: building, its record and the research that unlocks it, the weapon models, and each input per item made.</summary>
+    static List<object?> MadeAtRows(GameDatabase db, List<MadeAt> made, Dictionary<string, List<UnlockedBy>> unlocks) =>
+        [.. made.Select(m => (object?)new SortedDictionary<string, object?>
+        {
+            ["building"] = m.Building.Name,
+            ["buildingId"] = m.Building.StringId,
+            ["buildingResearch"] = unlocks.GetValueOrDefault(m.Building.StringId)?.Select(u => u.Research).Distinct().ToList() ?? [],
+            ["kind"] = m.Kind,
+            ["models"] = m.Models.Select(x => (object?)new SortedDictionary<string, object?> { ["model"] = x.Model, ["level"] = x.Level }).ToList(),
+            ["inputs"] = m.Inputs.Select(i => (object?)new SortedDictionary<string, object?>
+            {
+                ["item"] = db.Find(i.Item)?.Name ?? i.Item,
+                ["itemId"] = i.Item,
+                ["perItem"] = Round(i.PerItem),
+            }).ToList(),
+        })];
+
     static List<Row> Items(GameDatabase db, Func<string, string, string> id, Dictionary<string, List<UnlockedBy>> unlocks)
     {
+        var madeAt = MadeAtIndex(db);
         // Who makes each weapon type: the manufacturers' `weapon types`, their price/weight/damage modifiers and their `weapon models` (grades with their level numbers).
         var makers = new Dictionary<string, List<GameRecord>>(StringComparer.Ordinal);
         foreach (var m in db.OfType(FcsRecordType.WeaponManufacturer))
@@ -174,11 +222,12 @@ static partial class WikiExport
         object? Blueprint(string recordId)
         {
             if (!unlocks.TryGetValue(recordId, out var l)) return null;
-            return l.GroupBy(u => u.ResearchId).Select(g => (object?)new SortedDictionary<string, object?> { ["research"] = g.First().Research, ["repetition"] = g.Min(u => u.Repetition) }).ToList();
+            return l.GroupBy(u => u.ResearchId).Select(g => (object?)new SortedDictionary<string, object?> { ["research"] = g.First().Research, ["researchId"] = g.Key, ["repetition"] = g.Min(u => u.Repetition) }).ToList();
         }
 
         var items = new List<Row>();
         var records = db.OfType(FcsRecordType.Weapon).Concat(db.OfType(FcsRecordType.Crossbow)).Concat(db.OfType(FcsRecordType.Armour)).Concat(db.OfType(FcsRecordType.Item))
+            .Concat(db.OfType(FcsRecordType.Container)).Concat(db.OfType(FcsRecordType.LimbReplacement))
             .Where(r => r.Name.Length > 0).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal);
         foreach (var record in records)
         {
@@ -270,6 +319,12 @@ static partial class WikiExport
                 Put(data, "blueprint", Blueprint(record.StringId));
                 summary = $"{a.Class} {a.Material} armour ({ArmourSlotName(a.Slot)}), cut +{Round(a.CutDefBonus)}, blunt +{Round(a.BluntDefBonus)}, value {record.GetInt("value")}, weight {Num(record, "weight kg") ?? 0} kg.";
             }
+            else if (record.Type is FcsRecordType.Container or FcsRecordType.LimbReplacement)
+            {
+                kind = record.Type == FcsRecordType.Container ? "backpack" : "limb";
+                Put(data, "blueprint", Blueprint(record.StringId));
+                summary = $"{(kind == "limb" ? "Robotic limb" : "Backpack")}, value {record.GetInt("value")}, weight {Num(record, "weight kg") ?? 0} kg.";
+            }
             else
             {
                 kind = "item";
@@ -289,6 +344,7 @@ static partial class WikiExport
                 summary = $"Item ({category}), value {record.GetInt("value")}, weight {Num(record, "weight kg") ?? 0} kg.";
             }
             if (desc.Length > 0) data["description"] = Trim(desc, 300);
+            if (madeAt.TryGetValue(record.StringId, out var benches)) data["madeAt"] = MadeAtRows(db, benches, unlocks);
             items.Add(new Row(id(record.Name, record.StringId), record.Name, kind, null, null, null, null, "Observed", summary, record.StringId, data));
         }
         return items;
