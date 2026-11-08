@@ -721,7 +721,7 @@ Meitou: [simulation, captives](../simulation.md#captives).
   The slavers' event-38 lines ("shout at slave worker": chance temporary 10, six lines) are in "slaver guard MAIN" and "Holy Nation Paladin".
   **Observed** (probe, state 0.5 live check, the 10 workmasters of Rebirth, N = 1): a workmaster on 188 keeps it with one slave as target for
   long spells (one to three targets an hour), with order `move_on_free_will` at 72 of 75 checks and `send_dialogue_signal` at 3, and none ever
-  takes `stay_in_home`. Meitou (engine choice): the Shout job keeps with its slave and says the event again every 8 s until its worker speaks,
+  takes `stay_in_home`. Its walk runs while the slave moves faster than 20 ([pathfinding](pathfinding.md#running-after-a-moving-target); Meitou `FollowSlave`). Meitou (engine choice): the Shout job keeps with its slave and says the event again every 8 s until its worker speaks,
   then the next job picks a slave again ([simulation](../simulation.md)). The original's `isDialogDelivered` is not that test: it is true
   without a Dialogue object, else whether the event was delivered in the speaker's town ([dialogue](dialogue.md)).
 - **Capture** (167): the planner chain is 167 (effect isChained 134) <- 166 Restraining (`Task_CuffTarget`; needs 38, at location, 118 TARGET_IS_UNARMED, 7 target down) <- 181 Stripping weapons

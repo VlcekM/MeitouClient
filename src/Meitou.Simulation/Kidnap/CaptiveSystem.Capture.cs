@@ -220,7 +220,7 @@ public sealed partial class CaptiveSystem
     /// <c>isDialogDelivered</c> is true without a Dialogue object, else the event delivered in its town), so a line still showing from the last
     /// job neither ends this one nor is talked over. A worker with no line never ends it: <see cref="CaptiveSettings.GiveUpSeconds"/> does.
     /// </summary>
-    bool StepShout(World world, CaptiveJob j, int w, Vector2 to)
+    bool StepShout(World world, CaptiveJob j, int w, int c, Vector2 to)
     {
         bool speaking = (talk ??= world.SystemOf<Dialogue.DialogueSystem>())?.Engages(j.Worker) == true;
         if (j.Blows > 0 && speaking) return End(world, j, CaptiveEventKind.Shouted);
@@ -232,12 +232,12 @@ public sealed partial class CaptiveSystem
             world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, ShoutAtSlaveWorker) { Tick = world.Tick + 1 });
         }
 
-        FollowSlave(world, j, w, to);
+        FollowSlave(world, j, w, c, to);
         return true;
     }
 
-    /// <summary>The worker walks to its slave and stands within <see cref="CaptiveSettings.ShoutReach"/> of it, walking on when the slave moves off.</summary>
-    void FollowSlave(World world, CaptiveJob j, int w, Vector2 to)
+    /// <summary>The worker walks to its slave and stands within <see cref="CaptiveSettings.ShoutReach"/> of it, walking on when the slave moves off; it runs while the slave moves faster than <see cref="SpeedMode.ChaseRunAbove"/> (<see cref="SpeedMode.Chasing"/>).</summary>
+    void FollowSlave(World world, CaptiveJob j, int w, int slave, Vector2 to)
     {
         var table = world.Characters;
         var here = new Vector2(table.Next[w].Position.X, table.Next[w].Position.Z);
@@ -249,9 +249,14 @@ public sealed partial class CaptiveSystem
             return;
         }
 
+        byte mode = SpeedMode.Chasing(table, slave, SpeedMode.Walk);
         if (!walking || Vector2.Distance(table.Next[w].Goal, to) > 5)
         {
-            TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+            TaskStart.Walk(world, w, to, mode, RowOf(j.Kind), TaskSource.Goal);
+        }
+        else
+        {
+            table.Next[w].Mode = mode;
         }
     }
 
@@ -271,7 +276,7 @@ public sealed partial class CaptiveSystem
             return End(world, j, CaptiveEventKind.GaveUp);
         }
         var to = new Vector2(table.Next[c].Position.X, table.Next[c].Position.Z);
-        if (j.Kind == CaptiveJobKind.Shout) return StepShout(world, j, w, to);
+        if (j.Kind == CaptiveJobKind.Shout) return StepShout(world, j, w, c, to);
         // It got up: a caged one is beaten down first (196 Beat prisoner, Task_KillPrisoner: B list 78 imprisoned, 5 weapon drawn; effect 7 target down) by an armed worker;
         // any other is given up.
         if (!Down(cc) && j.Kind == CaptiveJobKind.Capture && (!cc.IsImprisoned || combat is null || wc.Fighter is not { Unarmed: false })) return End(world, j, CaptiveEventKind.GaveUp);

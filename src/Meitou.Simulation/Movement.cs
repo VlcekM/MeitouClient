@@ -84,6 +84,16 @@ public static class SpeedMode
     public const float RunCap = 55;
 
     public static float Cap(byte mode, float walkSpeed) => mode switch { Walk => walkSpeed, Run => RunCap, _ => 999 };
+
+    /// <summary>The speed above which a move toward a character runs: Task_Move's update (<c>FUN_140354600</c>, <c>DAT_141683188</c>, <b>Verified</b>) sets its mover to run each frame while its target character's current speed is above this.</summary>
+    public const float ChaseRunAbove = 20;
+
+    /// <summary><see cref="Free"/> (the mover's run) while the character in <paramref name="target"/> moves faster than <see cref="ChaseRunAbove"/>, else <paramref name="mode"/>.</summary>
+    public static byte Chasing(CharacterTable table, int target, byte mode)
+    {
+        var v = table.Next[target].Velocity;
+        return v.X * v.X + v.Z * v.Z > ChaseRunAbove * ChaseRunAbove ? Free : mode;
+    }
 }
 
 /// <summary>The animation layers a character plays for its movement state (<see cref="CharacterHot.Animation"/>): the names are the skeleton animations of docs/animation.md.</summary>
