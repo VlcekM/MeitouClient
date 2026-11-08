@@ -1313,6 +1313,7 @@ static partial class WorldFrame
     public const string
         LandmarkDistanceSlider = "Landmark distance (Meitou)",
         DistantTownsSlider = "Distant towns (zones)",
+        CharacterDistanceSlider = "Character draw distance",
         ObjectLodSlider = "Object LOD distance x",
         FoliageDistanceSlider = "Foliage draw distance x",
         FoliageLodSlider = "Foliage LOD distance x (lod Meitou)",
@@ -1425,6 +1426,7 @@ static partial class WorldFrame
         var sliders = new List<Slider>();
         AddViewerSliders(sliders, getHour, setHour, getTimeSpeed, setTimeSpeed, getVSync, setVSync, getFullScreen, setFullScreen);
         if (g.Objects is { } objects) AddObjectSliders(sliders, objects);
+        if (g.Characters is { } characters) sliders.Add(CharacterDistance(characters));
         if (g.Foliage is { } foliage) AddFoliageSliders(sliders, foliage);
         AddWaterSliders(sliders, g);
         AddTerrainSliders(sliders, g, r);
@@ -1485,6 +1487,11 @@ static partial class WorldFrame
             () => objects.DistantRange / WorldLayout.ZoneSize, v => objects.DistantRange = MathF.Round(v) * WorldLayout.ZoneSize, "0"));
         sliders.Add(new Slider(ObjectLodSlider, 0.25f, 4, () => 1 / objects.LodBias, v => objects.LodBias = 1 / v, "0.00", Logarithmic: true));
     }
+
+    /// <summary>The game's NPC View Range: characters farther than this from the eye are not drawn, in steps of 50 (also the Metal panel's).</summary>
+    internal static Slider CharacterDistance(Characters.CharacterRenderer characters) =>
+        new(CharacterDistanceSlider, Characters.CharacterRenderer.MinDrawDistance, Characters.CharacterRenderer.MaxDrawDistance,
+            () => characters.DrawDistance, v => characters.DrawDistance = MathF.Round(v / 50) * 50, "0", Step: 50);
 
     /// <summary>The foliage's distance, LOD, class ranges, impostor distances and the grass's distance and density.</summary>
     static void AddFoliageSliders(List<Slider> sliders, FoliageRenderer foliage)

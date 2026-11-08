@@ -21,6 +21,7 @@ static class SettingHints
         "Upscaler sharpness" => "Sharpen the image after resolution reconstruction.",
         "DLSS preset" => "Which DLSS model runs. Default picks one per render scale; L and M ghost less than K, L at the highest cost.",
         "Object draw distance" => "Maximum distance at which objects remain visible.",
+        "Character draw distance" => "How far away characters are drawn (the game's NPC View Range).",
         "Landmark distance" => "Keep large wrecks, towers and landmarks visible farther away.",
         "Distant towns" => "How many surrounding zones can display distant towns.",
         "Object LOD distance multiplier" => "Higher values retain detailed object meshes farther away.",

@@ -184,6 +184,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine") || S("Shadow")) return "Lighting";
         if (S("Haze") || S("Heat haze") || WorldFrame.ParticleSliders.Contains(label)) return "Sky & weather";
         if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom")) return "Colour";
+        if (label == WorldFrame.CharacterDistanceSlider) return "Characters";
         return "World";
     }
 

@@ -44,6 +44,8 @@ static class LauncherSchema
         Graphics(WorldFrame.ObjectDistanceSlider, 1000, 400000, 100, Enhancements.MeitouObjectDistance) with { Logarithmic = true },
         Graphics(WorldFrame.LandmarkDistanceSlider, 1000, 400000, 100, Enhancements.MeitouLandmarkDistance) with { Logarithmic = true },
         Graphics(WorldFrame.DistantTownsSlider, 0, ObjectRanges.MaxDistantTownRangeZones * 10, 1, ObjectRanges.MaxDistantTownRangeZones) with { Suffix = " zones" },
+        Graphics(WorldFrame.CharacterDistanceSlider, Rendering.Characters.CharacterRenderer.MinDrawDistance, Rendering.Characters.CharacterRenderer.MaxDrawDistance, 50,
+            GameplaySettings.DefaultNpcRange),
         Multiplier(WorldFrame.ObjectLodSlider, 0.25f, 4, 1),
         // Fewer pixels of error are finer: drawn mirrored, so right is more detail.
         Graphics(WorldFrame.TerrainErrorSlider, 4, 32, 0.1f, Enhancements.MeitouTerrainPixelError) with { Logarithmic = true, Format = "0.0", Suffix = " px", Reversed = true },

@@ -52,6 +52,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
     /// <summary>Characters farther than this from the eye are neither posed nor drawn.</summary>
     public float DrawDistance { get; set; } = 6000;
+    /// <summary>The range of the game's NPC View Range slider (docs/formats/settings.md), which <see cref="DrawDistance"/> is set from.</summary>
+    public const float MinDrawDistance = 1000, MaxDrawDistance = 8000;
     /// <summary>While the eye is above the game's camera heights (<see cref="EyeLift"/>): characters farther than this are neither built, posed nor drawn
     /// (engine choice: a few pixels tall there).</summary>
     public float LiftedReach { get; set; } = 3000;

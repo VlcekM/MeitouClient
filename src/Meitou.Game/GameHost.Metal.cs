@@ -672,6 +672,7 @@ sealed partial class GameHost
                 sliders.Add(new Slider("Object LOD distance x", 0.25f, 4, () => 1 / objects.LodBias,
                     v => objects.LodBias = 1 / v, "0.00", Logarithmic: true));
             }
+            if (characters is not null) sliders.Add(WorldFrame.CharacterDistance(characters));
             if (foliage is not null)
             {
                 sliders.Add(new Slider("Foliage draw distance x", 0.25f, 80, () => foliage.RangeSetting,

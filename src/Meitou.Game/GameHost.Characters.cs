@@ -19,14 +19,16 @@ sealed partial class GameHost
     /// <summary>The window's aspect ratio, kept by the frame loop for <see cref="SendView"/>.</summary>
     internal float viewAspect = 16f / 9;
 
-    /// <summary>The settings' <c>npc range</c>, read once (the drawing takes it once too; reading settings.cfg every frame cost 0.09 ms).</summary>
+    /// <summary>The settings' <c>npc range</c>, read once (reading settings.cfg every frame cost 0.09 ms), while no character renderer holds the slider's.</summary>
     float? npcRange;
+
+    float NpcRange => ActiveCharacters?.DrawDistance ?? (npcRange ??= GameplaySettings.NpcRange(install));
 
     /// <summary>Tells the world the camera it is looked at through, every frame (the update flag of <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/> and the sensing hooks, <see cref="Meitou.Simulation.Bodies.MedicalClock"/>).</summary>
     void SendView()
     {
         if (battle.IsBattle) return;
-        session.World.Commands.Enqueue(new Meitou.Simulation.Bodies.CameraViewCommand(camera.Eye, camera.Forward, camera.FieldOfView, viewAspect, npcRange ??= GameplaySettings.NpcRange(install)) { Tick = session.World.Tick });
+        session.World.Commands.Enqueue(new Meitou.Simulation.Bodies.CameraViewCommand(camera.Eye, camera.Forward, camera.FieldOfView, viewAspect, NpcRange) { Tick = session.World.Tick });
     }
 
     /// <summary>Tells the world where the camera looks, when it has moved enough to matter (the zones follow it).</summary>
