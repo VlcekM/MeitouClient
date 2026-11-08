@@ -34,13 +34,14 @@ New-Item -ItemType Directory -Force $stage, $Cache | Out-Null
 
 # The game, the world viewer (meitou-viewer) and meitou-tools, self-contained (no .NET install needed) and not single-file: the runtime and our
 # Meitou.*.dll lie beside the executables, shared by all three (same build, same runtime), so code mods can reference and load them. A numeric
-# version goes into the assembly version too.
+# version goes into the assembly version too, and v<version> is the embedded game tag (BuildGitTag): the workflows tag the commit only after
+# packaging, so git describe would still find the previous tag.
 $numeric = if ($Version -match '^\d+(\.\d+){1,3}') { $Matches[0] } else { "0.0.0" }
 # meitou-tools joins them for modders: mod-check runs a save with code mods and compares the runs (docs/modding.md "Determinism check").
 $projects = @("src/Meitou.Game/Meitou.Game.csproj", "tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj", "tools/Meitou.Tools/Meitou.Tools.csproj")
 foreach ($project in $projects) {
     dotnet publish (Join-Path $root $project) -c Release -r $Rid --self-contained true `
-        -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -o $stage
+        -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -p:BuildGitTag=v$Version -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish $project failed" }
 }
 # The Unix runtime packs carry native debug symbols (*.dbg, *.dwarf, *.dSYM; ~250 MB): not shipped.

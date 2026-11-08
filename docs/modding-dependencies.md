@@ -33,7 +33,7 @@ General loader contract: [modding](modding.md).
   the one that loads second is refused. `optional` is refused here.
 - `gameVersion`: the Meitou releases the mod was built against (its references bind to engine methods; `apiVersion` covers only the loader
   contract). The running version is the build's nearest game tag (`git describe --tags --abbrev=0 --match "v*"`, Meitou.Game.csproj;
-  `launcher-v*` tags never count), compared as its release: pre-release and build are dropped, so `v0.16.1-nightly.20261106` counts as
+  `launcher-v*` tags never count; release and nightly zips embed their own `v<version>`, package-release.ps1), compared as its release: pre-release and build are dropped, so `v0.16.1-nightly.20261106` counts as
   `0.16.1`. `>=0.16.1` takes every 0.16.1 nightly; `<0.17.0` refuses 0.17.0 nightlies. A range naming a pre-release refuses the manifest.
   Local builds carry the nearest `v*` tag too; only a build without one (no git history) passes every range.
 - Range: comparators separated by spaces, all must hold: `>=`, `>`, `<=`, `<`, `=`; a bare version is `=`.
