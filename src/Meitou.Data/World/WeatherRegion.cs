@@ -149,10 +149,12 @@ public sealed class WeatherRegion
         double end = t + minutes;
         if (chosen.Weather.HasTimeWindow)
         {
-            // Cut at today's end time. Observed: a cut already in the past (the window's last hour, which the inclusive window test accepts) is not applied, so
-            // the weather runs its rolled duration rather than being re-chosen every frame.
+            // Cut at today's end time (Verified, FUN_1409dcf60: also when already past). One chosen in the window's last hour, which the inclusive window
+            // test accepts, so ends at once in the original and is chosen again every update until the hour is out; here it ends at the next whole hour
+            // (engine choice: one change instead of one a frame). Skipping a past cut ran Venge's beams, chosen at 23:xx, through the night (#374).
             double cut = now.Day * WeatherTime.MinutesPerDay + chosen.Weather.EndTime * 60.0;
-            if (cut > t) end = Math.Min(end, cut);
+            if (cut <= t) cut = (Math.Floor(t / 60) + 1) * 60;
+            end = Math.Min(end, cut);
         }
         float s = RollStrength(season);
 

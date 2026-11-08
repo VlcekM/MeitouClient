@@ -15,7 +15,9 @@ share<1 uses equal division. Start/end/current season persist in saves; equal-or
 Choose positive-weight weather inside its inclusive whole-hour window; the original reversed
 window test (`hour<=start or hour>=end`) effectively accepts all hours when start>end. Base
 windows are 7-22 and 5-23. Weighted pick uses rand()/32768; no candidate uses last fallback.
-Duration is inclusive integer minutes val1..val2, cut at today's end-time for restricted weather.
+Duration is inclusive integer minutes val1..val2, cut at today's end-time for restricted weather, also when that is already past
+(**Verified**, `FUN_1409dcf60`): one chosen in its window's last hour ends at once and is chosen again until the hour is out, so
+Venge's beams (5-23) never run past midnight. Meitou ends such a pick at the next whole hour (engine choice: one change, not one a frame).
 Strength is clamp(season random min/max * region random mult min/max,0,1). Effect strength reads
 the minimum key twice, hence always minimum. Weather can follow itself.
 
