@@ -489,6 +489,7 @@ dlss-runtime/
 vpx-runtime/
 # The game's user settings (graphics sliders, key bindings, frame limit) and look presets beside them
 meitou.user.json
+!/bench/kit/meitou.user.json
 /presets/
 
 # Never commit original Kenshi assets. Point at the user's install instead.
