@@ -54,6 +54,9 @@ sealed partial class GameHost
     /// <summary>A new upright print within this share of its length of one of the body's last prints is not made: one footfall, one print (a toe or shin contact, a foot replanted, two feet close).</summary>
     const float PrintGap = 0.6f;
 
+    /// <summary>How far (units) a heel or toe piece may lie from the edge of a sole of the same body and still belong to it, and how much of that sole's length it is at most.</summary>
+    const float PieceReach = 0.5f, PieceShare = 0.8f;
+
     /// <summary>How many of a body's last prints are remembered for <see cref="PrintGap"/>.</summary>
     const int RecentPrints = 8;
 
@@ -153,8 +156,8 @@ sealed partial class GameHost
         st.Air = 0;
         if (st.Printed) return;
         st.Printed = true;
-        var print = PrintOf(patch, heading, depth, upright);
-        if (upright && !Remember(ref w, print)) return;
+        var print = PrintOf(patch, heading, depth, upright, animal);
+        if (upright && !Remember(ref w, print, upright && !animal && print.Kind == TrailKind.Foot)) return;
         Press(trails, ground, at, print);
     }
 
@@ -165,21 +168,34 @@ sealed partial class GameHost
         if (st.Air >= LiftTime) st.Printed = false;
     }
 
-    /// <summary>Notes a print among the body's last ones; false (nothing noted) when it is within <see cref="PrintGap"/> of its length of one of them: that footfall already printed.</summary>
-    static bool Remember(ref Walker w, in TrailStamp print)
+    /// <summary>
+    /// Whether a contact is a heel or toe piece of a foot of a two-legged body: flat on the ground but too short to be a whole sole. An animal's paw or hoof, and a stick foot's upright tip,
+    /// are no pieces: they print round.
+    /// </summary>
+    static bool Partial(in ContactPatch patch, bool upright, bool animal) => upright && !animal && patch.Flat && patch.Length <= SoleAspect * patch.Width;
+
+    /// <summary>
+    /// Notes a print among the body's last ones; false (nothing noted) when it is within <see cref="PrintGap"/> of its length of one of them: that footfall already printed. A <paramref name="foot"/>
+    /// print under 0.8 of the length of one it touches (within <see cref="PieceReach"/>) is also left out: a heel or toe piece belongs to the sole beside it.
+    /// </summary>
+    static bool Remember(ref Walker w, in TrailStamp print, bool foot)
     {
         w.Recent ??= new Vector3[RecentPrints];
         foreach (var p in w.Recent)
-            if (p.Z > 0 && Vector2.Distance(new Vector2(p.X, p.Y), print.Centre) < PrintGap * MathF.Max(p.Z, print.Length)) return false;
+        {
+            if (p.Z <= 0) continue;
+            float d = Vector2.Distance(new Vector2(p.X, p.Y), print.Centre);
+            if (d < PrintGap * MathF.Max(p.Z, print.Length) || (foot && print.Length < PieceShare * p.Z && d < (p.Z + print.Length) / 2 + PieceReach)) return false;
+        }
         w.Recent[w.RecentNext++ % RecentPrints] = new Vector3(print.Centre, print.Length);
         return true;
     }
 
-    /// <summary>The print a planted part leaves: a sole for a foot lying flat (its toe away from the body), a round print for a paw, hoof or stick foot, a stadium for a lying body's part.</summary>
-    static TrailStamp PrintOf(in ContactPatch patch, Vector2 heading, float depth, bool upright)
+    /// <summary>The print a planted part leaves: a sole for a foot lying flat (its toe away from the body; a two-legged body's short flat contact, a heel or toe, is a small sole, never a round print), a round print for a paw, hoof or stick foot, a stadium for a lying body's part.</summary>
+    static TrailStamp PrintOf(in ContactPatch patch, Vector2 heading, float depth, bool upright, bool animal)
     {
         if (!upright) return new TrailStamp(patch.At, patch.Along, patch.Length, patch.Width, depth, TrailKind.Press);
-        if (patch.Flat && patch.Length > SoleAspect * patch.Width)
+        if (patch.Flat && (patch.Length > SoleAspect * patch.Width || Partial(patch, upright, animal)))
         {
             // Heel to toe: the way the foot bone points to its toe; without one, its axis turned to the way the body moves.
             var along = patch.Toe != Vector2.Zero ? patch.Toe : Vector2.Dot(patch.Along, heading) < 0 ? -patch.Along : patch.Along;
