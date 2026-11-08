@@ -17,12 +17,6 @@ sealed partial class GameHost
     /// <summary>How far above the terrain a mark is still left: an ankle's height; higher is a floor or a roof.</summary>
     const float MarkAboveGround = 2.5f;
 
-    /// <summary>A sole's length; a person's stride (when its feet were not posed: it was not drawn) and how far beside the path a foot lands.</summary>
-    const float SoleLength = 2.6f, PersonStride = 4.5f, PersonGait = 0.6f;
-
-    /// <summary>An animal's print, stride and gait at scale 1 (the rigs differ too much to find their feet).</summary>
-    const float PawLength = 1.6f, AnimalStride = 5, AnimalGait = 1.2f;
-
     /// <summary>The furrow of a crawling or sliding body: one every this many units, its length and width.</summary>
     const float DragStep = 1.2f, DragLength = 3, DragWidth = 3;
 
@@ -42,7 +36,6 @@ sealed partial class GameHost
     struct Walker
     {
         public Vector3 Body;
-        public bool LeftNext;
         public float Walked;
         public int Frame;
         public Contact[]? Contacts;
@@ -85,7 +78,7 @@ sealed partial class GameHost
                 if (w.Frame != trailFrame) walkers.Remove(key);
     }
 
-    /// <summary>One character's frame: its posed body against the ground, or, with no pose, a furrow or its stride.</summary>
+    /// <summary>One character's frame: its posed body against the ground, or, with no pose, a crawler's furrow (a foot's print needs the body that makes it).</summary>
     void WalkTrail(TerrainTrailRenderer trails, GroundSurfaces ground, CharacterSnapshot c, Vector3 body)
     {
         long key = DrawKey(c.Id);
@@ -100,19 +93,6 @@ sealed partial class GameHost
         if (!continues || stepped < 1e-4f) return;
         var along = moved / stepped;
         if (c.Down || c.StayingLow || c.Body is { Crawling: true }) Drag(trails, ground, ref w, body, along, stepped);
-        else Stride(trails, ground, ref w, body, along, stepped, animal ? c.Scale : 1, animal);
-    }
-
-    /// <summary>A character whose feet are not known: a print left and right of its path, a stride apart.</summary>
-    void Stride(TerrainTrailRenderer trails, GroundSurfaces ground, ref Walker w, Vector3 body, Vector2 along, float stepped, float scale, bool animal)
-    {
-        w.Walked += stepped;
-        if (w.Walked < (animal ? AnimalStride : PersonStride) * scale) return;
-        w.Walked = 0;
-        w.LeftNext = !w.LeftNext;
-        var side = new Vector2(along.Y, -along.X) * ((animal ? AnimalGait : PersonGait) * scale * (w.LeftNext ? 1 : -1));
-        float length = (animal ? PawLength : SoleLength) * scale;
-        Press(trails, ground, body, new TrailStamp(new Vector2(body.X, body.Z) + side, along, length, length, 1, animal ? TrailKind.Paw : TrailKind.Foot));
     }
 
     void Drag(TerrainTrailRenderer trails, GroundSurfaces ground, ref Walker w, Vector3 body, Vector2 along, float stepped)

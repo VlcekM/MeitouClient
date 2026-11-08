@@ -168,6 +168,7 @@ internal sealed unsafe partial class CharacterRenderer
 
     void DisposeStudio()
     {
+        DisposeImprints();
         if (studioShadowDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, studioShadowIndex);
         if (studioAo is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, studioAoIndex);
         if (studioSkyDepth is not null) Gpu.Bindless.Free(BindlessKind.Texture2D, studioSkyIndex);

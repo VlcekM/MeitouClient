@@ -9,7 +9,7 @@ namespace Meitou.Game;
 
 /// <summary>
 /// Marks from real body contact (docs/render-terrain.md "Ground trails"): each frame the posed body of a character is read as capsules, and where one plants on or slides over the soft
-/// ground it presses or ploughs a mark shaped by its contact: a sole for a foot lying flat, a round print for a paw, hoof or stick foot, a stadium for a body part of a lying body.
+/// ground it presses or ploughs a mark shaped by its contact: a planted foot, paw or hoof prints the shape of its own posed mesh (<see cref="CharacterRenderer.RenderImprints"/>), a body part of a lying body a stadium.
 /// </summary>
 sealed partial class GameHost
 {
@@ -37,14 +37,8 @@ sealed partial class GameHost
     /// <summary>A part over a lower one of its own body that touches it (their stadia within this much, 0.6 of it across) is left out of an upright body's marks, and of two at one height the shorter: a shin over a foot, a toe in line with it.</summary>
     const float ShadowedBy = 0.15f, ShadowReach = 0.5f;
 
-    /// <summary>A capsule longer than this many times its width, lying flat (its axis within 0.6 of the ground's plane), is a foot with a sole; any other upright contact is a round print.</summary>
-    const float SoleAspect = 1.4f, SoleFlat = 0.6f;
-
-    /// <summary>A paw print's quad against the print's width (<see cref="TerrainTrailRenderer.StampFragment"/> draws it 0.86 of the quad).</summary>
-    const float PawPerWidth = 1.16f;
-
-    /// <summary>A sole's width over its length at the ball (<see cref="TerrainTrailRenderer.StampFragment"/> draws it).</summary>
-    const float SoleWidth = 0.38f;
+    /// <summary>An imprint's tile: how far it reaches past the contact's size (the mesh goes beyond its capsule), its least half side, and how far under the ground its band starts.</summary>
+    const float ImprintMargin = 2, ImprintLeast = 3, ImprintBelow = 0.4f;
 
     /// <summary>
     /// A part must be off the ground (swinging, sliding or hovering) this long (seconds) before it may print again: the animation's contact phase makes a foot bob a little, which is no new step.
@@ -68,8 +62,8 @@ sealed partial class GameHost
         public bool Touched, Printed;
     }
 
-    /// <summary>Where a capsule's underside meets the ground: the centre, direction and whole size of the stadium it presses, how hard (0 to 1), its lowest point and whether it lies flat.</summary>
-    readonly record struct ContactPatch(Vector2 At, Vector2 Along, float Length, float Width, float Sink, float Bottom, bool Flat, bool Valid, Vector2 Toe);
+    /// <summary>Where a capsule's underside meets the ground: the centre, direction and whole size of the stadium it presses, how hard (0 to 1) and its lowest point.</summary>
+    readonly record struct ContactPatch(Vector2 At, Vector2 Along, float Length, float Width, float Sink, float Bottom, bool Valid);
 
     readonly List<BodyCapsule> contactBodies = [];
     ContactPatch[] contactPatches = new ContactPatch[64];
@@ -91,7 +85,7 @@ sealed partial class GameHost
         for (int i = 0; i < count; i++) contactPatches[i] = Contacting(contactBodies[i], rootGround);
         if (upright) Unshadowed(count);
         for (int i = 0; i < count; i++)
-            Touch(trails, ground, contactBodies[i], contactPatches[i], ref w, i, heading, animal, upright, speed, known);
+            Touch(trails, ground, key, contactBodies[i], contactPatches[i], ref w, i, animal, upright, speed, known);
         return true;
     }
 
@@ -127,7 +121,7 @@ sealed partial class GameHost
     /// <summary>
     /// One capsule: how fast it moves over the ground (swinging, sliding or planted); a part planting prints once (never again until it has lifted or slid), a lying body's part sliding ploughs.
     /// </summary>
-    void Touch(TerrainTrailRenderer trails, GroundSurfaces ground, in BodyCapsule cap, in ContactPatch patch, ref Walker w, int index, Vector2 heading, bool animal, bool upright, float bodySpeed, bool known)
+    void Touch(TerrainTrailRenderer trails, GroundSurfaces ground, long key, in BodyCapsule cap, in ContactPatch patch, ref Walker w, int index, bool animal, bool upright, float bodySpeed, bool known)
     {
         ref var st = ref w.Contacts![index];
         var middle = new Vector2(cap.A.X + cap.B.X, cap.A.Z + cap.B.Z) / 2;
@@ -156,8 +150,8 @@ sealed partial class GameHost
         st.Air = 0;
         if (st.Printed) return;
         st.Printed = true;
-        var print = PrintOf(patch, heading, depth, upright, animal);
-        if (upright && !Remember(ref w, print, upright && !animal && print.Kind == TrailKind.Foot)) return;
+        var print = PrintOf(patch, depth, upright, key);
+        if (upright && !Remember(ref w, print, !animal)) return;
         Press(trails, ground, at, print);
     }
 
@@ -167,12 +161,6 @@ sealed partial class GameHost
         st.Air += trailDt;
         if (st.Air >= LiftTime) st.Printed = false;
     }
-
-    /// <summary>
-    /// Whether a contact is a heel or toe piece of a foot of a two-legged body: flat on the ground but too short to be a whole sole. An animal's paw or hoof, and a stick foot's upright tip,
-    /// are no pieces: they print round.
-    /// </summary>
-    static bool Partial(in ContactPatch patch, bool upright, bool animal) => upright && !animal && patch.Flat && patch.Length <= SoleAspect * patch.Width;
 
     /// <summary>
     /// Notes a print among the body's last ones; false (nothing noted) when it is within <see cref="PrintGap"/> of its length of one of them: that footfall already printed. A <paramref name="foot"/>
@@ -191,20 +179,15 @@ sealed partial class GameHost
         return true;
     }
 
-    /// <summary>The print a planted part leaves: a sole for a foot lying flat (its toe away from the body; a two-legged body's short flat contact, a heel or toe, is a small sole, never a round print), a round print for a paw, hoof or stick foot, a stadium for a lying body's part.</summary>
-    static TrailStamp PrintOf(in ContactPatch patch, Vector2 heading, float depth, bool upright, bool animal)
+    /// <summary>The mark a planted part leaves: an upright body's foot, paw or hoof prints the shape of its own mesh, a lying body's part a stadium.</summary>
+    TrailStamp PrintOf(in ContactPatch patch, float depth, bool upright, long key)
     {
         if (!upright) return new TrailStamp(patch.At, patch.Along, patch.Length, patch.Width, depth, TrailKind.Press);
-        // Soles are a two-legged body's: an animal's long flat contact (a dog's hock on the ground) is a paw too.
-        if (!animal && patch.Flat && (patch.Length > SoleAspect * patch.Width || Partial(patch, upright, animal)))
+        float floor = MathF.Min(patch.Bottom, gpu.Terrain.HeightAt(patch.At.X, patch.At.Y)) - ImprintBelow;
+        return new TrailStamp(patch.At, Vector2.UnitY, patch.Length, patch.Width, depth, TrailKind.Imprint)
         {
-            // Heel to toe: the way the foot bone points to its toe; without one, its axis turned to the way the body moves.
-            var along = patch.Toe != Vector2.Zero ? patch.Toe : Vector2.Dot(patch.Along, heading) < 0 ? -patch.Along : patch.Along;
-            return new TrailStamp(patch.At, along, patch.Length, patch.Length * SoleWidth, depth, TrailKind.Foot);
-        }
-        float size = MathF.Max(patch.Width, 0.8f) * PawPerWidth;
-        // Its toes the way the body moves (its axis is no guide: a paw's capsule lies any way round).
-        return new TrailStamp(patch.At, heading != Vector2.Zero ? heading : patch.Along, size, size, depth, TrailKind.Paw);
+            Body = key, Half = MathF.Max(MathF.Max(patch.Length, patch.Width) / 2 + ImprintMargin, ImprintLeast), Floor = floor,
+        };
     }
 
     /// <summary>
@@ -221,12 +204,10 @@ sealed partial class GameHost
         float pen = ContactPlane - MathF.Min(ca, cb);
         float half = MathF.Min(MathF.Max(MathF.Sqrt(MathF.Max(2 * r * MathF.Min(pen, r) - pen * pen, 0)), MathF.Max(0.9f * r, 0.5f)), MathF.Max(1.2f * r, 0.5f));
         var axis = new Vector2(cap.B.X - cap.A.X, cap.B.Z - cap.A.Z);
-        float flatLength = axis.Length(), length3 = Vector3.Distance(cap.A, cap.B);
+        float flatLength = axis.Length();
         var mid = Vector3.Lerp(cap.A, cap.B, (t0 + t1) / 2);
-        bool flat = length3 > 1e-3f && flatLength / length3 > SoleFlat;
         float sink = Math.Clamp(pen / ContactPlane, 0, 1);
-        var toe = new Vector2(cap.Forward.X, cap.Forward.Z);
         return new ContactPatch(new Vector2(mid.X, mid.Z), flatLength > 1e-3f ? axis / flatLength : Vector2.UnitX, (t1 - t0) * flatLength + 2 * half, 2 * half, sink,
-            MathF.Min(cap.A.Y, cap.B.Y) - r, flat, sink >= MinSink, toe.Length() > 0.3f ? Vector2.Normalize(toe) : Vector2.Zero);
+            MathF.Min(cap.A.Y, cap.B.Y) - r, sink >= MinSink);
     }
 }

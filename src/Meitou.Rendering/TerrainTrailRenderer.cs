@@ -11,18 +11,37 @@ public static class TerrainTrails
 }
 
 /// <summary>
-/// What pressed a mark: its shape in <see cref="TerrainTrailRenderer.StampFragment"/>. <see cref="Press"/> is a stadium (a body part resting on the ground: <see cref="TrailStamp.Length"/> and
+/// What pressed a mark: its shape in <see cref="TerrainTrailRenderer.StampFragment"/>. <see cref="Imprint"/> is a planted foot, paw or hoof: the shape of the body's own posed mesh where it
+/// touches the ground (<see cref="ITrailImprints"/>). <see cref="Press"/> is a stadium (a body part resting on the ground: <see cref="TrailStamp.Length"/> and
 /// <see cref="TrailStamp.Width"/> its whole size), <see cref="Plough"/> the same swept along a slide, feathered at its rear so the next sweep joins it. Their values leave room for the rim
-/// and core passes (kind and kind + 1), drawn after the other marks so a body's overlapping parts leave one imprint, not ridges. <see cref="Foot"/> is a sole: <see cref="TrailStamp.Length"/>
-/// long, <see cref="TrailStamp.Width"/> wide, its toe along <see cref="TrailStamp.Along"/>.
+/// and core passes (kind and kind + 1), drawn after the other marks so a body's overlapping parts leave one imprint, not ridges.
 /// </summary>
-public enum TrailKind { Foot, Paw, Drag, Press = 4, Plough = 6 }
+public enum TrailKind { Imprint, Drag = 2, Press = 4, Plough = 6 }
+
+/// <summary>A planted part's mark to render from the body: the character's draw key, the middle of the tile (world x, z), half its side and the height the band starts at.</summary>
+internal readonly record struct TrailImprint(long Key, Vector2 Centre, float Half, float Floor);
+
+/// <summary>What renders the bodies' contact with the ground into an atlas of depth tiles, one per mark, for <see cref="TerrainTrailRenderer"/>.</summary>
+internal interface ITrailImprints
+{
+    /// <summary>The atlas's bindless index, valid after a <see cref="RenderImprints"/> that returned more than 0.</summary>
+    uint ImprintAtlas { get; }
+    /// <summary>Renders the frame's marks, tile i for request i; how many got a tile. Outside any pass.</summary>
+    int RenderImprints(IReadOnlyList<TrailImprint> requests);
+}
 
 /// <summary>
 /// One mark on the ground: <paramref name="Centre"/> in world x, z, <paramref name="Along"/> the unit direction it points in, its size in world units,
 /// and how deep it goes (0 to 1 of <see cref="TerrainTrailRenderer.Depth"/>).
 /// </summary>
-public readonly record struct TrailStamp(Vector2 Centre, Vector2 Along, float Length, float Width, float Strength, TrailKind Kind);
+public readonly record struct TrailStamp(Vector2 Centre, Vector2 Along, float Length, float Width, float Strength, TrailKind Kind)
+{
+    /// <summary>An <see cref="TrailKind.Imprint"/>: the body's draw key, half the tile's side and the height the contact band starts at.</summary>
+    public long Body { get; init; }
+    public float Half { get; init; }
+    public float Floor { get; init; }
+    internal Vector4 Tile { get; init; }
+}
 
 /// <summary>
 /// The ground trails (docs/render-terrain.md "Ground trails"): a height in world-anchored images round the camera's target (not the eye, which zooming moves), addressed toroidally (texel = world mod
@@ -60,15 +79,18 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         #version 450
         layout(location = 0) in vec4 aQuad;   // the centre and half the along axis, in clip space
         layout(location = 1) in vec4 aSide;   // half the across axis, strength, kind
+        layout(location = 2) in vec4 aTile;   // an imprint's tile: uv of its first texel in the atlas, its size in uv, the atlas's bindless index
         layout(location = 0) out vec2 vUv;    // -1..1: x across, y along
         layout(location = 1) flat out vec2 vStamp;
         layout(location = 2) out vec2 vImg;    // the position in the image, texels
         layout(location = 3) flat out vec2 vHalf;   // the quad's half sides in texels: across, along (1 clip unit = 1024 texels)
+        layout(location = 4) flat out vec4 vTile;
         void main()
         {
             vec2 q = vec2(gl_VertexIndex & 1, gl_VertexIndex >> 1) * 2.0 - 1.0;
             vUv = q;
             vStamp = aSide.zw;
+            vTile = aTile;
             gl_Position = vec4(aQuad.xy + q.y * aQuad.zw + q.x * aSide.xy, 0.0, 1.0);
             vImg = (gl_Position.xy * 0.5 + 0.5) * 2048.0;
             vHalf = vec2(length(aSide.xy), length(aQuad.zw)) * 1024.0;
@@ -82,10 +104,12 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     /// </summary>
     internal const string StampFragment = """
         #version 450
+        BINDLESS_DECLARATIONS
         layout(location = 0) in vec2 vUv;
         layout(location = 1) flat in vec2 vStamp;   // strength, kind
         layout(location = 2) in vec2 vImg;
         layout(location = 3) flat in vec2 vHalf;
+        layout(location = 4) flat in vec4 vTile;
         layout(location = 0) out vec4 fragColour;
         const float K = TEXEL_SCALE;
 
@@ -130,45 +154,59 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             fragColour = vec4(rim * strength, 1.0, 0.0, smoothstep(6.0 * K, 3.5 * K, d) * rear);
         }
 
-        // The distance to a segment a-b grown by a radius changing from ra to rb along it.
-        float cone(vec2 q, vec2 a, vec2 b, float ra, float rb)
+        // The body's depth in its tile at uv (0 to 1 across the tile): 1 where nothing of the body is, read bilinearly.
+        float imprintDepth(vec2 uv)
         {
-            vec2 pa = q - a, ba = b - a;
-            float t = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-            return length(pa - ba * t) - mix(ra, rb, t);
-        }
-
-        // A sole, toes towards +y, in a quad of its length: a narrow heel widening to the ball, then narrowing to the toes, one continuous outline. In the quad (half 1.43 of the sole's half length)
-        // it spans y -0.7 to 0.7 and is 0.38 of the length wide at the ball.
-        float sole(vec2 q)
-        {
-            return min(cone(q, vec2(0.0, -0.56), vec2(0.0, 0.28), 0.14, 0.265), cone(q, vec2(0.0, 0.28), vec2(0.0, 0.57), 0.265, 0.13));
-        }
-
-        // A foot or paw print: the shape's edge and depth carry the image's noise (a slightly ragged edge, a print pressed a little deeper in one place), the same for every stamp on that ground,
-        // and a soft rim of the ground pushed aside.
-        void shape(float d, float strength)
-        {
-            float n = vnoise(16.0 * K), m = vnoise(48.0 * K);
-            d += (n - 0.5) * 0.04 + (m - 0.5) * 0.02;
-            float press = smoothstep(0.03, -0.14, d) * (0.88 + 0.12 * n);
-            float rim = exp(-pow((d - 0.08) / 0.09, 2.0)) * 0.3 * (0.75 + 0.5 * m);
-            fragColour = vec4((rim - press) * strength, 1.0, 0.0, smoothstep(0.3, 0.16, d));
-        }
-
-        // An animal's print, its toes towards +y: a pad and four toes melted together (a perfect disc read as a ring pressed into the sand).
-        float paw(vec2 p)
-        {
-            float d = (length((p - vec2(0.0, -0.20)) / vec2(0.40, 0.31)) - 1.0) * 0.31;
-            for (int i = 0; i < 4; i++)
+            uint atlas = uint(vTile.w + 0.5);
+            float size = float(textureSize(textures2D[nonuniformEXT(atlas)], 0).x), tile = vTile.z * size;
+            vec2 at = vTile.xy * size + clamp(uv, 0.0, 1.0) * (tile - 1.0);
+            ivec2 b = ivec2(floor(at));
+            vec2 f = fract(at);
+            ivec2 last = ivec2(vTile.xy * size + tile - 1.0);
+            float d = 0.0;
+            for (int k = 0; k < 4; k++)
             {
-                vec2 toe = vec2(i < 2 ? 0.16 : 0.42, i < 2 ? 0.40 : 0.16) * vec2((i & 1) == 0 ? 1.0 : -1.0, 1.0);
-                float t = length((p - toe) / vec2(0.13, 0.17)) - 1.0;
-                t *= 0.13;
-                float h = clamp(0.5 + 0.5 * (t - d) / 0.05, 0.0, 1.0);
-                d = mix(t, d, h) - 0.05 * h * (1.0 - h);
+                ivec2 o = ivec2(k & 1, k >> 1);
+                d += texelFetch(textures2D[nonuniformEXT(atlas)], min(b + o, last), 0).r * (o.x == 0 ? 1.0 - f.x : f.x) * (o.y == 0 ? 1.0 - f.y : f.y);
             }
             return d;
+        }
+
+        // How much of the body presses at one point of its tile: 0 outside it, towards 1 where it reaches lowest.
+        float imprintAt(vec2 uv)
+        {
+            float d = imprintDepth(uv);
+            return smoothstep(1.0, 0.92, d) * mix(1.0, 0.72, d);
+        }
+
+        // The same over a small disc of the tile (its texels are coarser than the image's), so the outline is a slope and not a staircase.
+        float imprintPress(vec2 uv)
+        {
+            float r = 1.6 * vTile.z / (vTile.z * float(textureSize(textures2D[nonuniformEXT(uint(vTile.w + 0.5))], 0).x));
+            float sum = imprintAt(uv) * 2.0;
+            for (int k = 0; k < 8; k++)
+            {
+                float a = float(k) * 0.7853982;
+                sum += imprintAt(uv + vec2(cos(a), sin(a)) * r);
+            }
+            return sum / 10.0;
+        }
+
+        // A planted foot, paw or hoof: the shape of the body itself where it meets the ground (its lowest parts deepest), edge and depth carrying the image's noise, and the ground pushed aside
+        // round it (where the shape is near but not under).
+        void imprint(float strength)
+        {
+            float n = vnoise(16.0 * K), m = vnoise(48.0 * K);
+            vec2 uv = vUv * 0.5 + 0.5 + (vec2(n, m) - 0.5) * 0.012;
+            float press = imprintPress(uv);
+            float near = 0.0;
+            for (int k = 0; k < 8; k++)
+            {
+                float a = float(k) * 0.7853982;
+                near = max(near, imprintAt(uv + vec2(cos(a), sin(a)) * 0.035));
+            }
+            float rim = max(near - press, 0.0) * 0.3 * (0.75 + 0.5 * m);
+            fragColour = vec4((rim - press * (0.88 + 0.12 * n)) * strength, 1.0, 0.0, clamp(max(press * 4.0, near * 1.5), 0.0, 1.0));
         }
 
         void main()
@@ -185,8 +223,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
                 float ends = smoothstep(1.0, 0.6, abs(vUv.y));
                 fragColour = vec4((rim - smoothstep(0.72, 0.35, across)) * strength, 1.0, 0.0, ends * smoothstep(1.0, 0.88, across));
             }
-            else if (kind == 1) shape(paw(vUv), strength);
-            else shape(sole(vUv), strength);
+            else imprint(strength);
         }
         """;
 
@@ -194,13 +231,14 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     struct Row
     {
-        public const int Size = 32;
-        public Vector4 Quad, Across;
+        public const int Size = 48;
+        public Vector4 Quad, Across, Tile;
     }
 
     static readonly VertexLayout Rows = new(
         new VertexInput(0, InternalFormat.Rgba32f, Row.Size, true),
-        new VertexInput(1, InternalFormat.Rgba32f, Row.Size, true));
+        new VertexInput(1, InternalFormat.Rgba32f, Row.Size, true),
+        new VertexInput(2, InternalFormat.Rgba32f, Row.Size, true));
 
     static readonly BlendState Blend = new(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
@@ -216,6 +254,31 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         frame = new NativeFrame(gpu);
         coarse = new Level(this, Texel, InternalFormat.R16f, "terrain trails");
         fine = new Level(this, FineTexel, InternalFormat.RG16f, "terrain trails fine");
+    }
+
+    /// <summary>Renders the imprints' shapes (the characters); without it an imprint leaves nothing.</summary>
+    internal ITrailImprints? Imprints { get; set; }
+
+    readonly List<TrailImprint> imprintRequests = [];
+
+    /// <summary>The frame's imprints rendered, each stamp told its tile; those that got none are dropped.</summary>
+    void RenderImprints()
+    {
+        imprintRequests.Clear();
+        foreach (var s in stamps)
+            if (s.Kind == TrailKind.Imprint) imprintRequests.Add(new TrailImprint(s.Body, s.Centre, s.Half, s.Floor));
+        int done = imprintRequests.Count > 0 && Imprints is { } source ? source.RenderImprints(imprintRequests) : 0;
+        int next = 0;
+        const int Columns = Characters.CharacterRenderer.ImprintColumns;
+        for (int i = stamps.Count - 1; i >= 0; i--)
+            if (stamps[i].Kind == TrailKind.Imprint && imprintRequests.Count - 1 - next++ >= done) stamps.RemoveAt(i);
+        next = 0;
+        for (int i = 0; i < stamps.Count; i++)
+        {
+            if (stamps[i].Kind != TrailKind.Imprint) continue;
+            int k = next++;
+            stamps[i] = stamps[i] with { Tile = new Vector4(k % Columns / (float)Columns, k / Columns / (float)Columns, 1f / Columns, Imprints!.ImprintAtlas) };
+        }
     }
 
     /// <summary>Queues a mark; <see cref="Record"/> draws it. One outside a window is dropped from that level.</summary>
@@ -239,6 +302,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         float share = 1 - MathF.Exp(-worn);
         bool wear = share >= WearStep;
         if (wear) worn = 0;
+        RenderImprints();
         foreach (var level in new[] { coarse, fine })
         {
             level.Begin(centre, wear ? share : 0);
@@ -275,7 +339,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
     /// <summary>One image of the trails: its texel, its window, its wipes and the stamps of the frame.</summary>
     sealed class Level(TerrainTrailRenderer owner, float texel, InternalFormat format, string name)
     {
-        readonly GpuProgram program = owner.frame.Program(Vertex, StampFragment.Replace("TEXEL_SCALE", (Texel / texel).ToString("0.0###", System.Globalization.CultureInfo.InvariantCulture)), name);
+        readonly GpuProgram program = owner.frame.Program(Vertex, StampFragment.Replace("TEXEL_SCALE", (Texel / texel).ToString("0.0###", System.Globalization.CultureInfo.InvariantCulture)).Replace("BINDLESS_DECLARATIONS", BindlessTable.Declarations(1)), name);
         readonly List<Row> cores = [];
         GpuPipeline? pipeline;
         GpuTexture? target;
@@ -363,10 +427,10 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             var (x, z) = o;
             float tx = s.Centre.X / texel, tz = s.Centre.Y / texel;
             if (tx < x || tz < z || tx >= x + Side || tz >= z + Side) return;
-            bool body = s.Kind >= TrailKind.Press, sole = s.Kind == TrailKind.Foot, square = s.Kind != TrailKind.Drag && !body && !sole;
+            bool body = s.Kind >= TrailKind.Press, imprint = s.Kind == TrailKind.Imprint;
             float margin = BodyMargin * Texel / texel;
-            float along = body ? s.Length * 0.5f / texel + margin : s.Length * 0.5f * QuadPerShape / texel;
-            float across = body ? s.Width * 0.5f / texel + margin : sole ? s.Length * 0.5f * QuadPerShape / texel : (square ? s.Length * 0.5f * QuadPerShape : s.Width * 0.5f) / texel;
+            float along = imprint ? s.Half / texel : body ? s.Length * 0.5f / texel + margin : s.Length * 0.5f * QuadPerShape / texel;
+            float across = imprint ? s.Half / texel : body ? s.Width * 0.5f / texel + margin : s.Width * 0.5f / texel;
             var a = s.Along * along;
             var b = new Vector2(s.Along.Y, -s.Along.X) * across;
             float reach = a.Length() + b.Length();
@@ -375,7 +439,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
                 for (int j = iz < reach ? 1 : 0; j >= (iz > Side - reach ? -1 : 0); j--)
                 {
                     var centre = new Vector2(ix + i * Side, iz + j * Side) / Side * 2 - Vector2.One;
-                    var row = new Row { Quad = new Vector4(centre, a.X * 2 / Side, a.Y * 2 / Side), Across = new Vector4(b.X * 2 / Side, b.Y * 2 / Side, s.Strength, (float)s.Kind) };
+                    var row = new Row { Quad = new Vector4(centre, a.X * 2 / Side, a.Y * 2 / Side), Across = new Vector4(b.X * 2 / Side, b.Y * 2 / Side, s.Strength, (float)s.Kind), Tile = s.Tile };
                     Add(row);
                     if (body) cores.Add(row with { Across = row.Across with { W = row.Across.W + 1 } });
                 }
@@ -404,7 +468,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
                 state.Record(cmd, t);
                 cmd.BindPipeline(pipeline ??= gpu.Pipelines.Get(state.Pipeline(program, Rows, PrimitiveType.TriangleStrip, t.Formats, name)));
                 owner.frame.Bind(cmd, program, default);
-                Span<GpuBufferBinding> buffers = [new(slice.Handle, slice.Offset), new(slice.Handle, slice.Offset + 16)];
+                Span<GpuBufferBinding> buffers = [new(slice.Handle, slice.Offset), new(slice.Handle, slice.Offset + 16), new(slice.Handle, slice.Offset + 32)];
                 cmd.BindVertexBuffers(0, buffers);
                 cmd.Draw(4, (uint)count);
             }

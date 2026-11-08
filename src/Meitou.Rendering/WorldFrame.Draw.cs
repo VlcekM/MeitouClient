@@ -456,6 +456,7 @@ static partial class WorldFrame
         var trails = TerrainTrails.Enabled ? gpu.Trails : null;
         gpu.Terrain.Trails = trails;
         if (trails is null) return;
+        trails.Imprints = gpu.Characters;
         var weather = gpu.Weather;
         trails.Record(focus, weather?.Times.Game ?? 0, WeatherSurfaces.RainAmount(gpu.Surfaces?.Rain ?? 0), weather?.State.WindSpeed ?? 0);
     }
