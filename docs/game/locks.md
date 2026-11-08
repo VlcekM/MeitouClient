@@ -323,7 +323,7 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   town nodes ([ai-tasks](ai-tasks.md#town-goals)). Data (**Verified**, base game probe): `Bed` and `Skeleton Repair Bed` hold two `Node Use` (node type 4)
   instances at local Z +11.18 / -11.05 (+12.18 / -12.05), the second turned 180°; Old, Camp and Fish Bed have none. `sleepinbed` holds `Bip01` at about
   (-11.8, 6.7, -1.5) in model space (`gotobed` moves it there from the origin), so from a node the pelvis lands on the mattress centre. Meitou:
-  `FixtureRegistry.LieSpot`, also applied to a sleeper bound on load (engine choice).
+  `FixtureRegistry.LieSpot`, also applied to a sleeper bound on load (engine choice), which also takes the bed's clip again (it is not saved; without it a loaded sleeper lay on the floor at the node).
   **Bad nodes** (**Verified**): with 2 or more use nodes `getPositionMarker` skips every node in the building's bad-node map (`+0x318` / `+0x338`) and returns node 0 when all are skipped. `FUN_14054d410(building, position)` marks the node
   nearest the position within 20 units (squared 400) with the world clock (`DAT_1421303d0 + 0xa0`, game hours, **Observed**: Task_TakeIntruderOutside's 5-minute rule reads its differences x 60); its only producer is `notifyPathImpossible`
   (`FUN_140796ed0`, from the path-failure paths `FUN_140332150`, `FUN_14033da80`, `FUN_14050d970`, `FUN_14060d6a0`, `FUN_1405c6840` when the failed goal is a building; the position is the movement object's vector `+0xdc`, goal or position **Unknown**). It also

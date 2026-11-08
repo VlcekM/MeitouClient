@@ -525,11 +525,12 @@ public sealed partial class FixtureRegistry
             // Matched from the original's keys: the held state is the one loaded, so they are written back as read (HeldSave.Write).
             if (c.Save is { } loaded && loaded.InWhat == what) loaded.InWhat = f.Id;
             // A loaded sleeper is put at its lie spot again (engine choice: a save from before LieSpot holds it at the bed's origin, half off the mattress),
-            // still sleeping: a task other than Sleep would get it up (BedSystem).
+            // still sleeping: a task other than Sleep would get it up (BedSystem). It plays the bed's clip as one laid in does (EnterBed); the clip is not saved.
             if (c.InSomething == HeldState.Bed)
             {
                 var (at, yaw) = LieSpot(f, next[s].Position, world.GameHours);
                 table.Place(s, at, yaw, CharacterTask.Sleep);
+                c.OperateClip = f.Bed.Clip;
             }
         }
     }
