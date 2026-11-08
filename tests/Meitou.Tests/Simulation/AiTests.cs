@@ -738,6 +738,7 @@ public class AiTests(ITestOutputHelper output)
         var saved = builder.AddPlatoon("Testfolk_7", "Testfolk", "20-t", "12-t", new Vector3(Centre.X + 500, 300, Centre.Z));
         saved.Record.Strings["basetown"] = "30-t";
         saved.Record.Strings["currentPackage"] = "117-t";   // not the one the slot rule picks (116-t, the first)
+        saved.Record.Ints["sqt"] = 2;   // the roaming pool, as the original and SaveCapture write a roaming platoon (sqt 1 is the residents')
         builder.Game.UpdateDerived();
         string platoonFolder = Path.Combine(Path.GetTempPath(), "meitou-ai-" + Guid.NewGuid().ToString("N"));
         try

@@ -402,7 +402,8 @@ public static class SaveLoader
         && Hand.Read(platoon.Record, "homebuilding") is { IsNull: false, Type: (int)FcsRecordType.Building };
 
     /// <summary>
-    /// Whether a saved NPC platoon travels and so gets a roaming stand-in (<b>engine rule</b>, from the five saves of docs/formats/save.md: residents are marked <c>is resident</c>, and
+    /// Whether a saved NPC platoon travels and so gets a roaming stand-in (<b>engine rule</b>, from the five saves of docs/formats/save.md: residents are marked <c>is resident</c> and
+    /// counted in the town's <c>sqt</c> 1 pool, and
     /// the bar squads, slaves and farm animals of a town have a package whose unloaded func keeps them home, 4, or 0): not a resident, and an off-screen job that moves it
     /// (unloaded func 2, 5 or 6) and not a bar squad of the town or its faction (which the population makes with the town), or a template of its base town's <c>roaming squads</c>.
     /// </summary>
@@ -410,6 +411,8 @@ public static class SaveLoader
     {
         string template = platoon.SquadTemplate;
         if (platoon.Record.Bools.GetValueOrDefault("is resident")) return false;
+        // `sqt` 1 is the town's resident pool (residents and bar squads, docs/formats/save.md "PLATOON keys"): the platoon belongs to its town, wherever its package walks it.
+        if (platoon.Record.Ints.GetValueOrDefault("sqt", 2) == 1) return false;
         if (baseTown.RoamingSquads.Any(r => r.Id == template)) return true;
         if (baseTown.BarSquads.Any(r => r.Id == template) || townFaction?.BarSquads.Any(r => r.Id == template) == true) return false;
         return job is Ai.PlatoonJob.PatrolShortRange or Ai.PlatoonJob.TravelTarget or Ai.PlatoonJob.TravelTargetFast;
