@@ -106,12 +106,14 @@ static class BuildingLodShaders
                 if (studioLamps() > 0)
                 {
                     // The set's lamps in place of the sun (the editor's bar): the first casts the shadow.
-                    colour = albedo * sky;
-                    float lampShade = studioLampShadow(vWorld, n, sl);
+                    float giFound;
+                    vec3 giLight = studioGi(vWorld, n, giFound);
+                    colour = albedo * (giFound > 0.0 ? giLight : sky);
+                    float lampShade = studioLampShadow(vWorld, n, sl, giFound > 0.0 ? 0.0 : 0.5);
                     for (int lamp = 0; lamp < studioLamps(); lamp++)
                     {
                         vec3 ll;
-                        vec3 light = studioLamp(lamp, vWorld, ll) * (lamp == 0 ? lampShade : 1.0);
+                        vec3 light = studioLamp(lamp, vWorld, ll) * (lamp == 0 ? lampShade : 1.0) * studioLampSeen(lamp);
                         vec3 lh = normalize(ll + v);
                         float ln = max(dot(n, ll), 0.0);
                         colour += albedo * ln * light + pow(max(dot(n, lh), 0.0), 8.0 + 56.0 * gloss) * gloss * uSpecular * 0.6 * ln * light;

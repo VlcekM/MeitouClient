@@ -271,7 +271,38 @@ internal sealed unsafe class GiScene : IDisposable
         UpdateGrass(eye, foliage);
         UpdateCharacters(eye, characters);
         Evict();
+        FinishTop(started);
+    }
 
+    /// <summary>
+    /// A scene of <paramref name="stage"/> alone (no terrain, foliage or characters: the character editor's set, <see cref="StudioGi"/>), its origin near <paramref name="eye"/>;
+    /// what is not loaded yet joins on a later frame.
+    /// </summary>
+    public void UpdateStage(Vector3 eye, WorldObjectRenderer objects, IReadOnlyList<ObjectStreamer.Instance> stage)
+    {
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+        frame++;
+        if (!originSet || Vector3.Distance(eye, Origin) > 512)
+        {
+            Origin = new Vector3(MathF.Round(eye.X / 64) * 64, MathF.Round(eye.Y / 64) * 64, MathF.Round(eye.Z / 64) * 64);
+            originSet = true;
+        }
+        instances.Clear();
+        records.Clear();
+        BuiltThisFrame = 0;
+        seg = null;
+        split = false;
+        foreach (var inst in stage)
+            if (inst is { Gpu: not null, Materials: not null } && !TryAddObject(inst, objects, null, MaxInstances)) break;
+        Evict();
+        FinishTop(started);
+    }
+
+    /// <summary>The top level over this frame's instances and the records, ending the frame's native list.</summary>
+    void FinishTop(long started)
+    {
+        var slot = slots[ctx.Frame.Slot];
+        var topSlot = SharedTop ? slots[0] : slot;
         // The top level, over this frame's instances: built again only when they are not those of its slot's last build (the eye still or walking, the
         // origin and the object set hold, see ReuseTop). The instances are plain data, so equal bytes are an equal structure.
         var bytes = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(instances));

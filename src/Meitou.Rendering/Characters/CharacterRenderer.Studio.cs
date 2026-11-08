@@ -29,8 +29,9 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>The fog distance of the studio's colour draw and of its depth draws (CharacterShaders).</summary>
     const float StudioColour = -4, StudioDepth = -5;
     /// <summary>The lamps the view block has room for (<c>cutPlanes</c> past the light's matrix, two each), the share of the studio's ambient left at night, and the lamps' strength.</summary>
-    const int MaxStudioLamps = 14;
-    const float StudioNightAmbient = 0.12f, StudioLampGain = 3.0f;
+    const int MaxStudioLamps = Gi.StudioGi.MaxLamps;
+    internal const float StudioLampGain = 3.0f;
+    const float StudioNightAmbient = 0.12f;
 
     GpuTexture? studioShadowColour, studioShadowDepth, studioAo, studioSkyColour, studioSkyDepth;
     uint studioShadowIndex, studioAoIndex, studioSkyIndex;
@@ -40,8 +41,10 @@ internal sealed unsafe partial class CharacterRenderer
 
     /// <summary>What else casts into the stage's studio maps (the editor's platform, <c>WorldObjectRenderer.RecordStagePropDepth</c>): called inside each
     /// map's pass with its world view-projection and eye. The host sets it before <see cref="DrawStage"/>; the portraits have none.</summary>
-    internal Action<Matrix4x4, Vector3>? StageCasters { get; set; }
-    Action<Matrix4x4, Vector3>? studioCasters;
+    internal Action<Matrix4x4, Vector3, bool>? StageCasters { get; set; }
+    Action<Matrix4x4, Vector3, bool>? studioCasters;
+    /// <summary>The set's traced light (the editor's bar; null elsewhere).</summary>
+    internal Gi.StudioGi? StageTraced { get; set; }
 
     /// <summary>
     /// The studio's shadow and occlusion for <paramref name="index"/>'s character (posed as the caller has it) seen through <paramref name="viewProjection"/> into
@@ -69,6 +72,9 @@ internal sealed unsafe partial class CharacterRenderer
         companyOn = true;
         DrawStudioDepth(index, viewProjection, eye, eye, colour, depth, width, height, "studio depth");
         companyOn = false;
+        // The set's traced light (the editor's bar): each lamp's visibility from this depth.
+        var traced = studioCasters is not null ? StageTraced : null;
+        traced?.TraceVisibility(depth, viewProjection, width, height, Math.Max(stageHdrScale, 1));
         RunStudioAo(depth, width, height, projection, radius);
 
         var v = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = toSun, FogDistance = StudioColour };
@@ -90,6 +96,7 @@ internal sealed unsafe partial class CharacterRenderer
                 v.CutPlanes[4 + 2 * i] = new Vector4(lamps[i].Position, lamps[i].Radius);
                 v.CutPlanes[5 + 2 * i] = new Vector4(lamps[i].Colour * StudioLampGain, 0);
             }
+            traced?.Fill(ref v);
         }
         return v;
     }
@@ -140,7 +147,7 @@ internal sealed unsafe partial class CharacterRenderer
                 var rect = new PixelRect(x, y, StudioSkyTile, StudioSkyTile);
                 Gpu.SetPassViewport(new PixelViewport(x, y, StudioSkyTile, StudioSkyTile, 0, 1), rect);
                 DrawView(new ViewConstants { ViewProjection = matrix, Eye = centre + d * (radius * 2), FogDistance = StudioDepth }, lodEye, []);
-                studioCasters?.Invoke(matrix, centre + d * (radius * 2));
+                studioCasters?.Invoke(matrix, centre + d * (radius * 2), false);
             }
         }
         finally { portraitLive = was; }
@@ -166,7 +173,7 @@ internal sealed unsafe partial class CharacterRenderer
         portraitLive = index;
         try { DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, FogDistance = StudioDepth }, lodEye, []); }
         finally { portraitLive = was; }
-        studioCasters?.Invoke(viewProjection, eye);
+        studioCasters?.Invoke(viewProjection, eye, companyOn);
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
         Gpu.EndNative(cmd);
@@ -208,7 +215,7 @@ internal sealed unsafe partial class CharacterRenderer
 /// </summary>
 internal static class StudioShaders
 {
-    public const string Functions = """
+    public static readonly string Functions = """
         // The studio (CharacterRenderer.Studio, Meitou previews): its sun's shadow map and occlusion through the view block's interior-cut fields, which the
         // characters never use: cutPad the map's bindless index, cutPlanes[0..3] its matrix relative to cutRanges[0].xyz (w: a texel in world units),
         // cutVolumes the occlusion's index (the preview's own pixels).
@@ -238,12 +245,35 @@ internal static class StudioShaders
                 }
             return lit / total;
         }
-        // The key lamp's shadow on the set: never full (the room's other light fills it) and gone before the map's edge, which would otherwise cut it in a straight line.
-        float studioLampShadow(vec3 world, vec3 n, vec3 l)
+        // The key lamp's shadow map on the set (the character's own shape): gone before the map's edge, which would otherwise cut it in a straight line; never full without the traced light to fill it.
+        float studioLampShadow(vec3 world, vec3 n, vec3 l, float least)
         {
             mat4 m = mat4(view.cutPlanes[0], view.cutPlanes[1], view.cutPlanes[2], view.cutPlanes[3]);
             vec4 c = m * vec4(world - view.cutRanges[0].xyz, 1.0);
-            return mix(mix(0.5, 1.0, studioShadow(world, n, l)), 1.0, smoothstep(0.65, 0.95, max(abs(c.x), abs(c.y))));
+            return mix(mix(least, 1.0, studioShadow(world, n, l)), 1.0, smoothstep(0.65, 0.95, max(abs(c.x), abs(c.y))));
+        }
+        // The set's traced light (Gi.StudioGi): the light arriving at a point from the probes; found 0: none there (not ready, or outside the grid).
+        vec4 studioGiTexel(ivec2 p) { return texelFetch(textures2D[nonuniformEXT(uint(view.cutPlanes[29].x + 0.5))], p, 0); }
+""" + Gi.StudioGi.Reading.Replace("GI_NAME", "studioProbes").Replace("GI_GRID", "view.cutPlanes[28]").Replace("GI_DIMS", "ivec3(view.cutPlanes[29].yzw + 0.5)").Replace("FETCH(", "studioGiTexel(") + """
+        vec3 studioGi(vec3 world, vec3 n, out float found)
+        {
+            found = 0.0;
+            return view.cutPlanes[29].x > 0.5 ? studioProbes(world, n, found) : vec3(0.0);
+        }
+        // Whether lamp i reaches this pixel (traced for the first eight); 1 past them or before the first trace.
+        float studioLampSeen(int i)
+        {
+            if (view.cutPlanes[30].x < 0.5 || i >= 8) return 1.0;
+            uint target = uint((i < 4 ? view.cutPlanes[30].x : view.cutPlanes[30].y) + 0.5);
+            vec2 size = vec2(textureSize(textures2D[nonuniformEXT(target)], 0)) * view.cutPlanes[30].z;
+            // A small cross of bilinear taps, two picture pixels of the trace apart: the lamp is not a point.
+            float seen = 0.0;
+            for (int k = 0; k < 5; k++)
+            {
+                vec2 o = k == 0 ? vec2(0.0) : vec2(k == 1 ? 2.0 : k == 2 ? -2.0 : 0.0, k == 3 ? 2.0 : k == 4 ? -2.0 : 0.0) * view.cutPlanes[30].z;
+                seen += textureLod(textures2D[nonuniformEXT(target)], (gl_FragCoord.xy + o) / size, 0.0)[i % 4];
+            }
+            return seen / 5.0;
         }
         // The sky's visibility (CharacterRenderer.Studio): the share of the sphere's spiral directions, weighted by the normal, from which nothing of the
         // character hides the point, each read in its tile of the sky atlas (cutRanges[1]: its bindless index, the directions, the radius, a tile's pixels).

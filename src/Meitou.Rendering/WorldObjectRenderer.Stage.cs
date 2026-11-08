@@ -31,6 +31,17 @@ public sealed unsafe partial class WorldObjectRenderer
         foreach (var prop in props) stageInstances.Add(streamer.MakeLoose(prop));
     }
 
+    Gi.StudioGi? studioGi;
+
+    /// <summary>The set's traced light, brought up to date (Vulkan with ray queries; null otherwise).</summary>
+    internal Gi.StudioGi? UpdateStageLight(IReadOnlyList<Characters.StageLamp> lamps, Vector3 centre)
+    {
+        if (Gpu is not GpuContext ctx || !ctx.Device.HasRayQuery) return null;
+        studioGi ??= new Gi.StudioGi(ctx);
+        studioGi.Update(this, stageInstances, lamps, centre, Characters.CharacterRenderer.StudioLampGain);
+        return studioGi;
+    }
+
     /// <summary>The loaded props into this frame's instance data, relative to <paramref name="origin"/>; <paramref name="castersOnly"/>: those near enough the character to cast. The number written.</summary>
     int FillStageInstances(Vector3 origin, bool castersOnly)
     {
@@ -63,9 +74,10 @@ public sealed unsafe partial class WorldObjectRenderer
     /// The stage's prop into the pass the caller has open (the character renderer's studio maps: the sun's, the sky's, the camera's depth), seen through
     /// <paramref name="viewProjection"/> (world) from <paramref name="origin"/>, as a studio depth draw (cut-outs only). What is not loaded yet is left out.
     /// </summary>
-    internal void RecordStagePropDepth(Matrix4x4 viewProjection, Vector3 origin)
+    /// <param name="whole">The whole set (the camera's depth, from which the lamps are traced), not only what can cast on the character.</param>
+    internal void RecordStagePropDepth(Matrix4x4 viewProjection, Vector3 origin, bool whole = false)
     {
-        if (FillStageInstances(origin, castersOnly: true) > 0)
+        if (FillStageInstances(origin, castersOnly: !whole) > 0)
         {
             var constants = new ViewConstants { ViewProjection = Matrix4x4.CreateTranslation(origin) * viewProjection, Eye = Vector3.Zero, FogDistance = -5 };
             PrepareDraws(iconOptions, wire: false);
@@ -97,6 +109,7 @@ public sealed unsafe partial class WorldObjectRenderer
             constants.CutRanges[0] = new Vector4(new Vector3(sv.CutRanges[0].X, sv.CutRanges[0].Y, sv.CutRanges[0].Z) - eye, sv.CutRanges[0].W);
             for (int i = 0; i < (int)sv.CutRanges[2].X; i++)
                 constants.CutPlanes[4 + 2 * i] = new Vector4(new Vector3(sv.CutPlanes[4 + 2 * i].X, sv.CutPlanes[4 + 2 * i].Y, sv.CutPlanes[4 + 2 * i].Z) - eye, sv.CutPlanes[4 + 2 * i].W);
+            constants.CutPlanes[28] = new Vector4(new Vector3(sv.CutPlanes[28].X, sv.CutPlanes[28].Y, sv.CutPlanes[28].Z) - eye, sv.CutPlanes[28].W);
         }
         PrepareDraws(iconOptions, wire: false);
         for (int d = 0; d < drawCount; d++) draws[d].Push.Spare = MeshSurface.NoWeather;

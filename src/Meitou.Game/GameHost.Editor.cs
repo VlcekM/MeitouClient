@@ -93,7 +93,9 @@ sealed partial class GameHost
         characters.StageFar = editorBar is null ? 400 : 1500;
         player.EditorNight = editorBar is not null;
         // The set casts into the studio's maps (Meitou, previewsun), as the character does.
-        characters.StageCasters = ActiveObjects is { } caster ? (viewProjection, eye) => caster.RecordStagePropDepth(viewProjection, eye) : null;
+        characters.StageCasters = ActiveObjects is { } caster ? (viewProjection, eye, whole) => caster.RecordStagePropDepth(viewProjection, eye, whole) : null;
+        // The bar's traced light, on its own scene: the world is not touched.
+        characters.StageTraced = editorBar is { } set && ActiveObjects is { } tracedSet && characters.StageView is { } last ? tracedSet.UpdateStageLight(set.Lamps, last.Feet.Translation) : null;
         characters.DrawStage();
         DrawEditorPlatform(view.Character, characters);
         characters.ResolveStage();
@@ -147,7 +149,7 @@ sealed partial class GameHost
         editorBar = null;
         editorCrowd.Clear();
         player.EditorNight = false;
-        if (ActiveCharacters is { } characters) (characters.StageLamps, characters.StageCompany, characters.StageFar) = (null, null, 400);
+        if (ActiveCharacters is { } characters) (characters.StageLamps, characters.StageCompany, characters.StageFar, characters.StageTraced) = (null, null, 400, null);
     }
 
     /// <summary>The bar when the set is the bar (the <c>editorbar</c> switch); null with the platform.</summary>
