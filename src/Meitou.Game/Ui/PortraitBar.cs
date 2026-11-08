@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
@@ -6,13 +7,13 @@ using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Simulation;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The squad bar's portraits (both UI modes; docs/game/ui-screens.md): a cell per member as the original's <c>Kenshi_PortraitCharacter</c> lays it out (the
 /// background, the portrait the renderer draws into its atlas, the name along the bottom, the frame that is the button), left to right on the squad tab's page.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class PortraitBar(PlayerInterface player)
 {
     /// <summary>The ImageBox texture name of the renderer's portrait atlas (<see cref="CharacterRenderer.PortraitAtlas"/>).</summary>
     public const string PortraitTexture = "meitou:portraits";
@@ -42,17 +43,17 @@ sealed partial class PlayerInterface
         into.Clear();
         foreach (var c in SquadBarMembers())
             if (into.Count < FullRateCount) into.Add(c.Id);
-        foreach (var squad in session.CurrentSnapshot.PlayerSquads)
+        foreach (var squad in player.session.CurrentSnapshot.PlayerSquads)
             foreach (var id in squad.Members)
                 if (into.Count < FullRateCount) into.Add(id);
-        if (Selected().FirstOrDefault() is { } first) into.Add(first.Id);
+        if (player.Selected().FirstOrDefault() is { } first) into.Add(first.Id);
     }
 
     /// <summary>The characters the squad bar shows, the active squad's in order: the first atlas cells (<see cref="PortraitMembers"/>).</summary>
     public IReadOnlyList<CharacterSnapshot> SquadBarMembers()
     {
-        var byId = session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
-        return [.. ActiveSquadMembers().Select(byId.GetValueOrDefault).OfType<CharacterSnapshot>().Take(DialogueNpcCell)];
+        var byId = player.session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
+        return [.. player.ActiveSquadMembers().Select(byId.GetValueOrDefault).OfType<CharacterSnapshot>().Take(DialogueNpcCell)];
     }
 
     /// <summary>
@@ -62,22 +63,22 @@ sealed partial class PlayerInterface
     public IReadOnlyList<CharacterSnapshot> PortraitMembers()
     {
         var bar = SquadBarMembers();
-        if (!SquadsShown) return bar;   // the others are drawn (and posed out of range) only while the squads screen shows them
-        var byId = session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
+        if (!player.squadWindows.SquadsShown) return bar;   // the others are drawn (and posed out of range) only while the squads screen shows them
+        var byId = player.session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
         var shown = bar.Select(c => c.Id).ToHashSet();
-        var rest = session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Where(id => shown.Add(id)).Select(byId.GetValueOrDefault).OfType<CharacterSnapshot>();
+        var rest = player.session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Where(id => shown.Add(id)).Select(byId.GetValueOrDefault).OfType<CharacterSnapshot>();
         return [.. bar.Concat(rest).Take(DialogueNpcCell)];
     }
 
     /// <summary>The speaker and the player character of the open conversation, whose portraits the host draws into <see cref="DialogueNpcCell"/> and <see cref="DialoguePlayerCell"/>.</summary>
     public (CharacterId Npc, CharacterId Player)? DialoguePortraitCharacters() =>
-        session.CurrentSnapshot.Conversation is { } talk ? (talk.Speaker.IsNone ? talk.Npc : talk.Speaker, talk.Player) : null;
+        player.session.CurrentSnapshot.Conversation is { } talk ? (talk.Speaker.IsNone ? talk.Npc : talk.Speaker, talk.Player) : null;
 
     /// <summary>The number that turns a character's portrait camera (<see cref="CharacterSnapshot.PortraitSerial"/>; 0 for one not in the snapshot).</summary>
-    public uint PortraitSerial(CharacterId id) => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.PortraitSerial ?? 0;
+    public uint PortraitSerial(CharacterId id) => player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.PortraitSerial ?? 0;
 
     /// <summary>The conversation window's two portraits over the layout's <c>NpcPortrait</c> and <c>PlayerPortrait</c> frames.</summary>
-    void AddDialoguePortraits(List<UiControl> controls)
+    internal void AddDialoguePortraits(List<UiControl> controls)
     {
         foreach (var (name, cell) in new[] { ("NpcPortrait", DialogueNpcCell), ("PlayerPortrait", DialoguePlayerCell) })
         {
@@ -88,33 +89,30 @@ sealed partial class PlayerInterface
         }
     }
 
-    /// <summary>Gives the interface a texture drawn at run time (the portrait atlas) under <paramref name="name"/>.</summary>
-    public void SetUiTexture(string name, GpuTexture texture, SampledTexture sampled) => uiPainter?.SetTexture(name, texture, sampled);
-
     /// <summary>The squad bar's page, its row height and how far its rows are scrolled (the ItemBox scrolls a row per wheel notch).</summary>
     UiRect squadBarPage;
-    float squadBarRow, squadBarScroll;
+    internal float squadBarRow, squadBarScroll;
 
     /// <summary>The wheel over the squad bar scrolls its rows; clamped when the bar is laid out.</summary>
-    bool SquadBarWheel(Vector2 p, float steps)
+    internal bool SquadBarWheel(Vector2 p, float steps)
     {
         if (squadBarRow <= 0 || !squadBarPage.Contains(p.X, p.Y)) return false;
         squadBarScroll -= MathF.Sign(steps) * squadBarRow;
-        if (inventoryViews.TryGetValue("SquadPanel", out var view))
-            squadBarScroll = inventoryScroll["SquadPanel"] = Math.Clamp(squadBarScroll, 0, view.Maximum);
+        if (player.inventoryViews.TryGetValue("SquadPanel", out var view))
+            squadBarScroll = player.inventoryScroll["SquadPanel"] = Math.Clamp(squadBarScroll, 0, view.Maximum);
         return true;
     }
 
     /// <summary>The squad bar member whose portrait is at <paramref name="p"/>, if any.</summary>
-    CharacterId? SquadBarMemberAt(Vector2 p)
+    internal CharacterId? SquadBarMemberAt(Vector2 p)
     {
-        if (!UiVisible || MyGuiPresentation.HitTest(ArrangeUi(), p.X, p.Y) is not { Action: "meitou:member" } frame
+        if (!player.UiVisible || MyGuiPresentation.HitTest(player.ArrangeUi(), p.X, p.Y) is not { Action: "meitou:member" } frame
             || !int.TryParse(frame.Argument, NumberStyles.None, CultureInfo.InvariantCulture, out int i)) return null;
         var members = SquadBarMembers();
         return i < members.Count ? members[i].Id : null;
     }
 
-    void AddSquadPortraits(List<UiControl> controls, UiRect panel)
+    internal void AddSquadPortraits(List<UiControl> controls, UiRect panel)
     {
         var members = SquadBarMembers();
         if (members.Count == 0) return;
@@ -122,7 +120,7 @@ sealed partial class PlayerInterface
         var page = new UiRect(panel.X + panel.Width * 0.0183727f, panel.Y + panel.Height * 0.206897f, panel.Width * 0.965879f, panel.Height * 0.737069f);
         // The page's ItemBox (docs/game/ui-screens.md "Squad bar"): square cells 0.9 of its height, or of its width over the members (counted up to 10), 60 to
         // 128 px at 1080p and even, filled left to right in rows; rows past the page are cut off.
-        float scale = InventoryScale;
+        float scale = player.InventoryScale;
         float fit = Math.Min(page.Height * 0.9f, page.Width * 0.9f / Math.Min(members.Count, 10)) / scale;
         float size = MathF.Floor(Math.Clamp(fit, 60, 128) / 2) * 2 * scale, k = size / PortraitLayoutSize;
         int columns = Math.Max(1, (int)(page.Width / size)), rows = (members.Count + columns - 1) / columns;
@@ -137,22 +135,22 @@ sealed partial class PlayerInterface
             columns = Math.Max(1, (int)(page.Width / size));
             rows = (members.Count + columns - 1) / columns;
             maximum = Math.Max(0, rows * size - page.Height);
-            squadBarScroll = Math.Clamp(inventoryScroll.GetValueOrDefault("SquadPanel"), 0, maximum);
-            inventoryScroll["SquadPanel"] = squadBarScroll;
-            inventoryViews["SquadPanel"] = (page, maximum);
-            AddScrollBar("SquadPanel", controls, new(page.X + page.Width, page.Y, barWidth, page.Height), page.Height,
+            squadBarScroll = Math.Clamp(player.inventoryScroll.GetValueOrDefault("SquadPanel"), 0, maximum);
+            player.inventoryScroll["SquadPanel"] = squadBarScroll;
+            player.inventoryViews["SquadPanel"] = (page, maximum);
+            player.AddScrollBar("SquadPanel", controls, new(page.X + page.Width, page.Y, barWidth, page.Height), page.Height,
                 page.Height + maximum, squadBarScroll, maximum, panel, "hud-squad");
         }
         else
         {
-            inventoryViews.Remove("SquadPanel");
-            inventoryTracks.Remove("SquadPanel");
+            player.inventoryViews.Remove("SquadPanel");
+            player.inventoryTracks.Remove("SquadPanel");
             squadBarScroll = 0;
         }
         squadBarPage = page;
         squadBarRow = size;
         squadBarScroll = Math.Clamp(squadBarScroll, 0, Math.Max(0, rows * size - page.Height));
-        var camera = session.Camera.Current;
+        var camera = player.session.Camera.Current;
         PrunePortraitFlashes(members);
         for (int i = 0; i < members.Count; i++)
         {
@@ -173,5 +171,85 @@ sealed partial class PlayerInterface
             controls.Add(new($"member-{i}", "Button", At(0, 0, 136, 136), "", "meitou:member", "Kenshi_PortraitFrameSkin", true,
                 new Dictionary<string, string> { ["Checked"] = m.Selected ? "true" : "false" }, Vector4.Zero, Argument: i.ToString(CultureInfo.InvariantCulture), Clip: page));
         }
+    }
+
+    // The squad portraits' states (docs/game/ui-screens.md "Portrait cells"): the original's per-cell flags and how its <c>Kenshi_PortraitCharacter</c> cell shows them, the
+    // <c>Background</c> (Normal, or a flashing Hurt), the <c>BackOverlay</c> (Combat, Hunger), the <c>FrontOverlay</c> (Slave, Prison) and the faded portrait.
+    [Flags]
+    enum PortraitState
+    {
+        None = 0,
+        Selected = 1,
+        /// <summary>Away from the camera and in danger: the red background, flashing.</summary>
+        Hurt = 2,
+        /// <summary>Down, carried or in bed: the portrait at a quarter alpha, and no flash.</summary>
+        Faded = 4,
+        Combat = 8,
+        Slave = 0x10,
+        Prison = 0x20,
+        /// <summary>Being eaten: the <c>Eaten</c> front overlay, over Prison and Slave.</summary>
+        Eaten = 0x40,
+        Hunger = 0x80,
+    }
+
+    /// <summary>When each member's flash started (<see cref="Stopwatch"/> ticks); a member leaves when its flash stops.</summary>
+    internal readonly Dictionary<CharacterId, long> portraitFlashes = [];
+
+    /// <summary>
+    /// The original's flags (<c>FUN_140414dc0</c>). Its danger test reads a float of the character's AI that is not decoded (eating also waits while it is above 0); Meitou takes
+    /// "in a fight" for it. Being eaten (<c>+0x279 &amp; 7</c>, <see cref="BodyStatus.BeingEaten"/>) also flashes, and sets <c>Eaten</c>.
+    /// </summary>
+    PortraitState PortraitStateOf(CharacterSnapshot m, Vector3 eye, Vector3 focus)
+    {
+        var s = PortraitState.None;
+        if (m.Selected) s |= PortraitState.Selected;
+        bool dead = m.Body is { Dead: true } or { Unconscious: true }, carried = !m.CarriedBy.IsNone, eaten = m.Body is { BeingEaten: true };
+        bool down = dead || carried;
+        if (Vector3.DistanceSquared(m.Position, eye) >= 1e6f && Vector3.DistanceSquared(m.Position, focus) >= 1e5f && (!down && m.InCombat && m.Prison is null || eaten))
+            s |= PortraitState.Hurt;
+        if (eaten) s |= PortraitState.Eaten;
+        if (dead || carried || m.InBed) s |= PortraitState.Faded;
+        if (m.CombatMode) s |= PortraitState.Combat;
+        if (m.Body is { Hunger: < 1.25f }) s |= PortraitState.Hunger;
+        if (m.Shackled) s |= PortraitState.Slave;
+        if (m.Prison is not null) s |= PortraitState.Prison;
+        return s;
+    }
+
+    /// <summary>
+    /// The background's alpha (<c>FUN_140415150</c>): a flash starts at 1 and moves by 2 per second, down to 0 and back, while the member is <see cref="PortraitState.Hurt"/> and not
+    /// <see cref="PortraitState.Faded"/>; otherwise 1.
+    /// </summary>
+    float PortraitFlash(CharacterId id, PortraitState s)
+    {
+        if ((s & PortraitState.Hurt) == 0 || (s & PortraitState.Faded) != 0)
+        {
+            portraitFlashes.Remove(id);
+            return 1;
+        }
+        long now = Stopwatch.GetTimestamp();
+        if (!portraitFlashes.TryGetValue(id, out long start)) portraitFlashes[id] = start = now;
+        double t = Stopwatch.GetElapsedTime(start, now).TotalSeconds;
+        return (float)Math.Abs(1 - 2 * (t - Math.Floor(t)));
+    }
+
+    /// <summary>Drops the flashes of characters no longer on the squad bar.</summary>
+    void PrunePortraitFlashes(IReadOnlyList<CharacterSnapshot> members)
+    {
+        if (portraitFlashes.Count == 0) return;
+        foreach (var id in portraitFlashes.Keys.ToList())
+            if (!members.Any(m => m.Id == id)) portraitFlashes.Remove(id);
+    }
+
+    static string BackOverlayName(PortraitState s) => (s & PortraitState.Combat) != 0 ? "Combat" : (s & PortraitState.Hunger) != 0 ? "Hunger" : "";
+
+    static string FrontOverlayName(PortraitState s) => (s & PortraitState.Eaten) != 0 ? "Eaten" : (s & PortraitState.Prison) != 0 ? "Prison" : (s & PortraitState.Slave) != 0 ? "Slave" : "";
+
+    /// <summary>An image of the cell's <c>Kenshi_PortraitImage</c> set at <paramref name="alpha"/>.</summary>
+    static UiControl PortraitImage(string name, UiRect bounds, string group, string image, float alpha = 1)
+    {
+        var properties = new Dictionary<string, string> { ["ImageResource"] = "Kenshi_PortraitImage", ["ImageGroup"] = group, ["ImageName"] = image };
+        if (alpha < 1) properties["Alpha"] = alpha.ToString(CultureInfo.InvariantCulture);
+        return new(name, "ImageBox", bounds, "", "", "", true, properties, Vector4.Zero, Pickable: false);
     }
 }

@@ -1,4 +1,5 @@
 using System.Numerics;
+using Meitou.Game.Building;
 
 namespace Meitou.Game;
 
@@ -14,7 +15,7 @@ sealed partial class PlayerInterface
     IReadOnlyList<(Vector3[] Vertices, int[] Indices)> CollisionMeshOf(string record)
     {
         if (collisionMeshes.TryGetValue(record, out var known)) return known;
-        var mesh = buildHost?.Placement.CollisionMesh(record) ?? [];
+        var mesh = build.buildHost?.Placement.CollisionMesh(record) ?? [];
         collisionMeshes[record] = mesh;
         return mesh;
     }
@@ -25,7 +26,7 @@ sealed partial class PlayerInterface
     /// </summary>
     internal float? BuildingRayT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float yMin, float yMax, string? record, Vector3 position, float y, Quaternion rotation)
     {
-        if (RayPrism(ray.Origin, ray.Direction, hull, y + yMin, y + yMax) is not { } prism) return null;
+        if (BuildMode.RayPrism(ray.Origin, ray.Direction, hull, y + yMin, y + yMax) is not { } prism) return null;
         if (record is null) return prism;
         var mesh = CollisionMeshOf(record);
         return mesh.Count == 0 ? prism : RayMesh(ray, mesh, new Vector3(position.X, y, position.Z), rotation);
@@ -35,7 +36,7 @@ sealed partial class PlayerInterface
     /// Where the ray meets a building without collision (a farm) by its plot (<see cref="Building.PlacementServices.Plot"/>, an engine stand-in): just before the ground, when the ground
     /// the ray meets at <paramref name="ground"/> lies inside the placed hull; null otherwise.
     /// </summary>
-    static float? PlotT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float? ground)
+    internal static float? PlotT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float? ground)
     {
         if (ground is not { } t) return null;
         var at = ray.Origin + ray.Direction * t;
@@ -53,7 +54,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The nearest hit of the ray on the triangles (double sided), the mesh turned by <paramref name="rotation"/> and put at <paramref name="at"/>; null for none.</summary>
-    static float? RayMesh((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
+    internal static float? RayMesh((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
     {
         var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
         var inverse = Quaternion.Conjugate(q);

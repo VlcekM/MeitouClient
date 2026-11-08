@@ -250,7 +250,7 @@ sealed class GameLoop(GameHost host)
     {
         overlay = DebugOverlay.TryCreate(display.Context, host.assets.Find);
         if (overlay is not null) { host.player.CreateUiPainter(overlay, host.assets.Find); host.itemIconFiles.ConnectItemIcons(); }
-        if (host.gpu.Characters is { } portraits) { var (atlas, sampled) = portraits.PortraitAtlas; host.player.SetUiTexture(PlayerInterface.PortraitTexture, atlas, sampled); }
+        if (host.gpu.Characters is { } portraits) { var (atlas, sampled) = portraits.PortraitAtlas; host.player.SetUiTexture(PortraitBar.PortraitTexture, atlas, sampled); }
         host.debugMenu.debugToolsOn = true;
         host.debugMenu.profiler = overlay is null ? null : new FrameProfiler(display.Context, () => display.Context.GpuFrameMs);
     }
@@ -523,7 +523,7 @@ sealed class GameLoop(GameHost host)
         {
             if (heldEditKey?.Key == k) heldEditKey = null;
             if (k is SilkKey.ShiftLeft or SilkKey.ShiftRight) { shiftDown = false; host.player.SlowModifier = false; }
-            if (KeyMap.Map(k) is { } key) { host.session.Input.SetKey(key, false); host.player.BuildKeyUp(key); }
+            if (KeyMap.Map(k) is { } key) { host.session.Input.SetKey(key, false); host.player.build.BuildKeyUp(key); }
         };
         kb.KeyChar += (_, value) => OnKeyChar(value);
     }
@@ -658,14 +658,14 @@ sealed class GameLoop(GameHost host)
             return;
         }
         // A numpad key bound to a game hotkey (the orders, NUM0..NUM8 by default) is the game's, except with Ctrl (saving a shot) or the cinema's editor open (F6).
-        bool hotkey = !host.duel.IsDuel && !ctrl && !cinema.EditorVisible && KeyMap.Map(k) is { } gameKey && (host.player.IsHotkey(gameKey) || host.player.OwnsBuildNumpad(gameKey));
+        bool hotkey = !host.duel.IsDuel && !ctrl && !cinema.EditorVisible && KeyMap.Map(k) is { } gameKey && (host.player.gameHotkeys.IsHotkey(gameKey) || host.player.build.OwnsBuildNumpad(gameKey));
         if (!hotkey && Enum.TryParse(k.ToString(), out CinemaKey cinemaKey) && cinema.OnKey(cinemaKey, ctrl, shiftDown)) return;
         // F9 is the game's quickload; the fps counter is on Ctrl+F9 (a modifier, so the key never reaches the input bindings).
         if (k == SilkKey.F9 && ctrl) { host.debugMenu.fpsVisible = !host.debugMenu.fpsVisible; return; }
         if (KeyMap.Map(k) is not { } key || DebugKey(key, ctrl)) return;
-        if (host.player.BuildKey(key, shiftDown)) return;
+        if (host.player.build.BuildKey(key, shiftDown)) return;
         host.session.Input.SetKey(key, true);
-        host.player.Key(key, shiftDown);
+        host.player.gameHotkeys.Key(key, shiftDown);
         host.sandbox.SandboxKey(key);
         if (host.duel.IsDuel && key == EngineKey.Backspace) host.duel.duelRestartRequested = true;
         if (host.battle.IsBattle && key == EngineKey.Backspace) host.battle.battleRestartRequested = true;
@@ -680,7 +680,7 @@ sealed class GameLoop(GameHost host)
             host.player.Follow = null;
             tour.HopSeconds = host.config.CharacterFlightSeconds;
             tourFollows = false;
-            tour.Start(host.camera, [.. host.player.SquadBarMembers().Select(c => c.Id)], TourPosition);
+            tour.Start(host.camera, [.. host.player.portraitBar.SquadBarMembers().Select(c => c.Id)], TourPosition);
             if (tour.Active) cinemaHolds = true;
             else Console.WriteLine("squad tour: nobody else in the squad to fly to");
         }
@@ -910,7 +910,7 @@ sealed class GameLoop(GameHost host)
         host.gpu.CameraFlying = tour.Moving;   // the far shadow cascades wait for the landing (docs/render-shadows.md "Flights")
         host.gpu.Kept = !host.config.KeepTexturesAtCharacters ? []
             : host.config.KeepTexturesAtAllSquads ? [.. host.session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Select(TourPosition).OfType<Vector3>()]
-            : [.. host.player.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()];
+            : [.. host.player.portraitBar.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()];
         host.viewAspect = FramebufferSizeNow().X / (float)Math.Max(FramebufferSizeNow().Y, 1);   // headless: no window, the size asked for
     }
 
@@ -1010,7 +1010,7 @@ sealed class GameLoop(GameHost host)
         bool highlighting = highlightHeld && windowFocused && !host.Covered && !host.session.Camera.IsFree &&
             panel?.Visible != true && !host.agentChannel.interfaceHidden && !cinema.Clean && !cinemaHolds && !cinema.EditorVisible;
         if (host.gpu.Objects is { } signObjects) signObjects.HighlightSigns = highlighting;
-        host.player.HighlightFocus = highlighting && !host.screenshotRequested && takeFile is null ? host.camera.Target : null;
+        host.player.groundItemPicks.HighlightFocus = highlighting && !host.screenshotRequested && takeFile is null ? host.camera.Target : null;
         return highlighting;
     }
 
@@ -1023,7 +1023,7 @@ sealed class GameLoop(GameHost host)
             host.gpu.HoverKeys = [.. host.player.HighlightTargets(host.camera.Target, PlayerInterface.HighlightRadius).Select(t => (host.DrawKey(t.Id), t.Colour))];
         else
             host.gpu.HoverKeys = outlining && pointerWorld && host.player.HoverTarget is { } hover ? [(host.DrawKey(hover.Id), hover.Colour)] : [];
-        host.gpu.OutlinedBuildings = outlines && host.config.BuildingOutline ? host.player.OutlinedBuildings(hover: pointerWorld) : [];
+        host.gpu.OutlinedBuildings = outlines && host.config.BuildingOutline ? host.player.buildingSelection.OutlinedBuildings(hover: pointerWorld) : [];
     }
 
     // ---- drawing ----

@@ -294,11 +294,11 @@ sealed class WorldMap(PlayerInterface player)
         if (trade is not null && picked.Control.Properties.TryGetValue("TradeItem", out var stockIndex))
         {
             if (trade.Stock.FirstOrDefault(i => i.Index == int.Parse(stockIndex, CultureInfo.InvariantCulture)) is not { } stock) return false;
-            player.Say(new BuyItem(stock.Token, shift ? stock.Quantity : 1) { Tick = player.session.World.Tick, Equip = true, Into = player.InventoryOwner()?.Id ?? CharacterId.None });
+            player.Say(new BuyItem(stock.Token, shift ? stock.Quantity : 1) { Tick = player.session.World.Tick, Equip = true, Into = player.inventoryWindows.InventoryOwner()?.Id ?? CharacterId.None });
             return true;
         }
         if (trade is null && WindowRightClick(picked.Screen, picked.Control, shift)) return true;
-        if (TradeWindows.IsLootScreen(picked.Screen) || !picked.Control.Properties.TryGetValue("InventoryItem", out var index) || player.WindowCharacter(picked.Screen) is not { ItemGrid: { } grid } lead) return false;
+        if (TradeWindows.IsLootScreen(picked.Screen) || !picked.Control.Properties.TryGetValue("InventoryItem", out var index) || player.inventoryWindows.WindowCharacter(picked.Screen) is not { ItemGrid: { } grid } lead) return false;
         var item = grid.Items.FirstOrDefault(i => i.Index == int.Parse(index, CultureInfo.InvariantCulture));
         if (item is null) return false;
         var token = new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality);
@@ -310,12 +310,12 @@ sealed class WorldMap(PlayerInterface player)
         if (trade is null && OtherCharacterWindow(picked.Screen, lead.Id) is { } other)
         {
             if (!InventoryCommands.IsMovableSection(item.Section)) return false;
-            bool otherBag = other == player.InventoryOwner()?.Id && player.faithfulScreens.IsOpen("bag");
+            bool otherBag = other == player.inventoryWindows.InventoryOwner()?.Id && player.faithfulScreens.IsOpen("bag");
             player.Say(new QuickMoveItem(lead.Id, token, shift, false) { Tick = player.session.World.Tick, Into = other, IntoBag = otherBag });
             return true;
         }
         if (MapItemTowns?.Invoke(item.Record) is not null) player.Say(new ReadMapItem(lead.Id, token) { Tick = player.session.World.Tick });
-        else player.Say(new QuickMoveItem(lead.Id, token, shift, player.faithfulScreens.IsOpen("bag") && !PlayerInterface.IsPinnedInventory(picked.Screen)) { Tick = player.session.World.Tick });
+        else player.Say(new QuickMoveItem(lead.Id, token, shift, player.faithfulScreens.IsOpen("bag") && !InventoryWindows.IsPinnedInventory(picked.Screen)) { Tick = player.session.World.Tick });
         return true;
     }
 
@@ -325,10 +325,10 @@ sealed class WorldMap(PlayerInterface player)
     /// </summary>
     CharacterId? OtherCharacterWindow(string screen, CharacterId own)
     {
-        if (screen is not ("inventory" or "bag") && !PlayerInterface.IsPinnedInventory(screen)) return null;
+        if (screen is not ("inventory" or "bag") && !InventoryWindows.IsPinnedInventory(screen)) return null;
         var open = player.faithfulScreens.OpenScreens;
         for (int i = open.Count - 1; i >= 0; i--)
-            if ((open[i] == "inventory" || PlayerInterface.IsPinnedInventory(open[i])) && player.WindowCharacter(open[i]) is { } other && other.Id != own) return other.Id;
+            if ((open[i] == "inventory" || InventoryWindows.IsPinnedInventory(open[i])) && player.inventoryWindows.WindowCharacter(open[i]) is { } other && other.Id != own) return other.Id;
         return null;
     }
 
@@ -340,8 +340,8 @@ sealed class WorldMap(PlayerInterface player)
     bool WindowRightClick(string screen, UiControl control, bool shift)
     {
         int count = shift ? 0 : 1;
-        if (!player.faithfulScreens.IsOpen("inventory") || player.InventoryOwner() is not { ItemGrid: { } grid } lead) return false;
-        var machine = player.Machine(player.shownMachine) is { } shown && player.faithfulScreens.IsOpen(PlayerInterface.MachineScreen(shown)) ? shown : null;
+        if (!player.faithfulScreens.IsOpen("inventory") || player.inventoryWindows.InventoryOwner() is not { ItemGrid: { } grid } lead) return false;
+        var machine = player.production.Machine(player.production.shownMachine) is { } shown && player.faithfulScreens.IsOpen(ProductionWindows.MachineScreen(shown)) ? shown : null;
         bool loot = player.faithfulScreens.IsOpen("loot") && lead.Id == player.session.CurrentSnapshot.LootOpener;
         if (machine is not null && control.Properties.TryGetValue("MachineItem", out var raw))
         {

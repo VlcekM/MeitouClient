@@ -35,7 +35,7 @@ sealed class ProspectingPanel(PlayerInterface player)
         }
         if (nearest is null || nearest.Task == CharacterTask.Prospect) return;
         player.Say(new ProspectOrder(nearest.Id) { Tick = player.session.World.Tick });
-        player.Sound("Prospect_Click");
+        player.interfaceSounds.Sound("Prospect_Click");
     }
 
     /// <summary>Once a frame: a new finished prospecting opens the results window (the exe shows it the moment the task hands it the spot) and sounds <c>Prospect_Results</c>. A new world only takes the baseline.</summary>
@@ -55,7 +55,7 @@ sealed class ProspectingPanel(PlayerInterface player)
         prospectReport = report;
         prospectRow = 0;
         player.faithfulScreens.Open("prospect");
-        player.Sound("Prospect_Results");
+        player.interfaceSounds.Sound("Prospect_Results");
     }
 
     internal void BindProspectScreen(UiBindings b)

@@ -2,12 +2,13 @@ using System.Globalization;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Ui;
 using Meitou.Game.Rendering.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 
 sealed partial class PlayerInterface
 {
-    ItemIcons? itemIcons;
+    internal ItemIcons? itemIcons;
 
     /// <summary>The source of the item icons the inventory and trader grids draw (null: only names).</summary>
     public void SetItemIcons(ItemIcons? icons) => itemIcons = icons;
@@ -22,9 +23,9 @@ sealed partial class PlayerInterface
     /// An item icon filling <paramref name="area"/> with its quantity in the corner, or a name while the icon loads. <paramref name="tip"/> is what its hover tooltip lists (the name only when null).
     /// The transparent text control handles picking and carries <paramref name="property"/>; <paramref name="colour"/> is the item's <c>color sid</c>.
     /// </summary>
-    internal void AddItemCell(List<UiControl> controls, string name, UiRect area, string record, string material, string itemName, int quantity, ItemTip? tip, string property, int index, UiRect? clip, bool pickable = true, float? charge = null, string colour = "")
+    internal void AddItemCell(List<UiControl> controls, string name, UiRect area, string record, string material, string itemName, int quantity, TooltipRuntime.ItemTip? tip, string property, int index, UiRect? clip, bool pickable = true, float? charge = null, string colour = "")
     {
-        itemTips[name] = tip ?? ItemTip.NameOnly(record, material, itemName, quantity);
+        tooltipRuntime.itemTips[name] = tip ?? TooltipRuntime.ItemTip.NameOnly(record, material, itemName, quantity);
         string count = quantity > 1 ? quantity.ToString(CultureInfo.InvariantCulture) : "";
         Dictionary<string, string>? image = null;
         if (itemIcons?.Choose(record, material, colour) is { } choice && uiPainter is { } painter)
@@ -49,7 +50,7 @@ sealed partial class PlayerInterface
         }
         string caption = shown ? count : itemName + (count.Length > 0 ? " x" + count : "");
         controls.Add(new(name, "TextBox", area, caption, "", "", true,
-            new Dictionary<string, string> { ["WordWrap"] = "true", ["TextAlign"] = shown ? "Right Bottom" : "Center", ["FontName"] = "Kenshi_StandardFont_Medium", [ItemTipKey] = name, [property] = index.ToString(CultureInfo.InvariantCulture) },
+            new Dictionary<string, string> { ["WordWrap"] = "true", ["TextAlign"] = shown ? "Right Bottom" : "Center", ["FontName"] = "Kenshi_StandardFont_Medium", [TooltipRuntime.ItemTipKey] = name, [property] = index.ToString(CultureInfo.InvariantCulture) },
             System.Numerics.Vector4.Zero, TextColour: System.Numerics.Vector4.One, Pickable: pickable, TextScale: 0.9f * InventoryScale, Clip: clip));
     }
 }

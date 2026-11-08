@@ -15,7 +15,7 @@ sealed partial class PlayerInterface
     /// </summary>
     void PlaceSlotWindow(string id, UiBindings b)
     {
-        if (id == "import") { BindAdvancedPanels(id, b); if (!advancedOpen) b.Hidden.Add("advanced-Root"); return; }
+        if (id == "import") { advancedOptions.BindAdvancedPanels(id, b); if (!advancedOptions.advancedOpen) b.Hidden.Add("advanced-Root"); return; }
         var root = faithfulScreens.Layout(id).Roots[0];
         var size = root.Position.RelativeTo(new(0, 0, Width, Height), root.RealPosition);
         float w = Math.Min(size.Width, Width), h = Math.Min(size.Height, Height);
@@ -44,7 +44,7 @@ sealed partial class PlayerInterface
     /// panel height / screen height)) of its height from 0.03 of it (rows 55 by default, FUN_1406fce20; the start window sets 40), the label from 3 % of the width and 96 % wide, a value right-aligned in 93 % from the same place. The last label of a
     /// <paramref name="lastWraps"/> panel is a wrapped paragraph down to the panel's bottom (the start's description).
     /// </summary>
-    void AddDatapanel(List<UiControl> controls, string panel, IReadOnlyList<(string Label, string Value)> lines, bool lastWraps, float rows = 55)
+    internal void AddDatapanel(List<UiControl> controls, string panel, IReadOnlyList<(string Label, string Value)> lines, bool lastWraps, float rows = 55)
     {
         if (controls.FirstOrDefault(c => c.Name == panel) is not { } host) return;
         var area = host.Bounds;

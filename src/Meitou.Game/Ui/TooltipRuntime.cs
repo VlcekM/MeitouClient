@@ -2,21 +2,21 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
 using Meitou.Data.Ui;
 using Meitou.Game.Rendering.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Trading;
-using Meitou.Game.Ui;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The tooltip runtime (docs/game/ui-screens.md "Tooltips"). Any control can carry the original's user strings (<see cref="UiTooltips"/>); the topmost control under a still pointer shows its
 /// tooltip after MyGUI's 0.5 s delay, laid out and placed as the original's <c>ToolTip</c> classes do, in the original's skins (Faithful) or on the Meitou plate.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class TooltipRuntime(PlayerInterface player)
 {
     /// <summary>The item records of the game data (for the item tooltip's lines); the host sets it.</summary>
     public Func<string, GameRecord?>? ItemRecordOf { get; set; }
@@ -28,16 +28,16 @@ sealed partial class PlayerInterface
     public Func<float>? RangedDamageMultiplier { get; set; }
 
     /// <summary>The control property that makes an item cell show an item tooltip: the key of its <see cref="ItemTip"/>.</summary>
-    const string ItemTipKey = "tooltip_item";
+    internal const string ItemTipKey = "tooltip_item";
 
     string? tipTarget;
     Vector2 tipPoint;
     long tipSince;
     bool tipShown;
-    readonly Dictionary<string, ItemTip> itemTips = [];
+    internal readonly Dictionary<string, ItemTip> itemTips = [];
 
     /// <summary>A press hides the tooltip (MyGUI hides it while the mouse is captured) and the delay starts again.</summary>
-    void HideTooltip()
+    internal void HideTooltip()
     {
         tipTarget = null;
         tipShown = false;
@@ -45,25 +45,25 @@ sealed partial class PlayerInterface
 
     /// <summary>
     /// The mouse-over tooltip of the control under the pointer. Characters get none: the original shows no name or goal over a character under the cursor (they appear in the
-    /// information panel after a click; the character is only outlined, <see cref="HoverTarget"/>).
+    /// information panel after a click; the character is only outlined, <see cref="PlayerInterface.HoverTarget"/>).
     /// </summary>
-    void AddHoverLabel(List<UiControl> controls)
+    internal void AddHoverLabel(List<UiControl> controls)
     {
-        if (held is not null || jobDrag is not null || dragging || uiPainter is not { } painter) { HideTooltip(); return; }
+        if (player.inventoryWindows.held is not null || player.jobDrag is not null || player.dragging || player.uiPainter is not { } painter) { HideTooltip(); return; }
         if (TooltipTarget(controls) is not { } hit) { HideTooltip(); return; }
         long now = Stopwatch.GetTimestamp();
         if (hit.Name != tipTarget)
         {
-            (tipTarget, tipPoint, tipSince, tipShown) = (hit.Name, mouse, now, false);
+            (tipTarget, tipPoint, tipSince, tipShown) = (hit.Name, player.mouse, now, false);
         }
-        else if (!tipShown && mouse != tipPoint)
+        else if (!tipShown && player.mouse != tipPoint)
         {
             // Moving before it shows starts the delay again; once shown it follows the pointer.
-            (tipPoint, tipSince) = (mouse, now);
+            (tipPoint, tipSince) = (player.mouse, now);
         }
         if (ResolveTooltip(hit) is not var (lines, kind) || lines.Count == 0) return;
         // An item's (ToolTipInventory) shows at once: the inventory's mouse-move hook shows it, not MyGUI's tooltip timer (ToolTipInventory::vfunc_6, Verified). The Meitou UI shows every one at once.
-        if (!tipShown && (kind == TooltipKind.Inventory || UiMode == UiMode.Meitou || Stopwatch.GetElapsedTime(tipSince, now).TotalSeconds >= UiTooltips.ShowDelaySeconds)) tipShown = true;
+        if (!tipShown && (kind == TooltipKind.Inventory || player.UiMode == UiMode.Meitou || Stopwatch.GetElapsedTime(tipSince, now).TotalSeconds >= UiTooltips.ShowDelaySeconds)) tipShown = true;
         if (!tipShown) return;
         // A static tooltip is shown in a widget of its own (the class names it: "static:AIToolTip"); an item's sits beside the window holding the item.
         UiRect? panel = kind == TooltipKind.Inventory ? ItemWindow(controls, hit) : null;
@@ -93,7 +93,7 @@ sealed partial class PlayerInterface
     /// </summary>
     UiControl? TooltipTarget(IReadOnlyList<UiControl> controls)
     {
-        var top = MyGuiPresentation.HitTest(controls, mouse.X, mouse.Y);
+        var top = MyGuiPresentation.HitTest(controls, player.mouse.X, player.mouse.Y);
         int from = 0;
         if (top is not null)
             for (int i = controls.Count - 1; i >= 0; i--)
@@ -101,7 +101,7 @@ sealed partial class PlayerInterface
         for (int i = controls.Count - 1; i >= from; i--)
         {
             var c = controls[i];
-            if (CarriesTooltip(c) && c.Bounds.Contains(mouse.X, mouse.Y) && (c.Clip is null || c.Clip.Value.Contains(mouse.X, mouse.Y)) && c.Properties.GetValueOrDefault("NeedMouse") != "false") return c;
+            if (CarriesTooltip(c) && c.Bounds.Contains(player.mouse.X, player.mouse.Y) && (c.Clip is null || c.Clip.Value.Contains(player.mouse.X, player.mouse.Y)) && c.Properties.GetValueOrDefault("NeedMouse") != "false") return c;
         }
         return top is not null && CarriesTooltip(top) ? top : null;
     }
@@ -136,7 +136,7 @@ sealed partial class PlayerInterface
         }
     }
 
-    const string TooltipFont = "Kenshi_StandardFont_Medium";
+    internal const string TooltipFont = "Kenshi_StandardFont_Medium";
     const string TipPlate = "meitou:tooltip:plate";
     /// <summary>The baked plate's margin (shadow room) and the radius of its corners, in its own pixels (<see cref="MenuArt.WindowSurface"/> at scale 1).</summary>
     const float TipPlateMargin = 16, TipPlateRadius = 10;
@@ -148,23 +148,23 @@ sealed partial class PlayerInterface
         string whole = Loc.Tr(text);
         return whole != text || text.Length <= 2 || text[0] != '[' || text[^1] != ']' ? whole : "[" + Loc.Tr(text[1..^1]) + "]";
     }
-    void PlaceTooltip(List<UiControl> controls, UiPainter painter, IReadOnlyList<TooltipLine> lines, TooltipKind kind, UiRect? given, string prefix = "tooltip", Vector2? point = null,
+    internal void PlaceTooltip(List<UiControl> controls, UiPainter painter, IReadOnlyList<TooltipLine> lines, TooltipKind kind, UiRect? given, string prefix = "tooltip", Vector2? point = null,
         IReadOnlyList<string?>? valueColours = null)
     {
-        float minimum = TitleOpen ? 0 : StandardPixels;
+        float minimum = player.TitleOpen ? 0 : player.StandardPixels;
         Vector2 Measure(string text, float wrap)
         {
-            var size = painter.MeasureText(TooltipFont, text, Height, wrap, minimum);
+            var size = painter.MeasureText(TooltipFont, text, player.Height, wrap, minimum);
             return new(size.Width, size.Height);
         }
         UiRect? anchor = kind == TooltipKind.Fixed ? HudTooltipAnchor() : given;
         // The tooltip texts the code sets are messages of the game's catalog: shown in the active language (a row's "-" mark of an indented key stays).
         if (Loc.Translating)
             lines = [.. lines.Select(l => l with { Key = l.Key.StartsWith('-') ? "-" + TipTr(l.Key[1..]) : TipTr(l.Key), Value = TipTr(l.Value) })];
-        var layout = UiTooltips.Arrange(lines, kind, Width, Height, point ?? mouse, anchor, Measure);
+        var layout = UiTooltips.Arrange(lines, kind, player.Width, player.Height, point ?? player.mouse, anchor, Measure);
         var panel = layout.Panel;
-        float scale = Height / 1080f;
-        bool meitou = kind != TooltipKind.Static && UiMode == UiMode.Meitou && TooltipPlateReady(painter);
+        float scale = player.Height / 1080f;
+        bool meitou = kind != TooltipKind.Static && player.UiMode == UiMode.Meitou && TooltipPlateReady(painter);
         var none = Vector4.Zero;
         if (kind == TooltipKind.Static) { }   // drawn by the window's own panel
         else if (meitou)
@@ -196,18 +196,18 @@ sealed partial class PlayerInterface
                     none, Pickable: false));
             }
             Text("key", area, line.Key, "Left Top", line.KeyTone);
-            float suffixWidth = line.Suffix.Length > 0 ? painter.MeasureText(TooltipFont, line.Suffix, Height, 0, minimum).Width : 0;
+            float suffixWidth = line.Suffix.Length > 0 ? painter.MeasureText(TooltipFont, line.Suffix, player.Height, 0, minimum).Width : 0;
             Text("value", area with { Width = Math.Max(0, area.Width - suffixWidth) }, line.Value, "Right Top", line.ValueTone, valueColours is not null && i < valueColours.Count ? valueColours[i] : null);
             Text("suffix", area, line.Suffix, "Right Top", line.SuffixTone);
         }
     }
 
     /// <summary>A <c>rrggbb</c> colour as MyGUI's "r g b" text.</summary>
-    static string TipHex(string rgb) => string.Join(' ', Enumerable.Range(0, 3).Select(i =>
+    internal static string TipHex(string rgb) => string.Join(' ', Enumerable.Range(0, 3).Select(i =>
         (int.Parse(rgb.AsSpan(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture) / 255f).ToString("0.###", CultureInfo.InvariantCulture)));
 
     /// <summary>The colour a tone takes: the original's own on its parchment (Faithful), the kit's matching colours on the plate (Meitou, docs/meitou-ui.md).</summary>
-    static string TipColour(TooltipTone tone, bool plate) => tone switch
+    internal static string TipColour(TooltipTone tone, bool plate) => tone switch
     {
         // The armour grades (ItemGrade0 to ItemGrade4 of kenshi_colours.xml) in both modes.
         TooltipTone.Grade0 => TipHex("666666"), TooltipTone.Grade1 => TipHex("d9ccbf"), TooltipTone.Grade2 => TipHex("4099b3"), TooltipTone.Grade3 => TipHex("66fc80"), TooltipTone.Grade4 => TipHex("fceb0d"),
@@ -220,22 +220,22 @@ sealed partial class PlayerInterface
         };
     static string ParchmentColour(TooltipTone tone) => tone switch
         {
-            TooltipTone.Main => MainColour, TooltipTone.Ink => MyGuiColours.InkText, TooltipTone.Title => TitleColour, TooltipTone.Bad => BadColour, TooltipTone.BadBright => BadBrightColour,
-            TooltipTone.Good => GoodColour, TooltipTone.Grey => GreyColour, TooltipTone.GreyBright => TipHex("777777"), TooltipTone.Cyan => TipHex("14ffdc"), _ => MyGuiColours.InkText,
+            TooltipTone.Main => PlayerInterface.MainColour, TooltipTone.Ink => MyGuiColours.InkText, TooltipTone.Title => PlayerInterface.TitleColour, TooltipTone.Bad => PlayerInterface.BadColour, TooltipTone.BadBright => PlayerInterface.BadBrightColour,
+            TooltipTone.Good => PlayerInterface.GoodColour, TooltipTone.Grey => PlayerInterface.GreyColour, TooltipTone.GreyBright => TipHex("777777"), TooltipTone.Cyan => TipHex("14ffdc"), _ => MyGuiColours.InkText,
         };
 
     /// <summary>Bakes the Meitou tooltip plate once (rust under the kit's tint, rounded, with its drop shadow; drawn nine-sliced).</summary>
     bool TooltipPlateReady(UiPainter painter)
     {
         if (painter.HasTexture(TipPlate)) return true;
-        if (UiAtlas() is not { } uiAtlas) return false;
+        if (player.UiAtlas() is not { } uiAtlas) return false;
         painter.SetImage(TipPlate, MenuArt.WindowSurface(uiAtlas, 96, 96, 1), srgb: false);
         return true;
     }
 
     /// <summary>The HUD's <c>TooltipPanel</c> (the <c>ToolTipFixed</c> anchor, <c>FUN_14072d3b0</c>): the tooltip grows up from its bottom edge, starting at its left.</summary>
     UiRect HudTooltipAnchor() =>
-        faithfulHud.Find("TooltipPanel") is { } panel ? panel.Position.RelativeTo(new(0, 0, Width, Height), true) : new(0.319792f * Width, 0.712963f * Height, 0.208333f * Width, 0.0666667f * Height);
+        player.faithfulHud.Find("TooltipPanel") is { } panel ? panel.Position.RelativeTo(new(0, 0, player.Width, player.Height), true) : new(0.319792f * player.Width, 0.712963f * player.Height, 0.208333f * player.Width, 0.0666667f * player.Height);
 
     // ---- HUD tooltips (FUN_14072b540, FUN_14072d3b0: Verified) ----
 
@@ -310,12 +310,12 @@ sealed partial class PlayerInterface
             _ => null,
         };
         return share is <= 0.9f and { } s
-            ? Loc.Tr("This machine is working fine, but due to low power is only operating at {1}{2,num}% {3}of its full potential.", TitleTag, (int)(s * 100), InkTag)
+            ? Loc.Tr("This machine is working fine, but due to low power is only operating at {1}{2,num}% {3}of its full potential.", TitleTag, (int)(s * 100), ProductionWindows.InkTag)
             : Loc.Tr("This machine is working fine.");
     }
 
     // The colour tags of the bounty rows (kenshi_colours.xml Main, Title, Greyed; FUN_1405d2da0's static strings).
-    const string MainTag = "#afa68b", TitleTag = "#492620", GreyTag = "#444444";
+    internal const string MainTag = "#afa68b", TitleTag = "#492620", GreyTag = "#444444";
 
     /// <summary>
     /// The bounty panel's tooltip rows (<c>FUN_1405d2da0</c>, docs/game/ui-screens.md section 4): per faction its name and <c>c.{1,num}</c> (Main for the local faction, else Greyed),
@@ -362,10 +362,10 @@ sealed partial class PlayerInterface
     /// The bounty panel's own text (the other output of <c>FUN_1405d2da0</c>): wanted by the local faction, Title <c>Bounty:</c> and its amount in Main; else both Greyed
     /// with the largest bounty (<c>FUN_140853740</c>).
     /// </summary>
-    static HudLine BountyLine(IReadOnlyList<Meitou.Simulation.Crime.BountyLine> bounties) =>
+    internal static PlayerInterface.HudLine BountyLine(IReadOnlyList<Meitou.Simulation.Crime.BountyLine> bounties) =>
         bounties.FirstOrDefault(v => v.Local) is { Amount: > 0 } local
-            ? new(Loc.Tr("Bounty:"), Loc.Tr("c.{1,num}", local.Amount), TitleColour, MainColour)
-            : new(Loc.Tr("Bounty:"), Loc.Tr("c.{1,num}", bounties.Count == 0 ? 0 : bounties.Max(v => v.Amount)), GreyColour, GreyColour);
+            ? new(Loc.Tr("Bounty:"), Loc.Tr("c.{1,num}", local.Amount), PlayerInterface.TitleColour, PlayerInterface.MainColour)
+            : new(Loc.Tr("Bounty:"), Loc.Tr("c.{1,num}", bounties.Count == 0 ? 0 : bounties.Max(v => v.Amount)), PlayerInterface.GreyColour, PlayerInterface.GreyColour);
 
     /// <summary>
     /// The status lines of a slave (<c>FUN_1405d4260</c>, <b>Observed</b>; docs/game/ui-screens.md section 4): a title, "Slave" (state 1), "Escaped slave" (state 2) or "Ex-slave" (state 3), and its text naming the
@@ -399,15 +399,15 @@ sealed partial class PlayerInterface
     /// The bounty panel's line for a status (<c>FUN_1405d4260</c>, <b>Observed</b>): its title in the Title colour (a pending crime's with its timer as the value), a slave's "Slave",
     /// "Escaped slave" or "Ex-slave"; null for a character with only a bounty (the Bounty line).
     /// </summary>
-    static HudLine? StatusLine(CharacterSnapshot lead) => lead.Status switch
+    internal static PlayerInterface.HudLine? StatusLine(CharacterSnapshot lead) => lead.Status switch
     {
-        { Kind: StatusKind.Leader } => new(Loc.Tr("Leader"), "", TitleColour),
-        { Kind: StatusKind.WarLeader } => new(Loc.Tr("War Leader"), "", TitleColour),
-        { Kind: StatusKind.Kidnapped } => new(Loc.Tr("Kidnapped"), "", TitleColour),
-        { Kind: StatusKind.Crime } crime => new(Loc.Tr("Committing Crime!"), Loc.Tr("{1,num}", crime.Timer), TitleColour, TitleColour),
-        { Kind: StatusKind.EscapedPrisoner } => new(Loc.Tr("Escaped Prisoner"), "", TitleColour),
-        { Kind: StatusKind.Diplomatic } => new(Loc.Tr("Diplomatic Status"), "", TitleColour),
-        _ => lead.Slave is { } slave ? new(SlaveTitle(slave.State), "", TitleColour) : null,
+        { Kind: StatusKind.Leader } => new(Loc.Tr("Leader"), "", PlayerInterface.TitleColour),
+        { Kind: StatusKind.WarLeader } => new(Loc.Tr("War Leader"), "", PlayerInterface.TitleColour),
+        { Kind: StatusKind.Kidnapped } => new(Loc.Tr("Kidnapped"), "", PlayerInterface.TitleColour),
+        { Kind: StatusKind.Crime } crime => new(Loc.Tr("Committing Crime!"), Loc.Tr("{1,num}", crime.Timer), PlayerInterface.TitleColour, PlayerInterface.TitleColour),
+        { Kind: StatusKind.EscapedPrisoner } => new(Loc.Tr("Escaped Prisoner"), "", PlayerInterface.TitleColour),
+        { Kind: StatusKind.Diplomatic } => new(Loc.Tr("Diplomatic Status"), "", PlayerInterface.TitleColour),
+        _ => lead.Slave is { } slave ? new(SlaveTitle(slave.State), "", PlayerInterface.TitleColour) : null,
     };
 
     /// <summary>
@@ -435,7 +435,7 @@ sealed partial class PlayerInterface
     const int EscapedExpiry = 99999;
 
     /// <summary>Gives the HUD's widgets their tooltips (user strings through the bindings, which the arranged controls merge) and the selected building's status word its own.</summary>
-    void BindTooltips(UiBindings b)
+    internal void BindTooltips(UiBindings b)
     {
         void Add(string name, string text)
         {
@@ -444,10 +444,10 @@ sealed partial class PlayerInterface
             b.Properties[name] = properties;
         }
         foreach (var (widget, text) in HudTips) Add(widget, text);
-        if (Lead() is { } wanted && (wanted.Bounties.Count > 0 || wanted.Slave is not null || wanted.Status is not null))
+        if (player.Lead() is { } wanted && (wanted.Bounties.Count > 0 || wanted.Slave is not null || wanted.Status is not null))
         {
             var rows = wanted.Status is { } status ? StatusRows(status) : wanted.Slave is { } slave ? SlaveRows(slave, wanted.IsPlayer) : [];
-            if (wanted.Bounties.Count > 0 && wanted.Status is not { Kind: StatusKind.Leader or StatusKind.WarLeader or StatusKind.Kidnapped }) rows.AddRange(BountyRows(wanted.Bounties, wanted.Prison, UiMode == UiMode.Meitou));
+            if (wanted.Bounties.Count > 0 && wanted.Status is not { Kind: StatusKind.Leader or StatusKind.WarLeader or StatusKind.Kidnapped }) rows.AddRange(BountyRows(wanted.Bounties, wanted.Prison, player.UiMode == UiMode.Meitou));
             foreach (string name in new[] { "BountyPanel", "BountyText" })
             {
                 var properties = b.Properties.TryGetValue(name, out var existing) ? new Dictionary<string, string>(existing) : [];
@@ -455,12 +455,12 @@ sealed partial class PlayerInterface
                 b.Properties[name] = properties;
             }
         }
-        if (BuildingFocus() is { } focus)
+        if (player.buildingSelection.BuildingFocus() is { } focus)
         {
-            var (_, _, _, status, _, _) = BuildingLines(focus);
-            if (BuildingStatusTip(status, Machine(focus.SiteId)) is { } tip) Add("HealthText", tip);
+            var (_, _, _, status, _, _) = player.buildingSelection.BuildingLines(focus);
+            if (BuildingStatusTip(status, player.production.Machine(focus.SiteId)) is { } tip) Add("HealthText", tip);
         }
-        else if (Lead() is { Body: not null } lead) Add("HealthText", HealthWord(lead).Tip);
+        else if (player.Lead() is { Body: not null } lead) Add("HealthText", PlayerInterface.HealthWord(lead).Tip);
     }
 
     // ---- item tooltips (the Item classes' vfunc_79: FUN_1407ae130 and its callees) ----
@@ -507,7 +507,7 @@ sealed partial class PlayerInterface
     static IEnumerable<TooltipLine> LimbRows(Meitou.Data.Gameplay.Bodies.LimbReplacement limb, int level)
     {
         int grade = ArmourTooltip.GradeOf(level);
-        yield return new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", GradeTone(grade));
+        yield return new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", PlayerInterface.GradeTone(grade));
         float t = Math.Clamp(level * 0.01f, 0, 1);
         yield return new("-Max HP", Number(MathF.Floor(limb.Hp(t))), TooltipTone.Title, TooltipTone.Ink);
         yield return new("-----STATS-----", "", TooltipTone.Grey);
@@ -516,7 +516,7 @@ sealed partial class PlayerInterface
             float m = limb.Multiplier(stat, t);
             if (m == 1) continue;
             int percent = (int)((m - 1) * 100);
-            yield return new("-" + StatLabel(stat), (percent >= 1 ? "+" : "") + percent.ToString(CultureInfo.InvariantCulture) + "%", TooltipTone.Title, m < 1 ? TooltipTone.Bad : TooltipTone.Good);
+            yield return new("-" + PlayerInterface.StatLabel(stat), (percent >= 1 ? "+" : "") + percent.ToString(CultureInfo.InvariantCulture) + "%", TooltipTone.Title, m < 1 ? TooltipTone.Bad : TooltipTone.Good);
         }
         if (limb.UnarmedDamageBonus(t) is not 0 and var unarmed)
             yield return new("-Unarmed damage bonus", unarmed.ToString(CultureInfo.InvariantCulture), TooltipTone.Title, unarmed < 0 ? TooltipTone.Bad : TooltipTone.Good);
@@ -564,7 +564,7 @@ sealed partial class PlayerInterface
     /// </summary>
     IEnumerable<TooltipLine> BlueprintRows(Meitou.Data.GameRecord research)
     {
-        var state = session.CurrentSnapshot.Research;
+        var state = player.session.CurrentSnapshot.Research;
         int level = research.GetInt("level");
         yield return state.Known.Contains(research.StringId) ? new(Loc.Tr("Research already known"), "", TooltipTone.Title)
             : level > state.BenchLevel ? new(Loc.Tr("Needs research bench level {1,num}", level), "", TooltipTone.BadBright)
@@ -580,19 +580,19 @@ sealed partial class PlayerInterface
     /// </summary>
     IEnumerable<TooltipLine> UnlockRows(Meitou.Data.GameRecord research)
     {
-        var known = session.CurrentSnapshot.Research.Known;
+        var known = player.session.CurrentSnapshot.Research.Known;
         bool first = true;
         foreach (var req in research.GetReferences("requirements"))
         {
-            if (RecordName?.Invoke(req.TargetStringId) is not { Length: > 0 } name) continue;
-            bool done = known.Contains(req.TargetStringId) || session.CurrentSnapshot.UnlockedBuildings.Contains(req.TargetStringId);
+            if (player.RecordName?.Invoke(req.TargetStringId) is not { Length: > 0 } name) continue;
+            bool done = known.Contains(req.TargetStringId) || player.session.CurrentSnapshot.UnlockedBuildings.Contains(req.TargetStringId);
             yield return new(first ? Loc.Tr("Requirements:") : "", name, TooltipTone.Default, done ? TooltipTone.Cyan : TooltipTone.BadBright);
             first = false;
         }
         foreach (var (field, label) in new[] { ("enable buildings", "New Building:"), ("enable weapon type", "New Weapon Class:"), ("enable weapon model", "New Weapons Grade:"),
             ("enable armour", "New Armour Type:"), ("enable item", "New Items:") })
             foreach (var r in research.GetReferences(field))
-                if (RecordName?.Invoke(r.TargetStringId) is { Length: > 0 } name) yield return new(Loc.Tr(label), name, TooltipTone.Default, TooltipTone.Good);
+                if (player.RecordName?.Invoke(r.TargetStringId) is { Length: > 0 } name) yield return new(Loc.Tr(label), name, TooltipTone.Default, TooltipTone.Good);
     }
 
     /// <summary>
@@ -605,7 +605,7 @@ sealed partial class PlayerInterface
         var record = ItemRecordOf?.Invoke(t.Record);
         var type = record?.Type;
         // A weapon's grade is its model ("Mk I"), shown under the name in the colour of its level's grade; a brief tooltip puts it before the name ("Mk I Fragment Axe").
-        string? model = type == Meitou.Data.Fcs.FcsRecordType.WEAPON && t.Material.Length > 0 && RecordName?.Invoke(t.Material) is { Length: > 0 } m ? m : null;
+        string? model = type == Meitou.Data.Fcs.FcsRecordType.WEAPON && t.Material.Length > 0 && player.RecordName?.Invoke(t.Material) is { Length: > 0 } m ? m : null;
         // A blueprint is titled with its research (BlueprintItem's first tooltip function, FUN_1407ab430): the name, "Research Blueprint", its state and Tech Level (BlueprintRows);
         // the requirement and unlock rows follow the prices.
         var research = ItemRecordOf?.Invoke(t.Company) is { Type: Meitou.Data.Fcs.FcsRecordType.RESEARCH } r ? r : null;
@@ -621,15 +621,15 @@ sealed partial class PlayerInterface
             lines.AddRange(BlueprintRows(research));
         }
         // Every grade line (weapon model, armour, crossbow, prosthetic) goes right under the name, as in the original.
-        if (model is not null) lines.Add(new(model, "", GradeTone(WeaponGrade(t.Level))));
+        if (model is not null) lines.Add(new(model, "", PlayerInterface.GradeTone(PlayerInterface.WeaponGrade(t.Level))));
         else if (type == Meitou.Data.Fcs.FcsRecordType.CROSSBOW)
         {
             int grade = ArmourTooltip.GradeOf(t.Level);
-            lines.Add(new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", GradeTone(grade)));
+            lines.Add(new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", PlayerInterface.GradeTone(grade)));
         }
         var combat = CombatOf?.Invoke();
         var armour = type == Meitou.Data.Fcs.FcsRecordType.ARMOUR ? combat?.Armour(t.Record) : null;
-        var armourHead = armour is not null ? ArmourTooltip.Head(armour, t.Level).Select(ArmourRow).ToList() : null;
+        var armourHead = armour is not null ? ArmourTooltip.Head(armour, t.Level).Select(PlayerInterface.ArmourRow).ToList() : null;
         var limbRows = type == Meitou.Data.Fcs.FcsRecordType.LIMB_REPLACEMENT ? LimbRows(Meitou.Data.Gameplay.Bodies.LimbReplacement.From(record!), t.Level).ToList() : null;
         if (armourHead is not null) { lines.Add(armourHead[0]); armourHead.RemoveAt(0); }
         if (limbRows is not null) { lines.Add(limbRows[0]); limbRows.RemoveAt(0); }
@@ -653,14 +653,14 @@ sealed partial class PlayerInterface
                 if (SpecialFoodRaces?.Invoke(t.Record) is { Length: > 0 } eaters) lines.Add(new("-" + Loc.Tr("Only for:"), eaters, TooltipTone.Title, TooltipTone.Title));
             }
             lines.Add(new("Nutrition", ((int)t.Charges).ToString(CultureInfo.InvariantCulture) + " nu", TooltipTone.Ink, TooltipTone.Ink));
-            var ingredients = string.Join(", ", record!.GetReferences("ingredients").Select(r => RecordName?.Invoke(r.TargetStringId)).Where(n => n is { Length: > 0 }));
+            var ingredients = string.Join(", ", record!.GetReferences("ingredients").Select(r => player.RecordName?.Invoke(r.TargetStringId)).Where(n => n is { Length: > 0 }));
             lines.Add(new("Ingredients", ingredients, TooltipTone.Ink, TooltipTone.Ink));
         }
         // A stolen good the open shop would roll on: its fencing chance above the owner, as the sale prompt shows it (Observed, the original's trade tooltip; #330).
         if (t.Goods && t.Trade is { FenceChance: { } fence })
             lines.Add(new("FENCING CHANCE:", $"{(int)(fence * 100)}%", TooltipTone.Bad, TooltipTone.Bad));
         if (t.StolenFrom >= 0)
-            lines.Add(FactionName?.Invoke(t.StolenFrom) is { Length: > 0 } owner ? new("Stolen from:", owner, TooltipTone.Bad, TooltipTone.Bad) : new("Stolen", "", TooltipTone.Bad));
+            lines.Add(player.FactionName?.Invoke(t.StolenFrom) is { Length: > 0 } owner ? new("Stolen from:", owner, TooltipTone.Bad, TooltipTone.Bad) : new("Stolen", "", TooltipTone.Bad));
         if (function == 16)
         {
             // Ammunition (FUN_1407ae130, Verified by disassembly): Damage = the item's quality x 0.01 then "x"; Shots = the charges left / the full charge, each truncated.
@@ -689,7 +689,7 @@ sealed partial class PlayerInterface
             lines.Add(Row("Blood loss:", Fixed2(bow.BleedMult) + "x", TooltipTone.Main));
             lines.Add(Row("Required skill:", bow.AccuracyPerfectSkill.ToString(CultureInfo.InvariantCulture), TooltipTone.Main));
             lines.Add(new("---------------", "", TooltipTone.Grey));
-            lines.Add(Row("Ammunition type:", bow.AmmoId.Length > 0 && RecordName?.Invoke(bow.AmmoId) is { Length: > 0 } ammo ? ammo : "???", TooltipTone.Main));
+            lines.Add(Row("Ammunition type:", bow.AmmoId.Length > 0 && player.RecordName?.Invoke(bow.AmmoId) is { Length: > 0 } ammo ? ammo : "???", TooltipTone.Main));
             Signed("Damage vs robots", (bow.RobotDamageMult - 1) * 100);
             Signed("Damage vs humans", (bow.HumanDamageMult - 1) * 100);
             Signed("Damage vs animals", (bow.AnimalDamageMult - 1) * 100);
@@ -716,7 +716,7 @@ sealed partial class PlayerInterface
             Signed("Damage vs humans", (weapon.HumanDamageMult - 1) * 100);
             Signed("Damage vs animals", (weapon.AnimalDamageMult - 1) * 100);
             foreach (var (race, percent) in weapon.RaceDamage)
-                if (RecordName?.Invoke(race) is { Length: > 0 } raceName) Signed(Loc.Tr("Damage vs") + " " + raceName, percent - 100);
+                if (player.RecordName?.Invoke(race) is { Length: > 0 } raceName) Signed(Loc.Tr("Damage vs") + " " + raceName, percent - 100);
             if (stats.AttackMod != 0) lines.Add(Row("Attack bonus", stats.AttackMod.ToString(CultureInfo.InvariantCulture), stats.AttackMod < 0 ? TooltipTone.Bad : TooltipTone.Good));
             if (stats.DefenceMod != 0) lines.Add(Row("Defence bonus", stats.DefenceMod.ToString(CultureInfo.InvariantCulture), stats.DefenceMod < 0 ? TooltipTone.Bad : TooltipTone.Good));
             if (stats.IndoorsMod != 0) lines.Add(Row(stats.IndoorsMod < 0 ? "Indoors penalty" : "Indoors bonus", stats.IndoorsMod.ToString(CultureInfo.InvariantCulture), stats.IndoorsMod < 0 ? TooltipTone.Bad : TooltipTone.Good));
@@ -753,7 +753,7 @@ sealed partial class PlayerInterface
             lines.Add(new("-Value", "c." + TradeWindows.Money(trade.Value), TooltipTone.Ink, TooltipTone.Ink, trade.Buyback && !t.Goods ? "" : suffix, TooltipTone.Bad));
             lines.Add(new("-Sell value", "c." + TradeWindows.Money(trade.SellValue), TooltipTone.Ink, TooltipTone.Ink, trade.Buyback && t.Goods ? "" : suffix, TooltipTone.Bad));
         }
-        else if (PricesOf?.Invoke(t) is { } prices)
+        else if (player.PricesOf?.Invoke(t) is { } prices)
         {
             // Outside a trade: the plain prices, no trader (the inventory tooltip prints them all the time).
             lines.Add(new("-Value", "c." + TradeWindows.Money(prices.Value), TooltipTone.Ink, TooltipTone.Ink));
@@ -762,7 +762,7 @@ sealed partial class PlayerInterface
         if (type == Meitou.Data.Fcs.FcsRecordType.CONTAINER) lines.AddRange(ContainerRows(record!));
         if (research is not null) lines.AddRange(UnlockRows(research));
         // A trade item's average price follows the prices, in and out of a trade; while trading, the mark-up of the town and trader factors, Bad above 1 and Good below (FUN_1407ae130).
-        if (type == Meitou.Data.Fcs.FcsRecordType.ITEM && PricesOf?.Invoke(t) is { Average: { } average })
+        if (type == Meitou.Data.Fcs.FcsRecordType.ITEM && player.PricesOf?.Invoke(t) is { Average: { } average })
         {
             lines.Add(new("-Avg. Price", "c." + TradeWindows.Money(average), TooltipTone.Ink, TooltipTone.Ink));
             if (t.Trade is { } quote)
@@ -773,7 +773,7 @@ sealed partial class PlayerInterface
         }
         if (armour is not null)
         {
-            lines.AddRange(ArmourTooltip.Tail(armour, id => RecordName?.Invoke(id), t.Level).Select(ArmourRow));
+            lines.AddRange(ArmourTooltip.Tail(armour, id => player.RecordName?.Invoke(id), t.Level).Select(PlayerInterface.ArmourRow));
             // Then a blank row and the record's description; for a piece with a crafter's name another blank row, the heading and a paragraph naming the smith and the player's faction
             // (FUN_1407a33a0, Observed: docs/game/ui-screens.md "Item tooltip"). Paragraphs wrap at the tooltip's width without widening it.
             if (record?.GetString("description") is { Length: > 0 } description)
@@ -783,7 +783,7 @@ sealed partial class PlayerInterface
             }
             if (t.Crafter.Length > 0)
             {
-                string faction = PlayerFactionName?.Invoke() ?? "";
+                string faction = player.PlayerFactionName?.Invoke() ?? "";
                 lines.Add(new(" "));
                 lines.Add(new(Loc.Tr("[Crafted by {1}]", t.Crafter), "", TooltipTone.Title));
                 lines.Add(new(t.Level >= 70 ? Loc.Tr("High quality armour crafted by the renowned smith {1} of {2}.", t.Crafter, faction)
@@ -814,10 +814,10 @@ sealed partial class PlayerInterface
     {
         yield return new(" ");
         // MyGUI prints "##" as one '#'.
-        if (model is not null) yield return new("[" + Loc.Tr("Model ##").Replace("##", "#", StringComparison.Ordinal) + " " + model + "]", "", GradeTone(WeaponGrade(t.Level)));
+        if (model is not null) yield return new("[" + Loc.Tr("Model ##").Replace("##", "#", StringComparison.Ordinal) + " " + model + "]", "", PlayerInterface.GradeTone(PlayerInterface.WeaponGrade(t.Level)));
         if (t.Crafter.Length > 0)
         {
-            string faction = PlayerFactionName?.Invoke() ?? "";
+            string faction = player.PlayerFactionName?.Invoke() ?? "";
             yield return new("[" + Loc.Tr("Crafted by {1}", t.Crafter) + "]", "", TooltipTone.Main);
             yield return new(t.Level >= 45 ? Loc.Tr("A masterful weapon crafted by the renowned smith {1} of {2}.", t.Crafter, faction)
                 : Loc.Tr("Crafted by the smith {1} of {2}.", t.Crafter, faction), "", TooltipTone.Ink, Paragraph: true);
@@ -828,4 +828,79 @@ sealed partial class PlayerInterface
             if (company.GetString("company description") is { Length: > 0 } about) yield return new(about, "", TooltipTone.Ink, Paragraph: true);
         }
     }
+
+    // The medical panel's tooltips (the medical section <c>FUN_14088a8f0</c>, docs/game/ui-screens.md "Tooltips"): one on each row's <c>LifeBarNTooltip</c> widget and one on the
+    // health word, as far as Meitou models the states they describe.
+    /// <summary>The Blood row: the race's bleed rate multiplier, Bad above 1 and Good below.</summary>
+    internal static string BloodTip(float rate) =>
+        (rate > 1 ? "#59231a" : rate < 1 ? "#a8b774" : "") + Loc.Tr("Racial bleed rate multiplier: x{1,num=fix,p=2}", rate);
+
+    /// <summary>
+    /// A body part's row. With h its flesh (no splint: the original's tests read it alone), d the pending healing, s the stun and m the maximum: destroyed (h + d - s at or below -m) says so; below 0 a robotic limb
+    /// "does not degenerate", a vital part above the KO point is "dangerous" (death at -m; unconscious: regain consciousness before the KO point) and at it "critical", any other part
+    /// "getting worse"; from 0 a part more than 20 short of m needs bandaging (robotic: plainly), less than 5 % short (healing and stun within 5) is okay or healing, else bandaging is not
+    /// urgent. Under 60 left a line on what the damage affects follows. The original's wear lines (skeletons), the kick line and the lost-limb line are not modelled.
+    /// </summary>
+    internal static string PartTip(HealthPartView part, float? koPoint, bool unconscious)
+    {
+        float h = part.Flesh, d = part.Bandage, s = part.Stun, m = part.Maximum;
+        string text;
+        if (h + d - s <= -m)
+            text = Loc.Tr(part.Vital ? "Your {1} is totally destroyed. It's probably the reason you are dead." : "Your {1} is totally destroyed. Lucky it's not something you need to live.", part.Name);
+        else if (h + d < 0)
+        {
+            if (!part.Vital) text = Loc.Tr(part.Robotic ? "This limb is severely damaged and in need of repairs. Luckily though skeleton limbs don't degenerate." : "This wound is getting worse. You need first aid.");
+            else if (koPoint is { } ko && h + d >= ko)
+                text = !unconscious ? Loc.Tr("This is a dangerous wound and is getting worse. Get some medical attention fast.  Death at {1}", (int)-m)
+                    : "#59231a" + Loc.Tr("This is a dangerous wound and is getting worse. If you can regain consciousness before it goes below {1,num} then you could save yourself.\nIf it goes below that then you will have to hope you get rescued by somebody else.\n", (int)ko)
+                      + Loc.Tr("You will die at {1}", (int)-m);
+            else text = Loc.Tr("This is a critical wound. If it doesn't get medical treatment you will die.");
+        }
+        else if (m - h - d > 20)
+            text = Loc.Tr(!part.Vital && part.Robotic ? "Your {1} needs bandaging." : "Your {1} needs bandaging, it's slowly getting worse.", part.Name);
+        else if (m * 0.95f - s <= d + h)
+            text = Loc.Tr(d + s <= 5 ? "Your {1} is okay." : "Your {1} is in the process of healing.", part.Name);
+        else text = Loc.Tr("Your {1} needs bandaging, but it's not urgent.", part.Name);
+        float left = h + d - s;
+        if (left > 0 && left < 60)
+        {
+            string? affects = part.Vital ? "Your stats will be negatively affected." : part.Type == BodyPartType.Leg ? "Your movement speed will be negatively affected."
+                : part.Type == BodyPartType.Arm ? "Your combat and manual labour skills will be negatively affected." : null;
+            if (affects is not null) text += "\n" + Loc.Tr(affects);
+        }
+        return text;
+    }
+
+    /// <summary>
+    /// A body part's arrows, the same section's row test (docs/game/ui-screens.md "Medical rows"; h, d, s, m and the KO point as in <see cref="PartTip"/>): "!!!" when destroyed;
+    /// below 0 (h + d) "&lt;&lt;" on a part that is neither vital nor robotic, "&lt;&lt;!!" on a vital one at or under the KO point (none above it); from 0, "&lt;" while more than 20
+    /// short of m (a robotic non-vital part excepted); else none. The bandage counts in the test, the splint does not.
+    /// </summary>
+    internal static string PartArrows(HealthPartView part, float? koPoint)
+    {
+        float h = part.Flesh, d = part.Bandage, s = part.Stun, m = part.Maximum;
+        if (h + d - s <= -m) return "!!!   ";
+        if (h + d < 0)
+        {
+            if (!part.Vital) return part.Robotic ? "" : "<<   ";
+            return koPoint is { } ko && h + d >= ko ? "" : "<<!!   ";
+        }
+        return (m - h) - d > 20 && !(!part.Vital && part.Robotic) ? "<   " : "";
+    }
+
+    /// <summary>
+    /// The Hunger row (0..3; Meitou keeps no stomach store, so the original's recovering texts never show): above 2 well fed, above 1 malnourished, else starving, or passed out
+    /// alone or with squad mates to feed it. Engine choice: the stat penalty and the pass-out threshold the original's malnutrition and starving rows print are not
+    /// modelled, so the malnourished row takes the Hungry health word's sentence and the starving row the Starving word's.
+    /// </summary>
+    internal static string HungerTip(float hunger, bool unconscious, int squadSize) =>
+        hunger > 2 ? Loc.Tr("You are well fed and currently have no problem.")
+        : hunger > 1 ? Loc.Tr("You are hungry and suffering from malnutrition. Your stats and strength will be affected, you need to get some food as soon as possible.")
+        : !unconscious ? Loc.Tr("You are starving to death. Get some food fast.")
+        : squadSize < 2 ? Loc.Tr("You have passed out from starvation. You're all alone and going to die. Nobody cares.")
+        : Loc.Tr("You have passed out from starvation. One of your squad mates will have to feed you or you're going to die.");
+
+    /// <summary>The KO point line's tooltip (<c>FUN_140895350</c>).</summary>
+    internal static string KoPointTip(float koPoint) =>
+        Loc.Tr("When an injury to a body part goes below your KO point of {1,num} then you are down for good. Your body will enter a coma and won't regain consciousness until all critical body parts have healed above 0.", (int)koPoint);
 }

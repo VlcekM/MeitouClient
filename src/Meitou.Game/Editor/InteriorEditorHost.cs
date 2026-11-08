@@ -30,7 +30,7 @@ sealed class InteriorEditorHost(GameHost host)
     /// <summary>The level building the editor shows: the selected one, with its state record (null for a player's site or nothing selected).</summary>
     (ResolvedBuilding Building, GameRecord? State)? InteriorEditorBuilding()
     {
-        if (host.player.SelectedBuildingKey is not { } key || host.scene.Objects is not { } objects) return null;
+        if (host.player.buildingSelection.SelectedBuildingKey is not { } key || host.scene.Objects is not { } objects) return null;
         if (interiorEditorPlacements?.Levels != objects.Levels || interiorEditorPlacements?.Revision != objects.Levels.EditRevision)
             interiorEditorPlacements = (objects.Levels, objects.Levels.EditRevision, objects.Levels.Buildings().GroupBy(b => b.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal));
         if (!interiorEditorPlacements.Value.ByKey.TryGetValue(key, out var placement)) return null;
@@ -95,7 +95,7 @@ sealed class InteriorEditorHost(GameHost host)
         if (shown is not { } s)
         {
             title = "Interior editor";
-            lines.Add((host.player.SelectedBuildingKey is null ? "Click a building to show its layouts." : "Not a building of the level data (a site of yours has no layouts).", false));
+            lines.Add((host.player.buildingSelection.SelectedBuildingKey is null ? "Click a building to show its layouts." : "Not a building of the level data (a site of yours has no layouts).", false));
             hint = "Esc close";
         }
         else

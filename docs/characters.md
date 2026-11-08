@@ -232,7 +232,7 @@ Meitou: `NamePool`, rolled at spawn (`PopulationSystem.SpawnName`, `RngPurpose.N
 ## Character editor
 
 `CharacterEditWindow` (constructor `FUN_1405f4dd0(chars, mode, forceRaces)`, layout `Kenshi_CharacterEditor`). Facts **Observed** from the
-exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / `FinishCreation` commands (`Simulation/Editing`), `PlayerInterface.Editor`.
+exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / `FinishCreation` commands (`Simulation/Editing`), `CharacterEditorPanel`.
 
 - **Modes**: 0 new game (`FUN_140872e00`: every player character after the start's `squad` spawns, with the start's `force race`), 1 in play
   (dialogue `DA_CHARACTER_EDITOR` on the talking player character; `DA_JOIN_SQUAD_WITH_EDIT` and slave purchases on the recruits). Mode 1
@@ -357,7 +357,7 @@ IMPORT opens `Kenshi_OpenSaveFileDialog` titled "Import character" on the folder
 else "Error loading appearance file '{1}'. The file is in an old format or invalid." (`FUN_1405f4280`), and its look replaces the editor's;
 what the original does with another race in mode 1 is **Unknown**. **Verified** (FcsReader + FcsWriter on the install's 12 exports): all are
 type 15, one record, id 1, `1--INGAME`, name `default` or `0`, and round-trip byte-exact. Meitou (`CharacterDraft.Import`/`Export`,
-`PlayerInterface.Editor`): export writes that layout, overwriting a file of the same name; import sanitizes the file for its race and refuses a
+`CharacterEditorPanel`): export writes that layout, overwriting a file of the same name; import sanitizes the file for its race and refuses a
 race the editor doesn't offer (creation) or another race or sex (surgeon).
 **Observed** (native 1.0.68 editor import/export): an imported appearance with head `99184-Newwworld.mod` exports with a different head id and explicit neutral face-slider defaults.
 For rendering comparisons, use the native editor's exported result on both sides; importing the same input alone does not establish identical appearance data. The head fallback rule is **Unknown**.

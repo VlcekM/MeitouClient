@@ -2,13 +2,13 @@ using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Ui;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// Loose items under the pointer (docs/simulation.md "Ground items"): a right click on one sends the nearest selected character to pick it up (pointer <c>pick_item</c>).
 /// While the Highlight key is held each one near the focus shows its name label (docs/game/ui-input.md "Ground item labels"), which picks like the item.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class GroundItemPicks(PlayerInterface player)
 {
     /// <summary>What the ray meets of a ground item where it is drawn: its triangles in its own space, its place and turn (the host sets it; null: no item is picked but by its label).</summary>
     public Func<Meitou.Simulation.Items.GroundItemSnapshot, (IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh, Vector3 At, Quaternion Rotation)?>? GroundItemShape { get; set; }
@@ -26,10 +26,10 @@ sealed partial class PlayerInterface
     /// The ground item whose label is under the pixel, else the nearest the ray meets on its collision (<see cref="GroundItemShape"/>), as the original's pick hits an item's
     /// shapes; one inside or behind a building seen from outside does not count.
     /// </summary>
-    int? PickGroundItem(Vector2 pixel) => PickGroundItemAt(pixel)?.Id;
+    internal int? PickGroundItem(Vector2 pixel) => PickGroundItemAt(pixel)?.Id;
 
     /// <summary>The ground item whose name label (shown while the Highlight key is held) is under the pixel, else null.</summary>
-    int? LabelAt(Vector2 pixel)
+    internal int? LabelAt(Vector2 pixel)
     {
         if (HighlightFocus is null) return null;
         foreach (var (id, rect) in itemLabels)
@@ -38,14 +38,14 @@ sealed partial class PlayerInterface
     }
 
     /// <summary><see cref="PickGroundItem"/> with the ray distance (0 for a label: it is drawn over everything).</summary>
-    (int Id, float T)? PickGroundItemAt(Vector2 pixel)
+    internal (int Id, float T)? PickGroundItemAt(Vector2 pixel)
     {
         if (LabelAt(pixel) is { } labelled) return (labelled, 0);
-        if (Ray(pixel) is not { } ray || GroundItemShape is not { } shapeOf) return null;
+        if (player.Ray(pixel) is not { } ray || GroundItemShape is not { } shapeOf) return null;
         (int, float)? best = null;
         float bestT = float.MaxValue;
-        foreach (var g in session.CurrentSnapshot.GroundItems)
-            if (GroundItemHidden?.Invoke(g.Id) != true && shapeOf(g) is { } shape && RayNears(ray, shape.Mesh, shape.At, shape.Rotation) && RayMesh(ray, shape.Mesh, shape.At, shape.Rotation) is { } t && t < bestT && !Hidden(ray, t))
+        foreach (var g in player.session.CurrentSnapshot.GroundItems)
+            if (GroundItemHidden?.Invoke(g.Id) != true && shapeOf(g) is { } shape && RayNears(ray, shape.Mesh, shape.At, shape.Rotation) && PlayerInterface.RayMesh(ray, shape.Mesh, shape.At, shape.Rotation) is { } t && t < bestT && !player.Hidden(ray, t))
                 (best, bestT) = ((g.Id, t), t);
         return best;
     }
@@ -54,7 +54,7 @@ sealed partial class PlayerInterface
     readonly Dictionary<IReadOnlyList<(Vector3[] Vertices, int[] Indices)>, (Vector3 Centre, float Radius)> shapeSpheres = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Whether the ray passes through the bounding sphere of the shape put at <paramref name="at"/> turned by <paramref name="rotation"/> (a hit on its triangles is inside it).</summary>
-    bool RayNears((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
+    internal bool RayNears((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
     {
         if (!shapeSpheres.TryGetValue(mesh, out var sphere))
         {
@@ -75,45 +75,45 @@ sealed partial class PlayerInterface
     /// A right click on a ground item, with a selection (true): the pick-up order at once. A plain item has no inventory, so the original adds no verb and a held press shows no menu
     /// (<c>FUN_1407a6bc0</c> adds Pick Up / Steal and Loot only for an item with an inventory; docs/game/ui-input.md "Ground item labels").
     /// </summary>
-    bool GroundItemClick(Vector2 p)
+    internal bool GroundItemClick(Vector2 p)
     {
-        if (SelectedIds().Count == 0 || PickGroundItem(p) is not { } item) return false;
-        Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = session.World.Tick, Alt = AltHeld });
+        if (player.SelectedIds().Count == 0 || PickGroundItem(p) is not { } item) return false;
+        player.Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = player.session.World.Tick, Alt = player.AltHeld });
         return true;
     }
 
     /// <summary>The ground item whose label took the left press, until the release.</summary>
-    int? labelPress;
+    internal int? labelPress;
 
     /// <summary>
     /// A left click released on an item's name label (<c>FUN_1401638f0</c>, the label's eventMouseButtonReleased handler, button Left only): the pick-up order for the selection, as the right
     /// click on the item. The original shows the "Hold down the ALT key to steal items" hint instead of stealing when Alt is not held; the label exists only while Highlight is held, so that cannot arise here.
     /// </summary>
-    void LabelPickUp(int item)
+    internal void LabelPickUp(int item)
     {
-        if (SelectedIds().Count == 0) return;
-        Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = session.World.Tick });
+        if (player.SelectedIds().Count == 0) return;
+        player.Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = player.session.World.Tick });
     }
 
     /// <summary>
-    /// The name label over each ground item within <see cref="HighlightRadius"/> of the focus while the Highlight key is held: the original's <c>Kenshi_ItemDropLabel</c>
+    /// The name label over each ground item within <see cref="PlayerInterface.HighlightRadius"/> of the focus while the Highlight key is held: the original's <c>Kenshi_ItemDropLabel</c>
     /// (<b>Verified</b>), a <c>Kenshi_GenericTextBoxFlatSmallSkin</c> 0.0259 of the screen high and fitted to the name, centred in Kenshi_StandardFont_Medium; plate and text
     /// in the item's <see cref="ItemLabelColour"/>, both green (<c>...Selected</c>, #66ff66) for the one the pointer picks, the plate red for a stolen one. Labels that would overlap the nearer
     /// one's are lifted above it, and hidden ones are skipped (engine choices).
     /// </summary>
-    void AddItemLabels(List<UiControl> controls)
+    internal void AddItemLabels(List<UiControl> controls)
     {
         itemLabels.Clear();
-        if (HighlightFocus is not { } focus || uiPainter is not { } painter || EditorOpen) return;
-        float scale = Height / 1080f, height = Height * 0.0259259f, em = 20 * 50f / 72f * scale;
+        if (HighlightFocus is not { } focus || player.uiPainter is not { } painter || player.characterEditor.EditorOpen) return;
+        float scale = player.Height / 1080f, height = player.Height * 0.0259259f, em = 20 * 50f / 72f * scale;
         var near = new List<(Meitou.Simulation.Items.GroundItemSnapshot Item, float Distance, Vector2 At)>();
-        foreach (var g in session.CurrentSnapshot.GroundItems)
+        foreach (var g in player.session.CurrentSnapshot.GroundItems)
         {
-            if (g.Name.Length == 0 || GroundItemHidden?.Invoke(g.Id) == true || Vector3.DistanceSquared(focus, g.Position) > HighlightRadius * HighlightRadius) continue;
+            if (g.Name.Length == 0 || GroundItemHidden?.Invoke(g.Id) == true || Vector3.DistanceSquared(focus, g.Position) > PlayerInterface.HighlightRadius * PlayerInterface.HighlightRadius) continue;
             var middle = g.Position + new Vector3(0, 0.5f, 0);
-            if (Project(middle) is not { } at || Ray(at) is not { } ray) continue;
+            if (player.Project(middle) is not { } at || player.Ray(at) is not { } ray) continue;
             float distance = Vector3.Distance(ray.Origin, middle);
-            if (!Hidden(ray, distance)) near.Add((g, distance, at));
+            if (!player.Hidden(ray, distance)) near.Add((g, distance, at));
         }
         near.Sort((a, b) => a.Distance.CompareTo(b.Distance));
         var placed = new List<(int Id, UiRect Rect)>();
@@ -130,7 +130,7 @@ sealed partial class PlayerInterface
             placed.Add((g.Id, rect));
         }
         itemLabels.AddRange(placed);
-        int? hovered = PickGroundItem(mouse);
+        int? hovered = PickGroundItem(player.mouse);
         // Drawn far to near so the nearer labels lie on top.
         for (int i = placed.Count - 1; i >= 0; i--)
         {
@@ -147,9 +147,9 @@ sealed partial class PlayerInterface
 
     /// <summary>Picking the item up would be stealing it: its owner's faction (<see cref="Meitou.Simulation.Items.GroundItem.OwnedBy"/>) is not the player's.</summary>
     /// <summary>The ground item under <paramref name="pixel"/> belongs to another faction: its pointer is <c>steal</c> (<c>FUN_1407fc440</c>), and a right click without Alt only walks to it.</summary>
-    internal bool StealsGroundItem(Vector2 pixel) => PickGroundItem(pixel) is { } id && session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == id) is { } g && Stealing(g);
+    internal bool StealsGroundItem(Vector2 pixel) => PickGroundItem(pixel) is { } id && player.session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == id) is { } g && Stealing(g);
 
-    bool Stealing(Meitou.Simulation.Items.GroundItemSnapshot g) => g.OwnedBy >= 0 && g.OwnedBy != session.World.Player.Faction;
+    bool Stealing(Meitou.Simulation.Items.GroundItemSnapshot g) => g.OwnedBy >= 0 && g.OwnedBy != player.session.World.Player.Faction;
 
     /// <summary>Whether an ITEM record is an artifact (its <c>artifact</c> field); the host sets it.</summary>
     public Func<string, bool>? ArtifactOf { get; set; }
@@ -163,9 +163,9 @@ sealed partial class PlayerInterface
         int level = Meitou.Simulation.Items.ItemInstance.GearLevelOf(g.Type, g.Level);
         return g.Type switch
         {
-            FcsRecordType.ITEM => TipHex(ArtifactOf?.Invoke(g.Record) == true ? "0dfceb" : "e0cccc"),
+            FcsRecordType.ITEM => TooltipRuntime.TipHex(ArtifactOf?.Invoke(g.Record) == true ? "0dfceb" : "e0cccc"),
             FcsRecordType.WEAPON or FcsRecordType.ARMOUR or FcsRecordType.CONTAINER or FcsRecordType.NEST_ITEM or FcsRecordType.MAP_ITEM or FcsRecordType.CROSSBOW
-                or FcsRecordType.LIMB_REPLACEMENT => TipHex(level < 16 ? "666666" : level < 36 ? "d9ccbf" : level < 51 ? "4099b3" : level < 66 ? "66fc80" : "fceb0d"),
+                or FcsRecordType.LIMB_REPLACEMENT => TooltipRuntime.TipHex(level < 16 ? "666666" : level < 36 ? "d9ccbf" : level < 51 ? "4099b3" : level < 66 ? "66fc80" : "fceb0d"),
             _ => "1 1 1",
         };
     }

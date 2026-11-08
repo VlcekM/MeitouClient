@@ -1,17 +1,16 @@
 using System.Globalization;
 using Meitou.Game.Audio;
 using Meitou.Simulation;
-using Meitou.Game.Ui;
 using Meitou.Simulation.Player;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The interface's sounds (docs/audio.md "Interface"). The original has no central click hook either: every handler posts its own sound, so this maps Meitou's actions to the same events
-/// (<see cref="ExecuteUiAction"/>, <see cref="FaithfulAction"/>, the commands <see cref="Say"/> sends) and watches the windows open and close once a frame (<see cref="PollUiSounds"/>).
+/// (<see cref="PlayerInterface.ExecuteUiAction"/>, <see cref="PlayerInterface.FaithfulAction"/>, the commands <see cref="PlayerInterface.Say"/> sends) and watches the windows open and close once a frame (<see cref="PollUiSounds"/>).
 /// The host plays what <see cref="UiSound"/> receives; nothing here changes the game.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class InterfaceSounds(PlayerInterface player)
 {
     /// <summary>Where interface sounds go (the host's audio); null without audio.</summary>
     public Action<UiSoundEvent>? UiSound { get; set; }
@@ -19,7 +18,7 @@ sealed partial class PlayerInterface
     internal void Sound(string name, string? group = null, string? value = null, bool state = false, string? item = null, string? building = null) =>
         UiSound?.Invoke(new UiSoundEvent(name, group, value, state, item, building));
 
-    readonly HashSet<string> soundScreens = [];
+    internal readonly HashSet<string> soundScreens = [];
     int soundOverviewTab = -1;
     string? soundHover;
     object? soundWorld;
@@ -30,15 +29,15 @@ sealed partial class PlayerInterface
     readonly Dictionary<string, bool> soundBuildings = new(StringComparer.Ordinal);
 
     /// <summary>Once a frame: windows opening and closing, the title buttons under the pointer, buildings finishing.</summary>
-    void PollUiSounds()
+    internal void PollUiSounds()
     {
         if (UiSound is null) return;
-        var open = faithfulScreens.OpenScreens;
+        var open = player.faithfulScreens.OpenScreens;
         foreach (string id in soundScreens.ToArray())
         {
             if (open.Contains(id)) continue;
             soundScreens.Remove(id);
-            switch (IsPinnedInventory(id) ? "inventory" : id)
+            switch (InventoryWindows.IsPinnedInventory(id) ? "inventory" : id)
             {
                 case "inventory" or "bag" or "limbs" or "trader" or "building" or "bench" or "storage": Sound("Inventory_Close"); break;
                 case "stats": Sound("Stats_Close"); break;
@@ -49,7 +48,7 @@ sealed partial class PlayerInterface
         foreach (string id in open)
         {
             if (!soundScreens.Add(id)) continue;
-            switch (IsPinnedInventory(id) ? "inventory" : id)
+            switch (InventoryWindows.IsPinnedInventory(id) ? "inventory" : id)
             {
                 case "inventory" or "bag" or "limbs" or "trader" or "building" or "bench" or "storage": Sound("Inventory_Open"); break;
                 case "stats": Sound("Stats_Open"); break;
@@ -61,7 +60,7 @@ sealed partial class PlayerInterface
         if (soundScreens.Contains("overview"))
         {
             // The overview's tabs (14049bf90): the map and research tabs have their own sounds, the others are tabs.
-            int tab = faithfulScreens.GetTab("overview", "TabsMain");
+            int tab = player.faithfulScreens.GetTab("overview", "TabsMain");
             if (tab != soundOverviewTab)
             {
                 soundOverviewTab = tab;
@@ -71,7 +70,7 @@ sealed partial class PlayerInterface
 
         // The title buttons: a sound when the pointer enters one (the title screen's constructor binds only these seven).
         string? hover = null;
-        if (faithfulScreens.IsOpen("title") && faithfulScreens.HitTest(mouse) is { Screen: "title", Control: { Type: "Button", Enabled: true } button }) hover = button.Name;
+        if (player.faithfulScreens.IsOpen("title") && player.faithfulScreens.HitTest(player.mouse) is { Screen: "title", Control: { Type: "Button", Enabled: true } button }) hover = button.Name;
         if (hover != soundHover)
         {
             soundHover = hover;
@@ -79,7 +78,7 @@ sealed partial class PlayerInterface
         }
 
         // The speed keys (F2 to F4) change the clock without a button: the same sound when the speed moves to a new running one (the buttons did it already).
-        double speedNow = session.Simulation.Speed;
+        double speedNow = player.session.Simulation.Speed;
         if (speedNow > 0 && speedNow != soundSpeed && !speedSounded && (speedNow == 1 || speedNow == 2 || speedNow == 5))
         {
             string name = speedNow == 1 ? "Normal" : speedNow == 2 ? "x2" : "x4";
@@ -89,14 +88,14 @@ sealed partial class PlayerInterface
         speedSounded = false;
 
         // A research finished (also one that unlocks nothing) or a blueprint read: "Research complete" (140834550). The first look only takes the baseline.
-        if (!ReferenceEquals(soundWorld, session.World)) soundUnlocked = -1;
-        int unlocked = session.CurrentSnapshot.UnlockedBuildings.Count + session.CurrentSnapshot.Research.Finished;
+        if (!ReferenceEquals(soundWorld, player.session.World)) soundUnlocked = -1;
+        int unlocked = player.session.CurrentSnapshot.UnlockedBuildings.Count + player.session.CurrentSnapshot.Research.Finished;
         if (soundUnlocked >= 0 && unlocked > soundUnlocked) Sound("Notifications", "Notifications", "Thing_Complete");
         soundUnlocked = unlocked;
 
         // A building of the player's finishing: the notification (140559110). The first look only takes the baseline.
-        var snapshot = session.CurrentSnapshot;
-        if (!ReferenceEquals(soundWorld, session.World)) { soundWorld = session.World; soundBuildingsRevision = -1; soundBuildings.Clear(); soundUnlocked = -1; }
+        var snapshot = player.session.CurrentSnapshot;
+        if (!ReferenceEquals(soundWorld, player.session.World)) { soundWorld = player.session.World; soundBuildingsRevision = -1; soundBuildings.Clear(); soundUnlocked = -1; }
         if (snapshot.BuildingsRevision != soundBuildingsRevision || soundBuildings.Count != snapshot.Buildings.Count)
         {
             bool baseline = soundBuildingsRevision < 0;
@@ -115,14 +114,14 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>A HUD action, before it runs (so a toggle's state is still the old one).</summary>
-    void SoundForAction(string action, string argument)
+    internal void SoundForAction(string action, string argument)
     {
         if (UiSound is null) return;
         if (action.StartsWith("speed:", StringComparison.Ordinal))
         {
             // Game_Speed is a state; the exe sets it and posts for 1, 2 and 5 only (140787e40), its three speed buttons; Meitou posts per button, whatever its speed.
             int index = int.Parse(action[6..], CultureInfo.InvariantCulture);
-            if (index is > 0 and < SpeedButtons)
+            if (index is > 0 and < PlayerInterface.SpeedButtons)
             {
                 string name = index == 1 ? "Normal" : index == 2 ? "x2" : "x4";
                 Sound("Game_Speed_" + name, "Game_Speed", name, state: true);
@@ -130,20 +129,20 @@ sealed partial class PlayerInterface
             }
         }
         else if (action is "floor-up" or "floor-down") Sound("Change_Level");
-        else if (action == "extendedstats") Sound("Stats_Preview", "Stats_Preview", infoExpanded ? "Stats_Down" : "Stats_Up");
+        else if (action == "extendedstats") Sound("Stats_Preview", "Stats_Preview", player.infoExpanded ? "Stats_Down" : "Stats_Up");
         else if (action is "member" or "job-remove" || action.StartsWith("runspeed.", StringComparison.Ordinal)) Sound("General_Click");
         else if (action.StartsWith("order.", StringComparison.Ordinal) && Enum.TryParse(action[6..], out CharacterOrders order))
         {
             // The orders panel (1407214e0 and neighbours): Block, Hold, Passive and Ranged make Blocks_Only on and off; Sneak makes Stealth on and a click off.
             if (order is CharacterOrders.Block or CharacterOrders.Hold or CharacterOrders.Passive or CharacterOrders.Ranged) Sound("Blocks_Only");
             else if (order == CharacterOrders.Taunt) Sound("Taunt");
-            else if (order == CharacterOrders.Sneak) Sound(Selected().FirstOrDefault() is { } lead && lead.Orders.HasFlag(CharacterOrders.Sneak) ? "General_Click" : "Stealth");
+            else if (order == CharacterOrders.Sneak) Sound(player.Selected().FirstOrDefault() is { } lead && lead.Orders.HasFlag(CharacterOrders.Sneak) ? "General_Click" : "Stealth");
             else if (order == CharacterOrders.Jobs) Sound("General_Click");
         }
     }
 
     /// <summary>A button, tab or list row of one of the original's screens, before it runs.</summary>
-    void SoundForScreen(MyGuiEvent e)
+    internal void SoundForScreen(MyGuiEvent e)
     {
         if (UiSound is null || e.Action.StartsWith("inventory-scroll", StringComparison.Ordinal)) return;
         switch (e.Screen)
@@ -151,7 +150,7 @@ sealed partial class PlayerInterface
             case "title" or "menu" or "new-game" or "save" or "load" or "message" or "file": Sound("General_Click"); break;
             case "inventory" or "bag" or "trader": if (e.Widget == "ArrangeButton") Sound("General_Click"); break;
             // A pick in the research type list (FUN_14049b5e0): Research_Tabs is set to the item's text, the category; the same row again is no change.
-            case "overview": if (e is { Widget: "ResearchTypeList", Action: "select" } && e.Text != researchCategory) Sound("Research_Tab", "Research_Tabs", e.Text); break;
+            case "overview": if (e is { Widget: "ResearchTypeList", Action: "select" } && e.Text != player.production.researchCategory) Sound("Research_Tab", "Research_Tabs", e.Text); break;
             case "build":
                 if (e.Widget is "CategoriesList" or "BuildingsList" or "BuldingTypePrevButton" or "BuldingTypeNextButton") Sound("Building_Navigate");
                 break;
@@ -176,7 +175,7 @@ sealed partial class PlayerInterface
     };
 
     /// <summary>A command the player is about to send: orders sound as the exe's order dispatcher (1407f9e20), item moves and trades as the inventory handlers.</summary>
-    void SoundForCommand(SimCommand command)
+    internal void SoundForCommand(SimCommand command)
     {
         if (UiSound is null) return;
         switch (command)
@@ -185,7 +184,7 @@ sealed partial class PlayerInterface
             case Meitou.Simulation.Trading.SellItem sell: Sound("Sell_Item", item: sell.Item.Record); return;
             // A right-click move (FUN_140713d20) sounds as a lift, not a drop; money turned into cats in the player's own window is silent.
             case Meitou.Simulation.Items.QuickMoveItem quick:
-                if (quick.Into != CharacterId.None || gameData?.Find(quick.Item.Record)?.GetInt("item function") != PlayerSystem.MoneyFunction) Sound("Item_Lift", item: quick.Item.Record);
+                if (quick.Into != CharacterId.None || player.gameData?.Find(quick.Item.Record)?.GetInt("item function") != PlayerSystem.MoneyFunction) Sound("Item_Lift", item: quick.Item.Record);
                 return;
             case Meitou.Simulation.Carrying.TakeLootItem take: Sound("Item_Lift", item: take.Item.Record); return;
             case Meitou.Simulation.Carrying.PutLootItem put: Sound("Item_Lift", item: put.Item.Record); return;
@@ -198,6 +197,6 @@ sealed partial class PlayerInterface
         string name = command.GetType().Name;
         if (name == "DialogueChoice") Sound("Dialogue_Choice", "Dialogue_Choice", "Continue_Conversation");
         // The exe skips the click for a move order given while steering.
-        else if (OrderCommands.Contains(name) && !(steering && name == "MoveOrder")) Sound("Right_Click");
+        else if (OrderCommands.Contains(name) && !(player.steering && name == "MoveOrder")) Sound("Right_Click");
     }
 }

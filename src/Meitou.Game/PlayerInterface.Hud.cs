@@ -13,7 +13,7 @@ sealed partial class PlayerInterface
 {
 
     /// <summary>The speed buttons: pause, then the clock's three speeds.</summary>
-    const int SpeedButtons = 4;
+    internal const int SpeedButtons = 4;
     const float Margin = 10, Pad = 6;
 
     public float HudBottom => 48;
@@ -60,7 +60,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>A MyGUI "r g b" colour as a <c>#rrggbb</c> tag.</summary>
-    static string Tag(string rgb)
+    internal static string Tag(string rgb)
     {
         var c = MyGuiColours.Parse(rgb, Vector4.One);
         return $"#{(int)MathF.Round(c.X * 255):x2}{(int)MathF.Round(c.Y * 255):x2}{(int)MathF.Round(c.Z * 255):x2}";
@@ -104,10 +104,10 @@ sealed partial class PlayerInterface
         dragging = false;
         steering = false;
         worldMap.mapDrag = null;
-        (held, liftPress, lifting, heldSerial) = (null, null, null, 0);
+        (inventoryWindows.held, inventoryWindows.liftPress, inventoryWindows.lifting, inventoryWindows.heldSerial) = (null, null, null, 0);
         selectedFor = null;
         selected = [];
-        selectedBuilding = null;
+        buildingSelection.selectedBuilding = null;
         Follow = null;
         CloseContextMenu();
     }
@@ -151,15 +151,15 @@ sealed partial class PlayerInterface
     CharacterSnapshot? inspected;
 
     /// <summary>The character the HUD panels describe: the other faction's character last clicked, else the first selected one (docs/game/ui-screens.md section 4). The selection stays whoever is inspected.</summary>
-    CharacterSnapshot? Lead() => Selected().FirstOrDefault() is { } first ? inspected ?? first : inspected;
+    internal CharacterSnapshot? Lead() => Selected().FirstOrDefault() is { } first ? inspected ?? first : inspected;
 
     /// <summary>The HUD and the drag box, over the finished picture.</summary>
     public void Draw(DebugOverlay o, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
-        PollUiSounds();
+        interfaceSounds.PollUiSounds();
         Width = width;
         Height = height;
-        PollBiome();
+        biomeBanner.PollBiome();
         PollNotice();
         prospecting.PollProspect();
         tutorialWindow.PollTutorials();

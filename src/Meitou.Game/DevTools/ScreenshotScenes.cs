@@ -6,6 +6,7 @@ using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Ui;
 using Meitou.Simulation;
 
 namespace Meitou.Game.DevTools;
@@ -156,7 +157,7 @@ sealed class ScreenshotScenes(GameHost host)
         display.EndFrame();
         using var overlay = DebugOverlay.TryCreate(context, host.assets.Find);
         if (overlay is not null) { host.player.CreateUiPainter(overlay, host.assets.Find); host.itemIconFiles.ConnectItemIcons(); }
-        if (host.gpu.Characters is { } portraits) { var (atlas, sampled) = portraits.PortraitAtlas; host.player.SetUiTexture(PlayerInterface.PortraitTexture, atlas, sampled); }
+        if (host.gpu.Characters is { } portraits) { var (atlas, sampled) = portraits.PortraitAtlas; host.player.SetUiTexture(PortraitBar.PortraitTexture, atlas, sampled); }
         if (host.g.Scene is { } sceneName)
         {
             SceneShots(sceneName, display, target, overlay, w, h);
@@ -176,7 +177,7 @@ sealed class ScreenshotScenes(GameHost host)
                 host.player.MouseMove(new Vector2(item.Bounds.X + item.Bounds.Width / 2, item.Bounds.Y + item.Bounds.Height / 2));
             bool showPanel = panelName is not ("trade" or "talk");   // the trade and the conversation open their own windows; closing them would end them
             if (panelName?.StartsWith("editor", StringComparison.Ordinal) == true) { host.player.ShowUiPanel(panelName); host.characterEditor.EditorCamera(); }
-            if (panelName == "edited") { host.player.ShowcaseEdit(); host.session.AdvanceSimulation(host.session.Ticks.TickSeconds); }
+            if (panelName == "edited") { host.player.characterEditor.ShowcaseEdit(); host.session.AdvanceSimulation(host.session.Ticks.TickSeconds); }
             if (panelName == "building") { host.UpdateView(w, h); host.player.ShowUiPanel("building"); host.session.AdvanceSimulation(host.session.Ticks.TickSeconds); }
             // Item icons are drawn from the frame after a cell asks for them, and their textures stream in: show the panel until they are done.
             for (int frames = 0; panelName is not null && overlay is not null && frames < 400 && (frames < 3 || host.gpu.Characters is { PendingIcons: > 0 } || host.gpu.Objects is { StagePropPending: true } || host.characterEditor.editorBar is not null && !host.characterEditor.editorBarReady || host.gpu.Objects is { PendingBuildingIcons: > 0 } || host.player.PendingIconFiles > 0); frames++)

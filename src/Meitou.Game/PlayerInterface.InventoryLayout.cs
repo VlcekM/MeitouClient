@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
+using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
 
@@ -11,22 +12,22 @@ sealed partial class PlayerInterface
     internal float InventoryScale => Height / 1080f;
     internal float InventoryCell => 25 * InventoryScale;
     internal readonly Dictionary<string, float> inventoryScroll = new(StringComparer.Ordinal);
-    readonly Dictionary<string, (UiRect View, float Maximum)> inventoryViews = new(StringComparer.Ordinal);
+    internal readonly Dictionary<string, (UiRect View, float Maximum)> inventoryViews = new(StringComparer.Ordinal);
     /// <summary>Per scrolled window, where its scrollbar's thumb runs and how tall it is (for dragging it).</summary>
-    readonly Dictionary<string, (UiRect Track, float Thumb)> inventoryTracks = new(StringComparer.Ordinal);
+    internal readonly Dictionary<string, (UiRect Track, float Thumb)> inventoryTracks = new(StringComparer.Ordinal);
     /// <summary>A scrollbar thumb being dragged: its window and where on the thumb it was taken.</summary>
-    (string Screen, float Grab)? scrollDrag;
+    internal (string Screen, float Grab)? scrollDrag;
 
     void BindInventoryGeometry(string id, UiBindings b)
     {
         b.TemplateScale = InventoryScale;
-        if (id is "bag" or "loot-bag" && (id == "bag" ? InventoryOwner() : tradeWindows.LootBody())?.ItemGrid is { } bag)
+        if (id is "bag" or "loot-bag" && (id == "bag" ? inventoryWindows.InventoryOwner() : tradeWindows.LootBody())?.ItemGrid is { } bag)
             b.Positions["Root"] = new(0, 0, bag.BagWidth * InventoryCell + 40 * InventoryScale,
                 Math.Min(Height * 0.8f, bag.BagHeight * InventoryCell + 108 * InventoryScale));
         if (id == "trader") tradeWindows.BindTraderGeometry(b);
     }
 
-    void PlaceBagWindow()
+    internal void PlaceBagWindow()
     {
         if (faithfulScreens.IsOpen("loot")) PlaceWindowRow(); else PlaceInventoryBeside("bag", left: true);
     }
@@ -67,7 +68,7 @@ sealed partial class PlayerInterface
     /// (5% of the smaller screen side); when that is off the screen, at the left edge with the inventory and its bag pushed right of it. Not moved with the inventory afterwards.
     /// With a loot window open it joins the window row instead.
     /// </summary>
-    void PlaceLimbsWindow()
+    internal void PlaceLimbsWindow()
     {
         if (faithfulScreens.IsOpen("loot")) { PlaceWindowRow(); return; }
         var roots = WindowRoots();
@@ -114,7 +115,7 @@ sealed partial class PlayerInterface
     /// A machine or container window's place (<b>Observed</b> on the original's 2026-10-26 screenshot of a mined iron rock): at the screen's left edge, vertically centred; an open
     /// inventory (with its bag) under it moves right of it.
     /// </summary>
-    void PlaceMachineWindow(string id)
+    internal void PlaceMachineWindow(string id)
     {
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var window)) return;
@@ -127,7 +128,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Puts window <paramref name="id"/> beside <paramref name="anchor"/>'s, moving the anchor in when the pair would not fit the screen.</summary>
-    void PlaceInventoryBeside(string id, bool left, string anchor = "inventory")
+    internal void PlaceInventoryBeside(string id, bool left, string anchor = "inventory")
     {
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var other) || !roots.TryGetValue(anchor, out var own)) return;
@@ -177,7 +178,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The grid is laid in the window with <paramref name="above"/> (default 50) layout pixels over it and <paramref name="below"/> (default 58) under it.</summary>
-    void ArrangeContainerGrid(string id, List<UiControl> controls, int columns, int rows, float above = 50, float below = 58)
+    internal void ArrangeContainerGrid(string id, List<UiControl> controls, int columns, int rows, float above = 50, float below = 58)
     {
         int index = controls.FindIndex(c => c.Name == "backpack_content");
         var root = controls.FirstOrDefault(c => c.Type == "Window");
@@ -207,7 +208,7 @@ sealed partial class PlayerInterface
     /// A vertical scrollbar as the original's <c>Kenshi_ScrollBarV</c> template draws it in <paramref name="bar"/>: arrows at both ends, the track between them and a thumb
     /// <c>MinTrackSize</c> (10) or more tall, sized to the visible share of the canvas. The arrows scroll by steps, a click on the track beside the thumb by a page, the thumb drags.
     /// </summary>
-    void AddScrollBar(string id, List<UiControl> controls, UiRect bar, float visible, float canvas, float scroll, float maximum, UiRect? clip,
+    internal void AddScrollBar(string id, List<UiControl> controls, UiRect bar, float visible, float canvas, float scroll, float maximum, UiRect? clip,
         string prefix = "inventory-scroll")
     {
         float scale = InventoryScale;
@@ -226,7 +227,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Takes the thumb of a window's scrollbar under the pointer (true: taken).</summary>
-    bool ScrollThumbDown(string screen, UiControl picked, Vector2 p)
+    internal bool ScrollThumbDown(string screen, UiControl picked, Vector2 p)
     {
         if (!picked.Name.EndsWith("-thumb", StringComparison.Ordinal) || !inventoryTracks.ContainsKey(screen)) return false;
         scrollDrag = (screen, p.Y - picked.Bounds.Y);
@@ -310,12 +311,12 @@ sealed partial class PlayerInterface
             yield break;
         }
         float total = d.Level * 100;
-        var rows = new List<(string, string)> { (Loc.Tr("Clothing disguise:"), $"{GoodTag}{Loc.Tr("{1,num}", (int)total)}%") };
+        var rows = new List<(string, string)> { (Loc.Tr("Clothing disguise:"), $"{ProductionWindows.GoodTag}{Loc.Tr("{1,num}", (int)total)}%") };
         void Factor(bool on, string label, string text, float mult)
         {
             if (!on) return;
             total *= mult;
-            rows.Add((Loc.Tr(label), BadTag + text));
+            rows.Add((Loc.Tr(label), ProductionWindows.BadTag + text));
         }
         Factor(d.Secure, "In secure location:", "-25%", 0.75f);
         Factor(d.SameFaction, "Same faction:", "-40%", 0.6f);
@@ -325,9 +326,9 @@ sealed partial class PlayerInterface
         {
             total = 0;
             int secs = (int)d.Blown;
-            rows.Add((Loc.Tr("Disguise blown:"), BadTag + Loc.Tr(secs == 1 ? "{1,num} sec" : "{1,num} secs", secs)));
+            rows.Add((Loc.Tr("Disguise blown:"), ProductionWindows.BadTag + Loc.Tr(secs == 1 ? "{1,num} sec" : "{1,num} secs", secs)));
         }
-        rows.Add((Loc.Tr("Total:"), $"{MainTag}{Loc.Tr("{1,num}", (int)total)}%"));
+        rows.Add((Loc.Tr("Total:"), $"{TooltipRuntime.MainTag}{Loc.Tr("{1,num}", (int)total)}%"));
         yield return new(Loc.Tr("Disguise:"), d.Faction.Length > 0 ? d.Faction : Loc.Tr("None"), ValueColour: d.Faction.Length > 0 ? MainColour : null, TooltipRows: rows);
         yield return d.Blown > 0 ? new("    ", Loc.Tr("Blown!"), ValueColour: BadColour) : new("    ", Loc.Tr("{1,num}%", (int)(d.Level * 100)), ValueColour: MainColour);
     }

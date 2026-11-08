@@ -3,13 +3,13 @@ using Meitou.Data.Save;
 using Meitou.Data.Ui;
 using Meitou.Data.World;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The biome banner (docs/game/ui-screens.md "Biome banner", <c>MainBarGUI::vfunc_10</c>): the HUD's <c>BiomeTextPanel</c> fades in with the name of the BIOME_GROUP under the camera pivot when it
 /// changes, holds 5 s and fades out, at most once in 30 s, with the <c>New_Biome</c> sound. Real time, like the original's frame clock; it only follows the pivot and changes nothing in the game.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class BiomeBanner(PlayerInterface player)
 {
     /// <summary>The seconds the banner holds (it fades in at 2 per second before, out at 1 per second after) and the least time between two banners (<b>Verified</b>).</summary>
     const float BiomeHoldSeconds = 5, BiomeCooldownSeconds = 30;
@@ -21,31 +21,31 @@ sealed partial class PlayerInterface
     string? biomeGroup;
     string biomeName = "";
     float biomeHold, biomeCooldown, biomeAlpha;
-    bool biomeShown;
+    internal bool biomeShown;
     long biomeAt;
 
     /// <summary>Once a frame: the banner's timers, its fade and the group it tracks. A new world only takes the group under the pivot (the original does so while its loading window is up).</summary>
-    void PollBiome()
+    internal void PollBiome()
     {
         long now = Stopwatch.GetTimestamp();
         float dt = biomeAt == 0 ? 0 : MathF.Min((float)Stopwatch.GetElapsedTime(biomeAt, now).TotalSeconds, 0.25f);
         biomeAt = now;
-        if (TitleOpen || EditorOpen || RegionAt is null) return;
-        var pivot = session.Camera.Current.Target;
+        if (player.TitleOpen || player.characterEditor.EditorOpen || RegionAt is null) return;
+        var pivot = player.session.Camera.Current.Target;
         if (RegionAt(pivot.X, pivot.Z) is not { } here) return;
-        if (!ReferenceEquals(biomeWorld, session.World))
+        if (!ReferenceEquals(biomeWorld, player.session.World))
         {
-            biomeWorld = session.World;
+            biomeWorld = player.session.World;
             (biomeGroup, biomeShown, biomeHold, biomeCooldown, pendingBiomeCooldown) = (here.Id, false, 0, pendingBiomeCooldown, 0);
             return;
         }
         biomeHold -= dt;
         biomeCooldown -= dt;
-        bool blocked = shownTown != 0;   // the town panel is showing a town (MainBarGUI +0x128, FUN_140728d50:358): no banner starts and the group does not follow the pivot
+        bool blocked = player.townPanel.shownTown != 0;   // the town panel is showing a town (MainBarGUI +0x128, FUN_140728d50:358): no banner starts and the group does not follow the pivot
         if (here.Id != biomeGroup && biomeCooldown <= 0 && !blocked && here.Name != "NONE" && here.Id != WeatherData.NoneRegionId)
         {
             (biomeName, biomeShown, biomeAlpha, biomeHold, biomeCooldown) = (here.Name, true, 0, BiomeHoldSeconds, BiomeCooldownSeconds);
-            Sound("Notifications", "Notifications", "New_Biome");
+            player.interfaceSounds.Sound("Notifications", "Notifications", "New_Biome");
         }
         else if (biomeShown)
         {
@@ -75,7 +75,7 @@ sealed partial class PlayerInterface
     {
         arrivalGroup = group;
         arrivalAt = Stopwatch.GetTimestamp();
-        Say(new Meitou.Simulation.Dialogue.AreaArrival(group, ++arrivalSerial) { Tick = session.World.Tick });
+        player.Say(new Meitou.Simulation.Dialogue.AreaArrival(group, ++arrivalSerial) { Tick = player.session.World.Tick });
     }
 
     /// <summary>
@@ -85,13 +85,13 @@ sealed partial class PlayerInterface
     void RetryArrival(string here)
     {
         if (arrivalGroup is not { } group) return;
-        bool? forget = session.World.ArrivalForget(arrivalSerial);
+        bool? forget = player.session.World.ArrivalForget(arrivalSerial);
         if (here != group || forget == true) arrivalGroup = null;
         else if (forget == false && Stopwatch.GetElapsedTime(arrivalAt).TotalSeconds > ArrivalRetrySeconds) TryArrival(group);
     }
 
     /// <summary>The panel over the HUD while the banner shows: the layout's own panel at the fade's alpha with the name in its text box; hidden otherwise.</summary>
-    void BindBiome(UiBindings b)
+    internal void BindBiome(UiBindings b)
     {
         if (!biomeShown) { b.Hidden.Add("BiomeTextPanel"); return; }
         b.Properties["BiomeTextPanel"] = new Dictionary<string, string> { ["Visible"] = "true", ["Alpha"] = Math.Clamp(biomeAlpha, 0, 1).ToString(System.Globalization.CultureInfo.InvariantCulture) };
@@ -108,7 +108,7 @@ sealed partial class PlayerInterface
     {
         camera.BiomeTextTimer = MathF.Max(biomeCooldown, 0);
         camera.BiomeTextGroup = biomeGroup ?? "";
-        var pivot = session.Camera.Current.Target;
+        var pivot = player.session.Camera.Current.Target;
         camera.Area = RegionAt?.Invoke(pivot.X, pivot.Z) is { } here && here.Name != "NONE" ? here.Name : "";   // the name test only (FUN_140375360); the banner also tests the id
     }
 

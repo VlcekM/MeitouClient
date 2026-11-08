@@ -717,7 +717,7 @@ sealed class GameSound(GameHost host)
         if (host.player is null) return;
         uiSounds = audio is null ? null : new UiSounds(audio.Player, () => host.scene.Database);
         var sounds = uiSounds;
-        host.player.UiSound = sounds is null ? null : e => sounds.Play(e);
+        host.player.interfaceSounds.UiSound = sounds is null ? null : e => sounds.Play(e);
     }
 
     /// <summary>One statistics line; empty without audio.</summary>

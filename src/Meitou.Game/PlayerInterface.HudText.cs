@@ -7,6 +7,7 @@ using Meitou.Game.Ui;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Weather;
+using Meitou.Game.Editor;
 
 namespace Meitou.Game;
 
@@ -174,7 +175,7 @@ sealed partial class PlayerInterface
     /// </summary>
     static HudLine SkillLine(CurrentSkillView skill, SpeedUnit unit)
     {
-        string label = skill.Label is { } own ? Loc.Tr(own) : EditorStatName(skill.Stat);
+        string label = skill.Label is { } own ? Loc.Tr(own) : CharacterEditorPanel.EditorStatName(skill.Stat);
         string? colour = skill.Penalised ? BadColour : null;
         string value = skill.Speed ? SpeedText(skill.Value, unit) : skill.Accuracy is not null ? Degrees(skill.Value) : Num(skill.Value);
         if (skill.Base is { } trained && (int)skill.Value != (int)trained)
@@ -190,7 +191,7 @@ sealed partial class PlayerInterface
         return new(label, value, ValueColour: colour, TooltipRows: tip);
     }
 
-    const string TipBad = "#59231a", TipGood = "#a8b774", TipMain = "#afa68b", TipTitle = "#492620";
+    internal const string TipBad = "#59231a", TipGood = "#a8b774", TipMain = "#afa68b", TipTitle = "#492620";
     static string Num(float v) => ((int)v).ToString(CultureInfo.InvariantCulture);
     static string Degrees(float v) => v.ToString("0.00", CultureInfo.InvariantCulture) + Loc.Tr(" degrees");
     static string SpeedText(float unitsPerSecond, SpeedUnit unit) =>
@@ -311,8 +312,8 @@ sealed partial class PlayerInterface
         var tips = lead.Hud.ExtendedTips;
         return [new(Loc.Tr("Athletics XP:"), Percent(e.AthleticsXp), TooltipRows: tips?.Athletics), new(Loc.Tr("Strength XP:"), Percent(e.StrengthXp), TooltipRows: tips?.Strength),
             new(Loc.Tr("Toughness XP:"), ((int)e.ToughnessXp).ToString(CultureInfo.InvariantCulture) + "x", TooltipRows: tips?.Toughness),
-            new(Loc.Tr("KO point:"), ((int)e.KoPoint).ToString(CultureInfo.InvariantCulture), Tooltip: KoPointTip(e.KoPoint)),
-            new(Loc.Tr("Run speed:"), run, ValueColour: change != 0 ? BadColour : null, TooltipRows: tips is null ? null : RunTip(e, tips, lead.Hud.Encumbrance, change != 0 ? BadTag + run : run, factor, suffix)),
+            new(Loc.Tr("KO point:"), ((int)e.KoPoint).ToString(CultureInfo.InvariantCulture), Tooltip: TooltipRuntime.KoPointTip(e.KoPoint)),
+            new(Loc.Tr("Run speed:"), run, ValueColour: change != 0 ? BadColour : null, TooltipRows: tips is null ? null : RunTip(e, tips, lead.Hud.Encumbrance, change != 0 ? ProductionWindows.BadTag + run : run, factor, suffix)),
             new(Loc.Tr("Hunger Rate:"), Percent(e.HungerRate), TooltipRows: tips?.Hunger)];
     }
 
@@ -326,20 +327,20 @@ sealed partial class PlayerInterface
         string InUnit(float unitsPerSecond) => $"{Loc.Tr("{1,num}", (int)(unitsPerSecond * factor))} {suffix}";
         var rows = new List<(string, string)> { (Loc.Tr("Athletics Skill:"), Loc.Tr("{1,num}", (int)tips.StoredAthletics)), (Loc.Tr("Max possible speed:"), InUnit(e.RunValue)) };
         int legs = (int)((1 - tips.LegFactor) * 100), load = (int)((1 - Math.Clamp(encumbrance, 0, 1)) * 100), robotics = (int)((tips.RoboticLegs - 1) * 100);
-        if (legs > 0) rows.Add((Loc.Tr("Leg injury:"), BadTag + "-" + Loc.Tr("{1,num}%", legs)));
-        if (load > 0) rows.Add((Loc.Tr("Encumbrance:"), BadTag + "-" + Loc.Tr("{1,num}%", load)));
+        if (legs > 0) rows.Add((Loc.Tr("Leg injury:"), ProductionWindows.BadTag + "-" + Loc.Tr("{1,num}%", legs)));
+        if (load > 0) rows.Add((Loc.Tr("Encumbrance:"), ProductionWindows.BadTag + "-" + Loc.Tr("{1,num}%", load)));
         // CharStats +0x18 on either side of 1, as the Athletics tooltip (so +0% and -0% can show).
-        if (tips.Gear > 1) rows.Add((Loc.Tr("Armour/equipment:"), GoodTag + "+" + Loc.Tr("{1,num}%", (int)((tips.Gear - 1) * 100))));
-        else if (tips.Gear < 1) rows.Add((Loc.Tr("Armour/equipment:"), BadTag + "-" + Loc.Tr("{1,num}%", (int)((1 - tips.Gear) * 100))));
-        if (robotics != 0) rows.Add((Loc.Tr("Robotics:"), (robotics < 0 ? BadTag : GoodTag) + Loc.Tr(robotics > 0 ? "+{1,num}" : "{1,num}", robotics) + "%"));
+        if (tips.Gear > 1) rows.Add((Loc.Tr("Armour/equipment:"), ProductionWindows.GoodTag + "+" + Loc.Tr("{1,num}%", (int)((tips.Gear - 1) * 100))));
+        else if (tips.Gear < 1) rows.Add((Loc.Tr("Armour/equipment:"), ProductionWindows.BadTag + "-" + Loc.Tr("{1,num}%", (int)((1 - tips.Gear) * 100))));
+        if (robotics != 0) rows.Add((Loc.Tr("Robotics:"), (robotics < 0 ? ProductionWindows.BadTag : ProductionWindows.GoodTag) + Loc.Tr(robotics > 0 ? "+{1,num}" : "{1,num}", robotics) + "%"));
         rows.Add(("#afa68b" + Loc.Tr("Total speed:"), InUnit(e.RunSpeed)));
-        if (tips.SneakCap is { } cap) rows.Add((Loc.Tr("Stealth mode:"), BadTag + Loc.Tr("max:") + " " + Loc.Tr("{1,num}", (int)(cap * factor))));
+        if (tips.SneakCap is { } cap) rows.Add((Loc.Tr("Stealth mode:"), ProductionWindows.BadTag + Loc.Tr("max:") + " " + Loc.Tr("{1,num}", (int)(cap * factor))));
         rows.Add((Loc.Tr("Total:"), total));
         return rows;
     }
 
     /// <summary>
-    /// The parts' severity the health word reads (<c>FUN_14088a8f0</c>'s part loop, docs/game/ui-screens.md "Health word choice"; h, d, s, m and the KO point as in <see cref="PartTip"/>):
+    /// The parts' severity the health word reads (<c>FUN_14088a8f0</c>'s part loop, docs/game/ui-screens.md "Health word choice"; h, d, s, m and the KO point as in <see cref="TooltipRuntime.PartTip"/>):
     /// 3 a vital part under 0 and below the KO point, 2 any part under 0 (h + d) that is not destroyed, 1 a destroyed non-vital part, else 0; the highest over the parts.
     /// </summary>
     static int WoundSeverity(IReadOnlyList<HealthPartView> parts, float? koPoint)
@@ -395,7 +396,7 @@ sealed partial class PlayerInterface
             if ((slaveState > 1 || d.Level > 0) && d.Blown > 0)
             {
                 int secs = (int)d.Blown;
-                string cooldown = "\n" + MainTag + Loc.Tr(secs == 1 ? "Cooldown {1,num} second" : "Cooldown {1,num} seconds", secs);
+                string cooldown = "\n" + TooltipRuntime.MainTag + Loc.Tr(secs == 1 ? "Cooldown {1,num} second" : "Cooldown {1,num} seconds", secs);
                 return slaveState < 2 ? (Loc.Tr("Disguise Blown!"), BadColour, Loc.Tr("You've been discovered, somebody has seen through your disguise.") + cooldown)
                     : (Loc.Tr("Discovered!"), BadColour, Loc.Tr("You've been discovered, somebody has noticed that you are an escaped slave.") + cooldown);
             }
@@ -470,9 +471,9 @@ sealed partial class PlayerInterface
     void AddHudText(List<UiControl> controls)
     {
         float row = 20 * Height / 1080f, sidePixels = StandardPixels;
-        if (BuildingFocus() is { } focus)
+        if (buildingSelection.BuildingFocus() is { } focus)
         {
-            var (name, state, stats, _, _, extended) = BuildingLines(focus);
+            var (name, state, stats, _, _, extended) = buildingSelection.BuildingLines(focus);
             AddLines(controls, "NameText", [name], row, sidePixels);
             AddLines(controls, "StateText", state, row, sidePixels);
             AddLines(controls, "StatsText", stats, row, sidePixels);
@@ -485,7 +486,7 @@ sealed partial class PlayerInterface
         string faction = FactionName?.Invoke(lead.Faction) ?? "";
         AddLines(controls, "NameText", [new(lead.Name, faction, TitleColour, TitleColour)], row, sidePixels);
         AddLines(controls, "StateText", StateLines(lead, SpeedUnit), row, sidePixels);
-        if (lead.Bounties.Count > 0 || lead.Slave is not null || lead.Status is not null) AddLines(controls, "BountyText", [StatusLine(lead) ?? BountyLine(lead.Bounties)], row, sidePixels);
+        if (lead.Bounties.Count > 0 || lead.Slave is not null || lead.Status is not null) AddLines(controls, "BountyText", [TooltipRuntime.StatusLine(lead) ?? TooltipRuntime.BountyLine(lead.Bounties)], row, sidePixels);
         // The base game draws the stats labels in the painted face (Observed: glyph shapes and widths match Sentencia at its resized 22 pt); the values
         // take the standard face, like the medical column's numbers.
         AddLines(controls, "StatsText", StatsLines(lead), row, font: "Kenshi_PaintedTextFont_Medium", valueFont: "Kenshi_StandardFont_Medium", valuePixels: sidePixels);
@@ -549,7 +550,7 @@ sealed partial class PlayerInterface
             // A robot race's row reads "Oil" and shows the Robot layer over its green, as a robotic part does (FUN_14088a8f0 passes RACE is robot; docs/game/ui-screens.md).
             bool robot = hud is { Robot: true };
             rows.Add(new(Loc.Tr(robot ? "Oil" : "Blood"), blood / capacity, 0, 0, ((int)MathF.Floor(blood + 0.1f)).ToString(CultureInfo.InvariantCulture), new string('<', bleed), robot,
-                BloodTip(hud?.BleedRate ?? 1)));
+                TooltipRuntime.BloodTip(hud?.BleedRate ?? 1)));
             foreach (var part in lead.HealthParts)
             {
                 // The original's row (FUN_14088a8f0): the green and the number are the flesh less the stun, the yellow adds the bandage, the white is the green plus the splint (rig x 0.01),
@@ -557,7 +558,7 @@ sealed partial class PlayerInterface
                 float max = Math.Max(part.Maximum, 1e-3f), health = part.Flesh - part.Stun, green = health / max;
                 bool stump = part.Limb == Meitou.Simulation.Bodies.LimbState.Stump;
                 rows.Add(new(part.Name, green, (health + part.Bandage) / max, (max - part.Stun) / max, ((int)MathF.Floor(health + 0.1f)).ToString(CultureInfo.InvariantCulture),
-                    PartArrows(part, koPoint), part.Robotic, PartTip(part, koPoint, body.Unconscious))
+                    TooltipRuntime.PartArrows(part, koPoint), part.Robotic, TooltipRuntime.PartTip(part, koPoint, body.Unconscious))
                     { White = stump ? 0 : Math.Clamp(green + part.Rig * 0.01f, 0f, 1f), Crushed = stump || part.Limb == Meitou.Simulation.Bodies.LimbState.Crushed });
             }
             float hunger = body.Hunger;
@@ -565,7 +566,7 @@ sealed partial class PlayerInterface
             string hungerArrows = hud?.Fed > 0 ? ">   " : hunger < 2 ? "<!   " : lead.InBed ? "" : "<   ";
             if (hud is not { Robot: true })
             {
-                string tip = HungerTip(hunger, body.Unconscious, ActiveSquadMembers().Count);
+                string tip = TooltipRuntime.HungerTip(hunger, body.Unconscious, ActiveSquadMembers().Count);
                 // The original's Hunger tooltip (FUN_14088a8f0) is the Hunger Rate rows (FUN_14088a2b0) with the sentence under them (#377).
                 rows.Add(new(Loc.Tr("Hunger"), hunger - 2, hunger - 1, hunger, ((int)(hunger * 100)).ToString(CultureInfo.InvariantCulture), hungerArrows, false, tip)
                     { TooltipRows = hud?.ExtendedTips is { } tips ? [.. tips.Hunger, (tip, "")] : null });

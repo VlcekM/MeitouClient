@@ -2,18 +2,17 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
 using Meitou.Simulation;
-using Meitou.Game.Ui;
 using Meitou.Simulation.Player;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The Overview's faction tab (<c>FactionsScreen</c>, docs/game/ui-screens.md "Faction tab"): the player faction's name, a <c>Kenshi_FactionRelationsLine</c> per faction with
 /// the relation's number and its bar, and the information panel's two headings.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class FactionWindow(PlayerInterface player)
 {
-    const int FactionTab = 1;
+    internal const int FactionTab = 1;
 
     /// <summary>The factions the faction tab lists with the player's relation towards each (-100..100); null before a world with game data. The host sets it.</summary>
     public Func<IReadOnlyList<(string Name, float Relation)>>? FactionRelations { get; set; }
@@ -21,17 +20,17 @@ sealed partial class PlayerInterface
     public Func<(IReadOnlyList<FactionInfoLine> Contracts, IReadOnlyList<FactionInfoLine> Events)>? FactionInfo { get; set; }
 
     /// <summary>A contract or event row in the original's colours: names #492620, details and headings Main, queued campaigns Greyed.</summary>
-    static HudLine InfoLine(FactionInfoLine l)
+    static PlayerInterface.HudLine InfoLine(FactionInfoLine l)
     {
         string value = double.IsNaN(l.Hours) ? l.Value : TotalTime(l.Hours);
         string? colour = l.Kind switch
         {
             FactionInfoKind.Name => MyGuiColours.Named("ContractName", "492620"),
-            FactionInfoKind.Queued => GreyColour,
-            FactionInfoKind.Heading or FactionInfoKind.Detail => MainColour,
+            FactionInfoKind.Queued => PlayerInterface.GreyColour,
+            FactionInfoKind.Heading or FactionInfoKind.Detail => PlayerInterface.MainColour,
             _ => null,
         };
-        return new(Loc.Tr(l.Label), value, colour, l.Kind == FactionInfoKind.Name ? colour : l.Kind == FactionInfoKind.Queued ? GreyColour : MainColour);
+        return new(Loc.Tr(l.Label), value, colour, l.Kind == FactionInfoKind.Name ? colour : l.Kind == FactionInfoKind.Queued ? PlayerInterface.GreyColour : PlayerInterface.MainColour);
     }
 
     /// <summary>
@@ -44,12 +43,12 @@ sealed partial class PlayerInterface
         : hours > 1 ? Loc.Tr("{1,num}hrs", (int)hours)
         : Loc.Tr("{1,num} mins", (int)(hours * 60));
 
-    MyGuiLayout? relationsLineLayout;
+    internal MyGuiLayout? relationsLineLayout;
     float relationsScroll;
 
-    bool FactionShown => faithfulScreens.IsOpen("overview") && faithfulScreens.GetTab("overview", "TabsMain") == FactionTab;
+    bool FactionShown => player.faithfulScreens.IsOpen("overview") && player.faithfulScreens.GetTab("overview", "TabsMain") == FactionTab;
 
-    const string FactionNameBox = "FactionNameText";
+    internal const string FactionNameBox = "FactionNameText";
 
     /// <summary>What was typed in the name box and is not yet accepted (null: nothing).</summary>
     string? factionDraft;
@@ -58,15 +57,15 @@ sealed partial class PlayerInterface
     /// The player faction's name in the tab's name box (the original's text is the player interface's faction name). The box takes typing; accepting it or losing the key focus renames
     /// (<see cref="UpdateFactionName"/>, <c>FUN_1404923d0</c>), and a box not being typed in shows the faction's current name.
     /// </summary>
-    void BindFactionTab(UiBindings b)
+    internal void BindFactionTab(UiBindings b)
     {
-        string name = FactionName?.Invoke(session.World.Player.Faction) ?? "Nameless";
-        if (faithfulScreens.Focus is not { Screen: "overview", Widget: FactionNameBox }) faithfulScreens.SetText("overview", FactionNameBox, name);
+        string name = player.FactionName?.Invoke(player.session.World.Player.Faction) ?? "Nameless";
+        if (player.faithfulScreens.Focus is not { Screen: "overview", Widget: FactionNameBox }) player.faithfulScreens.SetText("overview", FactionNameBox, name);
         b.Text[FactionNameBox] = name;
     }
 
     /// <summary>A text change in the name box is kept as the draft; the box losing the focus (or the tab closing) sends the rename of the last one.</summary>
-    void FactionAction(MyGuiEvent e)
+    internal void FactionAction(MyGuiEvent e)
     {
         if (e.Widget == FactionNameBox && e.Action == "text") factionDraft = e.Text;
     }
@@ -78,12 +77,12 @@ sealed partial class PlayerInterface
     /// Once a frame: a draft whose box no longer has the key focus is sent as <see cref="RenameFactionCommand"/>; a name another faction has opens the original's Ok box "Faction Name" /
     /// "This faction name already exists" instead (<c>FUN_1404923d0</c>, button mask 1), and the box shows the old name again.
     /// </summary>
-    void UpdateFactionName()
+    internal void UpdateFactionName()
     {
-        if (factionDraft is not { } draft || faithfulScreens.Focus is { Screen: "overview", Widget: FactionNameBox }) return;
+        if (factionDraft is not { } draft || player.faithfulScreens.Focus is { Screen: "overview", Widget: FactionNameBox }) return;
         factionDraft = null;
-        if (FactionNameTaken?.Invoke(draft) == true) { MessageBox("Faction Name", "This faction name already exists"); return; }
-        Say(new Meitou.Simulation.Player.RenameFactionCommand(draft) { Tick = session.World.Tick });
+        if (FactionNameTaken?.Invoke(draft) == true) { player.MessageBox("Faction Name", "This faction name already exists"); return; }
+        player.Say(new Meitou.Simulation.Player.RenameFactionCommand(draft) { Tick = player.session.World.Tick });
     }
 
     /// <summary>
@@ -91,19 +90,19 @@ sealed partial class PlayerInterface
     /// 1080 lines) between them; the number in BadBright below -30, Good above 60, else Main; a negative relation fills the left bar leftwards from the middle, a positive one
     /// the right bar rightwards, |relation| % of their width.
     /// </summary>
-    void AddFactionContent(List<UiControl> controls)
+    internal void AddFactionContent(List<UiControl> controls)
     {
         if (!FactionShown) return;
-        var scale = Height / 1080f;
+        var scale = player.Height / 1080f;
         if (controls.FirstOrDefault(c => c.Name == "FactionInfoPanel") is { } info)
         {
             // The contracts clear the panel before their rows (FUN_1404927f0), so the Active Contracts heading written before them never shows.
             var (contracts, events) = FactionInfo?.Invoke() ?? ([], []);
             var lines = contracts.Select(InfoLine).ToList();
-            lines.Add(new(Loc.Tr("---Upcoming Events---"), "", GreyColour));
+            lines.Add(new(Loc.Tr("---Upcoming Events---"), "", PlayerInterface.GreyColour));
             lines.AddRange(events.Select(InfoLine));
             // A DatapanelGUI's rows start 0.03 of its height down (AddDatapanel).
-            AddLines(controls, "FactionInfoPanel", lines, 20 * scale, StandardPixels, top: 0.03f * info.Bounds.Height);
+            player.AddLines(controls, "FactionInfoPanel", lines, 20 * scale, player.StandardPixels, top: 0.03f * info.Bounds.Height);
         }
         if (relationsLineLayout is null || controls.FirstOrDefault(c => c.Name == "RelationsPanel") is not { } panel) return;
         var factions = (FactionRelations?.Invoke() ?? []).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
@@ -111,8 +110,8 @@ sealed partial class PlayerInterface
         var area = controls.FirstOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == panel.Name && c.Properties.GetValueOrDefault("TemplatePart") == "Client")?.Bounds ?? panel.Bounds;
         var clip = panel.Clip is { } outer ? area.Intersect(outer) : area;
         var root = relationsLineLayout.Roots.FirstOrDefault();
-        float lineHeight = root is null ? 24 * scale : root.Position.RelativeTo(new(0, 0, Width, Height), root.RealPosition).Height;
-        float lineWidth = area.Width - SquadScrollBar * scale, step = lineHeight + 3 * scale;
+        float lineHeight = root is null ? 24 * scale : root.Position.RelativeTo(new(0, 0, player.Width, player.Height), root.RealPosition).Height;
+        float lineWidth = area.Width - SquadPanel.SquadScrollBar * scale, step = lineHeight + 3 * scale;
         relationsScroll = Math.Clamp(relationsScroll, 0, Math.Max(0, factions.Count * step - area.Height));
         for (int i = 0; i < factions.Count; i++)
         {
@@ -123,7 +122,7 @@ sealed partial class PlayerInterface
             if (root is not null) b.Positions[root.Name] = new(0, 0, lineWidth, lineHeight);
             b.Text["FactionName"] = name;
             b.Text["FactionValue"] = ((int)relation).ToString(CultureInfo.InvariantCulture);
-            b.Properties["FactionValue"] = new Dictionary<string, string> { ["TextColour"] = relation < -30 ? BadBrightColour : relation > 60 ? GoodColour : MainColour };
+            b.Properties["FactionValue"] = new Dictionary<string, string> { ["TextColour"] = relation < -30 ? PlayerInterface.BadBrightColour : relation > 60 ? PlayerInterface.GoodColour : PlayerInterface.MainColour };
             foreach (var (bar, negative) in new[] { ("LeftBar", true), ("RightBar", false) })
             {
                 if (relationsLineLayout.Find(bar) is not { } widget) continue;
@@ -132,7 +131,7 @@ sealed partial class PlayerInterface
                 float width = full.Width * Math.Min(share, 1);
                 b.Positions[bar] = negative ? full with { X = full.X + full.Width - width, Width = width } : full with { Width = width };
             }
-            foreach (var c in MyGuiPresentation.Arrange(relationsLineLayout, (int)MathF.Round(lineWidth), (int)MathF.Round(lineHeight), b, uiResources.Layers))
+            foreach (var c in MyGuiPresentation.Arrange(relationsLineLayout, (int)MathF.Round(lineWidth), (int)MathF.Round(lineHeight), b, player.uiResources.Layers))
             {
                 var own = c.Clip is { } inner ? (inner with { X = inner.X + line.X, Y = inner.Y + line.Y }).Intersect(clip) : clip;
                 controls.Add(c with { Name = c.Name.Length > 0 ? $"faction-{i}-{c.Name}" : c.Name, Bounds = c.Bounds with { X = c.Bounds.X + line.X, Y = c.Bounds.Y + line.Y }, Clip = own,
@@ -142,10 +141,10 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The wheel over the relations list scrolls it.</summary>
-    bool FactionWheel(Vector2 p, float steps)
+    internal bool FactionWheel(Vector2 p, float steps)
     {
-        if (!FactionShown || faithfulScreens.HitTest(p) is not { Screen: "overview" } hit || !(hit.Control.Name == "RelationsPanel" || hit.Control.Properties.ContainsKey("FactionLine"))) return false;
-        relationsScroll -= steps * 44 * (Height / 1080f);   // clamped when the list is laid out
+        if (!FactionShown || player.faithfulScreens.HitTest(p) is not { Screen: "overview" } hit || !(hit.Control.Name == "RelationsPanel" || hit.Control.Properties.ContainsKey("FactionLine"))) return false;
+        relationsScroll -= steps * 44 * (player.Height / 1080f);   // clamped when the list is laid out
         return true;
     }
 }

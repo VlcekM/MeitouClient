@@ -1,5 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Building;
 using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Ui;
 using Meitou.Simulation;
 
 namespace Meitou.Game;
@@ -72,7 +74,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The distance along the ray at which it passes closest to the segment a-b, when within <paramref name="radius"/>.</summary>
-    static float? RaySegment(Vector3 origin, Vector3 direction, Vector3 a, Vector3 b, float radius)
+    internal static float? RaySegment(Vector3 origin, Vector3 direction, Vector3 a, Vector3 b, float radius)
     {
         var u = direction;
         var v = b - a;
@@ -117,7 +119,7 @@ sealed partial class PlayerInterface
     /// </summary>
     public Func<CharacterId, Vector3, Vector3, float?>? MeshHit { get; set; }
 
-    CharacterId? PickWhere(Vector2 pixel, Func<CharacterSnapshot, bool> accept) => PickWhereAt(pixel, accept)?.Id;
+    internal CharacterId? PickWhere(Vector2 pixel, Func<CharacterSnapshot, bool> accept) => PickWhereAt(pixel, accept)?.Id;
 
     /// <summary>The nearest accepted character under the pixel with its ray distance; null when none, or when the nearest is hidden behind a building seen from outside.</summary>
     internal (CharacterId Id, float T)? PickWhereAt(Vector2 pixel, Func<CharacterSnapshot, bool> accept)
@@ -146,7 +148,7 @@ sealed partial class PlayerInterface
         }
         (CharacterId Id, float T)? picked = best is not { } found || Hidden(ray, bestT) ? null : (found, bestT);
         // An occupied cage with occupant selection that the ray meets first gives its occupant (the original's FUN_1407fb410 for the cage's occupant).
-        if (PickCageAt(pixel) is { Cage: { OccupantSelection: true, Occupant: { IsNone: false } occupant }, T: var cageT } && (picked is not { } nearer || cageT < nearer.T)
+        if (furniture.PickCageAt(pixel) is { Cage: { OccupantSelection: true, Occupant: { IsNone: false } occupant }, T: var cageT } && (picked is not { } nearer || cageT < nearer.T)
             && session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == occupant) is { } held && accept(held) && stealthView.HiddenInWorld?.Invoke(occupant) != true)
             return (occupant, cageT);
         return picked;
@@ -159,7 +161,7 @@ sealed partial class PlayerInterface
     /// The right button's target under the pixel, with characters selected (docs/game/ui-input.md "Building picking and selection"): the nearest along the ray of a character with a quick
     /// order, a ground item, a container, a door, a rock and a site that is an object (unfinished, a machine, storage, furnace or turret), as the original's pick walks its hits nearest first.
     /// What a building seen from outside hides is left out (each
-    /// helper's <see cref="Hidden"/> test, the original's floor rule). A plain building is not a candidate: it takes the click only when nothing is (<see cref="SitePress"/>). Hover and click
+    /// helper's <see cref="Hidden"/> test, the original's floor rule). A plain building is not a candidate: it takes the click only when nothing is (<see cref="BuildMode.SitePress"/>). Hover and click
     /// share it, as in the original.
     /// </summary>
     (Picked Kind, float T) PickAt(Vector2 p)
@@ -169,19 +171,19 @@ sealed partial class PlayerInterface
         if (QuickOrder(p) is { Do: not null } order) Offer(Picked.Character, PickWhereAt(p, c => c.Id == order.Target)?.T ?? 0);
         else if (PickWhereAt(p, _ => true) is { } any && session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == any.Id) is { } held && Verbs(held).Count > 0)
             Offer(Picked.Character, any.T);   // no quick order, but a held click opens its menu
-        var item = PickGroundItemAt(p);
+        var item = groundItemPicks.PickGroundItemAt(p);
         Offer(Picked.GroundItem, item?.T);
-        var container = PickContainerAt(p);
+        var container = furniture.PickContainerAt(p);
         Offer(Picked.Container, container?.T);
-        Offer(Picked.Door, PickDoorAt(p)?.T);
-        Offer(Picked.Seat, PickSeatAt(p)?.T);
-        var bed = PickBedAt(p);
+        Offer(Picked.Door, furniture.PickDoorAt(p)?.T);
+        Offer(Picked.Seat, furniture.PickSeatAt(p)?.T);
+        var bed = furniture.PickBedAt(p);
         Offer(Picked.Bed, bed?.T);
-        var cage = PickCageAt(p);
+        var cage = furniture.PickCageAt(p);
         Offer(Picked.Cage, cage?.T);
-        Offer(Picked.Dummy, PickDummyAt(p)?.T);
-        Offer(Picked.Rock, PickRockAt(p)?.T);
-        if (PickSiteAt(p) is { } site && SiteIsObject(site.Site)) Offer(Picked.Site, site.T);
+        Offer(Picked.Dummy, furniture.PickDummyAt(p)?.T);
+        Offer(Picked.Rock, furniture.PickRockAt(p)?.T);
+        if (build.PickSiteAt(p) is { } site && build.SiteIsObject(site.Site)) Offer(Picked.Site, site.T);
         // An item behind the container, bed or cage met first but lying inside its bounds takes the click (the original's walk, FUN_140800250: the building's box holds the item).
         if (item is { } i && ItemAt(i.Id) is { } at && best.Kind switch
             {
@@ -194,17 +196,17 @@ sealed partial class PlayerInterface
         return best;
     }
 
-    /// <summary>Where a ground item is drawn (<see cref="GroundItemShape"/>), else where it lies; null when it is gone.</summary>
+    /// <summary>Where a ground item is drawn (<see cref="GroundItemPicks.GroundItemShape"/>), else where it lies; null when it is gone.</summary>
     Vector3? ItemAt(int id)
     {
         foreach (var g in session.CurrentSnapshot.GroundItems)
-            if (g.Id == id) return GroundItemShape?.Invoke(g)?.At ?? g.Position;
+            if (g.Id == id) return groundItemPicks.GroundItemShape?.Invoke(g)?.At ?? g.Position;
         return null;
     }
 
     /// <summary>Whether a point lies inside the box of a building's collision placed at <paramref name="position"/> turned by <paramref name="yaw"/> (its footprint, from its lowest to its highest point).</summary>
     bool Holds(string record, Vector3 position, float yaw, Vector3 point) =>
-        buildHost?.Placement.Footprint(record) is { } f && point.Y >= position.Y + f.YMin && point.Y <= position.Y + f.YMax
+        build.buildHost?.Placement.Footprint(record) is { } f && point.Y >= position.Y + f.YMin && point.Y <= position.Y + f.YMax
         && f.Gap(position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw), new Vector2(point.X, point.Z)) == 0;
 
     /// <summary>The host's test for where a ray enters a building seen from outside (its interior not shown), within a distance; null when none is in the way.</summary>
@@ -217,7 +219,7 @@ sealed partial class PlayerInterface
     /// Whether a building seen from outside, or a shown floor or wall of one in the interior view, stands on the ray before <paramref name="distance"/>: what lies inside, behind or below
     /// it is not pointed at.
     /// </summary>
-    bool Hidden((Vector3 Origin, Vector3 Direction) ray, float distance) =>
+    internal bool Hidden((Vector3 Origin, Vector3 Direction) ray, float distance) =>
         ClosedBuildingHit?.Invoke(ray.Origin, ray.Direction, distance) is not null || ShownInteriorHit?.Invoke(ray.Origin, ray.Direction, distance) is not null;
 
     IReadOnlyList<CharacterId> InBox(Vector2 a, Vector2 b)

@@ -53,10 +53,10 @@ public class BedSelectionTests
         var ui = new PlayerInterface(session, (_, _) => 0, c => c.Position)
         {
             Width = 1600, Height = 900, FactionName = _ => "Owner",
-            BuildTarget = id => BuildingBuildData.From(data.Db.Find(id)!).Target,
         };
+        ui.buildingSelection.BuildTarget = id => BuildingBuildData.From(data.Db.Find(id)!).Target;
         ui.LoadUi(mode, name => resources.Find(name));
-        ui.BuildHost = new BuildServices
+        ui.build.BuildHost = new BuildServices
         {
             Menu = new BuildMenu([]), ItemName = id => data.Db.Find(id)?.Name ?? id, Description = _ => "", Parts = _ => [],
             Placement = new PlacementServices { Ground = (_, _) => 0, Footprint = _ => null, StaticAround = (_, _) => [] },
@@ -67,7 +67,7 @@ public class BedSelectionTests
             * Meitou.Game.Rendering.Frame.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
         try
         {
-            ui.SetBuilding(new("Bar", "House", "Owner", "Town", null, house.Key, house.Position, null, Record: house.BuildingId));
+            ui.buildingSelection.SetBuilding(new("Bar", "House", "Owner", "Town", null, house.Key, house.Position, null, Record: house.BuildingId));
             world.RunTick();
             Assert.Null(world.Snapshot.InspectedBuilding!.Bed);
             var point = new Vector2(800, 450);
@@ -77,25 +77,25 @@ public class BedSelectionTests
             Assert.Empty(world.Snapshot.InspectedBuilding!.Doors);
             Assert.Equal(100, world.Snapshot.InspectedBuilding.Bed!.Cost);
             Assert.Contains(ui.UiFrame, c => c.Caption == "Camp Bed");
-            var focus = new PlayerInterface.SelectedBuilding("Camp Bed", null, "Owner", null, null, bed.Id, bed.Position, null, Record: bed.Record);
-            var lines = ui.BuildingLines(focus);
+            var focus = new BuildingSelection.SelectedBuilding("Camp Bed", null, "Owner", null, null, bed.Id, bed.Position, null, Record: bed.Record);
+            var lines = ui.buildingSelection.BuildingLines(focus);
             Assert.Contains(lines.State, l => l.Label == "Town:");
             Assert.Contains(lines.State, l => l.Label == "Cost to use:" && l.Value == "(Pay c.100)");
             Assert.Contains(lines.Stats, l => l.Label == "Healing bonus:" && l.Value == "x4");
             Assert.DoesNotContain(lines.Stats, l => l.Label is "Open/Close:" or "Security:" or "Open to public:");
-            var condition = Assert.Single(ui.BuildingRows(focus));
+            var condition = Assert.Single(ui.buildingSelection.BuildingRows(focus));
             Assert.Equal("Condition", condition.Name); Assert.Equal("1", condition.Value);
             Assert.Equal(1, condition.Yellow);
             // Changing access rules must update the selected panel rather than caching the original price.
             data.Relations.Set(data.FactionIndex("owner"), data.PlayerFaction, 100);
             world.RunTick();
             Assert.Equal(0, world.Snapshot.InspectedBuilding!.Bed!.Cost);
-            Assert.DoesNotContain(ui.BuildingLines(focus).State, l => l.Label == "Cost to use:");
+            Assert.DoesNotContain(ui.buildingSelection.BuildingLines(focus).State, l => l.Label == "Cost to use:");
             data.Relations.Set(data.FactionIndex("owner"), data.PlayerFaction, 0);
             world.Squads.Remove(1);
             world.RunTick();
             Assert.Equal(-1, world.Snapshot.InspectedBuilding!.Bed!.Cost);
-            Assert.Contains(ui.BuildingLines(focus).State, l => l.Label == "Cost to use:" && l.Value == "Private");
+            Assert.Contains(ui.buildingSelection.BuildingLines(focus).State, l => l.Label == "Cost to use:" && l.Value == "Private");
         }
         finally { ui.DisposeUi(); }
     }

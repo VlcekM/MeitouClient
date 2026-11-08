@@ -57,29 +57,29 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
                     Assert.Equal(help.TextAt(NewGameSettings.Options[i].HelpLine), ui.UiFrame.Last(c => c.Name == "advanced-help").Caption);
                 }
                 Click(ui, $"advanced-more-{i}");
-                Assert.Equal(1.05f, ui.NewGameOptions[i]);
+                Assert.Equal(1.05f, ui.advancedOptions.NewGameOptions[i]);
                 var track = ui.UiFrame.Last(c => c.Name == $"advanced-track-{i}");
                 ui.MouseDown(MouseButton.Left, Centre(track), false);
                 ui.MouseUp(MouseButton.Left, Centre(track), false);
-                Assert.InRange(ui.NewGameOptions[i], NewGameSettings.Options[i].Min, NewGameSettings.Options[i].Max);
+                Assert.InRange(ui.advancedOptions.NewGameOptions[i], NewGameSettings.Options[i].Min, NewGameSettings.Options[i].Max);
             }
             ui.MouseMove(Vector2.Zero);   // the last option's help stays, so the pointer can reach its scroll bar
             Assert.Equal(help.TextAt(NewGameSettings.Options[^1].HelpLine), ui.UiFrame.Last(c => c.Name == "advanced-help").Caption);
-            float selectedHunger = ui.NewGameOptions[0];
+            float selectedHunger = ui.advancedOptions.NewGameOptions[0];
             Click(ui, "AdvancedButton"); // The lower panel must not intercept the parent toggle.
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "advanced-track-0");
             Click(ui, "AdvancedButton");
-            Assert.Equal(selectedHunger, ui.NewGameOptions[0]);
+            Assert.Equal(selectedHunger, ui.advancedOptions.NewGameOptions[0]);
             ui.UiKey(Key.Escape);
             Assert.Contains(ui.UiFrame, c => c.Name == "BeginButton");
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "advanced-track-0");
             Click(ui, "AdvancedButton");
             MyGuiEvent? request = null; ui.ScreenAction += e => request = e;
             Click(ui, "BeginButton"); Assert.Equal("new-game", request?.Action);
-            Assert.Equal(selectedHunger, ui.NewGameOptions[0]);
+            Assert.Equal(selectedHunger, ui.advancedOptions.NewGameOptions[0]);
             Click(ui, "CancelButton");
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "advanced-track-0");
-            Click(ui, "NewGameButton"); Assert.Equal(selectedHunger, ui.NewGameOptions[0]);   // kept between openings, as the original's globals
+            Click(ui, "NewGameButton"); Assert.Equal(selectedHunger, ui.advancedOptions.NewGameOptions[0]);   // kept between openings, as the original's globals
         }
         finally { ui.DisposeUi(); }
     }
@@ -223,11 +223,11 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         var ui = Ui(session);
         try
         {
-            Assert.Equal([first, second], ui.SquadBarMembers().Select(c => c.Id));
+            Assert.Equal([first, second], ui.portraitBar.SquadBarMembers().Select(c => c.Id));
             var frame = ui.UiFrame;
             // The renderer draws member i into atlas cell i (CharacterRenderer.PortraitRequests): the second cell starts 256 px in, the original's 128 px portrait in its corner.
             var portrait = Assert.Single(frame, c => c.Name == "portrait-1");
-            Assert.Equal(PlayerInterface.PortraitTexture, portrait.Properties["ImageTexture"]);
+            Assert.Equal(PortraitBar.PortraitTexture, portrait.Properties["ImageTexture"]);
             Assert.Equal("256 0 128 128", portrait.Properties["ImageRect"]);
             Assert.Contains(frame, c => c.Name == "portrait-name-1" && c.Caption == "Second");
             Click(ui, "member-1");

@@ -48,7 +48,7 @@ sealed class TutorialPanel(PlayerInterface player)
         if (manager.Update(dt, () => TutorialPoll(false)) is { Count: > 0 } started)
         {
             foreach (int id in started) tutorialFlashes[id] = 1;
-            player.Sound("Thing_Complete");
+            player.interfaceSounds.Sound("Thing_Complete");
         }
         foreach (int id in tutorialFlashes.Keys.ToArray())
             if ((tutorialFlashes[id] -= dt) <= 0) tutorialFlashes.Remove(id);
@@ -123,9 +123,9 @@ sealed class TutorialPanel(PlayerInterface player)
             case TutorialAdvance.CraftButton: return Tab(2) || Tab(3);
             case TutorialAdvance.CraftTab: return Tab(3);
             case TutorialAdvance.ProductionSelection:
-                return player.BuildingFocus() is { SiteId: { } site } && snap.Buildings.FirstOrDefault(b => b.Id == site) is { Complete: true } && player.Machine(site) is { Output: not null };
+                return player.buildingSelection.BuildingFocus() is { SiteId: { } site } && snap.Buildings.FirstOrDefault(b => b.Id == site) is { Complete: true } && player.production.Machine(site) is { Output: not null };
             case TutorialAdvance.ConstructionMaterials:
-                return player.BuildingFocus() is { SiteId: { } built } && snap.Buildings.FirstOrDefault(b => b.Id == built) is { Complete: true };
+                return player.buildingSelection.BuildingFocus() is { SiteId: { } built } && snap.Buildings.FirstOrDefault(b => b.Id == built) is { Complete: true };
             default: return false;
         }
     }
@@ -148,7 +148,7 @@ sealed class TutorialPanel(PlayerInterface player)
     internal void TutorialAction(string argument)
     {
         if (tutorials is null) return;
-        player.Sound("General_Click");
+        player.interfaceSounds.Sound("General_Click");
         int colon = argument.IndexOf(':');
         int id = colon > 0 && int.TryParse(argument.AsSpan(colon + 1), NumberStyles.None, CultureInfo.InvariantCulture, out int n) && n < TutorialManager.Names.Length ? n : -1;
         if (argument.StartsWith("open:", StringComparison.Ordinal) && id >= 0) { tutorialShown = id; StartTutorialPage(id); }
@@ -163,7 +163,7 @@ sealed class TutorialPanel(PlayerInterface player)
     /// <summary>The list's lines and, when one is open, the window, over the HUD.</summary>
     internal void AddTutorialPanel(List<UiControl> controls)
     {
-        if (tutorials is not { Enabled: true } manager || tutorialLineLayout is null || tutorialPanelLayout is null || !player.session.World.Player.Exists || player.EditorOpen) return;
+        if (tutorials is not { Enabled: true } manager || tutorialLineLayout is null || tutorialPanelLayout is null || !player.session.World.Player.Exists || player.characterEditor.EditorOpen) return;
         float scale = player.Height / 1080f, lineHeight = MathF.Round(TutorialLineHeight * scale), width = MathF.Round(player.Width * TutorialListWidth);
         float y = player.Height * TutorialListHeight;
         var active = manager.Active;
@@ -240,18 +240,18 @@ sealed class TutorialPanel(PlayerInterface player)
     {
         if (e.Widget == "TutorialList" && e.Action == "select" && int.TryParse(e.Text, NumberStyles.None, CultureInfo.InvariantCulture, out int row) && row < TutorialCatalog.Items.Length)
         {
-            player.Sound("General_Click");
+            player.interfaceSounds.Sound("General_Click");
             (tutorialsRow, tutorialsPage) = (row, 0);
         }
-        else if (e.Widget == "PrevTutorialButton") { player.Sound("General_Click"); tutorialsPage--; }
-        else if (e.Widget == "NextTutorialButton") { player.Sound("General_Click"); tutorialsPage++; }
+        else if (e.Widget == "PrevTutorialButton") { player.interfaceSounds.Sound("General_Click"); tutorialsPage--; }
+        else if (e.Widget == "NextTutorialButton") { player.interfaceSounds.Sound("General_Click"); tutorialsPage++; }
         else if (e.Widget == "ActivateButton")
         {
             player.faithfulScreens.Close("tutorials");
             if (tutorials?.Activate(tutorialsRow) == true)
             {
                 tutorialFlashes[tutorialsRow] = 1;
-                player.Sound("Thing_Complete");
+                player.interfaceSounds.Sound("Thing_Complete");
             }
         }
     }
@@ -273,17 +273,17 @@ sealed class TutorialPanel(PlayerInterface player)
         var snap = player.session.CurrentSnapshot;
         switch (page.Highlight)
         {
-            case TutorialHighlight.BuildModePanelBuildings: return player.BuildModeOn && player.CurrentBuilding() is not null ? page.Highlight : TutorialHighlight.None;
+            case TutorialHighlight.BuildModePanelBuildings: return player.build.BuildModeOn && player.build.CurrentBuilding() is not null ? page.Highlight : TutorialHighlight.None;
             case TutorialHighlight.PanelMedicalBarMaterials or TutorialHighlight.PanelMedicalBarCondition:
             {
-                if (player.BuildingFocus() is not { } focus || snap.Buildings.FirstOrDefault(b => b.Id == focus.SiteId) is not { Complete: false }) return TutorialHighlight.None;
-                bool door = player.FirstDoor(focus) is not null;
+                if (player.buildingSelection.BuildingFocus() is not { } focus || snap.Buildings.FirstOrDefault(b => b.Id == focus.SiteId) is not { Complete: false }) return TutorialHighlight.None;
+                bool door = player.buildingSelection.FirstDoor(focus) is not null;
                 return page.Highlight == TutorialHighlight.PanelMedicalBarMaterials
                     ? door ? TutorialHighlight.PanelMedicalBarMaterialsBuilding : TutorialHighlight.PanelMedicalBarMaterials
                     : door ? TutorialHighlight.PanelMedicalBarConditionBuilding : TutorialHighlight.PanelMedicalBarCondition;
             }
             default:   // the production building pages: the focus is a complete production building
-                return player.BuildingFocus() is { SiteId: { } site } && snap.Buildings.FirstOrDefault(b => b.Id == site) is { Complete: true } && player.Machine(site) is { Output: not null }
+                return player.buildingSelection.BuildingFocus() is { SiteId: { } site } && snap.Buildings.FirstOrDefault(b => b.Id == site) is { Complete: true } && player.production.Machine(site) is { Output: not null }
                     ? page.Highlight : TutorialHighlight.None;
         }
     }
@@ -410,7 +410,7 @@ sealed class TutorialPanel(PlayerInterface player)
         var facts = snap.TutorialFacts;
         return new TutorialPoll
         {
-            EditorOrLoading = player.EditorOpen || loading,
+            EditorOrLoading = player.characterEditor.EditorOpen || loading,
             Unsettled = unsettled || facts.InPrison || facts.InCannibalCage,
             InTown = facts.InTown,
             NeedsFirstAid = aid,
@@ -424,7 +424,7 @@ sealed class TutorialPanel(PlayerInterface player)
             InCannibalCage = facts.InCannibalCage,
             Sneaking = sneak,
             // The steal pointer (cursor 0x15): a selection over another faction's ground item.
-            StealCursor = player.SelectedIds().Count > 0 && !player.pointerOverUi && player.StealsGroundItem(player.mouse),
+            StealCursor = player.SelectedIds().Count > 0 && !player.pointerOverUi && player.groundItemPicks.StealsGroundItem(player.mouse),
             SelectedHasBounty = inspected is { IsPlayer: false, Bounties.Count: > 0 },
             Hungry = hungry,
             PlayingDead = playingDead,
@@ -434,7 +434,7 @@ sealed class TutorialPanel(PlayerInterface player)
             MachineFull = full,
             SelectedForSale = snap.InspectedBuilding?.SalePrice is not null,
             ProductionComplete = built,
-            Placing = player.BuildModeOn && player.CurrentBuilding() is not null,
+            Placing = player.build.BuildModeOn && player.build.CurrentBuilding() is not null,
             CraftingComplete = crafting,
             ResearchComplete = research,
             ManagementTab = player.faithfulScreens.IsOpen("overview") ? player.faithfulScreens.GetTab("overview", "TabsMain") : -1,

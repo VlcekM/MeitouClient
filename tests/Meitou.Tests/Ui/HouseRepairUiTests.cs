@@ -38,7 +38,7 @@ public class HouseRepairUiTests
         var resources = OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install));
         var ui = new PlayerInterface(session, (_, _) => 0, c => c.Position) { Width = 1600, Height = 900, SlowModifier = shift };
         ui.LoadUi(mode, name => resources.Find(name));
-        ui.BuildHost = new BuildServices
+        ui.build.BuildHost = new BuildServices
         {
             Menu = new BuildMenu([]), ItemName = id => id, Description = _ => "", Parts = _ => [],
             Placement = new PlacementServices { Ground = (_, _) => 0, Footprint = _ => null, StaticAround = (_, _) => [] },

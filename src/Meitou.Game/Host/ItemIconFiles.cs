@@ -72,7 +72,7 @@ sealed class ItemIconFiles(GameHost host)
         {
             if (UiPainter.TryParseRenderedIcon(name, out string record, out string material, out string colour))
                 return host.ActiveCharacters is { } characters && characters.TryGetIcon(new IconKey(record, material, colour), out var icon) ? icon : null;
-            if (UiPainter.TryParseRenderedBuildingIcon(name, out string building) && host.ActiveObjects is { } objects && host.player.BuildHost is { } buildHost)
+            if (UiPainter.TryParseRenderedBuildingIcon(name, out string building) && host.ActiveObjects is { } objects && host.player.build.BuildHost is { } buildHost)
                 return objects.TryGetBuildingIcon(building, buildHost.Parts(building), out var picture) ? picture : null;
             return null;
         });

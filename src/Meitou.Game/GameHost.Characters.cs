@@ -6,6 +6,7 @@ using Meitou.Game.Settings;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Simulation;
 using Meitou.Game.Editor;
+using Meitou.Game.Ui;
 
 namespace Meitou.Game;
 
@@ -181,16 +182,16 @@ sealed partial class GameHost
         // The serial turns each portrait's camera.
         if (player.UiVisible)
         {
-            var members = player.PortraitMembers();
+            var members = player.portraitBar.PortraitMembers();
             for (int i = 0; i < members.Count; i++)
                 characters.PortraitRequests.Add(new PortraitRequest(DrawKey(members[i].Id), i, members[i].PortraitSerial));
             foreach (var (id, cell) in player.tradeWindows.CharacterTradePortraits())
-                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(id), cell, player.PortraitSerial(id)));
+                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(id), cell, player.portraitBar.PortraitSerial(id)));
         }
-        if (player.DialoguePortraitCharacters() is var (npc, talker))
+        if (player.portraitBar.DialoguePortraitCharacters() is var (npc, talker))
         {
-            if (!npc.IsNone) characters.PortraitRequests.Add(new PortraitRequest(DrawKey(npc), PlayerInterface.DialogueNpcCell, player.PortraitSerial(npc)));
-            if (!talker.IsNone) characters.PortraitRequests.Add(new PortraitRequest(DrawKey(talker), PlayerInterface.DialoguePlayerCell, player.PortraitSerial(talker)));
+            if (!npc.IsNone) characters.PortraitRequests.Add(new PortraitRequest(DrawKey(npc), PortraitBar.DialogueNpcCell, player.portraitBar.PortraitSerial(npc)));
+            if (!talker.IsNone) characters.PortraitRequests.Add(new PortraitRequest(DrawKey(talker), PortraitBar.DialoguePlayerCell, player.portraitBar.PortraitSerial(talker)));
         }
     }
 
@@ -255,11 +256,11 @@ sealed partial class GameHost
         IndexPrevious();
         float alpha = session.SimulationAlpha;
         // The character editor is a scene of its own (CharacterEditorHost): only the character being edited is posed and drawn.
-        var editing = player.EditorFocus?.Character;
-        player.FullRateCharacters(fullRate);
+        var editing = player.characterEditor.EditorFocus?.Character;
+        player.portraitBar.FullRateCharacters(fullRate);
         // Beyond the renderer's reach a character needs its look and place only (to load it), not its poses or ragdoll; those go in the distant list, made again only
         // when the snapshot changes (CharacterDrawList.Distant). The editor's scene is listed whole every frame.
-        var reachOf = editing is null && !player.EditorOpen ? gpu.Characters : null;
+        var reachOf = editing is null && !player.characterEditor.EditorOpen ? gpu.Characters : null;
         var eye = camera.Eye;
         portraitKeys.Clear();
         if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) portraitKeys.Add(r.Key);
@@ -314,9 +315,9 @@ sealed partial class GameHost
                         }
                 poses[i] = new CharacterPose(layer.Name, time, weight);
             }
-            if (player.EditorIdle(c.Id) is { } stance) poses = EditorStancePoses(c.Id, stance);
+            if (player.characterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStancePoses(c.Id, stance);
             // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
-            else if (player.IsEditorAnimal(c.Id)) poses = [.. poses.Select(p => p with { Time = characterEditor.EditorClipTime(p.Animation, (float)realTime.Elapsed.TotalSeconds) })];
+            else if (player.characterEditor.IsEditorAnimal(c.Id)) poses = [.. poses.Select(p => p with { Time = characterEditor.EditorClipTime(p.Animation, (float)realTime.Elapsed.TotalSeconds) })];
             // The Meitou editor's bar (CharacterEditorHost): the shown character stands in it, the others sit on its seats.
             if (inBar is { } place)
             {
@@ -325,9 +326,9 @@ sealed partial class GameHost
             }
             if (c.Id == sandbox.sandboxHero && sandbox.sandboxPicker?.Pose() is { } forced) poses = forced;   // the sandbox drop-down loops a picked clip on the hero
             var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
-            var look = player.EditorPreview(c.Id, c.Appearance) ?? held;
+            var look = player.characterEditor.EditorPreview(c.Id, c.Appearance) ?? held;
             if (editing is null) decapitation.CutHead(c, look);
-            var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
+            var glide = player.characterEditor.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             var bones = !posed ? null : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot));
             bool hidden = inBar is null && interiors.hiddenIndoors.Contains(c.Id);
             bool fullRated = editing is not null || fullRate.Contains(c.Id) || c.Id == sandbox.sandboxHero && sandbox.sandboxPicker?.Current is not null;
@@ -335,7 +336,7 @@ sealed partial class GameHost
             if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
             list.Add(instance);
             // The editor's next preview look, listed hidden so the renderer prepares it while the last one is still shown.
-            if (player.EditorPending(c.Id) is { } pending)
+            if (player.characterEditor.EditorPending(c.Id) is { } pending)
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), pending, position, yaw, poses) { Hidden = true });
             else if (heldPending is not null)
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });

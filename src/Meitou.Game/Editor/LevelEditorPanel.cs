@@ -52,7 +52,7 @@ sealed class LevelEditorPanel(PlayerInterface player)
 
     void CloseLevelEditor()
     {
-        if (levelBuild) player.SetBuildMode(false);
+        if (levelBuild) player.build.SetBuildMode(false);
         levelEditor = false;
         player.faithfulScreens.Close("leveleditor");
     }
@@ -61,30 +61,30 @@ sealed class LevelEditorPanel(PlayerInterface player)
     internal void UpdateLevelEditor()
     {
         if (levelEditor && !player.faithfulScreens.IsOpen("leveleditor")) CloseLevelEditor();
-        if (levelBuild && !player.buildMode) levelBuild = false;
+        if (levelBuild && !player.build.buildMode) levelBuild = false;
     }
 
     /// <summary>Stops placing without leaving the editor or build mode: the list's choice and the ghost go, the queued ghosts stay (Meitou's choice, the original's way is <b>Unknown</b>).</summary>
     internal void DropPlacementChoice()
     {
-        player.buildDiscarded = true;
-        player.buildMember = null;
-        player.ghost = null;
-        player.wallLine = null;
-        player.wallPieces.Clear();
+        player.build.buildDiscarded = true;
+        player.build.buildMember = null;
+        player.build.ghost = null;
+        player.build.wallLine = null;
+        player.build.wallPieces.Clear();
         player.faithfulScreens.ClearSelection("build", "BuildingsList");
     }
 
     /// <summary>Esc in the editor's build window drops the placement choice first; true when there was one (a second Esc closes the window as before).</summary>
     internal bool LevelEscape()
     {
-        if (!levelBuild || !player.buildMode || player.CurrentBuilding() is null || player.faithfulScreens.OpenScreens[^1] != "build") return false;
+        if (!levelBuild || !player.build.buildMode || player.build.CurrentBuilding() is null || player.faithfulScreens.OpenScreens[^1] != "build") return false;
         DropPlacementChoice();
         return true;
     }
 
     /// <summary>Every BUILDING counts as available in the editor.</summary>
-    internal IReadOnlySet<string> LevelEveryBuilding() => levelEveryBuilding ??= player.buildHost is { } host ? [.. host.Menu.Catalog.Select(b => b.Id)] : [];
+    internal IReadOnlySet<string> LevelEveryBuilding() => levelEveryBuilding ??= player.build.buildHost is { } host ? [.. host.Menu.Catalog.Select(b => b.Id)] : [];
 
     /// <summary>The top bar, centred at the top of the screen as in the original (its layout puts it at the left).</summary>
     internal static MyGuiLayout LevelEditorBar(MyGuiLayout layout) =>
@@ -105,11 +105,11 @@ sealed class LevelEditorPanel(PlayerInterface player)
         switch (e.Widget)
         {
             case "buildings":
-                if (levelBuild) { player.SetBuildMode(false); break; }
-                if (player.buildMode) player.SetBuildMode(false);
+                if (levelBuild) { player.build.SetBuildMode(false); break; }
+                if (player.build.buildMode) player.build.SetBuildMode(false);
                 levelBuild = true;
-                player.SetBuildMode(true);
-                if (!player.buildMode) levelBuild = false;
+                player.build.SetBuildMode(true);
+                if (!player.build.buildMode) levelBuild = false;
                 break;
             case "save": if (levelHost is { } host) player.Notice(host.Save()); break;
             case "exit": CloseLevelEditor(); break;
@@ -129,10 +129,10 @@ sealed class LevelEditorPanel(PlayerInterface player)
 
     internal void LevelConfirm()
     {
-        if (levelHost is null || player.buildQueue.Count == 0) return;
-        player.Sound("Building_Confirm");
-        levelHost.Place([.. player.buildQueue]);
-        player.buildQueue.Clear();
+        if (levelHost is null || player.build.buildQueue.Count == 0) return;
+        player.interfaceSounds.Sound("Building_Confirm");
+        levelHost.Place([.. player.build.buildQueue]);
+        player.build.buildQueue.Clear();
     }
 
     /// <summary>
@@ -143,24 +143,24 @@ sealed class LevelEditorPanel(PlayerInterface player)
     {
         if (!levelBuild || levelHost is not { } host || player.Ray(p) is not { } ray) return false;
         var groundPoint = player.GroundHit(ray.Origin, ray.Direction);
-        if (groundPoint is { } g && player.buildQueue.FindLastIndex(q => q.Hull is { } hull && Inside(hull, new Vector2(g.X, g.Z))) is >= 0 and var queued)
+        if (groundPoint is { } g && player.build.buildQueue.FindLastIndex(q => q.Hull is { } hull && Inside(hull, new Vector2(g.X, g.Z))) is >= 0 and var queued)
         {
-            player.Sound("Building_Undo");
-            player.buildQueue.RemoveAt(queued);
+            player.interfaceSounds.Sound("Building_Undo");
+            player.build.buildQueue.RemoveAt(queued);
             return true;
         }
         float bestT = groundPoint is { } hit ? Vector3.Distance(ray.Origin, hit) : 6000;
         string? best = null;
         foreach (var b in host.Added())
-            if (player.buildHost?.Placement.Footprint(b.BuildingId) is { } footprint && b.WorldY is { } y
+            if (player.build.buildHost?.Placement.Footprint(b.BuildingId) is { } footprint && b.WorldY is { } y
                 && player.BuildingRayT(ray, footprint.Place(b.Position, b.Rotation), footprint.YMin, footprint.YMax, b.BuildingId, b.Position, y, b.Rotation) is { } t && t < bestT)
                 (bestT, best) = (t, b.Key);
-        if (best is null && player.PickBuilding(p) is { SiteId: null, Record: not null } level) best = level.Instance;
+        if (best is null && player.buildingSelection.PickBuilding(p) is { SiteId: null, Record: not null } level) best = level.Instance;
         if (best is null) DropPlacementChoice();
         else if (host.Clear(best))
         {
-            if (player.selectedBuilding?.Instance == best) player.SetBuilding(null);
-            player.Sound("Building_Undo");
+            if (player.buildingSelection.selectedBuilding?.Instance == best) player.buildingSelection.SetBuilding(null);
+            player.interfaceSounds.Sound("Building_Undo");
         }
         return true;
 

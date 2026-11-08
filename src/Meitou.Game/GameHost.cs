@@ -321,32 +321,32 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return "Failed to delete save: " + e.Message; }
         };
         // The region (BIOME_GROUP) under a point, for the biome banner.
-        ui.RegionAt = (x, z) => ActiveWeather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
-        ui.BuildHost = buildingSync.MakeBuildServices();
+        ui.biomeBanner.RegionAt = (x, z) => ActiveWeather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
+        ui.build.BuildHost = buildingSync.MakeBuildServices();
         ui.FactionName = faction => faction >= 0 && faction == session.World.Player.Faction && session.World.Player.FactionName is { } renamed ? renamed : popData is { } d && faction >= 0 && faction < d.Factions.Count ? d.Factions[faction].Name : null;
         // The rename's test (FUN_1402e7950, as RenameFactionCommand's): another faction of the data has the name.
-        ui.FactionNameTaken = name => popData is { } fd && fd.Factions.Where((f, i) => i != session.World.Player.Faction).Any(f => f.Name == name);
+        ui.factionWindow.FactionNameTaken = name => popData is { } fd && fd.Factions.Where((f, i) => i != session.World.Player.Faction).Any(f => f.Name == name);
         // The faction tab's list (docs/game/ui-screens.md "Faction tab"): every faction the player has met but the player's, the `not real` ones and the
         // generation template, with the player's relation towards it.
         // Its info panel's contracts and events, read from the live world as the list above is (a collection changed mid-read shows the panel empty for that frame).
-        ui.FactionInfo = () =>
+        ui.factionWindow.FactionInfo = () =>
         {
             try { return (session.World.ActiveContracts(ui.FactionName), population?.UpcomingEvents(session.World, ui.FactionName) ?? []); }
             catch (InvalidOperationException) { return ([], []); }
         };
-        ui.FactionRelations = () => popData is { } d && session.World.Player.Faction is >= 0 and var own && d.Relations.Contains(own) && session.CurrentSnapshot.KnownFactions is var known
+        ui.factionWindow.FactionRelations = () => popData is { } d && session.World.Player.Faction is >= 0 and var own && d.Relations.Contains(own) && session.CurrentSnapshot.KnownFactions is var known
             ? [.. d.Relations.Factions.Select((f, i) => (f, i)).Where(p => p.i != own && known.Contains(p.i) && !p.f.NotReal && p.f.Id != "GENERATION_TEMPLATE_FACTION").Select(p => (p.f.Name, d.Relations.Get(own, p.i)))]
             : [];
         // A BUILDING's construction target (its Condition rows): the sum of its materials' required amounts.
-        ui.BuildTarget = record => popData?.Db.Find(record) is { Type: Meitou.Data.Fcs.FcsRecordType.BUILDING } r
+        ui.buildingSelection.BuildTarget = record => popData?.Db.Find(record) is { Type: Meitou.Data.Fcs.FcsRecordType.BUILDING } r
             ? Meitou.Data.Gameplay.Construction.BuildingBuildData.From(r).Materials.Sum(m => m.Required) : null;
         // The upgrade chain of a BUILDING (the panel's [UPGRADE] / [DOWNGRADE]) and its build data (their tooltips' materials).
-        ui.UpgradeOf = record => popData is { } d ? Meitou.Simulation.Construction.BuildingUpgrades.UpgradeOf(d.Db, record) : null;
-        ui.DowngradeOf = record => popData is { } d ? Meitou.Simulation.Construction.BuildingUpgrades.DowngradeOf(d.Db, record) : null;
-        ui.BuildingData = record => popData?.Db.Find(record) is { Type: Meitou.Data.Fcs.FcsRecordType.BUILDING } r ? Meitou.Data.Gameplay.Construction.BuildingBuildData.From(r) : null;
-        ui.PowerOutput = record => popData?.Db.Find(record)?.GetInt("power output");
-        ui.SquadLimits = () => popData?.Bodies.Constants;
-        ui.Rocks = () => popData?.ResourceNodes;
+        ui.buildingSelection.UpgradeOf = record => popData is { } d ? Meitou.Simulation.Construction.BuildingUpgrades.UpgradeOf(d.Db, record) : null;
+        ui.buildingSelection.DowngradeOf = record => popData is { } d ? Meitou.Simulation.Construction.BuildingUpgrades.DowngradeOf(d.Db, record) : null;
+        ui.buildingSelection.BuildingData = record => popData?.Db.Find(record) is { Type: Meitou.Data.Fcs.FcsRecordType.BUILDING } r ? Meitou.Data.Gameplay.Construction.BuildingBuildData.From(r) : null;
+        ui.buildingSelection.PowerOutput = record => popData?.Db.Find(record)?.GetInt("power output");
+        ui.squadWindows.SquadLimits = () => popData?.Bodies.Constants;
+        ui.furniture.Rocks = () => popData?.ResourceNodes;
         ui.worldMap.MapTowns = () => popData?.Sites ?? [];
         ui.worldMap.MapFactionOf = id =>
         {
@@ -380,12 +380,12 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             var none = Meitou.Simulation.Trading.Trader.None;
             return (m.UnitPrice(item, false, none, -1), m.UnitPrice(item, true, none, -1), m.AveragePrice(item));
         };
-        ui.ArtifactOf = id => popData?.Db.Find(id)?.GetBool("artifact") == true;
-        ui.ItemRecordOf = id => popData?.Db.Find(id);
+        ui.groundItemPicks.ArtifactOf = id => popData?.Db.Find(id)?.GetBool("artifact") == true;
+        ui.tooltipRuntime.ItemRecordOf = id => popData?.Db.Find(id);
         var specialFoodRaces = new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.Ordinal);
-        ui.SpecialFoodRaces = id => popData is { } d ? specialFoodRaces.GetOrAdd(id, item => Meitou.Data.Gameplay.Bodies.SpecialFood.EatenBy(d.Db, item)) : "";
-        ui.CombatOf = () => popData?.Combat;
-        ui.RangedDamageMultiplier = () => popData?.BodyOptions.GlobalDamageMultiplier ?? 1;
+        ui.tooltipRuntime.SpecialFoodRaces = id => popData is { } d ? specialFoodRaces.GetOrAdd(id, item => Meitou.Data.Gameplay.Bodies.SpecialFood.EatenBy(d.Db, item)) : "";
+        ui.tooltipRuntime.CombatOf = () => popData?.Combat;
+        ui.tooltipRuntime.RangedDamageMultiplier = () => popData?.BodyOptions.GlobalDamageMultiplier ?? 1;
         ui.worldMap.MapItemTowns = record =>
         {
             if (popData is not { } d || d.Db.Find(record) is not { Type: Meitou.Data.Fcs.FcsRecordType.MAP_ITEM } map) return null;
@@ -424,9 +424,9 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.Floaters = config.Floaters;
         player.FeedbackButtonInPlay = config.FeedbackButton;
         player.FixLoadButton = config.FixLoadButton;
-        player.DeselectBuildings = config.DeselectBuildings;
+        player.buildingSelection.DeselectBuildings = config.DeselectBuildings;
         // The region (BIOME_GROUP) under a point, for the biome banner.
-        player.RegionAt = (x, z) => gpu.Weather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
+        player.biomeBanner.RegionAt = (x, z) => gpu.Weather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
         player.Markers = gpu.Markers ??= MarkerRenderer.Create(context, assets.Find);
         bloodDecals.SetUpBlood(context);
         gpu.HoverOutline ??= new HoverOutlineRenderer(context);
@@ -437,14 +437,14 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.Floor = (() => interiors.viewedFloor, interiors.StepFloor);
         player.stealthView.HiddenInWorld = interiors.hiddenIndoors.Contains;
         player.stealthView.DrawnHead = id => gpu.Characters?.BonePosition(DrawKey(id), "Bip01 Head");
-        player.AboveViewedFloor = interiors.AboveViewedFloor;
-        player.GroundItemShape = groundItemSync.GroundShape;
-        player.GroundItemHidden = groundItemSync.hiddenGround.Contains;
+        player.furniture.AboveViewedFloor = interiors.AboveViewedFloor;
+        player.groundItemPicks.GroundItemShape = groundItemSync.GroundShape;
+        player.groundItemPicks.GroundItemHidden = groundItemSync.hiddenGround.Contains;
         player.BuildingMoveHit = (origin, direction, distance) => gpu.Objects?.MoveHit(origin, direction, interiors.viewedFloor, distance);
         player.SurfaceMoveHit = interiors.SurfaceMoveHit;
         player.ClosedBuildingHit = (origin, direction, distance) => gpu.Objects?.ClosedBuildingHit(origin, direction, distance);
         player.ShownInteriorHit = (origin, direction, distance) => gpu.Objects?.ShownInteriorHit(origin, direction, distance);
-        player.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
+        player.furniture.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
         ConfigurePlayerInterface(player);
         player.levelEditorPanel.LevelHost = levelEditorHost.MakeLevelEditorServices();
         if (sandbox.IsSandbox) player.ReservedKeys.UnionWith([Meitou.Game.Host.Input.Key.Z, Meitou.Game.Host.Input.Key.X, Meitou.Game.Host.Input.Key.C, Meitou.Game.Host.Input.Key.Y, Meitou.Game.Host.Input.Key.P, Meitou.Game.Host.Input.Key.G]);
@@ -639,12 +639,12 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         if (gpu.Characters is { } previews)
         {
             previews.Look = Meitou.Game.Rendering.Characters.PreviewLook.Of(o.Post);
-            player.PortraitSize = Meitou.Game.Rendering.Characters.CharacterRenderer.PortraitSizeFor(previews.Look);
+            player.portraitBar.PortraitSize = Meitou.Game.Rendering.Characters.CharacterRenderer.PortraitSizeFor(previews.Look);
             itemIconFiles.SyncIconLook();
         }
-        if (!player.EditorOpen) characterEditor.ClearEditorBar();
+        if (!player.characterEditor.EditorOpen) characterEditor.ClearEditorBar();
         if (titleScreen.TitleVisible) { titleScreen.DrawTitleWorld(width, height); return; }
-        if (player.EditorOpen) { characterEditor.DrawEditorScene(width, height); return; }
+        if (player.characterEditor.EditorOpen) { characterEditor.DrawEditorScene(width, height); return; }
         if (gpu.Characters is { StageRequest: not null } staged) staged.StageRequest = null;
         characterEditor.ClearEditorStage();
         double seconds = animClock ? animSeconds : realTime.Elapsed.TotalSeconds;

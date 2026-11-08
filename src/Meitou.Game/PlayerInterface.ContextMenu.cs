@@ -12,7 +12,7 @@ namespace Meitou.Game;
 /// The context menu (the original's ContextMenuGUI, <c>Kenshi_ContextMenu</c>; docs/game/ui-input.md "Context menu verbs"): holding the command (right) button on a target for
 /// <see cref="ContextHoldSeconds"/> opens a menu of the orders the selection can give it, titled with its name; a quicker click gives the default order at once. The menu lives while that button is held: letting it go over a
 /// verb gives it, anywhere else closes the menu (<see cref="ContextMenuRelease"/>). The verbs carry the original's labels and are listed in the original's order-number order (<see cref="VerbOrders"/>);
-/// one method per target kind builds them: characters here, containers and doors below, sites in PlayerInterface.Build.cs, rocks in PlayerInterface.Rocks.cs.
+/// one method per target kind builds them: characters here, containers and doors below, sites in BuildMode, rocks in FurnitureUse.
 /// </summary>
 sealed partial class PlayerInterface
 {
@@ -21,8 +21,8 @@ sealed partial class PlayerInterface
     /// <summary>The hold on a squad bar portrait that opens its member's menu (<c>MainBarGUI</c>'s frame update, <c>DAT_141696c80</c>).</summary>
     public const double PortraitHoldSeconds = 0.25;
 
-    sealed record ContextMenu(string Title, Vector2 At, IReadOnlyList<(string Caption, Action Give)> Verbs);
-    ContextMenu? contextMenu;
+    internal sealed record ContextMenu(string Title, Vector2 At, IReadOnlyList<(string Caption, Action Give)> Verbs);
+    internal ContextMenu? contextMenu;
     // A right press on a target that has verbs: its menu (built again when the hold ends), where, when, the hold that opens it and the order a quick click gives (null: none).
     (Func<Vector2, ContextMenu?> Menu, Vector2 At, long Since, double Hold, Action? Quick)? contextPending;
 
@@ -54,10 +54,10 @@ sealed partial class PlayerInterface
     /// and the lockpicking of the selected character nearest <paramref name="at"/>) in per cent; a building's lock (<paramref name="building"/>: not a caged character's) below the minimum pick chance
     /// shows 0 (<c>DAT_142133f28</c>, taken to be CONSTANTS <c>minimum lockpick chance</c>, <b>Observed</b>: the allowed test <c>FUN_1408ca120</c> compares with it).
     /// </summary>
-    string PickLockCaption(Vector3 at, int level, bool building)
+    internal string PickLockCaption(Vector3 at, int level, bool building)
     {
         if (LockChance(at, level) is not { } chance) return "Pick Lock";
-        if (building && chance < (SquadLimits?.Invoke()?.MinimumLockpickChance ?? 0.05f)) chance = 0;
+        if (building && chance < (squadWindows.SquadLimits?.Invoke()?.MinimumLockpickChance ?? 0.05f)) chance = 0;
         return WithChance("Pick Lock", chance * 100);
     }
 
@@ -75,7 +75,7 @@ sealed partial class PlayerInterface
     static int? OrderOf(string caption) => VerbOrders.TryGetValue(SplitChance(caption).Caption, out int order) ? order : null;
 
     /// <summary>The menu for <paramref name="verbs"/>, as the original fills it: an animals-only selection keeps only its orders, the rest sorted by order number; null when none is left.</summary>
-    ContextMenu? Menu(string title, Vector2 at, List<(string Caption, Action Give)> verbs)
+    internal ContextMenu? Menu(string title, Vector2 at, List<(string Caption, Action Give)> verbs)
     {
         var selected = Selected();
         IEnumerable<(string Caption, Action Give)> kept = verbs;
@@ -104,7 +104,7 @@ sealed partial class PlayerInterface
             verbs.Add(("Put Down", () => Say(new Meitou.Simulation.Carrying.PutDownOrder(carriers) { Tick = session.World.Tick })));
             // Meitou stand-in for the original's cage use (docs/simulation.md "Arrest and jail"): carry the body to the nearest free cage.
             verbs.Add(("Put in Cage", () => Say(new Meitou.Simulation.Crime.PutInCageOrder(carriers) { Tick = session.World.Tick })));
-            // Meitou stand-in for the bed's own "Put in Bed" (PlayerInterface.Beds.cs): carry the body to the bed the bed search finds.
+            // Meitou stand-in for the bed's own "Put in Bed" (FurnitureUse): carry the body to the bed the bed search finds.
             verbs.Add(("Put in Bed", () => Say(new Meitou.Simulation.Locks.PutInBedOrder(carriers) { Tick = session.World.Tick })));
             return verbs;
         }
@@ -132,7 +132,7 @@ sealed partial class PlayerInterface
         // Meitou stand-in for dragging shackles onto a down or caged character's armour slot: a selected character carrying some puts them on, locked.
         if (target.CanBeShackled && Selected().Any(c => c.CarriesShackles))
             verbs.Add(("Put on Shackles", () => Say(new Meitou.Simulation.Locks.PutShacklesOrder(Selected().Where(c => c.CarriesShackles).Select(c => c.Id).ToArray(), id) { Tick = session.World.Tick })));
-        return [.. verbs.Select(v => (v.Item1, JobOrOrder(v.Item1, id, v.Item2)))];   // Shift turns an order into a job (PlayerInterface.SquadAi.cs)
+        return [.. verbs.Select(v => (v.Item1, squadWindows.JobOrOrder(v.Item1, id, v.Item2)))];   // Shift turns an order into a job (SquadPanel)
     }
 
     /// <summary>
@@ -186,7 +186,7 @@ sealed partial class PlayerInterface
             if (target.StayingLow) verbs.Add(("Stand Up", () => Say(new StandUpCommand(selection) { Tick = session.World.Tick })));
             return;
         }
-        // Bodyguard (45): follows and defends the target; with Shift it is the Bodyguard job (PlayerInterface.SquadAi.cs).
+        // Bodyguard (45): follows and defends the target; with Shift it is the Bodyguard job (SquadPanel).
         verbs.Add(("Bodyguard", () => Say(new FollowOrder(selection, id) { Guard = true, Tick = session.World.Tick })));
         verbs.Add(("Follow", () => Say(new FollowOrder(selection, id) { Tick = session.World.Tick })));
         if (target.CarriedBy.IsNone && (down || target.Carrying.IsNone)) verbs.Add(("Pick Up", () => Say(new Meitou.Simulation.Carrying.PickUpOrder([], id) { Tick = session.World.Tick })));
@@ -200,7 +200,7 @@ sealed partial class PlayerInterface
         void Open() => Say(new Meitou.Simulation.Carrying.OpenLootOrder([], id) { Tick = session.World.Tick });
         // With Shift the verb is an order on the target like any other: Trade on an own character (a character hand, not a building) falls through to the TaskData lookup of order 26, so it adds the
         // Foraging animals job like Loot does (FUN_1407fa650, Verified), not the window.
-        return (target.IsPlayer ? "Trade" : "Loot", () => OrderOrJob(Meitou.Data.Gameplay.Ai.TaskType.LOOT_TARGET, id, Open));
+        return (target.IsPlayer ? "Trade" : "Loot", () => squadWindows.OrderOrJob(Meitou.Data.Gameplay.Ai.TaskType.LOOT_TARGET, id, Open));
     }
 
     /// <summary>
@@ -333,7 +333,7 @@ sealed partial class PlayerInterface
     /// menu's orders skip the quick click's Alt test (<c>FUN_1407fa650</c>), so Loot on another faction's container takes from it at once (a shop container's stock is stolen from);
     /// a locked one also has Use Tools and Use Strength (285, 286). Not built: Auto-Haul (124) on an interior container.
     /// </summary>
-    List<(string Caption, Action Give)> ContainerVerbs(Meitou.Simulation.Locks.ContainerSpot container)
+    internal List<(string Caption, Action Give)> ContainerVerbs(Meitou.Simulation.Locks.ContainerSpot container)
     {
         var verbs = new List<(string, Action)>();
         if (SelectedIds().Count == 0) return verbs;
@@ -349,9 +349,9 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The open order for a container (Alt: another faction's locked one is picked, a shop's taken from).</summary>
-    void OpenContainer(string id, bool alt)
+    internal void OpenContainer(string id, bool alt)
     {
-        closedMachine = null;   // a container whose window was closed opens again when it is asked for (the sim may not have dropped it yet, e.g. while paused)
+        production.closedMachine = null;   // a container whose window was closed opens again when it is asked for (the sim may not have dropped it yet, e.g. while paused)
         Say(new Meitou.Simulation.Items.OpenContainerOrder([], id, alt) { Tick = session.World.Tick });
     }
 
@@ -359,14 +359,14 @@ sealed partial class PlayerInterface
     /// A door (the original's door branch): unlocked, the player's own gets Lock (77), every one Open (72) or Close (73); locked, the player's Unlock (140), another faction's Pick Lock (76).
     /// Lock and Unlock are task orders on this one door (<see cref="Meitou.Simulation.Locks.DoorLockOrder"/>: the nearest selected character walks there and works 3.3 s); the panel's buttons toggle the building. A locked one also has Use Tools, Use Strength and Smash (285, 286, 226: <see cref="Meitou.Simulation.Locks.ForceLockOrder"/>).
     /// </summary>
-    List<(string Caption, Action Give)> DoorVerbs((Meitou.Simulation.Locks.DoorPick Door, bool Locked) pick)
+    internal List<(string Caption, Action Give)> DoorVerbs((Meitou.Simulation.Locks.DoorPick Door, bool Locked) pick)
     {
         var verbs = new List<(string, Action)>();
         if (SelectedIds().Count == 0) return verbs;
         var door = pick.Door;
         bool own = door.Owner == session.World.Player.Faction;
         // A broken door is repaired (95, the building branch of FUN_1407fc6e0); the job of Shift is not built (the Engineer job works sites only).
-        if (DoorBroken(door))
+        if (furniture.DoorBroken(door))
         {
             if (own) verbs.Add(("Repair", () => Say(new Meitou.Simulation.Construction.BuildOrder([], door.Id) { Tick = session.World.Tick })));
             return verbs;
@@ -397,7 +397,7 @@ sealed partial class PlayerInterface
     /// A right press on a target whose <paramref name="menu"/> has verbs (true): the hold timer starts, the menu opens after <paramref name="hold"/> seconds
     /// (<see cref="ContextHoldSeconds"/> by default) and <paramref name="quick"/> waits for the release.
     /// </summary>
-    bool ContextPressOn(Vector2 p, Func<Vector2, ContextMenu?> menu, Action? quick, double hold = ContextHoldSeconds)
+    internal bool ContextPressOn(Vector2 p, Func<Vector2, ContextMenu?> menu, Action? quick, double hold = ContextHoldSeconds)
     {
         if (menu(p) is null) return false;
         contextPending = (menu, p, System.Diagnostics.Stopwatch.GetTimestamp(), hold, quick);
@@ -429,7 +429,7 @@ sealed partial class PlayerInterface
     {
         if (contextMenu is null) return false;
         var row = UiVisible ? MyGuiPresentation.HitTest(ArrangeUi(), p.X, p.Y) : null;
-        if (row is { Action: "meitou:context" }) { SoundForAction("context", row.Argument); ContextAction(row.Argument); return true; }
+        if (row is { Action: "meitou:context" }) { interfaceSounds.SoundForAction("context", row.Argument); ContextAction(row.Argument); return true; }
         if (button != MouseButton.Right) return false;   // another button's release still ends what its press began (a drag, a window move)
         CloseContextMenu();
         return true;
@@ -497,7 +497,7 @@ sealed partial class PlayerInterface
             "door" => snap.DoorPicks.OrderBy(d => Vector3.DistanceSquared(d.Position, near))
                 .Select(d => (Loc.Tr("Door"), d.Position, DoorVerbs((d, snap.Doors.GetValueOrDefault((d.Building, d.Door)).Locked)))).FirstOrDefault(),
             "container" => snap.Containers.OrderBy(c => Vector3.DistanceSquared(c.Position, near)).Select(c => (c.Record, c.Position, ContainerVerbs(c))).FirstOrDefault(),
-            "cage" => snap.Cages.OrderBy(c => Vector3.DistanceSquared(c.Position, near)).Select(c => (Loc.Tr("Cage"), c.Position, CageVerbs(c))).FirstOrDefault(),
+            "cage" => snap.Cages.OrderBy(c => Vector3.DistanceSquared(c.Position, near)).Select(c => (Loc.Tr("Cage"), c.Position, furniture.CageVerbs(c))).FirstOrDefault(),
             _ => null,
         };
         if (found is not { } f || f.Verbs is null || Project(f.At) is not { } px) return false;

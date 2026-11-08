@@ -223,7 +223,7 @@ sealed class BuildingSync(GameHost host)
     }
 
     /// <summary>
-    /// What the player's build mode needs (docs/simulation.md "Buildings", PlayerInterface.Build.cs): the catalog of BUILDINGs, their texts and parts, the placement services
+    /// What the player's build mode needs (docs/simulation.md "Buildings", BuildMode): the catalog of BUILDINGs, their texts and parts, the placement services
     /// (terrain, collision footprints) and the ghost drawing. Null without a game database.
     /// </summary>
     internal Building.BuildServices? MakeBuildServices()

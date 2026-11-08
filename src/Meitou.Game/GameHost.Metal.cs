@@ -1,5 +1,6 @@
 using Meitou.Game.Editor;
 using Meitou.Game.Rendering.Upscalers;
+using Meitou.Game.Ui;
 
 #if MEITOU_METAL
 // Metal exists on macOS only; the file is compiled only there (the csproj's MEITOU_METAL constant).
@@ -466,7 +467,7 @@ sealed partial class GameHost
                 // interface-less list, or the editor stage never shows a race, gender or slider change.
                 characters.Source = FillDrawList;
                 var (atlas, sampled) = characters.PortraitAtlas;
-                hud.SetUiTexture(PlayerInterface.PortraitTexture, atlas, sampled);
+                hud.SetUiTexture(PortraitBar.PortraitTexture, atlas, sampled);
             }
             itemIconFiles.ConnectItemIcons();
             hud.ConfigureFrontend(scene.Database,
@@ -482,10 +483,10 @@ sealed partial class GameHost
             hud.stealthView.HiddenInWorld = interiors.hiddenIndoors.Contains;
             hud.stealthView.DrawnHead = id => characters?.BonePosition(DrawKey(id), "Bip01 Head");
             hud.ShownInteriorHit = (origin, direction, distance) => objects?.ShownInteriorHit(origin, direction, distance);
-            hud.AboveViewedFloor = interiors.AboveViewedFloor;
-            hud.GroundItemShape = groundItemSync.GroundShape;
-            hud.GroundItemHidden = groundItemSync.hiddenGround.Contains;
-            hud.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
+            hud.furniture.AboveViewedFloor = interiors.AboveViewedFloor;
+            hud.groundItemPicks.GroundItemShape = groundItemSync.GroundShape;
+            hud.groundItemPicks.GroundItemHidden = groundItemSync.hiddenGround.Contains;
+            hud.furniture.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
             hoverOutline = new HoverOutlineRenderer(ctx);
             moveMarker = MarkerRenderer.Create(ctx, assets.Find);
             hud.Markers = moveMarker;
@@ -933,7 +934,7 @@ sealed partial class GameHost
                         hud.Follow = null;
                         tour.HopSeconds = config.CharacterFlightSeconds;
                         tourFollows = false;
-                        tour.Start(camera, [.. hud.SquadBarMembers().Select(c => c.Id)], TourPosition);
+                        tour.Start(camera, [.. hud.portraitBar.SquadBarMembers().Select(c => c.Id)], TourPosition);
                         if (tour.Active) tourHolds = true;
                         else Console.WriteLine("squad tour: nobody else in the squad to fly to");
                     }
@@ -942,16 +943,16 @@ sealed partial class GameHost
                 if (KeyMap.Map(key) is not { } mapped) return;
                 // The interface's keys come first (I/C, M/T/Y, Esc, B), as in the Vulkan host; what it does not take reaches
                 // the session (WASD, Q/E, Space, F2..F4, PageUp/PageDown, the camera bindings).
-                if (hud is not null && (hud.UiKey(mapped, ctrl, shiftDown) || hud.BuildKey(mapped, shiftDown))) return;
+                if (hud is not null && (hud.UiKey(mapped, ctrl, shiftDown) || hud.build.BuildKey(mapped, shiftDown))) return;
                 session.Input.SetKey(mapped, true);
-                if (hud is not null) hud.Key(mapped, shiftDown);
+                if (hud is not null) hud.gameHotkeys.Key(mapped, shiftDown);
                 sandbox.SandboxKey(mapped);
                 if (duel.IsDuel && mapped == EngineKey.Backspace) duel.duelRestartRequested = true;
             };
             keyboard.KeyUp += (_, key, _) =>
             {
                 if (key is SilkKey.ShiftLeft or SilkKey.ShiftRight) { shiftDown = false; if (hud is not null) hud.SlowModifier = false; }
-                if (KeyMap.Map(key) is { } mapped) { session.Input.SetKey(mapped, false); hud?.BuildKeyUp(mapped); }
+                if (KeyMap.Map(key) is { } mapped) { session.Input.SetKey(mapped, false); hud?.build.BuildKeyUp(mapped); }
             };
             keyboard.KeyChar += (_, value) =>
             {
@@ -1078,7 +1079,7 @@ sealed partial class GameHost
             if (panelName == "talk") return player is not null && screenshotScenes.ShowcaseTalk();
             if (panelName == "edited" && player is not null)
             {
-                player.ShowcaseEdit();
+                player.characterEditor.ShowcaseEdit();
                 session.AdvanceSimulation(session.Ticks.TickSeconds);
             }
             if (panelName?.StartsWith("editor", StringComparison.Ordinal) == true && hud is not null)
@@ -1200,7 +1201,7 @@ sealed partial class GameHost
                 if (tour.Active && !tour.Advance(dt, camera, TourPosition)) EndTour();
                 gpu.Ahead = tour.ArrivalEye(TourPosition);
                 if (hud is not null)
-                    gpu.Kept = config.KeepTexturesAtCharacters ? [.. hud.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()] : [];
+                    gpu.Kept = config.KeepTexturesAtCharacters ? [.. hud.portraitBar.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()] : [];
                 if (!tourHolds && hud is not null)
                 {
                     sandbox.SandboxFollowCamera();
@@ -1210,7 +1211,7 @@ sealed partial class GameHost
                 // The merged character editor is shared with Vulkan: a new game opens it once the squad is in the snapshot, and the world resumes when it closes.
                 characterEditor.OpenPendingEditor();
                 characterEditor.ResumeAfterCreation();
-                if (hud is not { EditorOpen: true }) { characterEditor.ClearEditorStage(); characterEditor.ClearEditorBar(); }
+                if (hud is not { characterEditor.EditorOpen: true }) { characterEditor.ClearEditorStage(); characterEditor.ClearEditorBar(); }
                 if (!tourHolds && hud is not null) titleScreen.ApplyTitleCamera();
                 // A flight puts the focus where it lands, so the towns there populate during the flight; otherwise the
                 // followed character's pivot is already in the rig.
@@ -1234,7 +1235,7 @@ sealed partial class GameHost
                 {
                     hud.CtrlHeld = ctrlHeld;
                     hud.AltHeld = altHeld;
-                    hud.HighlightFocus = highlighting ? camera.Target : null;
+                    hud.groundItemPicks.HighlightFocus = highlighting ? camera.Target : null;
                 }
                 if (objects is not null) objects.HighlightSigns = highlighting;
                 if (!Covered && hud is not null && titleScreen.TitleVisible) titleScreen.titleBattle?.Advance(dt);
@@ -1253,7 +1254,7 @@ sealed partial class GameHost
                 // It must run before the character draw list (which carries aboveFloor) and before the shadow casters.
                 interiors.UpdateInteriorView();
                 // The next world tick may run on its own thread while the frame is drawn, as in the Vulkan loop (docs/simulation.md "Tick ahead").
-                tickAhead = !Covered && skyArrival is null && !duel.IsDuel && !titleScreen.TitleVisible && !player.EditorOpen && g.PlayBench is null && TickAheadWanted();
+                tickAhead = !Covered && skyArrival is null && !duel.IsDuel && !titleScreen.TitleVisible && !player.characterEditor.EditorOpen && g.PlayBench is null && TickAheadWanted();
             }
             else
             {
@@ -1328,7 +1329,7 @@ sealed partial class GameHost
             var backbuffer = ctx.Backbuffer;
             // The editor's scene: in the Meitou UI the bar, drawn by the world pass below from the editor's camera (CharacterEditorHost); else the original's stage, the
             // character and its platform drawn into the stage texture the interface shows over the world.
-            var editorBarFrame = hud is { EditorOpen: true } ? characterEditor.BeginEditorBar(size.X, size.Y) : null;
+            var editorBarFrame = hud is { characterEditor.EditorOpen: true } ? characterEditor.BeginEditorBar(size.X, size.Y) : null;
             // The still's objects are all resident before the first picture, as the Vulkan screenshot path settles them (its Settle
             // opens its own frame; here the frame is the first one's).
             if (frames == 0) { objects?.Settle(camera.Eye); foliage?.Settle(camera.Eye); }
@@ -1337,7 +1338,7 @@ sealed partial class GameHost
             {
                 characters.PortraitRequests.Clear();
                 if (hud is not null)
-                    foreach (var (member, cell) in hud.SquadBarMembers().Select((member, cell) => (member, cell)))
+                    foreach (var (member, cell) in hud.portraitBar.SquadBarMembers().Select((member, cell) => (member, cell)))
                         characters.PortraitRequests.Add(new PortraitRequest(DrawKey(member.Id), cell, member.PortraitSerial));
             }
             var hoverKeys = new List<(long Key, Vector4 Colour)>();
@@ -1352,7 +1353,7 @@ sealed partial class GameHost
                     hoverKeys.Add((DrawKey(hover.Id), hover.Colour));
             }
             gpu.HoverKeys = hoverKeys;
-            gpu.OutlinedBuildings = outlines && config.BuildingOutline ? hud!.OutlinedBuildings(hover: true) : [];
+            gpu.OutlinedBuildings = outlines && config.BuildingOutline ? hud!.buildingSelection.OutlinedBuildings(hover: true) : [];
             gpu.HoverOutline = hoverOutline;
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.
@@ -1396,7 +1397,7 @@ sealed partial class GameHost
                 characters.Look = Meitou.Game.Rendering.Characters.PreviewLook.Of(o.Post);
                 if (hud is not null)
                 {
-                    hud.PortraitSize = Meitou.Game.Rendering.Characters.CharacterRenderer.PortraitSizeFor(characters.Look);
+                    hud.portraitBar.PortraitSize = Meitou.Game.Rendering.Characters.CharacterRenderer.PortraitSizeFor(characters.Look);
                     itemIconFiles.SyncIconLook();
                 }
             }

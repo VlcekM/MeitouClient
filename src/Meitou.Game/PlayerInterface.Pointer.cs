@@ -4,6 +4,7 @@ using Meitou.Data.Ui;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
 using Meitou.Game.Ui;
+using Meitou.Game.Building;
 
 namespace Meitou.Game;
 
@@ -17,7 +18,7 @@ sealed partial class PlayerInterface
     bool pointerOverButton;
     // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and every RepickTicks ticks while only the
     // world moves (the picks walk every character, item and building near the ray: 0.5 ms).
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (SelectedBuilding Building, float T)? Building) pointer = (-1, default, false, false, "arrow", null, null);
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) pointer = (-1, default, false, false, "arrow", null, null);
     Matrix4x4 pointerView;
     const long RepickTicks = 3;
 
@@ -79,7 +80,7 @@ sealed partial class PlayerInterface
     /// <summary>Another faction's hostile character on its feet (not downed, dead or carried): the attack pointer and red outline whatever is selected.</summary>
     bool StandingHostile(CharacterSnapshot c) => !c.IsPlayer && c.Conscious && c.HostileToPlayer;
 
-    static readonly Vector4 WhiteOutline = new(0.95f, 0.93f, 0.85f, 0.85f);
+    internal static readonly Vector4 WhiteOutline = new(0.95f, 0.93f, 0.85f, 0.85f);
 
     /// <summary>
     /// Whether the character's faction is hostile to the player's, or it is fighting one of the player's characters (a neutral squad robbing them): only a hostile one gets
@@ -88,12 +89,12 @@ sealed partial class PlayerInterface
     bool Hostile(CharacterId id) => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c || Hostile(c);
     bool Hostile(CharacterSnapshot c) => c.HostileToPlayer;
 
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (SelectedBuilding Building, float T)? Building) Point()
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) Point()
     {
         if (worldMap.mapDrag is not null) return (-1, mouse, CtrlHeld, AltHeld, "hand", null, null);   // the map's pan
         if (UiVisible && pointerOverUi || UiCapturesPointer || ContextMenuOpen || ModalOpen || dragging || settingsOpen || TitleOpen)
             return (-1, mouse, CtrlHeld, AltHeld, "arrow", null, null);
-        if (BuildPointer() is { } building) return (-1, mouse, CtrlHeld, AltHeld, building, null, null);
+        if (build.BuildPointer() is { } building) return (-1, mouse, CtrlHeld, AltHeld, building, null, null);
         var snapshot = session.CurrentSnapshot;
         if (pointer.Tick >= 0 && (ulong)(snapshot.Tick - pointer.Tick) < RepickTicks && pointer.Mouse == mouse && pointer.Ctrl == CtrlHeld && pointer.Alt == AltHeld
             && pointerView == ViewProjection) return pointer;
@@ -106,12 +107,12 @@ sealed partial class PlayerInterface
                 switch (PickAt(mouse).Kind)
                 {
                     case Picked.Character when QuickOrder(mouse) is { } order: chosen = (order.Pointer, order.Target); break;
-                    case Picked.GroundItem: chosen = (StealsGroundItem(mouse) ? "steal" : "pick_item", null); break;
-                    case Picked.Container when PickContainer(mouse) is { } container: chosen = (ContainerPointer(container), null); break;
-                    case Picked.Door when PickDoor(mouse) is { } door: chosen = (DoorPointer(door), null); break;
+                    case Picked.GroundItem: chosen = (groundItemPicks.StealsGroundItem(mouse) ? "steal" : "pick_item", null); break;
+                    case Picked.Container when furniture.PickContainer(mouse) is { } container: chosen = (furniture.ContainerPointer(container), null); break;
+                    case Picked.Door when furniture.PickDoor(mouse) is { } door: chosen = (furniture.DoorPointer(door), null); break;
                     case Picked.Bed or Picked.Cage or Picked.Dummy or Picked.Seat: chosen = ("use", null); break;   // a bed's slot 130 pointer (UseableStuff, no inventory)
                     case Picked.Rock: chosen = ("mine", null); break;   // a resource rock a right click would mine (the original's `mine` pointer)
-                    case Picked.Site when SitePointer(mouse) is { } siteMode: chosen = (siteMode, null); break;
+                    case Picked.Site when build.SitePointer(mouse) is { } siteMode: chosen = (siteMode, null); break;
                 }
         }
         else if (QuickOrder(mouse) is { } over0) chosen = (over0.Pointer, over0.Target);   // nothing selected: the pointer only, as the original sets it before it looks for orders to give
@@ -121,7 +122,7 @@ sealed partial class PlayerInterface
             chosen.Name = "attk";
         session.World.Player.Pointed = chosen.Target ?? CharacterId.None;
         pointerView = ViewProjection;
-        var hovered = chosen.Target is null ? PickBuildingAt(mouse) : null;
+        var hovered = chosen.Target is null ? buildingSelection.PickBuildingAt(mouse) : null;
         return pointer = (snapshot.Tick, mouse, CtrlHeld, AltHeld, chosen.Name, chosen.Target, hovered);
     }
 
@@ -138,17 +139,17 @@ sealed partial class PlayerInterface
         string colour = string.Create(CultureInfo.InvariantCulture, $"{1 - f:0.###} {f:0.###} 0");
         float minimum = TitleOpen ? 0 : StandardPixels;
         var width = UiTooltips.Arrange(lines, TooltipKind.Floating, Width, Height, mouse, null,
-            (text, wrap) => painter.MeasureText(TooltipFont, text, Height, wrap, minimum) is var s ? new(s.Width, s.Height) : default).Panel.Width;
+            (text, wrap) => painter.MeasureText(TooltipRuntime.TooltipFont, text, Height, wrap, minimum) is var s ? new(s.Width, s.Height) : default).Panel.Width;
 
         var bottomRight = new Vector2(mouse.X + width / 2, mouse.Y - PointerChanceRise * Height / 1080f);
-        PlaceTooltip(controls, painter, lines, TooltipKind.Floating, null, "pointer-chance", bottomRight, [colour]);
+        tooltipRuntime.PlaceTooltip(controls, painter, lines, TooltipKind.Floating, null, "pointer-chance", bottomRight, [colour]);
     }
 
     /// <summary>
     /// The pointed chance (0..1) the label shows: the stealth KO chance / 100 of the pointed character under <c>knockout</c> (published only while a selected character sneaks),
     /// the pick chance under <c>lockpick</c> (<see cref="PointedLockChance"/>); null for any other pointer.
     /// </summary>
-    float? PointerChance((long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (SelectedBuilding Building, float T)? Building) p) => p.Name switch
+    float? PointerChance((long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) p) => p.Name switch
     {
         "knockout" when p.Target is { } id => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.StealthKoChance * 0.01f,
         "lockpick" => PointedLockChance(p.Target),
@@ -164,8 +165,8 @@ sealed partial class PlayerInterface
         var snapshot = session.CurrentSnapshot;
         if (target is { } id && snapshot.Characters.FirstOrDefault(c => c.Id == id) is { Prison: { LockLevel: >= 0 } prison } caged)
             return LockChance(caged.Position, prison.LockLevel);
-        if (PickContainer(mouse) is { } container) return LockChance(container.Position, container.Level);
-        if (PickDoor(mouse) is { Door: var door }) return LockChance(door.Position, snapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Level);
+        if (furniture.PickContainer(mouse) is { } container) return LockChance(container.Position, container.Level);
+        if (furniture.PickDoor(mouse) is { Door: var door }) return LockChance(door.Position, snapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Level);
         return null;
     }
 

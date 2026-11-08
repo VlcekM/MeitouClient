@@ -154,11 +154,11 @@ sealed class AgentOrders(PlayerInterface player)
             {
                 float d = Vector2.Distance(new Vector2(s.Position.X, s.Position.Z), flat);
                 if (d > radius) continue;
-                var b = new ControlBuilding("b:" + s.Id, player.SiteName(s), s.Record, s.Position, null);
+                var b = new ControlBuilding("b:" + s.Id, player.build.SiteName(s), s.Record, s.Position, null);
                 controlBuildings["b:" + s.Id] = b;
                 items.Add((d, w => WriteBuilding(w, b, near)));
             }
-            if (player.buildHost is { } host)
+            if (player.build.buildHost is { } host)
                 foreach (var p in host.Placement.StaticPlacementsAround(flat, radius))
                 {
                     if (player.levelEditorPanel.levelHost?.IsCleared(p.Key) == true) continue;
@@ -203,7 +203,7 @@ sealed class AgentOrders(PlayerInterface player)
                 WritePosition(w, "position", player.where(c));
                 w.WriteNumber("distance", Math.Round(hit.T, 1));
             }
-            else if (player.PickBuilding(pixel) is { } building)
+            else if (player.buildingSelection.PickBuilding(pixel) is { } building)
             {
                 string id = "b:" + building.Instance;
                 controlBuildings[id] = new ControlBuilding(id, building.Name, building.Record, building.Position, building.Hull);
@@ -234,7 +234,7 @@ sealed class AgentOrders(PlayerInterface player)
         {
             if (ControlPosition(id) is not { } pos) return null;
             var hull = controlBuildings.TryGetValue(id, out var known) ? known.Hull : null;
-            if (hull is null && player.session.CurrentSnapshot.Buildings.FirstOrDefault(s => "b:" + s.Id == id) is { } site && player.buildHost is { } host
+            if (hull is null && player.session.CurrentSnapshot.Buildings.FirstOrDefault(s => "b:" + s.Id == id) is { } site && player.build.buildHost is { } host
                 && (host.Placement.Footprint(site.Record) ?? host.Placement.Plot(site.Record)) is { } footprint)
                 hull = footprint.Place(site.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, Meitou.Game.Building.PlacementCheck.YawOf(site.Rotation)));
             corners = hull is { Length: > 0 } ? [.. hull.Select(p => new Vector3(p.X, pos.Y, p.Y)), .. hull.Select(p => new Vector3(p.X, pos.Y + 12, p.Y))] : [pos, pos + new Vector3(0, 12, 0)];
@@ -609,14 +609,14 @@ sealed class AgentOrders(PlayerInterface player)
     BuildingBuildData? ControlBuildingData(string query, out string error)
     {
         error = "";
-        if (player.buildHost is not { } host) { error = "no build services (no world loaded)"; return null; }
+        if (player.build.buildHost is not { } host) { error = "no build services (no world loaded)"; return null; }
         var all = host.Menu.Catalog;
         var byId = all.FirstOrDefault(b => b.Id.Equals(query, StringComparison.OrdinalIgnoreCase));
         if (byId is not null) return byId;
         var named = all.Where(b => b.Name.Equals(query, StringComparison.OrdinalIgnoreCase)).ToList();
         if (named.Count == 0) named = [.. all.Where(b => b.Name.Contains(query, StringComparison.OrdinalIgnoreCase))];
         if (named.Count == 1) return named[0];
-        var unlocked = named.Where(b => player.Unlocked().Contains(b.Id)).ToList();
+        var unlocked = named.Where(b => player.build.Unlocked().Contains(b.Id)).ToList();
         if (unlocked.Count == 1) return unlocked[0];
         error = named.Count == 0 ? $"no building '{query}' (build-list shows the types)" : $"'{query}' matches {named.Count} buildings; use the record id: {string.Join(", ", named.Take(6).Select(b => $"{b.Id} ({b.Name})"))}";
         return null;
@@ -625,8 +625,8 @@ sealed class AgentOrders(PlayerInterface player)
     /// <summary>The buildings the player may place now (or all with <paramref name="all"/>), with their material costs, as a JSON object.</summary>
     public string ControlBuildListJson(string text, bool all, int limit)
     {
-        if (player.buildHost is not { } host) return "{\"types\":[],\"total\":0}";
-        var unlocked = player.Unlocked();
+        if (player.build.buildHost is not { } host) return "{\"types\":[],\"total\":0}";
+        var unlocked = player.build.Unlocked();
         var list = host.Menu.Catalog.Where(b => (all || unlocked.Contains(b.Id)) && !b.IsNode
             && (text.Length == 0 || b.Id.Contains(text, StringComparison.OrdinalIgnoreCase) || b.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || b.Category.Contains(text, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(b => b.Category, StringComparer.Ordinal).ThenBy(b => b.Name, StringComparer.Ordinal).ToList();
@@ -681,15 +681,15 @@ sealed class AgentOrders(PlayerInterface player)
     public bool ControlBuild(string type, float x, float z, float yawDegrees, bool anyway, out string message, out string json)
     {
         json = "";
-        if (player.buildHost is not { } host) { message = "refused: no build services (no world loaded)"; return false; }
+        if (player.build.buildHost is not { } host) { message = "refused: no build services (no world loaded)"; return false; }
         if (ControlBuildingData(type, out string error) is not { } data) { message = "refused: " + error; return false; }
-        if (!player.Unlocked().Contains(data.Id)) { message = $"refused: {data.Name} ({data.Id}) is not unlocked by research (build-list shows what is)"; return false; }
+        if (!player.build.Unlocked().Contains(data.Id)) { message = $"refused: {data.Name} ({data.Id}) is not unlocked by research (build-list shows what is)"; return false; }
         float yaw = yawDegrees * MathF.PI / 180;
         var footprint = host.Placement.Footprint(data.Id);
         var box = footprint?.Bounds ?? (new Vector2(-4), new Vector2(4));
         var at = new Vector2(x, z);
         var normal = PlacementCheck.GroundNormal(host.Placement.Ground, at, yaw, box);
-        float angle = MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * (data.MatchSlope ? 1 : PlayerInterface.DefaultTilt);
+        float angle = MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * (data.MatchSlope ? 1 : BuildMode.DefaultTilt);
         if (data.MaxSlope > 0) angle = MathF.Min(angle, data.MaxSlope * MathF.PI / 180);
         var axis = Vector3.Cross(Vector3.UnitY, normal);
         var tilt = axis.LengthSquared() < 1e-10f ? Quaternion.Identity : Quaternion.CreateFromAxisAngle(Vector3.Normalize(axis), angle);
@@ -1117,7 +1117,7 @@ sealed class AgentOrders(PlayerInterface player)
             {
                 w.WriteStartObject();
                 w.WriteString("id", "b:" + b.Id);
-                w.WriteString("name", player.SiteName(b));
+                w.WriteString("name", player.build.SiteName(b));
                 w.WriteString("record", b.Record);
                 WriteXZ(w, "pos", b.Position);
                 w.WriteNumber("dist", R1(D(b.Position)));
@@ -1130,7 +1130,7 @@ sealed class AgentOrders(PlayerInterface player)
                     foreach (var m in b.Materials.Where(m => m.Delivered < m.Required).Take(6))
                     {
                         w.WriteStartObject();
-                        w.WriteString("item", player.buildHost?.ItemName(m.Item) ?? m.Item);
+                        w.WriteString("item", player.build.buildHost?.ItemName(m.Item) ?? m.Item);
                         w.WriteNumber("required", R1(m.Required));
                         w.WriteNumber("delivered", R1(m.Delivered));
                         w.WriteEndObject();
@@ -1141,7 +1141,7 @@ sealed class AgentOrders(PlayerInterface player)
             }
             w.WriteEndArray();
             var near = new List<(float D, string Id, string Name, Vector3 At)>();
-            if (player.buildHost is { } host)
+            if (player.build.buildHost is { } host)
                 foreach (var p in host.Placement.StaticPlacementsAround(flat, radius))
                 {
                     if (player.levelEditorPanel.levelHost?.IsCleared(p.Key) == true) continue;
@@ -1189,7 +1189,7 @@ sealed class AgentOrders(PlayerInterface player)
                 var bs = snap.Buildings.FirstOrDefault(b => b.Id == m.Site);
                 w.WriteStartObject();
                 w.WriteString("id", "b:" + m.Site);
-                w.WriteString("name", bs is null ? m.Record : player.SiteName(bs));
+                w.WriteString("name", bs is null ? m.Record : player.build.SiteName(bs));
                 w.WriteNumber("status", m.Status);
                 w.WriteNumber("operators", m.Operators);
                 w.WriteNumber("maxOperators", m.MaxOperators);
@@ -1237,8 +1237,8 @@ sealed class AgentOrders(PlayerInterface player)
         if (found is null) { message = $"refused: no site '{site}' of yours (observe.buildings.own lists them)"; return false; }
         if (found.Owner != player.session.World.Player.Faction) { message = $"refused: {site} is not yours"; return false; }
         if (found.Dismantling) { message = $"refused: {site} is being dismantled"; return false; }
-        if (found.Complete && !found.NeedsWork) { message = $"refused: {player.SiteName(found)} is complete and undamaged, nothing to do"; return false; }
-        return ControlOrder(w => new Meitou.Simulation.Construction.BuildOrder(w, id) { Tick = player.session.World.Tick }, $"{(found.Complete ? "repair" : "build")} {player.SiteName(found)} b:{id}", out message);
+        if (found.Complete && !found.NeedsWork) { message = $"refused: {player.build.SiteName(found)} is complete and undamaged, nothing to do"; return false; }
+        return ControlOrder(w => new Meitou.Simulation.Construction.BuildOrder(w, id) { Tick = player.session.World.Tick }, $"{(found.Complete ? "repair" : "build")} {player.build.SiteName(found)} b:{id}", out message);
     }
 
     // ---- prospecting

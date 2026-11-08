@@ -113,7 +113,7 @@ sealed class FeedbackPanel(PlayerInterface player)
     internal bool FeedbackButtonDown(System.Numerics.Vector2 p)
     {
         if (!player.UiVisible || !feedbackButtonBounds.Contains(p.X, p.Y)) return false;
-        player.Sound("General_Click");
+        player.interfaceSounds.Sound("General_Click");
         player.RaiseScreenAction(new(FeedbackScreen, FeedbackButton, "feedback-open"));
         return true;
     }
@@ -186,7 +186,7 @@ sealed class FeedbackPanel(PlayerInterface player)
 
     internal void FeedbackFormAction(MyGuiEvent e)
     {
-        if (e.Action != "text") player.Sound("General_Click");
+        if (e.Action != "text") player.interfaceSounds.Sound("General_Click");
         if (e.Widget == "CancelButton") player.faithfulScreens.Close(FeedbackScreen);
         else if (e.Widget == FeedbackShotTick) FeedbackPrefs.Screenshot = !FeedbackPrefs.Screenshot;
         else if (e.Widget == FeedbackNavTick) FeedbackPrefs.Navmesh = !FeedbackPrefs.Navmesh;

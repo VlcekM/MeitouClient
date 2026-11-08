@@ -7,6 +7,7 @@ using Meitou.Data.Ui;
 using Meitou.Game.Host;
 using Meitou.Game.Host.Input;
 using Meitou.Game;
+using Meitou.Game.Building;
 using Meitou.Simulation;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Locks;
@@ -37,22 +38,22 @@ public class HousePurchaseUiTests
         ui.LoadUi(mode, name => resources.Find(name));
         ui.ConfigureFrontend(data.Db, () => [], "");
         // Open to public needs an interior (docs/game/ui-screens.md "Selected building"); the fixture house has none of its own.
-        ui.BuildingData = id => Meitou.Data.Gameplay.Construction.BuildingBuildData.From(data.Db.Find(id)!) with { HasInterior = true };
-        ui.BuildTarget = id => ui.BuildingData(id)?.Target;
+        ui.buildingSelection.BuildingData = id => Meitou.Data.Gameplay.Construction.BuildingBuildData.From(data.Db.Find(id)!) with { HasInterior = true };
+        ui.buildingSelection.BuildTarget = id => ui.buildingSelection.BuildingData(id)?.Target;
         try
         {
-            var focus = new PlayerInterface.SelectedBuilding("House", null, "Owner", "Town", null, house.Key, house.Position, null, Record: house.BuildingId, Destroyed: house.Destroyed);
-            ui.SetBuilding(focus); world.RunTick();
+            var focus = new BuildingSelection.SelectedBuilding("House", null, "Owner", "Town", null, house.Key, house.Position, null, Record: house.BuildingId, Destroyed: house.Destroyed);
+            ui.buildingSelection.SetBuilding(focus); world.RunTick();
             void CheckRuinCondition()
             {
-                var condition = Assert.Single(ui.BuildingRows(focus), row => row.Name == "Condition");
+                var condition = Assert.Single(ui.buildingSelection.BuildingRows(focus), row => row.Name == "Condition");
                 Assert.Equal("0", condition.Value);
                 Assert.Equal(0, condition.Green);
                 Assert.Equal(0, condition.Yellow);
                 Assert.Equal(0, condition.Red);
             }
             CheckRuinCondition();
-            var sale = Assert.Single(ui.BuildingLines(focus).Stats, line => line.Action == "meitou:building-buy");
+            var sale = Assert.Single(ui.buildingSelection.BuildingLines(focus).Stats, line => line.Action == "meitou:building-buy");
             Assert.Equal("For sale:", sale.Label); Assert.Equal("c.4,800", sale.Value); Assert.Equal(0.4f, sale.ButtonWidth);
             void Click(string name)
             {
@@ -68,7 +69,7 @@ public class HousePurchaseUiTests
             Click("ButtonB"); world.RunTick(); Assert.Equal(10000, world.Player.Money);
             Click(ui.UiFrame.Single(c => c.Action == "meitou:building-buy").Name); Click("ButtonA"); world.RunTick();
             Assert.Equal(5200, world.Player.Money);
-            var lines = ui.BuildingLines(focus);
+            var lines = ui.buildingSelection.BuildingLines(focus);
             Assert.Equal("Nameless", lines.Name.Value);
             Assert.DoesNotContain(lines.Stats, line => line.Action == "meitou:building-buy");
             Assert.Contains(lines.Stats, line => line.Action == "meitou:building-public");

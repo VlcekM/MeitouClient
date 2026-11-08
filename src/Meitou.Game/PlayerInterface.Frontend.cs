@@ -43,13 +43,13 @@ sealed partial class PlayerInterface
         public bool OkOnly { get; init; }
     }
     /// <summary>A message box with only an Ok button.</summary>
-    void MessageBox(string title, string text)
+    internal void MessageBox(string title, string text)
     {
         confirmation = new(TitleMenu.UpperTr(title), Loc.Tr(text), () => { }, TitleMenu.UpperTr("Ok")) { OkOnly = true }; faithfulScreens.Open("message");
     }
     internal Confirmation? confirmation;
     /// <summary>The game data (<see cref="ConfigureFrontend"/>; null without it).</summary>
-    GameDatabase? gameData;
+    internal GameDatabase? gameData;
     public void ConfigureFrontend(GameDatabase? database, Func<IReadOnlyList<SaveSlot>> enumerate, string creditsText)
     {
         gameData = database;
@@ -66,7 +66,7 @@ sealed partial class PlayerInterface
     public void CloseFrontend()
     {
         foreach (string id in new[] { "title", "menu", "new-game", "save", "load", "import", "message", "editor", "file" }) faithfulScreens.Close(id);
-        editor = null; previews.Clear();
+        characterEditor.editor = null; characterEditor.previews.Clear();
         confirmation = null; UpdateMenuPause();
     }
     internal void Confirm(string title, string text, Action action, string yes = "YES", (string Caption, Action Act)? middle = null, string cancel = "CANCEL")
@@ -105,7 +105,7 @@ sealed partial class PlayerInterface
     void ReadSlotDifficulty()
     {
         if (selectedSlot is not { } slot) return;
-        try { NewGameOptions = NewGameSettings.Read(new SaveGame(SaveFile.Read(File.ReadAllBytes(Path.Combine(slot.Folder, SaveFolder.QuickSaveName)))).Camera); }
+        try { advancedOptions.NewGameOptions = NewGameSettings.Read(new SaveGame(SaveFile.Read(File.ReadAllBytes(Path.Combine(slot.Folder, SaveFolder.QuickSaveName)))).Camera); }
         catch (Exception e) when (e is IOException or FormatException or ArgumentException or Meitou.Data.Fcs.FcsFormatException) { /* an unreadable save keeps the sliders as they are */ }
     }
     /// <summary>Whether a save folder is the one the game in play came from or was last saved to (the host's).</summary>
@@ -147,10 +147,10 @@ sealed partial class PlayerInterface
             switch (e.Widget)
             {
                 case "ResumeButton": faithfulScreens.Close("menu"); break;
-                case "NewGameButton": if (!wasOpen) { advancedOpen = false; faithfulScreens.Open("new-game"); } break;
+                case "NewGameButton": if (!wasOpen) { advancedOptions.advancedOpen = false; faithfulScreens.Open("new-game"); } break;
                 case "SaveGameButton": OpenSlots("save"); break;
                 case "LoadGameButton": if (!(title && wasOpen)) OpenSlots("load"); break;
-                case "ImportGameButton": if (!wasOpen) { advancedOpen = false; OpenSlots("import"); } break;
+                case "ImportGameButton": if (!wasOpen) { advancedOptions.advancedOpen = false; OpenSlots("import"); } break;
                 case "OptionsButton": ScreenAction?.Invoke(e); break;
                 case "CreditsButton": showCredits = true; creditsStart = System.Diagnostics.Stopwatch.GetTimestamp(); break;
                 case "ContinueButton": if (slots.FirstOrDefault() is { } last) ScreenAction?.Invoke(new("load", "LoadButton", "load", last.Folder)); break;
@@ -172,11 +172,11 @@ sealed partial class PlayerInterface
         }
         if (e.Screen == "new-game")
         {
-            if (AdvancedAction(e)) return true;
+            if (advancedOptions.AdvancedAction(e)) return true;
             if (e.Widget == "CancelButton") faithfulScreens.Close(e.Screen);
             else if (e.Widget == "LeftButton" && starts.Count > 0) startIndex = (startIndex + starts.Count - 1) % starts.Count;
             else if (e.Widget == "RightButton" && starts.Count > 0) startIndex = (startIndex + 1) % starts.Count;
-            else if (e.Widget == "AdvancedButton") { advancedOpen = !advancedOpen; advancedHelp = -1; }
+            else if (e.Widget == "AdvancedButton") { advancedOptions.advancedOpen = !advancedOptions.advancedOpen; advancedOptions.advancedHelp = -1; }
             else if (e.Widget == "BeginButton" && starts.Count > 0)
             {
                 void Start() => ScreenAction?.Invoke(new("new-game", "BeginButton", "new-game", starts[startIndex].Id));
@@ -186,15 +186,15 @@ sealed partial class PlayerInterface
         }
         if (e.Screen is "save" or "load" or "import")
         {
-            if (e.Screen == "import" && AdvancedAction(e)) return true;
-            if (e.Widget == "CancelButton") { faithfulScreens.Close(e.Screen); advancedOpen = false; }
+            if (e.Screen == "import" && advancedOptions.AdvancedAction(e)) return true;
+            if (e.Widget == "CancelButton") { faithfulScreens.Close(e.Screen); advancedOptions.advancedOpen = false; }
             else if (Array.IndexOf(TickBoxes, e.Widget) is var tick and >= 0) { if (!(e.Screen == "import" && tick < 4 && OldImportSave)) slotTicks[tick] = !slotTicks[tick]; }
             else if (e.Widget == HideKenshiTick)
             {
                 hideKenshiSaves = !hideKenshiSaves;
                 if (selectedSlot is not null && !VisibleSlots(e.Screen).Contains(selectedSlot)) { selectedSlot = null; ReadSlotDetails(); }
             }
-            else if (e.Widget == "AdvancedButton") { advancedOpen = !advancedOpen; advancedHelp = -1; if (advancedOpen && e.Screen == "import") ReadSlotDifficulty(); }
+            else if (e.Widget == "AdvancedButton") { advancedOptions.advancedOpen = !advancedOptions.advancedOpen; advancedOptions.advancedHelp = -1; if (advancedOptions.advancedOpen && e.Screen == "import") ReadSlotDifficulty(); }
             else if (e.Widget == "ImportButton" && selectedSlot is { } importSlot)
             {
                 void Import() => ScreenAction?.Invoke(new("import", "ImportButton", "import", importSlot.Folder));
@@ -204,7 +204,7 @@ sealed partial class PlayerInterface
             else if (e.Widget == "GamesList" && e.Action == "select")
             {
                 selectedSlot = slots.FirstOrDefault(s => s.Folder == e.Text); ReadSlotDetails();
-                if (e.Screen == "import" && advancedOpen) ReadSlotDifficulty();
+                if (e.Screen == "import" && advancedOptions.advancedOpen) ReadSlotDifficulty();
                 if (e.Screen == "import" && OldImportSave) Array.Fill(slotTicks, false, 0, 4);
                 if (e.Screen == "save" && selectedSlot is { } slot) faithfulScreens.SetText("save", "SaveEditBox", slot.Name);
             }
@@ -229,7 +229,7 @@ sealed partial class PlayerInterface
     void CloseTitleWindows()
     {
         foreach (string id in new[] { "new-game", "load", "import" }) faithfulScreens.Close(id);
-        advancedOpen = false;
+        advancedOptions.advancedOpen = false;
         showCredits = false;
     }
 
@@ -268,8 +268,8 @@ sealed partial class PlayerInterface
             {
                 // From 0.85 of the panel's height, 25 pixels up a second of wall-clock time (FUN_140914230, FUN_140913880); the text goes on out of view.
                 var layout = faithfulScreens.Layout("title");
-                var panel = RealBounds(layout, "CreditsPanel");
-                var view = RealBounds(layout, "CreditsPanelContent");
+                var panel = characterEditor.RealBounds(layout, "CreditsPanel");
+                var view = characterEditor.RealBounds(layout, "CreditsPanelContent");
                 double seconds = System.Diagnostics.Stopwatch.GetElapsedTime(creditsStart).TotalSeconds;
                 float scroll = MathF.Round((float)(panel.Height * 0.85 - seconds * 25), MidpointRounding.AwayFromZero);
                 b.Positions["CreditsPanelContent"] = view with { Y = view.Y + scroll, Height = Math.Max(view.Height, credits.Count(c => c == '\n') * 40 * Height / 1080f + 100) };
@@ -279,7 +279,7 @@ sealed partial class PlayerInterface
         }
         else if (id == "new-game")
         {
-            BindNewGamePanels(b);
+            advancedOptions.BindNewGamePanels(b);
             Enable("CancelButton", "AdvancedButton");
             b.Text["lbChooseBeginning"] = UpperCaption("Choose your beginning");
             b.Text["AdvancedButton"] = UpperCaption("Advanced options");

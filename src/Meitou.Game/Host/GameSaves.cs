@@ -199,7 +199,7 @@ sealed class GameSaves(GameHost host)
             difficulty.Write(game.Camera);
             WriteWeather(game, (int)clock.Day, clock.HourOfDay);
             host.bloodDecals.WriteDecals(game);
-            host.player.WriteBiome(game.Camera);
+            host.player.biomeBanner.WriteBiome(game.Camera);
             host.modding.CaptureModData(world, game);
             host.levelEditorHost.WriteLevelEdits(game);
         }
@@ -283,7 +283,7 @@ sealed class GameSaves(GameHost host)
         if (Busy()) { host.player.Notice("Save or load still in progress", true); return; }
         if (!File.Exists(Path.Combine(folder, SaveFolder.QuickSaveName))) { host.player.Notice("Failed to import game: the save is no longer available", true); return; }
         readingFolder = folder;
-        var settings = host.player.NewGameOptions;
+        var settings = host.player.advancedOptions.NewGameOptions;
         var data = host.popData!;
         Task<SaveGame>? read = null;
         PreparedSystems? prepared = null;
@@ -366,7 +366,7 @@ sealed class GameSaves(GameHost host)
         }
         host.popData = nextData;
         difficulty = nextDifficulty;
-        host.player.NewGameOptions = nextDifficulty;   // the New game window then shows the loaded save's options (the original loads them into its globals)
+        host.player.advancedOptions.NewGameOptions = nextDifficulty;   // the New game window then shows the loaded save's options (the original loads them into its globals)
         host.population = built.Population;
         if (host.nav is not null) host.population!.ZoneGate = zone => host.nav.Walkability.World.Contains(zone);
         SnapshotPlayerTowns();
@@ -392,7 +392,7 @@ sealed class GameSaves(GameHost host)
         // before the first tick (like a new game's start).
         Task navmesh = Task.CompletedTask;
         var saved = read.Result.Camera;
-        host.player.ReadBiome(saved);
+        host.player.biomeBanner.ReadBiome(saved);
         if (saved.HasView)
         {
             var (yaw, pitch, distance) = KenshiCamera.FromSaved(saved.Rotation, saved.Zoom);

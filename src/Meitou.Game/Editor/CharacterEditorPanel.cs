@@ -5,21 +5,20 @@ using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Ui;
-using Meitou.Game.Editor;
+using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Editing;
-using Meitou.Game.Ui;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Editor;
 
 /// <summary>
 /// The character editor (<c>CharacterEditWindow</c>, layout <c>Kenshi_CharacterEditor</c>; docs/characters.md "Character editor"): the start's characters after a new
 /// game, or one character at a plastic surgeon. The window edits <see cref="CharacterDraft"/>s, shows them on the characters in the world (<see cref="EditorPreview"/>),
 /// and on CONFIRM sends each one as an <see cref="EditCharacter"/> command; nothing in the world changes before that.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class CharacterEditorPanel(PlayerInterface player)
 {
-    sealed class EditorSession(EditKind kind, IReadOnlyList<CharacterId> characters, IReadOnlySet<CharacterId> animals, CharacterId surgeon, bool paid = false)
+    internal sealed class EditorSession(EditKind kind, IReadOnlyList<CharacterId> characters, IReadOnlySet<CharacterId> animals, CharacterId surgeon, bool paid = false)
     {
         /// <summary>A surgeon's dialogue took the money already (<see cref="EditCharacter.Paid"/>).</summary>
         public bool Paid { get; } = paid;
@@ -45,14 +44,14 @@ sealed partial class PlayerInterface
         public (Meitou.Game.Host.Input.MouseButton Button, Vector2 Last)? Drag;
     }
 
-    EditorSession? editor;
+    internal EditorSession? editor;
     /// <summary>The game data and the install root the editor reads races and editor limits from (the host sets them).</summary>
     public (GameDatabase Db, string InstallRoot)? EditorData { get; set; }
     /// <summary>Builds a preview look from a record id and a loadout (the world's appearance source; the host sets it).</summary>
     public Func<string, Loadout, CharacterAppearance?>? PreviewSource { get; set; }
     /// <summary>What the editor shows of a character: the draft version and clothes it was made for, the look on screen, the one being prepared, and the look the shown one replaced since when (the glide).</summary>
-    sealed record Preview(int Version, bool Clothes, CharacterAppearance? Shown, CharacterAppearance? Pending, CharacterAppearance? From = null, double Started = 0);
-    readonly Dictionary<CharacterId, Preview> previews = [];
+    internal sealed record Preview(int Version, bool Clothes, CharacterAppearance? Shown, CharacterAppearance? Pending, CharacterAppearance? From = null, double Started = 0);
+    internal readonly Dictionary<CharacterId, Preview> previews = [];
     /// <summary>How long the character glides from one look to the next: about the time between two looks while a slider is dragged, so the movement is continuous.</summary>
     const double BlendSeconds = 0.12;
     /// <summary>Has the renderer prepare the look being prepared at once, ahead of its ordinary queue (the host sets it).</summary>
@@ -69,7 +68,7 @@ sealed partial class PlayerInterface
     readonly Stopwatch previewClock = Stopwatch.StartNew();
     double lastPreviewBuild = double.NegativeInfinity;
 
-    public bool EditorOpen => editor is not null && faithfulScreens.IsOpen("editor");
+    public bool EditorOpen => editor is not null && player.faithfulScreens.IsOpen("editor");
     /// <summary>The character the editor shows and its tab, for the host's camera; null while the editor is closed.</summary>
     public (CharacterId Character, EditorTab Tab)? EditorFocus => EditorOpen ? (editor!.Current, editor.Tab) : null;
     /// <summary>Every character the open editor edits, the shown one included; empty while it is closed.</summary>
@@ -91,7 +90,7 @@ sealed partial class PlayerInterface
         var animals = new HashSet<CharacterId>();
         foreach (var id in characters)
         {
-            if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.Appearance is not { } look) continue;
+            if (player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.Appearance is not { } look) continue;
             if (look.Animal is not null) animals.Add(id);
             else if (RecordOf(look) is null) continue;
             listed.Add(id);
@@ -99,9 +98,9 @@ sealed partial class PlayerInterface
         if (listed.Count == 0) return false;
         editor = new EditorSession(kind, listed, animals, surgeon, paid);
         previews.Clear();
-        faithfulScreens.Open("editor");
+        player.faithfulScreens.Open("editor");
         ShowEditorCharacter();
-        UpdateMenuPause();
+        player.UpdateMenuPause();
         return true;
     }
 
@@ -111,7 +110,7 @@ sealed partial class PlayerInterface
     {
         if (editor is null || EditorData is not { } data || editor.Animals.Contains(id)) return null;
         if (editor.Drafts.TryGetValue(id, out var draft)) return draft;
-        if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { Appearance: { } look } snapshot || RecordOf(look) is not { } record) return null;
+        if (player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { Appearance: { } look } snapshot || RecordOf(look) is not { } record) return null;
         draft = new CharacterDraft(data.Db, data.InstallRoot, record, snapshot.Name);
         editor.Drafts[id] = draft;
         editor.StartNames[id] = snapshot.Name;
@@ -124,25 +123,25 @@ sealed partial class PlayerInterface
         editor.Shown.Add(editor.Current);
         if (editor.Animals.Contains(editor.Current))
         {
-            faithfulScreens.SetText("editor", "NameText", AnimalName(editor, editor.Current));
-            Select([editor.Current], false);
+            player.faithfulScreens.SetText("editor", "NameText", AnimalName(editor, editor.Current));
+            player.Select([editor.Current], false);
             return;
         }
         if (Draft(editor.Current) is not { } draft) return;
         // At creation a character of a race the editor doesn't offer (a start's `force race`) takes the first offered race (FUN_1405efd60).
         if (editor.Kind == EditKind.Creation && EditorData is { } data && EditorRaces(data.Db) is [{ } first, ..] groups && IndexOf(groups, draft.Race) < 0)
             draft.SetRace(first.Races[0], editor.Seed++);
-        faithfulScreens.SetText("editor", "NameText", draft.Name);
-        Select([editor.Current], false);
+        player.faithfulScreens.SetText("editor", "NameText", draft.Name);
+        player.Select([editor.Current], false);
     }
 
     void CloseEditor()
     {
-        faithfulScreens.Close("file");
-        faithfulScreens.Close("editor");
+        player.faithfulScreens.Close("file");
+        player.faithfulScreens.Close("editor");
         editor = null;
         previews.Clear();
-        UpdateMenuPause();
+        player.UpdateMenuPause();
     }
 
     /// <summary>
@@ -235,19 +234,19 @@ sealed partial class PlayerInterface
 
     /// <summary>The ImageBox texture name of the renderer's stage picture (<see cref="Meitou.Game.Rendering.Characters.CharacterRenderer.StageTexture"/>).</summary>
     public const string StageTexture = "meitou:stage";
-    Func<string, string?>? findAsset;
+    internal Func<string, string?>? findAsset;
     string? groundFile;
 
     /// <summary>
     /// The editor's scene behind its panels (the original's compositor <c>Kenshi_Character_Editor</c>): <c>SandyGround.dds</c> over the whole window, stretched as the original's full-screen
     /// quad is, and the character's picture on it. First in the screen's controls, so the panels draw over both.
     /// </summary>
-    List<UiControl> EditorBackdrop()
+    internal List<UiControl> EditorBackdrop()
     {
         var backdrop = new List<UiControl>();
-        if (uiPainter is not { } painter || EditorInWorld) return backdrop;
+        if (player.uiPainter is not { } painter || EditorInWorld) return backdrop;
         groundFile ??= findAsset?.Invoke("SandyGround.dds") ?? "";
-        var all = new UiRect(0, 0, Width, Height);
+        var all = new UiRect(0, 0, player.Width, player.Height);
         // A sand colour first, so the window is covered before the ground texture is decoded.
         backdrop.Add(new("editor-base", "Widget", all, "", "", "", true, new Dictionary<string, string>(), new Vector4(0.42f, 0.40f, 0.34f, 1), Pickable: false));
         if (groundFile.Length > 0 && painter.IconReady(groundFile))
@@ -278,17 +277,17 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Whether <paramref name="p"/> is on the editor's scene rather than on one of its panels or a window above it (the editor's screen is modal: what no widget of it covers counts as the scene).</summary>
-    bool OverEditorScene(Vector2 p) => faithfulScreens.OpenScreens[^1] == "editor" && faithfulScreens.HitTest(p) is { Control.Name: "modal" };
+    bool OverEditorScene(Vector2 p) => player.faithfulScreens.OpenScreens[^1] == "editor" && player.faithfulScreens.HitTest(p) is { Control.Name: "modal" };
 
     /// <summary>A mouse button pressed away from the editor's panels starts turning the camera; false when the press belongs to a panel.</summary>
-    bool EditorPointerDown(Meitou.Game.Host.Input.MouseButton button, Vector2 p)
+    internal bool EditorPointerDown(Meitou.Game.Host.Input.MouseButton button, Vector2 p)
     {
-        if (!EditorOpen || !UiVisible || editor is not { } s || !OverEditorScene(p)) return false;
+        if (!EditorOpen || !player.UiVisible || editor is not { } s || !OverEditorScene(p)) return false;
         s.Drag = (button, p);
         return true;
     }
 
-    bool EditorPointerMove(Vector2 p)
+    internal bool EditorPointerMove(Vector2 p)
     {
         if (editor?.Drag is not { } drag) return false;
         editor.Orbit.Drag(p.X - drag.Last.X, p.Y - drag.Last.Y);
@@ -296,20 +295,20 @@ sealed partial class PlayerInterface
         return true;
     }
 
-    void EditorPointerUp(Meitou.Game.Host.Input.MouseButton button)
+    internal void EditorPointerUp(Meitou.Game.Host.Input.MouseButton button)
     {
         if (editor?.Drag is { } drag && drag.Button == button) editor.Drag = null;
     }
 
     /// <summary>The wheel away from the panels zooms the camera.</summary>
-    bool EditorWheel(Vector2 p, float steps)
+    internal bool EditorWheel(Vector2 p, float steps)
     {
         if (!EditorOpen || editor is not { } s || !OverEditorScene(p)) return false;
         s.Orbit.Zoom(steps);
         return true;
     }
 
-    void EditorAction(MyGuiEvent e)
+    internal void EditorAction(MyGuiEvent e)
     {
         if (editor is { } open && open.Animals.Contains(open.Current))
         {
@@ -354,7 +353,7 @@ sealed partial class PlayerInterface
                 return;
             case "ImportButton":
                 ShowImportFolder("./" + ExportFolder.TrimEnd('/'), data.InstallRoot);
-                faithfulScreens.Open("file");
+                player.faithfulScreens.Open("file");
                 return;
         }
         // A row's bar moved (its arrows, track or thumb) or a picker's arrow was pressed; the row's widget names the control.
@@ -396,7 +395,7 @@ sealed partial class PlayerInterface
     string AnimalName(EditorSession s, CharacterId id)
     {
         if (s.AnimalNames.TryGetValue(id, out var typed)) return typed;
-        string name = session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.Name ?? "";
+        string name = player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.Name ?? "";
         s.StartNames.TryAdd(id, name);
         return name;
     }
@@ -410,7 +409,7 @@ sealed partial class PlayerInterface
 
     /// <summary>The races this session offers: at creation the playable ones, limited to the start's <c>force race</c>; a surgeon offers none (race stays).</summary>
     IReadOnlyList<EditorRaceGroup> EditorRaces(GameDatabase db) =>
-        editor?.Kind == EditKind.Creation ? CharacterDraft.PlayableRaces(db, [.. session.World.Player.CreationRaces]) : [];
+        editor?.Kind == EditKind.Creation ? CharacterDraft.PlayableRaces(db, [.. player.session.World.Player.CreationRaces]) : [];
 
     /// <summary>
     /// CONFIRM. Like the original (<c>FUN_1405e9f40</c>), a squad with characters never shown asks first ("There are other characters whose appearance haven't
@@ -421,20 +420,20 @@ sealed partial class PlayerInterface
         if (editor is not { } s) return;
         if (!asked && s.Shown.Count < s.Characters.Count)
         {
-            Confirm("CONFIRM", "There are other characters whose appearance haven't been changed. Are you sure you want to continue?", () => ConfirmEditor(true));
+            player.Confirm("CONFIRM", "There are other characters whose appearance haven't been changed. Are you sure you want to continue?", () => ConfirmEditor(true));
             return;
         }
-        long tick = session.World.Tick;
+        long tick = player.session.World.Tick;
         foreach (var (id, draft) in s.Drafts)
             if (s.Kind == EditKind.Surgery || draft.Version > 0 || draft.Name != s.StartNames[id])
-                Say(new EditCharacter(id, CharacterDraft.Copy(draft.Record), draft.Name, s.Kind) { Tick = tick, Surgeon = s.Surgeon, Paid = s.Paid });
+                player.Say(new EditCharacter(id, CharacterDraft.Copy(draft.Record), draft.Name, s.Kind) { Tick = tick, Surgeon = s.Surgeon, Paid = s.Paid });
         // An animal's page changes its name only (FUN_1405e9410 renames whichever character is shown).
         foreach (var (id, name) in s.AnimalNames)
             if (name != s.StartNames.GetValueOrDefault(id))
-                Say(new EditCharacter(id, null, name, s.Kind) { Tick = tick, Surgeon = s.Surgeon, Paid = s.Paid });
-        if (s.Kind == EditKind.Creation) Say(new FinishCreation { Tick = tick });
+                player.Say(new EditCharacter(id, null, name, s.Kind) { Tick = tick, Surgeon = s.Surgeon, Paid = s.Paid });
+        if (s.Kind == EditKind.Creation) player.Say(new FinishCreation { Tick = tick });
         CloseEditor();
-        session.Simulation.SetSpeed(1);   // CONFIRM unpauses and sets the speed to Normal for every kind of editor (FUN_1405e9f40)
+        player.session.Simulation.SetSpeed(1);   // CONFIRM unpauses and sets the speed to Normal for every kind of editor (FUN_1405e9f40)
     }
 
     /// <summary>For the screenshot showcase: the open editor's character gets a new random look and name, and CONFIRM is pressed (the creation path end to end).</summary>
@@ -458,15 +457,15 @@ sealed partial class PlayerInterface
     void ExportLook(CharacterDraft draft, string installRoot)
     {
         string name = draft.Name.Trim();
-        if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) { Notice($"Can't export: '{name}' is not a valid file name.", true); return; }
+        if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) { player.Notice($"Can't export: '{name}' is not a valid file name.", true); return; }
         string relative = ExportFolder + name + BodyExtension;
         try
         {
             Directory.CreateDirectory(Path.Combine(installRoot, ExportFolder));
             Meitou.Data.Fcs.FcsWriter.WriteFile(draft.Export(), Path.Combine(installRoot, relative));
-            Notice(Loc.Tr("Character '{1}' exported to file {2}", name, "./" + relative));
+            player.Notice(Loc.Tr("Character '{1}' exported to file {2}", name, "./" + relative));
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Notice($"Can't export '{name}': {e.Message}", true); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { player.Notice($"Can't export '{name}': {e.Message}", true); }
     }
 
     /// <summary>
@@ -501,20 +500,20 @@ sealed partial class PlayerInterface
         Meitou.Data.Fcs.FcsRecord appearance;
         try { appearance = AppearanceFile.Read(Path.Combine(data.InstallRoot, path)).Record; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or Meitou.Data.Fcs.FcsFormatException or InvalidDataException)
-        { Notice(Loc.Tr("Error loading appearance file '{1}'. The file is in an old format or invalid.", file), true); return; }
+        { player.Notice(Loc.Tr("Error loading appearance file '{1}'. The file is in an old format or invalid.", file), true); return; }
         bool female = appearance.Bools.TryGetValue("sex female", out var f) && f;
         bool allowed = CharacterDraft.RaceOf(data.Db, appearance) is { } race && (s.Kind == EditKind.Creation
             ? IndexOf(EditorRaces(data.Db), race) >= 0
             : race.StringId == draft.Race.StringId && (female == draft.Female || race.GetBool("single gender")));
-        if (!allowed || !draft.Import(appearance)) { Notice($"Can't import '{file}': this character can't take that race or sex.", true); return; }
-        faithfulScreens.Close("file");
+        if (!allowed || !draft.Import(appearance)) { player.Notice($"Can't import '{file}': this character can't take that race or sex.", true); return; }
+        player.faithfulScreens.Close("file");
     }
 
     /// <summary>The import dialog's buttons and list: a folder line opens on a double click or IMPORT, a file line imports; the up arrow cuts the folder at its last separator.</summary>
-    void FileDialogAction(MyGuiEvent e)
+    internal void FileDialogAction(MyGuiEvent e)
     {
         if (EditorData is not { } data) return;
-        if (e.Widget == "ButtonCancel") faithfulScreens.Close("file");
+        if (e.Widget == "ButtonCancel") player.faithfulScreens.Close("file");
         else if (e.Widget == "ButtonUp" && importFolder.LastIndexOfAny(['/', '\\']) is var cut and > 0) ShowImportFolder(importFolder[..cut], data.InstallRoot);
         else if (e.Widget == "ListFiles" && e.Action == "select") importChoice = e.Text;
         else if (e.Widget == "ListFiles" && e.Action == "accept" || e.Widget == "ButtonOpenSave")
@@ -529,9 +528,9 @@ sealed partial class PlayerInterface
     /// The import dialog (<c>Kenshi_OpenSaveFileDialog</c>, titled "Import character", <c>FUN_1405f4dd0</c>, <c>FUN_1401a0b10</c>): the folder in the combo box, the up arrow, the list,
     /// IMPORT and CANCEL; no file name box (it opens files).
     /// </summary>
-    void BindFileDialog(UiBindings b)
+    internal void BindFileDialog(UiBindings b)
     {
-        b.TemplateScale = Height / 1080f;
+        b.TemplateScale = player.Height / 1080f;
         b.Text["Root"] = "Import character";
         b.Text["ButtonOpenSave"] = Loc.Tr("Import").ToUpperInvariant();
         b.Text["ButtonCancel"] = Loc.Tr("Cancel").ToUpperInvariant();
@@ -545,7 +544,7 @@ sealed partial class PlayerInterface
         b.Properties["ButtonOpenSave"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
     }
 
-    void BindEditor(UiBindings b)
+    internal void BindEditor(UiBindings b)
     {
         if (editor is { } open && open.Animals.Contains(open.Current))
         {
@@ -586,7 +585,7 @@ sealed partial class PlayerInterface
         b.Text["GenderText"] = draft.Race.GetBool("single gender") ? "-" : draft.Female ? "Female" : "Male";
         b.Text["CharIndexText"] = $"{s.Index + 1}/{s.Characters.Count}";
         b.Text["DescriptionPanelText"] = draft.Race.GetString("description");
-        b.Properties["DescriptionPanelText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true", ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(uiResources, "Kenshi_WordWrap") };
+        b.Properties["DescriptionPanelText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true", ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(player.uiResources, "Kenshi_WordWrap") };
         b.Properties["NameText"] = new Dictionary<string, string> { ["DefaultAction"] = "false" };
         b.Properties["ConfirmButton"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
         BindEditorRows(b, draft, s.Tab);
@@ -598,7 +597,7 @@ sealed partial class PlayerInterface
     /// </summary>
     void BindAnimalEditor(UiBindings b, EditorSession s)
     {
-        if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current)?.Appearance is not { } look) return;
+        if (player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current)?.Appearance is not { } look) return;
         foreach (string name in new[] { "ClothesButton", "ConfirmButton" })
         {
             b.Disabled.Remove(name);
@@ -623,7 +622,7 @@ sealed partial class PlayerInterface
         b.Text["GenderText"] = "-";
         b.Text["CharIndexText"] = $"{s.Index + 1}/{s.Characters.Count}";
         b.Text["DescriptionPanelText"] = look.Race.GetString("description");
-        string ink = MyGuiColours.TemplateInk(uiResources, "Kenshi_WordWrap");
+        string ink = MyGuiColours.TemplateInk(player.uiResources, "Kenshi_WordWrap");
         b.Properties["DescriptionPanelText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true", ["TextAlign"] = "Left Top", ["TextColour"] = ink };
         b.Properties["NameText"] = new Dictionary<string, string> { ["DefaultAction"] = "false" };
         b.Properties["ConfirmButton"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
@@ -645,9 +644,9 @@ sealed partial class PlayerInterface
     ];
 
     /// <summary>The editor's layout as read; the shown tab's rows are added to a copy of it (<see cref="EnsureEditorRows"/>).</summary>
-    MyGuiLayout? editorLayout;
+    internal MyGuiLayout? editorLayout;
     /// <summary>The kinds of the rows the editor's layout has now, so it is composed again only when they change (another tab, race or gender).</summary>
-    string editorRowsShape = "";
+    internal string editorRowsShape = "";
     /// <summary>The shown tab's rows: the widget whose events and texts are the row's (the template's owner) and the control it edits.</summary>
     readonly List<(string Owner, int Control)> editorRows = [];
     /// <summary>The row widgets in the scroll view, top to bottom, with their template's height (layout pixels).</summary>
@@ -674,7 +673,7 @@ sealed partial class PlayerInterface
         {
             string name = "EditorRow" + i.ToString(CultureInfo.InvariantCulture);
             string template = controls[i].Kind == EditorControlKind.HairHue ? "Kenshi_MultiSlider" : controls[i].IsPicker ? "Kenshi_ListSlider" : "Kenshi_Slider";
-            float height = uiResources.Templates.TryGetValue(template, out var resource) ? MyGuiReader.ReadResourceLayout(resource).Roots[0].Position.Height : 55;
+            float height = player.uiResources.Templates.TryGetValue(template, out var resource) ? MyGuiReader.ReadResourceLayout(resource).Roots[0].Position.Height : 55;
             rows.Add(new("Widget", name, template, "", "Left Top", new(0, 0, 455, height), false, new Dictionary<string, string>(), new Dictionary<string, string>(), []));
             editorRowWidgets.Add((name, height));
             if (template == "Kenshi_MultiSlider")
@@ -688,10 +687,10 @@ sealed partial class PlayerInterface
             new Dictionary<string, string> { ["VisibleHScroll"] = "false", ["VisibleVScroll"] = "true", ["CanvasAlign"] = "Left Top" }, new Dictionary<string, string>(), rows);
         static MyGuiWidget Fill(MyGuiWidget w, MyGuiWidget view) =>
             w.Name == "TabsPanelContent" ? w with { Children = [view] } : w with { Children = [.. w.Children.Select(c => Fill(c, view))] };
-        faithfulScreens.Replace("editor", editorLayout with { Roots = [.. editorLayout.Roots.Select(r => Fill(r, view))] });
-        faithfulScreens.SetScroll("editor", EditorRowsView, 0);
+        player.faithfulScreens.Replace("editor", editorLayout with { Roots = [.. editorLayout.Roots.Select(r => Fill(r, view))] });
+        player.faithfulScreens.SetScroll("editor", EditorRowsView, 0);
         // A hair colour slider's own template widget (Slider1..3 of the multi-slider) owns its bar and texts.
-        var widgets = faithfulScreens.Layout("editor").Widgets.ToList();
+        var widgets = player.faithfulScreens.Layout("editor").Widgets.ToList();
         foreach (var (row, part, control) in parts)
             editorRows.Add((part is null ? row : widgets.FirstOrDefault(w => w.Properties.GetValueOrDefault("TemplateOwner") == row && w.Properties.GetValueOrDefault("TemplatePart") == part)?.Name ?? row, control));
     }
@@ -704,9 +703,9 @@ sealed partial class PlayerInterface
     void BindEditorRows(UiBindings b, CharacterDraft draft, EditorTab tab)
     {
         EnsureEditorRows(draft, tab);
-        float scale = Height / 1080f;
+        float scale = player.Height / 1080f;
         b.TemplateScale = scale;
-        var layout = faithfulScreens.Layout("editor");
+        var layout = player.faithfulScreens.Layout("editor");
         var controls = draft.Controls(tab);
         foreach (var (owner, index) in editorRows)
         {
@@ -728,7 +727,7 @@ sealed partial class PlayerInterface
             if (layout.Widgets.FirstOrDefault(w => w.Type == "ScrollBar" && w.Properties.GetValueOrDefault("TemplateOwner") == owner && w.Properties.GetValueOrDefault("TemplatePart") == "Slider") is { } bar)
             {
                 b.Properties[bar.Name] = new Dictionary<string, string> { ["Range"] = (c.Max - c.Min + 1).ToString(CultureInfo.InvariantCulture) };
-                faithfulScreens.SetScroll("editor", bar.Name, value - c.Min);
+                player.faithfulScreens.SetScroll("editor", bar.Name, value - c.Min);
             }
             if (c.Kind == EditorControlKind.HairHue && editorRowWidgets.FirstOrDefault(r => owner.StartsWith(r.Name + "@", StringComparison.Ordinal)).Name is { } multi)
                 b.Text[multi + ".Name"] = "Hair colour";
@@ -749,7 +748,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>A widget's bounds on the screen from its layout's relative positions (the editor's panels are all <c>position_real</c>).</summary>
-    UiRect RealBounds(MyGuiLayout layout, string name)
+    internal UiRect RealBounds(MyGuiLayout layout, string name)
     {
         UiRect? Walk(MyGuiWidget w, UiRect parent)
         {
@@ -758,15 +757,15 @@ sealed partial class PlayerInterface
             foreach (var child in w.Children) if (Walk(child, bounds) is { } found) return found;
             return null;
         }
-        foreach (var root in layout.Roots) if (Walk(root, new(0, 0, Width, Height)) is { } found) return found;
+        foreach (var root in layout.Roots) if (Walk(root, new(0, 0, player.Width, player.Height)) is { } found) return found;
         return default;
     }
 
-    void AddEditorContent(List<UiControl> controls)
+    internal void AddEditorContent(List<UiControl> controls)
     {
         if (editor is not { } s) return;
         // An animal's page shows its race's stats too (FUN_1405ee0c0 fills them for any character).
-        var race = s.Animals.Contains(s.Current) ? session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current)?.Appearance?.Race : Draft(s.Current)?.Race;
+        var race = s.Animals.Contains(s.Current) ? player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current)?.Appearance?.Race : Draft(s.Current)?.Race;
         if (race is not null && controls.FirstOrDefault(c => c.Name == "StatsPanelText") is { } stats) AddRaceStats(controls, race, stats);
     }
 
@@ -786,16 +785,16 @@ sealed partial class PlayerInterface
         // The first line is the character's hit points: its first body part's maximum (FUN_1405ee0c0 reads the medical state's first part, Observed), as an integer. While the
         // draft shows another race than the character has, that race's new medical state's (the character takes it on CONFIRM).
         float? hitPoints = null;
-        if (editor is { } s && session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current) is { } shown)
+        if (editor is { } s && player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current) is { } shown)
             hitPoints = shown.Appearance?.Race.StringId == race.StringId && shown.HealthParts is [var first, ..] ? first.Maximum : RaceHitPoints(race);
         if (hitPoints is { } hp) lines.Add((Loc.Tr("Hit Points:"), ((int)(hp + 0.01f)).ToString(CultureInfo.InvariantCulture), null));
         lines.AddRange(RaceStatLines(race).Select(l => (l.Label, l.Value, (bool?)l.Good)));
-        float scale = Height / 1080f, row = 19.2f * scale;
+        float scale = player.Height / 1080f, row = 19.2f * scale;
         // A new race's list starts at its top (the original fills the panel anew).
-        if (editorStatsRace != race.StringId) { inventoryScroll.Remove(EditorStatsScroll); editorStatsRace = race.StringId; }
+        if (editorStatsRace != race.StringId) { player.inventoryScroll.Remove(EditorStatsScroll); editorStatsRace = race.StringId; }
         float maximum = Math.Max(0, lines.Count * row - area.Height);
         if (maximum < 0.01f) maximum = 0;
-        float scroll = Math.Clamp(inventoryScroll.GetValueOrDefault(EditorStatsScroll), 0, maximum);
+        float scroll = Math.Clamp(player.inventoryScroll.GetValueOrDefault(EditorStatsScroll), 0, maximum);
         // The panel's ScrollView (Kenshi_ScrollViewEmpty: its bars 20 pixels): the lines are laid out on a canvas the bar's width narrower than the panel; with the bar
         // (overflow) the canvas fills the client, without it the canvas sits 13 pixels in from the panel's left and top (Observed at 1440 lines, a Hive Prince's and a
         // skeleton's stats against the base game's: the same 355-pixel rows, 13 pixels right and down without the bar; the text 6 pixels above the panel's top).
@@ -807,23 +806,23 @@ sealed partial class PlayerInterface
             var (label, value, good) = lines[i];
             var bounds = new UiRect(area.X + inset + width * 0.03f, area.Y + inset - Lift + i * row - scroll, width * 0.93f, row);
             controls.Add(new($"editor-stat-{i}", "TextBox", bounds, label, "", "Kenshi_TextboxStandardText", true,
-                new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextColour"] = MainColour, ["TextAlign"] = "Left Top" },
+                new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextColour"] = PlayerInterface.MainColour, ["TextAlign"] = "Left Top" },
                 Vector4.Zero, Pickable: false, Clip: clip));
             controls.Add(new($"editor-stat-value-{i}", "TextBox", bounds, value, "", "Kenshi_TextboxStandardText", true,
                 new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "Right Top",
-                    ["TextColour"] = good is null ? MainColour : good.Value ? GoodColour : BadBrightColour }, Vector4.Zero, Pickable: false, Clip: clip));
+                    ["TextColour"] = good is null ? PlayerInterface.MainColour : good.Value ? PlayerInterface.GoodColour : PlayerInterface.BadBrightColour }, Vector4.Zero, Pickable: false, Clip: clip));
         }
-        if (maximum <= 0) { inventoryViews.Remove(EditorStatsScroll); inventoryTracks.Remove(EditorStatsScroll); return; }
-        inventoryScroll[EditorStatsScroll] = scroll;
-        inventoryViews[EditorStatsScroll] = (area, maximum);
-        AddScrollBar(EditorStatsScroll, controls, new(area.X + width, area.Y, bar, area.Height), area.Height, lines.Count * row, scroll, maximum, host.Clip);
+        if (maximum <= 0) { player.inventoryViews.Remove(EditorStatsScroll); player.inventoryTracks.Remove(EditorStatsScroll); return; }
+        player.inventoryScroll[EditorStatsScroll] = scroll;
+        player.inventoryViews[EditorStatsScroll] = (area, maximum);
+        player.AddScrollBar(EditorStatsScroll, controls, new(area.X + width, area.Y, bar, area.Height), area.Height, lines.Count * row, scroll, maximum, host.Clip);
     }
 
     /// <summary>
     /// A stat's name as the editor's race stats give it (<c>FUN_140888440</c>): its own table, not the stats window's (Medic is "First Aid", Labouring, Weapon Smithing);
     /// the vet and hive medic are "Vet", mass combat, survival and polearms have no name.
     /// </summary>
-    static string EditorStatName(StatsEnumerated stat) => Loc.Tr(stat switch
+    internal static string EditorStatName(StatsEnumerated stat) => Loc.Tr(stat switch
     {
         StatsEnumerated.Strength => "Strength", StatsEnumerated.MeleeAttack => "Attack", StatsEnumerated.Labouring => "Labouring", StatsEnumerated.Science => "Science",
         StatsEnumerated.Engineering => "Engineering", StatsEnumerated.Robotics => "Robotics", StatsEnumerated.SmithingWeapon => "Weapon Smithing",

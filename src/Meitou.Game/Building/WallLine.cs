@@ -26,7 +26,7 @@ public sealed class WallLink(Vector3 start, Vector3 end, Vector3 startDirection,
 
 /// <summary>
 /// Kenshi's wall lines (docs/game/buildings-production.md "Walls", <c>PreviewBuilding_Wall</c>): the link points of walls, the snap search, the bend pieces at a snapped joint and the
-/// straight run that splits a line into the wall's pieces over the terrain. Pure over its inputs; the build mode in <c>PlayerInterface.Build.cs</c> drives it.
+/// straight run that splits a line into the wall's pieces over the terrain. Pure over its inputs; the build mode in <c>BuildMode</c> drives it.
 /// </summary>
 public static class WallLine
 {

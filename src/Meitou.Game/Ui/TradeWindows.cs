@@ -14,7 +14,7 @@ namespace Meitou.Game.Ui;
 /// <item>The trader's stock is the original's trader inventory window (<c>Kenshi_InventoryTraderWindow</c>, loaded by <c>FUN_140155ee0</c>) beside the character's inventory window, both at the
 /// top left of the screen (<c>FUN_1406e4960</c>). The window is the layout's grown by what the stock grid needs beyond the layout's grid, as a square (<c>FUN_140150570</c>); the grid scrolls
 /// in the layout's scroll view.</item>
-/// <item>Items are held with the mouse between the grids (PlayerInterface.Inventory.cs): stock placed in the customer's windows is bought there, the customer's items placed on the stock are
+/// <item>Items are held with the mouse between the grids (InventoryWindows): stock placed in the customer's windows is bought there, the customer's items placed on the stock are
 /// sold. Closing the trader window ends the trade. Prices are in the item tooltips (Value, Sell value); a stolen item held over the stock shows the fencing prompt.</item>
 /// </list>
 /// </summary>
@@ -184,16 +184,16 @@ sealed class TradeWindows(PlayerInterface player)
                 "", "", "", true, new Dictionary<string, string>(), new Vector4(0, 0, 0, 0.65f), Pickable: false, Clip: slot.Clip));
         foreach (var item in trade.Stock)
         {
-            if (player.Lifted(ItemOwner.Stock, item.Index)) continue;
+            if (player.inventoryWindows.Lifted(ItemOwner.Stock, item.Index)) continue;
             player.AddItemCell(controls, $"trade-item-{item.Index}",
                 new(area.X + item.X * area.Width / columns, area.Y + item.Y * area.Height / rows, item.Width * area.Width / columns, item.Height * area.Height / rows),
-                item.Record, item.Material, item.Name, item.Quantity, PlayerInterface.ItemTip.Of(item), "TradeItem", item.Index, slot.Clip, charge: item.Charge, colour: item.Colour);
+                item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "TradeItem", item.Index, slot.Clip, charge: item.Charge, colour: item.Colour);
         }
     }
 
     /// <summary>
     /// While trading, the trade item behind an inventory item of a seller's (<see cref="TradeView.GoodsOf"/>): its tooltip gains the prices (Value, Sell value; <c>FUN_14079e7a0</c>,
-    /// <b>Observed</b> by decompile, see <see cref="PlayerInterface.ItemLines"/>). Null: no trade, or a character who cannot take the trade.
+    /// <b>Observed</b> by decompile, see <see cref="TooltipRuntime.ItemLines"/>). Null: no trade, or a character who cannot take the trade.
     /// </summary>
     internal TradeItemView? SellTip(CharacterId owner, int index) =>
         player.session.CurrentSnapshot.Trade is { } trade && trade.GoodsOf.TryGetValue(owner, out var goods) ? goods.FirstOrDefault(g => g.Index == index) : null;
@@ -205,7 +205,7 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void AddFencePrompt(List<UiControl> controls)
     {
-        if (player.held is not { } item || player.session.CurrentSnapshot.Trade is not { } trade || item.From.Holder != ItemHolder.Character
+        if (player.inventoryWindows.held is not { } item || player.session.CurrentSnapshot.Trade is not { } trade || item.From.Holder != ItemHolder.Character
             || player.faithfulScreens.HitTest(player.mouse) is not { Screen: "trader" } || trade.Held is not { } goods) return;
         (string Label, string Value, string Colour)? prompt = goods.Illegal ? (trade.BuysIllegal ? ("Illegal goods?", "No problem!", PlayerInterface.GoodColour) : ("ILLEGAL GOODS!", "NO!", PlayerInterface.BadColour))
             : !goods.Stolen ? null
@@ -360,7 +360,7 @@ sealed class TradeWindows(PlayerInterface player)
                 if (c.Name == "Portrait" && cells.TryGetValue(row.Character, out int cell))
                 {
                     controls.Add(new(prefix + "portrait", "ImageBox", bounds, "", "", "", true,
-                        new Dictionary<string, string> { ["ImageTexture"] = PlayerInterface.PortraitTexture, ["ImageFlipV"] = "true", ["ImageRect"] = player.PortraitRect(cell) },
+                        new Dictionary<string, string> { ["ImageTexture"] = PortraitBar.PortraitTexture, ["ImageFlipV"] = "true", ["ImageRect"] = player.portraitBar.PortraitRect(cell) },
                         Vector4.Zero, Pickable: false, Clip: own));
                 }
             }
@@ -397,7 +397,7 @@ sealed class TradeWindows(PlayerInterface player)
     public IReadOnlyList<(CharacterId Character, int Cell)> CharacterTradePortraits()
     {
         if (player.session.CurrentSnapshot.CharacterTrade is not { } trade || !player.faithfulScreens.IsOpen(CharacterTradeScreen)) return [];
-        int next = player.PortraitMembers().Count, end = player.session.CurrentSnapshot.Conversation is null ? PlayerInterface.PortraitCells : PlayerInterface.DialogueNpcCell;
+        int next = player.portraitBar.PortraitMembers().Count, end = player.session.CurrentSnapshot.Conversation is null ? PortraitBar.PortraitCells : PortraitBar.DialogueNpcCell;
         var list = new List<(CharacterId, int)>();
         foreach (var row in trade.Rows)
         {
@@ -409,7 +409,7 @@ sealed class TradeWindows(PlayerInterface player)
 
     // The loot window (docs/simulation.md "Carrying, rescue and looting", engine choice: the original's is <b>Unknown</b>): a downed character's whole inventory in a second character window (<c>loot</c>, <c>Kenshi_InventoryCharacterWindow</c>) beside the
     // looter's, its worn gear in the equipment slots, and its bag in <c>loot-bag</c> (the generic window, OPEN BAG). Items are held with the mouse between the two characters' windows
-    // (PlayerInterface.Inventory.cs) or moved with a right click (TakeLootItem, PutLootItem); closing it closes the loot (CloseContainer).
+    // (InventoryWindows) or moved with a right click (TakeLootItem, PutLootItem); closing it closes the loot (CloseContainer).
     /// <summary>The body whose loot window is shown, and one whose window the player closed (not reopened while the sim still has it open).</summary>
     CharacterId shownLoot = CharacterId.None, closedLoot = CharacterId.None;
     /// <summary>The loot's bag window is wanted (OPEN BAG in the loot window toggles it).</summary>
@@ -438,7 +438,7 @@ sealed class TradeWindows(PlayerInterface player)
     internal void SyncInventoryLayouts()
     {
         if (player.faithfulScreens is null || characterInventoryLayout is null || animalInventoryLayout is null) return;
-        foreach (var (id, owner) in player.pinnedInventories.Keys.Select(slot => (slot, player.WindowCharacter(slot))).Prepend(("inventory", player.InventoryOwner())).Append(("loot", LootBody())))
+        foreach (var (id, owner) in player.inventoryWindows.pinnedInventories.Keys.Select(slot => (slot, player.inventoryWindows.WindowCharacter(slot))).Prepend(("inventory", player.inventoryWindows.InventoryOwner())).Append(("loot", LootBody())))
         {
             bool animal = IsAnimal(owner);
             if (animalWindow.GetValueOrDefault(id) == animal) continue;
@@ -451,7 +451,7 @@ sealed class TradeWindows(PlayerInterface player)
     internal void SyncLootScreen()
     {
         if (player.faithfulScreens is null) return;
-        if (!lootOpenedBag.IsNone && !player.faithfulScreens.IsOpen("loot")) { player.bagOpen.Remove(lootOpenedBag); lootOpenedBag = CharacterId.None; }
+        if (!lootOpenedBag.IsNone && !player.faithfulScreens.IsOpen("loot")) { player.inventoryWindows.bagOpen.Remove(lootOpenedBag); lootOpenedBag = CharacterId.None; }
         var open = player.session.CurrentSnapshot.OpenLoot;
         if (closedLoot != open) closedLoot = CharacterId.None;
         if (!shownLoot.IsNone && shownLoot == open && !player.faithfulScreens.IsOpen("loot"))
@@ -470,7 +470,7 @@ sealed class TradeWindows(PlayerInterface player)
                 player.faithfulScreens.Open("loot");
                 // The original opens both characters' bags with the window (the looted one's is open by default); OPEN BAG still toggles them afterwards. The looter's
                 // remembered OPEN BAG choice is kept: a bag opened here closes with the window.
-                if (player.InventoryOwner() is { } mine && player.bagOpen.Add(mine.Id)) lootOpenedBag = mine.Id;
+                if (player.inventoryWindows.InventoryOwner() is { } mine && player.inventoryWindows.bagOpen.Add(mine.Id)) lootOpenedBag = mine.Id;
                 player.PlaceWindowRow();
                 player.inventoryScroll.Remove("loot-bag");
             }
@@ -490,6 +490,6 @@ sealed class TradeWindows(PlayerInterface player)
         b.Properties["datapanel"] = new Dictionary<string, string> { ["SkipCaption"] = "true" };
         if (body?.ItemGrid is { BagWidth: > 0, BagHeight: > 0 }) { b.Disabled.Remove("OpenBagButton"); b.Actions["OpenBagButton"] = "OpenBagButton"; }
         // LIMBS opens the body's limbs window, as the inventory's does for its character (enabled by the same limb holder).
-        if (body is not null && PlayerInterface.HasLimbWindow(body)) { b.Disabled.Remove("LimbsButton"); b.Actions["LimbsButton"] = "LimbsButton"; }
+        if (body is not null && InventoryWindows.HasLimbWindow(body)) { b.Disabled.Remove("LimbsButton"); b.Actions["LimbsButton"] = "LimbsButton"; }
     }
 }

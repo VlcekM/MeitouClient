@@ -103,7 +103,7 @@ sealed class GroundItemSync(GameHost host)
         bool file = collision.Xml is not null && (collision.Weapon || g.Fall is not null);
         if (!groundShapes.TryGetValue((g.Record, file), out var mesh))
         {
-            mesh = file ? host.player.BuildHost?.Placement.CollisionFile(collision.Xml!) ?? [] : [];
+            mesh = file ? host.player.build.BuildHost?.Placement.CollisionFile(collision.Xml!) ?? [] : [];
             if (mesh.Count == 0 && BoundsOf(g.Record) is { } box) mesh = Box(box.Min, box.Max);   // engine choice: a collision file missing from the install falls back to the box
             groundShapes[(g.Record, file)] = mesh;
         }

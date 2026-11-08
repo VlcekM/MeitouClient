@@ -61,7 +61,7 @@ sealed class StealthView(PlayerInterface player)
         int n = 0;
         foreach (var c in player.session.CurrentSnapshot.Characters)
         {
-            if (!c.IsPlayer || c.Name.Length == 0 || player.EditorOpen || c.CarriedBy != CharacterId.None || !c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
+            if (!c.IsPlayer || c.Name.Length == 0 || player.characterEditor.EditorOpen || c.CarriedBy != CharacterId.None || !c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
             var feet = player.where(c);
             if (Vector3.DistanceSquared(player.Eye, feet) >= NameTagRangeSquared) continue;
             if (player.Project(TagAnchor(c, feet)) is not { } head) continue;
@@ -128,7 +128,7 @@ sealed class StealthView(PlayerInterface player)
     /// </summary>
     internal void AddTaskBars(List<UiControl> controls)
     {
-        if (taskBarLayout is not { Roots: [var root, ..] } || player.EditorOpen) return;
+        if (taskBarLayout is not { Roots: [var root, ..] } || player.characterEditor.EditorOpen) return;
         float tag = player.Height * 0.0296296f, scale = player.Height / 1080f;
         int n = 0;
         var all = player.session.CurrentSnapshot.Characters;

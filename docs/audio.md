@@ -202,7 +202,7 @@ each frame (`GameHost.UpdateEmitters`, key = the building's instance id). **Engi
   play; machines that need operators or town power (wells, mines, processors, stills, looms, silos, distillers, the Electrical Workbench) stay silent, since the NPC workers and town grids are not simulated. Level furniture
   that is a bench or generator follows the same rule through its own BUILDING record.
 - **Power switch.** The exe's `FarmBuilding::vfunc_161` (the machine panel's power button) flips `power on`, then sets the `Generator` switch to `On` / `Off` on the GUI object 110 and posts `UI_Generator`
-  (**Verified**). Meitou has `Machine.PowerOn` (saved, default on) but its machine panel (`PlayerInterface.Production.cs`) has no power button and no command sets it, so `UI_Generator` has no trigger.
+  (**Verified**). Meitou has `Machine.PowerOn` (saved, default on) but its machine panel (`ProductionWindows`) has no power button and no command sets it, so `UI_Generator` has no trigger.
 
 ### Other world-side events
 
@@ -370,11 +370,11 @@ and MAP_ITEM by `inventory sound` (`Backpack`, `Building_Material`, `Fabric`, `F
 `Armor_Plating`, `Blueprints`, `Meat`); LIMB_REPLACEMENT `Robotic_Component`. The `Notifications` bank also has `Raid` and `Under_Attack` and three unresolved values the exe never passes. **Unknown:** the MyGUI events behind
 Hover and Slider; whether the editor's speed reset posts `Game_Speed_Normal`; what Wwise does for a NULL switch value.
 
-Meitou (`UiSounds` in `Meitou.Game.Audio`, `PlayerInterface.Sounds.cs`, `GameSound`): the host plays what `PlayerInterface.UiSound` receives. Hooks: `ExecuteUiAction` (HUD actions), `FaithfulAction` (the original screens' widgets),
+Meitou (`UiSounds` in `Meitou.Game.Audio`, `InterfaceSounds`, `GameSound`): the host plays what `PlayerInterface.UiSound` receives. Hooks: `ExecuteUiAction` (HUD actions), `FaithfulAction` (the original screens' widgets),
 the commands `Say` sends (orders, item moves, trades, dialogue choices; `AddJob` and the Shift Medic / Rescue commands as `Permanent_Job`), and a poll in `Draw` for windows opening and closing, the title button under the pointer, the speed keys (F2 to F4, when the clock moves to a new speed without a button), a building of the player's finishing
 (`Building_Complete`) and a research finished or a building unlocked by a blueprint (`Thing_Complete`, one a frame; the sim also queues `DismantleDone` for a finished dismantle and `BountyPaid` for a reward, played as `Thing_Complete` / `Bounty_Fulfilled`).
 The prospecting, research tab and biome sounds are posted where the exe posts them: the HUD's Prospect action when it gives the task (`Prospect_Click`), the results window opening (`Prospect_Results`, in the poll), a type list pick in the overview (`Research_Tab`),
-and the banner (`New_Biome`, `PlayerInterface.Biome.cs`).
+and the banner (`New_Biome`, `BiomeBanner`).
 `Building_Click`: selecting a building (`SetBuilding`, so a click on the one already selected sounds again) switches `Buildings_Click` by the BUILDING's `select sound` (`UiSounds.BuildingSound`) and posts nothing for 0. The switch values are the exe's table at
 `0x141e17308` read by `FUN_1405504a0` (**Verified**: read from kenshi_x64.exe; 1 `Bed`, 2 `Dummy`, 3 `Farm`, 4 `Generator`, 5 `Grain_Silo`, 6 `House`, 7 `Mine_Ore`, 8 `Mine_Stone`, 9 `Research_Bench`, 10 `Store_Armor`, 11 `Store_Building_Materials`, 12 `Store_Flour`, 13 `Store_Ore`,
 14 `Store_Prisoner`, 15 `Store_Rum`, 16 `Store_Stones`, 17 `Stove`, 18 `Well`, 19 `Wind_Generator`, 20 `Chain_Bench`, 21 `Fabric_Loom`, 22 `Leather_Bench`, 23 `Medical_Desk`, 24 `Plate_Station`, 25 `Shop_Counter`, 26 `Smithy`, 27 `Stone_Processor`, 28 `Armorer`, 29 `Bar`, 30 `Boxes`,

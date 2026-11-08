@@ -18,7 +18,7 @@ sealed partial class PlayerInterface
         int Input, int Town, int? Tutorial, double Speed, bool Paused, bool Hud, bool Ctrl, bool Alt, bool ShotWithoutMenus);
 
     /// <summary>Counts the input the interface took (keys, clicks, text, the wheel): any of it can change what the base shows.</summary>
-    int uiInput;
+    internal int uiInput;
     UiBaseKey? uiBaseKey;
     string[] uiBaseScreens = [];
     List<UiControl> uiBase = [];
@@ -44,10 +44,10 @@ sealed partial class PlayerInterface
         return [.. uiBase];
     }
 
-    UiBaseKey BaseKey(bool hud) => new(session.CurrentSnapshot, mouse, Width, Height, UiMode, Meitou.Localisation.Loc.Language, uiInput, shownTown,
+    UiBaseKey BaseKey(bool hud) => new(session.CurrentSnapshot, mouse, Width, Height, UiMode, Meitou.Localisation.Loc.Language, uiInput, townPanel.shownTown,
         tutorialWindow.tutorialShown, session.Simulation.Speed, session.Simulation.IsPaused, hud, CtrlHeld, AltHeld, feedbackPanel.ShotWithoutMenus);
 
     /// <summary>The base shows something that moves on real time or with the camera: it is arranged every frame.</summary>
-    bool UiAnimating => TitleOpen || EditorOpen || showCredits || biomeShown || worldMap.mapShown || portraitFlashes.Count > 0 || tutorialWindow.tutorialFlashes.Count > 0
+    bool UiAnimating => TitleOpen || characterEditor.EditorOpen || showCredits || biomeBanner.biomeShown || worldMap.mapShown || portraitBar.portraitFlashes.Count > 0 || tutorialWindow.tutorialFlashes.Count > 0
         || faithfulScreens.CapturesPointer;
 }

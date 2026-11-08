@@ -3,15 +3,16 @@ using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Ui;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
-sealed partial class PlayerInterface
+/// <summary>The character's stats window (docs/game/ui-screens.md): the skills by category with their levels and the next level's progress.</summary>
+sealed class StatsWindow(PlayerInterface player)
 {
-    StatHelpCatalog statHelp = new();
-    void BindStatsGeometry(MyGuiLayout layout, UiBindings bindings)
+    internal StatHelpCatalog statHelp = new();
+    internal void BindStatsGeometry(MyGuiLayout layout, UiBindings bindings)
     {
-        bindings.TemplateScale = InventoryScale;
-        bindings.Positions["Root"] = new(0, 0, 980 * InventoryScale, 650 * InventoryScale);
+        bindings.TemplateScale = player.InventoryScale;
+        bindings.Positions["Root"] = new(0, 0, 980 * player.InventoryScale, 650 * player.InventoryScale);
         bindings.Hidden.Add("lbDerivedStats");
         // The installed layout includes an unused derived-statistics column. The runtime screen
         // gives that space to skills and description (observed in the original-game reference).
@@ -38,28 +39,28 @@ sealed partial class PlayerInterface
         [(0, "Thievery"), (4, "Athletics")], [(0, "Sciences"), (4, "Trades")],
     ];
 
-    void AddStatsContent(List<UiControl> controls)
+    internal void AddStatsContent(List<UiControl> controls)
     {
-        var lead = Selected().FirstOrDefault();
-        float scale = InventoryScale, rowHeight = 20 * scale;
+        var lead = player.Selected().FirstOrDefault();
+        float scale = player.InventoryScale, rowHeight = 20 * scale;
         // The skill columns sit in Kenshi_GenericTextBoxSkin frames (the attributes column's frame has no text colour and keeps its grey).
-        string statInk = MyGuiColours.TemplateInk(uiResources, "Kenshi_GenericTextBoxSkin");
-        for (int column = 0; column < StatPanels.Length; column++)
+        string statInk = MyGuiColours.TemplateInk(player.uiResources, "Kenshi_GenericTextBoxSkin");
+        for (int column = 0; column < PlayerInterface.StatPanels.Length; column++)
         {
             string name = column == 0 ? "AttributesPanel" : $"Skills{column}Panel";
             if (controls.FirstOrDefault(c => c.Name == name) is not { } panel) continue;
             var clip = panel.Bounds.Intersect(panel.Clip ?? panel.Bounds);
             float y = panel.Bounds.Y;
-            for (int i = 0; i < StatPanels[column].Length; i++)
+            for (int i = 0; i < PlayerInterface.StatPanels[column].Length; i++)
             {
                 foreach (var heading in StatHeadings[column].Where(h => h.Before == i))
                 {
-                    Text($"{name}-heading-{i}", "-" + Loc.Tr(heading.Caption) + "-", "Kenshi_StandardFont_Large", TitleColour, "Left VCenter", "", heading: true);
+                    Text($"{name}-heading-{i}", "-" + Loc.Tr(heading.Caption) + "-", "Kenshi_StandardFont_Large", PlayerInterface.TitleColour, "Left VCenter", "", heading: true);
                     y += rowHeight;
                 }
-                var stat = StatPanels[column][i];
+                var stat = PlayerInterface.StatPanels[column][i];
                 string id = ((int)stat).ToString(CultureInfo.InvariantCulture), action = "stat:" + id;
-                string label = column == 0 ? StatLabel(stat).ToUpperInvariant() : StatLabel(stat);
+                string label = column == 0 ? PlayerInterface.StatLabel(stat).ToUpperInvariant() : PlayerInterface.StatLabel(stat);
                 string font = column == 0 ? "Kenshi_PaintedTextFont_Medium" : "Kenshi_StandardFont_Medium";
                 string colour = column == 0 ? "0.4 0.380392 0.356863" : statInk;
                 bool wrapLabel = stat is StatsEnumerated.FriendlyFire or StatsEnumerated.SmithingBow;
@@ -90,14 +91,14 @@ sealed partial class PlayerInterface
 
     void AddStatDescription(List<UiControl> controls)
     {
-        if (!int.TryParse(selectedStat, out int selected) || selected <= 0 || selected >= StatsInfo.Count
+        if (!int.TryParse(player.selectedStat, out int selected) || selected <= 0 || selected >= StatsInfo.Count
             || controls.FirstOrDefault(c => c.Name == "Description1Panel") is not { } left
             || controls.FirstOrDefault(c => c.Name == "Description2Panel") is not { } right) return;
-        var lead = Selected().FirstOrDefault();
+        var lead = player.Selected().FirstOrDefault();
         var stat = (StatsEnumerated)selected;
         var help = statHelp.For(stat);
-        string statInk = MyGuiColours.TemplateInk(uiResources, "Kenshi_GenericTextBoxSkin");
-        float scale = InventoryScale, row = Math.Min(20 * scale, (left.Bounds.Height - 4 * scale) / Math.Max(1, 3 + help.Affected.Count + help.Training.Count));
+        string statInk = MyGuiColours.TemplateInk(player.uiResources, "Kenshi_GenericTextBoxSkin");
+        float scale = player.InventoryScale, row = Math.Min(20 * scale, (left.Bounds.Height - 4 * scale) / Math.Max(1, 3 + help.Affected.Count + help.Training.Count));
         float y = left.Bounds.Y + 4 * scale;
         var leftClip = left.Bounds.Intersect(left.Clip ?? left.Bounds);
         var rightClip = right.Bounds.Intersect(right.Clip ?? right.Bounds);
@@ -114,19 +115,19 @@ sealed partial class PlayerInterface
             Text(name, new(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, pixels == 18 ? 24 * scale : row), text, colour, pixels, leftClip);
             y += row;
         }
-        Line("stat-description-title", StatLabel(stat), TitleColour, 18);
-        Line("stat-affected-heading", statHelp.TextAt(681), MainColour);
+        Line("stat-description-title", PlayerInterface.StatLabel(stat), PlayerInterface.TitleColour, 18);
+        Line("stat-affected-heading", statHelp.TextAt(681), PlayerInterface.MainColour);
         // The rows' numbers (FUN_1408b1250, HudView.StatReadouts), matched to the catalog's rows by their label, right-aligned on the row.
         var readouts = lead?.Hud?.StatReadouts?.GetValueOrDefault(stat) ?? [];
         for (int i = 0; i < help.Affected.Count; i++)
         {
             var readout = readouts.FirstOrDefault(r => Loc.Tr(r.Label) == help.Affected[i]);
-            string ink = readout.Main ? MainColour : statInk;
+            string ink = readout.Main ? PlayerInterface.MainColour : statInk;
             if (readout.Value is { Length: > 0 } number)
                 Text($"stat-affected-value-{i}", new(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, row), number, ink, 14, leftClip, "Right Top");
             Line($"stat-affected-{i}", "-" + help.Affected[i].TrimEnd(':'), ink);
         }
-        Line("stat-training-heading", statHelp.TextAt(684), MainColour);
+        Line("stat-training-heading", statHelp.TextAt(684), PlayerInterface.MainColour);
         for (int i = 0; i < help.Training.Count; i++)
             Line($"stat-training-{i}", "-" + help.Training[i], statInk);
 
@@ -141,10 +142,10 @@ sealed partial class PlayerInterface
         controls.Add(new("stat-next-level-frame", "Widget", bar, "", "", "Kenshi_ProgressBarSkin", true,
             new Dictionary<string, string>(), Vector4.Zero, Pickable: false, Clip: rightClip));
         var barText = new UiRect(bar.X + 10 * scale, bar.Y - 4 * scale, bar.Width - 20 * scale, row);
-        Text("stat-next-level-label", barText, statHelp.TextAt(220), MainColour, 14, rightClip);
-        Text("stat-next-level-percent", barText, ((int)(progress * 100)).ToString(CultureInfo.InvariantCulture) + "%", MainColour, 14, rightClip, "Right Top");
+        Text("stat-next-level-label", barText, statHelp.TextAt(220), PlayerInterface.MainColour, 14, rightClip);
+        Text("stat-next-level-percent", barText, ((int)(progress * 100)).ToString(CultureInfo.InvariantCulture) + "%", PlayerInterface.MainColour, 14, rightClip, "Right Top");
         Text("stat-description-heading", new(bar.X + 10 * scale, bar.Y + 12 * scale, bar.Width - 20 * scale, row),
-            statHelp.TextAt(440), MainColour, 14, rightClip);
+            statHelp.TextAt(440), PlayerInterface.MainColour, 14, rightClip);
         string description = System.Text.RegularExpressions.Regex.Replace(help.Description, @"\{[12]\}", "");
         if (help.PhysicalEffect.Length > 0) description += "\n\n" + help.PhysicalEffect;
         float multiplier = lead?.SkillXpMultipliers.ElementAtOrDefault(selected) ?? 0;
@@ -154,4 +155,3 @@ sealed partial class PlayerInterface
             description, statInk, 14, rightClip, wrap: true);
     }
 }
-

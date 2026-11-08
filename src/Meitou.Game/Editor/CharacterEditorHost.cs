@@ -22,12 +22,12 @@ sealed class CharacterEditorHost(GameHost host)
     internal void ConfigureEditor(PlayerInterface ui)
     {
         if (host.popData is not { } data) return;
-        ui.EditorData = (data.Db, host.install.Root);
-        ui.PreviewSource = (recordId, loadout) => data.Appearances?.Create(recordId, loadout);
-        ui.PreviewReady = look => host.ActiveCharacters?.IsPrepared(look) ?? true;
+        ui.characterEditor.EditorData = (data.Db, host.install.Root);
+        ui.characterEditor.PreviewSource = (recordId, loadout) => data.Appearances?.Create(recordId, loadout);
+        ui.characterEditor.PreviewReady = look => host.ActiveCharacters?.IsPrepared(look) ?? true;
         // The editor's looks are close-ups: their meshes without generated levels (CharacterContent.PrepareMesh), so a new hair or head shows at once, as in the original.
-        ui.PreviewFetch = look => host.ActiveCharacters?.PrefetchCloseUp(look);
-        ui.PreviewWarm = (look, urgent) => host.ActiveCharacters?.Warm(look, urgent, close: true);
+        ui.characterEditor.PreviewFetch = look => host.ActiveCharacters?.PrefetchCloseUp(look);
+        ui.characterEditor.PreviewWarm = (look, urgent) => host.ActiveCharacters?.Warm(look, urgent, close: true);
     }
 
     /// <summary>Opens the editor on the new game's squad once the world shows and the squad is in the snapshot.</summary>
@@ -37,7 +37,7 @@ sealed class CharacterEditorHost(GameHost host)
         if (!squad.All(id => host.session.CurrentSnapshot.Characters.Any(c => c.Id == id))) return;
         pendingCreation = null;
         creationWarmOwed = true;
-        if (!host.player.OpenEditor(EditKind.Creation, squad)) host.session.World.Commands.Enqueue(new FinishCreation { Tick = host.session.World.Tick });
+        if (!host.player.characterEditor.OpenEditor(EditKind.Creation, squad)) host.session.World.Commands.Enqueue(new FinishCreation { Tick = host.session.World.Tick });
     }
 
     /// <summary>The world has not been warmed up yet: the new game's editor came first (see <see cref="GameHost.CoveredFrame"/>).</summary>
@@ -48,7 +48,7 @@ sealed class CharacterEditorHost(GameHost host)
     /// </summary>
     internal void ResumeAfterCreation()
     {
-        if (!creationWarmOwed || pendingCreation is not null || host.player.EditorOpen || host.sceneLoad is not null) return;
+        if (!creationWarmOwed || pendingCreation is not null || host.player.characterEditor.EditorOpen || host.sceneLoad is not null) return;
         creationWarmOwed = false;
         if (host.playerSquad is { Leader.IsNone: false } squad) host.player.Follow = squad.Leader;   // a new game starts with the camera locked to the leader
         if (host.gpu is null || host.metalRenderer)
@@ -70,7 +70,7 @@ sealed class CharacterEditorHost(GameHost host)
     /// </summary>
     internal void EditorCamera()
     {
-        if (host.player.EditorFocus is not { } focus || host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == focus.Character) is not { } c) return;
+        if (host.player.characterEditor.EditorFocus is not { } focus || host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == focus.Character) is not { } c) return;
         host.camera.Target = host.DrawnPosition(c) + new Vector3(0, 10, 0);
     }
 
@@ -87,14 +87,14 @@ sealed class CharacterEditorHost(GameHost host)
     {
         if (host.ActiveCharacters is not { } characters) return;
         editorStaged = true;
-        if (host.player.EditorView() is not { } view || host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == view.Character) is not { } c) { characters.StageRequest = null; return; }
+        if (host.player.characterEditor.EditorView() is not { } view || host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == view.Character) is not { } c) { characters.StageRequest = null; return; }
         characters.StageRequest = new EditorStageRequest(host.DrawKey(view.Character), width, height, view.Yaw, view.Elevation, view.Distance, view.Head, host.camera.FieldOfView, EditorStageShift);
         characters.SetView(width, height, host.camera.FieldOfView);
         if (!posed) characters.Update(host.DrawnPosition(c));
         characters.DrawStage();
         DrawEditorPlatform(view.Character, characters);
         characters.ResolveStage();
-        if (characters.StageTexture is { } stage) host.player.SetUiTexture(PlayerInterface.StageTexture, stage.Texture, stage.Sampled);
+        if (characters.StageTexture is { } stage) host.player.SetUiTexture(CharacterEditorPanel.StageTexture, stage.Texture, stage.Sampled);
     }
 
     /// <summary>The character the stage's platform was placed for (it is placed once per character, where the character stands when first shown).</summary>
@@ -148,7 +148,7 @@ sealed class CharacterEditorHost(GameHost host)
     /// </summary>
     const float EditorBarViewCap = 2500;
 
-    bool EditorBarWanted => host.player.EditorOpen && host.player.UiMode == UiMode.Meitou && host.popData is not null;
+    bool EditorBarWanted => host.player.characterEditor.EditorOpen && host.player.UiMode == UiMode.Meitou && host.popData is not null;
 
     /// <summary>What <see cref="BeginEditorBar"/> changed for the world's draw: the camera and the weather, which <see cref="EndEditorBar"/> puts back.</summary>
     internal readonly record struct EditorBarFrame(Vector3 Target, float Yaw, float Pitch, float Distance, SkyWeather Sky, WorldWeather? Weather, bool WeatherParticles, Vector3 Fill, bool Water, bool Reflections);
@@ -178,7 +178,7 @@ sealed class CharacterEditorHost(GameHost host)
             return null;
         }
         if (!editorBarReady && EditorBarLoaded(bar)) editorBarReady = true;
-        host.player.EditorInWorld = editorBarReady;
+        host.player.characterEditor.EditorInWorld = editorBarReady;
         var sky = host.gpu.Sky;
         var frame = new EditorBarFrame(host.camera.Target, host.camera.Yaw, host.camera.Pitch, host.camera.Distance, sky.Weather, host.gpu.Weather, host.gpu.WeatherParticles, host.gpu.Characters?.Fill ?? default, host.render.Water, host.render.Reflections);
         PlaceEditorCamera(bar, width, height);
@@ -209,7 +209,7 @@ sealed class CharacterEditorHost(GameHost host)
     {
         if (editorBar is not null || editorBarMissing) return editorBar;
         if (host.popData is not { } data || host.scene.Database is not { } db || host.scene.Objects is not { } world || host.ActiveObjects is not { } objects ||
-            host.player.EditorFocus is not { } focus || host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == focus.Character) is not { } shown) return null;
+            host.player.characterEditor.EditorFocus is not { } focus || host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == focus.Character) is not { } shown) return null;
         if (EditorBar.Above(host.install, data, shown.Position, host.scene.GroundAt) is not { } bar || db.Find(bar.Placement.BuildingId) is not { } record)
         {
             editorBarMissing = true;
@@ -237,9 +237,9 @@ sealed class CharacterEditorHost(GameHost host)
     /// <summary>The editor has closed, or the bar is no longer wanted: its parts and lamps go.</summary>
     internal void ClearEditorBar()
     {
-        host.player.EditorInWorld = false;
+        host.player.characterEditor.EditorInWorld = false;
         (editorBarReady, editorBarLaidOut) = (false, null);
-        if (!host.player.EditorOpen) editorBarMissing = false;
+        if (!host.player.characterEditor.EditorOpen) editorBarMissing = false;
         if (editorBar is null) return;
         if (host.ActiveObjects is { } objects && objects.Staged == editorBar.Ground) objects.Staged = null;
         editorCrowd.Clear();
@@ -272,7 +272,7 @@ sealed class CharacterEditorHost(GameHost host)
     /// </summary>
     void PlaceEditorCamera(EditorBar bar, int width, int height)
     {
-        if (host.player.EditorView() is not { } view) return;
+        if (host.player.characterEditor.EditorView() is not { } view) return;
         var request = new EditorStageRequest(host.DrawKey(view.Character), width, height, view.Yaw, view.Elevation, view.Distance, view.Head, host.camera.FieldOfView, EditorStageShift);
         var (eye, pivot) = host.gpu.Characters?.EditorCamera(request.Key, in request) ?? StandCamera(bar, in request);
         var back = eye - pivot;
@@ -303,9 +303,9 @@ sealed class CharacterEditorHost(GameHost host)
         if (editorBar is not { } bar) return null;
         if (id == shown) return (bar.Stand, bar.StandYaw, null);
         int seat = 0;
-        foreach (var other in host.player.EditorCharacters)
+        foreach (var other in host.player.characterEditor.EditorCharacters)
         {
-            if (other == shown || host.player.IsEditorAnimal(other)) continue;
+            if (other == shown || host.player.characterEditor.IsEditorAnimal(other)) continue;
             if (seat >= EditorBar.MaxSeated || seat >= bar.Seats.Count) return null;
             if (other == id) return (bar.Seats[seat].Position, bar.Seats[seat].Yaw, bar.Seats[seat].Clip);
             seat++;

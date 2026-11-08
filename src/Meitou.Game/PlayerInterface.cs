@@ -1,3 +1,4 @@
+using Meitou.Game.Rendering.Gpu;
 using Meitou.Data.Textures;
 using System.Numerics;
 using Meitou.Game.DevTools;
@@ -10,6 +11,7 @@ using Meitou.Game.Title;
 using Meitou.Game.Tutorials;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
+using Meitou.Game.Building;
 
 namespace Meitou.Game;
 
@@ -23,6 +25,25 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class PlayerInterface(WorldSession session, Func<float, float, float> ground, Func<CharacterSnapshot, Vector3> where)
 {
+    internal CharacterEditorPanel characterEditor => field ??= new(this);
+    internal ProductionWindows production => field ??= new(this);
+    internal BuildMode build => field ??= new(this);
+    internal BuildingSelection buildingSelection => field ??= new(this);
+    internal FurnitureUse furniture => field ??= new(this);
+    internal SquadPanel squadWindows => field ??= new(this);
+    internal FactionWindow factionWindow => field ??= new(this);
+    internal PortraitBar portraitBar => field ??= new(this);
+    internal InventoryWindows inventoryWindows => field ??= new(this);
+    internal TooltipRuntime tooltipRuntime => field ??= new(this);
+    internal GameHotkeys gameHotkeys => field ??= new(this);
+    internal DialogueWindow dialogueWindow => field ??= new(this);
+    internal StatsWindow statsWindow => field ??= new(this);
+    internal InterfaceSounds interfaceSounds => field ??= new(this);
+    internal BiomeBanner biomeBanner => field ??= new(this);
+    internal TownPanel townPanel => field ??= new(this);
+    internal GroundItemPicks groundItemPicks => field ??= new(this);
+    internal AdvancedOptions advancedOptions => field ??= new(this);
+
     internal readonly WorldSession session = session;
     internal readonly Func<float, float, float> ground = ground;
     internal readonly Func<CharacterSnapshot, Vector3> where = where;
@@ -52,6 +73,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// <summary>The button during play (<see cref="UserConfig.FeedbackButton"/>); off, it still shows on the title and with the game menu open.</summary>
     public bool FeedbackButtonInPlay { get; set; } = true;
 
+    /// <summary>Shift as the host last saw it: the slow modifier of the ghost's up and down move.</summary>
+    public bool SlowModifier { get; set; }
+
+    /// <summary>Gives the interface a texture drawn at run time (the portrait atlas) under <paramref name="name"/>.</summary>
+    public void SetUiTexture(string name, GpuTexture texture, SampledTexture sampled) => uiPainter?.SetTexture(name, texture, sampled);
+
     /// <summary>The original's <c>Show names</c> option (<c>FUN_1406e2fd0</c>): off, the name tag keeps only its icons.</summary>
     public bool ShowNames { get; set; } = true;
     /// <summary>The <c>font size2</c> option: points added to every GUI font's default height (applied to the painter once it exists).</summary>
@@ -76,20 +103,20 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public const float BoxSelectRange = 7500;
     /// <summary>A person's height (the renderer's sphere takes 20) for the box select's aim point and the pick capsule of a character the renderer does not draw.</summary>
     public const float CharacterHeight = 18;
-    const float DragThreshold = 5;
+    internal const float DragThreshold = 5;
 
     Vector2? dragFrom;
     internal Vector2 mouse;
-    bool dragging;
+    internal bool dragging;
     // The held right button's move order: where it goes now and the tick it was given.
-    bool steering;
+    internal bool steering;
     Vector3 steerTarget;
     long steerTick;
 
 
     internal IReadOnlyList<CharacterId> SelectedIds() => [.. Selected().Select(c => c.Id)];
 
-    IReadOnlyList<CharacterId> PlayerCharacters() =>
+    internal IReadOnlyList<CharacterId> PlayerCharacters() =>
         [.. session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).Select(c => c.Id)];
 
     /// <summary>
@@ -112,14 +139,14 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
 
     internal void Say(SimCommand command)
     {
-        SoundForCommand(command);
+        interfaceSounds.SoundForCommand(command);
         session.World.Commands.Enqueue(command);
     }
 
     /// <param name="toggle">A single character with shift: one already selected leaves the selection (<see cref="SelectCommand.Toggle"/>).</param>
     public void Select(IReadOnlyList<CharacterId> ids, bool additive, bool toggle = false)
     {
-        if (ids.Count > 0) SetBuilding(null);   // selecting a character ends the building's selection
+        if (ids.Count > 0) buildingSelection.SetBuilding(null);   // selecting a character ends the building's selection
         Say(new SelectCommand(ids, additive, toggle && additive) { Tick = session.World.Tick });
     }
 
@@ -133,14 +160,14 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     {
         mouse = p;
         uiInput++;
-        (pressShift, pressCtrl) = (shift, ctrl);
-        HideTooltip();   // a press captures the mouse, which hides a tooltip (MyGUI)
+        (inventoryWindows.pressShift, inventoryWindows.pressCtrl) = (shift, ctrl);
+        tooltipRuntime.HideTooltip();   // a press captures the mouse, which hides a tooltip (MyGUI)
         if (button == MouseButton.Left && feedbackPanel.FeedbackButtonDown(p)) return true;
-        if (EditorPointerDown(button, p)) return true;
-        if (button == MouseButton.Right && CancelInventoryDrag()) return true;
-        if (button == MouseButton.Right && !OverHud(p) && WallCancel()) return true;
+        if (characterEditor.EditorPointerDown(button, p)) return true;
+        if (button == MouseButton.Right && inventoryWindows.CancelInventoryDrag()) return true;
+        if (button == MouseButton.Right && !OverHud(p) && build.WallCancel()) return true;
         if (button == MouseButton.Right && !OverHud(p) && levelEditorPanel.LevelClearAt(p)) return true;
-        if (button == MouseButton.Right && !OverHud(p) && BuildDiscard()) return true;
+        if (button == MouseButton.Right && !OverHud(p) && build.BuildDiscard()) return true;
         if (button == MouseButton.Left)
         {
             if (contextMenu is not null) return true;   // an open menu takes no press: its rows act on the release, a press beside it does nothing (FUN_1407a7f10)
@@ -149,8 +176,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             // Debug "Explode on click": the host takes the press on the ground (the point under the cursor, if any) instead of the selection.
             if (WorldClick is { } worldClick && !worldMap.MapTabShown && worldClick(Ray(p) is { } wr ? MoveHit(wr.Origin, wr.Direction) : null)) return true;
             // A ground item's name label (shown while Highlight is held) takes the left press; its release over it is the item's pick-up (FUN_1401638f0).
-            if (LabelAt(p) is { } label) { labelPress = label; return true; }
-            if (BuildClick()) return true;
+            if (groundItemPicks.LabelAt(p) is { } label) { groundItemPicks.labelPress = label; return true; }
+            if (build.BuildClick()) return true;
             dragFrom = p;
             dragging = false;
             return true;
@@ -160,7 +187,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (button == MouseButton.Right && worldMap.MapRightDown(p)) return true;
         // A right press on a squad bar portrait held 0.25 s opens the member's context menu; a quicker release over it selects the member and focuses the camera on it,
         // as the double click (FUN_140413d80, FUN_140415630, docs/game/ui-input.md "Squad bar portraits").
-        if (button == MouseButton.Right && SquadBarMemberAt(p) is { } member)
+        if (button == MouseButton.Right && portraitBar.SquadBarMemberAt(p) is { } member)
         {
             if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == member) is { } shown
                 && ContextPressOn(p, at => Menu(shown.Name, at, Verbs(shown)), () => FocusMember(member, shift), PortraitHoldSeconds)) return true;
@@ -173,7 +200,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             // Alt + right click on a downed or dead character: the nearest selected loots it (take all). Ctrl + right click: picks it up, or puts it down when a selected
             // character carries it. A plain right click on one of your own downed characters that needs no first aid picks it up too (the original's quick right click).
             // A ground item's name label (shown while Alt is held) is drawn over everything: a click on it is the item's, never the body lying beside it.
-            var downed = (alt || ctrl) && LabelAt(p) is null ? PickDowned(p) : null;
+            var downed = (alt || ctrl) && groundItemPicks.LabelAt(p) is null ? PickDowned(p) : null;
             if (alt && downed is { } loot && SelectedIds() is { Count: > 0 })
                 Say(new Meitou.Simulation.Carrying.LootOrder([], loot) { Tick = session.World.Tick });
             else if (ctrl && downed is { } body && Selected().Where(c => c.Carrying == body).Select(c => c.Id).ToArray() is { Length: > 0 } carriers)
@@ -183,15 +210,15 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             // Else the nearest target along the ray (PickAt). On a character: the quick order (trade with a trader, attack anyone else, treat a hurt ally, pick up a downed one of yours,
             // loot anyone else's) is given when the button comes up before the context menu's hold time; held longer, the menu opens instead (PlayerInterface.ContextMenu.cs).
             else if (PickAt(p).Kind is var kind && kind == Picked.Character) { var quick = QuickOrder(p)?.Do; if (!ContextPress(p, quick)) quick?.Invoke(); }
-            else if (kind == Picked.GroundItem && GroundItemClick(p)) { }
-            else if (kind == Picked.Container && ContainerClick(p, alt)) { }
-            else if (kind == Picked.Door && DoorClick(p, alt)) { }
-            else if (kind == Picked.Bed && BedPress(p)) { }
-            else if (kind == Picked.Seat && SeatPress(p)) { }
-            else if (kind == Picked.Cage && CageClick(p)) { }
-            else if (kind == Picked.Dummy && DummyPress(p)) { }
-            else if (kind == Picked.Rock && RockPress(p)) { }
-            else if (kind is Picked.Site or Picked.None && SitePress(p)) { }
+            else if (kind == Picked.GroundItem && groundItemPicks.GroundItemClick(p)) { }
+            else if (kind == Picked.Container && furniture.ContainerClick(p, alt)) { }
+            else if (kind == Picked.Door && furniture.DoorClick(p, alt)) { }
+            else if (kind == Picked.Bed && furniture.BedPress(p)) { }
+            else if (kind == Picked.Seat && furniture.SeatPress(p)) { }
+            else if (kind == Picked.Cage && furniture.CageClick(p)) { }
+            else if (kind == Picked.Dummy && furniture.DummyPress(p)) { }
+            else if (kind == Picked.Rock && furniture.RockPress(p)) { }
+            else if (kind is Picked.Site or Picked.None && build.SitePress(p)) { }
             else if (Ray(p) is { } ray && MoveHit(ray.Origin, ray.Direction) is { } hit)
             {
                 Move(hit, shift);
@@ -252,7 +279,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (c.Body is { NeedsAid: true })
             {
                 bool robot = c.Body is { NeedsRobotAid: true };
-                return ("med", id, Do(() => OrderOrJob(robot ? Meitou.Data.Gameplay.Ai.TaskType.FIRST_AID_ROBOT : Meitou.Data.Gameplay.Ai.TaskType.FIRST_AID_ORDER, id,
+                return ("med", id, Do(() => squadWindows.OrderOrJob(robot ? Meitou.Data.Gameplay.Ai.TaskType.FIRST_AID_ROBOT : Meitou.Data.Gameplay.Ai.TaskType.FIRST_AID_ORDER, id,
                     () => Say(new Meitou.Simulation.FirstAid.TreatOrder(selection, id) { Tick = tick }))));
             }
             if (!down) return null;
@@ -273,7 +300,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 return ("attk", id, Do(() =>
                 {
                     if (lead.Turret is not null) Say(new Meitou.Simulation.Combat.ShootAtOrder(selection, id) { Tick = tick });
-                    else OrderOrJob(Meitou.Data.Gameplay.Ai.TaskType.MELEE_ATTACK, id, () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = tick, Picked = true, Defensive = defence }));
+                    else squadWindows.OrderOrJob(Meitou.Data.Gameplay.Ai.TaskType.MELEE_ATTACK, id, () => Say(new Meitou.Simulation.Combat.AttackOrder(selection, id) { Tick = tick, Picked = true, Defensive = defence }));
                 }));
             }
             return (TalkPointer(c), id, Do(() => Say(new Meitou.Simulation.Dialogue.TalkOrder(lead.Id, id) { Tick = tick })));
@@ -294,7 +321,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public void MouseMove(Vector2 p)
     {
         mouse = p;
-        if (EditorPointerMove(p)) return;
+        if (characterEditor.EditorPointerMove(p)) return;
         if (ScrollThumbMove(p)) return;
         if (worldMap.MapPointerMove(p)) return;
         if (UiVisible && faithfulScreens.PointerMove(p)) return;
@@ -305,24 +332,24 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     {
         mouse = p;
         uiInput++;
-        EditorPointerUp(button);
+        characterEditor.EditorPointerUp(button);
         if (ContextMenuRelease(button, p)) return;
-        if (button == MouseButton.Left && labelPress is { } labelled)
+        if (button == MouseButton.Left && groundItemPicks.labelPress is { } labelled)
         {
-            labelPress = null;
-            if (LabelAt(p) == labelled) LabelPickUp(labelled);
+            groundItemPicks.labelPress = null;
+            if (groundItemPicks.LabelAt(p) == labelled) groundItemPicks.LabelPickUp(labelled);
             return;
         }
-        if (button == MouseButton.Left) { worldMap.MapPickUp(p); InventoryPointerUp(p); JobDragEnd(p); SquadPointerUp(p, shift); faithfulScreens.PointerUp(); worldMap.mapDrag = null; }
+        if (button == MouseButton.Left) { worldMap.MapPickUp(p); inventoryWindows.InventoryPointerUp(p); JobDragEnd(p); squadWindows.SquadPointerUp(p, shift); faithfulScreens.PointerUp(); worldMap.mapDrag = null; }
         if (button == MouseButton.Middle) worldMap.mapDrag = null;
         if (button == MouseButton.Right && memberPress is { } pressed)
         {
             memberPress = null;
-            if (SquadBarMemberAt(p) == pressed) FocusMember(pressed, shift);
+            if (portraitBar.SquadBarMemberAt(p) == pressed) FocusMember(pressed, shift);
             return;
         }
         if (button == MouseButton.Right && worldMap.MapRightUp(p)) return;
-        if (button == MouseButton.Right) { ContextRelease(); SiteRelease(); RockRelease(); BedRelease(); DummyRelease(); SeatRelease(); }
+        if (button == MouseButton.Right) { ContextRelease(); build.SiteRelease(); furniture.RockRelease(); furniture.BedRelease(); furniture.DummyRelease(); furniture.SeatRelease(); }
         if (button == MouseButton.Right && steering)
         {
             Steer(final: true);
@@ -349,13 +376,13 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
 
             var other = hit is null && !shift ? PickWhere(p, c => !c.IsPlayer) : null;
             // A building under the cursor (and no character) is selected and the characters keep their selection (docs/game/ui-input.md "Building picking and selection").
-            if (hit is null && PickWhere(p, _ => true) is null && PickBuilding(p) is { } building)
+            if (hit is null && PickWhere(p, _ => true) is null && buildingSelection.PickBuilding(p) is { } building)
             {
-                SetBuilding(building);
+                buildingSelection.SetBuilding(building);
                 Inspect(CharacterId.None);
                 return;
             }
-            if (hit is null && other is null && DeselectBuildings) SetBuilding(null);
+            if (hit is null && other is null && buildingSelection.DeselectBuildings) buildingSelection.SetBuilding(null);
             Select(hit is { } id ? new[] { id } : [], shift, toggle: true);
             if (other is { } stranger) Inspect(stranger);
             else if (!shift || hit is not null) Inspect(CharacterId.None);
@@ -369,9 +396,9 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     bool DeadOwn(CharacterId id) => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { Body.Dead: true };
 
     /// <summary>Shows <paramref name="target"/> (another faction's character or your own dead one; <see cref="CharacterId.None"/> for nobody) in the HUD panels.</summary>
-    void Inspect(CharacterId target)
+    internal void Inspect(CharacterId target)
     {
-        if (!target.IsNone) SetBuilding(null);
+        if (!target.IsNone) buildingSelection.SetBuilding(null);
         Say(new InspectCommand(target) { Tick = session.World.Tick });
     }
 
@@ -384,13 +411,13 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     {
         if (!final) hotkeyEventsThisFrame = 0;
         UpdateContextMenu();
-        UpdateFactionName();
-        UpdateTownName();
-        UpdateBed();
-        UpdateDummy();
-        UpdateSeat();
+        factionWindow.UpdateFactionName();
+        townPanel.UpdateTownName();
+        furniture.UpdateBed();
+        furniture.UpdateDummy();
+        furniture.UpdateSeat();
         worldMap.UpdateMap();
-        if (!final) UpdateBuild();
+        if (!final) build.UpdateBuild();
         if (!steering || OverHud(mouse)) return;
         if (Ray(mouse) is not { } ray || MoveHit(ray.Origin, ray.Direction) is not { } hit) return;
         PlaceMarker(hit);   // the marker follows the cursor every frame; the order only once a tick
@@ -415,13 +442,13 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// <summary>A third press (a single one while the flight to that member is under way): the host ends the flight on it at once.</summary>
     public Action<CharacterId>? SkipFlight { get; set; }
     // The last number key and when it was pressed: the same key again within DoubleTapSeconds centres on the character (docs/game/ui-input.md, events 100..120).
-    InputAction? lastHotkey;
-    long lastHotkeyAt;
-    int hotkeyEventsThisFrame;
-    const double DoubleTapSeconds = 0.5;
+    internal InputAction? lastHotkey;
+    internal long lastHotkeyAt;
+    internal int hotkeyEventsThisFrame;
+    internal const double DoubleTapSeconds = 0.5;
 
     /// <summary>Selects the squad's <paramref name="index"/>th member (<paramref name="shift"/> adds); the second press within half a second centres the camera on it and follows.</summary>
-    void SelectMember(int index, bool shift, bool doubleTap)
+    internal void SelectMember(int index, bool shift, bool doubleTap)
     {
         var members = ActiveSquadMembers();
         if (index < 0 || index >= members.Count) return;
