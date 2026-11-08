@@ -358,6 +358,18 @@ sealed partial class GameHost
             if (gpu?.Particles is { } pr) foreach (var line in pr.Describe(session.Focus, 100000).Where(l => l.Contains("Fly"))) con.Print(line.Trim());
         });
 
+        Add("draw-state", "draw-state [--missing]", "every character: id, name, position, state, whether it is in the draw list (hidden indoors, in reach) and what the character renderer did with it last update (culled, not built, off screen, palette NaNs, parts shown); --missing: only those not drawn", (args, con) =>
+        {
+            bool missing = args.Contains("--missing");
+            foreach (var c in session.CurrentSnapshot.Characters)
+            {
+                string what = gpu?.Characters is { } r ? r.DrawReport(DrawKey(c.Id)) : "no renderer";
+                if (missing && what.StartsWith("live ") && !what.Contains("FAILED") && what.Contains("inFrustum=True") && what.Contains("partsShown=") && !what.Contains("partsShown=0/") && what.Contains("badBones=0/")) continue;
+                string kind = c.Body is { Dead: true } ? "dead" : c.Ragdoll is not null ? "ragdoll" : "alive";
+                con.Print($"{c.Id} {c.Name} {kind} at {c.Position.X:0.0},{c.Position.Y:0.0},{c.Position.Z:0.0} carriedBy={c.CarriedBy} appearance={(c.Appearance is null ? "NULL" : (c.Appearance.Headless ? "headless " : "") + (gpu?.Characters?.AssetState(c.Appearance) ?? "?"))} race={c.Appearance?.Race?.Name}[{c.Appearance?.Race?.StringId}]/{(c.Appearance?.Female == true ? "F" : "M")} mesh='{c.Appearance?.BodyMesh}' record={c.Appearance?.Character?.Name}[{c.Appearance?.Character?.StringId}] notes=[{string.Join("; ", c.Appearance?.Notes ?? [])}] loadoutRace={c.Appearance?.Loadout?.Race?.Name} hiddenIndoors={hiddenIndoors.Contains(c.Id)} reach={(gpu?.Characters?.InReach(c.Position, camera.Eye, c.DrawDistanceScale) == true)} | {what}");
+            }
+        });
+
         Add("research", "research [list | queue <tech>]", "finish every research; research list shows the research state, research queue <tech> queues one the way the research window does", (args, con) =>
         {
             if (args.Count > 0) { ControlResearch(args, con); return; }

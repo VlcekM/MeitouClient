@@ -688,6 +688,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         asset = content.Build(inst.Appearance);
         buildMs += Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds;
         assets[inst.Appearance] = asset;
+        if (asset is null) { Console.WriteLine($"characters a look failed to build and its characters are not drawn: {string.Join("; ", Messages.TakeLast(3))}"); Messages.Clear(); }
         if (asset is not null && inst.Appearance?.BodyMesh is { Length: > 0 } body) bodyHeights[body] = Math.Max(bodyHeights.GetValueOrDefault(body), asset.Height);
         built++;
         return asset;
