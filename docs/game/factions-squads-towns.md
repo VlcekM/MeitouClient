@@ -637,6 +637,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   is moved the same way; neither: the town position. Meitou: `TownExit` serves the patrols and the intruder errand 274 (`TownDutySystem.Outside`; placed towns by their level buildings, a player town by its complete sites; the point's cache is **Unknown**, not modelled). A town without buildings: a door point of the object under the town position
   (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So bandits never aim inside a walled town, the Hub included (its two
   `Defensive Gate IV` are ruins in the level data; a ruin has no door ([locks](locks.md#doors)), so the wall branch applies, skipping the first wall, a `Defensive Wall IV Connector` without `interior`; **Observed**).
+  The point still lies within the town radius (2500), so the squad counts as in the town and its loot goals walk it in through the ruined gates (**Observed**, headless, Rebirth save: Dust Bandit roamers at the Hub's west gate run LOOT_THE_DEAD inside the walls).
   The move: `CharMovement::setPatrolInput` (`FUN_14065eaa0`, vtable +0xa0) in mode 3 (a `PatrolInfo` with a biome group) draws the point
   above and sends the character to it exactly; it redraws (up to 10 times) only a point whose ground is present and below 95 when the
   byte at +0x79 of the object at Character +0x2e0 is set (a race flag, water below 95: **Observed**), else accepts it (**Verified**). The
