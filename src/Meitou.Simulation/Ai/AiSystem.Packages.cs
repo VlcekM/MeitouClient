@@ -72,6 +72,68 @@ public sealed partial class AiSystem
         return bestD <= bestR * bestR ? best : CampaignTown.None;
     }
 
+    /// <summary>Radius factors of the status town (<c>FUN_1405a51e0</c>, <b>Verified</b>): a town of the player's faction, keeping the town the character is in, entering one.</summary>
+    internal const float PlayerTownReach = 1.25f, StayReach = 1.5f, EnterReach = 1;
+
+    /// <summary>
+    /// The character's status town (the original's status <c>+0x88</c>, written by <c>FUN_1405a51e0</c> before each status update, docs/game/ai-tasks.md "Status town"), from its
+    /// position and its <paramref name="current"/> one: the nearest placed town of the player's faction within 1.25 x its radius; else the current town within 1.5 x its radius, or,
+    /// with none, the nearest placed town within its radius; else the nearest player town within the same reach. The original's walled-town and building steps are not modelled.
+    /// </summary>
+    internal static CampaignTown StatusTownAt(PopulationData data, World world, Vector3 p, CampaignTown current)
+    {
+        var at = Flat(p);
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
+        if (NearestSite(data, at, player) is { } own && Reaches(at, own, PlayerTownReach)) return own.Town;
+
+        float reach = current.IsNone ? EnterReach : StayReach;
+        var held = current.IsNone ? NearestSite(data, at, -1) : TownPlace(data, world, current);
+        if (held is { } town && Reaches(at, town, reach)) return town.Town;
+        return NearestPlayerTown(world, at) is { } built && Reaches(at, built, reach) ? built.Town : CampaignTown.None;
+    }
+
+    readonly record struct PlacedTown(CampaignTown Town, Vector2 Centre, float Radius);
+
+    static bool Reaches(Vector2 at, PlacedTown town, float factor)
+    {
+        float r = town.Radius * factor;
+        return Vector2.DistanceSquared(at, town.Centre) < r * r;
+    }
+
+    /// <summary>The nearest placed town but a nest marker (of <paramref name="faction"/> when it is 0 or more).</summary>
+    static PlacedTown? NearestSite(PopulationData data, Vector2 at, int faction)
+    {
+        PlacedTown? best = null;
+        float bestD = float.MaxValue;
+        foreach (var site in data.Sites)
+        {
+            if (site.Town.Type is TownType.NestMarker or TownType.Null) continue;
+            if (faction >= 0 && (site.Index >= data.SiteFactions.Count || data.SiteFactions[site.Index] != faction)) continue;
+
+            float d = Vector2.DistanceSquared(at, Flat(site.Position));
+            if (d < bestD) (best, bestD) = (new PlacedTown(CampaignTown.OfSite(site.Index), Flat(site.Position), site.Town.Radius), d);
+        }
+        return best;
+    }
+
+    static PlacedTown? NearestPlayerTown(World world, Vector2 at)
+    {
+        PlacedTown? best = null;
+        float bestD = float.MaxValue;
+        foreach (var town in world.Buildings.Towns)
+        {
+            float d = Vector2.DistanceSquared(at, Flat(town.Position));
+            if (d < bestD) (best, bestD) = (new PlacedTown(CampaignTown.OfPlayer(town.Number), Flat(town.Position), town.Radius), d);
+        }
+        return best;
+    }
+
+    static PlacedTown? TownPlace(PopulationData data, World world, CampaignTown t)
+    {
+        if (t.Site >= 0) return t.Site < data.Sites.Count ? new PlacedTown(t, Flat(data.Sites[t.Site].Position), data.Sites[t.Site].Town.Radius) : null;
+        return world.Buildings.FindTown(t.PlayerTown) is { } built ? new PlacedTown(t, Flat(built.Position), built.Radius) : null;
+    }
+
     /// <summary>The centre of the running package's mission town (X/Z); null without one or when that player town is gone.</summary>
     Vector2? DestinationCentre(World world, Blackboard board)
     {

@@ -508,6 +508,11 @@ public sealed class CharacterCold
     /// </summary>
     public bool Freed { get; set; }
     /// <summary>
+    /// The town the character is in for its status (the original's status <c>+0x88</c>, <see cref="Ai.AiSystem.StatusTownAt"/>): kept up by <see cref="Crime.ArrestSystem"/> before
+    /// the status tests (<see cref="Freed"/>, the slave escape). Runtime only, not saved and not hashed: none at load (whether the original's is set before a loaded character's first update is <b>Unknown</b>).
+    /// </summary>
+    public CampaignTown StatusTown { get; set; } = CampaignTown.None;
+    /// <summary>
     /// The original's slave state (status <c>+0</c>, saved as <c>slavestate</c>; <c>FUN_1405a4940</c>): 0 free, 1 slave, 2 escaped slave, 3 ex-slave. A slave's sentence is never served.
     /// <see cref="Locks.FixtureRegistry.Enslave"/>; an escaped slave lies low to ex-slave, then free (<see cref="Locks.FixtureRegistry.LayLow"/>); hashed only while set.
     /// </summary>
