@@ -1333,7 +1333,9 @@ A character's job list (the Orders menu's "Perma-Jobs"; class `OrdersReceiver`, 
     the heaviest wins. At the machine `Task_FeedCorpseIntoMachine` (136; slot 3 `FUN_1403567a0`, **Verified**) lets go of the body and kills/removes it ("incinerated or cooked"), plays `Armor_Worn` and
     `Character_Drop_Person` and floats the functionality's `string` over the machine ([corpse machine label](buildings-production.md#classes-and-functions)).
   - 45 Bodyguard, 31 Staying close and 97 Training have no finder: they act on the job's own target; 45 and 31 are goals (Task_Blank, rows above) on the job's character, the context menu gives
-    them as "Follow" (31) and "Bodyguard" (45), the dispatcher always adds 45 as a job. 97 is `Task_UseTrainingDummy` (slots 1-3 `FUN_1403513a0`, `FUN_14035c1e0`, `FUN_140345570`; **Verified** by
+    them as "Follow" (31) and "Bodyguard" (45), the dispatcher always adds 45 as a job. None of 31, 45, 289 has 47 `IS_CARRYING_SOMETHING` in list B (row table), so nothing in
+    those rows stops a carrier following. Meitou: a carrier standing idle with nothing under way (after a pick-up order or a 148 lift) takes them up, ahead of 106 when listed above it; one
+    whose job, errand or order still holds the body does not, and the other production list jobs wait until the body is put down (`ProductionSystem.AbleFor`). 97 is `Task_UseTrainingDummy` (slots 1-3 `FUN_1403513a0`, `FUN_14035c1e0`, `FUN_140345570`; **Verified** by
     decompile): the dummy (function 7, BF_TRAINING; the animation event `Impact Dummy`, a "Training" progress bar for the player's characters) is operated through `UseableStuff` vfunc 0x4b0: with a
     positive `stat used` (+0x3f8) it calls the continuous XP entry with a cap, `FUN_1408c64f0`(stats, dt, 2.0, &stat, cap = the float +0x1a4, stat number): nothing once the stat is at the cap, else the
     same gain as the operating XP (`0.02 x dt x exp gain mult x 2.0 x race[stat]`) through the core curve with that cap, ((cap - stat) / cap)^2, so the stat approaches the cap without reaching it.
