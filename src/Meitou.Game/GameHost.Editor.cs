@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Characters;
+using Meitou.Rendering;
 using Meitou.Rendering.Characters;
 using Meitou.Simulation;
 using Meitou.Simulation.Editing;
@@ -86,7 +87,12 @@ sealed partial class GameHost
         characters.StageRequest = new EditorStageRequest(DrawKey(view.Character), width, height, view.Yaw, view.Elevation, view.Distance, view.Head, camera.FieldOfView, EditorStageShift);
         characters.SetView(width, height, camera.FieldOfView);
         characters.Update(DrawnPosition(c));
-        // The platform casts into the studio's maps (Meitou, previewsun), as the character does.
+        // The bar's lamps, its other people and the far plane that reaches its ground; none of it with the platform.
+        characters.StageLamps = editorBar?.Lamps;
+        characters.StageCompany = EditorCompany();
+        characters.StageFar = editorBar is null ? 400 : 1500;
+        player.EditorNight = editorBar is not null;
+        // The set casts into the studio's maps (Meitou, previewsun), as the character does.
         characters.StageCasters = ActiveObjects is { } caster ? (viewProjection, eye) => caster.RecordStagePropDepth(viewProjection, eye) : null;
         characters.DrawStage();
         DrawEditorPlatform(view.Character, characters);
@@ -110,9 +116,17 @@ sealed partial class GameHost
         if (editorPlatformFor != character || editorSetIsBar != bar)
         {
             (editorPlatformFor, editorSetIsBar) = (character, bar);
-            var set = bar && scene.Objects is { } world ? EditorBar.Set(world, stage.Feet) : null;
-            set ??= Meitou.Data.World.WorldObjectLayout.EditorPlatformMesh(data.Db, Matrix4x4.CreateRotationY(MathF.PI) * stage.Feet) is { } platform ? [platform] : [];
+            editorBar = bar && scene.Objects is { } world ? EditorBar.At(world, stage.Feet) : null;
+            var set = editorBar?.Meshes ?? (Meitou.Data.World.WorldObjectLayout.EditorPlatformMesh(data.Db, Matrix4x4.CreateRotationY(MathF.PI) * stage.Feet) is { } platform ? [platform] : []);
             objects.SetStageProps(set, stage.Feet.Translation);
+            editorCrowd.Clear();
+            if (editorBar is not null)
+                foreach (var (id, faction, at, yaw, clip, seed) in editorBar.Crowd)
+                    if (data.Appearances?.Create(id, faction, seed) is { } look)
+                    {
+                        editorCrowd.Add((look, at, yaw, clip));
+                        characters.Prefetch(look);
+                    }
         }
         objects.Update(stage.Eye);
         objects.DrawStageProp(target.Colour, target.Depth, stage.ViewProjection, stage.Eye, stage.Light, target.FogDistance, characters);
@@ -130,6 +144,54 @@ sealed partial class GameHost
         if (editorPlatformFor is null) return;
         editorPlatformFor = null;
         ActiveObjects?.SetStageProps([], default);
+        editorBar = null;
+        editorCrowd.Clear();
+        player.EditorNight = false;
+        if (ActiveCharacters is { } characters) (characters.StageLamps, characters.StageCompany, characters.StageFar) = (null, null, 400);
+    }
+
+    /// <summary>The bar when the set is the bar (the <c>editorbar</c> switch); null with the platform.</summary>
+    EditorBar? editorBar;
+    /// <summary>The bar's own people for this opening of the editor (<see cref="EditorBar.Crowd"/>): their rolled looks, places, yaws and clips.</summary>
+    readonly List<(Meitou.Data.Characters.CharacterAppearance Look, Vector3 At, float Yaw, string Clip)> editorCrowd = [];
+    /// <summary>The draw keys of the bar's own people: their own range, clear of the characters' and the title's.</summary>
+    const long EditorCrowdKey = long.MinValue + (1L << 40);
+
+    /// <summary>Where one of the others being edited sits in the bar (up to <see cref="EditorBar.MaxSeated"/>, in the editor's order); null without the bar or for the shown one. An animal has no sitting clip.</summary>
+    (Vector3 Position, float Yaw, string Clip)? EditorBarSeat(CharacterId id, CharacterId shown)
+    {
+        if (editorBar is not { } bar || id == shown) return null;
+        int seat = 0;
+        foreach (var other in player.EditorCharacters)
+        {
+            if (other == shown || player.IsEditorAnimal(other)) continue;
+            if (seat >= EditorBar.MaxSeated || seat >= bar.Seats.Count) return null;
+            if (other == id) return bar.Seats[seat];
+            seat++;
+        }
+        return null;
+    }
+
+    /// <summary>The bar's own people in the draw list, each holding its clip from a start of its own so they do not move in step.</summary>
+    void AddEditorCrowd(CharacterDrawList list)
+    {
+        float now = (float)realTime.Elapsed.TotalSeconds;
+        for (int i = 0; i < editorCrowd.Count; i++)
+        {
+            var (look, at, yaw, clip) = editorCrowd[i];
+            list.Add(new CharacterInstance(EditorCrowdKey + i, look, at, yaw, [new CharacterPose(clip, EditorClipTime(clip, now + i * 3.7f), 1)]));
+        }
+    }
+
+    /// <summary>The draw keys of everyone in the bar but the shown character; null with the platform.</summary>
+    long[]? EditorCompany()
+    {
+        if (editorBar is null || player.EditorFocus is not { } focus) return null;
+        var keys = new List<long>();
+        foreach (var other in player.EditorCharacters)
+            if (EditorBarSeat(other, focus.Character) is not null) keys.Add(DrawKey(other));
+        for (int i = 0; i < editorCrowd.Count; i++) keys.Add(EditorCrowdKey + i);
+        return [.. keys];
     }
 
     /// <summary>

@@ -352,9 +352,11 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   as the mix of the old and new values over 0.12 s, the interval of the throttled rebuild (`CharacterRenderer.Blend`): body shape, posture
   layers, face/body pose weights (morph set recomputed per frame in a scratch ring of `MorphArena`) and skin/hair colours; a look with another
   head, hair or clothes swaps at once. The original's own slider behaviour is **Unknown**.
-- **Bar set** (`editorbar`, Meitou, optional and off by default; `EditorBar`): in place of the platform, the stage picture holds the base data's Storm House (`3384-TwoStorey.mod`) with interior layout `Bar`, laid out from its
-  records alone (no town, zone or save is read, so the world cannot switch it on or off), the edited character at (12, 4.4, -14) of its frame facing +x. The meshes are drawn as the platform: same studio (`previewsun`) or stage
-  light, casting into the studio's maps within 80 units of the character past its own radius. No lamps and no other people. Without that building or layout in the data: the platform.
+- **Bar set** (`editorbar`, Meitou, optional and off by default; `EditorBar`): in place of the platform, the stage picture holds the base data's Storm House (`3384-TwoStorey.mod`) with interior layout `Bar`, its lamps,
+  its ground (`FLatTop_Pillar01.mesh` to 1500 each way, 14 shrubs) and people, laid out from records alone (no town, zone or save is read, so the world cannot switch it on or off). The edited character stands at (12, 4.4, -14) of its
+  frame facing +x; up to 5 others being edited sit on the seats nearest the far tables, each over 41 across (beyond the orbit's reach), then the barman and guard of residents `44856-rebirth.mod` and 3 seated and 3 standing patrons of The Hub's
+  `bar squads` (`18919-Newwworld.mod`), rolled with fixed seeds. It is night: a dark backdrop, the studio's ambient at 0.12, the lamps (at most 14, those lighting the character most first, the room's white fill at half their mean power, radius 220) in place of
+  the studio's sun, with the world lamps' falloff; the first casts the character's shadow. The meshes are drawn as the platform and cast into the studio's maps within 80 units of the character past its own radius. Without that building or layout in the data: the platform.
 - **Held clips**: one without `loop` holds its last frame, as the simulation holds a one-shot clip (a mod's sit-down clip is not replayed, #242), at the record's `play speed`. Base data has none: its seat clips loop
   (`sitting chair` a 0.033 s pose at speed 0.01, `sitting idle` 10.9 s at 1; **Verified** by probe on base data). The original seats a sitter with the functionality's first `animation` reference (**Verified**, decompilation, `FUN_1402a0900`).
 - **Keys**: `in editor` true while open; a mode 0 character without a body file is randomised on open (Meitou's start characters are already

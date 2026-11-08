@@ -346,6 +346,15 @@ public static class TownBuildings
         return c;
     }
 
+    /// <summary>The spots (seats, nodes, beds) of <paramref name="resolved"/>'s interior layout, named by its placement: no town or state is read (the character editor's bar).</summary>
+    public static IReadOnlyList<HomeSpot> InteriorSpots(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved)
+    {
+        var c = new Contents();
+        if (!resolved.Destroyed && layouts.Find(resolved.Record, resolved.Placement.LayoutName(null, exterior: false), exterior: false) is { } interior)
+            LayInterior(db, layouts, resolved, interior, new(), new(), c);
+        return c.Spots;
+    }
+
     static void LayInterior(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord interior, Dictionary<string, bool> beds,
         Dictionary<string, GameRecord?> functions, Contents c)
     {

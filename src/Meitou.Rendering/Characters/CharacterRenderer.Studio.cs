@@ -3,6 +3,9 @@ using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering.Characters;
 
+/// <summary>A lamp of the character editor's set: where it is, how far it reaches and its colour times its intensity.</summary>
+public readonly record struct StageLamp(Vector3 Position, float Radius, Vector3 Colour);
+
 /// <summary>The <c>previewsun</c> switch (Meitou): the editor's stage and the portraits lit by the studio's fixed sun, with its shadow and occlusion. <see cref="Bar"/>, the
 /// <c>editorbar</c> switch (Meitou, optional): the editor's set is a bar instead of the platform.</summary>
 public static class PreviewStudio
@@ -25,6 +28,9 @@ internal sealed unsafe partial class CharacterRenderer
     const int StudioSkyDirections = 32, StudioSkyTile = 384, StudioSkyColumns = 8;
     /// <summary>The fog distance of the studio's colour draw and of its depth draws (CharacterShaders).</summary>
     const float StudioColour = -4, StudioDepth = -5;
+    /// <summary>The lamps the view block has room for (<c>cutPlanes</c> past the light's matrix, two each), the share of the studio's ambient left at night, and the lamps' strength.</summary>
+    const int MaxStudioLamps = 14;
+    const float StudioNightAmbient = 0.12f, StudioLampGain = 3.0f;
 
     GpuTexture? studioShadowColour, studioShadowDepth, studioAo, studioSkyColour, studioSkyDepth;
     uint studioShadowIndex, studioAoIndex, studioSkyIndex;
@@ -60,7 +66,9 @@ internal sealed unsafe partial class CharacterRenderer
         DrawStudioSky(index, centre, radius, eye);
 
         // The camera's depth, then the occlusion from it.
+        companyOn = true;
         DrawStudioDepth(index, viewProjection, eye, eye, colour, depth, width, height, "studio depth");
+        companyOn = false;
         RunStudioAo(depth, width, height, projection, radius);
 
         var v = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = toSun, FogDistance = StudioColour };
@@ -72,6 +80,17 @@ internal sealed unsafe partial class CharacterRenderer
         v.CutPlanes[1] = new Vector4(lightRelative.M21, lightRelative.M22, lightRelative.M23, lightRelative.M24);
         v.CutPlanes[2] = new Vector4(lightRelative.M31, lightRelative.M32, lightRelative.M33, lightRelative.M34);
         v.CutPlanes[3] = new Vector4(lightRelative.M41, lightRelative.M42, lightRelative.M43, lightRelative.M44);
+        // The set's lamps (the editor's bar): how many and the night's share of the studio's ambient, then two planes each from the fifth on.
+        if (StageLamps is { Count: > 0 } lamps && studioCasters is not null)
+        {
+            int count = Math.Min(lamps.Count, MaxStudioLamps);
+            v.CutRanges[2] = new Vector4(count, StudioNightAmbient, 0, 0);
+            for (int i = 0; i < count; i++)
+            {
+                v.CutPlanes[4 + 2 * i] = new Vector4(lamps[i].Position, lamps[i].Radius);
+                v.CutPlanes[5 + 2 * i] = new Vector4(lamps[i].Colour * StudioLampGain, 0);
+            }
+        }
         return v;
     }
 
@@ -257,11 +276,23 @@ internal static class StudioShaders
             return total > 0.0 ? open / total : 1.0;
         }
         // The studio's indirect light: a cool sky over warm sand by the normal's height. A share of it stays however closed the point is (light bounced in
-        // from everything the two maps do not hold), so a side the sun does not reach is dark, not black.
+        // from everything the two maps do not hold), so a side the sun does not reach is dark, not black. Less of it at night (the set's lamps, cutRanges[2].y).
         vec3 studioAmbient(vec3 n, float open)
         {
             vec3 sky = mix(vec3(0.30, 0.23, 0.16), vec3(0.30, 0.36, 0.46), smoothstep(-0.6, 0.8, n.y));
-            return sky * 2.2 * mix(0.3, 1.0, open);
+            return sky * 2.2 * mix(0.3, 1.0, open) * (view.cutRanges[2].x > 0.5 ? view.cutRanges[2].y : 1.0);
+        }
+        // The set's lamps (the editor's bar): cutRanges[2].x of them, none elsewhere. Lamp i's light at a point (the world lamps' falloff) and the way to it.
+        int studioLamps() { return int(view.cutRanges[2].x + 0.5); }
+        vec3 studioLamp(int i, vec3 world, out vec3 l)
+        {
+            vec4 p = view.cutPlanes[4 + 2 * i];
+            vec3 to = p.xyz - world;
+            float d = length(to);
+            l = to / max(d, 1e-3);
+            float x = clamp(d / max(p.w, 1e-3), 0.0, 1.0);
+            float a = x < 0.649 ? 0.2 + 0.8 * (1.0 - x) * (1.0 - x) * (1.0 - x) : x < 0.8 ? 0.242 - 3.0 * (x - 0.6) * (x - 0.6) : 3.0 * (x - 1.0) * (x - 1.0);
+            return view.cutPlanes[5 + 2 * i].rgb * a;
         }
         float studioOcclusion()
         {

@@ -461,8 +461,25 @@ static class CharacterShaders
                 float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.6;
                 // The sky's light where the character leaves it open (the large shapes: a hood over the face), the screen's occlusion for the folds.
                 float skyOpen = studioSky(vWorld, n) * mix(1.0, studioOcclusion(), 0.6);
-                colour = albedo * (studioAmbient(n, skyOpen) + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
-                if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade;
+                if (studioLamps() > 0)
+                {
+                    // The set's lamps in place of the sun: the first casts the shadow.
+                    colour = albedo * studioAmbient(n, skyOpen);
+                    for (int lamp = 0; lamp < studioLamps(); lamp++)
+                    {
+                        vec3 ll;
+                        vec3 light = studioLamp(lamp, vWorld, ll) * (lamp == 0 ? shade : 1.0);
+                        vec3 lh = normalize(ll + v);
+                        float ln = max(dot(n, ll), 0.0);
+                        colour += albedo * skinDiffuse(n, smoothNormal, ll, curvature, skin, albedo) * light + pow(max(dot(n, lh), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.6 * ln * light;
+                        if (surfaceOn) colour += surfaceSpecular(ll) * light;
+                    }
+                }
+                else
+                {
+                    colour = albedo * (studioAmbient(n, skyOpen) + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
+                    if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade;
+                }
                 {{(Environment.GetEnvironmentVariable("MEITOU_STUDIO_DEBUG") == "1" ? "colour = vec3(shade, studioSky(vWorld, n), studioOcclusion());" : "")}}
             }
             // The editor's stage (CharacterRenderer.DrawStage, a fog distance of -2): the game's rtt.hlsl (AtmosphereShaders.stageLight); -3 the same unclamped (Meitou's stage and

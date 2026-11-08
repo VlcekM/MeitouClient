@@ -92,6 +92,8 @@ public sealed unsafe partial class WorldObjectRenderer
             constants.CutVolumes = 0;
             // Eye-relative like the platform's positions (vWorld here is the point less the eye).
             constants.CutRanges[0] = new Vector4(new Vector3(sv.CutRanges[0].X, sv.CutRanges[0].Y, sv.CutRanges[0].Z) - eye, sv.CutRanges[0].W);
+            for (int i = 0; i < (int)sv.CutRanges[2].X; i++)
+                constants.CutPlanes[4 + 2 * i] = new Vector4(new Vector3(sv.CutPlanes[4 + 2 * i].X, sv.CutPlanes[4 + 2 * i].Y, sv.CutPlanes[4 + 2 * i].Z) - eye, sv.CutPlanes[4 + 2 * i].W);
         }
         PrepareDraws(iconOptions, wire: false);
         for (int d = 0; d < drawCount; d++) draws[d].Push.Spare = MeshSurface.NoWeather;
