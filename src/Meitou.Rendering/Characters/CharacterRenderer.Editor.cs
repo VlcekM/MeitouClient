@@ -108,9 +108,14 @@ internal sealed unsafe partial class CharacterRenderer
             Matrix4x4.Decompose(l.World, out _, out var facing, out _);
             StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
             StageStudio = null;
-            constants = StudioOn
+            studioCasters = StageCasters;
+            try
+            {
+                constants = StudioOn
                 ? StudioView(index, view * projection, perspective, eye, light, stageHdr!, stageHdrDepth!, target.Width, target.Height)
                 : new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light, FogDistance = hdr ? -3 : -2 };
+            }
+            finally { studioCasters = null; }
             if (StudioOn) StageStudio = constants;
         }
         var cmd = Gpu.BeginNative("character stage");

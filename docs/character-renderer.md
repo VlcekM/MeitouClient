@@ -171,7 +171,9 @@ interior-cut fields (`cutPad`, `cutVolumes`, `cutRanges[0]`, `cutPlanes[0..3]`),
 right and front, about 16 degrees above the level (the camera is at the head's height: the way to it already climbs); the stage from the camera's right, about 45 degrees to the side and 35 up, whichever way the editor turns the camera.
 The stage's platform (`WorldObjectRenderer.DrawStageProp`, the objects' shader, `StudioShaders`) takes the same view: lit by the studio's sun, it
 receives the character's shadow and the sky's occlusion round the feet (its `cutVolumes` left 0: the objects read it as their shadow cut; the
-centre made eye-relative like its positions). The platform's own parts cast nothing (only the character is in the maps).
+centre made eye-relative like its positions). The platform casts too: the host's `StageCasters` draws it
+(`WorldObjectRenderer.RecordStagePropDepth`, the objects' shader returning after its cut-outs at fog distance -5) into each studio map's pass
+(the sun's, the sky's spiral, the camera's depth), so its planks and pole shade it and the character, and its bulk closes the sky below the feet.
 The map is drawn with the camera's levels of detail. Its lookup takes clip y -1 as the first row (the viewport is not flipped). `MEITOU_STUDIO_DEBUG=1`
 draws the terms instead (red the sun's share, green the sky's visibility, blue the screen's occlusion). **Observed** (sandbox, `editor` console command, overhead and camera
 suns): the hood shades the eyes, the mantle the shoulders under its edges, a held staff the skirt. Not there: bounced light (the sky and the ground's bounce stand in).

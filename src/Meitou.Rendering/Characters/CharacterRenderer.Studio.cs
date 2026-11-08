@@ -30,6 +30,11 @@ internal sealed unsafe partial class CharacterRenderer
 
     bool StudioOn => look.Enhanced && look.Studio;
 
+    /// <summary>What else casts into the stage's studio maps (the editor's platform, <c>WorldObjectRenderer.RecordStagePropDepth</c>): called inside each
+    /// map's pass with its world view-projection and eye. The host sets it before <see cref="DrawStage"/>; the portraits have none.</summary>
+    internal Action<Matrix4x4, Vector3>? StageCasters { get; set; }
+    Action<Matrix4x4, Vector3>? studioCasters;
+
     /// <summary>
     /// The studio's shadow and occlusion for <paramref name="index"/>'s character (posed as the caller has it) seen through <paramref name="viewProjection"/> into
     /// <paramref name="depth"/> (the preview's depth target, <paramref name="width"/> × <paramref name="height"/>), outside any pass; returns the view constants
@@ -114,6 +119,7 @@ internal sealed unsafe partial class CharacterRenderer
                 var rect = new PixelRect(x, y, StudioSkyTile, StudioSkyTile);
                 Gpu.SetPassViewport(new PixelViewport(x, y, StudioSkyTile, StudioSkyTile, 0, 1), rect);
                 DrawView(new ViewConstants { ViewProjection = matrix, Eye = centre + d * (radius * 2), FogDistance = StudioDepth }, lodEye, []);
+                studioCasters?.Invoke(matrix, centre + d * (radius * 2));
             }
         }
         finally { portraitLive = was; }
@@ -139,6 +145,7 @@ internal sealed unsafe partial class CharacterRenderer
         portraitLive = index;
         try { DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, FogDistance = StudioDepth }, lodEye, []); }
         finally { portraitLive = was; }
+        studioCasters?.Invoke(viewProjection, eye);
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
         Gpu.EndNative(cmd);

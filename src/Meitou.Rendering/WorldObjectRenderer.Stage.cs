@@ -31,6 +31,33 @@ public sealed unsafe partial class WorldObjectRenderer
     /// the stage's lighting (a fog distance of -2) and no weather. Nothing while its mesh is not loaded.
     /// </summary>
     /// <param name="studio">The characters, whose stage has a studio view this frame (Meitou, previewsun): the platform is lit by it.</param>
+    /// <summary>
+    /// The stage's prop into the pass the caller has open (the character renderer's studio maps: the sun's, the sky's, the camera's depth), seen through
+    /// <paramref name="viewProjection"/> (world) from <paramref name="origin"/>, as a studio depth draw (cut-outs only). Nothing while its mesh is not loaded.
+    /// </summary>
+    internal void RecordStagePropDepth(Matrix4x4 viewProjection, Vector3 origin)
+    {
+        if (stageInstance is not { Gpu: { } gpu, Materials: { } materials } inst) return;
+        foreach (var b in batchMap.Values) b.Count = 0;
+        active.Clear();
+        Add(gpu, materials, gpu.MinLevel, inst.Transform * Matrix4x4.CreateTranslation(-origin), 0, 2, 0);
+        int total = 0;
+        foreach (var b in active) { b.Offset = total; total += b.Count; }
+        if (total > 0)
+        {
+            instances = Gpu.Frame.AllocateConstants((ulong)total * InstanceStride, 16);
+            var target = new Span<byte>(instances.Pointer, total * InstanceStride);
+            foreach (var b in active)
+                System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
+            var constants = new ViewConstants { ViewProjection = Matrix4x4.CreateTranslation(origin) * viewProjection, Eye = Vector3.Zero, FogDistance = -5 };
+            PrepareDraws(iconOptions, wire: false);
+            for (int d = 0; d < drawCount; d++) draws[d].Push.Spare = MeshSurface.NoWeather;
+            RecordDraws(colourProg, wire: false, in constants, default);
+        }
+        foreach (var b in active) b.Count = 0;
+        active.Clear();
+    }
+
     internal void DrawStageProp(GpuTexture colour, GpuTexture depth, Matrix4x4 viewProjection, Vector3 eye, Vector3 light, float fogDistance = -2, Characters.CharacterRenderer? studio = null)
     {
         if (stageInstance is not { Gpu: { } gpu, Materials: { } materials } inst) return;

@@ -92,6 +92,8 @@ static class BuildingLodShaders
         // The editor's studio (Meitou, previewsun; CharacterRenderer.Studio): the platform lit as the character on it, the character's shadow and its
         // sky's occlusion on it (the view block's interior-cut fields: the native port leaves view.* and the bindless tables as they are).
         f = Replace(f, @"void\s+main\s*\(\s*\)\s*\{", Characters.StudioShaders.Functions + "\nvoid main()\n{");
+        // A studio depth draw (a fog distance of -5, the platform casting into the studio's maps): its cut-outs only.
+        f = Literal(f, "vec3 l = normalize(uLightDir);", "if (uFogDistance < -4.5) { fragColour = vec4(0.0); return; }\n            vec3 l = normalize(uLightDir);");
         f = Literal(f, "if (uFogDistance < -1.5) colour = stageLight(albedo, n, v, normalize(uLightDir), glossLit, uFogDistance < -2.5);", """
             if (uFogDistance < -3.5)
             {

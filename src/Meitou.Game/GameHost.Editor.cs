@@ -87,6 +87,8 @@ sealed partial class GameHost
         characters.StageRequest = new EditorStageRequest(DrawKey(view.Character), width, height, view.Yaw, view.Elevation, view.Distance, view.Head, camera.FieldOfView, EditorStageShift);
         characters.SetView(width, height, camera.FieldOfView);
         if (!posed) characters.Update(DrawnPosition(c));
+        // The platform casts into the studio's maps (Meitou, previewsun), as the character does.
+        characters.StageCasters = ActiveObjects is { } caster ? (viewProjection, eye) => caster.RecordStagePropDepth(viewProjection, eye) : null;
         characters.DrawStage();
         DrawEditorPlatform(view.Character, characters);
         characters.ResolveStage();
