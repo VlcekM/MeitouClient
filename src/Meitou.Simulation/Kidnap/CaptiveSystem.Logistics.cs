@@ -85,7 +85,8 @@ public sealed partial class CaptiveSystem
             }
             case TaskType.SLAVE_GET_IN_MY_MASTERS_CAGE:
             {
-                if (cold.SlaveState != 1 || cold.SlaveOwner < 0 || cold.InSomething != HeldState.None || cold.IsPlayer) return null;
+                // FUN_1408caaf0 tests the owner handle only, not the slave state: an escaped or ex-slave that keeps its owner finds a cage too.
+                if (cold.SlaveState == 0 || cold.SlaveOwner < 0 || cold.InSomething != HeldState.None || cold.IsPlayer) return null;
                 // FUN_1408caaf0: the owner faction's free cages in the 3x3 zone cells round the slave, whatever the town (the finder's town argument is 0).
                 var at = table.Next[slot].Position;
                 Fixture? best = null;
