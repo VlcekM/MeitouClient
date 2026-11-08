@@ -806,7 +806,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// <see cref="TownRadiusMargin"/> beyond the farthest. Engine choice: a plain mean (the original weighs two building sets, <b>Unknown</b> which);
     /// a town without buildings keeps its place.
     /// </summary>
-    public static void ReassessTown(World world, PlayerTown town)
+    public static void ReassessTown(World world, PlayerTown town, bool mergeOverlaps = true)
     {
         var sum = Vector3.Zero;
         int count = 0;
@@ -820,6 +820,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
             if (s.Town == town.Number) radius = MathF.Max(radius, DistanceXz(s.Position, centre) + TownRadiusMargin);
         town.Position = centre;
         town.Override = Math.Clamp(radius, TownRadiusMin, TownRadiusMax);
+
+        if (mergeOverlaps) MergeOverlappingTown(world, town);
     }
 
     /// <summary>
@@ -827,7 +829,21 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// </summary>
     public static void ReassessTowns(World world)
     {
-        foreach (var town in world.Buildings.Towns) ReassessTown(world, town);
+        foreach (var town in world.Buildings.Towns) ReassessTown(world, town, mergeOverlaps: false);
+    }
+
+    static void MergeOverlappingTown(World world, PlayerTown town)
+    {
+        var other = world.Buildings.Towns
+            .Where(t => t != town && t.Owner == town.Owner)
+            .MinBy(t => DistanceXzSquared(t.Position, town.Position));
+        if (other is null || DistanceXzSquared(other.Position, town.Position) >= (other.Radius + town.Radius) * (other.Radius + town.Radius)) return;
+
+        var survivor = town.Radius <= other.Radius ? town : other;
+        var removed = survivor == town ? other : town;
+        world.Buildings.MoveTownBuildings(removed, survivor);
+        world.Buildings.RemoveTown(removed);
+        ReassessTown(world, survivor, mergeOverlaps: false);
     }
 
     /// <summary>
@@ -837,6 +853,12 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     {
         float dx = a.X - b.X, dz = a.Z - b.Z;
         return MathF.Sqrt(dx * dx + dz * dz);
+    }
+
+    static float DistanceXzSquared(Vector3 a, Vector3 b)
+    {
+        float dx = a.X - b.X, dz = a.Z - b.Z;
+        return dx * dx + dz * dz;
     }
 
     /// <summary>

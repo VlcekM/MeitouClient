@@ -254,12 +254,13 @@ shows the first failing message in this order (**Verified** unless marked):
 - **The outpost** (**Verified**, `FUN_140934e10`): a `Town` made from the TOWN `player_town_template` (base data: name
   "Your Outpost", type 1, `town radius mult` 1, no faction), owned by the player faction, named "Your Outpost",
   `public` false, `plevel` 0, `discovered` and `explored` (+0x180/+0x181, KenshiLib 1ce4a16 `TownBase`), added to the player-town list (town manager +0x68) that the save writes
-  ([player outposts](../formats/save.md#player-outposts)). On load (`FUN_14092ae80`) a player-faction town within the
-  radius of another player town is removed with "Player town '<a>' withing boundaries of <b>".
+  ([player outposts](../formats/save.md#player-outposts)). On load (`FUN_14092ae80`) a player-faction town whose centre lies strictly inside the
+  radius of its nearest other player-owned, non-nest town is removed (the one reached first in list order; its buildings keep their `town` handle,
+  become unassigned if that handle no longer resolves) with "Player town '<a>' withing boundaries of <b>" ([rule](../formats/save.md#importing-a-game-savemanagerimportgame-fun_140378a30)).
   No residents: the template lists none, and the resident pick (`Town::chooseResidents` `FUN_1409370d0`, from the building
   `default resident` / `residents override`) runs from `ZoneManager::loadPhase2` (`FUN_140a0e760`) only for towns whose faction
   lacks the player flag (FACTION `+0x250`) (**Verified** by decompile and its only caller).
-- **Centre and radius** (**Verified** by decompile, `Town::reassessTownPosition` `FUN_1405488f0`, via `TownList::reassessTownPositions`
+- **Centre, radius and placement-time merge** (**Verified** by decompile, `Town::reassessTownPosition` `FUN_1405488f0`, via `TownList::reassessTownPositions`
   `FUN_14054d080`; called on placement commit `FUN_1404d72a0`, dismantle `FUN_1402a2860` / `FUN_14054fea0` and town merge
   `FUN_140931840`): a player town's centre (+0x48) becomes a weighted mean of its buildings' position markers (two building
   sets, the first weighted x4; which buildings each holds is **Unknown**), put on the ground and on the navmesh within 500 (kept
@@ -267,7 +268,7 @@ shows the first failing message in this order (**Verified** unless marked):
   to [1000, 20000]. A town with no buildings at all is removed. `Town::getRadius` (`FUN_140926eb0`) returns +0x51c for a player
   town (2500 while it is at most 1), and `type`-based radii (table above) otherwise; campaigns' arrival and in-town tests
   (`FUN_140926d50`) use it. So the first building's spot stops being the centre as the base grows. Meitou:
-  `ConstructionSystem.ReassessTown`, a plain mean of the town's outdoor sites (engine choice), also on load.
+  `ConstructionSystem.ReassessTown`, a plain mean of the town's outdoor sites (engine choice); load reassessment deliberately does not run the merge pass. **Verified** (`FUN_14054d080`, `FUN_140931840`, `FUN_140927060`, `FUN_14092b3c0`): on placement-time reassessment, overlapping same-owner towns use `distance² < (radiusA + radiusB)²`; the smaller-radius town survives, the other town's buildings move to it, and the other town is destroyed.
 - **Slope** (slot 31 `FUN_1404daa20`): ground normal from four rays at the rotated bounding-box corners (outdoors) or
   one ray (indoors); slope = angle from vertical, compared with `max slope` in degrees. With `match slope` (forced for
   interior furniture and nodes) the ghost tilts to the ground and a slope over the limit fails; without it the tilt is
