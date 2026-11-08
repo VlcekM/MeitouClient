@@ -5,7 +5,7 @@ using Meitou.Data.Textures;
 using Meitou.Data.Ui;
 using Meitou.Modding;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Title;
 
 /// <summary>
 /// The Meitou title's main menu, after the Meitou UI kit (docs/meitou-ui.md, "Layout and states"): a stack 320 wide, 56 from the left and 36
@@ -15,7 +15,7 @@ namespace Meitou.Game;
 /// from crops of the game's Kenshi_UI.png (rounded corners, edges and shadow included) and drawn as images; the original title's buttons
 /// stay in place, invisible, as the hit targets, so input is the faithful screen's.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class TitleMenu(PlayerInterface player)
 {
     /// <summary>
     /// An upper-case button or title (<c>NEW GAME</c>, <c>YES</c>) in the active language: the catalog's message of the same text (<c>CONTINUE</c> is one), else of its
@@ -36,7 +36,7 @@ sealed partial class PlayerInterface
     /// <summary>The kit's numbers at 1600×900.</summary>
     const float MenuLeft = 56, MenuBottom = 36, MenuWidth = 320, MenuButton = 38, MenuGap = 6, MenuExitGap = 4, MenuCardGap = 8, MenuCardHeight = 78, MenuShadow = 22;
     /// <summary>The title's buttons and the catalog messages their captions are (FUN_140918ef0, upper-cased).</summary>
-    static readonly (string Widget, string Caption)[] TitleCaptions =
+    internal static readonly (string Widget, string Caption)[] TitleCaptions =
     [
         ("ContinueButton", "Continue"), ("NewGameButton", "New game"), ("LoadGameButton", "Load game"), ("ImportGameButton", "Import game"),
         ("OptionsButton", "Options"), ("CreditsButton", "Credits"), ("ExitButton", "Exit"),
@@ -50,23 +50,13 @@ sealed partial class PlayerInterface
     static Vector4 Hex(int r, int g, int b, float a = 1) => new(r / 255f, g / 255f, b / 255f, a);
     static readonly Vector4 InkMain = Hex(175, 166, 139), InkLight = Hex(217, 206, 184), InkPaper = Hex(20, 8, 6), InkDanger = Hex(191, 72, 52);
 
-    Func<string, string?>? uiResolve;
-    RgbaImage? uiAtlas;
     float menuArtScale;
-
-    /// <summary>The game's Kenshi_UI.png, decoded once and shared by the title menu, tooltips and settings; null when missing or unreadable.</summary>
-    internal RgbaImage? UiAtlas()
-    {
-        if (uiAtlas is not null || uiResolve?.Invoke("Kenshi_UI.png") is not { } path) return uiAtlas;
-        try { return uiAtlas = TextureLoader.LoadFile(path, allMips: false).Levels[0]; }
-        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException) { return null; }
-    }
     Dictionary<string, (float Progress, long At)>? menuHover;
     readonly Dictionary<UiRect, UiRect> menuIconBounds = [];
     (string Folder, DateTime Modified, SaveSlotInfo? Info) continueInfo;
 
     /// <summary>The kit's scale for this frame: 1 at 900 pixels high.</summary>
-    float MenuScale => Height / 900f;
+    float MenuScale => player.Height / 900f;
 
     float TitleHover(string name, bool hovered)
     {
@@ -80,9 +70,9 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Where each title button goes (the card first when there is a save), for the bindings and the drawing alike.</summary>
-    Dictionary<string, UiRect> MenuLayout(bool card)
+    internal Dictionary<string, UiRect> MenuLayout(bool card)
     {
-        float s = MenuScale, x = MenuLeft * s, w = MenuWidth * s, y = Height - MenuBottom * s - MenuButton * s;
+        float s = MenuScale, x = MenuLeft * s, w = MenuWidth * s, y = player.Height - MenuBottom * s - MenuButton * s;
         var at = new Dictionary<string, UiRect>(StringComparer.Ordinal) { ["ExitButton"] = new(x, y, w, MenuButton * s) };
         y -= MenuExitGap * s;
         for (int i = MenuButtons.Length - 2; i >= 0; i--) { y -= (MenuGap + MenuButton) * s; at[MenuButtons[i].Widget] = new(x, y, w, MenuButton * s); }
@@ -94,7 +84,7 @@ sealed partial class PlayerInterface
     /// Replaces the title buttons' looks with the kit's (their bounds and actions stay, invisible) and makes Continue the screen's default, so Enter
     /// continues. Falls back to the plain buttons until the art is baked.
     /// </summary>
-    void MeitouTitleMenu(List<UiControl> controls)
+    internal void MeitouTitleMenu(List<UiControl> controls)
     {
         if (!MenuArtReady()) return;
         float s = MenuScale;
@@ -109,13 +99,13 @@ sealed partial class PlayerInterface
         UiControl Text(string name, UiRect at, string text, float pixels, Vector4 colour, string align = "Left VCenter") =>
             new(name, "TextBox", at, text, "", "", true, new Dictionary<string, string> { ["TextAlign"] = align }, Vector4.Zero, colour, Pickable: false, TextScale: pixels * s / 16);
         // The vignette behind the stack (kit: an ellipse 620×470 at 4% across, on the bottom edge).
-        art.Add(Image("MeitouMenuVignette", new(0, Height - 470 * 0.8f * s, Width * 0.04f + 620 * 0.8f * s, 470 * 0.8f * s), MenuVignette));
+        art.Add(Image("MeitouMenuVignette", new(0, player.Height - 470 * 0.8f * s, player.Width * 0.04f + 620 * 0.8f * s, 470 * 0.8f * s), MenuVignette));
         for (int i = 0; i < controls.Count; i++)
         {
             var c = controls[i];
             if (c.Type != "Button") continue;
             var b = c.Bounds;
-            bool hover = c.Enabled && b.Contains(mouse.X, mouse.Y);
+            bool hover = c.Enabled && b.Contains(player.mouse.X, player.mouse.Y);
             float hoverAmount = TitleHover(c.Name, hover);
             if (c.Name == "ContinueButton")
             {
@@ -140,7 +130,7 @@ sealed partial class PlayerInterface
                 colour: FormattableString.Invariant($"1 1 1 {hoverAmount}")));
             // Use the sprite's tight visible box (stray pixels from neighbouring sprites dropped), fit it into the shared 24×20 slot
             // without upscaling, and centre it on the slot.
-            var tight = menuIconBounds.TryGetValue(icon, out var cached) ? cached : UiAtlas() is { } atlas ? menuIconBounds[icon] = VisibleBounds(atlas, icon) : icon;
+            var tight = menuIconBounds.TryGetValue(icon, out var cached) ? cached : player.UiAtlas() is { } atlas ? menuIconBounds[icon] = VisibleBounds(atlas, icon) : icon;
             float fit = Math.Min(1f, Math.Min(24 / tight.Width, 20 / tight.Height)) * s;
             float iconX = b.X + 24 * s - tight.Width * fit / 2;
             float iconY = b.Y + b.Height / 2 - tight.Height * fit / 2 + 1.0f * s;
@@ -161,12 +151,12 @@ sealed partial class PlayerInterface
     public ModReport? Mods { get; set; }
 
     /// <summary>The title's notice of <see cref="DataProblems"/>, bottom right (a missing mod or a data conflict would otherwise look like a clean install).</summary>
-    void AddDataProblems(List<UiControl> controls)
+    internal void AddDataProblems(List<UiControl> controls)
     {
         if (DataProblems == 0) return;
         float s = MenuScale;
         string text = DataProblems == 1 ? "1 game data problem, see log.txt" : $"{DataProblems} game data problems, see log.txt";
-        controls.Add(new("MeitouDataProblems", "TextBox", new(Width - 420 * s, Height - MenuBottom * s - 20 * s, 400 * s, 20 * s), text, "", "", true,
+        controls.Add(new("MeitouDataProblems", "TextBox", new(player.Width - 420 * s, player.Height - MenuBottom * s - 20 * s, 400 * s, 20 * s), text, "", "", true,
             new Dictionary<string, string> { ["TextAlign"] = "Right VCenter" }, Vector4.Zero, InkDanger, Pickable: false, TextScale: 13 * s / 16));
     }
 
@@ -221,7 +211,7 @@ sealed partial class PlayerInterface
     /// <summary>The save card's lines, from the newest save: "Save · Day N · Place" and "Squad · c.N · M members" (the squad when it is not the save's name).</summary>
     (string Line, string Meta) ContinueText()
     {
-        if (slots.FirstOrDefault() is not { } slot) return ("", "");
+        if (player.slots.FirstOrDefault() is not { } slot) return ("", "");
         if (continueInfo.Folder != slot.Folder || continueInfo.Modified != slot.ModifiedUtc)
         {
             SaveSlotInfo? info = null;
@@ -240,10 +230,10 @@ sealed partial class PlayerInterface
     /// <summary>Whether the menu's surfaces are on the GPU at this frame's size; bakes and uploads them when not (the atlas is read once).</summary>
     bool MenuArtReady()
     {
-        if (uiPainter is not { } painter) return false;
+        if (player.uiPainter is not { } painter) return false;
         float s = MenuScale;
         if (menuArtScale == s && painter.HasTexture(MenuPlateHover)) return true;
-        if (UiAtlas() is not { } uiAtlas) return false;
+        if (player.UiAtlas() is not { } uiAtlas) return false;
         int W(float v) => Math.Max(1, (int)MathF.Round(v * s));
         var paper = new UiRect(352, 457, 164, 81);   // GenericTextBoxSkin inside its soft alpha rim and worn corners (kit "paper-inner", cropped further)
         painter.SetImage(MenuCard, MenuArt.Card(uiAtlas, paper, W(MenuWidth), W(MenuCardHeight), s, MenuShadow * s, 1), srgb: false);
@@ -255,140 +245,25 @@ sealed partial class PlayerInterface
         menuArtScale = s;
         return true;
     }
-}
+    internal const string TitleLogoTexture = "meitou:title-logo";
+    /// <summary>Makes the Meitou title's wordmark (<see cref="TitleLogo"/>); asked once, null keeps the plain lettering.</summary>
+    public Func<RgbaImage?>? TitleLogoSource { get; set; }
+    Lazy<RgbaImage?>? titleLogo;
 
-/// <summary>The Meitou menu's surfaces, baked on the CPU as sRGB images with straight alpha (docs/meitou-ui.md, "Surfaces").</summary>
-static partial class MenuArt
-{
-    /// <summary>
-    /// The paper card (kit .mt-save): the paper crop stretched whole, brightened by <paramref name="bright"/>, with its edge drawn inside (2px dark line,
-    /// 1px faint line, 10px wear), corners rounded to 10, over a drop shadow (6 down, ~14 soft, 55% black) in a margin of <paramref name="margin"/> pixels.
-    /// </summary>
-    public static RgbaImage Card(RgbaImage atlas, UiRect paper, int width, int height, float s, float margin, float bright)
+    /// <summary>Whether the wordmark can be drawn; the first ask makes it and hands it to the painter.</summary>
+    internal bool TitleLogoReady()
     {
-        int m = (int)MathF.Ceiling(margin), w = width + 2 * m, h = height + 2 * m;
-        var image = new RgbaImage(w, h);
-        float radius = 10 * s;
-        for (int y = 0; y < h; y++)
-            for (int x = 0; x < w; x++)
-            {
-                float px = x + 0.5f - m, py = y + 0.5f - m;
-                float d = RoundedDistance(px, py, width, height, radius);
-                // The shadow: the card's shape 6 lower, faded over ~14.
-                float shadow = 0.55f * Smooth(1 - Math.Clamp((RoundedDistance(px, py - 6 * s, width, height, radius) + 3 * s) / (14 * s), 0, 1));
-                var colour = Vector4.Zero;
-                float cover = Math.Clamp(0.5f - d, 0, 1);
-                if (cover > 0)
-                {
-                    var c = Sample(atlas, paper, px / width, py / height) * bright;
-                    float inside = -d;
-                    c = Mix(c, new(60, 35, 20), 0.35f * Math.Clamp(1 - inside / (10 * s), 0, 1));
-                    if (inside < 3 * s) c = Mix(c, new(20, 8, 6), 0.25f);
-                    if (inside < 2 * s) c = Mix(c, new(20, 8, 6), 0.9f);
-                    colour = new(c, cover);
-                }
-                Put(image, x, y, Over(colour, new(0, 0, 0, shadow)));
-            }
-        return image;
+        if (player.uiPainter is not { } painter || TitleLogoSource is not { } source) return false;
+        if (painter.HasTexture(TitleLogoTexture)) return true;
+        titleLogo ??= new(source);
+        if (titleLogo.Value is not { } image) return false;
+        painter.SetImage(TitleLogoTexture, image);
+        return true;
     }
 
-    /// <summary>A plate button (kit .mt-btn): the 9-slice skin (6-pixel slices) stretched to size at <paramref name="bright"/> brightness, corners rounded to 7.</summary>
-    public static RgbaImage Plate(RgbaImage atlas, UiRect skin, int width, int height, float s, float bright)
+    /// <summary>The wordmark's texture goes while the title is closed (its image stays, so it is uploaded again when the title opens).</summary>
+    internal void ReleaseTitleLogo()
     {
-        var image = new RgbaImage(width, height);
-        float slice = 6 * s, radius = 7 * s;
-        static float Map(float p, float size, float slice, float source) =>
-            p < slice ? p / slice * 6 : p > size - slice ? source - 6 + (p - (size - slice)) / slice * 6 : 6 + (p - slice) / Math.Max(1, size - 2 * slice) * (source - 12);
-        for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
-            {
-                float px = x + 0.5f, py = y + 0.5f;
-                float cover = Math.Clamp(0.5f - RoundedDistance(px, py, width, height, radius), 0, 1);
-                var sample = SampleAlpha(atlas, skin.X + Map(px, width, slice, skin.Width), skin.Y + Map(py, height, slice, skin.Height));
-                Put(image, x, y, new(new Vector3(sample.X, sample.Y, sample.Z) * bright, sample.W * cover));
-            }
-        return image;
-    }
-
-    /// <summary>A flat chip with rounded corners (the save card's key badge), with an optional 1px rim.</summary>
-    public static RgbaImage Chip(int width, int height, float radius, Vector4 fill, Vector4? rim)
-    {
-        var image = new RgbaImage(width, height);
-        for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
-            {
-                float d = RoundedDistance(x + 0.5f, y + 0.5f, width, height, radius);
-                var c = rim is { } r && d > -1 ? Over(r, fill) : fill;
-                Put(image, x, y, c with { W = c.W * Math.Clamp(0.5f - d, 0, 1) });
-            }
-        return image;
-    }
-
-    /// <summary>
-    /// The vignette behind the stack (kit: radial-gradient(ellipse 620px 470px at 4% 100%, .93 at 25%, .6 at 55%, clear at 80%) in #080605), baked for
-    /// the area it covers: the ellipse's 80% extent from its centre at the image's bottom left, scaled to the frame by the caller.
-    /// </summary>
-    public static RgbaImage Vignette(int width, int height)
-    {
-        var image = new RgbaImage(width, height);
-        for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
-            {
-                // The image spans 0..0.8 of the ellipse's radii (its left 4% of the frame is folded into the first column).
-                float t = MathF.Sqrt(MathF.Pow((x + 0.5f) / width * 0.8f, 2) + MathF.Pow((height - y - 0.5f) / height * 0.8f, 2));
-                float a = t < 0.25f ? 0.93f : t < 0.55f ? 0.93f + (0.6f - 0.93f) * (t - 0.25f) / 0.3f : t < 0.8f ? 0.6f * (1 - (t - 0.55f) / 0.25f) : 0;
-                Put(image, x, y, new(8 / 255f, 6 / 255f, 5 / 255f, a));
-            }
-        return image;
-    }
-
-    /// <summary>Signed distance from the edge of a <paramref name="w"/>×<paramref name="h"/> rectangle at the origin with corners rounded to <paramref name="r"/> (negative inside).</summary>
-    static float RoundedDistance(float x, float y, float w, float h, float r)
-    {
-        float qx = MathF.Abs(x - w / 2) - (w / 2 - r), qy = MathF.Abs(y - h / 2) - (h / 2 - r);
-        return MathF.Sqrt(MathF.Max(qx, 0) * MathF.Max(qx, 0) + MathF.Max(qy, 0) * MathF.Max(qy, 0)) + MathF.Min(MathF.Max(qx, qy), 0) - r;
-    }
-
-    static float Smooth(float t) => t * t * (3 - 2 * t);
-    static Vector3 Mix(Vector3 a, Vector3 b, float t) => a + (b / 255f - a) * t;
-
-    /// <summary>Paper colour (0..1 sRGB) at <paramref name="u"/>, <paramref name="v"/> across a crop, bilinear.</summary>
-    static Vector3 Sample(RgbaImage atlas, UiRect crop, float u, float v)
-    {
-        var c = SampleAlpha(atlas, crop.X + Math.Clamp(u, 0, 1) * crop.Width, crop.Y + Math.Clamp(v, 0, 1) * crop.Height);
-        return new(c.X, c.Y, c.Z);
-    }
-
-    /// <summary>The atlas at pixel position <paramref name="x"/>, <paramref name="y"/> (0..1 sRGB with alpha), bilinear.</summary>
-    static Vector4 SampleAlpha(RgbaImage atlas, float x, float y)
-    {
-        x -= 0.5f; y -= 0.5f;
-        int x0 = (int)MathF.Floor(x), y0 = (int)MathF.Floor(y);
-        float fx = x - x0, fy = y - y0;
-        Vector4 At(int px, int py)
-        {
-            px = Math.Clamp(px, 0, atlas.Width - 1); py = Math.Clamp(py, 0, atlas.Height - 1);
-            int i = (py * atlas.Width + px) * 4;
-            return new Vector4(atlas.Pixels[i], atlas.Pixels[i + 1], atlas.Pixels[i + 2], atlas.Pixels[i + 3]) / 255f;
-        }
-        return Vector4.Lerp(Vector4.Lerp(At(x0, y0), At(x0 + 1, y0), fx), Vector4.Lerp(At(x0, y0 + 1), At(x0 + 1, y0 + 1), fx), fy);
-    }
-
-    /// <summary><paramref name="top"/> over <paramref name="under"/>, straight alpha.</summary>
-    static Vector4 Over(Vector4 top, Vector4 under)
-    {
-        float a = top.W + under.W * (1 - top.W);
-        if (a <= 0) return Vector4.Zero;
-        var rgb = (new Vector3(top.X, top.Y, top.Z) * top.W + new Vector3(under.X, under.Y, under.Z) * under.W * (1 - top.W)) / a;
-        return new(rgb, a);
-    }
-
-    static void Put(RgbaImage image, int x, int y, Vector4 c)
-    {
-        int i = (y * image.Width + x) * 4;
-        image.Pixels[i] = (byte)Math.Clamp(c.X * 255 + 0.5f, 0, 255);
-        image.Pixels[i + 1] = (byte)Math.Clamp(c.Y * 255 + 0.5f, 0, 255);
-        image.Pixels[i + 2] = (byte)Math.Clamp(c.Z * 255 + 0.5f, 0, 255);
-        image.Pixels[i + 3] = (byte)Math.Clamp(c.W * 255 + 0.5f, 0, 255);
+        if (player.uiPainter is { } painter && painter.HasTexture(TitleLogoTexture)) painter.Forget(TitleLogoTexture);
     }
 }

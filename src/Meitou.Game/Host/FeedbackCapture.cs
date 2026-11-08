@@ -5,7 +5,7 @@ using Meitou.Game.Ui;
 namespace Meitou.Game.Host;
 
 /// <summary>
-/// The feedback button's host side (PlayerInterface.Feedback.cs has the form): the frame after the press is drawn without the menus and kept as
+/// The feedback button's host side (FeedbackPanel has the form): the frame after the press is drawn without the menus and kept as
 /// the screenshot, then the form opens; Send saves the game into a temporary folder when asked and hands everything to <see cref="FeedbackSender"/>.
 /// </summary>
 sealed class FeedbackCapture(GameHost host)
@@ -57,15 +57,15 @@ sealed class FeedbackCapture(GameHost host)
             EndFeedbackNav();
             return;
         }
-        host.player.FeedbackPrefs = host.config.Feedback ??= new();   // the same object: what the form changes is saved with the settings
+        host.player.feedbackPanel.FeedbackPrefs = host.config.Feedback ??= new();   // the same object: what the form changes is saved with the settings
         feedbackPicture = picture;
         feedbackNavPicture = null;
         feedbackNavTried = false;
         bool inGame = FeedbackInGame;
         feedbackLocation = inGame ? CameraLocation() : null;
-        host.player.FeedbackNewer = null;
+        host.player.feedbackPanel.FeedbackNewer = null;
         feedbackNewer = LatestRelease.NewerThan(BuildVersion.Tag);
-        host.player.OpenFeedback(rgba is not null, inGame && host.nav is not null && host.debugOverlays.navOverlayRenderer is not null, inGame ? null : "only in a game");
+        host.player.feedbackPanel.OpenFeedback(rgba is not null, inGame && host.nav is not null && host.debugOverlays.navOverlayRenderer is not null, inGame ? null : "only in a game");
     }
 
     /// <summary>The camera as text for the issue: what it looks at, where the eye is, and the heading (the numbers of the F11 statistics).</summary>
@@ -129,44 +129,44 @@ sealed class FeedbackCapture(GameHost host)
         if (feedbackSend is { IsCompleted: true } done)
         {
             feedbackSend = null;
-            host.player.FeedbackSending = false;
+            host.player.feedbackPanel.FeedbackSending = false;
             var result = done.Result;
-            if (result.Error is { } error) host.player.FeedbackProgress(error, error: true);
+            if (result.Error is { } error) host.player.feedbackPanel.FeedbackProgress(error, error: true);
             else
             {
                 Console.WriteLine($"feedback  sent: issue #{result.Number} {result.Url}");
-                host.player.FeedbackSent(result.Number, result.Url!);
+                host.player.feedbackPanel.FeedbackSent(result.Number, result.Url!);
             }
         }
         else if (feedbackSend is not null && Volatile.Read(ref feedbackStatus) is var status && status != feedbackStatusShown)
-            host.player.FeedbackProgress(feedbackStatusShown = status);
+            host.player.feedbackPanel.FeedbackProgress(feedbackStatusShown = status);
         if (feedbackNewer is { IsCompleted: true } checkedNewer)
         {
             feedbackNewer = null;
-            host.player.FeedbackNewer = checkedNewer.IsCompletedSuccessfully ? checkedNewer.Result : null;
+            host.player.feedbackPanel.FeedbackNewer = checkedNewer.IsCompletedSuccessfully ? checkedNewer.Result : null;
         }
         StepFeedbackNav();
         if (!feedbackSendRequested) return;
         feedbackSendRequested = false;
         if (feedbackSend is not null || feedbackNavStage != FeedbackNavStage.None) return;
-        var form = host.player.FeedbackValues();
+        var form = host.player.feedbackPanel.FeedbackValues();
         host.config.Save();   // the ticks and Discord name, kept for the next report
         if (form.Navmesh && !feedbackNavTried && StartFeedbackNav())
         {
             // The navmesh screenshot first (a few frames); its end asks for the send again.
-            host.player.FeedbackSending = true;
-            host.player.FeedbackProgress("Taking the navmesh screenshot...");
+            host.player.feedbackPanel.FeedbackSending = true;
+            host.player.feedbackPanel.FeedbackProgress("Taking the navmesh screenshot...");
             return;
         }
         string? saveFolder = null;
         Task? saveWritten = null;
         if (form.Save)
         {
-            if (host.saves.Busy()) { host.player.FeedbackSending = false; host.player.FeedbackProgress("A save or load is still in progress. Try again in a moment.", error: true); return; }
+            if (host.saves.Busy()) { host.player.feedbackPanel.FeedbackSending = false; host.player.feedbackPanel.FeedbackProgress("A save or load is still in progress. Try again in a moment.", error: true); return; }
             saveFolder = Path.Combine(Path.GetTempPath(), $"meitou-feedback-{Guid.NewGuid():N}", $"feedback-{DateTime.Now:yyyyMMdd-HHmmss}");
             var before = host.saves.saveWrite;
             host.saves.QuickSaveNow(saveFolder, feedback: true);
-            if (ReferenceEquals(host.saves.saveWrite, before)) { host.player.FeedbackSending = false; host.player.FeedbackProgress("The game could not be saved (log.txt says why). Untick the save to send without it.", error: true); return; }
+            if (ReferenceEquals(host.saves.saveWrite, before)) { host.player.feedbackPanel.FeedbackSending = false; host.player.feedbackPanel.FeedbackProgress("The game could not be saved (log.txt says why). Untick the save to send without it.", error: true); return; }
             saveWritten = host.saves.saveWrite;
         }
         string[] mods = [.. Meitou.Data.LoadOrder.FromInstall(host.install).Entries.Select(e => e.Name)];
@@ -174,8 +174,8 @@ sealed class FeedbackCapture(GameHost host)
         var package = new FeedbackPackage(form, BuildVersion.Tag, BuildVersion.Commit, FeedbackSender.Platform(), mods, form.Screenshot ? feedbackPicture : null,
             form.Navmesh ? feedbackNavPicture : null, feedbackLocation, saveFolder, saveWritten, log);
         feedbackStatus = feedbackStatusShown = form.Save ? "Saving the game..." : "Sending...";
-        host.player.FeedbackProgress(feedbackStatus);
-        host.player.FeedbackSending = true;
+        host.player.feedbackPanel.FeedbackProgress(feedbackStatus);
+        host.player.feedbackPanel.FeedbackSending = true;
         feedbackSend = Task.Run(() => FeedbackSender.Send(package, s => Volatile.Write(ref feedbackStatus, s)));
     }
 }

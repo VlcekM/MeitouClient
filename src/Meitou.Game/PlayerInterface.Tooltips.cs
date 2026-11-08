@@ -6,7 +6,6 @@ using Meitou.Data.Gameplay.Combat;
 using Meitou.Data.Ui;
 using Meitou.Game.Rendering.Ui;
 using Meitou.Simulation;
-using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Trading;
 using Meitou.Game.Ui;
@@ -601,7 +600,7 @@ sealed partial class PlayerInterface
     /// count), kind markers, the stolen mark, the class's own rows, the weight, then the prices while trading, the charges and the quality. A row's label carries a leading hyphen as the
     /// original's do (docs/game/ui-screens.md "Tooltips"). What Meitou has no data for is left out (listed there).
     /// </summary>
-    IReadOnlyList<TooltipLine> ItemLines(ItemTip t)
+    internal IReadOnlyList<TooltipLine> ItemLines(ItemTip t)
     {
         var record = ItemRecordOf?.Invoke(t.Record);
         var type = record?.Type;
@@ -751,21 +750,21 @@ sealed partial class PlayerInterface
             int percent = trade.PriceFactor > 1 ? (int)((trade.PriceFactor - 1) * 100) : trade.PriceFactor < 1 ? (int)((1 - trade.PriceFactor) * 100) : 0;
             string suffix = trade.PriceFactor == 1 ? "" : $" ({(trade.PriceFactor > 1 ? "+" : "-")}{percent}%)";
             // A buyback price is the exact refund, not marked up.
-            lines.Add(new("-Value", "c." + Money(trade.Value), TooltipTone.Ink, TooltipTone.Ink, trade.Buyback && !t.Goods ? "" : suffix, TooltipTone.Bad));
-            lines.Add(new("-Sell value", "c." + Money(trade.SellValue), TooltipTone.Ink, TooltipTone.Ink, trade.Buyback && t.Goods ? "" : suffix, TooltipTone.Bad));
+            lines.Add(new("-Value", "c." + TradeWindows.Money(trade.Value), TooltipTone.Ink, TooltipTone.Ink, trade.Buyback && !t.Goods ? "" : suffix, TooltipTone.Bad));
+            lines.Add(new("-Sell value", "c." + TradeWindows.Money(trade.SellValue), TooltipTone.Ink, TooltipTone.Ink, trade.Buyback && t.Goods ? "" : suffix, TooltipTone.Bad));
         }
         else if (PricesOf?.Invoke(t) is { } prices)
         {
             // Outside a trade: the plain prices, no trader (the inventory tooltip prints them all the time).
-            lines.Add(new("-Value", "c." + Money(prices.Value), TooltipTone.Ink, TooltipTone.Ink));
-            lines.Add(new("-Sell value", "c." + Money(prices.Sell), TooltipTone.Ink, TooltipTone.Ink));
+            lines.Add(new("-Value", "c." + TradeWindows.Money(prices.Value), TooltipTone.Ink, TooltipTone.Ink));
+            lines.Add(new("-Sell value", "c." + TradeWindows.Money(prices.Sell), TooltipTone.Ink, TooltipTone.Ink));
         }
         if (type == Meitou.Data.Fcs.FcsRecordType.CONTAINER) lines.AddRange(ContainerRows(record!));
         if (research is not null) lines.AddRange(UnlockRows(research));
         // A trade item's average price follows the prices, in and out of a trade; while trading, the mark-up of the town and trader factors, Bad above 1 and Good below (FUN_1407ae130).
         if (type == Meitou.Data.Fcs.FcsRecordType.ITEM && PricesOf?.Invoke(t) is { Average: { } average })
         {
-            lines.Add(new("-Avg. Price", "c." + Money(average), TooltipTone.Ink, TooltipTone.Ink));
+            lines.Add(new("-Avg. Price", "c." + TradeWindows.Money(average), TooltipTone.Ink, TooltipTone.Ink));
             if (t.Trade is { } quote)
             {
                 float markup = quote.MarketFactor * quote.PriceFactor;

@@ -1,25 +1,25 @@
 using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Game.Tutorials;
-using Meitou.Simulation;
 using Meitou.Game.Ui;
+using Meitou.Simulation;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Movement;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Tutorials;
 
 /// <summary>
 /// The tutorial panel and window (<c>TutorialGUI</c>, docs/game/ui-screens.md "Tutorials"): a line per active tutorial stacked up from the bottom of the top-left list
 /// panel (25 px x the UI scale each, the newest lowest), a new line flashing white for a second; its name opens the window on it, its X dismisses it. The window shows the
 /// item's current page with PREVIOUS, SKIP / CONTINUE / FINISH and DISMISS, and runs the page's own advance while it is open.
 /// </summary>
-sealed partial class PlayerInterface
+sealed class TutorialPanel(PlayerInterface player)
 {
     TutorialManager? tutorials;
-    TutorialCatalog tutorialTexts = TutorialCatalog.From([]);
-    MyGuiLayout? tutorialPanelLayout, tutorialLineLayout;
-    readonly Dictionary<int, float> tutorialFlashes = [];
-    int? tutorialShown;
+    internal TutorialCatalog tutorialTexts = TutorialCatalog.From([]);
+    internal MyGuiLayout? tutorialPanelLayout, tutorialLineLayout;
+    internal readonly Dictionary<int, float> tutorialFlashes = [];
+    internal int? tutorialShown;
     long tutorialClock;
     // The page's advance state: the 5 s timer, whether its condition was seen, and what its start remembered.
     float tutorialTimer;
@@ -38,17 +38,17 @@ sealed partial class PlayerInterface
     public void ConfigureTutorials(TutorialManager? manager) => tutorials = manager;
 
     /// <summary>Once a frame from the HUD: the manager's poll (new lines flash, <c>Thing_Complete</c>), the flashes fading and the shown page's advance.</summary>
-    void PollTutorials()
+    internal void PollTutorials()
     {
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         float dt = tutorialClock == 0 ? 0 : MathF.Min((float)System.Diagnostics.Stopwatch.GetElapsedTime(tutorialClock, now).TotalSeconds, 0.25f);
         tutorialClock = now;
-        if (tutorials is not { } manager || TitleOpen || !session.World.Player.Exists) return;
+        if (tutorials is not { } manager || player.TitleOpen || !player.session.World.Player.Exists) return;
         if (!manager.Enabled) { tutorialShown = null; tutorialFlashes.Clear(); return; }
         if (manager.Update(dt, () => TutorialPoll(false)) is { Count: > 0 } started)
         {
             foreach (int id in started) tutorialFlashes[id] = 1;
-            Sound("Thing_Complete");
+            player.Sound("Thing_Complete");
         }
         foreach (int id in tutorialFlashes.Keys.ToArray())
             if ((tutorialFlashes[id] -= dt) <= 0) tutorialFlashes.Remove(id);
@@ -62,15 +62,15 @@ sealed partial class PlayerInterface
     void StartTutorialPage(int id)
     {
         (tutorialTimer, tutorialSeen, tutorialZoomed) = (0, false, false);
-        var view = session.Camera.Current;
+        var view = player.session.Camera.Current;
         (tutorialCameraTarget, tutorialCameraDistance) = (view.Target, view.Distance);
         tutorialLastPositions.Clear();
         switch (PageOf(id).Advance)
         {
-            case TutorialAdvance.CharSelection or TutorialAdvance.RecruitSelect: Select([], false); break;
-            case TutorialAdvance.CenterChar: Follow = null; break;
-            case TutorialAdvance.Map: foreach (string screen in faithfulScreens.OpenScreens.ToArray()) faithfulScreens.Close(screen); break;
-            case TutorialAdvance.RecruitStats: faithfulScreens.Close("stats"); break;
+            case TutorialAdvance.CharSelection or TutorialAdvance.RecruitSelect: player.Select([], false); break;
+            case TutorialAdvance.CenterChar: player.Follow = null; break;
+            case TutorialAdvance.Map: foreach (string screen in player.faithfulScreens.OpenScreens.ToArray()) player.faithfulScreens.Close(screen); break;
+            case TutorialAdvance.RecruitStats: player.faithfulScreens.Close("stats"); break;
             case TutorialAdvance.Lockpicking: tutorialPrisoners.Clear(); break;
         }
     }
@@ -78,15 +78,15 @@ sealed partial class PlayerInterface
     /// <summary>The shown page's advance test (docs/game/ui-screens.md "Tutorials", advance tests); the waits count real time while the window is open.</summary>
     bool TutorialAdvanced(int id, float dt)
     {
-        var snap = session.CurrentSnapshot;
-        var lead = Selected().FirstOrDefault();
+        var snap = player.session.CurrentSnapshot;
+        var lead = player.Selected().FirstOrDefault();
         bool Wait() { tutorialTimer += dt; return tutorialTimer >= TutorialWait; }
-        bool Tab(int tab) => faithfulScreens.IsOpen("overview") && faithfulScreens.GetTab("overview", "TabsMain") == tab;
+        bool Tab(int tab) => player.faithfulScreens.IsOpen("overview") && player.faithfulScreens.GetTab("overview", "TabsMain") == tab;
         switch (PageOf(id).Advance)
         {
             case TutorialAdvance.CameraControls:
             {
-                var view = session.Camera.Current;
+                var view = player.session.Camera.Current;
                 tutorialSeen |= view.Target.X != tutorialCameraTarget.X || view.Target.Z != tutorialCameraTarget.Z;
                 tutorialZoomed |= view.Distance != tutorialCameraDistance;
                 return tutorialSeen && tutorialZoomed && Wait();
@@ -99,14 +99,14 @@ sealed partial class PlayerInterface
                 tutorialLastPositions[lead.Id] = lead.Position;
                 return moved;
             }
-            case TutorialAdvance.CenterChar: return Follow is not null;
+            case TutorialAdvance.CenterChar: return player.Follow is not null;
             case TutorialAdvance.Map: tutorialSeen |= Tab(0); return tutorialSeen && Wait();
-            case TutorialAdvance.Signs: tutorialSeen |= AltHeld; return tutorialSeen && Wait();
+            case TutorialAdvance.Signs: tutorialSeen |= player.AltHeld; return tutorialSeen && Wait();
             case TutorialAdvance.Medkiting:
                 tutorialSeen |= snap.Characters.Any(c => c.IsPlayer && c.Task == CharacterTask.Treat);
                 return tutorialSeen && Wait();
             case TutorialAdvance.RecruitSelect: return tutorials!.Recruit is not { } recruit || lead?.Id == recruit;
-            case TutorialAdvance.RecruitStats: return faithfulScreens.IsOpen("stats");
+            case TutorialAdvance.RecruitStats: return player.faithfulScreens.IsOpen("stats");
             case TutorialAdvance.SquadArrange: return Tab(4);
             case TutorialAdvance.SelectUnconscious: return lead is { IsPlayer: true, Body: { Unconscious: true, PlayingDead: false } };
             case TutorialAdvance.Lockpicking:
@@ -123,9 +123,9 @@ sealed partial class PlayerInterface
             case TutorialAdvance.CraftButton: return Tab(2) || Tab(3);
             case TutorialAdvance.CraftTab: return Tab(3);
             case TutorialAdvance.ProductionSelection:
-                return BuildingFocus() is { SiteId: { } site } && snap.Buildings.FirstOrDefault(b => b.Id == site) is { Complete: true } && Machine(site) is { Output: not null };
+                return player.BuildingFocus() is { SiteId: { } site } && snap.Buildings.FirstOrDefault(b => b.Id == site) is { Complete: true } && player.Machine(site) is { Output: not null };
             case TutorialAdvance.ConstructionMaterials:
-                return BuildingFocus() is { SiteId: { } built } && snap.Buildings.FirstOrDefault(b => b.Id == built) is { Complete: true };
+                return player.BuildingFocus() is { SiteId: { } built } && snap.Buildings.FirstOrDefault(b => b.Id == built) is { Complete: true };
             default: return false;
         }
     }
@@ -145,10 +145,10 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The panel's buttons: <c>open:id</c> and <c>close:id</c> on a line, <c>prev</c> / <c>next</c> / <c>dismiss</c> / <c>hide</c> in the window.</summary>
-    void TutorialAction(string argument)
+    internal void TutorialAction(string argument)
     {
         if (tutorials is null) return;
-        Sound("General_Click");
+        player.Sound("General_Click");
         int colon = argument.IndexOf(':');
         int id = colon > 0 && int.TryParse(argument.AsSpan(colon + 1), NumberStyles.None, CultureInfo.InvariantCulture, out int n) && n < TutorialManager.Names.Length ? n : -1;
         if (argument.StartsWith("open:", StringComparison.Ordinal) && id >= 0) { tutorialShown = id; StartTutorialPage(id); }
@@ -161,11 +161,11 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The list's lines and, when one is open, the window, over the HUD.</summary>
-    void AddTutorialPanel(List<UiControl> controls)
+    internal void AddTutorialPanel(List<UiControl> controls)
     {
-        if (tutorials is not { Enabled: true } manager || tutorialLineLayout is null || tutorialPanelLayout is null || !session.World.Player.Exists || EditorOpen) return;
-        float scale = Height / 1080f, lineHeight = MathF.Round(TutorialLineHeight * scale), width = MathF.Round(Width * TutorialListWidth);
-        float y = Height * TutorialListHeight;
+        if (tutorials is not { Enabled: true } manager || tutorialLineLayout is null || tutorialPanelLayout is null || !player.session.World.Player.Exists || player.EditorOpen) return;
+        float scale = player.Height / 1080f, lineHeight = MathF.Round(TutorialLineHeight * scale), width = MathF.Round(player.Width * TutorialListWidth);
+        float y = player.Height * TutorialListHeight;
         var active = manager.Active;
         for (int k = active.Count - 1; k >= 0; k--)
         {
@@ -179,7 +179,7 @@ sealed partial class PlayerInterface
             b.Positions["CloseButton"] = new(width - 27, 0, 27, lineHeight);
             b.Text["NameButton"] = tutorialTexts.Title(id);
             string prefix = $"tutorial-{id}-";
-            foreach (var c in MyGuiPresentation.Arrange(tutorialLineLayout, (int)width, (int)lineHeight, b, uiResources.Layers))
+            foreach (var c in MyGuiPresentation.Arrange(tutorialLineLayout, (int)width, (int)lineHeight, b, player.uiResources.Layers))
             {
                 // Arranged at the top of the screen: the clip moves down with the bounds, else it hides the whole line.
                 var control = c with
@@ -198,7 +198,7 @@ sealed partial class PlayerInterface
         var (title, pages) = TutorialCatalog.Items[shown];
         int page = Math.Clamp(manager.Pages[shown], 0, pages.Length - 1);
         bool last = page == pages.Length - 1;
-        var w = new UiBindings { TextHeight = c => uiPainter?.TextHeight(c, Height, StandardPixels) ?? 0 };
+        var w = new UiBindings { TextHeight = c => player.uiPainter?.TextHeight(c, player.Height, player.StandardPixels) ?? 0 };
         w.Hidden.Add("TooltipsPanel");
         w.Text["TutorialWindow"] = tutorialTexts.TextAt(title);
         w.Text["TutorialDescription"] = tutorialTexts.TextAt(pages[page].Line);
@@ -207,7 +207,7 @@ sealed partial class PlayerInterface
         w.Text["DismissButton"] = "DISMISS";
         if (last) w.Hidden.Add("DismissButton");
         if (page == 0) w.Disabled.Add("PrevTutorialButton");
-        foreach (var c in MyGuiPresentation.Arrange(tutorialPanelLayout, Width, Height, w, uiResources.Layers))
+        foreach (var c in MyGuiPresentation.Arrange(tutorialPanelLayout, player.Width, player.Height, w, player.uiResources.Layers))
         {
             string? argument = c.Name switch { "NextTutorialButton" => "next", "PrevTutorialButton" => "prev", "DismissButton" => "dismiss", _ => null };
             var control = c with { Name = c.Name.Length > 0 ? "tutorial-window-" + c.Name : c.Name };
@@ -217,14 +217,11 @@ sealed partial class PlayerInterface
             controls.Add(control);
         }
     }
-}
 
-/// <summary>The Tutorials window (F1, <c>Kenshi_TutorialsWindow</c>): every tutorial by title; a row's pages paged read-only; ACTIVATE puts it in the panel from its first page.</summary>
-sealed partial class PlayerInterface
-{
+    // <summary>The Tutorials window (F1, <c>Kenshi_TutorialsWindow</c>): every tutorial by title; a row's pages paged read-only; ACTIVATE puts it in the panel from its first page.</summary>
     int tutorialsRow, tutorialsPage;
 
-    void BindTutorialsWindow(UiBindings b)
+    internal void BindTutorialsWindow(UiBindings b)
     {
         b.Text["Root"] = "TUTORIALS";
         b.Lists["TutorialList"] = [.. TutorialCatalog.Items.Select((item, i) => new UiListItem(i.ToString(CultureInfo.InvariantCulture), tutorialTexts.TextAt(item.Title)))];
@@ -239,33 +236,28 @@ sealed partial class PlayerInterface
         if (tutorialsPage < pages.Length - 1) b.Disabled.Remove("NextTutorialButton");
     }
 
-    void TutorialsWindowAction(MyGuiEvent e)
+    internal void TutorialsWindowAction(MyGuiEvent e)
     {
         if (e.Widget == "TutorialList" && e.Action == "select" && int.TryParse(e.Text, NumberStyles.None, CultureInfo.InvariantCulture, out int row) && row < TutorialCatalog.Items.Length)
         {
-            Sound("General_Click");
+            player.Sound("General_Click");
             (tutorialsRow, tutorialsPage) = (row, 0);
         }
-        else if (e.Widget == "PrevTutorialButton") { Sound("General_Click"); tutorialsPage--; }
-        else if (e.Widget == "NextTutorialButton") { Sound("General_Click"); tutorialsPage++; }
+        else if (e.Widget == "PrevTutorialButton") { player.Sound("General_Click"); tutorialsPage--; }
+        else if (e.Widget == "NextTutorialButton") { player.Sound("General_Click"); tutorialsPage++; }
         else if (e.Widget == "ActivateButton")
         {
-            faithfulScreens.Close("tutorials");
+            player.faithfulScreens.Close("tutorials");
             if (tutorials?.Activate(tutorialsRow) == true)
             {
                 tutorialFlashes[tutorialsRow] = 1;
-                Sound("Thing_Complete");
+                player.Sound("Thing_Complete");
             }
         }
     }
-}
 
-/// <summary>
-/// The tutorial highlight (<c>TutorialGUI</c>'s yellow box, <c>_setHightlightCoords</c>, docs/game/ui-screens.md "Tutorials"): the shown page's HUD part under a box of
-/// (0.909, 0.913, 0.125) whose alpha swings between 0.1 and 0.4 at 0.4 a second; a run page's box shows only while its condition holds.
-/// </summary>
-sealed partial class PlayerInterface
-{
+    // The tutorial highlight (<c>TutorialGUI</c>'s yellow box, <c>_setHightlightCoords</c>, docs/game/ui-screens.md "Tutorials"): the shown page's HUD part under a box of
+    // (0.909, 0.913, 0.125) whose alpha swings between 0.1 and 0.4 at 0.4 a second; a run page's box shows only while its condition holds.
     static readonly Vector4 TutorialHighlightColour = new(0.909f, 0.913f, 0.125f, 1);
     const float HighlightLow = 0.1f, HighlightHigh = 0.4f, HighlightRate = 0.4f;
     float highlightAlpha, highlightDirection = 1;
@@ -278,20 +270,20 @@ sealed partial class PlayerInterface
         if (tutorials is not { Enabled: true } || tutorialShown is not { } id) return TutorialHighlight.None;
         var page = PageOf(id);
         if (!page.Run) return page.Highlight;
-        var snap = session.CurrentSnapshot;
+        var snap = player.session.CurrentSnapshot;
         switch (page.Highlight)
         {
-            case TutorialHighlight.BuildModePanelBuildings: return BuildModeOn && CurrentBuilding() is not null ? page.Highlight : TutorialHighlight.None;
+            case TutorialHighlight.BuildModePanelBuildings: return player.BuildModeOn && player.CurrentBuilding() is not null ? page.Highlight : TutorialHighlight.None;
             case TutorialHighlight.PanelMedicalBarMaterials or TutorialHighlight.PanelMedicalBarCondition:
             {
-                if (BuildingFocus() is not { } focus || snap.Buildings.FirstOrDefault(b => b.Id == focus.SiteId) is not { Complete: false }) return TutorialHighlight.None;
-                bool door = FirstDoor(focus) is not null;
+                if (player.BuildingFocus() is not { } focus || snap.Buildings.FirstOrDefault(b => b.Id == focus.SiteId) is not { Complete: false }) return TutorialHighlight.None;
+                bool door = player.FirstDoor(focus) is not null;
                 return page.Highlight == TutorialHighlight.PanelMedicalBarMaterials
                     ? door ? TutorialHighlight.PanelMedicalBarMaterialsBuilding : TutorialHighlight.PanelMedicalBarMaterials
                     : door ? TutorialHighlight.PanelMedicalBarConditionBuilding : TutorialHighlight.PanelMedicalBarCondition;
             }
             default:   // the production building pages: the focus is a complete production building
-                return BuildingFocus() is { SiteId: { } site } && snap.Buildings.FirstOrDefault(b => b.Id == site) is { Complete: true } && Machine(site) is { Output: not null }
+                return player.BuildingFocus() is { SiteId: { } site } && snap.Buildings.FirstOrDefault(b => b.Id == site) is { Complete: true } && player.Machine(site) is { Output: not null }
                     ? page.Highlight : TutorialHighlight.None;
         }
     }
@@ -358,7 +350,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Once a frame, over everything else: the box over the wanted part, its alpha swinging.</summary>
-    void AddTutorialHighlight(List<UiControl> controls)
+    internal void AddTutorialHighlight(List<UiControl> controls)
     {
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         float dt = highlightClock == 0 ? 0 : MathF.Min((float)System.Diagnostics.Stopwatch.GetElapsedTime(highlightClock, now).TotalSeconds, 0.25f);
@@ -366,10 +358,90 @@ sealed partial class PlayerInterface
         var wanted = WantedHighlight();
         // startHighlight: a new item starts at alpha 0, rising; endHighlight resets.
         if (wanted != highlightShown) (highlightShown, highlightAlpha, highlightDirection) = (wanted, 0, 1);
-        if (wanted == TutorialHighlight.None || HighlightBounds(wanted, controls, obedienceJob) is not { } box) return;
+        if (wanted == TutorialHighlight.None || HighlightBounds(wanted, controls, player.obedienceJob) is not { } box) return;
         highlightAlpha += highlightDirection * dt * HighlightRate;
         if (highlightAlpha >= HighlightHigh) (highlightAlpha, highlightDirection) = (HighlightHigh, -1);
         else if (highlightAlpha <= HighlightLow && highlightDirection < 0) (highlightAlpha, highlightDirection) = (HighlightLow, 1);
         controls.Add(new("tutorial-highlight", "Widget", box, "", "", "", true, new Dictionary<string, string>(), TutorialHighlightColour with { W = highlightAlpha }, Pickable: false));
+    }
+
+    // <summary>The tutorials (docs/game/ui-screens.md "Tutorials"): what their triggers see.</summary>
+    /// <summary>The management tabs of the crafting and research triggers (overview tabs 3 and 2).</summary>
+    internal const int CraftingTab = 3, ResearchTab = 2;
+
+    /// <summary>The player's characters, buildings, selection and windows as the triggers ask for them.</summary>
+    internal TutorialPoll TutorialPoll(bool loading)
+    {
+        var snap = player.session.CurrentSnapshot;
+        int faction = player.session.World.Player.Faction;
+        bool unsettled = false, aid = false, attack = false, ko = false, awake = false, sneak = false, hungry = false, playingDead = false, slave = false;
+        int pcs = 0;
+        var pcIds = new List<CharacterId>();
+        foreach (var c in snap.Characters)
+        {
+            if (!c.IsPlayer || c.Body is { Dead: true }) continue;
+            pcs++;
+            pcIds.Add(c.Id);
+            bool down = c.Body is { Unconscious: true };
+            unsettled |= c.CombatMode || down || c.InBed;
+            aid |= c.Body is { NeedsAid: true };
+            attack |= c.InCombat;
+            ko |= down && c.Body is not { PlayingDead: true };
+            awake |= !down;
+            sneak |= c.Stealth is not null;
+            hungry |= c.Body is { Hunger: < 2 } && c.Hud is not { Robot: true };
+            playingDead |= c.Body is { PlayingDead: true };
+            slave |= c.Slave is not null;
+        }
+        var inspected = snap.Characters.FirstOrDefault(c => c.Inspected);
+        bool production = false, full = false, built = false, crafting = false, research = false, unstarted = false;
+        var sites = snap.Buildings.Where(b => b.Owner == faction && faction >= 0).ToDictionary(b => b.Id, StringComparer.Ordinal);
+        foreach (var m in snap.Machines)
+        {
+            if (!sites.TryGetValue(m.Site, out var site) || m.Output is null && m.Farm is null && m.Craft is null) continue;
+            production = true;
+            full |= m.Status == 1 || m.Farm is { Status: Meitou.Simulation.Production.FarmStatus.OutputFull };
+            built |= site.Complete && m.Output is not null;
+            crafting |= site.Complete && m.Craft is not null;
+        }
+        foreach (var m in snap.Machines)
+            if (m.TechLevel > 0 && sites.TryGetValue(m.Site, out var bench) && bench.Complete) research = true;
+        foreach (var site in sites.Values) unstarted |= !site.Complete && site.Progress == 0;
+        var facts = snap.TutorialFacts;
+        return new TutorialPoll
+        {
+            EditorOrLoading = player.EditorOpen || loading,
+            Unsettled = unsettled || facts.InPrison || facts.InCannibalCage,
+            InTown = facts.InTown,
+            NeedsFirstAid = aid,
+            UnderAttack = attack,
+            PcCount = pcs,
+            Pcs = pcIds,
+            Stolen = facts.Stolen,
+            AnyUnconscious = ko,
+            AnyConscious = awake,
+            InPrison = facts.InPrison,
+            InCannibalCage = facts.InCannibalCage,
+            Sneaking = sneak,
+            // The steal pointer (cursor 0x15): a selection over another faction's ground item.
+            StealCursor = player.SelectedIds().Count > 0 && !player.pointerOverUi && player.StealsGroundItem(player.mouse),
+            SelectedHasBounty = inspected is { IsPlayer: false, Bounties.Count: > 0 },
+            Hungry = hungry,
+            PlayingDead = playingDead,
+            HasProductionBuilding = production,
+            Slave = slave,
+            Uniform = facts.Uniform,
+            MachineFull = full,
+            SelectedForSale = snap.InspectedBuilding?.SalePrice is not null,
+            ProductionComplete = built,
+            Placing = player.BuildModeOn && player.CurrentBuilding() is not null,
+            CraftingComplete = crafting,
+            ResearchComplete = research,
+            ManagementTab = player.faithfulScreens.IsOpen("overview") ? player.faithfulScreens.GetTab("overview", "TabsMain") : -1,
+            Blueprint = facts.Blueprint,
+            UnstartedConstruction = unstarted,
+            Prospecting = player.faithfulScreens.IsOpen("prospect"),
+            SelectedStump = (player.Selected().FirstOrDefault() ?? inspected) is { } who && Enumerable.Range(0, 4).Any(k => ((who.LimbBits >> (2 * k)) & 3) == (int)LimbState.Stump),
+        };
     }
 }

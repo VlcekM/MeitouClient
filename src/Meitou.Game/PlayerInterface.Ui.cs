@@ -10,6 +10,8 @@ using Meitou.Simulation.Editing;
 using Meitou.Data.Characters;
 using Meitou.Game.Ui;
 using Meitou.Simulation.Player;
+using Meitou.Game.Editor;
+using Meitou.Game.Title;
 
 namespace Meitou.Game;
 
@@ -20,15 +22,18 @@ sealed partial class PlayerInterface
     bool infoExpanded;
     long lastMemberClickAt;
     MyGuiLayout faithfulHud = null!;
-    MyGuiResources uiResources = new();
+    internal MyGuiResources uiResources = new();
     readonly UiHost uiHost = new();
     IDisposable? uiRegistration;
-    UiPainter? uiPainter;
+    internal UiPainter? uiPainter;
     internal UiPainter? SettingsPainter => uiPainter;
     bool settingsOpen;
     internal void SetSettingsOpen(bool value) { settingsOpen = value; if (value) CancelInventoryDrag(); UpdateMenuPause(); }
-    MyGuiScreenHost faithfulScreens = null!;
+    internal MyGuiScreenHost faithfulScreens = null!;
     public event Action<MyGuiEvent>? ScreenAction;
+
+    /// <summary>Raises <see cref="ScreenAction"/> for a feature class (an event is raised only by its own type).</summary>
+    internal void RaiseScreenAction(MyGuiEvent e) => ScreenAction?.Invoke(e);
 
     /// <summary>The viewed floor of the interior view (the host's): read for the HUD's floor text, stepped by its arrows.</summary>
     public (Func<int> Get, Action<int> Step)? Floor { get; set; }
@@ -45,7 +50,7 @@ sealed partial class PlayerInterface
             ?? (Meitou.Content.GameInstall.Locate() is { } install ? Path.Combine(install.Root, "locale/en_GB/LC_MESSAGES/main.pot") : null));
         advancedHelpCatalog = NewGameHelpCatalog.From(template);
         statHelp = StatHelpCatalog.From(template);
-        tutorialTexts = TutorialCatalog.From(template);
+        tutorialWindow.tutorialTexts = TutorialCatalog.From(template);
         MyGuiColours.LoadPalette(resolve("kenshi_colours.xml"));
         uiResources = MyGuiResources.Load("kenshi_init.xml", resolve, "kenshi_fonts.xml");
         var mainPanel = MyGuiReader.ReadLayout(resolve("Kenshi_MainPanel.layout") ?? throw new FileNotFoundException("Kenshi_MainPanel.layout not found."));
@@ -54,9 +59,9 @@ sealed partial class PlayerInterface
         ordersRowLayout = resolve("Kenshi_OrdersPanelOrder.layout") is { } ordersRow ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(ordersRow), uiResources) : null;
         squadBoxLayout = resolve("Kenshi_SquadBox.layout") is { } squadBox ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(squadBox), uiResources) : null;
         messageLayout = resolve("Kenshi_MessagePanel.layout") is { } messages ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(messages), uiResources) : null;
-        taskBarLayout = resolve("Kenshi_ProgressBarPanel.layout") is { } taskBar ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(taskBar), uiResources) : null;
-        tutorialPanelLayout = resolve("Kenshi_TutorialPanel.layout") is { } tutorialPanel ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(tutorialPanel), uiResources) : null;
-        tutorialLineLayout = resolve("Kenshi_TutorialTooltipPanel.layout") is { } tutorialLine ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(tutorialLine), uiResources) : null;
+        stealthView.taskBarLayout = resolve("Kenshi_ProgressBarPanel.layout") is { } taskBar ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(taskBar), uiResources) : null;
+        tutorialWindow.tutorialPanelLayout = resolve("Kenshi_TutorialPanel.layout") is { } tutorialPanel ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(tutorialPanel), uiResources) : null;
+        tutorialWindow.tutorialLineLayout = resolve("Kenshi_TutorialTooltipPanel.layout") is { } tutorialLine ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(tutorialLine), uiResources) : null;
         messageClient = messageLayout?.Widgets.FirstOrDefault(w => w.Properties.GetValueOrDefault("CaptionOwner") == "MessageTextBox")?.Name;
         faithfulScreens = new(uiResources) { ClipboardReader = () => ClipboardRead?.Invoke(), ClipboardWriter = text => ClipboardWrite?.Invoke(text), CaretAt = p => uiPainter?.EditCaretAt(p) };
         foreach (var (id, file, modal) in FaithfulScreenFiles)
@@ -65,17 +70,17 @@ sealed partial class PlayerInterface
             if (id is "new-game" or "import") layout = WithAdvancedPanel(layout, MyGuiReader.ReadLayout(resolve("Kenshi_AdvancedOptionsWindow.layout") ?? throw new FileNotFoundException("Kenshi_AdvancedOptionsWindow.layout")));
             if (id == "load") layout = WithSaveFilter(layout);
             if (id == "editor") (editorLayout, editorRowsShape) = (layout, "");
-            if (id == "inventory") characterInventoryLayout = layout;
-            if (id == "leveleditor") layout = LevelEditorBar(layout);
+            if (id == "inventory") tradeWindows.characterInventoryLayout = layout;
+            if (id == "leveleditor") layout = LevelEditorPanel.LevelEditorBar(layout);
             faithfulScreens.Register(id, layout, modal, centreRoot: id is "file");
         }
-        animalInventoryLayout = resolve("Kenshi_InventoryAnimalWindow.layout") is { } animalWindow ? MyGuiReader.ReadLayout(animalWindow) : null;
-        characterRowLayout = resolve("Kenshi_CharacterSelectionBox.layout") is { } characterRow ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(characterRow), uiResources) : null;
+        tradeWindows.animalInventoryLayout = resolve("Kenshi_InventoryAnimalWindow.layout") is { } animalWindow ? MyGuiReader.ReadLayout(animalWindow) : null;
+        tradeWindows.characterRowLayout = resolve("Kenshi_CharacterSelectionBox.layout") is { } characterRow ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(characterRow), uiResources) : null;
         // The title's start, load and import windows leave its buttons live (the original's title windows are not modal): another button replaces them.
         faithfulScreens.PassThrough = id => id is "new-game" or "load" or "import" && faithfulScreens.IsOpen("title");
         faithfulScreens.RegisterPanel(TownScreen, TownPanelLayout(mainPanel));
-        faithfulScreens.Register(FeedbackScreen, FeedbackLayout(), modal: true);
-        feedbackButtonLayout = MyGuiTemplates.Expand(FeedbackButtonLayout(), uiResources);
+        faithfulScreens.Register(FeedbackPanel.FeedbackScreen, FeedbackPanel.FeedbackLayout(), modal: true);
+        feedbackPanel.feedbackButtonLayout = MyGuiTemplates.Expand(FeedbackPanel.FeedbackButtonLayout(), uiResources);
         faithfulScreens.Follow("bag", "inventory");   // the bag window is married to the inventory, opened and closed by OPEN BAG only
         faithfulScreens.Follow("loot-bag", "loot");
         faithfulScreens.Activated += FaithfulAction;
@@ -95,7 +100,7 @@ sealed partial class PlayerInterface
         ("building", "Kenshi_GenericBuildingWindow", false), ("bench", "Kenshi_InventoryResearchWindow", false), ("storage", "Kenshi_InventoryGenericWindow", false),
         ("build", "Kenshi_BuildWindow", false), ("editor", "Kenshi_CharacterEditor", true), ("dialogue", "Kenshi_ConversationPanel", true),
         ("file", "Kenshi_OpenSaveFileDialog", true), ("prospect", "Kenshi_ProspectingWindow", false), ("tutorials", "Kenshi_TutorialsWindow", false), ("leveleditor", "Kenshi_LevelEditor", false),
-        (CharacterTradeScreen, "Kenshi_CharacterSelectionWindow", false),
+        (TradeWindows.CharacterTradeScreen, "Kenshi_CharacterSelectionWindow", false),
     ];
 
     /// <summary>The expanded layout and the current bindings of the HUD (<c>"hud"</c>) or of a faithful screen, for the layout audit test.</summary>
@@ -127,7 +132,7 @@ sealed partial class PlayerInterface
         dragFrom = null;
         dragging = false;
         steering = false;
-        mapDrag = null;
+        worldMap.mapDrag = null;
         CancelInventoryDrag();
         UpdateMenuPause();
     }
@@ -216,28 +221,28 @@ sealed partial class PlayerInterface
         SyncScreens();
         bool hud = !TitleOpen && !EditorOpen && !conversationShown;   // the conversation panel covers the HUD bar (engine reading of its layout)
         SyncTownPanel(hud);
-        if (!TitleOpen) ReleaseTitleLogo();
+        if (!TitleOpen) titleMenu.ReleaseTitleLogo();
         var controls = ArrangedBase(hud);
         AddFrameControls(controls, hud);
         var top = MyGuiPresentation.HitTest(controls, mouse.X, mouse.Y);
         pointerOverUi = faithfulScreens.Contains(mouse) || top is not null;
         pointerOverButton = top is { Enabled: true } && (top.Type == "Button" || top.Action.Length > 0);
         AddHoverLabel(controls);
-        AddInspectorPanel(controls);
+        inspector.AddInspectorPanel(controls);
         return controls;
     }
 
     /// <summary>Once an arrangement: the screens that follow the world opened, closed or filled.</summary>
     void SyncScreens()
     {
-        SyncTradeScreens();
+        tradeWindows.SyncTradeScreens();
         SyncMachineScreens();
-        SyncLootScreen();
+        tradeWindows.SyncLootScreen();
         SyncPinnedInventories();
-        SyncInventoryLayouts();
+        tradeWindows.SyncInventoryLayouts();
         SyncLimbsScreen();
         SyncDialogueScreen();
-        SyncCharacterTradeScreen();
+        tradeWindows.SyncCharacterTradeScreen();
         ValidateInventoryDrag();
         faithfulScreens.FocusRing = UiMode == UiMode.Meitou;
     }
@@ -263,7 +268,7 @@ sealed partial class PlayerInterface
         AddHudText(controls);
         if (hud) AddJobScrollBar(controls);
         AddJobRowParts(controls);
-        if (hud) AddTutorialPanel(controls);
+        if (hud) tutorialWindow.AddTutorialPanel(controls);
         AddScreens(controls);
         return controls;
     }
@@ -273,7 +278,7 @@ sealed partial class PlayerInterface
     {
         foreach (var screen in faithfulScreens.Arrange(Width, Height, BindFaithfulScreen, AddFaithfulContent))
         {
-            if (ShotWithoutMenus && FeedbackShotHides.Contains(screen.Id)) continue;
+            if (feedbackPanel.ShotWithoutMenus && FeedbackPanel.FeedbackShotHides.Contains(screen.Id)) continue;
             if (screen.Id == "editor") controls.AddRange(EditorBackdrop());
             controls.AddRange(screen.Controls.Where(c => UiMode == UiMode.Faithful ||
                 !c.Properties.TryGetValue("ImageResource", out var resource) || resource != "Kenshi_TitleScreen"));
@@ -284,11 +289,11 @@ sealed partial class PlayerInterface
     /// <summary>The Meitou title's mark, top right: the logo once it is loaded, the word until then.</summary>
     void AddTitleMark(List<UiControl> controls)
     {
-        if (TitleLogoReady())
+        if (titleMenu.TitleLogoReady())
         {
             float logoWidth = Math.Min(Width * 0.3f, Height * 0.6f);
             controls.Add(new("MeitouTitle", "ImageBox", new(Width * 0.975f - logoWidth, Height * 0.04f, logoWidth, logoWidth * 0.469f), "", "", "", true,
-                new Dictionary<string, string> { ["ImageTexture"] = TitleLogoTexture }, Vector4.Zero, Pickable: false));
+                new Dictionary<string, string> { ["ImageTexture"] = TitleMenu.TitleLogoTexture }, Vector4.Zero, Pickable: false));
         }
         else
             controls.Add(new("MeitouTitle", "TextBox", new(Width * 0.6f, Height * 0.04f, Width * 0.37f, Height * 0.14f), "KENSHI", "", "", true,
@@ -303,23 +308,23 @@ sealed partial class PlayerInterface
     /// </summary>
     void AddFrameControls(List<UiControl> controls, bool hud)
     {
-        if (hud) AddTutorialHighlight(controls);
+        if (hud) tutorialWindow.AddTutorialHighlight(controls);
         AddNotice(controls);
         AddInventoryDrag(controls);
 
         var nameTags = new List<UiControl>();
         AddItemLabels(nameTags);
-        AddNameTags(nameTags);
-        AddTaskBars(nameTags);
+        stealthView.AddNameTags(nameTags);
+        stealthView.AddTaskBars(nameTags);
         var dialogLayer = new List<UiControl>();
-        AddFloaters(dialogLayer);
-        AddSpeech(dialogLayer);
+        damageFloaters.AddFloaters(dialogLayer);
+        speechBubbles.AddSpeech(dialogLayer);
         controls.InsertRange(0, [.. nameTags, .. dialogLayer]);
 
         AddBuildReadout(controls);
         AddPointerChance(controls);
         AddContextMenu(controls);
-        AddFeedbackButton(controls);
+        feedbackPanel.AddFeedbackButton(controls);
     }
 
     /// <summary>
@@ -348,7 +353,7 @@ sealed partial class PlayerInterface
         if (!UiVisible) return false;
         var controls = ArrangeUi();
         if (InventoryPointerDown(p)) return true;
-        if (MapPointerDown(p)) return true;
+        if (worldMap.MapPointerDown(p)) return true;
         if (SquadPointerDown(p)) return true;
         if (faithfulScreens.PointerDown(p)) { UpdateMenuPause(); return true; }
         if (JobDragStart(controls, p)) return true;
@@ -420,9 +425,9 @@ sealed partial class PlayerInterface
         else if (action == "stop") Say(new StopCommand(SelectedIds()) { Tick = session.World.Tick });
         else if (action == "medic") Say(new Meitou.Simulation.FirstAid.MedicJobCommand(SelectedIds(), SlowModifier) { Tick = session.World.Tick });
         else if (action == "rescue") Say(new Meitou.Simulation.Carrying.RescueJobCommand(SelectedIds(), SlowModifier) { Tick = session.World.Tick });
-        else if (action == "prospect") ProspectAction();
+        else if (action == "prospect") prospecting.ProspectAction();
         else if (action.StartsWith("building-", StringComparison.Ordinal) || action.StartsWith("machine-", StringComparison.Ordinal)) BuildingAction(action);
-        else if (action == "tutorial") TutorialAction(argument);
+        else if (action == "tutorial") tutorialWindow.TutorialAction(argument);
         else if (action == "job-remove") RemoveJob(argument);
         else if (action.StartsWith("order.", StringComparison.Ordinal) && Enum.TryParse(action[6..], out CharacterOrders order))
             Say(new OrdersCommand(SelectedIds(), order) { Tick = session.World.Tick });
@@ -451,7 +456,7 @@ sealed partial class PlayerInterface
         Width = width;
         Height = height;
         var controls = new List<UiControl>();
-        AddSpeech(controls);
+        speechBubbles.AddSpeech(controls);
         if (controls.Count == 0) return;
         uiPainter?.Draw(controls, width, height, mouse, SpeedButtonAction, minimumTextPixels: StandardPixels);
         overlay.Flush(width, height);

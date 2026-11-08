@@ -1,7 +1,14 @@
+using Meitou.Data.Textures;
 using System.Numerics;
+using Meitou.Game.DevTools;
+using Meitou.Game.DevTools.Agents;
+using Meitou.Game.Editor;
+using Meitou.Game.Effects;
 using Meitou.Game.Host;
 using Meitou.Game.Host.Input;
-using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Title;
+using Meitou.Game.Tutorials;
+using Meitou.Game.Ui;
 using Meitou.Simulation;
 
 namespace Meitou.Game;
@@ -16,9 +23,55 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class PlayerInterface(WorldSession session, Func<float, float, float> ground, Func<CharacterSnapshot, Vector3> where)
 {
+    internal readonly WorldSession session = session;
+    internal readonly Func<float, float, float> ground = ground;
+    internal readonly Func<CharacterSnapshot, Vector3> where = where;
+    internal AgentOrders agentOrders => field ??= new(this);
+    internal PickInspector inspector => field ??= new(this);
+    internal FeedbackPanel feedbackPanel => field ??= new(this);
+    internal LevelEditorPanel levelEditorPanel => field ??= new(this);
+    internal TutorialPanel tutorialWindow => field ??= new(this);
+    internal TitleMenu titleMenu => field ??= new(this);
+    internal SpeechBubbles speechBubbles => field ??= new(this);
+    internal DamageFloaters damageFloaters => field ??= new(this);
+    internal ProspectingPanel prospecting => field ??= new(this);
+    internal StealthView stealthView => field ??= new(this);
+    internal WorldMap worldMap => field ??= new(this);
+    internal TradeWindows tradeWindows => field ??= new(this);
+
     public Matrix4x4 ViewProjection = Matrix4x4.Identity;
     public Vector3 Eye;
     public int Width = 1, Height = 1;
+
+    /// <summary>
+    /// The "Show damage floaters" option. Off hides the damage numbers only: the original's texts (a pick roll, a stealth knock-out, "Ate", a machine label) read no option
+    /// (<b>Verified</b>: of the label creator's callers only the hit's <c>FUN_1406508d0</c> reads it). Meitou keeps a door's damage number with the option too.
+    /// </summary>
+    public FloaterMode Floaters { get; set; } = FloaterMode.Simple;
+
+    /// <summary>The button during play (<see cref="UserConfig.FeedbackButton"/>); off, it still shows on the title and with the game menu open.</summary>
+    public bool FeedbackButtonInPlay { get; set; } = true;
+
+    /// <summary>The original's <c>Show names</c> option (<c>FUN_1406e2fd0</c>): off, the name tag keeps only its icons.</summary>
+    public bool ShowNames { get; set; } = true;
+    /// <summary>The <c>font size2</c> option: points added to every GUI font's default height (applied to the painter once it exists).</summary>
+    public float FontSize
+    {
+        get => fontSize;
+        set { fontSize = value; if (uiPainter is not null) uiPainter.FontSizeSetting = value; }
+    }
+    float fontSize = Meitou.Data.Ui.KenshiFontSize.DefaultSetting;
+
+    internal Func<string, string?>? uiResolve;
+    RgbaImage? uiAtlas;
+
+    /// <summary>The game's Kenshi_UI.png, decoded once and shared by the title menu, tooltips and settings; null when missing or unreadable.</summary>
+    internal RgbaImage? UiAtlas()
+    {
+        if (uiAtlas is not null || uiResolve?.Invoke("Kenshi_UI.png") is not { } path) return uiAtlas;
+        try { return uiAtlas = TextureLoader.LoadFile(path, allMips: false).Levels[0]; }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException) { return null; }
+    }
     /// <summary>How far from the camera a box select still takes characters.</summary>
     public const float BoxSelectRange = 7500;
     /// <summary>A person's height (the renderer's sphere takes 20) for the box select's aim point and the pick capsule of a character the renderer does not draw.</summary>
@@ -26,7 +79,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     const float DragThreshold = 5;
 
     Vector2? dragFrom;
-    Vector2 mouse;
+    internal Vector2 mouse;
     bool dragging;
     // The held right button's move order: where it goes now and the tick it was given.
     bool steering;
@@ -34,7 +87,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     long steerTick;
 
 
-    IReadOnlyList<CharacterId> SelectedIds() => [.. Selected().Select(c => c.Id)];
+    internal IReadOnlyList<CharacterId> SelectedIds() => [.. Selected().Select(c => c.Id)];
 
     IReadOnlyList<CharacterId> PlayerCharacters() =>
         [.. session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).Select(c => c.Id)];
@@ -43,7 +96,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// The active squad's members in squad order, the first leading (the squad bar's; the number keys and select_all pick from them, the original's <c>UiSelectSquadMember</c> /
     /// <c>UiSelectAllInSquad</c>). The squad of the first selected character, else the first squad, when the active one is unknown; every player character in a world with no squad list.
     /// </summary>
-    IReadOnlyList<CharacterId> ActiveSquadMembers()
+    internal IReadOnlyList<CharacterId> ActiveSquadMembers()
     {
         var snapshot = session.CurrentSnapshot;
         // No cached squad: the first selected character's squad, else the first squad of the roster, else nothing (FUN_1407f5520).
@@ -57,7 +110,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
 
     // ---- commands ----
 
-    void Say(SimCommand command)
+    internal void Say(SimCommand command)
     {
         SoundForCommand(command);
         session.World.Commands.Enqueue(command);
@@ -82,11 +135,11 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         uiInput++;
         (pressShift, pressCtrl) = (shift, ctrl);
         HideTooltip();   // a press captures the mouse, which hides a tooltip (MyGUI)
-        if (button == MouseButton.Left && FeedbackButtonDown(p)) return true;
+        if (button == MouseButton.Left && feedbackPanel.FeedbackButtonDown(p)) return true;
         if (EditorPointerDown(button, p)) return true;
         if (button == MouseButton.Right && CancelInventoryDrag()) return true;
         if (button == MouseButton.Right && !OverHud(p) && WallCancel()) return true;
-        if (button == MouseButton.Right && !OverHud(p) && LevelClearAt(p)) return true;
+        if (button == MouseButton.Right && !OverHud(p) && levelEditorPanel.LevelClearAt(p)) return true;
         if (button == MouseButton.Right && !OverHud(p) && BuildDiscard()) return true;
         if (button == MouseButton.Left)
         {
@@ -94,7 +147,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (UiMouseDown(p)) return true;
             if (OverHud(p)) return true;
             // Debug "Explode on click": the host takes the press on the ground (the point under the cursor, if any) instead of the selection.
-            if (WorldClick is { } worldClick && !MapTabShown && worldClick(Ray(p) is { } wr ? MoveHit(wr.Origin, wr.Direction) : null)) return true;
+            if (WorldClick is { } worldClick && !worldMap.MapTabShown && worldClick(Ray(p) is { } wr ? MoveHit(wr.Origin, wr.Direction) : null)) return true;
             // A ground item's name label (shown while Highlight is held) takes the left press; its release over it is the item's pick-up (FUN_1401638f0).
             if (LabelAt(p) is { } label) { labelPress = label; return true; }
             if (BuildClick()) return true;
@@ -102,9 +155,9 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             dragging = false;
             return true;
         }
-        if (button == MouseButton.Right && InventoryRightClick(p, shift)) return true;
+        if (button == MouseButton.Right && worldMap.InventoryRightClick(p, shift)) return true;
         if (button == MouseButton.Right && CloseContextMenu()) return true;
-        if (button == MouseButton.Right && MapRightDown(p)) return true;
+        if (button == MouseButton.Right && worldMap.MapRightDown(p)) return true;
         // A right press on a squad bar portrait held 0.25 s opens the member's context menu; a quicker release over it selects the member and focuses the camera on it,
         // as the double click (FUN_140413d80, FUN_140415630, docs/game/ui-input.md "Squad bar portraits").
         if (button == MouseButton.Right && SquadBarMemberAt(p) is { } member)
@@ -114,7 +167,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             memberPress = member;
             return true;
         }
-        if (button == MouseButton.Middle && UiVisible && MapPointerDown(p)) return true;
+        if (button == MouseButton.Middle && UiVisible && worldMap.MapPointerDown(p)) return true;
         if (button == MouseButton.Right && !OverHud(p))
         {
             // Alt + right click on a downed or dead character: the nearest selected loots it (take all). Ctrl + right click: picks it up, or puts it down when a selected
@@ -243,7 +296,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         mouse = p;
         if (EditorPointerMove(p)) return;
         if (ScrollThumbMove(p)) return;
-        if (MapPointerMove(p)) return;
+        if (worldMap.MapPointerMove(p)) return;
         if (UiVisible && faithfulScreens.PointerMove(p)) return;
         if (dragFrom is { } from && !dragging && Vector2.Distance(from, p) >= DragThreshold) dragging = true;
     }
@@ -260,15 +313,15 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (LabelAt(p) == labelled) LabelPickUp(labelled);
             return;
         }
-        if (button == MouseButton.Left) { MapPickUp(p); InventoryPointerUp(p); JobDragEnd(p); SquadPointerUp(p, shift); faithfulScreens.PointerUp(); mapDrag = null; }
-        if (button == MouseButton.Middle) mapDrag = null;
+        if (button == MouseButton.Left) { worldMap.MapPickUp(p); InventoryPointerUp(p); JobDragEnd(p); SquadPointerUp(p, shift); faithfulScreens.PointerUp(); worldMap.mapDrag = null; }
+        if (button == MouseButton.Middle) worldMap.mapDrag = null;
         if (button == MouseButton.Right && memberPress is { } pressed)
         {
             memberPress = null;
             if (SquadBarMemberAt(p) == pressed) FocusMember(pressed, shift);
             return;
         }
-        if (button == MouseButton.Right && MapRightUp(p)) return;
+        if (button == MouseButton.Right && worldMap.MapRightUp(p)) return;
         if (button == MouseButton.Right) { ContextRelease(); SiteRelease(); RockRelease(); BedRelease(); DummyRelease(); SeatRelease(); }
         if (button == MouseButton.Right && steering)
         {
@@ -336,7 +389,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         UpdateBed();
         UpdateDummy();
         UpdateSeat();
-        UpdateMap();
+        worldMap.UpdateMap();
         if (!final) UpdateBuild();
         if (!steering || OverHud(mouse)) return;
         if (Ray(mouse) is not { } ray || MoveHit(ray.Origin, ray.Direction) is not { } hit) return;
@@ -386,7 +439,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (Selected().FirstOrDefault() is { } lead) CentreOn(lead.Id);
     }
 
-    void CentreOn(CharacterId id, bool follow = true)
+    internal void CentreOn(CharacterId id, bool follow = true)
     {
         if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c) return;
         var view = session.Camera.Current;

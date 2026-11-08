@@ -12,7 +12,7 @@ sealed partial class PlayerInterface
     /// <summary>Ctrl and Alt as the host last saw them: they turn the pointer over a downed character into the carry and loot pointers.</summary>
     public bool CtrlHeld, AltHeld;
     // Whether the mouse was over a control in the last arranged UI (ArrangeUi), so the pointer needs no arrange of its own.
-    bool pointerOverUi;
+    internal bool pointerOverUi;
     // Whether that control is one a click acts on (an enabled button, or a control with an action: as UiClickables takes them), for the enhanced Hardware mouse's hand.
     bool pointerOverButton;
     // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and every RepickTicks ticks while only the
@@ -90,7 +90,7 @@ sealed partial class PlayerInterface
 
     (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (SelectedBuilding Building, float T)? Building) Point()
     {
-        if (mapDrag is not null) return (-1, mouse, CtrlHeld, AltHeld, "hand", null, null);   // the map's pan
+        if (worldMap.mapDrag is not null) return (-1, mouse, CtrlHeld, AltHeld, "hand", null, null);   // the map's pan
         if (UiVisible && pointerOverUi || UiCapturesPointer || ContextMenuOpen || ModalOpen || dragging || settingsOpen || TitleOpen)
             return (-1, mouse, CtrlHeld, AltHeld, "arrow", null, null);
         if (BuildPointer() is { } building) return (-1, mouse, CtrlHeld, AltHeld, building, null, null);

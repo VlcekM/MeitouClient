@@ -37,7 +37,7 @@ Level data: [zones](../formats/zones.md). Its Layout window: [interior editor](i
 
 ## Meitou
 
-F10 → Tools → "Level editor..." (`LevelEditorHost`, `PlayerInterface.LevelEditor.cs`, `Building/LevelEdits.cs`).
+F10 → Tools → "Level editor..." (`LevelEditorHost`, `LevelEditorPanel`, `Building/LevelEdits.cs`).
 
 - The top bar is the original layout, centred at the top. BUILDINGS, SAVE MOD and EXIT work; the other tools say
   "not in Meitou yet". The mod box shows the one mod Meitou saves into. Esc or EXIT closes the bar.

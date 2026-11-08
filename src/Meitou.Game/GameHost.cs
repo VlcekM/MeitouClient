@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Numerics;
-
 using Meitou.Content;
 using Meitou.Data.Ogre;
 using Meitou.Game.Audio;
@@ -24,10 +23,10 @@ using Meitou.Game.Rendering.Terrain;
 using Meitou.Game.Scenarios;
 using Meitou.Game.Settings;
 using Meitou.Game.Title;
+using Meitou.Game.Ui;
 using Meitou.Modding;
 using Meitou.Simulation;
 using Meitou.Simulation.Session;
-
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using EngineKey = Meitou.Game.Host.Input.Key;
 
@@ -348,8 +347,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         ui.PowerOutput = record => popData?.Db.Find(record)?.GetInt("power output");
         ui.SquadLimits = () => popData?.Bodies.Constants;
         ui.Rocks = () => popData?.ResourceNodes;
-        ui.MapTowns = () => popData?.Sites ?? [];
-        ui.MapFactionOf = id =>
+        ui.worldMap.MapTowns = () => popData?.Sites ?? [];
+        ui.worldMap.MapFactionOf = id =>
         {
             if (popData is not { } d || id is null || d.FactionIndex(id) is not (>= 0 and var town)) return null;
             var faction = d.Factions[town];
@@ -359,7 +358,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             var standing = town == mine ? MapStanding.Player : d.Relations.IsAlly(mine, town) ? MapStanding.Ally : relation < -30 ? MapStanding.Enemy : MapStanding.Neutral;
             return new MapFaction(faction.Name, relation, standing, faction.NotReal);
         };
-        ui.MapFactionId = faction => popData is { } d && faction >= 0 && faction < d.Factions.Count ? d.Factions[faction].Id : null;
+        ui.worldMap.MapFactionId = faction => popData is { } d && faction >= 0 && faction < d.Factions.Count ? d.Factions[faction].Id : null;
         ui.ArmourOf = record => popData?.Combat.Armour(record);
         ui.RecordName = id => popData?.Db.Find(id)?.Name;
         ui.PlayerFactionName = () => ui.FactionName?.Invoke(session.World.Player.Faction) ?? "";
@@ -387,7 +386,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         ui.SpecialFoodRaces = id => popData is { } d ? specialFoodRaces.GetOrAdd(id, item => Meitou.Data.Gameplay.Bodies.SpecialFood.EatenBy(d.Db, item)) : "";
         ui.CombatOf = () => popData?.Combat;
         ui.RangedDamageMultiplier = () => popData?.BodyOptions.GlobalDamageMultiplier ?? 1;
-        ui.MapItemTowns = record =>
+        ui.worldMap.MapItemTowns = record =>
         {
             if (popData is not { } d || d.Db.Find(record) is not { Type: Meitou.Data.Fcs.FcsRecordType.MAP_ITEM } map) return null;
             return [.. Meitou.Simulation.Items.MapItems.Reveals(d, map, session.CurrentSnapshot.Towns, session.World.Seed).Select(i => d.Sites[i].Town.Name)];
@@ -436,8 +435,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         gpu.InspectorOverlay ??= new NavmeshOverlayRenderer(context);
         player.MeshHit = (id, origin, direction) => gpu.Characters?.RayHit(DrawKey(id), origin, direction);
         player.Floor = (() => interiors.viewedFloor, interiors.StepFloor);
-        player.HiddenInWorld = interiors.hiddenIndoors.Contains;
-        player.DrawnHead = id => gpu.Characters?.BonePosition(DrawKey(id), "Bip01 Head");
+        player.stealthView.HiddenInWorld = interiors.hiddenIndoors.Contains;
+        player.stealthView.DrawnHead = id => gpu.Characters?.BonePosition(DrawKey(id), "Bip01 Head");
         player.AboveViewedFloor = interiors.AboveViewedFloor;
         player.GroundItemShape = groundItemSync.GroundShape;
         player.GroundItemHidden = groundItemSync.hiddenGround.Contains;
@@ -447,17 +446,17 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.ShownInteriorHit = (origin, direction, distance) => gpu.Objects?.ShownInteriorHit(origin, direction, distance);
         player.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
         ConfigurePlayerInterface(player);
-        player.LevelHost = levelEditorHost.MakeLevelEditorServices();
+        player.levelEditorPanel.LevelHost = levelEditorHost.MakeLevelEditorServices();
         if (sandbox.IsSandbox) player.ReservedKeys.UnionWith([Meitou.Game.Host.Input.Key.Z, Meitou.Game.Host.Input.Key.X, Meitou.Game.Host.Input.Key.C, Meitou.Game.Host.Input.Key.Y, Meitou.Game.Host.Input.Key.P, Meitou.Game.Host.Input.Key.G]);
         player.ConfigureFrontend(scene.Database,
             () => Meitou.Data.Save.SaveCatalog.Scan(Meitou.Simulation.Saving.QuickSave.DefaultRoot, install.SaveDirectory,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")),
             assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "");
-        player.DataProblems = (scene.Database?.Issues.Count ?? 0) + (scene.Objects?.Levels.Problems().Count ?? 0);
+        player.titleMenu.DataProblems = (scene.Database?.Issues.Count ?? 0) + (scene.Objects?.Levels.Problems().Count ?? 0);
         if (scene.Database is { } db)
         {
-            player.Mods = ModReport.Build(install, db, modding.mods?.Refused);
-            LogMods(player.Mods);
+            player.titleMenu.Mods = ModReport.Build(install, db, modding.mods?.Refused);
+            LogMods(player.titleMenu.Mods);
         }
         if (OpensOnTitle(interactive)) player.ShowTitle();
         if (nav is not null && (start is not null || !interactive))

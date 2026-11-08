@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Ui;
@@ -10,7 +9,7 @@ using Meitou.Game.Rendering.Objects;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
 using Meitou.Game.Ui;
-using Meitou.Simulation.Movement;
+using Meitou.Game.Editor;
 
 namespace Meitou.Game;
 
@@ -29,31 +28,31 @@ sealed partial class PlayerInterface
     /// <summary>How far below the ceiling a <c>ceiling placement</c> ghost's origin hangs (docs/game/buildings-production.md "Placement": 1 below the upward ray's hit).</summary>
     const float CeilingHang = 1;
 
-    BuildServices? buildHost;
-    bool buildMode;
+    internal BuildServices? buildHost;
+    internal bool buildMode;
     // Build mode paused a running game (the original's requested pause, FUN_1404e65e0): leaving it resumes the speed the player had.
     bool buildPausedGame;
     string? buildCategory;
     int buildGroup;
 
     /// <summary>A right click dropped the held building: no building is held until one is chosen from the lists again (<c>FUN_1404e27e0</c>).</summary>
-    bool buildDiscarded;
+    internal bool buildDiscarded;
     // Which member of the group is chosen (null: its default pick).
-    BuildingBuildData? buildMember;
-    readonly List<QueuedGhost> buildQueue = [];
+    internal BuildingBuildData? buildMember;
+    internal readonly List<QueuedGhost> buildQueue = [];
     float ghostYaw, ghostLift, ghostTilt = DefaultTilt;
     // How far the ghost may still sink and rise at its last place (PlacementCheck.Margins, after the nudge); the height keys stop at them.
     PlacementCheck.VerticalMargins ghostMargins = PlacementCheck.VerticalMargins.Unlimited;
     // The ghost now: where the cursor meets the ground or a building's floor (On), its rotation (tilt included), the first failure.
-    (Vector3 Position, Quaternion Rotation, PlacementFailure Failure, BuildingBuildData Building, Vector2[]? Hull, GhostFloor? On)? ghost;
+    internal (Vector3 Position, Quaternion Rotation, PlacementFailure Failure, BuildingBuildData Building, Vector2[]? Hull, GhostFloor? On)? ghost;
     readonly HashSet<Key> buildHeld = [];
     long buildClock;
     bool ghostsDrawn;
     string? buildMessage;
     // Walls (docs/game/buildings-production.md "Walls"): the line being laid (its wall, start, the snap there and whether it runs backwards), its pieces this frame with their checks,
     // the snap at its end, and the snap of the ghost before the first click.
-    (BuildingBuildData Master, Vector3 Start, WallSnap? StartSnap, bool Reversed)? wallLine;
-    readonly List<(WallPiece Piece, PlacementFailure Failure, Vector2[]? Hull)> wallPieces = [];
+    internal (BuildingBuildData Master, Vector3 Start, WallSnap? StartSnap, bool Reversed)? wallLine;
+    internal readonly List<(WallPiece Piece, PlacementFailure Failure, Vector2[]? Hull)> wallPieces = [];
     WallSnap? wallEndSnap, ghostSnap;
     Dictionary<string, BuildingBuildData>? buildIndex;
 
@@ -62,12 +61,12 @@ sealed partial class PlayerInterface
 
     public bool BuildModeOn => buildMode;
 
-    IReadOnlySet<string> Unlocked() => levelBuild ? LevelEveryBuilding() : session.CurrentSnapshot.UnlockedBuildings;
+    internal IReadOnlySet<string> Unlocked() => levelEditorPanel.levelBuild ? levelEditorPanel.LevelEveryBuilding() : session.CurrentSnapshot.UnlockedBuildings;
 
     /// <summary>B: opens build mode (pausing the game and closing the inventory windows), or closes it (the queue of unconfirmed ghosts is dropped).</summary>
     public void ToggleBuildMode() => SetBuildMode(!buildMode);
 
-    void SetBuildMode(bool on)
+    internal void SetBuildMode(bool on)
     {
         if (on && (buildHost is null || faithfulScreens.HasModal)) return;
         if (on == buildMode) return;
@@ -106,7 +105,7 @@ sealed partial class PlayerInterface
 
     // ---- the menu's choice ----
 
-    IReadOnlyList<string> BuildCategories() => buildHost?.Menu.Categories(Unlocked()) is not { } categories ? [] : levelBuild ? [.. categories.Order(StringComparer.Ordinal)] : categories;
+    IReadOnlyList<string> BuildCategories() => buildHost?.Menu.Categories(Unlocked()) is not { } categories ? [] : levelEditorPanel.levelBuild ? [.. categories.Order(StringComparer.Ordinal)] : categories;
 
     /// <summary>The chosen category: the first that shows until one is chosen, none when nothing is unlocked.</summary>
     string? CurrentCategory()
@@ -125,7 +124,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The building the ghost shows: the chosen member of the chosen group (its default pick otherwise).</summary>
-    BuildingBuildData? CurrentBuilding() =>
+    internal BuildingBuildData? CurrentBuilding() =>
         CurrentGroup() is { } group ? buildMember is { } member && group.Members.Contains(member) ? member : group.Default : null;
 
     void StepVariant(int step)
@@ -175,7 +174,7 @@ sealed partial class PlayerInterface
     void UpdateBuild()
     {
         if (buildMode && !faithfulScreens.IsOpen("build")) SetBuildMode(false);   // Esc closed the window
-        UpdateLevelEditor();
+        levelEditorPanel.UpdateLevelEditor();
         UpdateSite();
         UpdateStorageOpening();
         UpdateRock();
@@ -241,7 +240,7 @@ sealed partial class PlayerInterface
                 ghostMargins = settled.After;
                 query = query with { Position = position, Lift = ghostLift };
             }
-            var failure = levelBuild ? PlacementFailure.None : !Unlocked().Contains(building.Id) ? PlacementFailure.NotAvailable : PlacementCheck.Evaluate(query);
+            var failure = levelEditorPanel.levelBuild ? PlacementFailure.None : !Unlocked().Contains(building.Id) ? PlacementFailure.NotAvailable : PlacementCheck.Evaluate(query);
             ghost = (position, rotation, failure, building, footprint?.Place(position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw)), on);
         }
         buildMessage = ghost is { Failure: not PlacementFailure.None } g ? PlacementCheck.Message(g.Failure)
@@ -313,7 +312,7 @@ sealed partial class PlayerInterface
         foreach (var piece in pieces)
         {
             float yaw = PlacementCheck.YawOf(piece.Rotation);
-            var failure = levelBuild ? PlacementFailure.None : !available ? PlacementFailure.NotAvailable : PlacementCheck.Evaluate(new PlacementQuery(piece.Data, piece.Position, piece.Rotation, yaw, 0, host.Parts(piece.Data.Id),
+            var failure = levelEditorPanel.levelBuild ? PlacementFailure.None : !available ? PlacementFailure.NotAvailable : PlacementCheck.Evaluate(new PlacementQuery(piece.Data, piece.Position, piece.Rotation, yaw, 0, host.Parts(piece.Data.Id),
                 buildQueue, snapshot.Characters, snapshot.Buildings, towns, faction, host.Placement) { WallPiece = true, Ignore = WallIgnore(piece, joints) });
             wallPieces.Add((piece, failure, host.Placement.Footprint(piece.Data.Id)?.Place(piece.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw))));
         }
@@ -444,7 +443,7 @@ sealed partial class PlayerInterface
 
     void BuildConfirm()
     {
-        if (levelBuild) { LevelConfirm(); return; }
+        if (levelEditorPanel.levelBuild) { levelEditorPanel.LevelConfirm(); return; }
         if (buildQueue.Count == 0) return;
         Sound("Building_Confirm");
         Say(new PlaceBuildings([.. buildQueue.Select(q => new PlannedBuilding(q.Building.Id, q.Position, q.Rotation, q.Floor, q.Parent, GhostBoundsSize(q.Building)))]) { Tick = session.World.Tick });
@@ -480,7 +479,7 @@ sealed partial class PlayerInterface
         // The building's picture (docs/game/ui-screens.md "Building icons"): the game's saved one, else the renderer's drawing; the frame stays empty while it loads.
         if (BuildingImage(building) is { } image) b.Properties["BuildingImage"] = image;
         else b.Hidden.Add("BuildingImage");
-        b.Text["CommandsTextBox"] = levelBuild ? string.Join('\n', LevelCommandLines) : BuildCommandsText();
+        b.Text["CommandsTextBox"] = levelEditorPanel.levelBuild ? string.Join('\n', LevelEditorPanel.LevelCommandLines) : BuildCommandsText();
         b.Properties["CommandsTextBox"] = new Dictionary<string, string> { ["WordWrap"] = "true", ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(uiResources, "Kenshi_GenericTextBox") };
         b.Text["FloorText"] = Loc.Tr("Floor {1,num}", Floor?.Get() ?? 0);
         Enable("FloorArrowUp", "FloorArrowUp");
@@ -550,7 +549,7 @@ sealed partial class PlayerInterface
                 buildMember = null;
                 break;
             case ("BuildingsList", "select"):
-                if (!buildDiscarded && (int)e.Value == buildGroup) { DropPlacementChoice(); break; }
+                if (!buildDiscarded && (int)e.Value == buildGroup) { levelEditorPanel.DropPlacementChoice(); break; }
                 buildGroup = (int)e.Value;
                 buildDiscarded = false;
                 buildMember = null;
@@ -572,7 +571,7 @@ sealed partial class PlayerInterface
     (BuildingSnapshot Site, Vector2 At, long Since)? sitePending;
 
     /// <summary>The nearest of the player's sites (and finished buildings) under a pixel, by a ray against each one's footprint prism (a sphere round its position without a footprint).</summary>
-    BuildingSnapshot? PickSite(Vector2 pixel) => PickSiteAt(pixel)?.Site;
+    internal BuildingSnapshot? PickSite(Vector2 pixel) => PickSiteAt(pixel)?.Site;
 
     /// <summary><see cref="PickSite"/> with the distance along the ray.</summary>
     (BuildingSnapshot Site, float T)? PickSiteAt(Vector2 pixel)
@@ -611,7 +610,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The distance at which a ray first enters a vertical prism over a convex polygon (the Y range grown a little), or null.</summary>
-    static float? RayPrism(Vector3 origin, Vector3 direction, Vector2[] polygon, float yMin, float yMax)
+    internal static float? RayPrism(Vector3 origin, Vector3 direction, Vector2[] polygon, float yMin, float yMax)
     {
         float t0 = 0, t1 = float.MaxValue;
         // The slab in Y.
@@ -643,7 +642,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The name of a site's building, for the menu's title.</summary>
-    string SiteName(BuildingSnapshot site) => site.LevelPlacement is not null ? site.Name : buildHost?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
+    internal string SiteName(BuildingSnapshot site) => site.LevelPlacement is not null ? site.Name : buildHost?.Menu.Catalog.FirstOrDefault(b => b.Id == site.Record)?.Name ?? site.Record;
 
     /// <summary>
     /// The verbs the selection has for a site (the original's building branch, docs/game/ui-input.md "Context menu verbs"): Build (2) for an unfinished one (the quick order); finished, a

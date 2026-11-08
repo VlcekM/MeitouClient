@@ -410,7 +410,7 @@ sealed partial class PlayerInterface
 
     /// <summary>Adds a text panel's lines over the arranged widget <paramref name="panel"/>: one row per line, the label from 3 % of the width, the value right-aligned to 96 %.</summary>
     /// <summary>One row per line from <paramref name="top"/> down, the label left and the value right; the value takes <paramref name="valueFont"/> at <paramref name="valuePixels"/> when given.</summary>
-    void AddLines(List<UiControl> controls, string panel, IReadOnlyList<HudLine> lines, float rowHeight, float? fontPixels = null, string font = "Kenshi_StandardFont_Medium",
+    internal void AddLines(List<UiControl> controls, string panel, IReadOnlyList<HudLine> lines, float rowHeight, float? fontPixels = null, string font = "Kenshi_StandardFont_Medium",
         string? valueFont = null, float? valuePixels = null, float top = 0)
     {
         if (controls.FirstOrDefault(c => c.Name == panel) is not { } host) return;
@@ -459,13 +459,13 @@ sealed partial class PlayerInterface
 
     /// <summary>The information panel's and the medical rows' text (Faithful HUD; called after the layout is arranged).</summary>
     /// <summary>The original's standard text at 1080 p: <c>Kenshi_StandardFont_Medium</c>, 20 pt at 50 dpi (docs/game/ui-screens.md).</summary>
-    const float StandardTextPixels = 20 * 50 / 72f;
+    internal const float StandardTextPixels = 20 * 50 / 72f;
 
     /// <summary>
     /// The standard text's em pixels at the window's height: the Faithful mode's as the original sizes its font at that scale (<see cref="UiPainter.StandardTextPixels"/>,
     /// smaller than linear above 1080 lines), Meitou's the 1080-line size scaled.
     /// </summary>
-    float StandardPixels => UiMode == UiMode.Faithful && uiPainter is { } painter ? painter.StandardTextPixels(Height) : StandardTextPixels * Height / 1080f;
+    internal float StandardPixels => UiMode == UiMode.Faithful && uiPainter is { } painter ? painter.StandardTextPixels(Height) : StandardTextPixels * Height / 1080f;
 
     void AddHudText(List<UiControl> controls)
     {

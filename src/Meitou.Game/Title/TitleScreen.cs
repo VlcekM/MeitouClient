@@ -6,9 +6,6 @@ using Meitou.Data.Ui;
 using Meitou.Data.World;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Particles;
-using Meitou.Game.Rendering.Sky;
-using Meitou.Simulation;
-using Meitou.Simulation.Factions;
 using Meitou.Simulation.Saving;
 using EffectType = Meitou.Data.Particles.EffectType;
 using WeatherEffectEntry = Meitou.Data.Particles.WeatherEffectEntry;
@@ -168,7 +165,7 @@ sealed class TitleScreen(GameHost host)
         EnsureTitleScene();
         if (titleComposition is not { } title) return;
         gameplayLens ??= host.camera.FieldOfView;
-        host.player.TitleLogoSource ??= TitleLogo.Load;
+        host.player.titleMenu.TitleLogoSource ??= TitleLogo.Load;
         if (host.ActiveCharacters is { } characters && gameplayCharacters is null)
         {
             gameplayCharacters = characters.Source;

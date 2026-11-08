@@ -7,6 +7,7 @@ using Meitou.Simulation;
 using Meitou.Simulation.Items;
 using Meitou.Simulation.Production;
 using Meitou.Game.Ui;
+using Meitou.Game.Tutorials;
 
 namespace Meitou.Game;
 
@@ -25,16 +26,16 @@ namespace Meitou.Game;
 sealed partial class PlayerInterface
 {
     /// <summary>The site whose machine window is shown (null: none), and a site whose window the player closed (not reopened until the selection changes).</summary>
-    string? shownMachine, closedMachine;
+    internal string? shownMachine, closedMachine;
 
     string? researchCategory, researchFocus;
 
-    MachineSnapshot? Machine(string? site) => site is null ? null : session.CurrentSnapshot.Machines.FirstOrDefault(m => m.Site == site);
+    internal MachineSnapshot? Machine(string? site) => site is null ? null : session.CurrentSnapshot.Machines.FirstOrDefault(m => m.Site == site);
 
     /// <summary>The storage window's layout pixels above its grid (caption and item heading) and in all around it, with the two-line Max Capacity text below (measured on the original's window).</summary>
     const float StorageAbove = 86, StorageChrome = 150;
 
-    static string MachineScreen(MachineSnapshot m) => m.Storage is null || m.Inputs.Count > 0 || m.Output is not null ? "building" : m.IsStorage && !m.IsContainer && m.TechLevel == 0 ? "storage" : "bench";
+    internal static string MachineScreen(MachineSnapshot m) => m.Storage is null || m.Inputs.Count > 0 || m.Output is not null ? "building" : m.IsStorage && !m.IsContainer && m.TechLevel == 0 ? "storage" : "bench";
 
     /// <summary>Opens the selected machine's window and closes it when the selection moves on.</summary>
     void SyncMachineScreens()
@@ -298,7 +299,7 @@ sealed partial class PlayerInterface
 
     void MachineAction(MyGuiEvent e)
     {
-        if (e.Screen == "bench" && e.Widget == "ResearchButton") { faithfulScreens.Open("overview"); faithfulScreens.SetTab("overview", "TabsMain", ResearchTab); }
+        if (e.Screen == "bench" && e.Widget == "ResearchButton") { faithfulScreens.Open("overview"); faithfulScreens.SetTab("overview", "TabsMain", TutorialPanel.ResearchTab); }
         else if (e.Screen == "building" && e.Widget == "QueueButton" && shownMachine is not null) OpenCraftTab(shownMachine);
     }
 
@@ -602,7 +603,7 @@ sealed partial class PlayerInterface
         if (research.BenchLevel <= 0) b.Text["ResearchBenchMessage"] = Loc.Tr("You currently have no research facilities. Build a research bench and assign someone to work there.");
         else b.Hidden.Add("ResearchBenchMessage");
         IndentLabel(b, "lbResearchDescription");
-        if (faithfulScreens.GetTab("overview", "TabsMain") == ResearchTab)
+        if (faithfulScreens.GetTab("overview", "TabsMain") == TutorialPanel.ResearchTab)
             b.Text["Root"] = Loc.Tr("RESEARCH - LEVEL {1,num} (CURRENT RATE: {2,num=fix,p=2}x)", research.BenchLevel, research.Rate);
     }
 
@@ -642,7 +643,7 @@ sealed partial class PlayerInterface
     /// </summary>
     void AddResearchContent(List<UiControl> controls)
     {
-        if (faithfulScreens.GetTab("overview", "TabsMain") != ResearchTab) return;
+        if (faithfulScreens.GetTab("overview", "TabsMain") != TutorialPanel.ResearchTab) return;
         var research = session.CurrentSnapshot.Research;
         var face = new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "Left VCenter" };
         float line = MathF.Max(18, 24 * InventoryScale);
@@ -699,7 +700,7 @@ sealed partial class PlayerInterface
     /// <summary>The wheel over the blueprint rows scrolls them a row per notch; clamped when the rows are laid out.</summary>
     bool ResearchWheel(Vector2 p, float steps)
     {
-        if (!faithfulScreens.IsOpen("overview") || faithfulScreens.GetTab("overview", "TabsMain") != ResearchTab || researchStep <= 0 || !researchArea.Contains(p.X, p.Y)) return false;
+        if (!faithfulScreens.IsOpen("overview") || faithfulScreens.GetTab("overview", "TabsMain") != TutorialPanel.ResearchTab || researchStep <= 0 || !researchArea.Contains(p.X, p.Y)) return false;
         researchScroll -= MathF.Sign(steps) * researchStep;
         return true;
     }

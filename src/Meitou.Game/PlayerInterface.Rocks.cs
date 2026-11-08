@@ -23,7 +23,7 @@ sealed partial class PlayerInterface
     ResourceNode? PickRock(Vector2 pixel) => PickRockAt(pixel)?.Rock;
 
     /// <summary>The nearest rock the pixel's ray meets before the ground, with the ray distance.</summary>
-    (ResourceNode Rock, float T)? PickRockAt(Vector2 pixel)
+    internal (ResourceNode Rock, float T)? PickRockAt(Vector2 pixel)
     {
         if (Rocks?.Invoke() is not { } rocks || Ray(pixel) is not { } ray || GroundHit(ray.Origin, ray.Direction) is not { } ground) return null;
         float bestT = Vector3.Distance(ray.Origin, ground) + 1;

@@ -23,7 +23,7 @@ sealed partial class PlayerInterface
     /// Where the ray meets a building: its hull prism first (null: no hit), then, when the record has collision triangles, the nearest of
     /// those (null: the ray passes through the prism without touching the building). <paramref name="y"/> is the building's base height.
     /// </summary>
-    float? BuildingRayT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float yMin, float yMax, string? record, Vector3 position, float y, Quaternion rotation)
+    internal float? BuildingRayT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float yMin, float yMax, string? record, Vector3 position, float y, Quaternion rotation)
     {
         if (RayPrism(ray.Origin, ray.Direction, hull, y + yMin, y + yMax) is not { } prism) return null;
         if (record is null) return prism;

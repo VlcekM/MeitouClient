@@ -885,7 +885,7 @@ hinting remains **Unknown**.
 ### Map
 
 MapScreen (ctor `140490210`) in the Overview's MAP tab: `MapImage` (`GUI_Map.dds`) on a 4096² `MapScrollView` canvas. **Verified** by reading the
-decompile unless marked; Meitou's adapter is `PlayerInterface.Map.cs`. Zoomed out, the original shows no scroll bars (**Observed**, vanilla screenshot);
+decompile unless marked; Meitou's adapter is `WorldMap`. Zoomed out, the original shows no scroll bars (**Observed**, vanilla screenshot);
 whether they show zoomed in is **Unknown**. Meitou pans the map itself and never shows them: the client takes the bars' room.
 
 - **Projection:** the image spans world X and Z −147456…147456, world (0, 0) at its centre, +X right, **+Z down** (`14048cf70`; also checked by drawing
@@ -1156,7 +1156,7 @@ unless marked; Meitou: `PlayerInterface.Squads.cs`, commands in `SquadManagement
   material (`WeaponStats`: the larger of `weight kg` × the maker's weight mod and 40 × blunt × `weight mult` × `weapon inventory weight mult`; a Falling Sun 30 kg), armour by its
   coverage ([Item tooltip](#6-inventory-trade-dialogue-build)). W includes `carry person weight` while carrying someone (Character `+0x348`, **Verified** `FUN_1405d4260`: the same sum as the carried-weight function `FUN_1405c89d0`, [carry-loot](carry-loot.md)); one character
   reads 124 where the original reads 126, cause not found.
-- **Trader window** (code `PlayerInterface.Trade.cs`):
+- **Trader window** (code `TradeWindows`):
   - Layout: `Kenshi_InventoryTraderWindow` (**Verified**: `FUN_140155ee0`, class `TraderInventoryLayout`, names the file; created by `FUN_1406e6af0` for a trading character or building).
   - Size (**Verified**, `FUN_140150570`): the grid is the trader's `backpack_content` section at the `Kenshi_InventorySlotSkin` size (25 x 25 px, read once from the skin). The grid is
     first sized columns x columns; the root window and `scrollview_backpack_content` grow by that size less the layout's grid size; then the grid takes its real rows, becomes the scroll
@@ -1198,7 +1198,7 @@ unless marked; Meitou: `PlayerInterface.Squads.cs`, commands in `SquadManagement
   - Reference screenshot (**Observed**, 2026-10-17, from a video): `Money:` label left and `c.442,269` right in the money box, stock icons at their footprints with plain counts bottom
     right, a vertical scrollbar, no other panels; the HUD stays. The character panel reads `Disguise: None`. Its text boxes and empty cells are dark, where the install's skins draw parchment; the cause (a UI mod or setting) is **Unknown**.
 - **Character trading window** (`CharacterTradingWindow` `FUN_14072a880`, rows `FUN_14072a070`; DA 41 / 42 / 43 / 48, [economy 12](economy.md#12-slaves-prisoners-animals); code
-  `PlayerInterface.CharacterTrade.cs`):
+  `TradeWindows`):
   - Layouts (**Verified**, install's `data/gui/layout`): `Kenshi_CharacterSelectionWindow`: full-screen `Root` (PanelEmpty, no mouse) holding `TradePanel` (Kenshi_FloatingPanelSkin,
     caption "Character Selection", never drawn: a plain MyGUI `Widget` has no text (**Observed**), 0.302 0.120 0.414 x 0.567 of the screen) with `CaptionTextBox` (title), the `CharacterSelectionItemBox` ScrollView (Kenshi_ScrollViewEmpty),
     `ConfirmButton` ("CONFIRM") and `CancelButton` ("CANCEL") at the bottom right, `lbTotalMoney` "Total:" + `MoneyAmountTextBox`, `SelectedTotalTextBox` ("0 / 0", bottom left),
@@ -1382,7 +1382,7 @@ panel 0.130 x 0.463 of the screen, newest lowest; a new line flashes white, fadi
 fresh manager: three queued messages, "Hold middle mouse button to rotate the camera", "Use mouse wheel to zoom", "Now create your first character.
 Use the 'Confirm' button when finished." (every new game of the process). The Tutorials window (F1) lists all 34 by title, pages read-only.
 
-Meitou (`Tutorials.cs`, `PlayerInterface.Tutorials.cs` / `TutorialPanel.cs`, `TutorialCatalog`): as above, the file in the working directory; with no Obedient Slave job no box is drawn (engine choice; the original leaves a stale box, below).
+Meitou (`Tutorials.cs`, `TutorialPanel`, `TutorialCatalog`): as above, the file in the working directory; with no Obedient Slave job no box is drawn (engine choice; the original leaves a stale box, below).
 Highlight targets (**Verified**, `_setHightlightCoords`; Meitou finds them by widget name): portraits `SquadPanel`, stats `NamePanel`, its bottom `StatsPanel` and its
 "Power" / "Workers" lines, medical `MedicalPanel`, status `StatusPanel`, the bars `LifeBar{n+1}` (body 1, limbs 4, blood 0, power 1, materials 1 or 2 with a door,
 condition 0 or 1 with a door), `SpeedButtonsPanel`, `TimeMoneyPanel`, `BuildPanel`, `BountyPanel`, `ShortcutsPanel` and its squad / stats / tech buttons,

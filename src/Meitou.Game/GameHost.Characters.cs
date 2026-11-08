@@ -1,22 +1,11 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Numerics;
-using Meitou.Content;
-using Meitou.Game.Host.Input;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Settings;
-using Meitou.Simulation.Bodies;
-using Meitou.Simulation.Session;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Simulation;
-using Silk.NET.Maths;
-using Silk.NET.Windowing;
 using Meitou.Game.Editor;
-using EngineKey = Meitou.Game.Host.Input.Key;
-using EngineButton = Meitou.Game.Host.Input.MouseButton;
-using SilkKey = Silk.NET.Input.Key;
-using SilkButton = Silk.NET.Input.MouseButton;
 
 namespace Meitou.Game;
 
@@ -195,7 +184,7 @@ sealed partial class GameHost
             var members = player.PortraitMembers();
             for (int i = 0; i < members.Count; i++)
                 characters.PortraitRequests.Add(new PortraitRequest(DrawKey(members[i].Id), i, members[i].PortraitSerial));
-            foreach (var (id, cell) in player.CharacterTradePortraits())
+            foreach (var (id, cell) in player.tradeWindows.CharacterTradePortraits())
                 characters.PortraitRequests.Add(new PortraitRequest(DrawKey(id), cell, player.PortraitSerial(id)));
         }
         if (player.DialoguePortraitCharacters() is var (npc, talker))

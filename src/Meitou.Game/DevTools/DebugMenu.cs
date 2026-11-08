@@ -2,9 +2,11 @@ using System.Globalization;
 using System.Numerics;
 using System.Text.RegularExpressions;
 using Meitou.Data.Fcs;
+using Meitou.Game.DevTools.Agents;
 using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Ui;
 using Meitou.Modding;
 using Meitou.Simulation;
 using EngineKey = Meitou.Game.Host.Input.Key;
@@ -82,7 +84,7 @@ sealed class DebugMenu(GameHost host)
         new("Tools", "Pick & collision inspector...", "", () => "", () => { debugMenuOpen = false; inspectorMenuOpen = true; }),
         new("Tools", "Interior editor...", "", () => "", host.interiorEditorHost.OpenInteriorEditor),
         new("Tools", "Level editor...", "Shift+F12", () => "", host.levelEditorHost.OpenLevelEditor),
-        new("Tools", "Teleport on map...", "", () => OnOff(host.player.MapPickSticky), ToggleMapTeleport) { IsSwitch = true },
+        new("Tools", "Teleport on map...", "", () => OnOff(host.player.worldMap.MapPickSticky), ToggleMapTeleport) { IsSwitch = true },
         new("Overlays", "Navmesh view", "Shift+F11", () => host.debugOverlays.navView.ToString().ToLowerInvariant(), host.debugOverlays.ToggleNavOverlay),
         new("Overlays", "Frame statistics", "F11", () => OnOff(statsVisible), () => { statsVisible = !statsVisible; FoliageGpuCull.CountTriangles = statsVisible; }) { IsSwitch = true },
         new("Overlays", "  Character boxes", "", () => OnOff(host.debugOverlays.characterBoxes), () => host.debugOverlays.characterBoxes = !host.debugOverlays.characterBoxes) { IsSwitch = true },
@@ -96,24 +98,24 @@ sealed class DebugMenu(GameHost host)
 
     /// <summary>
     /// The "Teleport on map" switch, level-triggered: on, every left click on the open Map tab sends the selected characters (else the lead) to the clicked spot, and the camera there, until it is
-    /// switched off (the menu row, or the console's <c>tpmap</c>). The state is the interface's (<see cref="PlayerInterface.MapPickSticky"/>); the map shows a hint with the last result while it is on.
+    /// switched off (the menu row, or the console's <c>tpmap</c>). The state is the interface's (<see cref="WorldMap.MapPickSticky"/>); the map shows a hint with the last result while it is on.
     /// </summary>
     internal void SetMapTeleport(bool on)
     {
-        if (on) host.player.ArmMapPick(TeleportToMapPoint);
-        else host.player.DisarmMapPick();
+        if (on) host.player.worldMap.ArmMapPick(TeleportToMapPoint);
+        else host.player.worldMap.DisarmMapPick();
         mapTeleportNote = "";
         debugStatus = on ? "map teleport on: close this menu, open the map, click a spot" : "map teleport off";
     }
 
-    void ToggleMapTeleport() => SetMapTeleport(!host.player.MapPickSticky);
+    void ToggleMapTeleport() => SetMapTeleport(!host.player.worldMap.MapPickSticky);
 
     /// <summary>The result of the last map click, shown in the map's hint.</summary>
     string mapTeleportNote = "";
 
     void TeleportToMapPoint(Vector3 at)
     {
-        var who = host.player.ControlOrderers();
+        var who = host.player.agentOrders.ControlOrderers();
         string lead = "";
         if (who.Count == 0)
         {
@@ -334,7 +336,7 @@ sealed class DebugMenu(GameHost host)
     CharacterId[] DebugTargets()
     {
         var player = host.session.World.Player;
-        var selected = host.player.ControlOrderers().ToArray();   // includes a select issued this tick (--setup / --exec run commands in one frame)
+        var selected = host.player.agentOrders.ControlOrderers().ToArray();   // includes a select issued this tick (--setup / --exec run commands in one frame)
         return selected.Length > 0 ? selected : player.Inspected.IsNone ? [] : [player.Inspected];
     }
 
@@ -406,7 +408,7 @@ sealed class DebugMenu(GameHost host)
             else if (bare == 1 && words[i].Length == 1 && ExplodeLevels.TryParse(words[i], out level)) (radius, force, damage) = ExplodeLevels.Values(level, click);
             else if (words[i].Equals("--id", StringComparison.OrdinalIgnoreCase))
             {
-                if (i + 1 >= words.Length || !PlayerInterface.TryParseCharacter(words[++i], out var parsed)) return DebugFail("explode: --id needs a character id (c:<slot>.<gen>)");
+                if (i + 1 >= words.Length || !AgentOrders.TryParseCharacter(words[++i], out var parsed)) return DebugFail("explode: --id needs a character id (c:<slot>.<gen>)");
                 byId = parsed;
             }
             else if (words[i].Equals("--radius", StringComparison.OrdinalIgnoreCase))
@@ -457,7 +459,7 @@ sealed class DebugMenu(GameHost host)
         debugFailed = false;
         var world = host.session.World;
         long tick = world.Tick;
-        var selected = host.player.ControlOrderers().ToArray();
+        var selected = host.player.agentOrders.ControlOrderers().ToArray();
         var targets = DebugTargets();
         var here = at ?? host.session.Camera.Current.Target;
         if ((int)row >= DebugLabels.Length) return host.modding.ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
@@ -527,7 +529,7 @@ sealed class DebugMenu(GameHost host)
     internal string DebugGive(string name, int quantity, int quality, bool equip = false)
     {
         debugFailed = false;
-        var selected = host.player.ControlOrderers().ToArray();
+        var selected = host.player.agentOrders.ControlOrderers().ToArray();
         if (selected.Length == 0) return DebugFail("select a character first");
         quantity = Math.Clamp(quantity, 1, 1000);
         quality = Math.Clamp(quality, 0, 100);
@@ -742,10 +744,10 @@ sealed class DebugMenu(GameHost host)
 
     bool InspectorValue(int row) => row switch
     {
-        0 => host.player.InspectorPanel,
-        1 => host.player.InspectorHull,
-        2 => host.player.InspectorShapes,
-        3 => host.player.InspectorMesh,
+        0 => host.player.inspector.InspectorPanel,
+        1 => host.player.inspector.InspectorHull,
+        2 => host.player.inspector.InspectorShapes,
+        3 => host.player.inspector.InspectorMesh,
         _ => false,
     };
 
@@ -764,14 +766,14 @@ sealed class DebugMenu(GameHost host)
     {
         switch (row)
         {
-            case 0: host.player.InspectorPanel = !host.player.InspectorPanel; break;
-            case 1: host.player.InspectorHull = !host.player.InspectorHull; break;
-            case 2: host.player.InspectorShapes = !host.player.InspectorShapes; break;
-            case 3: host.player.InspectorMesh = !host.player.InspectorMesh; break;
+            case 0: host.player.inspector.InspectorPanel = !host.player.inspector.InspectorPanel; break;
+            case 1: host.player.inspector.InspectorHull = !host.player.inspector.InspectorHull; break;
+            case 2: host.player.inspector.InspectorShapes = !host.player.inspector.InspectorShapes; break;
+            case 3: host.player.inspector.InspectorMesh = !host.player.inspector.InspectorMesh; break;
             case 4: host.debugOverlays.ToggleNavOverlay(); break;
             default: inspectorMenuOpen = false; break;
         }
-        host.player.InspectorChanged();
+        host.player.inspector.InspectorChanged();
     }
 
     internal void DrawInspectorMenu(DebugOverlay o, int width, int height, float top)

@@ -16,7 +16,7 @@ sealed partial class PlayerInterface
 {
     /// <summary>The ImageBox texture name of the renderer's portrait atlas (<see cref="CharacterRenderer.PortraitAtlas"/>).</summary>
     public const string PortraitTexture = "meitou:portraits";
-    const int PortraitCells = CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitRows;
+    internal const int PortraitCells = CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitRows;
     /// <summary>The cell layout's size (Kenshi_PortraitCharacter: 136 x 136); the parts below are placed in its pixels.</summary>
     const float PortraitLayoutSize = 136;
 
@@ -27,7 +27,7 @@ sealed partial class PlayerInterface
     public int PortraitSize { get; set; } = CharacterRenderer.FaithfulPortraitSize;
 
     /// <summary>An ImageBox's <c>ImageRect</c> for atlas cell <paramref name="cell"/>: the part of the cell its portrait fills.</summary>
-    string PortraitRect(int cell) => FormattableString.Invariant(
+    internal string PortraitRect(int cell) => FormattableString.Invariant(
         $"{cell % CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell} {cell / CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell} {PortraitSize} {PortraitSize}");
 
     /// <summary>How many of the player's characters are posed every frame however far from the eye (<see cref="FullRateCharacters"/>).</summary>

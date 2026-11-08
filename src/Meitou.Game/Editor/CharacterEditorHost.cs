@@ -1,5 +1,4 @@
 using System.Numerics;
-using Meitou.Data.Characters;
 using Meitou.Data.Ui;
 using Meitou.Data.World;
 using Meitou.Game.Rendering.Characters;

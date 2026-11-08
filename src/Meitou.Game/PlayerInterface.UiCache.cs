@@ -45,9 +45,9 @@ sealed partial class PlayerInterface
     }
 
     UiBaseKey BaseKey(bool hud) => new(session.CurrentSnapshot, mouse, Width, Height, UiMode, Meitou.Localisation.Loc.Language, uiInput, shownTown,
-        tutorialShown, session.Simulation.Speed, session.Simulation.IsPaused, hud, CtrlHeld, AltHeld, ShotWithoutMenus);
+        tutorialWindow.tutorialShown, session.Simulation.Speed, session.Simulation.IsPaused, hud, CtrlHeld, AltHeld, feedbackPanel.ShotWithoutMenus);
 
     /// <summary>The base shows something that moves on real time or with the camera: it is arranged every frame.</summary>
-    bool UiAnimating => TitleOpen || EditorOpen || showCredits || biomeShown || mapShown || portraitFlashes.Count > 0 || tutorialFlashes.Count > 0
+    bool UiAnimating => TitleOpen || EditorOpen || showCredits || biomeShown || worldMap.mapShown || portraitFlashes.Count > 0 || tutorialWindow.tutorialFlashes.Count > 0
         || faithfulScreens.CapturesPointer;
 }

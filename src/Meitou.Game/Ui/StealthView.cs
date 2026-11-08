@@ -4,13 +4,13 @@ using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
 using Meitou.Simulation.Player;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The stealth indicators of a sneaking player character (docs/game/perception.md "Spotting a sneaker"): a 3D arrow towards each hostile NPC noticing (yellow) or
 /// detecting (red) it, and a tag over its head tinted by its state, the original's name-tag colours (hidden blue, almost seen yellow, seen red).
 /// </summary>
-sealed partial class PlayerInterface
+sealed class StealthView(PlayerInterface player)
 {
     // The original's arrow colours (FUN_1408586d0) and name-tag fallback colours (NameTagStealthHidden / AlmostSeen / Seen).
     static readonly Vector3 ArrowNoticed = new(1, 0xdd / 255f, 0), ArrowDetected = new(0xdd / 255f, 0, 0);
@@ -28,14 +28,14 @@ sealed partial class PlayerInterface
     /// <c>arrow.mesh</c> pointing from it at the looker, its tail 12 up and min(d - 7, 15) out towards the looker (d the 3D distance; negative puts it
     /// on the far side, as in the original).
     /// </summary>
-    void UpdateStealthArrows()
+    internal void UpdateStealthArrows()
     {
-        if (Markers is not { } markers) return;
+        if (player.Markers is not { } markers) return;
         arrows.Clear();
-        foreach (var c in session.CurrentSnapshot.Characters)
+        foreach (var c in player.session.CurrentSnapshot.Characters)
         {
             if (c.Stealth is null) continue;
-            var feet = where(c);
+            var feet = player.where(c);
             foreach (var w in c.Watchers)
             {
                 var d = w.Position - feet;
@@ -55,24 +55,24 @@ sealed partial class PlayerInterface
     /// the state's tag colour. The name is white and in square brackets when the character is selected, grey and bare otherwise (<c>NameTagSelected</c> / <c>NameTagUnselected</c>, the brackets from a screenshot of the original; <b>Observed</b>);
     /// while it sneaks, also the <c>LightLevel</c> icon on the right from its light level. The panel stands on the head like a speech bubble does (the original's anchor is not mapped).
     /// </summary>
-    void AddNameTags(List<UiControl> controls)
+    internal void AddNameTags(List<UiControl> controls)
     {
-        float width = Width * 0.105729f, height = Height * 0.0296296f, scale = Height / 1080f;
+        float width = player.Width * 0.105729f, height = player.Height * 0.0296296f, scale = player.Height / 1080f;
         int n = 0;
-        foreach (var c in session.CurrentSnapshot.Characters)
+        foreach (var c in player.session.CurrentSnapshot.Characters)
         {
-            if (!c.IsPlayer || c.Name.Length == 0 || EditorOpen || c.CarriedBy != CharacterId.None || !c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
-            var feet = where(c);
-            if (Vector3.DistanceSquared(Eye, feet) >= NameTagRangeSquared) continue;
-            if (Project(TagAnchor(c, feet)) is not { } head) continue;
+            if (!c.IsPlayer || c.Name.Length == 0 || player.EditorOpen || c.CarriedBy != CharacterId.None || !c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
+            var feet = player.where(c);
+            if (Vector3.DistanceSquared(player.Eye, feet) >= NameTagRangeSquared) continue;
+            if (player.Project(TagAnchor(c, feet)) is not { } head) continue;
             float x = head.X - width / 2, y = head.Y - 4 * scale - height;
-            if (ShowNames) controls.Add(new($"nametag-{n}", "TextBox", new(x + width * 0.187192f, y, width * 0.655172f, height), c.Selected ? $"[{c.Name}]" : c.Name, "", "", true,
+            if (player.ShowNames) controls.Add(new($"nametag-{n}", "TextBox", new(x + width * 0.187192f, y, width * 0.655172f, height), c.Selected ? $"[{c.Name}]" : c.Name, "", "", true,
                 new Dictionary<string, string>
                 {
                     ["FontName"] = "Kenshi_StandardFont_Large", ["TextAlign"] = "Center", ["TextShadow"] = "true", ["TextColour"] = c.Selected ? "1 1 1" : "0.702 0.702 0.702",
                 }, Vector4.Zero, Pickable: false));
             // Without the name the panel is the two icons side by side (FUN_1406e2fd0 sizes it to them), centred over the head.
-            float stealthX = ShowNames ? x : head.X - width * (0.187192f + 0.157635f) / 2, lightX = ShowNames ? x + width * 0.842365f : stealthX + width * 0.187192f;
+            float stealthX = player.ShowNames ? x : head.X - width * (0.187192f + 0.157635f) / 2, lightX = player.ShowNames ? x + width * 0.842365f : stealthX + width * 0.187192f;
             if (c.Stealth is { } state)
             {
                 var tint = state switch { StealthExposure.Detected => TagSeen, StealthExposure.Noticed => TagAlmostSeen, _ => TagHidden };
@@ -111,45 +111,35 @@ sealed partial class PlayerInterface
     /// The point a name tag, task bar or speech bubble stands on (Meitou's: the original's anchor is not mapped): over a standing character's height, or just over the drawn
     /// head of one lying down, whose body its clip may lay away from its feet (a sleeper's from the bed's use node onto the mattress).
     /// </summary>
-    Vector3 TagAnchor(CharacterSnapshot c, Vector3 feet)
+    internal Vector3 TagAnchor(CharacterSnapshot c, Vector3 feet)
     {
-        var standing = feet + new Vector3(0, CharacterHeight + 4, 0);
+        var standing = feet + new Vector3(0, PlayerInterface.CharacterHeight + 4, 0);
         if (DrawnHead?.Invoke(c.Id) is not { } head) return standing;
 
         float lying = Math.Clamp((UprightHead - (head.Y - feet.Y)) / (UprightHead - LyingHead), 0, 1);
         return Vector3.Lerp(standing, head + new Vector3(0, 4, 0), lying);
     }
 
-    /// <summary>The original's <c>Show names</c> option (<c>FUN_1406e2fd0</c>): off, the name tag keeps only its icons.</summary>
-    public bool ShowNames { get; set; } = true;
-    /// <summary>The <c>font size2</c> option: points added to every GUI font's default height (applied to the painter once it exists).</summary>
-    public float FontSize
-    {
-        get => fontSize;
-        set { fontSize = value; if (uiPainter is not null) uiPainter.FontSizeSetting = value; }
-    }
-    float fontSize = Meitou.Data.Ui.KenshiFontSize.DefaultSetting;
-
-    MyGuiLayout? taskBarLayout;
+    internal MyGuiLayout? taskBarLayout;
 
     /// <summary>
     /// The floating progress bar over a player character at work (<c>FloatingProgressBar::ProgressBarWidget</c>, the <c>Kenshi_ProgressBarPanel</c> layout, <b>Verified</b>): the
     /// bar's fill and the centred caption of <see cref="CharacterSnapshot.Bar"/>. It stands just above the name tag (the original's anchor is not mapped).
     /// </summary>
-    void AddTaskBars(List<UiControl> controls)
+    internal void AddTaskBars(List<UiControl> controls)
     {
-        if (taskBarLayout is not { Roots: [var root, ..] } || EditorOpen) return;
-        float tag = Height * 0.0296296f, scale = Height / 1080f;
+        if (taskBarLayout is not { Roots: [var root, ..] } || player.EditorOpen) return;
+        float tag = player.Height * 0.0296296f, scale = player.Height / 1080f;
         int n = 0;
-        var all = session.CurrentSnapshot.Characters;
+        var all = player.session.CurrentSnapshot.Characters;
         for (int i = 0; i < all.Count; i++)
         {
             var c = all[i];
             if (c.Bar is not { } bar || c.CarriedBy != CharacterId.None) continue;
-            var feet = where(c);
-            if (Vector3.DistanceSquared(Eye, feet) >= NameTagRangeSquared) continue;
-            if (Project(TagAnchor(c, feet)) is not { } head) continue;
-            float x = head.X / Width - root.Position.Width / 2, y = (head.Y - 8 * scale - tag) / Height - root.Position.Height;
+            var feet = player.where(c);
+            if (Vector3.DistanceSquared(player.Eye, feet) >= NameTagRangeSquared) continue;
+            if (player.Project(TagAnchor(c, feet)) is not { } head) continue;
+            float x = head.X / player.Width - root.Position.Width / 2, y = (head.Y - 8 * scale - tag) / player.Height - root.Position.Height;
             AddTaskBar(controls, taskBarLayout, root, root.Position with { X = x, Y = y }, bar, $"taskbar-{n++}-");
         }
     }
@@ -160,7 +150,7 @@ sealed partial class PlayerInterface
         var b = new UiBindings();
         b.RelativePositions[root] = at;
         b.Text["Text"] = bar.Text;
-        var arranged = MyGuiPresentation.Arrange(layout, Width, Height, b, uiResources.Layers);
+        var arranged = MyGuiPresentation.Arrange(layout, player.Width, player.Height, b, player.uiResources.Layers);
         var parts = new List<UiControl>(arranged.Count + 1);
         foreach (var u in arranged) parts.Add(u with { Name = u.Name.Length > 0 ? prefix + u.Name : u.Name, Pickable = false });
 
@@ -177,6 +167,6 @@ sealed partial class PlayerInterface
 
     string? taskBarTrack;
 
-    string? TaskBarTrack() => taskBarTrack ??= uiResources.Templates.TryGetValue("Kenshi_ProgressBarFill", out var template)
+    string? TaskBarTrack() => taskBarTrack ??= player.uiResources.Templates.TryGetValue("Kenshi_ProgressBarFill", out var template)
         ? MyGuiReader.ReadResourceLayout(template).Roots.FirstOrDefault()?.UserStrings.GetValueOrDefault("TrackSkin") : null;
 }

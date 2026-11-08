@@ -123,12 +123,12 @@ sealed class DebugOverlays(GameHost host)
     /// <summary>Once a frame: the inspector's hulls go to their renderer when they changed (docs/viewer.md "Pick & collision inspector").</summary>
     internal void UpdateInspectorOverlay()
     {
-        if (!host.player.InspectorDrawing) { if (host.gpu.InspectorOverlay is { Visible: true } hidden) hidden.Visible = false; inspectorShown = -1; return; }
+        if (!host.player.inspector.InspectorDrawing) { if (host.gpu.InspectorOverlay is { Visible: true } hidden) hidden.Visible = false; inspectorShown = -1; return; }
         if (host.gpu.InspectorOverlay is not { } overlay) return;
         overlay.Visible = true;
-        if (inspectorShown == host.player.InspectorRevision) return;
-        inspectorShown = host.player.InspectorRevision;
-        var (origin, fill, edges) = host.player.InspectorGeometry;
+        if (inspectorShown == host.player.inspector.InspectorRevision) return;
+        inspectorShown = host.player.inspector.InspectorRevision;
+        var (origin, fill, edges) = host.player.inspector.InspectorGeometry;
         overlay.SetMesh(origin, fill, edges);
     }
 

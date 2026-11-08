@@ -99,11 +99,11 @@ sealed partial class PlayerInterface
     /// <summary>Drops the transient state of the mouse (a drag box, a steering right click): the world it belonged to is gone.</summary>
     public void Reset()
     {
-        floaters.Clear();
+        damageFloaters.floaters.Clear();
         dragFrom = null;
         dragging = false;
         steering = false;
-        mapDrag = null;
+        worldMap.mapDrag = null;
         (held, liftPress, lifting, heldSerial) = (null, null, null, 0);
         selectedFor = null;
         selected = [];
@@ -112,7 +112,7 @@ sealed partial class PlayerInterface
         CloseContextMenu();
     }
 
-    bool OverHud(Vector2 p) => ContainsUi(p);
+    internal bool OverHud(Vector2 p) => ContainsUi(p);
 
     void PressButton(int index)
     {
@@ -134,7 +134,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The selected characters of the current snapshot, found once per snapshot (the HUD box is asked for on every hit test).</summary>
-    IReadOnlyList<CharacterSnapshot> Selected()
+    internal IReadOnlyList<CharacterSnapshot> Selected()
     {
         var snapshot = session.CurrentSnapshot;
         if (!ReferenceEquals(snapshot, selectedFor))
@@ -161,10 +161,10 @@ sealed partial class PlayerInterface
         Height = height;
         PollBiome();
         PollNotice();
-        PollProspect();
-        PollTutorials();
-        UpdateStealthArrows();
-        DrawFloaters(o);
+        prospecting.PollProspect();
+        tutorialWindow.PollTutorials();
+        stealthView.UpdateStealthArrows();
+        damageFloaters.DrawFloaters(o);
         FadeMarker();
 
         // The box.

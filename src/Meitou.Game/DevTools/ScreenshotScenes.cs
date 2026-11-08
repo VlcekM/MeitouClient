@@ -1,22 +1,12 @@
-using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
-using Meitou.Content;
 using Meitou.Game.Host;
-using Meitou.Game.Host.Input;
 using Meitou.Game.Host.WorldSync;
 using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
-using Meitou.Simulation.Weather;
-using Silk.NET.Maths;
-using Silk.NET.Windowing;
-using EngineButton = Meitou.Game.Host.Input.MouseButton;
-using EngineKey = Meitou.Game.Host.Input.Key;
-using SilkButton = Silk.NET.Input.MouseButton;
-using SilkKey = Silk.NET.Input.Key;
 
 namespace Meitou.Game.DevTools;
 

@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-using Meitou.Game.DevTools;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Ui;
@@ -193,7 +192,7 @@ sealed class AgentChannel(GameHost host)
     {
         host.agentWorld.ControlCameraTick();
         var now = ControlSnapshot();
-        if (now.Loaded) { host.player.ControlKills(); host.player.ControlCombatSample(); host.agentPlay.ControlSpawnPoll(); host.agentPlay.ControlMoveWaitPoll(); }
+        if (now.Loaded) { host.player.agentOrders.ControlKills(); host.player.agentOrders.ControlCombatSample(); host.agentPlay.ControlSpawnPoll(); host.agentPlay.ControlMoveWaitPoll(); }
         if (lastSnap is { } old && controlEvents && old != now)
         {
             if (old.Screens != now.Screens) ControlEvent("screen", w => { w.WriteString("screen", now.Screen); w.WriteStartArray("screens"); foreach (string s in ControlScreenSet()) w.WriteStringValue(s); w.WriteEndArray(); });

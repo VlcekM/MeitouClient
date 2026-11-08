@@ -1,4 +1,3 @@
-using Meitou.Data.Fcs;
 using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Save;
@@ -14,7 +13,7 @@ sealed partial class PlayerInterface
     IReadOnlyList<NewGameStart> starts = [];
     int startIndex;
     Func<IReadOnlyList<SaveSlot>> saveSlots = () => [];
-    IReadOnlyList<SaveSlot> slots = [];
+    internal IReadOnlyList<SaveSlot> slots = [];
     SaveSlot? selectedSlot;
     string slotDetails = "", credits = "";
     bool showCredits;
@@ -38,7 +37,7 @@ sealed partial class PlayerInterface
         | (slotTicks[2] ? Meitou.Simulation.Saving.ImportOptions.Research : 0) | (slotTicks[3] ? Meitou.Simulation.Saving.ImportOptions.DeadNpcs : 0)
         | (slotTicks[4] ? Meitou.Simulation.Saving.ImportOptions.Relations : 0);
     /// <summary>The open message box: ButtonA confirms (captioned <c>Yes</c>), an optional middle choice (ButtonB), and the last button cancels (Esc presses it).</summary>
-    sealed record Confirmation(string Title, string Text, Action Confirm, string Yes = "YES", (string Caption, Action Act)? Middle = null, string Cancel = "CANCEL")
+    internal sealed record Confirmation(string Title, string Text, Action Confirm, string Yes = "YES", (string Caption, Action Act)? Middle = null, string Cancel = "CANCEL")
     {
         /// <summary>Only ButtonA, captioned Ok (the original's message box with button mask 1, <c>FUN_140742130</c>).</summary>
         public bool OkOnly { get; init; }
@@ -46,9 +45,9 @@ sealed partial class PlayerInterface
     /// <summary>A message box with only an Ok button.</summary>
     void MessageBox(string title, string text)
     {
-        confirmation = new(UpperTr(title), Loc.Tr(text), () => { }, UpperTr("Ok")) { OkOnly = true }; faithfulScreens.Open("message");
+        confirmation = new(TitleMenu.UpperTr(title), Loc.Tr(text), () => { }, TitleMenu.UpperTr("Ok")) { OkOnly = true }; faithfulScreens.Open("message");
     }
-    Confirmation? confirmation;
+    internal Confirmation? confirmation;
     /// <summary>The game data (<see cref="ConfigureFrontend"/>; null without it).</summary>
     GameDatabase? gameData;
     public void ConfigureFrontend(GameDatabase? database, Func<IReadOnlyList<SaveSlot>> enumerate, string creditsText)
@@ -70,9 +69,9 @@ sealed partial class PlayerInterface
         editor = null; previews.Clear();
         confirmation = null; UpdateMenuPause();
     }
-    void Confirm(string title, string text, Action action, string yes = "YES", (string Caption, Action Act)? middle = null, string cancel = "CANCEL")
+    internal void Confirm(string title, string text, Action action, string yes = "YES", (string Caption, Action Act)? middle = null, string cancel = "CANCEL")
     {
-        confirmation = new(UpperTr(title), Loc.Tr(text), action, UpperTr(yes), middle is { } m ? (UpperTr(m.Caption), m.Act) : null, UpperTr(cancel)); faithfulScreens.Open("message");
+        confirmation = new(TitleMenu.UpperTr(title), Loc.Tr(text), action, TitleMenu.UpperTr(yes), middle is { } m ? (TitleMenu.UpperTr(m.Caption), m.Act) : null, TitleMenu.UpperTr(cancel)); faithfulScreens.Open("message");
     }
     /// <summary>The cancel button of the open message box: ButtonC when it has a middle choice, else ButtonB.</summary>
     string CancelButton => confirmation?.Middle is null ? "ButtonB" : "ButtonC";
@@ -235,7 +234,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>A caption the original sets from the catalog in upper case (boost::locale's to_upper of the translation).</summary>
-    static string UpperCaption(string id) => Loc.Tr(id).ToUpperInvariant();
+    internal static string UpperCaption(string id) => Loc.Tr(id).ToUpperInvariant();
 
     /// <summary>The save list's date: the save folder's last write, in the user's short date and time with seconds (boost::locale <c>{1,datetime}</c>, Faithful).</summary>
     string SlotDate(SaveSlot s) => UiMode == UiMode.Faithful ? s.ModifiedUtc.ToLocalTime().ToString("G", CultureInfo.CurrentCulture)
@@ -257,10 +256,10 @@ sealed partial class PlayerInterface
             }
             Enable("ExitButton", "CreditsButton", "ImportGameButton");
             if (UiMode == UiMode.Faithful)
-                foreach (var (widget, caption) in TitleCaptions) b.Text[widget] = UpperCaption(caption);
+                foreach (var (widget, caption) in TitleMenu.TitleCaptions) b.Text[widget] = UpperCaption(caption);
             if (UiMode == UiMode.Meitou)
             {
-                foreach (var (widget, at) in MenuLayout(card: slots.Count > 0 && slotReadable)) b.Positions[widget] = at;
+                foreach (var (widget, at) in titleMenu.MenuLayout(card: slots.Count > 0 && slotReadable)) b.Positions[widget] = at;
             }
             // Continue is shown only when a save exists (docs/game/ui-screens.md section 3), not greyed out.
             if (slots.Count > 0 && slotReadable) Enable("ContinueButton"); else b.Hidden.Add("ContinueButton");

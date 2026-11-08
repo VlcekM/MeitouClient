@@ -7,9 +7,7 @@ using Meitou.Game.Rendering.Upscalers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime;
-using System.Runtime.InteropServices;
 using System.Numerics;
-using Meitou.Data.Particles;
 using Meitou.Data.Save;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
@@ -22,13 +20,10 @@ using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Rendering.Post;
-using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
 using Meitou.Game.Settings;
 using Meitou.Game.Title;
 using Meitou.Game.Tutorials;
-using Meitou.Simulation.Player;
-using Meitou.Simulation.Population;
 using Meitou.Simulation.Session;
 using Meitou.Game.Rendering.Metal;
 using Meitou.Game.Rendering.Metal.Gi;
@@ -36,7 +31,6 @@ using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Simulation;
-using Meitou.Simulation.Editing;
 using Meitou.Simulation.Saving;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
@@ -485,8 +479,8 @@ sealed partial class GameHost
             hud.BuildingMoveHit = (origin, direction, distance) => objects?.MoveHit(origin, direction, interiors.viewedFloor, distance);
             hud.SurfaceMoveHit = interiors.SurfaceMoveHit;
             hud.ClosedBuildingHit = (origin, direction, distance) => objects?.ClosedBuildingHit(origin, direction, distance);
-            hud.HiddenInWorld = interiors.hiddenIndoors.Contains;
-            hud.DrawnHead = id => characters?.BonePosition(DrawKey(id), "Bip01 Head");
+            hud.stealthView.HiddenInWorld = interiors.hiddenIndoors.Contains;
+            hud.stealthView.DrawnHead = id => characters?.BonePosition(DrawKey(id), "Bip01 Head");
             hud.ShownInteriorHit = (origin, direction, distance) => objects?.ShownInteriorHit(origin, direction, distance);
             hud.AboveViewedFloor = interiors.AboveViewedFloor;
             hud.GroundItemShape = groundItemSync.GroundShape;
@@ -536,7 +530,7 @@ sealed partial class GameHost
         if (hud is not null) (hud.MovementMarker, hud.RotationMarker) = (config.MovementMarker == true, config.RotationMarker == true);
         saves.tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
         saves.tutorials.Enabled = config.Tutorials == true;
-        hud?.ConfigureTutorials(saves.tutorials);
+        hud?.tutorialWindow.ConfigureTutorials(saves.tutorials);
         // The shared settings layout: Metal supplies the settings it can change live (window, upscaler, distances,
         // shadows, sky and the composite); the Interface/Controls/Advanced/Audio pages are the game's own.
         SettingsPanel? settingsValues = null;
@@ -1433,7 +1427,7 @@ sealed partial class GameHost
             if (editorBarFrame is { } barFrame) characterEditor.EndEditorBar(barFrame, size.X, size.Y);
             // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (FeedbackCapture).
             bool feedbackShot = feedbackCapture.feedbackShotRequested && hud is not null && !still;
-            if (hud is not null) hud.ShotWithoutMenus = feedbackShot;
+            if (hud is not null) hud.feedbackPanel.ShotWithoutMenus = feedbackShot;
             if (overlay is not null)
             {
                 overlay.Target = backbuffer;
@@ -1561,7 +1555,7 @@ sealed partial class GameHost
             }
             if (feedbackShot)
             {
-                hud!.ShotWithoutMenus = false;
+                hud!.feedbackPanel.ShotWithoutMenus = false;
                 var picture = ctx.Readback(backbuffer);
                 for (int i = 3; i < picture.Length; i += 4) picture[i] = 255;
                 feedbackCapture.FeedbackCaptured(picture, backbuffer.Desc.Width, backbuffer.Desc.Height);

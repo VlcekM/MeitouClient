@@ -3,7 +3,6 @@ using System.Globalization;
 using System.Numerics;
 using System.Text;
 using System.Text.Json;
-using Meitou.Game.DevTools;
 using Meitou.Simulation;
 using Meitou.Simulation.Locks;
 using Meitou.Simulation.Navigation;
@@ -13,7 +12,7 @@ namespace Meitou.Game.DevTools.Agents;
 /// <summary>
 /// The agent control channel's world layer (docs/procedures/game-launch-procedure.md "Driving a running game by command"): <c>world</c>, <c>world pick</c>, <c>entity-screen</c>, <c>camera ...</c>, <c>select</c>, <c>order move|attack</c>,
 /// <c>pause</c>, <c>resume</c>, <c>speed</c>, and the wait-for keys <c>camera-settled</c>, <c>selected</c> and <c>pos-near</c>. The commands are registered by <see cref="AgentChannel.RegisterControlCommands"/>; the data comes from
-/// <see cref="PlayerInterface"/> (PlayerInterface.Control.cs), which reads the same snapshot and picking the pointer uses.
+/// <see cref="PlayerInterface"/> (AgentOrders), which reads the same snapshot and picking the pointer uses.
 /// </summary>
 sealed class AgentWorld(GameHost host)
 {
@@ -52,11 +51,11 @@ sealed class AgentWorld(GameHost host)
         double t = Math.Min(1, Stopwatch.GetElapsedTime(m.Start).TotalSeconds / m.Seconds);
         float e = (float)(t * t * (3 - 2 * t));
         var p1 = m.Pivot1;
-        if (m.Entity is not null && host.player.ControlPosition(m.Entity) is { } at) p1 = m.Pivot1 = new Vector2(at.X, at.Z);
+        if (m.Entity is not null && host.player.agentOrders.ControlPosition(m.Entity) is { } at) p1 = m.Pivot1 = new Vector2(at.X, at.Z);
         host.session.Camera.Place(Vector2.Lerp(m.Pivot0, p1, e), m.Yaw0 + (m.Yaw1 - m.Yaw0) * e, m.Pitch0 + (m.Pitch1 - m.Pitch0) * e, m.Dist0 + (m.Dist1 - m.Dist0) * e);
         if (t < 1) return;
         cameraMove = null;
-        if (m.Follow && m.Entity is not null && PlayerInterface.TryParseCharacter(m.Entity, out var cid)) host.player.ControlFocusCharacter(cid);
+        if (m.Follow && m.Entity is not null && AgentOrders.TryParseCharacter(m.Entity, out var cid)) host.player.agentOrders.ControlFocusCharacter(cid);
         camStable = 0;
         if (m.Id is { } id) { string json = ControlCameraJson(); host.agentChannel.ControlWrite(id, true, "camera move done", json); }
     }
@@ -113,7 +112,7 @@ sealed class AgentWorld(GameHost host)
     /// <summary>The world position of an entity id, or an error line for the console.</summary>
     Vector3? ControlEntity(string id, DevConsole con)
     {
-        if (host.player.ControlPosition(id) is { } p) return p;
+        if (host.player.agentOrders.ControlPosition(id) is { } p) return p;
         con.Error($"no entity '{id}' (ids come from world: c:<slot>.<gen> or b:<key>)");
         return null;
     }
@@ -141,13 +140,13 @@ sealed class AgentWorld(GameHost host)
                 {
                     // Pick at the centre of an entity's on-screen rect (what a click on it would hit); the reply says whether that is the entity itself.
                     entity = args[2];
-                    if (host.player.ControlEntityScreenJson(entity) is not { } rect) { con.Error($"no entity '{entity}'"); return; }
+                    if (host.player.agentOrders.ControlEntityScreenJson(entity) is not { } rect) { con.Error($"no entity '{entity}'"); return; }
                     using var doc = JsonDocument.Parse(rect);
                     if (!doc.RootElement.TryGetProperty("center", out var centre)) { con.Error($"world pick: {entity} is offscreen"); return; }
                     (px, py) = (centre[0].GetSingle(), centre[1].GetSingle());
                 }
                 else if (args.Count != 3 || !Num(args[1], out px) || !Num(args[2], out py)) { con.Error("usage: world pick <screen x> <screen y> | world pick --entity <id>"); return; }
-                string pick = host.player.ControlPickJson(new Vector2(px, py));
+                string pick = host.player.agentOrders.ControlPickJson(new Vector2(px, py));
                 if (entity is not null)
                 {
                     using var doc = JsonDocument.Parse(pick);
@@ -179,7 +178,7 @@ sealed class AgentWorld(GameHost host)
             }
             int limit = 50;
             if (flags.TryGetValue("--limit", out var lv) && (lv.Count != 1 || !int.TryParse(lv[0], NumberStyles.None, CultureInfo.InvariantCulture, out limit) || limit < 1)) { con.Error("world: --limit needs a whole number"); return; }
-            string json = host.player.ControlWorldJson(near, radius, kind, limit);
+            string json = host.player.agentOrders.ControlWorldJson(near, radius, kind, limit);
             host.agentChannel.PrintData(con, json);
         });
 
@@ -187,7 +186,7 @@ sealed class AgentWorld(GameHost host)
         {
             if (!Loaded(con)) return;
             if (args.Count != 1) { con.Error("usage: entity-screen <id>"); return; }
-            if (host.player.ControlEntityScreenJson(args[0]) is not { } json) { con.Error($"no entity '{args[0]}'"); return; }
+            if (host.player.agentOrders.ControlEntityScreenJson(args[0]) is not { } json) { con.Error($"no entity '{args[0]}'"); return; }
             host.agentChannel.PrintData(con, json);
         });
 
@@ -278,7 +277,7 @@ sealed class AgentWorld(GameHost host)
                         break;
                     }
                     if (ControlEntity(args[1], con) is not { } found) return;
-                    bool isCharacter = PlayerInterface.TryParseCharacter(args[1], out var cid) && !args[1].StartsWith("b:", StringComparison.OrdinalIgnoreCase);
+                    bool isCharacter = AgentOrders.TryParseCharacter(args[1], out var cid) && !args[1].StartsWith("b:", StringComparison.OrdinalIgnoreCase);
                     if (over > 0)
                     {
                         host.player.Follow = null;
@@ -286,7 +285,7 @@ sealed class AgentWorld(GameHost host)
                         if (orbit) moveYawBy = yaw;
                         break;
                     }
-                    if (isCharacter) host.player.ControlFocusCharacter(cid); else host.player.Follow = null;
+                    if (isCharacter) host.player.agentOrders.ControlFocusCharacter(cid); else host.player.Follow = null;
                     CameraPlace(new Vector2(found.X, found.Z), yaw, null, null);
                     break;
                 }
@@ -323,15 +322,15 @@ sealed class AgentWorld(GameHost host)
             var words = args.Where(a => !a.Equals("--add", StringComparison.OrdinalIgnoreCase)).ToList();
             var ids = new List<CharacterId>();
             if (words.Count == 1 && words[0].Equals("--none", StringComparison.OrdinalIgnoreCase)) { }
-            else if (words.Count == 1 && words[0].Equals("--squad", StringComparison.OrdinalIgnoreCase)) ids.AddRange(host.player.ControlSquad());
+            else if (words.Count == 1 && words[0].Equals("--squad", StringComparison.OrdinalIgnoreCase)) ids.AddRange(host.player.agentOrders.ControlSquad());
             else if (words.Count == 0) { con.Error("usage: select <id...> | --squad | --none [--add]"); return; }
             else
                 foreach (string word in words)
                 {
-                    if (!word.StartsWith("c:", StringComparison.OrdinalIgnoreCase) || !PlayerInterface.TryParseCharacter(word, out var id)) { con.Error($"select: '{word}' is not a character id (c:<slot>.<gen>)"); return; }
+                    if (!word.StartsWith("c:", StringComparison.OrdinalIgnoreCase) || !AgentOrders.TryParseCharacter(word, out var id)) { con.Error($"select: '{word}' is not a character id (c:<slot>.<gen>)"); return; }
                     ids.Add(id);
                 }
-            if (!host.player.ControlSelect(ids, add, out string message)) { con.Error("select: " + message); return; }
+            if (!host.player.agentOrders.ControlSelect(ids, add, out string message)) { con.Error("select: " + message); return; }
             con.Print(message + ": " + string.Join(' ', ids.Select(i => $"c:{i.Slot}.{i.Generation}")));
         });
 
@@ -361,13 +360,13 @@ sealed class AgentWorld(GameHost host)
                     else nums.Add(args[i]);
                 }
                 if (nums.Count != 2 || !Num(nums[0], out float x) || !Num(nums[1], out float z) || (stuckGiven && !waited)) { con.Error("usage: order move <x> <z> [--queue] [--wait <s> [--stuck <s>]]"); return; }
-                if (!host.player.ControlMove(x, z, queue, out string message)) { con.Error("order: " + message); return; }
+                if (!host.player.agentOrders.ControlMove(x, z, queue, out string message)) { con.Error("order: " + message); return; }
                 if (waited) host.agentPlay.ControlMoveWaitStart(con, x, z, waitS, stuckS); else con.Print(message);
             }
             else if (sub == "attack")
             {
-                if (args.Count != 2 || !args[1].StartsWith("c:", StringComparison.OrdinalIgnoreCase) || !PlayerInterface.TryParseCharacter(args[1], out var target)) { con.Error("usage: order attack <c:slot.gen>"); return; }
-                if (!host.player.ControlAttack(target, out string message)) con.Error("order: " + message); else con.Print(message);
+                if (args.Count != 2 || !args[1].StartsWith("c:", StringComparison.OrdinalIgnoreCase) || !AgentOrders.TryParseCharacter(args[1], out var target)) { con.Error("usage: order attack <c:slot.gen>"); return; }
+                if (!host.player.agentOrders.ControlAttack(target, out string message)) con.Error("order: " + message); else con.Print(message);
             }
             else con.Error("usage: order move <x> <z> [--queue] [--wait <s> [--stuck <s>]] | order attack <id>");
         });
@@ -503,7 +502,7 @@ sealed class AgentWorld(GameHost host)
             {
                 string[] p = value.Split(',');
                 if (p.Length < 3 || !Num(p[0], out float x) || !Num(p[1], out float z) || !Num(p[2], out float r)) return false;
-                Vector3? at = p.Length > 3 ? host.player.ControlPosition(p[3]) : host.player.ControlLeadPosition();
+                Vector3? at = p.Length > 3 ? host.player.agentOrders.ControlPosition(p[3]) : host.player.agentOrders.ControlLeadPosition();
                 return at is { } a && Vector2.Distance(new Vector2(a.X, a.Z), new Vector2(x, z)) <= r;
             }
             default: return false;
@@ -530,7 +529,7 @@ sealed class AgentWorld(GameHost host)
             float a = 0, b = 0, c = 0, d = 0;
             if (idText is not null)
             {
-                if (!PlayerInterface.TryParseCharacter(idText, out _) || host.player.ControlPosition(idText.StartsWith("c:", StringComparison.OrdinalIgnoreCase) ? idText : "c:" + idText) is not { } at) { con.Error($"path-check: unknown character '{idText}'"); return; }
+                if (!AgentOrders.TryParseCharacter(idText, out _) || host.player.agentOrders.ControlPosition(idText.StartsWith("c:", StringComparison.OrdinalIgnoreCase) ? idText : "c:" + idText) is not { } at) { con.Error($"path-check: unknown character '{idText}'"); return; }
                 if (nums.Count != 2 || !Num(nums[0], out a) || !Num(nums[1], out b)) { con.Error("usage: path-check --id <c:slot.gen> <x> <z>"); return; }
                 from = at; to = new Vector3(a, walk.GroundHeight(a, b), b);
             }

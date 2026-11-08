@@ -166,7 +166,7 @@ sealed class DevConsoleHost(GameHost host)
     {
         var c = devConsole;
         IEnumerable<string> Starting(IEnumerable<string> names, string typed) => names.Where(n => n.StartsWith(typed, StringComparison.OrdinalIgnoreCase));
-        IEnumerable<string> Characters(string typed) => Starting(host.player.ControlCharacterKeys(), typed);
+        IEnumerable<string> Characters(string typed) => Starting(host.player.agentOrders.ControlCharacterKeys(), typed);
         c.FlagValues = (flag, typed) => flag.ToLowerInvariant() switch
         {
             "--id" => Characters(typed),
@@ -178,8 +178,8 @@ sealed class DevConsoleHost(GameHost host)
         c.SetComplete("version", (i, typed) => i == 0 ? Starting(["--say"], typed) : []);
         c.SetComplete("order", (i, typed) => i == 0 ? Starting(["move", "attack"], typed) : i == 1 && c.CompletionArgs is ["attack"] ? Characters(typed) : []);
         c.SetComplete("spawn-at", (i, typed) => i == 2 ? ConsoleMatch(ConsoleRecordNames(character: true), typed) : []);
-        c.SetComplete("equip", (i, typed) => i == 0 ? ConsoleMatch(host.player.ControlCarriedItemNames(), typed) : []);
-        c.SetComplete("pickup", (i, typed) => i == 0 ? Starting(host.player.ControlGroundItemKeys(), typed) : []);
+        c.SetComplete("equip", (i, typed) => i == 0 ? ConsoleMatch(host.player.agentOrders.ControlCarriedItemNames(), typed) : []);
+        c.SetComplete("pickup", (i, typed) => i == 0 ? Starting(host.player.agentOrders.ControlGroundItemKeys(), typed) : []);
         c.SetComplete("door", (i, typed) => i == 0 ? Starting(["nearest"], typed) : []);
         foreach (var name in new[] { "godmode", "guard", "tpmap" }) c.SetComplete(name, (i, typed) => i == 0 ? Starting(["on", "off"], typed) : []);
         IEnumerable<string> Levels(string typed) => Starting(["1", "2", "3", "4", "5", "underkill", "light", "normal", "overkill", "ridiculous"], typed);
@@ -281,7 +281,7 @@ sealed class DevConsoleHost(GameHost host)
         Add("tpmap", "tpmap [on|off]", "the F10 switch Teleport on map: while on, every left click on the open map tab teleports the selected characters (else the lead) there and puts the camera on the spot; no argument toggles; reports the state", (args, con) =>
         {
             if (!Need(args, 0, 1, Self("tpmap"))) return;
-            bool on = !host.player.MapPickSticky;
+            bool on = !host.player.worldMap.MapPickSticky;
             if (args.Count > 0)
             {
                 switch (args[0].ToLowerInvariant())

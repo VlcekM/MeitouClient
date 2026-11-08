@@ -4,7 +4,6 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Game.Editor;
 using Meitou.Game.Host;
-using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Rendering.Terrain;
 using Meitou.Simulation;

@@ -147,7 +147,7 @@ sealed partial class PlayerInterface
 
     /// <summary>Picking the item up would be stealing it: its owner's faction (<see cref="Meitou.Simulation.Items.GroundItem.OwnedBy"/>) is not the player's.</summary>
     /// <summary>The ground item under <paramref name="pixel"/> belongs to another faction: its pointer is <c>steal</c> (<c>FUN_1407fc440</c>), and a right click without Alt only walks to it.</summary>
-    bool StealsGroundItem(Vector2 pixel) => PickGroundItem(pixel) is { } id && session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == id) is { } g && Stealing(g);
+    internal bool StealsGroundItem(Vector2 pixel) => PickGroundItem(pixel) is { } id && session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == id) is { } g && Stealing(g);
 
     bool Stealing(Meitou.Simulation.Items.GroundItemSnapshot g) => g.OwnedBy >= 0 && g.OwnedBy != session.World.Player.Faction;
 

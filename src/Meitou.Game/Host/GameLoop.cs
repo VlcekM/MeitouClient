@@ -339,7 +339,7 @@ sealed class GameLoop(GameHost host)
         (host.player.MovementMarker, host.player.RotationMarker) = (host.config.MovementMarker == true, host.config.RotationMarker == true);
         host.saves.tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
         host.saves.tutorials.Enabled = host.config.Tutorials == true;
-        host.player.ConfigureTutorials(host.saves.tutorials);
+        host.player.tutorialWindow.ConfigureTutorials(host.saves.tutorials);
     }
 
     /// <summary>The saved sliders, the look the command line chose, then the saved switches and preset (unless the command line chose them).</summary>
@@ -1052,7 +1052,7 @@ sealed class GameLoop(GameHost host)
         bool shot = host.screenshotRequested, take = takeFile is not null;
         // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (FeedbackCapture).
         bool feedbackShot = host.feedbackCapture.feedbackShotRequested && !take;
-        host.player.ShotWithoutMenus = feedbackShot;
+        host.player.feedbackPanel.ShotWithoutMenus = feedbackShot;
         DrawInterface(size, covered, shot, take, feedbackShot);
         // The loading screen over the whole frame while a scene loads or the world warms up.
         DrawLoadingCover(size, covered, uiTarget);
@@ -1174,7 +1174,7 @@ sealed class GameLoop(GameHost host)
             host.debugOverlays.FindStatsToggles(overlay.CharWidth);
         }
         if (host.debugMenu.debugMenuOpen) host.debugMenu.DrawDebugMenu(overlay, size.X, size.Y, host.debugMenu.statsVisible ? menuTop : panelsBottom, atRight: host.debugMenu.statsVisible);
-        if (host.player.MapPick is not null && host.player.MapTabShown) host.debugMenu.DrawMapPickHint(overlay, size.X, size.Y);
+        if (host.player.worldMap.MapPick is not null && host.player.worldMap.MapTabShown) host.debugMenu.DrawMapPickHint(overlay, size.X, size.Y);
         if (host.debugMenu.ExplodeClickOn) host.debugMenu.DrawExplodeClickHint(overlay, size.X, size.Y);
         if (host.debugMenu.inspectorMenuOpen) host.debugMenu.DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
         if (host.interiorEditorHost.interiorEditorOpen) host.interiorEditorHost.DrawInteriorEditor(overlay, size.X, size.Y, panelsBottom);
@@ -1268,7 +1268,7 @@ sealed class GameLoop(GameHost host)
         if (shot) host.player.EndScreenshot();
         if (feedbackShot)
         {
-            host.player.ShotWithoutMenus = false;
+            host.player.feedbackPanel.ShotWithoutMenus = false;
             host.feedbackCapture.FeedbackCaptured(FramebufferCapture.ReadPicture(display.Context, picture, size.X, size.Y, topDown: topDown), size.X, size.Y);
         }
     }

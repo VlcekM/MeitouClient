@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
-using Meitou.Data.Fcs;
 using Meitou.Data.Ui;
+using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
 
@@ -16,7 +16,7 @@ namespace Meitou.Game;
 sealed partial class PlayerInterface
 {
     /// <summary>The held item as drawn: the world's, or what the interface expects while its last held command is on its way (<see cref="heldSerial"/>).</summary>
-    HeldItemView? held;
+    internal HeldItemView? held;
     /// <summary>Where the pointer holds the item: its offset from the item's top-left corner, in cells (at least half a cell inside the footprint, <c>FUN_140713560</c>).</summary>
     Vector2 heldGrab;
     /// <summary>The serial of the held command the world has not applied yet (0: none), when it was sent, and the last serial used.</summary>
@@ -28,13 +28,13 @@ sealed partial class PlayerInterface
     /// <summary>Shift and Ctrl at the last press (a lift takes the whole stack with either).</summary>
     bool pressShift, pressCtrl;
     /// <summary>The pinned inventory windows (<see cref="PinnedPrefix"/> and a number) and the character each stays on (docs/game/ui-screens.md section 6).</summary>
-    readonly Dictionary<string, CharacterId> pinnedInventories = new(StringComparer.Ordinal);
+    internal readonly Dictionary<string, CharacterId> pinnedInventories = new(StringComparer.Ordinal);
     /// <summary>The pinned characters last told to the simulation (<see cref="ShowInventoryCommand"/>), which publishes their grids while they are not selected.</summary>
     CharacterId[] pinnedSent = [];
     /// <summary>The character whose window was pinned last: selecting someone else opens the inventory again for them, beside it.</summary>
     CharacterId pinnedFrom = CharacterId.None;
     const string PinnedPrefix = "inventory-pin-";
-    static bool IsPinnedInventory(string screen) => screen.StartsWith(PinnedPrefix, StringComparison.Ordinal);
+    internal static bool IsPinnedInventory(string screen) => screen.StartsWith(PinnedPrefix, StringComparison.Ordinal);
 
     /// <summary>How long the interface waits for the world to apply a held command before it shows the world's held item again (engine choice).</summary>
     const double HeldWaitSeconds = 1;
@@ -46,11 +46,11 @@ sealed partial class PlayerInterface
     /// The character the inventory window (and its bag and limbs) shows: the lead selected character, also while trading, as the original's (a trade passes to the window's character,
     /// <see cref="Meitou.Simulation.Trading.TradeSystem.TradeWith"/>; a pinned window is its own screen, <see cref="SyncPinnedInventories"/>).
     /// </summary>
-    CharacterSnapshot? InventoryOwner() => Selected().FirstOrDefault();
+    internal CharacterSnapshot? InventoryOwner() => Selected().FirstOrDefault();
 
     /// <summary>The character a character window shows: a pinned window's, the loot's body, else the inventory owner.</summary>
-    CharacterSnapshot? WindowCharacter(string screen) =>
-        IsLootScreen(screen) ? LootBody()
+    internal CharacterSnapshot? WindowCharacter(string screen) =>
+        TradeWindows.IsLootScreen(screen) ? tradeWindows.LootBody()
         : screen == "limbs" ? LimbsCharacter()
         : pinnedInventories.TryGetValue(screen, out var pinned) ? session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == pinned)
         : InventoryOwner();
@@ -62,7 +62,7 @@ sealed partial class PlayerInterface
     /// </summary>
     void SyncPinnedInventories()
     {
-        if (faithfulScreens is null || characterInventoryLayout is null) return;
+        if (faithfulScreens is null || tradeWindows.characterInventoryLayout is null) return;
         var lead = InventoryOwner();
         if (faithfulScreens.IsPinned("inventory") && lead is not null)
         {
@@ -113,9 +113,9 @@ sealed partial class PlayerInterface
         int n = 1;
         while (pinnedInventories.ContainsKey(PinnedPrefix + n)) n++;
         string slot = PinnedPrefix + n;
-        if (!faithfulScreens.IsRegistered(slot)) faithfulScreens.Register(slot, characterInventoryLayout!);
-        animalWindow.Remove(slot);
-        faithfulScreens.Replace(slot, characterInventoryLayout!);
+        if (!faithfulScreens.IsRegistered(slot)) faithfulScreens.Register(slot, tradeWindows.characterInventoryLayout!);
+        tradeWindows.animalWindow.Remove(slot);
+        faithfulScreens.Replace(slot, tradeWindows.characterInventoryLayout!);
         return slot;
     }
 
@@ -125,14 +125,14 @@ sealed partial class PlayerInterface
         _ when IsPinnedInventory(screen) => WindowCharacter(screen) is { } pinned ? ItemOwner.Of(pinned.Id) : null,
         "inventory" or "bag" => InventoryOwner() is { } owner ? ItemOwner.Of(owner.Id) : null,
         "limbs" => LimbsCharacter() is { } limbed ? ItemOwner.Of(limbed.Id) : null,
-        "loot" or "loot-bag" => LootBody() is { } body ? ItemOwner.Of(body.Id) : null,
+        "loot" or "loot-bag" => tradeWindows.LootBody() is { } body ? ItemOwner.Of(body.Id) : null,
         "trader" => session.CurrentSnapshot.Trade is not null ? ItemOwner.Stock : null,
         "building" or "bench" or "storage" => shownMachine is { } site ? ItemOwner.AtSite(site) : null,
         _ => null,
     };
 
     /// <summary>Whether an item cell (its window and index or machine code) was just lifted whole and waits for the world: it is not drawn.</summary>
-    bool Lifted(ItemOwner window, int code) => lifting is { } l && l.Window == window && l.Code == code;
+    internal bool Lifted(ItemOwner window, int code) => lifting is { } l && l.Window == window && l.Code == code;
 
     /// <summary>Sends a held-item command with a new serial; the world's published serial says when it was applied.</summary>
     void SayHeld(HeldCommand command)
@@ -222,7 +222,7 @@ sealed partial class PlayerInterface
         else if (control.Properties.TryGetValue("InventoryItem", out var index))
         {
             code = int.Parse(index, CultureInfo.InvariantCulture);
-            bool loot = IsLootScreen(screen);
+            bool loot = TradeWindows.IsLootScreen(screen);
             if (WindowCharacter(screen) is not { ItemGrid: { } grid } owner || grid.Items.FirstOrDefault(i => i.Index == code) is not { } item
                 || !(InventoryCommands.IsMovableSection(item.Section) || InventoryCommands.IsLimbSection(item.Section))) return false;
             (window, actor) = (ItemOwner.Of(owner.Id), loot ? snapshot.LootOpener : owner.Id);
@@ -353,7 +353,7 @@ sealed partial class PlayerInterface
                 }
                 if (sale && session.CurrentSnapshot.Trade?.Held is { FenceOdds: { } odds })
                 {
-                    Confirm("FENCING ITEM", FenceQuestion(odds), Send);
+                    Confirm("FENCING ITEM", TradeWindows.FenceQuestion(odds), Send);
                     UpdateMenuPause();
                     return;
                 }
@@ -387,7 +387,7 @@ sealed partial class PlayerInterface
             AddItemCell(controls, "held-item", new(mouse.X - heldGrab.X * cell, mouse.Y - heldGrab.Y * cell, h.Width * cell, h.Height * cell),
                 h.Record, h.Material, h.Name, h.Quantity, null, "HeldItem", 0, null, pickable: false, charge: h.Charge, colour: h.Colour);
         }
-        AddFencePrompt(controls);
+        tradeWindows.AddFencePrompt(controls);
     }
 
     /// <summary>Right click or Escape: the held item goes back (and a scrollbar drag ends); true when there was one.</summary>
@@ -402,14 +402,14 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The characters whose bag was left open with OPEN BAG: their inventory shows it again when it opens or they are selected.</summary>
-    readonly HashSet<CharacterId> bagOpen = [];
+    internal readonly HashSet<CharacterId> bagOpen = [];
 
     /// <summary>OPEN BAG: opens or closes the lead character's bag and remembers it for that character.</summary>
     void ToggleBag()
     {
         if (InventoryOwner() is not { } lead) return;
         if (!bagOpen.Remove(lead.Id)) bagOpen.Add(lead.Id);
-        if (lootOpenedBag == lead.Id) lootOpenedBag = CharacterId.None;
+        if (tradeWindows.lootOpenedBag == lead.Id) tradeWindows.lootOpenedBag = CharacterId.None;
         SyncBagScreen();
     }
 
@@ -420,7 +420,7 @@ sealed partial class PlayerInterface
     /// Whether the character has the original's limb holder, which enables the LIMBS button (<c>FUN_140645690</c>: made the first time a limb changes). Meitou: a limb that is not
     /// the original now (a stump, a prosthetic or a crushed limb), which no limb ever goes back from.
     /// </summary>
-    static bool HasLimbWindow(CharacterSnapshot c) => c.LimbBits != 0;
+    internal static bool HasLimbWindow(CharacterSnapshot c) => c.LimbBits != 0;
 
     /// <summary>The character the limbs window shows: the one it was opened for (the inventory's or the open loot's), else the inventory owner.</summary>
     CharacterSnapshot? LimbsCharacter() =>
@@ -445,7 +445,7 @@ sealed partial class PlayerInterface
     void SyncLimbsScreen()
     {
         if (!faithfulScreens.IsOpen("limbs")) return;
-        bool shown = faithfulScreens.IsOpen("inventory") && InventoryOwner()?.Id == limbsOwner || faithfulScreens.IsOpen("loot") && LootBody()?.Id == limbsOwner;
+        bool shown = faithfulScreens.IsOpen("inventory") && InventoryOwner()?.Id == limbsOwner || faithfulScreens.IsOpen("loot") && tradeWindows.LootBody()?.Id == limbsOwner;
         if (!shown) faithfulScreens.Close("limbs");
     }
 
@@ -455,9 +455,9 @@ sealed partial class PlayerInterface
         var lead = InventoryOwner();
         bool want = faithfulScreens.IsOpen("inventory") && lead is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } } && bagOpen.Contains(lead.Id);
         if (want == faithfulScreens.IsOpen("bag")) return;
-        if (!want) { faithfulScreens.Close("bag"); if (shownTrader.IsNone && faithfulScreens.IsOpen("loot")) PlaceWindowRow(); return; }
+        if (!want) { faithfulScreens.Close("bag"); if (tradeWindows.shownTrader.IsNone && faithfulScreens.IsOpen("loot")) PlaceWindowRow(); return; }
         faithfulScreens.Open("bag");
-        if (shownTrader.IsNone) PlaceBagWindow(); else PlaceTradeWindows();
+        if (tradeWindows.shownTrader.IsNone) PlaceBagWindow(); else tradeWindows.PlaceTradeWindows();
     }
 
     /// <summary>

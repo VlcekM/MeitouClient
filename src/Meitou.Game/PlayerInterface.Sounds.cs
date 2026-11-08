@@ -16,7 +16,7 @@ sealed partial class PlayerInterface
     /// <summary>Where interface sounds go (the host's audio); null without audio.</summary>
     public Action<UiSoundEvent>? UiSound { get; set; }
 
-    void Sound(string name, string? group = null, string? value = null, bool state = false, string? item = null, string? building = null) =>
+    internal void Sound(string name, string? group = null, string? value = null, bool state = false, string? item = null, string? building = null) =>
         UiSound?.Invoke(new UiSoundEvent(name, group, value, state, item, building));
 
     readonly HashSet<string> soundScreens = [];

@@ -4,10 +4,10 @@ using Meitou.Data.Ui;
 using Meitou.Game.Rendering.Ui;
 using Meitou.Simulation.Dialogue;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>Speech bubbles over the characters that speak (docs/game/dialogue.md "Ambient conversations", the bubble).</summary>
-sealed partial class PlayerInterface
+sealed class SpeechBubbles(PlayerInterface player)
 {
     /// <summary>
     /// The bubble sits 4 units above the head and fades from opaque at 1000 units from the camera to gone at 2500, the distance counted x0.5 for the large font's events,
@@ -15,21 +15,21 @@ sealed partial class PlayerInterface
     /// <c>Kenshi_SpeechPanelSkin</c> at most 0.2344 of the screen wide, the centred <c>DialogueBubbleText</c> in Kenshi_StandardFont_Large or _Medium with a black shadow
     /// in its 0.0689, 0.125, 0.8556 x 0.75 box. Fitting the panel to its text is Meitou's (the original's sizing is not mapped).
     /// </summary>
-    void AddSpeech(List<UiControl> controls)
+    internal void AddSpeech(List<UiControl> controls)
     {
-        var speech = session.CurrentSnapshot.Speech;
-        if (speech.Count == 0 || uiPainter is not { } painter) return;
-        float scale = Height / 1080f;
+        var speech = player.session.CurrentSnapshot.Speech;
+        if (speech.Count == 0 || player.uiPainter is not { } painter) return;
+        float scale = player.Height / 1080f;
         var shown = new List<(SpeechBubble Bubble, FittedSpeech Text, float Alpha, UiRect Panel)>();
         foreach (var bubble in speech)
         {
-            if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == bubble.Speaker) is not { } who) continue;
-            var head = TagAnchor(who, where(who));
-            float distance = Vector3.Distance(Eye, head) * (bubble.Large ? 0.5f : bubble.Interrupting ? 0.75f : 1);
+            if (player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == bubble.Speaker) is not { } who) continue;
+            var head = player.stealthView.TagAnchor(who, player.where(who));
+            float distance = Vector3.Distance(player.Eye, head) * (bubble.Large ? 0.5f : bubble.Interrupting ? 0.75f : 1);
             float alpha = Math.Clamp((2500 - distance) / 1500f, 0, 1);
-            if (alpha <= 0 || Project(head) is not { } at) continue;
+            if (alpha <= 0 || player.Project(head) is not { } at) continue;
             var text = SpeechText(painter, bubble);
-            float w = (text.Width + 4) / 0.855556f, h = MathF.Max(text.Height / 0.75f, Height * 0.0222222f);
+            float w = (text.Width + 4) / 0.855556f, h = MathF.Max(text.Height / 0.75f, player.Height * 0.0222222f);
             var panel = new UiRect(at.X - w / 2, at.Y - 4 * scale - h, w, h);
             shown.Add((bubble, text, alpha, bubble.Interrupting ? OnScreen(panel) : panel));
         }
@@ -39,7 +39,7 @@ sealed partial class PlayerInterface
 
     /// <summary>An interrupting bubble moved inside the screen, its left and top edges winning on a screen too small for it (<c>FUN_1407221c0</c>).</summary>
     UiRect OnScreen(UiRect panel) =>
-        panel with { X = MathF.Max(MathF.Min(panel.X, Width - panel.Width), 0), Y = MathF.Max(MathF.Min(panel.Y, Height - panel.Height), 0) };
+        panel with { X = MathF.Max(MathF.Min(panel.X, player.Width - panel.Width), 0), Y = MathF.Max(MathF.Min(panel.Y, player.Height - panel.Height), 0) };
 
     void AddBubble(List<UiControl> controls, int n, SpeechBubble bubble, FittedSpeech text, float alpha, UiRect panel)
     {
@@ -109,15 +109,15 @@ sealed partial class PlayerInterface
     /// </summary>
     FittedSpeech SpeechText(UiPainter painter, SpeechBubble bubble)
     {
-        float minimumPixels = TitleOpen ? 0 : StandardPixels;
-        if (fittedFor != (Width, Height, painter.Mode, minimumPixels) || fittedSpeech.Count > 64)
+        float minimumPixels = player.TitleOpen ? 0 : player.StandardPixels;
+        if (fittedFor != (player.Width, player.Height, painter.Mode, minimumPixels) || fittedSpeech.Count > 64)
         {
             fittedSpeech.Clear();
-            fittedFor = (Width, Height, painter.Mode, minimumPixels);
+            fittedFor = (player.Width, player.Height, painter.Mode, minimumPixels);
         }
         if (fittedSpeech.TryGetValue((bubble.Text, bubble.Large), out var fitted)) return fitted;
 
-        float maxWidth = Width * 0.234375f * 0.855556f - 4;
+        float maxWidth = player.Width * 0.234375f * 0.855556f - 4;
         var (lines, size) = painter.WrapCaption(SpeechFont(bubble), bubble.Text, 1, maxWidth, minimumPixels);
         fitted = new(string.Join('\n', lines), size.Width, size.Height);
         fittedSpeech[(bubble.Text, bubble.Large)] = fitted;

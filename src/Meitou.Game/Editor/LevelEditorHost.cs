@@ -24,14 +24,14 @@ sealed class LevelEditorHost(GameHost host)
     internal void OpenLevelEditor()
     {
         host.debugMenu.debugMenuOpen = false;
-        host.player.OpenLevelEditor();
+        host.player.levelEditorPanel.OpenLevelEditor();
     }
 
     /// <summary>Shift+F12, the original's <c>editor_toggle</c>.</summary>
     void ToggleLevelEditor()
     {
         host.debugMenu.debugMenuOpen = false;
-        host.player.ToggleLevelEditor();
+        host.player.levelEditorPanel.ToggleLevelEditor();
     }
 
     internal LevelEditorServices MakeLevelEditorServices() => new()

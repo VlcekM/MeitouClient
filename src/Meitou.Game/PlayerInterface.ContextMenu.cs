@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Data.Ui;
 using Meitou.Game.Host.Input;
+using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Player;
 
@@ -78,7 +79,7 @@ sealed partial class PlayerInterface
     {
         var selected = Selected();
         IEnumerable<(string Caption, Action Give)> kept = verbs;
-        if (selected.Count > 0 && selected.All(IsAnimal)) kept = kept.Where(v => OrderOf(v.Caption) is { } o && AnimalVerbOrders.Contains(o));
+        if (selected.Count > 0 && selected.All(TradeWindows.IsAnimal)) kept = kept.Where(v => OrderOf(v.Caption) is { } o && AnimalVerbOrders.Contains(o));
         var list = kept.Select((v, i) => (v, i)).OrderBy(x => OrderOf(x.v.Caption) ?? int.MaxValue).ThenBy(x => x.i).Select(x => x.v).ToList();
         return list.Count == 0 ? null : new ContextMenu(title, at, list);
     }
@@ -442,7 +443,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>Closes the menu (true when one was open).</summary>
-    bool CloseContextMenu()
+    internal bool CloseContextMenu()
     {
         bool open = contextMenu is not null;
         contextMenu = null;

@@ -3,7 +3,6 @@ using System.Numerics;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Ui;
 using Meitou.Game.Host.Input;
-using Meitou.Simulation;
 using Meitou.Game.Ui;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Player;
@@ -13,7 +12,7 @@ namespace Meitou.Game;
 sealed partial class PlayerInterface
 {
     string selectedStat = ((int)StatsEnumerated.Katanas).ToString(CultureInfo.InvariantCulture);
-    public bool UiCapturesPointer => UiVisible && (faithfulScreens.CapturesPointer || mapDrag is not null || liftPress is not null || scrollDrag is not null);
+    public bool UiCapturesPointer => UiVisible && (faithfulScreens.CapturesPointer || worldMap.mapDrag is not null || liftPress is not null || scrollDrag is not null);
     /// <summary>A modal screen (the Esc menu, a message box) is up: the pointer is the interface's, even in the free camera.</summary>
     public bool ModalOpen => UiVisible && faithfulScreens.HasModal;
     /// <summary>The faithful screens open, bottom first (the play benchmark says which modal one stopped the game).</summary>
@@ -56,7 +55,7 @@ sealed partial class PlayerInterface
 
     /// <summary>Keys the host keeps for itself (the sandbox's letters), so the faithful window shortcuts leave them alone.</summary>
     public HashSet<Key> ReservedKeys { get; } = [];
-    void UpdateMenuPause() => session.Simulation.RequestedPause = settingsOpen || faithfulScreens.HasModal;
+    internal void UpdateMenuPause() => session.Simulation.RequestedPause = settingsOpen || faithfulScreens.HasModal;
     public bool UiKey(Key key, bool ctrl = false, bool shift = false)
     {
         uiInput++;
@@ -64,7 +63,7 @@ sealed partial class PlayerInterface
         if (key == Meitou.Game.Host.Input.Key.Escape && CancelInventoryDrag()) return true;
         // toggle_camera_grid (Shift+; fixed: a binding carries no modifier, and ; alone is the free camera's).
         if (shift && key == Meitou.Game.Host.Input.Key.Semicolon && !faithfulScreens.HasKeyboardFocus) { cameraGrid = !cameraGrid; return true; }
-        if (key == Meitou.Game.Host.Input.Key.Escape && LevelEscape()) return true;
+        if (key == Meitou.Game.Host.Input.Key.Escape && levelEditorPanel.LevelEscape()) return true;
         if (key == Meitou.Game.Host.Input.Key.Escape)
         {
             if (advancedOpen && faithfulScreens.OpenScreens.LastOrDefault() == "new-game") { advancedOpen = false; return true; }
@@ -141,7 +140,7 @@ sealed partial class PlayerInterface
         if (!UiVisible) return false;
         ArrangeUi();
         if (InventoryWheel(p, steps)) return true;
-        if (MapWheel(p, steps)) return true;
+        if (worldMap.MapWheel(p, steps)) return true;
         if (!faithfulScreens.Contains(p) && SquadBarWheel(p, steps)) return true;
         if (JobsWheel(p, steps)) return true;
         if (SquadsWheel(p, steps)) return true;
@@ -158,21 +157,21 @@ sealed partial class PlayerInterface
         { ScrollInventoryPage(e.Screen, float.Parse(e.Action[22..], CultureInfo.InvariantCulture)); return; }
         if (e.Screen == "editor") EditorAction(e);
         else if (e.Screen == "file") FileDialogAction(e);
-        else if (e.Screen == FeedbackScreen) FeedbackFormAction(e);
+        else if (e.Screen == FeedbackPanel.FeedbackScreen) feedbackPanel.FeedbackFormAction(e);
         else if (HandleFrontendAction(e)) UpdateMenuPause();
         else if (e.Screen == "stats" && e.Action == "select") selectedStat = e.Text;
         else if (e.Screen == "stats" && e.Action.StartsWith("stat:", StringComparison.Ordinal)) selectedStat = e.Action[5..];
         else if (e.Screen == "build") BuildAction(e);
-        else if (e.Screen == "leveleditor") LevelEditorAction(e);
+        else if (e.Screen == "leveleditor") levelEditorPanel.LevelEditorAction(e);
         else if (e.Screen == "dialogue") DialogueAction(e);
-        else if (e.Screen == CharacterTradeScreen) CharacterTradeAction(e);
-        else if (e.Screen == "prospect") ProspectScreenAction(e);
-        else if (e.Screen == "tutorials") TutorialsWindowAction(e);
+        else if (e.Screen == TradeWindows.CharacterTradeScreen) tradeWindows.CharacterTradeAction(e);
+        else if (e.Screen == "prospect") prospecting.ProspectScreenAction(e);
+        else if (e.Screen == "tutorials") tutorialWindow.TutorialsWindowAction(e);
         else if (e.Screen == TownScreen) TownAction(e);
-        else if (e.Screen == "overview") { MapAction(e.Widget); ResearchAction(e); CraftAction(e); AiAction(e); SquadsAction(e); FactionAction(e); }
+        else if (e.Screen == "overview") { worldMap.MapAction(e.Widget); ResearchAction(e); CraftAction(e); AiAction(e); SquadsAction(e); FactionAction(e); }
         else if (e.Screen is "building" or "bench" or "storage") MachineAction(e);
-        else if (e.Screen == "loot" && e.Widget == "OpenBagButton") lootBagOpen = !lootBagOpen;
-        else if (e.Screen == "loot" && e.Widget == "LimbsButton") ToggleLimbs(LootBody());
+        else if (e.Screen == "loot" && e.Widget == "OpenBagButton") tradeWindows.lootBagOpen = !tradeWindows.lootBagOpen;
+        else if (e.Screen == "loot" && e.Widget == "LimbsButton") ToggleLimbs(tradeWindows.LootBody());
         else if (e.Screen == "trader" && e.Widget == "ArrangeButton") Say(new Meitou.Simulation.Trading.ArrangeStock { Tick = session.World.Tick });
         else if (e.Screen is "inventory" or "bag" || IsPinnedInventory(e.Screen))
         {
@@ -181,7 +180,7 @@ sealed partial class PlayerInterface
             else if (e.Widget == "ArrangeButton" && WindowCharacter(e.Screen) is { } lead) Say(new Meitou.Simulation.Items.ArrangeInventory(lead.Id) { Tick = session.World.Tick });
         }
     }
-    UiBindings BindFaithfulScreen(string id)
+    internal UiBindings BindFaithfulScreen(string id)
     {
         var b = new UiBindings { TextHeight = c => uiPainter?.TextHeight(c, Height, StandardPixels) ?? 0 };
         var layout = faithfulScreens.Layout(id);
@@ -190,20 +189,20 @@ sealed partial class PlayerInterface
         if (pinned) id = "inventory";   // a pinned window binds as the inventory, for its own character
         var lead = pinned || id == "limbs" ? WindowCharacter(screen) : id is "inventory" or "bag" ? InventoryOwner() : Selected().FirstOrDefault();
         foreach (var button in layout.Widgets.Where(w => w.Type == "Button" && !w.Properties.ContainsKey("TemplateEvent"))) b.Disabled.Add(button.Name);
-        if (id == FeedbackScreen) { BindFeedbackScreen(b); return b; }
+        if (id == FeedbackPanel.FeedbackScreen) { feedbackPanel.BindFeedbackScreen(b); return b; }
         if (BindFrontend(id, b)) return b;
         if (id == "editor") { BindEditor(b); return b; }
         if (id == "file") { BindFileDialog(b); return b; }
-        else if (id == "trader") BindTraderScreen(b);
+        else if (id == "trader") tradeWindows.BindTraderScreen(b);
         else if (id == "dialogue") BindDialogueScreen(b);
-        else if (id == CharacterTradeScreen) BindCharacterTradeScreen(b);
-        else if (id == "prospect") BindProspectScreen(b);
-        else if (id == "tutorials") BindTutorialsWindow(b);
+        else if (id == TradeWindows.CharacterTradeScreen) tradeWindows.BindCharacterTradeScreen(b);
+        else if (id == "prospect") prospecting.BindProspectScreen(b);
+        else if (id == "tutorials") tutorialWindow.BindTutorialsWindow(b);
         else if (id == TownScreen) BindTownScreen(b);
         else if (id == "build") BindBuildScreen(b);
-        else if (id == "leveleditor") BindLevelEditorScreen(b);
+        else if (id == "leveleditor") levelEditorPanel.BindLevelEditorScreen(b);
         else if (id is "building" or "bench" or "storage") BindMachineScreen(id, b);
-        else if (IsLootScreen(id)) BindLootScreen(id, b);
+        else if (TradeWindows.IsLootScreen(id)) tradeWindows.BindLootScreen(id, b);
         else if (id is "inventory" or "stats" or "bag" or "limbs")
         {
             b.Text["Root"] = id == "stats" ? lead?.Name.ToUpperInvariant() ?? "CHARACTER STATS"
@@ -249,7 +248,7 @@ sealed partial class PlayerInterface
             BindFormation(b);
             // Editor preview markers are unrelated to the current camera and orders.
             b.Hidden.Add("CameraMarker"); b.Hidden.Add("MovemementMarker");
-            b.NativeScroll.Add("MapScrollView");   // the map pans and zooms itself (PlayerInterface.Map.cs); the canvas is not the layout's 4096 px
+            b.NativeScroll.Add("MapScrollView");   // the map pans and zooms itself (WorldMap); the canvas is not the layout's 4096 px
         }
         if (id is "inventory" or "bag" or "limbs" or "trader" or "loot" or "loot-bag") BindInventoryGeometry(id, b);
         return b;
@@ -279,9 +278,9 @@ sealed partial class PlayerInterface
         StatsEnumerated.MartialArts => "Martial arts",
         StatsEnumerated.Medic => "Field medic", StatsEnumerated.Engineering => "Engineer", _ => stat.ToString(),
     };
-    void AddFaithfulContent(string id, List<UiControl> controls)
+    internal void AddFaithfulContent(string id, List<UiControl> controls)
     {
-        if (id == "title") { if (UiMode == UiMode.Meitou) MeitouTitleMenu(controls); AddDataProblems(controls); return; }
+        if (id == "title") { if (UiMode == UiMode.Meitou) titleMenu.MeitouTitleMenu(controls); titleMenu.AddDataProblems(controls); return; }
         if (id == "stats") { AddStatsContent(controls); return; }
         if (id == "new-game") { AddStartLines(controls); AddAdvancedContent(controls); return; }
         if (id == "message") { StyleMessageBox(controls); return; }
@@ -289,14 +288,14 @@ sealed partial class PlayerInterface
         if (id == "editor") { AddEditorContent(controls); return; }
         if (id == "build") { AddBuildContent(controls); return; }
         if (id == "dialogue") { AddDialogueChoices(controls); return; }
-        if (id == CharacterTradeScreen) { AddCharacterTradeRows(controls); return; }
-        if (id == "prospect") { AddProspectContent(controls); return; }
+        if (id == TradeWindows.CharacterTradeScreen) { tradeWindows.AddCharacterTradeRows(controls); return; }
+        if (id == "prospect") { prospecting.AddProspectContent(controls); return; }
         if (id is "building" or "bench" or "storage") { AddMachineContent(id, controls); return; }
         // The bag window has no caption buttons (the vanilla screenshot): OPEN BAG closes it.
         if (id is "bag" or "loot-bag") controls.RemoveAll(c => c.Action.StartsWith("mygui:close", StringComparison.Ordinal) || c.Action.StartsWith("mygui:pin", StringComparison.Ordinal));
-        AddMapContent(id, controls);
+        worldMap.AddMapContent(id, controls);
         if (id == "overview") { AddResearchContent(controls); AddCraftContent(controls); AddAiContent(controls); AddSquadsContent(controls); AddFactionContent(controls); }
-        if (id == "trader") { ArrangeTraderWindow(controls); AddTraderContent(controls); return; }
+        if (id == "trader") { tradeWindows.ArrangeTraderWindow(controls); tradeWindows.AddTraderContent(controls); return; }
         // The loot windows show the open loot's body as the character windows show the lead; a pinned window its own character.
         var shown = WindowCharacter(id);
         if (IsPinnedInventory(id)) id = "inventory";
@@ -311,7 +310,7 @@ sealed partial class PlayerInterface
             ArrangeEquipmentGrid(controls, grid);
             CloseSlots(controls, lead);
         }
-        if (id is "inventory" or "loot") AddInventorySummary(controls, lead, animal: IsAnimal(lead));
+        if (id is "inventory" or "loot") AddInventorySummary(controls, lead, animal: TradeWindows.IsAnimal(lead));
         foreach (var item in grid.Items.Where(i => bagWindow ? i.Section == "backpack_content" : id == "limbs" ? i.Section.EndsWith("_replace", StringComparison.Ordinal) : i.Section != "backpack_content"))
         {
             if (Lifted(Meitou.Simulation.Items.ItemOwner.Of(lead.Id), item.Index)) continue;
@@ -320,13 +319,13 @@ sealed partial class PlayerInterface
             if (item.Section == gridSection && columns > 0 && rows > 0) area = new(area.X + item.X * area.Width / columns, area.Y + item.Y * area.Height / rows, item.Width * area.Width / columns, item.Height * area.Height / rows);
             else area = new(area.X + item.X * InventoryCell, area.Y + item.Y * InventoryCell, item.Width * InventoryCell, item.Height * InventoryCell);
             // The name carries the character: the loot window's cells would otherwise take over the same names' tooltips in the player's window.
-            AddItemCell(controls, $"inventory-item-{lead.Id}-{item.Index}", area, item.Record, item.Material, item.Name, item.Quantity, ItemTip.Of(item, SellTip(lead.Id, item.Index), MapItemCaption(item.Record)), "InventoryItem", item.Index, slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour);
+            AddItemCell(controls, $"inventory-item-{lead.Id}-{item.Index}", area, item.Record, item.Material, item.Name, item.Quantity, ItemTip.Of(item, tradeWindows.SellTip(lead.Id, item.Index), worldMap.MapItemCaption(item.Record)), "InventoryItem", item.Index, slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour);
         }
     }
     readonly List<(string Text, MessageTone Tone)> uiMessages = [];
     /// <summary>
     /// The orders panel's toggles by the words in their widget names (the layout names only <c>OrdersChaseButton</c>, <c>OrdersMedicButton</c> and <c>OrdersRescueButton</c>
-    /// for certain, docs/game/ui-screens.md section 4; the rest are matched by the button's word, so a differently spelt name still binds). Prospect is its own action (PlayerInterface.Prospecting.cs).
+    /// for certain, docs/game/ui-screens.md section 4; the rest are matched by the button's word, so a differently spelt name still binds). Prospect is its own action (ProspectingPanel).
     /// </summary>
     static readonly (string Word, CharacterOrders Order)[] OrderWords =
     [
@@ -360,7 +359,7 @@ sealed partial class PlayerInterface
     MyGuiLayout? ordersRowLayout;
 
     /// <summary>The first Obedient Slave job of the jobs list (the tutorial highlight PanelOrdersJobObedience), -1: none.</summary>
-    int obedienceJob = -1;
+    internal int obedienceJob = -1;
 
     /// <summary>The jobs rows drawn at half alpha: the jobs switch is off and the job does not run without it (<see cref="BindJobs"/>).</summary>
     readonly HashSet<string> dimmedJobs = [];

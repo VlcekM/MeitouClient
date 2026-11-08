@@ -120,14 +120,14 @@ sealed partial class PlayerInterface
     CharacterId? PickWhere(Vector2 pixel, Func<CharacterSnapshot, bool> accept) => PickWhereAt(pixel, accept)?.Id;
 
     /// <summary>The nearest accepted character under the pixel with its ray distance; null when none, or when the nearest is hidden behind a building seen from outside.</summary>
-    (CharacterId Id, float T)? PickWhereAt(Vector2 pixel, Func<CharacterSnapshot, bool> accept)
+    internal (CharacterId Id, float T)? PickWhereAt(Vector2 pixel, Func<CharacterSnapshot, bool> accept)
     {
         if (Ray(pixel) is not { } ray) return null;
         CharacterId? best = null;
         float bestT = float.MaxValue;
         foreach (var c in session.CurrentSnapshot.Characters)
         {
-            if (!accept(c) || HiddenInWorld?.Invoke(c.Id) == true) continue;   // not drawn: not picked, as the original's pick needs a visible character
+            if (!accept(c) || stealthView.HiddenInWorld?.Invoke(c.Id) == true) continue;   // not drawn: not picked, as the original's pick needs a visible character
             // The drawn body where the renderer has it (every part of a person or an animal, as posed); else a capsule from the feet up.
             float? hit = MeshHit?.Invoke(c.Id, ray.Origin, ray.Direction);
             if (hit is { } meshT)
@@ -147,7 +147,7 @@ sealed partial class PlayerInterface
         (CharacterId Id, float T)? picked = best is not { } found || Hidden(ray, bestT) ? null : (found, bestT);
         // An occupied cage with occupant selection that the ray meets first gives its occupant (the original's FUN_1407fb410 for the cage's occupant).
         if (PickCageAt(pixel) is { Cage: { OccupantSelection: true, Occupant: { IsNone: false } occupant }, T: var cageT } && (picked is not { } nearer || cageT < nearer.T)
-            && session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == occupant) is { } held && accept(held) && HiddenInWorld?.Invoke(occupant) != true)
+            && session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == occupant) is { } held && accept(held) && stealthView.HiddenInWorld?.Invoke(occupant) != true)
             return (occupant, cageT);
         return picked;
     }

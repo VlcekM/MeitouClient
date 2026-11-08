@@ -8,9 +8,9 @@ namespace Meitou.Game;
 
 sealed partial class PlayerInterface
 {
-    float InventoryScale => Height / 1080f;
-    float InventoryCell => 25 * InventoryScale;
-    readonly Dictionary<string, float> inventoryScroll = new(StringComparer.Ordinal);
+    internal float InventoryScale => Height / 1080f;
+    internal float InventoryCell => 25 * InventoryScale;
+    internal readonly Dictionary<string, float> inventoryScroll = new(StringComparer.Ordinal);
     readonly Dictionary<string, (UiRect View, float Maximum)> inventoryViews = new(StringComparer.Ordinal);
     /// <summary>Per scrolled window, where its scrollbar's thumb runs and how tall it is (for dragging it).</summary>
     readonly Dictionary<string, (UiRect Track, float Thumb)> inventoryTracks = new(StringComparer.Ordinal);
@@ -20,10 +20,10 @@ sealed partial class PlayerInterface
     void BindInventoryGeometry(string id, UiBindings b)
     {
         b.TemplateScale = InventoryScale;
-        if (id is "bag" or "loot-bag" && (id == "bag" ? InventoryOwner() : LootBody())?.ItemGrid is { } bag)
+        if (id is "bag" or "loot-bag" && (id == "bag" ? InventoryOwner() : tradeWindows.LootBody())?.ItemGrid is { } bag)
             b.Positions["Root"] = new(0, 0, bag.BagWidth * InventoryCell + 40 * InventoryScale,
                 Math.Min(Height * 0.8f, bag.BagHeight * InventoryCell + 108 * InventoryScale));
-        if (id == "trader") BindTraderGeometry(b);
+        if (id == "trader") tradeWindows.BindTraderGeometry(b);
     }
 
     void PlaceBagWindow()
@@ -45,7 +45,7 @@ sealed partial class PlayerInterface
     /// is centred with the character's top (the limbs window keeps its margin top), so no window slides over another when the row is wider than the pair that placed them. A row wider
     /// than the screen spans it, its windows overlapping evenly rather than the host stacking the last ones on the right edge.
     /// </summary>
-    void PlaceWindowRow()
+    internal void PlaceWindowRow()
     {
         var roots = WindowRoots();
         var row = new[] { "limbs", "bag", "inventory", "loot", "loot-bag" }.Where(roots.ContainsKey).ToArray();

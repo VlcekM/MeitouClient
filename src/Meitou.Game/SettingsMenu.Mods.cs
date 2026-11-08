@@ -1,7 +1,5 @@
-using System.Numerics;
 using System.Globalization;
 using Meitou.Data.Ui;
-using Meitou.Localisation;
 using Meitou.Modding;
 
 namespace Meitou.Game;
@@ -25,7 +23,7 @@ sealed partial class SettingsMenu
     /// <summary>The summary line under the version text, left of the page buttons' divider; a click opens the MODS page.</summary>
     void DrawModsSummary()
     {
-        if (player.Mods is not { } mods) return;
+        if (player.titleMenu.Mods is not { } mods) return;
         var at = R(28, 646, 160, 16);
         var ink = at.Contains(pointer.X, pointer.Y) || page == ModsPage ? LightInk : mods.Problems > 0 ? Brass : MutedInk;
         Text(mods.Summary, at, 10, ink, translate: false);
@@ -34,7 +32,7 @@ sealed partial class SettingsMenu
 
     void DrawMods()
     {
-        var report = player.Mods;
+        var report = player.titleMenu.Mods;
         var rows = report?.Rows ?? [];
         var lines = ModsLines(rows);
         viewport = R(212, 98, 888, 296);
@@ -160,7 +158,7 @@ sealed partial class SettingsMenu
     /// <summary>Copy: the selected mod in full, else the summary.</summary>
     void CopyMod()
     {
-        string text = SelectedMod(player.Mods) is { } row ? ModText(row, int.MaxValue) : SummaryText(player.Mods);
+        string text = SelectedMod(player.titleMenu.Mods) is { } row ? ModText(row, int.MaxValue) : SummaryText(player.titleMenu.Mods);
         player.ClipboardWrite?.Invoke(text);
         notice = "Copied to the clipboard.";
     }
@@ -168,7 +166,7 @@ sealed partial class SettingsMenu
     /// <summary>Copy all problems: every mod with issues and its lines, then the ones no mod owns.</summary>
     void CopyProblems()
     {
-        if (player.Mods is not { Problems: > 0 } report) { notice = "There are no problems to copy."; return; }
+        if (player.titleMenu.Mods is not { Problems: > 0 } report) { notice = "There are no problems to copy."; return; }
 
         var lines = new List<string> { report.Summary };
         foreach (var row in report.Rows.Where(r => r.Issues.Count > 0))

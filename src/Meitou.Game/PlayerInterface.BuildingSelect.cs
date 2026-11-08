@@ -2,7 +2,6 @@
 using System.Text;
 using System.Numerics;
 using Meitou.Simulation;
-using Meitou.Simulation.Factions;
 
 namespace Meitou.Game;
 
@@ -17,7 +16,7 @@ sealed partial class PlayerInterface
     internal sealed record SelectedBuilding(string Name, string? Type, string? Owner, string? Town, string? SiteId, string Instance, Vector3 Position, Vector2[]? Hull,
         bool PublicDay = false, bool PublicNight = false, string? Record = null, bool Destroyed = false);
 
-    SelectedBuilding? selectedBuilding;
+    internal SelectedBuilding? selectedBuilding;
 
     /// <summary>A left click on the ground ends the building's selection (Advanced settings "Click away deselects"); false: it stays, as in the game.</summary>
     public bool DeselectBuildings { get; set; } = true;
@@ -37,7 +36,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The selected building while it still exists (a site that was cancelled or dismantled drops the selection).</summary>
-    SelectedBuilding? BuildingFocus()
+    internal SelectedBuilding? BuildingFocus()
     {
         if (selectedBuilding is { SiteId: { } id } && !Meitou.Simulation.Production.ProductionSystem.IsNatural(id) && !session.CurrentSnapshot.Buildings.Any(s => s.Id == id)) SetBuilding(null);
         return selectedBuilding;
@@ -62,7 +61,7 @@ sealed partial class PlayerInterface
             Record: site.Record);
 
     /// <summary>The nearest building under the pixel, a site of the player's or a level-data one, when the ray meets it before the ground.</summary>
-    SelectedBuilding? PickBuilding(Vector2 pixel) => PickBuildingAt(pixel)?.Building;
+    internal SelectedBuilding? PickBuilding(Vector2 pixel) => PickBuildingAt(pixel)?.Building;
 
     /// <summary><see cref="PickBuilding"/> with the distance along the ray.</summary>
     (SelectedBuilding Building, float T)? PickBuildingAt(Vector2 pixel)
@@ -93,7 +92,7 @@ sealed partial class PlayerInterface
             foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, limit))
             {
                 var b = candidate.Placement;
-                if (levelHost?.IsCleared(b.Key) == true) continue;   // the level editor cleared it
+                if (levelEditorPanel.levelHost?.IsCleared(b.Key) == true) continue;   // the level editor cleared it
                 float y = b.WorldY ?? ground(b.Position.X, b.Position.Z) + b.Position.Y;
                 var hull = candidate.Footprint.Place(b.Position, b.Rotation);
                 float? hit = candidate.Plot ? PlotT(ray, hull, limit < 6000 ? limit : null)
@@ -295,7 +294,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>The selected building's first door as the simulation publishes it, or null.</summary>
-    Meitou.Simulation.Locks.DoorDetail? FirstDoor(SelectedBuilding focus) =>
+    internal Meitou.Simulation.Locks.DoorDetail? FirstDoor(SelectedBuilding focus) =>
         session.CurrentSnapshot.InspectedBuilding is { } detail && detail.Instance == focus.Instance && detail.Doors.Count > 0 ? detail.Doors[0] : null;
 
     /// <summary>

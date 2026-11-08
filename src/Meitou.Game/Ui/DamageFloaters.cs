@@ -1,13 +1,13 @@
 using System.Numerics;
+using Meitou.Data.Ui;
 using Meitou.Game.Effects;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Simulation;
-using Meitou.Data.Ui;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Ui;
 
 /// <summary>Damage and healing numbers over the characters (docs/game/ui-screens.md "Damage floaters").</summary>
-sealed partial class PlayerInterface
+sealed class DamageFloaters(PlayerInterface player)
 {
     /// <summary>The original's squared distance (4000 units) past which a hit shows no floater.</summary>
     const float FloaterRangeSquared = 1.6e7f;
@@ -18,28 +18,22 @@ sealed partial class PlayerInterface
     const float FloaterHeight = 15, FloaterRiseSpeed = 4, FloaterFadeFrom = 8, FloaterGone = 12;
 
     /// <summary>A floater on screen; <paramref name="Height"/> the units over its anchor it starts at (a machine label: 5, its point already over the building).</summary>
-    sealed record Live(CharacterId Target, string Text, Vector4 Colour, long Born, FloaterMode Mode, float Height = FloaterHeight)
+    internal sealed record Live(CharacterId Target, string Text, Vector4 Colour, long Born, FloaterMode Mode, float Height = FloaterHeight)
     {
         public Vector3 Last { get; set; }
     }
 
-    readonly List<Live> floaters = [];
+    internal readonly List<Live> floaters = [];
 
-    /// <summary>
-    /// The "Show damage floaters" option. Off hides the damage numbers only: the original's texts (a pick roll, a stealth knock-out, "Ate", a machine label) read no option
-    /// (<b>Verified</b>: of the label creator's callers only the hit's <c>FUN_1406508d0</c> reads it). Meitou keeps a door's damage number with the option too.
-    /// </summary>
-    public FloaterMode Floaters { get; set; } = FloaterMode.Simple;
-
-    void DrawFloaters(DebugOverlay o)
+    internal void DrawFloaters(DebugOverlay o)
     {
-        var queue = session.World.Floaters ??= new();
+        var queue = player.session.World.Floaters ??= new();
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         while (queue.TryDequeue(out var f))
         {
-            if (Floaters == FloaterMode.Off && f.Kind is FloaterKind.Damage or FloaterKind.Building) continue;
-            if (f.Kind == FloaterKind.Damage && Vector3.DistanceSquared(Eye, f.Position) >= FloaterRangeSquared) continue;
-            if (FloaterText.Format(f, Floaters) is not { } text) continue;
+            if (player.Floaters == FloaterMode.Off && f.Kind is FloaterKind.Damage or FloaterKind.Building) continue;
+            if (f.Kind == FloaterKind.Damage && Vector3.DistanceSquared(player.Eye, f.Position) >= FloaterRangeSquared) continue;
+            if (FloaterText.Format(f, player.Floaters) is not { } text) continue;
             // A machine label starts at its own point.
             float height = f.Kind == FloaterKind.Label ? 0 : FloaterHeight;
             floaters.Add(new Live(f.Target, text, FloaterText.Colour(f), now, FontMode(f.Kind), height) { Last = f.Kind == FloaterKind.Building ? Jittered(f.Position) : f.Position });
@@ -50,16 +44,16 @@ sealed partial class PlayerInterface
         if (floaters.Count == 0) return;
 
         var ids = floaters.Select(l => l.Target).ToHashSet();
-        foreach (var c in session.CurrentSnapshot.Characters)
+        foreach (var c in player.session.CurrentSnapshot.Characters)
             if (ids.Contains(c.Id))
                 foreach (var l in floaters)
-                    if (l.Target == c.Id) l.Last = where(c);
+                    if (l.Target == c.Id) l.Last = player.where(c);
     }
 
     /// <summary>
     /// The font a floater takes: a machine label (<c>FUN_1403567a0</c>) and a pick result (<c>FUN_140359160</c>) pass font 0, the small floater font; the rest follow the option.
     /// </summary>
-    FloaterMode FontMode(FloaterKind kind) => kind is FloaterKind.Label or FloaterKind.PickSuccess or FloaterKind.PickFailed ? FloaterMode.Full : Floaters;
+    FloaterMode FontMode(FloaterKind kind) => kind is FloaterKind.Label or FloaterKind.PickSuccess or FloaterKind.PickFailed ? FloaterMode.Full : player.Floaters;
 
     /// <summary>A building's damage number starts at the point hit moved a little at random in x, y and z (<c>FUN_14029d2b0</c>; the original's amounts are <b>Unknown</b>, display only).</summary>
     static Vector3 Jittered(Vector3 at) => at + new Vector3(Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f, Random.Shared.NextSingle() - 0.5f) * BuildingFloaterJitter;
@@ -73,16 +67,16 @@ sealed partial class PlayerInterface
     /// <c>Kenshi_FloaterFont_Medium</c> for Simple info, <c>Kenshi_FloaterFont_Small</c> for Full info, its top left at the screen point of the rising anchor, sized to the text plus
     /// 20 pixels at the UI scale. Blows landing together print over each other, as in the original.
     /// </summary>
-    void AddFloaters(List<UiControl> controls)
+    internal void AddFloaters(List<UiControl> controls)
     {
         if (floaters.Count == 0) return;
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        float scale = Height / 1080f;
+        float scale = player.Height / 1080f;
         int n = 0;
         foreach (var l in floaters)
         {
             float rise = Rise(l, now);
-            if (rise >= FloaterGone || Project(l.Last + new Vector3(0, l.Height + rise, 0)) is not { } at) continue;
+            if (rise >= FloaterGone || player.Project(l.Last + new Vector3(0, l.Height + rise, 0)) is not { } at) continue;
             float alpha = rise > FloaterFadeFrom ? 1 - (rise - FloaterFadeFrom) * 0.25f : 1;
             controls.Add(new($"floater-{n++}", "TextBox", new(at.X, at.Y, 600 * scale, 40 * scale), l.Text, "", "", true,
                 new Dictionary<string, string>
