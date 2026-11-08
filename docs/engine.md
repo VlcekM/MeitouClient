@@ -26,7 +26,8 @@ settings and current key list belong in viewer. Quicksave F5/loadF9; cinematic F
 ## Host and loading
 
 `WorldBoot` reads a world's content on a worker with no window (navmesh, towns' buildings, population data, ragdoll rigs, animations);
-GameHost adds the code mods and the systems. GameHost partials own boot/interactive/offscreen, characters, saving, transitions, duel and battle;
+GameHost adds the code mods and the systems. GameHost partials keep boot, the frame loops (Vulkan, Metal), loading, transitions and the character feed; each other feature is a class the host
+holds and makes in `CreateFeatures` (`GameSound`, `GameSaves`, `TitleScreen`, the scenarios, `Host/WorldSync`, `Effects`, `DevTools`, `Editor`);
 PlayerInterface owns picking/HUD/panels/commands. StandardSystems supplies order. NavAdapter
 bridges Navigation; never let UI/rendering duplicate simulation state.
 GUI executable attaches a caller's console; folder prompt creates its own when necessary.

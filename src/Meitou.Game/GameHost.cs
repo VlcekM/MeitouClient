@@ -3,10 +3,17 @@ using System.Globalization;
 using System.Numerics;
 using Meitou.Content;
 using Meitou.Data.Ogre;
+using Meitou.Game.Audio;
+using Meitou.Game.DevTools;
+using Meitou.Game.DevTools.Agents;
+using Meitou.Game.Editor;
 using Meitou.Game.Effects;
 using Meitou.Game.Host;
 using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
+using Meitou.Game.Host.WorldSync;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Objects;
@@ -15,23 +22,16 @@ using Meitou.Game.Rendering.Particles;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Scenarios;
 using Meitou.Game.Settings;
+using Meitou.Game.Title;
 using Meitou.Modding;
+using Meitou.Simulation;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Population;
 using Meitou.Simulation.Session;
-using Meitou.Game.Rendering.Characters;
-using Meitou.Simulation;
-using Meitou.Game.Rendering.Display;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
-using Meitou.Game.Audio;
-using Meitou.Game.DevTools;
-using Meitou.Game.DevTools.Agents;
-using Meitou.Game.Editor;
-using Meitou.Game.Host.WorldSync;
-using Meitou.Game.Scenarios;
-using Meitou.Game.Title;
 using EngineKey = Meitou.Game.Host.Input.Key;
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
@@ -45,47 +45,50 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config, Meitou.Data.Gameplay.NewGameStart? start)
 {
-    internal BattleScenario battle = null!;
-    internal DuelScenario duel = null!;
-    internal SandboxScenario sandbox = null!;
+    // Primary-constructor parameters the feature classes read.
+    internal readonly GameInstall install = install;
+    internal WorldScene scene = scene;
+    internal readonly AssetLocator assets = assets;
+    internal readonly WorldOptions o = o;
+    internal readonly GameOptions g = g;
+    internal readonly UserConfig config = config;
+
+    // The features, each a class of its own taking the host (made first in Run).
+    internal GameSound sound = null!;
     internal TitleScreen titleScreen = null!;
     internal NewGameLaunch newGame = null!;
     internal GameSaves saves = null!;
-    internal WeatherFeed weatherFeed = null!;
-    internal ItemIconFiles itemIconFiles = null!;
+    internal GameMods modding = null!;
+    internal BattleScenario battle = null!;
+    internal DuelScenario duel = null!;
+    internal SandboxScenario sandbox = null!;
 
     internal BuildingSync buildingSync = null!;
     internal FarmCrops farmCrops = null!;
     internal TownChanges townChanges = null!;
     internal GroundItemSync groundItemSync = null!;
     internal InteriorView interiors = null!;
-    internal PlayBench playBench = null!;
-    internal ScreenshotScenes screenshotScenes = null!;
-    internal FeedbackCapture feedbackCapture = null!;
+    internal WeatherFeed weatherFeed = null!;
+    internal ItemIconFiles itemIconFiles = null!;
 
-    internal readonly GameOptions g = g;
-    internal AgentChannel agentChannel = null!;
-    internal AgentPlay agentPlay = null!;
-    internal AgentWorld agentWorld = null!;
-    internal DebugMenu debugMenu = null!;
-    internal DebugOverlays debugOverlays = null!;
-    internal DevConsoleHost devConsoleHost = null!;
-    internal CharacterEditorHost characterEditor = null!;
-    internal LevelEditorHost levelEditorHost = null!;
-    internal InteriorEditorHost interiorEditorHost = null!;
-
-    internal readonly AssetLocator assets = assets;
     internal BloodDecals bloodDecals = null!;
     internal Debris debris = null!;
     internal Decapitation decapitation = null!;
     internal CorpseFlies corpseFlies = null!;
-    internal GameMods modding = null!;
 
-    internal readonly GameInstall install = install;
-    internal WorldScene scene = scene;
-    internal readonly WorldOptions o = o;
-    internal readonly UserConfig config = config;
-    internal GameSound sound = null!;
+    internal CharacterEditorHost characterEditor = null!;
+    internal LevelEditorHost levelEditorHost = null!;
+    internal InteriorEditorHost interiorEditorHost = null!;
+
+    internal DebugMenu debugMenu = null!;
+    internal DebugOverlays debugOverlays = null!;
+    internal DevConsoleHost devConsoleHost = null!;
+    internal AgentChannel agentChannel = null!;
+    internal AgentPlay agentPlay = null!;
+    internal AgentWorld agentWorld = null!;
+    internal PlayBench playBench = null!;
+    internal ScreenshotScenes screenshotScenes = null!;
+    internal FeedbackCapture feedbackCapture = null!;
 
     /// <summary>The save the run starts in (<c>--load</c>), loaded at the end of <see cref="Boot"/> through the menu's load path; null for a new world.</summary>
     public Meitou.Data.Save.SaveGame? StartSave { get; init; }
@@ -161,37 +164,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
 
     public int Run()
     {
-        battle = new(this);
-        duel = new(this);
-        sandbox = new(this);
-        titleScreen = new(this);
-        newGame = new(this);
-        saves = new(this);
-        weatherFeed = new(this);
-        itemIconFiles = new(this);
-        buildingSync = new(this);
-        farmCrops = new(this);
-        townChanges = new(this);
-        groundItemSync = new(this);
-        interiors = new(this);
-        playBench = new(this);
-        screenshotScenes = new(this);
-        feedbackCapture = new(this);
-        agentChannel = new(this);
-        agentPlay = new(this);
-        agentWorld = new(this);
-        debugMenu = new(this);
-        debugOverlays = new(this);
-        devConsoleHost = new(this);
-        characterEditor = new(this);
-        levelEditorHost = new(this);
-        interiorEditorHost = new(this);
-        bloodDecals = new(this);
-        debris = new(this);
-        decapitation = new(this);
-        corpseFlies = new(this);
-        modding = new(this);
-        sound = new(this);
+        CreateFeatures();
         try
         {
 #if MEITOU_METAL
@@ -205,6 +178,46 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             return o.Screenshot is not null ? screenshotScenes.Screenshot() : Interactive();
         }
         finally { sound.DisposeAudio(); titleScreen.DisposeTitleScene(); session?.Dispose(); nav?.Dispose(); ragdollGeometry?.Dispose(); ownedScene?.Dispose(); }
+    }
+
+    /// <summary>Makes the feature classes; first in <see cref="Run"/>, before anything reads them.</summary>
+    void CreateFeatures()
+    {
+        sound = new(this);
+        titleScreen = new(this);
+        newGame = new(this);
+        saves = new(this);
+        modding = new(this);
+        battle = new(this);
+        duel = new(this);
+        sandbox = new(this);
+
+        buildingSync = new(this);
+        farmCrops = new(this);
+        townChanges = new(this);
+        groundItemSync = new(this);
+        interiors = new(this);
+        weatherFeed = new(this);
+        itemIconFiles = new(this);
+
+        bloodDecals = new(this);
+        debris = new(this);
+        decapitation = new(this);
+        corpseFlies = new(this);
+
+        characterEditor = new(this);
+        levelEditorHost = new(this);
+        interiorEditorHost = new(this);
+
+        debugMenu = new(this);
+        debugOverlays = new(this);
+        devConsoleHost = new(this);
+        agentChannel = new(this);
+        agentPlay = new(this);
+        agentWorld = new(this);
+        playBench = new(this);
+        screenshotScenes = new(this);
+        feedbackCapture = new(this);
     }
 
     /// <summary>The start opens on the title (no start, save, sandbox or duel was asked for).</summary>
