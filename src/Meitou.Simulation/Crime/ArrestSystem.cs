@@ -261,7 +261,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             for (int w = 0; w < table.HighWater; w++)
             {
                 if (w == s || !next[w].Alive) continue;
-                if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true } wc || !Crimes.Relations.Contains(wc.Faction)) continue;
+                if (table.Cold(w) is not { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true } wc || !Crimes.Relations.Contains(wc.Faction) || SquadRegistry.IsAnimal(wc)) continue;   // an animal looker never recognises (FUN_140856f00 returns at once, economy.md 11.8)
                 float d2 = Vector3.DistanceSquared(next[w].Position, at);
                 if (d2 > range2) continue;
                 int bounty = c.Bounties?.BookedFor(Crimes.Factions.Relations, wc.Faction) is { Claimed: false } e ? e.Amount : 0;
