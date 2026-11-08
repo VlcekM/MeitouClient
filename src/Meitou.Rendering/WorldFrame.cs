@@ -172,6 +172,12 @@ sealed class WorldOptions
     public float OrbitStep;
     /// <summary><c>--sequence &lt;n&gt;</c>: with --screenshot, n more frames saved after the picture (<c>name-01.png</c>...), each a step of the motion (--orbit-step, --sway-step): a precision or motion check.</summary>
     public int Sequence;
+    /// <summary><c>--pan-step &lt;x&gt;,&lt;z&gt;</c>: with --screenshot, the camera's target moves this far (world units) every frame, its height kept (checks what follows the camera).</summary>
+    public Vector2 PanStep;
+    /// <summary><c>--pan-frames &lt;n&gt;</c>: the motion (pan, orbit, zoom) stops after the sequence's frame n (the rest show the same pose settling).</summary>
+    public int PanFrames;
+    /// <summary><c>--zoom-step &lt;f&gt;</c>: with --screenshot, the camera's distance grows by this fraction every frame (negative: closer).</summary>
+    public float ZoomStep;
     /// <summary>Interactive window: the monitor it opens on (1-based; <c>--monitor</c>).</summary>
     public int? Monitor;
     /// <summary>Interactive window: a bordered, maximized window instead of borderless full screen (<c>--windowed</c>).</summary>
@@ -306,6 +312,7 @@ sealed class WorldOptions
           --crowd <n>              place n generated characters of the start town round the start point (the character renderer's test; stills pose them at 0.35 s)
           --orbit-step <degrees>   with --screenshot: the camera orbits this much every frame (checks the upscaler's motion vectors)
           --sequence <n>           with --screenshot: n more frames saved after it (name-01.png ...), each one step of the motion
+          --pan-step <x>,<z>       with --screenshot: the camera's target moves this far every frame
           --terrain-sandbox [cliffs] [x,z]   the empty world round a flat spot whose ground is a field of tiles, one per terrain texture (cliffs: on a steep face)
           --field-tour <dir>       with --terrain-sandbox: a picture of every tile and an index.html (--tour-distance <u>, --tour-pitch <deg>)
           --relief <Name=value>    a GroundRelief or RockSmoothing setting for the run (repeatable), e.g. --relief TargetSlope=0.3
@@ -529,6 +536,9 @@ sealed class WorldOptions
             case "--sway-step": o.SwayStep = r.Float(); break;
             case "--orbit-step": o.OrbitStep = r.Float() * MathF.PI / 180; break;
             case "--sequence": o.Sequence = Math.Max(r.Int(), 0); break;
+            case "--zoom-step": o.ZoomStep = r.Float(); break;
+            case "--pan-frames": o.PanFrames = Math.Max(r.Int(), 0); break;
+            case "--pan-step": { var (px, pz) = r.Pair(); o.PanStep = new Vector2((float)px, (float)pz); break; }
             case "--ab": o.Ab = r.Next(); break;
             case "--ab-period": o.AbPeriod = Math.Max(r.Int(), 1); break;
             case "--bench-frames": o.BenchFrames = Math.Max(r.Int(), 1); break;

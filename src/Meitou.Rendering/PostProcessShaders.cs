@@ -313,6 +313,30 @@ static class PostProcessShaders
         """;
 
     /// <summary>
+    /// The fog volumes' sun shadow kept apart (docs/render-shafts.md "Fog shadow after the upscaler"): at half the render size as <see cref="LayersHalf"/>
+    /// (each texel the full-size pixel at twice its coordinates), what the shadow changes in the volumes' colour, shadowed minus unshadowed (rgb, mostly
+    /// negative). The merged pass then blends the volumes unshadowed and <see cref="LateFogShadow"/> adds this over the upscaler's output.
+    /// </summary>
+    public static readonly string FogShadowHalf = "#version 330 core\n#define FOG_VOLUME_DELTA\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
+        + FogVolumeShaders.Functions + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance + """
+
+        out vec4 fragColour;
+
+        void main()
+        {
+            ivec2 p = min(ivec2(gl_FragCoord.xy) * 2, ivec2(uFullSize) - 1);
+            vec3 dir;
+            bool sky;
+            float waterWeight;
+            float dist = sceneDistance(p, dir, sky, waterWeight);
+            vec3 add;
+            float trans;
+            fogVolumesAccumulate(uFogVolumeEye.xyz, dir, dist, add, trans);
+            fragColour = vec4(fogAddLit - add, 1.0);
+        }
+        """;
+
+    /// <summary>
     /// The depth-aware upsample of <see cref="LayersHalf"/> (needs <see cref="SceneDistance"/> before it): of the four nearest half-size texels, weighted
     /// bilinearly and by how close the distance of the pixel each stands for is to this pixel's (relative difference r, weight e^(−20 r)). False where no
     /// texel is within 10 % (a thin edge no texel lies on: twigs against the far fog).
@@ -347,6 +371,66 @@ static class PostProcessShaders
                 }
             layer = sum / max(weights, 1e-6);
             return bestR <= 0.1;
+        }
+        """;
+
+    /// <summary>
+    /// The fog volumes' shadow (<see cref="FogShadowHalf"/>) over the upscaler's output (<c>PostProcess.CompositeLateFogShadow</c>): the target pixel's place
+    /// in the render picture (the jitter undone), the four render pixels round it each upsampled by its own distance (<see cref="HalfUpsample"/>),
+    /// weighted bilinearly; then last frame's, reprojected by the closest of the four's motion, kept within the four's range and blended in (the four
+    /// follow the jitter at a depth edge). Written to a target of its own, which <see cref="LateFogShadowApply"/> adds.
+    /// </summary>
+    public static readonly string LateFogShadow = "#version 330 core\n" + LightShaftShaders.CommonUniforms + AtmosphereShaders.WaterHorizonFunctions + SceneDistance
+        + HalfUpsample + """
+
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform vec4 uLate;          // xy render pixels per target pixel, zw the jitter (render pixels)
+        uniform vec4 uLateTarget;    // xy the target's size, z 1 with last frame's in uLateHistory, w the share of this frame's
+        uniform sampler2D uLateHistory;
+        uniform sampler2D uLateMotion;   // the motion target (rg: this frame's place minus last frame's, in 0..1 units)
+
+        void main()
+        {
+            vec2 rp = gl_FragCoord.xy * uLate.xy - 0.5 + uLate.zw;
+            vec2 b = floor(rp), f = rp - b;
+            ivec2 last = ivec2(uFullSize) - 1;
+            vec4 sum = vec4(0.0), lo = vec4(1e30), hi = vec4(-1e30);
+            float closest = 1e30;
+            ivec2 qClosest = ivec2(0);
+            for (int i = 0; i < 4; i++)
+            {
+                ivec2 q = clamp(ivec2(b) + ivec2(i & 1, i >> 1), ivec2(0), last);
+                vec3 dir;
+                bool sky;
+                float waterWeight;
+                float dist = sceneDistance(q, dir, sky, waterWeight);
+                vec4 v;
+                halfUpsampled(q, dist, v);
+                sum += v * (((i & 1) == 0 ? 1.0 - f.x : f.x) * ((i >> 1) == 0 ? 1.0 - f.y : f.y));
+                lo = min(lo, v);
+                hi = max(hi, v);
+                if (dist < closest) { closest = dist; qClosest = q; }
+            }
+            if (uLateTarget.z < 0.5) { fragColour = sum; return; }
+            vec2 prev = gl_FragCoord.xy / uLateTarget.xy - texelFetch(uLateMotion, qClosest, 0).rg;
+            if (any(lessThan(prev, vec2(0.0))) || any(greaterThan(prev, vec2(1.0)))) { fragColour = sum; return; }
+            fragColour = mix(clamp(textureLod(uLateHistory, prev, 0.0), lo, hi), sum, uLateTarget.w);
+        }
+        """;
+
+    /// <summary>The upscaler's output plus the fog volumes' filtered shadow (<see cref="LateFogShadow"/>), into a target of its own (the TAA's output is its next history).</summary>
+    public const string LateFogShadowApply = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uScene;
+        uniform sampler2D uShadow;
+        void main()
+        {
+            ivec2 p = ivec2(gl_FragCoord.xy);
+            vec4 scene = texelFetch(uScene, p, 0);
+            fragColour = vec4(max(scene.rgb + texelFetch(uShadow, p, 0).rgb, vec3(0.0)), scene.a);
         }
         """;
 

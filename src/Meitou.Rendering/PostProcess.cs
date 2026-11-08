@@ -1437,6 +1437,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             ActiveUpscaler = width == displayWidth && height == displayHeight ? "taa" : $"taa {width}x{height}";
         }
         // The vendor upscaler's output (not a history Meitou keeps): the low-resolution particles over it, through their own temporal filter.
+        // The fog volumes' shadow kept out of what was upscaled (FogShadowAfterUpscale), then the low-resolution particles over it.
+        output = CompositeLateFogShadow(output, displayWidth, displayHeight, reset);
         CompositeLateParticlesFiltered(output, displayWidth, displayHeight, reset);
         historyValid = true;
         // Frame generation takes the depth and the motion this frame made, whatever upscaled (TAA, FSR); the vendor segment is closed above or no segment is open.
@@ -1769,6 +1771,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         DisposeSceneLayers();
         DisposeReflections();
         DisposeLateParticles();
+        DisposeLateFogShadow();
         DisposeMerged();
         DisposeBloom();
         DisposeMotionBlur();
