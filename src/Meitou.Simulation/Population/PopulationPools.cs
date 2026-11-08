@@ -304,6 +304,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     Squad? MakeUnmade(World world, Platoon p)
     {
+        if (p.Origin < 0) return MakeUnmadeWild(world, p);
         var site = _data.Sites[p.Origin];
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
         var home = p.Saved is { } sp ? Saving.SavedCharacters.SavedHome(world, sp, site) : null;
@@ -321,6 +322,27 @@ public sealed partial class PopulationSystem
         p.UnloadAtTick = -1;
         if (_townLog.Count >= 256) _townLog.RemoveAt(0);
         _townLog.Add($"{site.Town.Name}: {p.Stored.Name} made from its template ({squad.Members.Count})");
+        return squad;
+    }
+
+    /// <summary>
+    /// A save's never-made wild platoon (<see cref="Saving.SaveLoader.UnmadeWild"/>) made from its template into the same platoon where it was saved, round its nest or (homeless)
+    /// where it stands, as the save's wild platoons with characters. Its record is not written back with the characters (Meitou writes no characters of a save's wild platoon it
+    /// made), so the next load makes it from its template again. Null when the template plans no one.
+    /// </summary>
+    Squad? MakeUnmadeWild(World world, Platoon p)
+    {
+        if (p.Saved is not { } sp || RollTemplate(world, p).Built is not { } built) return null;
+        var (centre, homeRadius) = WildHome(sp, p.Position);
+        var squad = SpawnSquad(world, built, null, 0, platoonId: p.Id, wild: true);
+        squad.HomeCentre = centre;
+        squad.HomeRadius = homeRadius;
+        squad.Money = p.Money;
+        p.Size = built.Plan.TotalMembers;
+        p.Unmade = false;
+        p.State = PlatoonState.Loaded;
+        p.SquadId = squad.Id;
+        p.UnloadAtTick = -1;
         return squad;
     }
 

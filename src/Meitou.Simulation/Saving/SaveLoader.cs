@@ -451,7 +451,9 @@ public static class SaveLoader
                 if (n.Handle.C == home.C && n.Handle.Cs == home.Cs) { nest = n; break; }
         if (nest is null && !home.IsNull) return false;
         if (data.Db.Find(platoon.SquadTemplate) is not { } templateRecord || !SquadFactory.IsTemplate(templateRecord)) return false;
-        if (!platoon.IsLoaded || platoon.Characters.Count == 0) return true;   // nothing to make: it stays in the save as it is
+        bool hasCharacters = platoon.IsLoaded && platoon.Characters.Count > 0;
+        bool unmade = !hasCharacters && UnmadeWild(platoon);
+        if (!hasCharacters && !unmade) return true;   // nothing to make: it stays in the save as it is
         var kind = nest is null ? WildKind.Sector : WildKind.Nest;
         var sp = new SavedPlatoon { Source = platoon, Pinned = false, Wild = kind, Nest = nest, Anchor = new Vector2(platoon.Position.X, platoon.Position.Z) };
         foreach (var sc in platoon.Characters) sp.Members.Add(new SavedMember { Source = sc });
@@ -460,7 +462,7 @@ public static class SaveLoader
         int faction = data.FactionIndex(platoon.FactionId);
         var p = new Platoon
         {
-            Id = world.Platoons.NextId(),
+            Id = unmade ? world.Platoons.NextReservedId() : world.Platoons.NextId(),
             Origin = -1,
             TemplateId = platoon.SquadTemplate,
             Faction = faction,
@@ -475,12 +477,21 @@ public static class SaveLoader
             Imprisoned = platoon.Record.Bools.GetValueOrDefault("imprisoned"),
             Dead = platoon.Record.Bools.GetValueOrDefault("dead"),
             IntactFlag = platoon.Record.Bools.GetValueOrDefault("intact", true),
+            Unmade = unmade,
         };
         world.Platoons.Add(p);
         sp.PlatoonId = p.Id;
         context.Platoons.Add(sp);
         context.ByName[sp.Name] = sp;
         loaded.WildPlatoons++;
+        if (unmade) loaded.Notes.Add($"{platoon.Name}: a wild platoon never made by the game; made from its template where it was saved when it activates.");
         return true;
     }
+
+    /// <summary>
+    /// Whether a saved wild platoon with no file is one the game never made (<c>never been activated</c> and a <c>char count</c>): the original builds it from its template into the
+    /// same platoon on activation (<c>FUN_1404ffad0</c>, <b>Verified</b>, docs/formats/save.md "PLATOON keys"), at its saved place.
+    /// </summary>
+    internal static bool UnmadeWild(SavePlatoon platoon) =>
+        !platoon.IsLoaded && platoon.Record.Bools.GetValueOrDefault("never been activated") && platoon.CharCount > 0;
 }

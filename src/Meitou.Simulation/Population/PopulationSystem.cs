@@ -812,7 +812,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         return list;
     }
 
-    Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1, bool idle = false, float yaw = 0, bool pinned = false, HashSet<int>? gated = null)
+    Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1, bool idle = false, float yaw = 0, bool pinned = false,
+        HashSet<int>? gated = null, bool wild = false)
     {
         var table = world.Characters;
         var walk = world.Walkability;
@@ -825,6 +826,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             Town = site?.Index ?? -1,
             PlatoonId = platoonId,
             Pinned = pinned,
+            Wild = wild,
             Position = new Vector3(built.Position.X, Ground(walk, built.Position.X, built.Position.Y, built.NearY), built.Position.Y),
             HomeCentre = site is null ? built.Position : new Vector2(site.Position.X, site.Position.Z),
             HomeRadius = Math.Max(radius * 0.8f, 40),

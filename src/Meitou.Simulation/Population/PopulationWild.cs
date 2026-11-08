@@ -174,7 +174,10 @@ public sealed partial class PopulationSystem
         foreach (var p in world.Platoons.All)
         {
             if (p.Saved is not { Wild: not null } sp || sp.WildSite != site) continue;
-            int alive = sp.Members.Count(m => !m.Dead && !m.Gone && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true));
+            // A never-made one (SaveLoader.UnmadeWild) counts its `char count`, then, once made, its squad's living (LivingOf): it has no saved members.
+            int alive = sp.Members.Count == 0
+                ? LivingOf(world, p)
+                : sp.Members.Count(m => !m.Dead && !m.Gone && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true));
             if (alive == 0) continue;
             hold ??= new WildHold(0, 0, new Dictionary<string, int>(StringComparer.Ordinal));
             squads++;
