@@ -5,7 +5,7 @@ using Meitou.Simulation;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Population;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Scenarios;
 
 /// <summary>
 /// The trailer duel (<c>--duel [x,z]</c>, docs/simulation.md "Duel"): two Samurai on the real map at sunset, nobody else, a scripted start and the deterministic
@@ -13,7 +13,7 @@ namespace Meitou.Game;
 /// phase and the animation clock (clouds, water, foliage sway) start again with it, so a camera flight recorded from a restart sees the same picture frame for frame
 /// whatever angle it films from. Nothing here runs in the normal game.
 /// </summary>
-sealed partial class GameHost
+sealed class DuelScenario(GameHost host)
 {
     /// <summary>The built-in spot (the owner's pick, 2026-10-13): on a flat rock mesa in the dunes (top about 1350), about 160 units from its south (+Z) cliff and 370 east of the rock spire at its west end, the setting sun beyond (−X).</summary>
     public static readonly Vector2 DuelSpot = new(35400, -112020);
@@ -31,7 +31,7 @@ sealed partial class GameHost
     /// </summary>
     const int DuelLeadTicks = 1200, DuelHoldTicks = 120, DuelMaxTicks = 9000, DuelOpenTicks = 1800;
 
-    internal bool IsDuel => g.Duel && !IsSandbox;
+    internal bool IsDuel => host.g.Duel && !host.sandbox.IsSandbox;
 
     Vector3 duelSpot;
     Vector2 duelShift;
@@ -42,32 +42,32 @@ sealed partial class GameHost
     long duelSkipTicks, duelEndTick = DuelOpenTicks;
     ulong duelEndHash;
     int duelLaps;
-    bool duelRestartRequested;
+    internal bool duelRestartRequested;
     // The looks (SpawnSandbox's variant numbers): the first two whose rolled clothing has a helmet.
     (int A, int B) duelVariants = (1, 2);
     // The hour a lap starts at: --time, or what the Tab panel's time of day slider last set (it would snap back at the next lap otherwise).
-    float duelHour;
-    Meitou.Simulation.WorldSettings worldSettings = null!;
+    internal float duelHour;
+    internal Meitou.Simulation.WorldSettings worldSettings = null!;
 
     /// <summary>Finds the record and faction, measures the lap on a world of its own and starts the first lap; returns where the camera starts.</summary>
-    Vector3 DuelStart()
+    internal Vector3 DuelStart()
     {
-        var spot = g.DuelAt is { } at ? new Vector2(at.X, at.Z) : DuelSpot;
-        duelSpot = new Vector3(spot.X, gpu.Terrain.HeightAt(spot.X, spot.Y), spot.Y);
-        var db = scene.Database!;
+        var spot = host.g.DuelAt is { } at ? new Vector2(at.X, at.Z) : DuelSpot;
+        duelSpot = new Vector3(spot.X, host.gpu.Terrain.HeightAt(spot.X, spot.Y), spot.Y);
+        var db = host.scene.Database!;
         duelRecord = db.OfType(FcsRecordType.CHARACTER).FirstOrDefault(r => r.BaseName == DuelRecord)?.StringId
             ?? throw new InvalidOperationException($"--duel: no CHARACTER named '{DuelRecord}' in the game data");
-        int faction = popData!.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.f.BaseName == DuelFaction, (null!, -1)).Item2;
+        int faction = host.popData!.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.f.BaseName == DuelFaction, (null!, -1)).Item2;
         duelFaction = faction >= 0 ? faction : null;
         if (duelFaction is null) Console.Error.WriteLine($"duel      no faction named '{DuelFaction}': the pair gets another faction's looks");
         duelVariants = HelmetedVariants();
         // The pair drifts as it fights (about 140 units in the built-in duel): the spawn is moved so the middle of the lap's fight is on the spot.
-        duelHour = o.Hour;
+        duelHour = host.o.Hour;
         duelShift = Vector2.Zero;
         var middle = MeasureLap(report: false);
         duelShift = spot - middle;
         foreach (float z in new[] { -DuelGap / 2, DuelGap / 2 })
-            if (!simWalkability!.IsWalkable(spot.X + duelShift.X, spot.Y + duelShift.Y + z))
+            if (!host.simWalkability!.IsWalkable(spot.X + duelShift.X, spot.Y + duelShift.Y + z))
                 Console.Error.WriteLine($"duel      {spot.X + duelShift.X:0}, {spot.Y + duelShift.Y + z:0} is under water: pick another spot with --duel x,z");
         MeasureLap(report: true);
         DuelRestart();
@@ -79,7 +79,7 @@ sealed partial class GameHost
     {
         var found = new List<int>();
         for (int v = 1; v <= 200 && found.Count < 2; v++)
-            if (duelFaction is { } f && population!.SandboxLook(worldSettings.Seed, duelRecord, false, v, f) is { } look && look.Parts.Any(p => p.Slot == AttachSlot.Hat))
+            if (duelFaction is { } f && host.population!.SandboxLook(worldSettings.Seed, duelRecord, false, v, f) is { } look && look.Parts.Any(p => p.Slot == AttachSlot.Hat))
                 found.Add(v);
         if (found.Count < 2) Console.Error.WriteLine($"duel      no two looks of {DuelRecord} with a helmet in 200 rolls");
         return found.Count == 2 ? (found[0], found[1]) : (1, 2);
@@ -100,8 +100,8 @@ sealed partial class GameHost
     /// <summary>Runs the duel once, headless, on a world of its own to find when the first fighter is down, which places the lap round it; returns the pair's mean middle over the lap.</summary>
     Vector2 MeasureLap(bool report)
     {
-        var built = BuildSystems(interactive: true);
-        var world = new World(worldSettings, simWalkability!, built.Systems);
+        var built = host.saves.BuildSystems(interactive: true);
+        var world = new World(worldSettings, host.simWalkability!, built.Systems);
         try
         {
             DuelSetup(world, built.Population!);
@@ -146,41 +146,41 @@ sealed partial class GameHost
     /// </summary>
     void DuelRestart()
     {
-        var built = BuildSystems(interactive: true);
-        session.ReplaceWorld(built.Systems, world => DuelSetup(world, built.Population!));
-        population = built.Population;
-        worldEpoch++;
-        session.Clock.SetTime(o.Day ?? Meitou.Simulation.Session.GameClock.DefaultStartDay, duelHour);
-        session.Simulation.ResetPhase();
+        var built = host.saves.BuildSystems(interactive: true);
+        host.session.ReplaceWorld(built.Systems, world => DuelSetup(world, built.Population!));
+        host.population = built.Population;
+        host.saves.worldEpoch++;
+        host.session.Clock.SetTime(host.o.Day ?? Meitou.Simulation.Session.GameClock.DefaultStartDay, duelHour);
+        host.session.Simulation.ResetPhase();
         // The fight before the lap, headless; the last tick publishes the snapshot (the frame draws the pair at once).
-        do session.World.RunTick();
-        while (session.World.Tick <= duelSkipTicks);
-        session.Clock.Advance(session.Simulation.TickSeconds);
-        animSeconds = 0;
-        indexedFor = null;
-        previousById.Clear();
-        player.Reset();
+        do host.session.World.RunTick();
+        while (host.session.World.Tick <= duelSkipTicks);
+        host.session.Clock.Advance(host.session.Simulation.TickSeconds);
+        host.animSeconds = 0;
+        host.indexedFor = null;
+        host.previousById.Clear();
+        host.player.Reset();
         duelLaps++;
     }
 
     /// <summary>After the frame's ticks: the duel's sun stands still (the hour of the lap's start, or the Tab slider's), so every lap and every moment of one has the same light.</summary>
     internal void DuelHoldClock()
     {
-        if (IsDuel) session.Clock.HoldHourOfDay(duelHour);
+        if (IsDuel) host.session.Clock.HoldHourOfDay(duelHour);
     }
 
     /// <summary>Once per frame, between ticks: a restart asked for (Backspace, a cinema flight starting) or the end of the lap starts the next one.</summary>
     internal void DuelFrame(bool flightStarted)
     {
         if (!IsDuel) return;
-        var world = session.World;
+        var world = host.session.World;
         if (!duelRestartRequested && !flightStarted && world.Tick < duelEndTick) return;
         // A lap that ran to its end on the tick must be the measured one (a frame that ran past it has nothing to compare).
         if (world.Tick == duelEndTick)
             Console.WriteLine(world.StateHash() is var hash && hash == duelEndHash ? $"duel      lap {duelLaps} ended as measured (state hash {hash:x16})"
                 : $"duel      lap {duelLaps} DIFFERS from the measured run: state hash {hash:x16}, measured {duelEndHash:x16}");
         DuelRestart();
-        if (duelRestartRequested) player.Notice("Duel restarted (Backspace)");
+        if (duelRestartRequested) host.player.Notice("Duel restarted (Backspace)");
         duelRestartRequested = false;
     }
 }

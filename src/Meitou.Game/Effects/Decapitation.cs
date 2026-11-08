@@ -80,7 +80,7 @@ sealed class Decapitation(GameHost host)
     /// <summary>The heads, each placed where its fall has it now: the head bone along the drop, the whole head turned about it until it lands.</summary>
     internal void AddHeads(CharacterDrawList list)
     {
-        if (headsEpoch != host.worldEpoch) { heads.Clear(); headsSeen.Clear(); spurts.Clear(); headsEpoch = host.worldEpoch; }
+        if (headsEpoch != host.saves.worldEpoch) { heads.Clear(); headsSeen.Clear(); spurts.Clear(); headsEpoch = host.saves.worldEpoch; }
         UpdateSpurts();
         if (heads.Count == 0 || host.gpu.Characters is not { } characters) return;
         double clock = host.session.ShownTick + host.session.SimulationAlpha;

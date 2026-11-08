@@ -4,6 +4,7 @@ using Meitou.Data.Ogre;
 using Meitou.Game.DevTools;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Scenarios;
 using Meitou.Game.Settings;
 using Meitou.Game.Title;
 
@@ -148,9 +149,9 @@ static class Program
                 Console.Error.WriteLine("--duel makes its own two characters: drop --new-game and --no-population.");
                 return 2;
             }
-            var spot = game.DuelAt is { } at ? new Vector2(at.X, at.Z) : GameHost.DuelSpot;
+            var spot = game.DuelAt is { } at ? new Vector2(at.X, at.Z) : DuelScenario.DuelSpot;
             (world.X, world.Z, world.Town) = (spot.X, spot.Y, null);
-            if (!rest.Contains("--time")) world.Hour = GameHost.DuelHour;
+            if (!rest.Contains("--time")) world.Hour = DuelScenario.DuelHour;
             world.Weather ??= "Default";
             world.Distance ??= 90;
             world.Pitch ??= 8;
@@ -159,11 +160,11 @@ static class Program
         if (game.Battle is not null)
         {
             // The battle on the map (docs/simulation.md "Battle"): the world round its spot, with no towns; the camera across the two blocks.
-            var spot = game.BattleAt is { } at ? new Vector2(at.X, at.Z) : GameHost.BattleSpot;
+            var spot = game.BattleAt is { } at ? new Vector2(at.X, at.Z) : BattleScenario.BattleSpot;
             (world.X, world.Z, world.Town) = (spot.X, spot.Y, null);
             world.Distance ??= 150;
             world.Yaw ??= 90;
-            if (!rest.Contains("--time")) world.Hour = GameHost.BattleHour;
+            if (!rest.Contains("--time")) world.Hour = BattleScenario.BattleHour;
         }
         if (game.ListStarts || game.NewGame)
         {

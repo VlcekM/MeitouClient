@@ -229,7 +229,7 @@ sealed class BuildingSync(GameHost host)
     internal Building.BuildServices? MakeBuildServices()
     {
         if (host.scene.Database is not { } db) return null;
-        var footprints = new Meitou.Simulation.Navigation.BuildingFootprints(host.install, db, host.IsSandbox || host.IsDuel || host.IsBattle ? null : host.scene.Objects?.Levels);
+        var footprints = new Meitou.Simulation.Navigation.BuildingFootprints(host.install, db, host.sandbox.IsSandbox || host.duel.IsDuel || host.battle.IsBattle ? null : host.scene.Objects?.Levels);
         var parts = new Dictionary<string, IReadOnlyList<Meitou.Data.World.PlacedMesh>>(StringComparer.Ordinal);
         var icons = new Meitou.Data.Gameplay.Construction.BuildingIcons(Path.Combine(host.install.DataDirectory, "icons", "buildings"));
         IReadOnlyList<Meitou.Data.Gameplay.Construction.PlacementTown>? towns = null;

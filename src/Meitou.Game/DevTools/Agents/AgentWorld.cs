@@ -411,15 +411,15 @@ sealed class AgentWorld(GameHost host)
         Add("quicksave", "quicksave [name]", "queue a quicksave (the F5 key), taken between ticks; with a name, into Meitou's save folder of that name instead of the quicksave slot", (args, con) =>
         {
             if (args.Count > 1) { con.Error("usage: quicksave [name]"); return; }
-            if (args.Count == 0) { host.quickSaveRequested = true; con.Print("quicksave queued"); return; }
-            try { host.saveRequestedFolder = Meitou.Data.Save.SaveCatalog.Folder(Meitou.Simulation.Saving.QuickSave.DefaultRoot, args[0]); con.Print($"save queued: {host.saveRequestedFolder}"); }
+            if (args.Count == 0) { host.saves.quickSaveRequested = true; con.Print("quicksave queued"); return; }
+            try { host.saves.saveRequestedFolder = Meitou.Data.Save.SaveCatalog.Folder(Meitou.Simulation.Saving.QuickSave.DefaultRoot, args[0]); con.Print($"save queued: {host.saves.saveRequestedFolder}"); }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException) { con.Error("quicksave: " + e.Message); }
         });
         Add("quickload", "quickload [name]", "queue a quickload (the F9 key); with a name, the save folder of that name written by quicksave <name>", (args, con) =>
         {
             if (args.Count > 1) { con.Error("usage: quickload [name]"); return; }
-            if (args.Count == 0) { host.quickLoadRequested = true; con.Print("quickload queued"); return; }
-            try { host.loadRequestedFolder = Meitou.Data.Save.SaveCatalog.Folder(Meitou.Simulation.Saving.QuickSave.DefaultRoot, args[0]); con.Print($"load queued: {host.loadRequestedFolder}"); }
+            if (args.Count == 0) { host.saves.quickLoadRequested = true; con.Print("quickload queued"); return; }
+            try { host.saves.loadRequestedFolder = Meitou.Data.Save.SaveCatalog.Folder(Meitou.Simulation.Saving.QuickSave.DefaultRoot, args[0]); con.Print($"load queued: {host.saves.loadRequestedFolder}"); }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException) { con.Error("quickload: " + e.Message); }
         });
         RegisterControlBaseCommands(Add, Loaded);
@@ -784,7 +784,7 @@ sealed class AgentWorld(GameHost host)
             if (!loaded(con)) return;
             host.levelEditorHost.LevelEditsFollowWorld();
             if (host.scene.Database is not { } db) { con.Error("no database"); return; }
-            var footprints = host.siteFootprints ??= new Meitou.Simulation.Navigation.BuildingFootprints(host.install, db, null);
+            var footprints = host.saves.siteFootprints ??= new Meitou.Simulation.Navigation.BuildingFootprints(host.install, db, null);
             var items = new List<(string Key, string Id, Vector2[] Hull)>();
             foreach (var p in host.levelEditorHost.levelEdits.Added)
             {

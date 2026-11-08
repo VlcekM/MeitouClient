@@ -22,13 +22,13 @@ sealed partial class GameHost
     }
 
     /// <summary>A stage found the load cannot go on; the message is shown, the world as it was stays.</summary>
-    sealed class SceneLoadFailed(string message) : Exception(message);
+    internal sealed class SceneLoadFailed(string message) : Exception(message);
 
     internal SceneLoad? sceneLoad;
-    SkyArrival? skyArrival;
-    float? presentationHour;
+    internal SkyArrival? skyArrival;
+    internal float? presentationHour;
     /// <summary>The hour of the save being read, set by the reading worker as soon as its CAMERA is read (NaN until then), for the sky arrival.</summary>
-    float readHour = float.NaN;
+    internal float readHour = float.NaN;
     internal bool warming;
     double smoothSeconds;
     double warmSeconds;
@@ -47,15 +47,15 @@ sealed partial class GameHost
     /// <summary>Loading, warm-up, arrival or the loading overlay's final reveal still blocks input.</summary>
     internal bool Covered => sceneLoad is not null || warming || skyArrival is not null || loading is { Exiting: true };
 
-    static (string Step, Func<Task?> Run, bool DuringAscent) Stage(string step, Func<Task?> run, bool duringAscent = false) => (step, run, duringAscent || step == "read");
+    internal static (string Step, Func<Task?> Run, bool DuringAscent) Stage(string step, Func<Task?> run, bool duringAscent = false) => (step, run, duringAscent || step == "read");
 
-    void StartSceneLoad(bool mainMenuTransition, float? destinationHour, params (string Step, Func<Task?> Run, bool DuringAscent)[] stages)
+    internal void StartSceneLoad(bool mainMenuTransition, float? destinationHour, params (string Step, Func<Task?> Run, bool DuringAscent)[] stages)
     {
         if (sceneLoad is not null) return;
         sceneLoad = new();
         if (player.UiMode == Meitou.Data.Ui.UiMode.Meitou && (mainMenuTransition ? config.MainMenuTransitions : config.InGameTransitions))
-            skyArrival = new(camera, presentationHour ?? (TitleVisible ? TitleHour : (float)session.Clock.HourOfDay),
-                mainMenuTransition ? config.MainMenuTransitionSpeed : config.InGameTransitionSpeed, immediate: !TitleVisible);
+            skyArrival = new(camera, presentationHour ?? (titleScreen.TitleVisible ? titleScreen.TitleHour : (float)session.Clock.HourOfDay),
+                mainMenuTransition ? config.MainMenuTransitionSpeed : config.InGameTransitionSpeed, immediate: !titleScreen.TitleVisible);
         if (destinationHour is { } hour) skyArrival?.SetDestination(hour);
         Volatile.Write(ref readHour, float.NaN);
         foreach (var stage in stages) sceneLoad.Stages.Enqueue(stage);
@@ -132,22 +132,22 @@ sealed partial class GameHost
         }
         // A ready character mesh alone is insufficient: finish terrain, scenery and deferred textures too.
         // Content readiness has no pacing timeout that can expose missing NPCs or white stand-ins.
-        bool populationReady = TitleVisible || session.World.PreparePopulation(session.Camera.Current.Target);
+        bool populationReady = titleScreen.TitleVisible || session.World.PreparePopulation(session.Camera.Current.Target);
         // A game's view waits for the characters round the camera's focus only (CharacterRenderer.LoadingFocus); the rest are prepared once the screen lifts.
         var focus = session.Camera.Current.Target;
-        if (!TitleVisible && gpu.Characters is { } near) near.LoadingFocus = new Vector2(focus.X, focus.Z);
+        if (!titleScreen.TitleVisible && gpu.Characters is { } near) near.LoadingFocus = new Vector2(focus.X, focus.Z);
         bool charactersReady = gpu.Characters is not { } characters || !characters.ContentPending &&
             !session.CurrentSnapshot.Characters.Any(c => AwaitsLook(c, characters));
-        bool sceneReady = TitleVisible ? TitleSceneReady : populationReady && charactersReady &&
+        bool sceneReady = titleScreen.TitleVisible ? titleScreen.TitleSceneReady : populationReady && charactersReady &&
             gpu.Streamer is not { Idle: false } && !(gpu.Objects?.Pending > 0) && !(gpu.Foliage?.LoadingPending > 0);
         guardSeconds = gpu.Guard is { Pressure: true } ? guardSeconds + seconds : 0;
-        if (!sceneReady && guardSeconds >= GuardWait && (TitleVisible || populationReady))
+        if (!sceneReady && guardSeconds >= GuardWait && (titleScreen.TitleVisible || populationReady))
         {
             sceneReady = true;
             if (guardSeconds - seconds < GuardWait)
                 Console.WriteLine($"loading   stopped waiting for content held back by memory pressure (VramGuard, {gpu.Guard!.Fraction * 100:0}% of the {gpu.Guard.BudgetBytes / 1048576} MB budget)");
         }
-        if (characterEditor.pendingCreation is not null && !TitleVisible && charactersReady)
+        if (characterEditor.pendingCreation is not null && !titleScreen.TitleVisible && charactersReady)
         {
             // A new game shows the character editor before the world: the loading screen lifts once the squad is drawable, no sky arrival, and the world's own warm-up
             // runs when the editor closes (ResumeAfterCreation).
@@ -164,13 +164,13 @@ sealed partial class GameHost
             {
                 nextWarmReport = warmSeconds + 5;
                 int pendingLooks = gpu.Characters is { } characterRenderer
-                    ? TitleVisible ? characterRenderer.PendingLoads : session.CurrentSnapshot.Characters.Count(c => AwaitsLook(c, characterRenderer))
+                    ? titleScreen.TitleVisible ? characterRenderer.PendingLoads : session.CurrentSnapshot.Characters.Count(c => AwaitsLook(c, characterRenderer))
                     : 0;
-                Console.WriteLine($"loading   {(TitleVisible ? "menu" : "game")} still preparing: terrain {(gpu.Streamer?.Idle == false ? "pending" : "ready")}, objects {gpu.Objects?.Pending ?? 0}{(gpu.Objects is { Pending: > 0 } po ? $" ({po.PendingDetail})" : "")}, foliage {gpu.Foliage?.LoadingPending ?? 0}{(gpu.Foliage is { LoadingPending: > 0 } pf ? $" ({pf.PendingDetail})" : "")}, population {(populationReady ? "ready" : "pending")}, characters {((TitleVisible ? TitleCharactersReady : charactersReady) ? "ready" : $"pending ({pendingLooks} looks; {gpu.Characters?.PendingLoads ?? 0} assets/textures)")}");
+                Console.WriteLine($"loading   {(titleScreen.TitleVisible ? "menu" : "game")} still preparing: terrain {(gpu.Streamer?.Idle == false ? "pending" : "ready")}, objects {gpu.Objects?.Pending ?? 0}{(gpu.Objects is { Pending: > 0 } po ? $" ({po.PendingDetail})" : "")}, foliage {gpu.Foliage?.LoadingPending ?? 0}{(gpu.Foliage is { LoadingPending: > 0 } pf ? $" ({pf.PendingDetail})" : "")}, population {(populationReady ? "ready" : "pending")}, characters {((titleScreen.TitleVisible ? titleScreen.TitleCharactersReady : charactersReady) ? "ready" : $"pending ({pendingLooks} looks; {gpu.Characters?.PendingLoads ?? 0} assets/textures)")}");
             }
             return;
         }
-        if (TitleVisible && !titleWarmFinalized && loadingDisplay is { } display)
+        if (titleScreen.TitleVisible && !titleWarmFinalized && loadingDisplay is { } display)
         {
             // Streaming allocates after Boot's collection: retire its uploads and compact before exposing the menu.
             titleWarmFinalized = true;
@@ -181,7 +181,7 @@ sealed partial class GameHost
         readySeconds += seconds;
         smoothSeconds = seconds < SmoothFrame ? smoothSeconds + seconds : 0;
         // A machine that cannot draw the view at the smooth pace is let in after WarmLimit seconds of ready content, on the title as in play.
-        if ((TitleVisible ? smoothSeconds < TitleSmoothRun : smoothSeconds < SmoothRun) && readySeconds < WarmLimit) return;
+        if ((titleScreen.TitleVisible ? smoothSeconds < TitleSmoothRun : smoothSeconds < SmoothRun) && readySeconds < WarmLimit) return;
         warming = false;
         if (gpu.Characters is { } world) world.LoadingFocus = null;
         loading?.Finish();
@@ -212,11 +212,11 @@ sealed partial class GameHost
 
     void ApplySkyArrival()
     {
-        presentationHour = skyArrival?.Apply(camera, TitleVisible ? TitleHour : (float)session.Clock.HourOfDay, warming);
+        presentationHour = skyArrival?.Apply(camera, titleScreen.TitleVisible ? titleScreen.TitleHour : (float)session.Clock.HourOfDay, warming);
     }
 
     /// <summary>The host's side of a new world: the camera focus sent again, the first tick (it publishes the snapshot), the draw list and the mouse state dropped, the menus closed.</summary>
-    void SettleNewWorld()
+    internal void SettleNewWorld()
     {
         sentFocus = false;
         SendFocus();

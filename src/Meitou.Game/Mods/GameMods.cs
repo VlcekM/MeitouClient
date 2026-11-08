@@ -11,7 +11,7 @@ namespace Meitou.Modding;
 
 /// <summary>
 /// Code mods (docs/modding.md): loaded and initialized once in <see cref="GameHost.BootSimulation"/>, after the data and before the first world's systems; their simulation
-/// extensions go into every <see cref="GameHost.BuildSystems"/>, their interface extensions and notices to the interface, their debug rows to the F10 menu, and their
+/// extensions go into every <see cref="GameSaves.BuildSystems"/>, their interface extensions and notices to the interface, their debug rows to the F10 menu, and their
 /// systems' save data into and out of the save's sidecar files.
 /// </summary>
 sealed class GameMods(GameHost host)
@@ -93,7 +93,7 @@ sealed class GameMods(GameHost host)
     internal void CaptureModData(World world, Meitou.Data.Save.SaveGame game)
     {
         mods?.CaptureSaveData(world, game.ModData);
-        if (mods is not null || game.ModEnvironment is not null || host.loadedSave?.Source.ModEnvironment is not null)
+        if (mods is not null || game.ModEnvironment is not null || host.saves.loadedSave?.Source.ModEnvironment is not null)
             game.ModEnvironment = CurrentModEnvironment().ToJson();
     }
 

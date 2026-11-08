@@ -1,38 +1,38 @@
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Particles;
+using Meitou.Data.Save;
 using Meitou.Data.Ui;
 using Meitou.Data.World;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Particles;
 using Meitou.Game.Rendering.Sky;
-using Meitou.Game.Title;
 using Meitou.Simulation;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Saving;
-using Meitou.Data.Save;
 using EffectType = Meitou.Data.Particles.EffectType;
 using WeatherEffectEntry = Meitou.Data.Particles.WeatherEffectEntry;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Title;
 
-sealed partial class GameHost
+/// <summary>The title screen's world: its staged characters, camera and light, and the Continue save's leader drawn in its saved look.</summary>
+sealed class TitleScreen(GameHost host)
 {
     TitleComposition? titleComposition;
     internal TitleBattle? titleBattle;
     Meitou.Data.Characters.CharacterAppearance[] titleAppearances = [];
-    bool TitleCharactersReady => ActiveCharacters is not { } characters ||
+    internal bool TitleCharactersReady => host.ActiveCharacters is not { } characters ||
         titleAppearances.Length > 0 && titleAppearances.All(characters.IsPrepared) && !characters.ContentPending;
-    bool TitleSceneReady => TitleCharactersReady && (gpu is null || gpu.Streamer is not { Idle: false } &&
-        !(gpu.Objects?.Pending > 0) && !(gpu.Foliage?.Pending > 0));
-    Func<ParticleRenderer>? titleParticleFactory;
+    internal bool TitleSceneReady => TitleCharactersReady && (host.gpu is null || host.gpu.Streamer is not { Idle: false } &&
+        !(host.gpu.Objects?.Pending > 0) && !(host.gpu.Foliage?.Pending > 0));
+    internal Func<ParticleRenderer>? titleParticleFactory;
     ParticleRenderer? titleParticles;
     IReadOnlyList<WeatherEffectEntry>? titleDust;
     float? gameplayLens;
     /// <summary>The gameplay character source, set aside while the title shows its staged actors.</summary>
     Action<CharacterDrawList>? gameplayCharacters;
-    internal bool TitleVisible => player.TitleOpen && player.UiMode == UiMode.Meitou;
-    float TitleHour => scene.Clock.Sunrise + 0.75f;
+    internal bool TitleVisible => host.player.TitleOpen && host.player.UiMode == UiMode.Meitou;
+    internal float TitleHour => host.scene.Clock.Sunrise + 0.75f;
     /// <summary>The moons' fill light, and the shafts' air layer (a multiple of the usual) on the title: thick morning air so the low sun casts strong rays.</summary>
     const float TitlePlanetFill = 0.8f, TitleShaftAir = 2, TitleClouds = 0.38f;
     /// <summary>The title's white balance: keeps the orange of the early hour with the sun a little higher than that hour would put it.</summary>
@@ -42,15 +42,15 @@ sealed partial class GameHost
 
     void EnsureTitleScene()
     {
-        if (titleComposition is not null || scene.Database is not { } db) return;
+        if (titleComposition is not null || host.scene.Database is not { } db) return;
         var saved = TitleSaveAppearance(db, out var stats, out float hunger);
         // Its body from its saved stats and hunger, as the world publishes it (CharacterSnapshot.Build; FUN_140531820 skips robots).
         var build = saved is { Race: var race } && stats is not null && race.GetBool("is robot") != true
             ? Meitou.Data.Characters.CharacterShape.BuildFromStats(saved.Female, stats, static (stats, s) => stats[s], hunger) : (Meitou.Data.Characters.BodyBuild?)null;
-        titleComposition = new(install, db, scene.GroundAt, SandboxRecord(db), saved) { SavedBuild = build };
-        if (popData is { } data && animationLengths is { } lengths && animationLibrary is { } library)
-            titleBattle = TitleBattle.Create(data, scene.GroundAt, titleComposition.Fights, lengths, library);
-        if (ActiveCharacters is { } characters)
+        titleComposition = new(host.install, db, host.scene.GroundAt, host.sandbox.SandboxRecord(db), saved) { SavedBuild = build };
+        if (host.popData is { } data && host.animationLengths is { } lengths && host.animationLibrary is { } library)
+            titleBattle = TitleBattle.Create(data, host.scene.GroundAt, titleComposition.Fights, lengths, library);
+        if (host.ActiveCharacters is { } characters)
         {
             var list = new CharacterDrawList();
             FillTitleCharacters(list);
@@ -67,14 +67,14 @@ sealed partial class GameHost
         (stats, hunger) = (null, Meitou.Simulation.Bodies.MedicalState.MaxHunger);
         try
         {
-            SaveGame? save = StartSave;
+            SaveGame? save = host.StartSave;
             if (save is null)
             {
-                var slots = SaveCatalog.Scan(QuickSave.DefaultRoot, install.SaveDirectory,
+                var slots = SaveCatalog.Scan(QuickSave.DefaultRoot, host.install.SaveDirectory,
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save"));
                 if (slots.FirstOrDefault() is { } slot) save = SaveGame.Load(slot.Folder);
             }
-            if (save?.PlayerFaction is not { } faction || popData?.Appearances is not { } appearances) return null;
+            if (save?.PlayerFaction is not { } faction || host.popData?.Appearances is not { } appearances) return null;
             var platoons = save.Platoons.Where(p => p.FactionId == faction.Id && p.File is not null && p.Characters.Count > 0)
                 .OrderBy(p => p.Record.Ints.GetValueOrDefault("squad index", int.MaxValue)).ToArray();
             var candidates = platoons.SelectMany(p => p.Characters
@@ -159,17 +159,17 @@ sealed partial class GameHost
     {
         if (!TitleVisible)
         {
-            if (gameplayLens is { } lens) { camera.FieldOfView = lens; camera.MaxNear = 200; gameplayLens = null; }
-            if (gameplayCharacters is { } source && ActiveCharacters is { } restore) { restore.Source = source; gameplayCharacters = null; }
-            if (ActiveFoliage is { } plants && titleComposition is { } shown && plants.Shift == shown.Ruins) plants.Shift = null;
-            if (ActiveObjects is { } things && titleComposition is { } staged && things.Staged == staged.Staged) things.Staged = null;
+            if (gameplayLens is { } lens) { host.camera.FieldOfView = lens; host.camera.MaxNear = 200; gameplayLens = null; }
+            if (gameplayCharacters is { } source && host.ActiveCharacters is { } restore) { restore.Source = source; gameplayCharacters = null; }
+            if (host.ActiveFoliage is { } plants && titleComposition is { } shown && plants.Shift == shown.Ruins) plants.Shift = null;
+            if (host.ActiveObjects is { } things && titleComposition is { } staged && things.Staged == staged.Staged) things.Staged = null;
             return;
         }
         EnsureTitleScene();
         if (titleComposition is not { } title) return;
-        gameplayLens ??= camera.FieldOfView;
-        player.TitleLogoSource ??= TitleLogo.Load;
-        if (ActiveCharacters is { } characters && gameplayCharacters is null)
+        gameplayLens ??= host.camera.FieldOfView;
+        host.player.TitleLogoSource ??= TitleLogo.Load;
+        if (host.ActiveCharacters is { } characters && gameplayCharacters is null)
         {
             gameplayCharacters = characters.Source;
             characters.Source = FillTitleCharacters;
@@ -177,55 +177,55 @@ sealed partial class GameHost
             // The world's characters beyond reach are kept across frames and only the gameplay source empties them: left in, the title's view
             // waited forever for looks it never builds (out of its reach). The gameplay source fills them again when it returns.
             characters.Draws.BeginDistant();
-            distantFor = default;
+            host.distantFor = default;
         }
-        if (ActiveFoliage is { } foliage && foliage.Shift != title.Ruins) foliage.Shift = title.Ruins;
-        if (ActiveObjects is { } objects && objects.Staged != title.Staged) objects.Staged = title.Staged;
-        TitleComposition.Place(camera);
+        if (host.ActiveFoliage is { } foliage && foliage.Shift != title.Ruins) foliage.Shift = title.Ruins;
+        if (host.ActiveObjects is { } objects && objects.Staged != title.Staged) objects.Staged = title.Staged;
+        TitleComposition.Place(host.camera);
     }
 
-    void DrawTitleWorld(int width, int height)
+    internal void DrawTitleWorld(int width, int height)
     {
         EnsureTitleScene();
         if (titleComposition is not { } title) return;
-        double seconds = realTime.Elapsed.TotalSeconds;
+        double seconds = host.realTime.Elapsed.TotalSeconds;
         PrepareTitleDust(seconds);
         // Clear sky with a few clouds whatever the region's weather, no placed fog volumes, the sun turned into the right of the view, the moons lit
         // full face so they read by day, and thicker morning air so the hill the sun peeks over casts rays through it.
-        var sky = gpu.Sky;
-        var (weather, coverage, regions, clock, wind) = (sky.Weather, sky.CloudCoverage, gpu.Weather, scene.Clock, sky.CloudWind);
-        float hour = presentationHour ?? TitleHour;
+        var sky = host.gpu.Sky;
+        var (weather, coverage, regions, clock, wind) = (sky.Weather, sky.CloudCoverage, host.gpu.Weather, host.scene.Clock, sky.CloudWind);
+        float hour = host.presentationHour ?? TitleHour;
         // Fade the staged fill with the sun, reaching zero at the horizon.
         float fill = Math.Clamp(clock.SunDirection(hour).Y / MathF.Max(clock.SunDirection(TitleHour).Y, 1e-3f), 0, 1);
         fill = fill * fill * (3 - 2 * fill);
         sky.Weather = SkyWeather.Default;
         sky.CloudCoverage = TitleClouds;
-        sky.CloudWind = TitleComposition.CloudWind(camera);
-        sky.PlanetTurn = TitleComposition.MoonTurn(camera);
+        sky.CloudWind = TitleComposition.CloudWind(host.camera);
+        sky.PlanetTurn = TitleComposition.MoonTurn(host.camera);
         sky.PlanetFill = TitlePlanetFill * fill;
-        if (gpu.FogVolumes is { } placedFog) placedFog.HidePlaced = true;
-        if (gpu.Characters is { } lit) lit.Fill = TitleFill * fill;
-        var shafts = gpu.Post?.Options;
+        if (host.gpu.FogVolumes is { } placedFog) placedFog.HidePlaced = true;
+        if (host.gpu.Characters is { } lit) lit.Fill = TitleFill * fill;
+        var shafts = host.gpu.Post?.Options;
         var (air, strength, balance) = shafts is null ? (0f, 0f, System.Numerics.Vector3.One) : (shafts.ShaftAir, shafts.ShaftStrength, shafts.Balance);
         if (shafts is not null) (shafts.ShaftAir, shafts.ShaftStrength, shafts.Balance) = (TitleShaftAir, 1, TitleBalance);
-        gpu.Weather = null;
-        scene.Clock = clock with { SunTurn = TitleComposition.SunTurn(clock, hour, camera) };
+        host.gpu.Weather = null;
+        host.scene.Clock = clock with { SunTurn = TitleComposition.SunTurn(clock, hour, host.camera) };
         // A separate particle scene keeps the menu's dust out of gameplay and excludes the map's effect placers.
-        var worldParticles = gpu.Particles;
-        float density = gpu.ParticleDensity;
-        bool weatherParticles = gpu.WeatherParticles;
-        gpu.Particles = titleParticles;
-        gpu.ParticleDensity = 0.3f;
-        gpu.WeatherParticles = true;
-        if (gpu.Foliage is { } foliage && o.Screenshot is null) foliage.SwaySeconds = seconds;
-        try { WorldFrame.Draw(gpu, scene, camera, render, width, height, hour, (float)seconds / 600f, o.FogDistance); }
+        var worldParticles = host.gpu.Particles;
+        float density = host.gpu.ParticleDensity;
+        bool weatherParticles = host.gpu.WeatherParticles;
+        host.gpu.Particles = titleParticles;
+        host.gpu.ParticleDensity = 0.3f;
+        host.gpu.WeatherParticles = true;
+        if (host.gpu.Foliage is { } foliage && host.o.Screenshot is null) foliage.SwaySeconds = seconds;
+        try { WorldFrame.Draw(host.gpu, host.scene, host.camera, host.render, width, height, hour, (float)seconds / 600f, host.o.FogDistance); }
         finally
         {
-            (gpu.Particles, gpu.ParticleDensity, gpu.WeatherParticles) = (worldParticles, density, weatherParticles);
-            (sky.Weather, sky.CloudCoverage, gpu.Weather, scene.Clock, sky.PlanetFill, sky.CloudWind, sky.PlanetTurn) = (weather, coverage, regions, clock, 0, wind, System.Numerics.Quaternion.Identity);
+            (host.gpu.Particles, host.gpu.ParticleDensity, host.gpu.WeatherParticles) = (worldParticles, density, weatherParticles);
+            (sky.Weather, sky.CloudCoverage, host.gpu.Weather, host.scene.Clock, sky.PlanetFill, sky.CloudWind, sky.PlanetTurn) = (weather, coverage, regions, clock, 0, wind, System.Numerics.Quaternion.Identity);
             if (shafts is not null) (shafts.ShaftAir, shafts.ShaftStrength, shafts.Balance) = (air, strength, balance);
-            if (gpu.FogVolumes is { } restoreFog) restoreFog.HidePlaced = false;
-            if (gpu.Characters is { } unlit) unlit.Fill = default;
+            if (host.gpu.FogVolumes is { } restoreFog) restoreFog.HidePlaced = false;
+            if (host.gpu.Characters is { } unlit) unlit.Fill = default;
         }
     }
 
@@ -242,12 +242,12 @@ sealed partial class GameHost
                     0, 0, Vector3.One, 0, false, 4000, 0, 0, 0, 0), 1, 0, 0)];
         }
         if (titleParticles is not { } dust) return;
-        var left = -Vector3.Normalize(Vector3.Cross(camera.Forward, Vector3.UnitY));
+        var left = -Vector3.Normalize(Vector3.Cross(host.camera.Forward, Vector3.UnitY));
         float gust = 0.5f + 0.5f * MathF.Sin((float)(seconds % 120) * MathF.Tau / 24);
         dust.SetWeather(new WeatherEffectInput { Effects = titleDust!, Wind = new Vector2(left.X, left.Z) * (35 + 20 * gust) });
         // Warm once before setting the tint; Draw advances subsequent frames on the menu's real-time clock.
-        if (dust.Groups.Count == 0) dust.Update(seconds, camera);
-        float fade = Math.Clamp((camera.Pitch + 0.65f) / 0.45f, 0, 1);
+        if (dust.Groups.Count == 0) dust.Update(seconds, host.camera);
+        float fade = Math.Clamp((host.camera.Pitch + 0.65f) / 0.45f, 0, 1);
         foreach (var group in dust.Groups)
             foreach (var unit in group.Units)
                 unit.Tint = new Vector3(1, 0.86f, 0.68f) * ((0.4f + 0.25f * gust) * fade);

@@ -41,7 +41,7 @@ sealed class FeedbackCapture(GameHost host)
     }
 
     /// <summary>In a game: there is a world to save, a camera to report and a navmesh to draw.</summary>
-    bool FeedbackInGame => host.SavesAvailable(out _) && host.session.World.Player.Exists;
+    bool FeedbackInGame => host.saves.SavesAvailable(out _) && host.session.World.Player.Exists;
 
     /// <summary>
     /// The feedback frame was drawn: <paramref name="rgba"/> is its picture (rows from the top; null when it could not be read). The form opens; for the navmesh
@@ -162,12 +162,12 @@ sealed class FeedbackCapture(GameHost host)
         Task? saveWritten = null;
         if (form.Save)
         {
-            if (host.Busy()) { host.player.FeedbackSending = false; host.player.FeedbackProgress("A save or load is still in progress. Try again in a moment.", error: true); return; }
+            if (host.saves.Busy()) { host.player.FeedbackSending = false; host.player.FeedbackProgress("A save or load is still in progress. Try again in a moment.", error: true); return; }
             saveFolder = Path.Combine(Path.GetTempPath(), $"meitou-feedback-{Guid.NewGuid():N}", $"feedback-{DateTime.Now:yyyyMMdd-HHmmss}");
-            var before = host.saveWrite;
-            host.QuickSaveNow(saveFolder, feedback: true);
-            if (ReferenceEquals(host.saveWrite, before)) { host.player.FeedbackSending = false; host.player.FeedbackProgress("The game could not be saved (log.txt says why). Untick the save to send without it.", error: true); return; }
-            saveWritten = host.saveWrite;
+            var before = host.saves.saveWrite;
+            host.saves.QuickSaveNow(saveFolder, feedback: true);
+            if (ReferenceEquals(host.saves.saveWrite, before)) { host.player.FeedbackSending = false; host.player.FeedbackProgress("The game could not be saved (log.txt says why). Untick the save to send without it.", error: true); return; }
+            saveWritten = host.saves.saveWrite;
         }
         string[] mods = [.. Meitou.Data.LoadOrder.FromInstall(host.install).Entries.Select(e => e.Name)];
         string? log = form.Log && File.Exists(Path.Combine(AppContext.BaseDirectory, "log.txt")) ? Path.Combine(AppContext.BaseDirectory, "log.txt") : null;

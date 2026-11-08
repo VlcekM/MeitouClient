@@ -110,7 +110,7 @@ sealed partial class GameHost
             return 0;
         }
         var overlay = DebugOverlay.TryCreate(display.Context, assets.Find);
-        if (overlay is not null) { player.CreateUiPainter(overlay, assets.Find); ConnectItemIcons(); }
+        if (overlay is not null) { player.CreateUiPainter(overlay, assets.Find); itemIconFiles.ConnectItemIcons(); }
         if (gpu.Characters is { } portraits) { var (atlas, sampled) = portraits.PortraitAtlas; player.SetUiTexture(PlayerInterface.PortraitTexture, atlas, sampled); }
         // The debug overlays (docs/engine.md): F10 the debug menu (DebugMenu), F11 the frame statistics, F12 the profiler chart.
         debugMenu.debugToolsOn = true;
@@ -125,7 +125,7 @@ sealed partial class GameHost
         bool lowEnd = Environment.GetCommandLineArgs().Contains("--low-end") || g.BenchmarkBaseline;
         var runOnly = RunOnlyKeys();   // the keys this run leaves as saved (--bloom)
         var settingsValues = overlay is null ? null : WorldFrame.CreateSettingsPanel(overlay, gpu, render,
-            getHour: () => (float)session.Clock.HourOfDay, setHour: v => { session.Clock.SetHourOfDay(v); if (IsDuel) duelHour = v; },
+            getHour: () => (float)session.Clock.HourOfDay, setHour: v => { session.Clock.SetHourOfDay(v); if (duel.IsDuel) duel.duelHour = v; },
             getVSync: () => display.VSync, setVSync: v => display.VSync = v, switches: switches,
             getFullScreen: FullScreenOn, setFullScreen: _ => ToggleFullScreen(),
             extraChoices: [new PanelChoice(() => $"UI mode: {player.UiMode}", () => ["Faithful", "Meitou"], () => (int)player.UiMode,
@@ -153,13 +153,13 @@ sealed partial class GameHost
                 DoorsCloseChanged = on => { foreach (var locks in session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on; },
                 AnimalsPickUpChanged = on => { foreach (var players in session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on; },
                 AudioChanged = sound.AudioSettingsChanged,
-                GameplayChanged = ApplyGameplay,
+                GameplayChanged = saves.ApplyGameplay,
                 SkinRaceList = scene.Database is { } raceDb ? CharacterRenderer.PersonRaces(raceDb) : [],
                 SkinRacesChanged = () => { if (gpu.Characters is { } chars) chars.SkinRaces = config.SkinRaces; },
                 CameraRotateSpeedChanged = ApplyCameraRotateSpeed,
                 CameraChanged = () => config.ApplyCamera(session.Camera.Settings),
-                TutorialsChanged = on => { if (tutorials is { } t) t.Enabled = on; },
-                ResetTutorials = () => tutorials?.Reset(),
+                TutorialsChanged = on => { if (saves.tutorials is { } t) t.Enabled = on; },
+                ResetTutorials = () => saves.tutorials?.Reset(),
                 OffscreenChanged = () =>
                 {
                     foreach (var population in session.World.Systems.OfType<Meitou.Simulation.Population.PopulationSystem>())
@@ -179,9 +179,9 @@ sealed partial class GameHost
         config.MovementMarker ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
         config.RotationMarker ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
         (player.MovementMarker, player.RotationMarker) = (config.MovementMarker == true, config.RotationMarker == true);
-        tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
-        tutorials.Enabled = config.Tutorials == true;
-        player.ConfigureTutorials(tutorials);
+        saves.tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
+        saves.tutorials.Enabled = config.Tutorials == true;
+        player.ConfigureTutorials(saves.tutorials);
         if (panel is not null && !lowEnd)
             foreach (var slider in panel.Sliders)
                 if (!runOnly.Contains(slider.Label) && config.Graphics.TryGetValue(slider.Label, out float v) && !(o.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label))
@@ -208,7 +208,7 @@ sealed partial class GameHost
         // camera and the rig's state is not applied; the first camera input after that hands the camera back to the rig (CameraRig.TakeOver).
         // The hour is the game clock's (time does not follow the keys); Home puts the lens back while the editor is open, in the free camera and on a camera the cinema holds.
         var cinema = new Cinema(() => camera, () => (float)session.Clock.HourOfDay, null, FullScreenOn, ToggleFullScreen,
-            Cinema.GameFile, lensKeysAlways: IsDuel);   // the duel has no floors: PageUp/PageDown zoom the lens there
+            Cinema.GameFile, lensKeysAlways: duel.IsDuel);   // the duel has no floors: PageUp/PageDown zoom the lens there
         bool cinemaHolds = false;
         cinema.Moved = () => cinemaHolds = true;
         // PageUp/PageDown zoom the lens and Home puts it back in these cameras; in the strategy camera PageUp/PageDown are the game's floor keys.
@@ -228,7 +228,7 @@ sealed partial class GameHost
         // A double click on a squad member more than FlightDistance from the view flies there (Advanced settings "Character flights").
         player.FlyTo = id =>
         {
-            if (!config.CharacterFlights || IsDuel || session.Camera.IsFree || cinema.Playing || cinema.Recording || TourPosition(id) is not { } at) return false;
+            if (!config.CharacterFlights || duel.IsDuel || session.Camera.IsFree || cinema.Playing || cinema.Recording || TourPosition(id) is not { } at) return false;
             if (new Vector2(at.X - camera.Target.X, at.Z - camera.Target.Z).Length() <= UserConfig.FlightDistance) return false;
             player.Follow = null;
             tour.HopSeconds = config.CharacterFlightSeconds;
@@ -298,7 +298,7 @@ sealed partial class GameHost
                 if (Covered) return;
                 if (devConsoleHost.ConsoleOpen) devConsoleHost.devConsole.Type(value);
                 else if (panel?.Visible == true) panel.TextInput(value);
-                else if (sandboxPicker is { Open: true }) sandboxPicker.TextInput(value);
+                else if (sandbox.sandboxPicker is { Open: true }) sandbox.sandboxPicker.TextInput(value);
                 else if (debugMenu.debugMenuOpen) debugMenu.DebugMenuText(value);
                 else player.UiText(value);
             };
@@ -327,9 +327,9 @@ sealed partial class GameHost
                 return;
             }
             // The sandbox animation list, while open, takes every key too.
-            if (sandboxPicker is { Open: true })
+            if (sandbox.sandboxPicker is { Open: true })
             {
-                if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } pickerKey) sandboxPicker.KeyDown(pickerKey);
+                if ((k == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(k)) is { } pickerKey) sandbox.sandboxPicker.KeyDown(pickerKey);
                 return;
             }
             // F10 (rebindable) opens the debug menu, which then takes every key until it closes.
@@ -386,7 +386,7 @@ sealed partial class GameHost
             }
             if (KeyMap.Map(k) is { } uiKey && player.UiKey(uiKey, keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight), shiftDown)) return;
             bool ctrl = keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight);
-            if (k == SilkKey.KeypadDivide && !IsDuel)
+            if (k == SilkKey.KeypadDivide && !duel.IsDuel)
             {
                 if (tour.Active) EndTour();
                 else if (!cinema.Playing && !cinema.Recording)
@@ -401,7 +401,7 @@ sealed partial class GameHost
                 return;
             }
             // A numpad key bound to a game hotkey (the orders, NUM0..NUM8 by default) is the game's, except with Ctrl (saving a shot) or the cinema's editor open (F6).
-            bool hotkey = !IsDuel && !ctrl && !cinema.EditorVisible && KeyMap.Map(k) is { } gameKey && (player.IsHotkey(gameKey) || player.OwnsBuildNumpad(gameKey));
+            bool hotkey = !duel.IsDuel && !ctrl && !cinema.EditorVisible && KeyMap.Map(k) is { } gameKey && (player.IsHotkey(gameKey) || player.OwnsBuildNumpad(gameKey));
             if (!hotkey && Enum.TryParse(k.ToString(), out CinemaKey cinemaKey) && cinema.OnKey(cinemaKey, ctrl, shiftDown)) return;
             // F9 is the game's quickload; the fps counter is on Ctrl+F9 (a modifier, so the key never reaches the input bindings).
             if (k == SilkKey.F9 && ctrl) { debugMenu.fpsVisible = !debugMenu.fpsVisible; return; }
@@ -416,9 +416,9 @@ sealed partial class GameHost
                 if (player.BuildKey(key, shiftDown)) return;
                 session.Input.SetKey(key, true);
                 player.Key(key, shiftDown);
-                SandboxKey(key);
-                if (IsDuel && key == EngineKey.Backspace) duelRestartRequested = true;
-                if (IsBattle && key == EngineKey.Backspace) battleRestartRequested = true;
+                sandbox.SandboxKey(key);
+                if (duel.IsDuel && key == EngineKey.Backspace) duel.duelRestartRequested = true;
+                if (battle.IsBattle && key == EngineKey.Backspace) battle.battleRestartRequested = true;
             }
         }
         // The press and release of a pointer button, shared by the window's events and the control channel's `click` (which injects them at a pixel).
@@ -428,8 +428,8 @@ sealed partial class GameHost
             bool select = physical is { } pressed && PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
             if (PanelLive() && physical is { } settingsButton && panel?.MouseDown(at, settingsButton) == true) { panelDrag = true; return; }
             if (PanelLive() && panel?.Contains(at) == true) return;
-            if (select && PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
-            if (select && PanelLive() && SandboxToggleClick(at)) return;
+            if (select && PanelLive() && !config.SandboxPanelCollapsed && sandbox.sandboxPicker?.MouseDown(at) == true) return;
+            if (select && PanelLive() && sandbox.SandboxToggleClick(at)) return;
             if (select && debugMenu.profiler?.Click(at) == true) { profilerClick = true; return; }   // F12's legend opens and closes rows
             if (select && debugOverlays.StatsToggleClick(at)) { profilerClick = true; return; }   // F11's character boxes and paths
             // The cinema's editor: its clicks never select or move characters.
@@ -494,7 +494,7 @@ sealed partial class GameHost
             mouse.Scroll += (m, wheel) =>
             {
                 if (Covered || PanelLive() && panel?.Scroll(wheel.Y) == true) return;
-                if (PanelLive() && !config.SandboxPanelCollapsed && sandboxPicker?.Scroll(wheel.Y) == true) return;
+                if (PanelLive() && !config.SandboxPanelCollapsed && sandbox.sandboxPicker?.Scroll(wheel.Y) == true) return;
                 var at = Pixels(orbitAnchor ?? m.Position);
                 if (!cinema.Contains(at) && !player.UiScroll(at, wheel.Y) && !(PanelLive() && player.ContainsUi(at))) session.Input.AddWheel(wheel.Y);
             };
@@ -508,12 +508,12 @@ sealed partial class GameHost
         bool quit = false;
         player.ScreenAction += e =>
         {
-            if (e.Action == "save") saveRequestedFolder = Meitou.Data.Save.SaveCatalog.Folder(Meitou.Simulation.Saving.QuickSave.DefaultRoot, e.Text);
-            else if (e.Action == "load") loadRequestedFolder = e.Text;
-            else if (e.Action == "import") importRequested = (e.Text, player.ImportFlags);
-            else if (e.Action == "new-game") newGameRequested = e.Text;
+            if (e.Action == "save") saves.saveRequestedFolder = Meitou.Data.Save.SaveCatalog.Folder(Meitou.Simulation.Saving.QuickSave.DefaultRoot, e.Text);
+            else if (e.Action == "load") saves.loadRequestedFolder = e.Text;
+            else if (e.Action == "import") saves.importRequested = (e.Text, player.ImportFlags);
+            else if (e.Action == "new-game") newGame.newGameRequested = e.Text;
             else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) feedbackCapture.FeedbackAction(e);
-            else if (e.Action == "main-menu") mainMenuRequested = true;
+            else if (e.Action == "main-menu") newGame.mainMenuRequested = true;
             else if (e.Widget == "OptionsButton" && panel is not null) panel.Visible = true;
             else if (e.Widget == "ExitGameButton") quit = true;
         };
@@ -530,7 +530,7 @@ sealed partial class GameHost
             highlightHeld = actions.Held(InputAction.Highlight);
             // The duel is for filming: Esc must not close it. The terrain sandbox has no game menu: Esc opens the settings (close the window to leave).
             if (actions.Pressed(InputAction.Quit) && g.TerrainSandbox is not null) { if (panel is not null) panel.Visible = true; }
-            else if (actions.Pressed(InputAction.Quit) && !IsDuel) quit = true;
+            else if (actions.Pressed(InputAction.Quit) && !duel.IsDuel) quit = true;
             // Panning (or leaving for the free camera) lets go of the character the camera follows; turning and zooming keep it.
             if (actions.Held(InputAction.MoveForward) || actions.Held(InputAction.MoveBack) || actions.Held(InputAction.MoveLeft) || actions.Held(InputAction.MoveRight) ||
                 actions.Pressed(InputAction.ToggleFreeCamera)) player.Follow = null;
@@ -538,8 +538,8 @@ sealed partial class GameHost
             if (actions.Pressed(InputAction.Screenshot)) screenshotRequested = true;
             if (actions.Pressed(InputAction.ToggleStats)) { debugMenu.statsVisible = !debugMenu.statsVisible; FoliageGpuCull.CountTriangles = debugMenu.statsVisible; }   // the foliage triangles are read from its GPU cull while shown
             if (actions.Pressed(InputAction.ToggleFps)) debugMenu.fpsVisible = !debugMenu.fpsVisible;
-            if (actions.Pressed(InputAction.QuickSave)) quickSaveRequested = true;
-            if (actions.Pressed(InputAction.QuickLoad)) quickLoadRequested = true;
+            if (actions.Pressed(InputAction.QuickSave)) saves.quickSaveRequested = true;
+            if (actions.Pressed(InputAction.QuickLoad)) saves.quickLoadRequested = true;
             // PageUp / PageDown step the viewed floor in the strategy camera: in the free camera and on a held one the cinema takes them for the lens.
             if (actions.Pressed(InputAction.FloorUp)) interiors.StepFloor(1);
             if (actions.Pressed(InputAction.FloorDown)) interiors.StepFloor(-1);
@@ -579,7 +579,7 @@ sealed partial class GameHost
             // The last frame was drawn under the loading screen: a scene load's next stage may run, the warm-up counts it.
             if (Covered) CoveredFrame(dt);
             AdvanceSkyArrival(dt);
-            if (g.QuitAfter is not null && TitleVisible && !Covered)
+            if (g.QuitAfter is not null && titleScreen.TitleVisible && !Covered)
             {
                 menuFrames++;
                 menuFrameSeconds += dt;
@@ -600,8 +600,8 @@ sealed partial class GameHost
             // however slowly the frames are drawn and saved); otherwise the real time.
             double frameDt = cinema.Recording ? cinema.FrameTime(dt) : dt;
             // The duel starts a lap when a flight starts (played or recorded), so every take begins with the fight's first frame, and when its lap is over.
-            DuelFrame(cinema.Playing && !cinemaWasPlaying || cinema.Recording && !cinemaWasRecording);
-            BattleFrame();
+            duel.DuelFrame(cinema.Playing && !cinemaWasPlaying || cinema.Recording && !cinemaWasRecording);
+            battle.BattleFrame();
             (cinemaWasPlaying, cinemaWasRecording) = (cinema.Playing, cinema.Recording);
             if (!playBench.PlayBenchFrame(dt, debugMenu.profiler)) quit = true;
             playBench.BenchLap(0);
@@ -614,19 +614,19 @@ sealed partial class GameHost
             }
             // Edge scrolling (the game's default): the pointer at the edge of the window pans the camera, unless something else has the pointer.
             session.Camera.Settings.EdgeScroll = config.EdgeScroll != false;
-            session.Camera.Strategy.EdgePointer = Covered || TitleVisible || panel?.Visible == true || agentChannel.interfaceHidden || cinemaHolds || cinema.EditorVisible ? null : window is null ? null : WindowPointer.InWindow(window);
+            session.Camera.Strategy.EdgePointer = Covered || titleScreen.TitleVisible || panel?.Visible == true || agentChannel.interfaceHidden || cinemaHolds || cinema.EditorVisible ? null : window is null ? null : WindowPointer.InWindow(window);
             session.World.Profile.Enabled = debugMenu.profiler is { Showing: not FrameProfiler.Mode.Off } || g.PlayBench is not null || SpikeLog.Enabled;
             if (!Covered) session.Advance(frameDt);   // loading and arrival preserve the loaded world's exact time
-            DuelHoldClock();
+            duel.DuelHoldClock();
             double advanceMs = Stopwatch.GetElapsedTime(a0).TotalMilliseconds;
             advanceTotal += advanceMs;
             playBench.PlayBenchUpdated(advanceMs);   // before SimProfile, which clears the world's tick profile
             if (debugMenu.profiler is not null) SimProfile(debugMenu.profiler, advanceMs);   // F12's sim row and its parts
             playBench.BenchLap(1);
             WorldNews();
-            HandleSaves(frameDt);   // a quicksave or quickload asked for by a key, the autosave: between ticks, none in flight
-            HandleNewGame();
-            HandleMainMenu();
+            saves.HandleSaves(frameDt);   // a quicksave or quickload asked for by a key, the autosave: between ticks, none in flight
+            newGame.HandleNewGame();
+            newGame.HandleMainMenu();
             StepSceneLoad();
             animSeconds += frameDt;
             animClock = true;
@@ -650,25 +650,25 @@ sealed partial class GameHost
             string? takeFile = cinema.TakeFrame();
             // A flight puts the focus on where it lands from the first frame (the towns there populate during the flight), not on the arc.
             SendFocus(tour.Active && tour.Current is { } landing && TourPosition(landing) is { } landingAt ? landingAt : cinemaHolds ? camera.Target : null);
-            if (!cinemaHolds) SandboxFollowCamera();
-            if (!cinemaHolds) FollowCamera();
+            if (!cinemaHolds) sandbox.SandboxFollowCamera();
+            if (!cinemaHolds) sandbox.FollowCamera();
             if (!cinemaHolds) characterEditor.EditorCamera();
             characterEditor.OpenPendingEditor();
             characterEditor.ResumeAfterCreation();
-            if (!cinemaHolds) ApplyTitleCamera();
+            if (!cinemaHolds) titleScreen.ApplyTitleCamera();
             playBench.BenchLap(3);
             sound.UpdateAudio(dt);
             playBench.BenchLap(4);
-            if (TitleVisible && !warming) titleBattle?.Advance(frameDt);
+            if (titleScreen.TitleVisible && !warming) titleScreen.titleBattle?.Advance(frameDt);
             if (skyArrival is not null)
             {
                 ApplyCamera(session.Camera.Current);
-                ApplyTitleCamera();
+                titleScreen.ApplyTitleCamera();
                 ApplySkyArrival();
             }
             // The strategy camera's eye clearance (StrategyCamera's height rule) for what bypasses the rig's pivot: a followed character's
             // feet as the target, and the squad tour's and character flights' arcs over hills.
-            if (skyArrival is null && !TitleVisible && (tour.Active || !session.Camera.IsFree && !cinemaHolds))
+            if (skyArrival is null && !titleScreen.TitleVisible && (tour.Active || !session.Camera.IsFree && !cinemaHolds))
             {
                 var eye = camera.Eye;
                 float shortfall = session.Camera.EyeGroundAt(eye.X, eye.Z) + Meitou.Data.World.KenshiCamera.EyeClearance(camera.Distance) - eye.Y;
@@ -780,7 +780,7 @@ sealed partial class GameHost
                 else if (!sceneLoading || skyArrival is not null)
                 {
                     // The duel's laps and recorded flights replay exactly, and the play benchmark is deterministic from its save: their ticks stay in step with the frame.
-                    tickAhead = !covered && skyArrival is null && !IsDuel && !cinema.Recording && g.PlayBench is null && TickAheadWanted();
+                    tickAhead = !covered && skyArrival is null && !duel.IsDuel && !cinema.Recording && g.PlayBench is null && TickAheadWanted();
                     DrawWorld(size.X, size.Y);
                     tickAhead = false;
                 }
@@ -814,8 +814,8 @@ sealed partial class GameHost
                     player.Draw(overlay, size.X, size.Y);
                 }
                 else if (agentChannel.interfaceHidden && !cinema.Clean && !take && !covered && overlay is not null && !g.NoPopulation) player.DrawSpeechOnly(overlay, size.X, size.Y);
-                if (ui && overlay is not null && IsSandbox) DrawSandbox(overlay, size.X, size.Y);
-                if (ui && overlay is not null && IsBattle) DrawBattleCounter(overlay, size.X, size.Y);
+                if (ui && overlay is not null && sandbox.IsSandbox) sandbox.DrawSandbox(overlay, size.X, size.Y);
+                if (ui && overlay is not null && battle.IsBattle) battle.DrawBattleCounter(overlay, size.X, size.Y);
                 Meitou.Game.Rendering.Profiling.StageClock.UiPart(Meitou.Game.Rendering.Profiling.StageClock.UiHud);
                 // The debug overlays are left out of saved pictures: the statistics at the top left, the key list below them, the profiler.
                 if (ui && overlay is not null && !shot && !feedbackShot)
@@ -964,7 +964,7 @@ sealed partial class GameHost
         }
         playBench.WritePlayBench(FramebufferSizeNow());
         // A save still being written finishes before the game closes (the original's quit waits while its save manager is busy, FUN_14082b6e0, Verified).
-        try { saveWrite?.Wait(); } catch (AggregateException) { }
+        try { saves.saveWrite?.Wait(); } catch (AggregateException) { }
         SaveSettings();
         // Collect the last frames' GPU timestamps and print the --log-spikes run summary: the game's own one-shot runs
         // otherwise dispose the profiler before the frame ring has delivered them.
@@ -981,7 +981,7 @@ sealed partial class GameHost
         frameGen?.Dispose();   // before the display: it configures the layer's swapchain
         uiLayer?.Dispose();
         headlessTarget?.Dispose();
-        DisposeTitleScene();
+        titleScreen.DisposeTitleScene();
         gpu.Dispose();
         silkInput?.Dispose();
         return agentChannel.controlExitCode;

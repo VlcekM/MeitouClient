@@ -141,7 +141,7 @@ a later unit of the same kind replaces the strength). R = `effect radius`, else 
 Strength (`FUN_140100cb0`): the unit's +0x48 inside R (its falloff to 2R is unreachable, the query radius being R); where +0x48 comes
 from between `effect strength min/max` is **Unknown** (equal for the base burning and gas effects).
 
-**Meitou** (`WeatherSystem`, `MedicalState.Weather.cs`, host `GameHost.Weather.cs`): runs every tick in the slow-world phase;
+**Meitou** (`WeatherSystem`, `MedicalState.Weather.cs`, host `WeatherFeed`): runs every tick in the slow-world phase;
 the host gives the scheduler's region at each place (the schedule, not a viewer-forced weather) and the live affecting units of the
 particle groups. Engine choices: a race with `no shoes` has no boots slot; "down" is incapacitated or carried; units without
 `effect radius` are left out; unit strength is `effect strength min`; dead characters are skipped. Not modelled: the

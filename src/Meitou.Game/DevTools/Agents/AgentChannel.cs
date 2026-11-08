@@ -336,7 +336,7 @@ sealed class AgentChannel(GameHost host)
             if (!host.Covered && !host.player.TitleOpen) WriteWorldState(w);
             w.WriteBoolean("paused", host.session.Simulation.IsPaused);
             w.WriteNumber("speed", host.session.Simulation.Speed);
-            w.WriteString("save", string.IsNullOrEmpty(host.readingFolder) ? null : Path.GetFileName(host.readingFolder.TrimEnd('/', '\\')));
+            w.WriteString("save", string.IsNullOrEmpty(host.saves.readingFolder) ? null : Path.GetFileName(host.saves.readingFolder.TrimEnd('/', '\\')));
             w.WriteEndObject();
         }
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Meitou.Game.DevTools;
+using Meitou.Game.Scenarios;
 
 namespace Meitou.Game.Host;
 
@@ -60,7 +61,7 @@ sealed class GameOptions
     public int?[] BattleWidth = [null, null];
     /// <summary><c>--battle-map sandbox</c>: the battle is fought on the sandbox's flat floor instead of the map.</summary>
     public bool BattleFlat;
-    /// <summary><c>--battle-map x,z</c>: where on the map the battle is fought (null: the plateau, <see cref="GameHost.BattleSpot"/>).</summary>
+    /// <summary><c>--battle-map x,z</c>: where on the map the battle is fought (null: the plateau, <see cref="BattleScenario.BattleSpot"/>).</summary>
     public (float X, float Z)? BattleAt;
     /// <summary><c>--battle-no-fear</c>: nobody runs away, every fighter fights until it is down (no flee system).</summary>
     public bool BattleNoFear;
@@ -230,8 +231,8 @@ sealed class GameOptions
                     switch (Next())
                     {
                         case "plateau": (g.BattleFlat, g.BattleAt) = (false, null); break;
-                        case "mesa": (g.BattleFlat, g.BattleAt) = (false, (GameHost.DuelSpot.X, GameHost.DuelSpot.Y)); break;
-                        case "fog": (g.BattleFlat, g.BattleAt) = (false, (GameHost.FogBattleSpot.X, GameHost.FogBattleSpot.Y)); break;
+                        case "mesa": (g.BattleFlat, g.BattleAt) = (false, (DuelScenario.DuelSpot.X, DuelScenario.DuelSpot.Y)); break;
+                        case "fog": (g.BattleFlat, g.BattleAt) = (false, (BattleScenario.FogBattleSpot.X, BattleScenario.FogBattleSpot.Y)); break;
                         case "sandbox": (g.BattleFlat, g.BattleAt) = (true, null); break;
                         case var map when map.Split(',') is [var mx, var mz] && float.TryParse(mx, NumberStyles.Float, CultureInfo.InvariantCulture, out float bx)
                             && float.TryParse(mz, NumberStyles.Float, CultureInfo.InvariantCulture, out float bz):

@@ -30,6 +30,8 @@ using Meitou.Game.DevTools;
 using Meitou.Game.DevTools.Agents;
 using Meitou.Game.Editor;
 using Meitou.Game.Host.WorldSync;
+using Meitou.Game.Scenarios;
+using Meitou.Game.Title;
 using EngineKey = Meitou.Game.Host.Input.Key;
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
@@ -43,6 +45,15 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config, Meitou.Data.Gameplay.NewGameStart? start)
 {
+    internal BattleScenario battle = null!;
+    internal DuelScenario duel = null!;
+    internal SandboxScenario sandbox = null!;
+    internal TitleScreen titleScreen = null!;
+    internal NewGameLaunch newGame = null!;
+    internal GameSaves saves = null!;
+    internal WeatherFeed weatherFeed = null!;
+    internal ItemIconFiles itemIconFiles = null!;
+
     internal BuildingSync buildingSync = null!;
     internal FarmCrops farmCrops = null!;
     internal TownChanges townChanges = null!;
@@ -86,14 +97,14 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     internal WorldSession session = null!;   // disposed with the host (Run)
     internal Meitou.Simulation.Population.PopulationSystem? population;
     /// <summary>The fights started by faction hostility (printed to the log); null in the sandbox and without the population.</summary>
-    // The game data the world was built from, kept to build the next world of a quickload (GameHost.Saving.cs).
+    // The game data the world was built from, kept to build the next world of a quickload (GameSaves).
     internal Meitou.Simulation.Population.PopulationData? popData;
-    IReadOnlyList<Meitou.Data.World.TownPlacement> townPlacements = [];
+    internal IReadOnlyList<Meitou.Data.World.TownPlacement> townPlacements = [];
     // The level data, for the zone files and town handles of a save (null in the sandbox and the duel).
-    Meitou.Data.World.WorldLevelData? saveLevels;
-    Meitou.Simulation.IWalkability? simWalkability;
-    Meitou.Data.Characters.CharacterRigs? characterRigs;
-    Meitou.Simulation.Navigation.RagdollGeometry? ragdollGeometry;
+    internal Meitou.Data.World.WorldLevelData? saveLevels;
+    internal Meitou.Simulation.IWalkability? simWalkability;
+    internal Meitou.Data.Characters.CharacterRigs? characterRigs;
+    internal Meitou.Simulation.Navigation.RagdollGeometry? ragdollGeometry;
     internal Meitou.Simulation.Navigation.NavSystem? nav;
     /// <summary>Zones whose mesh went live since the last <see cref="Meitou.Simulation.RepathCommand"/> (filled on the nav thread, under its own lock).</summary>
     readonly HashSet<Meitou.Data.World.ZoneCoordinate> navReady = [];
@@ -119,7 +130,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     Func<float, float, float>? hostGround = null;
     internal WorldWeather? ActiveWeather => gpu is null ? fallbackWeather : gpu.Weather ?? fallbackWeather;
     internal WorldObjectRenderer? ActiveObjects => gpu is null ? hostObjects : gpu.Objects ?? hostObjects;
-    FoliageRenderer? ActiveFoliage => gpu is null ? hostFoliage : gpu.Foliage ?? hostFoliage;
+    internal FoliageRenderer? ActiveFoliage => gpu is null ? hostFoliage : gpu.Foliage ?? hostFoliage;
     internal CharacterRenderer? ActiveCharacters => gpu is null ? hostCharacters : gpu.Characters ?? hostCharacters;
     internal WorldLamps? ActiveLamps => gpu is null ? hostLamps : gpu.Lamps ?? hostLamps;
     internal float ActiveGround(float x, float z) => hostGround?.Invoke(x, z) ?? (gpu is null ? 0 : gpu.Terrain.HeightAt(x, z));
@@ -132,10 +143,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// <summary>Frames in a row that could not be drawn while a control screenshot waits; at 30 the screenshot is answered with an error.</summary>
     int shotNoFrame;
     // The interactive run's animation clock (foliage sway, clouds, water): the frame steps, which are exact while the cinema records; off, the real time.
-    double animSeconds;
+    internal double animSeconds;
     bool animClock;
     // Draw-list state (GameHost.Characters.cs): the previous snapshot indexed by id, and the last camera focus sent to the world.
-    WorldSnapshot? indexedFor;
+    internal WorldSnapshot? indexedFor;
     internal readonly Dictionary<CharacterId, CharacterSnapshot> previousById = [];
     internal Meitou.Data.Gameplay.AnimationLengths? animationLengths;
     internal Meitou.Data.Gameplay.AnimationLibrary? animationLibrary;
@@ -150,6 +161,14 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
 
     public int Run()
     {
+        battle = new(this);
+        duel = new(this);
+        sandbox = new(this);
+        titleScreen = new(this);
+        newGame = new(this);
+        saves = new(this);
+        weatherFeed = new(this);
+        itemIconFiles = new(this);
         buildingSync = new(this);
         farmCrops = new(this);
         townChanges = new(this);
@@ -185,18 +204,18 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             }
             return o.Screenshot is not null ? screenshotScenes.Screenshot() : Interactive();
         }
-        finally { sound.DisposeAudio(); DisposeTitleScene(); session?.Dispose(); nav?.Dispose(); ragdollGeometry?.Dispose(); ownedScene?.Dispose(); }
+        finally { sound.DisposeAudio(); titleScreen.DisposeTitleScene(); session?.Dispose(); nav?.Dispose(); ragdollGeometry?.Dispose(); ownedScene?.Dispose(); }
     }
 
     /// <summary>The start opens on the title (no start, save, sandbox or duel was asked for).</summary>
-    bool OpensOnTitle(bool interactive) => g.TitlePreview || interactive && start is null && StartSave is null && !IsSandbox && !IsDuel && !IsBattle && !g.NoPopulation;
+    bool OpensOnTitle(bool interactive) => g.TitlePreview || interactive && start is null && StartSave is null && !sandbox.IsSandbox && !duel.IsDuel && !battle.IsBattle && !g.NoPopulation;
 
     internal void Boot(VulkanDisplay display, bool interactive)
     {
         var context = display.Context;
         o.Day ??= (int)GameClock.DefaultStartDay;   // the weather schedule starts on the clock's first day (--day moves both)
         // --crowd in the game: simulated characters (SpawnCrowd), not the viewer's posed harness, which would take the renderer's place.
-        crowd = o.Crowd;
+        sandbox.crowd = o.Crowd;
         o.Crowd = 0;
         // The simulation's data (the navmesh system, the towns' homes, the population's data and systems) is read on a worker while the renderer is made here,
         // a step at a time with a loading frame between the steps (docs/engine.md "Loading").
@@ -206,17 +225,17 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             return (Grid: grid, Parts: BootSimulation(grid, interactive));
         });
         gpu = WorldFrame.CreateGpu(context, install, scene, assets, o, interactive, LoadingStep, AwaitLoading);
-        if (!o.NoParticles) titleParticleFactory = () => ParticleRenderer.Create(context, assets, gpu.Particles?.Library);
+        if (!o.NoParticles) titleScreen.titleParticleFactory = () => ParticleRenderer.Create(context, assets, gpu.Particles?.Library);
         if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = Meitou.Game.Rendering.Upscalers.VendorUpscalers.Factory(display.Context, streamline, ngx);
         (camera, render) = WorldFrame.Setup(scene, o);
-        render.Grid = IsFlat;
+        render.Grid = battle.IsFlat;
         LoadingStep("people");
         var (heights, (walkability, systems, constants)) = AwaitLoading(simulation);
         LoadingStep("world");
         var clock = GameClockFor(constants ??= scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null, o.Hour, o.Day ?? GameClock.DefaultStartDay);
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), gpu.Terrain.HeightAt, o.Hour, config.TickRate,
             clock: clock,
-            simulation: worldSettings = new Meitou.Simulation.WorldSettings
+            simulation: duel.worldSettings = new Meitou.Simulation.WorldSettings
             {
                 Seed = g.Seed, MinPartitionSize = 32, Threads = Math.Max(1, config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)),
                 Sunrise = (float)clock.Sunrise, Sunset = (float)clock.Sunset, FarTickPeriod = FarTickPeriod,
@@ -243,7 +262,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         {
             // The sandbox, the duel and the battle walk on open ground (the heightmap): the sandbox has no world, and the duel's spot may be a navmesh island the build prunes.
             // None has towns: their own characters are the only ones.
-            var levels = IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels ?? Meitou.Simulation.WorldBoot.LoadLevels(install, gameDb);
+            var levels = sandbox.IsSandbox || duel.IsDuel || battle.IsBattle ? null : scene.Objects?.Levels ?? Meitou.Simulation.WorldBoot.LoadLevels(install, gameDb);
             var boot = Meitou.Simulation.WorldBoot.Load(BootOptions(gameDb, heights, levels));
             nav = boot.Nav;
             ragdollGeometry = boot.RagdollGeometry;
@@ -255,10 +274,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             townPlacements = boot.Towns;
             saveLevels = levels;
             walkability = simWalkability = boot.Walkability;
-            var built = BuildSystems(interactive);
+            var built = saves.BuildSystems(interactive);
             population = built.Population;
             if (nav is not null) population!.ZoneGate = zone => nav.Walkability.World.Contains(zone);
-            SnapshotPlayerTowns();
+            saves.SnapshotPlayerTowns();
             systems = built.Systems;
             constants = boot.Data.Bodies.Constants;
         }
@@ -274,7 +293,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             Layouts = scene.Objects?.Layouts,
             Bodies = Meitou.Simulation.Bodies.BodyOptions.Default with
             {
-                Dismemberment = Gameplay.Dismemberment, Decapitation = config.Decapitation, AdvancedRagdolls = config.AdvancedRagdolls,
+                Dismemberment = saves.Gameplay.Dismemberment, Decapitation = config.Decapitation, AdvancedRagdolls = config.AdvancedRagdolls,
             },
             ZoneReady = ready => { lock (navReady) navReady.Add(ready.Zone); },
         };
@@ -287,7 +306,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     {
         modding.ConnectModUi(ui);
         ui.FixLoadButton = config.FixLoadButton;
-        ui.SaveInUse = folder => session.World.Player.Exists && saveInUse is { } used && string.Equals(Path.GetFullPath(used), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase);
+        ui.SaveInUse = folder => session.World.Player.Exists && saves.saveInUse is { } used && string.Equals(Path.GetFullPath(used), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase);
         ui.DeleteSave = folder =>
         {
             try { Directory.Delete(folder, recursive: true); return null; }
@@ -420,7 +439,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
         ConfigurePlayerInterface(player);
         player.LevelHost = levelEditorHost.MakeLevelEditorServices();
-        if (IsSandbox) player.ReservedKeys.UnionWith([Meitou.Game.Host.Input.Key.Z, Meitou.Game.Host.Input.Key.X, Meitou.Game.Host.Input.Key.C, Meitou.Game.Host.Input.Key.Y, Meitou.Game.Host.Input.Key.P, Meitou.Game.Host.Input.Key.G]);
+        if (sandbox.IsSandbox) player.ReservedKeys.UnionWith([Meitou.Game.Host.Input.Key.Z, Meitou.Game.Host.Input.Key.X, Meitou.Game.Host.Input.Key.C, Meitou.Game.Host.Input.Key.Y, Meitou.Game.Host.Input.Key.P, Meitou.Game.Host.Input.Key.G]);
         player.ConfigureFrontend(scene.Database,
             () => Meitou.Data.Save.SaveCatalog.Scan(Meitou.Simulation.Saving.QuickSave.DefaultRoot, install.SaveDirectory,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")),
@@ -452,10 +471,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             // open for the showcase's editor pictures.
             if (interactive) session.World.Commands.Enqueue(new Meitou.Simulation.Editing.FinishCreation { Tick = session.World.Tick });
         }
-        if (IsSandbox && population is not null) target = SandboxSpawn();
-        if (IsDuel && population is not null) target = DuelStart();
-        if (IsBattle && population is not null) target = BattleStart();
-        if (!IsSandbox && crowd > 0 && population is not null) SpawnCrowd(target, crowd);
+        if (sandbox.IsSandbox && population is not null) target = sandbox.SandboxSpawn();
+        if (duel.IsDuel && population is not null) target = duel.DuelStart();
+        if (battle.IsBattle && population is not null) target = battle.BattleStart();
+        if (!sandbox.IsSandbox && sandbox.crowd > 0 && population is not null) sandbox.SpawnCrowd(target, sandbox.crowd);
         LoadingStep("characters");
         if (scene.Database is { } characterDb && !g.NoPopulation && gpu.Characters is null)
             gpu.Characters = new CharacterRenderer(context, install, characterDb, assets, characterRigs) { DrawDistance = GameplaySettings.NpcRange(install), Source = FillDrawList, Guard = gpu.Guard, GeneratedLod = o.CharacterLod, SkinShading = o.SkinShading, SkinRaces = config.SkinRaces, EnhancedIcons = o.MeitouIcons,
@@ -465,18 +484,18 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
             (o.Pitch ?? Meitou.Data.World.KenshiCamera.InitialPitchDegrees) * MathF.PI / 180, o.Distance ?? Meitou.Data.World.KenshiCamera.InitialDistance);
         SendFocus();
         ApplyCamera(session.Camera.Current);
-        if (TitleVisible) ApplyTitleCamera();
+        if (titleScreen.TitleVisible) titleScreen.ApplyTitleCamera();
         if (StartSave is { } save && g.Load is { } folder)
         {
-            readingFolder = folder;
+            saves.readingFolder = folder;
             Task navmesh;
             string summary;
-            try { navmesh = SwapInSave(Task.FromResult(save), interactive, out summary); }
+            try { navmesh = saves.SwapInSave(Task.FromResult(save), interactive, out summary); }
             catch (SceneLoadFailed e) { throw new InvalidDataException($"--load {folder}: {e.Message}"); }
             LoadingStep("navmesh");
             AwaitLoading(navmesh);
             SettleNewWorld();
-            FinishLoadNotice(summary);
+            saves.FinishLoadNotice(summary);
         }
         if (interactive)
         {
@@ -613,10 +632,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         {
             previews.Look = Meitou.Game.Rendering.Characters.PreviewLook.Of(o.Post);
             player.PortraitSize = Meitou.Game.Rendering.Characters.CharacterRenderer.PortraitSizeFor(previews.Look);
-            SyncIconLook();
+            itemIconFiles.SyncIconLook();
         }
         if (!player.EditorOpen) characterEditor.ClearEditorBar();
-        if (TitleVisible) { DrawTitleWorld(width, height); return; }
+        if (titleScreen.TitleVisible) { titleScreen.DrawTitleWorld(width, height); return; }
         if (player.EditorOpen) { characterEditor.DrawEditorScene(width, height); return; }
         if (gpu.Characters is { StageRequest: not null } staged) staged.StageRequest = null;
         characterEditor.ClearEditorStage();
@@ -641,7 +660,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         birdAspect = width / (float)Math.Max(height, 1);
         UpdateBirds();
         Meitou.Game.Rendering.Profiling.StageClock.Lap(Meitou.Game.Rendering.Profiling.StageClock.Birds, "birds");
-        UpdateWeatherSource();
+        weatherFeed.UpdateWeatherSource();
         interiors.UpdateInteriorView();
         // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds. The clock moves in whole
         // 1/30 s ticks, so it runs on by the alpha the characters are drawn at; at 1x the weather particles otherwise moved at 30 Hz.
@@ -677,7 +696,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
 
         }
         // The step runs beside the frame: its flocks are shown one frame late (the original's thread is as loose), and a step still running when the next frame starts is left to finish.
-        bool async = o.Screenshot is null && !IsDuel;
+        bool async = o.Screenshot is null && !duel.IsDuel;
         if (birdStep!.Busy) return;
         if (birdStarted && async)
         {

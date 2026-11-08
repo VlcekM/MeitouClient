@@ -278,7 +278,7 @@ sealed partial class GameHost
         // particles, lamps, objects, foliage, faithful water, shadows and the memory guard. The step callback is
         // unused here because Metal has no separate Vulkan loading-frame loop.
         // --crowd means simulated characters (SpawnCrowd) here too; the posed harness is only for a renderer test.
-        crowd = o.Crowd;
+        sandbox.crowd = o.Crowd;
         o.Crowd = 0;
         bool terrainTexturesOff = Environment.GetEnvironmentVariable("MEITOU_METAL_NO_TERRAIN_TEXTURES") == "1";
         if (terrainTexturesOff) Console.WriteLine("metal     terrain textures disabled (MEITOU_METAL_NO_TERRAIN_TEXTURES=1)");
@@ -362,11 +362,11 @@ sealed partial class GameHost
         }
         session = new WorldSession(scene.Focus, (scene.X0, scene.Z0, scene.X1, scene.Z1), heights.HeightAt, o.Hour, config.TickRate,
             clock: GameClockFor(constants ??= scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null, o.Hour, o.Day ?? GameClock.DefaultStartDay),
-            simulation: worldSettings = new Meitou.Simulation.WorldSettings { Seed = g.Seed, MinPartitionSize = 128, Threads = Math.Max(1, config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)), FarTickPeriod = FarTickPeriod },
+            simulation: duel.worldSettings = new Meitou.Simulation.WorldSettings { Seed = g.Seed, MinPartitionSize = 128, Threads = Math.Max(1, config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)), FarTickPeriod = FarTickPeriod },
             systems: systems, walkability: walkability);
         session.World.BenchFacingFix = config.FixBenchFacing;
         session.Simulation.SetFastSpeeds(config.FastSpeed, config.FastestSpeed);
-        render.Grid = IsSandbox;
+        render.Grid = sandbox.IsSandbox;
         session.Camera.Place(new Vector2((float)(o.X ?? scene.Focus.X), (float)(o.Z ?? scene.Focus.Z)), (float)(o.Yaw ?? 30) * MathF.PI / 180,
             (float)(o.Pitch ?? Meitou.Data.World.KenshiCamera.InitialPitchDegrees) * MathF.PI / 180,
             (float)(o.Distance ?? Meitou.Data.World.KenshiCamera.InitialDistance));
@@ -445,14 +445,14 @@ sealed partial class GameHost
             hud.LoadUi(g.UiMode ?? config.UiMode, assets.Find);
             hud.CreateUiPainter(overlay, assets.Find);
             ConfigurePlayerInterface(hud);
-            if (IsSandbox)
+            if (sandbox.IsSandbox)
                 hud.ReservedKeys.UnionWith([Meitou.Game.Host.Input.Key.Z, Meitou.Game.Host.Input.Key.X, Meitou.Game.Host.Input.Key.C,
                     Meitou.Game.Host.Input.Key.Y, Meitou.Game.Host.Input.Key.P, Meitou.Game.Host.Input.Key.G]);
             // A double click on a far squad member flies there (Advanced settings "Character flights"); the third press
             // ends the flight on that member. With the setting off PlayerInterface centres on them instead.
             hud.FlyTo = id =>
             {
-                if (!config.CharacterFlights || IsDuel || session.Camera.IsFree || TourPosition(id) is not { } at) return false;
+                if (!config.CharacterFlights || duel.IsDuel || session.Camera.IsFree || TourPosition(id) is not { } at) return false;
                 if (new Vector2(at.X - camera.Target.X, at.Z - camera.Target.Z).Length() <= UserConfig.FlightDistance) return false;
                 hud.Follow = null;
                 tour.HopSeconds = config.CharacterFlightSeconds;
@@ -474,7 +474,7 @@ sealed partial class GameHost
                 var (atlas, sampled) = characters.PortraitAtlas;
                 hud.SetUiTexture(PlayerInterface.PortraitTexture, atlas, sampled);
             }
-            ConnectItemIcons();
+            itemIconFiles.ConnectItemIcons();
             hud.ConfigureFrontend(scene.Database,
                 () => SaveCatalog.Scan(QuickSave.DefaultRoot, install.SaveDirectory,
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save")),
@@ -505,13 +505,13 @@ sealed partial class GameHost
         }
         // The content test modes, in the Vulkan boot's order: a sandbox on the flat floor, the duel on its measured
         // spot, then a simulated crowd round the start. The duel restarts a world, so it needs the HUD's player state.
-        if (IsSandbox && population is not null) startTarget = SandboxSpawn();
-        else if (IsDuel && population is not null)
+        if (sandbox.IsSandbox && population is not null) startTarget = sandbox.SandboxSpawn();
+        else if (duel.IsDuel && population is not null)
         {
-            if (hud is not null) startTarget = DuelStart();
+            if (hud is not null) startTarget = duel.DuelStart();
             else Console.Error.WriteLine("duel      skipped: the Metal host has no interface/player state");
         }
-        if (!IsSandbox && crowd > 0 && population is not null) SpawnCrowd(startTarget, crowd);
+        if (!sandbox.IsSandbox && sandbox.crowd > 0 && population is not null) sandbox.SpawnCrowd(startTarget, sandbox.crowd);
         var startRig = session.Camera;
         startRig.Place(new Vector2(startTarget.X, startTarget.Z), (o.Yaw ?? 30) * MathF.PI / 180,
             (o.Pitch ?? Meitou.Data.World.KenshiCamera.InitialPitchDegrees) * MathF.PI / 180,
@@ -534,9 +534,9 @@ sealed partial class GameHost
         config.MovementMarker ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Movement marker", 1) != 0;
         config.RotationMarker ??= Meitou.Game.Audio.AudioSystem.Setting(install, "Rotation marker", 1) != 0;
         if (hud is not null) (hud.MovementMarker, hud.RotationMarker) = (config.MovementMarker == true, config.RotationMarker == true);
-        tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
-        tutorials.Enabled = config.Tutorials == true;
-        hud?.ConfigureTutorials(tutorials);
+        saves.tutorials ??= new TutorialManager(Path.Combine(Directory.GetCurrentDirectory(), TutorialManager.FileName));
+        saves.tutorials.Enabled = config.Tutorials == true;
+        hud?.ConfigureTutorials(saves.tutorials);
         // The shared settings layout: Metal supplies the settings it can change live (window, upscaler, distances,
         // shadows, sky and the composite); the Interface/Controls/Advanced/Audio pages are the game's own.
         SettingsPanel? settingsValues = null;
@@ -549,7 +549,7 @@ sealed partial class GameHost
                     Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps"), config)
             {
                 UpscalerStatus = UpscalerStatusText,
-                GameplayChanged = ApplyGameplay,
+                GameplayChanged = saves.ApplyGameplay,
                 ModSettings = () => modding.mods?.Settings ?? [],
                 AttackSlotsChanged = slots => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots); },
                 LateDefencesChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on; },
@@ -557,8 +557,8 @@ sealed partial class GameHost
                 DoorsCloseChanged = on => { foreach (var locks in session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on; },
                 AnimalsPickUpChanged = on => { foreach (var players in session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on; },
                 BenchFacingChanged = on => session.World.BenchFacingFix = on,
-                TutorialsChanged = on => { if (tutorials is { } t) t.Enabled = on; },
-                ResetTutorials = () => tutorials?.Reset(),
+                TutorialsChanged = on => { if (saves.tutorials is { } t) t.Enabled = on; },
+                ResetTutorials = () => saves.tutorials?.Reset(),
                 OffscreenChanged = () =>
                 {
                     foreach (var population in session.World.Systems.OfType<Meitou.Simulation.Population.PopulationSystem>())
@@ -605,16 +605,16 @@ sealed partial class GameHost
         }
         bool quit = false;
         // The title opens unless a start, a save or a picture chose the world; --title-preview opens it for a still.
-        bool showTitle = hud is not null && (g.TitlePreview || o.Screenshot is null && start is null && StartSave is null && !IsSandbox && !IsDuel && !g.NoPopulation);
+        bool showTitle = hud is not null && (g.TitlePreview || o.Screenshot is null && start is null && StartSave is null && !sandbox.IsSandbox && !duel.IsDuel && !g.NoPopulation);
         if (hud is not null)
         {
             hud.ScreenAction += e =>
             {
-                if (e.Action == "save") saveRequestedFolder = SaveCatalog.Folder(QuickSave.DefaultRoot, e.Text);
-                else if (e.Action == "load") loadRequestedFolder = e.Text;
-                else if (e.Action == "new-game") newGameRequested = e.Text;
+                if (e.Action == "save") saves.saveRequestedFolder = SaveCatalog.Folder(QuickSave.DefaultRoot, e.Text);
+                else if (e.Action == "load") saves.loadRequestedFolder = e.Text;
+                else if (e.Action == "new-game") newGame.newGameRequested = e.Text;
                 else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) feedbackCapture.FeedbackAction(e);
-                else if (e.Action == "main-menu") mainMenuRequested = true;
+                else if (e.Action == "main-menu") newGame.mainMenuRequested = true;
                 else if (e.Widget == "OptionsButton" && settings is not null) settings.Visible = true;
                 else if (e.Widget == "ExitGameButton" || e.Action == "exit") quit = true;
             };
@@ -623,14 +623,14 @@ sealed partial class GameHost
         // --load starts in the save: the same swap the menu's load uses, with the world already read around its camera.
         if (hud is not null && StartSave is { } startSave)
         {
-            readingFolder = g.Load ?? "";
+            saves.readingFolder = g.Load ?? "";
             try
             {
-                var navmesh = SwapInSave(Task.FromResult(startSave), interactive: true, out string summary);
+                var navmesh = saves.SwapInSave(Task.FromResult(startSave), interactive: true, out string summary);
                 navmesh.Wait();
                 SettleNewWorld();
                 hud.FollowSelected();
-                FinishLoadNotice(summary);
+                saves.FinishLoadNotice(summary);
                 ApplyCamera(session.Camera.Current);
             }
             catch (SceneLoadFailed e)
@@ -885,9 +885,9 @@ sealed partial class GameHost
                     return;
                 }
                 // The sandbox animation list, while open, takes every key too.
-                if (sandboxPicker is { Open: true })
+                if (sandbox.sandboxPicker is { Open: true })
                 {
-                    if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } pickerKey) sandboxPicker.KeyDown(pickerKey);
+                    if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } pickerKey) sandbox.sandboxPicker.KeyDown(pickerKey);
                     return;
                 }
                 if (hud is not null && DebugToggle(key)) { debugMenu.debugMenuOpen = !debugMenu.debugMenuOpen; debugMenu.debugParts = null; return; }
@@ -931,7 +931,7 @@ sealed partial class GameHost
                     return;
                 }
                 // Numpad / flies the camera across the squad in portrait order; it holds the camera like the tour on Vulkan.
-                if (key == SilkKey.KeypadDivide && !IsDuel && hud is not null)
+                if (key == SilkKey.KeypadDivide && !duel.IsDuel && hud is not null)
                 {
                     if (tour.Active) EndTour();
                     else
@@ -951,8 +951,8 @@ sealed partial class GameHost
                 if (hud is not null && (hud.UiKey(mapped, ctrl, shiftDown) || hud.BuildKey(mapped, shiftDown))) return;
                 session.Input.SetKey(mapped, true);
                 if (hud is not null) hud.Key(mapped, shiftDown);
-                SandboxKey(mapped);
-                if (IsDuel && mapped == EngineKey.Backspace) duelRestartRequested = true;
+                sandbox.SandboxKey(mapped);
+                if (duel.IsDuel && mapped == EngineKey.Backspace) duel.duelRestartRequested = true;
             };
             keyboard.KeyUp += (_, key, _) =>
             {
@@ -963,7 +963,7 @@ sealed partial class GameHost
             {
                 if (Covered) return;
                 if (settings?.Visible == true) settings.TextInput(value);
-                else if (sandboxPicker is { Open: true }) sandboxPicker.TextInput(value);
+                else if (sandbox.sandboxPicker is { Open: true }) sandbox.sandboxPicker.TextInput(value);
                 else if (debugMenu.debugMenuOpen) debugMenu.DebugMenuText(value);
                 else hud?.UiText(value);
             };
@@ -989,8 +989,8 @@ sealed partial class GameHost
                 var at = Pixels(mouse.Position);
                 if (settings?.Visible == true) { settings.MouseDown(at, mapped); return; }
                 bool select = PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left;
-                if (hud is { UiVisible: true } && select && !config.SandboxPanelCollapsed && sandboxPicker?.MouseDown(at) == true) return;
-                if (hud is { UiVisible: true } && select && SandboxToggleClick(at)) return;
+                if (hud is { UiVisible: true } && select && !config.SandboxPanelCollapsed && sandbox.sandboxPicker?.MouseDown(at) == true) return;
+                if (hud is { UiVisible: true } && select && sandbox.SandboxToggleClick(at)) return;
                 // PlayerInterface sees every click: it takes the HUD's controls, selects, starts a drag box or gives a move order.
                 if (hud is not null && hud.MouseDown(PlayerButton(mapped), at, shiftDown, Ctrl(), Alt())) return;
                 session.Input.SetMouseButton(mapped, true);
@@ -1008,7 +1008,7 @@ sealed partial class GameHost
                 if (Covered) return;
                 if (settings?.Visible == true) { settings.Scroll(wheel.Y); return; }
                 var at = Pixels(mouse.Position);
-                if (hud is { UiVisible: true } && !config.SandboxPanelCollapsed && sandboxPicker?.Scroll(wheel.Y) == true) return;
+                if (hud is { UiVisible: true } && !config.SandboxPanelCollapsed && sandbox.sandboxPicker?.Scroll(wheel.Y) == true) return;
                 // A panel's own scroll wins; over any HUD rectangle the wheel does not zoom the camera, as in the Vulkan host.
                 if (hud is not null && (hud.UiScroll(at, wheel.Y) || hud.ContainsUi(at))) return;
                 session.Input.AddWheel(wheel.Y);
@@ -1025,8 +1025,8 @@ sealed partial class GameHost
         // The game's quick save/load keys are control actions, as in the Vulkan host (F5/F9 by default).
         session.Ticked += actions =>
         {
-            if (actions.Pressed(InputAction.QuickSave)) quickSaveRequested = true;
-            if (actions.Pressed(InputAction.QuickLoad)) quickLoadRequested = true;
+            if (actions.Pressed(InputAction.QuickSave)) saves.quickSaveRequested = true;
+            if (actions.Pressed(InputAction.QuickLoad)) saves.quickLoadRequested = true;
             if (actions.Pressed(InputAction.FloorUp)) interiors.StepFloor(1);
             if (actions.Pressed(InputAction.FloorDown)) interiors.StepFloor(-1);
             if (hud is not null)
@@ -1040,7 +1040,7 @@ sealed partial class GameHost
             }
         };
         // Put the title's camera and staging up before the streamers settle, so the menu's first frame is already the staged view.
-        if (hud is not null) ApplyTitleCamera();
+        if (hud is not null) titleScreen.ApplyTitleCamera();
         // The streamer settles the fine heights and biome maps round the camera before the first frame draws (the still's camera does not move).
         streamer?.Settle(camera.Eye);
         if (streamer is { } settled) Console.WriteLine($"metal     {settled.Describe()}");
@@ -1100,13 +1100,13 @@ sealed partial class GameHost
             if (g.TitlePreview) player.ShowTitle();
             else if (hud is not null && panelName is not ("trade" or "talk"))
                 hud.ShowUiPanel(panelName is "hud-expanded" or "edited" ? null : panelName, panelName == "hud-expanded");
-            if (hud is not null) ApplyTitleCamera();
+            if (hud is not null) titleScreen.ApplyTitleCamera();
         }
         void KeepStillPanel(string? panelName)
         {
             if (player is null) return;
             if (hud is not null && panelName?.StartsWith("editor", StringComparison.Ordinal) == true) characterEditor.EditorCamera();
-            if (hud is not null) ApplyTitleCamera();
+            if (hud is not null) titleScreen.ApplyTitleCamera();
         }
 
         var clock = Stopwatch.StartNew();
@@ -1182,22 +1182,22 @@ sealed partial class GameHost
             {
                 // Edge scrolling only while the world owns the pointer (the interface is visible and not dragging a panel).
                 session.Camera.Settings.EdgeScroll = config.EdgeScroll != false;
-                session.Camera.Strategy.EdgePointer = Covered || hud is not null && TitleVisible || settings?.Visible == true ||
+                session.Camera.Strategy.EdgePointer = Covered || hud is not null && titleScreen.TitleVisible || settings?.Visible == true ||
                     hud is { UiVisible: false } or { UiCapturesPointer: true } ? null : WindowPointer.InWindow(window);
                 // The duel restarts between ticks when Backspace asks or its measured lap ends; its sun then holds at the lap's hour.
                 if (hud is not null)
                 {
-                    DuelFrame(false);
+                    duel.DuelFrame(false);
                     if (!Covered) session.Advance(dt);
-                    DuelHoldClock();
+                    duel.DuelHoldClock();
                     WorldNews();
                 }
                 else if (!Covered) session.Advance(dt);
                 if (hud is not null)
                 {
-                    HandleSaves(dt);
-                    HandleNewGame();
-                    HandleMainMenu();
+                    saves.HandleSaves(dt);
+                    newGame.HandleNewGame();
+                    newGame.HandleMainMenu();
                 }
                 StepSceneLoad();
                 AdvanceSkyArrival(dt);
@@ -1209,22 +1209,22 @@ sealed partial class GameHost
                     gpu.Kept = config.KeepTexturesAtCharacters ? [.. hud.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()] : [];
                 if (!tourHolds && hud is not null)
                 {
-                    SandboxFollowCamera();
-                    FollowCamera();
+                    sandbox.SandboxFollowCamera();
+                    sandbox.FollowCamera();
                     characterEditor.EditorCamera();
                 }
                 // The merged character editor is shared with Vulkan: a new game opens it once the squad is in the snapshot, and the world resumes when it closes.
                 characterEditor.OpenPendingEditor();
                 characterEditor.ResumeAfterCreation();
                 if (hud is not { EditorOpen: true }) { characterEditor.ClearEditorStage(); characterEditor.ClearEditorBar(); }
-                if (!tourHolds && hud is not null) ApplyTitleCamera();
+                if (!tourHolds && hud is not null) titleScreen.ApplyTitleCamera();
                 // A flight puts the focus where it lands, so the towns there populate during the flight; otherwise the
                 // followed character's pivot is already in the rig.
                 viewAspect = window.Size.X / (float)Math.Max(window.Size.Y, 1);
                 SendFocus(tour.Active && tour.Current is { } tourLanding && TourPosition(tourLanding) is { } tourAt ? tourAt
                     : tourHolds ? camera.Target : null);
                 // The strategy camera's eye clearance for the followed character and the tour's arcs over hills.
-                if (skyArrival is null && hud is not null && !TitleVisible && (tour.Active || !session.Camera.IsFree && !tourHolds))
+                if (skyArrival is null && hud is not null && !titleScreen.TitleVisible && (tour.Active || !session.Camera.IsFree && !tourHolds))
                 {
                     var clearEye = camera.Eye;
                     float shortfall = session.Camera.EyeGroundAt(clearEye.X, clearEye.Z) +
@@ -1234,7 +1234,7 @@ sealed partial class GameHost
                 // The pointer's Ctrl/Alt modifiers and the Highlight key (Alt): labels on the ground items near the focus, signs and the hover outlines agree.
                 ctrlHeld = Ctrl();
                 altHeld = Alt();
-                highlighting = altHeld && !Covered && !TitleVisible && hud is { UiVisible: true } &&
+                highlighting = altHeld && !Covered && !titleScreen.TitleVisible && hud is { UiVisible: true } &&
                     settings?.Visible != true && !session.Camera.IsFree;
                 if (hud is not null)
                 {
@@ -1243,11 +1243,11 @@ sealed partial class GameHost
                     hud.HighlightFocus = highlighting ? camera.Target : null;
                 }
                 if (objects is not null) objects.HighlightSigns = highlighting;
-                if (!Covered && hud is not null && TitleVisible) titleBattle?.Advance(dt);
+                if (!Covered && hud is not null && titleScreen.TitleVisible) titleScreen.titleBattle?.Advance(dt);
                 if (skyArrival is not null)
                 {
                     ApplyCamera(session.Camera.Current);
-                    if (hud is not null) ApplyTitleCamera();
+                    if (hud is not null) titleScreen.ApplyTitleCamera();
                     ApplySkyArrival();
                 }
                 if (!Covered) sound.UpdateAudio(dt);
@@ -1259,7 +1259,7 @@ sealed partial class GameHost
                 // It must run before the character draw list (which carries aboveFloor) and before the shadow casters.
                 interiors.UpdateInteriorView();
                 // The next world tick may run on its own thread while the frame is drawn, as in the Vulkan loop (docs/simulation.md "Tick ahead").
-                tickAhead = !Covered && skyArrival is null && !IsDuel && !TitleVisible && !player.EditorOpen && g.PlayBench is null && TickAheadWanted();
+                tickAhead = !Covered && skyArrival is null && !duel.IsDuel && !titleScreen.TitleVisible && !player.EditorOpen && g.PlayBench is null && TickAheadWanted();
             }
             else
             {
@@ -1362,8 +1362,8 @@ sealed partial class GameHost
             gpu.HoverOutline = hoverOutline;
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.
-            bool titleLook = hud is not null && TitleVisible;
-            float hour = editorBarFrame is not null ? CharacterEditorHost.EditorBarHour : presentationHour ?? (titleLook ? TitleHour : (float)session.Clock.HourOfDay);
+            bool titleLook = hud is not null && titleScreen.TitleVisible;
+            float hour = editorBarFrame is not null ? CharacterEditorHost.EditorBarHour : presentationHour ?? (titleLook ? titleScreen.TitleHour : (float)session.Clock.HourOfDay);
             var aspect = size.X / (float)Math.Max(size.Y, 1);
             var eye = camera.Eye;
             var view = camera.View;
@@ -1380,7 +1380,7 @@ sealed partial class GameHost
             bool savedHidePlaced = fogVolumes.HidePlaced;
             if (titleLook)
             {
-                float fill = Math.Clamp(scene.Clock.SunDirection(hour).Y / MathF.Max(scene.Clock.SunDirection(TitleHour).Y, 1e-3f), 0, 1);
+                float fill = Math.Clamp(scene.Clock.SunDirection(hour).Y / MathF.Max(scene.Clock.SunDirection(titleScreen.TitleHour).Y, 1e-3f), 0, 1);
                 fill = fill * fill * (3 - 2 * fill);
                 sky.Weather = Meitou.Data.World.SkyWeather.Default;
                 sky.CloudCoverage = 0.38f;
@@ -1403,7 +1403,7 @@ sealed partial class GameHost
                 if (hud is not null)
                 {
                     hud.PortraitSize = Meitou.Game.Rendering.Characters.CharacterRenderer.PortraitSizeFor(characters.Look);
-                    SyncIconLook();
+                    itemIconFiles.SyncIconLook();
                 }
             }
             var savedParticles = gpu.Particles;
@@ -1451,7 +1451,7 @@ sealed partial class GameHost
                     if (hud.UiVisible)
                     {
                         hud.Draw(overlay, size.X, size.Y, overlayPass);
-                        if (IsSandbox && !g.UiShowcase) DrawSandbox(overlay, size.X, size.Y);
+                        if (sandbox.IsSandbox && !g.UiShowcase) sandbox.DrawSandbox(overlay, size.X, size.Y);
                     }
                 }
                 bool wrote = false;
@@ -1489,7 +1489,7 @@ sealed partial class GameHost
                 // it and the hand over what a click acts on), else the game's own pointer. The free camera hides it, and saved pictures never contain it.
                 if (!still && !screenshotNow && !feedbackShot && pointerMouse is not null && hud is not null)
                 {
-                    bool pointerWorld = !Covered && !g.NoPopulation && settings?.Visible != true && !TitleVisible;
+                    bool pointerWorld = !Covered && !g.NoPopulation && settings?.Visible != true && !titleScreen.TitleVisible;
                     bool freeLook = pointerWorld && session.Camera.IsFree;
                     var cursorMode = config.HardwareMouse && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
                     if (cursorMode != windowCursor) pointerMouse.Cursor.CursorMode = windowCursor = cursorMode;
@@ -1545,7 +1545,7 @@ sealed partial class GameHost
                 // Compacting the LOH is a stop-the-world move of every large object: on a 4+ GB heap it stalled
                 // this loop for 1.6 s. Do it where a loading screen or a menu covers the pause, or when the heap
                 // has grown past 4 GB; otherwise a background collection is enough and does not move live arrays.
-                bool safePoint = TitleVisible || settings?.Visible == true || sceneLoad is not null || loading?.Exiting == true;
+                bool safePoint = titleScreen.TitleVisible || settings?.Visible == true || sceneLoad is not null || loading?.Exiting == true;
                 bool compact = safePoint || managedHighWater;
                 if (compact)
                 {

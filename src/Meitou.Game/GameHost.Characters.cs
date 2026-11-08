@@ -35,14 +35,14 @@ sealed partial class GameHost
     /// <summary>Tells the world the camera it is looked at through, every frame (the update flag of <see cref="Meitou.Simulation.Bodies.MedicalTimeBudget"/> and the sensing hooks, <see cref="Meitou.Simulation.Bodies.MedicalClock"/>).</summary>
     void SendView()
     {
-        if (IsBattle) return;
+        if (battle.IsBattle) return;
         session.World.Commands.Enqueue(new Meitou.Simulation.Bodies.CameraViewCommand(camera.Eye, camera.Forward, camera.FieldOfView, viewAspect, npcRange ??= GameplaySettings.NpcRange(install)) { Tick = session.World.Tick });
     }
 
     /// <summary>Tells the world where the camera looks, when it has moved enough to matter (the zones follow it).</summary>
     void SendFocus(Vector3? at = null)
     {
-        if (IsDuel) return;   // the duel's worlds keep the focus on its spot (DuelSetup), wherever the camera flies
+        if (duel.IsDuel) return;   // the duel's worlds keep the focus on its spot (DuelSetup), wherever the camera flies
         SendView();
         var current = session.Camera.Current;
         if (at is null && sentFocus && current.IsFree && current.Eye.Y - session.Camera.EyeGroundAt(current.Eye.X, current.Eye.Z) > FocusCeiling) return;
@@ -178,7 +178,7 @@ sealed partial class GameHost
         };
 
     /// <summary>A character's key in the draw list: stable while it exists, new for every world (the renderer keeps its poses by it).</summary>
-    internal long DrawKey(CharacterId id) => (((long)id.Slot << 32 | (uint)id.Generation) + 1) | (long)worldEpoch << 56;
+    internal long DrawKey(CharacterId id) => (((long)id.Slot << 32 | (uint)id.Generation) + 1) | (long)saves.worldEpoch << 56;
 
     /// <summary>
     /// The portraits for the renderer to draw this frame: the squad bar's and the squads screen's members, the character trading window's rows and the conversation's two in
@@ -235,7 +235,7 @@ sealed partial class GameHost
     readonly HashSet<CharacterId> fullRate = [];
     readonly HashSet<long> portraitKeys = [];
     /// <summary>The snapshot the distant list was made from (<see cref="AddDistant"/>), its tick and the world.</summary>
-    (WorldSnapshot?, long, int) distantFor;
+    internal (WorldSnapshot?, long, int) distantFor;
 
     /// <summary>A character beyond reach into the distant list: its look (with its tool), its snapshot place, and what loading and the kept textures read.</summary>
     void AddDistant(CharacterDrawList list, CharacterSnapshot c)
@@ -274,7 +274,7 @@ sealed partial class GameHost
         var eye = camera.Eye;
         portraitKeys.Clear();
         if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) portraitKeys.Add(r.Key);
-        var distantKey = (current, current.Tick, worldEpoch);
+        var distantKey = (current, current.Tick, saves.worldEpoch);
         bool distant = reachOf is not null && distantKey != distantFor;
         if (reachOf is null ? list.Distant.Count > 0 : distant) list.BeginDistant();
         distantFor = reachOf is null ? default : distantKey;
@@ -283,7 +283,7 @@ sealed partial class GameHost
             var inBar = editing is { } shown ? characterEditor.EditorBarPlace(c.Id, shown) : null;
             if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
             // The snapshot's place: a tick's motion is well inside InReach's margin.
-            if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !portraitKeys.Contains(DrawKey(c.Id)) && c.Id != sandboxHero)
+            if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !portraitKeys.Contains(DrawKey(c.Id)) && c.Id != sandbox.sandboxHero)
             {
                 if (distant) AddDistant(list, c);
                 continue;
@@ -334,14 +334,14 @@ sealed partial class GameHost
                 (position, yaw, rotation) = (place.Position, place.Yaw, null);
                 if (place.Clip is { } clip) poses = [new CharacterPose(clip, characterEditor.EditorClipTime(clip, (float)realTime.Elapsed.TotalSeconds), 1)];
             }
-            if (c.Id == sandboxHero && sandboxPicker?.Pose() is { } forced) poses = forced;   // the sandbox drop-down loops a picked clip on the hero
+            if (c.Id == sandbox.sandboxHero && sandbox.sandboxPicker?.Pose() is { } forced) poses = forced;   // the sandbox drop-down loops a picked clip on the hero
             var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
             var look = player.EditorPreview(c.Id, c.Appearance) ?? held;
             if (editing is null) decapitation.CutHead(c, look);
             var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             var bones = !posed ? null : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot));
             bool hidden = inBar is null && interiors.hiddenIndoors.Contains(c.Id);
-            bool fullRated = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null;
+            bool fullRated = editing is not null || fullRate.Contains(c.Id) || c.Id == sandbox.sandboxHero && sandbox.sandboxPicker?.Current is not null;
             var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated);
             if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
             list.Add(instance);

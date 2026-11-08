@@ -2,9 +2,10 @@ using Meitou.Data.Gameplay;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Ui;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host;
 
-sealed partial class GameHost
+/// <summary>The item icons Meitou draws, saved to disk and handed to the interface: their folder, the version that clears old ones, and the <c>icons</c> switch's look.</summary>
+sealed class ItemIconFiles(GameHost host)
 {
     /// <summary>
     /// Where Meitou saves the item icons it draws (<c>%LOCALAPPDATA%\Meitou\icons</c>), named as the game's saved pictures; the supersampled ones (the <c>icons</c> switch's Meitou
@@ -43,19 +44,19 @@ sealed partial class GameHost
     /// </summary>
     ItemIcons? ItemIconsOfInstall(bool enhanced)
     {
-        if (scene.Database is not { } db) return null;
+        if (host.scene.Database is not { } db) return null;
         string own = IconSaveDirectory(enhanced);
         ClearOldIcons(own);
-        return new(db, name => assets.FindInGroup(name, "Icons"), enhanced ? new ItemIconCache(own) : new ItemIconCache(Path.Combine(install.DataDirectory, "icons"), own));
+        return new(db, name => host.assets.FindInGroup(name, "Icons"), enhanced ? new ItemIconCache(own) : new ItemIconCache(Path.Combine(host.install.DataDirectory, "icons"), own));
     }
 
     /// <summary>Once a frame: when the <c>icons</c> switch has changed, the interface's icons and the renderer's save folder follow it.</summary>
-    void SyncIconLook()
+    internal void SyncIconLook()
     {
-        if (ActiveCharacters is not { } drawer || iconsEnhanced == drawer.EnhancedIcons) return;
+        if (host.ActiveCharacters is not { } drawer || iconsEnhanced == drawer.EnhancedIcons) return;
         iconsEnhanced = drawer.EnhancedIcons;
         drawer.IconSaveDirectory = IconSaveDirectory(drawer.EnhancedIcons);
-        player.SetItemIcons(ItemIconsOfInstall(drawer.EnhancedIcons));
+        host.player.SetItemIcons(ItemIconsOfInstall(drawer.EnhancedIcons));
     }
 
     /// <summary>
@@ -66,13 +67,13 @@ sealed partial class GameHost
     {
         iconsEnhanced = null;
         SyncIconLook();
-        if (ActiveCharacters is null) player.SetItemIcons(ItemIconsOfInstall(false));
-        player.SetRenderedIcons(name =>
+        if (host.ActiveCharacters is null) host.player.SetItemIcons(ItemIconsOfInstall(false));
+        host.player.SetRenderedIcons(name =>
         {
             if (UiPainter.TryParseRenderedIcon(name, out string record, out string material, out string colour))
-                return ActiveCharacters is { } characters && characters.TryGetIcon(new IconKey(record, material, colour), out var icon) ? icon : null;
-            if (UiPainter.TryParseRenderedBuildingIcon(name, out string building) && ActiveObjects is { } objects && player.BuildHost is { } host)
-                return objects.TryGetBuildingIcon(building, host.Parts(building), out var picture) ? picture : null;
+                return host.ActiveCharacters is { } characters && characters.TryGetIcon(new IconKey(record, material, colour), out var icon) ? icon : null;
+            if (UiPainter.TryParseRenderedBuildingIcon(name, out string building) && host.ActiveObjects is { } objects && host.player.BuildHost is { } buildHost)
+                return objects.TryGetBuildingIcon(building, buildHost.Parts(building), out var picture) ? picture : null;
             return null;
         });
     }

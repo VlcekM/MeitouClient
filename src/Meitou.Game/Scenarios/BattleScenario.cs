@@ -5,14 +5,14 @@ using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Population;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Scenarios;
 
 /// <summary>
 /// The battle (<c>--battle n unit m unit</c>, docs/simulation.md "Battle"): two groups of NPCs, each of one CHARACTER or ANIMAL_CHARACTER record, in two blocks facing
 /// each other on the map (the plateau, the duel's mesa or x,z) or the sandbox's floor. No towns and no aggro: the host gives every standing fighter without a target the nearest
 /// standing enemy. Backspace starts the same fight again (a new world made the same way). Nothing here runs in the normal game.
 /// </summary>
-sealed partial class GameHost
+sealed class BattleScenario(GameHost host)
 {
     /// <summary>The two fronts start this far apart along Z, each block in ranks of up to <see cref="BattleRankWidth"/> fighters <see cref="BattleSpacing"/> apart (more for bigger races).</summary>
     const float BattleGap = 40, BattleSpacing = 6;
@@ -28,36 +28,36 @@ sealed partial class GameHost
     /// <summary><c>--battle-map fog</c>: a spot in the Fog Islands picked in the game view, about 460 units from the plateau first used (-71170, -40200: about 880 high, level to 13 units over 800 x 800, in its fog volumes, 10k from any building).</summary>
     public static readonly Vector2 FogBattleSpot = new(-71560, -39953);
 
-    internal bool IsBattle => g.Battle is not null;
+    internal bool IsBattle => host.g.Battle is not null;
     /// <summary>The floor is the sandbox's: the animation sandbox's, or the battle's with <c>--battle-map sandbox</c>.</summary>
-    bool IsFlat => IsSandbox || IsBattle && g.BattleFlat;
+    internal bool IsFlat => host.sandbox.IsSandbox || IsBattle && host.g.BattleFlat;
 
     Vector3 battleSpot;
     readonly List<(string Record, string Name, int Count, int? Faction)> battleSides = [];
     readonly List<CharacterId>[] battleFighters = [[], []];
     long battleOrderedAt = -1;
-    bool battleRestartRequested, battleOver;
+    internal bool battleRestartRequested, battleOver;
 
     /// <summary>Finds the two records and their factions and fills the session's world; returns where the camera starts.</summary>
-    Vector3 BattleStart()
+    internal Vector3 BattleStart()
     {
-        var db = scene.Database!;
-        foreach (var (count, unit) in g.Battle!)
+        var db = host.scene.Database!;
+        foreach (var (count, unit) in host.g.Battle!)
         {
-            var record = FindCharacter(db, unit) ?? throw new ArgumentException($"--battle: no CHARACTER or ANIMAL_CHARACTER named '{unit}'");
+            var record = SandboxScenario.FindCharacter(db, unit) ?? throw new ArgumentException($"--battle: no CHARACTER or ANIMAL_CHARACTER named '{unit}'");
             // The record's own faction for its looks (an animal has none: the first faction hostile to the player's).
             string? factionId = record.GetReferences("faction").Select(r => r.TargetStringId).FirstOrDefault();
-            int faction = popData!.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.f.Id == factionId, (null!, -1)).Item2;
+            int faction = host.popData!.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.f.Id == factionId, (null!, -1)).Item2;
             battleSides.Add((record.StringId, record.Name, count, faction >= 0 ? faction : null));
         }
         BattleFactions();
-        var spot = g.BattleFlat ? Vector2.Zero : g.BattleAt is { } at ? new Vector2(at.X, at.Z) : BattleSpot;
-        battleSpot = new Vector3(spot.X, session.World.Walkability.GroundHeight(spot.X, spot.Y), spot.Y);
-        BattleSetup(session.World, population!);
-        session.Ticked += _ => BattleTick();
-        var wet = battleFighters.SelectMany(f => f).Count(id => !simWalkability!.IsWalkable(session.World.Characters.Previous[id.Slot].Position.X, session.World.Characters.Previous[id.Slot].Position.Z));
+        var spot = host.g.BattleFlat ? Vector2.Zero : host.g.BattleAt is { } at ? new Vector2(at.X, at.Z) : BattleSpot;
+        battleSpot = new Vector3(spot.X, host.session.World.Walkability.GroundHeight(spot.X, spot.Y), spot.Y);
+        BattleSetup(host.session.World, host.population!);
+        host.session.Ticked += _ => BattleTick();
+        var wet = battleFighters.SelectMany(f => f).Count(id => !host.simWalkability!.IsWalkable(host.session.World.Characters.Previous[id.Slot].Position.X, host.session.World.Characters.Previous[id.Slot].Position.Z));
         if (wet > 0) Console.Error.WriteLine($"battle    {wet} fighter(s) start under water: pick another spot with --battle-map x,z");
-        Console.WriteLine($"battle    {BattleSide(0)} vs {BattleSide(1)} at {spot.X:0}, {spot.Y:0}{(g.BattleFlat ? " (sandbox floor)" : "")}; Backspace restarts");
+        Console.WriteLine($"battle    {BattleSide(0)} vs {BattleSide(1)} at {spot.X:0}, {spot.Y:0}{(host.g.BattleFlat ? " (sandbox floor)" : "")}; Backspace restarts");
         return battleSpot;
     }
 
@@ -70,8 +70,8 @@ sealed partial class GameHost
     /// </summary>
     void BattleFactions()
     {
-        var relations = popData!.Relations;
-        int player = popData.PlayerFaction;
+        var relations = host.popData!.Relations;
+        int player = host.popData.PlayerFaction;
         for (int side = 0; side < 2; side++)
         {
             if (battleSides[side].Faction is not null) continue;
@@ -95,12 +95,12 @@ sealed partial class GameHost
             fighters.Clear();
             float sign = side == 0 ? -1 : 1;
             // Bigger bodies stand further apart: BattleSpacing is a human's (footprint 4), scaled by the race's footprint, never closer; the front rank at least that far off the middle.
-            var db = scene.Database!;
+            var db = host.scene.Database!;
             var race = db.Find(record)?.GetReferences("race").FirstOrDefault(r => r.Values.Value0 > 0) is { TargetStringId: { } raceId } ? db.Find(raceId) : null;
             float footprint = race?.GetFloat("pathfind footprint radius", CombatTuning.DefaultFootprint) ?? CombatTuning.DefaultFootprint;
             float spacing = Math.Max(BattleSpacing, BattleSpacing * footprint / CombatTuning.DefaultFootprint), front = Math.Max(BattleGap / 2, spacing);
             // --battle-width: rows of that many; else --battle's rows: that many rows of count / rows, the back row also taking the rest; otherwise rows of BattleRankWidth.
-            int rows = g.BattleWidth[side] is null && g.BattleRows is { } r ? Math.Min(r, count) : 0, width = g.BattleWidth[side] ?? (rows > 0 ? count / rows : BattleRankWidth);
+            int rows = host.g.BattleWidth[side] is null && host.g.BattleRows is { } r ? Math.Min(r, count) : 0, width = host.g.BattleWidth[side] ?? (rows > 0 ? count / rows : BattleRankWidth);
             var offsets = new Vector2[count];
             for (int i = 0; i < count; i++)
             {
@@ -121,7 +121,7 @@ sealed partial class GameHost
     /// </summary>
     void BattleTick()
     {
-        var world = session.World;
+        var world = host.session.World;
         if (battleOver || world.Tick < BattleOrderTick || world.Tick == battleOrderedAt) return;
         battleOrderedAt = world.Tick;
         // The world and its combat system are new after each restart.
@@ -136,7 +136,7 @@ sealed partial class GameHost
             int winner = standing[0].Count > 0 ? 0 : standing[1].Count > 0 ? 1 : -1;
             string result = winner < 0 ? "nobody left standing" : $"{battleSides[winner].Name} win, {standing[winner].Count} of {battleSides[winner].Count} standing";
             Console.WriteLine($"battle    {BattleSide(0)} vs {BattleSide(1)}: {result} after {world.Tick * world.TickSeconds:0.0} s");
-            player.Notice($"Battle over: {result} (Backspace restarts)");
+            host.player.Notice($"Battle over: {result} (Backspace restarts)");
             return;
         }
         for (int side = 0; side < 2; side++)
@@ -197,7 +197,7 @@ sealed partial class GameHost
     /// </summary>
     internal void DrawBattleCounter(DebugOverlay o, int width, int height)
     {
-        var world = session.World;
+        var world = host.session.World;
         if (battleCountedAt != world.Tick || battleCountedIn != world)
         {
             (battleCountedAt, battleCountedIn) = (world.Tick, world);
@@ -231,13 +231,13 @@ sealed partial class GameHost
     {
         if (!IsBattle || !battleRestartRequested) return;
         battleRestartRequested = false;
-        var built = BuildSystems(interactive: true);
-        session.ReplaceWorld(built.Systems, world => BattleSetup(world, built.Population!));
-        population = built.Population;
-        worldEpoch++;
-        indexedFor = null;
-        previousById.Clear();
-        player.Reset();
-        player.Notice("Battle restarted (Backspace)");
+        var built = host.saves.BuildSystems(interactive: true);
+        host.session.ReplaceWorld(built.Systems, world => BattleSetup(world, built.Population!));
+        host.population = built.Population;
+        host.saves.worldEpoch++;
+        host.indexedFor = null;
+        host.previousById.Clear();
+        host.player.Reset();
+        host.player.Notice("Battle restarted (Backspace)");
     }
 }

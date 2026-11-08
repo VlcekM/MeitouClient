@@ -4,6 +4,7 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Game.Host;
 using Meitou.Game.Host.Input;
+using Meitou.Game.Host.WorldSync;
 using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
@@ -108,7 +109,7 @@ sealed class ScreenshotScenes(GameHost host)
     internal void PrepareStill(IGpuContext context, bool finish = true)
     {
         if (host.o.Screenshot is null) return;
-        if (host.g.TitlePreview && host.player is not null) host.ApplyTitleCamera();
+        if (host.g.TitlePreview && host.player is not null) host.titleScreen.ApplyTitleCamera();
         if (host.g.UiShowcase && host.player is not null && host.playerSquad is not null)
             host.player.Select([host.playerSquad.Leader], additive: false);
         if (host.playerSquad is not null && host.g.MoveTo is { } to)
@@ -121,17 +122,17 @@ sealed class ScreenshotScenes(GameHost host)
             host.session.Tick();
             host.session.AdvanceSimulation(host.session.Ticks.TickSeconds);   // one control tick of real time, at speed 1
             host.UpdateNav(wait: true);
-            host.DuelHoldClock();
-            if (host.player is not null) host.DuelFrame(false);   // the duel's laps run on in a long still too
-            host.BattleFrame();
-            if (host.g.TitlePreview) host.titleBattle?.Advance(host.session.Ticks.TickSeconds);
+            host.duel.DuelHoldClock();
+            if (host.player is not null) host.duel.DuelFrame(false);   // the duel's laps run on in a long still too
+            host.battle.BattleFrame();
+            if (host.g.TitlePreview) host.titleScreen.titleBattle?.Advance(host.session.Ticks.TickSeconds);
         }
-        host.PrintSavedLog();
+        host.saves.PrintSavedLog();
         if (host.population is not null)
             foreach (var line in host.population.TakeTownLog()) Console.WriteLine($"town      {line}");
-        host.SandboxFollowCamera();
+        host.sandbox.SandboxFollowCamera();
         host.ApplyCamera(host.session.Camera.Current);
-        if (host.g.TitlePreview && host.player is not null) host.ApplyTitleCamera();
+        if (host.g.TitlePreview && host.player is not null) host.titleScreen.ApplyTitleCamera();
         // After a walk (--move-to) the picture is of where the leader got to.
         if (host.g.MoveTo is not null && host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is { } walker)
         {
@@ -164,13 +165,13 @@ sealed class ScreenshotScenes(GameHost host)
         host.DrawWorld(w, h);
         display.EndFrame();
         using var overlay = DebugOverlay.TryCreate(context, host.assets.Find);
-        if (overlay is not null) { host.player.CreateUiPainter(overlay, host.assets.Find); host.ConnectItemIcons(); }
+        if (overlay is not null) { host.player.CreateUiPainter(overlay, host.assets.Find); host.itemIconFiles.ConnectItemIcons(); }
         if (host.gpu.Characters is { } portraits) { var (atlas, sampled) = portraits.PortraitAtlas; host.player.SetUiTexture(PlayerInterface.PortraitTexture, atlas, sampled); }
         if (host.g.Scene is { } sceneName)
         {
             SceneShots(sceneName, display, target, overlay, w, h);
             host.player.DisposeUi();
-            host.DisposeTitleScene();
+            host.titleScreen.DisposeTitleScene();
             host.gpu.Dispose();
             return 0;
         }
@@ -205,8 +206,8 @@ sealed class ScreenshotScenes(GameHost host)
                 host.UpdateView(w, h);
                 if (host.g.TitlePreview) host.player.ShowTitle(); else if (showPanel) host.player.ShowUiPanel(panelName is "hud-expanded" or "edited" ? null : panelName, panelName == "hud-expanded");
                 host.player.Draw(overlay, w, h);
-                if (host.IsSandbox && !host.g.UiShowcase) host.DrawSandbox(overlay, w, h);
-                if (host.IsBattle && !host.g.UiShowcase) host.DrawBattleCounter(overlay, w, h);
+                if (host.sandbox.IsSandbox && !host.g.UiShowcase) host.sandbox.DrawSandbox(overlay, w, h);
+                if (host.battle.IsBattle && !host.g.UiShowcase) host.battle.DrawBattleCounter(overlay, w, h);
                 if (host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is { } me && host.player.Project(host.DrawnPosition(me) + new Vector3(0, 1, 0)) is { } px)
                 {
                     var picked = host.player.Pick(px);
@@ -226,7 +227,7 @@ sealed class ScreenshotScenes(GameHost host)
         var s = host.session.Camera.Current;
         Console.WriteLine($"camera    {(host.session.Camera.IsFree ? "free" : "strategy")}: pivot {s.Target.X:0}, {s.Target.Y:0}, {s.Target.Z:0}, eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, " +
             $"yaw {s.Yaw * 180 / MathF.PI:0.#}, pitch {s.Pitch * 180 / MathF.PI:0.#}, boom {s.Distance:0.#}; {host.session.Ticks.TotalTicks} control ticks, {host.session.Simulation.TotalTicks} simulation ticks, game time {host.session.Clock.TimeText} ({host.session.Clock.DayText})");
-        host.DisposeTitleScene();
+        host.titleScreen.DisposeTitleScene();
         host.gpu.Dispose();
         return 0;
     }
@@ -321,8 +322,8 @@ sealed class ScreenshotScenes(GameHost host)
                 return null;
             }
             case "acid":
-                host.hostWeather ??= new GameHost.HostWeather(() => host.gpu.Weather);
-                host.hostWeather.Forced = new WeatherHere(Meitou.Data.World.WeatherAffecting.Acid, 1, 0, 0);
+                host.weatherFeed.hostWeather ??= new WeatherFeed.HostWeather(() => host.gpu.Weather);
+                host.weatherFeed.hostWeather.Forced = new WeatherHere(Meitou.Data.World.WeatherAffecting.Acid, 1, 0, 0);
                 Console.WriteLine("scene     acid: acid rain of strength 1 forced on every point");
                 return null;
             case "menu":

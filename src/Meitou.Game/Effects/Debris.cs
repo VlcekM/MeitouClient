@@ -3,6 +3,7 @@ using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
+using Meitou.Game.Host;
 using Meitou.Game.Host.WorldSync;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Objects;
@@ -279,7 +280,7 @@ sealed class Debris(GameHost host)
     /// <summary>The tracers drawn, by bolt id: one keeps shrinking after its bolt stops (<see cref="Trail.Stopped"/>) until it is gone.</summary>
     readonly Dictionary<int, Trail> trails = [];
     readonly List<int> trailsGone = [];
-    /// <summary>The <see cref="GameHost.worldEpoch"/> <see cref="trails"/> belong to: a load or a new world drops the old world's.</summary>
+    /// <summary>The <see cref="GameSaves.worldEpoch"/> <see cref="trails"/> belong to: a load or a new world drops the old world's.</summary>
     int trailsEpoch = -1;
 
     sealed class Trail
@@ -306,7 +307,7 @@ sealed class Debris(GameHost host)
     {
         if (host.gpu.Particles is not { } particles) return;
         particles.Tracers.Clear();
-        if (trailsEpoch != host.worldEpoch) { trails.Clear(); trailsEpoch = host.worldEpoch; }
+        if (trailsEpoch != host.saves.worldEpoch) { trails.Clear(); trailsEpoch = host.saves.worldEpoch; }
         if (!host.o.MeitouTracers) { trails.Clear(); return; }
         double clock = (host.session.ShownTick + host.session.SimulationAlpha) * world.TickSeconds;
         foreach (var p in host.session.CurrentSnapshot.Projectiles)

@@ -88,7 +88,7 @@ sealed class PlayBench(GameHost host)
         if (benchScript is null)
         {
             var players = host.session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToList();
-            if (host.Covered || host.TitleVisible || players.Count == 0) { benchReadyFor = 0; return true; }
+            if (host.Covered || host.titleScreen.TitleVisible || players.Count == 0) { benchReadyFor = 0; return true; }
             if ((benchReadyFor += dt) < 1) return true;
             benchLeader = (host.playerSquad is { Leader.IsNone: false } squad ? squad.Leader : players[0].Id);
             benchOrigin = host.session.Camera.Strategy.PivotXZ;

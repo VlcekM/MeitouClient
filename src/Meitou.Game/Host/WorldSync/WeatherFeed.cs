@@ -3,14 +3,14 @@ using Meitou.Data.World;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Simulation;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host.WorldSync;
 
 /// <summary>
 /// The weather the simulation reads (<see cref="World.Weather"/>, docs/formats/weather.md "Effects on characters"): the renderer's scheduler gives each place its region's
 /// weather (<see cref="WeatherWorld.RegionAt"/>, the schedule only: a weather forced at the camera stays a view setting), and the live units of its particle groups
 /// whose EFFECT has an <c>affect type</c> are the local effects. Without a weather (the viewer's <c>--no-weather</c>) nothing acts.
 /// </summary>
-sealed partial class GameHost
+sealed class WeatherFeed(GameHost host)
 {
     internal sealed class HostWeather(Func<WorldWeather?> weather) : IWeatherSource
     {
@@ -34,13 +34,13 @@ sealed partial class GameHost
     /// Once a frame, before the simulation's ticks: hands the weather to the world and collects the affecting units of the particle groups (units whose life is over do not act;
     /// an effect without an <c>effect radius</c> is left out, an engine choice: the original then takes 0.375 x the width of its particle bounds, which Meitou does not keep).
     /// </summary>
-    void UpdateWeatherSource()
+    internal void UpdateWeatherSource()
     {
-        hostWeather ??= new HostWeather(() => gpu.Weather);
-        session.World.Weather = hostWeather;
+        hostWeather ??= new HostWeather(() => host.gpu.Weather);
+        host.session.World.Weather = hostWeather;
         var zones = hostWeather.ZoneList;
         zones.Clear();
-        if (gpu.Particles is not { } particles) return;
+        if (host.gpu.Particles is not { } particles) return;
         Collect(particles.Groups);
         Collect(particles.PlacerGroups);
 
