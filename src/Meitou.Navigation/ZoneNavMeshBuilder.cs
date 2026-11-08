@@ -473,9 +473,52 @@ internal static partial class ZoneNavMeshBuilder
     /// <summary>How far (units) a span's floor may be over a feature triangle's height at the cell's middle and still stand on it (engine choice).</summary>
     const float FeatureSurfaceReach = 2;
 
+    /// <summary>The height over a span's floor its enclosure rays run at (engine choice: just over the ground, under a gravel pile's skirt).</summary>
+    const float EncloseRayHeight = 1;
+
+    /// <summary>How many of the <see cref="EncloseDirections"/> must hit the mesh for a span to be walled in (engine choice).</summary>
+    const int EncloseHits = 4;
+
+    static readonly Vector3[] EncloseDirections = [.. Enumerable.Range(0, 8).Select(k => new Vector3(MathF.Cos(k * MathF.PI / 4), 0, MathF.Sin(k * MathF.PI / 4)))];
+
+    /// <summary>Whether a point is walled in by a triangle mesh: at least <see cref="EncloseHits"/> of eight horizontal rays from it hit one of its triangles.</summary>
+    static bool Enclosed(Vector3[] t, Vector3 at)
+    {
+        int hits = 0;
+        for (int d = 0; d < EncloseDirections.Length; d++)
+        {
+            if (RayHitsMesh(t, at, EncloseDirections[d])) hits++;
+            if (hits >= EncloseHits) return true;
+            if (hits + EncloseDirections.Length - 1 - d < EncloseHits) return false;
+        }
+        return false;
+    }
+
+    static bool RayHitsMesh(Vector3[] t, Vector3 from, Vector3 dir)
+    {
+        for (int i = 0; i < t.Length; i += 3)
+            if (RayHits(from, dir, t[i], t[i + 1], t[i + 2])) return true;
+        return false;
+    }
+
+    /// <summary>Whether the ray from <paramref name="o"/> along <paramref name="d"/> crosses the triangle (a, b, c), Moller-Trumbore.</summary>
+    static bool RayHits(Vector3 o, Vector3 d, Vector3 a, Vector3 b, Vector3 c)
+    {
+        Vector3 e1 = b - a, e2 = c - a, p = Vector3.Cross(d, e2);
+        float det = Vector3.Dot(e1, p);
+        if (MathF.Abs(det) < 1e-6f) return false;
+        float inv = 1 / det;
+        Vector3 s = o - a;
+        float u = Vector3.Dot(s, p) * inv;
+        if (u < 0 || u > 1) return false;
+        Vector3 q = Vector3.Cross(s, e1);
+        float v = Vector3.Dot(d, q) * inv;
+        return v >= 0 && u + v <= 1 && Vector3.Dot(e2, q) * inv > 0;
+    }
+
     /// <summary>
     /// Removes the walkable spans inside a closed or bottom-open triangle mesh (<see cref="NavMeshSolid"/>): the nearest of its triangles above the span's floor, at
-    /// the middle of the cell and more than <see cref="SolidTopInset"/> over it, faces up (docs/game/pathfinding.md, "Map features").
+    /// the middle of the cell and more than <see cref="SolidTopInset"/> over it, faces up, and the mesh walls the span in (<see cref="Enclosed"/>; docs/game/pathfinding.md, "Map features").
     /// </summary>
     static void RemoveInside(NavMeshSolid solid, RcCompactHeightfield chf, List<NavSolid> allSolids, List<int> tileSolids)
     {
@@ -557,6 +600,8 @@ internal static partial class ZoneNavMeshBuilder
                         if (y > floor + SolidTopInset && y < nearest) { nearest = y; up = faceUp; }
                         if (faceUp && floor >= y - SolidTopInset && floor - y <= FeatureSurfaceReach) onSurface = true;
                     }
+                    // Under a single-sided top (a trestle bridge's deck) the ground stays walkable unless the mesh walls it in.
+                    if (up && !Enclosed(solid.Triangles, new Vector3(chf.bmin.X + (x + 0.5f) * cs, floor + EncloseRayHeight, chf.bmin.Z + (z + 0.5f) * cs))) up = false;
                     if (up || seam && onSurface) chf.areas[i] = NavArea.Null;
                 }
             }
