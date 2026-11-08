@@ -1234,6 +1234,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         skinScattering.Dispose();
         DisposePortraits();
         DisposeStage();
+        DisposeStudio();
         DisposeHover();
         DisposeIcons();
     }

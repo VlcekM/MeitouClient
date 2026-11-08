@@ -201,6 +201,9 @@ public static class Enhancements
         new("traced", "Traced sun shadows", "cascades", "ray-traced",
             () => post.TracedSun, v => post.TracedSun = v,
             "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by default)"),
+        new("previewsun", "Portrait and editor sun", "key light", "fixed sun",
+            () => Characters.PreviewStudio.Sun, v => Characters.PreviewStudio.Sun = v,
+            "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"),
     ];
 
     /// <summary><c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.</summary>

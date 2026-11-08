@@ -8,14 +8,15 @@ namespace Meitou.Rendering.Characters;
 /// straight into their 8-bit pictures as the original's. Enhanced: drawn unclamped into a half-float picture <see cref="Supersample"/> times larger each way, then
 /// tone mapped, graded, averaged down and dithered as the world's composite (<see cref="PostProcessShaders.Composite"/>) finishes the world.
 /// </summary>
-public readonly record struct PreviewLook(bool Enhanced, int Supersample, ToneMapOperator Tone, float ToneMix, bool Grade, bool Dither)
+public readonly record struct PreviewLook(bool Enhanced, int Supersample, ToneMapOperator Tone, float ToneMix, bool Grade, bool Dither, bool Studio = false)
 {
     /// <summary>The look of the world's options: enhanced when its tone map, grade or anti-aliasing is Meitou's, supersampled twice with Meitou's anti-aliasing.</summary>
     public static PreviewLook Of(PostOptions o)
     {
         bool aa = o.Upscale.Kind != UpscalerKind.Off;
         bool enhanced = aa || o.GradeUsed || o.ToneMapUsed != ToneMapOperator.Clamp;
-        return enhanced ? new PreviewLook(true, aa ? 2 : 1, o.ToneMapUsed, Math.Clamp(o.ToneMix, 0, 1), o.GradeUsed, o.Dither) : default;
+        // Studio: the previewsun switch (PreviewStudio.Sun), part of the look so a change redraws the portraits.
+        return enhanced ? new PreviewLook(true, aa ? 2 : 1, o.ToneMapUsed, Math.Clamp(o.ToneMix, 0, 1), o.GradeUsed, o.Dither, PreviewStudio.Sun) : default;
     }
 }
 
@@ -96,7 +97,8 @@ internal sealed class PreviewResolve : IDisposable
     {
         int s = Math.Max(look.Supersample, 1);
         var colour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, width * s, height * s, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
-        var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width * s, height * s, Use: TextureUse.DepthTarget, Name: name + " depth"));
+        // Sampled: the studio's occlusion reads it (CharacterRenderer.Studio).
+        var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width * s, height * s, Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: name + " depth"));
         var sampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), colour.View());
         return (colour, depth, sampled);

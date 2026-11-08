@@ -83,24 +83,35 @@ internal sealed unsafe partial class CharacterRenderer
         int index = -1;
         for (int i = 0; i < liveCount; i++)
             if (live[i].Key == r.Key) { index = i; break; }
-        var cmd = Gpu.BeginNative("character stage");
         var target = hdr ? PassTargets.Of(stageHdr, stageHdrDepth) : PassTargets.Of(stageColour, stageDepth);
+        ViewConstants? constants = null;
+        Vector3 eye = default;
+        if (index >= 0)
+        {
+            ref var l = ref live[index];
+            (eye, var pivot) = StageCamera(in l, in r);
+            var view = Matrix4x4.CreateLookAt(eye, pivot, Vector3.UnitY);
+            var perspective = Matrix4x4.CreatePerspectiveFieldOfView(r.FieldOfView, r.Width / (float)r.Height, 0.5f, 400);
+            var projection = perspective * Matrix4x4.CreateTranslation(r.ShiftX, 0, 0);
+            var light = Vector3.Normalize(Vector3.TransformNormal(StageLight, l.World));
+            // The studio (previewsun): the stage's light raised to a sun, its shadow and occlusion drawn first.
+            if (StudioOn) light = Vector3.Normalize(Vector3.TransformNormal(StudioStageSun, l.World));
+            Matrix4x4.Decompose(l.World, out _, out var facing, out _);
+            StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
+            constants = StudioOn
+                ? StudioView(index, view * projection, perspective, eye, light, stageHdr!, stageHdrDepth!, target.Width, target.Height)
+                : new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light, FogDistance = hdr ? -3 : -2 };
+        }
+        var cmd = Gpu.BeginNative("character stage");
         cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
         Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
         var rect = new PixelRect(0, 0, (uint)target.Width, (uint)target.Height);
         cmd.Clear(true, default, true, 1, rect);
         Gpu.SetPassViewport(new PixelViewport(0, 0, target.Width, target.Height, 0, 1), rect);
-        if (index >= 0)
+        if (constants is { } c)
         {
-            ref var l = ref live[index];
-            var (eye, pivot) = StageCamera(in l, in r);
-            var view = Matrix4x4.CreateLookAt(eye, pivot, Vector3.UnitY);
-            var projection = Matrix4x4.CreatePerspectiveFieldOfView(r.FieldOfView, r.Width / (float)r.Height, 0.5f, 400) * Matrix4x4.CreateTranslation(r.ShiftX, 0, 0);
-            var light = Vector3.Normalize(Vector3.TransformNormal(StageLight, l.World));
-            Matrix4x4.Decompose(l.World, out _, out var facing, out _);
-            StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
             portraitLive = index;
-            try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light, FogDistance = hdr ? -3 : -2 }, eye, []); }
+            try { DrawView(c, eye, []); }
             finally { portraitLive = -1; }
         }
         Gpu.EndHostPass(cmd);
@@ -136,6 +147,8 @@ internal sealed unsafe partial class CharacterRenderer
 
     /// <summary>The stage's light direction (towards the light) in the character's frame: the original's (-3, 2, -3) on the stage, where the character faces the stage's -z.</summary>
     static readonly Vector3 StageLight = new(3, 2, 3);
+    /// <summary>The studio's sun on the stage (Meitou, previewsun): the stage light's side, about 30 degrees up, so it reaches under a hood.</summary>
+    static readonly Vector3 StudioStageSun = new(3, 2.6f, 3.4f);
 
     /// <summary>
     /// The eye and the pivot it looks at, in the world: the pivot is 12 units above the feet (the original's stage root is 12 below the camera rig's pivot, whatever the

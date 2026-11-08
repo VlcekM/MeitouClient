@@ -263,6 +263,40 @@ static class CharacterShaders
         vec3 skinGeometric = vec3(0.0, 1.0, 0.0), skinAlbedo = vec3(1.0);
         float skinCurvature = 0.0, skinShare = 0.0;
         {{CharacterSurface.Functions}}
+        // The studio (CharacterRenderer.Studio, Meitou previews): its sun's shadow map and occlusion through the view block's interior-cut fields, which the
+        // characters never use: cutPad the map's bindless index, cutPlanes[0..3] its matrix relative to cutRanges[0].xyz (w: a texel in world units),
+        // cutVolumes the occlusion's index (the preview's own pixels).
+        float studioShadow(vec3 world, vec3 n, vec3 l)
+        {
+            if (view.cutPad == 0u) return 1.0;
+            mat4 m = mat4(view.cutPlanes[0], view.cutPlanes[1], view.cutPlanes[2], view.cutPlanes[3]);
+            float texel = view.cutRanges[0].w;
+            float slope = 1.0 - clamp(dot(n, l), 0.0, 1.0);
+            vec4 c = m * vec4(world - view.cutRanges[0].xyz + n * (texel * (1.0 + 2.0 * slope)) + l * (texel * 1.5), 1.0);
+            vec3 q = c.xyz / c.w;
+            vec2 uv = vec2(q.x, -q.y) * 0.5 + 0.5;   // the map's first row is the top of its clip space (y down)
+            vec2 size = vec2(textureSize(textures2D[nonuniformEXT(view.cutPad)], 0));
+            vec2 base = uv * size - 0.5;
+            vec2 f = fract(base);
+            ivec2 b = ivec2(floor(base));
+            // 4 x 4 texels, each compared, weighted bilinearly at the edges: a soft edge of two texels.
+            float lit = 0.0, total = 0.0;
+            for (int y = -1; y <= 2; y++)
+                for (int x = -1; x <= 2; x++)
+                {
+                    ivec2 t = clamp(b + ivec2(x, y), ivec2(0), ivec2(size) - 1);
+                    float w = (x == -1 ? 1.0 - f.x : x == 2 ? f.x : 1.0) * (y == -1 ? 1.0 - f.y : y == 2 ? f.y : 1.0);
+                    float stored = texelFetch(textures2D[nonuniformEXT(view.cutPad)], t, 0).r;
+                    lit += (q.z <= stored ? 1.0 : 0.0) * w;
+                    total += w;
+                }
+            return lit / total;
+        }
+        float studioOcclusion()
+        {
+            if (view.cutVolumes == 0u) return 1.0;
+            return texelFetch(textures2D[nonuniformEXT(view.cutVolumes)], ivec2(gl_FragCoord.xy), 0).r;
+        }
         vec3 lampSkinDiffuse(vec3 n, vec3 l)
         {
             vec3 d = skinDiffuse(n, skinGeometric, l, skinCurvature, skinShare, skinAlbedo);
@@ -403,6 +437,7 @@ static class CharacterShaders
                 nm = vec4(0.5, 0.5, 1.0, 0.5);
             }
             if (cut) discard;
+            if (view.fogDistance < -4.5) { fragColour = vec4(0.0); return; }   // a studio depth draw (CharacterRenderer.Studio): the cut-outs only
             // The game writes character albedo darkened: 0.7 for bodies, heads and hair (character.hlsl DARKEN), 0.8 for worn items (skin.hlsl); not its icons (rtticons.hlsl,
             // a fog distance of -1).
             // An item attached with its own mesh (StaticObject, not Worn) is not darkened.
@@ -444,6 +479,22 @@ static class CharacterShaders
                 vec3 sunDiffuse = skinDiffuse(n, smoothNormal, uAtmoLight.xyz, curvature, skin, albedo);
                 skinSunBand = sunDiffuse - clamp(dot(n, uAtmoLight.xyz), 0.0, 1.0);
                 colour = kenshiLight(albedo, n, v, gloss, vWorld, sunDiffuse);
+            }
+            // The studio (Meitou, the previewsun switch; the editor's stage and the portraits, a fog distance of -4): a fixed warm sun and a sky over a sunlit
+            // ground, so the still shows form without depending on the hour it was drawn (docs/character-renderer.md "Meitou stage and portraits").
+            else if (view.fogDistance < -3.5)
+            {
+                vec3 l = normalize(view.lightDir);
+                const vec3 studioSun = vec3(1.0, 0.92, 0.80) * 1.9;
+                float shade = studioShadow(vWorld, n, l);
+                vec3 diffSkin = skinDiffuse(n, smoothNormal, l, curvature, skin, albedo);
+                // The sky above (cool) and the sunlit sand below (warm bounce), by the normal's height.
+                vec3 sky = mix(vec3(0.30, 0.23, 0.16), vec3(0.30, 0.36, 0.46), smoothstep(-0.6, 0.8, n.y));
+                vec3 h = normalize(l + v);
+                float diff = max(dot(n, l), 0.0);
+                float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.6;
+                colour = albedo * (sky * studioOcclusion() + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
+                if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade;
             }
             // The editor's stage (CharacterRenderer.DrawStage, a fog distance of -2): the game's rtt.hlsl (AtmosphereShaders.stageLight); -3 the same unclamped (Meitou's stage and
             // portraits, which also take the Meitou skin; the game's stage keeps its plain N.L).

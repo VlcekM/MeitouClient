@@ -157,7 +157,18 @@ coverage (anti-aliased edges on the transparent background), grades and dithers 
 picture. Atlas cells are 256 px apart; enhanced portraits fill them (the original's 128 px were stretched to the
 squad bar's 120-230 px from 1080 to 4K lines and looked soft), faithful ones keep 128 px in the corner. Portraits keep the
 fixed plain light: a still drawn under the live sky would depend on the hour it was drawn. Faithful
-keeps the original's direct 8-bit stage and 128 px plain portraits. No SSAO, shadows or GI (no scene).
+keeps the original's direct 8-bit stage and 128 px plain portraits.
+Studio (`previewsun`, Meitou, on by default; `CharacterRenderer.Studio`): enhanced previews are lit by a fixed sun instead of the key light, the same
+whatever the hour. Per view: the character's depth from the sun into a 2048 px map (an orthographic box round its sphere, the matrix relative to the
+sphere's centre), its depth from the camera, a horizon-based occlusion from that depth (8 directions of 6 steps out to an eighth of the sphere, a fixed
+4 x 4 turn the supersampling averages), then its colour in the shader's studio model (fog distance -4): a warm sun (shadowed, 4 x 4 compare, a
+normal and light offset of a texel or two), a cool sky over warm sand (the ground's bounce), the occlusion on the sky and bounce only. The depth draws
+are the colour shader at fog distance -5, returning after its cut-outs. The map and occlusion indices and the map's matrix ride the view block's
+interior-cut fields (`cutPad`, `cutVolumes`, `cutRanges[0]`, `cutPlanes[0..3]`), which characters never read. The sun: portraits from the camera's
+right and front, about 15 degrees up (under a hood); the stage from the stage light's side, about 30 degrees up, turned with the character.
+The map's first row is the top of its clip space: the lookup flips y. **Observed** (sandbox, `editor` console command, `gfx "Portrait and editor
+sun"`): the hood and the mantle cast on the face and chest, the skirt on the legs. Not there: the character's shadow on the stage's ground, the
+scene's GI (a lone character has no scene; the sky and the ground's bounce stand in).
 Atlas layout (Meitou): squad members take cells 0-29; the conversation window's speaker and player
 character take the last two (30, 31) while a conversation is open.
 Item icons (`CharacterRenderer.Icons.cs`) are the same: an item's mesh drawn through the item shader into a texture of its own, as a pseudo-instance that the world and shadow views skip;

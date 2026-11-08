@@ -359,6 +359,14 @@ sealed partial class GameHost
             if (gpu?.Particles is { } pr) foreach (var line in pr.Describe(session.Focus, 100000).Where(l => l.Contains("Fly"))) con.Print(line.Trim());
         });
 
+        Add("editor", "editor", "opens the character editor (the recruit form: appearance only) on the player squad's leader, as a recruit's would open; for pictures of the editor's stage", (args, con) =>
+        {
+            if (!Need(args, 0, 0, Self("editor"))) return;
+            if (playerSquad is null) { con.Error("editor: no player squad"); return; }
+            if (!player.OpenEditor(Meitou.Simulation.Editing.EditKind.Recruit, [playerSquad.Leader])) { con.Error("editor: the editor did not open"); return; }
+            con.Print("editor open on " + playerSquad.Leader);
+        });
+
         Add("draw-state", "draw-state [--missing]", "every character: id, name, position, state, whether it is in the draw list (hidden indoors, in reach) and what the character renderer did with it last update (culled, not built, off screen, palette NaNs, parts shown); --missing: only those not drawn", (args, con) =>
         {
             bool missing = args.Contains("--missing");
