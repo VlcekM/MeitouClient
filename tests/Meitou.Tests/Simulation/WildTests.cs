@@ -148,7 +148,8 @@ public class WildTests(ITestOutputHelper output)
         var sectors = pop.WildSites.Where(s => s.Kind == WildKind.Sector).ToList();
         var nests = pop.WildSites.Where(s => s.Kind == WildKind.Nest).ToList();
         Assert.Contains(sectors, s => OwnTownIsNest(data, nests, s));
-        Assert.All(sectors, s => Assert.Equal(2, pop.WildSquadsOf(s.Index).Count));
+        // Each sector has the group's squads; how many is the island's room (PopulationSystem.IslandRoom), not each sector's own count.
+        Assert.All(sectors, s => Assert.NotEmpty(pop.WildSquadsOf(s.Index)));
         Assert.All(nests, n => Assert.Empty(pop.WildSquadsOf(n.Index)));
     }
 

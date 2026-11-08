@@ -61,6 +61,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         public bool Pending;
         /// <summary>The nest rolls used since it loaded (a top-up's keys follow them).</summary>
         public int Made;
+        /// <summary>A sector's squads asked for at its load and not spawned yet (counted in the island's load, <see cref="IslandRoom"/>).</summary>
+        public int Planned;
         /// <summary>Replaced, its new residents not made yet (the original's <c>updatedTownOverrides</c>; not saved, as there).</summary>
         public bool Repopulate;
     }

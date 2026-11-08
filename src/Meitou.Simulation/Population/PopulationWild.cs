@@ -24,8 +24,8 @@ public sealed record WildSite(int Index, WildKind Kind, ZoneCoordinate Zone, int
 /// <list type="bullet">
 /// <item><b>Sectors</b> (6.2; patrols and the area tick's refill in <c>PopulationHomeless.cs</c>). Every zone cell is a sector of its BIOME_GROUP. When its zone activates it gets ceil(P x <c>homeless spawn amount</c>)
 /// squads: what the original's area tick reaches for a sector loaded alone (it spawns while the island's population is below P x the sum of the amounts and
-/// the sector's own count below its share; with one sector that stops at the ceiling). The island-wide sum over several loaded sectors, the counters a and
-/// b and the "town nearby" halving are not modelled (engine choice). Template weights are 6.2's homeless branch,
+/// the sector's own count below its share; with one sector that stops at the ceiling), but no more than the island's room (<see cref="IslandRoom"/>: the sum over
+/// the loaded sectors less their squads and the save's homeless squads in them). The counters a and b and the "town nearby" halving are not modelled (engine choice). Template weights are 6.2's homeless branch,
 /// <c>max(0, v0 - k x count)</c> with k = (sum of v0) / (P x amount) and the counts of this sector's own picks; world-state gated templates are skipped.
 /// The spot: a random point of the sector, pushed out of the nearest town to twice its radius and out of other towns of another faction to their radius,
 /// at least <see cref="PopulationSettings.HomelessPlayerDistance"/> from every player character, walkable; 40 tries (the original's 4 rounds of 10), else
@@ -424,8 +424,29 @@ public sealed partial class PopulationSystem
             else _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, players, budget)));
             return;
         }
-        if (_work is null) SpawnWild(world, BuildSector(site, loadId, seed, walk, players, hold));
-        else _work.Add(() => _builtWild.Enqueue(BuildSector(site, loadId, seed, walk, players, hold)));
+        int room = IslandRoom(world);
+        state.Planned = Math.Max(0, Math.Min(HomelessCount(_data.Biomes!.Groups[site.Group], _settings.PopulationMultiplier), (hold?.Squads ?? 0) + room) - (hold?.Squads ?? 0));
+        if (_work is null) SpawnWild(world, BuildSector(site, loadId, seed, walk, players, hold, room: room));
+        else _work.Add(() => _builtWild.Enqueue(BuildSector(site, loadId, seed, walk, players, hold, room: room)));
+    }
+
+    /// <summary>
+    /// The squads the island still has room for (6.2, the area tick <c>FUN_1408f9240</c>: it makes squads while the loaded sectors' load is below the sum of P x <c>homeless spawn amount</c>
+    /// over them, <b>Verified</b>): the sum over the loaded sectors (the one loading among them) less their squads in the world, those asked for and not spawned yet, and the save's
+    /// homeless squads standing in them. A sector's load-time fill makes no more than that, so a save whose homeless squads already fill the island adds none.
+    /// </summary>
+    int IslandRoom(World world)
+    {
+        float target = 0, load = 0;
+        foreach (int i in _wildLoaded)
+        {
+            var sector = _wildSites![i];
+            if (sector.Kind != WildKind.Sector) continue;
+            var state = _wildStates[i];
+            target += MathF.Max(0, _settings.PopulationMultiplier * _data.Biomes!.Groups[sector.Group].HomelessSpawnAmount);
+            load += state.Planned + state.Squads.Count(id => world.Squads.Find(id) is not null) + (HoldOf(world, i)?.Squads ?? 0);
+        }
+        return (int)MathF.Max(0, MathF.Ceiling(target - load - 1e-4f));
     }
 
     static Vector2[] PlayerSpots(World world)
@@ -512,6 +533,7 @@ public sealed partial class PopulationSystem
         var site = _wildSites![b.Site];
         state.Status = SiteStatus.Loaded;
         if (!b.TopUp) state.UnloadAtTick = -1;
+        if (!b.TopUp) state.Planned = 0;
         if (site.Kind == WildKind.Nest && b.Exhausted) CheckWipe(world, site, state);
     }
 
@@ -562,7 +584,7 @@ public sealed partial class PopulationSystem
         _data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r).WorldState.All(w => IWorldStates.Passes(States, _data.Db, w.Id, w.V0));
 
     /// <summary>A sector's squads as it loads, or with <paramref name="topUp"/> ≥ 0 the one squad of the area tick's refill number <paramref name="topUp"/> (<c>PopulationHomeless.cs</c>).</summary>
-    BuiltWild BuildSector(WildSite site, long loadId, ulong seed, IWalkability walk, Vector2[] players, WildHold? hold, int topUp = -1)
+    BuiltWild BuildSector(WildSite site, long loadId, ulong seed, IWalkability walk, Vector2[] players, WildHold? hold, int topUp = -1, int room = int.MaxValue)
     {
         var squads = new List<BuiltSquad>();
         var group = _data.Biomes!.Groups[site.Group];
@@ -580,6 +602,8 @@ public sealed partial class PopulationSystem
         // The save's homeless squads standing in this sector are of its count (and of their entry's).
         for (int i = 0; hold is not null && i < counts.Length; i++) counts[i] = hold.Templates.GetValueOrDefault(group.HomelessSpawns[i].Id);
         int first = hold?.Squads ?? 0;
+        // At load no more than the island has room for (IslandRoom).
+        if (topUp < 0 && room < n - first) n = first + Math.Max(0, room);
         // A refill's key follows the load's (n of them) and the refills before it.
         if (topUp >= 0) (first, n) = (n + topUp, n + topUp + 1);
         for (int s = first; s < n; s++)
