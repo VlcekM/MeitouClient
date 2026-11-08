@@ -24,6 +24,7 @@ return args switch
     ["image-diff", var a, var b] =>ImageDiff.Run(a, b, null),
     ["image-diff", var a, var b, var d] => ImageDiff.Run(a, b, d),
     ["mod-check", .. var checkArgs] => WithInstall(i => ModCheck.Run(i, checkArgs)),
+    ["icons", .. var iconArgs] => WithInstall(i => IconExport.Run(i, iconArgs)),
     ["world-map", var png] => WithInstall(i => WorldSurvey.RenderMap(i, png)),
     ["world-map", var png, var step] => WithInstall(i => WorldSurvey.RenderMap(i, png, int.Parse(step))),
     _ => Usage(),
@@ -59,6 +60,9 @@ static int Usage()
         meitou-tools mod-check <save folder> [--ticks n] [--threads n] [--mod <mod folder>]...
                            load the save headless with the enabled code mods, or the --mod folders (running their code), and compare the state hash
                            per tick over two one-thread runs and a run on n threads (defaults 600, 4): where they differ, and which hashed systems
+        meitou-tools icons <folder> [--enhanced] [--mods]  write every item's inventory icon to the folder, the drawn ones named as the game saves them
+                           (<item>.<material>[.<colour>].png), the others <item>.png, and icons.json listing them; --enhanced draws them supersampled,
+                           --mods uses the install's load order instead of the base game
         meitou-tools world-map <png> [step]  render a top-down world map (every step-th height sample, default 16)
         """);
     return 2;

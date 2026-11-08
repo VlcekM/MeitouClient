@@ -1281,6 +1281,8 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     all of that form; 116 with a colour; also mod items; `data/icons/buildings/` holds BUILDING pictures, see "Building icons"). Every picture of a base-game record is of a drawn kind
     (test `Every_picture_the_game_saved_of_a_base_game_item_is_of_a_kind_it_draws`) except limbs.mod's eight severed limbs (ITEM with a static icon; why they are drawn is **Unknown**). The colour is
     mostly not the record's own `color` reference (15 of 116 are), so it is the instance's colour ([clothing colours](../characters.md#clothing-colours)).
+    A WEAPON's material is a manufacturer's model: the 19 saved Katana (476) pictures are named by exactly the `weapon models` (MATERIAL_SPECS_WEAPON) of the WEAPON_MANUFACTURERs
+    whose `weapon types` list it (**Observed**, `meitou-tools icons` against the saved pictures). `meitou-tools icons <folder>` draws every item's icon by these names (a weapon once a model).
   - **How it is drawn** (**Verified** against FUN_1408473d0, FUN_140846060, FUN_140845f30 and FUN_140840380): a picture of 50 x 50 pixels a footprint cell, each side rounded up to a power of two (saved
     files: 5x4 256x256, 7x1 512x64, 8x2 512x128, 2x6 128x512, 3x3 256x256); a perspective camera, vertical field of view 45 degrees, aspect the footprint's, at (0, 0, 5 x `icon zoom`) looking at the origin;
     the item's node at (`icon offset H`, `icon offset V`, 0) turned by pitch (`icon offset pitch`), then yaw (`icon offset yaw` - 90), then roll (`icon offset roll`) about its own axes. A WEAPON uses the

@@ -110,6 +110,9 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>The icon texture of <paramref name="key"/> if it has been drawn (no request made).</summary>
     public bool HasIcon(IconKey key) => icons.TryGetValue(key, out var e) && e.Drawn;
 
+    /// <summary>The icon of <paramref name="key"/> was drawn with all its textures resident (not one shown after giving up on them).</summary>
+    public bool IconComplete(IconKey key) => icons.TryGetValue(key, out var e) && e.Settled;
+
     /// <summary>
     /// Adds the icons being made to this frame's list (after the characters: they are drawn only by <see cref="DrawIcons"/>, so the world and the shadows skip them), building the
     /// asset of a new one (one a frame). Their node's matrix goes to <paramref name="attach"/> later (<see cref="PoseIcons"/>). Called in <see cref="Update"/>.
