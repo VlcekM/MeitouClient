@@ -477,7 +477,10 @@ highlight or outline call was found for a selected building (**Unknown** whether
 The object stays selected until something replaces or clears it: a left click on another building or another faction's character replaces it.
 Selecting one of the player's characters without Shift (click, drag box, number keys, `[` / `]`) runs `FUN_1407f3b50`, which clears the
 squad selection, the object slot and the focus. With Shift the object slot stays but the focus (the HUD) moves to the character. A click on the
-ground and Esc do not clear it (**Observed** by absence: `FUN_140800250` has no such path, and `FUN_140917120` does not use the focus handle). Every select source goes through the gate `FUN_1407f7f20`, which refuses a dead character (`FUN_1406215b0`, byte +0x5bc): a drag box over only dead characters still clears the selection (the non-additive clear comes first, `FUN_140800f10`:176-186) and selects nothing (**Verified**, decompile).
+ground and Esc do not clear it (**Observed** by absence: `FUN_140800250` has no such path, and `FUN_140917120` does not use the focus handle). Every select source goes through the gate `FUN_1407f7f20`, which refuses a dead character (`FUN_1406215b0`, byte +0x5bc): a drag box over only dead characters still clears the selection (the non-additive clear comes first, `FUN_140800f10`:176-186) and selects nothing (**Verified**, decompile). A click on one of the player's dead characters is different (**Verified**, decompile):
+the click's select `FUN_1407f9000` clears only for a living player character, so the selection stays (Shift or not), and the gate puts the corpse in the
+object slot and moves the focus to it, as another faction's character (Meitou: `PlayerInterface.DeadOwn`, an inspect). The gate also calls character
+vfunc `0x130` on it (**Unknown**: presumably the selection marker).
 
 Shift toggles (**Verified**): on a single player character a Shift-click in the world (`FUN_140800250` -> `FUN_1407fb410` -> `FUN_1407f9000`), a Shift-click on a squad-bar portrait
 (`FUN_140413cd0`) or Shift with a number key (`FUN_140788100` -> `FUN_1407f90b0` -> `FUN_1407f8f60`) takes it out of the selection when it is in it and the selection holds two or more

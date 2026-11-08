@@ -288,6 +288,12 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         {
             // A click on another faction's character shows it in the information and medical panels and drops the squad's selection (docs/game/ui-screens.md section 4). Shift keeps the selection, a click on your own or on the ground clears the inspection.
             var hit = Pick(p);
+            if (hit is { } own && DeadOwn(own))
+            {
+                Inspect(own);
+                return;
+            }
+
             var other = hit is null && !shift ? PickWhere(p, c => !c.IsPlayer) : null;
             // A building under the cursor (and no character) is selected and the characters keep their selection (docs/game/ui-input.md "Building picking and selection").
             if (hit is null && PickWhere(p, _ => true) is null && PickBuilding(p) is { } building)
@@ -303,7 +309,13 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         }
     }
 
-    /// <summary>Shows <paramref name="target"/> (another faction's character; <see cref="CharacterId.None"/> for nobody) in the HUD panels.</summary>
+    /// <summary>
+    /// A click on one of your own dead characters, with or without Shift, keeps the squad's selection and shows the corpse in the HUD panels as another faction's character: the
+    /// original's select skips the clear for the dead and puts them in the object slot instead (<c>FUN_1407f9000</c>, <c>FUN_1407f7f20</c>, docs/game/ui-input.md "Selection").
+    /// </summary>
+    bool DeadOwn(CharacterId id) => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { Body.Dead: true };
+
+    /// <summary>Shows <paramref name="target"/> (another faction's character or your own dead one; <see cref="CharacterId.None"/> for nobody) in the HUD panels.</summary>
     void Inspect(CharacterId target)
     {
         if (!target.IsNone) SetBuilding(null);
