@@ -1,13 +1,14 @@
 using Meitou.Game.Host.Input;
 using Meitou.Game.Rendering.Frame;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Settings;
 
-sealed partial class SettingsMenu
+/// <summary>The one-line hints under the settings rows: per slider, per switch and per bindable action.</summary>
+static class SettingHints
 {
-    static string SliderHint(Slider slider) => SliderHint(slider.Label);
+    internal static string SliderHint(Slider slider) => SliderHint(slider.Label);
 
-    internal static string SliderHint(string label) => Label(label) switch
+    internal static string SliderHint(string label) => SettingsMenu.Label(label) switch
     {
         "VSync" => "Match the display refresh rate to prevent tearing.",
         "Frame limit" => "Frames per second while vertical sync is off.",
@@ -59,7 +60,7 @@ sealed partial class SettingsMenu
         "Night grading strength" => "Adjust the blue shift of colours in low light.",
         "Bloom strength" => "How much of each pixel's light glows into its surroundings.",
         _ when label == WorldFrame.UpscalerSliders[0] => "How edges are smoothed.",
-        _ => $"Adjust {Label(label).ToLowerInvariant()}.",
+        _ => $"Adjust {SettingsMenu.Label(label).ToLowerInvariant()}.",
     };
 
     internal static string ToggleHint(string label) => label switch
@@ -100,10 +101,10 @@ sealed partial class SettingsMenu
         "Blood cells" => "Draw blood on every terrain cell within decal range, not only the 8 nearest.",
         "Interior lamps" => "Keep the lamps of building interiors lit by day too. Stealth counts their light.",
         "Shadow cascade 5 (Meitou)" => "Add a fifth shadow cascade for distant scenery.",
-        _ => $"Enable {Label(label).ToLowerInvariant()}.",
+        _ => $"Enable {SettingsMenu.Label(label).ToLowerInvariant()}.",
     };
 
-    static string BindingHint(InputAction action) => action switch
+    internal static string BindingHint(InputAction action) => action switch
     {
         InputAction.MoveForward => "Move the camera forward.",
         InputAction.MoveBack => "Move the camera backward.",
@@ -166,6 +167,6 @@ sealed partial class SettingsMenu
         InputAction.Prospect => "Prospect the ground with the selected character nearest the camera.",
         InputAction.Rest => "The selection sits down to rest.",
         InputAction.PutDown => "The selected carriers put their bodies down.",
-        _ => $"Choose the control for {ActionLabel(action).ToLowerInvariant()}.",
+        _ => $"Choose the control for {SettingsMenu.ActionLabel(action).ToLowerInvariant()}.",
     };
 }

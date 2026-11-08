@@ -1,17 +1,16 @@
 using Meitou.Game.Rendering.Frame;
-using Meitou.Game.Settings;
 using Meitou.Settings;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Settings;
 
 /// <summary>A slider with named values in the catalogue (render scale's quality modes): a choice of them and Custom, the slider under it locked to the mode's value but under Custom.</summary>
-sealed partial class SettingsMenu
+sealed class SettingModes
 {
     /// <summary>The sliders whose Custom was picked: the slider stays shown even when its value matches a mode.</summary>
-    readonly HashSet<string> customModes = [];
+    internal readonly HashSet<string> customModes = [];
 
     /// <summary>The rows replacing a slider row with modes: the mode choice, then the slider (locked but under Custom); any other row as it is.</summary>
-    IEnumerable<Entry> ModeEntries(Entry row)
+    internal IEnumerable<SettingsMenu.Entry> ModeEntries(SettingsMenu.Entry row)
     {
         if (row is not { Slider: { } slider, Raw: { } key } || LauncherSchema.Find(key) is not { Modes: { Count: > 0 } modes } d)
         {

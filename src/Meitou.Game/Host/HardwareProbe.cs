@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Settings;
 
 namespace Meitou.Game.Host;
 
@@ -20,7 +21,7 @@ static class HardwareProbe
     /// </summary>
     public static string Recommend(bool integrated, bool apple, long videoMemoryMb, long memoryMb, int cores)
     {
-        var names = SettingsMenu.PresetChoices;   // Low, Medium, High, Ultra
+        var names = QualityTiers.PresetChoices;   // Low, Medium, High, Ultra
         if (apple) return names[memoryMb >= 16 * 1024 ? 1 : 0];
         if (integrated || videoMemoryMb < 3 * 1024 || memoryMb < 8 * 1024 || cores < 4) return names[0];
         if (videoMemoryMb < 6 * 1024 || memoryMb < 12 * 1024 || cores < 6) return names[1];

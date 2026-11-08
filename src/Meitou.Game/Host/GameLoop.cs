@@ -14,15 +14,14 @@ using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Terrain;
 using Meitou.Game.Rendering.Upscalers;
+using Meitou.Game.Settings;
 using Meitou.Game.Tutorials;
 using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Session;
-
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
-
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using EngineKey = Meitou.Game.Host.Input.Key;
 using SilkButton = Silk.NET.Input.MouseButton;
@@ -357,10 +356,10 @@ sealed class GameLoop(GameHost host)
         if (panel is not null && !lowEnd && !Environment.GetCommandLineArgs().Any(a => a is "--meitou" or "--faithful"))
         {
             foreach (var toggle in panel.Toggles)
-                if (!SettingsMenu.HiddenSwitch(toggle.Label) && !runOnly.Contains(SwitchKey(toggle.Label)) && host.config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
-            panel.ApplySavedPreset();
+                if (!LookPresets.HiddenSwitch(toggle.Label) && !runOnly.Contains(SwitchKey(toggle.Label)) && host.config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get()) toggle.Set(v >= 0.5f);
+            panel.tiers.ApplySavedPreset();
         }
-        if (host.g.BenchmarkBaseline) panel?.ApplyBenchmarkBaseline();
+        if (host.g.BenchmarkBaseline) panel?.tiers.ApplyBenchmarkBaseline();
     }
 
     /// <summary>
@@ -1547,7 +1546,7 @@ sealed class GameLoop(GameHost host)
                 if (!runOnly.Contains(slider.Label)) host.config.Graphics[slider.Label] = slider.Get();
             foreach (var toggle in panel.Toggles)
                 if (!runOnly.Contains(SwitchKey(toggle.Label))) host.config.Graphics[SwitchKey(toggle.Label)] = toggle.Get() ? 1 : 0;
-            panel.SavePreset();
+            panel.tiers.SavePreset();
         }
         host.config.Bindings = host.session.Bindings.ToDictionary();
         if (!host.g.LowEnd || host.player.UiMode != Meitou.Data.Ui.UiMode.Faithful) host.config.UiMode = host.player.UiMode;   // --low-end's Faithful UI is for the run

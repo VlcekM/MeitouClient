@@ -420,24 +420,24 @@ sealed class ScreenshotScenes(GameHost host)
         }
         string[] tabs = ["lighting", "sky", "colour", "world", "characters"];
         for (int i = 0; i < tabs.Length; i++) Shot(tabs[i], i);
-        menu.ShowcaseOpen("Shadows", "Light shafts", "Ambient light", "Tone map and grade", "Draw distances", "Terrain relief", "Water");
+        menu.grouping.ShowcaseOpen("Shadows", "Light shafts", "Ambient light", "Tone map and grade", "Draw distances", "Terrain relief", "Water");
         Shot("lighting-open", 0);
         Shot("colour-open", 2);
         Shot("world-open", 3);
-        Shot("sky-changed", 1, () => { menu.ShowcaseOpen("Heat haze", "Clouds"); menu.ShowcaseSet("Heat haze strength (1 = game)", 0.8f); });
+        Shot("sky-changed", 1, () => { menu.grouping.ShowcaseOpen("Heat haze", "Clouds"); menu.ShowcaseSet("Heat haze strength (1 = game)", 0.8f); });
         menu.ShowcaseSet("Heat haze strength (1 = game)", 0.5f);
-        Shot("preset-changed", 2, () => { menu.ShowcaseLook(1); menu.ShowcaseSet("Night grading strength (0 = game)", 0.8f); });
-        Shot("preset-list", 2, menu.ShowcaseOpenLooks);
-        Shot("save-as", 2, menu.ShowcaseNaming);
-        Shot("low-quality", 0, () => menu.ShowcaseTier(0));
-        Shot("faithful", 0, () => { menu.ShowcaseTier(2); menu.ShowcaseFaithful(true); });
+        Shot("preset-changed", 2, () => { menu.lookPresets.ShowcaseLook(1); menu.ShowcaseSet("Night grading strength (0 = game)", 0.8f); });
+        Shot("preset-list", 2, menu.lookBar.ShowcaseOpenLooks);
+        Shot("save-as", 2, menu.lookBar.ShowcaseNaming);
+        Shot("low-quality", 0, () => menu.tiers.ShowcaseTier(0));
+        Shot("faithful", 0, () => { menu.tiers.ShowcaseTier(2); menu.lookPresets.ShowcaseFaithful(true); });
         Shot("faithful-world", 3);
         Shot("faithful-changed", 0, () => menu.ShowcaseSwitch("Ambient occlusion", true));
-        menu.ShowcaseFaithful(false);
+        menu.lookPresets.ShowcaseFaithful(false);
         // The world in every look, without the menu (the temporal upscaler's history settles first).
-        for (int i = 0; i < menu.ShowcaseLookCount; i++)
+        for (int i = 0; i < menu.lookPresets.ShowcaseLookCount; i++)
         {
-            string name = menu.ShowcaseLook(i);
+            string name = menu.lookPresets.ShowcaseLook(i);
             for (int f = 0; f < Math.Max(host.gpu.Post!.WarmupFrames, 8); f++) { host.DrawWorld(w, h); display.EndFrame(); }
             host.DrawWorld(w, h);
             display.EndFrame();

@@ -178,7 +178,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
 - Each schema section is a tab: Display (with `tickAhead`, the world tick alongside drawing), then the game's Graphics sub-pages (Lighting, Sky & weather, Colour, World, Characters)
   as `SettingsMenu.Section` / `ToggleSection` place them, switches first. Interior lamps is not listed: it changes the stealth sight, so it
   is on the game's Advanced page only.
-- A section's `groups` (null in older schemas: flat rows) are the menu's features (`SettingsMenu.FeatureGroups`): one row headed by
+- A section's `groups` (null in older schemas: flat rows) are the menu's features (`FeatureGrouping.FeatureGroups`): one row headed by
   a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
   open while the launcher runs), named without the feature's name they repeat, as in the game.
 - The Look row is the game's look bar: Faithful | Meitou, the preset (`looks.presets`, then the player's files), the changes from it
@@ -190,7 +190,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   `values`). A look is a set of `graphics` values, as the game's menu applies it: `looks.faithful` (every Faithful / Meitou effect
   switch off but the performance ones, the look sliders at the game's value) or `looks.meitou` with the preset's own values over them (the quality tier's
   switches are left to the tier). Choosing one writes them, so the rows show it at once and the game counts no change from it; at Low
-  the game still holds the tier's look switches off at start unless kept on (`SettingsMenu.ApplySavedPreset`). No `faithfulLook`
+  the game still holds the tier's look switches off at start unless kept on (`QualityTiers.ApplySavedPreset`). No `faithfulLook`
   reads Faithful when every switch Faithful turns off and Meitou turns on is saved off, as the game does (unsaved, not written back). A look slider's Default writes the look's value.
 - `presets` (null in older schemas: no row) is the Quality preset row over the top-level `graphicsPreset`. The game saves the preset its
   settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--benchmark-baseline`, `--meitou` or `--faithful`), so a preset chosen in

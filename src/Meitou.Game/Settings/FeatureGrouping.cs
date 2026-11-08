@@ -1,20 +1,19 @@
 using Meitou.Game.Rendering.Frame;
 
-
-namespace Meitou.Game;
+namespace Meitou.Game.Settings;
 
 /// <summary>
 /// The Graphics tabs as features (docs/native-ui.md "Settings"): each feature is one header row (its switch, or a title when it has none) with its own
 /// settings folded under it, closed until opened. Settings in no group stay rows of their own.
 /// </summary>
-sealed partial class SettingsMenu
+sealed class FeatureGrouping(SettingsMenu menu)
 {
     /// <summary>A feature: the setting heading it (its switch or slider, by label) or a <see cref="Title"/> when nothing heads it, and its members' labels.</summary>
-    sealed record FeatureGroup(string Id, string? Header, string[] Members, string? Title = null, string Hint = "");
+    internal sealed record FeatureGroup(string Id, string? Header, string[] Members, string? Title = null, string Hint = "");
 
     const string SkinGroup = "Skin";
 
-    static readonly FeatureGroup[] FeatureGroups =
+    internal static readonly FeatureGroup[] FeatureGroups =
     [
         // Lighting
         new("Shadows", "Shadows", [WorldFrame.ShadowDistanceSlider, WorldFrame.ShadowMapSlider, WorldFrame.ShadowFilterSlider,
@@ -54,7 +53,8 @@ sealed partial class SettingsMenu
     /// <summary>The features among a launcher section's <paramref name="keys"/> (docs/launcher.md "Graphics"), by the keys their settings are saved under.</summary>
     internal static List<global::Meitou.Settings.SettingsGroup> LauncherGroups(IReadOnlyCollection<string> keys)
     {
-        string? Key(string label) => keys.Contains(label) ? label : keys.Contains(SwitchKeyPrefix + label) ? SwitchKeyPrefix + label : null;
+        string? Key(string label) => keys.Contains(label) ? label
+            : keys.Contains(SettingsMenu.SwitchKeyPrefix + label) ? SettingsMenu.SwitchKeyPrefix + label : null;
         return [.. FeatureGroups.Select(g => new global::Meitou.Settings.SettingsGroup
             {
                 Header = g.Header is { } header ? Key(header) : null, Title = g.Title ?? g.Id, Description = g.Hint,
@@ -64,7 +64,7 @@ sealed partial class SettingsMenu
     }
 
     /// <summary>The groups the player opened (this session).</summary>
-    readonly HashSet<string> openGroups = [];
+    internal readonly HashSet<string> openGroups = [];
 
     /// <summary>
     /// Where a Graphics row stands on its tab, in both menus: its feature's place in <see cref="FeatureGroups"/>, the rows of no feature after every feature
@@ -79,9 +79,9 @@ sealed partial class SettingsMenu
     static bool InGroup(FeatureGroup g, string raw) => g.Members.Contains(raw) || g.Id == SkinGroup && raw.StartsWith("race:", StringComparison.Ordinal);
 
     /// <summary>A tab's rows as features: each group's header where its first row was, its members under it while it is open; the rest as they were.</summary>
-    List<Entry> Grouped(List<Entry> rows)
+    internal List<SettingsMenu.Entry> Grouped(List<SettingsMenu.Entry> rows)
     {
-        var output = new List<Entry>();
+        var output = new List<SettingsMenu.Entry>();
         var done = new HashSet<string>();
         foreach (var row in rows)
         {
@@ -91,7 +91,7 @@ sealed partial class SettingsMenu
             // In the group's own order (the races after it), named without the feature's name they repeat ("Light shafts strength" is "Strength").
             var members = rows.Where(r => r.Raw is { } m && InGroup(group, m))
                 .OrderBy(r => Array.IndexOf(group.Members, r.Raw) is var i and >= 0 ? i : int.MaxValue).ToList();
-            var header = rows.FirstOrDefault(r => r.Raw == group.Header) ?? new Entry(group.Title ?? group.Id, group.Hint);
+            var header = rows.FirstOrDefault(r => r.Raw == group.Header) ?? new SettingsMenu.Entry(group.Title ?? group.Id, group.Hint);
             bool open = openGroups.Contains(group.Id);
             var resets = new[] { header }.Concat(members).Where(m => m.Changed).Select(m => m.Reset).OfType<Action>().ToList();
             output.Add(header with
@@ -109,7 +109,7 @@ sealed partial class SettingsMenu
         label.Length > group.Length + 1 && label.StartsWith(group + " ", StringComparison.OrdinalIgnoreCase)
             ? char.ToUpperInvariant(label[group.Length + 1]) + label[(group.Length + 2)..] : label;
 
-    void ToggleGroup(string id) { if (!openGroups.Remove(id)) openGroups.Add(id); focus = -1; }
+    internal void ToggleGroup(string id) { if (!openGroups.Remove(id)) openGroups.Add(id); menu.focus = -1; }
 
     internal void ShowcaseOpen(params string[] ids) { foreach (var id in ids) openGroups.Add(id); }
 }

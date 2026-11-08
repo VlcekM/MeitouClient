@@ -20,8 +20,8 @@ static class LauncherSchema
 
     static SettingDescription Graphics(string label, float min, float max, float step, float shown) => new()
     {
-        Key = label, Graphics = true, Kind = SettingKind.Slider, Name = SettingsMenu.Label(label), Description = SettingsMenu.SliderHint(label),
-        Min = min, Max = max, Step = step, Shown = shown, Impact = SettingsMenu.ImpactOf(label),
+        Key = label, Graphics = true, Kind = SettingKind.Slider, Name = SettingsMenu.Label(label), Description = SettingHints.SliderHint(label),
+        Min = min, Max = max, Step = step, Shown = shown, Impact = LookPresets.ImpactOf(label),
     };
 
     static readonly string[] LowMediumHigh = ["Low", "Medium", "High"];
@@ -113,9 +113,9 @@ static class LauncherSchema
         static SettingDescription Switch(string label, string off, string on, bool shown) => new()
         {
             Key = SettingsMenu.SwitchKeyPrefix + label, Graphics = true, Kind = SettingKind.Toggle, Name = SettingsMenu.Label(label),
-            Description = SettingsMenu.ToggleHint(label), Off = off, On = on, Shown = shown ? 1 : 0, Impact = SettingsMenu.ImpactOf(label),
+            Description = SettingHints.ToggleHint(label), Off = off, On = on, Shown = shown ? 1 : 0, Impact = LookPresets.ImpactOf(label),
         };
-        foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).Where(e => !SettingsMenu.HiddenSwitch(e.Name)))
+        foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).Where(e => !LookPresets.HiddenSwitch(e.Name)))
             yield return Switch(e.Name, e.Faithful is "off" or "none" ? "Off" : $"Faithful: {e.Faithful}", $"Meitou: {e.Meitou}", e.IsMeitou);
         yield return Switch(WorldFrame.FifthCascadeSwitch, "Off", "On", true);
         // An optional effect, in neither look: plain Off / On (Toggle.Optional).
@@ -154,11 +154,11 @@ static class LauncherSchema
             Name = "Display",
             Settings =
             [
-                new() { Key = Key(nameof(UserConfig.FullScreen)), Kind = SettingKind.Toggle, Name = "Full screen", Description = SettingsMenu.SliderHint("Full screen"),
+                new() { Key = Key(nameof(UserConfig.FullScreen)), Kind = SettingKind.Toggle, Name = "Full screen", Description = SettingHints.SliderHint("Full screen"),
                     Default = defaults.FullScreen ? 1 : 0, On = "Borderless", Off = "Window" },
-                new() { Key = Key(nameof(UserConfig.VSync)), Kind = SettingKind.Toggle, Name = "VSync", Description = SettingsMenu.SliderHint("VSync"),
+                new() { Key = Key(nameof(UserConfig.VSync)), Kind = SettingKind.Toggle, Name = "VSync", Description = SettingHints.SliderHint("VSync"),
                     Default = defaults.VSync ? 1 : 0 },
-                new() { Key = Key(nameof(UserConfig.FpsLimit)), Kind = SettingKind.Slider, Name = "Frame limit", Description = SettingsMenu.SliderHint("Frame limit"),
+                new() { Key = Key(nameof(UserConfig.FpsLimit)), Kind = SettingKind.Slider, Name = "Frame limit", Description = SettingHints.SliderHint("Frame limit"),
                     Default = defaults.FpsLimit, Shown = defaults.FpsLimit, Min = 0, Max = 360, Step = 5, Suffix = " fps", OffBelow = 1, OffText = "Unlimited" },
                 .. (!OperatingSystem.IsMacOS() ? FrameGenerationSettings(defaults) : []),
                 new() { Key = Key(nameof(UserConfig.TickAhead)), Kind = SettingKind.Slider, Name = "World tick alongside drawing", Description = SettingsMenu.TickAheadHint,
@@ -182,15 +182,15 @@ static class LauncherSchema
                     // Feature by feature, as the menu's tab (SettingsMenu.GroupRank); within, switches first, in the catalogue's order.
                     Settings = [.. switches.Where(s => SettingsMenu.ToggleSection(s.Key[SettingsMenu.SwitchKeyPrefix.Length..]) == page)
                         .Concat(sliders.Where(s => SettingsMenu.Section(s.Key) == page))
-                        .OrderBy(s => SettingsMenu.GroupRank(s.Key.StartsWith(SettingsMenu.SwitchKeyPrefix, StringComparison.Ordinal) ? s.Key[SettingsMenu.SwitchKeyPrefix.Length..] : s.Key))],
+                        .OrderBy(s => FeatureGrouping.GroupRank(s.Key.StartsWith(SettingsMenu.SwitchKeyPrefix, StringComparison.Ordinal) ? s.Key[SettingsMenu.SwitchKeyPrefix.Length..] : s.Key))],
                 }).Where(section => section.Settings.Count > 0)
-                .Select(section => { section.Groups = SettingsMenu.LauncherGroups([.. section.Settings.Select(s => s.Key)]); return section; }),
+                .Select(section => { section.Groups = FeatureGrouping.LauncherGroups([.. section.Settings.Select(s => s.Key)]); return section; }),
             ],
             Presets = new SettingsPresets
             {
-                Key = Key(nameof(UserConfig.GraphicsPreset)), Name = "Quality preset", Description = SettingsMenu.PresetHint,
-                Names = [.. SettingsMenu.PresetChoices], Custom = SettingsMenu.PresetChoices[^1], Default = SettingsMenu.DefaultPreset,
-                Keys = [.. SettingsMenu.PresetKeys()],
+                Key = Key(nameof(UserConfig.GraphicsPreset)), Name = "Quality preset", Description = QualityTiers.PresetHint,
+                Names = [.. QualityTiers.PresetChoices], Custom = QualityTiers.PresetChoices[^1], Default = QualityTiers.DefaultPreset,
+                Keys = [.. QualityTiers.PresetKeys()],
                 Detect = Program.HardwareProbeFlag,
             },
             Looks = Looks(switches, sliders),
@@ -205,19 +205,19 @@ static class LauncherSchema
     static SettingsLooks Looks(List<SettingDescription> switches, List<SettingDescription> sliders)
     {
         var shown = switches.Concat(sliders).ToDictionary(s => s.Key, s => s.Shown);
-        var keys = SettingsMenu.LookKeys(switches.Select(s => s.Key[SettingsMenu.SwitchKeyPrefix.Length..]), sliders.Select(s => s.Key)).ToList();
-        var tier = SettingsMenu.TierSwitchKeys.ToHashSet();
+        var keys = LookPresets.LookKeys(switches.Select(s => s.Key[SettingsMenu.SwitchKeyPrefix.Length..]), sliders.Select(s => s.Key)).ToList();
+        var tier = LookPresets.TierSwitchKeys.ToHashSet();
         bool IsSwitch(string key) => key.StartsWith(SettingsMenu.SwitchKeyPrefix, StringComparison.Ordinal);
         return new SettingsLooks
         {
-            Name = "Look", Description = SettingsMenu.LookHint,
+            Name = "Look", Description = LookPresets.LookHint,
             FaithfulKey = Key(nameof(UserConfig.FaithfulLook)), PresetKey = Key(nameof(UserConfig.LookPreset)),
-            Faithful = keys.ToDictionary(k => k, k => IsSwitch(k) ? 0 : SettingsMenu.UnderSwitch(k) ? shown[k] : SettingsMenu.LabelGameValue(k) ?? shown[k]),
+            Faithful = keys.ToDictionary(k => k, k => IsSwitch(k) ? 0 : LookPresets.UnderSwitch(k) ? shown[k] : LookPresets.LabelGameValue(k) ?? shown[k]),
             Meitou = keys.Where(k => !tier.Contains(k)).ToDictionary(k => k, k => shown[k]),
-            Presets = [.. SettingsMenu.BuiltInLooks.Select(l => new SettingsLook { Name = l.Name, Values = new(l.Values) })],
-            Folder = SettingsMenu.LookFolder,
-            Keys = [.. keys.Where(k => IsSwitch(k) ? SettingsMenu.IsLook(k[SettingsMenu.SwitchKeyPrefix.Length..], true) : SettingsMenu.IsLook(k, false))],
-            Made = SettingsMenu.MeitouVersion,
+            Presets = [.. LookPresets.BuiltInLooks.Select(l => new SettingsLook { Name = l.Name, Values = new(l.Values) })],
+            Folder = LookPresets.LookFolder,
+            Keys = [.. keys.Where(k => IsSwitch(k) ? LookPresets.IsLook(k[SettingsMenu.SwitchKeyPrefix.Length..], true) : LookPresets.IsLook(k, false))],
+            Made = LookPresets.MeitouVersion,
         };
     }
 
