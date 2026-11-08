@@ -12,6 +12,7 @@ public sealed unsafe partial class WorldObjectRenderer
 {
     readonly List<ObjectStreamer.Instance> stageInstances = [];
     Vector3 stageCasterCentre;
+    bool stageCullBacks;
     /// <summary>How far from the character, past its own radius, a prop still casts into the studio's maps (they hold the character's sphere; the rest of a room need not be drawn 34 times).</summary>
     const float StageCasterReach = 80;
 
@@ -19,9 +20,11 @@ public sealed unsafe partial class WorldObjectRenderer
     public bool StagePropPending => stageInstances.Exists(inst => inst.Mesh.Status != ObjectMesh.State.Failed
         && (inst.Gpu is null || inst.Materials is not { } set || !set.Parts.All(p => p.TexturesSettled)));
 
-    /// <summary>Sets the meshes the stage shows round the character (none: the editor is closed). <paramref name="casterCentre"/>: where the character stands.</summary>
-    public void SetStageProps(IReadOnlyList<PlacedMesh> props, Vector3 casterCentre)
+    /// <summary>Sets the meshes the stage shows round the character (none: the editor is closed). <paramref name="casterCentre"/>: where the character stands.
+    /// <paramref name="cullBacks"/>: building parts cull their back faces, as in the world (a room seen from inside: the shell's far side must not fill its windows).</summary>
+    public void SetStageProps(IReadOnlyList<PlacedMesh> props, Vector3 casterCentre, bool cullBacks = false)
     {
+        stageCullBacks = cullBacks;
         foreach (var inst in stageInstances) streamer.DropLoose(inst);
         stageInstances.Clear();
         stageCasterCentre = casterCentre;
@@ -39,7 +42,7 @@ public sealed unsafe partial class WorldObjectRenderer
             if (inst is not { Gpu: { } gpu, Materials: { } materials }) continue;
             if (castersOnly && Vector3.Distance(inst.Centre, stageCasterCentre) - inst.Radius > StageCasterReach) continue;
             inst.Mesh.LastUsed = now;
-            Add(gpu, materials, gpu.MinLevel, inst.Transform * Matrix4x4.CreateTranslation(-origin), 0, 2, 0);
+            Add(gpu, materials, gpu.MinLevel, inst.Transform * Matrix4x4.CreateTranslation(-origin), 0, 2, 0, backCull: stageCullBacks && inst.Placed.Kind == PlacedKind.BuildingPart);
         }
         int total = 0;
         foreach (var b in active) { b.Offset = total; total += b.Count; }

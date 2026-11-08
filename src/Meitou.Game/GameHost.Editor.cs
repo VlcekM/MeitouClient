@@ -118,7 +118,7 @@ sealed partial class GameHost
             (editorPlatformFor, editorSetIsBar) = (character, bar);
             editorBar = bar && scene.Objects is { } world ? EditorBar.At(world, stage.Feet) : null;
             var set = editorBar?.Meshes ?? (Meitou.Data.World.WorldObjectLayout.EditorPlatformMesh(data.Db, Matrix4x4.CreateRotationY(MathF.PI) * stage.Feet) is { } platform ? [platform] : []);
-            objects.SetStageProps(set, stage.Feet.Translation);
+            objects.SetStageProps(set, stage.Feet.Translation, cullBacks: editorBar is not null);
             editorCrowd.Clear();
             if (editorBar is not null)
                 foreach (var (id, faction, at, yaw, clip, seed) in editorBar.Crowd)

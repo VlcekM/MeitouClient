@@ -464,11 +464,13 @@ static class CharacterShaders
                 if (studioLamps() > 0)
                 {
                     // The set's lamps in place of the sun: the first casts the shadow.
-                    colour = albedo * studioAmbient(n, skyOpen);
+                    // The room's bounced light, warm, closed off by the same occlusion: the side no lamp reaches is dark, not black.
+                    colour = albedo * (studioAmbient(n, skyOpen) + vec3(0.32, 0.27, 0.20) * mix(0.35, 1.0, skyOpen));
+                    float lampShade = studioLampShadow(vWorld, n, l);
                     for (int lamp = 0; lamp < studioLamps(); lamp++)
                     {
                         vec3 ll;
-                        vec3 light = studioLamp(lamp, vWorld, ll) * (lamp == 0 ? shade : 1.0);
+                        vec3 light = studioLamp(lamp, vWorld, ll) * (lamp == 0 ? lampShade : 1.0);
                         vec3 lh = normalize(ll + v);
                         float ln = max(dot(n, ll), 0.0);
                         colour += albedo * skinDiffuse(n, smoothNormal, ll, curvature, skin, albedo) * light + pow(max(dot(n, lh), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.6 * ln * light;

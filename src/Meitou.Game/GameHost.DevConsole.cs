@@ -359,14 +359,15 @@ sealed partial class GameHost
             if (gpu?.Particles is { } pr) foreach (var line in pr.Describe(session.Focus, 100000).Where(l => l.Contains("Fly"))) con.Print(line.Trim());
         });
 
-        Add("editor", "editor [yawDegrees]", "opens the character editor (the recruit form: appearance only) on the player squad's leader, as a recruit's would open, or with it open turns its camera (0: in front, 180: behind); for pictures of the editor's stage", (args, con) =>
+        Add("editor", "editor [yawDegrees [elevationDegrees]]", "opens the character editor (the recruit form: appearance only) on the player squad's leader, as a recruit's would open, or with it open turns its camera (0: in front, 180: behind); for pictures of the editor's stage", (args, con) =>
         {
-            if (!Need(args, 0, 1, Self("editor"))) return;
+            if (!Need(args, 0, 2, Self("editor"))) return;
             if (playerSquad is null) { con.Error("editor: no player squad"); return; }
-            if (args.Count == 1)
+            if (args.Count >= 1)
             {
                 if (!float.TryParse(args[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float yaw)) { con.Error("editor: yaw in degrees"); return; }
-                if (!player.TurnEditor(yaw * MathF.PI / 180)) { con.Error("editor: not open"); return; }
+                float? height = args.Count == 2 && float.TryParse(args[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float h) ? h * MathF.PI / 180 : null;
+                if (!player.TurnEditor(yaw * MathF.PI / 180, height)) { con.Error("editor: not open"); return; }
                 con.Print("editor turned to " + yaw);
                 return;
             }

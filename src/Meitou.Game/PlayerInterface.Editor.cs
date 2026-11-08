@@ -270,10 +270,11 @@ sealed partial class PlayerInterface
     /// head (FACE and HAIR share one view) or the character changes, as the original's camera resets then.
     /// </summary>
     /// <summary>Debug: turns the open editor's camera (false when it is closed).</summary>
-    public bool TurnEditor(float yaw)
+    public bool TurnEditor(float yaw, float? elevation = null)
     {
         if (EditorView() is null) return false;
         editor!.Orbit.SetYaw(yaw);
+        if (elevation is { } height) editor.Orbit.SetElevation(height);
         return true;
     }
 

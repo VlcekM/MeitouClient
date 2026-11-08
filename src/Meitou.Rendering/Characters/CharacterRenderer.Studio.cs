@@ -238,6 +238,13 @@ internal static class StudioShaders
                 }
             return lit / total;
         }
+        // The key lamp's shadow on the set: never full (the room's other light fills it) and gone before the map's edge, which would otherwise cut it in a straight line.
+        float studioLampShadow(vec3 world, vec3 n, vec3 l)
+        {
+            mat4 m = mat4(view.cutPlanes[0], view.cutPlanes[1], view.cutPlanes[2], view.cutPlanes[3]);
+            vec4 c = m * vec4(world - view.cutRanges[0].xyz, 1.0);
+            return mix(mix(0.5, 1.0, studioShadow(world, n, l)), 1.0, smoothstep(0.65, 0.95, max(abs(c.x), abs(c.y))));
+        }
         // The sky's visibility (CharacterRenderer.Studio): the share of the sphere's spiral directions, weighted by the normal, from which nothing of the
         // character hides the point, each read in its tile of the sky atlas (cutRanges[1]: its bindless index, the directions, the radius, a tile's pixels).
         float studioSky(vec3 world, vec3 n)

@@ -18,6 +18,8 @@ sealed class EditorOrbit
     public const float StartYaw = 0;
     /// <summary>Debug: sets the camera's turn round the character (the console's <c>editor</c>).</summary>
     public void SetYaw(float radians) => Yaw = radians;
+    /// <summary>Debug: sets the camera's height angle (the console's <c>editor</c>; negative looks up from below the pivot).</summary>
+    public void SetElevation(float radians) => Elevation = radians;
     /// <summary>Radians a pixel of dragging turns, and the distance a wheel step moves (the head's zoom range is a third of the body's).</summary>
     public const float RadiansPerPixel = 0.008f, BodyStep = 1.5f, HeadStep = 0.5f;
 
