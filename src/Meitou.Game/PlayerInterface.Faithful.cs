@@ -419,13 +419,17 @@ sealed partial class PlayerInterface
             view.Height, view.Height + maximum, scroll, maximum, panel.Clip, "hud-jobs");
     }
 
-    void HudScrollAction(string action)
+    /// <summary>The list a HUD scrollbar part scrolls, by the part's name (AddScrollBar's prefix), or null.</summary>
+    static string? HudScrollKey(string name) =>
+        name.StartsWith("hud-jobs", StringComparison.Ordinal) ? "JobsPanel" : name.StartsWith("hud-squad", StringComparison.Ordinal) ? "SquadPanel" : null;
+
+    /// <summary>A HUD scrollbar's arrow (<c>prefix:direction</c>, a line) or track (<c>prefix-page:direction</c>, a page).</summary>
+    void HudScrollAction(string key, string action)
     {
-        string[] parts = action.Split(':');
-        if (parts.Length != 3 || !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float direction)) return;
-        string key = parts[0] == "hud-jobs" ? "JobsPanel" : "SquadPanel";
+        int colon = action.LastIndexOf(':');
+        if (colon < 0 || !float.TryParse(action.AsSpan(colon + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out float direction)) return;
         if (!inventoryViews.TryGetValue(key, out var view)) return;
-        float delta = parts[1] == "page" ? view.View.Height : 24 * Height / 1080f;
+        float delta = action[..colon].EndsWith("-page", StringComparison.Ordinal) ? view.View.Height : 24 * Height / 1080f;
         inventoryScroll[key] = Math.Clamp(inventoryScroll.GetValueOrDefault(key) - direction * delta, 0, view.Maximum);
         if (key == "SquadPanel") squadBarScroll = inventoryScroll[key];
     }

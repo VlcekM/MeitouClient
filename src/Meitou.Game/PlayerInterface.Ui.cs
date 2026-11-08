@@ -365,11 +365,11 @@ sealed partial class PlayerInterface
             UpdateMenuPause();
             return true;
         }
-        if (c.Action.StartsWith("hud-jobs:", StringComparison.Ordinal) || c.Action.StartsWith("hud-squad:", StringComparison.Ordinal))
+        // By name: the thumb has no action.
+        if (HudScrollKey(c.Name) is { } key)
         {
-            string key = c.Action.StartsWith("hud-jobs:", StringComparison.Ordinal) ? "JobsPanel" : "SquadPanel";
             if (c.Name.EndsWith("-thumb", StringComparison.Ordinal)) ScrollThumbDown(key, c, p);
-            else HudScrollAction(c.Action);
+            else HudScrollAction(key, c.Action);
             return true;
         }
         uiHost.Dispatch(c);

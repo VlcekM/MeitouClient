@@ -219,8 +219,8 @@ sealed partial class PlayerInterface
         var track = new UiRect(bar.X, bar.Y + 14 * scale, bar.Width, Math.Max(0, bar.Height - 28 * scale));
         float thumb = Math.Clamp(track.Height * visible / Math.Max(1, canvas), Math.Min(10 * scale, track.Height), track.Height);
         float top = track.Y + (track.Height - thumb) * scroll / maximum;
-        Part(prefix + "-page-up", new(track.X, track.Y, track.Width, top - track.Y), "", prefix + ":page:1");
-        Part(prefix + "-page-down", new(track.X, top + thumb, track.Width, track.Y + track.Height - top - thumb), "", prefix + ":page:-1");
+        Part(prefix + "-page-up", new(track.X, track.Y, track.Width, top - track.Y), "", prefix + "-page:1");
+        Part(prefix + "-page-down", new(track.X, top + thumb, track.Width, track.Y + track.Height - top - thumb), "", prefix + "-page:-1");
         Part(prefix + "-thumb", new(track.X, top, track.Width, thumb), "Kenshi_SmallBarSkin", pickable: true);
         inventoryTracks[id] = (track, thumb);
     }
