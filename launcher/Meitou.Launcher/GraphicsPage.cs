@@ -164,10 +164,22 @@ public sealed partial class MainWindow
         LauncherText.TranslateTree(content, originalUiText);
     }
 
-    Border SettingRow(SettingDescription s) => s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s)
-        : s.Labels is { Length: 2 } ? CheckRow(s, s.Labels[0], s.Labels[1], v => { if (s.Graphics) game.SetGraphics(s.Key, s.Min + v); else game.Set(s.Key, s.Min + v); })
-        : s.Labels is { Length: > 0 } ? ChoiceRow(s) : s.Modes is { Count: > 0 } ? ModesRow(s) : SliderRow(s);
+    Border SettingRow(SettingDescription s)
+    {
+        var row = s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s)
+            : s.Labels is { Length: 2 } ? CheckRow(s, s.Labels[0], s.Labels[1], v => { if (s.Graphics) game.SetGraphics(s.Key, s.Min + v); else game.Set(s.Key, s.Min + v); })
+            : s.Labels is { Length: > 0 } ? ChoiceRow(s) : s.Modes is { Count: > 0 } ? ModesRow(s) : SliderRow(s);
+        if (s.ShownWhen is { } when) ShowWhen(row, when);
+        return row;
+    }
 
+    /// <summary>Shows the row only while the setting it follows is at its value (<see cref="SettingDescription.ShownWhen"/>); checked again after each change.</summary>
+    void ShowWhen(Control row, SettingCondition when)
+    {
+        void Check() => row.IsVisible = !settingByKey.TryGetValue(when.Key, out var other) || when.Matches(CurrentValue(other));
+        rowMarks.Add(Check);
+        Check();
+    }
 
     const double GutterWidth = 22;
 

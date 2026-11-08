@@ -149,6 +149,9 @@ public sealed record SettingDescription
     /// <summary>A slider's named values (render scale's quality modes): a drop-down of them and Custom, the slider shown only under Custom;
     /// a value that is none of them reads Custom. Null: a plain slider (an older launcher shows that either way).</summary>
     public List<SettingMode>? Modes { get; set; }
+    /// <summary>Shown only while another setting of the section is at one value (the DLSS preset while anti-aliasing is DLSS); null: always
+    /// (an older launcher shows it either way).</summary>
+    public SettingCondition? ShownWhen { get; set; }
 
     public string Text(float value)
     {
@@ -166,6 +169,15 @@ public sealed record SettingMode
 
     /// <summary>Whether <paramref name="value"/> is this mode's, within half a slider <paramref name="step"/>.</summary>
     public bool Matches(float value, float step) => MathF.Abs(value - Value) <= step / 2;
+}
+
+/// <summary>A setting (<see cref="Key"/>) at one of its whole values: a choice's index from its slider's left end, a switch's 1 or 0.</summary>
+public sealed record SettingCondition
+{
+    public string Key { get; set; } = "";
+    public float Value { get; set; }
+
+    public bool Matches(float value) => MathF.Abs(value - Value) < 0.5f;
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, UseStringEnumConverter = true,
