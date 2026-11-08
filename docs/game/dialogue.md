@@ -143,8 +143,8 @@ package set.
 ### Firing an event
 
 `FUN_140684990(dialogue, target, event)` refuses when the event's cooldown is above 0, the owner is dead, KO or asleep (unless the
-event is in a mask `DAT_141eeaecc`, contents **Unknown**), the owner is talking already (unless the event is one of 2, 6, 11, 13,
-17, 26, 30, 31, 34, 36, 40, 45, 46, 48, 51, 54, 74), or an owner-state test fails (skipped for 6, 11, 39). After a successful 3, 4,
+event is in the mask `DAT_141eeaecc` = 0x03800800, events 11, 23, 24, 25; **Verified**, the exe's data), the owner is talking already (unless the event is one of 2, 6, 11, 13,
+17, 26, 30, 31, 34, 36, 40, 45, 46, 48, 51, 54, 74: the **interrupting set**, `FUN_1406712f0`), or an owner-state test fails (skipped for 6, 11, 39). After a successful 3, 4,
 27, 66 or 67 that event has a 1.0 cooldown (frame dt).
 
 Event 1 starts a [player conversation](#player-conversation), using a stored `interrupt` DIALOGUE instead of the event-1 list when one
@@ -278,7 +278,7 @@ reply used, **runs its effects**, then chooses and says the reply's best child.
 
 `FUN_140683f90(dialogue, target, line, event, force)`: a monologue root outside event 1 shows a **speech bubble**, no window; a root
 says its best child (as in [Choosing a line](#choosing-a-line)), any other line is said as given. Large font for events 2, 11, 17, 26,
-31, 34, 36, 40, 45, 74, medium for the interrupting set.
+31, 34, 36, 40, 45, 74 (`FUN_1406713a0`, **Verified**), medium for the others.
 
 **Chain** (`FUN_140684720`, **Observed**): when a bubble ends, the owner's state picks the best child of the said line with full
 speaker resolution (owner, target, interjector), copies its target to that speaker's state, and that speaker says it; a line said by
@@ -305,8 +305,8 @@ until the player character has been out of notice.
 **Timing** (`FUN_140685090`, `FUN_14067fd80`): showing a bubble sets timer `+0x230` = 2.0 + 0.12 × text length (both constants **Verified**,
 read from the exe); DA 12 sets the second timer `+0x234` (val0). Both lose the frame dt each update, only while the pause flag
 `DAT_1421349c9` is clear, and the next line starts once both are below 0 (**Verified**; the dt unit is **Unknown**). Updates do nothing
-while a state test on the owner (`FUN_1407d1440`) holds, unless the event is in the `DAT_141eeaecc` mask (**Observed**; Meitou drops a
-bubble whose speaker is not awake). The `repetition limit` check passes when the cooldown is 0, the line was never used (stored time
+while a state test on the owner (`FUN_1407d1440`) holds, unless the event is in the `DAT_141eeaecc` mask (11, 23, 24, 25; **Observed**; Meitou drops a
+bubble whose speaker is not awake). No test of whether the speaker is drawn: a bubble shows over a character hidden inside a building (**Observed**, `FUN_140672320`). The `repetition limit` check passes when the cooldown is 0, the line was never used (stored time
 −99.0, **Verified** constant) or now − last use ≥ the cooldown (`FUN_140678f30`).
 
 **End** (`FUN_140674830`): bubble and window closed, the per-event counter +1 with its time (read by DC 13), the event's last target
@@ -577,7 +577,9 @@ squad simply takes the speaker in, unless a target flag at +0x1d0 is set):
 Code (**Observed**): the window (`FUN_140725740`, opened by `FUN_140727820`) names the speaker and the player character and renders
 both portraits; choices use the MyGUI colours `DialogueTextOption` / `DialogueTextOptionHover`; the NPC frame grows to its text (Meitou keeps the layout's frame and scrolls a longer line under the EditBox's bar). The
 bubble (`FUN_140725f30`) uses Kenshi_StandardFont_Large or _Medium, sits 4 units above the "Bip01 Head" bone, and fades from opaque at
-1000 to gone at 2500 units from the camera (distance ×0.5 for large, ×0.75 for medium events). Meitou draws it as that layout
+1000 to gone at 2500 units from the camera, the distance ×0.5 for large-font events, ×0.75 for the rest of the
+[interrupting set](#firing-an-event), ×1 for the others; an interrupting bubble is clamped inside the screen, left and top edges winning (`FUN_140672320`,
+`FUN_1407221c0`, flags `+0x149` / `+0x14a` set by `FUN_140683f90`; constants **Verified** from the exe). Meitou draws it as that layout
 (`PlayerInterface.AddSpeech`): the skin and `DialogueBubbleText` #e6e6e6 with a black 1 px shadow, fitted to the wrapped text (the original's sizing is **Unknown**).
 
 ## Unknowns

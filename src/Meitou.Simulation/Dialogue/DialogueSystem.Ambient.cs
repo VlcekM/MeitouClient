@@ -3,8 +3,11 @@ using Meitou.Data.Gameplay.Dialogue;
 
 namespace Meitou.Simulation.Dialogue;
 
-/// <summary>A line on show over a character's head (docs/game/dialogue.md "Ambient conversations"): <see cref="Large"/> for the events that use the large font.</summary>
-public sealed record SpeechBubble(CharacterId Speaker, string Text, bool Large);
+/// <summary>
+/// A line on show over a character's head (docs/game/dialogue.md "Ambient conversations"): <see cref="Large"/> for the events that use the large font,
+/// <see cref="Interrupting"/> for the interrupting set, whose bubbles fade over a longer range and stay on screen.
+/// </summary>
+public sealed record SpeechBubble(CharacterId Speaker, string Text, bool Large, bool Interrupting = false);
 
 public sealed partial class DialogueSystem
 {
@@ -16,7 +19,7 @@ public sealed partial class DialogueSystem
 
     readonly List<Bubble> bubbles = [];
     // The lines on show: the text and the tick it goes (display only: follows from the bubbles, so not hashed).
-    readonly SortedDictionary<CharacterId, (string Text, long Until, bool Large)> shown = new(Comparer<CharacterId>.Create(CompareIds));
+    readonly SortedDictionary<CharacterId, (string Text, long Until, bool Large, bool Interrupting)> shown = new(Comparer<CharacterId>.Create(CompareIds));
     // When a squad last reacted to seeing a character (the cooldown of SeeOthers).
     readonly SortedDictionary<(int Squad, CharacterId Target), double> ambientAt = new(Comparer<(int, CharacterId)>.Create((a, b) => a.Item1 != b.Item1 ? a.Item1.CompareTo(b.Item1) : CompareIds(a.Item2, b.Item2)));
     // The NPC / player-character pairs noticed at the world's first look (a new game or a load) and not lost from notice since: no sight line for them (engine choice; the
@@ -32,10 +35,13 @@ public sealed partial class DialogueSystem
     /// <summary>The AI-to-AI talking range (DC 16 TARGET_IN_TALKING_RANGE, 260 units): how near another squad's NPC must be to be greeted (engine choice).</summary>
     const float TalkingRange = 260;
 
-    /// <summary>The events whose bubbles use the large font (<c>FUN_140725f30</c>, <b>Observed</b>); the others use the medium one.</summary>
+    /// <summary>The events whose bubbles use the large font (<c>FUN_1406713a0</c>, <b>Verified</b>); the others use the medium one.</summary>
     static bool IsLarge(int ev) => ev is 2 or 11 or 17 or 26 or 31 or 34 or 36 or 40 or 45 or 74;
 
-    public IReadOnlyList<SpeechBubble> PublishSpeech() => [.. shown.Select(s => new SpeechBubble(s.Key, s.Value.Text, s.Value.Large))];
+    /// <summary>The interrupting set (<c>FUN_1406712f0</c>, <b>Verified</b>): the large-font events and 6, 13, 30, 46, 48, 51, 54.</summary>
+    static bool IsInterrupting(int ev) => IsLarge(ev) || ev is 6 or 13 or 30 or 46 or 48 or 51 or 54;
+
+    public IReadOnlyList<SpeechBubble> PublishSpeech() => [.. shown.Select(s => new SpeechBubble(s.Key, s.Value.Text, s.Value.Large, s.Value.Interrupting))];
 
     /// <summary>
     /// A campaign's <c>dialog announcement</c> (docs/game/factions-squads-towns.md "Campaigns", announcement): <paramref name="dialogueId"/> fired as event 2 by
@@ -323,7 +329,8 @@ public sealed partial class DialogueSystem
             float seconds = 2 + 0.12f * text.Length;
             if (text.Length > 0)
             {
-                shown[speaker] = (text, world.Tick + (long)MathF.Ceiling(seconds / world.TickSeconds), IsLarge(c.Event));
+                long until = world.Tick + (long)MathF.Ceiling(seconds / world.TickSeconds);
+                shown[speaker] = (text, until, IsLarge(c.Event), IsInterrupting(c.Event));
                 world.Said(NameOf(world, speaker), text, world.Characters.Cold(n) is { IsPlayer: true });
             }
             foreach (var e in line.Effects) if (e.Action == DialogueActions.BubbleWait) seconds = MathF.Max(seconds, e.Value);

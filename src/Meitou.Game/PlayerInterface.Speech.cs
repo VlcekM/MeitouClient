@@ -10,8 +10,8 @@ namespace Meitou.Game;
 sealed partial class PlayerInterface
 {
     /// <summary>
-    /// The bubble sits 4 units above the head and fades from opaque at 1000 units from the camera to gone at 2500, the distance counted x0.5 for the large font's events and
-    /// x0.75 for the others (<b>Observed</b>, the original's bubble code). The box is the original's <c>Kenshi_SpeechPanel</c> layout (<b>Verified</b>): a
+    /// The bubble sits 4 units above the head and fades from opaque at 1000 units from the camera to gone at 2500, the distance counted x0.5 for the large font's events,
+    /// x0.75 for the rest of the interrupting set and x1 for the others; an interrupting bubble is kept on screen (<b>Verified</b>, the original's bubble code). The box is the original's <c>Kenshi_SpeechPanel</c> layout (<b>Verified</b>): a
     /// <c>Kenshi_SpeechPanelSkin</c> at most 0.2344 of the screen wide, the centred <c>DialogueBubbleText</c> in Kenshi_StandardFont_Large or _Medium with a black shadow
     /// in its 0.0689, 0.125, 0.8556 x 0.75 box. Fitting the panel to its text is Meitou's (the original's sizing is not mapped).
     /// </summary>
@@ -25,16 +25,21 @@ sealed partial class PlayerInterface
         {
             if (session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == bubble.Speaker) is not { } who) continue;
             var head = TagAnchor(who, where(who));
-            float distance = Vector3.Distance(Eye, head) * (bubble.Large ? 0.5f : 0.75f);
+            float distance = Vector3.Distance(Eye, head) * (bubble.Large ? 0.5f : bubble.Interrupting ? 0.75f : 1);
             float alpha = Math.Clamp((2500 - distance) / 1500f, 0, 1);
             if (alpha <= 0 || Project(head) is not { } at) continue;
             var text = SpeechText(painter, bubble);
             float w = (text.Width + 4) / 0.855556f, h = MathF.Max(text.Height / 0.75f, Height * 0.0222222f);
-            shown.Add((bubble, text, alpha, new UiRect(at.X - w / 2, at.Y - 4 * scale - h, w, h)));
+            var panel = new UiRect(at.X - w / 2, at.Y - 4 * scale - h, w, h);
+            shown.Add((bubble, text, alpha, bubble.Interrupting ? OnScreen(panel) : panel));
         }
         var panels = SeparateBubbles([.. shown.Select(b => b.Panel)]);
         for (int n = 0; n < shown.Count; n++) AddBubble(controls, n, shown[n].Bubble, shown[n].Text, shown[n].Alpha, panels[n]);
     }
+
+    /// <summary>An interrupting bubble moved inside the screen, its left and top edges winning on a screen too small for it (<c>FUN_1407221c0</c>).</summary>
+    UiRect OnScreen(UiRect panel) =>
+        panel with { X = MathF.Max(MathF.Min(panel.X, Width - panel.Width), 0), Y = MathF.Max(MathF.Min(panel.Y, Height - panel.Height), 0) };
 
     void AddBubble(List<UiControl> controls, int n, SpeechBubble bubble, FittedSpeech text, float alpha, UiRect panel)
     {
