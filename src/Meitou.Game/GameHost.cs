@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Numerics;
+
 using Meitou.Content;
 using Meitou.Data.Ogre;
 using Meitou.Game.Audio;
@@ -19,7 +19,6 @@ using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Overlays;
 using Meitou.Game.Rendering.Particles;
-using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
 using Meitou.Game.Scenarios;
@@ -27,15 +26,10 @@ using Meitou.Game.Settings;
 using Meitou.Game.Title;
 using Meitou.Modding;
 using Meitou.Simulation;
-using Meitou.Simulation.Factions;
-using Meitou.Simulation.Population;
 using Meitou.Simulation.Session;
-using Silk.NET.Maths;
-using Silk.NET.Windowing;
-using EngineKey = Meitou.Game.Host.Input.Key;
+
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
-using SilkKey = Silk.NET.Input.Key;
-using SilkButton = Silk.NET.Input.MouseButton;
+using EngineKey = Meitou.Game.Host.Input.Key;
 
 namespace Meitou.Game;
 
@@ -54,6 +48,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     internal readonly UserConfig config = config;
 
     // The features, each a class of its own taking the host (made first in Run).
+    internal GameLoop gameLoop = null!;
     internal GameSound sound = null!;
     internal TitleScreen titleScreen = null!;
     internal NewGameLaunch newGame = null!;
@@ -94,7 +89,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     public Meitou.Data.Save.SaveGame? StartSave { get; init; }
     /// <summary>Reads the world in the interactive run, on a worker behind the loading screen (the host owns the scene then); null: the scene was given.</summary>
     public Func<WorldScene?>? LoadScene { get; init; }
-    WorldScene? ownedScene;
+    internal WorldScene? ownedScene;
     /// <summary>The native splash shown since the program started; closed when the game window first shows.</summary>
     public IDisposable? Splash { get; init; }
     internal WorldSession session = null!;   // disposed with the host (Run)
@@ -144,10 +139,10 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     internal Meitou.Game.Rendering.Upscalers.Ngx? ngx;
     internal bool screenshotRequested;
     /// <summary>Frames in a row that could not be drawn while a control screenshot waits; at 30 the screenshot is answered with an error.</summary>
-    int shotNoFrame;
+    internal int shotNoFrame;
     // The interactive run's animation clock (foliage sway, clouds, water): the frame steps, which are exact while the cinema records; off, the real time.
     internal double animSeconds;
-    bool animClock;
+    internal bool animClock;
     // Draw-list state (GameHost.Characters.cs): the previous snapshot indexed by id, and the last camera focus sent to the world.
     internal WorldSnapshot? indexedFor;
     internal readonly Dictionary<CharacterId, CharacterSnapshot> previousById = [];
@@ -156,11 +151,11 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     Vector3 lastFocus;
     bool sentFocus;
     // Profile of the interactive run (printed by --quit-after).
-    double advanceTotal, fillTotal;
-    long fillCalls;
+    internal double advanceTotal, fillTotal;
+    internal long fillCalls;
     // --quit-after keeps the exposed menu's frame pacing separate from covered loading work.
-    double menuFrameSeconds, menuLongestFrame;
-    long menuFrames, menuSlowFrames;
+    internal double menuFrameSeconds, menuLongestFrame;
+    internal long menuFrames, menuSlowFrames;
 
     public int Run()
     {
@@ -175,7 +170,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 Console.Error.WriteLine($"the {g.Renderer} renderer is macOS only.");
                 return 2;
             }
-            return o.Screenshot is not null ? screenshotScenes.Screenshot() : Interactive();
+            return o.Screenshot is not null ? screenshotScenes.Screenshot() : gameLoop.Run();
         }
         finally { sound.DisposeAudio(); titleScreen.DisposeTitleScene(); session?.Dispose(); nav?.Dispose(); ragdollGeometry?.Dispose(); ownedScene?.Dispose(); }
     }
@@ -183,6 +178,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// <summary>Makes the feature classes; first in <see cref="Run"/>, before anything reads them.</summary>
     void CreateFeatures()
     {
+        gameLoop = new(this);
         sound = new(this);
         titleScreen = new(this);
         newGame = new(this);
@@ -221,7 +217,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     }
 
     /// <summary>The start opens on the title (no start, save, sandbox or duel was asked for).</summary>
-    bool OpensOnTitle(bool interactive) => g.TitlePreview || interactive && start is null && StartSave is null && !sandbox.IsSandbox && !duel.IsDuel && !battle.IsBattle && !g.NoPopulation;
+    internal bool OpensOnTitle(bool interactive) => g.TitlePreview || interactive && start is null && StartSave is null && !sandbox.IsSandbox && !duel.IsDuel && !battle.IsBattle && !g.NoPopulation;
 
     internal void Boot(VulkanDisplay display, bool interactive)
     {
@@ -804,7 +800,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     float birdAspect = 16f / 9;
 
     /// <summary>This frame's world draw overlaps the next world tick (set by the interactive loop; never in stills, the duel, recorded flights or the play benchmark).</summary>
-    bool tickAhead;
+    internal bool tickAhead;
 
     /// <summary>
     /// Meitou's dynamic tick ahead (engine choice): on once a world tick takes <see cref="AheadOnMs"/> (smoothed), off again under <see cref="AheadOffMs"/>, so a quiet
@@ -813,7 +809,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     const double AheadOnMs = 4, AheadOffMs = 2;
     bool worldBusy;
 
-    bool TickAheadWanted() => config.TickAhead switch
+    internal bool TickAheadWanted() => config.TickAhead switch
     {
         TickAheadMode.Always => true,
         TickAheadMode.Dynamic => worldBusy = session.TickMs >= (worldBusy ? AheadOffMs : AheadOnMs),

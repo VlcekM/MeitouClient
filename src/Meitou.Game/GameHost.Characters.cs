@@ -27,7 +27,7 @@ sealed partial class GameHost
     const float FocusCeiling = Meitou.Data.World.KenshiCamera.FlightHeight;
 
     /// <summary>The window's aspect ratio, kept by the frame loop for <see cref="SendView"/>.</summary>
-    float viewAspect = 16f / 9;
+    internal float viewAspect = 16f / 9;
 
     /// <summary>The settings' <c>npc range</c>, read once (the drawing takes it once too; reading settings.cfg every frame cost 0.09 ms).</summary>
     float? npcRange;
@@ -40,7 +40,7 @@ sealed partial class GameHost
     }
 
     /// <summary>Tells the world where the camera looks, when it has moved enough to matter (the zones follow it).</summary>
-    void SendFocus(Vector3? at = null)
+    internal void SendFocus(Vector3? at = null)
     {
         if (duel.IsDuel) return;   // the duel's worlds keep the focus on its spot (DuelSetup), wherever the camera flies
         SendView();
@@ -410,7 +410,7 @@ sealed partial class GameHost
     }
 
     /// <summary>Squares over the characters that have no drawing (a failed build, a world without looks), coloured by faction.</summary>
-    void DrawMarkers(DebugOverlay overlay, int width, int height)
+    internal void DrawMarkers(DebugOverlay overlay, int width, int height)
     {
         var view = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
         var current = session.CurrentSnapshot;

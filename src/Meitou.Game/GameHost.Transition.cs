@@ -30,9 +30,9 @@ sealed partial class GameHost
     /// <summary>The hour of the save being read, set by the reading worker as soon as its CAMERA is read (NaN until then), for the sky arrival.</summary>
     internal float readHour = float.NaN;
     internal bool warming;
-    double smoothSeconds;
+    internal double smoothSeconds;
     double warmSeconds;
-    double readySeconds;
+    internal double readySeconds;
     double nextWarmReport;
     /// <summary>Seconds of the warm-up the VRAM guard has held its pressure without a break.</summary>
     double guardSeconds;
@@ -65,7 +65,7 @@ sealed partial class GameHost
     }
 
     /// <summary>Once a frame, between ticks: the next stage of the running load when its work is done and a covered frame was drawn.</summary>
-    void StepSceneLoad()
+    internal void StepSceneLoad()
     {
         if (sceneLoad is not { } load || !load.Shown || load.Waiting is { IsCompleted: false }) return;
         // Reading a save can overlap the ascent; world mutations wait until the ground is out of view.
@@ -200,7 +200,7 @@ sealed partial class GameHost
     bool AwaitsLook(Meitou.Simulation.CharacterSnapshot c, Meitou.Game.Rendering.Characters.CharacterRenderer characters) =>
         c.Appearance is { } look && InLoadingReach(c) && !characters.IsPrepared(look) && !HeldPrepared(look, c.HeldTool, characters);
 
-    void AdvanceSkyArrival(double seconds)
+    internal void AdvanceSkyArrival(double seconds)
     {
         if (skyArrival is not { } arrival) return;
         if (Volatile.Read(ref readHour) is var hour && !float.IsNaN(hour)) arrival.SetDestination(hour);
@@ -210,7 +210,7 @@ sealed partial class GameHost
         presentationHour = null;
     }
 
-    void ApplySkyArrival()
+    internal void ApplySkyArrival()
     {
         presentationHour = skyArrival?.Apply(camera, titleScreen.TitleVisible ? titleScreen.TitleHour : (float)session.Clock.HourOfDay, warming);
     }

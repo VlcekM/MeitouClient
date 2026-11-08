@@ -11,7 +11,7 @@ namespace Meitou.Game;
 sealed partial class GameHost
 {
     VulkanDisplay? loadingDisplay;
-    DebugOverlay? loadingOverlay;
+    internal DebugOverlay? loadingOverlay;
     internal LoadingScreen? loading;
     // The steps of a start, in order, with their shown names and about how many seconds each takes (measured 2026-10-14 on an RTX 4070 machine, a cold start at
     // The Hub); the bar's share of a step is its time over the sum. The renderer's steps are named by WorldFrame.CreateGpu. "colourmap" comes only on a start
@@ -31,16 +31,16 @@ sealed partial class GameHost
     internal (string Step, string Label, double Seconds)[] loadingSteps = StartSteps;
 
     /// <summary>The original's background-loading bar (Faithful UI mode), stepped once a drawn frame.</summary>
-    readonly ResourceLoadBar loadBar = new();
+    internal readonly ResourceLoadBar loadBar = new();
 
     /// <summary>
     /// What the bar counts as the original's resource loader queue: the objects' and the characters' loads waiting (engine choice: the original's queue holds the
     /// meshes and textures it loads in the background; Meitou's terrain and foliage streaming are left out, as the original's are not in that queue).
     /// </summary>
-    int PendingLoads() => (ActiveObjects?.Pending ?? 0) + (ActiveCharacters?.PendingLoads ?? 0);
+    internal int PendingLoads() => (ActiveObjects?.Pending ?? 0) + (ActiveCharacters?.PendingLoads ?? 0);
 
     /// <summary>Opens the loading screen on the window (nothing without an overlay, e.g. headless).</summary>
-    void BeginLoadingScreen(VulkanDisplay display)
+    internal void BeginLoadingScreen(VulkanDisplay display)
     {
         loadingDisplay = display;
         loadingOverlay = DebugOverlay.TryCreate(display.Context, assets.Find);
@@ -49,7 +49,7 @@ sealed partial class GameHost
     }
 
     /// <summary>A step of the load starts: the bar moves to its share and the screen is drawn once (the step itself may then hold the thread).</summary>
-    void LoadingStep(string step)
+    internal void LoadingStep(string step)
     {
         if (loading is null) return;
         SetLoadingStep(step);
@@ -81,7 +81,7 @@ sealed partial class GameHost
     }
 
     /// <summary>Draws one loading frame and handles the window's events; false when the window is being closed.</summary>
-    bool LoadingFrame()
+    internal bool LoadingFrame()
     {
         if (loadingDisplay?.Window is not { } window || loading is null || loadingOverlay is null) return true;
         // The longest time the window went without a frame (the measure of a frozen screen), and the step it was in.
@@ -107,7 +107,7 @@ sealed partial class GameHost
     }
 
     /// <summary>Waits for <paramref name="work"/> drawing loading frames (about 60 a second); the window closing cancels the start.</summary>
-    T AwaitLoading<T>(Task<T> work)
+    internal T AwaitLoading<T>(Task<T> work)
     {
         while (!work.IsCompleted)
         {
@@ -119,7 +119,7 @@ sealed partial class GameHost
 
     void AwaitLoading(Task work) => AwaitLoading(work.ContinueWith(t => { t.GetAwaiter().GetResult(); return true; }, TaskScheduler.Default));
 
-    void EndLoadingScreen()
+    internal void EndLoadingScreen()
     {
         loading?.Dispose();
         loadingOverlay?.Dispose();
@@ -127,5 +127,5 @@ sealed partial class GameHost
     }
 
     /// <summary>The window was closed while the game was loading.</summary>
-    sealed class LoadingCancelledException : Exception;
+    internal sealed class LoadingCancelledException : Exception;
 }
