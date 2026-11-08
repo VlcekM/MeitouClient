@@ -18,14 +18,14 @@ public sealed partial class CaptiveSystem
     internal static readonly TaskType[] GoalTypes =
     [
         // The prisoner's fate, the eaters and the worshippers.
-        TaskType.KILL_A_RANDOM_CAGE_OCCUPANT, TaskType.EAT_A_RANDOM_CAGE_OCCUPANT, TaskType.EAT_A_RANDOM_CAGE_OCCUPANT_MEASURED_RATE,
-        TaskType.EAT_A_RANDOM_DEAD_BODY, TaskType.EAT_A_RANDOM_KO_BODY, TaskType.FIND_CROPS_TO_EAT, TaskType.FOGMAN_WORSHIP_VICTIM,
+        TaskType.KillARandomCageOccupant, TaskType.EatARandomCageOccupant, TaskType.EatARandomCageOccupantMeasuredRate,
+        TaskType.EatARandomDeadBody, TaskType.EatARandomKoBody, TaskType.FindCropsToEat, TaskType.FogmanWorshipVictim,
         // The dogs' limb play.
-        TaskType.ANIMAL_FETCH_A_LIMB, TaskType.PLAY_BECAUSE_I_HAVE_A_LIMB_IN_MOUTH, TaskType.CHASE_ALLY_DOGS_WITH_MOUTH_LIMBS,
+        TaskType.AnimalFetchALimb, TaskType.PlayBecauseIHaveALimbInMouth, TaskType.ChaseAllyDogsWithMouthLimbs,
         // The slavers and their slaves.
-        TaskType.NEW_SLAVE_PROCESSING, TaskType.SLAVE_WATCHING, TaskType.LIBERATE_ALL_THE_PRISONERS, TaskType.CAPTURE_NEW_SLAVES,
-        TaskType.CARRY_WOUNDED_SLAVES, TaskType.WORK_THE_SLAVES, TaskType.GATHER_SLAVES_FROM_CAGES, TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST,
-        TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN, TaskType.GO_TO_SOMEWHERE_FOR_DELIVERING_SLAVES, TaskType.SLAVE_GET_IN_MY_MASTERS_CAGE,
+        TaskType.NewSlaveProcessing, TaskType.SlaveWatching, TaskType.LiberateAllThePrisoners, TaskType.CaptureNewSlaves,
+        TaskType.CarryWoundedSlaves, TaskType.WorkTheSlaves, TaskType.GatherSlavesFromCages, TaskType.GatherSlavesFromCagesIfFemaleOrBeast,
+        TaskType.GatherSlavesFromCagesIfItsAnExportTown, TaskType.GoToSomewhereForDeliveringSlaves, TaskType.SlaveGetInMyMastersCage,
     ];
 
     /// <summary>
@@ -67,7 +67,7 @@ public sealed partial class CaptiveSystem
     static void ClearOffers(World world, int slot) => world.Characters.Cold(slot)?.Ai?.CaptiveOffers.Clear();
 
     // The workers whose job ended in this step's job loop (SlowWorld), offered anew once those jobs are gone.
-    readonly List<CharacterId> ended = [];
+    readonly List<CharacterId> _ended = [];
 
     /// <summary>
     /// Keeps the offers of each worker whose job just ended, on the state after the job, so its next think weighs its captive goals at once
@@ -76,10 +76,10 @@ public sealed partial class CaptiveSystem
     void OfferAfterJobs(World world)
     {
         var table = world.Characters;
-        foreach (var id in ended)
+        foreach (var id in _ended)
             if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { Ai.Squad: { Ai: { } board } squad })
                 KeepOffers(world, squad, board, slot, world.Hour);
-        ended.Clear();
+        _ended.Clear();
     }
 
     /// <summary>
@@ -88,9 +88,9 @@ public sealed partial class CaptiveSystem
     /// </summary>
     float OfferDesire(World world, Squad squad, CharacterCold cold, TaskType type) => type switch
     {
-        TaskType.WORK_THE_SLAVES or TaskType.GO_TO_SOMEWHERE_FOR_DELIVERING_SLAVES => DeliverDesire(world, squad),
-        TaskType.PLAY_BECAUSE_I_HAVE_A_LIMB_IN_MOUTH => PlayDesire(world, cold),
-        TaskType.CHASE_ALLY_DOGS_WITH_MOUTH_LIMBS => ChaseDesire(world, cold),
+        TaskType.WorkTheSlaves or TaskType.GoToSomewhereForDeliveringSlaves => DeliverDesire(world, squad),
+        TaskType.PlayBecauseIHaveALimbInMouth => PlayDesire(world, cold),
+        TaskType.ChaseAllyDogsWithMouthLimbs => ChaseDesire(world, cold),
         _ => 1,
     };
 
@@ -107,7 +107,7 @@ public sealed partial class CaptiveSystem
             mind.CaptiveAsk = false;
             mind.CaptiveOffers.Clear();
             if (!table.Next[s].Alive || mind.Goal is not { } goal || mind.Squad.Ai is not { } board) continue;
-            if (jobs.Count >= Settings.MaxJobs || Busy(table.IdOf(s))) continue;
+            if (_jobs.Count >= Settings.MaxJobs || Busy(table.IdOf(s))) continue;
             Start(world, mind.Squad, board, s, cold, goal);
         }
     }

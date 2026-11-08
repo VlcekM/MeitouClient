@@ -78,7 +78,7 @@ public class FirstAidTests
     {
         FcsRecord Kit(string id, string name, int function, float quality, float charges)
         {
-            var r = new FcsRecord { StringId = id, Flags = 0x10, Name = name, RecordType = FcsRecordType.ITEM };
+            var r = new FcsRecord { StringId = id, Flags = 0x10, Name = name, RecordType = FcsRecordType.Item };
             r.Ints["item function"] = function;
             r.Floats["quality"] = quality;
             r.Floats["charges"] = charges;
@@ -97,15 +97,15 @@ public class FirstAidTests
     {
         public SimWorld World { get; }
         public ItemFactory Items { get; }
-        readonly OpenGroundWalkability walk = new(SyntheticTown.Ground);
+        readonly OpenGroundWalkability _walk = new(SyntheticTown.Ground);
         public List<CharacterId> Ids { get; } = [];
 
         public Rig(int threads = 1, int minPartition = 16, FirstAidSettings? settings = null, ulong seed = 5)
         {
             Items = new ItemFactory(KitDatabase(), BaseGame);
-            var movement = new MovementSystem(new PathService(walk, true));
+            var movement = new MovementSystem(new PathService(_walk, true));
             var systems = new List<ITickSystem> { new PlayerSystem(), movement, new FirstAidSystem(BaseGame, BodyOptions.Default, Items, settings), new BodySystem(BaseGame, BodyOptions.Default) };
-            World = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, walk, systems);
+            World = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, _walk, systems);
         }
 
         /// <summary>Adds a character at a spot; <paramref name="kits"/> are record ids put in its inventory. All join squad <paramref name="squad"/> (created when new).</summary>
@@ -358,11 +358,11 @@ public class FirstAidTests
     static CagedWorld CagedPrisoner(float rise, AiGoal[]? goals = null)
     {
         // The cage record with a use node 30 to its side (local +X), raised by `rise`.
-        var node = SyntheticTown.Rec("56-a", FcsRecordType.BUILDING, "Use node");
+        var node = SyntheticTown.Rec("56-a", FcsRecordType.Building, "Use node");
         node.Bools["is node"] = true;
         node.Ints["node type"] = 4;
         var data = ArrestTests.Town([node]);
-        var withDoor = SyntheticTown.Rec("54-a", FcsRecordType.BUILDING, "Prisoner Cage");   // a later file adds the node to the cage, as a mod would
+        var withDoor = SyntheticTown.Rec("54-a", FcsRecordType.Building, "Prisoner Cage");   // a later file adds the node to the cage, as a mod would
         withDoor.Instances.Add(new FcsInstance { Id = "door", Target = "56-a", Position = new Vector3(30, rise, 0) });
         var edit = new FcsFile();
         edit.Records.Add(withDoor);
@@ -420,8 +420,8 @@ public class FirstAidTests
     [InlineData(false)]
     public void A_guard_on_its_post_treats_a_caged_prisoner_by_its_medic_goal(bool listsMedic)
     {
-        var post = Goal(TaskType.HOLD_POSITION, TaskPriority.NonUrgent);
-        AiGoal[] goals = listsMedic ? [post, Goal(TaskType.JOB_MEDIC, TaskPriority.Urgent)] : [post];
+        var post = Goal(TaskType.HoldPosition, TaskPriority.NonUrgent);
+        AiGoal[] goals = listsMedic ? [post, Goal(TaskType.JobMedic, TaskPriority.Urgent)] : [post];
         using var c = CagedPrisoner(0, goals);
         Assert.NotNull(c.World.Characters.Cold(c.Guard.Slot)!.Ai);
         for (int t = 0; t < 3000 && Bandage(c.Body) == 0; t++) c.World.RunTick();
@@ -439,7 +439,7 @@ public class FirstAidInstallTests
         Assert.SkipWhen(InstallData.BaseGame is null, "Kenshi install not found");
         var db = InstallData.BaseGame!;
         var items = new ItemFactory(db, GameConstants.FromDatabase(db));
-        var citizen = db.OfType(FcsRecordType.CHARACTER).First(r => r.Name == "Citizen" && r.GetReferences("inventory").Any(i => i.TargetStringId == "515-gamedata.base"));
+        var citizen = db.OfType(FcsRecordType.Character).First(r => r.Name == "Citizen" && r.GetReferences("inventory").Any(i => i.TargetStringId == "515-gamedata.base"));
         var inventory = items.Build(citizen, null);
         Assert.Contains(inventory.All(), i => i.Record == "515-gamedata.base" && i.ItemFunction == 1);
     }

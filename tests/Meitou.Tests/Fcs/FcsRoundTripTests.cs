@@ -22,8 +22,8 @@ public class FcsRoundTripTests
         record.Bools["on"] = true;
         record.Floats["chance"] = 0.5f;
         record.Ints["count"] = -3;
-        record.Vector3s["offset"] = new Vector3(1, 2, 3);
-        record.Vector4s["colour"] = new Vector4(1, 2, 3, 4);
+        record.Vector3S["offset"] = new Vector3(1, 2, 3);
+        record.Vector4S["colour"] = new Vector4(1, 2, 3, 4);
         record.Strings["text"] = "hello";
         record.Filenames["mesh"] = "a.mesh";
         record.References["conditions"] = [new("2-test.mod", 1, 0, 0)];
@@ -39,10 +39,10 @@ public class FcsRoundTripTests
         Assert.Equal(["gamedata.base", "Newwworld.mod"], back.Dependencies);
         var r = Assert.Single(back.Records);
         Assert.Equal("1-test.mod", r.StringId);
-        Assert.Equal(new Vector4(1, 2, 3, 4), r.Vector4s["colour"]);
+        Assert.Equal(new Vector4(1, 2, 3, 4), r.Vector4S["colour"]);
         Assert.Equal(new FcsReference("2-test.mod", 1, 0, 0), Assert.Single(r.References["conditions"]));
         Assert.Equal("open", Assert.Single(Assert.Single(r.Instances).States));
-        Assert.Equal(new System.Numerics.Quaternion(0.1f, 0.2f, 0.3f, 0.9f), r.Instances[0].Rotation);
+        Assert.Equal(new Quaternion(0.1f, 0.2f, 0.3f, 0.9f), r.Instances[0].Rotation);
         Assert.True(r.IsModified && r.IsRenamed);
         Assert.Equal(42, back.NextId);
         if (type == FcsFileType.V17)

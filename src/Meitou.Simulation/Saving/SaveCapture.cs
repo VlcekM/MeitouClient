@@ -1,4 +1,3 @@
-using SquadMemoryData = Meitou.Simulation.Dialogue.SquadMemoryData;
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Characters;
@@ -11,6 +10,7 @@ using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
+using SquadMemoryData = Meitou.Simulation.Dialogue.SquadMemoryData;
 
 namespace Meitou.Simulation.Saving;
 
@@ -81,8 +81,8 @@ public static partial class SaveCapture
         var builder = prepared ?? PrepareBase(data, loaded, options);
         var game = builder.Game;
         var camera = game.Camera;
-        memoryPass = new MemoryPass();
-        SavedKit.OwnerNotes = memoryPass.Owners;
+        s_memoryPass = new MemoryPass();
+        SavedKit.OwnerNotes = s_memoryPass.Owners;
 
         camera.Day = clock.Day;
         camera.Hour = clock.Hour;
@@ -166,17 +166,17 @@ public static partial class SaveCapture
     /// <summary>The platoon's mission town (Meitou key: the TOWN id of the site its package took it to), read back as <see cref="Platoon.Target"/>.</summary>
     public const string MissionTownKey = "meitou mission town";
 
-    [ThreadStatic] static MemoryPass? memoryPass;
+    [ThreadStatic] static MemoryPass? s_memoryPass;
 
     static Dialogue.SquadMemory? MemoryOf(World world) => world.Systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault()?.Memory;
 
     /// <summary>Puts a squad's memory (null: none, which clears the record's) on a platoon record once the capture has written every character (<see cref="MemorySave"/>).</summary>
-    static void NoteMemory(FcsRecord record, SquadMemoryData? data) => memoryPass?.Targets.Add((record, data));
+    static void NoteMemory(FcsRecord record, SquadMemoryData? data) => s_memoryPass?.Targets.Add((record, data));
 
     static void WriteMemories()
     {
-        if (memoryPass is not { } pass) return;
-        memoryPass = null;
+        if (s_memoryPass is not { } pass) return;
+        s_memoryPass = null;
         foreach (var (record, data) in pass.Targets)
             MemorySave.Write(record, data, id => pass.Handles.TryGetValue(id, out var hand) ? hand : null);
         // The carry links (FUN_1406280a0 writes the partner's handle under `carrying`, the null one when it is not saved).
@@ -210,7 +210,7 @@ public static partial class SaveCapture
         if (options.Placements is null) return;
         foreach (var p in options.Placements)
         {
-            if (data.Db.Find(p.TownId) is not { Type: FcsRecordType.TOWN } record) continue;
+            if (data.Db.Find(p.TownId) is not { Type: FcsRecordType.Town } record) continue;
             var town = TownData.From(record);
             // The level state's handle, as the original keeps it (docs/formats/save.md "Object handles"): the buildings' and platoons' town handles name it.
             Hand? hand = p.StateId is not null && options.Levels?.Level.Find(p.StateId) is { } level && level.Ints.ContainsKey("handI")
@@ -250,7 +250,8 @@ public static partial class SaveCapture
         var sites = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var s in data.Sites) if (s.InstanceId.Length > 0) sites.TryAdd(s.InstanceId, s.Index);
         foreach (var town in game.Towns)
-            if (!town.IsNest && sites.TryGetValue(town.Instance, out int site) && population.PoolsOf(site) is { } pools) {
+            if (!town.IsNest && sites.TryGetValue(town.Instance, out int site) && population.PoolsOf(site) is { } pools)
+            {
                 pools.Write(town.Record);
                 town.Record.Bools["started"] = pools.Started;
             }
@@ -465,14 +466,14 @@ public static partial class SaveCapture
             if (orders && sc.Ai is { } queueAi)
                 OrderSave.Write(queueAi, cold, world, buildings, (record, prefix, who) =>
                 {
-                    if (memoryPass is { } pass) pass.OrderTargets.Add((record, prefix, who));   // the handle is written once every character has one
+                    if (s_memoryPass is { } pass) pass.OrderTargets.Add((record, prefix, who));   // the handle is written once every character has one
                     else if (world.Characters.TryResolveNext(who, out int slot) && world.Characters.Cold(slot)?.Save is { } held) held.Source.Handle.Write(record, prefix);
                 });
             HeldSave.Write(g, cold, link, world.Fixtures, buildings);
             // Carrying or carried: the bool says which, the partner's handle is written once every character has one.
             g.Bools["carrying"] = !cold.Carrying.IsNone;
             var partner = cold.Carrying.IsNone ? cold.CarriedBy : cold.Carrying;
-            if (partner.IsNone) Hand.Null.Write(g, "carrying"); else memoryPass?.Carries.Add((g, partner));
+            if (partner.IsNone) Hand.Null.Write(g, "carrying"); else s_memoryPass?.Carries.Add((g, partner));
             // A world without ragdolls (headless) keeps what was read; a stale pose is not used where the character no longer lies.
             if (id.IsNone) RagdollSave.Write(g, null);
             else if (world.Systems.OfType<Ragdolls.RagdollSystem>().FirstOrDefault() is { } ragdolls) RagdollSave.Write(g, ragdolls.SaveState(id));
@@ -489,13 +490,13 @@ public static partial class SaveCapture
         if (isNew || cold.LookEdited) WriteAppearance(sc, cold, data.Db, races, replace: !isNew);
         // What it carries and wears, as it is now; items read from a save keep their records' other keys.
         if (cold.Inventory is { } inventory) builder.SetInventory(platoon, sc, SavedKit.FromInventory(inventory));
-        if (!id.IsNone) memoryPass?.Handles[id] = sc.Handle;
+        if (!id.IsNone) s_memoryPass?.Handles[id] = sc.Handle;
         return sc;
     }
 
     /// <summary>The <c>warrior spirit</c> of the character record's STATS template (0 without one or without the field).</summary>
     static float WarriorSpiritOf(GameDatabase db, string recordId) =>
-        db.Find(recordId)?.GetReferences("stats").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId)).FirstOrDefault(s => s?.Type == FcsRecordType.STATS)?.GetFloat("warrior spirit") ?? 0;
+        db.Find(recordId)?.GetReferences("stats").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId)).FirstOrDefault(s => s?.Type == FcsRecordType.Stats)?.GetFloat("warrior spirit") ?? 0;
 
     static void WriteBody(SaveCharacter sc, string recordId, CharacterStats? stats, MedicalState? medical, bool isNew, PopulationData data, Dictionary<string, RaceData?> races)
     {
@@ -783,11 +784,11 @@ public static partial class SaveCapture
         if (game.Zones.TryGetValue(b.Zone, out var zone) && zone.BuildingList is { } list)
         {
             var entry = list.Instances.FirstOrDefault(i => i.Id == b.InstanceId);
-            if (entry is not null && zone.File.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.GAMESTATE_BUILDING && entry.States.Contains(r.StringId)) is { } state
+            if (entry is not null && zone.File.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.GamestateBuilding && entry.States.Contains(r.StringId)) is { } state
                 && Hand.Read(state, "handle") is { IsNull: false } saved)
                 return saved;
         }
-        return b.HandleSlot >= 0 ? new Hand((int)FcsRecordType.BUILDING, SaveZone.ContainerIdOf(b.Zone), ZoneContainerSerial, b.HandleSlot, b.HandleSerial) : null;
+        return b.HandleSlot >= 0 ? new Hand((int)FcsRecordType.Building, SaveZone.ContainerIdOf(b.Zone), ZoneContainerSerial, b.HandleSlot, b.HandleSerial) : null;
     }
 
     /// <summary>The <c>CS</c> of every zone container (docs/formats/save.md "Object handles").</summary>
@@ -829,11 +830,11 @@ public static partial class SaveCapture
         var list = zone.BuildingList;
         if (list is null)
         {
-            list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Id = NextRecordId(file), Name = "0", StringId = WorldLevelData.BuildingListId };
+            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextRecordId(file), Name = "0", StringId = WorldLevelData.BuildingListId };
             file.Records.Add(list);
         }
         string stateId = placement.StateId ?? placement.InstanceId + "-S23";   // the hex of GAMESTATE_BUILDING (35)
-        var state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Id = NextRecordId(file), Name = "0", StringId = stateId };
+        var state = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Id = NextRecordId(file), Name = "0", StringId = stateId };
         state.Bools["is complete"] = true;
         state.Bools["destroyed"] = placement.DestroyedOverride ?? false;
         state.Floats["world Y pos"] = placement.WorldY ?? placement.Position.Y;
@@ -875,12 +876,12 @@ public static partial class SaveCapture
             if (ReferenceEquals(source, target)) return;
             if (replace)
             {
-                target.Bools.Clear(); target.Floats.Clear(); target.Ints.Clear(); target.Vector3s.Clear(); target.Strings.Clear(); target.References.Clear();
+                target.Bools.Clear(); target.Floats.Clear(); target.Ints.Clear(); target.Vector3S.Clear(); target.Strings.Clear(); target.References.Clear();
             }
             foreach (var (k, v) in source.Bools) target.Bools[k] = v;
             foreach (var (k, v) in source.Floats) target.Floats[k] = v;
             foreach (var (k, v) in source.Ints) target.Ints[k] = v;
-            foreach (var (k, v) in source.Vector3s) target.Vector3s[k] = v;
+            foreach (var (k, v) in source.Vector3S) target.Vector3S[k] = v;
             foreach (var (k, v) in source.Strings) target.Strings[k] = v;
             foreach (var (k, v) in source.References) target.References[k] = [.. v];
             return;
@@ -889,7 +890,7 @@ public static partial class SaveCapture
         target.Bools["in editor"] = false;
         target.Ints["body version"] = 2;
         target.Ints["Age"] = 20;
-        target.Vector3s["Skin Tone"] = new Vector3(0.5f, 0.5f, 0.5f);
+        target.Vector3S["Skin Tone"] = new Vector3(0.5f, 0.5f, 0.5f);
         foreach (var k in new[] { "head", "idle stance", "beard", "hair style" }) target.Strings[k] = "";
         if (db.Find(cold.RecordId) is { } record)
             foreach (var r in record.GetReferences("race"))

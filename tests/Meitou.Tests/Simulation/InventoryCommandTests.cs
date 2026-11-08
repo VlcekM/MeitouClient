@@ -43,7 +43,7 @@ public class InventoryCommandTests
     public void TryEquipFillsTheBackThenTheHipAndRefusesWhenBothAreFull()
     {
         var inventory = new Inventory();
-        ItemInstance Weapon(int width) => new() { Record = "w", Type = Meitou.Data.Fcs.FcsRecordType.WEAPON, Width = width, Height = 1 };
+        ItemInstance Weapon(int width) => new() { Record = "w", Type = Data.Fcs.FcsRecordType.Weapon, Width = width, Height = 1 };
         var (a, b, c, d, e) = (Weapon(5), Weapon(5), Weapon(10), Weapon(7), Weapon(7));
         Assert.True(InventoryCommands.TryEquip(inventory, a));
         Assert.True(InventoryCommands.TryEquip(inventory, b));

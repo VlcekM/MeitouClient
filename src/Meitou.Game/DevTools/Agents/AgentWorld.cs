@@ -17,17 +17,17 @@ namespace Meitou.Game.DevTools.Agents;
 sealed class AgentWorld(GameHost host)
 {
     /// <summary>The camera at the last poll tick and for how many ticks in a row it did not move (0.25 s each): <c>camera-settled</c> waits for two.</summary>
-    (Vector3 Eye, Vector3 Target, float Distance) camStamp;
-    int camStable;
+    (Vector3 Eye, Vector3 Target, float Distance) _camStamp;
+    int _camStable;
 
-    bool CameraSettled => camStable >= 2;
+    bool CameraSettled => _camStable >= 2;
 
     internal void ControlCameraTick()
     {
-        var c = host.session.Camera.Current;
+        var c = host.Session.Camera.Current;
         var stamp = (c.Eye, c.Target, c.Distance);
-        camStable = stamp == camStamp ? camStable + 1 : 0;
-        camStamp = stamp;
+        _camStable = stamp == _camStamp ? _camStable + 1 : 0;
+        _camStamp = stamp;
     }
 
     /// <summary>A timed camera move (<c>--over</c>): driven once per frame from <see cref="ControlCameraMoveTick"/>, eased in and out; the command replies when it ends.</summary>
@@ -42,22 +42,22 @@ sealed class AgentWorld(GameHost host)
         public bool Follow;
     }
 
-    CameraMove? cameraMove;
+    CameraMove? _cameraMove;
 
     /// <summary>Once per frame, before the camera is drawn: advances the running timed move (smoothstep from start to end) and, at its end, replies to the command that started it.</summary>
     internal void ControlCameraMoveTick()
     {
-        if (cameraMove is not { } m) return;
+        if (_cameraMove is not { } m) return;
         double t = Math.Min(1, Stopwatch.GetElapsedTime(m.Start).TotalSeconds / m.Seconds);
         float e = (float)(t * t * (3 - 2 * t));
         var p1 = m.Pivot1;
-        if (m.Entity is not null && host.player.agentOrders.ControlPosition(m.Entity) is { } at) p1 = m.Pivot1 = new Vector2(at.X, at.Z);
-        host.session.Camera.Place(Vector2.Lerp(m.Pivot0, p1, e), m.Yaw0 + (m.Yaw1 - m.Yaw0) * e, m.Pitch0 + (m.Pitch1 - m.Pitch0) * e, m.Dist0 + (m.Dist1 - m.Dist0) * e);
+        if (m.Entity is not null && host.Player.AgentOrders.ControlPosition(m.Entity) is { } at) p1 = m.Pivot1 = new Vector2(at.X, at.Z);
+        host.Session.Camera.Place(Vector2.Lerp(m.Pivot0, p1, e), m.Yaw0 + (m.Yaw1 - m.Yaw0) * e, m.Pitch0 + (m.Pitch1 - m.Pitch0) * e, m.Dist0 + (m.Dist1 - m.Dist0) * e);
         if (t < 1) return;
-        cameraMove = null;
-        if (m.Follow && m.Entity is not null && AgentOrders.TryParseCharacter(m.Entity, out var cid)) host.player.agentOrders.ControlFocusCharacter(cid);
-        camStable = 0;
-        if (m.Id is { } id) { string json = ControlCameraJson(); host.agentChannel.ControlWrite(id, true, "camera move done", json); }
+        _cameraMove = null;
+        if (m.Follow && m.Entity is not null && AgentOrders.TryParseCharacter(m.Entity, out var cid)) host.Player.AgentOrders.ControlFocusCharacter(cid);
+        _camStable = 0;
+        if (m.Id is { } id) { string json = ControlCameraJson(); host.AgentChannel.ControlWrite(id, true, "camera move done", json); }
     }
 
     internal static bool Num(string text, out float value) => float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) && float.IsFinite(value);
@@ -77,20 +77,20 @@ sealed class AgentWorld(GameHost host)
 
     string ControlCameraJson()
     {
-        var c = host.session.Camera.Current;
+        var c = host.Session.Camera.Current;
         using var stream = new MemoryStream();
         using (var w = new Utf8JsonWriter(stream))
         {
             w.WriteStartObject();
-            w.WriteString("mode", host.session.Camera.IsFree ? "free" : "strategy");
+            w.WriteString("mode", host.Session.Camera.IsFree ? "free" : "strategy");
             void Vec(string name, Vector3 v) { w.WriteStartArray(name); foreach (float f in new[] { v.X, v.Y, v.Z }) w.WriteNumberValue(Math.Round(f, 1)); w.WriteEndArray(); }
             Vec("pivot", c.Target);
             Vec("eye", c.Eye);
             w.WriteNumber("yaw", Math.Round(NormalDegrees(c.Yaw), 1));
             w.WriteNumber("pitch", Math.Round(c.Pitch * 180 / MathF.PI, 1));
             w.WriteNumber("zoom", Math.Round(c.Distance, 1));
-            w.WriteNumber("fov", Math.Round(host.camera.FieldOfView * 180 / MathF.PI, 1));
-            w.WriteString("focus", host.player.Follow is { } f ? $"c:{f.Slot}.{f.Generation}" : null);
+            w.WriteNumber("fov", Math.Round(host.Camera.FieldOfView * 180 / MathF.PI, 1));
+            w.WriteString("focus", host.Player.Follow is { } f ? $"c:{f.Slot}.{f.Generation}" : null);
             w.WriteBoolean("settled", CameraSettled);
             w.WriteEndObject();
         }
@@ -105,25 +105,25 @@ sealed class AgentWorld(GameHost host)
 
     void CameraPlace(Vector2 pivot, float? yaw, float? pitch, float? zoom)
     {
-        var c = host.session.Camera.Current;
-        host.session.Camera.Place(pivot, yaw ?? c.Yaw, pitch ?? c.Pitch, zoom ?? c.Distance);
+        var c = host.Session.Camera.Current;
+        host.Session.Camera.Place(pivot, yaw ?? c.Yaw, pitch ?? c.Pitch, zoom ?? c.Distance);
     }
 
     /// <summary>The world position of an entity id, or an error line for the console.</summary>
     Vector3? ControlEntity(string id, DevConsole con)
     {
-        if (host.player.agentOrders.ControlPosition(id) is { } p) return p;
+        if (host.Player.AgentOrders.ControlPosition(id) is { } p) return p;
         con.Error($"no entity '{id}' (ids come from world: c:<slot>.<gen> or b:<key>)");
         return null;
     }
 
     internal void RegisterControlWorldCommands()
     {
-        var c = host.devConsoleHost.devConsole;
+        var c = host.DevConsoleHost.DevConsole;
         void Add(string name, string usage, string help, Action<IReadOnlyList<string>, DevConsole> run) => c.Register(new ConsoleCommand(name, usage, help, run));
         bool Loaded(DevConsole con)
         {
-            if (!host.Covered && !host.player.TitleOpen) return true;
+            if (!host.Covered && !host.Player.TitleOpen) return true;
             con.Error("no world is loaded yet (state.screen is not world)");
             return false;
         }
@@ -140,20 +140,20 @@ sealed class AgentWorld(GameHost host)
                 {
                     // Pick at the centre of an entity's on-screen rect (what a click on it would hit); the reply says whether that is the entity itself.
                     entity = args[2];
-                    if (host.player.agentOrders.ControlEntityScreenJson(entity) is not { } rect) { con.Error($"no entity '{entity}'"); return; }
+                    if (host.Player.AgentOrders.ControlEntityScreenJson(entity) is not { } rect) { con.Error($"no entity '{entity}'"); return; }
                     using var doc = JsonDocument.Parse(rect);
                     if (!doc.RootElement.TryGetProperty("center", out var centre)) { con.Error($"world pick: {entity} is offscreen"); return; }
                     (px, py) = (centre[0].GetSingle(), centre[1].GetSingle());
                 }
                 else if (args.Count != 3 || !Num(args[1], out px) || !Num(args[2], out py)) { con.Error("usage: world pick <screen x> <screen y> | world pick --entity <id>"); return; }
-                string pick = host.player.agentOrders.ControlPickJson(new Vector2(px, py));
+                string pick = host.Player.AgentOrders.ControlPickJson(new Vector2(px, py));
                 if (entity is not null)
                 {
                     using var doc = JsonDocument.Parse(pick);
                     bool same = doc.RootElement.TryGetProperty("id", out var got) && string.Equals(got.GetString(), entity, StringComparison.OrdinalIgnoreCase);
                     pick = pick[..^1] + ",\"entity\":" + JsonSerializer.Serialize(entity) + ",\"matches\":" + (same ? "true" : "false") + "}";
                 }
-                host.agentChannel.controlData = pick;
+                host.AgentChannel.ControlData = pick;
                 con.Print(pick);
                 return;
             }
@@ -161,7 +161,7 @@ sealed class AgentWorld(GameHost host)
             foreach (string key in flags.Keys)
                 if (key is not ("" or "--near" or "--radius" or "--kind" or "--limit")) { con.Error($"world: unknown flag {key}"); return; }
             if (flags[""].Count > 0) { con.Error($"world: unexpected '{flags[""][0]}'"); return; }
-            Vector3 near = host.session.Camera.Current.Target;
+            Vector3 near = host.Session.Camera.Current.Target;
             if (flags.TryGetValue("--near", out var nv))
             {
                 if (nv.Count == 1) { if (ControlEntity(nv[0], con) is not { } at) return; near = at; }
@@ -178,16 +178,16 @@ sealed class AgentWorld(GameHost host)
             }
             int limit = 50;
             if (flags.TryGetValue("--limit", out var lv) && (lv.Count != 1 || !int.TryParse(lv[0], NumberStyles.None, CultureInfo.InvariantCulture, out limit) || limit < 1)) { con.Error("world: --limit needs a whole number"); return; }
-            string json = host.player.agentOrders.ControlWorldJson(near, radius, kind, limit);
-            host.agentChannel.PrintData(con, json);
+            string json = host.Player.AgentOrders.ControlWorldJson(near, radius, kind, limit);
+            host.AgentChannel.PrintData(con, json);
         });
 
         Add("entity-screen", "entity-screen <id>", "the entity's on-screen rect [x,y,w,h] and centre in screen pixels, or state offscreen; characters also report occluded (something else is under the centre)", (args, con) =>
         {
             if (!Loaded(con)) return;
             if (args.Count != 1) { con.Error("usage: entity-screen <id>"); return; }
-            if (host.player.agentOrders.ControlEntityScreenJson(args[0]) is not { } json) { con.Error($"no entity '{args[0]}'"); return; }
-            host.agentChannel.PrintData(con, json);
+            if (host.Player.AgentOrders.ControlEntityScreenJson(args[0]) is not { } json) { con.Error($"no entity '{args[0]}'"); return; }
+            host.AgentChannel.PrintData(con, json);
         });
 
         Add("camera", "camera | camera set [--pos x z] [--yaw d] [--pitch d] [--zoom v] | rotate <deg> | pitch <deg> | zoom <v> | focus <id | x z> | orbit <id | x z> <yawDeg>  [--over <s>]",
@@ -208,43 +208,43 @@ sealed class AgentWorld(GameHost host)
             // The end of the move: target pivot, entity to follow, absolute yaw/pitch/boom (null: unchanged), yaw as a relative amount.
             Vector2? movePivot = null; string? moveEntity = null; float? moveYaw = null, moveYawBy = null, movePitch = null, moveZoom = null; bool moveFollow = false;
             string sub = args.Count > 0 ? args[0].ToLowerInvariant() : "";
-            if (sub.Length == 0) { string json = ControlCameraJson(); host.agentChannel.PrintData(con, json); return; }
-            if (cameraMove is { } running)
+            if (sub.Length == 0) { string json = ControlCameraJson(); host.AgentChannel.PrintData(con, json); return; }
+            if (_cameraMove is { } running)
             {
-                cameraMove = null;
-                if (running.Id is { } oldId) host.agentChannel.ControlWrite(oldId, true, "camera move replaced by a newer one", ControlCameraJson());
+                _cameraMove = null;
+                if (running.Id is { } oldId) host.AgentChannel.ControlWrite(oldId, true, "camera move replaced by a newer one", ControlCameraJson());
             }
-            var strat = host.session.Camera.Strategy;
-            var view = host.session.Camera.Current;
-            var pivot = strat.PivotXZ;
+            var strat = host.Session.Camera.Strategy;
+            var view = host.Session.Camera.Current;
+            var pivot = strat.PivotXz;
             float deg = 0;
             bool oneNumber = args.Count == 2 && Num(args[1], out deg);
             switch (sub)
             {
                 case "set":
-                {
-                    var flags = ControlFlags(args.Skip(1).ToList());
-                    float? yaw = null, pitch = null, zoom = null;
-                    foreach (var (key, values) in flags)
                     {
-                        if (key.Length == 0) { if (values.Count > 0) { con.Error("camera set: unexpected " + values[0]); return; } continue; }
-                        if (key == "--pos")
+                        var flags = ControlFlags(args.Skip(1).ToList());
+                        float? yaw = null, pitch = null, zoom = null;
+                        foreach (var (key, values) in flags)
                         {
-                            if (values.Count != 2 || !Num(values[0], out float x) || !Num(values[1], out float z)) { con.Error("camera set: --pos needs x z"); return; }
-                            pivot = new Vector2(x, z);
+                            if (key.Length == 0) { if (values.Count > 0) { con.Error("camera set: unexpected " + values[0]); return; } continue; }
+                            if (key == "--pos")
+                            {
+                                if (values.Count != 2 || !Num(values[0], out float x) || !Num(values[1], out float z)) { con.Error("camera set: --pos needs x z"); return; }
+                                pivot = new Vector2(x, z);
+                            }
+                            else if (key is "--yaw" or "--pitch" or "--zoom")
+                            {
+                                if (values.Count != 1 || !Num(values[0], out float v)) { con.Error($"camera set: {key} needs a number"); return; }
+                                if (key == "--yaw") yaw = v * MathF.PI / 180; else if (key == "--pitch") pitch = v * MathF.PI / 180; else zoom = v;
+                            }
+                            else { con.Error($"camera set: unknown flag {key}"); return; }
                         }
-                        else if (key is "--yaw" or "--pitch" or "--zoom")
-                        {
-                            if (values.Count != 1 || !Num(values[0], out float v)) { con.Error($"camera set: {key} needs a number"); return; }
-                            if (key == "--yaw") yaw = v * MathF.PI / 180; else if (key == "--pitch") pitch = v * MathF.PI / 180; else zoom = v;
-                        }
-                        else { con.Error($"camera set: unknown flag {key}"); return; }
+                        host.Player.Follow = null;
+                        if (over > 0) { movePivot = pivot; moveYaw = yaw; movePitch = pitch; moveZoom = zoom; break; }
+                        CameraPlace(pivot, yaw, pitch, zoom);
+                        break;
                     }
-                    host.player.Follow = null;
-                    if (over > 0) { movePivot = pivot; moveYaw = yaw; movePitch = pitch; moveZoom = zoom; break; }
-                    CameraPlace(pivot, yaw, pitch, zoom);
-                    break;
-                }
                 case "rotate":
                     if (!oneNumber) { con.Error("usage: camera rotate <degrees> (relative)"); return; }
                     if (over > 0) { moveYawBy = deg * MathF.PI / 180; break; }
@@ -262,33 +262,33 @@ sealed class AgentWorld(GameHost host)
                     break;
                 case "focus":
                 case "orbit":
-                {
-                    // focus <id | x z>; orbit <id | x z> <yawDeg>
-                    bool orbit = sub == "orbit";
-                    int words = args.Count - 1 - (orbit ? 1 : 0);
-                    if (words is < 1 or > 2 || (orbit && !Num(args[^1], out deg))) { con.Error(orbit ? "usage: camera orbit <id | x z> <yawDeg> [--over <s>]" : "usage: camera focus <id | x z> [--over <s>]"); return; }
-                    float? yaw = orbit ? deg * MathF.PI / 180 : null;
-                    if (words == 2)
                     {
-                        if (!Num(args[1], out float fx) || !Num(args[2], out float fz)) { con.Error("camera " + sub + ": x z must be numbers"); return; }
-                        host.player.Follow = null;
-                        if (over > 0) { movePivot = new Vector2(fx, fz); if (orbit) moveYawBy = yaw; break; }
-                        CameraPlace(new Vector2(fx, fz), yaw, null, null);
+                        // focus <id | x z>; orbit <id | x z> <yawDeg>
+                        bool orbit = sub == "orbit";
+                        int words = args.Count - 1 - (orbit ? 1 : 0);
+                        if (words is < 1 or > 2 || (orbit && !Num(args[^1], out deg))) { con.Error(orbit ? "usage: camera orbit <id | x z> <yawDeg> [--over <s>]" : "usage: camera focus <id | x z> [--over <s>]"); return; }
+                        float? yaw = orbit ? deg * MathF.PI / 180 : null;
+                        if (words == 2)
+                        {
+                            if (!Num(args[1], out float fx) || !Num(args[2], out float fz)) { con.Error("camera " + sub + ": x z must be numbers"); return; }
+                            host.Player.Follow = null;
+                            if (over > 0) { movePivot = new Vector2(fx, fz); if (orbit) moveYawBy = yaw; break; }
+                            CameraPlace(new Vector2(fx, fz), yaw, null, null);
+                            break;
+                        }
+                        if (ControlEntity(args[1], con) is not { } found) return;
+                        bool isCharacter = AgentOrders.TryParseCharacter(args[1], out var cid) && !args[1].StartsWith("b:", StringComparison.OrdinalIgnoreCase);
+                        if (over > 0)
+                        {
+                            host.Player.Follow = null;
+                            movePivot = new Vector2(found.X, found.Z); moveEntity = args[1]; moveFollow = isCharacter && !orbit;
+                            if (orbit) moveYawBy = yaw;
+                            break;
+                        }
+                        if (isCharacter) host.Player.AgentOrders.ControlFocusCharacter(cid); else host.Player.Follow = null;
+                        CameraPlace(new Vector2(found.X, found.Z), yaw, null, null);
                         break;
                     }
-                    if (ControlEntity(args[1], con) is not { } found) return;
-                    bool isCharacter = AgentOrders.TryParseCharacter(args[1], out var cid) && !args[1].StartsWith("b:", StringComparison.OrdinalIgnoreCase);
-                    if (over > 0)
-                    {
-                        host.player.Follow = null;
-                        movePivot = new Vector2(found.X, found.Z); moveEntity = args[1]; moveFollow = isCharacter && !orbit;
-                        if (orbit) moveYawBy = yaw;
-                        break;
-                    }
-                    if (isCharacter) host.player.agentOrders.ControlFocusCharacter(cid); else host.player.Follow = null;
-                    CameraPlace(new Vector2(found.X, found.Z), yaw, null, null);
-                    break;
-                }
                 default:
                     con.Error("usage: camera | camera set ... | camera rotate <deg> | camera pitch <deg> | camera zoom <v> | camera focus <id | x z> | camera orbit <id> <yawDeg>");
                     return;
@@ -297,21 +297,30 @@ sealed class AgentWorld(GameHost host)
             {
                 var mv = new CameraMove
                 {
-                    Start = Stopwatch.GetTimestamp(), Seconds = over, Pivot0 = pivot, Pivot1 = movePivot ?? pivot, Entity = moveEntity, Follow = moveFollow,
-                    Yaw0 = strat.Yaw, Pitch0 = strat.Pitch, Dist0 = strat.Distance, Pitch1 = movePitch ?? strat.Pitch, Dist1 = moveZoom ?? strat.Distance,
+                    Start = Stopwatch.GetTimestamp(),
+                    Seconds = over,
+                    Pivot0 = pivot,
+                    Pivot1 = movePivot ?? pivot,
+                    Entity = moveEntity,
+                    Follow = moveFollow,
+                    Yaw0 = strat.Yaw,
+                    Pitch0 = strat.Pitch,
+                    Dist0 = strat.Distance,
+                    Pitch1 = movePitch ?? strat.Pitch,
+                    Dist1 = moveZoom ?? strat.Distance,
                 };
                 mv.Yaw1 = moveYawBy is { } by ? mv.Yaw0 + by
-                    : moveYaw is { } ya ? mv.Yaw0 + Meitou.Simulation.Session.Interp.WrapAngle(ya - mv.Yaw0)
+                    : moveYaw is { } ya ? mv.Yaw0 + Simulation.Session.Interp.WrapAngle(ya - mv.Yaw0)
                     : mv.Yaw0;
-                if (host.agentChannel.controlDir is not null) { mv.Id = host.agentChannel.currentControlId; host.agentChannel.controlReplyDeferred = true; }
-                cameraMove = mv;
-                camStable = 0;
+                if (host.AgentChannel.ControlDir is not null) { mv.Id = host.AgentChannel.CurrentControlId; host.AgentChannel.ControlReplyDeferred = true; }
+                _cameraMove = mv;
+                _camStable = 0;
                 con.Print($"camera move over {over} s");
                 return;
             }
-            camStable = 0;
+            _camStable = 0;
             string after = ControlCameraJson();
-            host.agentChannel.controlData = after;
+            host.AgentChannel.ControlData = after;
             con.Print(after);
         });
 
@@ -322,7 +331,7 @@ sealed class AgentWorld(GameHost host)
             var words = args.Where(a => !a.Equals("--add", StringComparison.OrdinalIgnoreCase)).ToList();
             var ids = new List<CharacterId>();
             if (words.Count == 1 && words[0].Equals("--none", StringComparison.OrdinalIgnoreCase)) { }
-            else if (words.Count == 1 && words[0].Equals("--squad", StringComparison.OrdinalIgnoreCase)) ids.AddRange(host.player.agentOrders.ControlSquad());
+            else if (words.Count == 1 && words[0].Equals("--squad", StringComparison.OrdinalIgnoreCase)) ids.AddRange(host.Player.AgentOrders.ControlSquad());
             else if (words.Count == 0) { con.Error("usage: select <id...> | --squad | --none [--add]"); return; }
             else
                 foreach (string word in words)
@@ -330,7 +339,7 @@ sealed class AgentWorld(GameHost host)
                     if (!word.StartsWith("c:", StringComparison.OrdinalIgnoreCase) || !AgentOrders.TryParseCharacter(word, out var id)) { con.Error($"select: '{word}' is not a character id (c:<slot>.<gen>)"); return; }
                     ids.Add(id);
                 }
-            if (!host.player.agentOrders.ControlSelect(ids, add, out string message)) { con.Error("select: " + message); return; }
+            if (!host.Player.AgentOrders.ControlSelect(ids, add, out string message)) { con.Error("select: " + message); return; }
             con.Print(message + ": " + string.Join(' ', ids.Select(i => $"c:{i.Slot}.{i.Generation}")));
         });
 
@@ -360,13 +369,13 @@ sealed class AgentWorld(GameHost host)
                     else nums.Add(args[i]);
                 }
                 if (nums.Count != 2 || !Num(nums[0], out float x) || !Num(nums[1], out float z) || (stuckGiven && !waited)) { con.Error("usage: order move <x> <z> [--queue] [--wait <s> [--stuck <s>]]"); return; }
-                if (!host.player.agentOrders.ControlMove(x, z, queue, out string message)) { con.Error("order: " + message); return; }
-                if (waited) host.agentPlay.ControlMoveWaitStart(con, x, z, waitS, stuckS); else con.Print(message);
+                if (!host.Player.AgentOrders.ControlMove(x, z, queue, out string message)) { con.Error("order: " + message); return; }
+                if (waited) host.AgentPlay.ControlMoveWaitStart(con, x, z, waitS, stuckS); else con.Print(message);
             }
             else if (sub == "attack")
             {
                 if (args.Count != 2 || !args[1].StartsWith("c:", StringComparison.OrdinalIgnoreCase) || !AgentOrders.TryParseCharacter(args[1], out var target)) { con.Error("usage: order attack <c:slot.gen>"); return; }
-                if (!host.player.agentOrders.ControlAttack(target, out string message)) con.Error("order: " + message); else con.Print(message);
+                if (!host.Player.AgentOrders.ControlAttack(target, out string message)) con.Error("order: " + message); else con.Print(message);
             }
             else con.Error("usage: order move <x> <z> [--queue] [--wait <s> [--stuck <s>]] | order attack <id>");
         });
@@ -384,45 +393,45 @@ sealed class AgentWorld(GameHost host)
             args = plain;
             float yaw = 0, lift = 0;
             if (args.Count < 3 || args.Count > 5 || (args.Count == 5 && !Num(args[4], out lift)) || !Num(args[1], out float px) || !Num(args[2], out float pz) || (args.Count >= 4 && !Num(args[3], out yaw))) { con.Error("usage: place-building <building> <x> <z> [yawDegrees] [heightAboveGround] [--interior <layout>] [--exterior <layout>]"); return; }
-            if (host.scene.Objects is null) { con.Error("no world loaded"); return; }
-            var all = host.buildingSync.BuildData();
+            if (host.Scene.Objects is null) { con.Error("no world loaded"); return; }
+            var all = host.BuildingSync.BuildData();
             if (!all.TryGetValue(args[0], out var data))
             {
                 var named = all.Values.Where(b => string.Equals(b.Name, args[0], StringComparison.OrdinalIgnoreCase)).ToList();
                 if (named.Count != 1) { con.Error(named.Count == 0 ? $"no building '{args[0]}'" : $"'{args[0]}' matches {named.Count} buildings; use the record id"); return; }
                 data = named[0];
             }
-            if (host.scene.Database?.Find(data.Id) is { } record && host.scene.Objects is { } objs)
+            if (host.Scene.Database?.Find(data.Id) is { } record && host.Scene.Objects is { } objs)
             {
                 if (interior is not null && objs.Layouts.Find(record, interior, exterior: false) is null) { con.Error($"no interior layout '{interior}' for {data.Name} (layouts {data.Id} lists them)"); return; }
                 if (exterior is not null && objs.Layouts.Find(record, exterior, exterior: true) is null) { con.Error($"no exterior layout '{exterior}' for {data.Name} (layouts {data.Id} exterior lists them)"); return; }
             }
-            float y = host.gpu.Terrain.HeightAt(px, pz) + lift;
+            float y = host.Gpu.Terrain.HeightAt(px, pz) + lift;
             var ghost = new Building.QueuedGhost(data, new Vector3(px, y, pz), Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw * MathF.PI / 180f), 0, null);
-            int before = host.levelEditorHost.levelEdits.Added.Count;
-            (host.levelEditorHost.placeInterior, host.levelEditorHost.placeExterior) = (interior, exterior);
-            try { host.levelEditorHost.LevelPlace([ghost]); }
-            finally { (host.levelEditorHost.placeInterior, host.levelEditorHost.placeExterior) = (null, null); }
-            var added = host.levelEditorHost.levelEdits.Added.Skip(before).LastOrDefault();
+            int before = host.LevelEditorHost.LevelEdits.Added.Count;
+            (host.LevelEditorHost.PlaceInterior, host.LevelEditorHost.PlaceExterior) = (interior, exterior);
+            try { host.LevelEditorHost.LevelPlace([ghost]); }
+            finally { (host.LevelEditorHost.PlaceInterior, host.LevelEditorHost.PlaceExterior) = (null, null); }
+            var added = host.LevelEditorHost.LevelEdits.Added.Skip(before).LastOrDefault();
             con.Print(added is null ? "placed, no edit recorded" : $"placed {data.Name} ({data.Id}) key {added.Key} at {px:F1} {y:F1} {pz:F1}{(interior is null ? "" : " interior " + interior)}{(exterior is null ? "" : " exterior " + exterior)}");
         });
 
         Add("quicksave", "quicksave [name]", "queue a quicksave (the F5 key), taken between ticks; with a name, into Meitou's save folder of that name instead of the quicksave slot", (args, con) =>
         {
             if (args.Count > 1) { con.Error("usage: quicksave [name]"); return; }
-            if (args.Count == 0) { host.saves.quickSaveRequested = true; con.Print("quicksave queued"); return; }
-            try { host.saves.saveRequestedFolder = Meitou.Data.Save.SaveCatalog.Folder(Meitou.Simulation.Saving.QuickSave.DefaultRoot, args[0]); con.Print($"save queued: {host.saves.saveRequestedFolder}"); }
+            if (args.Count == 0) { host.Saves.QuickSaveRequested = true; con.Print("quicksave queued"); return; }
+            try { host.Saves.SaveRequestedFolder = Data.Save.SaveCatalog.Folder(Simulation.Saving.QuickSave.DefaultRoot, args[0]); con.Print($"save queued: {host.Saves.SaveRequestedFolder}"); }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException) { con.Error("quicksave: " + e.Message); }
         });
         Add("quickload", "quickload [name]", "queue a quickload (the F9 key); with a name, the save folder of that name written by quicksave <name>", (args, con) =>
         {
             if (args.Count > 1) { con.Error("usage: quickload [name]"); return; }
-            if (args.Count == 0) { host.saves.quickLoadRequested = true; con.Print("quickload queued"); return; }
-            try { host.saves.loadRequestedFolder = Meitou.Data.Save.SaveCatalog.Folder(Meitou.Simulation.Saving.QuickSave.DefaultRoot, args[0]); con.Print($"load queued: {host.saves.loadRequestedFolder}"); }
+            if (args.Count == 0) { host.Saves.QuickLoadRequested = true; con.Print("quickload queued"); return; }
+            try { host.Saves.LoadRequestedFolder = Data.Save.SaveCatalog.Folder(Simulation.Saving.QuickSave.DefaultRoot, args[0]); con.Print($"load queued: {host.Saves.LoadRequestedFolder}"); }
             catch (Exception e) when (e is ArgumentException or InvalidOperationException) { con.Error("quickload: " + e.Message); }
         });
         RegisterControlBaseCommands(Add, Loaded);
-        host.agentPlay.RegisterControlPlayCommands(Add, Loaded);
+        host.AgentPlay.RegisterControlPlayCommands(Add, Loaded);
         RegisterControlNavCommands(Add, Loaded);
 
         Add("terrain-height", "terrain-height <x> <z> [radius step]", "terrain height at X Z; with a radius and step, the min, max and spread over the square around it (to find flat ground)", (args, con) =>
@@ -433,19 +442,19 @@ sealed class AgentWorld(GameHost host)
             for (float dx = -r; dx <= r; dx += step)
                 for (float dz = -r; dz <= r; dz += step)
                 {
-                    float h = host.gpu.Terrain.HeightAt(hx + dx, hz + dz);
+                    float h = host.Gpu.Terrain.HeightAt(hx + dx, hz + dz);
                     lo = Math.Min(lo, h); hi = Math.Max(hi, h);
                 }
-            con.Print($"height {host.gpu.Terrain.HeightAt(hx, hz):F2} min {lo:F2} max {hi:F2} spread {hi - lo:F2}");
+            con.Print($"height {host.Gpu.Terrain.HeightAt(hx, hz):F2} min {lo:F2} max {hi:F2} spread {hi - lo:F2}");
         });
 
         Add("doors", "doors [building key]", "list the door fixtures (id, position, motion, lock) of one building instance, or the count over every building when none is given", (args, con) =>
         {
-            var reg = host.session.World.Fixtures;
-            if (args.Count == 0) { con.Print($"{reg.All.Count(f => f.Kind == Meitou.Simulation.Locks.FixtureKind.Door)} doors in {reg.All.Select(f => f.Building).Distinct().Count()} buildings"); return; }
+            var reg = host.Session.World.Fixtures;
+            if (args.Count == 0) { con.Print($"{reg.All.Count(f => f.Kind == FixtureKind.Door)} doors in {reg.All.Select(f => f.Building).Distinct().Count()} buildings"); return; }
             var list = reg.OfBuilding(args[0]);
-            con.Print($"{list.Count} fixtures, {list.Count(f => f.Kind == Meitou.Simulation.Locks.FixtureKind.Door)} doors");
-            if (host.nav is { } ns && list.FirstOrDefault(f => f.Kind == Meitou.Simulation.Locks.FixtureKind.Door) is { } first)
+            con.Print($"{list.Count} fixtures, {list.Count(f => f.Kind == FixtureKind.Door)} doors");
+            if (host.Nav is { } ns && list.FirstOrDefault(f => f.Kind == FixtureKind.Door) is { } first)
             {
                 Vector3 sum = Vector3.Zero; int near = 0, named = 0, own = 0; float minY = float.MaxValue, maxY = float.MinValue;
                 var w = ns.Walkability.World;
@@ -454,7 +463,7 @@ sealed class AgentWorld(GameHost host)
                     var m = w.Mesh(slot);
                     for (int p = 0; p < m.PolygonCount; p++)
                     {
-                        if (m.Areas[p] != Meitou.Simulation.Navigation.NavArea.Door) continue;
+                        if (m.Areas[p] != NavArea.Door) continue;
                         var c = Vector3.Zero;
                         foreach (int vi in m.Polygons[p]) c += m.Vertices[vi];
                         c /= m.Polygons[p].Length;
@@ -465,28 +474,28 @@ sealed class AgentWorld(GameHost host)
                 }
                 con.Print($"nav: {near} door-area polygons within 150 of the door or assigned to it (y {minY:F1}..{maxY:F1}), {named} assigned to a building, {own} to this one (mean {(own > 0 ? sum.X / own : 0):F1} {(own > 0 ? sum.Y / own : 0):F1} {(own > 0 ? sum.Z / own : 0):F1}); doors closed in nav: {ns.Doors.IsClosed(args[0])}");
             }
-            foreach (var f in list.Where(f => f.Kind == Meitou.Simulation.Locks.FixtureKind.Door))
-                con.Print($"door {f.Id} #{f.DoorIndex} pos {f.Position.X:F1} {f.Position.Y:F1} {f.Position.Z:F1} terrainY {host.gpu.Terrain.HeightAt(f.Position.X, f.Position.Z):F2} spot {(reg.DoorSpotOf(f) is { } sp ? $"centre {sp.Centre.X:F1} {sp.Centre.Y:F1} {sp.Centre.Z:F1} normal {sp.Normal.X:F2} {sp.Normal.Z:F2}" : "none")} motion {f.Motion} lock level {f.Lock?.Level} locked {f.Lock?.Locked} owner {f.Owner}");
+            foreach (var f in list.Where(f => f.Kind == FixtureKind.Door))
+                con.Print($"door {f.Id} #{f.DoorIndex} pos {f.Position.X:F1} {f.Position.Y:F1} {f.Position.Z:F1} terrainY {host.Gpu.Terrain.HeightAt(f.Position.X, f.Position.Z):F2} spot {(reg.DoorSpotOf(f) is { } sp ? $"centre {sp.Centre.X:F1} {sp.Centre.Y:F1} {sp.Centre.Z:F1} normal {sp.Normal.X:F2} {sp.Normal.Z:F2}" : "none")} motion {f.Motion} lock level {f.Lock?.Level} locked {f.Lock?.Locked} owner {f.Owner}");
         });
 
-        Add("pause", "pause", "stop the game clock (speed 0)", (_, con) => { host.session.Simulation.SetSpeed(0); con.Print("paused"); });
-        Add("resume", "resume", "run the game clock again at the last speed", (_, con) => { host.session.Simulation.SetSpeed(host.session.Simulation.LastNonZeroSpeed); con.Print($"speed {host.session.Simulation.Speed}"); });
+        Add("pause", "pause", "stop the game clock (speed 0)", (_, con) => { host.Session.Simulation.SetSpeed(0); con.Print("paused"); });
+        Add("resume", "resume", "run the game clock again at the last speed", (_, con) => { host.Session.Simulation.SetSpeed(host.Session.Simulation.LastNonZeroSpeed); con.Print($"speed {host.Session.Simulation.Speed}"); });
         Add("hud", "hud hide|show", "hide or show the whole interface (what F7 does) for filming; the control channel keeps working, ui-tree may be empty while hidden", (args, con) =>
         {
             if (args.Count != 1 || args[0].ToLowerInvariant() is not ("hide" or "show")) { con.Error("usage: hud hide|show"); return; }
-            host.agentChannel.interfaceHidden = args[0].Equals("hide", StringComparison.OrdinalIgnoreCase);
-            con.Print(host.agentChannel.interfaceHidden ? "interface hidden" : "interface shown");
+            host.AgentChannel.InterfaceHidden = args[0].Equals("hide", StringComparison.OrdinalIgnoreCase);
+            con.Print(host.AgentChannel.InterfaceHidden ? "interface hidden" : "interface shown");
         });
 
         Add("speed", "speed <0|1|2|5>", "set the game speed (0 pauses; 2 and 5 are the default fast speeds, Advanced settings)", (args, con) =>
         {
-            var speeds = host.session.Simulation.Speeds;
+            var speeds = host.Session.Simulation.Speeds;
             if (args.Count != 1 || !double.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double v) || (v != 0 && !speeds.Contains(v)))
             {
                 con.Error($"usage: speed <0|{string.Join('|', speeds.Select(s => s.ToString(CultureInfo.InvariantCulture)))}>");
                 return;
             }
-            host.session.Simulation.SetSpeed(v);
+            host.Session.Simulation.SetSpeed(v);
             con.Print($"speed {v}");
         });
     }
@@ -497,14 +506,14 @@ sealed class AgentWorld(GameHost host)
         switch (key)
         {
             case "camera-settled": return CameraSettled == !value.Equals("false", StringComparison.OrdinalIgnoreCase);
-            case "selected": return int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int n) && !host.Covered && !host.player.TitleOpen && host.session.World.Player.Selection.Count() == n;
+            case "selected": return int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int n) && !host.Covered && !host.Player.TitleOpen && host.Session.World.Player.Selection.Count() == n;
             case "pos-near":
-            {
-                string[] p = value.Split(',');
-                if (p.Length < 3 || !Num(p[0], out float x) || !Num(p[1], out float z) || !Num(p[2], out float r)) return false;
-                Vector3? at = p.Length > 3 ? host.player.agentOrders.ControlPosition(p[3]) : host.player.agentOrders.ControlLeadPosition();
-                return at is { } a && Vector2.Distance(new Vector2(a.X, a.Z), new Vector2(x, z)) <= r;
-            }
+                {
+                    string[] p = value.Split(',');
+                    if (p.Length < 3 || !Num(p[0], out float x) || !Num(p[1], out float z) || !Num(p[2], out float r)) return false;
+                    Vector3? at = p.Length > 3 ? host.Player.AgentOrders.ControlPosition(p[3]) : host.Player.AgentOrders.ControlLeadPosition();
+                    return at is { } a && Vector2.Distance(new Vector2(a.X, a.Z), new Vector2(x, z)) <= r;
+                }
             default: return false;
         }
     }
@@ -516,7 +525,7 @@ sealed class AgentWorld(GameHost host)
         add("path-check", "path-check <x1> <z1> <x2> <z2> | path-check --id <c:slot.gen> <x> <z>", "ask the game's own navigation query (what a walking character uses, doors as they are now) whether a path exists, without walking: reachable, path length and, when none exists, the doors that block it (the nearest-first doors on the way that are closed to paths, with lock, open, broken state); blockedBy is only searched inside the query's own zone mesh", (args, con) =>
         {
             if (!loaded(con)) return;
-            if (host.nav is null) { con.Error("path-check: no navmesh in this run"); return; }
+            if (host.Nav is null) { con.Error("path-check: no navmesh in this run"); return; }
             string? idText = null;
             var nums = new List<string>();
             for (int i = 0; i < args.Count; i++)
@@ -524,12 +533,12 @@ sealed class AgentWorld(GameHost host)
                 if (args[i].Equals("--id", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Count) idText = args[++i];
                 else nums.Add(args[i]);
             }
-            var walk = host.nav.Walkability;
+            var walk = host.Nav.Walkability;
             Vector3 from, to;
             float a = 0, b = 0, c = 0, d = 0;
             if (idText is not null)
             {
-                if (!AgentOrders.TryParseCharacter(idText, out _) || host.player.agentOrders.ControlPosition(idText.StartsWith("c:", StringComparison.OrdinalIgnoreCase) ? idText : "c:" + idText) is not { } at) { con.Error($"path-check: unknown character '{idText}'"); return; }
+                if (!AgentOrders.TryParseCharacter(idText, out _) || host.Player.AgentOrders.ControlPosition(idText.StartsWith("c:", StringComparison.OrdinalIgnoreCase) ? idText : "c:" + idText) is not { } at) { con.Error($"path-check: unknown character '{idText}'"); return; }
                 if (nums.Count != 2 || !Num(nums[0], out a) || !Num(nums[1], out b)) { con.Error("usage: path-check --id <c:slot.gen> <x> <z>"); return; }
                 from = at; to = new Vector3(a, walk.GroundHeight(a, b), b);
             }
@@ -541,11 +550,11 @@ sealed class AgentWorld(GameHost host)
             var inv = CultureInfo.InvariantCulture;
             var path = walk.FindPath(from, to);
             // Both ends on loaded zones and the query still gave only a provisional path: the goal is cut off (a shut door, water, a wall), the path leads to the nearest point reached, then straight on.
-            bool bothLoaded = walk.World.Contains(Meitou.Data.World.WorldLayout.ZoneOf(from.X, from.Z)) && walk.World.Contains(Meitou.Data.World.WorldLayout.ZoneOf(to.X, to.Z));
+            bool bothLoaded = walk.World.Contains(Data.World.WorldLayout.ZoneOf(from.X, from.Z)) && walk.World.Contains(Data.World.WorldLayout.ZoneOf(to.X, to.Z));
             // The query also answers "as near as can be got" when the goal lies within its snap distance of reachable ground (just outside a shut door): such a path ends short of the target.
-            const float EndTolerance = 1.5f;
+            const float endTolerance = 1.5f;
             var pathEnd = path.Found ? path.Points[Math.Min(path.Exact, path.Points.Count) - 1] : default;
-            bool cutOff = path.Found && bothLoaded && (path.IsProvisional || Vector2.Distance(new(pathEnd.X, pathEnd.Z), new(to.X, to.Z)) > EndTolerance);
+            bool cutOff = path.Found && bothLoaded && (path.IsProvisional || Vector2.Distance(new(pathEnd.X, pathEnd.Z), new(to.X, to.Z)) > endTolerance);
             bool reachable = path.Found && !cutOff;
             using var stream = new MemoryStream();
             using (var w = new Utf8JsonWriter(stream))
@@ -595,7 +604,7 @@ sealed class AgentWorld(GameHost host)
                 }
                 w.WriteEndObject();
             }
-            host.agentChannel.controlData = System.Text.Encoding.UTF8.GetString(stream.ToArray());
+            host.AgentChannel.ControlData = Encoding.UTF8.GetString(stream.ToArray());
             con.Print(reachable ? $"reachable, {path.Points.Count} points" : "no path");
         });
     }
@@ -606,7 +615,7 @@ sealed class AgentWorld(GameHost host)
         add("door", "door <fixture id> | door nearest <x> <z> [--lock] [--unlock] [--close] [--open] [--break] [--repair] [--all]", "set a door's state for a test (flags apply in the order given): --lock locks it (level at least 1, an open leaf starts closing), --unlock, --close and --open set the leaf at once, --break breaks door and lock, --repair undoes it; --all applies to every door of the building (navigation treats a building as shut only when all its doors are locked); no flag only reports; reply: JSON with the door's lock, broken, motion, openAmount and whether navigation now has the building closed", (args, con) =>
         {
             if (!loaded(con)) return;
-            var reg = host.session.World.Fixtures;
+            var reg = host.Session.World.Fixtures;
             Fixture? door = null;
             var flags = new List<string>();
             var rest = new List<string>();
@@ -657,10 +666,10 @@ sealed class AgentWorld(GameHost host)
                 w.WriteBoolean("broken", door.DoorBroken);
                 w.WriteString("motion", door.Motion.ToString().ToLowerInvariant());
                 w.WriteNumber("openAmount", Math.Round(door.OpenAmount, 2));
-                if (host.nav is { } ns) w.WriteBoolean("navClosed", ns.Doors.IsClosed(door.Building));
+                if (host.Nav is { } ns) w.WriteBoolean("navClosed", ns.Doors.IsClosed(door.Building));
                 w.WriteEndObject();
             }
-            host.agentChannel.controlData = System.Text.Encoding.UTF8.GetString(stream.ToArray());
+            host.AgentChannel.ControlData = Encoding.UTF8.GetString(stream.ToArray());
             con.Print($"door {door.Id}");
         });
     }
@@ -687,7 +696,7 @@ sealed class AgentWorld(GameHost host)
             string building = ids[di];
             if (!walk.Doors.IsClosed(building)) continue;
             if (result.Any(r => r.Item2 == building)) continue;
-            result.Add(($"{poly.Zone}.{poly.Polygon}", building, host.session.World.Fixtures.OfBuilding(building).Where(f => f.Kind == FixtureKind.Door).ToList()));
+            result.Add(($"{poly.Zone}.{poly.Polygon}", building, host.Session.World.Fixtures.OfBuilding(building).Where(f => f.Kind == FixtureKind.Door).ToList()));
         }
         why = result.Count > 0 ? "a door on the way is closed for paths" : "the path exists with every door open but no door on it is closed for paths (cause not a door)";
         return result;
@@ -700,7 +709,7 @@ sealed class AgentWorld(GameHost host)
         add("buildings", "buildings [text]", "list the placeable BUILDING records (id, name, category, path mode, furniture flags) whose id, name or category contains text", (args, con) =>
         {
             string text = args.Count > 0 ? string.Join(' ', args) : "";
-            var list = host.buildingSync.BuildData().Values.Where(b => text.Length == 0 || b.Id.Contains(text, StringComparison.OrdinalIgnoreCase) || b.Name.Contains(text, StringComparison.OrdinalIgnoreCase)
+            var list = host.BuildingSync.BuildData().Values.Where(b => text.Length == 0 || b.Id.Contains(text, StringComparison.OrdinalIgnoreCase) || b.Name.Contains(text, StringComparison.OrdinalIgnoreCase)
                 || b.Category.Contains(text, StringComparison.OrdinalIgnoreCase)).OrderBy(b => b.Category, StringComparer.Ordinal).ThenBy(b => b.Name, StringComparer.Ordinal).ToList();
             con.Print($"{list.Count} buildings");
             foreach (var b in list.Take(400))
@@ -709,16 +718,16 @@ sealed class AgentWorld(GameHost host)
 
         add("layouts", "layouts <building record id or name> [exterior]", "the interior (or exterior) layouts a building record has: name, parts, bar / shop flags, the kinds of parts (what place-building --interior takes)", (args, con) =>
         {
-            if (args.Count is < 1 or > 2 || host.scene.Database is not { } db) { con.Error("usage: layouts <building record id or name> [exterior]"); return; }
+            if (args.Count is < 1 or > 2 || host.Scene.Database is not { } db) { con.Error("usage: layouts <building record id or name> [exterior]"); return; }
             var record = db.Find(args[0]);
-            if (record is null && host.buildingSync.BuildData().Values.FirstOrDefault(b => string.Equals(b.Name, args[0], StringComparison.OrdinalIgnoreCase)) is { } bd) record = db.Find(bd.Id);
+            if (record is null && host.BuildingSync.BuildData().Values.FirstOrDefault(b => string.Equals(b.Name, args[0], StringComparison.OrdinalIgnoreCase)) is { } bd) record = db.Find(bd.Id);
             if (record is null) { con.Error($"no building '{args[0]}'"); return; }
             bool exterior = args.Count == 2;
-            var list = host.interiorEditorHost.InteriorEditorLayouts(record, exterior);
+            var list = host.InteriorEditorHost.InteriorEditorLayouts(record, exterior);
             con.Print($"{list.Count} {(exterior ? "exterior" : "interior")} layouts for {record.Name} ({record.StringId})");
             foreach (var l in list)
             {
-                var parts = host.scene.Objects is { } o ? o.Layouts.Items(l).GroupBy(i => i.Building.Name).OrderByDescending(g => g.Count()).Take(8).Select(g => $"{g.Count()}x {g.Key}") : [];
+                var parts = host.Scene.Objects is { } o ? o.Layouts.Items(l).GroupBy(i => i.Building.Name).OrderByDescending(g => g.Count()).Take(8).Select(g => $"{g.Count()}x {g.Key}") : [];
                 con.Print($"{l.Name} | {l.Instances.Values.Count(x => !x.IsCleared)} parts{(l.GetBool("is bar") ? " | bar" : "")}{(l.GetBool("is shop") ? " | shop" : "")} | {string.Join(", ", parts)}");
             }
         });
@@ -727,14 +736,14 @@ sealed class AgentWorld(GameHost host)
         {
             if (!loaded(con)) return;
             if (args.Count != 1) { con.Error("usage: clear-building <building key>"); return; }
-            con.Print(host.levelEditorHost.LevelClear(args[0]) ? $"cleared {args[0]}" : $"no building {args[0]}");
+            con.Print(host.LevelEditorHost.LevelClear(args[0]) ? $"cleared {args[0]}" : $"no building {args[0]}");
         });
 
         add("building-info", "building-info <building key>", "what the building with that run-time key holds: fixtures by kind, containers and their items, item slots (total and filled), loose items lying in its slots", (args, con) =>
         {
             if (!loaded(con)) return;
             if (args.Count != 1) { con.Error("usage: building-info <building key>"); return; }
-            var world = host.session.World;
+            var world = host.Session.World;
             var fixtures = world.Fixtures.OfBuilding(args[0]);
             var (slots, filled) = world.ItemSlots.OfBuilding(args[0]);
             int lying = world.GroundItems.All.Count(g => g.Slot is { } s && s.StartsWith(args[0] + "/item", StringComparison.Ordinal));
@@ -749,8 +758,8 @@ sealed class AgentWorld(GameHost host)
         {
             if (!loaded(con)) return;
             if (args.Count != 3 || !Num(args[0], out float x) || !Num(args[1], out float z) || !Num(args[2], out float r)) { con.Error("usage: ground-items <x> <z> <radius>"); return; }
-            var near = host.session.World.GroundItems.All.Where(g => Vector2.Distance(new Vector2(g.Position.X, g.Position.Z), new Vector2(x, z)) <= r).ToList();
-            con.Print($"{near.Count} items within {r:F0} of {x:F0} {z:F0} (all {host.session.World.GroundItems.Count} in the world)");
+            var near = host.Session.World.GroundItems.All.Where(g => Vector2.Distance(new Vector2(g.Position.X, g.Position.Z), new Vector2(x, z)) <= r).ToList();
+            con.Print($"{near.Count} items within {r:F0} of {x:F0} {z:F0} (all {host.Session.World.GroundItems.Count} in the world)");
             foreach (var g in near.Take(30))
                 con.Print($"item {g.Id} {g.Item.Record} {g.Item.Name} x{g.Item.Quantity} at {g.Position.X:F1} {g.Position.Y:F1} {g.Position.Z:F1}{(g.Slot is null ? "" : " slot " + g.Slot)}");
         });
@@ -761,9 +770,9 @@ sealed class AgentWorld(GameHost host)
             float yaw = 0, y = float.NaN, q = 1;
             if (args.Count < 3 || args.Count > 6 || !Num(args[1], out float x) || !Num(args[2], out float z) || (args.Count > 3 && !Num(args[3], out yaw)) || (args.Count > 4 && !Num(args[4], out y)) || (args.Count > 5 && !Num(args[5], out q)))
             { con.Error("usage: place-item \"<item>\" <x> <z> [yawDegrees] [y] [qty]"); return; }
-            if (host.debugMenu.DebugRecord(args[0], character: false) is not { } item) { con.Error($"no item record matches '{args[0]}'"); return; }
-            if (float.IsNaN(y)) y = host.gpu.Terrain.HeightAt(x, z);
-            host.session.World.Commands.Enqueue(new DebugPlaceItem(item.Id, Math.Clamp((int)q, 1, 1000), new Vector3(x, y, z), yaw * MathF.PI / 180f) { Tick = host.session.World.Tick });
+            if (host.DebugMenu.DebugRecord(args[0], character: false) is not { } item) { con.Error($"no item record matches '{args[0]}'"); return; }
+            if (float.IsNaN(y)) y = host.Gpu.Terrain.HeightAt(x, z);
+            host.Session.World.Commands.Enqueue(new DebugPlaceItem(item.Id, Math.Clamp((int)q, 1, 1000), new Vector3(x, y, z), yaw * MathF.PI / 180f) { Tick = host.Session.World.Tick });
             con.Print($"placed {item.Name} ({item.Id}) at {x:F1} {y:F1} {z:F1}");
         });
 
@@ -772,20 +781,20 @@ sealed class AgentWorld(GameHost host)
             if (!loaded(con)) return;
             int qty = 1;
             if (args.Count < 2 || args.Count > 3 || (args.Count == 3 && !int.TryParse(args[2], NumberStyles.None, CultureInfo.InvariantCulture, out qty))) { con.Error("usage: container-put <container fixture id> \"<item>\" [qty]"); return; }
-            if (host.session.World.Fixtures.Find(args[0]) is not { Contents: not null }) { con.Error($"no container '{args[0]}' (building-info lists them)"); return; }
-            if (host.debugMenu.DebugRecord(args[1], character: false) is not { } item) { con.Error($"no item record matches '{args[1]}'"); return; }
-            host.session.World.Commands.Enqueue(new DebugPutItem(args[0], item.Id, Math.Clamp(qty, 1, 1000)) { Tick = host.session.World.Tick });
+            if (host.Session.World.Fixtures.Find(args[0]) is not { Contents: not null }) { con.Error($"no container '{args[0]}' (building-info lists them)"); return; }
+            if (host.DebugMenu.DebugRecord(args[1], character: false) is not { } item) { con.Error($"no item record matches '{args[1]}'"); return; }
+            host.Session.World.Commands.Enqueue(new DebugPutItem(args[0], item.Id, Math.Clamp(qty, 1, 1000)) { Tick = host.Session.World.Tick });
             con.Print($"queued {qty} x {item.Name} into {args[0]}");
         });
 
         add("base-check", "base-check", "footprints of the buildings placed in this session: per building key, record, position, yaw, bounds; and the pair gaps in units (negative: the collision hulls overlap)", (args, con) =>
         {
             if (!loaded(con)) return;
-            host.levelEditorHost.LevelEditsFollowWorld();
-            if (host.scene.Database is not { } db) { con.Error("no database"); return; }
-            var footprints = host.saves.siteFootprints ??= new Meitou.Simulation.Navigation.BuildingFootprints(host.install, db, null);
+            host.LevelEditorHost.LevelEditsFollowWorld();
+            if (host.Scene.Database is not { } db) { con.Error("no database"); return; }
+            var footprints = host.Saves.SiteFootprints ??= new BuildingFootprints(host.Install, db, null);
             var items = new List<(string Key, string Id, Vector2[] Hull)>();
-            foreach (var p in host.levelEditorHost.levelEdits.Added)
+            foreach (var p in host.LevelEditorHost.LevelEdits.Added)
             {
                 var fp = footprints.Wait(p.BuildingId) ?? footprints.Plot(p.BuildingId);
                 if (fp is null) { con.Print($"{p.Key} {p.BuildingId}: no footprint"); continue; }

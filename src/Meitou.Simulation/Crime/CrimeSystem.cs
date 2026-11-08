@@ -32,20 +32,20 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// <summary>The "recently wanted" marker a booking or a witnessed crime sets (<see cref="CharacterCold.RecentlyWanted"/>; the game's 250.0, counted down here as game seconds: engine choice).</summary>
     public const float RecentlyWantedSeconds = 250;
 
-    readonly List<Booking> bookings = [];
-    long bookingsTick = -1;
+    readonly List<Booking> _bookings = [];
+    long _bookingsTick = -1;
 
     /// <summary>The bookings of this tick by a witness (the police-like NPC that booked, the culprit, the faction): the arrest system's witnessed-crime trigger. Not world state.</summary>
-    public IReadOnlyList<Booking> BookingsOf(long tick) => bookingsTick == tick ? bookings : [];
+    public IReadOnlyList<Booking> BookingsOf(long tick) => _bookingsTick == tick ? _bookings : [];
 
-    readonly List<CrimeEvent> log = [];
+    readonly List<CrimeEvent> _log = [];
 
     public CrimeSettings Settings { get; } = settings ?? new CrimeSettings();
     public CrimeFactions Factions { get; } = new(relations);
     public FactionRelations Relations => Factions.Relations;
 
     /// <summary>What happened (with <see cref="CrimeSettings.RecordLog"/>).</summary>
-    public IReadOnlyList<CrimeEvent> Log => log;
+    public IReadOnlyList<CrimeEvent> Log => _log;
 
     // ------------------------------------------------------------------ who is who
 
@@ -227,8 +227,8 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         c.RecentlyWanted = RecentlyWantedSeconds;
         if (!witness.IsNone)
         {
-            if (bookingsTick != world.Tick) { bookings.Clear(); bookingsTick = world.Tick; }
-            bookings.Add(new Booking(witness, world.Characters.IdOf(culprit), faction));
+            if (_bookingsTick != world.Tick) { _bookings.Clear(); _bookingsTick = world.Tick; }
+            _bookings.Add(new Booking(witness, world.Characters.IdOf(culprit), faction));
         }
         Note(world, CrimeEventKind.Booked, culprit, p.Code, faction, entry.Amount, witness);
         if (c.IsPlayer)
@@ -249,10 +249,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         int phase = (int)(world.Tick % every);
         Sweep(world, every * world.TickSeconds, every);
         if (phase != 0) return;
-        if (alarms.Count > 0) Investigate(world, every * world.TickSeconds);
+        if (_alarms.Count > 0) Investigate(world, every * world.TickSeconds);
         // Alarms die 8 game seconds after their last raise, whether answered or not (AlarmManager update FUN_14092bfe0, Verified).
-        for (int k = alarms.Count - 1; k >= 0; k--)
-            if ((alarms[k].Life -= every * world.TickSeconds) < 0) alarms.RemoveAt(k);
+        for (int k = _alarms.Count - 1; k >= 0; k--)
+            if ((_alarms[k].Life -= every * world.TickSeconds) < 0) _alarms.RemoveAt(k);
     }
 
     void Sweep(World world, float seconds, int every)
@@ -287,14 +287,14 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         }
     }
 
-    AggroSystem? aggro;
-    bool aggroLooked;
+    AggroSystem? _aggro;
+    bool _aggroLooked;
 
     /// <summary>Whether the witness has spotted the sneaking culprit: its spot meter, kept by <see cref="AggroSystem"/> for every looker, is full (without one, never).</summary>
     bool Spotted(World world, int witness, CharacterId culprit)
     {
-        if (!aggroLooked) { aggroLooked = true; aggro = world.SystemOf<AggroSystem>(); }
-        return aggro?.Spotted(witness, culprit) == true;
+        if (!_aggroLooked) { _aggroLooked = true; _aggro = world.SystemOf<AggroSystem>(); }
+        return _aggro?.Spotted(witness, culprit) == true;
     }
 
     /// <summary>
@@ -388,13 +388,13 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     static string? HomeKey(Squad q) => (q.Ai?.OwnHome ?? q.HomeBuilding)?.Key;
 
-    Locks.LockSystem? locks;
-    bool locksLooked;
+    Locks.LockSystem? _locks;
+    bool _locksLooked;
 
     bool LockedUp(World world, string key)
     {
-        if (!locksLooked) { locksLooked = true; locks = world.SystemOf<Locks.LockSystem>(); }
-        return locks?.IsHouseLocked(world, key) ?? false;
+        if (!_locksLooked) { _locksLooked = true; _locks = world.SystemOf<Locks.LockSystem>(); }
+        return _locks?.IsHouseLocked(world, key) ?? false;
     }
 
     /// <summary>
@@ -463,14 +463,14 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     {
         var table = world.Characters;
         if (town < 0 || code == CrimeCode.None || table.Cold(target) is not { } t) return;
-        if (t.IsPlayer && world.GameHours - lastAlarmHours >= AlarmPostSeconds / World.SecondsPerGameHour)
+        if (t.IsPlayer && world.GameHours - _lastAlarmHours >= AlarmPostSeconds / World.SecondsPerGameHour)
         {
-            lastAlarmHours = world.GameHours;
+            _lastAlarmHours = world.GameHours;
             world.Post(Loc.Tr("Alarm raised"));
         }
         var at = table.Next[target].Position;
         int place = world.Sight.PlaceOf(target), floor = FloorOf(world, target, at);
-        foreach (var a in alarms)
+        foreach (var a in _alarms)
             if (a.Town == town && a.Code == code && a.Faction == faction)
             {
                 a.Position = at;
@@ -478,13 +478,13 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
                 a.Floor = floor;
                 return;
             }
-        alarms.Add(new TownAlarm { Town = town, Code = code, Faction = faction, Position = at, Place = place, Floor = floor });
+        _alarms.Add(new TownAlarm { Town = town, Code = code, Faction = faction, Position = at, Place = place, Floor = floor });
     }
 
-    readonly List<TownAlarm> alarms = [];
+    readonly List<TownAlarm> _alarms = [];
 
     /// <summary>The towns' raised alarms, oldest first.</summary>
-    public IReadOnlyList<TownAlarm> Alarms => alarms;
+    public IReadOnlyList<TownAlarm> Alarms => _alarms;
 
     /// <summary>How far an investigator answers an alarm (<c>FUN_14092a810</c>'s 375, <b>Verified</b> literal): at that range for an alarm raised outdoors, at half of it for one raised in a building, whatever the crime.</summary>
     public const float AlarmReach = 375;
@@ -508,7 +508,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     {
         TownAlarm? best = null;
         float bestD = float.MaxValue;
-        foreach (var a in alarms)
+        foreach (var a in _alarms)
         {
             if (a.Town != town || faction >= 0 && a.Faction != faction) continue;
             if (a.Place >= 0 && Math.Abs(a.Floor - floor) > 1) continue;
@@ -537,13 +537,13 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         var next = table.Next;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!next[i].Alive || table.Cold(i) is not { Ai: { Behaviour: Ai.AiBehaviour.Investigate, Goal: { } goal, Squad.Ai: { } board } mind } cold || !Ai.AiSystem.Holds(next[i], cold)) continue;
-            var alarm = AlarmFor(board.Town, next[i].Position, goal.Task.Type == Data.Gameplay.Ai.TaskType.INVESTIGATE_ALARMS_ALLIES_ONLY ? cold.Faction : -1, FloorOf(world, i, next[i].Position), world.Sight.PlaceOf(i), world);
+            if (!next[i].Alive || table.Cold(i) is not { Ai: { Behaviour: AiBehaviour.Investigate, Goal: { } goal, Squad.Ai: { } board } mind } cold || !AiSystem.Holds(next[i], cold)) continue;
+            var alarm = AlarmFor(board.Town, next[i].Position, goal.Task.Type == Data.Gameplay.Ai.TaskType.InvestigateAlarmsAlliesOnly ? cold.Faction : -1, FloorOf(world, i, next[i].Position), world.Sight.PlaceOf(i), world);
             if (alarm is null) continue;
             if (Vector3.DistanceSquared(alarm.Position, next[i].Position) <= AlarmLookRange * AlarmLookRange)
             {
                 mind.LookAbout -= seconds;
-                if (mind.LookAbout < 0) alarms.Remove(alarm);
+                if (mind.LookAbout < 0) _alarms.Remove(alarm);
                 continue;
             }
             mind.LookAbout = LookAboutSeconds;
@@ -564,9 +564,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     public void Hash(ref StateHasher hasher)
     {
-        if (alarms.Count == 0) return;
-        hasher.Add(alarms.Count);
-        foreach (var a in alarms)
+        if (_alarms.Count == 0) return;
+        hasher.Add(_alarms.Count);
+        foreach (var a in _alarms)
         {
             hasher.Add(a.Town); hasher.Add((int)a.Code); hasher.Add(a.Faction); hasher.Add(a.Position); hasher.Add(a.Life);
             if (a.Place >= 0) { hasher.Add(a.Place); hasher.Add(a.Floor); }   // only an alarm raised in a building, so the others hash as before
@@ -577,7 +577,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     public const float AlarmTimer = 30, AlarmPostSeconds = 30;
     /// <summary>The game seconds a town alarm lives after it is created (<c>FUN_1409335e0</c> sets 8.0 for a new alarm only, a repeated raise does not extend it; the town update <c>FUN_14092bfe0</c> counts it down and deletes it below 0: <b>Verified</b>).</summary>
     public const float AlarmLife = 8;
-    double lastAlarmHours = double.NegativeInfinity;
+    double _lastAlarmHours = double.NegativeInfinity;
 
     /// <summary>The dialogue event the witness says at the culprit (<c>FUN_140854d10</c>'s switch on the crime code, docs/game/dialogue.md "Event sources").</summary>
     static int WitnessEvent(World world, CharacterCold w, PendingCrime p) => p.Code switch
@@ -646,6 +646,6 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
 
     void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
     {
-        if (Settings.RecordLog) log.Add(new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness));
+        if (Settings.RecordLog) _log.Add(new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness));
     }
 }

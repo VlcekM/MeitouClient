@@ -24,16 +24,16 @@ public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool F
     /// <summary>The weather whose name matches (exactly, else by substring); null name picks "Default".</summary>
     public static SkyWeather? Find(GameDatabase db, string? name)
     {
-        var all = db.OfType(FcsRecordType.WEATHER).ToList();
+        var all = db.OfType(FcsRecordType.Weather).ToList();
         name ??= "Default";
         var r = all.FirstOrDefault(w => w.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? all.FirstOrDefault(w => w.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
         return r is null ? null : FromRecord(r);
     }
 
-    public static IEnumerable<string> Names(GameDatabase db) => db.OfType(FcsRecordType.WEATHER).Select(w => w.Name);
+    public static IEnumerable<string> Names(GameDatabase db) => db.OfType(FcsRecordType.Weather).Select(w => w.Name);
 
     /// <summary>CONSTANTS <c>night darkness</c> (0.35 in the merged data): the night's floor of the exposure band, as a fraction of <c>exposure min</c> (docs/formats/lighting.md).</summary>
     public static float NightDarkness(GameDatabase db) =>
-        (db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault())?.GetFloat("night darkness", 0.5f) ?? 0.5f;
+        (db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.Constants).FirstOrDefault())?.GetFloat("night darkness", 0.5f) ?? 0.5f;
 }

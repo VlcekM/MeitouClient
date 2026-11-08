@@ -97,11 +97,11 @@ static class WorldSurvey
         if (buildings.Count - inZone - atOrigin > 0) problems++;
 
         var db = GameDatabase.Load(LoadOrder.FromInstall(install));
-        problems += Resolve("building targets", buildings.Select(b => b.BuildingId), db, FcsRecordType.BUILDING);
+        problems += Resolve("building targets", buildings.Select(b => b.BuildingId), db, FcsRecordType.Building);
         var towns = world.Towns().ToList();
-        problems += Resolve("town targets", towns.Select(t => t.TownId), db, FcsRecordType.TOWN);
-        var factions = world.Zones.Values.SelectMany(z => z.OfType(FcsRecordType.GAMESTATE_BUILDING)).Select(s => s.GetString("owner faction ID")).Where(s => s.Length > 0);
-        Resolve("building owner factions", factions, db, FcsRecordType.FACTION);
+        problems += Resolve("town targets", towns.Select(t => t.TownId), db, FcsRecordType.Town);
+        var factions = world.Zones.Values.SelectMany(z => z.OfType(FcsRecordType.GamestateBuilding)).Select(s => s.GetString("owner faction ID")).Where(s => s.Length > 0);
+        Resolve("building owner factions", factions, db, FcsRecordType.Faction);
 
         var townZones = world.TownZones();
         int matched = 0, mismatched = 0, noState = 0, noZones = 0;

@@ -8,10 +8,10 @@ namespace Meitou.Tests.Gameplay;
 /// must keep what it cannot read aside and what it does not know as it was.</summary>
 public class UserConfigTests : IDisposable
 {
-    readonly string dir = Directory.CreateTempSubdirectory("meitou-config").FullName;
-    string File => Path.Combine(dir, UserConfig.FileName);
+    readonly string _dir = Directory.CreateTempSubdirectory("meitou-config").FullName;
+    string File => Path.Combine(_dir, UserConfig.FileName);
 
-    public void Dispose() => Directory.Delete(dir, recursive: true);
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     // Loads the text, saves it back, returns the config, the saved JSON and the backups beside it.
     (UserConfig Config, JsonObject Saved, string[] Backups) RoundTrip(string json)
@@ -19,7 +19,7 @@ public class UserConfigTests : IDisposable
         System.IO.File.WriteAllText(File, json);
         var config = UserConfig.Load(File);
         config.Save();
-        return (config, (JsonObject)JsonNode.Parse(System.IO.File.ReadAllText(File))!, Directory.GetFiles(dir, "meitou.user.*.bak.json"));
+        return (config, (JsonObject)JsonNode.Parse(System.IO.File.ReadAllText(File))!, Directory.GetFiles(_dir, "meitou.user.*.bak.json"));
     }
 
     [Fact]

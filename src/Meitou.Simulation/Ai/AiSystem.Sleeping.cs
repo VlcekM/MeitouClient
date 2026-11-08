@@ -40,15 +40,15 @@ public sealed partial class AiSystem
     /// </summary>
     float SleepDanger(World world, Blackboard board, int slot, CharacterCold me)
     {
-        if (aggro?.SensesOf(slot) is { Enemies: > 0 }) return 2;
-        if (AlarmOf(world, slot, TaskType.INVESTIGATE_ALARMS, board) is not null) return 1.5f;
+        if (_aggro?.SensesOf(slot) is { Enemies: > 0 }) return 2;
+        if (AlarmOf(world, slot, TaskType.InvestigateAlarms, board) is not null) return 1.5f;
         return board.OwnHome is { } home && world.Sight.BuildingOf(slot) == home.Key && StrangerKnown(world, slot) ? 1 : 0;
     }
 
     /// <summary>A sensed neutral or enemy (filter 6, not 0x208: neither KO nor imprisoned) in the same building as the character that it knows (<c>FUN_140855960</c>, flag clear).</summary>
     bool StrangerKnown(World world, int slot)
     {
-        if (aggro?.SensesOf(slot) is not { } senses) return false;
+        if (_aggro?.SensesOf(slot) is not { } senses) return false;
         var table = world.Characters;
         string? here = world.Sight.BuildingOf(slot);
         foreach (var e in senses.Entries)

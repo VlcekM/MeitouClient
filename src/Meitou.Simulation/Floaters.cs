@@ -56,10 +56,10 @@ public readonly record struct Floater(FloaterKind Kind, CharacterId Target, Vect
 
 public sealed partial class World
 {
-    volatile System.Collections.Concurrent.ConcurrentQueue<Floater>? floaters;
+    volatile System.Collections.Concurrent.ConcurrentQueue<Floater>? _floaters;
 
     /// <summary>
     /// Where hits and texts queue their floaters for the host to draw; null (the default) records none. The host sets it while it shows floaters and empties it every frame.
     /// </summary>
-    public System.Collections.Concurrent.ConcurrentQueue<Floater>? Floaters { get => floaters; set => floaters = value; }
+    public System.Collections.Concurrent.ConcurrentQueue<Floater>? Floaters { get => _floaters; set => _floaters = value; }
 }

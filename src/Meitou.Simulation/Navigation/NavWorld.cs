@@ -21,26 +21,26 @@ public sealed class NavWorld
     /// <summary>The empty world.</summary>
     public static readonly NavWorld Empty = new([], [], []);
 
-    readonly ZoneNavMesh[] meshes;
-    readonly Dictionary<ZoneCoordinate, int> slots;
-    readonly Dictionary<long, NavLink[]> links;
+    readonly ZoneNavMesh[] _meshes;
+    readonly Dictionary<ZoneCoordinate, int> _slots;
+    readonly Dictionary<long, NavLink[]> _links;
 
     NavWorld(ZoneNavMesh[] meshes, Dictionary<ZoneCoordinate, int> slots, Dictionary<long, NavLink[]> links)
     {
-        this.meshes = meshes;
-        this.slots = slots;
-        this.links = links;
+        this._meshes = meshes;
+        this._slots = slots;
+        this._links = links;
     }
 
-    public int ZoneCount => meshes.Length;
-    public ZoneNavMesh Mesh(int slot) => meshes[slot];
-    public IEnumerable<ZoneCoordinate> Zones => slots.Keys;
-    public bool Contains(ZoneCoordinate zone) => slots.ContainsKey(zone);
-    public bool TryGetSlot(ZoneCoordinate zone, out int slot) => slots.TryGetValue(zone, out slot);
-    public ZoneNavMesh? Find(ZoneCoordinate zone) => slots.TryGetValue(zone, out var s) ? meshes[s] : null;
+    public int ZoneCount => _meshes.Length;
+    public ZoneNavMesh Mesh(int slot) => _meshes[slot];
+    public IEnumerable<ZoneCoordinate> Zones => _slots.Keys;
+    public bool Contains(ZoneCoordinate zone) => _slots.ContainsKey(zone);
+    public bool TryGetSlot(ZoneCoordinate zone, out int slot) => _slots.TryGetValue(zone, out slot);
+    public ZoneNavMesh? Find(ZoneCoordinate zone) => _slots.TryGetValue(zone, out var s) ? _meshes[s] : null;
 
     /// <summary>The links of a polygon across zone borders (empty for nearly all).</summary>
-    public ReadOnlySpan<NavLink> LinksOf(NavRef p) => links.TryGetValue(p.Key, out var l) ? l : [];
+    public ReadOnlySpan<NavLink> LinksOf(NavRef p) => _links.TryGetValue(p.Key, out var l) ? l : [];
 
     /// <summary>
     /// A new world with <paramref name="mesh"/> added (or replacing the zone's), linked to its loaded neighbours where the borders' heights differ by at most
@@ -49,15 +49,15 @@ public sealed class NavWorld
     public NavWorld With(ZoneNavMesh mesh, float maxStep = 5.5f)
     {
         var zone = new ZoneCoordinate(mesh.ZoneX, mesh.ZoneZ);
-        var list = meshes.ToList();
-        var newSlots = new Dictionary<ZoneCoordinate, int>(slots);
+        var list = _meshes.ToList();
+        var newSlots = new Dictionary<ZoneCoordinate, int>(_slots);
         int slot;
         if (newSlots.TryGetValue(zone, out slot)) list[slot] = mesh;
         else { slot = list.Count; list.Add(mesh); newSlots[zone] = slot; }
 
         // Links that touch the replaced zone are rebuilt; the rest carry over.
         var newLinks = new Dictionary<long, NavLink[]>();
-        foreach (var (key, value) in links)
+        foreach (var (key, value) in _links)
         {
             int zoneOfKey = (int)(key >> 32);
             if (zoneOfKey == slot) continue;
@@ -74,14 +74,14 @@ public sealed class NavWorld
     /// <summary>A new world without the zone.</summary>
     public NavWorld Without(ZoneCoordinate zone)
     {
-        if (!slots.TryGetValue(zone, out int removed)) return this;
-        var kept = slots.Where(kv => kv.Key != zone).OrderBy(kv => kv.Value).ToList();
+        if (!_slots.TryGetValue(zone, out int removed)) return this;
+        var kept = _slots.Where(kv => kv.Key != zone).OrderBy(kv => kv.Value).ToList();
         var remap = new Dictionary<int, int>();
         var newMeshes = new List<ZoneNavMesh>();
         var newSlots = new Dictionary<ZoneCoordinate, int>();
-        foreach (var (z, old) in kept) { remap[old] = newMeshes.Count; newSlots[z] = newMeshes.Count; newMeshes.Add(meshes[old]); }
+        foreach (var (z, old) in kept) { remap[old] = newMeshes.Count; newSlots[z] = newMeshes.Count; newMeshes.Add(_meshes[old]); }
         var newLinks = new Dictionary<long, NavLink[]>();
-        foreach (var (key, value) in links)
+        foreach (var (key, value) in _links)
         {
             int zoneOfKey = (int)(key >> 32);
             if (zoneOfKey == removed) continue;
@@ -94,8 +94,8 @@ public sealed class NavWorld
     /// <summary>Links the border edges of two adjacent zones where they overlap. (dx, dz) is the direction from <paramref name="a"/> to <paramref name="b"/>.</summary>
     void LinkZones(int a, int b, int dx, int dz, float maxStep)
     {
-        var ma = meshes[a];
-        var mb = meshes[b];
+        var ma = _meshes[a];
+        var mb = _meshes[b];
         var edgesA = ma.BorderEdges(dx, dz, skipLinked: false);
         var edgesB = mb.BorderEdges(-dx, -dz, skipLinked: false);
         bool alongX = dz != 0; // the shared border line runs along X when the zones are stacked in Z
@@ -116,8 +116,8 @@ public sealed class NavWorld
 
     void Add(NavRef from, NavLink link)
     {
-        var existing = links.TryGetValue(from.Key, out var l) ? l : [];
-        links[from.Key] = [.. existing, link];
+        var existing = _links.TryGetValue(from.Key, out var l) ? l : [];
+        _links[from.Key] = [.. existing, link];
     }
 
     // ---- point queries over all zones ----
@@ -127,8 +127,8 @@ public sealed class NavWorld
     {
         height = float.MinValue;
         var zone = WorldLayout.ZoneOf(x, z);
-        if (!slots.TryGetValue(zone, out int slot)) return false;
-        return meshes[slot].TryHighestAt(x, z, out height);
+        if (!_slots.TryGetValue(zone, out int slot)) return false;
+        return _meshes[slot].TryHighestAt(x, z, out height);
     }
 
     /// <summary>The walkable collision surface of the zone at (x, z) nearest to <paramref name="y"/> within <paramref name="range"/> (<see cref="NavSurfaces"/>).</summary>
@@ -140,14 +140,14 @@ public sealed class NavWorld
     {
         height = y;
         beside = false;
-        return slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot) && meshes[slot].Surfaces is { } s && s.TryNear(x, z, y, range, out height, out beside);
+        return _slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot) && _meshes[slot].Surfaces is { } s && s.TryNear(x, z, y, range, out height, out beside);
     }
 
     /// <summary>The terrain height at (x, z) from the zone's own heightmap samples (<see cref="ZoneNavMesh.Terrain"/>); false where the zone has none.</summary>
     public bool TryTerrain(float x, float z, out float height)
     {
         height = 0;
-        return slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot) && meshes[slot].Terrain is { } t && t.TryHeightAt(x, z, out height);
+        return _slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot) && _meshes[slot].Terrain is { } t && t.TryHeightAt(x, z, out height);
     }
 
     /// <summary>Appends the mesh heights of every walkable surface at (x, z) (<see cref="ZoneNavMesh.HeightsAt"/>).</summary>
@@ -155,8 +155,8 @@ public sealed class NavWorld
     /// its nearest point counts, picked by this height.</param>
     public void HeightsAt(float x, float z, List<float> heights, float nearY = 0, float edge = 0)
     {
-        if (!slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot)) return;
-        var m = meshes[slot];
+        if (!_slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot)) return;
+        var m = _meshes[slot];
         m.HeightsAt(x, z, heights);
         if (heights.Count == 0 && edge > 0 && TryEdgeHeight(x, z, nearY, edge, out float h)) heights.Add(h);
     }
@@ -165,8 +165,8 @@ public sealed class NavWorld
     public bool TryEdgeHeight(float x, float z, float nearY, float edge, out float height)
     {
         height = 0;
-        if (!slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot)) return false;
-        var m = meshes[slot];
+        if (!_slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot)) return false;
+        var m = _meshes[slot];
         if (m.Nearest(x, nearY, z, edge, out _) is not (var p and >= 0)) return false;
         height = ClosestPoint(m, p, new Vector3(x, nearY, z)).Y;
         return true;
@@ -184,8 +184,8 @@ public sealed class NavWorld
         for (int dz = -1; dz <= 1; dz++)
             for (int dx = -1; dx <= 1; dx++)
             {
-                if (!slots.TryGetValue(new ZoneCoordinate(zone.X + dx, zone.Y + dz), out int slot)) continue;
-                var m = meshes[slot];
+                if (!_slots.TryGetValue(new ZoneCoordinate(zone.X + dx, zone.Y + dz), out int slot)) continue;
+                var m = _meshes[slot];
                 int poly = m.Nearest(p.X, p.Y, p.Z, maxDistance, out float d, skip is null ? null : q => skip(new NavRef(slot, q)));
                 if (poly < 0) continue;
                 float y = m.HeightAt(poly, Math.Clamp(p.X, m.BoundsMin.X, m.BoundsMax.X), Math.Clamp(p.Z, m.BoundsMin.Y, m.BoundsMax.Y));

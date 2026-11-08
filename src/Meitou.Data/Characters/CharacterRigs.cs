@@ -27,9 +27,9 @@ public sealed class CharacterPoseSetup
 /// </summary>
 public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMesh, Func<string, string?> find)
 {
-    readonly ConcurrentDictionary<string, Lazy<SkeletonRig>> rigs = new(StringComparer.OrdinalIgnoreCase);
-    readonly ConcurrentDictionary<string, Lazy<string?>> skeletonNames = new(StringComparer.OrdinalIgnoreCase);
-    readonly ConcurrentDictionary<CharacterAppearance, Lazy<CharacterPoseSetup?>> setups = new(ReferenceEqualityComparer.Instance);
+    readonly ConcurrentDictionary<string, Lazy<SkeletonRig>> _rigs = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, Lazy<string?>> _skeletonNames = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<CharacterAppearance, Lazy<CharacterPoseSetup?>> _setups = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Rigs that find their files through <paramref name="assets"/>, as the characters' content does; one is shared by the simulation and the renderer.</summary>
     public static CharacterRigs For(GameDatabase db, AssetLocator assets) => new(db, path => assets.FindMesh(path), name => assets.Find(name));
@@ -41,11 +41,11 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
     {
         var path = find(name);
         if (path is null) return null;
-        return rigs.GetOrAdd(path, p => new Lazy<SkeletonRig>(() => new SkeletonRig(OgreSkeletonReader.ReadFile(p)))).Value;
+        return _rigs.GetOrAdd(path, p => new Lazy<SkeletonRig>(() => new SkeletonRig(OgreSkeletonReader.ReadFile(p)))).Value;
     }
 
-    readonly ConcurrentDictionary<string, Lazy<SkeletonRig>> linkedRigs = new(StringComparer.OrdinalIgnoreCase);
-    readonly ConcurrentDictionary<string, Lazy<OgreSkeleton?>> sources = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, Lazy<SkeletonRig>> _linkedRigs = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, Lazy<OgreSkeleton?>> _sources = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The rig of the skeleton file <paramref name="name"/> linking <paramref name="animationFiles"/> (<see cref="AnimationFiles"/>, FCS paths in link order); a file
@@ -56,7 +56,7 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
         if (Rig(name) is not { } own) return null;
         var found = animationFiles.Select(f => find(AnimationFiles.BareName(f))).OfType<string>().ToList();
         if (found.Count == 0) return own;
-        return linkedRigs.GetOrAdd(find(name) + "|" + string.Join("|", found),
+        return _linkedRigs.GetOrAdd(find(name) + "|" + string.Join("|", found),
             _ => new Lazy<SkeletonRig>(() => new SkeletonRig(own.Skeleton, [.. found.Select(Source)]))).Value;
     }
 
@@ -64,7 +64,7 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
     public SkeletonRig? Rig(string name, CharacterAppearance c) => Rig(name, AnimationFiles.Of(db, c.Race, c.Character ?? c.Animal, c.Female));
 
     // A linked skeleton, read once per file whichever rigs link it; null when it cannot be read (the game logs and plays without it).
-    Lazy<OgreSkeleton?> Source(string path) => sources.GetOrAdd(path, p => new Lazy<OgreSkeleton?>(() =>
+    Lazy<OgreSkeleton?> Source(string path) => _sources.GetOrAdd(path, p => new Lazy<OgreSkeleton?>(() =>
     {
         try { return OgreSkeletonReader.ReadFile(p); }
         catch (Exception e) when (e is OgreFormatException or IOException or EndOfStreamException or InvalidDataException) { return null; }
@@ -77,11 +77,11 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
     public string? Find(string fcsPath) => find(fcsPath);
 
     /// <summary>The skeleton a body mesh file links, read from the file once per path; throws what the reader throws.</summary>
-    public string? BodySkeletonName(string path) => skeletonNames.GetOrAdd(path, p => new Lazy<string?>(() => OgreMeshReader.ReadFile(p).SkeletonName)).Value;
+    public string? BodySkeletonName(string path) => _skeletonNames.GetOrAdd(path, p => new Lazy<string?>(() => OgreMeshReader.ReadFile(p).SkeletonName)).Value;
 
     /// <summary>The pose setup of <paramref name="c"/> (cached per appearance); null when its body mesh or skeleton cannot be found or read.</summary>
     public CharacterPoseSetup? For(CharacterAppearance c) =>
-        setups.GetOrAdd(c, static (a, self) => new Lazy<CharacterPoseSetup?>(() => self.Build(a)), this).Value;   // a static factory: nothing allocated on a hit
+        _setups.GetOrAdd(c, static (a, self) => new Lazy<CharacterPoseSetup?>(() => self.Build(a)), this).Value;   // a static factory: nothing allocated on a hit
 
     /// <summary>
     /// Whether the body of <paramref name="c"/> can play the ANIMATION record <paramref name="record"/>: its skeleton, with the animation files its race and record link, has the clip

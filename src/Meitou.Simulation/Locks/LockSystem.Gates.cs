@@ -13,12 +13,12 @@ public sealed partial class LockSystem
     public IGateRegions? Regions { get; private set; }
 
     /// <summary>The gate states of the codes' pairs, rebuilt once a check (<see cref="BashCheckTicks"/>) from the gates' doors; null when not yet asked this check.</summary>
-    Dictionary<int, List<(int To, int State, GateLink Gate)>>? gateGraph;
+    Dictionary<int, List<(int To, int State, GateLink Gate)>>? _gateGraph;
 
     void GateInputs(GateRegionsCommand command)
     {
         Regions = command.Regions;
-        gateGraph = null;
+        _gateGraph = null;
     }
 
     /// <summary>
@@ -37,15 +37,15 @@ public sealed partial class LockSystem
         return state == 0 ? 1 : state;
     }
 
-    readonly object gateGraphLock = new();
+    readonly object _gateGraphLock = new();
 
     // Built on first use; the combat step asks from its workers (CombatSystem.ImmediateThreat), so the graph is built under a lock and published whole.
     Dictionary<int, List<(int To, int State, GateLink Gate)>> GateGraph(World world)
     {
-        if (Volatile.Read(ref gateGraph) is { } built) return built;
-        lock (gateGraphLock)
+        if (Volatile.Read(ref _gateGraph) is { } built) return built;
+        lock (_gateGraphLock)
         {
-            if (gateGraph is { } raced) return raced;
+            if (_gateGraph is { } raced) return raced;
             var graph = new Dictionary<int, List<(int To, int State, GateLink Gate)>>();
             if (Regions is not null)
                 foreach (var gate in Regions.Gates)
@@ -60,7 +60,7 @@ public sealed partial class LockSystem
                             list.Add((gate.Codes[j], state, gate));
                         }
                 }
-            Volatile.Write(ref gateGraph, graph);
+            Volatile.Write(ref _gateGraph, graph);
             return graph;
         }
     }
@@ -176,13 +176,13 @@ public sealed partial class LockSystem
         // No gate leads there: 270 falls back to a wall of the attacker's region (FUN_1405a3f60), planned through 272 Smashing.
         if (gate is null) return FindWallBasher(world, s, t, c, a);
         if (gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return false;
-        if (!gatePlan.PlansBash(world, Combat, this, s, t, g.Building, main.Door, main.Spot)) return false;
+        if (!_gatePlan.PlansBash(world, Combat, this, s, t, g.Building, main.Door, main.Spot)) return false;
         c.Bashing = main.Door.Id;
         c.BashTime = 0;
         return true;
     }
 
-    readonly GatePlan gatePlan = new();
+    readonly GatePlan _gatePlan = new();
 
     /// <summary>
     /// How a ransacker (goal 216) at <paramref name="from"/> gets past the gates between it and a building at <paramref name="to"/>, by the planner (<see cref="GatePlan.PlansEntry"/>): a walk when no gate is
@@ -194,7 +194,7 @@ public sealed partial class LockSystem
         int a = Regions.CodeAt(from), b = Regions.CodeAt(to);
         if (a == b || a < 0 || b < 0 || RouteState(world, a, b, Flat(from), out var gate) == 1) return (DoorPlan.Entry.Walk, null);
         if (gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return (DoorPlan.Entry.Blocked, null);
-        var entry = gatePlan.PlansEntry(world, Combat, this, s, to, g.Building, main.Door, main.Spot);
+        var entry = _gatePlan.PlansEntry(world, Combat, this, s, to, g.Building, main.Door, main.Spot);
         return (entry, entry == DoorPlan.Entry.Bash ? main.Door.Id : null);
     }
 

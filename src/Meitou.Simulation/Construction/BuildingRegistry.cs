@@ -140,7 +140,7 @@ public sealed class PlayerTown
     /// <summary>The save's instance id of its town-list entry (null until a save has named it); bookkeeping for <c>Saving.BuildingSave</c>, not hashed.</summary>
     public string? SaveInstance { get; set; }
     /// <summary>The save's town handle <c>hand*</c> (null until a save has named it); not hashed.</summary>
-    public Meitou.Data.Save.Hand? SaveHandle { get; set; }
+    public Data.Save.Hand? SaveHandle { get; set; }
 
     internal void Hash(ref StateHasher h)
     {
@@ -160,26 +160,26 @@ public sealed class PlayerTown
 /// </summary>
 public sealed partial class BuildingRegistry
 {
-    readonly List<BuildSite> sites = [];
-    readonly List<PlayerTown> towns = [];
-    readonly Dictionary<string, BuildSite> byId = new(StringComparer.Ordinal);
-    readonly Dictionary<ZoneCoordinate, int> counters = [];
-    IReadOnlyList<BuildingSnapshot> published = [];
-    long publishedVersion = -1;
+    readonly List<BuildSite> _sites = [];
+    readonly List<PlayerTown> _towns = [];
+    readonly Dictionary<string, BuildSite> _byId = new(StringComparer.Ordinal);
+    readonly Dictionary<ZoneCoordinate, int> _counters = [];
+    IReadOnlyList<BuildingSnapshot> _published = [];
+    long _publishedVersion = -1;
 
-    public int Count => sites.Count;
-    public IReadOnlyList<BuildSite> All => sites;
-    public BuildSite? Find(string id) => byId.GetValueOrDefault(id);
+    public int Count => _sites.Count;
+    public IReadOnlyList<BuildSite> All => _sites;
+    public BuildSite? Find(string id) => _byId.GetValueOrDefault(id);
 
     /// <summary>The player towns (outposts), in creation order; never removed.</summary>
-    public IReadOnlyList<PlayerTown> Towns => towns;
-    public PlayerTown? FindTown(int number) => number > 0 && number <= towns.Count ? towns[number - 1] : null;
+    public IReadOnlyList<PlayerTown> Towns => _towns;
+    public PlayerTown? FindTown(int number) => number > 0 && number <= _towns.Count ? _towns[number - 1] : null;
 
     /// <summary>Makes a player town with the next number.</summary>
     public PlayerTown AddTown(Vector3 position, int owner, string name = PlayerTown.DefaultName)
     {
-        var town = new PlayerTown { Number = towns.Count + 1, Name = name, Position = position, Owner = owner };
-        towns.Add(town);
+        var town = new PlayerTown { Number = _towns.Count + 1, Name = name, Position = position, Owner = owner };
+        _towns.Add(town);
         Revision++;
         Version++;
         return town;
@@ -195,7 +195,7 @@ public sealed partial class BuildingRegistry
     {
         get
         {
-            foreach (var s in sites) if (!s.Complete) return true;
+            foreach (var s in _sites) if (!s.Complete) return true;
             return false;
         }
     }
@@ -205,7 +205,7 @@ public sealed partial class BuildingRegistry
     {
         get
         {
-            foreach (var s in sites) if (s.NeedsWork) return true;
+            foreach (var s in _sites) if (s.NeedsWork) return true;
             return false;
         }
     }
@@ -229,7 +229,7 @@ public sealed partial class BuildingRegistry
     /// <summary>Keeps new ids of the id's zone above its number (an id of another pattern is ignored).</summary>
     public void Reserve(string id)
     {
-        if (TryParseId(id, out var zone, out int n)) counters[zone] = Math.Max(counters.GetValueOrDefault(zone), n);
+        if (TryParseId(id, out var zone, out int n)) _counters[zone] = Math.Max(_counters.GetValueOrDefault(zone), n);
     }
 
     /// <summary>The id the next site in <paramref name="zone"/> gets (skipping any id in use).</summary>
@@ -237,10 +237,10 @@ public sealed partial class BuildingRegistry
     {
         while (true)
         {
-            int n = counters.GetValueOrDefault(zone) + 1;
-            counters[zone] = n;
+            int n = _counters.GetValueOrDefault(zone) + 1;
+            _counters[zone] = n;
             string id = IdOf(n, zone);
-            if (!byId.ContainsKey(id)) return id;
+            if (!_byId.ContainsKey(id)) return id;
         }
     }
 
@@ -250,8 +250,8 @@ public sealed partial class BuildingRegistry
     public void Add(BuildSite site)
     {
         ArgumentNullException.ThrowIfNull(site);
-        if (!byId.TryAdd(site.Id, site)) throw new InvalidOperationException($"site {site.Id} exists");
-        sites.Add(site);
+        if (!_byId.TryAdd(site.Id, site)) throw new InvalidOperationException($"site {site.Id} exists");
+        _sites.Add(site);
         Reserve(site.Id);
         Revision++;
         Version++;
@@ -259,8 +259,8 @@ public sealed partial class BuildingRegistry
 
     public bool Remove(BuildSite site)
     {
-        if (!byId.Remove(site.Id)) return false;
-        sites.Remove(site);
+        if (!_byId.Remove(site.Id)) return false;
+        _sites.Remove(site);
         Revision++;
         Version++;
         return true;
@@ -279,37 +279,36 @@ public sealed partial class BuildingRegistry
     /// <summary>The snapshots of every site, rebuilt only when something changed since the last call.</summary>
     internal IReadOnlyList<BuildingSnapshot> Published()
     {
-        if (publishedVersion == Version) return published;
-        var list = new List<BuildingSnapshot>(sites.Count);
-        foreach (var s in sites)
+        if (_publishedVersion == Version) return _published;
+        var list = new List<BuildingSnapshot>(_sites.Count);
+        foreach (var s in _sites)
         {
             var materials = new MaterialView[s.Materials.Length];
             for (int i = 0; i < materials.Length; i++) materials[i] = new MaterialView(s.Materials[i].Item, s.Materials[i].Required, s.Materials[i].Delivered);
             list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials, s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public, TownName = s.LevelTownName ?? FindTown(s.Town)?.Name, LevelPlacement = s.LevelPlacement, Destroyed = s.Destroyed, Name = s.Name });
         }
-        publishedVersion = Version;
-        return published = list;
+        _publishedVersion = Version;
+        return _published = list;
     }
 
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x426C6473);
-        var zones = counters.Keys.ToList();
+        var zones = _counters.Keys.ToList();
         zones.Sort(static (a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y));
         h.Add(zones.Count);
         foreach (var z in zones)
         {
             h.Add(z.X);
             h.Add(z.Y);
-            h.Add(counters[z]);
+            h.Add(_counters[z]);
         }
-        h.Add(sites.Count);
-        foreach (var s in sites) s.Hash(ref h);
-        if (towns.Count > 0)
+        h.Add(_sites.Count);
+        foreach (var s in _sites) s.Hash(ref h);
+        if (_towns.Count > 0)
         {
-            h.Add(towns.Count);
-            foreach (var t in towns) t.Hash(ref h);
+            h.Add(_towns.Count);
+            foreach (var t in _towns) t.Hash(ref h);
         }
     }
 }
-

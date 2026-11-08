@@ -17,12 +17,12 @@ sealed class BuildingFloor
     public required int Exterior { get; init; }
     public required Func<FloorSurfaces> Make { get; init; }
 
-    Task<FloorSurfaces>? job;
+    Task<FloorSurfaces>? _job;
 
     /// <summary>The floor collision, or null while it is being made.</summary>
-    public FloorSurfaces? Surfaces => job is { IsCompletedSuccessfully: true } j ? j.Result : null;
+    public FloorSurfaces? Surfaces => _job is { IsCompletedSuccessfully: true } j ? j.Result : null;
 
-    public void Request() => job ??= BackgroundWork.Run(Make);
+    public void Request() => _job ??= BackgroundWork.Run(Make);
 }
 
 /// <summary>
@@ -40,8 +40,8 @@ sealed class BuildingFloors(WorldObjects objects)
     /// <summary>How far above the feet the ray starts (<c>FUN_14065f160</c>: 20), and how far below the feet a floor still counts as the one stood on (engine choice: the heights characters stand at come from the navigation mesh).</summary>
     public const float RayStart = 20, Tolerance = 4;
 
-    readonly Dictionary<ZoneCoordinate, ZoneListing> zones = [];
-    readonly List<(BuildingFloor Floor, FloorSurfaces Surfaces)> near = [];
+    readonly Dictionary<ZoneCoordinate, ZoneListing> _zones = [];
+    readonly List<(BuildingFloor Floor, FloorSurfaces Surfaces)> _near = [];
 
     /// <summary>The GroundType of the building floor under <paramref name="feet"/> (the closest of the buildings' floors within the tolerance), or -1 for none.</summary>
     public int MaterialUnder(Vector3 feet, bool inside)
@@ -72,7 +72,7 @@ sealed class BuildingFloors(WorldObjects objects)
     /// <summary>The buildings within <see cref="Reach"/> whose floors are made (asking for the rest); the list is reused by the next call.</summary>
     List<(BuildingFloor, FloorSurfaces)> Near(float x, float z)
     {
-        near.Clear();
+        _near.Clear();
         // The zones the reach touches: its four corners.
         Span<ZoneCoordinate> touched = stackalloc ZoneCoordinate[4];
         int count = 0;
@@ -86,10 +86,10 @@ sealed class BuildingFloors(WorldObjects objects)
             foreach (var floor in Listed(zone))
             {
                 if (Vector2.DistanceSquared(new(floor.Position.X, floor.Position.Z), new(x, z)) > Reach * Reach) continue;
-                if (floor.Surfaces is { } surfaces) near.Add((floor, surfaces));
+                if (floor.Surfaces is { } surfaces) _near.Add((floor, surfaces));
                 else floor.Request();
             }
-        return near;
+        return _near;
     }
 
     /// <summary>
@@ -98,7 +98,7 @@ sealed class BuildingFloors(WorldObjects objects)
     /// </summary>
     BuildingFloor[] Listed(ZoneCoordinate zone)
     {
-        if (!zones.TryGetValue(zone, out var listing)) zones[zone] = listing = new ZoneListing();
+        if (!_zones.TryGetValue(zone, out var listing)) _zones[zone] = listing = new ZoneListing();
         if (listing.Job is { IsCompletedSuccessfully: true } done && listing.Adopted != done)
         {
             listing.Floors = KeepUnchanged(listing.Floors, done.Result);

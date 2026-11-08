@@ -52,13 +52,13 @@ public sealed class SenseBlock
     /// </summary>
     public const int Cap = 40;
 
-    internal readonly List<SenseEntry> entries = [];
-    internal readonly List<CharacterId> threats = [];
+    internal readonly List<SenseEntry> EntryList = [];
+    internal readonly List<CharacterId> ThreatList = [];
 
     /// <summary>The entries, by target slot.</summary>
-    public IReadOnlyList<SenseEntry> Entries => entries;
+    public IReadOnlyList<SenseEntry> Entries => EntryList;
     /// <summary>The threats list (+0x50): the characters of another faction sensed at the last look whose fight targets this one.</summary>
-    public IReadOnlyList<CharacterId> Threats => threats;
+    public IReadOnlyList<CharacterId> Threats => ThreatList;
     /// <summary><c>numEnemies</c> (+0x94, the AI's +0xbc): entries tagged enemy whose character is not down, dead or carried.</summary>
     public int Enemies { get; internal set; }
     /// <summary><c>numNeutrals</c> (+0x98): the same for the entries tagged neutral.</summary>
@@ -75,12 +75,12 @@ public sealed class SenseBlock
     /// <summary>The entry of <paramref name="slot"/> (its generation), by binary search; -1 when none.</summary>
     public int IndexOf(int slot, int generation)
     {
-        int lo = 0, hi = entries.Count - 1;
+        int lo = 0, hi = EntryList.Count - 1;
         while (lo <= hi)
         {
             int mid = (lo + hi) >> 1;
-            int t = entries[mid].Target;
-            if (t == slot) return entries[mid].Generation == generation ? mid : -1;
+            int t = EntryList[mid].Target;
+            if (t == slot) return EntryList[mid].Generation == generation ? mid : -1;
             if (t < slot) lo = mid + 1;
             else hi = mid - 1;
         }
@@ -88,24 +88,24 @@ public sealed class SenseBlock
     }
 
     /// <summary>Whether the block holds an entry of <paramref name="who"/> (the knows test <c>FUN_140855960</c> with its flag clear; with <paramref name="now"/> only one sensed at the last look).</summary>
-    public bool Knows(CharacterId who, bool now = false) => IndexOf(who.Slot, who.Generation) is >= 0 and var k && (!now || entries[k].Now);
+    public bool Knows(CharacterId who, bool now = false) => IndexOf(who.Slot, who.Generation) is >= 0 and var k && (!now || EntryList[k].Now);
 
     /// <summary>The entry of <paramref name="who"/>, if any.</summary>
     public bool TryGet(CharacterId who, out SenseEntry entry)
     {
         int k = IndexOf(who.Slot, who.Generation);
-        entry = k >= 0 ? entries[k] : default;
+        entry = k >= 0 ? EntryList[k] : default;
         return k >= 0;
     }
 
     /// <summary>Where the entry of <paramref name="slot"/> sits or would be inserted (the first entry whose target slot is not below it).</summary>
     internal int LowerBound(int slot)
     {
-        int lo = 0, hi = entries.Count;
+        int lo = 0, hi = EntryList.Count;
         while (lo < hi)
         {
             int mid = (lo + hi) >> 1;
-            if (entries[mid].Target < slot) lo = mid + 1;
+            if (EntryList[mid].Target < slot) lo = mid + 1;
             else hi = mid;
         }
         return lo;
@@ -113,8 +113,8 @@ public sealed class SenseBlock
 
     internal void Hash(ref StateHasher h)
     {
-        h.Add(entries.Count);
-        foreach (var e in entries)
+        h.Add(EntryList.Count);
+        foreach (var e in EntryList)
         {
             h.Add(e.Target);
             h.Add(e.Generation);
@@ -127,8 +127,8 @@ public sealed class SenseBlock
             h.Add((int)e.Tags);
             h.Add((int)e.Base);
         }
-        h.Add(threats.Count);
-        foreach (var t in threats) { h.Add(t.Slot); h.Add(t.Generation); }
+        h.Add(ThreatList.Count);
+        foreach (var t in ThreatList) { h.Add(t.Slot); h.Add(t.Generation); }
         h.Add(Enemies);
         h.Add(Neutrals);
         h.Add(Allies);

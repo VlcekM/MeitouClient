@@ -1,8 +1,7 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Meitou.Data.Textures;
-
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Gpu.Core;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Frame;
@@ -19,7 +18,7 @@ public static unsafe class FramebufferCapture
         var picture = ReadPicture(ctx, target, w, h, topDown);
         var dir = Path.GetDirectoryName(Path.GetFullPath(path));
         if (dir is not null) Directory.CreateDirectory(dir);
-        Meitou.Data.Textures.PngWriter.Write(path, w, h, picture);
+        PngWriter.Write(path, w, h, picture);
     }
 
     /// <summary>The target as a picture: RGBA8 rows from the top, alpha opaque.</summary>

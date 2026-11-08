@@ -11,34 +11,34 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
 {
-    readonly VulkanDevice device;
-    readonly LinearAllocator[] constants, staging;
+    readonly VulkanDevice _device;
+    readonly LinearAllocator[] _constants, _staging;
     /// <summary>Regular staging chunks a slot keeps beyond what its last cycle used (32 MB): a loading peak's are freed once it has passed.</summary>
     const int StagingKeep = 4;
-    readonly List<DescriptorPool>[] pools;
-    readonly GpuContext ctx;
+    readonly List<DescriptorPool>[] _pools;
+    readonly GpuContext _ctx;
 
     internal GpuFrame(GpuContext ctx)
     {
-        this.ctx = ctx;
-        device = ctx.Device;
-        int n = device.Frames.Count;
-        constants = new LinearAllocator[n];
-        staging = new LinearAllocator[n];
-        pools = new List<DescriptorPool>[n];
+        this._ctx = ctx;
+        _device = ctx.Device;
+        int n = _device.Frames.Count;
+        _constants = new LinearAllocator[n];
+        _staging = new LinearAllocator[n];
+        _pools = new List<DescriptorPool>[n];
         for (int i = 0; i < n; i++)
         {
-            constants[i] = new LinearAllocator(device, $"frame constants {i}");
-            staging[i] = new LinearAllocator(device, $"upload staging {i}");
-            pools[i] = [];
+            _constants[i] = new LinearAllocator(_device, $"frame constants {i}");
+            _staging[i] = new LinearAllocator(_device, $"upload staging {i}");
+            _pools[i] = [];
         }
         Stats = new GpuStats();
         Commands = new CommandList(ctx, Stats);
         PreFrame = new CommandList(ctx, Stats);
-        Timestamps = new QueryArena(device);
+        Timestamps = new QueryArena(_device);
         States = new ResourceStates();
         Parallel = new ParallelPass(ctx);
-        threads = new ThreadPools?[RenderJobs.Threads];
+        _threads = new ThreadPools?[RenderJobs.Threads];
     }
 
     /// <summary>The host's rendering with secondary command buffers, when one is open (docs/renderer-native.md 6, wave 4).</summary>
@@ -48,24 +48,24 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
     /// slot comes round (docs/renderer-native.md 6.3). Each thread only touches its own entry; the render thread resets them at the frame's begin.</summary>
     sealed class ThreadPools(GpuContext ctx, int slots)
     {
-        readonly VulkanDevice device = ctx.Device;
+        readonly VulkanDevice _device = ctx.Device;
         public readonly CommandPool[] Pools = new CommandPool[slots];
         public readonly List<CommandList>[] Lists = [.. Enumerable.Range(0, slots).Select(_ => new List<CommandList>())];
         public readonly int[] Used = new int[slots];
 
         public CommandList Next(int slot)
         {
-            var vk = device.Vk;
+            var vk = _device.Vk;
             if (Pools[slot].Handle == 0)
             {
-                var pi = new CommandPoolCreateInfo { SType = StructureType.CommandPoolCreateInfo, Flags = CommandPoolCreateFlags.TransientBit, QueueFamilyIndex = device.GraphicsFamily };
-                VulkanException.Check(vk.CreateCommandPool(device.Device, in pi, null, out Pools[slot]), "vkCreateCommandPool");
+                var pi = new CommandPoolCreateInfo { SType = StructureType.CommandPoolCreateInfo, Flags = CommandPoolCreateFlags.TransientBit, QueueFamilyIndex = _device.GraphicsFamily };
+                VulkanException.Check(vk.CreateCommandPool(_device.Device, in pi, null, out Pools[slot]), "vkCreateCommandPool");
             }
             var lists = Lists[slot];
             if (Used[slot] == lists.Count)
             {
                 var ai = new CommandBufferAllocateInfo { SType = StructureType.CommandBufferAllocateInfo, CommandPool = Pools[slot], Level = CommandBufferLevel.Secondary, CommandBufferCount = 1 };
-                VulkanException.Check(vk.AllocateCommandBuffers(device.Device, in ai, out var cb), "vkAllocateCommandBuffers");
+                VulkanException.Check(vk.AllocateCommandBuffers(_device.Device, in ai, out var cb), "vkAllocateCommandBuffers");
                 lists.Add(new CommandList(ctx, new GpuStats()) { Handle = cb });
             }
             return lists[Used[slot]++];
@@ -74,23 +74,23 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
         public void Reset(int slot)
         {
             if (Pools[slot].Handle == 0) return;
-            VulkanException.Check(device.Vk.ResetCommandPool(device.Device, Pools[slot], 0), "vkResetCommandPool");
+            VulkanException.Check(_device.Vk.ResetCommandPool(_device.Device, Pools[slot], 0), "vkResetCommandPool");
             Used[slot] = 0;
         }
 
         public void Dispose()
         {
-            foreach (var p in Pools) if (p.Handle != 0) device.Vk.DestroyCommandPool(device.Device, p, null);
+            foreach (var p in Pools) if (p.Handle != 0) _device.Vk.DestroyCommandPool(_device.Device, p, null);
         }
     }
 
-    readonly ThreadPools?[] threads;
+    readonly ThreadPools?[] _threads;
 
     /// <summary>A secondary command buffer of the calling thread's pool for this slot, begun to continue a rendering of <paramref name="formats"/>.</summary>
     internal CommandList BeginSecondary(in AttachmentFormats formats)
     {
         int t = RenderJobs.ThreadIndex;
-        var pools = threads[t] ??= new ThreadPools(ctx, device.Frames.Count);
+        var pools = _threads[t] ??= new ThreadPools(_ctx, _device.Frames.Count);
         var list = pools.Next(Slot);
         list.Stats.Reset();
         list.BeginSecondary(formats);
@@ -107,14 +107,14 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
     /// <summary>The upload commands, as the seam's interface (<see cref="IGpuFrame.PreFrame"/>).</summary>
     IGpuCommandList IGpuFrame.PreFrame => PreFrame;
     /// <summary>Host-visible memory for this frame (constants, CPU-written instances and indirect arguments).</summary>
-    public LinearAllocator Constants => constants[Slot];
+    public LinearAllocator Constants => _constants[Slot];
 
     /// <inheritdoc cref="IGpuFrame.WriteConstants"/>
     public Transient WriteConstants(ReadOnlySpan<byte> data, ulong alignment = 16) => Constants.Write(data, alignment);
     /// <inheritdoc cref="IGpuFrame.AllocateConstants"/>
     public Transient AllocateConstants(ulong size, ulong alignment = 16) => Constants.Allocate(size, alignment);
     /// <summary>Host-visible staging for this frame's uploads (<see cref="Uploader"/>): copy sources only, so its reset trims it.</summary>
-    public LinearAllocator Staging => staging[Slot];
+    public LinearAllocator Staging => _staging[Slot];
     public QueryArena Timestamps { get; }
     public ResourceStates States { get; }
     public GpuStats Stats { get; }
@@ -135,21 +135,21 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
     /// <summary>Called by the host after <c>FrameRing.BeginFrame</c>: the slot's fence has passed, so its memory, pools and queries are free.</summary>
     public void Begin(CommandBuffer commands, CommandBuffer uploads)
     {
-        Number = device.Frames.FrameNumber;
-        Slot = device.Frames.Slot;
+        Number = _device.Frames.FrameNumber;
+        Slot = _device.Frames.Slot;
         Commands.Handle = commands;
         Commands.Invalidate();
         UploadCommands = uploads;
         PreFrame.Handle = uploads;
         PreFrame.Invalidate();
-        constants[Slot].Reset();
-        staging[Slot].Reset(StagingKeep);
-        foreach (var p in pools[Slot]) device.Vk.ResetDescriptorPool(device.Device, p, 0);
-        foreach (var t in threads) t?.Reset(Slot);
+        _constants[Slot].Reset();
+        _staging[Slot].Reset(StagingKeep);
+        foreach (var p in _pools[Slot]) _device.Vk.ResetDescriptorPool(_device.Device, p, 0);
+        foreach (var t in _threads) t?.Reset(Slot);
         Timestamps.Begin(Slot, Number);
         States.AssumeFullBarrier();
         Stats.Reset();
-        ctx.Bindless?.BeginFrame(Slot);
+        _ctx.Bindless?.BeginFrame(Slot);
         Open = true;
     }
 
@@ -162,19 +162,19 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
         PreFrame.Handle = uploads;
         PreFrame.Invalidate();
         States.AssumeFullBarrier();
-        ctx.Bindless?.BeginFrame(Slot);
+        _ctx.Bindless?.BeginFrame(Slot);
     }
 
     /// <summary>Called by the host before it submits the frame.</summary>
     public void End()
     {
         Timestamps.End();
-        ctx.Bindless?.EndFrame();   // what was registered during the frame, into its set before the submit
+        _ctx.Bindless?.EndFrame();   // what was registered during the frame, into its set before the submit
         Open = false;
     }
 
     /// <summary>A descriptor set from this frame's pools (sets that cannot be pushed); freed when the slot comes round.</summary>
-    public DescriptorSet AllocateSet(GpuSetLayout layout) => AllocateSet(ctx.Shaders.VkLayout(layout));
+    public DescriptorSet AllocateSet(GpuSetLayout layout) => AllocateSet(_ctx.Shaders.VkLayout(layout));
 
     /// <summary>As <see cref="AllocateSet(GpuSetLayout)"/>, with the backend's own layout.</summary>
     public DescriptorSet AllocateSet(DescriptorSetLayout layout)
@@ -183,15 +183,15 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
         return AllocateSetAnyThread(layout);
     }
 
-    readonly object setGate = new();
+    readonly object _setGate = new();
 
     /// <summary>As <see cref="AllocateSet(DescriptorSetLayout)"/> from any thread: a recording job writes a set it cannot push
     /// (<see cref="CommandList.BindProgramResources"/> on a device or layout without push descriptors). Serialized: the pools are shared.</summary>
     internal DescriptorSet AllocateSetAnyThread(DescriptorSetLayout layout)
     {
-        lock (setGate)
+        lock (_setGate)
         {
-            var list = pools[Slot];
+            var list = _pools[Slot];
             var sizes = stackalloc DescriptorPoolSize[] { new(DescriptorType.UniformBuffer, 4096), new(DescriptorType.CombinedImageSampler, 8192), new(DescriptorType.StorageBuffer, 2048),
                 new(DescriptorType.StorageImage, 1024) };
             for (int attempt = 0; attempt < 2; attempt++)
@@ -200,10 +200,10 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
                 {
                     var ai = new DescriptorSetAllocateInfo { SType = StructureType.DescriptorSetAllocateInfo, DescriptorPool = list[^1], DescriptorSetCount = 1, PSetLayouts = &layout };
                     DescriptorSet set;
-                    if (device.Vk.AllocateDescriptorSets(device.Device, &ai, &set) == Result.Success) return set;
+                    if (_device.Vk.AllocateDescriptorSets(_device.Device, &ai, &set) == Result.Success) return set;
                 }
                 var pi = new DescriptorPoolCreateInfo { SType = StructureType.DescriptorPoolCreateInfo, MaxSets = 1024, PoolSizeCount = 4, PPoolSizes = sizes };
-                VulkanException.Check(device.Vk.CreateDescriptorPool(device.Device, &pi, null, out var fresh), "vkCreateDescriptorPool");
+                VulkanException.Check(_device.Vk.CreateDescriptorPool(_device.Device, &pi, null, out var fresh), "vkCreateDescriptorPool");
                 list.Add(fresh);
             }
         }
@@ -212,11 +212,11 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
 
     public void Dispose()
     {
-        foreach (var c in constants) c.Dispose();
-        foreach (var c in staging) c.Dispose();
-        foreach (var list in pools)
-            foreach (var p in list) device.Vk.DestroyDescriptorPool(device.Device, p, null);
+        foreach (var c in _constants) c.Dispose();
+        foreach (var c in _staging) c.Dispose();
+        foreach (var list in _pools)
+            foreach (var p in list) _device.Vk.DestroyDescriptorPool(_device.Device, p, null);
         Timestamps.Dispose();
-        foreach (var t in threads) t?.Dispose();
+        foreach (var t in _threads) t?.Dispose();
     }
 }

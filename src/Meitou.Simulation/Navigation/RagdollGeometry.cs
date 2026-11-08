@@ -14,42 +14,42 @@ namespace Meitou.Simulation.Navigation;
 /// </summary>
 public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
 {
-    readonly ZoneGeometryGatherer gatherer;
-    readonly Func<float, float, float> terrain;
-    readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), Task<Dictionary<(int, int), List<Vector3>>>> zones = new();
-    readonly object gatherLock = new();
+    readonly ZoneGeometryGatherer _gatherer;
+    readonly Func<float, float, float> _terrain;
+    readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), Task<Dictionary<(int, int), List<Vector3>>>> _zones = new();
+    readonly object _gatherLock = new();
     /// <summary>Zones kept at most; the least recently asked for goes first (engine choice).</summary>
     const int MaxZones = 24;
     /// <summary>How far a building's collision may reach from its placement (the navmesh gatherer's reach).</summary>
     const float Reach = 600;
-    readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), long> used = new();
-    long clock;
-    readonly NavRuntimeBuildings? runtime;
-    int generation;
+    readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), long> _used = new();
+    long _clock;
+    readonly NavRuntimeBuildings? _runtime;
+    int _generation;
 
-    public int Generation => Volatile.Read(ref generation);
+    public int Generation => Volatile.Read(ref _generation);
 
     void Changed(ZoneCoordinate zone)
     {
-        zones.TryRemove((zone, false), out _);
-        zones.TryRemove((zone, true), out _);
-        Interlocked.Increment(ref generation);
+        _zones.TryRemove((zone, false), out _);
+        _zones.TryRemove((zone, true), out _);
+        Interlocked.Increment(ref _generation);
     }
 
     /// <summary>Heightmap samples along a block of the ground cache, and blocks kept at most (65 × 65 samples each, about 8 KB; a block is 1152 units across).</summary>
     const int BlockSamples = 64, MaxBlocks = 256;
-    readonly TerrainHeightmap? map;
-    readonly Dictionary<(int, int), HeightWindow> blocks = [];
+    readonly TerrainHeightmap? _map;
+    readonly Dictionary<(int, int), HeightWindow> _blocks = [];
 
     /// <param name="terrainHeight">The simulation's ground height, used only where the full heightmap cannot be opened: it is the coarse world grid away from the loaded area.</param>
     /// <param name="runtime">The buildings placed at run time (built, bought or ruined houses), which the zones' collision includes as the navmesh does; a change drops the zone's gathered collision and bumps <see cref="Generation"/>.</param>
     public RagdollGeometry(GameInstall install, GameDatabase db, WorldLevelData levels, Func<float, float, float> terrainHeight, NavRuntimeBuildings? runtime = null)
     {
-        gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install), runtime) { IncludeFoliage = false };
-        this.runtime = runtime;
+        _gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install), runtime) { IncludeFoliage = false };
+        this._runtime = runtime;
         if (runtime is not null) runtime.Changed += Changed;
-        terrain = terrainHeight;
-        try { map = TerrainHeightmap.Open(install); }
+        _terrain = terrainHeight;
+        try { _map = TerrainHeightmap.Open(install); }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException) { }
     }
 
@@ -59,15 +59,15 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// </summary>
     public float GroundHeight(float x, float z, float nearY)
     {
-        if (map is null) return terrain(x, z);
+        if (_map is null) return _terrain(x, z);
         var (column, row) = WorldLayout.ToSample(x, z);
         int bx = (int)Math.Floor(column / BlockSamples), bz = (int)Math.Floor(row / BlockSamples);
-        if (!blocks.TryGetValue((bx, bz), out var block))
+        if (!_blocks.TryGetValue((bx, bz), out var block))
         {
-            if (blocks.Count >= MaxBlocks) blocks.Clear();
-            blocks[(bx, bz)] = block = map.ReadWindow(bx * BlockSamples, bz * BlockSamples, BlockSamples + 1, BlockSamples + 1);
+            if (_blocks.Count >= MaxBlocks) _blocks.Clear();
+            _blocks[(bx, bz)] = block = _map.ReadWindow(bx * BlockSamples, bz * BlockSamples, BlockSamples + 1, BlockSamples + 1);
         }
-        return block.TryHeightAt(x, z, out float height) ? height : terrain(x, z);
+        return block.TryHeightAt(x, z, out float height) ? height : _terrain(x, z);
     }
 
     public bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles) => Collect(min, max, triangles, roofs: false);
@@ -87,8 +87,8 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
             {
                 var zone = new ZoneCoordinate(zx, zy);
                 if (!zone.IsInsideGrid) continue;
-                used[(zone, roofs)] = Interlocked.Increment(ref clock);
-                var task = zones.GetOrAdd((zone, roofs), k => Task.Run(() => Gather(k.Zone, k.Roofs)));
+                _used[(zone, roofs)] = Interlocked.Increment(ref _clock);
+                var task = _zones.GetOrAdd((zone, roofs), k => Task.Run(() => Gather(k.Zone, k.Roofs)));
                 if (!task.IsCompletedSuccessfully) { ready &= !task.IsFaulted && task.IsCompleted; continue; }
                 for (int x = cx0; x <= cx1; x++)
                     for (int z = cz0; z <= cz1; z++)
@@ -103,7 +103,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     Dictionary<(int, int), List<Vector3>> Gather(ZoneCoordinate zone, bool roofs)
     {
         var all = new List<Vector3>();
-        lock (gatherLock) { if (roofs) gatherer.RoofTriangles(zone, all); else gatherer.RagdollTriangles(zone, all); }
+        lock (_gatherLock) { if (roofs) _gatherer.RoofTriangles(zone, all); else _gatherer.RagdollTriangles(zone, all); }
         var cells = new Dictionary<(int, int), List<Vector3>>();
         for (int t = 0; t + 2 < all.Count; t += 3)
         {
@@ -122,16 +122,16 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
 
     void Evict()
     {
-        if (zones.Count <= MaxZones) return;
-        foreach (var (zone, _) in used.OrderBy(u => u.Value).Take(zones.Count - MaxZones).ToList())
-            if (zones.TryGetValue(zone, out var task) && task.IsCompleted && zones.TryRemove(zone, out _)) used.TryRemove(zone, out _);
+        if (_zones.Count <= MaxZones) return;
+        foreach (var (zone, _) in _used.OrderBy(u => u.Value).Take(_zones.Count - MaxZones).ToList())
+            if (_zones.TryGetValue(zone, out var task) && task.IsCompleted && _zones.TryRemove(zone, out _)) _used.TryRemove(zone, out _);
     }
 
     public void Dispose()
     {
-        if (runtime is not null) runtime.Changed -= Changed;
-        foreach (var task in zones.Values) try { task.Wait(); } catch (AggregateException) { }
-        map?.Dispose();
-        lock (gatherLock) gatherer.Dispose();
+        if (_runtime is not null) _runtime.Changed -= Changed;
+        foreach (var task in _zones.Values) try { task.Wait(); } catch (AggregateException) { }
+        _map?.Dispose();
+        lock (_gatherLock) _gatherer.Dispose();
     }
 }

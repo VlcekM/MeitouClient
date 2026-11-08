@@ -68,11 +68,11 @@ public static class PlayerRelations
     /// </summary>
     public static string? Notice(string factionName, float before, float after)
     {
-        const float Hostile = FactionRelations.HostileThreshold, Ally = FactionRelations.AllyThreshold;
-        if (before > Hostile && after <= Hostile) return Loc.Tr("{1} are now hostile towards you", factionName);
-        if (before <= Hostile && after > Hostile) return Loc.Tr("{1} are no longer hostile towards you", factionName);
-        if (before <= Ally && after > Ally) return Loc.Tr("{1} are now your allies", factionName);
-        if (before > Ally && after <= Ally) return Loc.Tr("{1} are no longer your ally", factionName);
+        const float hostile = FactionRelations.HostileThreshold, ally = FactionRelations.AllyThreshold;
+        if (before > hostile && after <= hostile) return Loc.Tr("{1} are now hostile towards you", factionName);
+        if (before <= hostile && after > hostile) return Loc.Tr("{1} are no longer hostile towards you", factionName);
+        if (before <= ally && after > ally) return Loc.Tr("{1} are now your allies", factionName);
+        if (before > ally && after <= ally) return Loc.Tr("{1} are no longer your ally", factionName);
         return null;
     }
 }

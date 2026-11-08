@@ -25,7 +25,7 @@ public static class SpikeLog
     sealed class Tally { public int Count; public long Bytes; public double Ms; }
 
     sealed class Total { public long Frames, Count, Bytes, MaxFrameBytes; public double Ms; }
-    static readonly Dictionary<string, Total> totals = [];
+    static readonly Dictionary<string, Total> Totals = [];
 
     /// <summary>One line per kind of note over the whole run (frames it appeared in, count, bytes, the most bytes in one frame), biggest first.</summary>
     public static void PrintSummary()
@@ -33,15 +33,15 @@ public static class SpikeLog
         if (!Enabled) return;
         OnSummary?.Invoke();
         Console.WriteLine($"spikes    {Spikes} frames over {Factor:0.0} x the median; notes over the run (frames / count / MB total / MB most in one frame):");
-        foreach (var (what, t) in totals.OrderByDescending(p => p.Value.Bytes).ThenByDescending(p => p.Value.Count).Take(40))
+        foreach (var (what, t) in Totals.OrderByDescending(p => p.Value.Bytes).ThenByDescending(p => p.Value.Count).Take(40))
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"spikes      {what,-60} {t.Frames,6} {t.Count,7} {t.Bytes / 1048576.0,9:0.00} {t.MaxFrameBytes / 1048576.0,7:0.00}"));
     }
 
-    static readonly object gate = new();
-    static Dictionary<string, Tally> current = [];
-    static readonly string[] noNotes = [];
-    static long gc2, gcCount, taken_frames;
-    static TimeSpan gcPause;
+    static readonly object Gate = new();
+    static Dictionary<string, Tally> s_current = [];
+    static readonly string[] NoNotes = [];
+    static long s_gc2, s_gcCount, s_takenFrames;
+    static TimeSpan s_gcPause;
 
     /// <summary>Set by the profiler: prints its per-stage run summary with <see cref="PrintSummary"/>.</summary>
     internal static Action? OnSummary;
@@ -53,9 +53,9 @@ public static class SpikeLog
     public static void Note(string what, long bytes = 0, double ms = 0)
     {
         if (!Enabled) return;
-        lock (gate)
+        lock (Gate)
         {
-            if (!current.TryGetValue(what, out var t)) current[what] = t = new Tally();
+            if (!s_current.TryGetValue(what, out var t)) s_current[what] = t = new Tally();
             t.Count++; t.Bytes += bytes; t.Ms += ms;
         }
     }
@@ -64,18 +64,18 @@ public static class SpikeLog
     internal static string TakeFrame()
     {
         Dictionary<string, Tally> taken;
-        lock (gate) { taken = current; current = []; }
+        lock (Gate) { taken = s_current; s_current = []; }
         var sb = new StringBuilder();
         long g2 = GC.CollectionCount(2), g0 = GC.CollectionCount(0);
         var pause = GC.GetTotalPauseDuration();
-        if (g0 != gcCount || g2 != gc2) sb.Append(CultureInfo.InvariantCulture, $"GC gen0+{g0 - gcCount} gen2+{g2 - gc2} pause {(pause - gcPause).TotalMilliseconds:0.0} ms; ");
-        (gcCount, gc2, gcPause) = (g0, g2, pause);
-        if (++taken_frames > SkipFrames)
-        foreach (var (what, t) in taken)
-        {
-            if (!totals.TryGetValue(what, out var all)) totals[what] = all = new Total();
-            all.Frames++; all.Count += t.Count; all.Bytes += t.Bytes; all.Ms += t.Ms; all.MaxFrameBytes = Math.Max(all.MaxFrameBytes, t.Bytes);
-        }
+        if (g0 != s_gcCount || g2 != s_gc2) sb.Append(CultureInfo.InvariantCulture, $"GC gen0+{g0 - s_gcCount} gen2+{g2 - s_gc2} pause {(pause - s_gcPause).TotalMilliseconds:0.0} ms; ");
+        (s_gcCount, s_gc2, s_gcPause) = (g0, g2, pause);
+        if (++s_takenFrames > SkipFrames)
+            foreach (var (what, t) in taken)
+            {
+                if (!Totals.TryGetValue(what, out var all)) Totals[what] = all = new Total();
+                all.Frames++; all.Count += t.Count; all.Bytes += t.Bytes; all.Ms += t.Ms; all.MaxFrameBytes = Math.Max(all.MaxFrameBytes, t.Bytes);
+            }
         foreach (var (what, t) in taken.OrderByDescending(p => p.Value.Bytes).ThenByDescending(p => p.Value.Ms))
         {
             sb.Append(what);

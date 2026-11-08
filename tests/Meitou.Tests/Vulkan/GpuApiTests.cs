@@ -84,8 +84,8 @@ public class GpuApiTests
             var vertices = frame.Constants.Write<float>(Vertices);
             LegacyProgram.Attribute?[] attributes =
             [
-                new LegacyProgram.Attribute(vertices.Binding, InternalFormat.RG32f, 20, false),
-                new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 8), InternalFormat.Rgb32f, 20, false),
+                new LegacyProgram.Attribute(vertices.Binding, InternalFormat.Rg32F, 20, false),
+                new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 8), InternalFormat.Rgb32F, 20, false),
             ];
             var pipeline = ctx.Pipelines.Get(new GraphicsPipelineDesc(lp.Program, lp.VertexLayout(attributes), PrimitiveType.Triangles,
                 new AttachmentFormats(InternalFormat.Rgba8, InternalFormat.None), BlendState.Off,
@@ -284,14 +284,14 @@ public class GpuApiTests
         {
             using (var ctx = new GpuContext(d!))
             {
-                const int Columns = 8;
-                var sources = new GpuTexture[Columns];
-                var indices = new uint[Columns];
+                const int columns = 8;
+                var sources = new GpuTexture[columns];
+                var indices = new uint[columns];
                 using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, W, H, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "columns"));
                 var draw = ctx.Shaders.Native(BindlessVertex, BindlessFragment, "bindless", [GpuSetLayout.Bindless], 4);
                 var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
                     TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
-                for (int k = 0; k < Columns; k++)
+                for (int k = 0; k < columns; k++)
                 {
                     sources[k] = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, 1, 1, Name: $"column {k}"));
                     indices[k] = ctx.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, sources[k].View()));
@@ -302,14 +302,14 @@ public class GpuApiTests
 
                 ctx.BeginFrame();
                 var frame = ctx.Frame;
-                for (int k = 0; k < Columns; k++) ctx.Uploads.Write(sources[k], 0, 0, new PixelRect(0, 0, 1, 1), [(byte)(10 + 30 * k), (byte)(200 - 20 * k), (byte)(5 * k), 255]);
+                for (int k = 0; k < columns; k++) ctx.Uploads.Write(sources[k], 0, 0, new PixelRect(0, 0, 1, 1), [(byte)(10 + 30 * k), (byte)(200 - 20 * k), (byte)(5 * k), 255]);
                 var cmd = ctx.BeginNative("columns host");
                 cmd.BeginRendering(Target(target), secondaries: true);
                 frame.Parallel.Begin((CommandList)cmd, formats, 0);
                 ctx.BeginHostPass((CommandList)cmd, PassTargets.Of(target, null), DrawState.For(formats, d!.DepthClamp));
-                for (int k = 0; k < Columns; k++)
+                for (int k = 0; k < columns; k++)
                 {
-                    var job = new ColumnJob(pipeline, draw, indices[k], k * (W / Columns));
+                    var job = new ColumnJob(pipeline, draw, indices[k], k * (W / columns));
                     if (k == 4)
                     {
                         // A guest that is not a job: records at once into a secondary of its own, in its place.
@@ -319,9 +319,9 @@ public class GpuApiTests
                     }
                     else ctx.Record($"column {k}", job);
                 }
-                Assert.Equal(1 + Columns, frame.Stats.NativeSegments);   // the host's own segment and the columns
+                Assert.Equal(1 + columns, frame.Stats.NativeSegments);   // the host's own segment and the columns
                 frame.Parallel.End();
-                Assert.Equal(Columns, frame.Parallel.Totals.Draws);
+                Assert.Equal(columns, frame.Parallel.Totals.Draws);
                 cmd.EndRendering();
                 ctx.EndHostPass(cmd);
                 ctx.EndNative(cmd);
@@ -333,7 +333,7 @@ public class GpuApiTests
                 for (int y = 0; y < H; y++)
                     for (int x = 0; x < W; x++)
                     {
-                        int k = x / (W / Columns), i = (y * W + x) * 4;
+                        int k = x / (W / columns), i = (y * W + x) * 4;
                         Assert.Equal((10 + 30 * k, 200 - 20 * k, 5 * k), (pixels[i], pixels[i + 1], pixels[i + 2]));
                     }
                 foreach (var s in sources) s.Dispose();

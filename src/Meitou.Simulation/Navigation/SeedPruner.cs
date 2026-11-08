@@ -128,7 +128,7 @@ internal static class SeedPruner
                         {
                             if (keep[p]) { found = true; continue; }
                             if (seed.X < ix.Min[p].X - reach || seed.X > ix.Max[p].X + reach || seed.Z < ix.Min[p].Y - reach || seed.Z > ix.Max[p].Y + reach) continue;
-                            if (mesh.DistanceXZ(p, seed.X, seed.Z) > reach) continue;
+                            if (mesh.DistanceXz(p, seed.X, seed.Z) > reach) continue;
                             float y = mesh.HeightAt(p, Math.Clamp(seed.X, ix.Min[p].X, ix.Max[p].X), Math.Clamp(seed.Z, ix.Min[p].Y, ix.Max[p].Y));
                             if (Math.Abs(y - seed.Y) > slack) continue;
                             keep[p] = true;

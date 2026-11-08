@@ -19,7 +19,7 @@ public static class SpawnBounties
     /// <summary>The ledger a character made from <paramref name="record"/> starts with, or null (no CHARACTER record, no chance, a failed roll, or no faction to be wanted by).</summary>
     public static BountyLedger? Roll(PopulationData data, GameRecord? record, ulong seed, CharacterId id, long tick)
     {
-        if (record is not { Type: Meitou.Data.Fcs.FcsRecordType.CHARACTER }) return null;
+        if (record is not { Type: Data.Fcs.FcsRecordType.Character }) return null;
         int chance = IntOf(record, "bounty chance");
         if (chance <= 0) return null;
         ulong key = Rng.Key(id);

@@ -48,8 +48,8 @@ sealed class Debris(GameHost host)
         public Vector3? Recolour;
     }
 
-    internal readonly List<Piece> pieces = [];
-    readonly Dictionary<string, string[]> limbMeshes = new(StringComparer.Ordinal);
+    internal readonly List<Piece> Pieces = [];
+    readonly Dictionary<string, string[]> _limbMeshes = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The fall of a severed limb (<see cref="GroundItemSync.StartFall"/>; docs/formats/collision.md "Item physics": the original's item is a dynamic PhysX body made at the stump's bone with no
@@ -70,7 +70,7 @@ sealed class Debris(GameHost host)
         public Vector2 Drift;
     }
 
-    internal readonly List<FallingLimb> falls = [];
+    internal readonly List<FallingLimb> Falls = [];
     internal const float FallGravity = 98.1f, FallTipTime = 0.25f, FallUnsampledSeconds = 2;
 
     /// <summary>A burst: blood all round and the pieces thrown.</summary>
@@ -78,39 +78,39 @@ sealed class Debris(GameHost host)
     {
         bool bleeds = m.Amount > 0;
         var blow = m.Direction.LengthSquared() > 1e-6f ? Vector2.Normalize(m.Direction) : Vector2.Zero;
-        if (host.bloodDecals.decalStore is { } store && bleeds && m.Position.Y <= host.gpu.Terrain.HeightAt(m.Position.X, m.Position.Z) + BloodDecals.BloodAboveGround)
+        if (host.BloodDecals.DecalStore is { } store && bleeds && m.Position.Y <= host.Gpu.Terrain.HeightAt(m.Position.X, m.Position.Z) + BloodDecals.BloodAboveGround)
         {
             uint opaque = 0xFF000000 | BloodDecals.Abgr(m.Colour);
-            store.Add(TerrainDecalType.Pool, m.Position, RandomDirection(), 1.5f, opaque, TerrainDecalStore.NewLife, host.bloodDecals.bloodRandom);
+            store.Add(TerrainDecalType.Pool, m.Position, RandomDirection(), 1.5f, opaque, TerrainDecalStore.NewLife, host.BloodDecals.BloodRandom);
             for (int i = 0; i < BurstSplashes; i++)
             {
                 var d = Vector2.Normalize(RandomDirection() + blow * 0.5f);
-                float far = MathF.Sqrt(host.bloodDecals.bloodRandom.NextSingle()) * BurstReach;
-                store.Add(TerrainDecalType.Splash, m.Position + new Vector3(d.X, 0, d.Y) * far, d, 0.3f + host.bloodDecals.bloodRandom.NextSingle() * 0.2f, opaque, TerrainDecalStore.NewLife, host.bloodDecals.bloodRandom);
+                float far = MathF.Sqrt(host.BloodDecals.BloodRandom.NextSingle()) * BurstReach;
+                store.Add(TerrainDecalType.Splash, m.Position + new Vector3(d.X, 0, d.Y) * far, d, 0.3f + host.BloodDecals.BloodRandom.NextSingle() * 0.2f, opaque, TerrainDecalStore.NewLife, host.BloodDecals.BloodRandom);
             }
         }
         var centre = m.Position + new Vector3(0, BurstHeight, 0);
-        host.sound.characterSounds?.Burst(centre);
-        if (bleeds && host.gpu.Particles is { } particles)
+        host.Sound.CharacterSounds?.Burst(centre);
+        if (bleeds && host.Gpu.Particles is { } particles)
         {
             var recolour = BloodDecals.BloodRecolour(m.Colour);
             particles.Burst(BurstSplash, centre, Quaternion.Identity, 0.3f, MistSize, MistLife, recolour);
             for (int i = 0; i < SpraysPerBurst; i++)
             {
                 var d = Vector2.Normalize(RandomDirection() + blow * 0.6f);
-                var spray = Vector3.Normalize(new Vector3(d.X, 0.3f + host.bloodDecals.bloodRandom.NextSingle() * 0.7f, d.Y));
-                particles.Burst(BurstSpray, centre, Turn(Vector3.UnitZ, spray), 0.4f + host.bloodDecals.bloodRandom.NextSingle() * 0.3f, MistSize, MistLife, recolour);
+                var spray = Vector3.Normalize(new Vector3(d.X, 0.3f + host.BloodDecals.BloodRandom.NextSingle() * 0.7f, d.Y));
+                particles.Burst(BurstSpray, centre, Turn(Vector3.UnitZ, spray), 0.4f + host.BloodDecals.BloodRandom.NextSingle() * 0.3f, MistSize, MistLife, recolour);
             }
         }
-        if (host.gpu.Debris is not { } debris) return;
-        float terrain = host.gpu.Terrain.HeightAt(m.Position.X, m.Position.Z);
+        if (host.Gpu.Debris is not { } debris) return;
+        float terrain = host.Gpu.Terrain.HeightAt(m.Position.X, m.Position.Z);
         // On an upper floor the pieces land on its level; the terrain is beneath the building.
         float floor = m.Position.Y > terrain + BloodDecals.BloodAboveGround ? m.Position.Y : float.NaN;
         var limbs = LimbMeshes(m.Race);
         var meshes = new List<string>(limbs);
         int meat = bleeds ? MeatPerBurst : 0;
         for (int i = 0; i < meat; i++) meshes.Add(MeatMesh);
-        for (int i = 0; i < BonesPerBurst; i++) meshes.Add(BoneMeshes[host.bloodDecals.bloodRandom.Next(BoneMeshes.Length)]);
+        for (int i = 0; i < BonesPerBurst; i++) meshes.Add(BoneMeshes[host.BloodDecals.BloodRandom.Next(BoneMeshes.Length)]);
         for (int i = 0; i < meshes.Count; i++)
         {
             string mesh = meshes[i];
@@ -118,21 +118,28 @@ sealed class Debris(GameHost host)
             if (debris.Extent(mesh, flesh ? null : BoneMeshes[0]) is not { } size) continue;
             // The nest bones are a beast's (up to 3.5 m long): all shrunk alike by BoneScale (±15%), so a vertebra stays smaller than a thigh bone.
             // The meat is a 39 cm slab: torn smaller.
-            float scale = limb ? 1 : flesh ? 0.5f + host.bloodDecals.bloodRandom.NextSingle() * 0.4f : BoneScale * (0.85f + host.bloodDecals.bloodRandom.NextSingle() * 0.3f);
+            float scale = limb ? 1 : flesh ? 0.5f + host.BloodDecals.BloodRandom.NextSingle() * 0.4f : BoneScale * (0.85f + host.BloodDecals.BloodRandom.NextSingle() * 0.3f);
             var extent = size * scale;
             var d = Vector2.Normalize(RandomDirection() + blow * 0.6f);
-            float speed = 30 + host.bloodDecals.bloodRandom.NextSingle() * 60;
-            var spinAxis = Vector3.Normalize(new Vector3(host.bloodDecals.bloodRandom.NextSingle() - 0.5f, host.bloodDecals.bloodRandom.NextSingle() - 0.5f, host.bloodDecals.bloodRandom.NextSingle() - 0.5f) + new Vector3(1e-3f));
-            pieces.Add(new Piece
+            float speed = 30 + host.BloodDecals.BloodRandom.NextSingle() * 60;
+            var spinAxis = Vector3.Normalize(new Vector3(host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f) + new Vector3(1e-3f));
+            Pieces.Add(new Piece
             {
-                Mesh = mesh, Scale = scale, Extent = extent, Floor = floor, Born = world.Tick, Colour = bleeds ? 0xFF000000 | BloodDecals.Abgr(m.Colour) : 0, Recolour = BloodDecals.BloodRecolour(m.Colour), Flesh = flesh,
+                Mesh = mesh,
+                Scale = scale,
+                Extent = extent,
+                Floor = floor,
+                Born = world.Tick,
+                Colour = bleeds ? 0xFF000000 | BloodDecals.Abgr(m.Colour) : 0,
+                Recolour = BloodDecals.BloodRecolour(m.Colour),
+                Flesh = flesh,
                 Position = centre,
-                Velocity = new Vector3(d.X * speed, 30 + host.bloodDecals.bloodRandom.NextSingle() * 50, d.Y * speed),
-                Rotation = Quaternion.Normalize(new Quaternion(host.bloodDecals.bloodRandom.NextSingle() - 0.5f, host.bloodDecals.bloodRandom.NextSingle() - 0.5f, host.bloodDecals.bloodRandom.NextSingle() - 0.5f, host.bloodDecals.bloodRandom.NextSingle() - 0.5f)),
-                Spin = spinAxis * (4 + host.bloodDecals.bloodRandom.NextSingle() * 10),
+                Velocity = new Vector3(d.X * speed, 30 + host.BloodDecals.BloodRandom.NextSingle() * 50, d.Y * speed),
+                Rotation = Quaternion.Normalize(new Quaternion(host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f)),
+                Spin = spinAxis * (4 + host.BloodDecals.BloodRandom.NextSingle() * 10),
             });
         }
-        if (pieces.Count > MaxPieces) pieces.RemoveRange(0, pieces.Count - MaxPieces);
+        if (Pieces.Count > MaxPieces) Pieces.RemoveRange(0, Pieces.Count - MaxPieces);
     }
 
     /// <summary>The shortest rotation taking unit vector <paramref name="from"/> to unit vector <paramref name="to"/>.</summary>
@@ -146,39 +153,39 @@ sealed class Debris(GameHost host)
 
     internal Vector2 RandomDirection()
     {
-        float a = host.bloodDecals.bloodRandom.NextSingle() * MathF.Tau;
+        float a = host.BloodDecals.BloodRandom.NextSingle() * MathF.Tau;
         return new Vector2(MathF.Sin(a), MathF.Cos(a));
     }
 
     /// <summary>The meshes of a race's <c>severed limbs</c> items (their <c>ground mesh</c>, else <c>mesh</c>).</summary>
     string[] LimbMeshes(string? race)
     {
-        if (race is null || host.scene.Database is not { } db) return [];
-        if (limbMeshes.TryGetValue(race, out var known)) return known;
+        if (race is null || host.Scene.Database is not { } db) return [];
+        if (_limbMeshes.TryGetValue(race, out var known)) return known;
         var list = new List<string>();
         if (db.Find(race) is { } record)
             foreach (var limb in record.GetReferences("severed limbs"))
                 if (db.Find(limb.TargetStringId) is { } item && (item.GetPath("ground mesh") is { Length: > 0 } ground ? ground : item.GetPath("mesh")) is { Length: > 0 } mesh)
                     list.Add(mesh);
-        return limbMeshes[race] = [.. list];
+        return _limbMeshes[race] = [.. list];
     }
 
     /// <summary>Moves the pieces by <paramref name="dt"/> seconds of game time and hands the renderer this frame's list; those older than a corpse go.</summary>
     internal void UpdateDebris(World world, float dt)
     {
-        pieces.RemoveAll(p => world.Tick - p.Born >= BodySystem.CorpseTicksOf(world));
-        host.gpu.DebrisPieces.Clear();
+        Pieces.RemoveAll(p => world.Tick - p.Born >= BodySystem.CorpseTicksOf(world));
+        host.Gpu.DebrisPieces.Clear();
         AddBolts();
         AddTracers(world);
         UpdateFalls(world);
         AddRestingLimbs();
-        if (pieces.Count == 0) return;
+        if (Pieces.Count == 0) return;
         int steps = Math.Clamp((int)MathF.Ceiling(dt * 60), 1, 8);
         float h = dt / steps;
-        foreach (var p in pieces)
+        foreach (var p in Pieces)
         {
             for (int s = 0; s < steps && !p.Resting && h > 0; s++) Step(p, h);
-            host.gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, p.Scale, p.Rotation, p.Position));
+            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, p.Scale, p.Rotation, p.Position));
         }
     }
 
@@ -189,35 +196,35 @@ sealed class Debris(GameHost host)
     /// </summary>
     internal void UpdateFalls(World world)
     {
-        double clock = host.session.ShownTick + host.session.SimulationAlpha;
+        double clock = host.Session.ShownTick + host.Session.SimulationAlpha;
         float tick = world.TickSeconds;
-        for (int i = falls.Count - 1; i >= 0; i--)
+        for (int i = Falls.Count - 1; i >= 0; i--)
         {
-            var f = falls[i];
+            var f = Falls[i];
             if (f.Start is null) SampleStump(f);
             float elapsed = MathF.Max(0, (float)((clock - f.Stump.Tick) * tick));
             bool landed = f.Start is null ? elapsed > FallUnsampledSeconds : elapsed >= f.Flight + FallTipTime;
             if (landed)
             {
-                falls.RemoveAt(i);
+                Falls.RemoveAt(i);
                 RestLimb(f.Ground, f.Lying, f.RestY);
                 continue;
             }
             if (f.Start is not { } start)
             {
-                if (landed) host.gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, f.Lying, LimbMiddle(f.Mesh, f.Look, f.Lying, f.Rest), 1, f.Look));
+                if (landed) host.Gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, f.Lying, LimbMiddle(f.Mesh, f.Look, f.Lying, f.Rest), 1, f.Look));
                 continue;
             }
             if (elapsed < f.Flight)
             {
                 var at = new Vector3(start.X + f.Drift.X * elapsed, start.Y - 0.5f * FallGravity * elapsed * elapsed, start.Z + f.Drift.Y * elapsed);
-                host.gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, f.Hanging, LimbMiddle(f.Mesh, f.Look, f.Hanging, at), 1, f.Look));
+                host.Gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, f.Hanging, LimbMiddle(f.Mesh, f.Look, f.Hanging, at), 1, f.Look));
             }
             else
             {
                 float s = Math.Min(1, (elapsed - f.Flight) / FallTipTime), eased = s * s * (3 - 2 * s);
                 var turned = Quaternion.Slerp(f.Hanging, f.Lying, eased);
-                host.gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, turned, LimbMiddle(f.Mesh, f.Look, turned, f.Rest), 1, f.Look));
+                host.Gpu.DebrisPieces.Add(new DebrisPiece(f.Mesh, 1, turned, LimbMiddle(f.Mesh, f.Look, turned, f.Rest), 1, f.Look));
             }
         }
     }
@@ -225,15 +232,15 @@ sealed class Debris(GameHost host)
     /// <summary>Samples the stump's bone where its character is drawn now (the pose of the last frame); the flight and the drift follow from its height over the rest point.</summary>
     void SampleStump(FallingLimb f)
     {
-        if (host.gpu?.Characters is not { } characters || characters.BonePosition(host.DrawKey(f.Stump.Character), f.Stump.Bone) is not { } start) return;
+        if (host.Gpu?.Characters is not { } characters || characters.BonePosition(host.DrawKey(f.Stump.Character), f.Stump.Bone) is not { } start) return;
         f.Start = start;
         f.Flight = MathF.Sqrt(2 * MathF.Max(start.Y - f.RestY, 0) / FallGravity);
         f.Drift = f.Flight > 0 ? new Vector2(f.Rest.X - start.X, f.Rest.Z - start.Z) / f.Flight : Vector2.Zero;
     }
 
-    readonly Dictionary<int, ProjectileSnapshot> boltsBefore = [];
+    readonly Dictionary<int, ProjectileSnapshot> _boltsBefore = [];
     /// <summary>Each bolt in flight's gap from its shooter's muzzle when it was first drawn, and where that was (by bolt id).</summary>
-    readonly Dictionary<int, (Vector3 Gap, Vector3 From)> boltLaunches = [];
+    readonly Dictionary<int, (Vector3 Gap, Vector3 From)> _boltLaunches = [];
     /// <summary>
     /// How far (units) a drawn bolt takes to close the gap between the crossbow's muzzle, where it is first drawn, and its simulated flight, which starts at a fixed point by the
     /// shooter (engine choice: the simulation has no posed bones).
@@ -246,42 +253,42 @@ sealed class Debris(GameHost host)
     /// </summary>
     internal void AddBolts()
     {
-        var now = host.session.CurrentSnapshot.Projectiles;
-        boltHeads.Clear();
-        if (now.Count == 0) boltLaunches.Clear();
-        if (now.Count == 0 || host.gpu.Debris is not { } debris) return;
-        boltsBefore.Clear();
-        if (host.session.PreviousSnapshot is { } previous)
-            foreach (var b in previous.Projectiles) boltsBefore[b.Id] = b;
-        float alpha = host.session.SimulationAlpha;
+        var now = host.Session.CurrentSnapshot.Projectiles;
+        _boltHeads.Clear();
+        if (now.Count == 0) _boltLaunches.Clear();
+        if (now.Count == 0 || host.Gpu.Debris is not { } debris) return;
+        _boltsBefore.Clear();
+        if (host.Session.PreviousSnapshot is { } previous)
+            foreach (var b in previous.Projectiles) _boltsBefore[b.Id] = b;
+        float alpha = host.Session.SimulationAlpha;
         foreach (var p in now)
         {
             if (p.Mesh.Length == 0 || debris.Extent(p.Mesh, null) is null) continue;
-            var at = !p.Stuck && boltsBefore.TryGetValue(p.Id, out var b) && !b.Stuck ? Vector3.Lerp(b.Position, p.Position, alpha) : p.Position;
+            var at = !p.Stuck && _boltsBefore.TryGetValue(p.Id, out var b) && !b.Stuck ? Vector3.Lerp(b.Position, p.Position, alpha) : p.Position;
             // A bolt leaves the crossbow: drawn from the muzzle, it joins its simulated flight over LaunchBlend units.
             if (!p.Stuck)
             {
-                if (!boltLaunches.TryGetValue(p.Id, out var launch))
-                    boltLaunches[p.Id] = launch = (host.gpu.Characters?.Muzzle(host.DrawKey(p.Shooter)) is { } muzzle ? muzzle - at : Vector3.Zero, at);
+                if (!_boltLaunches.TryGetValue(p.Id, out var launch))
+                    _boltLaunches[p.Id] = launch = (host.Gpu.Characters?.Muzzle(host.DrawKey(p.Shooter)) is { } muzzle ? muzzle - at : Vector3.Zero, at);
                 float left = 1 - Vector3.Distance(at, launch.From) / LaunchBlend;
                 if (left > 0) at += launch.Gap * left;
-                boltHeads[p.Id] = (at, launch.From + launch.Gap);
+                _boltHeads[p.Id] = (at, launch.From + launch.Gap);
             }
-            else boltLaunches.Remove(p.Id);
-            host.gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, 1, Turn(Vector3.UnitZ, p.Direction), at, p.Stuck ? 1 : p.Stretch));
+            else _boltLaunches.Remove(p.Id);
+            host.Gpu.DebrisPieces.Add(new DebrisPiece(p.Mesh, 1, Turn(Vector3.UnitZ, p.Direction), at, p.Stuck ? 1 : p.Stretch));
         }
-        if (boltLaunches.Count > now.Count)
-            foreach (int id in boltLaunches.Keys.ToArray())
-                if (!now.Any(p => p.Id == id)) boltLaunches.Remove(id);
+        if (_boltLaunches.Count > now.Count)
+            foreach (int id in _boltLaunches.Keys.ToArray())
+                if (!now.Any(p => p.Id == id)) _boltLaunches.Remove(id);
     }
 
     /// <summary>Where each bolt in flight is drawn this frame and the muzzle it left (by bolt id), for <see cref="AddTracers"/>.</summary>
-    readonly Dictionary<int, (Vector3 At, Vector3 Muzzle)> boltHeads = [];
+    readonly Dictionary<int, (Vector3 At, Vector3 Muzzle)> _boltHeads = [];
     /// <summary>The tracers drawn, by bolt id: one keeps shrinking after its bolt stops (<see cref="Trail.Stopped"/>) until it is gone.</summary>
-    readonly Dictionary<int, Trail> trails = [];
-    readonly List<int> trailsGone = [];
-    /// <summary>The <see cref="GameSaves.worldEpoch"/> <see cref="trails"/> belong to: a load or a new world drops the old world's.</summary>
-    int trailsEpoch = -1;
+    readonly Dictionary<int, Trail> _trails = [];
+    readonly List<int> _trailsGone = [];
+    /// <summary>The <see cref="GameSaves.WorldEpoch"/> <see cref="_trails"/> belong to: a load or a new world drops the old world's.</summary>
+    int _trailsEpoch = -1;
 
     sealed class Trail
     {
@@ -305,39 +312,39 @@ sealed class Debris(GameHost host)
     /// </summary>
     internal void AddTracers(World world)
     {
-        if (host.gpu.Particles is not { } particles) return;
+        if (host.Gpu.Particles is not { } particles) return;
         particles.Tracers.Clear();
-        if (trailsEpoch != host.saves.worldEpoch) { trails.Clear(); trailsEpoch = host.saves.worldEpoch; }
-        if (!host.o.MeitouTracers) { trails.Clear(); return; }
-        double clock = (host.session.ShownTick + host.session.SimulationAlpha) * world.TickSeconds;
-        foreach (var p in host.session.CurrentSnapshot.Projectiles)
+        if (_trailsEpoch != host.Saves.WorldEpoch) { _trails.Clear(); _trailsEpoch = host.Saves.WorldEpoch; }
+        if (!host.WorldOptions.MeitouTracers) { _trails.Clear(); return; }
+        double clock = (host.Session.ShownTick + host.Session.SimulationAlpha) * world.TickSeconds;
+        foreach (var p in host.Session.CurrentSnapshot.Projectiles)
         {
             if (p.Stuck)
             {
-                if (trails.TryGetValue(p.Id, out var hit) && hit.Stopped is null) Stop(hit, p.Position, clock);
+                if (_trails.TryGetValue(p.Id, out var hit) && hit.Stopped is null) Stop(hit, p.Position, clock);
                 continue;
             }
-            if (!boltHeads.TryGetValue(p.Id, out var head)) continue;
-            if (!trails.TryGetValue(p.Id, out var t) || t.Stopped is not null) trails[p.Id] = t = new Trail();
+            if (!_boltHeads.TryGetValue(p.Id, out var head)) continue;
+            if (!_trails.TryGetValue(p.Id, out var t) || t.Stopped is not null) _trails[p.Id] = t = new Trail();
             (t.Head, t.Direction, t.Speed) = (head.At, p.Direction, p.Speed);
             t.Length = MathF.Min(MathF.Min(TracerMaxLength, p.Speed * TracerSeconds), Vector3.Distance(head.At, head.Muzzle));
         }
-        trailsGone.Clear();
-        foreach (var (id, t) in trails)
+        _trailsGone.Clear();
+        foreach (var (id, t) in _trails)
         {
             // A bolt gone without sticking (recycled past its range, a glancing terrain hit) stops where it was last drawn.
-            if (t.Stopped is null && !boltHeads.ContainsKey(id)) Stop(t, t.Head, clock);
+            if (t.Stopped is null && !_boltHeads.ContainsKey(id)) Stop(t, t.Head, clock);
             float length = t.Length;
             if (t.Stopped is { } stopped)
                 length = clock < stopped ? 0 : length - (float)(clock - stopped) * MathF.Max(t.Speed, t.Length / TracerFade);   // back in time: a load
             if (length <= 0)
             {
-                if (t.Stopped is not null) trailsGone.Add(id);
+                if (t.Stopped is not null) _trailsGone.Add(id);
                 continue;
             }
             particles.Tracers.Add(new(t.Head, t.Head - t.Direction * length, TracerWidth, TracerColour));
         }
-        foreach (int id in trailsGone) trails.Remove(id);
+        foreach (int id in _trailsGone) _trails.Remove(id);
     }
 
     /// <summary>A tracer's bolt stopped at <paramref name="at"/>: the tail stays where it was drawn and the head moves there, from which the streak shrinks.</summary>
@@ -350,12 +357,12 @@ sealed class Debris(GameHost host)
         t.Stopped = clock;
     }
 
-    /// <summary>A character's stuck bolts for the renderer, in its slot's array (<see cref="GameHost.boltsBySlot"/>).</summary>
+    /// <summary>A character's stuck bolts for the renderer, in its slot's array (<see cref="GameHost.BoltsBySlot"/>).</summary>
     internal IReadOnlyList<StuckBoltMesh> BoltsOf(CharacterSnapshot c)
     {
         var stuck = c.StuckBolts;
         if (stuck.Count == 0) return [];
-        ref var kept = ref GameHost.Slot(ref host.boltsBySlot, c.Id.Slot);
+        ref var kept = ref GameHost.Slot(ref host.BoltsBySlot, c.Id.Slot);
         if (kept is null || kept.Length != stuck.Count) kept = new StuckBoltMesh[stuck.Count];
         for (int i = 0; i < stuck.Count; i++) kept[i] = new StuckBoltMesh(stuck[i].Id, stuck[i].Mesh, stuck[i].Bone, stuck[i].Direction);
         return kept;
@@ -367,16 +374,16 @@ sealed class Debris(GameHost host)
         p.Position += p.Velocity * h;
         float spin = p.Spin.Length();
         if (spin > 0) p.Rotation = Quaternion.Normalize(Quaternion.CreateFromAxisAngle(p.Spin / spin, spin * h) * p.Rotation);
-        float floor = float.IsNaN(p.Floor) ? host.gpu.Terrain.HeightAt(p.Position.X, p.Position.Z) : p.Floor;
+        float floor = float.IsNaN(p.Floor) ? host.Gpu.Terrain.HeightAt(p.Position.X, p.Position.Z) : p.Floor;
         float thin = MathF.Min(p.Extent.X, MathF.Min(p.Extent.Y, p.Extent.Z));
         if (p.Position.Y - thin > floor) return;
         p.Position.Y = floor + thin;
-        if (!p.Landed && p.Colour != 0 && host.bloodDecals.decalStore is { } store)
-            store.Add(TerrainDecalType.Splash, p.Position, new Vector2(p.Velocity.X, p.Velocity.Z), 0.12f, p.Colour, TerrainDecalStore.NewLife, host.bloodDecals.bloodRandom);
+        if (!p.Landed && p.Colour != 0 && host.BloodDecals.DecalStore is { } store)
+            store.Add(TerrainDecalType.Splash, p.Position, new Vector2(p.Velocity.X, p.Velocity.Z), 0.12f, p.Colour, TerrainDecalStore.NewLife, host.BloodDecals.BloodRandom);
         if (!p.Landed && p.Flesh)
         {
-            host.sound.characterSounds?.Splat(p.Position);
-            if (p.Colour != 0) host.gpu.Particles?.Burst(BurstSplash, p.Position, Quaternion.Identity, 0.15f, 1.3f, 1.5f, p.Recolour);
+            host.Sound.CharacterSounds?.Splat(p.Position);
+            if (p.Colour != 0) host.Gpu.Particles?.Burst(BurstSplash, p.Position, Quaternion.Identity, 0.15f, 1.3f, 1.5f, p.Recolour);
         }
         p.Landed = true;
         var flat = new Vector2(p.Velocity.X, p.Velocity.Z);
@@ -408,15 +415,15 @@ sealed class Debris(GameHost host)
     /// <summary>A severed limb at rest: its mesh and look, its rotation and where its origin is.</summary>
     internal sealed record RestingLimb(string Mesh, LimbLook Look, Quaternion Rotation, Vector3 Origin);
 
-    internal readonly Dictionary<int, RestingLimb> restLimbs = [];
-    Dictionary<string, GameRecord>? limbRaces;
-    readonly Dictionary<string, LimbLook?> limbLooks = new(StringComparer.Ordinal);
+    internal readonly Dictionary<int, RestingLimb> RestLimbs = [];
+    Dictionary<string, GameRecord>? _limbRaces;
+    readonly Dictionary<string, LimbLook?> _limbLooks = new(StringComparer.Ordinal);
 
     /// <summary>Sets a landed limb down where the object path would have put it, drawn as debris with the severed limb's look.</summary>
     internal void RestLimb(GroundItemSnapshot g, Quaternion rotation, float y)
     {
-        if (host.scene.Database?.Find(g.Record) is not { } item || WorldObjectLayout.ItemMesh(item) is not { Length: > 0 } mesh || LimbLookOf(g.Record) is not { } look) { host.groundItemSync.ShowGround(g, rotation, y); return; }
-        restLimbs[g.Id] = new RestingLimb(mesh, ToneOf(look, g)!, rotation, new Vector3(g.Position.X, y, g.Position.Z));
+        if (host.Scene.Database?.Find(g.Record) is not { } item || WorldObjectLayout.ItemMesh(item) is not { Length: > 0 } mesh || LimbLookOf(g.Record) is not { } look) { host.GroundItemSync.ShowGround(g, rotation, y); return; }
+        RestLimbs[g.Id] = new RestingLimb(mesh, ToneOf(look, g)!, rotation, new Vector3(g.Position.X, y, g.Position.Z));
     }
 
     /// <summary>
@@ -425,32 +432,32 @@ sealed class Debris(GameHost host)
     /// </summary>
     internal LimbLook? LimbLookOf(string record)
     {
-        if (limbLooks.TryGetValue(record, out var known)) return known;
+        if (_limbLooks.TryGetValue(record, out var known)) return known;
         LimbLook? look = null;
-        if (host.scene.Database is { } db)
+        if (host.Scene.Database is { } db)
         {
-            if (limbRaces is null)
+            if (_limbRaces is null)
             {
-                limbRaces = new(StringComparer.Ordinal);
+                _limbRaces = new(StringComparer.Ordinal);
                 foreach (var race in db.Records.Values)
-                    if (race.Type == FcsRecordType.RACE)
-                        foreach (var limb in race.GetReferences("severed limbs")) limbRaces.TryAdd(limb.TargetStringId, race);
+                    if (race.Type == FcsRecordType.Race)
+                        foreach (var limb in race.GetReferences("severed limbs")) _limbRaces.TryAdd(limb.TargetStringId, race);
             }
-            if (limbRaces.TryGetValue(record, out var owner) && db.Find(record) is { } item)
+            if (_limbRaces.TryGetValue(record, out var owner) && db.Find(record) is { } item)
             {
                 var spec = item.GetReferences("material").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(r => r is not null);
                 string? Name(string key) => spec?.GetPath(key) is { Length: > 0 } p ? Path.GetFileName(p.Replace('\\', '/')) : null;
                 if (Name("texture map") is { } diffuse)
-                    look = new LimbLook(diffuse, Name("color map"), Vector3.Zero, CharacterAppearance.Rgb(owner.GetInt("blood colour", 0x800000) & 0xFFFFFF), owner.StringId, Meitou.Game.Rendering.Characters.CharacterRenderer.SkinByDefault(owner), Name("normal map"));
+                    look = new LimbLook(diffuse, Name("color map"), Vector3.Zero, CharacterAppearance.Rgb(owner.GetInt("blood colour", 0x800000) & 0xFFFFFF), owner.StringId, Rendering.Characters.CharacterRenderer.SkinByDefault(owner), Name("normal map"));
             }
         }
-        return limbLooks[record] = look;
+        return _limbLooks[record] = look;
     }
 
     /// <summary>The look with the skin tone of the character the limb was cut from (<see cref="FallSource.SkinTone"/>; none for a limb read from a save).</summary>
     internal static LimbLook? ToneOf(LimbLook? look, GroundItemSnapshot g) => look is null ? null : look with { SkinTone = g.Fall?.SkinTone ?? default };
 
-    readonly Dictionary<(string Record, Vector3 Tone), MouthMesh?> mouthMeshes = [];
+    readonly Dictionary<(string Record, Vector3 Tone), MouthMesh?> _mouthMeshes = [];
 
     /// <summary>
     /// The limb an animal holds in its mouth (<see cref="CharacterSnapshot.Mouth"/>), drawn at its <c>mouth</c> point by the character renderer: the item's <c>mesh</c> (the original attaches
@@ -459,11 +466,11 @@ sealed class Debris(GameHost host)
     internal MouthMesh? MouthOf(CharacterSnapshot c)
     {
         if (c.Mouth is not { } record) return null;
-        if (mouthMeshes.TryGetValue((record, c.MouthTone), out var known)) return known;
+        if (_mouthMeshes.TryGetValue((record, c.MouthTone), out var known)) return known;
         MouthMesh? made = null;
-        if (host.scene.Database?.Find(record) is { } item && item.GetPath("mesh") is { Length: > 0 } mesh)
+        if (host.Scene.Database?.Find(record) is { } item && item.GetPath("mesh") is { Length: > 0 } mesh)
             made = new MouthMesh(mesh, LimbLookOf(record) is { } look ? look with { SkinTone = c.MouthTone } : null);
-        return mouthMeshes[(record, c.MouthTone)] = made;
+        return _mouthMeshes[(record, c.MouthTone)] = made;
     }
 
     /// <summary>The position of a limb's piece: its mesh's origin (a limb keeps the mesh's own space, <see cref="DebrisRenderer"/>; the other pieces are centred on their bounds).</summary>
@@ -471,8 +478,8 @@ sealed class Debris(GameHost host)
 
     void AddRestingLimbs()
     {
-        foreach (var (id, r) in restLimbs)
-            if (!host.groundItemSync.hiddenGround.Contains(id) && host.gpu.Debris?.Extent(r.Mesh, null, r.Look) is not null)
-                host.gpu.DebrisPieces.Add(new DebrisPiece(r.Mesh, 1, r.Rotation, LimbMiddle(r.Mesh, r.Look, r.Rotation, r.Origin), 1, r.Look));
+        foreach (var (id, r) in RestLimbs)
+            if (!host.GroundItemSync.HiddenGround.Contains(id) && host.Gpu.Debris?.Extent(r.Mesh, null, r.Look) is not null)
+                host.Gpu.DebrisPieces.Add(new DebrisPiece(r.Mesh, 1, r.Rotation, LimbMiddle(r.Mesh, r.Look, r.Rotation, r.Origin), 1, r.Look));
     }
 }

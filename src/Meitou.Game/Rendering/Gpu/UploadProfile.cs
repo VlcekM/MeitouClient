@@ -16,21 +16,21 @@ public static class UploadProfile
 
     public static bool On => SpikeLog.Enabled;
 
-    [ThreadStatic] static long[]? ticks;
-    [ThreadStatic] static int[]? counts;
-    [ThreadStatic] static long bytes;
-    [ThreadStatic] static TimeSpan gcMark;
+    [ThreadStatic] static long[]? s_ticks;
+    [ThreadStatic] static int[]? s_counts;
+    [ThreadStatic] static long s_bytes;
+    [ThreadStatic] static TimeSpan s_gcMark;
 
     public static long Begin() => On ? Stopwatch.GetTimestamp() : 0;
 
     public static void End(Part part, long start, long size = 0)
     {
         if (!On) return;
-        ticks ??= new long[(int)Part.Count];
-        counts ??= new int[(int)Part.Count];
-        ticks[(int)part] += Stopwatch.GetTimestamp() - start;
-        counts[(int)part]++;
-        if (part == Part.StagingCopy) bytes += size;
+        s_ticks ??= new long[(int)Part.Count];
+        s_counts ??= new int[(int)Part.Count];
+        s_ticks[(int)part] += Stopwatch.GetTimestamp() - start;
+        s_counts[(int)part]++;
+        if (part == Part.StagingCopy) s_bytes += size;
     }
 
     /// <summary>A memory block made or given back (<see cref="Part.NewBlock"/>, <see cref="Part.FreeBlock"/>); a line when it took 1 ms or more, with the thread kind.</summary>
@@ -48,19 +48,19 @@ public static class UploadProfile
     {
         if (!On) return "";
         var parts = new List<string>();
-        if (ticks is not null && counts is not null)
+        if (s_ticks is not null && s_counts is not null)
             for (int i = 0; i < (int)Part.Count; i++)
             {
-                if (counts[i] == 0) continue;
-                string extra = (Part)i == Part.StagingCopy ? $" ({bytes / 1048576.0:0.0} MB)" : "";
-                parts.Add($"{(Part)i} {ticks[i] * 1000.0 / Stopwatch.Frequency:0.0} ms x{counts[i]}{extra}");
-                ticks[i] = 0;
-                counts[i] = 0;
+                if (s_counts[i] == 0) continue;
+                string extra = (Part)i == Part.StagingCopy ? $" ({s_bytes / 1048576.0:0.0} MB)" : "";
+                parts.Add($"{(Part)i} {s_ticks[i] * 1000.0 / Stopwatch.Frequency:0.0} ms x{s_counts[i]}{extra}");
+                s_ticks[i] = 0;
+                s_counts[i] = 0;
             }
-        bytes = 0;
+        s_bytes = 0;
         var pause = GC.GetTotalPauseDuration();
-        if (pause - gcMark > TimeSpan.FromMilliseconds(0.5)) parts.Add($"GC pause {(pause - gcMark).TotalMilliseconds:0.0} ms");
-        gcMark = pause;
+        if (pause - s_gcMark > TimeSpan.FromMilliseconds(0.5)) parts.Add($"GC pause {(pause - s_gcMark).TotalMilliseconds:0.0} ms");
+        s_gcMark = pause;
         return string.Join(", ", parts);
     }
 }

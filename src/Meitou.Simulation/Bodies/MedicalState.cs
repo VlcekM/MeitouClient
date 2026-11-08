@@ -18,15 +18,15 @@ public sealed partial class MedicalState
     /// <summary>Hunger starts and tops out here (the UI shows level x 100).</summary>
     public const float MaxHunger = 3;
 
-    readonly List<float> wounds = [];
-    ulong rollCounter;
+    readonly List<float> _wounds = [];
+    ulong _rollCounter;
 
-    public MedicalState(IEnumerable<HealthPart> parts) => this.parts = [.. parts];
+    public MedicalState(IEnumerable<HealthPart> parts) => this._parts = [.. parts];
 
-    public IReadOnlyList<HealthPart> Parts => parts;
-    readonly HealthPart[] parts;
+    public IReadOnlyList<HealthPart> Parts => _parts;
+    readonly HealthPart[] _parts;
     /// <summary><see cref="Parts"/> for the every-tick loops (no enumerator to allocate).</summary>
-    internal ReadOnlySpan<HealthPart> PartSpan => parts;
+    internal ReadOnlySpan<HealthPart> PartSpan => _parts;
 
     /// <summary>Save key <c>blood</c>. Current blood; a character has capacity <see cref="BloodCapacity(RaceData, float, bool, float, float)"/>.</summary>
     public float Blood { get; set; }
@@ -71,9 +71,9 @@ public sealed partial class MedicalState
     /// The KO point (<see cref="KoPoint"/>) the legs' collapse test uses, from the owner's toughness at the last <see cref="Tick"/> (0 before the first). Derived, not saved: the first tick
     /// after a load sets it again.
     /// </summary>
-    public float LegKoPoint { get => legKoPoint; private set { legKoPoint = value; legKoKnown = true; } }
-    float legKoPoint;
-    bool legKoKnown;
+    public float LegKoPoint { get => _legKoPoint; private set { _legKoPoint = value; _legKoKnown = true; } }
+    float _legKoPoint;
+    bool _legKoKnown;
 
     /// <summary>
     /// The injuries make an NPC medic pass the patient by, and count it crippled in the target score (<c>FUN_140644170</c>, <b>Verified</b>): a stump on a leg, or on both arms.
@@ -112,8 +112,8 @@ public sealed partial class MedicalState
     {
         get
         {
-            if (!HasStatsObject || !legKoKnown) return false;
-            foreach (var p in parts) if (p.IsLeg && p.LegDown(LegKoPoint)) return true;
+            if (!HasStatsObject || !_legKoKnown) return false;
+            foreach (var p in _parts) if (p.IsLeg && p.LegDown(LegKoPoint)) return true;
             return false;
         }
     }
@@ -124,7 +124,7 @@ public sealed partial class MedicalState
     /// load only learns the state. Not saved.
     /// </summary>
     public bool CollapseOnset { get; set; }
-    int legsWereDown = -1;
+    int _legsWereDown = -1;
 
     /// <summary>
     /// The planner's <c>myLegsAreMessedUp</c> (state 103, <c>FUN_1409980c0</c>, docs/game/ai-tasks.md "Planner states"): false when a leg is a stump (the limb-state table's legs, <c>FUN_14002a6e9</c>);
@@ -135,9 +135,9 @@ public sealed partial class MedicalState
     {
         get
         {
-            if (!legKoKnown) return false;
-            foreach (var p in parts) if (p.IsLeg && p.Limb == LimbState.Stump) return false;
-            foreach (var p in parts) if (p.IsLeg && p.LegDown(LegKoPoint) && LegKoPoint < p.MaxHp - p.Stun) return true;
+            if (!_legKoKnown) return false;
+            foreach (var p in _parts) if (p.IsLeg && p.Limb == LimbState.Stump) return false;
+            foreach (var p in _parts) if (p.IsLeg && p.LegDown(LegKoPoint) && LegKoPoint < p.MaxHp - p.Stun) return true;
             return false;
         }
     }
@@ -171,7 +171,7 @@ public sealed partial class MedicalState
     {
         get
         {
-            foreach (var p in parts)
+            foreach (var p in _parts)
                 if (p.Limb == LimbState.Stump && p.Template.Type is BodyPartType.Leg or BodyPartType.Arm && p.Flesh - p.Stun < -p.MaxHp) return true;
             return false;
         }
@@ -204,11 +204,11 @@ public sealed partial class MedicalState
     public float Light { get; set; } = 1;
 
     /// <summary>The untreated wounds' strengths, in creation order.</summary>
-    public IReadOnlyList<float> Wounds => wounds;
+    public IReadOnlyList<float> Wounds => _wounds;
 
     /// <summary>Game hours until a starving character may pass out again after waking (an engine choice; the original's timing was not traced).</summary>
-    float starveGrace;
-    bool starvationKo;
+    float _starveGrace;
+    bool _starvationKo;
 
     // ------------------------------------------------------------------ creation
 
@@ -252,7 +252,7 @@ public sealed partial class MedicalState
     public void SetAnimalBody(float size, float hpMult)
     {
         (HasStatsObject, ScaleK, ScaleZ) = (false, size, hpMult);
-        foreach (var p in parts) (p.HpMultiplier, p.BodyScale) = (size, hpMult);
+        foreach (var p in _parts) (p.HpMultiplier, p.BodyScale) = (size, hpMult);
     }
 
     /// <summary>This character's blood capacity under <paramref name="ctx"/> (its stats object and scale factors applied).</summary>
@@ -274,7 +274,7 @@ public sealed partial class MedicalState
     public bool ArmWorks(bool left)
     {
         int bit = left ? 4 : 2;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             if ((p.Template.CollapsePart & bit) == 0) continue;
             if (p.Limb is LimbState.Stump or LimbState.Crushed) return false;
@@ -298,34 +298,34 @@ public sealed partial class MedicalState
     // The part figures, kept while no part changed (HealthPart.Version only grows, so the sum moves with every change). A value under a lock: the publish reads it from several
     // threads, and a new record on every change (a bleeding or healing character's every tick) was garbage.
     readonly record struct PartSummary(int Version, BodyAggregates Aggregates, float Worst, ulong Blood);
-    PartSummary summary;
-    bool summaryKnown;
-    readonly Lock summaryLock = new();
+    PartSummary _summary;
+    bool _summaryKnown;
+    readonly Lock _summaryLock = new();
 
     PartSummary Summary
     {
         get
         {
             int version = 0;
-            foreach (var p in parts) version += p.Version;
-            lock (summaryLock)
+            foreach (var p in _parts) version += p.Version;
+            lock (_summaryLock)
             {
-                if (summaryKnown && summary.Version == version) return summary;
-                summary = new(version, ComputeAggregates(), ComputeWorstPart(), BloodAmounts(this));
-                summaryKnown = true;
-                return summary;
+                if (_summaryKnown && _summary.Version == version) return _summary;
+                _summary = new(version, ComputeAggregates(), ComputeWorstPart(), BloodAmounts(this));
+                _summaryKnown = true;
+                return _summary;
             }
         }
     }
 
     float ComputeWorstPart()
     {
-        if (parts.Length == 0) return 1;
-        float worst = parts[0].Fraction;
+        if (_parts.Length == 0) return 1;
+        float worst = _parts[0].Fraction;
         if (float.IsNaN(worst)) return worst;
-        for (int k = 1; k < parts.Length; k++)
+        for (int k = 1; k < _parts.Length; k++)
         {
-            float f = parts[k].Fraction;
+            float f = _parts[k].Fraction;
             if (f < worst) worst = f;
             else if (float.IsNaN(f)) return f;
         }
@@ -336,7 +336,7 @@ public sealed partial class MedicalState
     {
         float arm = 0, head = 1, torso = float.MaxValue;
         bool anyArm = false, anyTorso = false, left = false, right = false;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             float f = Math.Clamp(p.Fraction, 0, 1);
             switch (p.Template.Type)
@@ -359,7 +359,7 @@ public sealed partial class MedicalState
 
     /// <summary>The stat multiplier in [0, 1] (<c>FUN_1406457e0</c>); see <see cref="StatMultiplier"/>.</summary>
     public float StatMultiplier(StatsEnumerated stat, StatUse use = StatUse.Hunger | StatUse.Limbs | StatUse.Light | StatUse.DamageState | StatUse.Stun, StatFactors? factors = null, bool exemptFromWear = false) =>
-        Bodies.StatMultiplier.Compute(this, stat, use, factors ?? (Bodies.StatFactors.None with { Stun = DustStatFactor }), Aggregates(exemptFromWear), Light);
+        Bodies.StatMultiplier.Compute(this, stat, use, factors ?? (StatFactors.None with { Stun = DustStatFactor }), Aggregates(exemptFromWear), Light);
 
     /// <summary>
     /// The body term of stealth (<c>FUN_140644da0</c>, medical <c>+0xb4</c>): the lowest health fraction over the torso and leg parts (1 with none) plus
@@ -368,7 +368,7 @@ public sealed partial class MedicalState
     public float StealthBodyFactor(float toughness)
     {
         float f = 1;
-        foreach (var p in parts)
+        foreach (var p in _parts)
             if (p.Template.Type is BodyPartType.Torso or BodyPartType.Leg) f = MathF.Min(f, p.Fraction);
         return Math.Clamp(f + toughness * 0.01f, 0, 1);
     }
@@ -384,7 +384,7 @@ public sealed partial class MedicalState
     {
         get
         {
-            foreach (var p in parts)
+            foreach (var p in _parts)
                 if (p.Limb == LimbState.Replaced && p.Replacement is not null && p.Template.Type is BodyPartType.Arm or BodyPartType.Leg) return true;
             return false;
         }
@@ -393,7 +393,7 @@ public sealed partial class MedicalState
     float ItemFactor(StatsEnumerated stat, bool legs)
     {
         float f = 1;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             bool isLeg = p.Template.Type == BodyPartType.Leg;
             bool isArm = p.Template.Type == BodyPartType.Arm;
@@ -411,7 +411,7 @@ public sealed partial class MedicalState
     bool VitalPartsKeepDown(float koPoint)
     {
         bool down = false;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             if (!p.IsVital) continue;
             float v = p.Flesh - p.Stun + p.Rig;
@@ -477,7 +477,7 @@ public sealed partial class MedicalState
         var c = ctx.Constants;
         float k = c.KnockoutMult1 + (c.KnockoutMult99 - c.KnockoutMult1) * (ctx.Toughness / 100);
         float sum = 0;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             float m = p.MaxHp;
             if (m <= 0) continue;

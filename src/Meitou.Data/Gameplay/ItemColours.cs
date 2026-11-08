@@ -10,7 +10,7 @@ public static class ItemColours
 {
     /// <summary>The COLOR_DATA of a record's first <c>color</c> reference (null: none).</summary>
     public static GameRecord? Of(GameDatabase db, GameRecord? record) =>
-        record?.GetReferences("color") is [var first, ..] && db.Find(first.TargetStringId) is { Type: FcsRecordType.COLOR_DATA } colour ? colour : null;
+        record?.GetReferences("color") is [var first, ..] && db.Find(first.TargetStringId) is { Type: FcsRecordType.ColorData } colour ? colour : null;
 
     /// <summary>The scheme a wearer gives an uncoloured item: the CHARACTER's <c>color</c>, else the faction's.</summary>
     public static GameRecord? Scheme(GameDatabase db, GameRecord? character, GameRecord? faction) => Of(db, character) ?? Of(db, faction);
@@ -21,7 +21,7 @@ public static class ItemColours
     /// </summary>
     public static GameRecord? Shown(GameDatabase db, GameRecord item, GameRecord? own, GameRecord? character, GameRecord? faction)
     {
-        if (item.Type is FcsRecordType.ARMOUR or FcsRecordType.CONTAINER && item.GetBool("dont colorise", true)) return null;
+        if (item.Type is FcsRecordType.Armour or FcsRecordType.Container && item.GetBool("dont colorise", true)) return null;
         return own ?? Scheme(db, character, faction);
     }
 }

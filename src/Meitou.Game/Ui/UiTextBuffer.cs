@@ -13,10 +13,10 @@ public sealed class UiTextBuffer(string text = "")
 {
     const int MaxUndo = 128;
     readonly record struct State(string Text, int Caret);
-    readonly List<State> undo = [], redo = [];
+    readonly List<State> _undo = [], _redo = [];
     public string Text { get; private set; } = text;
     public int Caret { get; private set; } = text.Length;
-    int anchor = text.Length;
+    int _anchor = text.Length;
     /// <summary>The longest text typing and pasting build; 512 here, the host passes the box's <c>MaxTextLength</c> or MyGUI's default 2048.</summary>
     public int MaxLength { get; init; } = 512;
     /// <summary>Enter adds a line and Up/Down move between lines (the box's <c>MultiLine</c>).</summary>
@@ -27,8 +27,8 @@ public sealed class UiTextBuffer(string text = "")
     public bool Password { get; init; }
     /// <summary>Selecting and copying only.</summary>
     public bool ReadOnly { get; init; }
-    public int SelectionStart => Math.Min(anchor, Caret);
-    public int SelectionLength => Math.Abs(anchor - Caret);
+    public int SelectionStart => Math.Min(_anchor, Caret);
+    public int SelectionLength => Math.Abs(_anchor - Caret);
     public string SelectedText => Text.Substring(SelectionStart, SelectionLength);
     int Previous(int at) => at <= 0 ? 0 : at > 1 && char.IsLowSurrogate(Text[at - 1]) && char.IsHighSurrogate(Text[at - 2]) ? at - 2 : at - 1;
     int Next(int at) => at >= Text.Length ? Text.Length : at + 1 < Text.Length && char.IsHighSurrogate(Text[at]) && char.IsLowSurrogate(Text[at + 1]) ? at + 2 : at + 1;
@@ -38,8 +38,8 @@ public sealed class UiTextBuffer(string text = "")
     /// <summary>The text replaced from outside (not typed): the caret goes to the end and, when the text changed, the history is gone (MyGUI's <c>setText</c>).</summary>
     public void Set(string value)
     {
-        if (value != Text) { undo.Clear(); redo.Clear(); }
-        Text = value; Caret = anchor = value.Length;
+        if (value != Text) { _undo.Clear(); _redo.Clear(); }
+        Text = value; Caret = _anchor = value.Length;
     }
 
     /// <summary>Typed text or a paste: the selection goes, the text goes in, one undo step.</summary>
@@ -58,7 +58,7 @@ public sealed class UiTextBuffer(string text = "")
                 Text = Text[..cut]; Caret = Math.Min(Caret, cut);
             }
         }
-        anchor = Caret;
+        _anchor = Caret;
         Commit(before);
     }
 
@@ -75,27 +75,31 @@ public sealed class UiTextBuffer(string text = "")
     public void Place(int index, bool extend = false)
     {
         Caret = Math.Clamp(index, 0, Text.Length);
-        if (!extend) anchor = Caret;
+        if (!extend) _anchor = Caret;
     }
 
     public void Key(UiEditKey key, bool extend = false)
     {
         switch (key)
         {
-            case UiEditKey.SelectAll: anchor = 0; Caret = Text.Length; return;
+            case UiEditKey.SelectAll: _anchor = 0; Caret = Text.Length; return;
             case UiEditKey.Undo: Undo(); return;
             case UiEditKey.Redo: Redo(); return;
             case UiEditKey.Backspace or UiEditKey.Delete: Erase(key == UiEditKey.Backspace); return;
         }
         Caret = key switch
         {
-            UiEditKey.Left => Previous(Caret), UiEditKey.Right => Next(Caret),
-            UiEditKey.Home => LineStart(Caret), UiEditKey.End => LineEnd(Caret),
-            UiEditKey.DocumentStart => 0, UiEditKey.DocumentEnd => Text.Length,
+            UiEditKey.Left => Previous(Caret),
+            UiEditKey.Right => Next(Caret),
+            UiEditKey.Home => LineStart(Caret),
+            UiEditKey.End => LineEnd(Caret),
+            UiEditKey.DocumentStart => 0,
+            UiEditKey.DocumentEnd => Text.Length,
             UiEditKey.Up or UiEditKey.PageUp => MultiLine ? LineAbove() : 0,
-            UiEditKey.Down or UiEditKey.PageDown => MultiLine ? LineBelow() : Text.Length, _ => Caret,
+            UiEditKey.Down or UiEditKey.PageDown => MultiLine ? LineBelow() : Text.Length,
+            _ => Caret,
         };
-        if (!extend) anchor = Caret;
+        if (!extend) _anchor = Caret;
     }
 
     int LineAbove()
@@ -120,7 +124,7 @@ public sealed class UiTextBuffer(string text = "")
         var before = new State(Text, Caret);
         if (!RemoveSelection())
         {
-            if (backwards) { int start = Previous(Caret); Text = Text[..start] + Text[Caret..]; Caret = anchor = start; }
+            if (backwards) { int start = Previous(Caret); Text = Text[..start] + Text[Caret..]; Caret = _anchor = start; }
             else Text = Text[..Caret] + Text[Next(Caret)..];
         }
         Commit(before);
@@ -130,33 +134,33 @@ public sealed class UiTextBuffer(string text = "")
     {
         int start = SelectionStart, length = SelectionLength;
         if (length == 0) return false;
-        Text = Text[..start] + Text[(start + length)..]; Caret = anchor = start;
+        Text = Text[..start] + Text[(start + length)..]; Caret = _anchor = start;
         return true;
     }
 
     /// <summary>An edit that changed the text is one undo step; every edit, changed or not, ends the redo (MyGUI resets it for Backspace, Delete, typing and paste).</summary>
     void Commit(State before)
     {
-        redo.Clear();
+        _redo.Clear();
         if (Text == before.Text) return;
-        undo.Add(before);
-        if (undo.Count > MaxUndo) undo.RemoveAt(0);
+        _undo.Add(before);
+        if (_undo.Count > MaxUndo) _undo.RemoveAt(0);
     }
 
     void Undo()
     {
-        if (undo.Count == 0) return;
-        var prior = undo[^1]; undo.RemoveAt(undo.Count - 1);
-        redo.Add(new(Text, Caret));
-        Text = prior.Text; Caret = anchor = Math.Min(prior.Caret, Text.Length);
+        if (_undo.Count == 0) return;
+        var prior = _undo[^1]; _undo.RemoveAt(_undo.Count - 1);
+        _redo.Add(new(Text, Caret));
+        Text = prior.Text; Caret = _anchor = Math.Min(prior.Caret, Text.Length);
     }
 
     void Redo()
     {
-        if (redo.Count == 0) return;
-        var next = redo[^1]; redo.RemoveAt(redo.Count - 1);
-        undo.Add(new(Text, Caret));
-        Text = next.Text; Caret = anchor = Math.Min(next.Caret, Text.Length);
+        if (_redo.Count == 0) return;
+        var next = _redo[^1]; _redo.RemoveAt(_redo.Count - 1);
+        _undo.Add(new(Text, Caret));
+        Text = next.Text; Caret = _anchor = Math.Min(next.Caret, Text.Length);
     }
 
     /// <summary>

@@ -32,15 +32,15 @@ public sealed partial class World
     /// <summary>The system whose <see cref="IOrderOwner"/> checks and starts the order row (the one each owner gives its orders with), or null when none does.</summary>
     internal IOrderOwner? OrderOwnerOf(TaskType row) => row switch
     {
-        TaskType.MOVE_CUS_ORDERED or TaskType.STAY_CLOSE_TO_TARGET or TaskType.BODYGUARD => SystemOf<MovementSystem>(),
-        TaskType.LIFT_PERSON_PLAYER_ORDER or TaskType.KIDNAP_ORDER or TaskType.LOOT_TARGET or TaskType.STEALTH_KNOCKOUT or TaskType.PUT_DOWN_OBJECT => SystemOf<Carrying.CarrySystem>(),
-        TaskType.FOCUSED_MELEE_ATTACK or TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK => SystemOf<Combat.CombatSystem>(),
-        TaskType.BUILD or TaskType.REPAIR or TaskType.DISMANTLE => SystemOf<Construction.ConstructionSystem>(),
-        TaskType.OPERATE_MACHINERY or TaskType.OPERATE_AUTOMATIC_MACHINERY or TaskType.OPERATE_STORAGE or TaskType.USE_TRAINING_DUMMY or TaskType.USE_TURRET or TaskType.PROSPECTING => SystemOf<Production.ProductionSystem>(),
-        TaskType.FIRST_AID_ORDER or TaskType.SPLINT_ORDER or TaskType.REST => SystemOf<FirstAid.FirstAidSystem>(),
-        TaskType.PICKUP => SystemOf<PlayerSystem>(),
-        TaskType.USE_BED or TaskType.PUT_SOMEONE_IN_BED => SystemOf<Locks.BedSystem>(),
-        TaskType.PUT_IN_CAGE => SystemOf<Crime.ArrestSystem>(),
+        TaskType.MoveCusOrdered or TaskType.StayCloseToTarget or TaskType.Bodyguard => SystemOf<MovementSystem>(),
+        TaskType.LiftPersonPlayerOrder or TaskType.KidnapOrder or TaskType.LootTarget or TaskType.StealthKnockout or TaskType.PutDownObject => SystemOf<Carrying.CarrySystem>(),
+        TaskType.FocusedMeleeAttack or TaskType.UnprovokedFocusedMeleeAttack => SystemOf<Combat.CombatSystem>(),
+        TaskType.Build or TaskType.Repair or TaskType.Dismantle => SystemOf<Construction.ConstructionSystem>(),
+        TaskType.OperateMachinery or TaskType.OperateAutomaticMachinery or TaskType.OperateStorage or TaskType.UseTrainingDummy or TaskType.UseTurret or TaskType.Prospecting => SystemOf<Production.ProductionSystem>(),
+        TaskType.FirstAidOrder or TaskType.SplintOrder or TaskType.Rest => SystemOf<FirstAid.FirstAidSystem>(),
+        TaskType.Pickup => SystemOf<PlayerSystem>(),
+        TaskType.UseBed or TaskType.PutSomeoneInBed => SystemOf<Locks.BedSystem>(),
+        TaskType.PutInCage => SystemOf<Crime.ArrestSystem>(),
         _ => Locks.LockSystem.OwnsRow(row) ? SystemOf<Locks.LockSystem>() : null,
     };
 }

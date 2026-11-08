@@ -24,13 +24,13 @@ public class CarryTests
     {
         public SimWorld World { get; }
         public CarrySystem Carry { get; }
-        readonly OpenGroundWalkability walk = new(SyntheticTown.Ground);
+        readonly OpenGroundWalkability _walk = new(SyntheticTown.Ground);
 
         public Rig(int threads = 1, int minPartition = 16, FactionRelations? relations = null, ulong seed = 5, CarrySettings? settings = null)
         {
             Carry = new CarrySystem(BaseGame, BodyOptions.Default, 1, settings) { Relations = relations };
-            var systems = new List<ITickSystem> { new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame, BodyOptions.Default), Carry };
-            World = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, walk, systems);
+            var systems = new List<ITickSystem> { new PlayerSystem(), new MovementSystem(new PathService(_walk, true)), new BodySystem(BaseGame, BodyOptions.Default), Carry };
+            World = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, _walk, systems);
         }
 
         public CharacterId Add(float x, float z, bool player = true, int squad = 0, int faction = 0, float strength = 50, RaceData? race = null, CharacterTask task = CharacterTask.Idle, float yaw = 0, bool leader = false)
@@ -248,7 +248,7 @@ public class CarryTests
         var leader = rig.Add(1600, 2000, player: false, squad: 4, faction: 0, leader: true);
         var rescuer = rig.Add(1650, 2000, player: false, squad: 4, faction: 0, task: CharacterTask.Wander);
         // Its AI chose goal 142 (Find and rescue leader, listed by a few retreat packages); a squad whose package does not list it leaves its leader lying.
-        rig.Cold(rescuer).Ai = new Meitou.Simulation.Ai.AiMind { Squad = rig.World.Squads.Find(4)!, Goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("142", "Find and rescue leader", Meitou.Data.Gameplay.Ai.TaskType.FIND_AND_RESCUE_LEADER, Meitou.Data.Gameplay.Ai.TaskPriority.NonUrgent, Meitou.Data.Gameplay.Ai.TaskTargetType.Specific, Meitou.Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 100, 1) };
+        rig.Cold(rescuer).Ai = new Meitou.Simulation.Ai.AiMind { Squad = rig.World.Squads.Find(4)!, Goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("142", "Find and rescue leader", Data.Gameplay.Ai.TaskType.FindAndRescueLeader, Data.Gameplay.Ai.TaskPriority.NonUrgent, Data.Gameplay.Ai.TaskTargetType.Specific, Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 100, 1) };
         rig.Add(1700, 2050, player: false, squad: 4, faction: 0, task: CharacterTask.Idle, yaw: -MathF.PI / 2);   // the witness, facing the looting
         foreach (var r in new[] { "a", "b", "c", "d" }) rig.Cold(down1).Inventory!.Add(Item(r, 2, 2));
         rig.Body(down1).KnockOut(10000);
@@ -311,7 +311,7 @@ public class CarryTests
         // The AI scores only the goals of its lists: a carrier whose race goals (or package) lack 169 keeps the awake body on its shoulder.
         using var rig = new Rig(1, minPartition: 1, seed: 21);
         var carrier = rig.Add(1000, 2000, player: false, squad: 1, faction: 0);
-        var goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("169", "Putting down", Meitou.Data.Gameplay.Ai.TaskType.PUT_DOWN_CARRIED_DUDE_IF_THEY_CAN_WALK, Meitou.Data.Gameplay.Ai.TaskPriority.Urgent, Meitou.Data.Gameplay.Ai.TaskTargetType.Self, Meitou.Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 24, 1);
+        var goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("169", "Putting down", Data.Gameplay.Ai.TaskType.PutDownCarriedDudeIfTheyCanWalk, Data.Gameplay.Ai.TaskPriority.Urgent, Data.Gameplay.Ai.TaskTargetType.Self, Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 24, 1);
         var squad = rig.World.Squads.Find(1)!;
         rig.Cold(carrier).Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad };
         Assert.False(rig.Carry.ListsPutDown(rig.World, carrier.Slot, rig.Cold(carrier)));

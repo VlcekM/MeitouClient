@@ -10,8 +10,8 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public static class OgreSkeletonReader
 {
-    public const string Version1_80 = "[Serializer_v1.80]";
-    public const string Version1_10 = "[Serializer_v1.10]";
+    public const string Version180 = "[Serializer_v1.80]";
+    public const string Version110 = "[Serializer_v1.10]";
 
     /// <summary>Chunk header, handle, position and orientation; the name is not counted. Ogre's <c>calcBoneSizeWithoutScale</c>.</summary>
     public const int BoneLengthWithoutScale = OgreStream.ChunkHeaderSize + 2 + 3 * 4 + 4 * 4;
@@ -19,7 +19,7 @@ public static class OgreSkeletonReader
     /// <summary>Chunk header, time, rotation and translation. Ogre's <c>calcKeyFrameSizeWithoutScale</c>.</summary>
     public const int KeyFrameLengthWithoutScale = OgreStream.ChunkHeaderSize + 4 + 4 * 4 + 3 * 4;
 
-    public static OgreSkeleton ReadFile(string path) => Read(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static OgreSkeleton ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     public static OgreSkeleton Read(byte[] data)
     {
@@ -27,7 +27,7 @@ public static class OgreSkeletonReader
         try
         {
             var skeleton = new OgreSkeleton { Version = s.ReadHeader() };
-            if (skeleton.Version is not (Version1_80 or Version1_10))
+            if (skeleton.Version is not (Version180 or Version110))
                 throw new OgreFormatException($"Unsupported skeleton version {skeleton.Version}.", 0);
 
             var bones = new Dictionary<ushort, OgreBone>();

@@ -42,7 +42,7 @@ public static class ResidentHomes
         : !town.ResidentsOverride && faction.DefaultResident.Count > 0 ? faction.DefaultResident[0] : null;
 
     /// <summary>A SQUAD_TEMPLATE or UNIQUE_SQUAD_TEMPLATE record.</summary>
-    public static bool IsTemplate(GameRecord? record) => record is { Type: FcsRecordType.SQUAD_TEMPLATE or FcsRecordType.UNIQUE_SQUAD_TEMPLATE };
+    public static bool IsTemplate(GameRecord? record) => record is { Type: FcsRecordType.SquadTemplate or FcsRecordType.UniqueSquadTemplate };
 
     /// <summary>
     /// Houses the town's resident entries in <paramref name="buildings"/> (those that can house, are not <paramref name="playerFactionId"/>'s in the level data and not among
@@ -100,8 +100,12 @@ public static class ResidentHomes
             var t = SquadTemplate.From(record);
             entries.Add(new Entry
             {
-                Id = link.Id, Template = t, Count = link.V0, Priority = link.V1 == 100 ? 0 : link.V1,
-                Preferred = [.. t.Buildings.Select(b => b.Id)], Disliked = [.. t.BuildingDislike.Select(b => b.Id)],
+                Id = link.Id,
+                Template = t,
+                Count = link.V0,
+                Priority = link.V1 == 100 ? 0 : link.V1,
+                Preferred = [.. t.Buildings.Select(b => b.Id)],
+                Disliked = [.. t.BuildingDislike.Select(b => b.Id)],
             });
         }
         return entries;

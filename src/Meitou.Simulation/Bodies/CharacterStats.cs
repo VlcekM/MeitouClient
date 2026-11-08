@@ -13,13 +13,13 @@ public sealed class CharacterStats
     public const float XpCap = 101;
 
     // Indexed by stat number; numbers 14, 15 (shared with Medic), 20 and 33 (no storage) stay unused.
-    readonly float[] values = new float[StatsInfo.Count];
+    readonly float[] _values = new float[StatsInfo.Count];
 
     /// <summary>Stats that read as 1 for a character built without data (the editor's default of a STATS field).</summary>
     public CharacterStats()
     {
-        foreach (var s in StatsInfo.RecordStats) values[(int)s] = 1;
-        values[(int)StatsEnumerated.MassCombat] = 0;
+        foreach (var s in StatsInfo.RecordStats) _values[(int)s] = 1;
+        _values[(int)StatsEnumerated.MassCombat] = 0;
     }
 
     /// <summary>
@@ -28,8 +28,8 @@ public sealed class CharacterStats
     /// </summary>
     public float this[StatsEnumerated stat]
     {
-        get => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? values[(int)s] : 0;
-        set { if (StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None) values[(int)s] = value; }
+        get => StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None ? _values[(int)s] : 0;
+        set { if (StatsInfo.StorageOf(stat) is var s && s != StatsEnumerated.None) _values[(int)s] = value; }
     }
 
     /// <summary>
@@ -38,21 +38,21 @@ public sealed class CharacterStats
     /// </summary>
     public float Scale { get; set; } = 1;
 
-    public float Strength => values[(int)StatsEnumerated.Strength];
-    public float Dexterity => values[(int)StatsEnumerated.Dexterity];
-    public float Toughness => values[(int)StatsEnumerated.Toughness];
+    public float Strength => _values[(int)StatsEnumerated.Strength];
+    public float Dexterity => _values[(int)StatsEnumerated.Dexterity];
+    public float Toughness => _values[(int)StatsEnumerated.Toughness];
     /// <summary>The toughness every read of the original uses: stat x the stats multiplier (<c>+0x90</c> x <c>+0x34</c>), see <see cref="Scale"/>.</summary>
     public float ScaledToughness => Toughness * Scale;
-    public float Athletics => values[(int)StatsEnumerated.Athletics];
+    public float Athletics => _values[(int)StatsEnumerated.Athletics];
 
     // The values a character had before the debug god mode raised them (null while not boosted); the save writes these, so boosted stats never reach a save.
-    float[]? godOriginal;
+    float[]? _godOriginal;
 
     /// <summary>Whether the debug god mode (<see cref="Boost"/>) holds this character's stats raised.</summary>
-    public bool Boosted => godOriginal is not null;
+    public bool Boosted => _godOriginal is not null;
 
     /// <summary>The values <see cref="Unboost"/> restores, or null while not boosted (state hash only).</summary>
-    internal float[]? GodOriginal => godOriginal;
+    internal float[]? GodOriginal => _godOriginal;
 
     /// <summary>
     /// Debug god mode (Meitou only): keeps the current values for <see cref="Unboost"/> and sets every stat that has storage to <paramref name="value"/>. Does nothing while already boosted,
@@ -60,22 +60,22 @@ public sealed class CharacterStats
     /// </summary>
     public void Boost(float value)
     {
-        if (godOriginal is not null) return;
-        godOriginal = (float[])values.Clone();
+        if (_godOriginal is not null) return;
+        _godOriginal = (float[])_values.Clone();
         for (int i = 1; i < StatsInfo.Count; i++)
-            if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) values[i] = value;
+            if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) _values[i] = value;
     }
 
     /// <summary>Puts back exactly the values <see cref="Boost"/> kept; does nothing when not boosted.</summary>
     public void Unboost()
     {
-        if (godOriginal is null) return;
-        Array.Copy(godOriginal, values, values.Length);
-        godOriginal = null;
+        if (_godOriginal is null) return;
+        Array.Copy(_godOriginal, _values, _values.Length);
+        _godOriginal = null;
     }
 
     /// <summary>A copy of the values by stat number.</summary>
-    public float[] ToArray() => (float[])values.Clone();
+    public float[] ToArray() => (float[])_values.Clone();
 
     /// <summary>
     /// The core gain (<c>FUN_1408c5df0</c>, <b>Observed</b>): f = ((cap - stat) / cap)^2; <c>amount * f</c> is added only when 0 &lt; amount &lt;= 20 and
@@ -100,8 +100,8 @@ public sealed class CharacterStats
     {
         var s = StatsInfo.StorageOf(stat);
         if (s == StatsEnumerated.None) return 0;
-        if (float.IsNaN(values[(int)s])) return values[(int)s];
-        return values[(int)s] = CoreGain(values[(int)s], amount, cap);
+        if (float.IsNaN(_values[(int)s])) return _values[(int)s];
+        return _values[(int)s] = CoreGain(_values[(int)s], amount, cap);
     }
 
     /// <summary>
@@ -115,17 +115,17 @@ public sealed class CharacterStats
     {
         var stats = new CharacterStats();
         for (int i = 1; i < StatsInfo.Count && i < baseValues.Length; i++)
-            if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) stats.values[i] = baseValues[i];
+            if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) stats._values[i] = baseValues[i];
         if (randomise > 0)
             foreach (var s in StatsInfo.RecordStats)
             {
                 float u = BodyRolls.Float(worldSeed, characterKey, BodyRolls.StatsDomain, (ulong)s);
-                stats.values[(int)s] = MathF.Max(0, stats.values[(int)s] + (u * 2 - 1) * randomise);
+                stats._values[(int)s] = MathF.Max(0, stats._values[(int)s] + (u * 2 - 1) * randomise);
             }
         for (int i = 1; i < StatsInfo.Count; i++)
         {
             var storage = StatsInfo.StorageOf((StatsEnumerated)i);
-            if (storage != StatsEnumerated.None) stats.values[(int)storage] *= race.StatMultipliers[i];
+            if (storage != StatsEnumerated.None) stats._values[(int)storage] *= race.StatMultipliers[i];
         }
         return stats;
     }
@@ -135,7 +135,7 @@ public sealed class CharacterStats
     {
         var stats = new CharacterStats();
         for (int i = 1; i < StatsInfo.Count && i < savedValues.Length; i++)
-            if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) stats.values[i] = savedValues[i];
+            if (StatsInfo.StorageOf((StatsEnumerated)i) == (StatsEnumerated)i) stats._values[i] = savedValues[i];
         return stats;
     }
 
@@ -177,7 +177,7 @@ public sealed class CharacterStats
     /// </summary>
     public void WriteSave(IDictionary<string, float> floats)
     {
-        var written = godOriginal ?? values;   // a boosted character is saved with the values it had before
+        var written = _godOriginal ?? _values;   // a boosted character is saved with the values it had before
         for (int i = 1; i < StatsInfo.Count; i++)
             if (StatsInfo.FieldName((StatsEnumerated)i) is { } name) floats[name] = written[i];
     }
@@ -190,9 +190,9 @@ public sealed class CharacterStats
     {
         var stats = new CharacterStats();
         for (int i = 1; i < StatsInfo.Count; i++)
-            if (StatsInfo.FieldName((StatsEnumerated)i) is { } name && floats.TryGetValue(name, out float v)) stats.values[i] = v;
-        if (!floats.ContainsKey("lockpicking")) stats.values[(int)StatsEnumerated.Lockpicking] = stats.values[(int)StatsEnumerated.Thieving] * 0.5f;
-        if (!floats.ContainsKey("toughness2")) stats.values[(int)StatsEnumerated.Toughness] = stats.values[(int)StatsEnumerated.MeleeDefence];   // FUN_14064b6a0: toughness = defence
+            if (StatsInfo.FieldName((StatsEnumerated)i) is { } name && floats.TryGetValue(name, out float v)) stats._values[i] = v;
+        if (!floats.ContainsKey("lockpicking")) stats._values[(int)StatsEnumerated.Lockpicking] = stats._values[(int)StatsEnumerated.Thieving] * 0.5f;
+        if (!floats.ContainsKey("toughness2")) stats._values[(int)StatsEnumerated.Toughness] = stats._values[(int)StatsEnumerated.MeleeDefence];   // FUN_14064b6a0: toughness = defence
         return stats;
     }
 }

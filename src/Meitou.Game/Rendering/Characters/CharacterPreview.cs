@@ -78,26 +78,26 @@ internal sealed class PreviewResolve : IDisposable
         }
         """;
 
-    readonly IGpuContext gpu;
-    readonly LegacyProgram program;
-    readonly SamplerSlot source;
-    readonly UniformHandle rect, scale, tone, toneMix, grade, saturation, contrast, dither;
-    readonly Dictionary<InternalFormat, GpuPipeline> pipelines = [];
+    readonly IGpuContext _gpu;
+    readonly LegacyProgram _program;
+    readonly SamplerSlot _source;
+    readonly UniformHandle _rect, _scale, _tone, _toneMix, _grade, _saturation, _contrast, _dither;
+    readonly Dictionary<InternalFormat, GpuPipeline> _pipelines = [];
 
     public PreviewResolve(IGpuContext gpu)
     {
-        this.gpu = gpu;
-        program = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, Fragment, "character preview resolve");
-        source = program.Sampler("uSource");
-        (rect, scale, tone, toneMix) = (program.Uniform("uRect"), program.Uniform("uScale"), program.Uniform("uTone"), program.Uniform("uToneMix"));
-        (grade, saturation, contrast, dither) = (program.Uniform("uGrade"), program.Uniform("uSaturation"), program.Uniform("uContrast"), program.Uniform("uDither"));
+        this._gpu = gpu;
+        _program = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, Fragment, "character preview resolve");
+        _source = _program.Sampler("uSource");
+        (_rect, _scale, _tone, _toneMix) = (_program.Uniform("uRect"), _program.Uniform("uScale"), _program.Uniform("uTone"), _program.Uniform("uToneMix"));
+        (_grade, _saturation, _contrast, _dither) = (_program.Uniform("uGrade"), _program.Uniform("uSaturation"), _program.Uniform("uContrast"), _program.Uniform("uDither"));
     }
 
     /// <summary>A half-float colour target and its depth for <paramref name="width"/> × <paramref name="height"/> destination pixels at <paramref name="look"/>'s supersampling.</summary>
     public static (GpuTexture Colour, GpuTexture Depth, SampledTexture Sampled) Targets(IGpuContext gpu, int width, int height, PreviewLook look, string name)
     {
         int s = Math.Max(look.Supersample, 1);
-        var colour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, width * s, height * s, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
+        var colour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, width * s, height * s, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
         var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width * s, height * s, Use: TextureUse.DepthTarget, Name: name + " depth"));
         var sampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), colour.View());
@@ -113,35 +113,35 @@ internal sealed class PreviewResolve : IDisposable
         if (regions.Length == 0) return;
         var targets = PassTargets.Of(into, null);
         var state = DrawState.For(targets.Formats, false);
-        if (!pipelines.TryGetValue(into.Desc.Format, out var pipeline))
-            pipelines[into.Desc.Format] = pipeline = gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout([]), PrimitiveType.Triangles, targets.Formats, program.Name));
-        var cmd = gpu.BeginNative("character preview resolve");
+        if (!_pipelines.TryGetValue(into.Desc.Format, out var pipeline))
+            _pipelines[into.Desc.Format] = pipeline = _gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout([]), PrimitiveType.Triangles, targets.Formats, _program.Name));
+        var cmd = _gpu.BeginNative("character preview resolve");
         cmd.Order();   // the source was just drawn
         cmd.BeginRendering(new RenderingDesc(targets.Colour, default, targets.Width, targets.Height));
         cmd.SetRaster(state.Cull, state.Front);
         cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
         cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
         cmd.BindPipeline(pipeline);
-        program.Bind(source, from);
-        program.Set(scale, Math.Max(look.Supersample, 1));
-        program.Set(tone, (int)look.Tone);
-        program.Set(toneMix, look.ToneMix);
-        program.Set(grade, look.Grade ? 1 : 0);
-        program.Set(saturation, PostOptions.Saturation);
-        program.Set(contrast, PostOptions.Contrast);
-        program.Set(dither, look.Dither ? 1 : 0);
+        _program.Bind(_source, from);
+        _program.Set(_scale, Math.Max(look.Supersample, 1));
+        _program.Set(_tone, (int)look.Tone);
+        _program.Set(_toneMix, look.ToneMix);
+        _program.Set(_grade, look.Grade ? 1 : 0);
+        _program.Set(_saturation, PostOptions.Saturation);
+        _program.Set(_contrast, PostOptions.Contrast);
+        _program.Set(_dither, look.Dither ? 1 : 0);
         foreach (var r in regions)
         {
             cmd.SetViewport(new PixelViewport(r.X, r.Y, r.Width, r.Height, 0, 1));
             cmd.SetScissor(r);
-            program.Set(rect, new Vector4(r.X, r.Y, r.Width, r.Height));
-            program.Flush(cmd);
+            _program.Set(_rect, new Vector4(r.X, r.Y, r.Width, r.Height));
+            _program.Flush(cmd);
             cmd.Draw(3);
         }
         cmd.EndRendering();
         cmd.Order();
-        gpu.EndNative(cmd);
+        _gpu.EndNative(cmd);
     }
 
-    public void Dispose() => program.Dispose();
+    public void Dispose() => _program.Dispose();
 }

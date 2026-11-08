@@ -1,19 +1,19 @@
 using System.Numerics;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
-using Silk.NET.Vulkan;
 using Meitou.Game.Rendering.Overlays;
+using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>The outlined characters drawn alone into masks of their own, one per colour, for the hover outline (<see cref="HoverOutlineRenderer"/>, docs/game/ui-input.md "Hover outline").</summary>
 internal sealed unsafe partial class CharacterRenderer
 {
-    readonly List<(GpuTexture Colour, GpuTexture Depth)> hoverTargets = [];
-    readonly List<HoverMask> hoverMasks = [];
+    readonly List<(GpuTexture Colour, GpuTexture Depth)> _hoverTargets = [];
+    readonly List<HoverMask> _hoverMasks = [];
 
     /// <summary>This frame's masks (empty when nothing is outlined).</summary>
-    public IReadOnlyList<HoverMask> HoverMasks => hoverMasks;
+    public IReadOnlyList<HoverMask> HoverMasks => _hoverMasks;
 
     /// <summary>
     /// Draws the characters <paramref name="wanted"/> (by draw-list key) alone, in their live poses and the picture's levels, through the colour pass (it writes alpha 1),
@@ -23,7 +23,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     public void DrawHoverMasks(IReadOnlyList<(long Key, Vector4 Colour)> wanted, int width, int height, Matrix4x4 view, float fieldOfView, Vector3 eye)
     {
-        hoverMasks.Clear();
+        _hoverMasks.Clear();
         if (wanted.Count == 0 || width <= 0 || height <= 0) return;
         var groups = HoverGroups(wanted, width, height, view, fieldOfView);
         for (int g = 0; g < groups.Count; g++)
@@ -36,16 +36,16 @@ internal sealed unsafe partial class CharacterRenderer
             var spheres = new List<(Vector3, float)>();
             foreach (int i in members)
             {
-                float distance = Vector3.Distance(eye, live[i].Centre);
-                (near, far) = (Math.Min(near, distance - live[i].Radius * 2), Math.Max(far, distance + live[i].Radius * 2));
-                spheres.Add((live[i].Centre, live[i].Radius));
+                float distance = Vector3.Distance(eye, _live[i].Centre);
+                (near, far) = (Math.Min(near, distance - _live[i].Radius * 2), Math.Max(far, distance + _live[i].Radius * 2));
+                spheres.Add((_live[i].Centre, _live[i].Radius));
             }
             near = Math.Max(0.25f, near);
             var projection = DepthConvention.Perspective(fieldOfView, width / (float)height, near, far);
 
             var target = PassTargets.Of(colourTarget, depthTarget);
             for (int m = 0; m < members.Count; m++) DrawHoverMember(target, members[m], m == 0, view * projection, eye);
-            hoverMasks.Add(new HoverMask(colourTarget, depthTarget, near, far, groups[g].Colour, spheres));
+            _hoverMasks.Add(new HoverMask(colourTarget, depthTarget, near, far, groups[g].Colour, spheres));
         }
     }
 
@@ -57,14 +57,14 @@ internal sealed unsafe partial class CharacterRenderer
         foreach (var (key, colour) in wanted)
         {
             int index = -1;
-            for (int i = 0; i < liveCount; i++)
-                if (live[i].Key == key)
+            for (int i = 0; i < _liveCount; i++)
+                if (_live[i].Key == key)
                 {
                     index = i;
                     break;
                 }
-            if (index < 0 || live[index].PortraitOnly) continue;
-            ref var l = ref live[index];
+            if (index < 0 || _live[index].PortraitOnly) continue;
+            ref var l = ref _live[index];
             if (HoverOutlineRenderer.Bounds(l.Centre, l.Radius, onScreen, width, height, 0) is null) continue;
 
             int g = groups.FindIndex(x => x.Colour == colour);
@@ -81,17 +81,17 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>Mask <paramref name="g"/>'s targets, made again at a new size (the portraits' formats, so the masks share their pipelines).</summary>
     (GpuTexture Colour, GpuTexture Depth) HoverTarget(int g, int width, int height)
     {
-        if (hoverTargets.Count > g && hoverTargets[g].Colour.Desc.Width == width && hoverTargets[g].Colour.Desc.Height == height) return hoverTargets[g];
-        if (hoverTargets.Count > g)
+        if (_hoverTargets.Count > g && _hoverTargets[g].Colour.Desc.Width == width && _hoverTargets[g].Colour.Desc.Height == height) return _hoverTargets[g];
+        if (_hoverTargets.Count > g)
         {
-            hoverTargets[g].Colour.Dispose();
-            hoverTargets[g].Depth.Dispose();
+            _hoverTargets[g].Colour.Dispose();
+            _hoverTargets[g].Depth.Dispose();
         }
 
         var colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Srgb8Alpha8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "hover mask"));
         var depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "hover mask depth"));
-        if (hoverTargets.Count > g) hoverTargets[g] = (colour, depth);
-        else hoverTargets.Add((colour, depth));
+        if (_hoverTargets.Count > g) _hoverTargets[g] = (colour, depth);
+        else _hoverTargets.Add((colour, depth));
         return (colour, depth);
     }
 
@@ -104,14 +104,14 @@ internal sealed unsafe partial class CharacterRenderer
             target.Colour with { Load = load, Clear = new ClearColour(0f, 0f, 0f, 0f) },
             target.Depth with { Load = load, DepthClear = DepthConvention.Clear }, target.Width, target.Height));
         Gpu.BeginHostPass(cmd, target, DrawState.SceneDepth(target.Formats));
-        portraitLive = index;
+        _portraitLive = index;
         try
         {
             DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = Vector3.UnitY }, eye, []);
         }
         finally
         {
-            portraitLive = -1;
+            _portraitLive = -1;
         }
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
@@ -120,8 +120,8 @@ internal sealed unsafe partial class CharacterRenderer
 
     void DisposeHover()
     {
-        foreach (var (colour, depth) in hoverTargets) { colour.Dispose(); depth.Dispose(); }
-        hoverTargets.Clear();
-        hoverMasks.Clear();
+        foreach (var (colour, depth) in _hoverTargets) { colour.Dispose(); depth.Dispose(); }
+        _hoverTargets.Clear();
+        _hoverMasks.Clear();
     }
 }

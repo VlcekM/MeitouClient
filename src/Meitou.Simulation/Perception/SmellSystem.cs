@@ -27,13 +27,13 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     /// <summary>The weights of a neighbouring and any other zone in the hunters' pick (<b>Verified</b> literals).</summary>
     public const float NeighbourWeight = 0.8f, FarWeight = 0.5f;
 
-    readonly SortedDictionary<int, (float Value, Vector2 Position)> zones = [];
+    readonly SortedDictionary<int, (float Value, Vector2 Position)> _zones = [];
     // The zone each hunting squad keeps (Blackboard +0xf8), by squad id.
-    readonly SortedDictionary<int, int> hunts = [];
-    readonly Dictionary<string, float> thresholds = new(StringComparer.Ordinal);
+    readonly SortedDictionary<int, int> _hunts = [];
+    readonly Dictionary<string, float> _thresholds = new(StringComparer.Ordinal);
 
     /// <summary>A zone's smell (none: 0).</summary>
-    public ZoneBlood Blood(ZoneCoordinate zone) => zones.TryGetValue(Key(zone), out var z) ? new ZoneBlood(z.Value, z.Position) : default;
+    public ZoneBlood Blood(ZoneCoordinate zone) => _zones.TryGetValue(Key(zone), out var z) ? new ZoneBlood(z.Value, z.Position) : default;
 
     static int Key(ZoneCoordinate z) => z.Y * WorldLayout.ZoneCount + z.X;
 
@@ -41,18 +41,18 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     {
         if (world.Tick % EveryTicks != 0) return;
         // The sources step once per 10 game seconds with the whole time since the last step as dt (FUN_1408f85f0: its timer runs to DAT_14167fad4 = 10 and the step takes the frozen value).
-        elapsed += EveryTicks * world.TickSeconds;
-        if (elapsed >= StepSeconds)
+        _elapsed += EveryTicks * world.TickSeconds;
+        if (_elapsed >= StepSeconds)
         {
-            Update(world, elapsed);
-            elapsed = 0;
+            Update(world, _elapsed);
+            _elapsed = 0;
         }
         if (population is not null) Hunt(world);
     }
 
     /// <summary>Game seconds between the zone steps (Verified literal 10), and the time gathered towards the next. Not saved.</summary>
     public const float StepSeconds = 10;
-    float elapsed;
+    float _elapsed;
 
     void Update(World world, float dt)
     {
@@ -69,25 +69,25 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
             var at = new Vector2(p.X, p.Z);
             sums[key] = (a.Corpses + 1, a.CorpseSum + at);
         }
-        foreach (int key in zones.Keys.Union(sums.Keys).ToList())
+        foreach (int key in _zones.Keys.Union(sums.Keys).ToList())
         {
-            var (value, _) = zones.GetValueOrDefault(key);
+            var (value, _) = _zones.GetValueOrDefault(key);
             var a = sums.GetValueOrDefault(key);
             float target = a.Corpses;
             var position = a.Corpses > 0 ? a.CorpseSum / a.Corpses : Vector2.Zero;
             value = value < target ? MathF.Min(target, value + dt * Rise) : MathF.Max(target, value - dt * Decay);
             bool unloaded = world.LoadedZones is { } loaded && !loaded.Contains(new ZoneCoordinate(key % WorldLayout.ZoneCount, key / WorldLayout.ZoneCount));
-            if (target <= 0 && (value <= 0 || unloaded)) zones.Remove(key);
-            else zones[key] = (value, position);
+            if (target <= 0 && (value <= 0 || unloaded)) _zones.Remove(key);
+            else _zones[key] = (value, position);
         }
     }
 
     /// <summary>ANIMAL_CHARACTER <c>smell blood</c> of a character's record (<c>CharacterAnimal +0x6e8</c>); 0 when it has none.</summary>
     float Threshold(CharacterCold c)
     {
-        if (thresholds.TryGetValue(c.RecordId, out float t)) return t;
+        if (_thresholds.TryGetValue(c.RecordId, out float t)) return t;
         t = data.Db.Find(c.RecordId)?.GetFloat("smell blood") ?? 0;
-        thresholds[c.RecordId] = t;
+        _thresholds[c.RecordId] = t;
         return t;
     }
 
@@ -97,19 +97,19 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
         foreach (var squad in world.Squads.All)
         {
             if (squad.Ai is null || squad.Members.Count == 0 || !table.TryResolveNext(squad.Leader, out int lead) || table.Cold(lead) is not { Fighter.IsAnimal: true } leader) continue;
-            int role = (int)Ai.AiSystem.RoleOf(squad, squad.Leader, leader);
-            bool listed = population!.GoalDuty(world, squad, (AiRole)role, TaskType.HUNTING_BLOODSMELL);
+            int role = (int)AiSystem.RoleOf(squad, squad.Leader, leader);
+            bool listed = population!.GoalDuty(world, squad, (AiRole)role, TaskType.HuntingBloodsmell);
             float threshold = Threshold(leader);
             int zone = -1;
             if (listed && threshold > 0)
             {
                 // A kept zone stays while its smell holds; else the best weighted one above the threshold.
-                if (hunts.TryGetValue(squad.Id, out int kept) && zones.TryGetValue(kept, out var k) && k.Value >= threshold) zone = kept;
+                if (_hunts.TryGetValue(squad.Id, out int kept) && _zones.TryGetValue(kept, out var k) && k.Value >= threshold) zone = kept;
                 else
                 {
                     var here = WorldLayout.ZoneOf(table.Next[lead].Position.X, table.Next[lead].Position.Z);
                     float best = threshold;
-                    foreach (var (key, z) in zones)
+                    foreach (var (key, z) in _zones)
                     {
                         int dx = Math.Abs(key % WorldLayout.ZoneCount - here.X), dy = Math.Abs(key / WorldLayout.ZoneCount - here.Y);
                         float w = z.Value * (dx == 0 && dy == 0 ? 1 : dx <= 1 && dy <= 1 ? NeighbourWeight : FarWeight);
@@ -119,19 +119,19 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
             }
             if (zone < 0)
             {
-                if (hunts.Remove(squad.Id)) Release(world, squad);
+                if (_hunts.Remove(squad.Id)) Release(world, squad);
                 continue;
             }
-            hunts[squad.Id] = zone;
-            var to = zones[zone].Position;
+            _hunts[squad.Id] = zone;
+            var to = _zones[zone].Position;
             foreach (var member in squad.Members)
             {
                 if (!table.TryResolveNext(member, out int s) || table.Cold(s) is not { } c || c.InCombat || c.Fleeing || c.Medical is { Incapacitated: true } || !c.CarriedBy.IsNone) continue;
-                if (!c.Engaged && !Ai.AiSystem.Holds(table.Next[s], c)) continue;
+                if (!c.Engaged && !AiSystem.Holds(table.Next[s], c)) continue;
                 c.Engaged = true;
                 ref var n = ref table.Next[s];
                 if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) > HuntArrive && (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > HuntArrive))
-                    TaskStart.Walk(world, s, to, SpeedMode.Run, Meitou.Data.Gameplay.Ai.TaskType.HUNTING_BLOODSMELL, TaskSource.Goal);
+                    TaskStart.Walk(world, s, to, SpeedMode.Run, TaskType.HuntingBloodsmell, TaskSource.Goal);
             }
         }
     }
@@ -147,10 +147,10 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
 
     public void Hash(ref StateHasher hasher)
     {
-        if (zones.Count == 0 && hunts.Count == 0) return;
+        if (_zones.Count == 0 && _hunts.Count == 0) return;
         hasher.Add(0x536D656C);
-        foreach (var (k, z) in zones) { hasher.Add(k); hasher.Add(z.Value); hasher.Add(z.Position); }
-        foreach (var (s, z) in hunts) { hasher.Add(s); hasher.Add(z); }
-        hasher.Add(elapsed);
+        foreach (var (k, z) in _zones) { hasher.Add(k); hasher.Add(z.Value); hasher.Add(z.Position); }
+        foreach (var (s, z) in _hunts) { hasher.Add(s); hasher.Add(z); }
+        hasher.Add(_elapsed);
     }
 }

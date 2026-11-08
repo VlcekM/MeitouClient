@@ -13,13 +13,13 @@ public sealed partial class PostProcess
     /// <summary>Meitou: the sky round the sun moves with the sun in the motion vectors (default on; <c>--ab sun-motion</c>).</summary>
     public bool SunMotion { get; set; } = true;
 
-    readonly SunMotionTracker sunTracker = new();
+    readonly SunMotionTracker _sunTracker = new();
 
     /// <summary>This frame's: xyz the direction to the sun, w cos of the inner angle; and xy the motion to add (the motion target's units), z cos of the
     /// outer angle, w 1 when on (<see cref="SunMotionTracker"/>).</summary>
-    (Vector4 Sun, Vector4 Motion) sunMotion;
+    (Vector4 Sun, Vector4 Motion) _sunMotion;
 
     /// <summary>The sun's motion for this frame's velocity pass, from the frame globals' sun direction and the last frame's.</summary>
     void PrepareSunMotion() =>
-        sunMotion = sunTracker.Prepare(Gpu.Globals, SunMotion, previousValid, viewRotation, fovNow, aspectNow);
+        _sunMotion = _sunTracker.Prepare(Gpu.Globals, SunMotion, _previousValid, _viewRotation, _fovNow, _aspectNow);
 }

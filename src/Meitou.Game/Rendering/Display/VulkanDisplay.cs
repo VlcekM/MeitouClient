@@ -20,23 +20,23 @@ public sealed unsafe class VulkanDisplay : IDisposable
     public VulkanDevice Device { get; }
     /// <summary>The native GPU API the renderers draw with; its frames are what <see cref="BeginFrame"/> / <see cref="Present"/> begin and submit.</summary>
     public GpuContext Context { get; }
-    readonly VulkanPresenter? presenter;
+    readonly VulkanPresenter? _presenter;
 
     /// <summary>With a window: what the frame is drawn into (the window's framebuffer size), valid after <see cref="BeginFrame"/>; null when headless.</summary>
-    public GpuTexture? Backbuffer => presenter?.Backbuffer;
+    public GpuTexture? Backbuffer => _presenter?.Backbuffer;
     /// <summary>Stopwatch ticks spent acquiring swapchain images and presenting (0 when headless).</summary>
-    public long AcquireTicks => presenter?.AcquireTicks ?? 0;
-    public long PresentTicks => presenter?.PresentTicks ?? 0;
+    public long AcquireTicks => _presenter?.AcquireTicks ?? 0;
+    public long PresentTicks => _presenter?.PresentTicks ?? 0;
     /// <summary>The window's vsync (<see cref="VulkanPresenter.VSync"/>; the swapchain is remade at the next frame). Always off without a window.</summary>
-    public bool VSync { get => presenter?.VSync ?? false; set { if (presenter is not null) presenter.VSync = value; } }
+    public bool VSync { get => _presenter?.VSync ?? false; set { if (_presenter is not null) _presenter.VSync = value; } }
 
     /// <summary>True while the swapchain goes through AMD's frame-interpolation layer (the Frame generation setting, when it could be honoured; false after a fallback).</summary>
-    public bool FrameGeneration => presenter?.FrameGeneration is not null;
+    public bool FrameGeneration => _presenter?.FrameGeneration is not null;
     /// <summary>The frame-interpolation layer itself (null for the plain swapchain); frame generation is configured on top of it.</summary>
-    public FfxSwapchain? FrameGenerationLayer => presenter?.FrameGeneration;
+    public FfxSwapchain? FrameGenerationLayer => _presenter?.FrameGeneration;
 
     /// <summary>True while the swapchain goes through Streamline with DLSS frame generation (the Frame generation setting's DLSS, where supported).</summary>
-    public bool DlssFrameGeneration => presenter?.StreamlineHooks is not null && Streamline is { FrameGenerationSupported: true };
+    public bool DlssFrameGeneration => _presenter?.StreamlineHooks is not null && Streamline is { FrameGenerationSupported: true };
 
     /// <summary>Streamline (DLSS), when <c>dlss</c> asked for it and it loaded; shut down before the device.</summary>
     public Streamline? Streamline { get; }
@@ -53,10 +53,12 @@ public sealed unsafe class VulkanDisplay : IDisposable
     public VulkanDisplay(WindowOptions? options, bool vsync, bool dlss = false, FrameGenerationMethod frameGeneration = FrameGenerationMethod.Off)
     {
         var (validation, sync, gpu) = VulkanDeviceOptions.FromEnvironment();
-        validationRequested = validation == true;
+        _validationRequested = validation == true;
         var deviceOptions = new VulkanDeviceOptions
         {
-            Validation = validation == true, SyncValidation = sync, GpuValidation = gpu,
+            Validation = validation == true,
+            SyncValidation = sync,
+            GpuValidation = gpu,
             PipelineCachePath = PipelineCacheFile(),
             TriangleMeasurements = TriangleMeasurements,
             RayTracing = RayTracing,
@@ -132,7 +134,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
         Context = new GpuContext(Device);
         if (options is not null)
         {
-            presenter = new VulkanPresenter(Context, vsync)
+            _presenter = new VulkanPresenter(Context, vsync)
             {
                 PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null,
                 StreamlineHooks = Streamline is { FrameGenerationSupported: true } g ? g.Swapchain : null,
@@ -141,7 +143,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
             {
                 var layer = FfxSwapchain.TryCreate(Device, out var why);
                 if (layer is null) Console.WriteLine($"frame generation  unavailable: {why}");
-                else presenter.FrameGeneration = layer;
+                else _presenter.FrameGeneration = layer;
             }
         }
     }
@@ -170,16 +172,16 @@ public sealed unsafe class VulkanDisplay : IDisposable
     {
         Streamline?.Marker(PclMarker.SimulationEnd);
         Streamline?.Marker(PclMarker.RenderSubmitStart);
-        return presenter?.BeginFrame(width, height) ?? width > 0 && height > 0;
+        return _presenter?.BeginFrame(width, height) ?? width > 0 && height > 0;
     }
 
     /// <summary>Shows the frame (headless: just submits it). The backbuffer stays intact until the next frame, so a screenshot of it is read after this.
     /// With <paramref name="topDown"/> the window shows that finished picture (row 0 the top) instead of the flipped backbuffer.</summary>
-    public void Present(Meitou.Game.Rendering.Gpu.GpuTexture? topDown = null)
+    public void Present(GpuTexture? topDown = null)
     {
         Streamline?.Marker(PclMarker.RenderSubmitEnd);
         Streamline?.Marker(PclMarker.PresentStart);
-        if (presenter is not null) presenter.Present(topDown);
+        if (_presenter is not null) _presenter.Present(topDown);
         else Context.EndFrame();
         Streamline?.Marker(PclMarker.PresentEnd);
         Streamline?.EndFrame();
@@ -190,18 +192,18 @@ public sealed unsafe class VulkanDisplay : IDisposable
 
     public void Dispose()
     {
-        presenter?.Dispose();
+        _presenter?.Dispose();
         Context.Dispose();
         Device.Frames.WaitAll();   // what was released after the frames in flight
         Streamline?.Dispose();
         Ngx?.Dispose();
         if (Device.ValidationErrors > 0) Console.WriteLine($"vulkan validation: {Device.ValidationErrors} errors\n{string.Join("\n", Device.ValidationLog.Take(20))}");
-        else if (validationRequested) Console.WriteLine("vulkan validation: 0 errors");
+        else if (_validationRequested) Console.WriteLine("vulkan validation: 0 errors");
         Device.Dispose();
         Window?.Dispose();
     }
 
-    readonly bool validationRequested;
+    readonly bool _validationRequested;
 
     /// <summary>
     /// <c>%LOCALAPPDATA%\Meitou\pipeline-cache.bin</c> (the driver checks the header and ignores a cache from another device or driver);
@@ -209,7 +211,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// </summary>
     static string? PipelineCacheFile()
     {
-        if (Meitou.Data.World.LoadCaches.Disabled) return null;
+        if (Data.World.LoadCaches.Disabled) return null;
         var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrEmpty(root)) return null;
         try

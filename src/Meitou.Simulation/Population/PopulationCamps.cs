@@ -17,7 +17,7 @@ public sealed partial class PopulationSystem
     {
         FoldCamp(world, camp);
         world.NestBuildings.Set(camp, layout, owner, centre, record);
-        foreach (var piece in layout.Pieces) world.Fixtures.RegisterNestBuilding(world, data, piece, owner, site);
+        foreach (var piece in layout.Pieces) world.Fixtures.RegisterNestBuilding(world, _data, piece, owner, site);
         if (layout.Drops.Count > 0 && !world.SavedZones.Contains(WorldLayout.ZoneOf(centre.X, centre.Y)) && world.NestBuildings.Stock(camp))
             LayItems(world, camp, layout.Drops, owner, centre);
     }
@@ -39,14 +39,14 @@ public sealed partial class PopulationSystem
         var town = site.Town;
         int camp = NestBuildings.TownCamp(site.Index);
         var at = new Vector2(site.Position.X, site.Position.Z);
-        int owner = site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
+        int owner = site.Index < _data.SiteFactions.Count ? _data.SiteFactions[site.Index] : -1;
         if (!town.SpawnInTownCentre)
         {
             LayResidentNests(world, site, camp, owner, at);
             return;
         }
         if (world.NestBuildings.RecordOf(camp) == town.Id) return;
-        var layout = NestFurniture.Scatter(data.Db, town, at, world.Walkability, world.Seed, $"town{site.Index}:");
+        var layout = NestFurniture.Scatter(_data.Db, town, at, world.Walkability, world.Seed, $"town{site.Index}:");
         layout.Drops.AddRange(ResidentNestDrops(world, site, at));
         StandCamp(world, camp, layout, owner, at, town.Id, site.Index);
     }
@@ -68,13 +68,13 @@ public sealed partial class PopulationSystem
     {
         var drops = new List<NestDrop>();
         var nests = site.Town.Residents
-            .Select(r => data.Db.Find(r.Id)).OfType<Meitou.Data.GameRecord>()
+            .Select(r => _data.Db.Find(r.Id)).OfType<Data.GameRecord>()
             .SelectMany(t => t.GetReferences("nest")).Select(n => n.TargetStringId).Distinct(StringComparer.Ordinal);
         foreach (var id in nests)
         {
-            if (data.Db.Find(id) is not { Type: Meitou.Data.Fcs.FcsRecordType.TOWN } nest) continue;
+            if (_data.Db.Find(id) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town } nest) continue;
             ulong seed = world.Seed ^ Rng.StableHash(id);
-            drops.AddRange(NestFurniture.Scatter(data.Db, TownData.From(nest), at, world.Walkability, seed, $"town{site.Index}:{id}:").Drops);
+            drops.AddRange(NestFurniture.Scatter(_data.Db, TownData.From(nest), at, world.Walkability, seed, $"town{site.Index}:{id}:").Drops);
         }
         return drops;
     }
@@ -90,8 +90,8 @@ public sealed partial class PopulationSystem
         foreach (var drop in drops)
         {
             var item = drop.List
-                ? data.Db.Find(drop.Record) is { } list ? Items.ItemSlots.Roll(data, VendorList.From(data.Db, list), owner, ref rng).Item : null
-                : data.Items.Create(drop.Record, 1, 0);
+                ? _data.Db.Find(drop.Record) is { } list ? Items.ItemSlots.Roll(_data, VendorList.From(_data.Db, list), owner, ref rng).Item : null
+                : _data.Items.Create(drop.Record, 1, 0);
             if (item is not null) world.GroundItems.Place(item, drop.Position, drop.Yaw, null, -1, camp);
         }
     }

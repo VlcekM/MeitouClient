@@ -122,12 +122,12 @@ public class PopulationTests
     [Fact]
     public void A_housed_squads_prisoners_are_made_caged_in_its_home_held_without_a_sentence_and_trimmed_to_its_free_cages()
     {
-        var function = SyntheticTown.Rec("53-t", Meitou.Data.Fcs.FcsRecordType.BUILDING_FUNCTIONALITY, "Cage");
+        var function = SyntheticTown.Rec("53-t", Data.Fcs.FcsRecordType.BuildingFunctionality, "Cage");
         function.Ints["function"] = TownBuildings.CageFunction;
-        var cage = SyntheticTown.Rec("54-t", Meitou.Data.Fcs.FcsRecordType.BUILDING, "Prisoner Cage");
+        var cage = SyntheticTown.Rec("54-t", Data.Fcs.FcsRecordType.Building, "Prisoner Cage");
         cage.References["functionality"] = [SyntheticTown.Ref("53-t")];
-        var house = SyntheticTown.Rec("52-t", Meitou.Data.Fcs.FcsRecordType.BUILDING, "House");
-        var captives = SyntheticTown.Rec("14-t", Meitou.Data.Fcs.FcsRecordType.SQUAD_TEMPLATE, "Captives");
+        var house = SyntheticTown.Rec("52-t", Data.Fcs.FcsRecordType.Building, "House");
+        var captives = SyntheticTown.Rec("14-t", Data.Fcs.FcsRecordType.SquadTemplate, "Captives");
         captives.References["squad"] = [SyntheticTown.Ref("2-t", 3)];
         // One patrol, housed by its level-data template in a house with two cages; its template makes a captive squad of three.
         var db = SyntheticTown.Database(residentSquads: 1, extra: [function, cage, house, captives], changePatrol: p => p.References["prisoners"] = [SyntheticTown.Ref("14-t")]);
@@ -169,30 +169,30 @@ public class PopulationTests
     /// The synthetic town (30-t) with overrides, in this order: E (54-t, no conditions), A (50-t, state 91; residents a Patrol), C (52-t, 91 and 93), B (51-t, 91 and 92; faction
     /// Others 21-t, residents Faction folk; its own list B, A), D (53-t, 92 and 91). With 91 and 92 holding B wins, then A from B's list.
     /// </summary>
-    internal static Meitou.Data.GameDatabase OverrideDb(bool items = false, IReadOnlyList<Meitou.Data.Fcs.FcsRecord>? extra = null)
+    internal static Data.GameDatabase OverrideDb(bool items = false, IReadOnlyList<Meitou.Data.Fcs.FcsRecord>? extra = null)
     {
-        var R = SyntheticTown.Ref;
-        Meitou.Data.Fcs.FcsRecord State(string id) => SyntheticTown.Rec(id, Meitou.Data.Fcs.FcsRecordType.WORLD_EVENT_STATE, id);
+        var r = SyntheticTown.Ref;
+        Meitou.Data.Fcs.FcsRecord State(string id) => SyntheticTown.Rec(id, Data.Fcs.FcsRecordType.WorldEventState, id);
         Meitou.Data.Fcs.FcsRecord Town(string id, string name, string resident, Meitou.Data.Fcs.FcsReference[] states, params Meitou.Data.Fcs.FcsReference[] overrides)
         {
-            var t = SyntheticTown.Rec(id, Meitou.Data.Fcs.FcsRecordType.TOWN, name);
+            var t = SyntheticTown.Rec(id, Data.Fcs.FcsRecordType.Town, name);
             t.Ints["type"] = 2;
             t.Floats["size radius"] = 300;
             t.Bools["residents override"] = true;
-            t.References["residents"] = [R(resident, 1, 0)];
+            t.References["residents"] = [r(resident, 1, 0)];
             t.References["world state"] = [.. states];
             if (overrides.Length > 0) t.References["override town"] = [.. overrides];
             return t;
         }
-        var others = SyntheticTown.Rec("21-t", Meitou.Data.Fcs.FcsRecordType.FACTION, "Others");
-        var a = Town("50-t", "A (override)", "10-t", [R("91-t", 1)]);
-        var b = Town("51-t", "B (override)", "12-t", [R("91-t", 1), R("92-t", 1)], R("51-t"), R("50-t"));   // lists itself: never picked again
-        b.References["faction"] = [R("21-t")];
-        var c = Town("52-t", "C (override)", "10-t", [R("91-t", 1), R("93-t", 1)]);   // heavy, but 93 does not hold
-        var d = Town("53-t", "D (override)", "10-t", [R("92-t", 1), R("91-t", 1)]);   // as heavy as B, later in the list
+        var others = SyntheticTown.Rec("21-t", Data.Fcs.FcsRecordType.Faction, "Others");
+        var a = Town("50-t", "A (override)", "10-t", [r("91-t", 1)]);
+        var b = Town("51-t", "B (override)", "12-t", [r("91-t", 1), r("92-t", 1)], r("51-t"), r("50-t"));   // lists itself: never picked again
+        b.References["faction"] = [r("21-t")];
+        var c = Town("52-t", "C (override)", "10-t", [r("91-t", 1), r("93-t", 1)]);   // heavy, but 93 does not hold
+        var d = Town("53-t", "D (override)", "10-t", [r("92-t", 1), r("91-t", 1)]);   // as heavy as B, later in the list
         var e = Town("54-t", "E (override)", "10-t", []);                              // no conditions: never
         return SyntheticTown.Database(items: items, extra: [others, State("91-t"), State("92-t"), State("93-t"), a, b, c, d, e, .. extra ?? []],
-            changeTown: t => t.References["override town"] = [R("54-t"), R("50-t"), R("52-t"), R("51-t"), R("53-t")]);
+            changeTown: t => t.References["override town"] = [r("54-t"), r("50-t"), r("52-t"), r("51-t"), r("53-t")]);
     }
 
     /// <summary><paramref name="made"/> answering world states from <paramref name="states"/>, its looks from <paramref name="looks"/>.</summary>

@@ -15,13 +15,13 @@ public sealed record SeatSpot(string Id, string Building, string Record, Vector3
 
 public sealed partial class FixtureRegistry
 {
-    readonly Dictionary<string, SeatSpot> seatSpots = new(StringComparer.Ordinal);
-    IReadOnlyList<SeatSpot>? publishedSeats;
-    public IReadOnlyList<SeatSpot> SeatSpots => publishedSeats ??= [.. seatSpots.Values];
-    public SeatSpot? FindSeat(string id) => seatSpots.GetValueOrDefault(id);
+    readonly Dictionary<string, SeatSpot> _seatSpots = new(StringComparer.Ordinal);
+    IReadOnlyList<SeatSpot>? _publishedSeats;
+    public IReadOnlyList<SeatSpot> SeatSpots => _publishedSeats ??= [.. _seatSpots.Values];
+    public SeatSpot? FindSeat(string id) => _seatSpots.GetValueOrDefault(id);
 
     /// <summary>The original furniture a player-built seat in this town house can face: none once bought (<see cref="IsEmptied"/>).</summary>
-    public IReadOnlyList<Vector3> TablesOfBuilding(string building) => properties.TryGetValue(building, out var p) && !p.Purchased ? p.Building.Tables : [];
+    public IReadOnlyList<Vector3> TablesOfBuilding(string building) => _properties.TryGetValue(building, out var p) && !p.Purchased ? p.Building.Tables : [];
 
     void RegisterSeats(TownBuilding building, int owner)
     {
@@ -30,13 +30,13 @@ public sealed partial class FixtureRegistry
         {
             if (spot.Kind is not (HomeSpotKind.Chair or HomeSpotKind.ThroneSeat) || spot.Record is null) continue;
             string id = $"{building.Key}@seat{(index++).ToString(CultureInfo.InvariantCulture)}";
-            seatSpots[id] = new(id, building.Key, spot.Record, spot.Position, owner, spot.Yaw) { PlacementYaw = spot.PlacementYaw, FaithfulYaw = spot.FaithfulYaw };
+            _seatSpots[id] = new(id, building.Key, spot.Record, spot.Position, owner, spot.Yaw) { PlacementYaw = spot.PlacementYaw, FaithfulYaw = spot.FaithfulYaw };
         }
-        publishedSeats = null;
+        _publishedSeats = null;
     }
     void RemoveSeats(string building)
     {
-        foreach (var id in seatSpots.Values.Where(s => s.Building == building).Select(s => s.Id).ToArray()) seatSpots.Remove(id);
-        publishedSeats = null;
+        foreach (var id in _seatSpots.Values.Where(s => s.Building == building).Select(s => s.Id).ToArray()) _seatSpots.Remove(id);
+        _publishedSeats = null;
     }
 }

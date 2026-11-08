@@ -181,7 +181,7 @@ public sealed class MetalShaders : IGpuShaders
     }
 
     /// <summary>Whether a kind's entries have a sampler array in the MSL (every kind but the integer ones: their fetches never read one).</summary>
-    internal static bool HasSamplers(int kind) => kind != (int)BindlessKind.UTexture2D && kind != (int)BindlessKind.ITexture2D;
+    internal static bool HasSamplers(int kind) => kind != (int)BindlessKind.UintTexture2D && kind != (int)BindlessKind.IntTexture2D;
 
 
     /// <summary>

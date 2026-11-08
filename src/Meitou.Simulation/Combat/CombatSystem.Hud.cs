@@ -24,16 +24,16 @@ public sealed partial class CombatSystem
     {
         if (cold is not { Fighter: { } fighter, Stats: { } stats, Medical: not null }) return null;
         float str = Eff(cold, StatsEnumerated.Strength), dex = Eff(cold, StatsEnumerated.Dexterity) * fighter.DexterityMult, tough = stats.ScaledToughness;
-        var fists = DamageFormulas.Unarmed(UnarmedRating(world, slot, cold, fighter), tough, str, combat);
+        var fists = DamageFormulas.Unarmed(UnarmedRating(world, slot, cold, fighter), tough, str, _combat);
         float cut = fists.Cut, blunt = fists.Blunt;
         if (!fighter.Unarmed)
         {
             float skill = Eff(cold, fighter.WeaponSkill);
-            cut = DamageFormulas.Cut(skill, dex, fighter.Weapon!.Stats, combat);
-            blunt = DamageFormulas.Blunt(skill, str, fighter.Weapon.Stats, combat);
+            cut = DamageFormulas.Cut(skill, dex, fighter.Weapon!.Stats, _combat);
+            blunt = DamageFormulas.Blunt(skill, str, fighter.Weapon.Stats, _combat);
         }
-        return new HudCombat(Rate(world, slot, cold, true), Rate(world, slot, cold, false), cut, blunt, HudDamage(world, slot, cold), HitResolver.ToughnessResistance(tough, combat))
-            { Stagger = DamageFormulas.StumbleThreshold(tough, combat) };
+        return new HudCombat(Rate(world, slot, cold, true), Rate(world, slot, cold, false), cut, blunt, HudDamage(world, slot, cold), HitResolver.ToughnessResistance(tough, _combat))
+        { Stagger = DamageFormulas.StumbleThreshold(tough, _combat) };
     }
 
     /// <summary>
@@ -46,7 +46,7 @@ public sealed partial class CombatSystem
         if (melee && MeleeCombatMode(id, cold)) return true;
         if (!ranged || !RangedCombatMode(cold)) return false;
         int target = -1, generation = 0;
-        if (cold.Gunning is { } key) { if (turrets.TryGetValue(key, out var t)) (target, generation) = (t.Target, t.TargetGeneration); }
+        if (cold.Gunning is { } key) { if (_turrets.TryGetValue(key, out var t)) (target, generation) = (t.Target, t.TargetGeneration); }
         else if (StateOf(id) is { TargetSlot: >= 0 } s) (target, generation) = (s.TargetSlot, s.TargetGeneration);
         return target >= 0 && table.TryResolveNext(new CharacterId(target, generation), out int slot) && table.Cold(slot) is { } tc
             && !CharacterFacts.Down(tc);

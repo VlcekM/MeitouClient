@@ -14,7 +14,7 @@ static class NavmeshTool
 {
     // --verbose: painters, seeds, interiors, door joins and path points are listed, and --near lists every field of the building records.
     // --near also lists the map features, carvers and solids reaching within the radius; --probe shows one point's column or a map of ground against the original.
-    static bool verbose;
+    static bool s_verbose;
 
     public static int Run(GameInstall install, string[] args)
     {
@@ -89,7 +89,7 @@ static class NavmeshTool
                 case "--name": surveyName = args[++i]; break;
                 case "--border": surveyBorder = true; break;
                 case "--section": { var p = args[++i].Split(','); section = new(float.Parse(p[0], CultureInfo.InvariantCulture), float.Parse(p[1], CultureInfo.InvariantCulture)); break; }
-                case "--verbose": verbose = true; break;
+                case "--verbose": s_verbose = true; break;
                 case "--interior": interiorKey = args[++i]; break;
                 case "--climb": settings = settings with { MaxClimb = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
                 case "--cell": settings = settings with { CellSize = float.Parse(args[++i], CultureInfo.InvariantCulture) }; break;
@@ -145,14 +145,14 @@ static class NavmeshTool
             return 0;
         }
         var g = gatherer.Gather(zone.Value);
-        if (verbose) for (int i = 1; i <= 3; i++) { var sw2 = Stopwatch.StartNew(); gatherer.Gather(new ZoneCoordinate(zone.Value.X + i, zone.Value.Y)); Console.WriteLine($"  warm gather {sw2.ElapsedMilliseconds} ms (terrain {gatherer.Phases.Terrain:0}, buildings {gatherer.Phases.Buildings:0}, foliage {gatherer.Phases.Foliage:0})"); }
+        if (s_verbose) for (int i = 1; i <= 3; i++) { var sw2 = Stopwatch.StartNew(); gatherer.Gather(new ZoneCoordinate(zone.Value.X + i, zone.Value.Y)); Console.WriteLine($"  warm gather {sw2.ElapsedMilliseconds} ms (terrain {gatherer.Phases.Terrain:0}, buildings {gatherer.Phases.Buildings:0}, foliage {gatherer.Phases.Foliage:0})"); }
         var s = g.Stats;
         Console.WriteLine($"gathered zone {zone} in {watch.ElapsedMilliseconds} ms (terrain {gatherer.Phases.Terrain:0}, buildings {gatherer.Phases.Buildings:0}, foliage {gatherer.Phases.Foliage:0}): {g.TriangleCount} triangles ({s.TerrainTriangles} terrain + {s.WaterTriangles} water, " +
             $"{s.WalkableTriangles} walkable and {s.CuttingTriangles} cutting object triangles), {s.Buildings} buildings, {s.PartsWithCollision} parts with collision, {s.Shapes} shapes, " +
             $"{s.FoliageInstances} foliage objects ({s.FoliageShapes} shapes, {s.FoliageMeshes} of them triangle meshes, {s.FoliageCutters} cutters), {s.MapFeatures} map features, {g.Carvers.Count} carvers, {g.Painters.Count} door painters, {g.Seeds.Count} seeds ({s.SeedsDropped} dropped by the ray rule, {s.WallSeeds} wall, {s.DoorSeeds} door), " +
             $"{s.MissingFiles} missing files, building hash {g.BuildingHash:x8}");
 
-        if (verbose) { foreach (var p in g.Painters) Console.WriteLine($"  painter x {p.Polygon.Min(v => v.X):0}..{p.Polygon.Max(v => v.X):0} z {p.Polygon.Min(v => v.Y):0}..{p.Polygon.Max(v => v.Y):0} y {p.YMin:0}..{p.YMax:0}"); foreach (var sd in g.Seeds) Console.WriteLine($"  seed {sd.X:0},{sd.Y:0},{sd.Z:0}"); }
+        if (s_verbose) { foreach (var p in g.Painters) Console.WriteLine($"  painter x {p.Polygon.Min(v => v.X):0}..{p.Polygon.Max(v => v.X):0} z {p.Polygon.Min(v => v.Y):0}..{p.Polygon.Max(v => v.Y):0} y {p.YMin:0}..{p.YMax:0}"); foreach (var sd in g.Seeds) Console.WriteLine($"  seed {sd.X:0},{sd.Y:0},{sd.Z:0}"); }
         if (near is not null)
         {
             foreach (var line in DescribeNear(gatherer, db, collision, zone.Value, near[0], near[1], near[2])) Console.WriteLine("  " + line);
@@ -180,13 +180,13 @@ static class NavmeshTool
                 ZoneNavMesh? mesh = null;
                 for (int i = 0; i < (dx == 0 && dz == 0 ? repeat : 1); i++)
                 {
-                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, settings, out var t, out var inner, interiors: !noInteriors, log: verbose ? line => Console.WriteLine(line) : null); interiorMeshes.AddRange(inner.Select(i => i.Mesh));
+                    mesh = NavMeshPipeline.BuildZone(gatherer, geometry, settings, out var t, out var inner, interiors: !noInteriors, log: s_verbose ? line => Console.WriteLine(line) : null); interiorMeshes.AddRange(inner.Select(i => i.Mesh));
                     Console.WriteLine($"built {c}: {t.TileCount} tiles in {t.Tiles:0} ms, stitch {t.Stitch:0} ms, prune {t.Prune:0} ms, interiors {t.Interiors:0} ms ({t.InteriorCount}), total {t.Total:0} ms; {t.Polygons} polygons ({t.KeptPolygons} kept), {t.Vertices} vertices");
                     if (dx == 0 && dz == 0)
                         Console.WriteLine($"  cpu ms summed over tiles: raster {t.CpuRaster:0}, compact+areas {t.CpuCompact:0}, regions {t.CpuRegions:0}, contours {t.CpuContours:0}, polygons {t.CpuMesh:0}, detail {t.CpuDetail:0}");
                 }
                 built.Add((geometry, mesh!));
-                if (dx == 0 && dz == 0 && verbose) foreach (var p in g.Painters) { int n = 0; for (int q = 0; q < mesh!.PolygonCount; q++) { if (mesh.Areas[q] != NavArea.Door) continue; var vv = mesh.Vertices[mesh.Polygons[q][0]]; if (vv.X >= p.Polygon.Min(a => a.X) - 4 && vv.X <= p.Polygon.Max(a => a.X) + 4 && vv.Z >= p.Polygon.Min(a => a.Y) - 4 && vv.Z <= p.Polygon.Max(a => a.Y) + 4) n++; } Console.WriteLine($"  door polygons near painter {p.Polygon.Min(a => a.X):0},{p.Polygon.Min(a => a.Y):0}: {n}"); }
+                if (dx == 0 && dz == 0 && s_verbose) foreach (var p in g.Painters) { int n = 0; for (int q = 0; q < mesh!.PolygonCount; q++) { if (mesh.Areas[q] != NavArea.Door) continue; var vv = mesh.Vertices[mesh.Polygons[q][0]]; if (vv.X >= p.Polygon.Min(a => a.X) - 4 && vv.X <= p.Polygon.Max(a => a.X) + 4 && vv.Z >= p.Polygon.Min(a => a.Y) - 4 && vv.Z <= p.Polygon.Max(a => a.Y) + 4) n++; } Console.WriteLine($"  door polygons near painter {p.Polygon.Min(a => a.X):0},{p.Polygon.Min(a => a.Y):0}: {n}"); }
                 full[c] = mesh!;
             }
         // The kept regions are resolved over the built zones as the game does for the loaded ones (NavMeshService): own seeds, the border rule toward
@@ -230,7 +230,7 @@ static class NavmeshTool
                     }
                     Console.WriteLine($"  {seen.Count} polygons reachable from the start without clearance; goal reachable: {okGoal && seen.ContainsKey(gref.Key)}");
                     // --verbose: the chain of polygon centres the clearance-free search took to the goal.
-                    if (verbose && okGoal && seen.ContainsKey(gref.Key))
+                    if (s_verbose && okGoal && seen.ContainsKey(gref.Key))
                         for (NavRef? c = gref; c is { } r; c = seen[r.Key])
                         {
                             var cc = world.Mesh(r.Zone).Centre(r.Polygon);
@@ -241,7 +241,7 @@ static class NavmeshTool
             else
             {
                 path = [.. result.Points];
-                if (verbose) foreach (var pt in path) Console.WriteLine($"  {pt.X:0},{pt.Y:0},{pt.Z:0}");
+                if (s_verbose) foreach (var pt in path) Console.WriteLine($"  {pt.X:0},{pt.Y:0},{pt.Z:0}");
                 float length = 0;
                 for (int i = 1; i < path.Count; i++) length += Vector3.Distance(path[i - 1], path[i]);
                 Console.WriteLine($"path {from.X:0},{from.Z:0} -> {to.X:0},{to.Z:0}: {path.Count} points, length {length:0} (straight {Vector3.Distance(from, to):0}), {sw.Elapsed.TotalMilliseconds:0.0} ms");
@@ -332,7 +332,7 @@ static class NavmeshTool
                 }
             }
             Console.WriteLine($"route with {name}: {points.Count} points, length {length:0}, {inside} of {samples} samples (every 16) inside a feature footprint");
-            if (verbose) foreach (var q in points) Console.WriteLine($"  {q.X:0},{q.Y:0},{q.Z:0}");
+            if (s_verbose) foreach (var q in points) Console.WriteLine($"  {q.X:0},{q.Y:0},{q.Z:0}");
         }
         return 0;
     }
@@ -591,9 +591,9 @@ static class NavmeshTool
             if (Vector2.Distance(new(position.X, position.Z), new(x, z)) > radius) continue;
             var parts = WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed) { WithInterior = !destroyed });
             int withCollision = parts.Count(p => p.Source.GetPath("xml collision").Length > 0 && collision.Get(p.Source.GetPath("xml collision")) is not null);
-            if (verbose) yield return "    fields " + string.Join(", ", record.Ints.Select(kv => $"{kv.Key}={kv.Value}").Concat(record.Floats.Select(kv => $"{kv.Key}={kv.Value}")).Concat(record.Bools.Where(kv => kv.Value).Select(kv => kv.Key)));
+            if (s_verbose) yield return "    fields " + string.Join(", ", record.Ints.Select(kv => $"{kv.Key}={kv.Value}").Concat(record.Floats.Select(kv => $"{kv.Key}={kv.Value}")).Concat(record.Bools.Where(kv => kv.Value).Select(kv => kv.Key)));
             yield return $"{record.Name} [{record.StringId}] key {b.Key} at {position.X:0},{position.Y:0},{position.Z:0} rotation {b.Rotation.X:0.###},{b.Rotation.Y:0.###},{b.Rotation.Z:0.###},{b.Rotation.W:0.###} mode {record.GetInt("path mode", (int)PathMode.Obstacle)} gateway {record.GetBool("is gateway")} parts {parts.Count} with collision {withCollision} interior masks {record.GetReferences("interior mask").Count()} destroyed {destroyed}";
-            if (verbose)
+            if (s_verbose)
                 foreach (var p in parts)
                     yield return $"    part {p.Source.Name} [{p.Source.StringId}] floor {p.Source.GetInt("building floor")}{(p.Source.GetBool("is stairs") ? " stairs" : "")}{(p.Source.GetBool("passable") ? " passable" : "")}{(p.Source.GetBool("is unwalkable roof") ? " unwalkable-roof" : "")} mesh {p.MeshPath} collision {p.Source.GetPath("xml collision")} at {p.Transform.Translation.X:0},{p.Transform.Translation.Y:0},{p.Transform.Translation.Z:0}";
         }
@@ -842,7 +842,7 @@ static class NavmeshTool
                         if (ours.Count > theirs.Count && ours.Min() < ours.Max() - ExtraLayer)
                         {
                             extra++;
-                            if (verbose && extra % 100 == 1) Console.WriteLine($"  extra layer at {x:0},{z:0}: ours {string.Join("/", ours.Select(y => y.ToString("0")))}, original {string.Join("/", theirs.Select(y => y.ToString("0")))}, terrain {gatherer.TerrainHeight(x, z):0}");
+                            if (s_verbose && extra % 100 == 1) Console.WriteLine($"  extra layer at {x:0},{z:0}: ours {string.Join("/", ours.Select(y => y.ToString("0")))}, original {string.Join("/", theirs.Select(y => y.ToString("0")))}, terrain {gatherer.TerrainHeight(x, z):0}");
                         }
                     }
                     else if (ours.Count > 0)
@@ -893,7 +893,7 @@ static class NavmeshTool
             // Each of our interiors' hull, to name the building an original group lies in (the one holding most of its face centres).
             var sites = InteriorJoinSweep.Sites(gatherer, zone, settings);
             var coverage = OriginalNavTiles.CoverInteriors(groups, mesh, g.ZoneMin, g.ZoneMax);
-            if (verbose) FurnitureOverOriginal(gatherer, zone, groups, settings);
+            if (s_verbose) FurnitureOverOriginal(gatherer, zone, groups, settings);
             int faces = coverage.Sum(c => c.Faces), covered = coverage.Sum(c => c.Covered);
             Console.WriteLine($"{zone}: {groups.Count} interior groups, {covered}/{faces} faces covered ({(faces > 0 ? 100.0 * covered / faces : 100):0.0} %)");
             PrintJoins(InteriorJoinSweep.Compare(gatherer, zone, groups, sites, InteriorJoinSweep.Reached(zone, full, inner, settings, resolved), settings));
@@ -949,7 +949,7 @@ static class NavmeshTool
             int band = Array.FindIndex(bands, b => c.Y - floor < b);
             bool isPruned = OriginalNavTiles.Covers(all, c, heights);
             (isPruned ? pruned : absent)[band]++;
-            if (!verbose) continue;
+            if (!s_verbose) continue;
             heights.Clear();
             all.HeightsAt(c.X, c.Z, heights);
             int nearest = kept.Nearest(c.X, c.Y, c.Z, 50, out float d);
@@ -999,19 +999,19 @@ static class NavmeshTool
     sealed class OriginalIndex
     {
         const float Cell = 64;
-        readonly OriginalNavMesh mesh;
-        readonly Dictionary<(int, int), List<int>> cells = [];
+        readonly OriginalNavMesh _mesh;
+        readonly Dictionary<(int, int), List<int>> _cells = [];
 
         public OriginalIndex(OriginalNavMesh mesh)
         {
-            this.mesh = mesh;
+            this._mesh = mesh;
             for (int p = 0; p < mesh.Polygons.Length; p++)
             {
                 var v = mesh.Polygons[p].Select(i => mesh.Vertices[i]).ToArray();
                 for (int cx = (int)MathF.Floor(v.Min(a => a.X) / Cell); cx <= (int)MathF.Floor(v.Max(a => a.X) / Cell); cx++)
                     for (int cz = (int)MathF.Floor(v.Min(a => a.Z) / Cell); cz <= (int)MathF.Floor(v.Max(a => a.Z) / Cell); cz++)
                     {
-                        if (!cells.TryGetValue((cx, cz), out var list)) cells[(cx, cz)] = list = [];
+                        if (!_cells.TryGetValue((cx, cz), out var list)) _cells[(cx, cz)] = list = [];
                         list.Add(p);
                     }
             }
@@ -1021,15 +1021,15 @@ static class NavmeshTool
         public void HeightsAt(float x, float z, List<float> heights)
         {
             heights.Clear();
-            if (!cells.TryGetValue(((int)MathF.Floor(x / Cell), (int)MathF.Floor(z / Cell)), out var list)) return;
+            if (!_cells.TryGetValue(((int)MathF.Floor(x / Cell), (int)MathF.Floor(z / Cell)), out var list)) return;
             foreach (int p in list)
             {
-                var poly = mesh.Polygons[p];
-                var a = mesh.Vertices[poly[0]];
+                var poly = _mesh.Polygons[p];
+                var a = _mesh.Vertices[poly[0]];
                 for (int k = 1; k + 1 < poly.Length; k++)
                 {
-                    var b = mesh.Vertices[poly[k]];
-                    var c = mesh.Vertices[poly[k + 1]];
+                    var b = _mesh.Vertices[poly[k]];
+                    var c = _mesh.Vertices[poly[k + 1]];
                     if (NavGeometry.Barycentric(x, z, a, b, c, out float u, out float v, out float w) && u >= -1e-4f && v >= -1e-4f && w >= -1e-4f)
                     {
                         heights.Add(u * a.Y + v * b.Y + w * c.Y);

@@ -53,12 +53,12 @@ public sealed partial class DialogueSystem
     sealed record CharacterTrade(long Id, CharacterTradeKind Kind, CharacterId Slaver, CharacterId Player, IReadOnlyList<CharacterTradeRow> Rows);
 
     // The window to open when the conversation ends (val0 the price override), the open one and its view.
-    (CharacterTradeKind Kind, CharacterId Slaver, CharacterId Player, int Price)? characterTradeAfter;
-    CharacterTrade? characterTrade;
-    CharacterTradeView? characterTradeView;
-    long characterTradeId;
+    (CharacterTradeKind Kind, CharacterId Slaver, CharacterId Player, int Price)? _characterTradeAfter;
+    CharacterTrade? _characterTrade;
+    CharacterTradeView? _characterTradeView;
+    long _characterTradeId;
 
-    public CharacterTradeView? PublishCharacterTrade() => characterTradeView;
+    public CharacterTradeView? PublishCharacterTrade() => _characterTradeView;
 
     /// <summary>
     /// A slave's base price (<c>FUN_1406751f0</c>, economy.md section 12): clamp(trunc(strength x k + melee attack + dexterity x k) x RACE <c>buy value</c>, 1000, 20000), k the
@@ -88,8 +88,8 @@ public sealed partial class DialogueSystem
     /// </summary>
     void OpenCharacterTrade(World world)
     {
-        if (characterTradeAfter is not { } t) return;
-        characterTradeAfter = null;
+        if (_characterTradeAfter is not { } t) return;
+        _characterTradeAfter = null;
         var table = world.Characters;
         if (!table.TryResolveNext(t.Slaver, out int s) || !table.TryResolveNext(t.Player, out int p) || table.Cold(s) is not { } sc || table.Cold(p) is not { IsPlayer: true } pc) return;
         var rows = new List<CharacterTradeRow>();
@@ -115,7 +115,7 @@ public sealed partial class DialogueSystem
                     StatLines(c, StatsEnumerated.Labouring, StatsEnumerated.Farming, StatsEnumerated.Cooking, StatsEnumerated.Engineering, StatsEnumerated.Medic)));
             }
         }
-        characterTrade = new(++characterTradeId, t.Kind, t.Slaver, t.Player, rows);
+        _characterTrade = new(++_characterTradeId, t.Kind, t.Slaver, t.Player, rows);
     }
 
     /// <summary>
@@ -168,7 +168,9 @@ public sealed partial class DialogueSystem
 
     static string StatName(StatsEnumerated s) => s switch
     {
-        StatsEnumerated.MeleeAttack => "Melee Attack", StatsEnumerated.MeleeDefence => "Melee Defence", _ => s.ToString(),
+        StatsEnumerated.MeleeAttack => "Melee Attack",
+        StatsEnumerated.MeleeDefence => "Melee Defence",
+        _ => s.ToString(),
     };
 
     /// <summary>The buyer's money the window shows and gates the confirm by: the slaver's squad purse when selling (its shop's money for a trader), the player's when buying.</summary>
@@ -179,17 +181,17 @@ public sealed partial class DialogueSystem
     /// <summary>Closes the window when the slaver or the customer is no longer awake (engine choice).</summary>
     void KeepCharacterTrade(World world)
     {
-        if (characterTrade is not { } t) return;
+        if (_characterTrade is not { } t) return;
         var table = world.Characters;
-        if (!table.TryResolveNext(t.Slaver, out int s) || !table.TryResolveNext(t.Player, out int p) || !Awake(table, s) || !Awake(table, p)) characterTrade = null;
+        if (!table.TryResolveNext(t.Slaver, out int s) || !table.TryResolveNext(t.Player, out int p) || !Awake(table, s) || !Awake(table, p)) _characterTrade = null;
     }
 
     void RefreshCharacterTrade(World world)
     {
-        if (characterTrade is not { } t) { characterTradeView = null; return; }
+        if (_characterTrade is not { } t) { _characterTradeView = null; return; }
         bool buying = t.Kind != CharacterTradeKind.SlaveSelling;
         string title = t.Kind switch { CharacterTradeKind.SlaveBuying => "Buying Slaves", CharacterTradeKind.AnimalBuying => "Buying Animals", _ => "Selling Slaves" };
-        characterTradeView = new(t.Id, t.Kind, t.Slaver, t.Player, Loc.Tr(title), Loc.Tr(buying ? "Buy" : "Sell"), BuyerMoney(world, t), t.Rows);
+        _characterTradeView = new(t.Id, t.Kind, t.Slaver, t.Player, Loc.Tr(title), Loc.Tr(buying ? "Buy" : "Sell"), BuyerMoney(world, t), t.Rows);
     }
 
     /// <summary>
@@ -198,9 +200,9 @@ public sealed partial class DialogueSystem
     /// </summary>
     void ConfirmTrade(World world, IReadOnlyList<CharacterId> selected)
     {
-        if (characterTrade is not { } t) return;
+        if (_characterTrade is not { } t) return;
         long buyerMoney = BuyerMoney(world, t);
-        characterTrade = null;
+        _characterTrade = null;
         var table = world.Characters;
         if (!table.TryResolveNext(t.Slaver, out int s) || table.Cold(s) is not { } sc) return;
         var chosen = new List<(int Slot, CharacterCold Cold, long Price)>();
@@ -263,7 +265,7 @@ public sealed partial class DialogueSystem
         var away = new Vector2(from.X - to.X, from.Z - to.Z);
         float gap = away.Length();
         var target = new Vector2(to.X, to.Z) + (gap > 1e-3f ? away / gap * Math.Min(GetOutReach, gap) : Vector2.Zero);
-        TaskStart.Walk(world, slot, target, SpeedMode.Walk, Meitou.Data.Gameplay.Ai.TaskType.MOVE_ON_FREE_WILL, TaskSource.Npc);
+        TaskStart.Walk(world, slot, target, SpeedMode.Walk, Data.Gameplay.Ai.TaskType.MoveOnFreeWill, TaskSource.Npc);
     }
 
     /// <summary>
@@ -276,10 +278,10 @@ public sealed partial class DialogueSystem
     void BuyAnimals(World world, CharacterTrade t, int seller, List<(int Slot, CharacterCold Cold, long Price)> chosen, long total)
     {
         var table = world.Characters;
-        int free = data.Bodies.Constants.MaxFactionSize - PlayerHeads(world);
+        int free = _data.Bodies.Constants.MaxFactionSize - PlayerHeads(world);
         if (chosen.Count > free)
         {
-            characterTrade = t;   // the original returns before closing
+            _characterTrade = t;   // the original returns before closing
             world.Post(free <= 0 ? Loc.Tr("You cannot hire any more characters")
                 : free == 1 ? Loc.Tr("You can only hire {1} more character", free) : Loc.Tr("You can only hire {1} more characters", free));
             return;
@@ -308,7 +310,7 @@ public sealed partial class DialogueSystem
     void OpenAnimalEditor(CharacterTrade t, List<CharacterId> bought)
     {
         if (bought.Count == 0) return;
-        request = new DialogueRequest(++requestId, DialogueRequestKind.AnimalEditor, bought[0], t.Slaver) { Characters = bought };
+        _request = new DialogueRequest(++_requestId, DialogueRequestKind.AnimalEditor, bought[0], t.Slaver) { Characters = bought };
     }
 
     /// <summary>Puts an item from a bought animal's bag into the first backpack of <paramref name="squad"/>'s members, from the last member back, that takes it; none: it is gone.</summary>
@@ -334,14 +336,14 @@ public sealed partial class DialogueSystem
         ChangeTowardPlayer(world, c.Faction, -4);
     }
 
-    CharacterAssembly? chainAssembly;
+    CharacterAssembly? _chainAssembly;
 
     /// <summary>Chains a character (<see cref="CharacterAssembly.Chain"/>).</summary>
-    void Chain(CharacterCold c) => (chainAssembly ??= new CharacterAssembly(data)).Chain(c);
+    void Chain(CharacterCold c) => (_chainAssembly ??= new CharacterAssembly(_data)).Chain(c);
 
     void ChangeTowardPlayer(World world, int faction, int amount)
     {
-        if (world.Player.Faction < 0 || faction == world.Player.Faction || !data.Relations.Contains(faction)) return;
+        if (world.Player.Faction < 0 || faction == world.Player.Faction || !_data.Relations.Contains(faction)) return;
         ChangeRelation(world, faction, world.Player.Faction, amount);
     }
 
@@ -354,10 +356,10 @@ public sealed partial class DialogueSystem
         Leave(world, id, c);
         Squad squad;
         if (world.Player.Faction >= 0 && c.Faction == world.Player.Faction)
-            squad = SquadManagement.NewSquad(world, data.Db, at, data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
+            squad = SquadManagement.NewSquad(world, _data.Db, at, _data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
         else
         {
-            var template = data.Db.Find(SquadManagement.DismissTemplate);
+            var template = _data.Db.Find(SquadManagement.DismissTemplate);
             squad = new Squad
             {
                 Id = world.Squads.NextId(),

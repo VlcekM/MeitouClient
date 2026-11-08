@@ -22,24 +22,24 @@ internal sealed class CrowdHarness
     const string Idle = "idle_stand_relax";
     static readonly string[] Walk = ["walk lower", "walk upper"];
 
-    readonly CharacterAppearance[] appearances;
-    readonly CharacterPose[][] poses;
-    readonly Vector3[] positions;
-    readonly float[] yaws, phases;
-    readonly Func<float> time;
+    readonly CharacterAppearance[] _appearances;
+    readonly CharacterPose[][] _poses;
+    readonly Vector3[] _positions;
+    readonly float[] _yaws, _phases;
+    readonly Func<float> _time;
 
     CrowdHarness(CharacterAppearance[] appearances, Vector3[] positions, float[] yaws, float[] phases, CharacterPose[][] poses, Func<float> time)
-        => (this.appearances, this.positions, this.yaws, this.phases, this.poses, this.time) = (appearances, positions, yaws, phases, poses, time);
+        => (this._appearances, this._positions, this._yaws, this._phases, this._poses, this._time) = (appearances, positions, yaws, phases, poses, time);
 
     /// <summary>Fills <paramref name="list"/> for this frame.</summary>
     public void Fill(CharacterDrawList list)
     {
-        float t = time();
-        for (int i = 0; i < appearances.Length; i++)
+        float t = _time();
+        for (int i = 0; i < _appearances.Length; i++)
         {
-            var p = poses[i];
-            for (int k = 0; k < p.Length; k++) p[k] = p[k] with { Time = t + phases[i] };
-            list.Add(new CharacterInstance(i + 1, appearances[i], positions[i], yaws[i], p));
+            var p = _poses[i];
+            for (int k = 0; k < p.Length; k++) p[k] = p[k] with { Time = t + _phases[i] };
+            list.Add(new CharacterInstance(i + 1, _appearances[i], _positions[i], _yaws[i], p));
         }
     }
 
@@ -107,16 +107,16 @@ internal sealed class CrowdHarness
         var result = new List<(GameRecord, double)>();
         GameRecord? faction = null;
         IEnumerable<GameRecord> templates;
-        if (townName is not null && db.OfType(FcsRecordType.TOWN).Where(t => t.Name.Contains(townName, StringComparison.OrdinalIgnoreCase)).OrderBy(t => t.Name.Length).FirstOrDefault() is { } town)
+        if (townName is not null && db.OfType(FcsRecordType.Town).Where(t => t.Name.Contains(townName, StringComparison.OrdinalIgnoreCase)).OrderBy(t => t.Name.Length).FirstOrDefault() is { } town)
         {
             faction = town.GetReferences("faction").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(x => x is not null);
             templates = town.GetReferences("residents").Concat(town.GetReferences("bar squads")).Select(r => db.Find(r.TargetStringId))
-                .Where(t => t is { Type: FcsRecordType.SQUAD_TEMPLATE }).Select(t => t!);
+                .Where(t => t is { Type: FcsRecordType.SquadTemplate }).Select(t => t!);
         }
-        else templates = db.OfType(FcsRecordType.SQUAD_TEMPLATE);
+        else templates = db.OfType(FcsRecordType.SquadTemplate);
         foreach (var template in templates)
             foreach (var r in template.GetReferences("choosefrom list"))
-                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.CHARACTER } character)
+                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.Character } character)
                     result.Add((character, Math.Max(r.Values.Value0, 1)));
         return (result, faction);
     }

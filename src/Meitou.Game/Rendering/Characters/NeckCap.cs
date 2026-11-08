@@ -106,7 +106,13 @@ internal static class NeckCap
         if (indices.Count == 0) return null;
         return new ModelPart
         {
-            SubMeshIndex = 0, MaterialName = "neck cap", Vertices = [.. vertices], Indices = [.. indices], HasUv = true, HasTangents = true, Skinned = true,
+            SubMeshIndex = 0,
+            MaterialName = "neck cap",
+            Vertices = [.. vertices],
+            Indices = [.. indices],
+            HasUv = true,
+            HasTangents = true,
+            Skinned = true,
         };
     }
 

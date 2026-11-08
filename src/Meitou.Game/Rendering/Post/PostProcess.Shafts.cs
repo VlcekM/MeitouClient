@@ -1,12 +1,10 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Runtime.InteropServices;
-
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
-using Vk = Silk.NET.Vulkan;
-
 using Meitou.Game.Rendering.Sky;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
+using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Post;
 
@@ -79,7 +77,7 @@ public sealed unsafe partial class PostProcess
     /// </summary>
     public bool ShaftScan { get; set; } = true;
     /// <summary>Whether the device can write the atlases as storage images (the scan kernel can run).</summary>
-    public bool ShaftScanSupported => SupportsStorage(InternalFormat.R32f) && SupportsStorage(InternalFormat.Rgba16f);
+    public bool ShaftScanSupported => SupportsStorage(InternalFormat.R32F) && SupportsStorage(InternalFormat.Rgba16F);
 
     /// <summary>The scan kernel's uniform block (std140: every member takes a 16-byte slot).</summary>
     [StructLayout(LayoutKind.Sequential)]
@@ -88,8 +86,8 @@ public sealed unsafe partial class PostProcess
         public Vector4 Grid, Range, Eye, Right, Up, Back, Tan, Air, AtmoParams, AtmoSimple, AtmoHaze, AtmoAltitude, AtmoFog, AtmoSun, SunLight, AtmoMaps;
     }
 
-    GpuProgram? shaftScanProgram;
-    GpuComputePipeline? shaftScanPipeline;
+    GpuProgram? _shaftScanProgram;
+    GpuComputePipeline? _shaftScanPipeline;
 
     static T ReadGlobal<T>(FrameGlobals g, string name) where T : unmanaged
     {
@@ -101,56 +99,67 @@ public sealed unsafe partial class PostProcess
     /// <summary>Integrate and scatter in one dispatch: the light atlas and, with the air layer on, the scatter atlas, from the injected atlas.</summary>
     void ShaftScanRun(Vector4 grid, Vector4 range, float tanX, float tanY, Vector4 air, bool withAir)
     {
-        if (shaftScanProgram is null)
+        if (_shaftScanProgram is null)
         {
-            shaftScanProgram = Gpu.Shaders.Compute(LightShaftShaders.Scan, "post shafts scan");
-            shaftScanPipeline = Gpu.Pipelines.Get(new ComputePipelineDesc(shaftScanProgram!.Value, "post shafts scan"));
+            _shaftScanProgram = Gpu.Shaders.Compute(LightShaftShaders.Scan, "post shafts scan");
+            _shaftScanPipeline = Gpu.Pipelines.Get(new ComputePipelineDesc(_shaftScanProgram!.Value, "post shafts scan"));
         }
         var g = Gpu.Globals;
-        var r = viewRotation;
+        var r = _viewRotation;
         var sunLight = ReadGlobal<Vector3>(g, "uAtmoSunLight");
         var p = new ShaftScanParams
         {
-            Grid = grid, Range = range, Eye = new Vector4(eyeNow, 0), Right = new Vector4(r.M11, r.M21, r.M31, 0), Up = new Vector4(r.M12, r.M22, r.M32, 0),
-            Back = new Vector4(r.M13, r.M23, r.M33, 0), Tan = new Vector4(tanX, tanY, 0, 0), Air = withAir ? air : default,
-            AtmoParams = ReadGlobal<Vector4>(g, "uAtmoParams"), AtmoSimple = ReadGlobal<Vector4>(g, "uAtmoSimple"), AtmoHaze = ReadGlobal<Vector4>(g, "uAtmoHaze"),
-            AtmoAltitude = ReadGlobal<Vector4>(g, "uAtmoAltitude"), AtmoFog = ReadGlobal<Vector4>(g, "uAtmoFog"), AtmoSun = ReadGlobal<Vector4>(g, "uAtmoSun"),
-            SunLight = new Vector4(sunLight, ReadGlobal<Vector4>(g, "uAtmoLight").W), AtmoMaps = ReadGlobal<Vector4>(g, "uAtmoMaps"),
+            Grid = grid,
+            Range = range,
+            Eye = new Vector4(_eyeNow, 0),
+            Right = new Vector4(r.M11, r.M21, r.M31, 0),
+            Up = new Vector4(r.M12, r.M22, r.M32, 0),
+            Back = new Vector4(r.M13, r.M23, r.M33, 0),
+            Tan = new Vector4(tanX, tanY, 0, 0),
+            Air = withAir ? air : default,
+            AtmoParams = ReadGlobal<Vector4>(g, "uAtmoParams"),
+            AtmoSimple = ReadGlobal<Vector4>(g, "uAtmoSimple"),
+            AtmoHaze = ReadGlobal<Vector4>(g, "uAtmoHaze"),
+            AtmoAltitude = ReadGlobal<Vector4>(g, "uAtmoAltitude"),
+            AtmoFog = ReadGlobal<Vector4>(g, "uAtmoFog"),
+            AtmoSun = ReadGlobal<Vector4>(g, "uAtmoSun"),
+            SunLight = new Vector4(sunLight, ReadGlobal<Vector4>(g, "uAtmoLight").W),
+            AtmoMaps = ReadGlobal<Vector4>(g, "uAtmoMaps"),
         };
         var data = Gpu.Frame.Constants.Write(new ReadOnlySpan<ShaftScanParams>(in p), 256);
         var cube = g.Texture("uAtmoIrradiance")?.Invoke() ?? default;
         if (cube.IsNull) cube = Gpu.Dummy(FrameGlobals.Sampler2D("uAtmoIrradiance", cube: true));
         var cmd = Segment();
         var bindings = stackalloc GpuBinding[5];
-        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(Point(), shaftInjected!.Texture.View()));
-        bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, shaftLight!.Texture.View()));
-        bindings[2] = GpuBinding.StorageImage(2, new SampledTexture(default, shaftScatter!.Texture.View()));
+        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(Point(), _shaftInjected!.Texture.View()));
+        bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, _shaftLight!.Texture.View()));
+        bindings[2] = GpuBinding.StorageImage(2, new SampledTexture(default, _shaftScatter!.Texture.View()));
         bindings[3] = GpuBinding.Sampled(3, new SampledTexture(cube.Sampler, cube.View));
         bindings[4] = GpuBinding.Uniform(4, new GpuBufferBinding(data.Handle, data.Offset, (ulong)sizeof(ShaftScanParams)));
         cmd.Order();
-        cmd.BindPipeline(shaftScanPipeline!.Value);
-        cmd.BindProgramResources(shaftScanProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 5));
+        cmd.BindPipeline(_shaftScanPipeline!.Value);
+        cmd.BindProgramResources(_shaftScanProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 5));
         cmd.Dispatch((uint)(((int)grid.X + 7) / 8), (uint)(((int)grid.Y + 7) / 8));
         cmd.Order();
     }
     static readonly bool ShaftStamps = Environment.GetEnvironmentVariable("MEITOU_SHAFT_STAMPS") == "1";
-    ShaftInjectPass? shaftInject;
-    ShaftResolvePass? shaftResolve;
+    ShaftInjectPass? _shaftInject;
+    ShaftResolvePass? _shaftResolve;
     /// <summary>With a temporal upscaler: the injection's raw output and last frame's filtered atlas (<see cref="LightShaftShaders.Resolve"/>, into
-    /// <see cref="shaftInjected"/>, the two swapped each frame), and last frame's camera and slices.</summary>
-    Target2D? shaftRaw, shaftHistory;
-    bool shaftHistoryValid;
-    long shaftHistoryFrame = -10;
-    (Vector4 Range, Vector3 Eye, Vector3 Right, Vector3 Up, Vector3 Back, Vector2 Tan) shaftPrevious;
+    /// <see cref="_shaftInjected"/>, the two swapped each frame), and last frame's camera and slices.</summary>
+    Target2D? _shaftRaw, _shaftHistory;
+    bool _shaftHistoryValid;
+    long _shaftHistoryFrame = -10;
+    (Vector4 Range, Vector3 Eye, Vector3 Right, Vector3 Up, Vector3 Back, Vector2 Tan) _shaftPrevious;
     /// <summary>The share of this frame's sun share in the filtered one (0.1: about ten frames of jitter averaged).</summary>
     public const float ShaftTemporalBlend = 0.1f;
-    ShaftIntegratePass? shaftIntegrate;
-    ShaftScatterPass? shaftScatterPass;
-    ShaftApplyPass? shaftApply;
-    Target2D? shaftInjected, shaftLight, shaftScatter;
+    ShaftIntegratePass? _shaftIntegrate;
+    ShaftScatterPass? _shaftScatterPass;
+    ShaftApplyPass? _shaftApply;
+    Target2D? _shaftInjected, _shaftLight, _shaftScatter;
 
     /// <summary>This frame's grid for the fog volumes pass (<see cref="LightShaftShaders.FogVolumeShadow"/>): its uniforms and the darkening (0: no shafts this frame).</summary>
-    (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) shaftFrame;
+    (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) _shaftFrame;
 
     /// <summary>What the light shafts did in the last frame (the stats line).</summary>
     public string ShaftsDescribe { get; private set; } = "off";
@@ -159,7 +168,7 @@ public sealed unsafe partial class PostProcess
     (int Across, int Down, int Slices, int AtlasWidth, int AtlasHeight) ShaftLayout()
     {
         int across = Math.Clamp(Options.ShaftCells, 8, 1024), slices = Math.Clamp(Options.ShaftSlices, 8, 256);
-        int down = Math.Max(1, (int)MathF.Round(across * height / (float)Math.Max(width, 1)));
+        int down = Math.Max(1, (int)MathF.Round(across * _height / (float)Math.Max(_width, 1)));
         int columns = LightShaftShaders.AtlasColumns, rows = (slices + columns - 1) / columns;
         return (across, down, slices, across * columns, down * rows);
     }
@@ -172,26 +181,26 @@ public sealed unsafe partial class PostProcess
     public void RunLightShafts(float darkening, float far, float groundY, float airByTime = 1)
     {
         var o = Options;
-        shaftFrame.Darkening = 0;
+        _shaftFrame.Darkening = 0;
         ShaftsDescribe = !o.LightShafts ? "off" : $"darkening {darkening:0.###} (none: no passes)";
-        if (!o.LightShafts || darkening <= 0 || sceneColour is null || !haveScene) return;
+        if (!o.LightShafts || darkening <= 0 || _sceneColour is null || !_haveScene) return;
         var (across, down, slices, aw, ah) = ShaftLayout();
         ShaftsDescribe = $"darkening {darkening:0.###}, grid {across} x {down} x {slices} ({Options.ShaftSamples} samples), {PostOptions.ShaftNear:0} to {far:0} units, air {(o.ShaftAir > 0 ? $"x{o.ShaftAir:0.##} x{airByTime:0.##} by the hour from {groundY:0} (scale height {PostOptions.ShaftAirHeight:0}, g {PostOptions.ShaftAirPhase:0.##})" : "off")}";
-        if (shaftInjected is null || shaftInjected.Width != aw || shaftInjected.Height != ah)
+        if (_shaftInjected is null || _shaftInjected.Width != aw || _shaftInjected.Height != ah)
         {
-            foreach (var t in new[] { shaftInjected, shaftLight, shaftScatter, shaftRaw, shaftHistory }.OfType<Target2D>()) t.Texture.Dispose();   // released after the frames in flight
-            shaftRaw = shaftHistory = null;
-            shaftHistoryValid = false;
+            foreach (var t in new[] { _shaftInjected, _shaftLight, _shaftScatter, _shaftRaw, _shaftHistory }.OfType<Target2D>()) t.Texture.Dispose();   // released after the frames in flight
+            _shaftRaw = _shaftHistory = null;
+            _shaftHistoryValid = false;
             using var batch = Gpu.Uploads.Begin();
             // Linear: the fog volumes pass reads the sun's share (blue) between cells.
-            shaftInjected = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post shafts injected");
-            shaftLight = Make(batch, aw, ah, InternalFormat.R32f, TextureMinFilter.Linear, "post shafts light");
-            shaftScatter = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post shafts scatter");
+            _shaftInjected = Make(batch, aw, ah, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post shafts injected");
+            _shaftLight = Make(batch, aw, ah, InternalFormat.R32F, TextureMinFilter.Linear, "post shafts light");
+            _shaftScatter = Make(batch, aw, ah, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post shafts scatter");
         }
-        shaftInject ??= new ShaftInjectPass(Gpu);
-        shaftIntegrate ??= new ShaftIntegratePass(Gpu);
-        shaftApply ??= new ShaftApplyPass(Gpu);
-        shaftScatterPass ??= new ShaftScatterPass(Gpu);
+        _shaftInject ??= new ShaftInjectPass(Gpu);
+        _shaftIntegrate ??= new ShaftIntegratePass(Gpu);
+        _shaftApply ??= new ShaftApplyPass(Gpu);
+        _shaftScatterPass ??= new ShaftScatterPass(Gpu);
         // The air layer: density at the ground under the eye, its scale height, the phase's anisotropy (0 density: no layer, no pass).
         var air = new Vector4(MathF.Max(o.ShaftAir, 0) * MathF.Max(airByTime, 0) * PostOptions.ShaftAirDensity, groundY, MathF.Max(PostOptions.ShaftAirHeight, 1), Math.Clamp(PostOptions.ShaftAirPhase, 0, 0.95f));
 
@@ -199,41 +208,41 @@ public sealed unsafe partial class PostProcess
         var grid = new Vector4(across, down, slices, LightShaftShaders.AtlasColumns);
         // The jitter moves every frame only for a temporal upscaler to average; without one it stays put (a still pattern, not a shimmer).
         var range = new Vector4(near, far, MathF.Log(far / near), Temporal ? Gpu.Frame.Number % 4096 : 0);
-        float tanY = MathF.Tan(fovNow * 0.5f);
-        var r = viewRotation;
+        float tanY = MathF.Tan(_fovNow * 0.5f);
+        var r = _viewRotation;
         void Common(ShaftPass s)
         {
             s.P.Set(s.Grid, grid);
             s.P.Set(s.Range, range);
-            s.P.Set(s.Eye, eyeNow);
-            s.P.Set(s.Tan, tanY * aspectNow, tanY);
+            s.P.Set(s.Eye, _eyeNow);
+            s.P.Set(s.Tan, tanY * _aspectNow, tanY);
             s.P.Set(s.Right, r.M11, r.M21, r.M31);
             s.P.Set(s.Up, r.M12, r.M22, r.M32);
             s.P.Set(s.Back, r.M13, r.M23, r.M33);
         }
 
-        var i = shaftInject;
+        var i = _shaftInject;
         Common(i);
         i.P.Set(i.Samples, Math.Clamp(Options.ShaftSamples, 1, 16));
         i.P.ApplyGlobals();   // the atmosphere's uniforms and the shadow receivers, through the frame globals
         if (Temporal)
         {
             // The jittered samples averaged over frames in the grid itself (LightShaftShaders.Resolve), not left to the upscaler.
-            if (shaftRaw is null || shaftHistory is null)
+            if (_shaftRaw is null || _shaftHistory is null)
             {
                 using var batch = Gpu.Uploads.Begin();
-                shaftRaw = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post shafts raw");
-                shaftHistory = Make(batch, aw, ah, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post shafts history");
-                shaftHistoryValid = false;
+                _shaftRaw = Make(batch, aw, ah, InternalFormat.Rgba16F, TextureMinFilter.Nearest, "post shafts raw");
+                _shaftHistory = Make(batch, aw, ah, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post shafts history");
+                _shaftHistoryValid = false;
             }
-            Draw(i.P, shaftRaw);
-            (shaftHistory, shaftInjected) = (shaftInjected, shaftHistory);   // last frame's filtered atlas becomes the history; this frame's goes over the older one
-            var v = shaftResolve ??= new ShaftResolvePass(Gpu);
+            Draw(i.P, _shaftRaw);
+            (_shaftHistory, _shaftInjected) = (_shaftInjected, _shaftHistory);   // last frame's filtered atlas becomes the history; this frame's goes over the older one
+            var v = _shaftResolve ??= new ShaftResolvePass(Gpu);
             Common(v);
-            var prev = shaftPrevious;
-            bool continuous = shaftHistoryValid && Gpu.Frame.Number - shaftHistoryFrame <= 2 && Vector3.Distance(prev.Eye, eyeNow) < 2000;
-            Bind(v.P, v.Current, shaftRaw);
-            Bind(v.P, v.History, continuous ? shaftHistory : shaftRaw);   // never an uninitialised history
+            var prev = _shaftPrevious;
+            bool continuous = _shaftHistoryValid && Gpu.Frame.Number - _shaftHistoryFrame <= 2 && Vector3.Distance(prev.Eye, _eyeNow) < 2000;
+            Bind(v.P, v.Current, _shaftRaw);
+            Bind(v.P, v.History, continuous ? _shaftHistory : _shaftRaw);   // never an uninitialised history
             v.P.Set(v.PrevRange, prev.Range);
             v.P.Set(v.PrevEye, prev.Eye);
             v.P.Set(v.PrevRight, prev.Right);
@@ -241,76 +250,76 @@ public sealed unsafe partial class PostProcess
             v.P.Set(v.PrevBack, prev.Back);
             v.P.Set(v.PrevTan, prev.Tan);
             v.P.Set(v.Blend, continuous ? ShaftTemporalBlend : 1f);
-            Draw(v.P, shaftInjected!);
-            shaftHistoryValid = true;
-            shaftHistoryFrame = Gpu.Frame.Number;
-            shaftPrevious = (range, eyeNow, new Vector3(r.M11, r.M21, r.M31), new Vector3(r.M12, r.M22, r.M32), new Vector3(r.M13, r.M23, r.M33), new Vector2(tanY * aspectNow, tanY));
+            Draw(v.P, _shaftInjected!);
+            _shaftHistoryValid = true;
+            _shaftHistoryFrame = Gpu.Frame.Number;
+            _shaftPrevious = (range, _eyeNow, new Vector3(r.M11, r.M21, r.M31), new Vector3(r.M12, r.M22, r.M32), new Vector3(r.M13, r.M23, r.M33), new Vector2(tanY * _aspectNow, tanY));
         }
         else
         {
-            Draw(i.P, shaftInjected!);
-            shaftHistoryValid = false;
+            Draw(i.P, _shaftInjected!);
+            _shaftHistoryValid = false;
         }
         if (ShaftStamps) Stamp("shafts-inject");
 
         if (ShaftScan && ShaftScanSupported)
         {
-            ShaftScanRun(grid, range, tanY * aspectNow, tanY, air, air.X > 0);
+            ShaftScanRun(grid, range, tanY * _aspectNow, tanY, air, air.X > 0);
             if (ShaftStamps) Stamp("shafts-scan");
         }
         else
         {
-            var g = shaftIntegrate;
+            var g = _shaftIntegrate;
             Common(g);
-            Bind(g.P, g.Injected, shaftInjected);
-            Draw(g.P, shaftLight!);
+            Bind(g.P, g.Injected, _shaftInjected);
+            Draw(g.P, _shaftLight!);
             if (ShaftStamps) Stamp("shafts-integrate");
 
             if (air.X > 0)
             {
-                var sc = shaftScatterPass;
+                var sc = _shaftScatterPass;
                 Common(sc);
-                Bind(sc.P, sc.Injected, shaftInjected);
+                Bind(sc.P, sc.Injected, _shaftInjected);
                 sc.P.Set(sc.Air, air);
                 sc.P.ApplyGlobals();   // the sun and the sky's ambient
-                Draw(sc.P, shaftScatter!);
+                Draw(sc.P, _shaftScatter!);
                 if (ShaftStamps) Stamp("shafts-scatter");
             }
         }
 
         var parameters = new Vector4(Math.Clamp(darkening, 0, 1), PostOptions.ShaftSky, 0, 0);
-        shaftFrame = (grid, range, new Vector2(tanY * aspectNow, tanY), Math.Clamp(darkening, 0, 1));
+        _shaftFrame = (grid, range, new Vector2(tanY * _aspectNow, tanY), Math.Clamp(darkening, 0, 1));
         if (MergeLayers)
         {
             // The apply is the merged pass's (ApplySsao).
-            (shaftsPending, shaftArgs) = (true, (air, parameters));
+            (_shaftsPending, _shaftArgs) = (true, (air, parameters));
             Stamp("shafts");
             CloseSegment();
             return;
         }
-        var a = shaftApply;
+        var a = _shaftApply;
         Common(a);
-        Bind(a.P, a.NearDepth, sceneDepth);
-        Bind(a.P, a.Light, shaftLight);
-        Bind(a.P, a.Scatter, shaftScatter);
+        Bind(a.P, a.NearDepth, _sceneDepth);
+        Bind(a.P, a.Light, _shaftLight);
+        Bind(a.P, a.Scatter, _shaftScatter);
         a.P.Set(a.Air, air);
-        a.P.Set(a.NearPlanes, planes.X, planes.Y);
+        a.P.Set(a.NearPlanes, _planes.X, _planes.Y);
         a.P.Set(a.WaterY, WaterHeight ?? float.MinValue);
         a.P.Set(a.Atlas, aw, ah);
         a.P.Set(a.Params, parameters);
         a.P.ApplyGlobals();
-        Draw(a.P, sceneColour!.Attachment, sceneColour.Format, width, height, width, height, FogState);
+        Draw(a.P, _sceneColour!.Attachment, _sceneColour.Format, _width, _height, _width, _height, FogState);
         Stamp("shafts");
         CloseSegment();
     }
 
     void DisposeShafts()
     {
-        shaftInject?.P.Dispose();
-        shaftResolve?.P.Dispose();
-        shaftIntegrate?.P.Dispose();
-        shaftApply?.P.Dispose();
-        if (shaftScanProgram is { } scan) Gpu.Shaders.Dispose(scan);
-        shaftScatterPass?.P.Dispose();
+        _shaftInject?.P.Dispose();
+        _shaftResolve?.P.Dispose();
+        _shaftIntegrate?.P.Dispose();
+        _shaftApply?.P.Dispose();
+        if (_shaftScanProgram is { } scan) Gpu.Shaders.Dispose(scan);
+        _shaftScatterPass?.P.Dispose();
     }
 }

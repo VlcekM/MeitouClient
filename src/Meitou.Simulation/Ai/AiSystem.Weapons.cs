@@ -7,7 +7,7 @@ namespace Meitou.Simulation.Ai;
 
 public sealed partial class AiSystem
 {
-    readonly CharacterAssembly assembly = new(data);
+    readonly CharacterAssembly _assembly = new(data);
 
     /// <summary>
     /// The third section of <c>Task_EquipBestWeapon</c> (<c>FUN_140346c30</c> :91-118, <b>Verified</b>; docs/game/ai-tasks.md): when neither the back nor the hip gave a weapon of the task's kind and the
@@ -19,7 +19,7 @@ public sealed partial class AiSystem
     internal bool DrawFromInventory(World world, CharacterCold cold, bool ranged)
     {
         if (cold.Inventory is not { } inventory || CarrySystem.PlayerSide(world, cold)) return false;
-        var kind = ranged ? FcsRecordType.CROSSBOW : FcsRecordType.WEAPON;
+        var kind = ranged ? FcsRecordType.Crossbow : FcsRecordType.Weapon;
         if (FirstOfKind(inventory, inventory, kind) is not var (owner, item)) return false;
         owner.Items.Remove(item);
         if (!InventoryCommands.TryEquip(inventory, item, cold))
@@ -27,7 +27,7 @@ public sealed partial class AiSystem
             owner.Items.Add(item);
             return false;
         }
-        assembly.RefreshEquipment(cold);
+        _assembly.RefreshEquipment(cold);
         return true;
     }
 

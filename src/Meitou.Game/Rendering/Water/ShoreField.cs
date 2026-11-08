@@ -28,41 +28,41 @@ internal sealed class ShoreField : IDisposable
     /// <summary>A finished bake: the world rectangle, and the texels, or the one value every texel has.</summary>
     sealed record Baked(float X0, float Z0, float X1, float Z1, bool Uniform, Vector2 Value, float[]? Texels, double Ms);
 
-    readonly IGpuContext gpu;
-    readonly int size;
-    readonly float texel;
-    TerrainTexture? texture;
+    readonly IGpuContext _gpu;
+    readonly int _size;
+    readonly float _texel;
+    TerrainTexture? _texture;
     /// <summary>The shown texture is the one-texel stand-in for a uniform field.</summary>
-    bool textureIsUniform;
-    Vector2 uniformValue;
-    Task<Baked>? job;
-    (float X, float Z)? centre;
-    int frame;
-    readonly List<(TerrainTexture Texture, int Frame)> retired = [];
+    bool _textureIsUniform;
+    Vector2 _uniformValue;
+    Task<Baked>? _job;
+    (float X, float Z)? _centre;
+    int _frame;
+    readonly List<(TerrainTexture Texture, int Frame)> _retired = [];
     /// <summary>Full-size textures nothing samples any more, kept for the next bake (at most <see cref="KeptTextures"/>).</summary>
-    readonly List<TerrainTexture> spare = [];
+    readonly List<TerrainTexture> _spare = [];
     const int KeptTextures = 2;
 
     // The worker's arrays: the bake's, and two for the texels (one is read by the upload while the next bake fills the other).
-    readonly ShoreBake.Scratch scratch = new();
-    readonly float[][] texelBuffers = new float[2][];
-    int nextBuffer;
+    readonly ShoreBake.Scratch _scratch = new();
+    readonly float[][] _texelBuffers = new float[2][];
+    int _nextBuffer;
 
     // The upload in progress: a full-size texture filled a few rows a frame.
-    (Baked Bake, TerrainTexture Target, int Row)? uploading;
+    (Baked Bake, TerrainTexture Target, int Row)? _uploading;
 
     public ShoreField(IGpuContext gpu, int size = DefaultSize, float texel = DefaultTexel)
     {
-        this.gpu = gpu;
-        this.size = size;
-        this.texel = texel;
+        this._gpu = gpu;
+        this._size = size;
+        this._texel = texel;
     }
 
-    public int Size => size;
-    public float Texel => texel;
+    public int Size => _size;
+    public float Texel => _texel;
 
     /// <summary>True once the first bake has been uploaded.</summary>
-    public bool Ready => texture is not null;
+    public bool Ready => _texture is not null;
 
     /// <summary>The world rectangle the texture covers (x0, z0, x1, z1), edge to edge.</summary>
     public Vector4 Rect { get; private set; }
@@ -75,7 +75,7 @@ internal sealed class ShoreField : IDisposable
     public int UploadedFields { get; private set; }
 
     /// <summary>The sampler and view to bind this frame. Only valid when <see cref="Ready"/>.</summary>
-    public SampledTexture Sampled() => texture!.Sampled();
+    public SampledTexture Sampled() => _texture!.Sampled();
 
     /// <summary>
     /// Once a frame on the render thread, with a snapshot taken on it (<see cref="TerrainRenderer.Snapshot"/>): writes the next rows of a field
@@ -84,53 +84,53 @@ internal sealed class ShoreField : IDisposable
     /// </summary>
     public void Update(Vector3 eye, HeightSnapshot heights)
     {
-        frame++;
-        for (int i = retired.Count - 1; i >= 0; i--)
-            if (frame - retired[i].Frame >= 4)
+        _frame++;
+        for (int i = _retired.Count - 1; i >= 0; i--)
+            if (_frame - _retired[i].Frame >= 4)
             {
-                var done = retired[i].Texture;
-                retired.RemoveAt(i);
+                var done = _retired[i].Texture;
+                _retired.RemoveAt(i);
                 // A frame in flight may have sampled it until now: from here it is free to be written again.
-                if (done.Texture.Desc.Width == size && spare.Count < KeptTextures) spare.Add(done);
+                if (done.Texture.Desc.Width == _size && _spare.Count < KeptTextures) _spare.Add(done);
                 else done.Dispose();
             }
 
-        if (uploading is not null) ContinueUpload();
+        if (_uploading is not null) ContinueUpload();
 
         // The next bake's texels may only be taken once the last upload is whole: its buffer is the one the upload reads.
-        if (uploading is null && job is { IsCompleted: true })
+        if (_uploading is null && _job is { IsCompleted: true })
         {
-            var finished = job;
-            job = null;
+            var finished = _job;
+            _job = null;
             if (finished.IsCompletedSuccessfully) Take(finished.Result);
-            else if (finished.Exception is { } ex) { centre = null; Console.WriteLine($"water    shore field bake failed: {ex.GetBaseException().Message}"); }
+            else if (finished.Exception is { } ex) { _centre = null; Console.WriteLine($"water    shore field bake failed: {ex.GetBaseException().Message}"); }
         }
 
-        if (job is not null) return;
-        bool far = centre is not { } c || MathF.Abs(eye.X - c.X) > size * texel / 4 || MathF.Abs(eye.Z - c.Z) > size * texel / 4;
+        if (_job is not null) return;
+        bool far = _centre is not { } c || MathF.Abs(eye.X - c.X) > _size * _texel / 4 || MathF.Abs(eye.Z - c.Z) > _size * _texel / 4;
         if (!far) return;
-        var (cx, cz) = ShoreBake.SnapCentre(eye.X, eye.Z, texel);
-        int n = size;
-        float t = texel;
+        var (cx, cz) = ShoreBake.SnapCentre(eye.X, eye.Z, _texel);
+        int n = _size;
+        float t = _texel;
         // Two bakes in flight never share a buffer: this one fills the one the shown field's upload is not reading.
-        int buffer = nextBuffer;
-        nextBuffer ^= 1;
-        job = Task.Run(() =>
+        int buffer = _nextBuffer;
+        _nextBuffer ^= 1;
+        _job = Task.Run(() =>
         {
             long start = System.Diagnostics.Stopwatch.GetTimestamp();
-            var grid = ShoreBake.Bake(heights.HeightAt, cx, cz, n, t, scratch: scratch);
+            var grid = ShoreBake.Bake(heights.HeightAt, cx, cz, n, t, scratch: _scratch);
             Baked baked;
             if (grid.IsUniform(out var value)) baked = new Baked(grid.X0, grid.Z0, grid.X1, grid.Z1, true, value, null, 0);
             else
             {
-                var texels = texelBuffers[buffer] ??= new float[n * n * 2];
+                var texels = _texelBuffers[buffer] ??= new float[n * n * 2];
                 grid.InterleaveInto(texels);
                 baked = new Baked(grid.X0, grid.Z0, grid.X1, grid.Z1, false, default, texels, 0);
             }
             return baked with { Ms = (System.Diagnostics.Stopwatch.GetTimestamp() - start) * 1000.0 / System.Diagnostics.Stopwatch.Frequency };
         });
         // The next bake is centred on this snapped point however long it takes, so a long bake is not restarted every frame.
-        centre = (cx, cz);
+        _centre = (cx, cz);
     }
 
     /// <summary>A finished bake: a uniform field is swapped in at once (one texel); the rest starts its upload.</summary>
@@ -142,55 +142,55 @@ internal sealed class ShoreField : IDisposable
         if (baked.Uniform)
         {
             UniformFields++;
-            if (!(textureIsUniform && uniformValue == baked.Value))
+            if (!(_textureIsUniform && _uniformValue == baked.Value))
             {
                 // One texel of the value; clamped and filtered, it reads the same everywhere on the rectangle.
                 TerrainTexture next;
                 var value = baked.Value;
-                using (var batch = gpu.Uploads.Begin())
+                using (var batch = _gpu.Uploads.Begin())
                 {
-                    var t = batch.Create(new TextureDesc(InternalFormat.RG32f, 1, 1, Name: "shore field"));
+                    var t = batch.Create(new TextureDesc(InternalFormat.Rg32F, 1, 1, Name: "shore field"));
                     batch.Write(t, 0, 0, new PixelRect(0, 0, 1, 1), MemoryMarshal.AsBytes(new ReadOnlySpan<Vector2>(in value)));
-                    next = new TerrainTexture(gpu, t, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
+                    next = new TerrainTexture(_gpu, t, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
                 }
                 Swap(next, uniform: true, baked);
-                uniformValue = baked.Value;
+                _uniformValue = baked.Value;
             }
             else Rect = new Vector4(baked.X0, baked.Z0, baked.X1, baked.Z1);
             Log(start, "uniform");
             return;
         }
         TerrainTexture target;
-        if (spare.Count > 0)
+        if (_spare.Count > 0)
         {
-            target = spare[^1];
-            spare.RemoveAt(spare.Count - 1);
+            target = _spare[^1];
+            _spare.RemoveAt(_spare.Count - 1);
         }
         else
         {
-            using var batch = gpu.Uploads.Begin();
-            target = new TerrainTexture(gpu, batch.Create(new TextureDesc(InternalFormat.RG32f, size, size, Name: "shore field")),
+            using var batch = _gpu.Uploads.Begin();
+            target = new TerrainTexture(_gpu, batch.Create(new TextureDesc(InternalFormat.Rg32F, _size, _size, Name: "shore field")),
                 TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge);
         }
-        uploading = (baked, target, 0);
+        _uploading = (baked, target, 0);
         // Nothing shown yet (the first field, or the screenshot's): all at once. Otherwise the old field is shown while this one is written.
-        ContinueUpload(all: texture is null);
+        ContinueUpload(all: _texture is null);
         Log(start, "start");
     }
 
     /// <summary>The next <see cref="RowsPerFrame"/> rows (or all) of the field being uploaded; the swap when it is whole.</summary>
     void ContinueUpload(bool all = false)
     {
-        var (baked, target, row) = uploading!.Value;
-        int rows = all ? size - row : Math.Min(RowsPerFrame, size - row);
+        var (baked, target, row) = _uploading!.Value;
+        int rows = all ? _size - row : Math.Min(RowsPerFrame, _size - row);
         long start = System.Diagnostics.Stopwatch.GetTimestamp();
         UploadProfile.Take();
-        using (var batch = gpu.Uploads.Begin())
-            batch.Write(target.Texture, 0, 0, new PixelRect(0, row, (uint)size, (uint)rows),
-                MemoryMarshal.AsBytes(baked.Texels.AsSpan(row * size * 2, rows * size * 2)));
+        using (var batch = _gpu.Uploads.Begin())
+            batch.Write(target.Texture, 0, 0, new PixelRect(0, row, (uint)_size, (uint)rows),
+                MemoryMarshal.AsBytes(baked.Texels.AsSpan(row * _size * 2, rows * _size * 2)));
         row += rows;
-        if (row < size) { uploading = (baked, target, row); Log(start, "rows"); return; }
-        uploading = null;
+        if (row < _size) { _uploading = (baked, target, row); Log(start, "rows"); return; }
+        _uploading = null;
         UploadedFields++;
         Swap(target, uniform: false, baked);
         Log(start, "last rows");
@@ -200,9 +200,9 @@ internal sealed class ShoreField : IDisposable
     void Swap(TerrainTexture next, bool uniform, Baked baked)
     {
         // A frame in flight may still sample the old one: let it go a few frames later, as the terrain does with a replaced height window.
-        if (texture is not null) retired.Add((texture, frame));
-        texture = next;
-        textureIsUniform = uniform;
+        if (_texture is not null) _retired.Add((_texture, _frame));
+        _texture = next;
+        _textureIsUniform = uniform;
         Rect = new Vector4(baked.X0, baked.Z0, baked.X1, baked.Z1);
     }
 
@@ -217,14 +217,14 @@ internal sealed class ShoreField : IDisposable
 
     public void Dispose()
     {
-        try { job?.Wait(); } catch (AggregateException) { }
-        texture?.Dispose();
-        foreach (var r in retired) r.Texture.Dispose();
-        retired.Clear();
-        foreach (var s in spare) s.Dispose();
-        spare.Clear();
-        if (uploading is { } u) u.Target.Dispose();
-        uploading = null;
-        texture = null;
+        try { _job?.Wait(); } catch (AggregateException) { }
+        _texture?.Dispose();
+        foreach (var r in _retired) r.Texture.Dispose();
+        _retired.Clear();
+        foreach (var s in _spare) s.Dispose();
+        _spare.Clear();
+        if (_uploading is { } u) u.Target.Dispose();
+        _uploading = null;
+        _texture = null;
     }
 }

@@ -70,10 +70,10 @@ public sealed class UiSounds(WwisePlayer player, Func<GameDatabase?> database)
         static string? Of(string[] names, int i) => (uint)i < names.Length ? names[i] : null;
         return r.Type switch
         {
-            FcsRecordType.WEAPON or FcsRecordType.CROSSBOW => Of(Weapon, r.GetInt("material")),
-            FcsRecordType.ARMOUR => Of(Armour, r.GetInt("material type")),
-            FcsRecordType.ITEM or FcsRecordType.CONTAINER or FcsRecordType.NEST_ITEM or FcsRecordType.MAP_ITEM => Of(Items, r.GetInt("inventory sound")),
-            FcsRecordType.LIMB_REPLACEMENT => "Robotic_Component",
+            FcsRecordType.Weapon or FcsRecordType.Crossbow => Of(Weapon, r.GetInt("material")),
+            FcsRecordType.Armour => Of(Armour, r.GetInt("material type")),
+            FcsRecordType.Item or FcsRecordType.Container or FcsRecordType.NestItem or FcsRecordType.MapItem => Of(Items, r.GetInt("inventory sound")),
+            FcsRecordType.LimbReplacement => "Robotic_Component",
             _ => null,
         };
     }

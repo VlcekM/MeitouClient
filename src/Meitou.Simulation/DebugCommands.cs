@@ -108,7 +108,7 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
     /// The record types whose items have a quality (grade): armour's is <see cref="Items.ItemInstance.Quality"/>, the others' the <see cref="Items.ItemInstance.Level"/> their stats read.
     /// A weapon gets the model of <see cref="Grade"/> instead, so its name shows the grade.
     /// </summary>
-    public static readonly FcsRecordType[] QualityTypes = [FcsRecordType.WEAPON, FcsRecordType.ARMOUR, FcsRecordType.CROSSBOW, FcsRecordType.LIMB_REPLACEMENT];
+    public static readonly FcsRecordType[] QualityTypes = [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Crossbow, FcsRecordType.LimbReplacement];
 
     /// <summary>The <c>PLAYER_WEAPONS</c> model a weapon of <paramref name="quality"/> gets: the highest level at or below it, else the lowest (null without models).</summary>
     public static (string Model, string Name, int Level)? Grade(GameDatabase db, int quality)
@@ -123,7 +123,7 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
 
     /// <summary>The record types an item can be made from.</summary>
     public static readonly FcsRecordType[] ItemTypes =
-        [FcsRecordType.WEAPON, FcsRecordType.ARMOUR, FcsRecordType.ITEM, FcsRecordType.CONTAINER, FcsRecordType.BLUEPRINT, FcsRecordType.MAP_ITEM, FcsRecordType.CROSSBOW, FcsRecordType.LIMB_REPLACEMENT];
+        [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Item, FcsRecordType.Container, FcsRecordType.Blueprint, FcsRecordType.MapItem, FcsRecordType.Crossbow, FcsRecordType.LimbReplacement];
 }
 
 /// <summary>
@@ -458,12 +458,12 @@ static class DebugCheats
             case DebugGiveItem give when data is not null:
                 if (!table.TryResolveNext(give.Character, out int owner) || table.Cold(owner)?.Inventory is not { } inventory) break;
                 if (data.Items.Create(give.Record, give.Quantity) is not { } item) { world.Post($"No item record {give.Record}."); break; }
-                if (item.Type == FcsRecordType.ARMOUR) (item.Quality, item.Level) = (Math.Clamp(give.Quality, 0, 100), Math.Clamp(give.Quality, 0, 100));
-                else if (item.Type == FcsRecordType.WEAPON && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
+                if (item.Type == FcsRecordType.Armour) (item.Quality, item.Level) = (Math.Clamp(give.Quality, 0, 100), Math.Clamp(give.Quality, 0, 100));
+                else if (item.Type == FcsRecordType.Weapon && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
                     (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
                 else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
                 var wearer = table.Cold(owner);
-                if (give.Equip && item.Type == FcsRecordType.CONTAINER && item.Contents is not null)
+                if (give.Equip && item.Type == FcsRecordType.Container && item.Contents is not null)
                 {
                     // A backpack: worn in the attach slot when it is free (strip or `unequip backpack` first); never put into the grids or dropped.
                     if (inventory.Backpack is not null) { world.Post($"{item.Name} not worn: a backpack is already worn (remove it first); nothing dropped."); break; }
@@ -473,7 +473,7 @@ static class DebugCheats
                     break;
                 }
                 bool worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
-                if (!worn && give.Equip && item.Type is FcsRecordType.ARMOUR or FcsRecordType.ITEM && Items.InventoryCommands.IsEquipmentSection(item.EquipmentSection)
+                if (!worn && give.Equip && item.Type is FcsRecordType.Armour or FcsRecordType.Item && Items.InventoryCommands.IsEquipmentSection(item.EquipmentSection)
                     && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") && inventory.Items.Find(i => i.Section == item.EquipmentSection) is { } displaced)
                 {
                     // The slot is taken: take the worn item off, wear the new one, give the old one a place in the grids; with no room nothing changes and nothing is dropped.

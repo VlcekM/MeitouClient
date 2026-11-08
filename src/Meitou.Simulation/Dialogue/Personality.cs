@@ -68,8 +68,8 @@ public static class Personality
     static GameRecord? RecordOf(GameDatabase db, string characterId, string? factionId)
     {
         static GameRecord? First(GameDatabase db, GameRecord? owner) =>
-            owner?.GetReferences("personality") is { Count: > 0 } list && db.Find(list[0].TargetStringId) is { Type: FcsRecordType.PERSONALITY } p ? p : null;
+            owner?.GetReferences("personality") is { Count: > 0 } list && db.Find(list[0].TargetStringId) is { Type: FcsRecordType.Personality } p ? p : null;
         return First(db, db.Find(characterId)) ?? (factionId is { Length: > 0 } ? First(db, db.Find(factionId)) : null)
-            ?? (db.Find("blank personality") is { Type: FcsRecordType.PERSONALITY } blank ? blank : null);
+            ?? (db.Find("blank personality") is { Type: FcsRecordType.Personality } blank ? blank : null);
     }
 }

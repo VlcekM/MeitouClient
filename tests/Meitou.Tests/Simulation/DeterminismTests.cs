@@ -37,7 +37,7 @@ public class DeterminismTests
         foreach (var c in table.Previous)
         {
             if (!c.Alive) continue;
-            Assert.True(WanderSystem.Ground(c.Position.X, c.Position.Z) > Meitou.Data.World.WorldWater.Height);
+            Assert.True(WanderSystem.Ground(c.Position.X, c.Position.Z) > Data.World.WorldWater.Height);
             Assert.Equal(WanderSystem.Ground(c.Position.X, c.Position.Z), c.Position.Y, 3);
         }
     }

@@ -10,17 +10,17 @@ sealed class GameLog : TextWriter
 {
     const long Cap = 10 << 20, Keep = 8 << 20;
 
-    readonly FileStream file;
-    readonly StreamWriter writer;
+    readonly FileStream _file;
+    readonly StreamWriter _writer;
     /// <summary>The output and the error both write here, each through its own synchronised writer; the flushing thread too.</summary>
-    readonly object gate = new();
-    readonly AutoResetEvent lineEnded = new(false);
-    bool disposed;
+    readonly object _gate = new();
+    readonly AutoResetEvent _lineEnded = new(false);
+    bool _disposed;
 
     GameLog(FileStream file)
     {
-        this.file = file;
-        writer = new StreamWriter(file, new UTF8Encoding(false)) { AutoFlush = true };   // flushed per write: a crash keeps its last lines
+        this._file = file;
+        _writer = new StreamWriter(file, new UTF8Encoding(false)) { AutoFlush = true };   // flushed per write: a crash keeps its last lines
         new Thread(FlushToDisk) { IsBackground = true, Name = "log flush" }.Start();
     }
 
@@ -32,12 +32,12 @@ sealed class GameLog : TextWriter
     {
         while (true)
         {
-            lineEnded.WaitOne();
+            _lineEnded.WaitOne();
             Microsoft.Win32.SafeHandles.SafeFileHandle handle;
-            lock (gate)
+            lock (_gate)
             {
-                if (disposed) return;
-                handle = file.SafeFileHandle;   // the writes are already with the OS (AutoFlush): writers need not wait for the disk
+                if (_disposed) return;
+                handle = _file.SafeFileHandle;   // the writes are already with the OS (AutoFlush): writers need not wait for the disk
             }
             try { RandomAccess.FlushToDisk(handle); }
             catch (ObjectDisposedException) { return; }
@@ -45,7 +45,7 @@ sealed class GameLog : TextWriter
         }
     }
 
-    public override Encoding Encoding => writer.Encoding;
+    public override Encoding Encoding => _writer.Encoding;
 
     /// <summary>The log of this run, or null when it cannot be opened (another game has it, or the folder is read-only).</summary>
     public static GameLog? Open()
@@ -61,33 +61,33 @@ sealed class GameLog : TextWriter
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
-    public override void Write(char value) { lock (gate) { writer.Write(value); Trim(value == '\n'); } }
-    public override void Write(string? value) { lock (gate) { writer.Write(value); Trim(value is { Length: > 0 } && value[^1] == '\n'); } }
-    public override void Write(char[] buffer, int index, int count) { lock (gate) { writer.Write(buffer, index, count); Trim(count > 0 && buffer[index + count - 1] == '\n'); } }
-    public override void WriteLine(string? value) { lock (gate) { writer.WriteLine(value); Trim(true); } }
+    public override void Write(char value) { lock (_gate) { _writer.Write(value); Trim(value == '\n'); } }
+    public override void Write(string? value) { lock (_gate) { _writer.Write(value); Trim(value is { Length: > 0 } && value[^1] == '\n'); } }
+    public override void Write(char[] buffer, int index, int count) { lock (_gate) { _writer.Write(buffer, index, count); Trim(count > 0 && buffer[index + count - 1] == '\n'); } }
+    public override void WriteLine(string? value) { lock (_gate) { _writer.WriteLine(value); Trim(true); } }
 
     void Trim(bool lineEnd)
     {
-        if (lineEnd) lineEnded.Set();   // FlushToDisk
-        if (file.Length <= Cap) return;
+        if (lineEnd) _lineEnded.Set();   // FlushToDisk
+        if (_file.Length <= Cap) return;
         var tail = new byte[Keep];
-        file.Seek(-Keep, SeekOrigin.End);
-        file.ReadExactly(tail);
+        _file.Seek(-Keep, SeekOrigin.End);
+        _file.ReadExactly(tail);
         int start = Array.IndexOf(tail, (byte)'\n') + 1;   // from a whole line
-        file.SetLength(0);
-        file.Write(tail, start, tail.Length - start);
+        _file.SetLength(0);
+        _file.Write(tail, start, tail.Length - start);
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
-            lock (gate)
+            lock (_gate)
             {
-                disposed = true;
-                writer.Flush();
-                file.Flush(flushToDisk: true);
-                writer.Dispose();
-                lineEnded.Set();
+                _disposed = true;
+                _writer.Flush();
+                _file.Flush(flushToDisk: true);
+                _writer.Dispose();
+                _lineEnded.Set();
             }
         base.Dispose(disposing);
     }

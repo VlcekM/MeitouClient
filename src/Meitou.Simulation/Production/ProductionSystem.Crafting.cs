@@ -13,14 +13,14 @@ public sealed partial class ProductionSystem
     /// <summary>How many crafts a bench's queue holds (engine choice; the original's limit is Unknown).</summary>
     public const int MaxCraftQueue = 20;
 
-    HashSet<(CraftKind, string)>? everEnabled;
+    HashSet<(CraftKind, string)>? _everEnabled;
 
     /// <summary>Crafts some research unlocks; anything no research lists is craftable from the start (engine reading).</summary>
     HashSet<(CraftKind, string)> EverEnabled()
     {
-        if (everEnabled is not null) return everEnabled;
-        allResearch ??= ResearchData.LoadAll(db);
-        return everEnabled = [.. allResearch.SelectMany(r => r.EnableCrafts.Select(e => (e.Kind, e.Id)))];
+        if (_everEnabled is not null) return _everEnabled;
+        _allResearch ??= ResearchData.LoadAll(_db);
+        return _everEnabled = [.. _allResearch.SelectMany(r => r.EnableCrafts.Select(e => (e.Kind, e.Id)))];
     }
 
     bool Unlocked(World world, CraftKind kind, string id) => world.Research.UnlockedCrafts.Contains((kind, id)) || !EverEnabled().Contains((kind, id));
@@ -29,7 +29,7 @@ public sealed partial class ProductionSystem
     public bool CanCraft(World world, CraftBench bench, CraftOption option) =>
         Unlocked(world, option.Kind, option.Item) && (option.Model is null || Unlocked(world, CraftKind.Weapon, option.Model)) && option.Level <= bench.TechLevel;
 
-    CraftRecipe RecipeOf(Machine m, CraftOption option) => m.Data.Craft!.Recipe(db, constants, option, m.Data.Inputs);
+    CraftRecipe RecipeOf(Machine m, CraftOption option) => m.Data.Craft!.Recipe(_db, _constants, option, m.Data.Inputs);
 
     void QueueCraft(World world, QueueCraft order)
     {
@@ -64,7 +64,7 @@ public sealed partial class ProductionSystem
         for (int k = 0; k < m.Inputs.Length; k++)
         {
             var slot = m.Inputs[k];
-            if (slot.Item != ItemOf(m, job, k) && slot.Count > 0 && items.Create(slot.Item, slot.Count) is { } back)
+            if (slot.Item != ItemOf(m, job, k) && slot.Count > 0 && _items.Create(slot.Item, slot.Count) is { } back)
             {
                 world.GroundItems.Drop(back, m.Position, 0);
                 slot.Count = 0;
@@ -87,7 +87,7 @@ public sealed partial class ProductionSystem
     /// <summary>A remembered level read from a save (an item that is not in the game is dropped).</summary>
     internal void RestorePartial(Machine m, string item, float level)
     {
-        if (m.Craft is { } state && level > 0 && items.Info(item) is not null) state.Partial[item] = level;
+        if (m.Craft is { } state && level > 0 && _items.Info(item) is not null) state.Partial[item] = level;
     }
 
     static string ItemOf(Machine m, CraftJob job, int k) => k < job.Recipe.Inputs.Count ? job.Recipe.Inputs[k].Item : m.Inputs[k].Recipe.Item;
@@ -128,7 +128,7 @@ public sealed partial class ProductionSystem
             float roll = Rng.Float(Rng.Hash(world.Seed, Rng.StableHash(m.Site), RngPurpose.Craft, (ulong)(uint)state.Rolls++));
             job.Critical = (byte)(roll < chance ? 1 : 0);
         }
-        float amount = m.Data.Rate * WorkFactor(world, m) * s * Settings.ProductionOption * constants.ProductionSpeed * dt / MathF.Max(1e-3f, job.Seconds);
+        float amount = m.Data.Rate * WorkFactor(world, m) * s * Settings.ProductionOption * _constants.ProductionSpeed * dt / MathF.Max(1e-3f, job.Seconds);
         foreach (var input in m.Inputs)
             if (input.Rate > 0 && input.Level + input.Count < input.Rate * amount) amount = (input.Level + input.Count) / input.Rate;
         amount = MathF.Min(amount, 1 - job.Progress);
@@ -164,15 +164,15 @@ public sealed partial class ProductionSystem
         switch (option.Kind)
         {
             case CraftKind.Armour:
-                made = items.Create(option.Item, 1, Math.Min(CraftBench.ArmourQuality(skill, critical), bench.TechLevel));   // the factory gives an armour piece its level from that quality
+                made = _items.Create(option.Item, 1, Math.Min(CraftBench.ArmourQuality(skill, critical), bench.TechLevel));   // the factory gives an armour piece its level from that quality
                 break;
             case CraftKind.Robotics or CraftKind.Crossbow:
-                made = items.Create(option.Item, 1);
+                made = _items.Create(option.Item, 1);
                 if (made is not null) made.Level = Math.Min(CraftBench.ArmourQuality(skill, critical), bench.TechLevel);
                 break;
             case CraftKind.Weapon:
                 var model = WeaponModel(bench, option, skill, critical);
-                made = items.Create(option.Item, 1);
+                made = _items.Create(option.Item, 1);
                 if (made is not null)
                 {
                     made.Level = model.Level;
@@ -181,7 +181,7 @@ public sealed partial class ProductionSystem
                 }
                 break;
             default:
-                made = items.Create(option.Item, 1);
+                made = _items.Create(option.Item, 1);
                 break;
         }
         state.Queue.RemoveAt(0);
@@ -201,8 +201,8 @@ public sealed partial class ProductionSystem
             : bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item && o.Level <= skill).OrderByDescending(o => o.Level).FirstOrDefault()
                 ?? bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item).OrderBy(o => o.Level).First();
 
-    IReadOnlyDictionary<string, CraftSmithView>? publishedSmiths;
-    long smithsVersion = -1;
+    IReadOnlyDictionary<string, CraftSmithView>? _publishedSmiths;
+    long _smithsVersion = -1;
 
     /// <summary>
     /// The Craft tab's Current Smith per bench (<c>FUN_1402bcf60</c>): the bench's last operator (<see cref="Machine.Smith"/>) while it is alive with stats, his effective level of the bench's
@@ -210,8 +210,8 @@ public sealed partial class ProductionSystem
     /// </summary>
     public IReadOnlyDictionary<string, CraftSmithView> SmithsView(World world)
     {
-        if (publishedSmiths is not null && smithsVersion == world.Machines.Version) return publishedSmiths;
-        smithsVersion = world.Machines.Version;
+        if (_publishedSmiths is not null && _smithsVersion == world.Machines.Version) return _publishedSmiths;
+        _smithsVersion = world.Machines.Version;
         var map = new Dictionary<string, CraftSmithView>(StringComparer.Ordinal);
         foreach (var m in world.Machines.All)
         {
@@ -234,8 +234,10 @@ public sealed partial class ProductionSystem
                         var model = WeaponModel(bench, option, level, false);
                         entries.Add(none with
                         {
-                            Model = model.Model is { } id ? db.Find(id)?.Name ?? id : "", ModelChanged = model.Model != option.Model,
-                            MaterialCost = db.Find(option.Item)?.GetInt("material cost", 4) ?? 4, Critical = critical,
+                            Model = model.Model is { } id ? _db.Find(id)?.Name ?? id : "",
+                            ModelChanged = model.Model != option.Model,
+                            MaterialCost = _db.Find(option.Item)?.GetInt("material cost", 4) ?? 4,
+                            Critical = critical,
                         });
                         break;
                     default:
@@ -245,24 +247,24 @@ public sealed partial class ProductionSystem
             }
             map[m.Site] = new CraftSmithView(cold.Name, (int)level, penalty, entries);
         }
-        return publishedSmiths = map;
+        return _publishedSmiths = map;
     }
 
-    IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>>? publishedCrafts;
-    long craftsResearch = -1;
-    int craftsBenches = -1;
+    IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>>? _publishedCrafts;
+    long _craftsResearch = -1;
+    int _craftsBenches = -1;
 
     /// <summary>Every crafting bench's options (rebuilt when research or the set of benches changed).</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>> CraftsView(World world)
     {
         int benches = 0;
         foreach (var m in world.Machines.All) if (m.Craft is not null) benches++;
-        if (publishedCrafts is not null && craftsResearch == world.Research.Version && craftsBenches == benches) return publishedCrafts;
-        craftsResearch = world.Research.Version;
-        craftsBenches = benches;
+        if (_publishedCrafts is not null && _craftsResearch == world.Research.Version && _craftsBenches == benches) return _publishedCrafts;
+        _craftsResearch = world.Research.Version;
+        _craftsBenches = benches;
         var map = new Dictionary<string, IReadOnlyList<CraftOptionView>>(StringComparer.Ordinal);
         foreach (var m in world.Machines.All) if (m.Craft is not null) map[m.Site] = CraftOptions(world, m.Site);
-        return publishedCrafts = map;
+        return _publishedCrafts = map;
     }
 
     /// <summary>What a bench can craft, for its Craft tab: every option with its recipe and whether it can be queued now.</summary>
@@ -272,7 +274,7 @@ public sealed partial class ProductionSystem
         return [.. bench.Options.Select(o =>
         {
             var recipe = RecipeOf(m, o);
-            return new CraftOptionView(o.Key, recipe.Name, o.Kind, o.Level, recipe.Hours, [.. recipe.Inputs.Select(i => (items.Info(i.Item)?.Name ?? i.Item, i.PerItem))], CanCraft(world, bench, o));
+            return new CraftOptionView(o.Key, recipe.Name, o.Kind, o.Level, recipe.Hours, [.. recipe.Inputs.Select(i => (_items.Info(i.Item)?.Name ?? i.Item, i.PerItem))], CanCraft(world, bench, o));
         })];
     }
 

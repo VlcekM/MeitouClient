@@ -11,12 +11,12 @@ public static class BackgroundWork
 {
     sealed class Scheduler : TaskScheduler
     {
-        readonly BlockingCollection<Task> queue = [], urgent = [];
+        readonly BlockingCollection<Task> _queue = [], _urgent = [];
 
         public Scheduler(int threads)
         {
             // A free thread takes the oldest urgent job first (TakeFromAny tries the collections in order), then the oldest other one.
-            var both = new[] { urgent, queue };
+            var both = new[] { _urgent, _queue };
             for (int i = 0; i < threads; i++)
                 new Thread(() =>
                 {
@@ -29,9 +29,9 @@ public static class BackgroundWork
                 { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = $"meitou-stream-{i}" }.Start();
         }
 
-        protected override void QueueTask(Task task) => (task.AsyncState is UrgentMark ? urgent : queue).Add(task);
+        protected override void QueueTask(Task task) => (task.AsyncState is UrgentMark ? _urgent : _queue).Add(task);
         protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => false;
-        protected override IEnumerable<Task> GetScheduledTasks() => [.. urgent.ToArray(), .. queue.ToArray()];
+        protected override IEnumerable<Task> GetScheduledTasks() => [.. _urgent.ToArray(), .. _queue.ToArray()];
         public override int MaximumConcurrencyLevel => Math.Max(2, Environment.ProcessorCount - 3);
     }
 
@@ -42,18 +42,18 @@ public static class BackgroundWork
     /// <summary>The streaming threads.</summary>
     public static readonly int Threads = Math.Max(2, Environment.ProcessorCount - 3);
 
-    static readonly Scheduler scheduler = new(Threads);
+    static readonly Scheduler WorkScheduler = new(Threads);
 
     public static Task<T> Run<T>(Func<T> work) =>
-        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.None, scheduler);
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.None, WorkScheduler);
 
     /// <summary>
     /// Like <see cref="Run{T}(Func{T})"/>, but ahead of every job that is not urgent: for work whose lateness shows near the camera
     /// (the foliage's whole zone layouts), which otherwise waited behind a burst of grass pages and texture decodes.
     /// </summary>
     public static Task<T> RunUrgent<T>(Func<T> work) =>
-        Task.Factory.StartNew(_ => work(), Urgent, CancellationToken.None, TaskCreationOptions.None, scheduler);
+        Task.Factory.StartNew(_ => work(), Urgent, CancellationToken.None, TaskCreationOptions.None, WorkScheduler);
 
     public static Task Run(Action work) =>
-        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.None, scheduler);
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.None, WorkScheduler);
 }

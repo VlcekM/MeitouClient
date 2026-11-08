@@ -17,9 +17,9 @@ public static class SpecialFood
     public static string EatenBy(GameDatabase db, string item)
     {
         var groupOf = new Dictionary<string, GameRecord>(StringComparer.Ordinal);   // a race listed by several groups keeps the last (the race loader)
-        foreach (var group in db.OfType(FcsRecordType.RACE_GROUP))
+        foreach (var group in db.OfType(FcsRecordType.RaceGroup))
             foreach (var race in group.GetReferences("races")) groupOf[race.TargetStringId] = group;
-        var eaters = db.OfType(FcsRecordType.RACE).Where(r => r.GetReferences("special food").Any(f => f.TargetStringId == item)).ToList();
+        var eaters = db.OfType(FcsRecordType.Race).Where(r => r.GetReferences("special food").Any(f => f.TargetStringId == item)).ToList();
         var listed = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var race in eaters)
             if (groupOf.TryGetValue(race.StringId, out var group)) listed[group.StringId] = listed.GetValueOrDefault(group.StringId) + 1;

@@ -105,7 +105,21 @@ public struct CombatSlot
 
     public static CombatSlot Fresh(int generation) => new()
     {
-        Generation = generation, TargetSlot = -1, TargetGeneration = 0, TaskSlot = -1, AttackTech = -1, CancelTick = -1, ReactTech = -1, ReactedSlot = -1, ReactedSeq = -1, HitTick = -1, HitPart = -1, HitFrom = -1, StumbleClip = -1, YieldTo = -1, LastTech = -1,
+        Generation = generation,
+        TargetSlot = -1,
+        TargetGeneration = 0,
+        TaskSlot = -1,
+        AttackTech = -1,
+        CancelTick = -1,
+        ReactTech = -1,
+        ReactedSlot = -1,
+        ReactedSeq = -1,
+        HitTick = -1,
+        HitPart = -1,
+        HitFrom = -1,
+        StumbleClip = -1,
+        YieldTo = -1,
+        LastTech = -1,
     };
 
     public readonly bool Fighting => TargetSlot >= 0;

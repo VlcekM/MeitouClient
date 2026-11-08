@@ -19,12 +19,12 @@ namespace Meitou.Game.Rendering.Foliage;
 /// </summary>
 public sealed unsafe partial class FoliageRenderer
 {
-    FoliageGrassGpu grassStore = null!;
+    FoliageGrassGpu _grassStore = null!;
     /// <summary>The native frame of the GPU blade programs (set 0 with the patch table as an extra storage binding).</summary>
-    NativeFrame? grassFrame;
-    NativeProg? grassGpuProgram, grassMotionGpuProgram;
+    NativeFrame? _grassFrame;
+    NativeProg? _grassGpuProgram, _grassMotionGpuProgram;
     /// <summary>The blade programs' vertex layout over the arena (instance rate: vec4 at 0, float at 16, stride 20), and their pipelines per segment.</summary>
-    NativeMesh grassMeshCpu, grassMeshMotionCpu, grassMeshGpu, grassMeshMotionGpu;
+    NativeMesh _grassMeshCpu, _grassMeshMotionCpu, _grassMeshGpu, _grassMeshMotionGpu;
 
     /// <summary>
     /// The grass drawn by the GPU (docs/renderer-native.md 5.6.2; where the device allows it): per view two compute kernels choose the
@@ -32,7 +32,7 @@ public sealed unsafe partial class FoliageRenderer
     /// </summary>
     public bool GpuGrass { get; set; } = true;
 
-    bool GpuGrassActive => GpuGrass && grassGpuProgram is not null;
+    bool GpuGrassActive => GpuGrass && _grassGpuProgram is not null;
 
     /// <summary>Bytes of the blade arena (160 MB) and slots of the cull table at the default grass distance; <see cref="GrassStoreScale"/> times them for a longer one.</summary>
     const ulong GrassArenaBytes = 160ul << 20;
@@ -42,7 +42,7 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary>The share of the device's memory budget a larger store may take (an 11 GB card fits the largest, an 8 GB one 6 times the default).</summary>
     const ulong GrassStoreBudgetShare = 8;
     /// <summary>The scale the store has, and the last one <see cref="VramGuard.Allows"/> refused (not asked again until the setting wants more).</summary>
-    int grassStoreScale, grassStoreRefused;
+    int _grassStoreScale, _grassStoreRefused;
 
     /// <summary>
     /// How many times the default store a grass distance needs: the pages in reach grow with the square of the distance, so x 2 needs 4 (640 MB);
@@ -53,21 +53,21 @@ public sealed unsafe partial class FoliageRenderer
     {
         int fits = budget > 0 ? (int)Math.Clamp(budget / GrassStoreBudgetShare / GrassArenaBytes, 1, MaxGrassStoreScale) : MaxGrassStoreScale;
         // Each place kept loaded besides the eye's (Areas) holds its own pages: the store is that many times larger, within the same caps.
-        return Math.Min((int)Math.Ceiling(Math.Clamp(grassRange * grassRange / (DefaultGrassRange * DefaultGrassRange) * areas, 1, MaxGrassStoreScale)), fits);
+        return Math.Min((int)Math.Ceiling(Math.Clamp(grassRange * grassRange / (DefaultGrassRange * DefaultGrassRange) * _areas, 1, MaxGrassStoreScale)), fits);
     }
 
     void InitGrassStore(IGpuContext gpu)
     {
-        grassStoreScale = GrassStoreScale(GrassRangeSetting, gpu.VideoMemoryBudget);
-        grassStore = new FoliageGrassGpu(gpu, GrassArenaBytes * (ulong)grassStoreScale, GrassSlotCapacity * grassStoreScale);
-        grassMeshCpu = ArenaMesh(grassProgram);
-        grassMeshMotionCpu = ArenaMesh(grassMotionProgram);
-        if (!grassStore.Kernels) return;
-        grassFrame = new NativeFrame(gpu, extraStorage: 1);
-        grassGpuProgram = new NativeProg(gpu, grassFrame, FoliageGrassShaders.GrassVertexGpu(), FoliageGrassShaders.GrassFragmentGpu(), "foliage grass gpu");
-        grassMotionGpuProgram = new NativeProg(gpu, grassFrame, FoliageGrassShaders.GrassMotionVertexGpu(), FoliageGrassShaders.GrassMotionFragmentGpu(), "foliage grass motion gpu");
-        grassMeshGpu = ArenaMesh(grassGpuProgram);
-        grassMeshMotionGpu = ArenaMesh(grassMotionGpuProgram);
+        _grassStoreScale = GrassStoreScale(GrassRangeSetting, gpu.VideoMemoryBudget);
+        _grassStore = new FoliageGrassGpu(gpu, GrassArenaBytes * (ulong)_grassStoreScale, GrassSlotCapacity * _grassStoreScale);
+        _grassMeshCpu = ArenaMesh(_grassProgram);
+        _grassMeshMotionCpu = ArenaMesh(_grassMotionProgram);
+        if (!_grassStore.Kernels) return;
+        _grassFrame = new NativeFrame(gpu, extraStorage: 1);
+        _grassGpuProgram = new NativeProg(gpu, _grassFrame, FoliageGrassShaders.GrassVertexGpu(), FoliageGrassShaders.GrassFragmentGpu(), "foliage grass gpu");
+        _grassMotionGpuProgram = new NativeProg(gpu, _grassFrame, FoliageGrassShaders.GrassMotionVertexGpu(), FoliageGrassShaders.GrassMotionFragmentGpu(), "foliage grass motion gpu");
+        _grassMeshGpu = ArenaMesh(_grassGpuProgram);
+        _grassMeshMotionGpu = ArenaMesh(_grassMotionGpuProgram);
     }
 
     /// <summary>
@@ -79,16 +79,16 @@ public sealed unsafe partial class FoliageRenderer
     void GrowGrassStore()
     {
         if (GpuContext.DiagNoGrow) return;
-        if (GrassStoreScale(GrassRangeSetting, 0) is var wanted && (wanted <= grassStoreScale || wanted <= grassStoreRefused)) return;
-        int scale = GrassStoreScale(GrassRangeSetting, guard is { BudgetBytes: > 0 } g ? (ulong)g.BudgetBytes : Gpu.VideoMemoryBudget);
-        if (scale <= grassStoreScale) { grassStoreRefused = wanted; return; }   // the budget caps it where it is
-        if (guard is { } vram && !vram.Allows(GrassArenaBytes * (ulong)scale))
+        if (GrassStoreScale(GrassRangeSetting, 0) is var wanted && (wanted <= _grassStoreScale || wanted <= _grassStoreRefused)) return;
+        int scale = GrassStoreScale(GrassRangeSetting, _guard is { BudgetBytes: > 0 } g ? (ulong)g.BudgetBytes : Gpu.VideoMemoryBudget);
+        if (scale <= _grassStoreScale) { _grassStoreRefused = wanted; return; }   // the budget caps it where it is
+        if (_guard is { } vram && !vram.Allows(GrassArenaBytes * (ulong)scale))
         {
-            grassStoreRefused = wanted;
+            _grassStoreRefused = wanted;
             Console.WriteLine($"foliage   grass store not grown to {GrassArenaBytes * (ulong)scale >> 20} MB: memory budget (VramGuard)");
             return;
         }
-        foreach (var state in zones.Values)
+        foreach (var state in _zones.Values)
         {
             foreach (var page in state.Pages.Values)
             {
@@ -98,60 +98,60 @@ public sealed unsafe partial class FoliageRenderer
             state.Pages.Clear();
             state.GrassRunning = 0;   // their jobs finish unread
         }
-        var old = grassStore;
-        grassStoreScale = scale;
-        grassStore = new FoliageGrassGpu(Gpu, GrassArenaBytes * (ulong)scale, GrassSlotCapacity * scale) { Misses = old.Misses };
-        grassMeshCpu = ArenaMesh(grassProgram);
-        grassMeshMotionCpu = ArenaMesh(grassMotionProgram);
-        if (grassGpuProgram is not null && grassMotionGpuProgram is not null)
+        var old = _grassStore;
+        _grassStoreScale = scale;
+        _grassStore = new FoliageGrassGpu(Gpu, GrassArenaBytes * (ulong)scale, GrassSlotCapacity * scale) { Misses = old.Misses };
+        _grassMeshCpu = ArenaMesh(_grassProgram);
+        _grassMeshMotionCpu = ArenaMesh(_grassMotionProgram);
+        if (_grassGpuProgram is not null && _grassMotionGpuProgram is not null)
         {
-            grassMeshGpu = ArenaMesh(grassGpuProgram);
-            grassMeshMotionGpu = ArenaMesh(grassMotionGpuProgram);
+            _grassMeshGpu = ArenaMesh(_grassGpuProgram);
+            _grassMeshMotionGpu = ArenaMesh(_grassMotionGpuProgram);
         }
-        grassFull = false;
-        grassVersion++;
+        _grassFull = false;
+        _grassVersion++;
         Gpu.DeferDelete(old.Dispose);
         Console.WriteLine($"foliage   grass store grown to {GrassArenaBytes * (ulong)scale >> 20} MB for grass distance x {GrassRangeSetting / DefaultGrassRange:0.##}");
     }
 
-    bool grassDisposing;
+    bool _grassDisposing;
 
     void DisposeGrassStore()
     {
-        grassDisposing = true;
-        grassGpuProgram?.Dispose();
-        grassMotionGpuProgram?.Dispose();
-        grassFrame?.Dispose();
-        grassStore.Dispose();
+        _grassDisposing = true;
+        _grassGpuProgram?.Dispose();
+        _grassMotionGpuProgram?.Dispose();
+        _grassFrame?.Dispose();
+        _grassStore.Dispose();
     }
 
     /// <summary>A blade program's inputs over the arena: location 0 the position and scale (a vec4), location 1 the yaw, both per instance.</summary>
     NativeMesh ArenaMesh(NativeProg p)
     {
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
-        var arena = grassStore.BladeBuffer;
-        attributes[0] = new LegacyProgram.Attribute(new GpuBufferBinding(arena, 0), InternalFormat.Rgba32f, FoliageGrassGpu.BladeBytes, true);
-        attributes[1] = new LegacyProgram.Attribute(new GpuBufferBinding(arena, 16), InternalFormat.R32f, FoliageGrassGpu.BladeBytes, true);
+        var arena = _grassStore.BladeBuffer;
+        attributes[0] = new LegacyProgram.Attribute(new GpuBufferBinding(arena, 0), InternalFormat.Rgba32F, FoliageGrassGpu.BladeBytes, true);
+        attributes[1] = new LegacyProgram.Attribute(new GpuBufferBinding(arena, 16), InternalFormat.R32F, FoliageGrassGpu.BladeBytes, true);
         return new NativeMesh { Layout = p.Layout(attributes), Vertices = p.Buffers(attributes, p.Own) };
     }
 
     // ---- pages into the store ----
 
-    uint grassPageSerial;
-    int grassZoneHigh;
-    readonly Stack<int> freeGrassZones = [];
+    uint _grassPageSerial;
+    int _grassZoneHigh;
+    readonly Stack<int> _freeGrassZones = [];
 
-    int AllocGrassZone() => freeGrassZones.Count > 0 ? freeGrassZones.Pop() : grassZoneHigh++;
+    int AllocGrassZone() => _freeGrassZones.Count > 0 ? _freeGrassZones.Pop() : _grassZoneHigh++;
 
     void ReleaseGrassZone(ZoneState state)
     {
         if (state.GrassZone < 0) return;
-        freeGrassZones.Push(state.GrassZone);
+        _freeGrassZones.Push(state.GrassZone);
         state.GrassZone = -1;
     }
 
     /// <summary>The store had no room for the last page tried (<see cref="TryQueuePage"/>), and whether a page was tried while it was full this frame.</summary>
-    bool grassFull, grassTriedFull;
+    bool _grassFull, _grassTriedFull;
 
     /// <summary>
     /// <see cref="QueuePage"/>, but while the store is full only one page a frame is tried; the others keep their blades and wait. Every page tried
@@ -160,14 +160,14 @@ public sealed unsafe partial class FoliageRenderer
     /// </summary>
     void TryQueuePage(ZoneState state, int key, GrassPage page, float[][] blades, int[] floats, int[][] prefixes)
     {
-        if (grassFull && grassTriedFull)
+        if (_grassFull && _grassTriedFull)
         {
-            if (page.PendingBlades is null) grassStore.Misses++;
+            if (page.PendingBlades is null) _grassStore.Misses++;
             (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (blades, floats, prefixes);
             return;
         }
-        grassTriedFull |= grassFull;
-        grassFull = !QueuePage(state, key, page, blades, floats, prefixes);
+        _grassTriedFull |= _grassFull;
+        _grassFull = !QueuePage(state, key, page, blades, floats, prefixes);
     }
 
     /// <summary>
@@ -177,7 +177,7 @@ public sealed unsafe partial class FoliageRenderer
     /// </summary>
     bool QueuePage(ZoneState state, int key, GrassPage page, float[][] blades, int[] floats, int[][] prefixes)
     {
-        var store = grassStore;
+        var store = _grassStore;
         var buffers = new GrassBuffer[blades.Length];
         bool room = true;
         for (int i = 0; i < blades.Length && room; i++)
@@ -200,7 +200,7 @@ public sealed unsafe partial class FoliageRenderer
         }
         (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (null, null, null);
         if (state.GrassZone < 0) state.GrassZone = AllocGrassZone();
-        uint zone = (uint)state.GrassZone, serial = ++grassPageSerial;
+        uint zone = (uint)state.GrassZone, serial = ++_grassPageSerial;
         float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
         float y = state.Ground is { } ground ? ground.Height(x0 + PageSize / 2, z0 + PageSize / 2) : 0;
         for (int i = 0; i < buffers.Length; i++)
@@ -212,13 +212,13 @@ public sealed unsafe partial class FoliageRenderer
             for (int at = 0; at < bytes; at += SlabBytes)
             {
                 int start = at, length = Math.Min(SlabBytes, bytes - at);
-                uploads.Enqueue(() =>
+                _uploads.Enqueue(() =>
                 {
                     if (!page.Dropped) store.WriteBlades(b.Range, start, MemoryMarshal.AsBytes(data.AsSpan()).Slice(start, length));
                 });
             }
         }
-        uploads.Enqueue(() =>
+        _uploads.Enqueue(() =>
         {
             // Every blade write is done: the rented blades go back.
             foreach (var data in blades) if (data.Length > 0) ArrayPool<float>.Shared.Return(data);
@@ -234,15 +234,15 @@ public sealed unsafe partial class FoliageRenderer
                 store.WriteSlot(b.Slot, new GrassSlot { X0 = x0, Z0 = z0, Y = y, FirstBlade = b.FirstBlade, Count = (uint)b.Count, Zone = zone, Local = (uint)i, Tie = serial << 8 | (uint)i }, b.Prefixes);
             }
             page.Buffers = buffers;
-            grassVersion++;
+            _grassVersion++;
         });
         return true;
     }
 
     // ---- the GPU path ----
 
-    readonly List<GrassPatchRow> grassPatchRows = [];
-    GrassZoneRow[] grassZoneRows = new GrassZoneRow[16];
+    readonly List<GrassPatchRow> _grassPatchRows = [];
+    GrassZoneRow[] _grassZoneRows = new GrassZoneRow[16];
 
     /// <summary>
     /// The view's zone and patch tables: for every zone with pages in the store, its patches' rows (a zone's patches can change when it is laid
@@ -252,14 +252,14 @@ public sealed unsafe partial class FoliageRenderer
     /// </summary>
     int BuildGrassRows(bool motion, WorldRenderOptions options, bool coverage)
     {
-        grassPatchRows.Clear();
-        if (grassZoneRows.Length < grassZoneHigh) grassZoneRows = new GrassZoneRow[Math.Max(grassZoneHigh, grassZoneRows.Length * 2)];
-        else Array.Clear(grassZoneRows);
+        _grassPatchRows.Clear();
+        if (_grassZoneRows.Length < _grassZoneHigh) _grassZoneRows = new GrassZoneRow[Math.Max(_grassZoneHigh, _grassZoneRows.Length * 2)];
+        else Array.Clear(_grassZoneRows);
         int active = 0;
-        foreach (var state in zones.Values)
+        foreach (var state in _zones.Values)
         {
             if (state.GrassZone < 0) continue;
-            grassZoneRows[state.GrassZone] = new GrassZoneRow { PatchBase = (uint)grassPatchRows.Count, PatchCount = (uint)state.Patches.Count };
+            _grassZoneRows[state.GrassZone] = new GrassZoneRow { PatchBase = (uint)_grassPatchRows.Count, PatchCount = (uint)state.Patches.Count };
             for (int i = 0; i < state.Patches.Count; i++)
             {
                 var patch = state.Patches[i];
@@ -274,12 +274,17 @@ public sealed unsafe partial class FoliageRenderer
                     (!motion && coverage ? FoliageGrassShaders.FlagCoverage : 0) | (!motion && options.Wireframe == 2 ? FoliageGrassShaders.FlagWireframe : 0) |
                     (isActive ? FoliageGrassShaders.FlagActive : 0);
                 if (isActive) active++;
-                grassPatchRows.Add(new GrassPatchRow
+                _grassPatchRows.Add(new GrassPatchRow
                 {
                     Size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight),
                     ColourBounds = new Vector4(patch.X0, patch.Z0, patch.X1, patch.Z1),
-                    Sway = motion || wind ? g.SwayLength : 0f, Range = GrassRange(patch), Frequency = 2f, Flags = flags,
-                    Sprite = motion || options.Textures ? spriteId : 0, ColourMap = hasColour ? colourId : 0, VertexCount = g.CrossQuads ? 12u : 6u,
+                    Sway = motion || wind ? g.SwayLength : 0f,
+                    Range = GrassRange(patch),
+                    Frequency = 2f,
+                    Flags = flags,
+                    Sprite = motion || options.Textures ? spriteId : 0,
+                    ColourMap = hasColour ? colourId : 0,
+                    VertexCount = g.CrossQuads ? 12u : 6u,
                 });
             }
         }
@@ -289,7 +294,7 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary>The rows' texture keys as bindless indices (inside the segment, as the CPU path's <see cref="Texture"/> calls are), and the tables into the frame's constants.</summary>
     GrassTables BindRows(uint nearDepth)
     {
-        var rows = CollectionsMarshal.AsSpan(grassPatchRows);
+        var rows = CollectionsMarshal.AsSpan(_grassPatchRows);
         for (int i = 0; i < rows.Length; i++)
         {
             ref var r = ref rows[i];
@@ -297,15 +302,15 @@ public sealed unsafe partial class FoliageRenderer
             r.ColourMap = Texture(r.ColourMap);
             r.NearDepth = nearDepth;
         }
-        return grassStore.Prepare(grassZoneRows.AsSpan(0, Math.Max(grassZoneHigh, 1)), rows);
+        return _grassStore.Prepare(_grassZoneRows.AsSpan(0, Math.Max(_grassZoneHigh, 1)), rows);
     }
 
     /// <summary>One view's grass on the GPU: the cull into <see cref="GpuFrame.PreFrame"/>, then one indirect draw in a native segment. False when nothing can draw.</summary>
     bool DrawGrassGpu(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour, float fogDistance, bool coverage)
     {
-        if (grassStore.SlotHigh == 0 || frustum.Length > 8) return false;
+        if (_grassStore.SlotHigh == 0 || frustum.Length > 8) return false;
         if (BuildGrassRows(false, options, coverage) == 0) return false;
-        var gp = grassGpuProgram!;
+        var gp = _grassGpuProgram!;
         var p = gp.P;
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the cull (into PreFrame), the sets and the draw, into a job.
         var targets = Gpu.CurrentTargets();
@@ -314,21 +319,21 @@ public sealed unsafe partial class FoliageRenderer
         NewTextureSegment();
         var tables = BindRows(0);
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
-        var result = grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
+        var result = _grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
-        if (!depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
-        var job = grassGpuJobs.Rent();
+        if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
+        var job = _grassGpuJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program) = (this, targets, state, p);
-        job.Frame = grassFrame!.Prepare(in view, [tables.Patches.Binding]);
-        job.Pipeline = result.IsEmpty ? null : PipelineFor(ref grassMeshGpu, gp, segment, state, targets.Formats, "foliage grass gpu");
-        (job.Vertices, job.Result) = (grassMeshGpu.Vertices, result);
+        job.Frame = _grassFrame!.Prepare(in view, [tables.Patches.Binding]);
+        job.Pipeline = result.IsEmpty ? null : PipelineFor(ref _grassMeshGpu, gp, segment, state, targets.Formats, "foliage grass gpu");
+        (job.Vertices, job.Result) = (_grassMeshGpu.Vertices, result);
         Gpu.Record("foliage grass", job);
-        DrawCalls += grassStore.LateDraws;
-        DrawnBlades += (int)grassStore.LateBlades;
+        DrawCalls += _grassStore.LateDraws;
+        DrawnBlades += (int)_grassStore.LateBlades;
         return true;
     }
 
-    readonly JobPool<GrassGpuJob> grassGpuJobs = new();
+    readonly JobPool<GrassGpuJob> _grassGpuJobs = new();
 
     /// <summary>One view's GPU grass as prepared (<see cref="DrawGrassGpu"/>): recorded on any thread, the same commands as before wave 4.</summary>
     sealed class GrassGpuJob : RecordJob
@@ -363,16 +368,16 @@ public sealed unsafe partial class FoliageRenderer
         public override void Release()
         {
             Pipeline = null;
-            Owner.grassGpuJobs.Return(this);
+            Owner._grassGpuJobs.Return(this);
         }
     }
 
     /// <summary><see cref="DrawGrassMotion"/> on the GPU: the same cull for the scene camera over the patches that sway, one indirect draw.</summary>
     void DrawGrassMotionGpu(MotionTargets targets, Vector3 eye, float time, float previousTime, Matrix4x4 previous)
     {
-        if (grassStore.SlotHigh == 0 || motionFrustum.Length > 8) return;
+        if (_grassStore.SlotHigh == 0 || _motionFrustum.Length > 8) return;
         if (BuildGrassRows(true, default!, false) == 0) return;
-        var gp = grassMotionGpuProgram!;
+        var gp = _grassMotionGpuProgram!;
         var p = gp.P;
         var cmd = Gpu.BeginGuest("foliage grass motion");
         var pass = Gpu.CurrentTargets();
@@ -385,18 +390,23 @@ public sealed unsafe partial class FoliageRenderer
         cmd.SetDepthBias(drawState.BiasEnable, drawState.BiasConstant, drawState.BiasSlope);
         var view = new ViewConstants
         {
-            ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = eye, Time = time, PreviousTime = previousTime,
-            NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc,
+            ViewProjection = _motionViewProjection,
+            PreviousViewProjection = previous,
+            Eye = eye,
+            Time = time,
+            PreviousTime = previousTime,
+            NearPlanes = targets.Planes,
+            JitterNdc = targets.JitterNdc,
         };
         NewTextureSegment();
         var tables = BindRows(NearDepthIndex(targets.Depth));
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
-        var result = grassStore.Dispatch(motionFrustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables, motionScale);
-        grassFrame!.Bind(cmd, p, in view, [tables.Patches.Binding]);
+        var result = _grassStore.Dispatch(_motionFrustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables, _motionScale);
+        _grassFrame!.Bind(cmd, p, in view, [tables.Patches.Binding]);
         if (!result.IsEmpty)
         {
-            cmd.BindPipeline(PipelineFor(ref grassMeshMotionGpu, gp, segment, drawState, pass.Formats, "foliage grass motion gpu"));
-            cmd.BindVertexBuffers(0, grassMeshMotionGpu.Vertices);
+            cmd.BindPipeline(PipelineFor(ref _grassMeshMotionGpu, gp, segment, drawState, pass.Formats, "foliage grass motion gpu"));
+            cmd.BindVertexBuffers(0, _grassMeshMotionGpu.Vertices);
             cmd.DrawIndirectCount(result.Draws, result.DrawsOffset, result.Counters, result.CountersOffset, (uint)result.MaxDraws);
         }
         Gpu.EndGuest(cmd);

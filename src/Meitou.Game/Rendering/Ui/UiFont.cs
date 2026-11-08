@@ -28,27 +28,27 @@ internal sealed unsafe class UiFont : IDisposable
     internal readonly record struct Glyph(float Advance, float OffsetX, float OffsetY, float Width, float Height, ushort X, ushort Y, ushort PixelWidth, ushort PixelHeight);
 
     const int MaxSide = 2048;
-    readonly IGpuContext gpu;
-    readonly FreeTypeFace face;
-    readonly FT_SizeRec_* size;
-    readonly bool faithful;
-    readonly int oversample;
-    FT_LOAD loadFlags;
-    int hintingFailures;
-    readonly MyGuiCodeRanges? ranges;
-    readonly int substituteCode, offsetHeight, pad;
-    readonly float tabWidth, kerningScale;
-    readonly Dictionary<int, Glyph> glyphs = [];
-    readonly Dictionary<uint, Glyph> byIndex = [];
-    byte[] pixels;
-    byte[] scratch = new byte[1024], uploadScratch = new byte[1024];
-    int cursorX, cursorY, rowHeight;
-    int dirtyX0, dirtyY0, dirtyX1, dirtyY1;
-    bool dirty;
-    GpuTexture? texture;
-    SampledTexture sampled;
-    float tab = -1;
-    bool disposed;
+    readonly IGpuContext _gpu;
+    readonly FreeTypeFace _face;
+    readonly FT_SizeRec_* _size;
+    readonly bool _faithful;
+    readonly int _oversample;
+    FT_LOAD _loadFlags;
+    int _hintingFailures;
+    readonly MyGuiCodeRanges? _ranges;
+    readonly int _substituteCode, _offsetHeight, _pad;
+    readonly float _tabWidth, _kerningScale;
+    readonly Dictionary<int, Glyph> _glyphs = [];
+    readonly Dictionary<uint, Glyph> _byIndex = [];
+    byte[] _pixels;
+    byte[] _scratch = new byte[1024], _uploadScratch = new byte[1024];
+    int _cursorX, _cursorY, _rowHeight;
+    int _dirtyX0, _dirtyY0, _dirtyX1, _dirtyY1;
+    bool _dirty;
+    GpuTexture? _texture;
+    SampledTexture _sampled;
+    float _tab = -1;
+    bool _disposed;
 
     /// <summary>The atlas side in texels.</summary>
     public int Side { get; private set; }
@@ -65,42 +65,42 @@ internal sealed unsafe class UiFont : IDisposable
 
     public UiFont(IGpuContext gpu, UiFontOptions options)
     {
-        this.gpu = gpu;
-        faithful = options.Faithful;
-        Snapped = faithful || options.Snapped;
+        this._gpu = gpu;
+        _faithful = options.Faithful;
+        Snapped = _faithful || options.Snapped;
         var resource = options.Resource;
-        oversample = !faithful && !Snapped ? 2 : 1;
-        ranges = faithful ? resource?.Codes ?? MyGuiCodeRanges.Bmp : null;
-        substituteCode = resource?.SubstituteCode ?? -1;
-        offsetHeight = faithful ? resource?.OffsetHeight ?? 0 : 0;
-        tabWidth = resource?.TabWidth ?? 0;
-        pad = Math.Max(1, faithful ? resource?.Distance ?? 1 : 1) * oversample;
+        _oversample = !_faithful && !Snapped ? 2 : 1;
+        _ranges = _faithful ? resource?.Codes ?? MyGuiCodeRanges.Bmp : null;
+        _substituteCode = resource?.SubstituteCode ?? -1;
+        _offsetHeight = _faithful ? resource?.OffsetHeight ?? 0 : 0;
+        _tabWidth = resource?.TabWidth ?? 0;
+        _pad = Math.Max(1, _faithful ? resource?.Distance ?? 1 : 1) * _oversample;
         var hinting = resource?.Hinting ?? MyGuiHinting.UseNative;
-        loadFlags = !faithful ? Snapped ? (FT_LOAD)FT_LOAD_TARGET_LIGHT : FT_LOAD.FT_LOAD_NO_HINTING : hinting switch
+        _loadFlags = !_faithful ? Snapped ? (FT_LOAD)FT_LOAD_TARGET_LIGHT : FT_LOAD.FT_LOAD_NO_HINTING : hinting switch
         {
             MyGuiHinting.ForceAuto => FT_LOAD.FT_LOAD_FORCE_AUTOHINT,
             MyGuiHinting.DisableAuto => FT_LOAD.FT_LOAD_NO_AUTOHINT,
             MyGuiHinting.DisableAll => FT_LOAD.FT_LOAD_NO_HINTING,
             _ => FT_LOAD.FT_LOAD_DEFAULT,
         };
-        face = FreeTypeFace.Open(options.Path);
+        _face = FreeTypeFace.Open(options.Path);
         float ppem = options.Size64 / 64f * options.Dpi / 72f;
         lock (FreeTypeFace.Gate)
         {
             FT_SizeRec_* created;
-            Check(FT_New_Size(face.Face, &created), "FT_New_Size");
-            size = created;
-            Check(FT_Activate_Size(size), "FT_Activate_Size");
-            if (face.Scalable) Check(FT_Set_Char_Size(face.Face, (nint)(options.Size64 * oversample), 0, options.Dpi, options.Dpi), "FT_Set_Char_Size");
-            else SelectStrike(ppem * oversample);
-            var metrics = face.Face->size->metrics;
-            if (faithful)
+            Check(FT_New_Size(_face.Face, &created), "FT_New_Size");
+            _size = created;
+            Check(FT_Activate_Size(_size), "FT_Activate_Size");
+            if (_face.Scalable) Check(FT_Set_Char_Size(_face.Face, (nint)(options.Size64 * _oversample), 0, options.Dpi, options.Dpi), "FT_Set_Char_Size");
+            else SelectStrike(ppem * _oversample);
+            var metrics = _face.Face->size->metrics;
+            if (_faithful)
             {
                 // MyGUI: the grid-fitted ascent and descent, raised to the OS/2 Windows and typographic values at the pixel size.
                 int ascent = (int)(metrics.ascender >> 6), descent = (int)((-metrics.descender) >> 6);
-                if (face.Os2 is { } os2 && face.UnitsPerEm > 0)
+                if (_face.Os2 is { } os2 && _face.UnitsPerEm > 0)
                 {
-                    int yppem = metrics.y_ppem, upem = face.UnitsPerEm;
+                    int yppem = metrics.y_ppem, upem = _face.UnitsPerEm;
                     ascent = Math.Max(ascent, os2.WinAscent * yppem / upem);
                     descent = Math.Max(descent, os2.WinDescent * yppem / upem);
                     ascent = Math.Max(ascent, os2.TypoAscender * yppem / upem);
@@ -111,17 +111,17 @@ internal sealed unsafe class UiFont : IDisposable
             }
             else
             {
-                float em = ppem / Math.Max(1, face.UnitsPerEm);
+                float em = ppem / Math.Max(1, _face.UnitsPerEm);
                 LineHeight = ppem * 1.25f;
-                Baseline = (LineHeight - (face.Ascender - face.Descender) * em) / 2 + face.Ascender * em;
+                Baseline = (LineHeight - (_face.Ascender - _face.Descender) * em) / 2 + _face.Ascender * em;
             }
-            kerningScale = faithful ? 0 : ppem / Math.Max(1, face.UnitsPerEm);
+            _kerningScale = _faithful ? 0 : ppem / Math.Max(1, _face.UnitsPerEm);
         }
-        Side = ppem * oversample <= 48 ? 512 : ppem * oversample <= 96 ? 1024 : MaxSide;
-        pixels = new byte[Side * Side];
-        (cursorX, cursorY) = (pad, pad);
+        Side = ppem * _oversample <= 48 ? 512 : ppem * _oversample <= 96 ? 1024 : MaxSide;
+        _pixels = new byte[Side * Side];
+        (_cursorX, _cursorY) = (_pad, _pad);
         // Like MyGUI, which builds every glyph of its ranges at load: the usual ones now (not while a frame draws them), the rest on demand.
-        if (ranges is not null) { if (ranges.Count <= 1024) foreach (int cp in ranges.CodePoints()) Lookup(cp); }
+        if (_ranges is not null) { if (_ranges.Count <= 1024) foreach (int cp in _ranges.CodePoints()) Lookup(cp); }
         else { for (int cp = 32; cp < 127; cp++) Lookup(cp); for (int cp = 0xA0; cp < 0x100; cp++) Lookup(cp); }
         CharWidth = Lookup('M').Advance;
     }
@@ -134,7 +134,7 @@ internal sealed unsafe class UiFont : IDisposable
     /// <summary>A bitmap-only font: the smallest strike at least as large as <paramref name="ppem"/>, else the largest.</summary>
     void SelectStrike(float ppem)
     {
-        var f = face.Face;
+        var f = _face.Face;
         if (f->num_fixed_sizes <= 0) return;
         int best = 0;
         float bestSize = float.MaxValue, largest = -1;
@@ -151,9 +151,9 @@ internal sealed unsafe class UiFont : IDisposable
     /// <summary>The glyph drawn for <paramref name="codePoint"/>, rasterising it if it is new (CPU only; <see cref="Prepare"/> uploads).</summary>
     public Glyph Lookup(int codePoint)
     {
-        if (glyphs.TryGetValue(codePoint, out var known)) return known;
+        if (_glyphs.TryGetValue(codePoint, out var known)) return known;
         var made = Make(codePoint);
-        glyphs[codePoint] = made;
+        _glyphs[codePoint] = made;
         return made;
     }
 
@@ -165,17 +165,17 @@ internal sealed unsafe class UiFont : IDisposable
     }
 
     /// <summary>The kerning between two code points in output pixels (none in Faithful mode: MyGUI 3.2 does not kern).</summary>
-    public float Kern(int left, int right) => faithful ? 0 : face.KerningUnits(left, right) * kerningScale;
+    public float Kern(int left, int right) => _faithful ? 0 : _face.KerningUnits(left, right) * _kerningScale;
 
     Glyph Make(int codePoint)
     {
         if (codePoint == '\t')
         {
-            if (tab < 0) tab = tabWidth > 0 ? tabWidth : 8 * Lookup(' ').Advance;
-            return new Glyph(tab, 0, 0, 0, 0, 0, 0, 0, 0);
+            if (_tab < 0) _tab = _tabWidth > 0 ? _tabWidth : 8 * Lookup(' ').Advance;
+            return new Glyph(_tab, 0, 0, 0, 0, 0, 0, 0, 0);
         }
         // Line breaks are the text layout's; other C0 controls and (Meitou) zero-width marks have no glyph.
-        if (codePoint < 0x20 || !faithful && codePoint is >= 0x200B and <= 0x200F or 0xFEFF or >= 0xFE00 and <= 0xFE0F) return default;
+        if (codePoint < 0x20 || !_faithful && codePoint is >= 0x200B and <= 0x200F or 0xFEFF or >= 0xFE00 and <= 0xFE0F) return default;
         return ForIndex(Resolve(codePoint));
     }
 
@@ -188,20 +188,20 @@ internal sealed unsafe class UiFont : IDisposable
     {
         lock (FreeTypeFace.Gate)
         {
-            uint Index(int cp) => cp >= 0 && (ranges is null || cp == ' ' || ranges.Contains(cp)) ? FT_Get_Char_Index(face.Face, (nuint)cp) : 0;
+            uint Index(int cp) => cp >= 0 && (_ranges is null || cp == ' ' || _ranges.Contains(cp)) ? FT_Get_Char_Index(_face.Face, (nuint)cp) : 0;
             uint index = Index(codePoint);
             if (index != 0) return index;
-            if (substituteCode >= 0 && Index(substituteCode) is var substitute and not 0) return substitute;
-            if (!faithful && Index('?') is var question and not 0) return question;
+            if (_substituteCode >= 0 && Index(_substituteCode) is var substitute and not 0) return substitute;
+            if (!_faithful && Index('?') is var question and not 0) return question;
             return 0;
         }
     }
 
     Glyph ForIndex(uint index)
     {
-        if (byIndex.TryGetValue(index, out var known)) return known;
+        if (_byIndex.TryGetValue(index, out var known)) return known;
         var made = Rasterise(index);
-        byIndex[index] = made;
+        _byIndex[index] = made;
         return made;
     }
 
@@ -211,43 +211,43 @@ internal sealed unsafe class UiFont : IDisposable
         int width, height;
         lock (FreeTypeFace.Gate)
         {
-            Check(FT_Activate_Size(size), "FT_Activate_Size");
-            var error = FT_Load_Glyph(face.Face, index, loadFlags | FT_LOAD.FT_LOAD_RENDER);
+            Check(FT_Activate_Size(_size), "FT_Activate_Size");
+            var error = FT_Load_Glyph(_face.Face, index, _loadFlags | FT_LOAD.FT_LOAD_RENDER);
             // Some fonts' bytecode is rejected by this FreeType (ume-pgs5.ttf: Invalid_Opcode at every size): the auto-hinter, then no hinting,
             // for the glyph, and for the font from the third failure on (a font whose hinting fails once is not tried at every glyph).
-            if (error != FT_Error.FT_Err_Ok && (loadFlags & (FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_FORCE_AUTOHINT)) == 0)
+            if (error != FT_Error.FT_Err_Ok && (_loadFlags & (FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_FORCE_AUTOHINT)) == 0)
             {
-                if (++hintingFailures >= 3) loadFlags = FT_LOAD.FT_LOAD_FORCE_AUTOHINT;
-                error = FT_Load_Glyph(face.Face, index, FT_LOAD.FT_LOAD_FORCE_AUTOHINT | FT_LOAD.FT_LOAD_RENDER);
+                if (++_hintingFailures >= 3) _loadFlags = FT_LOAD.FT_LOAD_FORCE_AUTOHINT;
+                error = FT_Load_Glyph(_face.Face, index, FT_LOAD.FT_LOAD_FORCE_AUTOHINT | FT_LOAD.FT_LOAD_RENDER);
             }
-            if (error != FT_Error.FT_Err_Ok && (loadFlags & FT_LOAD.FT_LOAD_NO_HINTING) == 0)
+            if (error != FT_Error.FT_Err_Ok && (_loadFlags & FT_LOAD.FT_LOAD_NO_HINTING) == 0)
             {
-                if (++hintingFailures >= 3) loadFlags = FT_LOAD.FT_LOAD_NO_HINTING;
-                error = FT_Load_Glyph(face.Face, index, FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_RENDER);
+                if (++_hintingFailures >= 3) _loadFlags = FT_LOAD.FT_LOAD_NO_HINTING;
+                error = FT_Load_Glyph(_face.Face, index, FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_RENDER);
             }
             if (error != FT_Error.FT_Err_Ok) return default;
-            var slot = face.Face->glyph;
+            var slot = _face.Face->glyph;
             // MyGUI advances by the hinted advance; Meitou by the unhinted one (light hinting leaves it alone), both in output pixels.
-            advance = faithful ? slot->advance.x / 64f
-                : (slot->linearHoriAdvance != 0 ? slot->linearHoriAdvance / 65536f : slot->advance.x / 64f) / oversample;
+            advance = _faithful ? slot->advance.x / 64f
+                : (slot->linearHoriAdvance != 0 ? slot->linearHoriAdvance / 65536f : slot->advance.x / 64f) / _oversample;
             ref var bitmap = ref slot->bitmap;
             width = (int)bitmap.width;
             height = (int)bitmap.rows;
-            if (width <= 0 || height <= 0 || bitmap.buffer == null || bitmap.pitch <= 0 || width > MaxSide - 2 * pad || height > MaxSide - 2 * pad)
+            if (width <= 0 || height <= 0 || bitmap.buffer == null || bitmap.pitch <= 0 || width > MaxSide - 2 * _pad || height > MaxSide - 2 * _pad)
                 return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
-            if (scratch.Length < width * height) scratch = new byte[width * height];
+            if (_scratch.Length < width * height) _scratch = new byte[width * height];
             switch (bitmap.pixel_mode)
             {
                 case FT_Pixel_Mode_.FT_PIXEL_MODE_GRAY:
                     for (int row = 0; row < height; row++)
-                        new ReadOnlySpan<byte>(bitmap.buffer + (long)row * bitmap.pitch, width).CopyTo(scratch.AsSpan(row * width, width));
+                        new ReadOnlySpan<byte>(bitmap.buffer + (long)row * bitmap.pitch, width).CopyTo(_scratch.AsSpan(row * width, width));
                     break;
                 case FT_Pixel_Mode_.FT_PIXEL_MODE_MONO:
                     // An embedded bitmap strike: one bit per texel, most significant first.
                     for (int row = 0; row < height; row++)
                     {
                         byte* source = bitmap.buffer + (long)row * bitmap.pitch;
-                        for (int x = 0; x < width; x++) scratch[row * width + x] = (source[x >> 3] >> (7 - (x & 7)) & 1) != 0 ? (byte)255 : (byte)0;
+                        for (int x = 0; x < width; x++) _scratch[row * width + x] = (source[x >> 3] >> (7 - (x & 7)) & 1) != 0 ? (byte)255 : (byte)0;
                     }
                     break;
                 default:
@@ -255,13 +255,13 @@ internal sealed unsafe class UiFont : IDisposable
             }
             // MyGUI places the bitmap at the metrics' bearing (floor(ascent - horiBearingY) from the line top, less OffsetHeight); for
             // hinted glyphs that is bitmap_left / bitmap_top, which are used here.
-            offsetX = slot->bitmap_left / (float)oversample;
-            offsetY = (-slot->bitmap_top - offsetHeight) / (float)oversample;
+            offsetX = slot->bitmap_left / (float)_oversample;
+            offsetY = (-slot->bitmap_top - _offsetHeight) / (float)_oversample;
         }
         if (!Pack(width, height, out int x0, out int y0)) return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
-        for (int row = 0; row < height; row++) System.Buffer.BlockCopy(scratch, row * width, pixels, (y0 + row) * Side + x0, width);
+        for (int row = 0; row < height; row++) System.Buffer.BlockCopy(_scratch, row * width, _pixels, (y0 + row) * Side + x0, width);
         MarkDirty(x0, y0, x0 + width, y0 + height);
-        return new Glyph(advance, offsetX, offsetY, width / (float)oversample, height / (float)oversample, (ushort)x0, (ushort)y0, (ushort)width, (ushort)height);
+        return new Glyph(advance, offsetX, offsetY, width / (float)_oversample, height / (float)_oversample, (ushort)x0, (ushort)y0, (ushort)width, (ushort)height);
     }
 
     /// <summary>A free rectangle of <paramref name="width"/> x <paramref name="height"/> texels (with the spacing around it): growing the atlas, then starting it over, when it is full.</summary>
@@ -270,12 +270,12 @@ internal sealed unsafe class UiFont : IDisposable
         bool restarted = false;
         while (true)
         {
-            if (cursorX > pad && cursorX + width + pad > Side) { cursorY += rowHeight + pad; cursorX = pad; rowHeight = 0; }
-            if (width + 2 * pad <= Side && cursorY + height + pad <= Side)
+            if (_cursorX > _pad && _cursorX + width + _pad > Side) { _cursorY += _rowHeight + _pad; _cursorX = _pad; _rowHeight = 0; }
+            if (width + 2 * _pad <= Side && _cursorY + height + _pad <= Side)
             {
-                (x, y) = (cursorX, cursorY);
-                cursorX += width + pad;
-                rowHeight = Math.Max(rowHeight, height);
+                (x, y) = (_cursorX, _cursorY);
+                _cursorX += width + _pad;
+                _rowHeight = Math.Max(_rowHeight, height);
                 return true;
             }
             if (Side < MaxSide) Grow();
@@ -286,8 +286,8 @@ internal sealed unsafe class UiFont : IDisposable
 
     void MarkDirty(int x0, int y0, int x1, int y1)
     {
-        if (!dirty) (dirtyX0, dirtyY0, dirtyX1, dirtyY1, dirty) = (x0, y0, x1, y1, true);
-        else (dirtyX0, dirtyY0, dirtyX1, dirtyY1) = (Math.Min(dirtyX0, x0), Math.Min(dirtyY0, y0), Math.Max(dirtyX1, x1), Math.Max(dirtyY1, y1));
+        if (!_dirty) (_dirtyX0, _dirtyY0, _dirtyX1, _dirtyY1, _dirty) = (x0, y0, x1, y1, true);
+        else (_dirtyX0, _dirtyY0, _dirtyX1, _dirtyY1) = (Math.Min(_dirtyX0, x0), Math.Min(_dirtyY0, y0), Math.Max(_dirtyX1, x1), Math.Max(_dirtyY1, y1));
     }
 
     /// <summary>The atlas twice as large: glyph rectangles keep their place, texture coordinates change (and the GPU texture is made anew).</summary>
@@ -296,8 +296,8 @@ internal sealed unsafe class UiFont : IDisposable
         Retire();
         int side = Side * 2;
         var larger = new byte[side * side];
-        for (int row = 0; row < Side; row++) System.Buffer.BlockCopy(pixels, row * Side, larger, row * side, Side);
-        pixels = larger;
+        for (int row = 0; row < Side; row++) System.Buffer.BlockCopy(_pixels, row * Side, larger, row * side, Side);
+        _pixels = larger;
         Side = side;
         Generation++;
         Changes++;
@@ -307,11 +307,11 @@ internal sealed unsafe class UiFont : IDisposable
     void Restart()
     {
         Retire();
-        glyphs.Clear();
-        byIndex.Clear();
-        tab = -1;
-        Array.Clear(pixels);
-        (cursorX, cursorY, rowHeight) = (pad, pad, 0);
+        _glyphs.Clear();
+        _byIndex.Clear();
+        _tab = -1;
+        Array.Clear(_pixels);
+        (_cursorX, _cursorY, _rowHeight) = (_pad, _pad, 0);
         Generation++;
         Changes++;
     }
@@ -322,17 +322,17 @@ internal sealed unsafe class UiFont : IDisposable
     /// </summary>
     void Retire()
     {
-        if (texture is null) { dirty = false; return; }
+        if (_texture is null) { _dirty = false; return; }
         UploadDirty();
-        texture.Dispose();
-        texture = null;
+        _texture.Dispose();
+        _texture = null;
     }
 
     /// <summary>Uploads the glyphs rasterised since the last call, creating the GPU texture first when there is none.</summary>
     public void Prepare()
     {
-        if (texture is null) Create();
-        else if (dirty) UploadDirty();
+        if (_texture is null) Create();
+        else if (_dirty) UploadDirty();
     }
 
     /// <summary>The atlas as a draw samples it (uploads first).</summary>
@@ -341,38 +341,38 @@ internal sealed unsafe class UiFont : IDisposable
         get
         {
             Prepare();
-            return sampled;
+            return _sampled;
         }
     }
 
     void Create()
     {
-        using var upload = gpu.Uploads.Begin();
+        using var upload = _gpu.Uploads.Begin();
         var created = upload.Create(new TextureDesc(InternalFormat.R8, Side, Side, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "UI font"));
-        upload.Write(created, 0, 0, new PixelRect(0, 0, (uint)Side, (uint)Side), pixels);
-        texture = created;
-        sampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
+        upload.Write(created, 0, 0, new PixelRect(0, 0, (uint)Side, (uint)Side), _pixels);
+        _texture = created;
+        _sampled = new SampledTexture(_gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), created.View());
-        dirty = false;
+        _dirty = false;
     }
 
     void UploadDirty()
     {
-        if (!dirty || texture is null) { dirty = false; return; }
-        int width = dirtyX1 - dirtyX0, height = dirtyY1 - dirtyY0;
-        if (uploadScratch.Length < width * height) uploadScratch = new byte[width * height];
-        for (int row = 0; row < height; row++) System.Buffer.BlockCopy(pixels, (dirtyY0 + row) * Side + dirtyX0, uploadScratch, row * width, width);
-        using var upload = gpu.Uploads.Begin();
-        upload.Write(texture, 0, 0, new PixelRect(dirtyX0, dirtyY0, (uint)width, (uint)height), uploadScratch.AsSpan(0, width * height));
-        dirty = false;
+        if (!_dirty || _texture is null) { _dirty = false; return; }
+        int width = _dirtyX1 - _dirtyX0, height = _dirtyY1 - _dirtyY0;
+        if (_uploadScratch.Length < width * height) _uploadScratch = new byte[width * height];
+        for (int row = 0; row < height; row++) System.Buffer.BlockCopy(_pixels, (_dirtyY0 + row) * Side + _dirtyX0, _uploadScratch, row * width, width);
+        using var upload = _gpu.Uploads.Begin();
+        upload.Write(_texture, 0, 0, new PixelRect(_dirtyX0, _dirtyY0, (uint)width, (uint)height), _uploadScratch.AsSpan(0, width * height));
+        _dirty = false;
     }
 
     public void Dispose()
     {
-        if (disposed) return;
-        disposed = true;
-        lock (FreeTypeFace.Gate) FT_Done_Size(size);
-        texture?.Dispose();
-        texture = null;
+        if (_disposed) return;
+        _disposed = true;
+        lock (FreeTypeFace.Gate) FT_Done_Size(_size);
+        _texture?.Dispose();
+        _texture = null;
     }
 }

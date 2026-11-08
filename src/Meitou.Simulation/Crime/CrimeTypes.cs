@@ -96,15 +96,15 @@ public sealed class BountyEntry
 /// <summary>A character's bounties, one entry per faction in faction order (so the ledger enumerates and hashes the same way however it was filled). Serial phases change it.</summary>
 public sealed class BountyLedger
 {
-    readonly List<BountyEntry> entries = [];
+    readonly List<BountyEntry> _entries = [];
 
-    public IReadOnlyList<BountyEntry> Entries => entries;
-    public int Count => entries.Count;
+    public IReadOnlyList<BountyEntry> Entries => _entries;
+    public int Count => _entries.Count;
 
     /// <summary>The entry of <paramref name="faction"/>, or null.</summary>
     public BountyEntry? Of(int faction)
     {
-        foreach (var e in entries) if (e.Faction == faction) return e;
+        foreach (var e in _entries) if (e.Faction == faction) return e;
         return null;
     }
 
@@ -122,7 +122,7 @@ public sealed class BountyLedger
     {
         get
         {
-            foreach (var e in entries) if (e.Amount > 0) return true;
+            foreach (var e in _entries) if (e.Amount > 0) return true;
             return false;
         }
     }
@@ -133,7 +133,7 @@ public sealed class BountyLedger
         get
         {
             int t = 0;
-            foreach (var e in entries) t += e.Amount;
+            foreach (var e in _entries) t += e.Amount;
             return t;
         }
     }
@@ -144,18 +144,18 @@ public sealed class BountyLedger
         if (Of(faction) is { } found) return found;
         var entry = new BountyEntry { Faction = faction, FactionName = name };
         int at = 0;
-        while (at < entries.Count && entries[at].Faction < faction) at++;
-        entries.Insert(at, entry);
+        while (at < _entries.Count && _entries[at].Faction < faction) at++;
+        _entries.Insert(at, entry);
         return entry;
     }
 
-    public bool Remove(BountyEntry entry) => entries.Remove(entry);
+    public bool Remove(BountyEntry entry) => _entries.Remove(entry);
 
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x426F756E);   // "Boun"
-        h.Add(entries.Count);
-        foreach (var e in entries)
+        h.Add(_entries.Count);
+        foreach (var e in _entries)
         {
             h.Add(e.Faction);
             h.Add(e.Amount);
@@ -247,31 +247,31 @@ public readonly record struct CrimeEvent(long Tick, CrimeEventKind Kind, Charact
 /// <summary>What the crime rules need to know of the factions: who books bounties and whose goods are free.</summary>
 public sealed class CrimeFactions
 {
-    readonly bool[] books, lawless, bandit, hunters;
-    readonly int[] booking;
+    readonly bool[] _books, _lawless, _bandit, _hunters;
+    readonly int[] _booking;
 
     public CrimeFactions(FactionRelations relations)
     {
         Relations = relations;
         int n = relations.Count;
-        books = new bool[n];
-        lawless = new bool[n];
-        bandit = new bool[n];
-        hunters = new bool[n];
-        booking = new int[n];
+        _books = new bool[n];
+        _lawless = new bool[n];
+        _bandit = new bool[n];
+        _hunters = new bool[n];
+        _booking = new int[n];
         for (int f = 0; f < n; f++)
         {
             var data = relations.Factions[f];
-            books[f] = data.BooksBounties;
-            bandit[f] = data.FundamentalType == FundamentalType.Bandit;
-            lawless[f] = data.NotReal || bandit[f];
+            _books[f] = data.BooksBounties;
+            _bandit[f] = data.FundamentalType == FundamentalType.Bandit;
+            _lawless[f] = data.NotReal || _bandit[f];
         }
         for (int f = 0; f < n; f++)
         {
             var data = relations.Factions[f];
             int legal = data.LegalSystem is { } id ? relations.IndexOf(id) : -1;
-            booking[f] = BookingKey(relations, f);
-            hunters[f] = data.FundamentalType == FundamentalType.Adventurer && legal >= 0 && !data.NotReal;
+            _booking[f] = BookingKey(relations, f);
+            _hunters[f] = data.FundamentalType == FundamentalType.Adventurer && legal >= 0 && !data.NotReal;
         }
     }
 
@@ -279,7 +279,7 @@ public sealed class CrimeFactions
     /// The faction whose ledger entry <paramref name="f"/>'s bounties use (the game's <c>FUN_140851fb0</c> / <c>FUN_140852010</c>, economy.md 11.2, <b>Verified</b>): its <c>legal system</c>
     /// when it has one, else itself when it books bounties, else -1 (no entry). The booking, the claims and every bounty lookup by a faction go through it.
     /// </summary>
-    public int BookingOf(int f) => Relations.Contains(f) ? booking[f] : -1;
+    public int BookingOf(int f) => Relations.Contains(f) ? _booking[f] : -1;
 
     /// <summary><see cref="BookingOf"/> computed from the relations (for code without the crime system's cache).</summary>
     public static int BookingKey(FactionRelations relations, int f)
@@ -294,16 +294,16 @@ public sealed class CrimeFactions
     /// The faction's NPCs hunt bounties (economy.md 11.8). <b>Engine choice</b>: nothing in the data flags bounty hunters; read here as <c>fundamental type</c> ADVENTURER with a
     /// <c>legal system</c>, which in the base data is exactly the faction Bounty Hunters (-> United Cities; <b>Verified</b> by probe of the FACTION records).
     /// </summary>
-    public bool Hunts(int f) => Relations.Contains(f) && hunters[f];
+    public bool Hunts(int f) => Relations.Contains(f) && _hunters[f];
 
     public FactionRelations Relations { get; }
 
     /// <summary>The faction books bounties (the game's faction flag <c>+0x40</c>: <c>fundamental type</c> LAW_ENFORCEMENT or <c>offers bounties</c>).</summary>
-    public bool Books(int f) => Relations.Contains(f) && books[f];
+    public bool Books(int f) => Relations.Contains(f) && _books[f];
     /// <summary>A "lawless" faction (<c>not real</c>, or of <c>fundamental type</c> BANDIT): crimes against it are no crimes.</summary>
-    public bool Lawless(int f) => !Relations.Contains(f) || lawless[f];
+    public bool Lawless(int f) => !Relations.Contains(f) || _lawless[f];
     /// <summary>The faction is <c>not real</c> (the game's faction byte <c>+0x1d0</c>): the cage leave routine writes no escaped flag for its cages (<c>FUN_1403554b0</c>).</summary>
     public bool NotReal(int f) => Relations.Contains(f) && Relations.Factions[f].NotReal;
-    public bool Bandit(int f) => Relations.Contains(f) && bandit[f];
+    public bool Bandit(int f) => Relations.Contains(f) && _bandit[f];
     public string NameOf(int f) => Relations.Contains(f) ? Relations.Factions[f].Name : "?";
 }

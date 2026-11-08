@@ -1,5 +1,3 @@
-using Meitou.Simulation.Items;
-using Meitou.Simulation.Bodies;
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data;
@@ -7,6 +5,8 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Items;
 
 namespace Meitou.Simulation.Population;
 

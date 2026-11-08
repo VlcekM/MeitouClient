@@ -59,7 +59,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     {
         if (p.Y < YMin - margin || p.Y > YMax + margin || Footprint.Length < 3) return false;
         var q = new Vector2(p.X, p.Z);
-        var e = edges;
+        var e = _edges;
         float reach = margin > 0 ? margin * e.Reach : 0;
         if (q.X < e.Min.X - reach || q.X > e.Max.X + reach || q.Y < e.Min.Y - reach || q.Y > e.Max.Y + reach) return false;
         // Counter-clockwise: inside is to the left of every edge.
@@ -71,14 +71,14 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// <summary>How far <paramref name="p"/> is from the volume's box (footprint box by height range): a point nearer than that to it is still outside (<see cref="Contains"/>, no margin).</summary>
     public float Distance(Vector3 p)
     {
-        var e = edges;
+        var e = _edges;
         float dx = MathF.Max(MathF.Max(e.Min.X - p.X, p.X - e.Max.X), 0), dz = MathF.Max(MathF.Max(e.Min.Y - p.Z, p.Z - e.Max.Y), 0);
         float dy = MathF.Max(MathF.Max(YMin - p.Y, p.Y - YMax), 0);
         return MathF.Sqrt(dx * dx + dy * dy + dz * dz);
     }
 
     // Contains's footprint, worked out once: the most asked of it (every character and furniture piece near a building, each frame) are far outside.
-    readonly FootprintEdges edges = FootprintEdges.Of(Footprint);
+    readonly FootprintEdges _edges = FootprintEdges.Of(Footprint);
 
     /// <summary>
     /// The footprint's edges that are not degenerate (a point on each and its inward unit normal), their box, and how far past the box the footprint widened
@@ -121,7 +121,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         }
     }
 
-    Lazy<FloorSurfaces>? floors;
+    Lazy<FloorSurfaces>? _floors;
 
     /// <summary>How far above a point the search for something over it starts (the floor it stands on is not its cover).</summary>
     public const float CoverClearance = 5;
@@ -131,19 +131,19 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// (<see cref="FloorSurfaces.LowestAbove"/>). False on a walkable roof and in a roofless part, which the hull's height range still holds: Meitou's indoor
     /// lighting asks this, the floor view and the sounds ask <see cref="Contains"/> as the game does.
     /// </summary>
-    public bool Covered(Vector3 p) => floors?.Value.LowestAbove(p.X, p.Z, p.Y + CoverClearance) is not null;
+    public bool Covered(Vector3 p) => _floors?.Value.LowestAbove(p.X, p.Z, p.Y + CoverClearance) is not null;
 
     /// <summary>The height of the ceiling over <paramref name="p"/> (from <see cref="CoverClearance"/> up), or null when nothing is over it (<see cref="FloorSurfaces.CeilingAbove"/>).</summary>
-    public float? CeilingAbove(Vector3 p) => floors?.Value.CeilingAbove(p.X, p.Z, p.Y + CoverClearance);
+    public float? CeilingAbove(Vector3 p) => _floors?.Value.CeilingAbove(p.X, p.Z, p.Y + CoverClearance);
 
     /// <summary>
     /// The floor (0..3) a character standing at <paramref name="feet"/> in this building is on, from the building's floor collision under it (made on first use;
     /// 0 when nothing is hit). See <see cref="FloorSurfaces.FloorAt"/>.
     /// </summary>
-    public int FloorAt(Vector3 feet) => floors?.Value.FloorAt(feet) ?? 0;
+    public int FloorAt(Vector3 feet) => _floors?.Value.FloorAt(feet) ?? 0;
 
     // The interior mask collision's triangles in world space (three corners each): the indoor space itself, concave where the building is.
-    Vector3[] maskCorners = [];
+    Vector3[] _maskCorners = [];
 
     /// <summary>
     /// Where a ray first meets the indoor space (the <c>interior mask</c> collision) within <paramref name="maxDistance"/>, or null: what hides the characters and
@@ -151,28 +151,28 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// </summary>
     public float? MaskHit(Vector3 origin, Vector3 direction, float maxDistance)
     {
-        if (maskCorners.Length == 0) return null;
+        if (_maskCorners.Length == 0) return null;
         var min = new Vector3(Footprint.Min(p => p.X), YMin, Footprint.Min(p => p.Y));
         var max = new Vector3(Footprint.Max(p => p.X), YMax, Footprint.Max(p => p.Y));
         if (!FloorSurfaces.RayBox(origin, direction, min, max, maxDistance)) return null;
         float? best = null;
-        for (int i = 0; i + 2 < maskCorners.Length; i += 3)
-            if (FloorSurfaces.RayTriangle(origin, direction, maskCorners[i], maskCorners[i + 1], maskCorners[i + 2]) is { } t && t <= maxDistance && (best is null || t < best))
+        for (int i = 0; i + 2 < _maskCorners.Length; i += 3)
+            if (FloorSurfaces.RayTriangle(origin, direction, _maskCorners[i], _maskCorners[i + 1], _maskCorners[i + 2]) is { } t && t <= maxDistance && (best is null || t < best))
                 best = t;
         return best;
     }
 
     /// <summary>The floor surface's upward normal under <paramref name="point"/> on floors up to <paramref name="floor"/> (<see cref="FloorSurfaces.NormalBelow"/>); null for none.</summary>
-    public Vector3? FloorNormal(Vector3 point, int floor, float reach) => floors?.Value.NormalBelow(point, floor, reach);
+    public Vector3? FloorNormal(Vector3 point, int floor, float reach) => _floors?.Value.NormalBelow(point, floor, reach);
 
     /// <summary>A movement pick on this building's collision at or below the viewed floor.</summary>
     public (float Distance, Vector3 Position)? MoveHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
-        if (Footprint.Length < 3 || floors is null) return null;
+        if (Footprint.Length < 3 || _floors is null) return null;
         var min = new Vector3(Footprint.Min(p => p.X), YMin, Footprint.Min(p => p.Y));
         var max = new Vector3(Footprint.Max(p => p.X), YMax, Footprint.Max(p => p.Y));
         return FloorSurfaces.RayBox(origin, direction, min, max, maxDistance)
-            ? floors.Value.MoveHit(origin, direction, floor, maxDistance) : null;
+            ? _floors.Value.MoveHit(origin, direction, floor, maxDistance) : null;
     }
 
     /// <summary>
@@ -191,7 +191,7 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         float yMin = float.MaxValue, yMax = float.MinValue;
         foreach (var r in building.GetReferences("interior mask"))
         {
-            if (db.Find(r.TargetStringId) is not { Type: FcsRecordType.BUILDING_PART } mask) continue;
+            if (db.Find(r.TargetStringId) is not { Type: FcsRecordType.BuildingPart } mask) continue;
             if (mask.GetPath("phs or mesh") is { } meshPath && meshPath.Contains(".mesh", StringComparison.OrdinalIgnoreCase)) meshes.Add(meshPath);
             if (collision.Mesh(mask.GetPath("xml collision")) is not { } shape) continue;
             foreach (int i in shape.Indices) corners.Add(Vector3.Transform(shape.Vertices[i], node));
@@ -214,8 +214,8 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             IsGateway = gateway,
             MaskMeshes = meshes,
             Node = node,
-            maskCorners = [.. corners],
-            floors = new Lazy<FloorSurfaces>(() => FloorSurfaces.For(db, building, placementId, position, rotation, node, collision)),
+            _maskCorners = [.. corners],
+            _floors = new Lazy<FloorSurfaces>(() => FloorSurfaces.For(db, building, placementId, position, rotation, node, collision)),
         };
     }
 
@@ -253,11 +253,11 @@ public sealed partial class FloorSurfaces
         public TriangleGrid Grid { get; } = new(Corners, Min, Max);
     }
 
-    readonly List<Surface> surfaces = [];
+    readonly List<Surface> _surfaces = [];
     /// <summary>The <c>is unwalkable roof</c> parts: no floor, only cover (<see cref="LowestAbove"/>).</summary>
-    readonly List<Surface> roofs = [];
+    readonly List<Surface> _roofs = [];
     /// <summary>The solids' flat undersides left out of the floors: a slab's bottom, what a ceiling ghost hangs from (<see cref="CeilingAbove"/>).</summary>
-    readonly List<Surface> undersides = [];
+    readonly List<Surface> _undersides = [];
 
     /// <summary>How far above the feet the downward ray starts (game: 10 units above the character).</summary>
     public const float RayStart = 10;
@@ -296,8 +296,8 @@ public sealed partial class FloorSurfaces
                 list.Add(a); list.Add(b); list.Add(c);
             }
             int floor = Math.Clamp(part.GetInt("building floor"), 0, 3);
-            if (Of(floor, part.GetBool("is stairs"), kept) is { } surface) (roof ? result.roofs : result.surfaces).Add(surface);
-            if (Of(floor, false, under) is { } bottom) result.undersides.Add(bottom);
+            if (Of(floor, part.GetBool("is stairs"), kept) is { } surface) (roof ? result._roofs : result._surfaces).Add(surface);
+            if (Of(floor, false, under) is { } bottom) result._undersides.Add(bottom);
         }
         return result;
     }
@@ -321,7 +321,7 @@ public sealed partial class FloorSurfaces
         float top = feet.Y + RayStart, best = float.NegativeInfinity;
         int floor = 0;
         var q = new Vector2(feet.X, feet.Z);
-        foreach (var s in surfaces)
+        foreach (var s in _surfaces)
         {
             if (q.X < s.Min.X || q.Y < s.Min.Y || q.X > s.Max.X || q.Y > s.Max.Y || s.YMin > top) continue;
             foreach (int i in s.Grid.At(q))
@@ -358,14 +358,14 @@ public sealed record CollisionMesh(Vector3[] Vertices, int[] Indices, bool[] Out
 /// <summary>The collision files that building parts name (the <c>interior mask</c> hulls, the floor parts), read and triangulated once each; safe from several threads.</summary>
 public sealed class InteriorCollisions(GameInstall install)
 {
-    readonly ConcurrentDictionary<string, CollisionMesh?> files = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, CollisionMesh?> _files = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Every triangulated vertex of the file's shapes, or null when the path is empty or the file is missing or unreadable.</summary>
     public Vector3[]? Vertices(string recordPath) => Mesh(recordPath)?.Vertices;
 
     /// <summary>The file's triangles, or null when the path is empty or the file is missing, unreadable or has no triangles.</summary>
     public CollisionMesh? Mesh(string recordPath) =>
-        string.IsNullOrWhiteSpace(recordPath) ? null : files.GetOrAdd(recordPath, Load);
+        string.IsNullOrWhiteSpace(recordPath) ? null : _files.GetOrAdd(recordPath, Load);
 
     CollisionMesh? Load(string recordPath)
     {

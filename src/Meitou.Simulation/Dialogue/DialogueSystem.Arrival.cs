@@ -22,24 +22,24 @@ public sealed partial class DialogueSystem
     void Arrive(World world, AreaArrival a)
     {
         bool forget = TryArrive(world, a);
-        Volatile.Write(ref arrivalResult, a.Serial * 2 + (forget ? 1 : 0));
+        Volatile.Write(ref _arrivalResult, a.Serial * 2 + (forget ? 1 : 0));
     }
 
-    int arrivalResult;
+    int _arrivalResult;
 
     /// <summary>
     /// The result of the last arrival try: its <see cref="AreaArrival.Serial"/> and whether the host forgets the group (<c>FUN_140800eb0</c>: a non-zero result of the banter,
     /// squad of under 2 or a line started; an enemy sensed, under 2 candidates or no pair with a line keep the 10 s retry going).
     /// </summary>
-    public (int Serial, bool Forget) ArrivalResult { get { int r = Volatile.Read(ref arrivalResult); return (r >> 1, (r & 1) != 0); } }
+    public (int Serial, bool Forget) ArrivalResult { get { int r = Volatile.Read(ref _arrivalResult); return (r >> 1, (r & 1) != 0); } }
 
     /// <summary>One try of <see cref="Arrive"/>; true: forget the group.</summary>
     bool TryArrive(World world, AreaArrival a)
     {
         var table = world.Characters;
         if (world.Squads.Find(world.Player.Squad) is not { Members.Count: >= 2 } squad) return true;
-        if (data.Db.Find(a.GroupId) is not { } group) return false;
-        var roots = group.GetReferences("arrival dialog").Select(r => dialogue.Node(r.TargetStringId)).Where(n => n is { IsRoot: true }).ToList();
+        if (_data.Db.Find(a.GroupId) is not { } group) return false;
+        var roots = group.GetReferences("arrival dialog").Select(r => _dialogue.Node(r.TargetStringId)).Where(n => n is { IsRoot: true }).ToList();
         if (roots.Count == 0) return false;
         var candidates = new List<CharacterId>();
         foreach (var id in squad.Members)
@@ -48,7 +48,7 @@ public sealed partial class DialogueSystem
             // Only a member that is up, free, not an animal and out of melee counts for the enemy test, which aborts the whole arrival; the town filter comes after it (FUN_1407ffe40 :100-121).
             if (!Awake(table, s) || !c.CarriedBy.IsNone || c.InSomething != Locks.HeldState.None || SquadRegistry.IsAnimal(c) || c.InCombat) continue;
             if (SensesEnemy(world, s, c)) return false;
-            if (data.TownAt(table.Next[s].Position) >= 0) continue;
+            if (_data.TownAt(table.Next[s].Position) >= 0) continue;
             candidates.Add(id);
         }
         if (candidates.Count < 2) return false;

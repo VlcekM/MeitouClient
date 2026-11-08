@@ -16,7 +16,7 @@ sealed class PlayerUiExtension(Action<string, string> command) : IUiExtension
         }
         foreach (string name in new[] { "inventory", "stats", "squad", "stop", "medic", "rescue", "member", "context", "extendedstats", "floor-up", "floor-down", "build", "job-remove", "prospect", "building-buy", "building-dismantle", "building-pause", "building-doors", "building-locks", "building-public", "building-upgrade", "building-downgrade", "machine-power", "machine-battery", "tutorial" })
             r.RegisterAction(name, c => command(name, c.Argument));
-        foreach (string name in Enum.GetNames<Meitou.Simulation.Player.CharacterOrders>().Where(n => n != "None").Select(n => "order." + n).Concat(["runspeed.-1", "runspeed.1"]))
+        foreach (string name in Enum.GetNames<Simulation.Player.CharacterOrders>().Where(n => n != "None").Select(n => "order." + n).Concat(["runspeed.-1", "runspeed.1"]))
             r.RegisterAction(name, c => command(name, c.Argument));
     }
 }

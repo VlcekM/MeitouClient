@@ -17,7 +17,7 @@ public sealed class InteriorSounds(WwisePlayer player)
     /// <summary>The <c>InteriorSound</c> enum's names by number; 0 (None) starts nothing.</summary>
     public static readonly string[] Names = ["None", "Metal", "Stone", "Wicker", "Wood"];
 
-    string? last;
+    string? _last;
 
     /// <summary>The <c>Indoors</c> switch value last set (null before any building with an ambience was entered).</summary>
     public string? Indoors { get; private set; }
@@ -26,7 +26,7 @@ public sealed class InteriorSounds(WwisePlayer player)
     public bool Playing { get; private set; }
 
     /// <summary>Whether the pivot is over a building with an indoor volume (whatever its ambience).</summary>
-    public bool Inside => last is not null;
+    public bool Inside => _last is not null;
 
     /// <summary>
     /// Once a frame with the building under the pivot, or null (outdoors, no building loaded there). Nothing happens while the building stays the same.
@@ -35,8 +35,8 @@ public sealed class InteriorSounds(WwisePlayer player)
     public void Update(InteriorHit? hit)
     {
         string? id = hit?.Id;
-        if (id == last) return;
-        if (last is not null) player.Post("Leave_Building", AudioSystem.MusicObject);
+        if (id == _last) return;
+        if (_last is not null) player.Post("Leave_Building", AudioSystem.MusicObject);
         Playing = false;
         if (hit is { Ambience: > 0 and < 5 } building)
         {
@@ -46,7 +46,7 @@ public sealed class InteriorSounds(WwisePlayer player)
             player.Post(building.Cavernous ? "Enter_Building_Big" : "Enter_Building", AudioSystem.MusicObject);
             Playing = true;
         }
-        last = id;
+        _last = id;
     }
 
     /// <summary>Ends the interior ambience and forgets the building (the main menu: the next game's first update enters its building afresh).</summary>

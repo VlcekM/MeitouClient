@@ -29,15 +29,15 @@ public readonly record struct AmbienceInput
 public sealed class AmbienceDirector(WwisePlayer player)
 {
     /// <summary>The state the game compares each frame: the biome index, with bit 8 set at night; -1 before the first.</summary>
-    int state = -1;
-    bool? day;
-    bool raining, windy;
-    double clock;
+    int _state = -1;
+    bool? _day;
+    bool _raining, _windy;
+    double _clock;
 
-    public Ambience? Biome => state < 0 ? null : (Ambience)(state & 0xFF);
-    public bool Night => (state & 0x100) != 0;
-    public bool Raining => raining;
-    public bool Windy => windy;
+    public Ambience? Biome => _state < 0 ? null : (Ambience)(_state & 0xFF);
+    public bool Night => (_state & 0x100) != 0;
+    public bool Raining => _raining;
+    public bool Windy => _windy;
 
     /// <summary>Fix (default): a biome entered before its bank is loaded gets the right <c>_Day</c> / <c>_Night</c> event. Off: the game's bug, the opposite suffix on that path.</summary>
     public bool FixDelayedSuffix { get; set; } = true;
@@ -58,36 +58,36 @@ public sealed class AmbienceDirector(WwisePlayer player)
     /// </summary>
     public void Silence()
     {
-        if (state >= 0) player.Post($"Leave_{(Ambience)(state & 0xFF)}", AudioSystem.MusicObject);
-        if (raining) player.Post("Weather_Rain_End", AudioSystem.MusicObject);
-        if (windy) player.Post("Weather_Wind_End", AudioSystem.MusicObject);
-        state = -1;
-        day = null;
-        raining = windy = false;
+        if (_state >= 0) player.Post($"Leave_{(Ambience)(_state & 0xFF)}", AudioSystem.MusicObject);
+        if (_raining) player.Post("Weather_Rain_End", AudioSystem.MusicObject);
+        if (_windy) player.Post("Weather_Wind_End", AudioSystem.MusicObject);
+        _state = -1;
+        _day = null;
+        _raining = _windy = false;
     }
 
     public void Update(in AmbienceInput input)
     {
         // Day strictly between sunrise and sunset; Time_in_Game (the state group) changes only when that flips.
         bool isDay = input.Hour > input.Sunrise && input.Hour < input.Sunset;
-        if (day != isDay)
+        if (_day != isDay)
         {
-            day = isDay;
+            _day = isDay;
             player.SetState("Time_in_Game", isDay ? "Day" : "Night");
         }
 
         // The game parameter Time_in_Game is not the clock: a 0..10 sawtooth over 10 real minutes.
-        clock += input.RealSeconds;
-        player.SetParameter("Time_in_Game", (float)(clock % 600 / 60));
+        _clock += input.RealSeconds;
+        player.SetParameter("Time_in_Game", (float)(_clock % 600 / 60));
         player.SetParameter("Camera_Zoom", input.EyeAboveGround / 2000 * 100);
 
         if (input.Biome is { } biome)
         {
             int next = (int)biome | (isDay ? 0 : 0x100);
-            if (next != state)
+            if (next != _state)
             {
-                if (state >= 0 && (state & 0xFF) != (int)biome) player.Post($"Leave_{(Ambience)(state & 0xFF)}", AudioSystem.MusicObject);
-                state = next;
+                if (_state >= 0 && (_state & 0xFF) != (int)biome) player.Post($"Leave_{(Ambience)(_state & 0xFF)}", AudioSystem.MusicObject);
+                _state = next;
                 // The game posts Enter at once when the bank is loaded, otherwise after loading it (and then, by a bug, with the opposite
                 // suffix); the player keeps the event until its bank arrives, so with the fix the suffix here is always the right one.
                 bool suffixDay = FixDelayedSuffix || player.IsBankLoaded($"SFX_Amb_{biome}") ? isDay : !isDay;
@@ -96,16 +96,16 @@ public sealed class AmbienceDirector(WwisePlayer player)
             }
         }
 
-        if (input.Rain > 0 != raining)
+        if (input.Rain > 0 != _raining)
         {
-            raining = input.Rain > 0;
-            player.Post(raining ? "Weather_Rain_Start" : "Weather_Rain_End", AudioSystem.MusicObject);
+            _raining = input.Rain > 0;
+            player.Post(_raining ? "Weather_Rain_Start" : "Weather_Rain_End", AudioSystem.MusicObject);
         }
-        if (input.Wind > 0 != windy)
+        if (input.Wind > 0 != _windy)
         {
-            windy = input.Wind > 0;
+            _windy = input.Wind > 0;
             // The game posts Weather_Wind_Stop, which no bank has, so its wind never stops; the fix posts the bank's Weather_Wind_End.
-            player.Post(windy ? "Weather_Wind_Start" : FixWindStop ? "Weather_Wind_End" : "Weather_Wind_Stop", AudioSystem.MusicObject);
+            player.Post(_windy ? "Weather_Wind_Start" : FixWindStop ? "Weather_Wind_End" : "Weather_Wind_Stop", AudioSystem.MusicObject);
         }
         player.SetParameter("Rain_Intensity", input.Rain);
         player.SetParameter("Intensity", input.Wind);

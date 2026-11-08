@@ -152,16 +152,16 @@ public sealed class CharacterAppearance
     public static CharacterAppearance Build(GameDatabase db, string installRoot, string nameOrId, CharacterOptions? options = null)
     {
         options ??= new CharacterOptions();
-        var record = Find(db, nameOrId, FcsRecordType.CHARACTER, FcsRecordType.RACE, FcsRecordType.ANIMAL_CHARACTER)
+        var record = Find(db, nameOrId, FcsRecordType.Character, FcsRecordType.Race, FcsRecordType.AnimalCharacter)
             ?? throw new KeyNotFoundException($"No CHARACTER, RACE or ANIMAL_CHARACTER record '{nameOrId}'.");
-        if (record.Type == FcsRecordType.ANIMAL_CHARACTER) return BuildAnimal(db, installRoot, record);
+        if (record.Type == FcsRecordType.AnimalCharacter) return BuildAnimal(db, installRoot, record);
         // With a seed the generator rolls everything (docs/characters.md, "Generating a character").
-        var faction = options.Faction is { } factionName ? Find(db, factionName, FcsRecordType.FACTION) : null;
+        var faction = options.Faction is { } factionName ? Find(db, factionName, FcsRecordType.Faction) : null;
         var loadout = options.Loadout ?? (options.Seed is { } seed ? CharacterGenerator.Generate(db, installRoot, record, seed, options.Female, faction, options.RaceOverride) : null);
         Random? random = null;
         var notes = new List<string>();
-        GameRecord? character = record.Type == FcsRecordType.CHARACTER ? record : null;
-        faction ??= loadout?.Faction ?? character?.GetReferences("faction").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(f => f is { Type: FcsRecordType.FACTION });
+        GameRecord? character = record.Type == FcsRecordType.Character ? record : null;
+        faction ??= loadout?.Faction ?? character?.GetReferences("faction").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(f => f is { Type: FcsRecordType.Faction });
 
         // Body file (.bod2). CHARACTER "body": empty = random body.
         AppearanceFile? body = loadout?.Appearance;
@@ -182,12 +182,12 @@ public sealed class CharacterAppearance
         }
 
         // Race: CHARACTER "race" overrides the body file's (fcs.def); RACE records are their own race.
-        GameRecord? race = loadout?.Race ?? (record.Type == FcsRecordType.RACE ? record : null);
+        GameRecord? race = loadout?.Race ?? (record.Type == FcsRecordType.Race ? record : null);
         race ??= Pick(db, character!.GetReferences("race"), random, r => r.Values.Value0);
         if (race is null && body?.RaceId is { } bodyRace) race = db.Find(bodyRace);
         if (race is null)
         {
-            race = Find(db, CharacterGenerator.DefaultRaceId, FcsRecordType.RACE) ?? throw new KeyNotFoundException($"'{record.Name}' ({record.StringId}) has no race.");
+            race = Find(db, CharacterGenerator.DefaultRaceId, FcsRecordType.Race) ?? throw new KeyNotFoundException($"'{record.Name}' ({record.StringId}) has no race.");
             notes.Add($"no race: default {CharacterGenerator.DefaultRaceId}");
         }
 
@@ -201,12 +201,20 @@ public sealed class CharacterAppearance
 
         var result = new CharacterAppearance
         {
-            Character = character, Race = race, Female = female, Body = body, BodyFile = bodyFile, Loadout = loadout,
+            Character = character,
+            Race = race,
+            Female = female,
+            Body = body,
+            BodyFile = bodyFile,
+            Loadout = loadout,
             Faction = faction,
             BodyMesh = bodyMesh,
-            BodyTexture = FilePath(race, $"body texture {g}"), BodyNormal = FilePath(race, $"nm {g}"),
-            BodyNormalStrong = FilePath(race, $"nm {g} strong"), BodyNormalSkinny = FilePath(race, $"nm {g} skinny"),
-            BodyMask = FilePath(race, $"body mask {g}"), PartMap = FilePath(race, $"part map {g}"),
+            BodyTexture = FilePath(race, $"body texture {g}"),
+            BodyNormal = FilePath(race, $"nm {g}"),
+            BodyNormalStrong = FilePath(race, $"nm {g} strong"),
+            BodyNormalSkinny = FilePath(race, $"nm {g} skinny"),
+            BodyMask = FilePath(race, $"body mask {g}"),
+            PartMap = FilePath(race, $"part map {g}"),
             Head = head,
             SkinToneParameter = body?.SkinTone is { } tone ? Vector3.One - tone : Vector3.Zero,
             HairColour = HairColourOf(db, race, body, random),
@@ -244,8 +252,8 @@ public sealed class CharacterAppearance
         }
         foreach (var name in options.Equip)
         {
-            var item = Find(db, name, FcsRecordType.ARMOUR, FcsRecordType.WEAPON, FcsRecordType.CROSSBOW, FcsRecordType.ATTACHMENT,
-                FcsRecordType.CONTAINER, FcsRecordType.LIMB_REPLACEMENT, FcsRecordType.ITEM);
+            var item = Find(db, name, FcsRecordType.Armour, FcsRecordType.Weapon, FcsRecordType.Crossbow, FcsRecordType.Attachment,
+                FcsRecordType.Container, FcsRecordType.LimbReplacement, FcsRecordType.Item);
             if (item is null) result.Notes.Add($"--equip '{name}': no such item");
             else items.Add(item);
         }
@@ -254,7 +262,7 @@ public sealed class CharacterAppearance
 
         // An ARMOUR in a slot replaces an earlier one in the same slot (--equip comes last, so it wins).
         var worn = new List<GameRecord>();
-        foreach (var item in items.Where(i => i.Type == FcsRecordType.ARMOUR))
+        foreach (var item in items.Where(i => i.Type == FcsRecordType.Armour))
         {
             worn.RemoveAll(w => w.GetInt("slot", 5) == item.GetInt("slot", 5));
             worn.Add(item);
@@ -279,11 +287,11 @@ public sealed class CharacterAppearance
             if (attachment is not null) result.AddWorn(attachment, female, worn);
         GameRecord? Dye(GameRecord item) => Gameplay.ItemColours.Shown(db, item, colours.TryGetValue(item, out var own) ? own : Gameplay.ItemColours.Of(db, item), character, faction);
         foreach (var item in worn) result.AddWorn(item, female, worn, materials.GetValueOrDefault(item), Dye(item));
-        foreach (var item in items.Where(i => i.Type is FcsRecordType.ATTACHMENT or FcsRecordType.CONTAINER))
+        foreach (var item in items.Where(i => i.Type is FcsRecordType.Attachment or FcsRecordType.Container))
             result.AddWorn(item, female, worn, colour: Dye(item));
         // A limb's item is dyed like clothing: its own colour (a new one's: its record's), else the wearer's scheme.
         GameRecord? LimbDye(GameRecord limb, GameRecord? own) => Gameplay.ItemColours.Shown(db, limb, own ?? Gameplay.ItemColours.Of(db, limb), character, faction);
-        result.AddLimbParts(db, race, female, items.Where(i => i.Type == FcsRecordType.LIMB_REPLACEMENT), loadout, LimbDye);
+        result.AddLimbParts(db, race, female, items.Where(i => i.Type == FcsRecordType.LimbReplacement), loadout, LimbDye);
 
         // Weapons: the loadout's, else the likeliest: the first entry with quantity > 0 of the hip pool (val1 = 0) and of
         // the back pool (val1 ≠ 0), whose absolute chances make the first one win (docs/characters.md). Then --equip weapons.
@@ -301,7 +309,7 @@ public sealed class CharacterAppearance
                 if (listed.FirstOrDefault(w => (w.Ref.Values.Value1 != 0) == back).Item is { } weapon)
                     weapons.Add((weapon, back ? "back" : "hip", null));
         }
-        foreach (var extra in items.Where(i => i.Type is FcsRecordType.WEAPON or FcsRecordType.CROSSBOW or FcsRecordType.ITEM))
+        foreach (var extra in items.Where(i => i.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow or FcsRecordType.Item))
         {
             string point = weapons.All(w => w.Point != "hip") ? "hip" : weapons.All(w => w.Point != "back") ? "back" : "back2";
             weapons.Add((extra, point, null));
@@ -309,14 +317,14 @@ public sealed class CharacterAppearance
         result.LoadAttachmentPoints(installRoot, race);
         // A fight draws the first WEAPON of the hip or of the back, by the arms (CharacterAssembly.MakeFighter, Fighter.Weapon): each gets its sheathed and drawn meshes, the
         // renderer shows one set.
-        int hipInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.WEAPON && w.Point == "hip"), backInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.WEAPON && w.Point == "back");
-        int bowInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.CROSSBOW);
+        int hipInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.Weapon && w.Point == "hip"), backInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.Weapon && w.Point == "back");
+        int bowInHand = weapons.FindIndex(w => w.Weapon.Type == FcsRecordType.Crossbow);
         for (int i = 0; i < weapons.Count; i++)
-            if (weapons[i].Weapon.Type == FcsRecordType.CROSSBOW) result.AddCrossbow(weapons[i].Weapon, weapons[i].Point, drawable: i == bowInHand, weapons[i].Model);
+            if (weapons[i].Weapon.Type == FcsRecordType.Crossbow) result.AddCrossbow(weapons[i].Weapon, weapons[i].Point, drawable: i == bowInHand, weapons[i].Model);
             else result.AddWeapon(weapons[i].Weapon, female, weapons[i].Point, drawn: options.WeaponDrawn && i == 0, backCount: 0, weapons[i].Model,
                 both: !options.WeaponDrawn && (i == hipInHand || i == backInHand), back: i == backInHand);
         var lightRoll = new Random(loadout?.Seed ?? options.Seed ?? 0);
-        foreach (var item in worn.Concat(items.Where(i => i.Type is FcsRecordType.ATTACHMENT or FcsRecordType.CONTAINER)).Concat(loadout?.Carried.Select(c => c.Record) ?? []))
+        foreach (var item in worn.Concat(items.Where(i => i.Type is FcsRecordType.Attachment or FcsRecordType.Container)).Concat(loadout?.Carried.Select(c => c.Record) ?? []))
             if (CarriedLights.From(db, installRoot, item, female, lightRoll) is { } carried) result.Lights.Add(carried);
         return result;
     }
@@ -330,12 +338,15 @@ public sealed class CharacterAppearance
     public static CharacterAppearance BuildAnimal(GameDatabase db, string installRoot, GameRecord animal)
     {
         var race = animal.GetReferences("race").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId))
-            .FirstOrDefault(r => r is { Type: FcsRecordType.RACE }) ?? throw new KeyNotFoundException($"'{animal.Name}' has no race.");
+            .FirstOrDefault(r => r is { Type: FcsRecordType.Race }) ?? throw new KeyNotFoundException($"'{animal.Name}' has no race.");
         var result = new CharacterAppearance
         {
-            Animal = animal, Race = race, Female = false,
+            Animal = animal,
+            Race = race,
+            Female = false,
             BodyMesh = race.GetPath("male mesh"),
-            BodyTexture = FilePath(race, "body texture male"), BodyNormal = FilePath(race, "nm male"),
+            BodyTexture = FilePath(race, "body texture male"),
+            BodyNormal = FilePath(race, "nm male"),
             HairColour = HairColourOf(db, race, null, null),
         };
         result.Hair = PickHair(db, race, AttachSlot.Hair, null);
@@ -364,9 +375,28 @@ public sealed class CharacterAppearance
     {
         var copy = new CharacterAppearance
         {
-            Character = Character, Animal = Animal, Race = Race, Female = Female, Body = Body, BodyFile = BodyFile, Loadout = Loadout, Faction = Faction,
-            BodyMesh = BodyMesh, BodyTexture = BodyTexture, BodyNormal = BodyNormal, BodyNormalStrong = BodyNormalStrong, BodyNormalSkinny = BodyNormalSkinny, BodyMask = BodyMask, PartMap = PartMap, Head = Head, Hair = Hair,
-            Shape = Shape, Beard = Beard, SkinToneParameter = SkinToneParameter, HairColour = HairColour, HeadOnly = true,
+            Character = Character,
+            Animal = Animal,
+            Race = Race,
+            Female = Female,
+            Body = Body,
+            BodyFile = BodyFile,
+            Loadout = Loadout,
+            Faction = Faction,
+            BodyMesh = BodyMesh,
+            BodyTexture = BodyTexture,
+            BodyNormal = BodyNormal,
+            BodyNormalStrong = BodyNormalStrong,
+            BodyNormalSkinny = BodyNormalSkinny,
+            BodyMask = BodyMask,
+            PartMap = PartMap,
+            Head = Head,
+            Hair = Hair,
+            Shape = Shape,
+            Beard = Beard,
+            SkinToneParameter = SkinToneParameter,
+            HairColour = HairColour,
+            HeadOnly = true,
         };
         copy.Parts.AddRange(Parts.Where(p => p.Record == Hair || p.Record == Beard || p.Slot == AttachSlot.Hat));
         copy.BodyLayers.AddRange(BodyLayers);
@@ -390,7 +420,7 @@ public sealed class CharacterAppearance
             if (limb.State == 3) continue;
             var record = limb.State == 2 ? limb.Prosthetic : null;
             record ??= race.GetReferences("limb replacement").Select(r => db.Find(r.TargetStringId))
-                .FirstOrDefault(r => r is { Type: FcsRecordType.LIMB_REPLACEMENT } && r.GetInt("slot") == 50 + k);
+                .FirstOrDefault(r => r is { Type: FcsRecordType.LimbReplacement } && r.GetInt("slot") == 50 + k);
             if (record is not null) AddLimb(record, female, dye(record, limb.State == 2 ? limb.Colour : null));
         }
     }
@@ -410,7 +440,7 @@ public sealed class CharacterAppearance
         if (left == right) return;
 
         for (int i = 0; i < Parts.Count; i++)
-            if (Parts[i] is { Slot: AttachSlot.Boots } boots && boots.Record.Type == FcsRecordType.ARMOUR && !boots.Record.GetBool("is locked"))
+            if (Parts[i] is { Slot: AttachSlot.Boots } boots && boots.Record.Type == FcsRecordType.Armour && !boots.Record.GetBool("is locked"))
                 Parts[i] = boots with { HideSide = left ? 1 : 2 };
     }
 
@@ -428,12 +458,12 @@ public sealed class CharacterAppearance
 
     void AddWorn(GameRecord item, bool female, List<GameRecord> worn, GameRecord? material = null, GameRecord? colour = null)
     {
-        AttachSlot? slot = item.Type == FcsRecordType.ATTACHMENT ? (AttachSlot)item.GetInt("attach slot", (int)AttachSlot.Hair)
+        AttachSlot? slot = item.Type == FcsRecordType.Attachment ? (AttachSlot)item.GetInt("attach slot", (int)AttachSlot.Hair)
             : item.Ints.ContainsKey("slot") ? (AttachSlot)item.GetInt("slot") : null;
         // Mesh: by gender, no fallback for shared-skeleton items; "overlap mesh" when an "overlap items" item is worn too.
         string field = female ? "mesh female" : "mesh";
         string mesh = item.GetPath(field);
-        if (item.Type == FcsRecordType.ARMOUR)
+        if (item.Type == FcsRecordType.Armour)
         {
             var overlaps = item.GetReferences("overlap items").Select(r => r.TargetStringId).ToHashSet(StringComparer.Ordinal);
             string overlapField = female ? "overlap mesh female" : "overlap mesh";
@@ -472,8 +502,17 @@ public sealed class CharacterAppearance
         // Mode-0 items fall back from "mesh female" to "mesh" (ogre-skeleton.md).
         string field = Field("mesh");
         if (weapon.GetPath(field) is not { Length: > 0 } mesh) { Notes.Add($"'{weapon.Name}' has no mesh"); return; }
-        Parts.Add(new CharacterPart { Record = weapon, Mesh = mesh, Field = field, Mode = AttachMode.Bone, Slot = AttachSlot.Weapon, Point = slot, Material = model,
-            Shown = !(both && bare) ? WeaponShown.Always : back ? WeaponShown.BackSheathed : WeaponShown.Sheathed });
+        Parts.Add(new CharacterPart
+        {
+            Record = weapon,
+            Mesh = mesh,
+            Field = field,
+            Mode = AttachMode.Bone,
+            Slot = AttachSlot.Weapon,
+            Point = slot,
+            Material = model,
+            Shown = !(both && bare) ? WeaponShown.Always : back ? WeaponShown.BackSheathed : WeaponShown.Sheathed
+        });
     }
 
     /// <summary>
@@ -516,9 +555,30 @@ public sealed class CharacterAppearance
         if (item.GetPath("mesh") is not { Length: > 0 } mesh) return this;
         var copy = new CharacterAppearance
         {
-            Character = Character, Animal = Animal, Race = Race, Female = Female, Body = Body, BodyFile = BodyFile, Loadout = Loadout, Faction = Faction,
-            BodyMesh = BodyMesh, BodyTexture = BodyTexture, BodyNormal = BodyNormal, BodyNormalStrong = BodyNormalStrong, BodyNormalSkinny = BodyNormalSkinny, BodyMask = BodyMask, PartMap = PartMap, Head = Head, Hair = Hair,
-            Shape = Shape, Beard = Beard, SkinToneParameter = SkinToneParameter, HairColour = HairColour, HiddenLimbs = HiddenLimbs, HiddenParts = HiddenParts, Headless = Headless,
+            Character = Character,
+            Animal = Animal,
+            Race = Race,
+            Female = Female,
+            Body = Body,
+            BodyFile = BodyFile,
+            Loadout = Loadout,
+            Faction = Faction,
+            BodyMesh = BodyMesh,
+            BodyTexture = BodyTexture,
+            BodyNormal = BodyNormal,
+            BodyNormalStrong = BodyNormalStrong,
+            BodyNormalSkinny = BodyNormalSkinny,
+            BodyMask = BodyMask,
+            PartMap = PartMap,
+            Head = Head,
+            Hair = Hair,
+            Shape = Shape,
+            Beard = Beard,
+            SkinToneParameter = SkinToneParameter,
+            HairColour = HairColour,
+            HiddenLimbs = HiddenLimbs,
+            HiddenParts = HiddenParts,
+            Headless = Headless,
         };
         copy.Parts.AddRange(Parts);
         copy.Parts.Add(new CharacterPart { Record = item, Mesh = mesh, Field = "mesh", Mode = AttachMode.Bone, Slot = AttachSlot.Weapon, Point = "hands" });

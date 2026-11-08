@@ -8,17 +8,17 @@ namespace Meitou.Data.Gameplay.Construction;
 /// </summary>
 public sealed class BuildingIcons
 {
-    readonly Dictionary<string, string> files = new(StringComparer.Ordinal);
+    readonly Dictionary<string, string> _files = new(StringComparer.Ordinal);
 
     /// <summary>Indexes the PNGs of <paramref name="directory"/> (empty when it does not exist).</summary>
     public BuildingIcons(string directory)
     {
         if (!Directory.Exists(directory)) return;
-        foreach (string file in Directory.EnumerateFiles(directory, "*.png")) files[Path.GetFileNameWithoutExtension(file)] = file;
+        foreach (string file in Directory.EnumerateFiles(directory, "*.png")) _files[Path.GetFileNameWithoutExtension(file)] = file;
     }
 
     /// <summary>The saved picture of the BUILDING <paramref name="record"/> (its string id), null when none.</summary>
-    public string? Find(string record) => files.GetValueOrDefault(record);
+    public string? Find(string record) => _files.GetValueOrDefault(record);
 }
 
 /// <summary>

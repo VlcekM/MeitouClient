@@ -19,9 +19,9 @@ public sealed partial class PopulationSystem
     /// <summary>Stand-ins this close (XZ) meet (engine choice: about a town's edge).</summary>
     public const float FightRadius = 300;
 
-    readonly List<Platoon> fighters = [];
-    readonly Dictionary<(int X, int Z), List<Platoon>> fightCells = [];
-    readonly Dictionary<string, RaceData?> recoverRaces = new(StringComparer.Ordinal);
+    readonly List<Platoon> _fighters = [];
+    readonly Dictionary<(int X, int Z), List<Platoon>> _fightCells = [];
+    readonly Dictionary<string, RaceData?> _recoverRaces = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Settles the meetings of hostile stand-ins (serial phase): every unloaded platoon that is not a town's own nor the player's, met by an enemy within
@@ -30,19 +30,19 @@ public sealed partial class PopulationSystem
     /// </summary>
     void Fights(World world)
     {
-        fighters.Clear();
-        foreach (var list in fightCells.Values) list.Clear();
+        _fighters.Clear();
+        foreach (var list in _fightCells.Values) list.Clear();
         foreach (var p in world.Platoons.All)
         {
-            if (p.State != PlatoonState.Unloaded || p.Pinned || p.Faction < 0 || p.Faction == data.PlayerFaction || p.Faction == world.Player.Faction) continue;
-            fighters.Add(p);
+            if (p.State != PlatoonState.Unloaded || p.Pinned || p.Faction < 0 || p.Faction == _data.PlayerFaction || p.Faction == world.Player.Faction) continue;
+            _fighters.Add(p);
             var cell = ((int)MathF.Floor(p.Position.X / FightRadius), (int)MathF.Floor(p.Position.Y / FightRadius));
-            if (!fightCells.TryGetValue(cell, out var at)) fightCells[cell] = at = [];
+            if (!_fightCells.TryGetValue(cell, out var at)) _fightCells[cell] = at = [];
             at.Add(p);
         }
-        if (fighters.Count < 2) return;
+        if (_fighters.Count < 2) return;
         var gone = new HashSet<int>();
-        foreach (var a in fighters)
+        foreach (var a in _fighters)
         {
             if (gone.Contains(a.Id)) continue;
             int cx = (int)MathF.Floor(a.Position.X / FightRadius), cz = (int)MathF.Floor(a.Position.Y / FightRadius);
@@ -50,12 +50,12 @@ public sealed partial class PopulationSystem
             for (int dx = -1; dx <= 1; dx++)
                 for (int dz = -1; dz <= 1; dz++)
                 {
-                    if (!fightCells.TryGetValue((cx + dx, cz + dz), out var cell)) continue;
+                    if (!_fightCells.TryGetValue((cx + dx, cz + dz), out var cell)) continue;
                     foreach (var b in cell)
                     {
                         if (b.Id == a.Id || gone.Contains(b.Id) || foe is not null && b.Id >= foe.Id) continue;
                         if (Vector2.DistanceSquared(a.Position, b.Position) > FightRadius * FightRadius) continue;
-                        if (!AggroSystem.IsEnemy(data.Relations, a.Faction, b.Faction) && !AggroSystem.IsEnemy(data.Relations, b.Faction, a.Faction)) continue;
+                        if (!AggroSystem.IsEnemy(_data.Relations, a.Faction, b.Faction) && !AggroSystem.IsEnemy(_data.Relations, b.Faction, a.Faction)) continue;
                         foe = b;
                     }
                 }
@@ -71,12 +71,12 @@ public sealed partial class PopulationSystem
             foreach (var (member, _) in ws.OrderBy(s => s.Strength).Take(losses)) Kill(world, winner, member);
             gone.Add(loser.Id);
             Despawn(world, loser, killed: true);
-            if (townLog.Count >= 256) townLog.RemoveAt(0);
-            townLog.Add($"Off screen at {winner.Position.X:0}, {winner.Position.Y:0}: {NameOf(winner)} ({wt:0}) beat {NameOf(loser)} ({lt:0}), losing {losses}");
+            if (_townLog.Count >= 256) _townLog.RemoveAt(0);
+            _townLog.Add($"Off screen at {winner.Position.X:0}, {winner.Position.Y:0}: {NameOf(winner)} ({wt:0}) beat {NameOf(loser)} ({lt:0}), losing {losses}");
         }
     }
 
-    string NameOf(Platoon p) => p.Stored?.Name ?? p.Saved?.Name ?? data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId;
+    string NameOf(Platoon p) => p.Stored?.Name ?? p.Saved?.Name ?? _data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId;
 
     /// <summary>
     /// The strength of each member able to fight (alive and conscious): 10 + the mean of its melee attack, melee defence and toughness. A platoon whose characters were never
@@ -121,7 +121,7 @@ public sealed partial class PopulationSystem
             saved.Gone = true;
             recordId = saved.Source.RecordId;
         }
-        if (recordId is not null && UniqueCharacters.IsUnique(data.Db.Find(recordId))) world.Uniques.Died(recordId, false, p.Faction);
+        if (recordId is not null && UniqueCharacters.IsUnique(_data.Db.Find(recordId))) world.Uniques.Died(recordId, false, p.Faction);
     }
 
     /// <summary>
@@ -134,22 +134,22 @@ public sealed partial class PopulationSystem
         float hours = (world.Tick - stored.StoredTick) * BodySystem.HoursPerTick;
         foreach (var m in stored.Members)
             if (m.Cold is { Medical: { } medical, Race: { } race } cold)
-                medical.Recover(hours, new MedicalContext(data.Bodies.Constants, data.Bodies.Options, race) { Toughness = cold.Stats?.ScaledToughness ?? 1, Strength = cold.Stats?.Strength ?? 50, Resting = true });
+                medical.Recover(hours, new MedicalContext(_data.Bodies.Constants, _data.Bodies.Options, race) { Toughness = cold.Stats?.ScaledToughness ?? 1, Strength = cold.Stats?.Strength ?? 50, Resting = true });
         stored.StoredTick = world.Tick;
     }
 
     void Recover(World world, Platoon p)
     {
-        var constants = data.Bodies.Constants;
-        var options = data.Bodies.Options;
+        var constants = _data.Bodies.Constants;
+        var options = _data.Bodies.Options;
         if (p.Stored is { } stored) RecoverStored(world, stored);
         else if (p.Saved is { StoredTick: >= 0 } saved)
         {
             float hours = (world.Tick - saved.StoredTick) * BodySystem.HoursPerTick;
             foreach (var m in saved.Members)
             {
-                if (m.Medical is not { } medical || m.Gone || m.Dead || data.Db.Find(m.Source.RecordId) is not { } record) continue;
-                if (CharacterAssembly.RaceId(record) is not { } raceId || CharacterAssembly.RaceDataOf(data.Db, raceId, recoverRaces) is not { } race) continue;
+                if (m.Medical is not { } medical || m.Gone || m.Dead || _data.Db.Find(m.Source.RecordId) is not { } record) continue;
+                if (CharacterAssembly.RaceId(record) is not { } raceId || CharacterAssembly.RaceDataOf(_data.Db, raceId, _recoverRaces) is not { } race) continue;
                 medical.Recover(hours, new MedicalContext(constants, options, race) { Toughness = m.Stats?.ScaledToughness ?? 1, Strength = m.Stats?.Strength ?? 50, Resting = true });
             }
             saved.StoredTick = world.Tick;

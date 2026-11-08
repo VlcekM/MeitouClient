@@ -92,30 +92,30 @@ public sealed partial class PlayerSystem
         switch (lift.From.Holder)
         {
             case ItemHolder.Character:
-            {
-                if (CharacterWindow(world, lift.From.Character, lift.Actor, out var cold) is not { } root) return;
-                var item = root.All().ElementAtOrDefault(t.Index);
-                if (!Matches(item, t) || !(InventoryCommands.IsMovableSection(item!.Section) || InventoryCommands.IsLimbSection(item.Section)) || HolderOf(root, item) is not { } holder) return;
-                if (item.LockedOn) { world.Post(LockedText); return; }
-                if (InventoryCommands.LimbSlotOf(item.Section) is >= 0 and var limb)
                 {
-                    // A fitted prosthetic comes off: the limb is a stump while it is held.
-                    if (cold!.Medical?.LimbPart(limb) is not { Limb: Bodies.LimbState.Replaced } part || part.ReplacementItem != item) return;
-                    cold.Medical.RemoveReplacement(limb);
+                    if (CharacterWindow(world, lift.From.Character, lift.Actor, out var cold) is not { } root) return;
+                    var item = root.All().ElementAtOrDefault(t.Index);
+                    if (!Matches(item, t) || !(InventoryCommands.IsMovableSection(item!.Section) || InventoryCommands.IsLimbSection(item.Section)) || HolderOf(root, item) is not { } holder) return;
+                    if (item.LockedOn) { world.Post(LockedText); return; }
+                    if (InventoryCommands.LimbSlotOf(item.Section) is >= 0 and var limb)
+                    {
+                        // A fitted prosthetic comes off: the limb is a stump while it is held.
+                        if (cold!.Medical?.LimbPart(limb) is not { Limb: Bodies.LimbState.Replaced } part || part.ReplacementItem != item) return;
+                        cold.Medical.RemoveReplacement(limb);
+                    }
+                    var (section, x, y) = (item.Section, item.X, item.Y);
+                    Hold(world, lift, Split(holder, item, lift.Whole), root, section, x, y);
+                    if (InventoryCommands.IsEquipmentSection(section) || InventoryCommands.IsLimbSection(section)) _assembly?.RefreshEquipment(cold!);
+                    return;
                 }
-                var (section, x, y) = (item.Section, item.X, item.Y);
-                Hold(world, lift, Split(holder, item, lift.Whole), root, section, x, y);
-                if (InventoryCommands.IsEquipmentSection(section) || InventoryCommands.IsLimbSection(section)) assembly?.RefreshEquipment(cold!);
-                return;
-            }
             case ItemHolder.Stock:
-            {
-                if (world.SystemOf<Trading.TradeSystem>()?.OpenStock(world, out var buyer) is not { } stock || buyer != lift.Actor) return;
-                var item = stock.All().ElementAtOrDefault(t.Index);
-                if (!Matches(item, t) || HolderOf(stock, item!) is not { } holder) return;
-                Hold(world, lift, Split(holder, item!, lift.Whole), stock, item!.Section, item.X, item.Y);
-                return;
-            }
+                {
+                    if (world.SystemOf<Trading.TradeSystem>()?.OpenStock(world, out var buyer) is not { } stock || buyer != lift.Actor) return;
+                    var item = stock.All().ElementAtOrDefault(t.Index);
+                    if (!Matches(item, t) || HolderOf(stock, item!) is not { } holder) return;
+                    Hold(world, lift, Split(holder, item!, lift.Whole), stock, item!.Section, item.X, item.Y);
+                    return;
+                }
             case ItemHolder.Site:
                 LiftFromSite(world, lift);
                 return;
@@ -130,7 +130,7 @@ public sealed partial class PlayerSystem
         if (ContainerFor(world, site, lift.Actor, out var opener) is { } container)
         {
             if (opener is null || world.Player.OpenContainer != site) return;
-            var grid = PlayerSystem.GridOf(world, container, out var region);
+            var grid = GridOf(world, container, out var region);
             var item = grid.Items.ElementAtOrDefault(t.Index);
             if (!Matches(item, t with { X = t.X + region.X, Y = t.Y + region.Y }, section: false) || !region.Holds(item!)) return;   // the window shows cells from the container's corner
             Hold(world, lift, Split(grid, item!, lift.Whole), grid, "main", item!.X, item.Y);
@@ -172,21 +172,21 @@ public sealed partial class PlayerSystem
         switch (into.Holder)
         {
             case ItemHolder.Character:
-            {
-                if (CharacterWindow(world, into.Character, held.Actor, out var cold) is not { } root) return null;
-                if (place.Section == "backpack_content") return root.Backpack?.Contents is { } bag ? new(root, bag, place.Section, bag.Width, bag.Height, cold, null, null) : null;
-                if (place.Section == "main") return new(root, root, place.Section, root.Width, root.Height, cold, null, null);
-                if (!InventoryCommands.IsEquipmentSection(place.Section) && !InventoryCommands.IsLimbSection(place.Section)) return null;
-                var (w, h) = InventoryCommands.IsSingleSlot(place.Section) ? (0, 0) : InventoryCommands.SectionSize(place.Section);
-                return new(root, root, place.Section, w, h, cold, null, null);
-            }
+                {
+                    if (CharacterWindow(world, into.Character, held.Actor, out var cold) is not { } root) return null;
+                    if (place.Section == "backpack_content") return root.Backpack?.Contents is { } bag ? new(root, bag, place.Section, bag.Width, bag.Height, cold, null, null) : null;
+                    if (place.Section == "main") return new(root, root, place.Section, root.Width, root.Height, cold, null, null);
+                    if (!InventoryCommands.IsEquipmentSection(place.Section) && !InventoryCommands.IsLimbSection(place.Section)) return null;
+                    var (w, h) = InventoryCommands.IsSingleSlot(place.Section) ? (0, 0) : InventoryCommands.SectionSize(place.Section);
+                    return new(root, root, place.Section, w, h, cold, null, null);
+                }
             case ItemHolder.Stock:
                 return place.Section == "main" && world.SystemOf<Trading.TradeSystem>()?.OpenStock(world, out var buyer) is { } stock && buyer == held.Actor
                     ? new(stock, stock, "main", stock.Width, stock.Height, null, null, null) : null;
             default:
                 if (place.Section != "main") return null;
                 if (ContainerFor(world, into.Site, held.Actor, out var opener) is { } container)
-                    return opener is not null && world.Player.OpenContainer == into.Site && PlayerSystem.ShopOf(world, container) is null ? new(PlayerSystem.GridOf(world, container), PlayerSystem.GridOf(world, container), "main", PlayerSystem.GridOf(world, container).Width, PlayerSystem.GridOf(world, container).Height, null, container, null) : null;
+                    return opener is not null && world.Player.OpenContainer == into.Site && ShopOf(world, container) is null ? new(GridOf(world, container), GridOf(world, container), "main", GridOf(world, container).Width, GridOf(world, container).Height, null, container, null) : null;
                 return world.SystemOf<Production.ProductionSystem>()?.Reach(world, held.Actor, into.Site, out _) is { Storage: { } storage, Closed: false } m
                     ? new(storage, storage, "main", storage.Width, storage.Height, null, null, m) : null;
         }
@@ -435,7 +435,7 @@ public sealed partial class PlayerSystem
     /// <summary>After a placement: a worn section re-dresses its character; a machine or container's window is redrawn.</summary>
     void Touched(World world, HeldItem held, Target target)
     {
-        if (target.Owner is { } owner && (InventoryCommands.IsEquipmentSection(target.Section) || InventoryCommands.IsLimbSection(target.Section))) assembly?.RefreshEquipment(owner);
+        if (target.Owner is { } owner && (InventoryCommands.IsEquipmentSection(target.Section) || InventoryCommands.IsLimbSection(target.Section))) _assembly?.RefreshEquipment(owner);
         if (target.Container is not null || target.Machine is not null || held.From.Holder == ItemHolder.Site) world.Machines.Touch();
     }
 
@@ -583,7 +583,7 @@ public sealed partial class PlayerSystem
         var grid = held.Section == "backpack_content" ? root.Backpack?.Contents : root;
         if (grid is not null && BackInPlace(grid, held, item, owner))
         {
-            if (owner is not null && (InventoryCommands.IsEquipmentSection(held.Section) || InventoryCommands.IsLimbSection(held.Section))) assembly?.RefreshEquipment(owner);
+            if (owner is not null && (InventoryCommands.IsEquipmentSection(held.Section) || InventoryCommands.IsLimbSection(held.Section))) _assembly?.RefreshEquipment(owner);
             return;
         }
         if (root.Add(item) || InventoryCommands.Arrange(root) && root.Add(item)) return;
@@ -653,7 +653,7 @@ public sealed partial class PlayerSystem
             holder.Items.Remove(item);
             return;
         }
-        if (item.Type == FcsRecordType.BLUEPRINT && cold.Faction == world.Player.Faction)
+        if (item.Type == FcsRecordType.Blueprint && cold.Faction == world.Player.Faction)
         {
             // One read whatever Shift says: a second unit would only say "Research already known".
             if (world.SystemOf<Production.ProductionSystem>()?.Learn(world, item) == true) root.RemoveOne(item);
@@ -668,7 +668,7 @@ public sealed partial class PlayerSystem
             holder.Items.Remove(item);
             if (!root.AddTo("main", item) && !(bag?.AddTo("backpack_content", item) ?? false)) { holder.Items.Add(item); return; }
             cold.Medical.RemoveReplacement(fitted);
-            assembly?.RefreshEquipment(cold);
+            _assembly?.RefreshEquipment(cold);
             return;
         }
         bool worn = InventoryCommands.IsEquipmentSection(from);
@@ -676,13 +676,13 @@ public sealed partial class PlayerSystem
         {
             if (worn) return root.AddTo("main", unit) || (bag?.AddTo("backpack_content", unit) ?? false);
             if (InventoryCommands.TryEquip(root, unit, cold)) return true;
-            if (unit.Type == FcsRecordType.CONTAINER && unit.Contents is not null && from == "main" && !root.Items.Exists(i => i.Section == "backpack_attach"))
+            if (unit.Type == FcsRecordType.Container && unit.Contents is not null && from == "main" && !root.Items.Exists(i => i.Section == "backpack_attach"))
             {
                 (unit.Section, unit.X, unit.Y) = ("backpack_attach", 0, 0);
                 root.Items.Add(unit);
                 return true;
             }
-            if (unit.Type == FcsRecordType.LIMB_REPLACEMENT && data?.Items.Limb(unit.Record) is { LimbSlot: >= 0 and <= 3 } limb
+            if (unit.Type == FcsRecordType.LimbReplacement && data?.Items.Limb(unit.Record) is { LimbSlot: >= 0 and <= 3 } limb
                 && cold.Medical?.LimbPart(limb.LimbSlot) is { Limb: Bodies.LimbState.Stump })
             {
                 string section = limb.LimbSlot switch { 0 => "left_arm_replace", 1 => "right_arm_replace", 2 => "left_leg_replace", _ => "right_leg_replace" };
@@ -713,7 +713,7 @@ public sealed partial class PlayerSystem
             if (!last) item.Quantity--;
             moved++;
         }
-        if (moved > 0) assembly?.RefreshEquipment(cold);
+        if (moved > 0) _assembly?.RefreshEquipment(cold);
     }
 
     /// <summary>
@@ -731,7 +731,7 @@ public sealed partial class PlayerSystem
             world.Post($"{taker.Name} has no room for {item.Name}.");
             return;
         }
-        if (worn) assembly?.RefreshEquipment(from);
-        if (wear) assembly?.RefreshEquipment(taker);
+        if (worn) _assembly?.RefreshEquipment(from);
+        if (wear) _assembly?.RefreshEquipment(taker);
     }
 }

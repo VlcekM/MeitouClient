@@ -13,9 +13,9 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public sealed class FrameGlobals
 {
-    readonly Dictionary<string, Func<SampledTexture>> textures = [];
-    readonly Dictionary<string, Func<GpuBufferBinding>> blocks = [];
-    readonly Dictionary<string, Uniform> uniforms = [];
+    readonly Dictionary<string, Func<SampledTexture>> _textures = [];
+    readonly Dictionary<string, Func<GpuBufferBinding>> _blocks = [];
+    readonly Dictionary<string, Uniform> _uniforms = [];
 
     /// <summary>A loose uniform's getter, typed by what <see cref="LegacyProgram.Set(UniformHandle, float)"/> and its overloads take.</summary>
     public abstract class Uniform
@@ -82,8 +82,8 @@ public sealed class FrameGlobals
     /// <summary>Bumped by every publish (consumers re-resolve their names).</summary>
     public int Version { get; private set; }
 
-    public void Publish(string name, Func<SampledTexture> texture) { textures[name] = texture; Version++; }
-    public void Publish(string name, Func<GpuBufferBinding> block) { blocks[name] = block; Version++; }
+    public void Publish(string name, Func<SampledTexture> texture) { _textures[name] = texture; Version++; }
+    public void Publish(string name, Func<GpuBufferBinding> block) { _blocks[name] = block; Version++; }
 
     /// <summary>A loose uniform: float, int, Vector2, Vector3, Vector4 or Matrix4x4. With <paramref name="when"/>, written only while it is true.</summary>
     public void PublishUniform<T>(string name, Func<T> value, Func<bool>? when = null) where T : unmanaged
@@ -91,7 +91,7 @@ public sealed class FrameGlobals
         if (typeof(T) != typeof(float) && typeof(T) != typeof(int) && typeof(T) != typeof(Vector2) && typeof(T) != typeof(Vector3) &&
             typeof(T) != typeof(Vector4) && typeof(T) != typeof(Matrix4x4))
             throw new NotSupportedException($"frame-global uniform of type {typeof(T).Name}");
-        uniforms[name] = new Uniform<T>(value, when);
+        _uniforms[name] = new Uniform<T>(value, when);
         Version++;
     }
 
@@ -99,7 +99,7 @@ public sealed class FrameGlobals
     /// written, the rest keeps whatever it held (the shaders read only the used part).</summary>
     public void PublishUniformArray(string name, Vector4[] storage, Func<int> count)
     {
-        uniforms[name] = new ArrayUniform(storage, count);
+        _uniforms[name] = new ArrayUniform(storage, count);
         Version++;
     }
 
@@ -107,16 +107,16 @@ public sealed class FrameGlobals
     public static SamplerInfo Sampler2D(string name, bool cube = false, bool shadow = false, bool arrayed = false) =>
         new(name, 0, 0, cube ? SamplerDimension.Cube : SamplerDimension.Dim2D, arrayed, false, shadow, ScalarKind.Float, 0);
 
-    public Func<SampledTexture>? Texture(string name) => textures.GetValueOrDefault(name);
+    public Func<SampledTexture>? Texture(string name) => _textures.GetValueOrDefault(name);
     public Func<GpuBufferBinding>? Block(string name)
     {
-        var published = blocks.GetValueOrDefault(name);
+        var published = _blocks.GetValueOrDefault(name);
         if (published is null) return null;
         // An override (OverrideBlock) is looked up at each read, so it applies to the segments prepared while it is set.
-        return () => blockOverrides.Count > 0 && blockOverrides.TryGetValue(name, out var over) ? over() : published();
+        return () => _blockOverrides.Count > 0 && _blockOverrides.TryGetValue(name, out var over) ? over() : published();
     }
 
-    readonly Dictionary<string, Func<GpuBufferBinding>> blockOverrides = [];
+    readonly Dictionary<string, Func<GpuBufferBinding>> _blockOverrides = [];
 
     /// <summary>
     /// Replaces a published block's value for the segments prepared until it is cleared (<c>null</c>): a pass that needs the frame's blocks
@@ -124,11 +124,11 @@ public sealed class FrameGlobals
     /// </summary>
     public void OverrideBlock(string name, Func<GpuBufferBinding>? getter)
     {
-        if (getter is null) blockOverrides.Remove(name); else blockOverrides[name] = getter;
+        if (getter is null) _blockOverrides.Remove(name); else _blockOverrides[name] = getter;
     }
-    public Uniform? UniformValue(string name) => uniforms.GetValueOrDefault(name);
+    public Uniform? UniformValue(string name) => _uniforms.GetValueOrDefault(name);
 
-    public IEnumerable<string> TextureNames => textures.Keys;
-    public IEnumerable<string> BlockNames => blocks.Keys;
-    public IEnumerable<string> UniformNames => uniforms.Keys;
+    public IEnumerable<string> TextureNames => _textures.Keys;
+    public IEnumerable<string> BlockNames => _blocks.Keys;
+    public IEnumerable<string> UniformNames => _uniforms.Keys;
 }

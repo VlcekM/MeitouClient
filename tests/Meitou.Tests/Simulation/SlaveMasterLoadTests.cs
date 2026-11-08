@@ -106,7 +106,7 @@ public class SlaveMasterLoadTests
 
     static AiGoal CageGoal(int start, int end)
     {
-        var task = new AiTask("t", "cage", TaskType.SLAVE_GET_IN_MY_MASTERS_CAGE, TaskPriority.NonUrgent, TaskTargetType.Specific, TaskEndEvent.Nothing);
+        var task = new AiTask("t", "cage", TaskType.SlaveGetInMyMastersCage, TaskPriority.NonUrgent, TaskTargetType.Specific, TaskEndEvent.Nothing);
         return new AiGoal(task, start, end, 1);
     }
 

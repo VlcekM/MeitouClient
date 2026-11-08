@@ -10,13 +10,13 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public static class GameResources
 {
-    static readonly ConcurrentDictionary<(string Root, DateTime ModList), Lazy<OgreScriptResources>> cache = new();
+    static readonly ConcurrentDictionary<(string Root, DateTime ModList), Lazy<OgreScriptResources>> Cache = new();
 
     public static OgreScriptResources For(GameInstall install)
     {
         string modList = ModList.ModsCfgPath(install);
         var key = (install.Root, File.Exists(modList) ? File.GetLastWriteTimeUtc(modList) : default);
-        return cache.GetOrAdd(key, _ => new(() => OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install)))).Value;
+        return Cache.GetOrAdd(key, _ => new(() => OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install)))).Value;
     }
 
     /// <summary>

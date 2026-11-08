@@ -15,30 +15,30 @@ namespace Meitou.Simulation.Population;
 public sealed partial class PopulationSystem
 {
     /// <summary>Each site's artifacts still to be given out (null until <see cref="EnsureArtifacts"/>).</summary>
-    List<ArtifactStack>[]? townArtifacts;
-    PriceConstants? prices;
+    List<ArtifactStack>[]? _townArtifacts;
+    PriceConstants? _prices;
 
     /// <summary>The artifacts still to be given out at <paramref name="site"/>: empty once given, or for none.</summary>
     public IReadOnlyList<ArtifactStack> ArtifactsOf(World world, int site)
     {
         EnsureArtifacts(world);
-        return (uint)site < (uint)townArtifacts!.Length ? townArtifacts[site] : [];
+        return (uint)site < (uint)_townArtifacts!.Length ? _townArtifacts[site] : [];
     }
 
     /// <summary>The lists, once: a loaded save's town states, else (a new game) the towns' share of the data's artifacts.</summary>
     void EnsureArtifacts(World world)
     {
-        if (townArtifacts is not null) return;
-        townArtifacts = new List<ArtifactStack>[data.Sites.Count];
-        for (int i = 0; i < townArtifacts.Length; i++) townArtifacts[i] = [];
+        if (_townArtifacts is not null) return;
+        _townArtifacts = new List<ArtifactStack>[_data.Sites.Count];
+        for (int i = 0; i < _townArtifacts.Length; i++) _townArtifacts[i] = [];
         if (world.Saved is { } saved)
         {
-            foreach (var site in data.Sites)
+            foreach (var site in _data.Sites)
                 if (site.InstanceId.Length > 0 && saved.TownStates.TryGetValue(site.InstanceId, out var state))
-                    townArtifacts[site.Index] = ReadArtifacts(state, data.Db);
+                    _townArtifacts[site.Index] = ReadArtifacts(state, _data.Db);
             return;
         }
-        foreach (var (site, list) in PlanArtifacts(data)) townArtifacts[site] = list;
+        foreach (var (site, list) in PlanArtifacts(_data)) _townArtifacts[site] = list;
     }
 
     /// <summary>The data's artifacts shared among the placed towns, by site index.</summary>
@@ -92,12 +92,12 @@ public sealed partial class PopulationSystem
     void GiveArtifacts(World world, BuiltTown town)
     {
         EnsureArtifacts(world);
-        var list = townArtifacts![town.Site];
+        var list = _townArtifacts![town.Site];
         if (list.Count == 0 || town.Homes.Count == 0) return;
-        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
-        if (player >= 0 && town.Site < data.SiteFactions.Count && data.SiteFactions[town.Site] == player) return;
-        string? playerId = player >= 0 && player < data.Factions.Count ? data.Factions[player].Id : null;
-        var site = data.Sites[town.Site];
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction;
+        if (player >= 0 && town.Site < _data.SiteFactions.Count && _data.SiteFactions[town.Site] == player) return;
+        string? playerId = player >= 0 && player < _data.Factions.Count ? _data.Factions[player].Id : null;
+        var site = _data.Sites[town.Site];
 
         var templateOf = new Dictionary<TownBuilding, SquadTemplate>(ReferenceEqualityComparer.Instance);
         foreach (var (b, t) in town.Homes) templateOf.TryAdd(b, t);
@@ -113,14 +113,14 @@ public sealed partial class PopulationSystem
         itemHomes = [.. itemHomes.OrderByDescending(h => h.Base)];
         gearHomes = [.. gearHomes.OrderByDescending(h => h.Base)];
 
-        prices ??= PriceConstants.FromDatabase(data.Db);
+        _prices ??= PriceConstants.FromDatabase(_data.Db);
         var items = new List<MadeArtifact>();
         var gear = new List<MadeArtifact>();
         foreach (var s in list)
         {
-            uint value = (uint)Artifacts.ValueOf(data.Db, s, prices);
+            uint value = (uint)Artifacts.ValueOf(_data.Db, s, _prices);
             for (int u = 0; u < s.Units; u++)
-                if (MakeArtifact(s) is { } item) (item.Type == FcsRecordType.ITEM ? items : gear).Add(new MadeArtifact(value, item));
+                if (MakeArtifact(s) is { } item) (item.Type == FcsRecordType.Item ? items : gear).Add(new MadeArtifact(value, item));
         }
         list.Clear();
 
@@ -180,14 +180,14 @@ public sealed partial class PopulationSystem
     /// <summary>One unit of an entry as an item flagged unique: armour at its level as quality, a weapon of its maker and model, a crossbow or limb at its level.</summary>
     ItemInstance? MakeArtifact(ArtifactStack s)
     {
-        if (data.Db.Find(s.Item) is not { } record || data.Items.Create(s.Item, 1, record.Type == FcsRecordType.ARMOUR ? s.Level : 0) is not { } item) return null;
-        if (record.Type == FcsRecordType.WEAPON)
+        if (_data.Db.Find(s.Item) is not { } record || _data.Items.Create(s.Item, 1, record.Type == FcsRecordType.Armour ? s.Level : 0) is not { } item) return null;
+        if (record.Type == FcsRecordType.Weapon)
         {
             item.CompanyId = s.Part2;
             item.MaterialId = s.Part1;
             item.Level = s.Level;
         }
-        else if (record.Type is FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT) item.Level = s.Level;
+        else if (record.Type is FcsRecordType.Crossbow or FcsRecordType.LimbReplacement) item.Level = s.Level;
         item.Unique = true;
         return item;
     }
@@ -195,13 +195,13 @@ public sealed partial class PopulationSystem
     /// <summary>The lists while any town has artifacts left (so worlds without hash as before).</summary>
     void HashArtifacts(ref StateHasher h)
     {
-        if (townArtifacts is null || townArtifacts.All(l => l.Count == 0)) return;
-        for (int site = 0; site < townArtifacts.Length; site++)
+        if (_townArtifacts is null || _townArtifacts.All(l => l.Count == 0)) return;
+        for (int site = 0; site < _townArtifacts.Length; site++)
         {
-            if (townArtifacts[site].Count == 0) continue;
+            if (_townArtifacts[site].Count == 0) continue;
             h.Add(site);
-            h.Add(townArtifacts[site].Count);
-            foreach (var s in townArtifacts[site])
+            h.Add(_townArtifacts[site].Count);
+            foreach (var s in _townArtifacts[site])
             {
                 h.Add(Rng.StableHash(s.Item));
                 h.Add(Rng.StableHash(s.Part1));

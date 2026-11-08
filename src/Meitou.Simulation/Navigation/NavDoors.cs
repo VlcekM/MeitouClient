@@ -12,19 +12,19 @@ public sealed class NavDoors
 {
     sealed class State { public volatile bool Closed; }
 
-    readonly ConcurrentDictionary<string, State> doors = new(StringComparer.Ordinal);
-    int version;
+    readonly ConcurrentDictionary<string, State> _doors = new(StringComparer.Ordinal);
+    int _version;
 
     /// <summary>Increases with every change that flips a door; a path cached under an older number may cross a door that has closed since.</summary>
-    public int Version => Volatile.Read(ref version);
+    public int Version => Volatile.Read(ref _version);
 
     /// <summary>Opens or closes the doors of a building, by its <see cref="Meitou.Data.World.BuildingKey"/>. Unknown ids are remembered (the zone may load later).</summary>
     public void Set(string buildingInstance, bool closed)
     {
-        var state = doors.GetOrAdd(buildingInstance, _ => new State());
+        var state = _doors.GetOrAdd(buildingInstance, _ => new State());
         if (state.Closed == closed) return;
         state.Closed = closed;
-        Interlocked.Increment(ref version);
+        Interlocked.Increment(ref _version);
     }
 
     public void Open(string buildingInstance) => Set(buildingInstance, false);
@@ -33,9 +33,9 @@ public sealed class NavDoors
     /// <summary>Opens every door (a new world replaced the one that closed them).</summary>
     public void Clear()
     {
-        foreach (var s in doors.Values)
-            if (s.Closed) { s.Closed = false; Interlocked.Increment(ref version); }
+        foreach (var s in _doors.Values)
+            if (s.Closed) { s.Closed = false; Interlocked.Increment(ref _version); }
     }
 
-    public bool IsClosed(string buildingInstance) => doors.TryGetValue(buildingInstance, out var s) && s.Closed;
+    public bool IsClosed(string buildingInstance) => _doors.TryGetValue(buildingInstance, out var s) && s.Closed;
 }

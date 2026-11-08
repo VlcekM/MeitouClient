@@ -26,28 +26,28 @@ sealed class BloodDecals(GameHost host)
     /// <summary>How far above the ground a mark is still left on it (an engine rule: a character on an upper floor of a building bleeds onto the floor, which has no decals).</summary>
     internal const float BloodAboveGround = 20;
 
-    internal TerrainDecalStore? decalStore;
-    World? bloodFor;
-    long bloodTick;
-    double debrisClock;
-    readonly ConcurrentQueue<BloodMark> bloodQueue = new();
-    internal readonly Random bloodRandom = new();
+    internal TerrainDecalStore? DecalStore;
+    World? _bloodFor;
+    long _bloodTick;
+    double _debrisClock;
+    readonly ConcurrentQueue<BloodMark> _bloodQueue = new();
+    internal readonly Random BloodRandom = new();
 
     /// <summary>Makes the store and the renderer when the install's <c>Blood</c> setting is on (missing: on).</summary>
     internal void SetUpBlood(IGpuContext context)
     {
-        host.gpu.Debris ??= new DebrisRenderer(context, host.gpu.Objects?.Resolver, host.assets.Find) { SharedTextures = () => host.gpu.Characters?.Textures };   // made now: its shaders compile here, not at the first burst
-        host.gpu.Particles?.PrepareBursts(Debris.BurstSplash, Debris.BurstSpray, SparksSystem);
-        if (host.gpu.Decals is not null || AudioSystem.Setting(host.install, "Blood", 1) == 0) return;
-        var files = BloodTextureFiles(host.assets.Configured);
-        decalStore = new TerrainDecalStore([.. files.Select(list => (IReadOnlyList<(int, int)>)[.. list.Select(DdsSize)])]);
-        host.gpu.Decals = TerrainDecalRenderer.Create(context, files);
-        host.gpu.Decals.Meitou = host.o.MeitouBlood;
-        host.gpu.Decals.GroundHeight = (x, z) => host.gpu.Terrain.HeightAt(x, z);
-        host.gpu.Decals.Surfaces = host.o.MeitouBloodSurfaces;
-        host.gpu.Decals.Resolution = (int)AudioSystem.Setting(host.install, "Decal Resolution", 1024, 512, 2048);
-        host.gpu.Decals.Range = AudioSystem.Setting(host.install, "Decal Range", 1000, 0, 5000);
-        host.gpu.DecalStore = decalStore;
+        host.Gpu.Debris ??= new DebrisRenderer(context, host.Gpu.Objects?.Resolver, host.Assets.Find) { SharedTextures = () => host.Gpu.Characters?.Textures };   // made now: its shaders compile here, not at the first burst
+        host.Gpu.Particles?.PrepareBursts(Debris.BurstSplash, Debris.BurstSpray, SparksSystem);
+        if (host.Gpu.Decals is not null || AudioSystem.Setting(host.Install, "Blood", 1) == 0) return;
+        var files = BloodTextureFiles(host.Assets.Configured);
+        DecalStore = new TerrainDecalStore([.. files.Select(list => (IReadOnlyList<(int, int)>)[.. list.Select(DdsSize)])]);
+        host.Gpu.Decals = TerrainDecalRenderer.Create(context, files);
+        host.Gpu.Decals.Meitou = host.WorldOptions.MeitouBlood;
+        host.Gpu.Decals.GroundHeight = (x, z) => host.Gpu.Terrain.HeightAt(x, z);
+        host.Gpu.Decals.Surfaces = host.WorldOptions.MeitouBloodSurfaces;
+        host.Gpu.Decals.Resolution = (int)AudioSystem.Setting(host.Install, "Decal Resolution", 1024, 512, 2048);
+        host.Gpu.Decals.Range = AudioSystem.Setting(host.Install, "Decal Range", 1000, 0, 5000);
+        host.Gpu.DecalStore = DecalStore;
     }
 
     /// <summary>
@@ -56,54 +56,54 @@ sealed class BloodDecals(GameHost host)
     /// </summary>
     internal void UpdateBlood()
     {
-        var world = host.session.World;
-        world.Luckyren = host.config.LuckyrenMode;
+        var world = host.Session.World;
+        world.Luckyren = host.Config.LuckyrenMode;
         UpdateBlockSparks(world);
-        if (decalStore is null && !host.config.LuckyrenMode && host.debris.pieces.Count == 0)
+        if (DecalStore is null && !host.Config.LuckyrenMode && host.Debris.Pieces.Count == 0)
         {
             world.BloodMarks = null;
-            host.gpu.DebrisPieces.Clear();
-            host.debris.AddBolts();   // the bolts are drawn whatever the Blood setting
-            host.debris.AddTracers(world);   // with their tracers
-            host.debris.UpdateFalls(world);   // and the severed limbs falling
+            host.Gpu.DebrisPieces.Clear();
+            host.Debris.AddBolts();   // the bolts are drawn whatever the Blood setting
+            host.Debris.AddTracers(world);   // with their tracers
+            host.Debris.UpdateFalls(world);   // and the severed limbs falling
             return;
         }
-        if (!ReferenceEquals(bloodFor, world)) BloodForNewWorld(null);
-        world.BloodMarks = bloodQueue;
+        if (!ReferenceEquals(_bloodFor, world)) BloodForNewWorld(null);
+        world.BloodMarks = _bloodQueue;
         float tick = world.TickSeconds;
-        while (bloodQueue.TryDequeue(out var m))
+        while (_bloodQueue.TryDequeue(out var m))
         {
             if (m.Kind == BloodMarkKind.Explosion)
             {
-                host.debris.Burst(m, world);
+                host.Debris.Burst(m, world);
                 continue;
             }
-            if (decalStore is not { } store) continue;
+            if (DecalStore is not { } store) continue;
             uint opaque = 0xFF000000 | Abgr(m.Colour);
             long who = (long)(uint)m.Who.Slot << 32 | (uint)m.Who.Generation;
-            if (host.gpu.Decals is { Surfaces: true } surfaces) SurfaceMark(surfaces, m, who, opaque, tick);   // the walls, floors and objects too, upper floors included
-            if (m.Position.Y > host.gpu.Terrain.HeightAt(m.Position.X, m.Position.Z) + BloodAboveGround) continue;
+            if (host.Gpu.Decals is { Surfaces: true } surfaces) SurfaceMark(surfaces, m, who, opaque, tick);   // the walls, floors and objects too, upper floors included
+            if (m.Position.Y > host.Gpu.Terrain.HeightAt(m.Position.X, m.Position.Z) + BloodAboveGround) continue;
             switch (m.Kind)
             {
-                case BloodMarkKind.Pool: store.Bleed(who, m.Position, m.Amount, tick, opaque, bloodRandom); break;
+                case BloodMarkKind.Pool: store.Bleed(who, m.Position, m.Amount, tick, opaque, BloodRandom); break;
                 case BloodMarkKind.Smear:
-                    store.Add(TerrainDecalType.Smear, m.Position, m.Direction, 0.2f, (uint)(Math.Clamp(m.Amount, 0, 1) * 255) << 24 | Abgr(m.Colour), TerrainDecalStore.NewLife, bloodRandom);
+                    store.Add(TerrainDecalType.Smear, m.Position, m.Direction, 0.2f, (uint)(Math.Clamp(m.Amount, 0, 1) * 255) << 24 | Abgr(m.Colour), TerrainDecalStore.NewLife, BloodRandom);
                     break;
-                case BloodMarkKind.Drip: store.Add(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, TerrainDecalStore.NewLife, bloodRandom); break;
-                case BloodMarkKind.Splash: store.Add(TerrainDecalType.Splash, m.Position, m.Direction, m.Amount, opaque, TerrainDecalStore.NewLife, bloodRandom); break;
+                case BloodMarkKind.Drip: store.Add(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, TerrainDecalStore.NewLife, BloodRandom); break;
+                case BloodMarkKind.Splash: store.Add(TerrainDecalType.Splash, m.Position, m.Direction, m.Amount, opaque, TerrainDecalStore.NewLife, BloodRandom); break;
             }
         }
-        long ticks = world.Tick - bloodTick;
-        bloodTick = world.Tick;
-        if (ticks > 0 && decalStore is { } aging && host.gpu.Decals is { } decals)
+        long ticks = world.Tick - _bloodTick;
+        _bloodTick = world.Tick;
+        if (ticks > 0 && DecalStore is { } aging && host.Gpu.Decals is { } decals)
         {
             aging.Age(ticks * tick, decals.Drawn);
             decals.AgeSurfaces(ticks * tick);
         }
         // The pieces move by the game time between frames, the tick count plus the simulation's alpha, so they fly smoothly at the display rate, not in tick steps.
-        double clock = host.session.ShownTick + host.session.SimulationAlpha;   // the shown tick: one run ahead is not on screen yet
-        host.debris.UpdateDebris(world, (float)Math.Clamp((clock - debrisClock) * tick, 0, 0.5));
-        debrisClock = clock;
+        double clock = host.Session.ShownTick + host.Session.SimulationAlpha;   // the shown tick: one run ahead is not on screen yet
+        host.Debris.UpdateDebris(world, (float)Math.Clamp((clock - _debrisClock) * tick, 0, 0.5));
+        _debrisClock = clock;
     }
 
     /// <summary>One mark as the <c>bloodsurfaces</c> switch's decals (<see cref="TerrainDecalRenderer.Surfaces"/>); the same marks and sizes as the terrain's.</summary>
@@ -111,18 +111,18 @@ sealed class BloodDecals(GameHost host)
     {
         switch (m.Kind)
         {
-            case BloodMarkKind.Pool: surfaces.BleedSurface(who, m.Position, m.Amount, tick, opaque, bloodRandom); break;
+            case BloodMarkKind.Pool: surfaces.BleedSurface(who, m.Position, m.Amount, tick, opaque, BloodRandom); break;
             case BloodMarkKind.Smear:
-                surfaces.AddSurface(TerrainDecalType.Smear, m.Position, m.Direction, 0.2f, (uint)(Math.Clamp(m.Amount, 0, 1) * 255) << 24 | Abgr(m.Colour), bloodRandom);
+                surfaces.AddSurface(TerrainDecalType.Smear, m.Position, m.Direction, 0.2f, (uint)(Math.Clamp(m.Amount, 0, 1) * 255) << 24 | Abgr(m.Colour), BloodRandom);
                 break;
-            case BloodMarkKind.Drip: surfaces.AddSurface(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, bloodRandom); break;
-            case BloodMarkKind.Splash: surfaces.AddSurface(TerrainDecalType.Splash, m.Position, m.Direction, m.Amount, opaque, bloodRandom); break;
+            case BloodMarkKind.Drip: surfaces.AddSurface(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, BloodRandom); break;
+            case BloodMarkKind.Splash: surfaces.AddSurface(TerrainDecalType.Splash, m.Position, m.Direction, m.Amount, opaque, BloodRandom); break;
         }
     }
 
     /// <summary>The EFFECT `small- sparks1` (5463-nodes_furniture1_otto.mod) the original throws on a parry: its particle system.</summary>
     const string SparksSystem = "kenshi_sparks";
-    readonly ConcurrentQueue<CharacterId> sparkQueue = new();
+    readonly ConcurrentQueue<CharacterId> _sparkQueue = new();
 
     /// <summary>
     /// Once a frame: the parries of the ticks since the last frame throw <see cref="SparksSystem"/> at the parrying character's <c>Bip01 Prop2</c> (its weapon), 0 or 1 unit higher
@@ -130,15 +130,15 @@ sealed class BloodDecals(GameHost host)
     /// </summary>
     void UpdateBlockSparks(World world)
     {
-        if (host.gpu.Particles is not { } particles || host.gpu.Characters is not { } characters)
+        if (host.Gpu.Particles is not { } particles || host.Gpu.Characters is not { } characters)
         {
             world.BlockSparks = null;
             return;
         }
-        if (!ReferenceEquals(world.BlockSparks, sparkQueue)) { sparkQueue.Clear(); world.BlockSparks = sparkQueue; }
-        while (sparkQueue.TryDequeue(out var who))
+        if (!ReferenceEquals(world.BlockSparks, _sparkQueue)) { _sparkQueue.Clear(); world.BlockSparks = _sparkQueue; }
+        while (_sparkQueue.TryDequeue(out var who))
             if (characters.BonePosition(host.DrawKey(who), "Bip01 Prop2") is { } at)
-                particles.Burst(SparksSystem, at + new Vector3(0, bloodRandom.Next(2), 0), Quaternion.Identity, 0.1f);
+                particles.Burst(SparksSystem, at + new Vector3(0, BloodRandom.Next(2), 0), Quaternion.Identity, 0.1f);
     }
 
     /// <summary>
@@ -147,28 +147,28 @@ sealed class BloodDecals(GameHost host)
     /// </summary>
     internal void BloodForNewWorld(FcsRecord? saved)
     {
-        var world = host.session.World;
-        host.debris.pieces.Clear();
-        if (host.gpu is not null) host.gpu.DebrisPieces.Clear();
-        bloodQueue.Clear();
-        bloodFor = world;
-        bloodTick = world.Tick;
-        debrisClock = host.session.ShownTick + host.session.SimulationAlpha;
-        if (decalStore is not { } store) return;
+        var world = host.Session.World;
+        host.Debris.Pieces.Clear();
+        if (host.Gpu is not null) host.Gpu.DebrisPieces.Clear();
+        _bloodQueue.Clear();
+        _bloodFor = world;
+        _bloodTick = world.Tick;
+        _debrisClock = host.Session.ShownTick + host.Session.SimulationAlpha;
+        if (DecalStore is not { } store) return;
         store.Clear();
-        host.gpu?.Decals?.ClearSurfaces();
-        world.BloodMarks = bloodQueue;
+        host.Gpu?.Decals?.ClearSurfaces();
+        world.BloodMarks = _bloodQueue;
         if (saved is null) return;
         store.Load(SaveDecals.Read(saved));
-        host.gpu?.Decals?.LoadSurfaces(SaveSurfaceDecals.Read(saved));   // the bloodsurfaces switch's marks (Meitou-only keys)
+        host.Gpu?.Decals?.LoadSurfaces(SaveSurfaceDecals.Read(saved));   // the bloodsurfaces switch's marks (Meitou-only keys)
     }
 
     /// <summary>The store's decals and the surfaces' into the save's TERRAIN_DECALS record (with <c>Blood</c> off the record keeps what the loaded save had).</summary>
     internal void WriteDecals(SaveGame game)
     {
-        if (decalStore is not { } store || game.Decals is not { } record) return;
+        if (DecalStore is not { } store || game.Decals is not { } record) return;
         SaveDecals.Write(record, store.All);
-        if (host.gpu?.Decals is { } decals) SaveSurfaceDecals.Write(record, decals.SavedSurfaces);
+        if (host.Gpu?.Decals is { } decals) SaveSurfaceDecals.Write(record, decals.SavedSurfaces);
     }
 
     /// <summary>The default <c>blood colour</c> (RACE, 0x800000), the red the blood particles' textures already are.</summary>

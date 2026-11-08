@@ -161,10 +161,10 @@ public enum ModSource { Local, Workshop }
 /// <summary>A mod on disk: its name (the <c>.mod</c> file's stem), file and source.</summary>
 public sealed class ModInfo(string name, string path, ModSource source)
 {
-    ModHeader? header;
-    bool headerRead;
-    bool? nativePlugin;
-    bool? code;
+    ModHeader? _header;
+    bool _headerRead;
+    bool? _nativePlugin;
+    bool? _code;
 
     public string Name { get; } = name;
     public string Path { get; } = path;
@@ -172,10 +172,10 @@ public sealed class ModInfo(string name, string path, ModSource source)
     public string Folder => System.IO.Path.GetDirectoryName(Path)!;
 
     /// <summary>An RE_Kenshi plugin mod: its data loads in Meitou, its DLLs do not. Checked on first use.</summary>
-    public bool HasNativePlugin => nativePlugin ??= File.Exists(System.IO.Path.Combine(Folder, ModList.NativePluginFile));
+    public bool HasNativePlugin => _nativePlugin ??= File.Exists(System.IO.Path.Combine(Folder, ModList.NativePluginFile));
 
     /// <summary>A Meitou code mod: its folder has <see cref="ModList.CodeManifestFile"/>, so it runs C# code of its own. Checked on first use.</summary>
-    public bool HasCode => code ??= File.Exists(CodeManifestPath);
+    public bool HasCode => _code ??= File.Exists(CodeManifestPath);
 
     public string CodeManifestPath => System.IO.Path.Combine(Folder, ModList.CodeManifestFile);
 
@@ -184,8 +184,8 @@ public sealed class ModInfo(string name, string path, ModSource source)
     {
         get
         {
-            if (!headerRead) { header = ModHeader.TryRead(Path); headerRead = true; }
-            return header;
+            if (!_headerRead) { _header = ModHeader.TryRead(Path); _headerRead = true; }
+            return _header;
         }
     }
 }

@@ -89,27 +89,27 @@ public readonly record struct SaidLine(string Owner, string Text, bool Player);
 
 public sealed partial class World : IDisposable
 {
-    readonly List<ITickSystem> systems;
-    readonly WorkerPool pool;
-    readonly EffectBuffer[] buffers;
-    readonly List<Effect> effects = [];
-    Partition[] partitions = [];
+    readonly List<ITickSystem> _systems;
+    readonly WorkerPool _pool;
+    readonly EffectBuffer[] _buffers;
+    readonly List<Effect> _effects = [];
+    Partition[] _partitions = [];
     // The far cadence (RefreshCadence): per slot, the ticks this tick's step covers (0: skipped this tick) and the tick of its last step.
-    byte[] stepTicks = [];
-    long[] lastStep = [];
-    readonly List<System.Numerics.Vector3> playerSpots = [];
+    byte[] _stepTicks = [];
+    long[] _lastStep = [];
+    readonly List<System.Numerics.Vector3> _playerSpots = [];
     // Per system, built once when it is added: which parallel phases it implements and the delegates that run them (no closure per tick).
-    readonly List<SystemPhases> phases = [];
-    readonly List<SimCommand> deferred = [];
-    readonly List<string> messages = [];
-    readonly List<SaidLine> said = [];
-    readonly Dictionary<CharacterId, (string Text, long Until)> barks = [];
-    IAnimationSource? animations;
-    IProjectileSource? projectiles;
-    Trading.ITradeSource? trades;
-    Production.ProductionSystem? production;
-    Dialogue.IDialogueSource? dialogues;
-    Ragdolls.IRagdollSource? ragdolls;
+    readonly List<SystemPhases> _phases = [];
+    readonly List<SimCommand> _deferred = [];
+    readonly List<string> _messages = [];
+    readonly List<SaidLine> _said = [];
+    readonly Dictionary<CharacterId, (string Text, long Until)> _barks = [];
+    IAnimationSource? _animations;
+    IProjectileSource? _projectiles;
+    Trading.ITradeSource? _trades;
+    readonly Production.ProductionSystem? _production;
+    Dialogue.IDialogueSource? _dialogues;
+    Ragdolls.IRagdollSource? _ragdolls;
 
     public World(WorldSettings settings, IWalkability walkability, IEnumerable<ITickSystem>? systems = null, CharacterTable? characters = null)
     {
@@ -118,25 +118,25 @@ public sealed partial class World : IDisposable
         Settings = settings;
         GameHours = settings.StartHours;
         Walkability = walkability;
-        this.systems = [.. systems ?? []];
-        for (int k = 0; k < this.systems.Count; k++) phases.Add(new SystemPhases(this, this.systems[k], k));
-        animations = this.systems.OfType<IAnimationSource>().FirstOrDefault();
-        projectiles = this.systems.OfType<IProjectileSource>().FirstOrDefault();
-        trades = this.systems.OfType<Trading.ITradeSource>().FirstOrDefault();
-        production = this.systems.OfType<Production.ProductionSystem>().FirstOrDefault();
-        dialogues = this.systems.OfType<Dialogue.IDialogueSource>().FirstOrDefault();
-        ragdolls = this.systems.OfType<Ragdolls.IRagdollSource>().FirstOrDefault();
-        hasGoalSources = this.systems.OfType<IGoalSource>().Any();
+        this._systems = [.. systems ?? []];
+        for (int k = 0; k < this._systems.Count; k++) _phases.Add(new SystemPhases(this, this._systems[k], k));
+        _animations = this._systems.OfType<IAnimationSource>().FirstOrDefault();
+        _projectiles = this._systems.OfType<IProjectileSource>().FirstOrDefault();
+        _trades = this._systems.OfType<Trading.ITradeSource>().FirstOrDefault();
+        _production = this._systems.OfType<Production.ProductionSystem>().FirstOrDefault();
+        _dialogues = this._systems.OfType<Dialogue.IDialogueSource>().FirstOrDefault();
+        _ragdolls = this._systems.OfType<Ragdolls.IRagdollSource>().FirstOrDefault();
+        _hasGoalSources = this._systems.OfType<IGoalSource>().Any();
         Claims.Configure(settings.TickSeconds);
-        for (int k = 0; k < this.systems.Count; k++) RegisterCombatHitObserver(this.systems[k], k);
-        foreach (var owner in this.systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
-        foreach (var owner in this.systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
-        for (int k = 0; k < this.systems.Count; k++) if (DecidesAfter(this.systems[k])) decideAfter = k;
+        for (int k = 0; k < this._systems.Count; k++) RegisterCombatHitObserver(this._systems[k], k);
+        foreach (var owner in this._systems.OfType<ITaskOwner>()) owner.RegisterTasks(Tasks);
+        foreach (var owner in this._systems.OfType<IDecisionOwner>()) owner.RegisterSources(Decisions);
+        for (int k = 0; k < this._systems.Count; k++) if (DecidesAfter(this._systems[k])) _decideAfter = k;
         Characters = characters ?? new CharacterTable();
         Grid = new SpatialGrid(settings.GridCellSize);
-        pool = new WorkerPool(settings.Threads);
-        buffers = new EffectBuffer[Math.Max(1, settings.Threads * settings.PartitionsPerThread)];
-        for (int i = 0; i < buffers.Length; i++) buffers[i] = new EffectBuffer();
+        _pool = new WorkerPool(settings.Threads);
+        _buffers = new EffectBuffer[Math.Max(1, settings.Threads * settings.PartitionsPerThread)];
+        for (int i = 0; i < _buffers.Length; i++) _buffers[i] = new EffectBuffer();
     }
 
     public WorldSettings Settings { get; private set; }
@@ -150,7 +150,7 @@ public sealed partial class World : IDisposable
     /// when the world has none of them), and for orders between ticks. Its sources are registered by the systems that own them (<see cref="IDecisionOwner"/>; open to later additions).
     /// </summary>
     public DecisionSystem Decisions { get; } = new();
-    int decideAfter = -1;
+    int _decideAfter = -1;
 
     static bool DecidesAfter(ITickSystem system) => system is RetaliationSystem or AggroSystem or FleeSystem;
 
@@ -190,7 +190,7 @@ public sealed partial class World : IDisposable
     /// <summary>The camera the host last passed (<see cref="CameraViewCommand"/>); null: none, nothing is tested against a screen.</summary>
     public CameraViewCommand? View { get; internal set; }
 
-    readonly bool hasGoalSources;
+    readonly bool _hasGoalSources;
     /// <summary>The characters' places and light levels for the sight tests (docs/game/perception.md "Sight"), worked out each tick.</summary>
     public SightMap Sight { get; } = new();
     /// <summary>The unique (story) characters made, dead or captured (docs/game/factions-squads-towns.md "Unique characters").</summary>
@@ -223,7 +223,7 @@ public sealed partial class World : IDisposable
     public Construction.ResearchState Research { get; } = new();
     /// <summary>The machines of the player's complete buildings: recipe slots, storage, farms (docs/simulation.md "Production").</summary>
     public Production.MachineRegistry Machines { get; } = new();
-    public IReadOnlyList<ITickSystem> Systems => systems;
+    public IReadOnlyList<ITickSystem> Systems => _systems;
     /// <summary>The number of ticks run; during a tick, the number of the tick being run.</summary>
     public long Tick { get; private set; }
 
@@ -231,7 +231,7 @@ public sealed partial class World : IDisposable
     /// Runs <paramref name="body"/> for 0..<paramref name="count"/>-1 on the worker pool and waits, in a serial phase (a slow-world pass over independent items: each call may
     /// change only its own item). The result must not depend on the order the items run in.
     /// </summary>
-    internal void ParallelFor(int count, Action<int> body) => pool.ForEach(count, body);
+    internal void ParallelFor(int count, Action<int> body) => _pool.ForEach(count, body);
     /// <summary>Game seconds per game hour (docs/game/game-loop.md "The clock", Verified; the engine's <c>GameClock</c> has the same).</summary>
     public const double SecondsPerGameHour = 1200.0 / 11;
     /// <summary>
@@ -274,7 +274,7 @@ public sealed partial class World : IDisposable
     /// <summary>Whether <paramref name="slot"/> steps this tick (far cadence): the parallel systems, the ragdolls, the sight map and the decisions leave a skipped slot as it is.</summary>
     public bool Steps(int slot) => StepTicks(slot) != 0;
     /// <summary>The ticks a stepping slot's step covers this tick (1 for a near character; up to <see cref="WorldSettings.FarTickPeriod"/> for a far one), 0 when skipped. A slot the tick has not seen yet (outside a tick) steps.</summary>
-    public int StepTicks(int slot) => slot < stepTicks.Length ? stepTicks[slot] : 1;
+    public int StepTicks(int slot) => slot < _stepTicks.Length ? _stepTicks[slot] : 1;
     /// <summary>The game seconds a stepping slot's step covers this tick: the systems' <c>dt</c> for it.</summary>
     public float StepSeconds(int slot) => StepTicks(slot) * TickSeconds;
     /// <summary>
@@ -299,47 +299,47 @@ public sealed partial class World : IDisposable
     public void AddSystem(ITickSystem system)
     {
         if (Tick != 0) throw new InvalidOperationException("systems are added before the first tick");
-        systems.Add(system);
-        systemsByType.Clear();
-        phases.Add(new SystemPhases(this, system, systems.Count - 1));
-        animations ??= system as IAnimationSource;
-        projectiles ??= system as IProjectileSource;
-        trades ??= system as Trading.ITradeSource;
-        dialogues ??= system as Dialogue.IDialogueSource;
-        ragdolls ??= system as Ragdolls.IRagdollSource;
-        RegisterCombatHitObserver(system, systems.Count - 1);
+        _systems.Add(system);
+        _systemsByType.Clear();
+        _phases.Add(new SystemPhases(this, system, _systems.Count - 1));
+        _animations ??= system as IAnimationSource;
+        _projectiles ??= system as IProjectileSource;
+        _trades ??= system as Trading.ITradeSource;
+        _dialogues ??= system as Dialogue.IDialogueSource;
+        _ragdolls ??= system as Ragdolls.IRagdollSource;
+        RegisterCombatHitObserver(system, _systems.Count - 1);
         if (system is IDecisionOwner owner) owner.RegisterSources(Decisions);
-        if (DecidesAfter(system)) decideAfter = systems.Count - 1;
+        if (DecidesAfter(system)) _decideAfter = _systems.Count - 1;
     }
 
     /// <summary>The character holds a line it wants to say to the player (<see cref="Dialogue.IDialogueSource.HasInterrupt"/>).</summary>
-    public bool WantsToTalk(CharacterId id) => dialogues is not null && Characters.Phase == TablePhase.Outside && dialogues.HasInterrupt(id);
+    public bool WantsToTalk(CharacterId id) => _dialogues is not null && Characters.Phase == TablePhase.Outside && _dialogues.HasInterrupt(id);
 
     /// <summary>Whether the character answers the player's Talk (the dialogue system finds event-1 dialogue for it, and with <paramref name="talker"/> given, a line of it passes now); the host asks between ticks.</summary>
-    public bool CanTalk(CharacterId id, CharacterId? talker = null) => dialogues is not null && Characters.Phase == TablePhase.Outside && Characters.TryResolveNext(id, out int slot) && dialogues.CanTalk(this, slot, talker);
+    public bool CanTalk(CharacterId id, CharacterId? talker = null) => _dialogues is not null && Characters.Phase == TablePhase.Outside && Characters.TryResolveNext(id, out int slot) && _dialogues.CanTalk(this, slot, talker);
 
     // The profiled parallel phase (RunParallel): the body run, a timed wrapper made once, and each partition's Stopwatch ticks (a partition is one job, written by one thread).
-    Action<int>? timedBody;
-    Action<int>? timedRun;
-    long[] jobTicks = [];
+    Action<int>? _timedBody;
+    Action<int>? _timedRun;
+    long[] _jobTicks = [];
 
     /// <summary>One system's parallel phase over the partitions; profiled, it also sums its jobs' time and notes the slowest (<see cref="TickProfile.Jobs"/>).</summary>
     void RunParallel(Action<int> body, TickProfile? prof, int phase, int system)
     {
-        if (prof is null) { pool.ForEach(partitions.Length, body); return; }
-        int n = partitions.Length;
-        if (jobTicks.Length < n) jobTicks = new long[n];
-        Array.Clear(jobTicks, 0, n);
-        timedBody = body;
-        timedRun ??= i =>
+        if (prof is null) { _pool.ForEach(_partitions.Length, body); return; }
+        int n = _partitions.Length;
+        if (_jobTicks.Length < n) _jobTicks = new long[n];
+        Array.Clear(_jobTicks, 0, n);
+        _timedBody = body;
+        _timedRun ??= i =>
         {
             long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
-            timedBody!(i);
-            jobTicks[i] = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
+            _timedBody!(i);
+            _jobTicks[i] = System.Diagnostics.Stopwatch.GetTimestamp() - t0;
         };
-        pool.ForEach(n, timedRun);
+        _pool.ForEach(n, _timedRun);
         long sum = 0, max = 0;
-        for (int i = 0; i < n; i++) { sum += jobTicks[i]; max = Math.Max(max, jobTicks[i]); }
+        for (int i = 0; i < n; i++) { sum += _jobTicks[i]; max = Math.Max(max, _jobTicks[i]); }
         prof.Jobs(phase, sum, max);
         prof.Lap(phase, system);
     }
@@ -349,14 +349,14 @@ public sealed partial class World : IDisposable
     {
         var table = Characters;
         var prof = Profile.Enabled ? Profile : null;
-        prof?.Begin(systems.Count);
+        prof?.Begin(_systems.Count);
         table.BeginTick();
 
         // 1. Inputs (serial).
         table.Phase = TablePhase.Inputs;
         var due = TakeDue();
         prof?.Lap(TickProfile.Inputs);
-        for (int k = 0; k < systems.Count; k++) { systems[k].Inputs(this, due); prof?.Lap(TickProfile.Inputs, k); }
+        for (int k = 0; k < _systems.Count; k++) { _systems[k].Inputs(this, due); prof?.Lap(TickProfile.Inputs, k); }
 
         // 2. Schedule (serial): the grid of the last tick's positions, then the systems.
         table.Phase = TablePhase.Schedule;
@@ -368,46 +368,46 @@ public sealed partial class World : IDisposable
         prof?.Lap(TickProfile.Sight);
         MakePartitions();
         prof?.Lap(TickProfile.Schedule);
-        for (int k = 0; k < systems.Count; k++) { systems[k].Schedule(this); prof?.Lap(TickProfile.Schedule, k); }
+        for (int k = 0; k < _systems.Count; k++) { _systems[k].Schedule(this); prof?.Lap(TickProfile.Schedule, k); }
 
         // 3-5. Think, move, act (parallel; each system's phase is a barrier).
         table.Phase = TablePhase.Parallel;
         // A system that leaves a phase at its empty default is skipped there: a barrier costs more than the nothing it would wait for.
-        foreach (var p in phases) if (p.Think is { } think) RunParallel(think, prof, TickProfile.Think, p.Index);
-        foreach (var p in phases) if (p.Move is { } move) RunParallel(move, prof, TickProfile.Move, p.Index);
-        foreach (var b in buffers) b.Reset();
+        foreach (var p in _phases) if (p.Think is { } think) RunParallel(think, prof, TickProfile.Think, p.Index);
+        foreach (var p in _phases) if (p.Move is { } move) RunParallel(move, prof, TickProfile.Move, p.Index);
+        foreach (var b in _buffers) b.Reset();
         prof?.Lap(TickProfile.Act);
-        foreach (var p in phases)
+        foreach (var p in _phases)
         {
             if (p.BeforeAct is { } before) RunParallel(before, prof, TickProfile.Act, p.Index);
             if (p.Act is not { } act) continue;
-            foreach (var b in buffers) b.BeginSystem(p.Index);   // Effect.System is the system's real index, so the commit order does not depend on which systems act
+            foreach (var b in _buffers) b.BeginSystem(p.Index);   // Effect.System is the system's real index, so the commit order does not depend on which systems act
             RunParallel(act, prof, TickProfile.Act, p.Index);
         }
 
         table.Phase = TablePhase.Commit;
         // 6. Commit (serial): the effects in an order the partitioning cannot change.
-        effects.Clear();
-        for (int i = 0; i < partitions.Length; i++) effects.AddRange(buffers[i].Items);
-        effects.Sort(EffectBuffer.Order);
+        _effects.Clear();
+        for (int i = 0; i < _partitions.Length; i++) _effects.AddRange(_buffers[i].Items);
+        _effects.Sort(EffectBuffer.Order);
         prof?.Lap(TickProfile.Commit);
-        foreach (var e in effects) { systems[e.System].Apply(this, e); prof?.Lap(TickProfile.Commit, e.System); }
+        foreach (var e in _effects) { _systems[e.System].Apply(this, e); prof?.Lap(TickProfile.Commit, e.System); }
 
         Squads.Refresh(table);
         prof?.Lap(TickProfile.Commit);
         table.Phase = TablePhase.SlowWorld;
         // 7. Slow world (serial).
-        for (int k = 0; k < systems.Count; k++)
+        for (int k = 0; k < _systems.Count; k++)
         {
-            systems[k].SlowWorld(this);
+            _systems[k].SlowWorld(this);
             prof?.Lap(TickProfile.SlowWorld, k);
-            if (k == decideAfter) RunDecisions(prof);
+            if (k == _decideAfter) RunDecisions(prof);
         }
-        if (decideAfter < 0) RunDecisions(prof);
+        if (_decideAfter < 0) RunDecisions(prof);
         TaskStart.CheckStarts(this);
         prof?.Part("task starts");
         Claims.Now = Tick;
-        if (hasGoalSources) SquadGoals.Of(this);   // the duties running now refresh their entries; the ones past their 3 s go
+        if (_hasGoalSources) SquadGoals.Of(this);   // the duties running now refresh their entries; the ones past their 3 s go
 
         // 8. Publish.
         Squads.Refresh(table);
@@ -434,7 +434,7 @@ public sealed partial class World : IDisposable
             var at = table.Previous[i];
             if (!at.Alive) continue;
             if (loaded is null) { if (at.Dormant) table.SetDormant(i, false); continue; }
-            var zone = Meitou.Data.World.WorldLayout.ZoneOf(at.Position.X, at.Position.Z);
+            var zone = Data.World.WorldLayout.ZoneOf(at.Position.X, at.Position.Z);
             if (zone.IsInsideGrid && at.Dormant == loaded.Contains(zone)) table.SetDormant(i, !loaded.Contains(zone));
         }
     }
@@ -460,24 +460,24 @@ public sealed partial class World : IDisposable
         ArgumentNullException.ThrowIfNull(command);
         if (Characters.Phase == TablePhase.Parallel) throw new InvalidOperationException("commands are deferred in serial phases only");
         if (command.Tick <= Tick) throw new ArgumentException("a deferred command is for a later tick", nameof(command));
-        deferred.Add(command);
+        _deferred.Add(command);
     }
 
     /// <summary>The commands deferred for later ticks (for tests).</summary>
-    public int DeferredCount => deferred.Count;
+    public int DeferredCount => _deferred.Count;
 
     IReadOnlyList<SimCommand> TakeDue()
     {
         var external = Commands.TakeDue(Tick);
-        if (deferred.Count == 0) return external;
-        var due = new List<SimCommand>(deferred.Count + external.Count);
+        if (_deferred.Count == 0) return external;
+        var due = new List<SimCommand>(_deferred.Count + external.Count);
         int kept = 0;
-        for (int k = 0; k < deferred.Count; k++)
+        for (int k = 0; k < _deferred.Count; k++)
         {
-            if (deferred[k].Tick <= Tick) due.Add(deferred[k]);
-            else deferred[kept++] = deferred[k];
+            if (_deferred[k].Tick <= Tick) due.Add(_deferred[k]);
+            else _deferred[kept++] = _deferred[k];
         }
-        deferred.RemoveRange(kept, deferred.Count - kept);
+        _deferred.RemoveRange(kept, _deferred.Count - kept);
         due.AddRange(external);
         return due;
     }
@@ -485,7 +485,7 @@ public sealed partial class World : IDisposable
     /// <summary>Posts a message for the player (a relation crossing a threshold...); serial phases only. The host shows them.</summary>
     public void Post(string message)
     {
-        lock (messages) messages.Add(message);
+        lock (_messages) _messages.Add(message);
     }
 
     /// <summary>
@@ -494,17 +494,17 @@ public sealed partial class World : IDisposable
     /// </summary>
     public void Bark(CharacterId speaker, string text)
     {
-        barks[speaker] = (text, Tick + (long)MathF.Ceiling((2 + 0.12f * text.Length) / TickSeconds));
+        _barks[speaker] = (text, Tick + (long)MathF.Ceiling((2 + 0.12f * text.Length) / TickSeconds));
     }
 
     /// <summary>Takes the messages posted since the last call (the host, between ticks).</summary>
     public IReadOnlyList<string> TakeMessages()
     {
-        lock (messages)
+        lock (_messages)
         {
-            if (messages.Count == 0) return [];
-            string[] all = [.. messages];
-            messages.Clear();
+            if (_messages.Count == 0) return [];
+            string[] all = [.. _messages];
+            _messages.Clear();
             return all;
         }
     }
@@ -516,21 +516,21 @@ public sealed partial class World : IDisposable
     public void Said(string owner, string text, bool player)
     {
         if (text.Length == 0) return;
-        lock (said)
+        lock (_said)
         {
-            said.Add(new(owner, text.ReplaceLineEndings(" "), player));
-            if (said.Count > 200) said.RemoveAt(0);
+            _said.Add(new(owner, text.ReplaceLineEndings(" "), player));
+            if (_said.Count > 200) _said.RemoveAt(0);
         }
     }
 
     /// <summary>Takes the dialogue lines said since the last call (the host, between ticks).</summary>
     public IReadOnlyList<SaidLine> TakeSaid()
     {
-        lock (said)
+        lock (_said)
         {
-            if (said.Count == 0) return [];
-            SaidLine[] all = [.. said];
-            said.Clear();
+            if (_said.Count == 0) return [];
+            SaidLine[] all = [.. _said];
+            _said.Clear();
             return all;
         }
     }
@@ -550,44 +550,44 @@ public sealed partial class World : IDisposable
     {
         var table = Characters;
         int n = table.HighWater, period = Settings.FarTickPeriod;
-        if (stepTicks.Length < n)
+        if (_stepTicks.Length < n)
         {
-            int size = Math.Max(n, stepTicks.Length * 2);
-            int was = stepTicks.Length;
-            Array.Resize(ref stepTicks, size);
-            Array.Resize(ref lastStep, size);
-            stepTicks.AsSpan(was).Fill(1);
+            int size = Math.Max(n, _stepTicks.Length * 2);
+            int was = _stepTicks.Length;
+            Array.Resize(ref _stepTicks, size);
+            Array.Resize(ref _lastStep, size);
+            _stepTicks.AsSpan(was).Fill(1);
         }
         if (period <= 1 || ViewPosition is not { } eye)
         {
-            if (FarSkipped > 0) stepTicks.AsSpan(0, n).Fill(1);
+            if (FarSkipped > 0) _stepTicks.AsSpan(0, n).Fill(1);
             FarSkipped = 0;
             return;
         }
         var prev = table.Previous;
-        playerSpots.Clear();
+        _playerSpots.Clear();
         for (int i = 0; i < n; i++)
-            if (prev[i].Alive && table.Cold(i) is { IsPlayer: true }) playerSpots.Add(prev[i].Position);
+            if (prev[i].Alive && table.Cold(i) is { IsPlayer: true }) _playerSpots.Add(prev[i].Position);
         float near2 = NearRadius * NearRadius;
         int skipped = 0;
         for (int i = 0; i < n; i++)
         {
             if (!prev[i].Alive)
             {
-                stepTicks[i] = 1;
-                lastStep[i] = Tick;
+                _stepTicks[i] = 1;
+                _lastStep[i] = Tick;
                 continue;
             }
             var at = prev[i].Position;
             bool near = (Tick + i) % period == 0 || System.Numerics.Vector3.DistanceSquared(at, eye) <= near2 || table.Cold(i) is { IsPlayer: true } || NearPlayer(at);
             if (!near)
             {
-                stepTicks[i] = 0;
+                _stepTicks[i] = 0;
                 skipped++;
                 continue;
             }
-            stepTicks[i] = (byte)Math.Clamp(Tick - lastStep[i], 1, period);
-            lastStep[i] = Tick;
+            _stepTicks[i] = (byte)Math.Clamp(Tick - _lastStep[i], 1, period);
+            _lastStep[i] = Tick;
         }
         FarSkipped = skipped;
     }
@@ -595,7 +595,7 @@ public sealed partial class World : IDisposable
     bool NearPlayer(System.Numerics.Vector3 at)
     {
         const float r2 = PlayerNearRadius * PlayerNearRadius;
-        foreach (var p in playerSpots)
+        foreach (var p in _playerSpots)
             if (System.Numerics.Vector3.DistanceSquared(at, p) <= r2) return true;
         return false;
     }
@@ -603,10 +603,10 @@ public sealed partial class World : IDisposable
     void MakePartitions()
     {
         int slots = Characters.HighWater;
-        int wanted = Math.Max(1, Math.Min(buffers.Length, slots / Math.Max(Settings.MinPartitionSize, 1)));
-        if (partitions.Length != wanted) partitions = new Partition[wanted];
+        int wanted = Math.Max(1, Math.Min(_buffers.Length, slots / Math.Max(Settings.MinPartitionSize, 1)));
+        if (_partitions.Length != wanted) _partitions = new Partition[wanted];
         for (int i = 0; i < wanted; i++)
-            partitions[i] = new Partition(i, (int)((long)slots * i / wanted), (int)((long)slots * (i + 1) / wanted));
+            _partitions[i] = new Partition(i, (int)((long)slots * i / wanted), (int)((long)slots * (i + 1) / wanted));
     }
 
     /// <summary>A hash of the canonical state after the last tick: the tick number, every character's state in slot order and the free list. Equal worlds give equal hashes at any thread count.</summary>
@@ -626,10 +626,10 @@ public sealed partial class World : IDisposable
         if (ItemSlots.Count > 0) ItemSlots.Hash(ref h);   // only once a town with item slots registered
         if (Machines.Count > 0) Machines.Hash(ref h);   // only once the player has a working building
         if (Research.Changed) Research.Hash(ref h);   // only once research changed in play
-        foreach (var s in systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
+        foreach (var s in _systems) if (s is IStateHashed hashed) hashed.Hash(ref h);
         HashCombatHitObserverFaults(ref h);
         return h.Value;
     }
 
-    public void Dispose() => pool.Dispose();
+    public void Dispose() => _pool.Dispose();
 }

@@ -33,18 +33,18 @@ public enum MouseButton
 /// <summary>One key or one mouse button an action can be bound to.</summary>
 public readonly record struct Binding
 {
-    readonly int code; // < 0: mouse button (-1 - button), >= 0: key
+    readonly int _code; // < 0: mouse button (-1 - button), >= 0: key
 
-    Binding(int code) => this.code = code;
+    Binding(int code) => this._code = code;
 
     public static Binding Of(Key key) => new((int)key);
     public static Binding Of(MouseButton button) => new(-1 - (int)button);
     public static implicit operator Binding(Key key) => Of(key);
     public static implicit operator Binding(MouseButton button) => Of(button);
 
-    public bool IsMouse => code < 0;
-    public Key Key => IsMouse ? throw new InvalidOperationException("A mouse binding") : (Key)code;
-    public MouseButton Button => IsMouse ? (MouseButton)(-1 - code) : throw new InvalidOperationException("A key binding");
+    public bool IsMouse => _code < 0;
+    public Key Key => IsMouse ? throw new InvalidOperationException("A mouse binding") : (Key)_code;
+    public MouseButton Button => IsMouse ? (MouseButton)(-1 - _code) : throw new InvalidOperationException("A key binding");
 
     /// <summary>"W", or "Mouse:Right" for a button (the form <see cref="InputBindings"/> reads from a config).</summary>
     public override string ToString() => IsMouse ? "Mouse:" + Button : Key.ToString();

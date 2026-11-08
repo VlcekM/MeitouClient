@@ -50,17 +50,17 @@ public sealed class SavedCharacterLink
     /// <summary>The whole-body ragdoll the save holds (<see cref="RagdollSave"/>), until the ragdoll system takes it; null: none.</summary>
     public SavedRagdoll? Ragdoll { get; set; }
     /// <summary>The partner of a carry the save holds (the <c>carrying</c> handle) and whether this character is the carrier (the <c>carrying</c> bool), until <see cref="Carrying.CarrySystem"/> links them.</summary>
-    public Meitou.Data.Save.Hand CarryPartner { get; set; } = Meitou.Data.Save.Hand.Null;
+    public Hand CarryPartner { get; set; } = Hand.Null;
     public bool CarryIsCarrier { get; set; }
     /// <summary>The owner character a slave's save names (the <c>slaver</c> handle, <see cref="SlaveSave"/>), until <see cref="Kidnap.CaptiveSystem"/> finds it in the world.</summary>
-    public Meitou.Data.Save.Hand Slaver { get; set; } = Meitou.Data.Save.Hand.Null;
+    public Hand Slaver { get; set; } = Hand.Null;
     /// <summary>The save's <c>slaver</c> handle no longer names the owner (the slave was freed or handed to another master): it is written as null.</summary>
     public bool SlaverStale { get; set; }
 
     /// <summary>Forgets the save's owner character: the slave was freed or handed on.</summary>
     public void DropSlaver()
     {
-        Slaver = Meitou.Data.Save.Hand.Null;
+        Slaver = Hand.Null;
         SlaverStale = true;
     }
 }

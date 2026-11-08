@@ -27,8 +27,8 @@ public sealed class ImpostorCache
     /// <summary>A maintenance pass runs after this many saves.</summary>
     const int SavesPerPass = 16;
 
-    readonly object gate = new();
-    int saves, running;
+    readonly object _gate = new();
+    int _saves, _running;
 
     public ImpostorCache(string? root = null, long? maxBytes = null)
     {
@@ -75,7 +75,7 @@ public sealed class ImpostorCache
         using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16))
             atlas.Write(stream);
         File.Move(temporary, path, overwrite: true);
-        if (Interlocked.Increment(ref saves) % SavesPerPass == 0) MaintainInBackground();
+        if (Interlocked.Increment(ref _saves) % SavesPerPass == 0) MaintainInBackground();
     }
 
     static void Touch(string path)
@@ -88,13 +88,13 @@ public sealed class ImpostorCache
     /// <summary>A <see cref="Maintain"/> pass on a worker (skipped when one is running); failures are ignored, the cache is only a cache.</summary>
     public void MaintainInBackground()
     {
-        if (Interlocked.CompareExchange(ref running, 1, 0) != 0) return;
+        if (Interlocked.CompareExchange(ref _running, 1, 0) != 0) return;
         Task.Run(() =>
         {
             try { Maintain(); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
-            finally { Volatile.Write(ref running, 0); }
+            finally { Volatile.Write(ref _running, 0); }
         });
     }
 
@@ -105,7 +105,7 @@ public sealed class ImpostorCache
     /// </summary>
     public ImpostorCacheMaintenance Maintain(DateTime? now = null)
     {
-        lock (gate)
+        lock (_gate)
         {
             if (!Directory.Exists(Root)) return default;
             var time = now ?? DateTime.UtcNow;
@@ -140,7 +140,7 @@ public sealed class ImpostorCache
     /// <summary>The atlas files in the folder and their total size (the Tab panel's question before <see cref="Clear"/>).</summary>
     public (int Files, long Bytes) Measure()
     {
-        lock (gate)
+        lock (_gate)
         {
             if (!Directory.Exists(Root)) return default;
             var files = new DirectoryInfo(Root).EnumerateFiles("*.mimp").ToList();
@@ -154,7 +154,7 @@ public sealed class ImpostorCache
     /// </summary>
     public (int Files, long Bytes) Clear()
     {
-        lock (gate)
+        lock (_gate)
         {
             if (!Directory.Exists(Root)) return default;
             int files = 0;

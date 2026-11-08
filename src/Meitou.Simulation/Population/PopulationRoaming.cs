@@ -26,26 +26,26 @@ namespace Meitou.Simulation.Population;
 /// </summary>
 public sealed partial class PopulationSystem
 {
-    readonly ConcurrentQueue<BuiltRoamer> builtRoamers = new();
-    readonly List<Platoon> platoonBuffer = [];   // StepRoaming's copy of the registry (a step may remove a platoon)
-    readonly List<Vector2> playerPositions = [];
+    readonly ConcurrentQueue<BuiltRoamer> _builtRoamers = new();
+    readonly List<Platoon> _platoonBuffer = [];   // StepRoaming's copy of the registry (a step may remove a platoon)
+    readonly List<Vector2> _playerPositions = [];
 
     sealed record BuiltRoamer(int Platoon, BuiltSquad? Squad, List<(Saving.SavedMember Member, Saving.SavedParts Parts)>? Saved = null);
 
     static bool IsSettlement(TownType t) => t is TownType.Town or TownType.Village or TownType.Outpost or TownType.Military;
 
-    Vector2 SiteCentre(int site) => new(data.Sites[site].Position.X, data.Sites[site].Position.Z);
+    Vector2 SiteCentre(int site) => new(_data.Sites[site].Position.X, _data.Sites[site].Position.Z);
 
     /// <summary>Whether a platoon should have its characters: it is inside the trimmed box of an active zone (<see cref="ZoneActivation.InLoadedBox"/>, <c>FUN_1404febd0</c>), or (a town's own saved squad) its town's zone is, as the town's fresh squads are made with the town.</summary>
     bool Wanted(Platoon p) =>
-        ZoneActivation.InLoadedBox(p.Position.X, p.Position.Y, active) || p.Pinned && p.Origin >= 0 && active.Contains(data.Sites[p.Origin].Zone);
+        ZoneActivation.InLoadedBox(p.Position.X, p.Position.Y, _active) || p.Pinned && p.Origin >= 0 && _active.Contains(_data.Sites[p.Origin].Zone);
 
     /// <summary>
     /// Whether a wanted platoon may be made now: the host's <see cref="ZoneGate"/> holds it back until the navmesh is ready, of its town's zone for a town's own (as the
     /// town's load is gated; its members may stand in a neighbouring zone), else of its own zone.
     /// </summary>
     bool Ready(Platoon p) =>
-        ZoneGate is not { } gate || gate(p.Pinned && p.Origin >= 0 ? data.Sites[p.Origin].Zone : WorldLayout.ZoneOf(p.Position.X, p.Position.Y));
+        ZoneGate is not { } gate || gate(p.Pinned && p.Origin >= 0 ? _data.Sites[p.Origin].Zone : WorldLayout.ZoneOf(p.Position.X, p.Position.Y));
 
     /// <summary>
     /// The activation dwell (<c>FUN_1407ebf30</c>): with its zone ready, a platoon outside the zone's box (<see cref="ZoneActivation.TrimmedBox"/>, trim 170) waits 2 s again, inside
@@ -55,7 +55,7 @@ public sealed partial class PopulationSystem
     {
         if (!Ready(p)) return false;
         var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);   // the zone at the platoon's own position, as the original
-        var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, active.Contains, ZoneActivation.ActivationTrim);
+        var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, _active.Contains, ZoneActivation.ActivationTrim);
         if (p.Position.X < minX || p.Position.X > maxX || p.Position.Y < minZ || p.Position.Y > maxZ) p.DwellLeft = 2;
         else p.DwellLeft -= dt;
         return p.DwellLeft < 0;
@@ -65,19 +65,19 @@ public sealed partial class PopulationSystem
 
     void StepRoaming(World world)
     {
-        float dt = settings.CheckEveryTicks * world.TickSeconds;
-        platoonBuffer.Clear();
-        platoonBuffer.AddRange(world.Platoons.All);
+        float dt = _settings.CheckEveryTicks * world.TickSeconds;
+        _platoonBuffer.Clear();
+        _platoonBuffer.AddRange(world.Platoons.All);
         // The off-screen step (docs/simulation.md "Off-screen tier"): every travelling stand-in moves on, in parallel; each changes only its own platoon and reads
         // nothing another one changes, so the result does not depend on the order. What changes the registry or the world follows, serially, in id order.
-        movers.Clear();
-        foreach (var p in platoonBuffer)
-            if (p.State == PlatoonState.Unloaded && !p.Pinned) movers.Add(p);   // a campaign's are moved by it (they follow their leader, StandIn); its orphan timer counts here
-        world.ParallelFor((movers.Count + MoversPerJob - 1) / MoversPerJob, job =>
+        _movers.Clear();
+        foreach (var p in _platoonBuffer)
+            if (p.State == PlatoonState.Unloaded && !p.Pinned) _movers.Add(p);   // a campaign's are moved by it (they follow their leader, StandIn); its orphan timer counts here
+        world.ParallelFor((_movers.Count + MoversPerJob - 1) / MoversPerJob, job =>
         {
-            for (int i = job * MoversPerJob, end = Math.Min(movers.Count, i + MoversPerJob); i < end; i++) StepOffscreen(world, movers[i], dt);
+            for (int i = job * MoversPerJob, end = Math.Min(_movers.Count, i + MoversPerJob); i < end; i++) StepOffscreen(world, _movers[i], dt);
         });
-        foreach (var p in platoonBuffer)
+        foreach (var p in _platoonBuffer)
         {
             switch (p.State)
             {
@@ -94,7 +94,7 @@ public sealed partial class PopulationSystem
                     break;
             }
         }
-        if (world.Tick % settings.RoamCheckTicks == 0)
+        if (world.Tick % _settings.RoamCheckTicks == 0)
         {
             EnsurePools(world);
             GrowPools(world);
@@ -113,12 +113,12 @@ public sealed partial class PopulationSystem
     /// never a platoon declared <see cref="Platoon.Dead"/>, which clears the flag), else not in spawn mode 3 (<see cref="Platoon.ReplacedHome"/>) and held by a faction campaign whose record is not in phase 2
     /// (<see cref="CampaignKept"/>; the original's empty-squad refusal is <c>RemoveWiped</c> before this runs). The Meitou switches (<see cref="KeepWild"/> for a save's wild one, else <see cref="KeepRoamers"/>) keep the rest.
     /// </summary>
-    bool Kept(Platoon p) => !p.Dead && (Ai.AiSystem.Occupies(data.Ai, p.Package) || PersistentPlatoon(p) || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers)) || CampaignKept(p);
+    bool Kept(Platoon p) => !p.Dead && (AiSystem.Occupies(_data.Ai, p.Package) || PersistentPlatoon(p) || !p.ReplacedHome && (p.Wild ? KeepWild : KeepRoamers)) || CampaignKept(p);
 
     /// <summary>The war manager's record for the platoon exists and is not in phase 2 (<c>FUN_140283500</c>, <c>FUN_1407ec570</c>), outside spawn mode 3: a campaign's force that has not been spent is kept, a victorious or retreating one is not.</summary>
     internal static bool CampaignKept(Platoon p) => !p.ReplacedHome && p.Campaign is { Phase: not 2 };
 
-    readonly List<Platoon> movers = [];
+    readonly List<Platoon> _movers = [];
     /// <summary>Stand-ins one worker job steps (engine choice: a job costs more than a few stand-ins).</summary>
     const int MoversPerJob = 64;
 
@@ -159,17 +159,17 @@ public sealed partial class PopulationSystem
     {
         if (p.Pinned || p.Wild || p.Campaign is not null) return;   // a town's own saved squad, or a wild one, stays where it was; a campaign moves its own
         // GOHOME only issues a goto (FUN_1407ee790, Verified): the mover's speed is reset to 0 each step and only the platoon-handle branch (meaning Unknown, none in Meitou) sets 55, so it stands still.
-        if (p.Job == Ai.PlatoonJob.GoHome) return;
+        if (p.Job == PlatoonJob.GoHome) return;
         // It stands still (FUN_1407ee790, Verified): a platoon of the player's faction, one off the zone grid, one inside the trimmed box of a loaded zone (it waits to be made), and a
         // platoon left with a member caged.
         if (p.Faction >= 0 && p.Faction == PlayerFactionOf(world) || p.Imprisoned) return;
         // Job 0 of a persistent platoon becomes GOHOME (FUN_1407ee790, Verified): it stands still too, whatever its distance from home (9216 only picks GOHOME over the idle hook); only a non-persistent one takes the engine's travel.
-        if (p.Job == Ai.PlatoonJob.None && (PersistentPlatoon(p) || Ai.AiSystem.Occupies(data.Ai, p.Package))) return;
+        if (p.Job == PlatoonJob.None && (PersistentPlatoon(p) || AiSystem.Occupies(_data.Ai, p.Package))) return;
         var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Y);
         if (!zone.IsInsideGrid) return;
-        if (active.Contains(zone))
+        if (_active.Contains(zone))
         {
-            var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, active.Contains, StandInStopTrim);
+            var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, _active.Contains, StandInStopTrim);
             if (p.Position.X >= minX && p.Position.X <= maxX && p.Position.Y >= minZ && p.Position.Y <= maxZ) return;
         }
         if (MissionGoal(p) is >= 0 and var mission)
@@ -179,7 +179,7 @@ public sealed partial class PopulationSystem
             p.Point = null;
             var at = SiteCentre(mission);
             float left = Vector2.Distance(p.Position, at);
-            if (left > MathF.Max(data.Sites[mission].Town.Radius, settings.RoamArrivalRadius)) Travel(p, at, StandInSpeed(p, left) * dt);
+            if (left > MathF.Max(_data.Sites[mission].Town.Radius, _settings.RoamArrivalRadius)) Travel(p, at, StandInSpeed(p, left) * dt);
             return;
         }
         if (p.WaitLeft > 0)
@@ -195,7 +195,7 @@ public sealed partial class PopulationSystem
         }
         var to = goal - p.Position;
         float d = to.Length();
-        if (d <= (p.Point is not null ? Ai.PlatoonJobs.PatrolArrive : settings.RoamArrivalRadius))
+        if (d <= (p.Point is not null ? PlatoonJobs.PatrolArrive : _settings.RoamArrivalRadius))
         {
             Arrive(world, p);
             return;
@@ -212,7 +212,7 @@ public sealed partial class PopulationSystem
         if (p.RouteGoal != goal)
         {
             p.RouteGoal = goal;
-            p.Route = data.Roads is { } roads && p.Faction >= 0 && p.Faction < data.Factions.Count ? roads.Route(p.Position, goal, data.Factions[p.Faction].RoadPreference) : null;
+            p.Route = _data.Roads is { } roads && p.Faction >= 0 && p.Faction < _data.Factions.Count ? roads.Route(p.Position, goal, _data.Factions[p.Faction].RoadPreference) : null;
             p.RouteStep = 0;
         }
         while (step > 0)
@@ -239,13 +239,13 @@ public sealed partial class PopulationSystem
     /// </summary>
     float StandInSpeed(Platoon p, float d)
     {
-        bool far = d > settings.StandInFarDistance;
+        bool far = d > _settings.StandInFarDistance;
         float speed = p.Job switch
         {
-            Ai.PlatoonJob.TravelTarget => 25,
-            Ai.PlatoonJob.TravelTargetFast => far ? 90 : 60,
-            Ai.PlatoonJob.PatrolShortRange => settings.StandInSpeed,
-            _ => far ? settings.StandInFarSpeed : settings.StandInSpeed,
+            PlatoonJob.TravelTarget => 25,
+            PlatoonJob.TravelTargetFast => far ? 90 : 60,
+            PlatoonJob.PatrolShortRange => _settings.StandInSpeed,
+            _ => far ? _settings.StandInFarSpeed : _settings.StandInSpeed,
         };
         return MathF.Min(speed, StandInSpeedCap);
     }
@@ -271,14 +271,14 @@ public sealed partial class PopulationSystem
                 if (!m.Dead && !m.Gone && m.Source.SquadMemberType == (int)SquadRole.Slave && m.Source.GameState?.Ints.GetValueOrDefault(Saving.SlaveSave.StateKey) == 1) { slaves = true; break; }
         }
         if (!slaves) return -1;
-        if (p.Target >= 0 && p.Target < data.Sites.Count && data.Sites[p.Target].Town.Type == TownType.SlaveCamp) return p.Target;
+        if (p.Target >= 0 && p.Target < _data.Sites.Count && _data.Sites[p.Target].Town.Type == TownType.SlaveCamp) return p.Target;
         int best = -1;
         float bestD = float.MaxValue;
-        foreach (var site in data.Sites)
+        foreach (var site in _data.Sites)
         {
-            if (site.Town.Type != TownType.SlaveCamp || site.Index >= data.SiteFactions.Count) continue;
-            int f = data.SiteFactions[site.Index];
-            if (f >= 0 && p.Faction >= 0 && data.Relations.Contains(f) && data.Relations.Contains(p.Faction) && data.Relations.IsHostile(f, p.Faction)) continue;
+            if (site.Town.Type != TownType.SlaveCamp || site.Index >= _data.SiteFactions.Count) continue;
+            int f = _data.SiteFactions[site.Index];
+            if (f >= 0 && p.Faction >= 0 && _data.Relations.Contains(f) && _data.Relations.Contains(p.Faction) && _data.Relations.IsHostile(f, p.Faction)) continue;
             float d = Vector2.DistanceSquared(p.Position, SiteCentre(site.Index));
             if (d < bestD) (best, bestD) = (site.Index, d);
         }
@@ -292,13 +292,13 @@ public sealed partial class PopulationSystem
     /// </summary>
     int MissionGoal(Platoon p)
     {
-        if (p.Job is not (Ai.PlatoonJob.TravelTarget or Ai.PlatoonJob.TravelTargetFast) || p.Campaign is not null) return -1;
+        if (p.Job is not (PlatoonJob.TravelTarget or PlatoonJob.TravelTargetFast) || p.Campaign is not null) return -1;
         if (ShippingCamp(p) is >= 0 and var camp) return camp;
-        return p.Target >= 0 && p.Target < data.Sites.Count ? p.Target : p.Origin;
+        return p.Target >= 0 && p.Target < _data.Sites.Count ? p.Target : p.Origin;
     }
 
     /// <summary>A shipping package (signal 11 or 28) whose off-screen job is TRAVEL_TARGET (<c>unloaded func</c> 5, as all four in the base data).</summary>
-    bool IsShipping(string package) => data.Ai.Package(package) is { Signal: 11 or 28, Unloaded: (int)Ai.PlatoonJob.TravelTarget };
+    bool IsShipping(string package) => _data.Ai.Package(package) is { Signal: 11 or 28, Unloaded: (int)PlatoonJob.TravelTarget };
 
     /// <summary>The original's TRAVEL_TARGET speed off screen without a campaign (docs/game/factions-squads-towns.md "Off-screen world").</summary>
     const float TravelTargetSpeed = 25;
@@ -312,7 +312,7 @@ public sealed partial class PopulationSystem
     void Arrive(World world, Platoon p)
     {
         ulong roll = Rng.Hash(world.Seed, (ulong)p.Id, RngPurpose.Wander, (ulong)world.Tick);
-        p.WaitLeft = settings.RoamWaitMin + Rng.Float(roll) * (settings.RoamWaitMax - settings.RoamWaitMin);
+        p.WaitLeft = _settings.RoamWaitMin + Rng.Float(roll) * (_settings.RoamWaitMax - _settings.RoamWaitMin);
         if (p.Point is not null)
         {
             p.Point = null;   // a short-range patrol point: the next one after the wait
@@ -328,14 +328,14 @@ public sealed partial class PopulationSystem
     void ChooseNext(World world, Platoon p)
     {
         // The off-screen job of its package (docs/simulation.md "AI", Off screen): a point near home, or home; the rest travel as below.
-        if (p.Job == Ai.PlatoonJob.PatrolShortRange)
+        if (p.Job == PlatoonJob.PatrolShortRange)
         {
             p.Point = PatrolPoint(world, p);
             p.Target = p.Origin;
             p.GoingHome = false;
             return;
         }
-        if (p.Job == Ai.PlatoonJob.GoHome)
+        if (p.Job == PlatoonJob.GoHome)
         {
             p.Target = p.Origin;
             p.GoingHome = false;
@@ -347,11 +347,11 @@ public sealed partial class PopulationSystem
             return;
         }
         var candidates = new List<(float Distance, int Site)>();
-        foreach (var site in data.Sites)
+        foreach (var site in _data.Sites)
         {
             if (site.Index == p.Origin || !IsSettlement(site.Town.Type)) continue;
-            int theirs = data.SiteFactions[site.Index];
-            if (p.Faction >= 0 && theirs >= 0 && data.Relations.IsHostile(p.Faction, theirs)) continue;
+            int theirs = _data.SiteFactions[site.Index];
+            if (p.Faction >= 0 && theirs >= 0 && _data.Relations.IsHostile(p.Faction, theirs)) continue;
             candidates.Add((Vector2.Distance(p.Position, SiteCentre(site.Index)), site.Index));
         }
         candidates.Sort(static (a, b) => a.Distance != b.Distance ? a.Distance.CompareTo(b.Distance) : a.Site.CompareTo(b.Site));
@@ -373,7 +373,7 @@ public sealed partial class PopulationSystem
         for (int k = 0; k < 8; k++)
         {
             ulong roll = Rng.Hash(world.Seed, (ulong)p.Id, RngPurpose.Wander, (ulong)world.Tick ^ SeedSalts.PlatoonPatrol ^ (ulong)k << 32);
-            var at = Rng.PointInDisc(roll, home, Ai.PlatoonJobs.PatrolRange);
+            var at = Rng.PointInDisc(roll, home, PlatoonJobs.PatrolRange);
             if (world.Walkability.IsWalkable(at.X, at.Y)) return at;
         }
         return home;
@@ -424,7 +424,7 @@ public sealed partial class PopulationSystem
         // Away from every active zone for long enough: only the stand-in goes on.
         if (Wanted(p) || SquadCarriesPlayer(world, squad)) p.UnloadAtTick = -1;
         // A town's own squad keeps the town's grace (it leaves with its town), a roaming one the roaming grace.
-        else if (p.UnloadAtTick < 0) p.UnloadAtTick = world.Tick + (long)Math.Ceiling((p.Pinned ? settings.TownUnloadGraceSeconds : settings.RoamUnloadGraceSeconds) / world.TickSeconds);
+        else if (p.UnloadAtTick < 0) p.UnloadAtTick = world.Tick + (long)Math.Ceiling((p.Pinned ? _settings.TownUnloadGraceSeconds : _settings.RoamUnloadGraceSeconds) / world.TickSeconds);
         // Faithful: a platoon the original does not keep is not unloaded whole: each member out of the zone is destroyed, and the platoon stays while any is left.
         else if (world.Tick >= p.UnloadAtTick && !(!Kept(p) && !p.Pinned && ThinOutOfZone(world, p, squad)))
         {
@@ -437,7 +437,7 @@ public sealed partial class PopulationSystem
             p.Imprisoned = squad.Members.Any(m => table.TryResolveNext(m, out int ms) && table.Cold(ms)!.IsImprisoned);
             if (squad.Ai is { } flagged) p.IntactFlag = flagged.Intact;   // kept as it was at unload (+0x100)
             if (squad.Ai?.Current is { } running) FollowPackage(world, p, running);
-            if (squad.Ai is { } running_ && Ai.AiSystem.BoardMoves(running_) && MissionSite(running_) is >= 0 and var mission) p.Target = mission;   // where its package was taking it
+            if (squad.Ai is { } squadBoard && AiSystem.BoardMoves(squadBoard) && MissionSite(squadBoard) is >= 0 and var mission) p.Target = mission;   // where its package was taking it
             else if (p.Package is { } shipping && IsShipping(shipping) && squad.Ai is { MissionTown: >= 0 and var camp }) p.Target = camp;   // the camp it ships to (ShippingCamp)
             // Faithful: a platoon the original does not keep (not a town's own, not in a campaign, not occupying) is despawned as it leaves; a save's wild one by the wild switch.
             if (!Kept(p) && !p.Pinned)
@@ -475,7 +475,7 @@ public sealed partial class PopulationSystem
         }
         if (p.Pinned || p.Wild || p.Dead) return;   // a town's own or a wild one: its AI runs it, it has no trips (nor has a dead one)
         // A package that travels (the trader, the shipping classes) moves the squad itself: no trip order meanwhile, and the trip starts afresh when it gives way.
-        if (squad.Ai is { } board && Ai.AiSystem.BoardMoves(board))
+        if (squad.Ai is { } board && AiSystem.BoardMoves(board))
         {
             (p.Target, p.WaitLeft, p.Point) = (-1, 0, null);
             return;
@@ -500,18 +500,18 @@ public sealed partial class PopulationSystem
             return;
         }
         bool point = p.Point is not null;
-        if (Vector2.Distance(p.Position, goal) <= settings.RoamArrivalRadius)
+        if (Vector2.Distance(p.Position, goal) <= _settings.RoamArrivalRadius)
         {
             Arrive(world, p);
             // At the town the squad mills about in it.
             if (table.TryResolveNext(squad.Leader, out int slot))
             {
-                TaskStart.Become(world, slot, CharacterTask.Wander, Meitou.Data.Gameplay.Ai.TaskType.WANDERER, TaskSource.Goal);
+                TaskStart.Become(world, slot, CharacterTask.Wander, Meitou.Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Goal);
                 table.Next[slot].Mode = SpeedMode.Walk;
                 table.Next[slot].TaskTime = 0.5f;
             }
             squad.HomeCentre = goal;
-            squad.HomeRadius = point ? 60 : Math.Max(data.Sites[p.Target].Town.SizeRadius * data.Sites[p.Target].Town.TownRadiusMult * 0.5f, 40);
+            squad.HomeRadius = point ? 60 : Math.Max(_data.Sites[p.Target].Town.SizeRadius * _data.Sites[p.Target].Town.TownRadiusMult * 0.5f, 40);
             return;
         }
         // On the way: the leader keeps a go-to; ask again when it has none (arrived short, blocked, or just loaded).
@@ -529,7 +529,7 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>The town (site index) a travelling package heads for: its mission town, else its mission town hand's placed town; -1: none.</summary>
-    internal static int MissionSite(Ai.Blackboard board) => board.MissionTown >= 0 ? board.MissionTown : board.Destination.Site;
+    internal static int MissionSite(Blackboard board) => board.MissionTown >= 0 ? board.MissionTown : board.Destination.Site;
 
     /// <summary>
     /// A squad unloading with <paramref name="running"/> as its package: the platoon keeps it and takes its off-screen job (<c>FUN_1407ee790</c> re-reads the job from the blackboard's
@@ -538,10 +538,10 @@ public sealed partial class PopulationSystem
     void FollowPackage(World world, Platoon p, Meitou.Data.Gameplay.Ai.AiPackage running)
     {
         p.Package = running.Id;
-        var job = Ai.PlatoonJobs.JobOf(running.Unloaded);
+        var job = PlatoonJobs.JobOf(running.Unloaded);
         if (job == p.Job) return;
         p.Job = job;
-        if (job is not (Ai.PlatoonJob.GoHome or Ai.PlatoonJob.PatrolShortRange) || p.Campaign is not null || p.Pinned || p.Wild) return;
+        if (job is not (PlatoonJob.GoHome or PlatoonJob.PatrolShortRange) || p.Campaign is not null || p.Pinned || p.Wild) return;
         p.Point = null;
         p.WaitLeft = 0;
         ChooseNext(world, p);
@@ -557,8 +557,8 @@ public sealed partial class PopulationSystem
     bool OutOfZone(Vector3 at)
     {
         var zone = WorldLayout.ZoneOf(at.X, at.Z);
-        if (!active.Contains(zone)) return true;
-        var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, active.Contains, ZoneActivation.ActivationTrim);
+        if (!_active.Contains(zone)) return true;
+        var (minX, minZ, maxX, maxZ) = ZoneActivation.TrimmedBox(zone, _active.Contains, ZoneActivation.ActivationTrim);
         return at.X < minX || at.Z < minZ || at.X > maxX || at.Z > maxZ;
     }
 
@@ -581,7 +581,7 @@ public sealed partial class PopulationSystem
         {
             if (Ai.SquadIntact.Down(table, m) || !table.TryResolveNext(m, out int s)) continue;
             var at = table.Previous[s].Position;
-            if (!active.Contains(WorldLayout.ZoneOf(at.X, at.Z))) continue;
+            if (!_active.Contains(WorldLayout.ZoneOf(at.X, at.Z))) continue;
             squad.Backup = m;
             return m;
         }
@@ -632,7 +632,7 @@ public sealed partial class PopulationSystem
         else p.Dead = true;
     }
 
-    readonly List<CharacterId> thinStay = [], thinGo = [];
+    readonly List<CharacterId> _thinStay = [], _thinGo = [];
 
     /// <summary>
     /// The unload of a platoon the original does not keep (<c>FUN_14079c600</c>, serial phase): not the whole squad at once but each living member by its own place. One out of the
@@ -644,8 +644,8 @@ public sealed partial class PopulationSystem
     bool ThinOutOfZone(World world, Platoon p, Squad squad)
     {
         var table = world.Characters;
-        thinStay.Clear();
-        thinGo.Clear();
+        _thinStay.Clear();
+        _thinGo.Clear();
         var anchor = EffectiveLeader(world, squad);
         bool leaderOut = false;
         var anchorAt = Vector3.Zero;
@@ -658,17 +658,17 @@ public sealed partial class PopulationSystem
         {
             if (!Living(world, m) || !table.TryResolveNext(m, out int slot)) continue;   // a corpse is no part of the platoon's staying
             var at = table.Next[slot].Position;
-            if (OutOfZone(at) || leaderOut && Vector3.DistanceSquared(at, anchorAt) < LeaderOutOfZoneRadiusSq) thinGo.Add(m);
-            else thinStay.Add(m);
+            if (OutOfZone(at) || leaderOut && Vector3.DistanceSquared(at, anchorAt) < LeaderOutOfZoneRadiusSq) _thinGo.Add(m);
+            else _thinStay.Add(m);
         }
-        if (thinStay.Count == 0) return false;
-        foreach (var m in thinGo)
+        if (_thinStay.Count == 0) return false;
+        foreach (var m in _thinGo)
         {
             if (table.Cold(m.Slot) is { } cold) ReleaseUnique(world, cold.RecordId, m, false);
             RemoveMember(world, m);
         }
-        squad.Members.RemoveAll(m => thinGo.Contains(m));
-        if (thinGo.Contains(squad.Leader)) squad.Leader = SquadRegistry.Successor(thinStay, table);
+        squad.Members.RemoveAll(m => _thinGo.Contains(m));
+        if (_thinGo.Contains(squad.Leader)) squad.Leader = SquadRegistry.Successor(_thinStay, table);
         if (table.TryResolveNext(squad.Leader, out int lead)) p.Position = new Vector2(table.Next[lead].Position.X, table.Next[lead].Position.Z);
         return true;
     }
@@ -677,7 +677,7 @@ public sealed partial class PopulationSystem
     {
         if (Goal(p) is not { } goal || !world.Characters.TryResolveNext(squad.Leader, out int slot)) return;
         // A short-range patrol and going home walk; travel runs (as before the packages).
-        TaskStart.Walk(world, slot, goal, p.Job is Ai.PlatoonJob.PatrolShortRange or Ai.PlatoonJob.GoHome ? SpeedMode.Walk : SpeedMode.Run, Meitou.Data.Gameplay.Ai.TaskType.TRAVEL_TO_TARGET_TOWN,
+        TaskStart.Walk(world, slot, goal, p.Job is PlatoonJob.PatrolShortRange or PlatoonJob.GoHome ? SpeedMode.Walk : SpeedMode.Run, Meitou.Data.Gameplay.Ai.TaskType.TravelToTargetTown,
             TaskSource.Goal);
     }
 
@@ -690,16 +690,16 @@ public sealed partial class PopulationSystem
     /// </summary>
     bool RefuseReplacedHome(World world, Platoon p)
     {
-        if (p.Saved is null || p.Origin < 0 || p.Origin >= data.Sites.Count || HomeFits(p)) { p.ReplacedHome = false; return false; }
+        if (p.Saved is null || p.Origin < 0 || p.Origin >= _data.Sites.Count || HomeFits(p)) { p.ReplacedHome = false; return false; }
         p.ReplacedHome = true;
         p.State = PlatoonState.Unloaded;
-        if (data.Db.Find(p.TemplateId) is { } template && UniqueCharacters.IsUnique(template.GetReferences("leader") is { Count: > 0 } l ? data.Db.Find(l[0].TargetStringId) : null)) ReleaseUniques(world, p);
+        if (_data.Db.Find(p.TemplateId) is { } template && UniqueCharacters.IsUnique(template.GetReferences("leader") is { Count: > 0 } l ? _data.Db.Find(l[0].TargetStringId) : null)) ReleaseUniques(world, p);
         else p.PersistentCleared = true;
         return true;
     }
 
     /// <summary>The home-hand test of activation: the platoon's <c>basetown</c> (unset: its town's own TOWN) names the town's own TOWN when it has no replacement, else the replacement.</summary>
-    bool HomeFits(Platoon p) => HomeFits(p.Saved!.LegacyBaseTown, p.Saved.Source.Record.Strings.GetValueOrDefault("basetown", ""), data.Sites[p.Origin].Record.Id, data.Sites[p.Origin].Replacement?.Id);
+    bool HomeFits(Platoon p) => HomeFits(p.Saved!.LegacyBaseTown, p.Saved.Source.Record.Strings.GetValueOrDefault("basetown", ""), _data.Sites[p.Origin].Record.Id, _data.Sites[p.Origin].Replacement?.Id);
 
     /// <summary>The activation's home test: an older Meitou save's platoon always fits; else an unset or own <paramref name="home"/> fits only a town with no replacement, otherwise <paramref name="home"/> must be the replacement.</summary>
     internal static bool HomeFits(bool legacy, string home, string own, string? replacement) =>
@@ -743,8 +743,8 @@ public sealed partial class PopulationSystem
         // A save's platoon: its saved characters (their records read on the build thread, like a new squad's looks).
         if (p.Saved is { } saved && world.Saved is { } context)
         {
-            if (work is null) FinishRoamer(world, new BuiltRoamer(id, null, Saving.SavedCharacters.Prepare(saved, data, context.Appearances, context)));
-            else work.Add(() => builtRoamers.Enqueue(new BuiltRoamer(id, null, Saving.SavedCharacters.Prepare(saved, data, context.Appearances, context))));
+            if (_work is null) FinishRoamer(world, new BuiltRoamer(id, null, Saving.SavedCharacters.Prepare(saved, _data, context.Appearances, context)));
+            else _work.Add(() => _builtRoamers.Enqueue(new BuiltRoamer(id, null, Saving.SavedCharacters.Prepare(saved, _data, context.Appearances, context))));
             return;
         }
         // A player-owned platoon with nobody to bring is never filled from its template (FUN_1404ffad0, Verified): it is removed.
@@ -753,25 +753,25 @@ public sealed partial class PopulationSystem
             world.Platoons.Remove(p.Id);
             return;
         }
-        if (work is null) FinishRoamer(world, new BuiltRoamer(id, BuildRoamer(p.TemplateId, p.Faction, p.Key, seed, position)));
+        if (_work is null) FinishRoamer(world, new BuiltRoamer(id, BuildRoamer(p.TemplateId, p.Faction, p.Key, seed, position)));
         else
         {
             string template = p.TemplateId;
             int faction = p.Faction;
             ulong key = p.Key;
-            work.Add(() => builtRoamers.Enqueue(new BuiltRoamer(id, BuildRoamer(template, faction, key, seed, position))));
+            _work.Add(() => _builtRoamers.Enqueue(new BuiltRoamer(id, BuildRoamer(template, faction, key, seed, position))));
         }
     }
 
     /// <summary>Null when the template is gone or plans no one now (e.g. a save's platoon whose members are all dead or unique).</summary>
     BuiltSquad? BuildRoamer(string templateId, int faction, ulong key, ulong seed, Vector2 position)
     {
-        if (data.Db.Find(templateId) is not { } record) return null;
-        var townFaction = faction >= 0 ? data.Factions[faction] : null;
+        if (_data.Db.Find(templateId) is not { } record) return null;
+        var townFaction = faction >= 0 ? _data.Factions[faction] : null;
         return BuildOne(SquadTemplate.From(record), faction, townFaction, key, seed, position);
     }
 
-    readonly List<BuiltRoamer> readyRoamers = [];
+    readonly List<BuiltRoamer> _readyRoamers = [];
 
     /// <summary>
     /// Finishes at most one finished roaming platoon build (the original builds one queued squad request per rendered frame, <c>FUN_140583310</c>; a tick stands for a frame here).
@@ -779,12 +779,12 @@ public sealed partial class PopulationSystem
     /// </summary>
     bool DrainRoamers(World world)
     {
-        while (builtRoamers.TryDequeue(out var queued)) readyRoamers.Add(queued);
-        readyRoamers.Sort(static (a, b) => a.Platoon.CompareTo(b.Platoon));
-        while (readyRoamers.Count > 0)
+        while (_builtRoamers.TryDequeue(out var queued)) _readyRoamers.Add(queued);
+        _readyRoamers.Sort(static (a, b) => a.Platoon.CompareTo(b.Platoon));
+        while (_readyRoamers.Count > 0)
         {
-            var b = readyRoamers[0];
-            readyRoamers.RemoveAt(0);
+            var b = _readyRoamers[0];
+            _readyRoamers.RemoveAt(0);
             if (world.Platoons.Find(b.Platoon) is not { State: PlatoonState.Activating }) continue;
             FinishRoamer(world, b);
             return true;
@@ -802,14 +802,14 @@ public sealed partial class PopulationSystem
         {
             // A save's wild platoon wanders round its nest, or (homeless) round where it stands.
             var (centre, homeRadius) = WildHome(wild, p.Position);
-            squad = b.Saved is { } wildMembers ? Saving.SavedCharacters.Spawn(world, p, wild, wildMembers, data, assembly, centre, homeRadius) : null;
+            squad = b.Saved is { } wildMembers ? Saving.SavedCharacters.Spawn(world, p, wild, wildMembers, _data, _assembly, centre, homeRadius) : null;
         }
         else
         {
-            var site = data.Sites[p.Origin];
+            var site = _data.Sites[p.Origin];
             float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
             if (b.Saved is { } members && p.Saved is { } saved)
-                squad = Saving.SavedCharacters.Spawn(world, p, saved, members, data, assembly, new Vector2(site.Position.X, site.Position.Z), Math.Max(radius * 0.8f, 40));
+                squad = Saving.SavedCharacters.Spawn(world, p, saved, members, _data, _assembly, new Vector2(site.Position.X, site.Position.Z), Math.Max(radius * 0.8f, 40));
             else squad = b.Squad is null ? null : SpawnSquad(world, b.Squad, site, radius, platoonId: p.Id);
         }
         if (squad is null)
@@ -838,7 +838,7 @@ public sealed partial class PopulationSystem
         int player = PlayerFactionOf(world);
         if (player < 0 || squad.Faction == player || world.SystemOf<Locks.LockSystem>()?.Regions is not { } regions) return;
         var place = squad.Position;
-        if (Ai.AiSystem.TownAt(data, world, place) is not { IsNone: false } town || FactionOfTown(world, town) != player || regions.CodeAt(place) != 0) return;
+        if (AiSystem.TownAt(_data, world, place) is not { IsNone: false } town || FactionOfTown(world, town) != player || regions.CodeAt(place) != 0) return;
         var table = world.Characters;
         foreach (var id in squad.Members)
         {
@@ -857,11 +857,11 @@ public sealed partial class PopulationSystem
     {
         if (sp.Wild == WildKind.Nest && sp.WildSite >= 0 && sp.WildSite < WildSites.Count && WildSites[sp.WildSite].Nest is { } nest)
         {
-            var centre = wildCentres[sp.WildSite] ?? WildSites[sp.WildSite].Spots[0];
+            var centre = _wildCentres[sp.WildSite] ?? WildSites[sp.WildSite].Spots[0];
             float radius = NestRadius(nest);
             if (Vector2.DistanceSquared(centre, at) <= 9 * radius * radius) return (centre, radius);
         }
-        return (at, settings.HomelessHomeRadius);
+        return (at, _settings.HomelessHomeRadius);
     }
 
     // ---- the pools ----
@@ -871,12 +871,12 @@ public sealed partial class PopulationSystem
     {
         var table = world.Characters;
         bool playersListed = false;   // the player's characters, scanned once per look and only when a town gets as far as placing a squad
-        foreach (var site in data.Sites)
+        foreach (var site in _data.Sites)
         {
-            if (states[site.Index].Status != SiteStatus.Loaded || site.Town.RoamingSquads.Count == 0) continue;
-            int factionIndex = data.SiteFactions[site.Index];
+            if (_states[site.Index].Status != SiteStatus.Loaded || site.Town.RoamingSquads.Count == 0) continue;
+            int factionIndex = _data.SiteFactions[site.Index];
             if (factionIndex < 0) continue;
-            int cap = (int)MathF.Floor(settings.RoamingShare * data.Factions[factionIndex].RoamingPopulation * settings.PopulationMultiplier);
+            int cap = (int)MathF.Floor(_settings.RoamingShare * _data.Factions[factionIndex].RoamingPopulation * _settings.PopulationMultiplier);
             int members = 0;
             foreach (var p in world.Platoons.All) if (p.Origin == site.Index && !p.Pinned && p.Campaign is null && !p.Dead) members += p.Size;   // a town's own saved squads are not its roaming ones, nor campaign squads; a dead one is out of the pool
             if (members >= cap) continue;
@@ -885,7 +885,7 @@ public sealed partial class PopulationSystem
             float total = 0;
             foreach (var entry in site.Town.RoamingSquads)
             {
-                if (entry.V0 <= 0 || !SquadFactory.IsTemplate(data.Db.Find(entry.Id))) continue;
+                if (entry.V0 <= 0 || !SquadFactory.IsTemplate(_data.Db.Find(entry.Id))) continue;
                 int existing = 0;
                 foreach (var p in world.Platoons.All) if (p.Origin == site.Index && !p.Pinned && p.Campaign is null && !p.Dead && p.TemplateId == entry.Id) existing++;
                 float w = MathF.Max(0, entry.V0 - existing);
@@ -902,28 +902,35 @@ public sealed partial class PopulationSystem
             {
                 if ((pick -= w) < 0) { chosen = entry; break; }
             }
-            var template = SquadTemplate.From(data.Db.Find(chosen.Id)!);
-            var plan = SquadFactory.Plan(data.Db, template, settings.SquadSizeMultiplier, world.Seed, key, States);
+            var template = SquadTemplate.From(_data.Db.Find(chosen.Id)!);
+            var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, world.Seed, key, States);
             if (plan.TotalMembers == 0 || members + plan.TotalMembers > cap) continue;
             var position = Place(site, world.Seed, key, world.Walkability);
             // Not on top of the player (6.3: within 35.4 of the view point).
             if (!playersListed)
             {
                 playersListed = true;
-                playerPositions.Clear();
+                _playerPositions.Clear();
                 for (int i = 0; i < table.Previous.Length; i++)
-                    if (table.Previous[i].Alive && table.Cold(i) is { IsPlayer: true }) playerPositions.Add(new Vector2(table.Previous[i].Position.X, table.Previous[i].Position.Z));
+                    if (table.Previous[i].Alive && table.Cold(i) is { IsPlayer: true }) _playerPositions.Add(new Vector2(table.Previous[i].Position.X, table.Previous[i].Position.Z));
             }
             bool crowded = false;
-            foreach (var at in playerPositions)
+            foreach (var at in _playerPositions)
                 if (Vector2.Distance(at, position) < 36) { crowded = true; break; }
             if (crowded) continue;
-            int squadFaction = template.Faction is { } tf && data.FactionIndex(tf) is var ti and >= 0 ? ti : factionIndex;
-            var (package, job) = Ai.PlatoonJobs.For(data.Ai, template);
+            int squadFaction = template.Faction is { } tf && _data.FactionIndex(tf) is var ti and >= 0 ? ti : factionIndex;
+            var (package, job) = PlatoonJobs.For(_data.Ai, template);
             var platoon = new Platoon
             {
-                Id = id, Origin = site.Index, TemplateId = chosen.Id, Faction = squadFaction, Key = key, Size = plan.TotalMembers,
-                Position = position, Package = package?.Id, Job = job,
+                Id = id,
+                Origin = site.Index,
+                TemplateId = chosen.Id,
+                Faction = squadFaction,
+                Key = key,
+                Size = plan.TotalMembers,
+                Position = position,
+                Package = package?.Id,
+                Job = job,
             };
             world.Platoons.Add(platoon);
             ChooseNext(world, platoon);

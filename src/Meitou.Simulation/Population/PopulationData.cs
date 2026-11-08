@@ -1,7 +1,3 @@
-using Meitou.Simulation.Aggro;
-using Meitou.Simulation.Factions;
-using Meitou.Simulation.Items;
-using Meitou.Simulation.Bodies;
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data;
@@ -9,6 +5,10 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Towns;
 
@@ -36,7 +36,7 @@ public interface IAppearanceSource
 public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : IAppearanceSource
 {
     // One look per ANIMAL_CHARACTER (nothing of an animal's is rolled): every animal of a record shares it, so the renderer builds one asset per species.
-    readonly ConcurrentDictionary<string, CharacterAppearance?> animals = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<string, CharacterAppearance?> _animals = new(StringComparer.Ordinal);
 
     public CharacterAppearance? Create(string recordId, string? factionId, int seed) => Create(recordId, factionId, seed, null);
 
@@ -44,8 +44,8 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
     {
         try
         {
-            if (db.Find(recordId) is { Type: FcsRecordType.ANIMAL_CHARACTER } animal)
-                return animals.GetOrAdd(recordId, static (_, s) =>
+            if (db.Find(recordId) is { Type: FcsRecordType.AnimalCharacter } animal)
+                return _animals.GetOrAdd(recordId, static (_, s) =>
                 {
                     try { return CharacterAppearance.BuildAnimal(s.db, s.installRoot, s.animal); }
                     catch (KeyNotFoundException) { return null; }
@@ -61,21 +61,21 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
 
 
     // A record whose look fails is drawn as a marker; say so once per record, not per character.
-    readonly ConcurrentDictionary<string, byte> warned = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<string, byte> _warned = new(StringComparer.Ordinal);
     void Warn(string recordId, Exception e)
     {
-        if (warned.TryAdd(recordId, 0)) Console.Error.WriteLine($"warning   no appearance for {recordId}: {e.Message}");
+        if (_warned.TryAdd(recordId, 0)) Console.Error.WriteLine($"warning   no appearance for {recordId}: {e.Message}");
     }
 
     public FcsRecord? Sanitize(FcsRecord proposed, GameRecord race) => CharacterDraft.Sanitize(db, installRoot, proposed, race);
 
-    readonly Lazy<NamePool> names = new(() => NamePool.Load(installRoot));
-    public string? RandomName(bool female, ulong roll) => names.Value.Pick(female, roll);
+    readonly Lazy<NamePool> _names = new(() => NamePool.Load(installRoot));
+    public string? RandomName(bool female, ulong roll) => _names.Value.Pick(female, roll);
     public CharacterAppearance? Create(string recordId, Loadout loadout)
     {
         try
         {
-            if (db.Find(recordId) is { Type: FcsRecordType.ANIMAL_CHARACTER }) return Create(recordId, null, loadout.Seed);
+            if (db.Find(recordId) is { Type: FcsRecordType.AnimalCharacter }) return Create(recordId, null, loadout.Seed);
             return CharacterAppearance.Build(db, installRoot, recordId, new CharacterOptions { Loadout = loadout });
         }
         catch (Exception e) when (e is IOException or FcsFormatException or KeyNotFoundException or InvalidDataException or UnauthorizedAccessException)
@@ -110,20 +110,20 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     /// The town's placed buildings with their beds and nodes (<see cref="TownBuildings"/>), the AI's homes; empty when the host gave none. A building laid out
     /// afresh (<see cref="PopulationData.Relay"/>) takes its old one's place.
     /// </summary>
-    public IReadOnlyList<TownBuilding> Buildings { get => Volatile.Read(ref buildings); init => buildings = value; }
-    IReadOnlyList<TownBuilding> buildings = [];
+    public IReadOnlyList<TownBuilding> Buildings { get => Volatile.Read(ref _buildings); init => _buildings = value; }
+    IReadOnlyList<TownBuilding> _buildings = [];
     // The buildings as the boot laid them out, by key, of those laid out afresh since.
-    readonly Dictionary<string, TownBuilding> booted = [];
+    readonly Dictionary<string, TownBuilding> _booted = [];
 
     /// <summary>Swaps the list for another (copy on write: readers on other threads hold the list they took, never one being changed); only <see cref="PopulationData"/> calls it, in the serial phase.</summary>
-    internal void SetBuildings(IReadOnlyList<TownBuilding> list) => Volatile.Write(ref buildings, list);
+    internal void SetBuildings(IReadOnlyList<TownBuilding> list) => Volatile.Write(ref _buildings, list);
 
     internal void Relay(TownBuilding old, TownBuilding relaid)
     {
-        var list = buildings.ToList();
+        var list = _buildings.ToList();
         int index = list.FindIndex(x => ReferenceEquals(x, old));
         if (index < 0) return;
-        booted.TryAdd(old.Key, old);
+        _booted.TryAdd(old.Key, old);
         list[index] = relaid;
         SetBuildings(list);
     }
@@ -131,9 +131,9 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     /// <summary>The buildings laid out afresh go back to the boot's (a building the level editor cleared since stays cleared).</summary>
     internal void ClearRelays()
     {
-        if (booted.Count == 0) return;
-        SetBuildings([.. buildings.Select(x => booted.GetValueOrDefault(x.Key) is { } old ? old : x)]);
-        booted.Clear();
+        if (_booted.Count == 0) return;
+        SetBuildings([.. _buildings.Select(x => _booted.GetValueOrDefault(x.Key) is { } old ? old : x)]);
+        _booted.Clear();
     }
     /// <summary>The zones the town's level state lists, as the original files them at load, which discovery counts as well as <see cref="Zone"/> (docs/game/ui-screens.md "Map"); empty for a Nest and when the host gave none.</summary>
     public IReadOnlyList<ZoneCoordinate> Coverage { get; init; } = [];
@@ -144,9 +144,9 @@ public sealed class PopulationData
 {
     public required GameDatabase Db { get; init; }
 
-    int buildingsRevision;
+    int _buildingsRevision;
     /// <summary>Counts the changes of the towns' building lists after the world was made (<see cref="TownEdits"/>); the host's caches of them are rebuilt when it moves.</summary>
-    public int BuildingsRevision => Volatile.Read(ref buildingsRevision);
+    public int BuildingsRevision => Volatile.Read(ref _buildingsRevision);
 
     /// <summary>Puts <paramref name="building"/> into the list of the town with placement id <paramref name="town"/>, replacing one of its key; the town's index, -1 when there is no such town.</summary>
     internal int PutBuilding(string town, TownBuilding building)
@@ -154,7 +154,7 @@ public sealed class PopulationData
         var site = Sites.FirstOrDefault(s => s.InstanceId == town);
         if (site is null) return -1;
         site.SetBuildings([.. site.Buildings.Where(b => b.Key != building.Key), building]);
-        Interlocked.Increment(ref buildingsRevision);
+        Interlocked.Increment(ref _buildingsRevision);
         return site.Index;
     }
 
@@ -165,7 +165,7 @@ public sealed class PopulationData
         {
             if (site.Buildings.FirstOrDefault(b => b.Key == key) is not { } found) continue;
             site.SetBuildings([.. site.Buildings.Where(b => b.Key != key)]);
-            Interlocked.Increment(ref buildingsRevision);
+            Interlocked.Increment(ref _buildingsRevision);
             return (site.Index, found);
         }
         return (-1, null);
@@ -185,8 +185,8 @@ public sealed class PopulationData
     /// </summary>
     public FactionRelations Relations { get; init; } = FactionRelations.Build([]);
     /// <summary>The faction of every placed town, a position in <see cref="Factions"/> (-1: none); a <see cref="SetReplacement"/> changes it.</summary>
-    public IReadOnlyList<int> SiteFactions { get => siteFactions; init => siteFactions = [.. value]; }
-    int[] siteFactions = [];
+    public IReadOnlyList<int> SiteFactions { get => _siteFactions; init => _siteFactions = [.. value]; }
+    int[] _siteFactions = [];
 
     /// <summary>
     /// Puts <paramref name="replacement"/> in the town's place, or the town's own record back (null): the original's <c>FUN_1409fe7a0</c>, whose town then reads everything
@@ -196,7 +196,7 @@ public sealed class PopulationData
     {
         var s = Sites[site];
         s.Replace(replacement);
-        if (site < siteFactions.Length) siteFactions[site] = s.Town.Faction is { } fid ? FactionIndex(fid) : -1;
+        if (site < _siteFactions.Length) _siteFactions[site] = s.Town.Faction is { } fid ? FactionIndex(fid) : -1;
     }
 
     /// <summary>Every town back to its own record (a new game or a save starting; the data outlives the worlds, as <see cref="Relations"/> does).</summary>
@@ -222,7 +222,7 @@ public sealed class PopulationData
         var relaid = TownBuildings.Relay(Db, Layouts, b, interior, exterior, naming);
         if (ReferenceEquals(relaid, b)) return b;
         Sites[site].Relay(b, relaid);
-        lock (turrets) turrets.Remove(site);
+        lock (_turrets) _turrets.Remove(site);
         return relaid;
     }
 
@@ -230,7 +230,7 @@ public sealed class PopulationData
     void ClearRelays()
     {
         foreach (var s in Sites) s.ClearRelays();
-        lock (turrets) turrets.Clear();
+        lock (_turrets) _turrets.Clear();
     }
 
     /// <summary>The nearest placed town whose radius holds a point (the game's position lookup, <c>FUN_140928890</c>), -1 when none.</summary>
@@ -254,35 +254,35 @@ public sealed class PopulationData
     /// <summary>The road network squads travel by, off screen here and on screen through the walkability's long routes (null: none, they go straight).</summary>
     public RoadNetwork? Roads { get; init; }
     /// <summary>The new-game options that change the body mechanics (hunger time, chance of death...).</summary>
-    public BodyOptions BodyOptions { get => bodyOptions; init => bodyOptions = value; }
-    BodyOptions bodyOptions = BodyOptions.Default;
+    public BodyOptions BodyOptions { get => _bodyOptions; init => _bodyOptions = value; }
+    BodyOptions _bodyOptions = BodyOptions.Default;
     /// <summary>
     /// A new world's body options without changing the data retained by the running world's systems: a shallow copy sharing every other member and cache,
     /// with only the body factory built again; the same data when the options are unchanged.
     /// </summary>
     public PopulationData WithBodyOptions(BodyOptions options)
     {
-        if (options == bodyOptions) return this;
+        if (options == _bodyOptions) return this;
         var copy = (PopulationData)MemberwiseClone();
-        copy.bodyOptions = options;
-        copy.bodies = null;
+        copy._bodyOptions = options;
+        copy._bodies = null;
         return copy;
     }
-    Dictionary<string, int>? factionIndex;
-    Dictionary<string, int>? templateFaction;
+    Dictionary<string, int>? _factionIndex;
+    Dictionary<string, int>? _templateFaction;
 
-    readonly Dictionary<int, IReadOnlyList<TownBuilding>> turrets = [];
+    readonly Dictionary<int, IReadOnlyList<TownBuilding>> _turrets = [];
     /// <summary>
     /// The turret buildings of the site (<see cref="TownBuilding.Turret"/>), in placement order; empty for no site, no building data or none. Cached: the AI asks the
     /// package cadence of every town squad.
     /// </summary>
     public IReadOnlyList<TownBuilding> Turrets(int site)
     {
-        lock (turrets)
+        lock (_turrets)
         {
-            if (turrets.TryGetValue(site, out var known)) return known;
+            if (_turrets.TryGetValue(site, out var known)) return known;
             IReadOnlyList<TownBuilding> list = site >= 0 && site < Sites.Count ? [.. Sites[site].Buildings.Where(b => b.Turret is not null)] : [];
-            turrets[site] = list;
+            _turrets[site] = list;
             return list;
         }
     }
@@ -343,13 +343,13 @@ public sealed class PopulationData
     /// The faction owning a town building before any saved owner: the player's faction when the level data names it, else the town's faction whatever the level data says, since the town populate
     /// gives the town faction every non-player building of the town (<c>FUN_1409370d0</c>:35-75, <c>FUN_14092e4b0</c>:35-37).
     /// </summary>
-    public int LevelOwnerOf(Meitou.Data.World.TownBuilding b, int townFaction) =>
+    public int LevelOwnerOf(TownBuilding b, int townFaction) =>
         b.OwnerFactionId is { } id && FactionIndex(id) is >= 0 and var faction && faction == PlayerFaction ? faction : townFaction;
 
     /// <summary>The position of a faction id in <see cref="Factions"/> (the first when an id repeats), or -1. The index is built once.</summary>
     public int FactionIndex(string id)
     {
-        var index = LazyInitializer.EnsureInitialized(ref factionIndex, () => BuildFactionIndex(Factions));
+        var index = LazyInitializer.EnsureInitialized(ref _factionIndex, () => BuildFactionIndex(Factions));
         return index.GetValueOrDefault(id, -1);
     }
 
@@ -361,7 +361,7 @@ public sealed class PopulationData
     /// </summary>
     public int FactionOfTemplate(string templateId)
     {
-        var map = LazyInitializer.EnsureInitialized(ref templateFaction, () =>
+        var map = LazyInitializer.EnsureInitialized(ref _templateFaction, () =>
         {
             var m = new Dictionary<string, int>(StringComparer.Ordinal);
             for (int f = 0; f < Factions.Count; f++)
@@ -391,8 +391,8 @@ public sealed class PopulationData
     /// The factions a new game's player knows before the start-off's are added (<c>FUN_1409ef230</c>; docs/game/factions-squads-towns.md "Factions met"): the <c>known</c> list of the
     /// level data's GAMESTATE_FACTION of the player faction (the last when several name it), else <see cref="KnownAtSetup"/>.
     /// </summary>
-    public HashSet<int> KnownAtNewGame() => levelKnown is { } level ? [.. level] : KnownAtSetup();
-    IReadOnlyList<int>? levelKnown;
+    public HashSet<int> KnownAtNewGame() => _levelKnown is { } level ? [.. level] : KnownAtSetup();
+    IReadOnlyList<int>? _levelKnown;
 
     static Dictionary<string, int> BuildFactionIndex(IReadOnlyList<FactionData> factions)
     {
@@ -401,24 +401,24 @@ public sealed class PopulationData
         return index;
     }
 
-    BodyFactory? bodies;
+    BodyFactory? _bodies;
     /// <summary>Makes the stats and medical states of the characters spawned (race data cached).</summary>
-    public BodyFactory Bodies => LazyInitializer.EnsureInitialized(ref bodies, () => new BodyFactory(Db) { Options = BodyOptions });
-    Meitou.Data.Gameplay.Combat.CombatDatabase? combat;
+    public BodyFactory Bodies => LazyInitializer.EnsureInitialized(ref _bodies, () => new BodyFactory(Db) { Options = BodyOptions });
+    Meitou.Data.Gameplay.Combat.CombatDatabase? _combat;
     /// <summary>The weapon, armour and technique data of combat.</summary>
-    public Meitou.Data.Gameplay.Combat.CombatDatabase Combat => LazyInitializer.EnsureInitialized(ref combat, () => Meitou.Data.Gameplay.Combat.CombatDatabase.From(Db));
-    ItemFactory? items;
+    public Meitou.Data.Gameplay.Combat.CombatDatabase Combat => LazyInitializer.EnsureInitialized(ref _combat, () => Data.Gameplay.Combat.CombatDatabase.From(Db));
+    ItemFactory? _items;
     /// <summary>Makes item instances and the starting inventories (loadout and the CHARACTER's <c>inventory</c> list).</summary>
-    public ItemFactory Items => LazyInitializer.EnsureInitialized(ref items, () => new ItemFactory(Db, Bodies.Constants, () => Combat));
-    Meitou.Data.Gameplay.Ai.AiDatabase? ai;
+    public ItemFactory Items => LazyInitializer.EnsureInitialized(ref _items, () => new ItemFactory(Db, Bodies.Constants, () => Combat));
+    Meitou.Data.Gameplay.Ai.AiDatabase? _ai;
     /// <summary>The AI_TASK and AI_PACKAGE records with their inheritance resolved (<see cref="Ai.AiSystem"/>).</summary>
-    public Meitou.Data.Gameplay.Ai.AiDatabase Ai => LazyInitializer.EnsureInitialized(ref ai, () => new Meitou.Data.Gameplay.Ai.AiDatabase(Db));
-    Meitou.Data.Characters.SurgeonDialogues? surgeons;
+    public Meitou.Data.Gameplay.Ai.AiDatabase Ai => LazyInitializer.EnsureInitialized(ref _ai, () => new Meitou.Data.Gameplay.Ai.AiDatabase(Db));
+    SurgeonDialogues? _surgeons;
     /// <summary>The plastic surgeons' editor lines and costs (<see cref="Meitou.Data.Characters.SurgeonDialogues"/>).</summary>
-    public Meitou.Data.Characters.SurgeonDialogues Surgeons => LazyInitializer.EnsureInitialized(ref surgeons, () => new Meitou.Data.Characters.SurgeonDialogues(Db));
-    Meitou.Data.Gameplay.Dialogue.DialogueDatabase? dialogue;
+    public SurgeonDialogues Surgeons => LazyInitializer.EnsureInitialized(ref _surgeons, () => new SurgeonDialogues(Db));
+    Meitou.Data.Gameplay.Dialogue.DialogueDatabase? _dialogue;
     /// <summary>The dialogue trees, packages and word swaps (docs/game/dialogue.md).</summary>
-    public Meitou.Data.Gameplay.Dialogue.DialogueDatabase Dialogue => LazyInitializer.EnsureInitialized(ref dialogue, () => new Meitou.Data.Gameplay.Dialogue.DialogueDatabase(Db));
+    public Meitou.Data.Gameplay.Dialogue.DialogueDatabase Dialogue => LazyInitializer.EnsureInitialized(ref _dialogue, () => new Meitou.Data.Gameplay.Dialogue.DialogueDatabase(Db));
 
     /// <param name="buildings">The towns' buildings by placement id (<see cref="TownBuildings.Build"/>), for the AI's homes; null: none.</param>
     /// <param name="townZones">The zones each town's level state lists, by placement id (<see cref="WorldLevelData.TownZones"/>), for discovery; null: none.</param>
@@ -430,7 +430,7 @@ public sealed class PopulationData
         var sites = new List<TownSite>();
         foreach (var p in placements)
         {
-            if (db.Find(p.TownId) is not { Type: FcsRecordType.TOWN } record) continue;
+            if (db.Find(p.TownId) is not { Type: FcsRecordType.Town } record) continue;
             var zone = WorldLayout.ZoneOf(p.Position.X, p.Position.Z);
             var town = TownData.From(record);
             sites.Add(new TownSite(sites.Count, town, p.Position, zone)
@@ -447,10 +447,17 @@ public sealed class PopulationData
         relations.PlayerFaction = player;
         return new PopulationData
         {
-            Db = db, Sites = sites, Factions = factions, Appearances = appearances, Biomes = biomes, Roads = roads is null ? null : new RoadNetwork(roads), BodyOptions = bodyOptions ?? BodyOptions.Default, PlayerFaction = player,
+            Db = db,
+            Sites = sites,
+            Factions = factions,
+            Appearances = appearances,
+            Biomes = biomes,
+            Roads = roads is null ? null : new RoadNetwork(roads),
+            BodyOptions = bodyOptions ?? BodyOptions.Default,
+            PlayerFaction = player,
             Relations = relations,
             SiteFactions = [.. sites.Select(s => s.Town.Faction is { } fid ? byId.GetValueOrDefault(fid, -1) : -1)],
-            levelKnown = player >= 0 && level?.OfType(FcsRecordType.GAMESTATE_FACTION).LastOrDefault(s => s.GetString("gamedata stringID") == factions[player].Id) is { } state
+            _levelKnown = player >= 0 && level?.OfType(FcsRecordType.GamestateFaction).LastOrDefault(s => s.GetString("gamedata stringID") == factions[player].Id) is { } state
                 ? [.. state.GetReferences("known").Select(r => byId.GetValueOrDefault(r.TargetStringId, -1)).Where(f => f >= 0)] : null,
         };
     }

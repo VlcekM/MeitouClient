@@ -21,7 +21,7 @@ sealed class StealthView(PlayerInterface player)
     /// <summary>The frames of the <c>LightLevel</c> icon in <c>Kenshi_CharacterNameTags</c> (Verified, kenshi_images.xml).</summary>
     const int LightLevelFrames = 7;
 
-    readonly List<MarkerRenderer.Arrow> arrows = [];
+    readonly List<MarkerRenderer.Arrow> _arrows = [];
 
     /// <summary>
     /// Hands the world renderer this frame's stealth arrows (the original's <c>FUN_1408586d0</c>): per watcher of a sneaking player character an
@@ -31,11 +31,11 @@ sealed class StealthView(PlayerInterface player)
     internal void UpdateStealthArrows()
     {
         if (player.Markers is not { } markers) return;
-        arrows.Clear();
-        foreach (var c in player.session.CurrentSnapshot.Characters)
+        _arrows.Clear();
+        foreach (var c in player.Session.CurrentSnapshot.Characters)
         {
             if (c.Stealth is null) continue;
-            var feet = player.where(c);
+            var feet = player.Where(c);
             foreach (var w in c.Watchers)
             {
                 var d = w.Position - feet;
@@ -43,10 +43,10 @@ sealed class StealthView(PlayerInterface player)
                 if (dist < 1e-3f) continue;
                 d /= dist;
                 var colour = w.Level == StealthExposure.Detected ? ArrowDetected : ArrowNoticed;
-                arrows.Add(new(feet + new Vector3(0, 12, 0) + d * MathF.Min(dist - 7, 15), d, colour));
+                _arrows.Add(new(feet + new Vector3(0, 12, 0) + d * MathF.Min(dist - 7, 15), d, colour));
             }
         }
-        markers.Arrows = arrows.Count == 0 ? [] : [.. arrows];
+        markers.Arrows = _arrows.Count == 0 ? [] : [.. _arrows];
     }
 
     /// <summary>
@@ -59,17 +59,20 @@ sealed class StealthView(PlayerInterface player)
     {
         float width = player.Width * 0.105729f, height = player.Height * 0.0296296f, scale = player.Height / 1080f;
         int n = 0;
-        foreach (var c in player.session.CurrentSnapshot.Characters)
+        foreach (var c in player.Session.CurrentSnapshot.Characters)
         {
-            if (!c.IsPlayer || c.Name.Length == 0 || player.characterEditor.EditorOpen || c.CarriedBy != CharacterId.None || !c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
-            var feet = player.where(c);
+            if (!c.IsPlayer || c.Name.Length == 0 || player.CharacterEditor.EditorOpen || c.CarriedBy != CharacterId.None || !c.Selected && HiddenInWorld?.Invoke(c.Id) == true) continue;
+            var feet = player.Where(c);
             if (Vector3.DistanceSquared(player.Eye, feet) >= NameTagRangeSquared) continue;
             if (player.Project(TagAnchor(c, feet)) is not { } head) continue;
             float x = head.X - width / 2, y = head.Y - 4 * scale - height;
             if (player.ShowNames) controls.Add(new($"nametag-{n}", "TextBox", new(x + width * 0.187192f, y, width * 0.655172f, height), c.Selected ? $"[{c.Name}]" : c.Name, "", "", true,
                 new Dictionary<string, string>
                 {
-                    ["FontName"] = "Kenshi_StandardFont_Large", ["TextAlign"] = "Center", ["TextShadow"] = "true", ["TextColour"] = c.Selected ? "1 1 1" : "0.702 0.702 0.702",
+                    ["FontName"] = "Kenshi_StandardFont_Large",
+                    ["TextAlign"] = "Center",
+                    ["TextShadow"] = "true",
+                    ["TextColour"] = c.Selected ? "1 1 1" : "0.702 0.702 0.702",
                 }, Vector4.Zero, Pickable: false));
             // Without the name the panel is the two icons side by side (FUN_1406e2fd0 sizes it to them), centred over the head.
             float stealthX = player.ShowNames ? x : head.X - width * (0.187192f + 0.157635f) / 2, lightX = player.ShowNames ? x + width * 0.842365f : stealthX + width * 0.187192f;
@@ -79,7 +82,9 @@ sealed class StealthView(PlayerInterface player)
                 controls.Add(new($"nametag-stealth-{n}", "ImageBox", new(stealthX, y + height * 0.09375f, width * 0.187192f, height * 0.84375f), "", "", "", true,
                     new Dictionary<string, string>
                     {
-                        ["ImageResource"] = "Kenshi_CharacterNameTags", ["ImageGroup"] = "Stealth", ["ImageName"] = "Stealth",
+                        ["ImageResource"] = "Kenshi_CharacterNameTags",
+                        ["ImageGroup"] = "Stealth",
+                        ["ImageName"] = "Stealth",
                         ["Colour"] = FormattableString.Invariant($"{tint.X} {tint.Y} {tint.Z} 1"),
                     }, default, Pickable: false));
                 // The LightLevel icon on the right in the layout's colour: frame round((1 - light) x 6) of its 7, the sun at full light (FUN_1406e8100).
@@ -87,8 +92,11 @@ sealed class StealthView(PlayerInterface player)
                 controls.Add(new($"nametag-light-{n}", "ImageBox", new(lightX, y, width * 0.157635f, height), "", "", "", true,
                     new Dictionary<string, string>
                     {
-                        ["ImageResource"] = "Kenshi_CharacterNameTags", ["ImageGroup"] = "LightLevel", ["ImageName"] = "LightLevel",
-                        ["ImageFrame"] = frame.ToString(System.Globalization.CultureInfo.InvariantCulture), ["Colour"] = "0.94152 0.805549 0.34137 1",
+                        ["ImageResource"] = "Kenshi_CharacterNameTags",
+                        ["ImageGroup"] = "LightLevel",
+                        ["ImageName"] = "LightLevel",
+                        ["ImageFrame"] = frame.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ["Colour"] = "0.94152 0.805549 0.34137 1",
                     }, default, Pickable: false));
             }
             n++;
@@ -120,7 +128,7 @@ sealed class StealthView(PlayerInterface player)
         return Vector3.Lerp(standing, head + new Vector3(0, 4, 0), lying);
     }
 
-    internal MyGuiLayout? taskBarLayout;
+    internal MyGuiLayout? TaskBarLayout;
 
     /// <summary>
     /// The floating progress bar over a player character at work (<c>FloatingProgressBar::ProgressBarWidget</c>, the <c>Kenshi_ProgressBarPanel</c> layout, <b>Verified</b>): the
@@ -128,19 +136,19 @@ sealed class StealthView(PlayerInterface player)
     /// </summary>
     internal void AddTaskBars(List<UiControl> controls)
     {
-        if (taskBarLayout is not { Roots: [var root, ..] } || player.characterEditor.EditorOpen) return;
+        if (TaskBarLayout is not { Roots: [var root, ..] } || player.CharacterEditor.EditorOpen) return;
         float tag = player.Height * 0.0296296f, scale = player.Height / 1080f;
         int n = 0;
-        var all = player.session.CurrentSnapshot.Characters;
+        var all = player.Session.CurrentSnapshot.Characters;
         for (int i = 0; i < all.Count; i++)
         {
             var c = all[i];
             if (c.Bar is not { } bar || c.CarriedBy != CharacterId.None) continue;
-            var feet = player.where(c);
+            var feet = player.Where(c);
             if (Vector3.DistanceSquared(player.Eye, feet) >= NameTagRangeSquared) continue;
             if (player.Project(TagAnchor(c, feet)) is not { } head) continue;
             float x = head.X / player.Width - root.Position.Width / 2, y = (head.Y - 8 * scale - tag) / player.Height - root.Position.Height;
-            AddTaskBar(controls, taskBarLayout, root, root.Position with { X = x, Y = y }, bar, $"taskbar-{n++}-");
+            AddTaskBar(controls, TaskBarLayout, root, root.Position with { X = x, Y = y }, bar, $"taskbar-{n++}-");
         }
     }
 
@@ -150,7 +158,7 @@ sealed class StealthView(PlayerInterface player)
         var b = new UiBindings();
         b.RelativePositions[root] = at;
         b.Text["Text"] = bar.Text;
-        var arranged = MyGuiPresentation.Arrange(layout, player.Width, player.Height, b, player.uiResources.Layers);
+        var arranged = MyGuiPresentation.Arrange(layout, player.Width, player.Height, b, player.UiResources.Layers);
         var parts = new List<UiControl>(arranged.Count + 1);
         foreach (var u in arranged) parts.Add(u with { Name = u.Name.Length > 0 ? prefix + u.Name : u.Name, Pickable = false });
 
@@ -165,8 +173,8 @@ sealed class StealthView(PlayerInterface player)
         controls.AddRange(parts);
     }
 
-    string? taskBarTrack;
+    string? _taskBarTrack;
 
-    string? TaskBarTrack() => taskBarTrack ??= player.uiResources.Templates.TryGetValue("Kenshi_ProgressBarFill", out var template)
+    string? TaskBarTrack() => _taskBarTrack ??= player.UiResources.Templates.TryGetValue("Kenshi_ProgressBarFill", out var template)
         ? MyGuiReader.ReadResourceLayout(template).Roots.FirstOrDefault()?.UserStrings.GetValueOrDefault("TrackSkin") : null;
 }

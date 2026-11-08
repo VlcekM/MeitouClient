@@ -222,7 +222,7 @@ public class NavigationTests
         Assert.True(query.FindPath(street, room).Found);
 
         // Cache round trip keeps the polygons and the door links.
-        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "meitou-nav-int-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "meitou-nav-int-" + Guid.NewGuid().ToString("N"));
         try
         {
             var cache = new NavMeshCache(dir);

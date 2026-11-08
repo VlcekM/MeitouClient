@@ -110,7 +110,7 @@ public sealed record SquadTemplate
         {
             Id = r.StringId,
             Name = r.Name,
-            IsUnique = r.Type == FcsRecordType.UNIQUE_SQUAD_TEMPLATE,
+            IsUnique = r.Type == FcsRecordType.UniqueSquadTemplate,
             Leader = leader.Count > 0 ? RecordLink.From(leader[0]) : null,
             Squad = Links("squad"),
             Squad2 = Links("squad2"),
@@ -159,5 +159,5 @@ public sealed record SquadTemplate
 
     /// <summary>Every SQUAD_TEMPLATE record, then every UNIQUE_SQUAD_TEMPLATE, in the database's order.</summary>
     public static List<SquadTemplate> LoadAll(GameDatabase db) =>
-        [.. db.OfType(FcsRecordType.SQUAD_TEMPLATE).Select(From), .. db.OfType(FcsRecordType.UNIQUE_SQUAD_TEMPLATE).Select(From)];
+        [.. db.OfType(FcsRecordType.SquadTemplate).Select(From), .. db.OfType(FcsRecordType.UniqueSquadTemplate).Select(From)];
 }

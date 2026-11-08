@@ -19,12 +19,12 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
     }
 
     /// <summary>The API 1 deconstruction (four parts), kept beside the generated six-part one for mods compiled against API 1.</summary>
-    public void Deconstruct(out string Id, out int ApiVersion, out IReadOnlyList<string> Assemblies, out string Entry)
+    public void Deconstruct(out string id, out int apiVersion, out IReadOnlyList<string> assemblies, out string entry)
     {
-        Id = this.Id;
-        ApiVersion = this.ApiVersion;
-        Assemblies = this.Assemblies;
-        Entry = this.Entry;
+        id = this.Id;
+        apiVersion = this.ApiVersion;
+        assemblies = this.Assemblies;
+        entry = this.Entry;
     }
 
     /// <summary>The declared dependencies, in manifest order; empty when the manifest has none.</summary>

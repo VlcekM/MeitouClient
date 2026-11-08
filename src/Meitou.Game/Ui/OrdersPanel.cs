@@ -20,9 +20,9 @@ sealed class OrdersPanel(PlayerInterface player)
     ];
 
     /// <summary>Binds the order toggles (checked while the lead selected character has the order) and the speed arrows of the HUD.</summary>
-    internal void BindOrders(UiBindings b, Meitou.Simulation.CharacterSnapshot? lead)
+    internal void BindOrders(UiBindings b, Simulation.CharacterSnapshot? lead)
     {
-        foreach (var w in player.faithfulHud.Widgets)
+        foreach (var w in player.FaithfulHud.Widgets)
         {
             if (w.Type != "Button" || !w.Name.StartsWith("Orders", StringComparison.Ordinal)) continue;
             foreach (var (word, order) in OrderWords)
@@ -41,38 +41,39 @@ sealed class OrdersPanel(PlayerInterface player)
     }
 
     /// <summary>The jobs list's row layout (<c>Kenshi_OrdersPanelOrder.layout</c>: a <c>Kenshi_ConnectBarSkin</c> bar, <c>OrderText</c> and <c>RemoveButton</c>).</summary>
-    internal MyGuiLayout? ordersRowLayout;
+    internal MyGuiLayout? OrdersRowLayout;
 
     /// <summary>The first Obedient Slave job of the jobs list (the tutorial highlight PanelOrdersJobObedience), -1: none.</summary>
-    internal int obedienceJob = -1;
+    internal int ObedienceJob = -1;
 
     /// <summary>The jobs rows drawn at half alpha: the jobs switch is off and the job does not run without it (<see cref="BindJobs"/>).</summary>
-    readonly HashSet<string> dimmedJobs = [];
+    readonly HashSet<string> _dimmedJobs = [];
 
     /// <summary>
     /// The jobs list (<c>JobsPanel</c>, docs/game/ui-screens.md section 4): the lead's jobs, one <c>Kenshi_OrdersPanelOrder</c> row each, int(24 x height / 1080) tall
     /// (<see cref="AddJobRowParts"/>), numbered from 1, with an X that removes it from that character; with none, the layout's hint. Rows are dragged to reorder.
     /// </summary>
-    internal void BindJobs(UiBindings b, Meitou.Simulation.CharacterSnapshot? lead)
+    internal void BindJobs(UiBindings b, Simulation.CharacterSnapshot? lead)
     {
-        obedienceJob = -1;
-        dimmedJobs.Clear();
+        ObedienceJob = -1;
+        _dimmedJobs.Clear();
         var jobs = new List<UiListItem>();
         bool switchedOn = lead is not null && (lead.Orders & CharacterOrders.Jobs) != 0;
         for (int i = 0; i < (lead?.Jobs.Count ?? 0); i++)
         {
             var job = lead!.Jobs[i];
-            if (job.Type == Meitou.Data.Gameplay.Ai.TaskType._SLAVE_OBEDIENCE && obedienceJob < 0) obedienceJob = i;
+            if (job.Type == Data.Gameplay.Ai.TaskType.SlaveObedience && ObedienceJob < 0) ObedienceJob = i;
             string id = "job:" + i.ToString(CultureInfo.InvariantCulture);
-            if (!switchedOn && !Meitou.Simulation.Production.PermaJobs.IgnoresSwitch(job.Type)) dimmedJobs.Add(id);
+            if (!switchedOn && !Simulation.Production.PermaJobs.IgnoresSwitch(job.Type)) _dimmedJobs.Add(id);
             jobs.Add(new(id, (i + 1).ToString(CultureInfo.InvariantCulture) + ": " + JobRowText(job)));
         }
         b.Lists["JobsPanel"] = jobs;
         b.Properties["JobsPanel"] = new Dictionary<string, string>
         {
-            ["LineSkin"] = "Kenshi_ConnectBarSkin", ["LineHeight"] = ((int)(24 * player.Height / 1080f)).ToString(CultureInfo.InvariantCulture),
+            ["LineSkin"] = "Kenshi_ConnectBarSkin",
+            ["LineHeight"] = ((int)(24 * player.Height / 1080f)).ToString(CultureInfo.InvariantCulture),
         };
-        b.ScrollOffsets["JobsPanel"] = player.scrollBars.inventoryScroll.GetValueOrDefault("JobsPanel");
+        b.ScrollOffsets["JobsPanel"] = player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel");
         if (jobs.Count > 0) b.Hidden.Add("JobsPanelInfo");
         // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an order").
         else b.Text["JobsPanelInfo"] = "[" + Loc.Tr("No jobs assigned") + "]\n[" + Loc.Tr("To add jobs, hold shift key when giving an order") + "]";
@@ -80,9 +81,9 @@ sealed class OrdersPanel(PlayerInterface player)
 
     internal bool JobsWheel(Vector2 p, float steps)
     {
-        if (!player.scrollBars.inventoryViews.TryGetValue("JobsPanel", out var view) || !view.View.Contains(p.X, p.Y)) return false;
+        if (!player.ScrollBars.InventoryViews.TryGetValue("JobsPanel", out var view) || !view.View.Contains(p.X, p.Y)) return false;
         float line = 24 * player.Height / 1080f;
-        player.scrollBars.inventoryScroll["JobsPanel"] = Math.Clamp(player.scrollBars.inventoryScroll.GetValueOrDefault("JobsPanel") - steps * line, 0, view.Maximum);
+        player.ScrollBars.InventoryScroll["JobsPanel"] = Math.Clamp(player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel") - steps * line, 0, view.Maximum);
         return true;
     }
 
@@ -93,16 +94,16 @@ sealed class OrdersPanel(PlayerInterface player)
         var panel = controls[panelIndex];
         float line = MyGuiPresentation.Num(panel.Properties, "ListLine", 24 * player.Height / 1080f);
         float maximum = MyGuiPresentation.Num(panel.Properties, "ScrollMax");
-        if (maximum <= 0) { player.scrollBars.inventoryViews.Remove("JobsPanel"); player.scrollBars.inventoryTracks.Remove("JobsPanel"); return; }
-        float scroll = Math.Clamp(player.scrollBars.inventoryScroll.GetValueOrDefault("JobsPanel"), 0, maximum);
-        player.scrollBars.inventoryScroll["JobsPanel"] = scroll;
+        if (maximum <= 0) { player.ScrollBars.InventoryViews.Remove("JobsPanel"); player.ScrollBars.InventoryTracks.Remove("JobsPanel"); return; }
+        float scroll = Math.Clamp(player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel"), 0, maximum);
+        player.ScrollBars.InventoryScroll["JobsPanel"] = scroll;
         float barWidth = 17 * player.InventoryScale, gap = 3 * player.InventoryScale;
         var view = panel.Bounds with { Width = Math.Max(0, panel.Bounds.Width - barWidth - gap) };
-        player.scrollBars.inventoryViews["JobsPanel"] = (view, maximum);
+        player.ScrollBars.InventoryViews["JobsPanel"] = (view, maximum);
         for (int i = 0; i < controls.Count; i++)
             if (controls[i].Properties.GetValueOrDefault("ListOwner") == "JobsPanel" || controls[i].Name.StartsWith("JobsPanel@row", StringComparison.Ordinal))
                 controls[i] = controls[i] with { Bounds = controls[i].Bounds with { Width = Math.Max(0, controls[i].Bounds.Width - barWidth - gap) }, Clip = controls[i].Clip?.Intersect(view) ?? view };
-        player.scrollBars.AddScrollBar("JobsPanel", controls, new(panel.Bounds.X + panel.Bounds.Width - barWidth, panel.Bounds.Y, barWidth, panel.Bounds.Height),
+        player.ScrollBars.AddScrollBar("JobsPanel", controls, new(panel.Bounds.X + panel.Bounds.Width - barWidth, panel.Bounds.Y, barWidth, panel.Bounds.Height),
             view.Height, view.Height + maximum, scroll, maximum, panel.Clip, "hud-jobs");
     }
 
@@ -110,14 +111,14 @@ sealed class OrdersPanel(PlayerInterface player)
     /// A jobs row: the type's text and the building it targets. The engineer works every site, not the one it was ordered on, so its row is plain
     /// "Engineer" (<b>Observed</b> in the original by players, #348/#353).
     /// </summary>
-    string JobRowText(Meitou.Simulation.Production.PermaJob job)
+    string JobRowText(Simulation.Production.PermaJob job)
     {
-        string text = Loc.Tr(Meitou.Simulation.Production.PermaJobs.Text(job.Type) ?? job.Type.ToString());
-        if (job.Type == Meitou.Data.Gameplay.Ai.TaskType.JOB_BUILDER) return text;
+        string text = Loc.Tr(Simulation.Production.PermaJobs.Text(job.Type) ?? job.Type.ToString());
+        if (job.Type == Data.Gameplay.Ai.TaskType.JobBuilder) return text;
 
-        if (job.Site is { } id && player.session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { } site) return text + ": " + player.build.SiteName(site);
-        if (job.Site is { } dummyId && player.session.CurrentSnapshot.Dummies.FirstOrDefault(d => d.Id == dummyId) is { } dummy)
-            return text + ": " + (player.build.buildHost?.ItemName(dummy.Record) ?? dummy.Record);
+        if (job.Site is { } id && player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { } site) return text + ": " + player.Build.SiteName(site);
+        if (job.Site is { } dummyId && player.Session.CurrentSnapshot.Dummies.FirstOrDefault(d => d.Id == dummyId) is { } dummy)
+            return text + ": " + (player.Build.Services?.ItemName(dummy.Record) ?? dummy.Record);
         return text;
     }
 
@@ -127,13 +128,13 @@ sealed class OrdersPanel(PlayerInterface player)
     /// </summary>
     internal void AddJobRowParts(List<UiControl> controls)
     {
-        if (ordersRowLayout is null) return;
+        if (OrdersRowLayout is null) return;
         for (int i = controls.Count - 1; i >= 0; i--)
         {
             var row = controls[i];
             if (row.Properties.GetValueOrDefault("ListOwner") != "JobsPanel") continue;
 
-            bool dimmed = dimmedJobs.Contains(row.Argument);
+            bool dimmed = _dimmedJobs.Contains(row.Argument);
             controls[i] = row with { Caption = "", Properties = Dimmed(row.Properties, dimmed) };
             controls.InsertRange(i + 1, JobRowParts(row, dimmed));
         }
@@ -147,7 +148,7 @@ sealed class OrdersPanel(PlayerInterface player)
     {
         var box = row.Bounds;
         var b = new UiBindings();
-        var root = ordersRowLayout!.Roots.FirstOrDefault();
+        var root = OrdersRowLayout!.Roots.FirstOrDefault();
         if (root is not null) b.Positions[root.Name] = new(0, 0, box.Width, box.Height);
         b.Positions["OrderText"] = new(10, 0, Math.Max(0, box.Width - 45), box.Height);
         b.Positions["RemoveButton"] = new(box.Width - 30, 0, 30, Math.Max(0, box.Height - 1));
@@ -155,7 +156,7 @@ sealed class OrdersPanel(PlayerInterface player)
         b.Properties["OrderText"] = new Dictionary<string, string> { ["TextColour"] = PlayerInterface.MainColour };
 
         var parts = new List<UiControl>();
-        foreach (var c in MyGuiPresentation.Arrange(ordersRowLayout, (int)box.Width, (int)box.Height, b, player.uiResources.Layers))
+        foreach (var c in MyGuiPresentation.Arrange(OrdersRowLayout, (int)box.Width, (int)box.Height, b, player.UiResources.Layers))
         {
             if (c.Name == root?.Name) continue;   // the row draws the bar
 
@@ -163,8 +164,13 @@ sealed class OrdersPanel(PlayerInterface player)
             bool remove = c.Name == "RemoveButton";
             parts.Add(c with
             {
-                Name = $"{row.Name}-{c.Name}", Bounds = c.Bounds with { X = c.Bounds.X + box.X, Y = c.Bounds.Y + box.Y }, Clip = clip,
-                Action = remove ? "meitou:job-remove" : c.Action, Argument = row.Argument, Pickable = remove, Properties = Dimmed(c.Properties, dimmed),
+                Name = $"{row.Name}-{c.Name}",
+                Bounds = c.Bounds with { X = c.Bounds.X + box.X, Y = c.Bounds.Y + box.Y },
+                Clip = clip,
+                Action = remove ? "meitou:job-remove" : c.Action,
+                Argument = row.Argument,
+                Pickable = remove,
+                Properties = Dimmed(c.Properties, dimmed),
             });
         }
         return parts;
@@ -175,7 +181,7 @@ sealed class OrdersPanel(PlayerInterface player)
         dimmed ? new Dictionary<string, string>(properties, StringComparer.Ordinal) { ["Alpha"] = "0.5" } : properties;
 
     /// <summary>The job row (its list index) pressed and being dragged to a new place in the list; null: none.</summary>
-    internal int? jobDrag;
+    internal int? JobDrag;
 
     /// <summary>The job-list index of the jobs row under a point (not its X), or null.</summary>
     static int? JobRowAt(IReadOnlyList<UiControl> controls, Vector2 p)
@@ -188,17 +194,17 @@ sealed class OrdersPanel(PlayerInterface player)
     /// <summary>A press on a job row starts dragging it (true: taken).</summary>
     internal bool JobDragStart(IReadOnlyList<UiControl> controls, Vector2 p)
     {
-        jobDrag = JobRowAt(controls, p);
-        return jobDrag is not null;
+        JobDrag = JobRowAt(controls, p);
+        return JobDrag is not null;
     }
 
     /// <summary>The button let go: a dragged job dropped on another row of the list moves there.</summary>
     internal void JobDragEnd(Vector2 p)
     {
-        if (jobDrag is not { } from) return;
-        jobDrag = null;
+        if (JobDrag is not { } from) return;
+        JobDrag = null;
         if (JobRowAt(player.ArrangeUi(), p) is { } to && to != from && (player.Selected().FirstOrDefault() ?? player.Lead()) is { IsPlayer: true } lead)
-            player.Say(new Meitou.Simulation.Production.MoveJob(lead.Id, from, to) { Tick = player.session.World.Tick });
+            player.Say(new Simulation.Production.MoveJob(lead.Id, from, to) { Tick = player.Session.World.Tick });
     }
 
     /// <summary>Takes a job (the jobs list's row id) off the lead whose list shows it.</summary>
@@ -206,7 +212,7 @@ sealed class OrdersPanel(PlayerInterface player)
     {
         if ((player.Selected().FirstOrDefault() ?? player.Lead()) is not { IsPlayer: true } lead) return;
         if (job.StartsWith("job:", StringComparison.Ordinal) && int.TryParse(job.AsSpan(4), NumberStyles.None, CultureInfo.InvariantCulture, out int index))
-            player.Say(new Meitou.Simulation.Production.RemoveJob(lead.Id, index) { Tick = player.session.World.Tick });
+            player.Say(new Simulation.Production.RemoveJob(lead.Id, index) { Tick = player.Session.World.Tick });
     }
 
     /// <summary>The speed icon per mode: the <c>Kenshi_CharacterSpeedSet</c> image names, in mode order.</summary>

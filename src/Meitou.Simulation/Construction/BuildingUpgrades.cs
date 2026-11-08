@@ -10,20 +10,20 @@ namespace Meitou.Simulation.Construction;
 /// </summary>
 public static class BuildingUpgrades
 {
-    static readonly ConditionalWeakTable<GameDatabase, Dictionary<string, string>> downgrades = [];
+    static readonly ConditionalWeakTable<GameDatabase, Dictionary<string, string>> Downgrades = [];
 
     /// <summary>The BUILDING <paramref name="record"/> upgrades to, or null.</summary>
     public static string? UpgradeOf(GameDatabase db, string record) =>
-        db.Find(record)?.GetReferences("upgrades to") is [var first, ..] && db.Find(first.TargetStringId) is { Type: FcsRecordType.BUILDING } target ? target.StringId : null;
+        db.Find(record)?.GetReferences("upgrades to") is [var first, ..] && db.Find(first.TargetStringId) is { Type: FcsRecordType.Building } target ? target.StringId : null;
 
     /// <summary>The BUILDING that upgrades to <paramref name="record"/>, or null.</summary>
     public static string? DowngradeOf(GameDatabase db, string record) =>
-        downgrades.GetValue(db, Build).GetValueOrDefault(record);
+        Downgrades.GetValue(db, Build).GetValueOrDefault(record);
 
     static Dictionary<string, string> Build(GameDatabase db)
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var r in db.OfType(FcsRecordType.BUILDING))
+        foreach (var r in db.OfType(FcsRecordType.Building))
             if (r.GetReferences("upgrades to") is [var first, ..]) map.TryAdd(first.TargetStringId, r.StringId);
         return map;
     }

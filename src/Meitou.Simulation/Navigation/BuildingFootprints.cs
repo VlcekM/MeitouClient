@@ -76,37 +76,37 @@ public readonly record struct PlacedBuilding(BuildingPlacement Placement, Buildi
 /// </summary>
 public sealed class BuildingFootprints
 {
-    readonly GameInstall install;
-    readonly GameDatabase db;
-    readonly CollisionCache collision;
+    readonly GameInstall _install;
+    readonly GameDatabase _db;
+    readonly CollisionCache _collision;
     // The level data's buildings by zone, made on first use and again when the level data was edited (WorldLevelData.EditRevision).
-    (int Revision, Dictionary<ZoneCoordinate, List<BuildingPlacement>> Map)? indexed;
-    readonly object indexGate = new();
-    readonly WorldLevelData? levels;
-    readonly ConcurrentDictionary<string, Task<BuildingFootprint?>> byRecord = new(StringComparer.Ordinal);
+    (int Revision, Dictionary<ZoneCoordinate, List<BuildingPlacement>> Map)? _indexed;
+    readonly object _indexGate = new();
+    readonly WorldLevelData? _levels;
+    readonly ConcurrentDictionary<string, Task<BuildingFootprint?>> _byRecord = new(StringComparer.Ordinal);
 
     public BuildingFootprints(GameInstall install, GameDatabase db, WorldLevelData? levels)
     {
-        this.install = install;
-        this.db = db;
-        this.levels = levels;
-        collision = new CollisionCache(install);
+        this._install = install;
+        this._db = db;
+        this._levels = levels;
+        _collision = new CollisionCache(install);
     }
 
     Dictionary<ZoneCoordinate, List<BuildingPlacement>> Index()
     {
-        int revision = levels?.EditRevision ?? 0;
-        lock (indexGate)
+        int revision = _levels?.EditRevision ?? 0;
+        lock (_indexGate)
         {
-            if (indexed is { } known && known.Revision == revision) return known.Map;
+            if (_indexed is { } known && known.Revision == revision) return known.Map;
             var map = new Dictionary<ZoneCoordinate, List<BuildingPlacement>>();
-            if (levels is not null)
-                foreach (var b in levels.Buildings())
+            if (_levels is not null)
+                foreach (var b in _levels.Buildings())
                 {
                     if (!map.TryGetValue(b.Zone, out var list)) map[b.Zone] = list = [];
                     list.Add(b);
                 }
-            indexed = (revision, map);
+            _indexed = (revision, map);
             return map;
         }
     }
@@ -131,7 +131,7 @@ public sealed class BuildingFootprints
         var placed = new List<ResolvedBuilding>();
         foreach (var b in placements)
         {
-            if (b.TargetsZoneRecord || BuildingPlacements.Resolve(b, db, levels, terrainHeight) is not { Destroyed: false } r) continue;
+            if (b.TargetsZoneRecord || BuildingPlacements.Resolve(b, _db, levels, terrainHeight) is not { Destroyed: false } r) continue;
             var mode = (PathMode)r.Record.GetInt("path mode", (int)PathMode.Obstacle);
             if (mode == PathMode.Ignore || r.Record.GetBool("is gateway") || mode == PathMode.Walkable && r.Record.GetBool("is feature")) continue;
             placed.Add(r);
@@ -157,16 +157,16 @@ public sealed class BuildingFootprints
     /// </summary>
     public IReadOnlyList<Vector2[]> FeatureObstacles(Func<double, double, float> terrainHeight)
     {
-        var path = Path.Combine(install.DataDirectory, MapFeatureFile.RelativePath);
+        var path = Path.Combine(_install.DataDirectory, MapFeatureFile.RelativePath);
         if (!System.IO.File.Exists(path)) return [];
-        var features = MapFeatureFile.Open(install).All().Select(t => t.Feature).ToList();
+        var features = MapFeatureFile.Open(_install).All().Select(t => t.Feature).ToList();
         float agentHeight = new NavBuildSettings().AgentHeight;
         var result = new ConcurrentBag<Vector2[]>();
         var terrainGate = new object();
         Parallel.ForEach(features, f =>
         {
-            if (db.Find(f.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record || record.GetPath("collision") is not { Length: > 0 } file
-                || collision.Get(file) is not { } prepared) return;
+            if (_db.Find(f.StringId) is not { Type: FcsRecordType.MapFeatures } record || record.GetPath("collision") is not { Length: > 0 } file
+                || _collision.Get(file) is not { } prepared) return;
             var node = WorldObjectLayout.InstanceTransform(f.Position, f.Rotation, f.Scale);
             var tris = new List<Vector3>();
             foreach (var shape in prepared.Shapes)
@@ -229,13 +229,13 @@ public sealed class BuildingFootprints
     public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh(string buildingId)
     {
         var result = new List<(Vector3[], int[])>();
-        if (db.Find(buildingId) is not { } building) return result;
+        if (_db.Find(buildingId) is not { } building) return result;
         float scale = building.GetFloat("scale", 1);
         if (scale <= 0) scale = 1;
-        foreach (var mesh in WorldObjectLayout.Building(db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
+        foreach (var mesh in WorldObjectLayout.Building(_db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
         {
             string path = mesh.Source.GetPath("xml collision");
-            if (path.Length == 0 || collision.Get(path) is not { } prepared) continue;
+            if (path.Length == 0 || _collision.Get(path) is not { } prepared) continue;
             foreach (var shape in prepared.Shapes) result.Add(([.. shape.Vertices.Select(v => v * scale)], shape.Indices));
         }
         return result;
@@ -243,21 +243,21 @@ public sealed class BuildingFootprints
 
     /// <summary>The triangles of a collision file in its own space (an item's <c>physics file</c>), unscaled; empty when it is not in the install or cannot be read.</summary>
     public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> File(string recordPath) =>
-        collision.Get(recordPath) is { } prepared ? [.. prepared.Shapes.Select(s => (s.Vertices, s.Indices))] : [];
+        _collision.Get(recordPath) is { } prepared ? [.. prepared.Shapes.Select(s => (s.Vertices, s.Indices))] : [];
 
-    readonly ConcurrentDictionary<string, BuildingFootprint?> plots = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<string, BuildingFootprint?> _plots = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The pick stand-in of a BUILDING without collision (outdoor farms, tents, carpets: docs/formats/collision.md): the hull of its parts' render-mesh bounds boxes, scale and part
     /// placement applied. Only for picking: placement and the navmesh never see it. Null when the record has collision, or no part's bounds can be read.
     /// </summary>
-    public BuildingFootprint? Plot(string buildingId) => plots.GetOrAdd(buildingId, id =>
+    public BuildingFootprint? Plot(string buildingId) => _plots.GetOrAdd(buildingId, id =>
     {
-        if (Wait(id) is not null || db.Find(id) is not { } building) return null;
+        if (Wait(id) is not null || _db.Find(id) is not { } building) return null;
         var points = new List<Vector3>();
-        foreach (var mesh in WorldObjectLayout.Building(db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
+        foreach (var mesh in WorldObjectLayout.Building(_db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
         {
-            if (Meitou.Data.Physics.CollisionPaths.Resolve(install, mesh.MeshPath) is not { } path || !Meitou.Data.Ogre.OgreMeshReader.TryReadBounds(path, out var b)) continue;
+            if (Data.Physics.CollisionPaths.Resolve(_install, mesh.MeshPath) is not { } path || !Data.Ogre.OgreMeshReader.TryReadBounds(path, out var b)) continue;
             for (int corner = 0; corner < 8; corner++)
                 points.Add(Vector3.Transform(new Vector3((corner & 1) == 0 ? b.Min.X : b.Max.X, (corner & 2) == 0 ? b.Min.Y : b.Max.Y, (corner & 4) == 0 ? b.Min.Z : b.Max.Z), mesh.Transform));
         }
@@ -266,28 +266,28 @@ public sealed class BuildingFootprints
         return hull.Length < 3 ? null : new BuildingFootprint(hull, points.Min(p => p.Y), points.Max(p => p.Y));
     });
 
-    readonly ConcurrentDictionary<string, (Vector3 Min, Vector3 Max)?> partBounds = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<string, (Vector3 Min, Vector3 Max)?> _partBounds = new(StringComparer.Ordinal);
 
     /// <summary>The bounds box of a building part's mesh in its own space (the mesh file's bounds chunk, read once); null when the file is not found or has none.</summary>
-    public (Vector3 Min, Vector3 Max)? PartBounds(string meshPath) => partBounds.GetOrAdd(meshPath, path =>
-        Meitou.Data.Physics.CollisionPaths.Resolve(install, path) is { } file && Meitou.Data.Ogre.OgreMeshReader.TryReadBounds(file, out var b) && b.Max.X >= b.Min.X ? (b.Min, b.Max) : null);
+    public (Vector3 Min, Vector3 Max)? PartBounds(string meshPath) => _partBounds.GetOrAdd(meshPath, path =>
+        Data.Physics.CollisionPaths.Resolve(_install, path) is { } file && Data.Ogre.OgreMeshReader.TryReadBounds(file, out var b) && b.Max.X >= b.Min.X ? (b.Min, b.Max) : null);
 
     /// <summary>Whether a BUILDING is a farm (it names a <c>farm data</c>): the level buildings without collision that a click still selects, by their <see cref="Plot"/>.</summary>
-    bool IsFarm(string buildingId) => db.Find(buildingId)?.GetReferences("farm data") is [_, ..];
+    bool IsFarm(string buildingId) => _db.Find(buildingId)?.GetReferences("farm data") is [_, ..];
 
-    Task<BuildingFootprint?> Request(string buildingId) => byRecord.GetOrAdd(buildingId, static (id, self) => Task.Run(() => self.Compute(id)), this);   // a static factory: nothing allocated on a hit
+    Task<BuildingFootprint?> Request(string buildingId) => _byRecord.GetOrAdd(buildingId, static (id, self) => Task.Run(() => self.Compute(id)), this);   // a static factory: nothing allocated on a hit
 
     BuildingFootprint? Compute(string buildingId)
     {
-        if (db.Find(buildingId) is not { } building) return null;
+        if (_db.Find(buildingId) is not { } building) return null;
         float scale = building.GetFloat("scale", 1);
         if (scale <= 0) scale = 1;
         var points = new List<Vector3>();
         var shapes = new List<Vector2[]>();
-        foreach (var mesh in WorldObjectLayout.Building(db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
+        foreach (var mesh in WorldObjectLayout.Building(_db, building, "footprint", Vector3.Zero, Quaternion.Identity, new BuildingState()))
         {
             string path = mesh.Source.GetPath("xml collision");
-            if (path.Length == 0 || collision.Get(path) is not { } prepared) continue;
+            if (path.Length == 0 || _collision.Get(path) is not { } prepared) continue;
             foreach (var shape in prepared.Shapes)
             {
                 foreach (var v in shape.Vertices) points.Add(v * scale);
@@ -315,7 +315,7 @@ public sealed class BuildingFootprints
     IEnumerable<BuildingPlacement> Near(Vector3 origin, Vector3 direction, float maxDistance)
     {
         var map = Index();
-        const float Reach = 200;
+        const float reach = 200;
         var from = new Vector2(origin.X, origin.Z);
         var track = new Vector2(direction.X, direction.Z) * maxDistance;
         float trackLength = track.Length();
@@ -337,7 +337,7 @@ public sealed class BuildingFootprints
                 if (b.Position == Vector3.Zero || b.TargetsZoneRecord) continue;
                 var p = new Vector2(b.Position.X, b.Position.Z);
                 float s = lengthSquared < 1e-6f ? 0 : Math.Clamp(Vector2.Dot(p - from, track) / lengthSquared, 0, 1);
-                if (Vector2.DistanceSquared(p, from + track * s) > Reach * Reach) continue;
+                if (Vector2.DistanceSquared(p, from + track * s) > reach * reach) continue;
                 yield return b;
             }
         }
@@ -349,7 +349,7 @@ public sealed class BuildingFootprints
     /// </summary>
     public IEnumerable<(string Key, string Record, Vector3 Position, Quaternion Rotation)> LinkedAround(Vector2 centre, float radius, Func<double, double, float> terrainHeight)
     {
-        if (levels is null) yield break;
+        if (_levels is null) yield break;
         var map = Index();
         var home = WorldLayout.ZoneOf(centre.X, centre.Y);
         int span = (int)MathF.Ceiling(radius / WorldLayout.ZoneSize);
@@ -360,7 +360,7 @@ public sealed class BuildingFootprints
                 foreach (var b in list)
                 {
                     if (b.TargetsZoneRecord || b.Position == Vector3.Zero || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > radius * radius) continue;
-                    if (db.Find(b.BuildingId)?.GetBool("links together") == true && BuildingPlacements.Resolve(b, db, levels, terrainHeight) is { } r) yield return (b.Key, b.BuildingId, r.Position, b.Rotation);
+                    if (_db.Find(b.BuildingId)?.GetBool("links together") == true && BuildingPlacements.Resolve(b, _db, _levels, terrainHeight) is { } r) yield return (b.Key, b.BuildingId, r.Position, b.Rotation);
                 }
             }
     }
@@ -384,16 +384,16 @@ public sealed class BuildingFootprints
     public IEnumerable<PlacedFootprint> StaticAround(Vector2 centre, float radius)
     {
         var map = Index();
-        const float Reach = 200;   // a building's own extent beyond its placement point
+        const float reach = 200;   // a building's own extent beyond its placement point
         var home = WorldLayout.ZoneOf(centre.X, centre.Y);
-        int span = (int)MathF.Ceiling((radius + Reach) / WorldLayout.ZoneSize);
+        int span = (int)MathF.Ceiling((radius + reach) / WorldLayout.ZoneSize);
         for (int dz = -span; dz <= span; dz++)
             for (int dx = -span; dx <= span; dx++)
             {
                 if (!map.TryGetValue(new ZoneCoordinate(home.X + dx, home.Y + dz), out var list)) continue;
                 foreach (var b in list)
                 {
-                    if (b.Position == Vector3.Zero || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > (radius + Reach) * (radius + Reach)) continue;
+                    if (b.Position == Vector3.Zero || Vector2.DistanceSquared(new Vector2(b.Position.X, b.Position.Z), centre) > (radius + reach) * (radius + reach)) continue;
                     if (Of(b.BuildingId) is { } footprint) yield return new PlacedFootprint(b.Key, footprint.Place(b.Position, b.Rotation));
                 }
             }

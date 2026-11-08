@@ -39,7 +39,7 @@ public sealed partial class MedicalState
         touched = 0;
         if (Dead || amount <= 0) return 0;
         float total = 0;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             if (robotKit is { } robot && p.IsRobotic(race) != robot) continue;
             float room = p.MaxHp - p.Flesh - p.Bandage;
@@ -59,11 +59,11 @@ public sealed partial class MedicalState
     /// </summary>
     public bool CloseWound(float dt, float skill, float kitQuality, GameConstants c)
     {
-        if (wounds.Count == 0) return false;
+        if (_wounds.Count == 0) return false;
         float t = Math.Clamp(MathF.Min(skill, kitQuality) * 0.01f, 0, 1);
-        int last = wounds.Count - 1;
-        wounds[last] -= c.MedicSpeedMult * 2 * (0.0005f + (0.03f - 0.0005f) * t) * dt;
-        if (wounds[last] < 0) wounds.RemoveAt(last);
+        int last = _wounds.Count - 1;
+        _wounds[last] -= c.MedicSpeedMult * 2 * (0.0005f + (0.03f - 0.0005f) * t) * dt;
+        if (_wounds[last] < 0) _wounds.RemoveAt(last);
         return true;
     }
 
@@ -71,7 +71,7 @@ public sealed partial class MedicalState
     public float BandageRoom(RaceData race, bool robotKit)
     {
         float total = 0;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             if (p.IsRobotic(race) != robotKit) continue;
             total += MathF.Max(0, p.MaxHp - p.Flesh - p.Bandage);
@@ -100,7 +100,7 @@ public sealed partial class MedicalState
     {
         if (Dead) return (-0.1f, -0.1f);
         float vitalOrganic = 100, anyOrganic = 100, vitalRobot = 100, anyRobot = 100;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             float pct = 100f / p.MaxHp * (p.Flesh + p.Bandage);
             if (!p.IsRobotic(race))
@@ -146,7 +146,7 @@ public sealed partial class MedicalState
     {
         if (Dead || race.IsRobot) return false;
         float cap = MathF.Truncate(skill);
-        foreach (var p in parts)
+        foreach (var p in _parts)
             if (!p.IsVital && p.Rig < p.Bandage && (p.Flesh - p.Stun + p.Rig) * 1.05f < SplintLimit && p.Rig + 1 < cap) return true;
         return false;
     }
@@ -160,7 +160,7 @@ public sealed partial class MedicalState
         if (Dead || ctx.Race.IsRobot) return 0;
         float t = MathF.Min(skill, kitQuality) * 0.01f;
         float cap = 1 - (int)(float)(t * -100.0);   // t in float, x -100 in double, back to float, truncated: quality 20 gives 20 (0.2f is just under 0.2)
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             if (p.IsVital || p.Flesh - p.Stun + p.Rig >= SplintLimit || p.Rig >= p.Stun + p.Bandage || p.Rig >= cap) continue;
             float before = p.Rig;
@@ -255,10 +255,10 @@ public sealed partial class MedicalState
         if (Hunger <= 0 && EatenCountdown <= 0) { Die(DeathCause.Starvation, events); return; }
 
         // Starvation passes the character out below a toughness-dependent point; after waking, a grace period (game hours) keeps it from happening at once.
-        starveGrace = MathF.Max(0, starveGrace - hours);
-        if (!Unconscious && starveGrace <= 0 && Hunger < StarvationKoThreshold(c, ctx.Toughness, Fed > 0))
+        _starveGrace = MathF.Max(0, _starveGrace - hours);
+        if (!Unconscious && _starveGrace <= 0 && Hunger < StarvationKoThreshold(c, ctx.Toughness, Fed > 0))
         {
-            starvationKo = true;
+            _starvationKo = true;
             StartKo(ctx, events);
         }
 
@@ -283,18 +283,18 @@ public sealed partial class MedicalState
                 Unconscious = false;
                 PlayingDead = false;
                 KoTimer = 0;
-                if (starvationKo)
+                if (_starvationKo)
                 {
-                    starvationKo = false;
-                    starveGrace = 0.5f + 1.5f * NextRoll(ctx);
+                    _starvationKo = false;
+                    _starveGrace = 0.5f + 1.5f * NextRoll(ctx);
                 }
                 events?.Add(new MedicalEvent(MedicalEventKind.WokeUp));
             }
         }
         bool legsDown = LegsDown;
-        if (legsDown && legsWereDown == 0) CollapseOnset = true;
-        legsWereDown = legsDown ? 1 : 0;
-        posture = Standing ? PostureState.Normal : PostureState.Other;
+        if (legsDown && _legsWereDown == 0) CollapseOnset = true;
+        _legsWereDown = legsDown ? 1 : 0;
+        _posture = Standing ? PostureState.Normal : PostureState.Other;
     }
 
     /// <summary>
@@ -307,7 +307,7 @@ public sealed partial class MedicalState
         if (Dead || hours <= 0) return;
         var c = ctx.Constants;
         float seconds = hours / GameHoursPerSecond;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             float m = MathF.Max(p.MaxHp, 0.01f);
             p.Bandage = MathF.Max(p.Bandage, MathF.Max(m - p.Flesh, 0));
@@ -320,7 +320,7 @@ public sealed partial class MedicalState
             p.Rig = 0;
             p.HitMult = 1;
         }
-        wounds.Clear();
+        _wounds.Clear();
         Bleeding = 0;
         float cap = Capacity(ctx);
         if (Blood < cap)
@@ -333,7 +333,7 @@ public sealed partial class MedicalState
             Unconscious = false;
             PlayingDead = false;
             KoTimer = 0;
-            starvationKo = false;
+            _starvationKo = false;
         }
     }
 
@@ -345,17 +345,17 @@ public sealed partial class MedicalState
         float decay = c.BleedingClotRate * dt;
         float woundSum = 0;
         int keep = 0;
-        for (int i = 0; i < wounds.Count; i++)
+        for (int i = 0; i < _wounds.Count; i++)
         {
-            float w = wounds[i] - decay;
+            float w = _wounds[i] - decay;
             if (w <= 0) continue;
-            wounds[keep++] = w;
+            _wounds[keep++] = w;
             woundSum += w;
         }
-        wounds.RemoveRange(keep, wounds.Count - keep);
+        _wounds.RemoveRange(keep, _wounds.Count - keep);
         // A damaged stump keeps bleeding: -(h + b) x 0.002 while h + b is negative.
         float stump = 0;
-        foreach (var p in parts)
+        foreach (var p in _parts)
             if (p.Limb == LimbState.Stump && p.Flesh + p.Bandage < 0) stump += -(p.Flesh + p.Bandage) * 0.002f;
         // Floored at 0 (a negative race `bleed rate` gains no blood); blood is then held to capacity every tick.
         Bleeding = MathF.Max(0, (c.ExtraBloodLossFromBodyparts * stump + woundSum) * ctx.Options.ChanceOfDeath * 1.2f * race.BleedRate);

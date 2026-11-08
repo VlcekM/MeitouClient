@@ -16,9 +16,9 @@ namespace Meitou.Tests.Save;
 /// <summary>A save's town platoon the game never made (docs/formats/save.md "NPC platoons", Observed on one save): which ones become stand-ins, and which come in at load.</summary>
 public class UnmadePlatoonTests
 {
-    static SavePlatoon Platoon(bool neverActivated = true, int charCount = 8, int homeType = (int)FcsRecordType.BUILDING, string contentFile = "platoon/")
+    static SavePlatoon Platoon(bool neverActivated = true, int charCount = 8, int homeType = (int)FcsRecordType.Building, string contentFile = "platoon/")
     {
-        var r = new FcsRecord { Type = (int)FcsRecordType.PLATOON, StringId = "Shinobi Thieves_0" };
+        var r = new FcsRecord { Type = (int)FcsRecordType.Platoon, StringId = "Shinobi Thieves_0" };
         r.Bools["never been activated"] = neverActivated;
         r.Bools["persistent"] = true;
         r.Bools["is resident"] = false;
@@ -81,7 +81,7 @@ public class UnmadePlatoonTests
             unmade.Record.Bools["never been activated"] = true;
             unmade.Record.Bools["is resident"] = true;
             unmade.Record.Strings["basetown"] = "30-t";
-            var home = new Hand((int)FcsRecordType.BUILDING, 2133, 11111, 5, 750000000);
+            var home = new Hand((int)FcsRecordType.Building, 2133, 11111, 5, 750000000);
             home.Write(unmade.Record, "homebuilding");
             var save0 = RoundTrip(base0, root);
             var handle = save0.Platoons.Single(p => p.Name == UnmadeName).Handle;

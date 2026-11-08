@@ -32,7 +32,7 @@ public static class DistantTowns
     public static List<DistantTown> Find(GameInstall install, GameDatabase db, WorldLevelData world)
     {
         var handles = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var state in world.Level.OfType(FcsRecordType.GAMESTATE_TOWN))
+        foreach (var state in world.Level.OfType(FcsRecordType.GamestateTown))
             if (state.Ints.TryGetValue("handC", out int c) && state.GetString("instance") is { Length: > 0 } instance)
                 handles.TryAdd(instance, c);
         var result = new List<DistantTown>();

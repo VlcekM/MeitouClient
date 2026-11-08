@@ -19,12 +19,12 @@ public sealed partial class AiSystem
     /// The game hour each faction's last passing-by assault ended (the original's global map <c>DAT_14212dde0</c>, by faction, not saved): a squad of the faction may start
     /// one only while another of its squads assaults, or once its own wait has passed since then.
     /// </summary>
-    readonly SortedDictionary<int, double> assaultEnds = [];
+    readonly SortedDictionary<int, double> _assaultEnds = [];
 
     /// <summary>The faction assault clocks once there is one (worlds without a passing-by assault hash as before).</summary>
     public void Hash(ref StateHasher hasher)
     {
-        foreach (var (faction, end) in assaultEnds) { hasher.Add(faction); hasher.Add(end); }
+        foreach (var (faction, end) in _assaultEnds) { hasher.Add(faction); hasher.Add(end); }
     }
 
     /// <summary>A passing-by assault looks for the town faction's people within this of the town (<b>Verified</b>, 2500 in <c>FUN_140290450</c>).</summary>
@@ -95,7 +95,7 @@ public sealed partial class AiSystem
             if (world.Characters.IsAlive(squad.Leader)) world.Defer(new Dialogue.DialogueEvent(squad.Leader, CharacterId.None, EnterTown) { Tick = world.Tick + 1 });
         }
         board.InTown = town;
-        if (town.Site >= 0 && !places.ContainsKey(town.Site)) RefreshPlaces(world);
+        if (town.Site >= 0 && !_places.ContainsKey(town.Site)) RefreshPlaces(world);
     }
 
     /// <summary>
@@ -235,11 +235,11 @@ public sealed partial class AiSystem
         if (data.Relations.IsAlly(squad.Faction, town.Owner)) return false;
         if (!Assaulting(world, squad.Faction, squad))
         {
-            if (assaultEnds.TryGetValue(squad.Faction, out double end))
+            if (_assaultEnds.TryGetValue(squad.Faction, out double end))
             {
                 if (world.GameHours - end <= board.AssaultCooldown) return false;
             }
-            else assaultEnds[squad.Faction] = world.GameHours;
+            else _assaultEnds[squad.Faction] = world.GameHours;
         }
         return FactionNear(world, town.Owner, Flat(town.Position), AssaultReach);
     }
@@ -288,7 +288,7 @@ public sealed partial class AiSystem
     /// <summary>The assault gives way (vtable +0x38): the last of its faction's running ones to end starts the faction's wait.</summary>
     void AssaultEnded(World world, Squad squad)
     {
-        if (!Assaulting(world, squad.Faction, squad)) assaultEnds[squad.Faction] = world.GameHours;
+        if (!Assaulting(world, squad.Faction, squad)) _assaultEnds[squad.Faction] = world.GameHours;
     }
 
     /// <summary>
@@ -459,7 +459,7 @@ public sealed partial class AiSystem
     const float PlatoonCell = 4608, PlatoonCellOffset = 147465;
 
     /// <summary>Squads to fold into another once the serial look is done (the registry cannot change while it is walked): (the refugees, the squad they join).</summary>
-    readonly List<(Squad From, Squad Into)> merges = [];
+    readonly List<(Squad From, Squad Into)> _merges = [];
 
     /// <summary>The members not dead (a body stays on its squad's roll until it decays; the original's count, squad +0x58 and platoon +0xa4, is read as the living ones, <b>Unknown</b>).</summary>
     static int Living(World world, Squad squad)
@@ -521,7 +521,7 @@ public sealed partial class AiSystem
         }
         if (Vector3.DistanceSquared(at, there) >= RefugeeJoinRange * RefugeeJoinRange) return;
         if (target.Ai is { Current: { } running } theirs && board.Current is { } mine && running.Id == mine.Id) theirs.RefugeeTarget = -1;
-        merges.Add((squad, target));
+        _merges.Add((squad, target));
     }
 
     Squad? RefugeeTargetFor(World world, Squad squad, Vector3 at)
@@ -543,9 +543,9 @@ public sealed partial class AiSystem
     /// <summary>Folds the squads <see cref="StepRefugee"/> queued into theirs (after the look; a squad that was itself folded away meanwhile waits for the next).</summary>
     void ApplyMerges(World world)
     {
-        foreach (var (from, into) in merges)
+        foreach (var (from, into) in _merges)
             if (world.Squads.Find(from.Id) == from && world.Squads.Find(into.Id) == into) SquadManagement.Merge(world, from, into);
-        merges.Clear();
+        _merges.Clear();
     }
 
     /// <summary>Whether a town has hostile occupiers (the original's Town +0x128, the count of its occupier set): a squad whose running occupation holds it.</summary>

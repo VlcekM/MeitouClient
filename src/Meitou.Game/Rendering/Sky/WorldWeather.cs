@@ -13,19 +13,19 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 public sealed class WorldWeather
 {
-    readonly Stopwatch clock = new();
-    WeatherTime? last;
-    int lastSerial = -1;
-    string lastForced = "";
-    Vector3? eye;   // the camera of the last update
+    readonly Stopwatch _clock = new();
+    WeatherTime? _last;
+    int _lastSerial = -1;
+    string _lastForced = "";
+    Vector3? _eye;   // the camera of the last update
 
     /// <summary>The zone the camera of the last update is in (as <c>--zone</c> names it), null before the first.</summary>
-    public ZoneCoordinate? CameraZone => eye is { } e ? WorldLayout.ZoneOf(e.X, e.Z) : null;
+    public ZoneCoordinate? CameraZone => _eye is { } e ? WorldLayout.ZoneOf(e.X, e.Z) : null;
 
-    readonly Meitou.Data.GameDatabase? database;
-    readonly Dictionary<WeatherDef, IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry>> effectLists = new(ReferenceEqualityComparer.Instance);
+    readonly Data.GameDatabase? _database;
+    readonly Dictionary<WeatherDef, IReadOnlyList<Meitou.Data.Particles.WeatherEffectEntry>> _effectLists = new(ReferenceEqualityComparer.Instance);
 
-    public WorldWeather(WeatherWorld world, Meitou.Data.GameDatabase? database = null) => (World, this.database) = (world, database);
+    public WorldWeather(WeatherWorld world, Data.GameDatabase? database = null) => (World, this._database) = (world, database);
 
     public WeatherWorld World { get; }
     /// <summary>The state of the last <see cref="Update"/>.</summary>
@@ -50,23 +50,23 @@ public sealed class WorldWeather
     /// </summary>
     public WeatherState Update(Vector3 eye, double hour, float sunHeight, bool held)
     {
-        this.eye = eye;
-        float real = held || !clock.IsRunning ? 0 : (float)Math.Min(clock.Elapsed.TotalSeconds, 0.25);
-        clock.Restart();
+        this._eye = eye;
+        float real = held || !_clock.IsRunning ? 0 : (float)Math.Min(_clock.Elapsed.TotalSeconds, 0.25);
+        _clock.Restart();
         var times = FrameTimes.FromClock(real, GameSpeed, Paused);
         Times = times;
         var now = new WeatherTime(Day, hour);
         // The schedule runs from the world's creation (day 0, 00:00; the seasons count from there, as `meitou-tools weather --days 0 ..` prints them) in game minutes, so a
         // start at --day 50 or a jump forward (the step keys, the time slider) passes through every change before it; a jump of more than an hour then snaps everything.
-        double from = last?.Minutes ?? 0;
+        double from = _last?.Minutes ?? 0;
         for (double m = Math.Floor(from) + 1; m <= now.Minutes; m++)
         {
             var t = WeatherTime.FromHours(m / 60);
             foreach (var region in World.Regions) region.Update(t);
         }
         // The clock moved back (the viewer's time slider or its camera keys set the hour, not the day): nothing to replay, the sky and fog snap as for a long jump.
-        if (now.Minutes - from > 60 || (last is not null && now.Minutes < from)) { World.Snap(); times = default; }
-        last = now;
+        if (now.Minutes - from > 60 || (_last is not null && now.Minutes < from)) { World.Snap(); times = default; }
+        _last = now;
         var state = World.Update(eye, now, times, sunHeight);
         LogChange(state);
         return state;
@@ -80,17 +80,17 @@ public sealed class WorldWeather
     {
         Day = day;
         var now = new WeatherTime(day, hour);
-        double from = last?.Minutes ?? 0;
+        double from = _last?.Minutes ?? 0;
         for (double m = Math.Floor(from) + 1; m <= now.Minutes; m++)
         {
             var t = WeatherTime.FromHours(m / 60);
             foreach (var region in World.Regions) region.Update(t);
         }
         World.Restore(regions, now);
-        last = now;
+        _last = now;
     }
 
-    WeatherRegion? Here => World.CameraRegion ?? (eye is { } e ? World.RegionAt(e.X, e.Z) : null);
+    WeatherRegion? Here => World.CameraRegion ?? (_eye is { } e ? World.RegionAt(e.X, e.Z) : null);
 
     /// <summary>The Tab panel's weather list: the weathers of the camera region's season, in its order (empty before the first frame).</summary>
     public IReadOnlyList<string> Choices() => Here is { } r ? [.. r.Season.Season.Weathers.Select(w => w.Weather.Name)] : [];
@@ -133,14 +133,14 @@ public sealed class WorldWeather
     public Meitou.Data.Particles.WeatherEffectInput EffectInput()
     {
         var s = State;
-        if (database is null) return Meitou.Data.Particles.WeatherEffectInput.None;
-        if (!effectLists.TryGetValue(s.Weather, out var list))
+        if (_database is null) return Data.Particles.WeatherEffectInput.None;
+        if (!_effectLists.TryGetValue(s.Weather, out var list))
         {
             var entries = new List<Meitou.Data.Particles.WeatherEffectEntry>();
             foreach (var e in s.Effects)
-                if (database.Find(e.Effect.StringId) is { } record)
-                    entries.Add(new(Meitou.Data.Particles.EffectRecord.From(record, database), e.MaxCount, (int)e.RespawnMin, (int)e.RespawnMax));
-            effectLists[s.Weather] = list = entries;
+                if (_database.Find(e.Effect.StringId) is { } record)
+                    entries.Add(new(Data.Particles.EffectRecord.From(record, _database), e.MaxCount, (int)e.RespawnMin, (int)e.RespawnMax));
+            _effectLists[s.Weather] = list = entries;
         }
         // TODO(effects): the game gives each group the weather's effect strength (WeatherDef.EffectStrength); the groups take the strength s, as the forced adapter did.
         return new Meitou.Data.Particles.WeatherEffectInput { Effects = list, Strength = s.Strength, Wind = s.WindDirection * s.WindSpeed, Region = s.RegionName };
@@ -151,19 +151,19 @@ public sealed class WorldWeather
         if (!Log) return;
         if (World.ForcedWeather is { } forced)
         {
-            if (lastForced != forced.Name) Console.WriteLine($"weather   forced {forced.Name}, strength {s.Strength:0.00}");
-            lastForced = forced.Name;
-            lastSerial = -1;
+            if (_lastForced != forced.Name) Console.WriteLine($"weather   forced {forced.Name}, strength {s.Strength:0.00}");
+            _lastForced = forced.Name;
+            _lastSerial = -1;
             return;
         }
-        lastForced = "";
-        if (World.CameraRegion is not { } region || region.Serial == lastSerial && lastRegion == region.Index) return;
-        lastSerial = region.Serial;
-        lastRegion = region.Index;
+        _lastForced = "";
+        if (World.CameraRegion is not { } region || region.Serial == _lastSerial && _lastRegion == region.Index) return;
+        _lastSerial = region.Serial;
+        _lastRegion = region.Index;
         Console.WriteLine($"weather   {Describe()}");
     }
 
-    int lastRegion = -1;
+    int _lastRegion = -1;
 
     /// <summary>The line for the log and the statistics: region, season, weather, strength, wind and the time left.</summary>
     public string Describe()

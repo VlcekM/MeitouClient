@@ -10,37 +10,37 @@ namespace Meitou.Game.Editor;
 /// <summary>
 /// The level editor's host side (docs/game/level-editor.md), opened from the F10 menu's Tools: every edit is merged into the running world's level data as if a mod's zone file had been read
 /// at load (<see cref="WorldLevelData.ApplyEdit"/>), so a placed building is a level building for the picking, the building panel, the interior and the lights, and a cleared one is gone from
-/// them; the renderer and the navmesh are told too (runtime placements, hidden keys, zones built again). Save Mod writes the edits as zone files of Meitou's own mod (<see cref="LevelEdits"/>).
+/// them; the renderer and the navmesh are told too (runtime placements, hidden keys, zones built again). Save Mod writes the edits as zone files of Meitou's own mod (<see cref="Building.LevelEdits"/>).
 /// </summary>
 sealed class LevelEditorHost(GameHost host)
 {
-    internal readonly LevelEdits levelEdits = new();
+    internal readonly LevelEdits LevelEdits = new();
     // The world the edits belong to, and the level data's buildings by key for clearing.
-    World? levelEditsWorld;
+    World? _levelEditsWorld;
     // The edits of the game save just loaded, until the host has met the new world.
-    internal IReadOnlyDictionary<ZoneCoordinate, byte[]>? pendingLevelEdits;
-    (WorldLevelData Levels, int Revision, Dictionary<string, BuildingPlacement> ByKey)? levelPlacements;
+    internal IReadOnlyDictionary<ZoneCoordinate, byte[]>? PendingLevelEdits;
+    (WorldLevelData Levels, int Revision, Dictionary<string, BuildingPlacement> ByKey)? _levelPlacements;
 
     internal void OpenLevelEditor()
     {
-        host.debugMenu.debugMenuOpen = false;
-        host.player.levelEditorPanel.OpenLevelEditor();
+        host.DebugMenu.DebugMenuOpen = false;
+        host.Player.LevelEditorPanel.OpenLevelEditor();
     }
 
     /// <summary>Shift+F12, the original's <c>editor_toggle</c>.</summary>
     void ToggleLevelEditor()
     {
-        host.debugMenu.debugMenuOpen = false;
-        host.player.levelEditorPanel.ToggleLevelEditor();
+        host.DebugMenu.DebugMenuOpen = false;
+        host.Player.LevelEditorPanel.ToggleLevelEditor();
     }
 
     internal LevelEditorServices MakeLevelEditorServices() => new()
     {
         ModName = LevelEdits.ModName,
         Place = LevelPlace,
-        Added = () => { LevelEditsFollowWorld(); return levelEdits.Added; },
+        Added = () => { LevelEditsFollowWorld(); return LevelEdits.Added; },
         Clear = LevelClear,
-        IsCleared = key => ReferenceEquals(levelEditsWorld, host.session.World) && levelEdits.IsCleared(key),
+        IsCleared = key => ReferenceEquals(_levelEditsWorld, host.Session.World) && LevelEdits.IsCleared(key),
         Save = LevelSave,
     };
 
@@ -51,46 +51,46 @@ sealed class LevelEditorHost(GameHost host)
     /// </summary>
     internal void LevelEditsFollowWorld()
     {
-        if (ReferenceEquals(levelEditsWorld, host.session.World)) return;
-        levelEditsWorld = host.session.World;
+        if (ReferenceEquals(_levelEditsWorld, host.Session.World)) return;
+        _levelEditsWorld = host.Session.World;
         // The level data (and the town lists of the shared population data) outlive the world: take the edits back out of them.
-        if (host.scene.Objects is { } objects)
+        if (host.Scene.Objects is { } objects)
         {
             var townBuilder = MakeTownBuilder(objects);
-            foreach (var added in levelEdits.Added)
+            foreach (var added in LevelEdits.Added)
             {
                 objects.Levels.ApplyEdit(added.Zone, LevelEdits.ClearedFile(added), LevelEdits.ModName);
-                host.nav?.LevelChanged(added.Position);
+                host.Nav?.LevelChanged(added.Position);
                 host.ActiveLamps?.RemoveRuntime(added.InstanceId);
-                host.gpu.Particles?.RemoveBuildingEffects(added.InstanceId);
-                host.session.World.Commands.Enqueue(new DebugClearBuilding(added.Key) { Tick = host.session.World.Tick });
+                host.Gpu.Particles?.RemoveBuildingEffects(added.InstanceId);
+                host.Session.World.Commands.Enqueue(new DebugClearBuilding(added.Key) { Tick = host.Session.World.Tick });
             }
-            foreach (var cleared in levelEdits.Cleared)
+            foreach (var cleared in LevelEdits.Cleared)
             {
                 objects.Levels.ApplyEdit(cleared.Zone, LevelEdits.RestoredFile(cleared), LevelEdits.ModName);
-                host.nav?.LevelChanged(cleared.Position);
+                host.Nav?.LevelChanged(cleared.Position);
                 host.ActiveLamps?.RemoveRuntime(cleared.InstanceId);   // the world's own lamps of it shine again
                 TownPlaced(townBuilder, cleared);
             }
         }
-        foreach (var cleared in levelEdits.Cleared) host.gpu.Objects?.SetCleared(cleared, false);
-        levelEdits.Forget();
+        foreach (var cleared in LevelEdits.Cleared) host.Gpu.Objects?.SetCleared(cleared, false);
+        LevelEdits.Forget();
     }
 
     /// <summary>The builder of town buildings from placements (the boot pass's own), null without the population or the database.</summary>
     TownBuildings.Builder? MakeTownBuilder(WorldObjects objects) =>
-        host.popData is null || host.scene.Database is not { } database ? null
-            : new TownBuildings.Builder(database, objects.Levels, objects.Layouts, (x, z) => host.gpu.Terrain.HeightAt((float)x, (float)z));
+        host.PopData is null || host.Scene.Database is not { } database ? null
+            : new TownBuildings.Builder(database, objects.Levels, objects.Layouts, (x, z) => host.Gpu.Terrain.HeightAt((float)x, (float)z));
 
     /// <summary>
     /// The edits a game save holds (<see cref="SaveGame.LevelEdits"/>), applied to the world just loaded as the live edits were: Called once the host has met the new world
     /// (<see cref="BuildingSync.UpdateBuildings"/>). Placed buildings join the level data, the renderer, the navmesh, the lights and the town simulation as a placement does, cleared ones are cleared
-    /// as a click does; both go among <see cref="levelEdits"/> again, so the next save and Save Mod hold them. A building the level data has already (the mod written by Save Mod
+    /// as a click does; both go among <see cref="LevelEdits"/> again, so the next save and Save Mod hold them. A building the level data has already (the mod written by Save Mod
     /// is active) is only noted.
     /// </summary>
     internal void ReplayLevelEdits(IReadOnlyDictionary<ZoneCoordinate, byte[]> files)
     {
-        if (host.scene.Objects is not { } objects || files.Count == 0) return;
+        if (host.Scene.Objects is not { } objects || files.Count == 0) return;
         LevelEditsFollowWorld();
         var townBuilder = MakeTownBuilder(objects);
         int placed = 0, cleared = 0;
@@ -100,8 +100,8 @@ sealed class LevelEditorHost(GameHost host)
             foreach (var placement in adds)
             {
                 bool known = LevelBuildingsByKey(objects).TryGetValue(placement.Key, out var existing) && existing.BuildingId == placement.BuildingId;
-                levelEdits.Restore(placement);
-                if (!known) ApplyPlaced(objects, placement, host.buildingSync.BuildData().TryGetValue(placement.BuildingId, out var data) ? data.PathMode : 2, townBuilder);
+                LevelEdits.Restore(placement);
+                if (!known) ApplyPlaced(objects, placement, host.BuildingSync.BuildData().TryGetValue(placement.BuildingId, out var data) ? data.PathMode : 2, townBuilder);
                 placed++;
             }
             foreach (string key in clearKeys)
@@ -114,29 +114,29 @@ sealed class LevelEditorHost(GameHost host)
     internal void WriteLevelEdits(SaveGame game)
     {
         game.LevelEdits.Clear();
-        if (!ReferenceEquals(levelEditsWorld, host.session.World) || levelEdits.IsEmpty || host.scene.Objects is not { } objects) return;
-        foreach (var (zone, bytes) in levelEdits.Snapshot(objects.Levels, id => host.scene.Database?.Find(id)?.Name ?? id)) game.LevelEdits[zone] = bytes;
+        if (!ReferenceEquals(_levelEditsWorld, host.Session.World) || LevelEdits.IsEmpty || host.Scene.Objects is not { } objects) return;
+        foreach (var (zone, bytes) in LevelEdits.Snapshot(objects.Levels, id => host.Scene.Database?.Find(id)?.Name ?? id)) game.LevelEdits[zone] = bytes;
     }
 
     /// <summary>The level data's buildings by key (made again when the level data changed).</summary>
     Dictionary<string, BuildingPlacement> LevelBuildingsByKey(WorldObjects objects)
     {
-        if (levelPlacements?.Levels != objects.Levels || levelPlacements?.Revision != objects.Levels.EditRevision)
-            levelPlacements = (objects.Levels, objects.Levels.EditRevision, objects.Levels.Buildings().GroupBy(b => b.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal));
-        return levelPlacements.Value.ByKey;
+        if (_levelPlacements?.Levels != objects.Levels || _levelPlacements?.Revision != objects.Levels.EditRevision)
+            _levelPlacements = (objects.Levels, objects.Levels.EditRevision, objects.Levels.Buildings().GroupBy(b => b.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal));
+        return _levelPlacements.Value.ByKey;
     }
 
     // The layout names the next LevelPlace gives its buildings (the place-building command's --interior / --exterior); null: the building's own.
-    internal string? placeInterior, placeExterior;
+    internal string? PlaceInterior, PlaceExterior;
 
     internal void LevelPlace(IReadOnlyList<QueuedGhost> ghosts)
     {
-        if (host.scene.Objects is not { } objects) return;
+        if (host.Scene.Objects is not { } objects) return;
         LevelEditsFollowWorld();
         var townBuilder = MakeTownBuilder(objects);
         foreach (var ghost in ghosts)
         {
-            var placement = levelEdits.Add(ghost.Building.Id, ghost.Position, ghost.Rotation, host.gpu.Terrain.HeightAt(ghost.Position.X, ghost.Position.Z), objects.Levels, placeInterior, placeExterior);
+            var placement = LevelEdits.Add(ghost.Building.Id, ghost.Position, ghost.Rotation, host.Gpu.Terrain.HeightAt(ghost.Position.X, ghost.Position.Z), objects.Levels, PlaceInterior, PlaceExterior);
             ApplyPlaced(objects, placement, ghost.Building.PathMode, townBuilder);
         }
     }
@@ -144,10 +144,10 @@ sealed class LevelEditorHost(GameHost host)
     /// <summary>A placement (made in the session, or read from a game save) into the level data, the renderer, the navmesh, the lights and the town simulation.</summary>
     void ApplyPlaced(WorldObjects objects, BuildingPlacement placement, int pathMode, TownBuildings.Builder? townBuilder)
     {
-        objects.Levels.ApplyEdit(placement.Zone, LevelEdits.PlacedFile(placement, host.scene.Database?.Find(placement.BuildingId)?.Name ?? placement.BuildingId), LevelEdits.ModName);
-        host.gpu.Objects?.AddRuntime(placement);
-        if (pathMode != 0) host.nav?.AddRuntimeBuilding(placement);
-        else host.nav?.LevelChanged(placement.Position);
+        objects.Levels.ApplyEdit(placement.Zone, LevelEdits.PlacedFile(placement, host.Scene.Database?.Find(placement.BuildingId)?.Name ?? placement.BuildingId), LevelEdits.ModName);
+        host.Gpu.Objects?.AddRuntime(placement);
+        if (pathMode != 0) host.Nav?.AddRuntimeBuilding(placement);
+        else host.Nav?.LevelChanged(placement.Position);
         LightPlaced(objects, placement);
         TownPlaced(townBuilder, placement);
     }
@@ -159,45 +159,45 @@ sealed class LevelEditorHost(GameHost host)
     void TownPlaced(TownBuildings.Builder? builder, BuildingPlacement placement)
     {
         if (builder?.Build(placement) is not var (town, building)) return;
-        host.session.World.Commands.Enqueue(new DebugPlaceBuilding(town, building) { Tick = host.session.World.Tick });
+        host.Session.World.Commands.Enqueue(new DebugPlaceBuilding(town, building) { Tick = host.Session.World.Tick });
     }
 
     /// <summary>The lamps and effects of a placed building: the world's were read from the level files once at load, so a building made since adds its own (keyed by its instance id, which names its lights).</summary>
     void LightPlaced(WorldObjects objects, BuildingPlacement placement)
     {
-        if (host.scene.Database is not { } db || BuildingPlacements.Resolve(placement, db, objects.Levels, (x, z) => host.gpu.Terrain.HeightAt((float)x, (float)z)) is not { } resolved) return;
+        if (host.Scene.Database is not { } db || BuildingPlacements.Resolve(placement, db, objects.Levels, (x, z) => host.Gpu.Terrain.HeightAt((float)x, (float)z)) is not { } resolved) return;
         host.ActiveLamps?.SetRuntime(placement.InstanceId, WorldLights.ForBuilding(db, objects.Levels, resolved, objects.Layouts));
-        host.gpu.Particles?.SetBuildingEffects(placement.InstanceId, BuildingEffects.ForBuilding(db, objects.Levels, resolved, objects.Layouts));
+        host.Gpu.Particles?.SetBuildingEffects(placement.InstanceId, BuildingEffects.ForBuilding(db, objects.Levels, resolved, objects.Layouts));
     }
 
     internal bool LevelClear(string key)
     {
-        if (host.scene.Objects is not { } objects) return false;
+        if (host.Scene.Objects is not { } objects) return false;
         LevelEditsFollowWorld();
-        var placement = levelEdits.Added.FirstOrDefault(p => p.Key == key);
+        var placement = LevelEdits.Added.FirstOrDefault(p => p.Key == key);
         if (placement is null)
         {
             if (!LevelBuildingsByKey(objects).TryGetValue(key, out placement)) return false;
         }
-        var result = levelEdits.Clear(placement);
-        if (result is not null) host.session.World.Commands.Enqueue(new DebugClearBuilding(placement.Key) { Tick = host.session.World.Tick });   // out of its town's list and registries
+        var result = LevelEdits.Clear(placement);
+        if (result is not null) host.Session.World.Commands.Enqueue(new DebugClearBuilding(placement.Key) { Tick = host.Session.World.Tick });   // out of its town's list and registries
         switch (result)
         {
             case true:
                 // Placed in this session: it leaves the level data again (an entry with no target), the renderer and the navmesh.
                 objects.Levels.ApplyEdit(placement.Zone, LevelEdits.ClearedFile(placement), LevelEdits.ModName);
                 // The renderer's and the navmesh's runtime placements are named by the key.
-                host.gpu.Objects?.RemoveRuntime(placement.Key);
-                if (host.nav is not null && host.nav.Runtime.All().Any(p => p.Key == placement.Key)) host.nav.RemoveRuntimeBuilding(placement.Key);
-                else host.nav?.LevelChanged(placement.Position);
+                host.Gpu.Objects?.RemoveRuntime(placement.Key);
+                if (host.Nav is not null && host.Nav.Runtime.All().Any(p => p.Key == placement.Key)) host.Nav.RemoveRuntimeBuilding(placement.Key);
+                else host.Nav?.LevelChanged(placement.Position);
                 host.ActiveLamps?.RemoveRuntime(placement.InstanceId);
-                host.gpu.Particles?.RemoveBuildingEffects(placement.InstanceId);
+                host.Gpu.Particles?.RemoveBuildingEffects(placement.InstanceId);
                 return true;
             case false:
                 // A level building: gone from the level data (the picking, the panel, the lights), hidden in the renderer, and the navmesh zones it shaped are built again without it.
                 objects.Levels.ApplyEdit(placement.Zone, LevelEdits.ClearedFile(placement), LevelEdits.ModName);
-                host.gpu.Objects?.SetCleared(placement, true);
-                host.nav?.LevelChanged(placement.Position);
+                host.Gpu.Objects?.SetCleared(placement, true);
+                host.Nav?.LevelChanged(placement.Position);
                 host.ActiveLamps?.SetRuntime(placement.InstanceId, []);   // replaces the world's lamps of it with none
                 return true;
             default:
@@ -208,10 +208,10 @@ sealed class LevelEditorHost(GameHost host)
     /// <summary>Save Mod: the zone files go into <c>mods/&lt;LevelEdits.ModName&gt;/leveldata/</c>, a folder Meitou made (it carries <see cref="LevelEdits.MarkerFile"/>).</summary>
     string LevelSave()
     {
-        if (host.scene.Objects is not { } objects) return "Level editor: no level data loaded";
+        if (host.Scene.Objects is not { } objects) return "Level editor: no level data loaded";
         LevelEditsFollowWorld();
-        if (levelEdits.IsEmpty) return "Level editor: nothing to save";
-        string mod = Path.Combine(host.install.ModsDirectory, LevelEdits.ModName);
+        if (LevelEdits.IsEmpty) return "Level editor: nothing to save";
+        string mod = Path.Combine(host.Install.ModsDirectory, LevelEdits.ModName);
         string marker = Path.Combine(mod, LevelEdits.MarkerFile);
         if (Directory.Exists(mod) && !File.Exists(marker)) return $"Level editor: mods/{LevelEdits.ModName} exists and is not Meitou's; nothing saved";
         try
@@ -220,9 +220,9 @@ sealed class LevelEditorHost(GameHost host)
             if (!File.Exists(marker)) File.WriteAllText(marker, "Written by Meitou's level editor (docs/game/level-editor.md). Meitou only writes into this folder while this file is here.\n");
             // The mod's own game-data file, empty, so the launcher lists it and the game loads its leveldata/ once it is active.
             string data = Path.Combine(mod, LevelEdits.ModName + ".mod");
-            if (!File.Exists(data)) Meitou.Data.Fcs.FcsWriter.WriteFile(new Meitou.Data.Fcs.FcsFile { Author = "Meitou", Description = "Buildings placed with Meitou's level editor" }, data);
-            var zones = levelEdits.Save(Path.Combine(mod, "leveldata"), objects.Levels, id => host.scene.Database?.Find(id)?.Name ?? id);
-            Console.WriteLine($"level     saved {levelEdits.Added.Count} placed and {levelEdits.Cleared.Count} cleared buildings in {zones.Count} zones to {mod}");
+            if (!File.Exists(data)) Data.Fcs.FcsWriter.WriteFile(new Data.Fcs.FcsFile { Author = "Meitou", Description = "Buildings placed with Meitou's level editor" }, data);
+            var zones = LevelEdits.Save(Path.Combine(mod, "leveldata"), objects.Levels, id => host.Scene.Database?.Find(id)?.Name ?? id);
+            Console.WriteLine($"level     saved {LevelEdits.Added.Count} placed and {LevelEdits.Cleared.Count} cleared buildings in {zones.Count} zones to {mod}");
             return $"Saved mod {LevelEdits.ModName}";
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

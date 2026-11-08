@@ -7,10 +7,10 @@ namespace Meitou.Simulation.Ai;
 public sealed partial class AiSystem
 {
     // Resolved in the serial step; starts the treatments the think asked for.
-    FirstAidSystem? firstAid;
+    FirstAidSystem? _firstAid;
 
     // Set by a think that chose the Medic goal (<see cref="AiMind.MedicAsk"/>).
-    int treating;
+    int _treating;
 
     /// <summary>
     /// Whether the character's goal lists (its role's list, or the slave lists it obeys, and its race's) hold <paramref name="type"/>: a mind the AI runs, not an engine one.

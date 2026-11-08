@@ -1,6 +1,3 @@
-using Meitou.Simulation.Factions;
-using Meitou.Simulation.Items;
-using Meitou.Simulation.Bodies;
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data;
@@ -8,9 +5,13 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Towns;
 
 namespace Meitou.Simulation.Population;
+
 public sealed partial class PopulationSystem
 {
     // ---- building (pure given the seed; safe on another thread) ----
@@ -30,8 +31,8 @@ public sealed partial class PopulationSystem
     {
         if (held) return new BuiltTown(site.Index, loadId, [], []);
         var town = site.Town;
-        int factionIndex = town.Faction is { } fid ? data.FactionIndex(fid) : -1;
-        var faction = factionIndex >= 0 ? data.Factions[factionIndex] : null;
+        int factionIndex = town.Faction is { } fid ? _data.FactionIndex(fid) : -1;
+        var faction = factionIndex >= 0 ? _data.Factions[factionIndex] : null;
         var squads = new List<BuiltSquad>();
         var homes = new List<(TownBuilding, SquadTemplate)>();
         var entries = ResidentHomes.Entries(town, faction);
@@ -42,7 +43,7 @@ public sealed partial class PopulationSystem
             // No building data (headless worlds): every entry's squads at spots round the centre (engine choice).
             for (int e = 0; e < entries.Count; e++)
             {
-                if (data.Db.Find(entries[e].Id) is not { } record || !SquadFactory.IsTemplate(record)) continue;
+                if (_data.Db.Find(entries[e].Id) is not { } record || !SquadFactory.IsTemplate(record)) continue;
                 var template = SquadTemplate.From(record);
                 for (int k = 0; k < entries[e].V0; k++)
                 {
@@ -57,7 +58,7 @@ public sealed partial class PopulationSystem
         List<Vector3>? guardNodes = null;
         for (int e = 0; e < barEntries.Count; e++)
         {
-            if (data.Db.Find(barEntries[e].Id) is not { } record || !SquadFactory.IsTemplate(record)) continue;
+            if (_data.Db.Find(barEntries[e].Id) is not { } record || !SquadFactory.IsTemplate(record)) continue;
             var template = SquadTemplate.From(record);
             int n = BarCount(barEntries[e].V0, barEntries[e].V1, seed, Rng.Mix(SeedSalts.BarSquad ^ (ulong)site.Index << 40 ^ (ulong)e << 20 ^ 0xFFFFF));
             for (int k = 0; k < n; k++)
@@ -65,7 +66,7 @@ public sealed partial class PopulationSystem
                 ulong key = Rng.Mix(SeedSalts.BarSquad ^ (ulong)site.Index << 40 ^ (ulong)e << 20 ^ (uint)k);
                 // A node of the town's node map, the guard nodes outside its doors, whether or not a bar has nodes (FUN_1409fcd20 via FUN_14038b000, FUN_14038b650); none: the town's own position with no random
                 // offset, the height the ground there (FUN_1409fcd20:197-205, Town slot 8 FUN_1409272c0).
-                if (GuardSpot(guardNodes ??= TownGuardNodes.Of(data.Db, site.Buildings, walk), seed, key) is { } node)
+                if (GuardSpot(guardNodes ??= TownGuardNodes.Of(_data.Db, site.Buildings, walk), seed, key) is { } node)
                 {
                     if (BuildOne(template, factionIndex, faction, key, seed, new Vector2(node.X, node.Z)) is { } outside) squads.Add(outside with { NearY = node.Y + SpotLift });
                 }
@@ -114,16 +115,16 @@ public sealed partial class PopulationSystem
     /// <summary>One squad: its plan from the factory and a rolled look for every human member. Pure given its arguments (any thread).</summary>
     BuiltSquad? BuildOne(SquadTemplate template, int townFactionIndex, FactionData? townFaction, ulong key, ulong seed, Vector2 position)
     {
-        var plan = SquadFactory.Plan(data.Db, template, settings.SquadSizeMultiplier, seed, key, States);
+        var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, seed, key, States);
         if (plan.TotalMembers == 0) return null;
         // The squad's own faction (its template's) wins over the town's (section 4).
-        int squadFaction = template.Faction is { } tf && data.FactionIndex(tf) is var ti and >= 0 ? ti : townFactionIndex;
+        int squadFaction = template.Faction is { } tf && _data.FactionIndex(tf) is var ti and >= 0 ? ti : townFactionIndex;
         var members = new List<BuiltMember>();
         int n = 0;
         foreach (var m in plan.Members)
         {
             CharacterAppearance? look = null;
-            if (data.Appearances is { } source)   // an animal gets its species' shared look (GeneratedAppearances)
+            if (_data.Appearances is { } source)   // an animal gets its species' shared look (GeneratedAppearances)
                 look = source.Create(m.RecordId, townFaction?.Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.MemberLook + (ulong)n) & 0x7FFFFFFF), template.Id);
             members.Add(new BuiltMember(m, look));
             n++;
@@ -133,7 +134,7 @@ public sealed partial class PopulationSystem
 
     Vector2 Place(TownSite site, ulong seed, ulong key, IWalkability walk)
     {
-        float radius = site.Town.SizeRadius * site.Town.TownRadiusMult * settings.PlacementRadiusShare;
+        float radius = site.Town.SizeRadius * site.Town.TownRadiusMult * _settings.PlacementRadiusShare;
         var centre = new Vector2(site.Position.X, site.Position.Z);
         for (int attempt = 0; attempt < 12; attempt++)
         {

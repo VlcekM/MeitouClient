@@ -1,7 +1,7 @@
 using Meitou.Game.Rendering.Bench;
 using Meitou.Game.Rendering.Gpu.Core;
-using Silk.NET.Vulkan;
 using Meitou.Game.Rendering.Profiling;
+using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Gpu;
 
@@ -27,18 +27,18 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
     const QueryPipelineStatisticFlags Wanted = QueryPipelineStatisticFlags.InputAssemblyPrimitivesBit | QueryPipelineStatisticFlags.VertexShaderInvocationsBit |
         QueryPipelineStatisticFlags.ClippingInvocationsBit | QueryPipelineStatisticFlags.ClippingPrimitivesBit | QueryPipelineStatisticFlags.FragmentShaderInvocationsBit;
 
-    readonly GpuContext ctx;
-    readonly Vk vk;
-    readonly Device device;
-    readonly QueryPool pool;
-    int next;
-    int open = -1;
-    nint openBuffer;
-    bool active;
-    readonly List<int> loose = [];
-    readonly List<(string Label, int[] Queries)> subs = [];
-    readonly List<(string Key, int[] Queries)> rows = [];
-    readonly Dictionary<string, int> occurrences = [];
+    readonly GpuContext _ctx;
+    readonly Vk _vk;
+    readonly Device _device;
+    readonly QueryPool _pool;
+    int _next;
+    int _open = -1;
+    nint _openBuffer;
+    bool _active;
+    readonly List<int> _loose = [];
+    readonly List<(string Label, int[] Queries)> _subs = [];
+    readonly List<(string Key, int[] Queries)> _rows = [];
+    readonly Dictionary<string, int> _occurrences = [];
 
     /// <summary>Queries lost to a full pool or a close in the wrong command buffer, over all frames (0 when the numbers are complete).</summary>
     public int Lost { get; private set; }
@@ -48,79 +48,79 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
     public PipelineStatsMeter(GpuContext ctx)
     {
         if (!ctx.Device.HasPipelineStatistics) throw new NotSupportedException("the device has no pipeline statistics queries");
-        this.ctx = ctx;
-        vk = ctx.Device.Vk;
-        device = ctx.Device.Device;
+        this._ctx = ctx;
+        _vk = ctx.Device.Vk;
+        _device = ctx.Device.Device;
         var info = new QueryPoolCreateInfo { SType = StructureType.QueryPoolCreateInfo, QueryType = QueryType.PipelineStatistics, QueryCount = Capacity, PipelineStatistics = Wanted };
-        VulkanException.Check(vk.CreateQueryPool(device, &info, null, out pool), "vkCreateQueryPool(pipeline statistics)");
+        VulkanException.Check(_vk.CreateQueryPool(_device, &info, null, out _pool), "vkCreateQueryPool(pipeline statistics)");
     }
 
     /// <summary>Starts recording the parts of one frame: call at the frame's start (the stage clock's start), after the previous frame was waited for.</summary>
     public void BeginFrame()
     {
-        vk.ResetQueryPool(device, pool, 0, Capacity);
-        next = 0;
-        open = -1;
-        loose.Clear();
-        subs.Clear();
-        rows.Clear();
-        occurrences.Clear();
-        active = true;
+        _vk.ResetQueryPool(_device, _pool, 0, Capacity);
+        _next = 0;
+        _open = -1;
+        _loose.Clear();
+        _subs.Clear();
+        _rows.Clear();
+        _occurrences.Clear();
+        _active = true;
         Current = this;
-        ctx.Interleave(Open);
+        _ctx.Interleave(Open);
     }
 
     /// <summary>A stage or part of the frame ended (the stage clock's hook): the open query closes and is filed under <paramref name="label"/>, the next one opens.</summary>
     public void OnClose(string label, bool isSub)
     {
-        if (!active) return;
-        ctx.Interleave(End);
-        if (isSub) subs.Add((label, Take()));
+        if (!_active) return;
+        _ctx.Interleave(End);
+        if (isSub) _subs.Add((label, Take()));
         else
         {
-            int n = occurrences.GetValueOrDefault(label) + 1;
-            occurrences[label] = n;
+            int n = _occurrences.GetValueOrDefault(label) + 1;
+            _occurrences[label] = n;
             string key = n == 1 ? label : $"{label} #{n}";
-            rows.Add((key, Take()));
-            foreach (var (sub, queries) in subs) rows.Add(($"{key}/{sub}", queries));
-            subs.Clear();
+            _rows.Add((key, Take()));
+            foreach (var (sub, queries) in _subs) _rows.Add(($"{key}/{sub}", queries));
+            _subs.Clear();
             // The post stage is the last of the world frame: only the overlay follows.
-            if (label == "post") { active = false; return; }
+            if (label == "post") { _active = false; return; }
         }
-        ctx.Interleave(Open);
+        _ctx.Interleave(Open);
     }
 
     int[] Take()
     {
-        var q = loose.ToArray();
-        loose.Clear();
+        var q = _loose.ToArray();
+        _loose.Clear();
         return q;
     }
 
     void Open(IGpuCommandList cmd)
     {
-        if (!active || open >= 0) return;
-        if (next >= Capacity) { Lost++; return; }
-        open = next++;
-        openBuffer = ((CommandList)cmd).Handle.Handle;
-        vk.CmdBeginQuery(((CommandList)cmd).Handle, pool, (uint)open, 0);
-        loose.Add(open);
+        if (!_active || _open >= 0) return;
+        if (_next >= Capacity) { Lost++; return; }
+        _open = _next++;
+        _openBuffer = ((CommandList)cmd).Handle.Handle;
+        _vk.CmdBeginQuery(((CommandList)cmd).Handle, _pool, (uint)_open, 0);
+        _loose.Add(_open);
     }
 
     void End(IGpuCommandList cmd)
     {
-        if (open < 0) return;
+        if (_open < 0) return;
         var vkList = (CommandList)cmd;
-        if (vkList.Handle.Handle != openBuffer) { Lost++; open = -1; return; }
-        vk.CmdEndQuery(vkList.Handle, pool, (uint)open);
-        open = -1;
+        if (vkList.Handle.Handle != _openBuffer) { Lost++; _open = -1; return; }
+        _vk.CmdEndQuery(vkList.Handle, _pool, (uint)_open);
+        _open = -1;
     }
 
     /// <summary>Called by <see cref="CommandList"/> around a rendering: <paramref name="before"/> ends the open query, after it a new one opens.</summary>
     internal void Rendering(CommandList cmd, bool before)
     {
-        if (before) { if (open >= 0 && cmd.Handle.Handle == openBuffer) End(cmd); }
-        else if (active && open < 0) Open(cmd);
+        if (before) { if (_open >= 0 && cmd.Handle.Handle == _openBuffer) End(cmd); }
+        else if (_active && _open < 0) Open(cmd);
     }
 
     /// <summary>Per part of the frame, what the queries counted (call after the frame was waited for): the stages (<c>terrain</c>, <c>foliage</c>, a second
@@ -128,14 +128,14 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
     public List<(string Key, PassStat Stat)> Read()
     {
         Current = null;
-        active = false;
-        var data = new ulong[Math.Max(next, 1) * Values];
-        if (next > 0)
+        _active = false;
+        var data = new ulong[Math.Max(_next, 1) * Values];
+        if (_next > 0)
             fixed (ulong* p = data)
-                VulkanException.Check(vk.GetQueryPoolResults(device, pool, 0, (uint)next, (nuint)(data.Length * 8), p, Values * 8, QueryResultFlags.Result64Bit | QueryResultFlags.ResultWaitBit),
+                VulkanException.Check(_vk.GetQueryPoolResults(_device, _pool, 0, (uint)_next, (nuint)(data.Length * 8), p, Values * 8, QueryResultFlags.Result64Bit | QueryResultFlags.ResultWaitBit),
                     "vkGetQueryPoolResults(pipeline statistics)");
-        var result = new List<(string, PassStat)>(rows.Count);
-        foreach (var (key, queries) in rows)
+        var result = new List<(string, PassStat)>(_rows.Count);
+        foreach (var (key, queries) in _rows)
         {
             var s = new PassStat();
             foreach (int q in queries)
@@ -154,6 +154,6 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
     public void Dispose()
     {
         if (Current == this) Current = null;
-        vk.DestroyQueryPool(device, pool, null);
+        _vk.DestroyQueryPool(_device, _pool, null);
     }
 }

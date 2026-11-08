@@ -16,26 +16,26 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed class LoadingScreen : IDisposable
 {
-    readonly DebugOverlay overlay;
-    DebugOverlay? stamp;   // the original's LOADING... face (Kenshi_UI_Messages: MailartRubberstamp-Regular.ttf)
-    readonly UiPainter? painter;
-    readonly MyGuiResources? resources;
-    readonly MyGuiLayout? layout;
-    readonly Random random = new();
-    readonly string[] tips, pictures, groups;
-    string? picture, group;
-    string tip = "";
-    double shownAt;
-    readonly Stopwatch clock = Stopwatch.StartNew();
-    string label = "";
-    double from, to, expected = 1, stepStart;
-    float shown;
+    readonly DebugOverlay _overlay;
+    DebugOverlay? _stamp;   // the original's LOADING... face (Kenshi_UI_Messages: MailartRubberstamp-Regular.ttf)
+    readonly UiPainter? _painter;
+    readonly MyGuiResources? _resources;
+    readonly MyGuiLayout? _layout;
+    readonly Random _random = new();
+    readonly string[] _tips, _pictures, _groups;
+    string? _picture, _group;
+    string _tip = "";
+    double _shownAt;
+    readonly Stopwatch _clock = Stopwatch.StartNew();
+    string _label = "";
+    double _from, _to, _expected = 1, _stepStart;
+    float _shown;
     const double ExitSeconds = 0.7;
-    double? exitStart;
-    bool drawn;
+    double? _exitStart;
+    bool _drawn;
 
-    float ExitProgress => exitStart is { } start ? (float)Math.Clamp((clock.Elapsed.TotalSeconds - start) / ExitSeconds, 0, 1) : 0;
-    public bool Exiting => exitStart is not null && ExitProgress < 1;
+    float ExitProgress => _exitStart is { } start ? (float)Math.Clamp((_clock.Elapsed.TotalSeconds - start) / ExitSeconds, 0, 1) : 0;
+    public bool Exiting => _exitStart is not null && ExitProgress < 1;
 
     /// <summary>The original's background-loading bar, drawn over the Faithful screen (the host steps it).</summary>
     public ResourceLoadBar? LoadBar { get; set; }
@@ -46,12 +46,12 @@ sealed class LoadingScreen : IDisposable
     /// <summary>Reveal the ready scene while the panels slide out (Faithful: hidden at once, as the original's window). A fast sky load that never showed panels has nothing to dismiss.</summary>
     public void Finish()
     {
-        if (drawn) exitStart ??= clock.Elapsed.TotalSeconds - (Faithful ? ExitSeconds : 0);
+        if (_drawn) _exitStart ??= _clock.Elapsed.TotalSeconds - (Faithful ? ExitSeconds : 0);
     }
 
     LoadingScreen(DebugOverlay overlay, UiPainter? painter, MyGuiResources? resources, MyGuiLayout? layout, string[] tips, string[] pictures, string[] groups)
     {
-        (this.overlay, this.painter, this.resources, this.layout, this.tips, this.pictures, this.groups) = (overlay, painter, resources, layout, tips, pictures, groups);
+        (this._overlay, this._painter, this._resources, this._layout, this._tips, this._pictures, this._groups) = (overlay, painter, resources, layout, tips, pictures, groups);
         Pick();
     }
 
@@ -61,10 +61,10 @@ sealed class LoadingScreen : IDisposable
     /// </summary>
     void Pick()
     {
-        tip = tips.Length > 0 ? Meitou.Localisation.Loc.Tr(tips[random.Next(tips.Length)]) : "";
-        picture = pictures.Length > 0 ? pictures[random.Next(pictures.Length)] : null;
-        group = groups.Length > 0 ? groups[random.Next(groups.Length)] : null;
-        shownAt = clock.Elapsed.TotalSeconds;
+        _tip = _tips.Length > 0 ? Loc.Tr(_tips[_random.Next(_tips.Length)]) : "";
+        _picture = _pictures.Length > 0 ? _pictures[_random.Next(_pictures.Length)] : null;
+        _group = _groups.Length > 0 ? _groups[_random.Next(_groups.Length)] : null;
+        _shownAt = _clock.Elapsed.TotalSeconds;
     }
 
     /// <summary>The screen with the original's layout, picture and tips when they are found (else the spinner and bar on black).</summary>
@@ -85,7 +85,7 @@ sealed class LoadingScreen : IDisposable
             string[] groups = resources.Resources.TryGetValue(ImageSet, out var set) ? [.. set.Elements("Group").Select(g => (string?)g.Attribute("name")).OfType<string>()] : [];
             var painter = new UiPainter(overlay, resources, resolve);
             var stamp = resolve("MailartRubberstamp-Regular.ttf") is { } stampFile ? DebugOverlay.FromFont(overlay.Gpu, stampFile, 64) : null;
-            return new(overlay, painter, resources, layout, tips, pictures, groups) { stamp = stamp, Faithful = faithful };
+            return new(overlay, painter, resources, layout, tips, pictures, groups) { _stamp = stamp, Faithful = faithful };
         }
         catch (Exception e) when (e is IOException or InvalidDataException or System.Xml.XmlException)
         {
@@ -123,11 +123,11 @@ sealed class LoadingScreen : IDisposable
     /// <summary>A step starts: its name, the bar's share it covers (<paramref name="start"/> to <paramref name="end"/>, 0..1) and about how long it takes.</summary>
     public void Step(string name, double start, double end, double seconds)
     {
-        label = name;
-        from = Math.Max(start, shown);
-        to = Math.Max(end, from);
-        expected = Math.Max(seconds, 0.05);
-        stepStart = clock.Elapsed.TotalSeconds;
+        _label = name;
+        _from = Math.Max(start, _shown);
+        _to = Math.Max(end, _from);
+        _expected = Math.Max(seconds, 0.05);
+        _stepStart = _clock.Elapsed.TotalSeconds;
     }
 
     /// <summary>The bar's position now: the step's start, eased towards 95 % of its share by the time it has run against the time it usually takes.</summary>
@@ -135,9 +135,9 @@ sealed class LoadingScreen : IDisposable
     {
         get
         {
-            double t = (clock.Elapsed.TotalSeconds - stepStart) / expected;
-            double eased = from + (to - from) * 0.95 * (1 - Math.Exp(-2.5 * t));
-            return shown = Math.Max(shown, (float)Math.Clamp(eased, 0, 1));
+            double t = (_clock.Elapsed.TotalSeconds - _stepStart) / _expected;
+            double eased = _from + (_to - _from) * 0.95 * (1 - Math.Exp(-2.5 * t));
+            return _shown = Math.Max(_shown, (float)Math.Clamp(eased, 0, 1));
         }
     }
 
@@ -147,9 +147,9 @@ sealed class LoadingScreen : IDisposable
     /// at the screen's height.
     /// </summary>
     static readonly (string ImageSet, float Scale)[] SplashSlides = [("Kenshi_Splash_Logos", 100), ("Kenshi_Splash_LoFi", 0.7f)];
-    int splashSlide = -1, fullFrames;
-    double slideStart;
-    bool skipSlide;
+    int _splashSlide = -1, _fullFrames;
+    double _slideStart;
+    bool _skipSlide;
 
     /// <summary>
     /// A splash slide's height: the image height × the GUI's horizontal scale (<c>DAT_1421337ec</c> = screen width / the 1920 px width of <c>Kenshi_UI.png</c>, set by
@@ -160,15 +160,15 @@ sealed class LoadingScreen : IDisposable
     /// <summary>Plays the splash from its first picture (the Faithful start, which opens on the title); the loading screen shows once it is over.</summary>
     public void StartSplash()
     {
-        if (painter is null || resources is null) return;
-        (splashSlide, fullFrames, skipSlide, slideStart) = (0, 0, false, clock.Elapsed.TotalSeconds);
+        if (_painter is null || _resources is null) return;
+        (_splashSlide, _fullFrames, _skipSlide, _slideStart) = (0, 0, false, _clock.Elapsed.TotalSeconds);
     }
 
     /// <summary>The splash is still showing a picture.</summary>
-    public bool SplashPlaying => splashSlide >= 0 && splashSlide < SplashSlides.Length;
+    public bool SplashPlaying => _splashSlide >= 0 && _splashSlide < SplashSlides.Length;
 
     /// <summary>A key or button was pressed: the picture showing ends once it is fully shown.</summary>
-    public void SkipSplash() { if (SplashPlaying) skipSlide = true; }
+    public void SkipSplash() { if (SplashPlaying) _skipSlide = true; }
 
     /// <summary>
     /// One frame of the splash: the picture fades in at 3 a second and ends after 4 seconds, or on a press, once it has been drawn fully opaque on more than three
@@ -176,63 +176,66 @@ sealed class LoadingScreen : IDisposable
     /// </summary>
     void DrawSplash(int width, int height)
     {
-        double elapsed = clock.Elapsed.TotalSeconds - slideStart;
+        double elapsed = _clock.Elapsed.TotalSeconds - _slideStart;
         float alpha = (float)Math.Min(1, elapsed * 3);
-        if (alpha == 1) fullFrames++;
-        bool ended = (skipSlide || elapsed > 4) && fullFrames > 3;
-        overlay.Rect(0, 0, width, height, new Vector4(0, 0, 0, 1));
-        overlay.Flush(width, height);
-        if (!ended && resources!.Resources.TryGetValue(SplashSlides[splashSlide].ImageSet, out var set)
+        if (alpha == 1) _fullFrames++;
+        bool ended = (_skipSlide || elapsed > 4) && _fullFrames > 3;
+        _overlay.Rect(0, 0, width, height, new Vector4(0, 0, 0, 1));
+        _overlay.Flush(width, height);
+        if (!ended && _resources!.Resources.TryGetValue(SplashSlides[_splashSlide].ImageSet, out var set)
             && set.Element("Group")?.Attribute("size")?.Value.Split(' ') is [var w, var h]
             && float.TryParse(w, CultureInfo.InvariantCulture, out float imageWidth) && float.TryParse(h, CultureInfo.InvariantCulture, out float imageHeight) && imageHeight > 0)
         {
-            int shownHeight = SplashSlideHeight(imageHeight, width, height, SplashSlides[splashSlide].Scale);
+            int shownHeight = SplashSlideHeight(imageHeight, width, height, SplashSlides[_splashSlide].Scale);
             int shownWidth = (int)(imageWidth / imageHeight * shownHeight);
             var bounds = new UiRect((int)(width * 0.5f - shownWidth * 0.5f), (int)(height * 0.5f - shownHeight * 0.5f), shownWidth, shownHeight);
             var properties = new Dictionary<string, string>
             {
-                ["ImageResource"] = SplashSlides[splashSlide].ImageSet, ["ImageGroup"] = "Main", ["ImageName"] = "Main", ["Alpha"] = alpha.ToString(CultureInfo.InvariantCulture),
+                ["ImageResource"] = SplashSlides[_splashSlide].ImageSet,
+                ["ImageGroup"] = "Main",
+                ["ImageName"] = "Main",
+                ["Alpha"] = alpha.ToString(CultureInfo.InvariantCulture),
             };
-            painter!.Mode = UiMode.Faithful;
-            painter.Draw([new UiControl("Splash", "ImageBox", bounds, "", "", "", true, properties, Vector4.Zero)], width, height, new Vector2(-1, -1), null);
+            _painter!.Mode = UiMode.Faithful;
+            _painter.Draw([new UiControl("Splash", "ImageBox", bounds, "", "", "", true, properties, Vector4.Zero)], width, height, new Vector2(-1, -1), null);
         }
-        if (ended) (splashSlide, fullFrames, skipSlide, slideStart) = (splashSlide + 1, 0, false, clock.Elapsed.TotalSeconds);
+        if (ended) (_splashSlide, _fullFrames, _skipSlide, _slideStart) = (_splashSlide + 1, 0, false, _clock.Elapsed.TotalSeconds);
     }
 
     /// <summary>Starts the bar again (a new load between scenes), with a new tip and picture.</summary>
-    public void Restart() { shown = 0; from = to = 0; exitStart = null; drawn = false; released = false; Pick(); }
+    public void Restart() { _shown = 0; _from = _to = 0; _exitStart = null; _drawn = false; _released = false; Pick(); }
 
-    bool released;
+    bool _released;
 
     /// <summary>Once the screen has gone, frees its pictures (the picture and the UI atlas, about 17 MB at 1080p); the next showing loads them again.
     /// The host calls it on frames the screen is not drawn.</summary>
     public void ReleaseWhenGone()
     {
-        if (released || exitStart is null || ExitProgress < 1) return;
-        painter?.ReleaseTextures();
-        released = true;
+        if (_released || _exitStart is null || ExitProgress < 1) return;
+        _painter?.ReleaseTextures();
+        _released = true;
     }
 
     public void Draw(int width, int height, bool background = true)
     {
         float t = ExitProgress;
         if (t >= 1) return;
-        drawn = true;
-        if (SplashPlaying && exitStart is null) { DrawSplash(width, height); return; }
-        if (Faithful && painter is not null && layout is not null && resources is not null)
+        _drawn = true;
+        if (SplashPlaying && _exitStart is null) { DrawSplash(width, height); return; }
+        if (Faithful && _painter is not null && _layout is not null && _resources is not null)
         {
             // Hidden at once when done, also when the mode was switched to Faithful during the Meitou slide-out.
-            if (exitStart is null) DrawFaithful(width, height, background);
+            if (_exitStart is null) DrawFaithful(width, height, background);
             return;
         }
-        if (painter is not null) painter.Mode = UiMode.Meitou;
+        if (_painter is not null) _painter.Mode = UiMode.Meitou;
         float departure = t * t * (3 - 2 * t), opacity = 1 - departure;
         if (background)
         {
-            overlay.Rect(0, 0, width, height, new Vector4(0.02f, 0.02f, 0.018f, opacity));
-            overlay.Flush(width, height);
+            _overlay.Rect(0, 0, width, height, new Vector4(0.02f, 0.02f, 0.018f, opacity));
+            _overlay.Flush(width, height);
         }
-        float progress = exitStart is null ? Progress : 1;
+        float progress = _exitStart is null ? Progress : 1;
         // Two panels along the bottom (engine choice): the loading panel on the left (LOADING..., the spinner, the bar, the step), the layout's own panel on the
         // right, made small and holding only the tip. Sizes at 1080 rows, scaled with the height.
         float s = height / 1080f, margin = 40 * s, panelHeight = 120 * s, top = height - margin - panelHeight;
@@ -242,58 +245,64 @@ sealed class LoadingScreen : IDisposable
         float slide = (box.Width + margin + 8 * s) * departure;
         box = box with { X = box.X - slide };
         tipBox = tipBox with { X = tipBox.X + slide };
-        if (painter is not null && layout is not null && resources is not null)
+        if (_painter is not null && _layout is not null && _resources is not null)
         {
             var b = new UiBindings();
             if (!background) b.Hidden.Add("BackgroundImage");
             var image = new Dictionary<string, string> { ["Alpha"] = opacity.ToString(CultureInfo.InvariantCulture) };
-            if (picture is not null) image["ImageTexture"] = picture;
+            if (_picture is not null) image["ImageTexture"] = _picture;
             b.Properties["BackgroundImage"] = image;
             b.Positions["LoadingPanel"] = tipBox;
             b.Positions["MessageText"] = new UiRect(tipBox.X + 8 * s, tipBox.Y + 8 * s, tipBox.Width - 16 * s, tipBox.Height - 16 * s);
             b.Hidden.Add("LoadingText");
-            b.Text["MessageText"] = tip;
-            b.Properties["MessageText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true", ["TextAlign"] = "Center",
-                ["FontName"] = "Kenshi_StandardFont_Medium", ["FontPixels"] = Math.Max(8, (int)MathF.Round(16 * s)).ToString(CultureInfo.InvariantCulture) };
-            var controls = MyGuiPresentation.Arrange(layout, width, height, b, resources.Layers).ToList();
+            b.Text["MessageText"] = _tip;
+            b.Properties["MessageText"] = new Dictionary<string, string>
+            {
+                ["Static"] = "true",
+                ["WordWrap"] = "true",
+                ["TextAlign"] = "Center",
+                ["FontName"] = "Kenshi_StandardFont_Medium",
+                ["FontPixels"] = Math.Max(8, (int)MathF.Round(16 * s)).ToString(CultureInfo.InvariantCulture)
+            };
+            var controls = MyGuiPresentation.Arrange(_layout, width, height, b, _resources.Layers).ToList();
             // The loading panel in the tip panel's frame (Kenshi_FloatingPanelSkin, the layout's LoadingPanel skin).
             controls.Add(new UiControl("LoadingBox", "Widget", box, "", "", "Kenshi_FloatingPanelSkin", true, new Dictionary<string, string>(), Vector4.Zero));
-            painter.Draw(controls, width, height, new Vector2(-1, -1), null);
+            _painter.Draw(controls, width, height, new Vector2(-1, -1), null);
         }
-        else overlay.Rect(box.X, box.Y, box.X + box.Width, box.Y + box.Height, new Vector4(0.08f, 0.07f, 0.06f, 0.85f));
+        else _overlay.Rect(box.X, box.Y, box.X + box.Width, box.Y + box.Height, new Vector4(0.08f, 0.07f, 0.06f, 0.85f));
 
         // The bar along the panel's bottom; above it LOADING... and the running step on the left, the spinner on the right.
         float pad = 16 * s, barHeight = 10 * s;
         float x0 = box.X + pad, x1 = box.X + box.Width - pad, barTop = box.Y + box.Height - pad - barHeight;
         float rowTop = box.Y + pad * 0.75f, rowHeight = barTop - pad * 0.5f - rowTop, cy = rowTop + rowHeight / 2;
         float textEnd = x0;
-        if (stamp is not null)
+        if (_stamp is not null)
         {
-            float scale = rowHeight * 0.52f / stamp.LineHeight, textTop = cy - stamp.LineHeight * scale / 2;
-            stamp.Target = overlay.Target;
-            stamp.TextScaled("LOADING...", x0 + 2, textTop + 2, new Vector4(0, 0, 0, 0.8f), scale);
-            textEnd = x0 + stamp.TextScaled("LOADING...", x0, textTop, new Vector4(0.87f, 0.85f, 0.81f, 1), scale);
-            stamp.Flush(width, height);
+            float scale = rowHeight * 0.52f / _stamp.LineHeight, textTop = cy - _stamp.LineHeight * scale / 2;
+            _stamp.Target = _overlay.Target;
+            _stamp.TextScaled("LOADING...", x0 + 2, textTop + 2, new Vector4(0, 0, 0, 0.8f), scale);
+            textEnd = x0 + _stamp.TextScaled("LOADING...", x0, textTop, new Vector4(0.87f, 0.85f, 0.81f, 1), scale);
+            _stamp.Flush(width, height);
         }
-        else textEnd = x0 + overlay.Text("LOADING...", x0, cy - overlay.LineHeight / 2, DebugOverlay.TextColour);
+        else textEnd = x0 + _overlay.Text("LOADING...", x0, cy - _overlay.LineHeight / 2, DebugOverlay.TextColour);
 
         // The spinner at the right end: twelve spokes, the bright one going round once a second.
         float outer = Math.Min(rowHeight * 0.45f, 22 * s), inner = outer * 0.45f, cx = x1 - outer;
-        double turn = clock.Elapsed.TotalSeconds % 1;
-        const int Spokes = 12;
-        for (int i = 0; i < Spokes; i++)
+        double turn = _clock.Elapsed.TotalSeconds % 1;
+        const int spokes = 12;
+        for (int i = 0; i < spokes; i++)
         {
-            float a = i * MathF.Tau / Spokes;
-            float behind = (float)(((turn * Spokes - i) % Spokes + Spokes) % Spokes) / Spokes;   // 0 at the head, towards 1 behind it
+            float a = i * MathF.Tau / spokes;
+            float behind = (float)(((turn * spokes - i) % spokes + spokes) % spokes) / spokes;   // 0 at the head, towards 1 behind it
             var colour = new Vector4(0.9f, 0.84f, 0.7f, 0.15f + 0.85f * (1 - behind));
-            overlay.Line(cx + MathF.Sin(a) * inner, cy - MathF.Cos(a) * inner, cx + MathF.Sin(a) * outer, cy - MathF.Cos(a) * outer, Math.Max(2, 3 * s), colour);
+            _overlay.Line(cx + MathF.Sin(a) * inner, cy - MathF.Cos(a) * inner, cx + MathF.Sin(a) * outer, cy - MathF.Cos(a) * outer, Math.Max(2, 3 * s), colour);
         }
-        if (label.Length > 0 && textEnd + 12 * s + label.Length * overlay.CharWidth <= cx - outer - 12 * s)
-            overlay.Text(label, textEnd + 12 * s, cy - overlay.LineHeight / 2, new Vector4(0.62f, 0.6f, 0.52f, 1));
-        overlay.Rect(x0 - 2, barTop - 2, x1 + 2, barTop + barHeight + 2, new Vector4(0.35f, 0.31f, 0.24f, 1));
-        overlay.Rect(x0, barTop, x1, barTop + barHeight, new Vector4(0.08f, 0.07f, 0.06f, 1));
-        overlay.Rect(x0, barTop, x0 + (x1 - x0) * progress, barTop + barHeight, new Vector4(0.78f, 0.66f, 0.42f, 1));
-        overlay.Flush(width, height);
+        if (_label.Length > 0 && textEnd + 12 * s + _label.Length * _overlay.CharWidth <= cx - outer - 12 * s)
+            _overlay.Text(_label, textEnd + 12 * s, cy - _overlay.LineHeight / 2, new Vector4(0.62f, 0.6f, 0.52f, 1));
+        _overlay.Rect(x0 - 2, barTop - 2, x1 + 2, barTop + barHeight + 2, new Vector4(0.35f, 0.31f, 0.24f, 1));
+        _overlay.Rect(x0, barTop, x1, barTop + barHeight, new Vector4(0.08f, 0.07f, 0.06f, 1));
+        _overlay.Rect(x0, barTop, x0 + (x1 - x0) * progress, barTop + barHeight, new Vector4(0.78f, 0.66f, 0.42f, 1));
+        _overlay.Flush(width, height);
     }
 
     /// <summary>
@@ -303,28 +312,28 @@ sealed class LoadingScreen : IDisposable
     /// </summary>
     void DrawFaithful(int width, int height, bool background)
     {
-        painter!.Mode = UiMode.Faithful;
+        _painter!.Mode = UiMode.Faithful;
         var b = new UiBindings();
         if (!background) b.Hidden.Add("BackgroundImage");
-        if (group is not null)
-            b.Properties["BackgroundImage"] = new Dictionary<string, string> { ["ImageResource"] = ImageSet, ["ImageGroup"] = group, ["ImageName"] = "Background" };
-        string word = Meitou.Localisation.Loc.Tr("Loading").ToUpperInvariant();
-        int dots = (int)Math.Floor(clock.Elapsed.TotalSeconds - shownAt) % 4;
+        if (_group is not null)
+            b.Properties["BackgroundImage"] = new Dictionary<string, string> { ["ImageResource"] = ImageSet, ["ImageGroup"] = _group, ["ImageName"] = "Background" };
+        string word = Loc.Tr("Loading").ToUpperInvariant();
+        int dots = (int)Math.Floor(_clock.Elapsed.TotalSeconds - _shownAt) % 4;
         b.Text["LoadingText"] = word + new string('.', dots);
-        b.Text["MessageText"] = tip;
-        var controls = MyGuiPresentation.Arrange(layout!, width, height, b, resources!.Layers).ToList();
+        b.Text["MessageText"] = _tip;
+        var controls = MyGuiPresentation.Arrange(_layout!, width, height, b, _resources!.Layers).ToList();
         int text = controls.FindIndex(c => c.Name == "LoadingText"), panel = controls.FindIndex(c => c.Name == "LoadingPanel");
         if (text >= 0 && panel >= 0)
         {
             var c = controls[text];
-            float measured = painter.MeasureText(c.Properties.GetValueOrDefault("FontName") ?? "", word + "..", height, 0, 0).Width;
+            float measured = _painter.MeasureText(c.Properties.GetValueOrDefault("FontName") ?? "", word + "..", height, 0, 0).Width;
             var box = controls[panel].Bounds;
             var properties = new Dictionary<string, string>(c.Properties) { ["TextAlign"] = "Left VCenter" };
             controls[text] = c with { Bounds = c.Bounds with { X = box.X + (box.Width - measured) * 0.5f }, Properties = properties };
         }
-        if (LoadBar is { Visible: true } bar) controls.AddRange(bar.Controls(resources, width, height));
-        painter.Draw(controls, width, height, new Vector2(-1, -1), null);
+        if (LoadBar is { Visible: true } bar) controls.AddRange(bar.Controls(_resources, width, height));
+        _painter.Draw(controls, width, height, new Vector2(-1, -1), null);
     }
 
-    public void Dispose() { painter?.Dispose(); stamp?.Dispose(); }
+    public void Dispose() { _painter?.Dispose(); _stamp?.Dispose(); }
 }

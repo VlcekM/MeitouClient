@@ -20,7 +20,7 @@ internal sealed class WeatherSurfaces : IDisposable
     /// <summary>The game's file for the dust noise (the <c>dust</c> unit the material builder adds, docs/formats/runtime-materials.md).</summary>
     public const string NoiseFile = "Turbulent.dds";
 
-    SampledImage? noise;
+    readonly SampledImage? _noise;
 
     /// <summary>Shared <c>wetness</c> 0..1: how wet the ground and objects are.</summary>
     public float Wetness;
@@ -37,11 +37,11 @@ internal sealed class WeatherSurfaces : IDisposable
     public WeatherSurfaces(IGpuContext gpu, AssetLocator assets)
     {
         if (assets.Find(NoiseFile) is { } path)
-            noise = SampledImage.Rgba8(gpu, TextureLoader.LoadFile(path, allMips: false).Levels[0], repeat: true, mipmaps: true, "weather dust noise");
+            _noise = SampledImage.Rgba8(gpu, TextureLoader.LoadFile(path, allMips: false).Levels[0], repeat: true, mipmaps: true, "weather dust noise");
         var g = gpu.Globals;
         g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, 0));
         g.PublishUniform("uWeatherDust", () => new Vector4(Dust, 1));   // w 1: triplanar map features get dust too (always on)
-        g.Publish("uWeatherDustNoise", () => noise is { } n ? n.Sampled() : default);
+        g.Publish("uWeatherDustNoise", () => _noise is { } n ? n.Sampled() : default);
     }
 
     /// <summary>Test overrides (<c>--wetness</c>, <c>--rain</c>, <c>--dust</c>; a NaN dust component keeps the weather's): they win over the weather state.</summary>
@@ -49,7 +49,7 @@ internal sealed class WeatherSurfaces : IDisposable
     public Vector3? DustOverride;
 
     /// <summary>Takes the frame's weather at the camera (the scheduler's ramps, or a forced record snapped to its targets), then the overrides.</summary>
-    public void Apply(Meitou.Data.World.WeatherState state)
+    public void Apply(Data.World.WeatherState state)
     {
         Wetness = WetnessOverride ?? state.Wetness;
         Rain = RainOverride ?? state.Rain;
@@ -58,7 +58,7 @@ internal sealed class WeatherSurfaces : IDisposable
         Dust = d;
     }
 
-    public void Dispose() => noise?.Dispose();
+    public void Dispose() => _noise?.Dispose();
 }
 
 

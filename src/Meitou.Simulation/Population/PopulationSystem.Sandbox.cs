@@ -8,7 +8,7 @@ namespace Meitou.Simulation.Population;
 public sealed partial class PopulationSystem
 {
     /// <summary>Characters the F10 debug menu has spawned (<see cref="DebugSpawn"/>): each one's look variant.</summary>
-    int debugSpawns;
+    int _debugSpawns;
 
     /// <summary>
     /// The animation sandbox's spawn (the game host's <c>--sandbox</c>): one character made from <paramref name="recordId"/> at a place, alone in a squad of its own, standing idle.
@@ -21,17 +21,17 @@ public sealed partial class PopulationSystem
     public CharacterAppearance? SandboxLook(ulong seed, string recordId, bool player, int variant, int faction)
     {
         ulong key = Rng.Mix(SeedSalts.PlayerStart ^ Rng.StableHash(recordId) ^ (player ? 1UL : 2UL) ^ ((ulong)variant << 8));
-        return data.Appearances?.Create(recordId, data.Factions[faction].Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF));
+        return _data.Appearances?.Create(recordId, _data.Factions[faction].Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF));
     }
 
     public CharacterId SpawnSandbox(World world, string recordId, Vector2 at, bool player, float yaw = 0, int variant = 0, int? faction = null)
     {
         int chosen = SandboxFaction(player, faction);
         // An animal (ANIMAL_CHARACTER) has its species' shared look (nothing rolled); it is an adult (age 1).
-        bool animal = data.Db.Find(recordId) is { Type: Meitou.Data.Fcs.FcsRecordType.ANIMAL_CHARACTER };
+        bool animal = _data.Db.Find(recordId) is { Type: Meitou.Data.Fcs.FcsRecordType.AnimalCharacter };
         CharacterAppearance? look = SandboxLook(world.Seed, recordId, player, variant, chosen);
         var member = new MemberPlan(recordId, SquadRole.Leader, 0, default, animal, 1);
-        var template = new SquadTemplate { Id = "sandbox " + recordId, Name = data.Db.Find(recordId)?.Name ?? recordId };
+        var template = new SquadTemplate { Id = "sandbox " + recordId, Name = _data.Db.Find(recordId)?.Name ?? recordId };
         var plan = new SquadPlan(template, [member], [], []);
         var built = new BuiltSquad(plan, at, chosen, [new BuiltMember(member, look)]);
         bool playerSquad = player && variant == 0 && faction is null;
@@ -39,8 +39,8 @@ public sealed partial class PopulationSystem
         var id = squad.Leader;
         if (playerSquad)
         {
-            world.Player.Faction = data.PlayerFaction;
-            world.Player.KnownFactions = data.KnownAtNewGame();
+            world.Player.Faction = _data.PlayerFaction;
+            world.Player.KnownFactions = _data.KnownAtNewGame();
             world.Player.Squad = squad.Id;
             world.Player.Selection.Clear();
         }
@@ -50,13 +50,13 @@ public sealed partial class PopulationSystem
     /// <summary><see cref="SpawnSandbox"/>'s faction: <paramref name="faction"/>, else the player's, else (an NPC) the first faction hostile to the player's.</summary>
     int SandboxFaction(bool player, int? faction)
     {
-        if (data.PlayerFaction < 0) throw new InvalidOperationException("the game data has no player faction (Nameless)");
-        int chosen = faction ?? data.PlayerFaction;
+        if (_data.PlayerFaction < 0) throw new InvalidOperationException("the game data has no player faction (Nameless)");
+        int chosen = faction ?? _data.PlayerFaction;
         if (!player && faction is null)
         {
-            for (int f = 0; f < data.Factions.Count; f++)
-                if (f != data.PlayerFaction && data.Relations.Get(f, data.PlayerFaction) <= FactionRelations.HostileThreshold) { chosen = f; break; }
-            if (chosen == data.PlayerFaction) chosen = data.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.i != data.PlayerFaction).i;
+            for (int f = 0; f < _data.Factions.Count; f++)
+                if (f != _data.PlayerFaction && _data.Relations.Get(f, _data.PlayerFaction) <= FactionRelations.HostileThreshold) { chosen = f; break; }
+            if (chosen == _data.PlayerFaction) chosen = _data.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.i != _data.PlayerFaction).i;
         }
         return chosen;
     }
@@ -69,7 +69,7 @@ public sealed partial class PopulationSystem
     public IReadOnlyList<CharacterId> SpawnSandboxSquad(World world, string recordId, Vector2 at, IReadOnlyList<Vector2> offsets, float yaw, int firstVariant, int? faction)
     {
         int chosen = SandboxFaction(false, faction);
-        bool animal = data.Db.Find(recordId) is { Type: Meitou.Data.Fcs.FcsRecordType.ANIMAL_CHARACTER };
+        bool animal = _data.Db.Find(recordId) is { Type: Meitou.Data.Fcs.FcsRecordType.AnimalCharacter };
         var members = new MemberPlan[offsets.Count];
         var built = new BuiltMember[offsets.Count];
         for (int i = 0; i < offsets.Count; i++)
@@ -77,7 +77,7 @@ public sealed partial class PopulationSystem
             members[i] = new MemberPlan(recordId, i == 0 ? SquadRole.Leader : SquadRole.Squad1, i, offsets[i], animal, 1);
             built[i] = new BuiltMember(members[i], SandboxLook(world.Seed, recordId, false, firstVariant + i, chosen));
         }
-        var template = new SquadTemplate { Id = "sandbox " + recordId, Name = data.Db.Find(recordId)?.Name ?? recordId };
+        var template = new SquadTemplate { Id = "sandbox " + recordId, Name = _data.Db.Find(recordId)?.Name ?? recordId };
         var squad = SpawnSquad(world, new BuiltSquad(new SquadPlan(template, members, [], []), at, chosen, [.. built]), null, 100, idle: true, yaw: yaw);
         return squad.Members;
     }

@@ -46,7 +46,7 @@ public class MovementTests
         using var w = Flat();
         var here = Add(w, new(0, 300, 0));
         var there = Add(w, new(9000, 300, 0));
-        w.LoadedZones = new HashSet<Meitou.Data.World.ZoneCoordinate> { Meitou.Data.World.WorldLayout.ZoneOf(0, 0) };
+        w.LoadedZones = new HashSet<Meitou.Data.World.ZoneCoordinate> { Data.World.WorldLayout.ZoneOf(0, 0) };
         w.Commands.Enqueue(new MoveOrder([here], new Vector3(0, 0, 400)) { Tick = 0 });
         w.Commands.Enqueue(new MoveOrder([there], new Vector3(9000, 0, 400)) { Tick = 0 });
         w.RunTicks(60);

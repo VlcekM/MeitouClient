@@ -152,7 +152,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     /// <summary>
     /// The skeleton rigs, to know which clips a body can play (<see cref="Plays"/>); null: every clip plays (tests, headless worlds).
     /// </summary>
-    public Meitou.Data.Characters.CharacterRigs? Rigs { get; init; }
+    public CharacterRigs? Rigs { get; init; }
 
     /// <summary>
     /// Whether the character's skeleton has the clip of definition <paramref name="index"/>. <b>Verified</b> (<c>FUN_1405b5c30</c>, the layer manager's update): a layer whose animation
@@ -167,7 +167,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         return known > 0;
     }
     /// <summary>The ragdolls (null: none; the fall and lying clips stand in for them). Read in the parallel phase: the last tick's state.</summary>
-    public Meitou.Simulation.Ragdolls.IRagdollState? Ragdolls { get; set; }
+    public Ragdolls.IRagdollState? Ragdolls { get; set; }
 
     /// <summary>The clip a knocked-out or dead character lies in: <c>sleeponfloor</c>, -1 when the data has none.</summary>
     int LyingClip { get; } = library.IndexOf("sleeponfloor");
@@ -175,8 +175,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     int TreatingClip { get; } = library.IndexOf("medic");
     int RestingClip { get; } = library.IndexOf("sitting idle");
     // The chairs' sitting clips by record name (looked up on every worker).
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> sitClips = new(StringComparer.Ordinal);
-    int SitClipOf(string name) => sitClips.GetOrAdd(name, Library.IndexOf);
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _sitClips = new(StringComparer.Ordinal);
+    int SitClipOf(string name) => _sitClips.GetOrAdd(name, Library.IndexOf);
     /// <summary>The whole-body clip held while a character takes a building apart (<c>stonemine</c>, <b>Verified</b>: <c>Task_Dismantle</c>); -1 when the data has none.</summary>
     int DismantlingClip { get; } = library.IndexOf("stonemine");
     /// <summary>The carrier's lift clip (<c>shoulder lift left</c>, played backwards to put down) and a carried body's held pose (<c>carry me</c>, a category 3 record the library appends); -1 when the data has none.</summary>
@@ -214,7 +214,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         _ => -1,
     };
     // The combat system asks this system for its hit reaction clips (it owns the stun, this system the clips).
-    readonly bool stumbleHook = Hook(combat, library, lengths);
+    readonly bool _stumbleHook = Hook(combat, library, lengths);
 
     static bool Hook(CombatSystem? combat, AnimationLibrary library, AnimationLengths lengths)
     {
@@ -226,30 +226,30 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     }
 
     // The fall (without a ragdoll) and getting up.
-    readonly int fall = library.IndexOfAny("Dodge back fall"), getUp = library.IndexOf("standing up 3");
+    readonly int _fall = library.IndexOfAny("Dodge back fall"), _getUp = library.IndexOf("standing up 3");
     // The crossbow clips (RANGED records, played by the combat system's timing).
-    readonly int aimClip = library.IndexOf(AnimationLibrary.RangedAimRecord), defaultReload = library.IndexOf(AnimationLibrary.RangedReloadRecord);
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> reloadClips = new(StringComparer.Ordinal);
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> stanceClips = new(StringComparer.Ordinal);
+    readonly int _aimClip = library.IndexOf(AnimationLibrary.RangedAimRecord), _defaultReload = library.IndexOf(AnimationLibrary.RangedReloadRecord);
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _reloadClips = new(StringComparer.Ordinal);
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _stanceClips = new(StringComparer.Ordinal);
 
     /// <summary>The character's own idle stance (its appearance's <c>idle stance</c>, an ANIMATION record name), -1 when it has none or the data lacks it.</summary>
-    int OwnStance(CharacterCold cold) => cold.Appearance?.Body?.IdleStance is { } name ? stanceClips.GetOrAdd(name, static (key, lib) => lib.IndexOf(key), Library) : -1;
+    int OwnStance(CharacterCold cold) => cold.Appearance?.Body?.IdleStance is { } name ? _stanceClips.GetOrAdd(name, static (key, lib) => lib.IndexOf(key), Library) : -1;
 
     /// <summary>The reload clip of the character's crossbow: its record's <c>reload anim</c>, else <c>reload 1 phase</c>.</summary>
     int ReloadClip(CharacterCold cold) => cold.Fighter?.Crossbow is { Data.ReloadAnimId: { Length: > 0 } id }
-        ? reloadClips.GetOrAdd(id, static (key, lib) => lib.IndexOfRecord(key), Library) is >= 0 and var k ? k : defaultReload
-        : defaultReload;
+        ? _reloadClips.GetOrAdd(id, static (key, lib) => lib.IndexOfRecord(key), Library) is >= 0 and var k ? k : _defaultReload
+        : _defaultReload;
 
     // Scratch lists of the thread running a partition, kept between ticks (Update clears them on entry).
-    [ThreadStatic] static List<(int Index, float Weight)>? lowerScratch, upperScratch;
+    [ThreadStatic] static List<(int Index, float Weight)>? s_lowerScratch, s_upperScratch;
 
     public void Act(World world, Partition part, EffectBuffer effects)
     {
         var table = world.Characters;
         var prev = table.Previous;
         var next = table.Next;
-        var wantedLower = lowerScratch ??= [];
-        var wantedUpper = upperScratch ??= [];
+        var wantedLower = s_lowerScratch ??= [];
+        var wantedUpper = s_upperScratch ??= [];
         for (int i = part.Start; i < part.End; i++)
         {
             if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
@@ -352,8 +352,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
             // half, the reload plays the crossbow's own "reload anim" record (else "reload 1 phase") stretched over the reload time.
             (technique, progress) = pose.Pose switch
             {
-                RangedPose.Aim => (aimClip, pose.Progress * 0.5f),
-                RangedPose.Shot => (aimClip, 0.5f + pose.Progress * 0.5f),
+                RangedPose.Aim => (_aimClip, pose.Progress * 0.5f),
+                RangedPose.Shot => (_aimClip, 0.5f + pose.Progress * 0.5f),
                 _ => (ReloadClip(cold), pose.Progress),
             };
         }
@@ -438,19 +438,19 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         // (docs/game/locks.md "Cages and beds": a captive lies in a cage or stands on a pole, and an awake one stands at once).
         if (inCage) a.Action = -1;
         // A ragdoll falls instead; one in a bed lies on; one already held in a cage takes the cage's own out-cold pose (its `animation KO`) at once.
-        if (down && !a.WasDown && !carried && !ragdoll.Has && !inBed && !inCage) StartAction(a, fall, false);
+        if (down && !a.WasDown && !carried && !ragdoll.Has && !inBed && !inCage) StartAction(a, _fall, false);
         if (carried) a.Action = -1;   // held on the shoulder: no falling or getting up
         // Waking with a leg down there is nothing to get up on, and one staying low does not stand: the original's get-up ends with the bone blend and the posture's idle
         // follows (docs/game/ragdolls.md "Getting up"). Waking in a bed it lies on (engine choice); one held in a cage or on a pole stands up at once, no get-up clip.
         else if (!down && a.WasDown && (crawling || inBed || inCage || cold.Medical is { StayingLow: true })) a.Action = -1;
         else if (!down && a.WasDown)
         {
-            StartAction(a, getUp, false);
+            StartAction(a, _getUp, false);
             // Out of a ragdoll the clip waits at its first key while the bones blend into it (docs/game/ragdolls.md "Getting up").
             if (ragdoll.WasWhole) a.ActionTime = -Meitou.Simulation.Ragdolls.RagdollSystem.GetUpBlend;
         }
         // The leg back up or Stand Up from staying low: posture 2 or 1 ends in 0 and the posture setter queues the get-up task 65 (FUN_1405c7e20), which plays `standing up 3`.
-        else if (a.WasCrawling && !down && !carried && !inBed && !inCage && cold.Medical is { Crawling: false, Prone: false }) StartAction(a, getUp, false);
+        else if (a.WasCrawling && !down && !carried && !inBed && !inCage && cold.Medical is { Crawling: false, Prone: false }) StartAction(a, _getUp, false);
         a.WasDown = down;
         a.WasCrawling = cold.Medical is { Crawling: true } or { StayingLow: true };
         // The hit reaction the combat system picked (it holds the character helpless for the clip's length; see ChooseStumble).
@@ -469,7 +469,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         {
             var d = Library.Definitions[a.Action];
             a.ActionTime += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : 1);
-            if (a.ActionTime >= Lengths.Of(d.Clip) * (a.Action == getUp ? GetUpEnd : 1) && !(down && a.Action == fall && LyingClip < 0)) a.Action = -1;
+            if (a.ActionTime >= Lengths.Of(d.Clip) * (a.Action == _getUp ? GetUpEnd : 1) && !(down && a.Action == _fall && LyingClip < 0)) a.Action = -1;
         }
 
         var wanted = lower;
@@ -618,7 +618,7 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     }
 
     /// <summary>The clip direction of a crouch goal the character runs: 1 for CROUCH (27), -1 for STAND_UP (28), 0 for any other.</summary>
-    static int CrouchGoal(CharacterCold cold) => cold.Ai is { Behaviour: Ai.AiBehaviour.Crouch, Goal: { } goal } ? goal.Task.Type == Meitou.Data.Gameplay.Ai.TaskType.CROUCH ? 1 : -1 : 0;
+    static int CrouchGoal(CharacterCold cold) => cold.Ai is { Behaviour: Ai.AiBehaviour.Crouch, Goal: { } goal } ? goal.Task.Type == Data.Gameplay.Ai.TaskType.Crouch ? 1 : -1 : 0;
 
     /// <summary>The share of <c>squat T</c> past which Task_Crouch sets the crouched byte (FUN_140346440, the float at 14168a25c, 0.9).</summary>
     const float CrouchSet = 0.9f;
@@ -819,13 +819,13 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     /// <summary>An animal's clips with those its skeleton lacks taken out, and the fall and lying clip chosen (<see cref="PlanOf"/>).</summary>
     sealed record AnimalPlan(int[] Movement, IReadOnlyList<(int Index, float Weight)> Idles, int Fall, int Lying, AnimationLengths Lengths);
 
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, AnimalPlan> animalPlans = new(StringComparer.Ordinal);
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, AnimalPlan> _animalPlans = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The plan of an animal's clip set: the race's skeleton lengths (<see cref="AnimationLengths.For"/>), and when that skeleton was read, only the clips it has (a record whose
     /// clip the skeleton lacks would pose nothing: the skimmer's <c>idle1</c>); the first fall and lying candidates it has.
     /// </summary>
-    AnimalPlan PlanOf(AnimalClips clips) => animalPlans.GetOrAdd(clips.RecordId, static (_, s) =>
+    AnimalPlan PlanOf(AnimalClips clips) => _animalPlans.GetOrAdd(clips.RecordId, static (_, s) =>
     {
         var (self, c) = s;
         var lengths = self.Lengths.For(c.RaceId);
@@ -1016,7 +1016,11 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
     {
         var stance = new AnimationStance
         {
-            Right = new HandHold(cold.DrawnWeapon), Combat = cold.InCombat, Stealth = (cold.Orders & CharacterOrders.Sneak) != 0, CarryingLeft = !cold.Carrying.IsNone, BeingCarried = !cold.CarriedBy.IsNone,
+            Right = new HandHold(cold.DrawnWeapon),
+            Combat = cold.InCombat,
+            Stealth = (cold.Orders & CharacterOrders.Sneak) != 0,
+            CarryingLeft = !cold.Carrying.IsNone,
+            BeingCarried = !cold.CarriedBy.IsNone,
             Prone = cold.CarriedBy.IsNone && cold.Medical is { Prone: true },   // the crawl records are prone; no standing clip (stumbles included) fits a crawler
             Crouched = cold.Crouched && !(cold.CarriedBy.IsNone && cold.Medical is { Prone: true }),   // never together with prone (FUN_14051dda0)
         };
@@ -1025,8 +1029,8 @@ public sealed class AnimationSystem(AnimationLibrary library, AnimationLengths l
         float left = 100, right = 100;
         foreach (var part in body.PartSpan)
         {
-            if (part.Template.Type != Meitou.Data.Gameplay.Bodies.BodyPartType.Leg) continue;
-            if (part.Template.Side == Meitou.Data.Gameplay.Bodies.BodySide.Left) left = MathF.Min(left, part.Fraction * 100);
+            if (part.Template.Type != Data.Gameplay.Bodies.BodyPartType.Leg) continue;
+            if (part.Template.Side == Data.Gameplay.Bodies.BodySide.Left) left = MathF.Min(left, part.Fraction * 100);
             else right = MathF.Min(right, part.Fraction * 100);
         }
         return stance with { LeftLeg = left, RightLeg = right };

@@ -52,8 +52,15 @@ public sealed partial class AiSystem
         foreach (var s in home.Spots) reach = MathF.Max(reach, Vector2.Distance(Flat(s.Position), Flat(home.Position)) + 10);
         var scan = new StrangerScan
         {
-            World = world, Relations = Relations, Table = table, Me = me, Home = home.Key, Self = slot, Faction = me.Faction,
-            Player = me.Faction == world.Player.Faction ? -1 : world.Player.Faction, Outdoor = AggroSystem.RangeOf(me, AggroSystem.OutdoorSight),
+            World = world,
+            Relations = Relations,
+            Table = table,
+            Me = me,
+            Home = home.Key,
+            Self = slot,
+            Faction = me.Faction,
+            Player = me.Faction == world.Player.Faction ? -1 : world.Player.Faction,
+            Outdoor = AggroSystem.RangeOf(me, AggroSystem.OutdoorSight),
         };
         world.Grid.Query(home.Position.X, home.Position.Z, reach * 1.5f, ref scan, static (int other, ref StrangerScan st) =>
         {

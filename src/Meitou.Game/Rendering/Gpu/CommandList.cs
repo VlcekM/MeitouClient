@@ -29,70 +29,70 @@ public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget De
 /// </summary>
 public sealed unsafe class CommandList : IGpuCommandList
 {
-    readonly Vk vk;
-    readonly GpuContext ctx;
-    readonly VulkanDevice device;
-    readonly KhrPushDescriptor? push;
-    readonly ExtDebugUtils? debug;
-    readonly Dictionary<string, nint> labels = [];
-    Pipeline lastPipeline;
-    PipelineBindPoint lastPoint;
-    GpuBufferBinding lastIndex;
-    IndexKind lastIndexType;
-    readonly Buffer[] lastVertex = new Buffer[32];
-    readonly ulong[] lastVertexOffset = new ulong[32];
-    uint vertexValid;   // bit per binding whose last* entry is known
+    readonly Vk _vk;
+    readonly GpuContext _ctx;
+    readonly VulkanDevice _device;
+    readonly KhrPushDescriptor? _push;
+    readonly ExtDebugUtils? _debug;
+    readonly Dictionary<string, nint> _labels = [];
+    Pipeline _lastPipeline;
+    PipelineBindPoint _lastPoint;
+    GpuBufferBinding _lastIndex;
+    IndexKind _lastIndexType;
+    readonly Buffer[] _lastVertex = new Buffer[32];
+    readonly ulong[] _lastVertexOffset = new ulong[32];
+    uint _vertexValid;   // bit per binding whose last* entry is known
 
     // The per-draw and per-segment commands, called through the device's own entry points (vkGetDeviceProcAddr: the driver's, or the top
     // layer's when validation is on) instead of Silk.NET's per-call vtable lookup and cast (docs/renderer-native.md 9: ~0.02 us a draw).
     // The same commands with the same arguments; nothing else changes.
-    readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, Pipeline, void> cmdBindPipeline;
-    readonly delegate* unmanaged<CommandBuffer, uint, uint, Viewport*, void> cmdSetViewport;
-    readonly delegate* unmanaged<CommandBuffer, uint, uint, Rect2D*, void> cmdSetScissor;
-    readonly delegate* unmanaged<CommandBuffer, CullModeFlags, void> cmdSetCullMode;
-    readonly delegate* unmanaged<CommandBuffer, FrontFace, void> cmdSetFrontFace;
-    readonly delegate* unmanaged<CommandBuffer, Bool32, void> cmdSetDepthTestEnable, cmdSetDepthWriteEnable, cmdSetDepthBiasEnable;
-    readonly delegate* unmanaged<CommandBuffer, CompareOp, void> cmdSetDepthCompareOp;
-    readonly delegate* unmanaged<CommandBuffer, float, float, float, void> cmdSetDepthBias;
-    readonly delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void> cmdBindVertexBuffers;
-    readonly delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void> cmdBindIndexBuffer;
-    readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*, void> cmdBindDescriptorSets;
-    readonly delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void> cmdPushConstants;
-    readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void> cmdDraw;
-    readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void> cmdDrawIndexed;
-    readonly delegate* unmanaged<CommandBuffer, Buffer, ulong, uint, uint, void> cmdDrawIndexedIndirect;
+    readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, Pipeline, void> _cmdBindPipeline;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, Viewport*, void> _cmdSetViewport;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, Rect2D*, void> _cmdSetScissor;
+    readonly delegate* unmanaged<CommandBuffer, CullModeFlags, void> _cmdSetCullMode;
+    readonly delegate* unmanaged<CommandBuffer, FrontFace, void> _cmdSetFrontFace;
+    readonly delegate* unmanaged<CommandBuffer, Bool32, void> _cmdSetDepthTestEnable, _cmdSetDepthWriteEnable, _cmdSetDepthBiasEnable;
+    readonly delegate* unmanaged<CommandBuffer, CompareOp, void> _cmdSetDepthCompareOp;
+    readonly delegate* unmanaged<CommandBuffer, float, float, float, void> _cmdSetDepthBias;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void> _cmdBindVertexBuffers;
+    readonly delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void> _cmdBindIndexBuffer;
+    readonly delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*, void> _cmdBindDescriptorSets;
+    readonly delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void> _cmdPushConstants;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void> _cmdDraw;
+    readonly delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void> _cmdDrawIndexed;
+    readonly delegate* unmanaged<CommandBuffer, Buffer, ulong, uint, uint, void> _cmdDrawIndexedIndirect;
 
     internal CommandList(GpuContext ctx, GpuStats stats)
     {
-        this.ctx = ctx;
-        device = ctx.Device;
-        vk = device.Vk;
+        this._ctx = ctx;
+        _device = ctx.Device;
+        _vk = _device.Vk;
         Stats = stats;
-        if (device.HasPushDescriptor) vk.TryGetDeviceExtension(device.Instance, device.Device, out push);
-        debug = device.DebugUtils;
-        cmdBindPipeline = (delegate* unmanaged<CommandBuffer, PipelineBindPoint, Pipeline, void>)Proc("vkCmdBindPipeline");
-        cmdSetViewport = (delegate* unmanaged<CommandBuffer, uint, uint, Viewport*, void>)Proc("vkCmdSetViewport");
-        cmdSetScissor = (delegate* unmanaged<CommandBuffer, uint, uint, Rect2D*, void>)Proc("vkCmdSetScissor");
-        cmdSetCullMode = (delegate* unmanaged<CommandBuffer, CullModeFlags, void>)Proc("vkCmdSetCullMode");
-        cmdSetFrontFace = (delegate* unmanaged<CommandBuffer, FrontFace, void>)Proc("vkCmdSetFrontFace");
-        cmdSetDepthTestEnable = (delegate* unmanaged<CommandBuffer, Bool32, void>)Proc("vkCmdSetDepthTestEnable");
-        cmdSetDepthWriteEnable = (delegate* unmanaged<CommandBuffer, Bool32, void>)Proc("vkCmdSetDepthWriteEnable");
-        cmdSetDepthBiasEnable = (delegate* unmanaged<CommandBuffer, Bool32, void>)Proc("vkCmdSetDepthBiasEnable");
-        cmdSetDepthCompareOp = (delegate* unmanaged<CommandBuffer, CompareOp, void>)Proc("vkCmdSetDepthCompareOp");
-        cmdSetDepthBias = (delegate* unmanaged<CommandBuffer, float, float, float, void>)Proc("vkCmdSetDepthBias");
-        cmdBindVertexBuffers = (delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void>)Proc("vkCmdBindVertexBuffers");
-        cmdBindIndexBuffer = (delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void>)Proc("vkCmdBindIndexBuffer");
-        cmdBindDescriptorSets = (delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*, void>)Proc("vkCmdBindDescriptorSets");
-        cmdPushConstants = (delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void>)Proc("vkCmdPushConstants");
-        cmdDraw = (delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void>)Proc("vkCmdDraw");
-        cmdDrawIndexed = (delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void>)Proc("vkCmdDrawIndexed");
-        cmdDrawIndexedIndirect = (delegate* unmanaged<CommandBuffer, Buffer, ulong, uint, uint, void>)Proc("vkCmdDrawIndexedIndirect");
+        if (_device.HasPushDescriptor) _vk.TryGetDeviceExtension(_device.Instance, _device.Device, out _push);
+        _debug = _device.DebugUtils;
+        _cmdBindPipeline = (delegate* unmanaged<CommandBuffer, PipelineBindPoint, Pipeline, void>)Proc("vkCmdBindPipeline");
+        _cmdSetViewport = (delegate* unmanaged<CommandBuffer, uint, uint, Viewport*, void>)Proc("vkCmdSetViewport");
+        _cmdSetScissor = (delegate* unmanaged<CommandBuffer, uint, uint, Rect2D*, void>)Proc("vkCmdSetScissor");
+        _cmdSetCullMode = (delegate* unmanaged<CommandBuffer, CullModeFlags, void>)Proc("vkCmdSetCullMode");
+        _cmdSetFrontFace = (delegate* unmanaged<CommandBuffer, FrontFace, void>)Proc("vkCmdSetFrontFace");
+        _cmdSetDepthTestEnable = (delegate* unmanaged<CommandBuffer, Bool32, void>)Proc("vkCmdSetDepthTestEnable");
+        _cmdSetDepthWriteEnable = (delegate* unmanaged<CommandBuffer, Bool32, void>)Proc("vkCmdSetDepthWriteEnable");
+        _cmdSetDepthBiasEnable = (delegate* unmanaged<CommandBuffer, Bool32, void>)Proc("vkCmdSetDepthBiasEnable");
+        _cmdSetDepthCompareOp = (delegate* unmanaged<CommandBuffer, CompareOp, void>)Proc("vkCmdSetDepthCompareOp");
+        _cmdSetDepthBias = (delegate* unmanaged<CommandBuffer, float, float, float, void>)Proc("vkCmdSetDepthBias");
+        _cmdBindVertexBuffers = (delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void>)Proc("vkCmdBindVertexBuffers");
+        _cmdBindIndexBuffer = (delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void>)Proc("vkCmdBindIndexBuffer");
+        _cmdBindDescriptorSets = (delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*, void>)Proc("vkCmdBindDescriptorSets");
+        _cmdPushConstants = (delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void>)Proc("vkCmdPushConstants");
+        _cmdDraw = (delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void>)Proc("vkCmdDraw");
+        _cmdDrawIndexed = (delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void>)Proc("vkCmdDrawIndexed");
+        _cmdDrawIndexedIndirect = (delegate* unmanaged<CommandBuffer, Buffer, ulong, uint, uint, void>)Proc("vkCmdDrawIndexedIndirect");
     }
 
     /// <summary>A device-level command entry point (all of them core in Vulkan 1.3, which the device requires).</summary>
     void* Proc(string name)
     {
-        var p = (void*)vk.GetDeviceProcAddr(device.Device, name).Handle;
+        var p = (void*)_vk.GetDeviceProcAddr(_device.Device, name).Handle;
         return p != null ? p : throw new InvalidOperationException($"{name} not found on the device");
     }
 
@@ -106,9 +106,9 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// <summary>Forgets everything the redundancy filters and callers believed was bound (after VkGl recorded into the same buffer).</summary>
     public void Invalidate()
     {
-        lastPipeline = default;
-        lastIndex = default;
-        vertexValid = 0;
+        _lastPipeline = default;
+        _lastIndex = default;
+        _vertexValid = 0;
         BoundProgram = null;
         Epoch++;
     }
@@ -123,26 +123,37 @@ public sealed unsafe class CommandList : IGpuCommandList
         var colours = stackalloc RenderingAttachmentInfo[2];
         colours[0] = new RenderingAttachmentInfo
         {
-            SType = StructureType.RenderingAttachmentInfo, ImageView = device.ViewAt(d.Colour.View.Index), ImageLayout = ImageLayout.General,
-            LoadOp = GlConventions.VkLoadOp(d.Colour.Load), StoreOp = AttachmentStoreOp.Store,
+            SType = StructureType.RenderingAttachmentInfo,
+            ImageView = _device.ViewAt(d.Colour.View.Index),
+            ImageLayout = ImageLayout.General,
+            LoadOp = GlConventions.VkLoadOp(d.Colour.Load),
+            StoreOp = AttachmentStoreOp.Store,
             ClearValue = new ClearValue(new ClearColorValue(d.Colour.Clear.R, d.Colour.Clear.G, d.Colour.Clear.B, d.Colour.Clear.A)),
         };
         colours[1] = new RenderingAttachmentInfo
         {
-            SType = StructureType.RenderingAttachmentInfo, ImageView = device.ViewAt(d.Extra.View.Index), ImageLayout = ImageLayout.General,
-            LoadOp = GlConventions.VkLoadOp(d.Extra.Load), StoreOp = AttachmentStoreOp.Store,
+            SType = StructureType.RenderingAttachmentInfo,
+            ImageView = _device.ViewAt(d.Extra.View.Index),
+            ImageLayout = ImageLayout.General,
+            LoadOp = GlConventions.VkLoadOp(d.Extra.Load),
+            StoreOp = AttachmentStoreOp.Store,
             ClearValue = new ClearValue(new ClearColorValue(d.Extra.Clear.R, d.Extra.Clear.G, d.Extra.Clear.B, d.Extra.Clear.A)),
         };
         uint colourCount = d.Colour.IsNull ? 0u : d.Extra.IsNull ? 1u : 2u;
         var depth = new RenderingAttachmentInfo
         {
-            SType = StructureType.RenderingAttachmentInfo, ImageView = device.ViewAt(d.Depth.View.Index), ImageLayout = ImageLayout.General,
-            LoadOp = GlConventions.VkLoadOp(d.Depth.Load), StoreOp = AttachmentStoreOp.Store,
+            SType = StructureType.RenderingAttachmentInfo,
+            ImageView = _device.ViewAt(d.Depth.View.Index),
+            ImageLayout = ImageLayout.General,
+            LoadOp = GlConventions.VkLoadOp(d.Depth.Load),
+            StoreOp = AttachmentStoreOp.Store,
             ClearValue = new ClearValue(depthStencil: new ClearDepthStencilValue(d.Depth.DepthClear, 0)),
         };
         var rate = new RenderingFragmentShadingRateAttachmentInfoKHR
         {
-            SType = StructureType.RenderingFragmentShadingRateAttachmentInfoKhr, ImageView = device.ViewAt(d.ShadingRate.Index), ImageLayout = ImageLayout.General,
+            SType = StructureType.RenderingFragmentShadingRateAttachmentInfoKhr,
+            ImageView = _device.ViewAt(d.ShadingRate.Index),
+            ImageLayout = ImageLayout.General,
             ShadingRateAttachmentTexelSize = new Extent2D((uint)d.ShadingRateTexel, (uint)d.ShadingRateTexel),
         };
         var info = new RenderingInfo
@@ -152,23 +163,24 @@ public sealed unsafe class CommandList : IGpuCommandList
             Flags = secondaries ? RenderingFlags.ContentsSecondaryCommandBuffersBit : 0,
             RenderArea = new Rect2D(new Offset2D(d.X, d.Y), new Extent2D((uint)d.Width, (uint)d.Height)),
             LayerCount = 1,
-            ColorAttachmentCount = colourCount, PColorAttachments = colourCount == 0 ? null : colours,
+            ColorAttachmentCount = colourCount,
+            PColorAttachments = colourCount == 0 ? null : colours,
             PDepthAttachment = d.Depth.IsNull ? null : &depth,
         };
         var stats = PipelineStatsMeter.Current;   // the bench's counting frames only
         stats?.Rendering(this, before: true);
-        vk.CmdBeginRendering(Handle, &info);
+        _vk.CmdBeginRendering(Handle, &info);
         stats?.Rendering(this, before: false);
-        lastPipeline = default;
-        lastIndex = default;
-        vertexValid = 0;
+        _lastPipeline = default;
+        _lastIndex = default;
+        _vertexValid = 0;
     }
 
     public void EndRendering()
     {
         var stats = PipelineStatsMeter.Current;
         stats?.Rendering(this, before: true);
-        vk.CmdEndRendering(Handle);
+        _vk.CmdEndRendering(Handle);
         stats?.Rendering(this, before: false);
     }
 
@@ -176,7 +188,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     public void ExecuteCommands(ReadOnlySpan<CommandBuffer> buffers)
     {
         if (buffers.IsEmpty) return;
-        fixed (CommandBuffer* p = buffers) vk.CmdExecuteCommands(Handle, (uint)buffers.Length, p);
+        fixed (CommandBuffer* p = buffers) _vk.CmdExecuteCommands(Handle, (uint)buffers.Length, p);
         Invalidate();
     }
 
@@ -187,8 +199,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         var rendering = new CommandBufferInheritanceRenderingInfo
         {
             SType = StructureType.CommandBufferInheritanceRenderingInfo,
-            ColorAttachmentCount = formats.Colour == InternalFormat.None ? 0u : formats.Extra == InternalFormat.None ? 1u : 2u, PColorAttachmentFormats = colours,
-            DepthAttachmentFormat = GlConventions.VkFormatOrUndefined(formats.Depth), StencilAttachmentFormat = Format.Undefined,
+            ColorAttachmentCount = formats.Colour == InternalFormat.None ? 0u : formats.Extra == InternalFormat.None ? 1u : 2u,
+            PColorAttachmentFormats = colours,
+            DepthAttachmentFormat = GlConventions.VkFormatOrUndefined(formats.Depth),
+            StencilAttachmentFormat = Format.Undefined,
             RasterizationSamples = (SampleCountFlags)Math.Max(formats.Samples, 1),
         };
         var inheritance = new CommandBufferInheritanceInfo { SType = StructureType.CommandBufferInheritanceInfo, PNext = &rendering };
@@ -198,11 +212,11 @@ public sealed unsafe class CommandList : IGpuCommandList
             Flags = CommandBufferUsageFlags.RenderPassContinueBit | CommandBufferUsageFlags.OneTimeSubmitBit,
             PInheritanceInfo = &inheritance,
         };
-        VulkanException.Check(vk.BeginCommandBuffer(Handle, &begin), "vkBeginCommandBuffer");
+        VulkanException.Check(_vk.BeginCommandBuffer(Handle, &begin), "vkBeginCommandBuffer");
         Invalidate();
     }
 
-    internal void EndSecondary() => VulkanException.Check(vk.EndCommandBuffer(Handle), "vkEndCommandBuffer");
+    internal void EndSecondary() => VulkanException.Check(_vk.EndCommandBuffer(Handle), "vkEndCommandBuffer");
 
     /// <summary>Clears the depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>; a shadow atlas tile, a depth slice).</summary>
     public void ClearDepth(float value, PixelRect rect) => Clear(false, default, true, value, rect);
@@ -217,7 +231,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         if (depth) attachments[n++] = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(depthValue, 0)));
         if (n == 0) return;
         var area = new ClearRect(GlConventions.VkRect(rect), 0, 1);
-        vk.CmdClearAttachments(Handle, n, attachments, 1, &area);
+        _vk.CmdClearAttachments(Handle, n, attachments, 1, &area);
     }
 
     /// <summary>The bench's triangle size histogram (<c>--bench-tris</c>, <see cref="TriangleCounter"/>): while set, every pipeline bound is swapped for its counting variant. Null (a null check per bind) otherwise.</summary>
@@ -226,48 +240,48 @@ public sealed unsafe class CommandList : IGpuCommandList
     public void BindPipeline(GpuPipeline pipeline)
     {
         if (PipelineSubstitute is { } substitute) pipeline = substitute(pipeline);
-        var handle = ctx.Pipelines.Handle(in pipeline);
-        if (handle.Handle == lastPipeline.Handle && lastPoint == PipelineBindPoint.Graphics) return;
-        cmdBindPipeline(Handle, PipelineBindPoint.Graphics, handle);
-        (lastPipeline, lastPoint) = (handle, PipelineBindPoint.Graphics);
+        var handle = _ctx.Pipelines.Handle(in pipeline);
+        if (handle.Handle == _lastPipeline.Handle && _lastPoint == PipelineBindPoint.Graphics) return;
+        _cmdBindPipeline(Handle, PipelineBindPoint.Graphics, handle);
+        (_lastPipeline, _lastPoint) = (handle, PipelineBindPoint.Graphics);
         Stats.PipelinesBound++;
     }
 
     public void SetViewport(in PixelViewport v)
     {
         var vk = GlConventions.VkViewport(v);
-        cmdSetViewport(Handle, 0, 1, &vk);
+        _cmdSetViewport(Handle, 0, 1, &vk);
     }
 
     public void SetScissor(in PixelRect r)
     {
         var vk = GlConventions.VkRect(r);
-        cmdSetScissor(Handle, 0, 1, &vk);
+        _cmdSetScissor(Handle, 0, 1, &vk);
     }
 
     public void SetRaster(CullMode cull, FrontFaceDirection front)
     {
-        cmdSetCullMode(Handle, GlConventions.VkCull(cull));
-        cmdSetFrontFace(Handle, GlConventions.VkFrontFace(front));
+        _cmdSetCullMode(Handle, GlConventions.VkCull(cull));
+        _cmdSetFrontFace(Handle, GlConventions.VkFrontFace(front));
     }
 
     /// <summary>The front face alone (a draw that turns the winding round, the cull mode left as set).</summary>
     public void SetFrontFace(FrontFaceDirection front)
     {
-        cmdSetFrontFace(Handle, GlConventions.VkFrontFace(front));
+        _cmdSetFrontFace(Handle, GlConventions.VkFrontFace(front));
     }
 
     public void SetDepth(bool test, bool write, DepthFunction op)
     {
-        cmdSetDepthTestEnable(Handle, test);
-        cmdSetDepthWriteEnable(Handle, write);
-        cmdSetDepthCompareOp(Handle, GlConventions.CompareOp(op));
+        _cmdSetDepthTestEnable(Handle, test);
+        _cmdSetDepthWriteEnable(Handle, write);
+        _cmdSetDepthCompareOp(Handle, GlConventions.CompareOp(op));
     }
 
     public void SetDepthBias(bool enable, float constant, float slope)
     {
-        cmdSetDepthBiasEnable(Handle, enable);
-        cmdSetDepthBias(Handle, constant, 0, slope);
+        _cmdSetDepthBiasEnable(Handle, enable);
+        _cmdSetDepthBias(Handle, constant, 0, slope);
     }
 
     public void BindVertexBuffers(uint first, ReadOnlySpan<GpuBufferBinding> bindings)
@@ -279,50 +293,50 @@ public sealed unsafe class CommandList : IGpuCommandList
         {
             // One pass: compare with what is bound and gather the arguments; record only when a binding differs or is not known.
             uint mask = (n == 32 ? uint.MaxValue : (1u << n) - 1) << (int)first;
-            bool same = (vertexValid & mask) == mask;
+            bool same = (_vertexValid & mask) == mask;
             for (int i = 0; i < n; i++)
             {
                 ref readonly var bb = ref bindings[i];
-                buffers[i] = device.BufferAt(bb.Buffer.Index);
+                buffers[i] = _device.BufferAt(bb.Buffer.Index);
                 offsets[i] = bb.Offset;
                 uint b = first + (uint)i;
-                if (lastVertex[b].Handle != buffers[i].Handle || lastVertexOffset[b] != bb.Offset)
+                if (_lastVertex[b].Handle != buffers[i].Handle || _lastVertexOffset[b] != bb.Offset)
                 {
                     same = false;
-                    lastVertex[b] = buffers[i];
-                    lastVertexOffset[b] = bb.Offset;
+                    _lastVertex[b] = buffers[i];
+                    _lastVertexOffset[b] = bb.Offset;
                 }
             }
             if (same) return;
-            vertexValid |= mask;
+            _vertexValid |= mask;
         }
         else
             for (int i = 0; i < n; i++)
             {
-                buffers[i] = device.BufferAt(bindings[i].Buffer.Index);
+                buffers[i] = _device.BufferAt(bindings[i].Buffer.Index);
                 offsets[i] = bindings[i].Offset;
                 uint b = first + (uint)i;
-                if (b < 32) { lastVertex[b] = buffers[i]; lastVertexOffset[b] = offsets[i]; vertexValid |= 1u << (int)b; }
+                if (b < 32) { _lastVertex[b] = buffers[i]; _lastVertexOffset[b] = offsets[i]; _vertexValid |= 1u << (int)b; }
             }
-        cmdBindVertexBuffers(Handle, first, (uint)n, buffers, offsets);
+        _cmdBindVertexBuffers(Handle, first, (uint)n, buffers, offsets);
     }
 
     public void BindIndexBuffer(GpuBufferBinding binding, IndexKind type)
     {
-        var buffer = device.BufferAt(binding.Buffer.Index);
-        if (binding.Buffer.Index == lastIndex.Buffer.Index && binding.Offset == lastIndex.Offset && type == lastIndexType && lastIndex.Buffer.Index != 0) return;
-        cmdBindIndexBuffer(Handle, buffer, binding.Offset, GlConventions.VkIndexKind(type));
-        (lastIndex, lastIndexType) = (binding, type);
+        var buffer = _device.BufferAt(binding.Buffer.Index);
+        if (binding.Buffer.Index == _lastIndex.Buffer.Index && binding.Offset == _lastIndex.Offset && type == _lastIndexType && _lastIndex.Buffer.Index != 0) return;
+        _cmdBindIndexBuffer(Handle, buffer, binding.Offset, GlConventions.VkIndexKind(type));
+        (_lastIndex, _lastIndexType) = (binding, type);
     }
 
     /// <summary>Binds sets to a program (the layout comes from the program).</summary>
     public void BindSets(GpuProgram program, uint first, ReadOnlySpan<GpuSet> sets, ReadOnlySpan<uint> dynamicOffsets, GpuBindPoint point = GpuBindPoint.Graphics)
     {
         Span<DescriptorSet> resolved = stackalloc DescriptorSet[sets.Length];
-        for (int i = 0; i < sets.Length; i++) resolved[i] = device.SetAt(sets[i].Index);
+        for (int i = 0; i < sets.Length; i++) resolved[i] = _device.SetAt(sets[i].Index);
         fixed (DescriptorSet* ps = resolved)
         fixed (uint* po = dynamicOffsets)
-            cmdBindDescriptorSets(Handle, VkBindPoint(point), ctx.Shaders.Backend(program).Layout, first, (uint)sets.Length, ps, (uint)dynamicOffsets.Length, po);
+            _cmdBindDescriptorSets(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, first, (uint)sets.Length, ps, (uint)dynamicOffsets.Length, po);
     }
 
     static PipelineBindPoint VkBindPoint(GpuBindPoint point) => point == GpuBindPoint.Compute ? PipelineBindPoint.Compute : PipelineBindPoint.Graphics;
@@ -330,15 +344,15 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// <summary>Binds the bindless table to a program (the table is the context's).</summary>
     public void BindBindlessTable(GpuProgram program, uint set, GpuBindPoint point = GpuBindPoint.Graphics)
     {
-        var table = new GpuSet(ctx.Bindless.SetIndex);
+        var table = new GpuSet(_ctx.Bindless.SetIndex);
         BindSets(program, set, new ReadOnlySpan<GpuSet>(in table), [], point);
     }
 
     /// <summary>Pushes descriptors of set <paramref name="set"/> (legacy layout and compute; VK_KHR_push_descriptor).</summary>
     public void PushDescriptors(GpuProgram program, uint set, ReadOnlySpan<WriteDescriptorSet> writes, GpuBindPoint point = GpuBindPoint.Graphics)
     {
-        if (push is null) throw new InvalidOperationException("VK_KHR_push_descriptor is not available");
-        fixed (WriteDescriptorSet* pw = writes) push.CmdPushDescriptorSet(Handle, VkBindPoint(point), ctx.Shaders.Backend(program).Layout, set, (uint)writes.Length, pw);
+        if (_push is null) throw new InvalidOperationException("VK_KHR_push_descriptor is not available");
+        fixed (WriteDescriptorSet* pw = writes) _push.CmdPushDescriptorSet(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, set, (uint)writes.Length, pw);
         Stats.DescriptorPushes++;
     }
 
@@ -361,45 +375,45 @@ public sealed unsafe class CommandList : IGpuCommandList
             {
                 case GpuBindingKind.Sampled:
                 case GpuBindingKind.StorageImage:
-                    images[i] = new DescriptorImageInfo(device.SamplerAt(b.Texture.Sampler.Index), device.ViewAt(b.Texture.View.Index), ImageLayout.General);
+                    images[i] = new DescriptorImageInfo(_device.SamplerAt(b.Texture.Sampler.Index), _device.ViewAt(b.Texture.View.Index), ImageLayout.General);
                     writes[i].DescriptorType = b.Kind == GpuBindingKind.Sampled ? DescriptorType.CombinedImageSampler : DescriptorType.StorageImage;
                     writes[i].PImageInfo = &images[i];
                     break;
                 case GpuBindingKind.UniformBuffer:
-                    buffers[i] = new DescriptorBufferInfo(device.BufferAt(b.Buffer.Buffer.Index), b.Buffer.Offset, b.Buffer.Size);
+                    buffers[i] = new DescriptorBufferInfo(_device.BufferAt(b.Buffer.Buffer.Index), b.Buffer.Offset, b.Buffer.Size);
                     writes[i].DescriptorType = DescriptorType.UniformBuffer;
                     writes[i].PBufferInfo = &buffers[i];
                     break;
                 case GpuBindingKind.StorageBuffer:
-                    buffers[i] = new DescriptorBufferInfo(device.BufferAt(b.Buffer.Buffer.Index), b.Buffer.Offset, b.Buffer.Size);
+                    buffers[i] = new DescriptorBufferInfo(_device.BufferAt(b.Buffer.Buffer.Index), b.Buffer.Offset, b.Buffer.Size);
                     writes[i].DescriptorType = DescriptorType.StorageBuffer;
                     writes[i].PBufferInfo = &buffers[i];
                     break;
             }
         }
-        var vp = ctx.Shaders.Backend(program);
+        var vp = _ctx.Shaders.Backend(program);
         var point = vp.ComputeCode is not null ? PipelineBindPoint.Compute : PipelineBindPoint.Graphics;
         // Pushed only into a layout made for it (a set too large for the device's push limit, or not per draw, is not one).
-        if (push is not null && ctx.Shaders.Pushes(vp, set))
+        if (_push is not null && _ctx.Shaders.Pushes(vp, set))
         {
-            push.CmdPushDescriptorSet(Handle, point, vp.Layout, set, (uint)bindings.Length, writes);
+            _push.CmdPushDescriptorSet(Handle, point, vp.Layout, set, (uint)bindings.Length, writes);
             Stats.DescriptorPushes++;
             return;
         }
         // Otherwise the set is written and bound (the frame's pools free it when the slot comes round). Bound by its own handle, not
         // through the device's set table: a set per draw would grow the table every frame. Safe on a recording job's thread.
-        var allocated = ctx.Frame.AllocateSetAnyThread(vp.SetLayouts[set]);
+        var allocated = _ctx.Frame.AllocateSetAnyThread(vp.SetLayouts[set]);
         for (int i = 0; i < bindings.Length; i++) writes[i].DstSet = allocated;
-        device.Vk.UpdateDescriptorSets(device.Device, (uint)bindings.Length, writes, 0, null);
-        cmdBindDescriptorSets(Handle, point, vp.Layout, set, 1, &allocated, 0, null);
+        _device.Vk.UpdateDescriptorSets(_device.Device, (uint)bindings.Length, writes, 0, null);
+        _cmdBindDescriptorSets(Handle, point, vp.Layout, set, 1, &allocated, 0, null);
     }
 
     /// <summary>Pushes a block of constants to a program (the layout comes from the program). Vulkan names the stages of the program's one
     /// range, whatever <paramref name="stages"/> says: a push must name every stage of a range it overlaps and none outside it.</summary>
     public void PushConstants<T>(GpuProgram program, GpuStage stages, in T value, uint offset = 0) where T : unmanaged
     {
-        var vp = ctx.Shaders.Backend(program);
-        fixed (T* p = &value) cmdPushConstants(Handle, vp.Layout, vp.PushConstantStages, offset, (uint)sizeof(T), p);
+        var vp = _ctx.Shaders.Backend(program);
+        fixed (T* p = &value) _cmdPushConstants(Handle, vp.Layout, vp.PushConstantStages, offset, (uint)sizeof(T), p);
     }
 
     static ShaderStageFlags VkStageFlags(GpuStage stages)
@@ -415,26 +429,26 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     public void Draw(uint vertices, uint instances = 1, uint firstVertex = 0, uint firstInstance = 0)
     {
-        cmdDraw(Handle, vertices, instances, firstVertex, firstInstance);
+        _cmdDraw(Handle, vertices, instances, firstVertex, firstInstance);
         Stats.Draws++;
     }
 
     public void DrawIndexed(uint indices, uint instances = 1, uint firstIndex = 0, int vertexOffset = 0, uint firstInstance = 0)
     {
-        cmdDrawIndexed(Handle, indices, instances, firstIndex, vertexOffset, firstInstance);
+        _cmdDrawIndexed(Handle, indices, instances, firstIndex, vertexOffset, firstInstance);
         Stats.Draws++;
     }
 
     public void DrawIndexedIndirect(GpuBuffer args, ulong offset, uint count, uint stride = 20)
     {
-        cmdDrawIndexedIndirect(Handle, device.BufferAt(args.Index), offset, count, stride);
+        _cmdDrawIndexedIndirect(Handle, _device.BufferAt(args.Index), offset, count, stride);
         Stats.Draws++;
         Stats.IndirectDraws++;
     }
 
     public void DrawIndexedIndirectCount(GpuBuffer args, ulong offset, GpuBuffer count, ulong countOffset, uint maxCount, uint stride = 20)
     {
-        vk.CmdDrawIndexedIndirectCount(Handle, device.BufferAt(args.Index), offset, device.BufferAt(count.Index), countOffset, maxCount, stride);
+        _vk.CmdDrawIndexedIndirectCount(Handle, _device.BufferAt(args.Index), offset, _device.BufferAt(count.Index), countOffset, maxCount, stride);
         Stats.Draws++;
         Stats.IndirectDraws++;
     }
@@ -444,7 +458,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// one call. Needs <c>drawIndirectCount</c> (Vulkan 1.2) and <c>drawIndirectFirstInstance</c> for a non-zero firstInstance.</summary>
     public void DrawIndirectCount(GpuBuffer args, ulong offset, GpuBuffer countBuffer, ulong countOffset, uint maxCount, uint stride = 16)
     {
-        vk.CmdDrawIndirectCount(Handle, device.BufferAt(args.Index), offset, device.BufferAt(countBuffer.Index), countOffset, maxCount, stride);
+        _vk.CmdDrawIndirectCount(Handle, _device.BufferAt(args.Index), offset, _device.BufferAt(countBuffer.Index), countOffset, maxCount, stride);
         Stats.Draws++;
         Stats.IndirectDraws++;
     }
@@ -453,41 +467,41 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     public void BindPipeline(GpuComputePipeline pipeline)
     {
-        var handle = ctx.Pipelines.Handle(in pipeline);
-        if (handle.Handle == lastPipeline.Handle && lastPoint == PipelineBindPoint.Compute) return;
-        vk.CmdBindPipeline(Handle, PipelineBindPoint.Compute, handle);
-        (lastPipeline, lastPoint) = (handle, PipelineBindPoint.Compute);
+        var handle = _ctx.Pipelines.Handle(in pipeline);
+        if (handle.Handle == _lastPipeline.Handle && _lastPoint == PipelineBindPoint.Compute) return;
+        _vk.CmdBindPipeline(Handle, PipelineBindPoint.Compute, handle);
+        (_lastPipeline, _lastPoint) = (handle, PipelineBindPoint.Compute);
         Stats.PipelinesBound++;
     }
 
     public void Dispatch(uint x, uint y = 1, uint z = 1)
     {
-        vk.CmdDispatch(Handle, x, y, z);
+        _vk.CmdDispatch(Handle, x, y, z);
         Stats.Dispatches++;
     }
 
     public void DispatchIndirect(GpuBuffer args, ulong offset)
     {
-        vk.CmdDispatchIndirect(Handle, device.BufferAt(args.Index), offset);
+        _vk.CmdDispatchIndirect(Handle, _device.BufferAt(args.Index), offset);
         Stats.Dispatches++;
     }
 
-    public void FillBuffer(GpuBuffer b, ulong offset, ulong size, uint value) => vk.CmdFillBuffer(Handle, device.BufferAt(b.Index), offset, size, value);
+    public void FillBuffer(GpuBuffer b, ulong offset, ulong size, uint value) => _vk.CmdFillBuffer(Handle, _device.BufferAt(b.Index), offset, size, value);
 
     public void CopyBuffer(GpuBuffer src, GpuBuffer dst, in GpuBufferCopy region)
     {
         var copy = new BufferCopy(region.SourceOffset, region.DestinationOffset, region.Size);
-        vk.CmdCopyBuffer(Handle, device.BufferAt(src.Index), device.BufferAt(dst.Index), 1, &copy);
+        _vk.CmdCopyBuffer(Handle, _device.BufferAt(src.Index), _device.BufferAt(dst.Index), 1, &copy);
     }
 
     /// <summary>
     /// A new texture: the backend's own image, and its transition into the layout the backend uses,
     /// recorded into this command list (so the frame's own work sees it in order).
     /// </summary>
-    public GpuTexture CreateTexture(TextureDesc desc) => ctx.CreateTexture(desc, Handle);
+    public GpuTexture CreateTexture(TextureDesc desc) => _ctx.CreateTexture(desc, Handle);
 
     /// <inheritdoc/>
-    public void InitTexture(GpuTexture texture) => ctx.InitTexture(texture, Handle);
+    public void InitTexture(GpuTexture texture) => _ctx.InitTexture(texture, Handle);
 
     /// <summary>(Added for the Meitou water's ocean.) Copies tightly packed texels from <paramref name="src"/> at <paramref name="offset"/> over a
     /// whole level and layer of <paramref name="dst"/> (GENERAL layout). The caller orders it against the writes before and the reads after.</summary>
@@ -500,7 +514,7 @@ public sealed unsafe class CommandList : IGpuCommandList
             ImageOffset = new Offset3D(region.X, region.Y, 0),
             ImageExtent = new Extent3D(region.Width, region.Height, 1),
         };
-        vk.CmdCopyImageToBuffer(Handle, device.NativeImage(src), ImageLayout.General, device.BufferAt(dst.Index), 1, &copy);
+        _vk.CmdCopyImageToBuffer(Handle, _device.NativeImage(src), ImageLayout.General, _device.BufferAt(dst.Index), 1, &copy);
     }
 
     public void CopyBufferToImage(GpuBuffer src, ulong offset, GpuTexture dst, int level, int layer)
@@ -511,7 +525,7 @@ public sealed unsafe class CommandList : IGpuCommandList
             ImageSubresource = new ImageSubresourceLayers(GlConventions.VkAspect(dst.Desc), (uint)level, (uint)layer, 1),
             ImageExtent = new Extent3D((uint)Math.Max(dst.Desc.Width >> level, 1), (uint)Math.Max(dst.Desc.Height >> level, 1), 1),
         };
-        vk.CmdCopyBufferToImage(Handle, device.BufferAt(src.Index), device.NativeImage(dst), ImageLayout.General, 1, &copy);
+        _vk.CmdCopyBufferToImage(Handle, _device.BufferAt(src.Index), _device.NativeImage(dst), ImageLayout.General, 1, &copy);
     }
 
     /// <summary>Resolves level 0 / layer 0 of a multisampled colour texture into a single-sampled one (the reflection's 4× target).</summary>
@@ -523,7 +537,7 @@ public sealed unsafe class CommandList : IGpuCommandList
             DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
             Extent = new Extent3D((uint)src.Desc.Width, (uint)src.Desc.Height, 1),
         };
-        vk.CmdResolveImage(Handle, device.NativeImage(src), ImageLayout.General, device.NativeImage(dst), ImageLayout.General, 1, &region);
+        _vk.CmdResolveImage(Handle, _device.NativeImage(src), ImageLayout.General, _device.NativeImage(dst), ImageLayout.General, 1, &region);
     }
 
     /// <summary>As <see cref="Resolve(Texture, Texture)"/> for two images in GENERAL layout (a render target taken from <see cref="PassTargets"/>), <paramref name="width"/> × <paramref name="height"/> from the origin.</summary>
@@ -535,7 +549,7 @@ public sealed unsafe class CommandList : IGpuCommandList
             DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
             Extent = new Extent3D((uint)width, (uint)height, 1),
         };
-        vk.CmdResolveImage(Handle, src, ImageLayout.General, dst, ImageLayout.General, 1, &region);
+        _vk.CmdResolveImage(Handle, src, ImageLayout.General, dst, ImageLayout.General, 1, &region);
     }
 
     /// <summary>Scales level 0 / layer 0 of <paramref name="src"/> over level 0 of <paramref name="dst"/>.</summary>
@@ -548,7 +562,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         };
         blit.SrcOffsets[1] = new Offset3D(src.Desc.Width, src.Desc.Height, 1);
         blit.DstOffsets[1] = new Offset3D(dst.Desc.Width, dst.Desc.Height, 1);
-        vk.CmdBlitImage(Handle, device.NativeImage(src), ImageLayout.General, device.NativeImage(dst), ImageLayout.General, 1, &blit, GlConventions.VkFilter(filter));
+        _vk.CmdBlitImage(Handle, _device.NativeImage(src), ImageLayout.General, _device.NativeImage(dst), ImageLayout.General, 1, &blit, GlConventions.VkFilter(filter));
     }
 
     /// <summary>
@@ -563,8 +577,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         Barrier(BarrierBatch.Full);
         var transfer = new BarrierBatch
         {
-            SrcStages = PipelineStageFlags2.TransferBit, SrcAccess = AccessFlags2.TransferWriteBit,
-            DstStages = PipelineStageFlags2.TransferBit, DstAccess = AccessFlags2.TransferReadBit,
+            SrcStages = PipelineStageFlags2.TransferBit,
+            SrcAccess = AccessFlags2.TransferWriteBit,
+            DstStages = PipelineStageFlags2.TransferBit,
+            DstAccess = AccessFlags2.TransferReadBit,
         };
         uint layers = (uint)(d.Kind == TextureKind.Cube ? 6 * Math.Max(d.Layers, 1) : d.Layers);
         for (int level = 1; level < d.Levels; level++)
@@ -577,7 +593,7 @@ public sealed unsafe class CommandList : IGpuCommandList
             };
             blit.SrcOffsets[1] = new Offset3D(Math.Max(d.Width >> (level - 1), 1), Math.Max(d.Height >> (level - 1), 1), 1);
             blit.DstOffsets[1] = new Offset3D(Math.Max(d.Width >> level, 1), Math.Max(d.Height >> level, 1), 1);
-            vk.CmdBlitImage(Handle, device.NativeImage(t), ImageLayout.General, device.NativeImage(t), ImageLayout.General, 1, &blit, Filter.Linear);
+            _vk.CmdBlitImage(Handle, _device.NativeImage(t), ImageLayout.General, _device.NativeImage(t), ImageLayout.General, 1, &blit, Filter.Linear);
         }
         Barrier(BarrierBatch.Full);
     }
@@ -595,7 +611,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         };
         blit.SrcOffsets[1] = new Offset3D(Math.Max(d.Width >> srcLevel, 1), Math.Max(d.Height >> srcLevel, 1), 1);
         blit.DstOffsets[1] = new Offset3D(Math.Max(d.Width >> dstLevel, 1), Math.Max(d.Height >> dstLevel, 1), 1);
-        vk.CmdBlitImage(Handle, device.NativeImage(texture), ImageLayout.General, device.NativeImage(texture), ImageLayout.General, 1, &blit, GlConventions.VkFilter(filter));
+        _vk.CmdBlitImage(Handle, _device.NativeImage(texture), ImageLayout.General, _device.NativeImage(texture), ImageLayout.General, 1, &blit, GlConventions.VkFilter(filter));
     }
 
     // ---- sync, timing, labels ----
@@ -605,11 +621,13 @@ public sealed unsafe class CommandList : IGpuCommandList
         var barrier = new MemoryBarrier2
         {
             SType = StructureType.MemoryBarrier2,
-            SrcStageMask = batch.SrcStages, SrcAccessMask = batch.SrcAccess,
-            DstStageMask = batch.DstStages, DstAccessMask = batch.DstAccess,
+            SrcStageMask = batch.SrcStages,
+            SrcAccessMask = batch.SrcAccess,
+            DstStageMask = batch.DstStages,
+            DstAccessMask = batch.DstAccess,
         };
         var info = new DependencyInfo { SType = StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &barrier };
-        vk.CmdPipelineBarrier2(Handle, &info);
+        _vk.CmdPipelineBarrier2(Handle, &info);
     }
 
     /// <summary>
@@ -683,27 +701,27 @@ public sealed unsafe class CommandList : IGpuCommandList
             GpuStage.Compute => PipelineStageFlags2.ComputeShaderBit,
             _ => PipelineStageFlags2.AllCommandsBit,
         };
-        vk.CmdWriteTimestamp2(Handle, vkStage, pools.Pool(in slot), slot.Index);
+        _vk.CmdWriteTimestamp2(Handle, vkStage, pools.Pool(in slot), slot.Index);
     }
 
     /// <summary>As <see cref="Timestamp(QueryArena, in QuerySlot, GpuStage)"/>, with the backend's own stage (the pipe's ends).</summary>
     public void Timestamp(QueryArena arena, in QuerySlot slot, PipelineStageFlags2 stage)
     {
         if (!slot.IsValid) return;
-        vk.CmdWriteTimestamp2(Handle, stage, arena.Pool(in slot), slot.Index);
+        _vk.CmdWriteTimestamp2(Handle, stage, arena.Pool(in slot), slot.Index);
     }
 
     /// <summary>A debug label (VK_EXT_debug_utils; no-op without it).</summary>
     public void BeginLabel(string name)
     {
-        if (debug is null) return;
-        if (!labels.TryGetValue(name, out var p)) labels[name] = p = Marshal.StringToCoTaskMemUTF8(name);
+        if (_debug is null) return;
+        if (!_labels.TryGetValue(name, out var p)) _labels[name] = p = Marshal.StringToCoTaskMemUTF8(name);
         var info = new DebugUtilsLabelEXT { SType = StructureType.DebugUtilsLabelExt, PLabelName = (byte*)p };
-        debug.CmdBeginDebugUtilsLabel(Handle, &info);
+        _debug.CmdBeginDebugUtilsLabel(Handle, &info);
     }
 
     public void EndLabel()
     {
-        debug?.CmdEndDebugUtilsLabel(Handle);
+        _debug?.CmdEndDebugUtilsLabel(Handle);
     }
 }

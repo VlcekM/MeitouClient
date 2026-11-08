@@ -10,8 +10,8 @@ namespace Meitou.Game.Audio;
 public sealed partial class WwisePlayer
 {
     // Offsets set by actions, keyed by (target node or bus, game object; 0 for the global scope), fading to their target value.
-    readonly OffsetTable volumeOffsets = new(decibels: true), pitchOffsets = new(), lowPassOffsets = new(), busVolumes = new(decibels: true);
-    readonly Dictionary<uint, AuxBusState> auxBuses = [];
+    readonly OffsetTable _volumeOffsets = new(decibels: true), _pitchOffsets = new(), _lowPassOffsets = new(), _busVolumes = new(decibels: true);
+    readonly Dictionary<uint, AuxBusState> _auxBuses = [];
 
     /// <summary>
     /// A value in dB (or cents, or low-pass units) set by an action: it moves to its target over the action's fade time and an entry that has fallen
@@ -25,19 +25,19 @@ public sealed partial class WwisePlayer
             public float Value, Start, Target, Seconds, Elapsed;
         }
 
-        readonly Dictionary<(uint Id, ulong Object), Entry> entries = [];
+        readonly Dictionary<(uint Id, ulong Object), Entry> _entries = [];
 
-        public bool IsEmpty => entries.Count == 0;
+        public bool IsEmpty => _entries.Count == 0;
 
         public void Set(uint id, ulong gameObject, float target, float seconds)
         {
-            if (!entries.TryGetValue((id, gameObject), out var e)) entries[(id, gameObject)] = e = new Entry();
+            if (!_entries.TryGetValue((id, gameObject), out var e)) _entries[(id, gameObject)] = e = new Entry();
             Start(e, target, seconds);
         }
 
         public void Reset(uint id, ulong gameObject, float seconds)
         {
-            if (entries.TryGetValue((id, gameObject), out var e)) Start(e, 0, seconds);
+            if (_entries.TryGetValue((id, gameObject), out var e)) Start(e, 0, seconds);
         }
 
         static void Start(Entry e, float target, float seconds)
@@ -48,9 +48,9 @@ public sealed partial class WwisePlayer
 
         public void Advance(double dt)
         {
-            if (entries.Count == 0) return;
+            if (_entries.Count == 0) return;
             List<(uint, ulong)>? gone = null;
-            foreach (var (key, e) in entries)
+            foreach (var (key, e) in _entries)
             {
                 if (e.Value != e.Target)
                 {
@@ -62,21 +62,21 @@ public sealed partial class WwisePlayer
                 }
                 if (e.Value == 0 && e.Target == 0) (gone ??= []).Add(key);
             }
-            if (gone is not null) foreach (var key in gone) entries.Remove(key);
+            if (gone is not null) foreach (var key in gone) _entries.Remove(key);
         }
 
         /// <summary>The global offset plus the one for the object.</summary>
         public float Get(uint id, ulong gameObject)
         {
-            if (entries.Count == 0) return 0;
-            float sum = entries.TryGetValue((id, 0), out var g) ? g.Value : 0;
-            if (gameObject != 0 && entries.TryGetValue((id, gameObject), out var o)) sum += o.Value;
+            if (_entries.Count == 0) return 0;
+            float sum = _entries.TryGetValue((id, 0), out var g) ? g.Value : 0;
+            if (gameObject != 0 && _entries.TryGetValue((id, gameObject), out var o)) sum += o.Value;
             return sum;
         }
 
         public void ForgetObject(ulong gameObject)
         {
-            foreach (var key in entries.Keys.Where(k => k.Object == gameObject).ToList()) entries.Remove(key);
+            foreach (var key in _entries.Keys.Where(k => k.Object == gameObject).ToList()) _entries.Remove(key);
         }
 
         /// <summary>A linear gain in dB, −96 (the floor <see cref="WwiseCurves.DbToGain"/> reads as silence) at or below 10^(−96/20).</summary>
@@ -109,14 +109,14 @@ public sealed partial class WwisePlayer
     /// Bypasses or enables effect slots of an auxiliary bus directly, as the banks' bypass actions do (<c>Enter_Building</c>, a biome's <c>Enter_</c> event):
     /// <paramref name="slots"/> bits 0-3 are the slots, bit 4 means all. A bypassed reverb takes no more input and its tail rings out.
     /// </summary>
-    public void SetAuxBypass(uint auxBus, bool bypass, byte slots = 0x10) => commands.Enqueue(() => ApplyBypass(auxBus, bypass, slots));
+    public void SetAuxBypass(uint auxBus, bool bypass, byte slots = 0x10) => _commands.Enqueue(() => ApplyBypass(auxBus, bypass, slots));
 
     /// <summary>The state of an auxiliary bus (made on first use); null when the bus is not a known aux bus (its bank is not loaded).</summary>
     AuxBusState? AuxBus(uint id)
     {
-        if (auxBuses.TryGetValue(id, out var state)) return state;
-        if (!objects.TryGetValue(id, out var o) || o is not WwiseBus { IsAux: true } bus) return null;
-        return auxBuses[id] = new AuxBusState(bus);
+        if (_auxBuses.TryGetValue(id, out var state)) return state;
+        if (!_objects.TryGetValue(id, out var o) || o is not WwiseBus { IsAux: true } bus) return null;
+        return _auxBuses[id] = new AuxBusState(bus);
     }
 
     /// <summary>
@@ -136,9 +136,9 @@ public sealed partial class WwisePlayer
     float BusGain(uint busId, ulong gameObject)
     {
         float db = 0, linear = 1;
-        for (int guard = 0; busId != 0 && guard < 16 && objects.TryGetValue(busId, out var o) && o is WwiseBus bus; guard++)
+        for (int guard = 0; busId != 0 && guard < 16 && _objects.TryGetValue(busId, out var o) && o is WwiseBus bus; guard++)
         {
-            db += bus.Properties.Float(WwisePropertyId.BusVolume) + busVolumes.Get(bus.Id, gameObject);
+            db += bus.Properties.Float(WwisePropertyId.BusVolume) + _busVolumes.Get(bus.Id, gameObject);
             foreach (var rtpc in bus.Rtpcs)
             {
                 if (rtpc.ParameterId != WwisePropertyId.Volume) continue;
@@ -157,13 +157,13 @@ public sealed partial class WwisePlayer
     /// </summary>
     void MixAuxBuses(float[] mix, int frames)
     {
-        foreach (var aux in auxBuses.Values)
+        foreach (var aux in _auxBuses.Values)
         {
             float busGain = BusGain(aux.Bus.Id, 0);
             foreach (var slot in aux.Bus.Effects)
             {
-                if (!objects.TryGetValue(slot.EffectId, out var o) || o is not WwiseEffect { IsRoomVerb: true } effect) continue;
-                if (!aux.Units.TryGetValue(slot.Index, out var unit)) aux.Units[slot.Index] = unit = new RoomReverb(outputRate);
+                if (!_objects.TryGetValue(slot.EffectId, out var o) || o is not WwiseEffect { IsRoomVerb: true } effect) continue;
+                if (!aux.Units.TryGetValue(slot.Index, out var unit)) aux.Units[slot.Index] = unit = new RoomReverb(_outputRate);
                 bool enabled = (aux.Bypass & (1 << slot.Index)) == 0;
                 unit.Enabled = enabled;
                 if (!aux.Received && unit.TailDead) continue;

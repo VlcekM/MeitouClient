@@ -37,18 +37,18 @@ public class JailSaveTests
     static PopulationData JailData(bool bed = false)
     {
         static FcsRecord Rec(string id, FcsRecordType type, string name) => SyntheticTown.Rec(id, type, name);
-        var door = Rec("51-t", FcsRecordType.BUILDING, "Door");
-        var house = Rec("52-t", FcsRecordType.BUILDING, "House");
+        var door = Rec("51-t", FcsRecordType.Building, "Door");
+        var house = Rec("52-t", FcsRecordType.Building, "House");
         house.Floats["hardness"] = 40;
         house.References["doors"] = [SyntheticTown.Ref("51-t")];
-        var function = Rec("53-t", FcsRecordType.BUILDING_FUNCTIONALITY, "Cage");
+        var function = Rec("53-t", FcsRecordType.BuildingFunctionality, "Cage");
         function.Ints["function"] = TownBuildings.CageFunction;
         function.Floats["use range"] = 25;
-        var cage = Rec("54-t", FcsRecordType.BUILDING, "Prisoner Cage");
+        var cage = Rec("54-t", FcsRecordType.Building, "Prisoner Cage");
         cage.References["functionality"] = [SyntheticTown.Ref("53-t")];
-        var sleep = Rec("55-t", FcsRecordType.BUILDING_FUNCTIONALITY, "Bed");
+        var sleep = Rec("55-t", FcsRecordType.BuildingFunctionality, "Bed");
         sleep.Ints["function"] = TownBuildings.BedFunction;
-        var cot = Rec("56-t", FcsRecordType.BUILDING, "Bed");
+        var cot = Rec("56-t", FcsRecordType.Building, "Bed");
         cot.References["functionality"] = [SyntheticTown.Ref("55-t")];
         var db = SyntheticTown.Database(anatomy: true, extra: [door, house, function, cage, sleep, cot]);
         HomeSpot[] spots = bed ? [new HomeSpot(HomeSpotKind.Bed, BedAt, 0) { Record = "56-t" }] : [];
@@ -81,7 +81,7 @@ public class JailSaveTests
 
     static FcsRecord HouseState(params (string Key, bool Value)[] bools)
     {
-        var state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Id = 0, Name = "0", StringId = "house-S23" };
+        var state = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Id = 0, Name = "0", StringId = "house-S23" };
         foreach (var (key, value) in bools) state.Bools[key] = value;
         return state;
     }
@@ -94,7 +94,7 @@ public class JailSaveTests
         if (!builder.Game.Zones.TryGetValue(zone, out var saveZone)) builder.Game.Zones[zone] = saveZone = new SaveZone(zone, new SaveFile());
         var file = saveZone.File;
         int next = Math.Max(file.Data.NextId, file.Records.Count == 0 ? 0 : file.Records.Max(r => r.Id)) + 1;
-        var list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Id = next, Name = "0", StringId = WorldLevelData.BuildingListId };
+        var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = next, Name = "0", StringId = WorldLevelData.BuildingListId };
         var instance = new FcsInstance { Id = "house", Target = "52-t", Position = HouseAt };
         instance.States.Add("house-S23");
         list.Instances.Add(instance);
@@ -106,7 +106,7 @@ public class JailSaveTests
     }
 
     /// <summary>The handle the original gives the generated interior cage (any handle the zone's states resolve).</summary>
-    static readonly Hand GeneratedCage = new((int)FcsRecordType.BUILDING, 1238, 11111, 1485, 99);
+    static readonly Hand GeneratedCage = new((int)FcsRecordType.Building, 1238, 11111, 1485, 99);
 
     /// <summary>
     /// A save as the original writes a member caged in a generated interior cage: the member's state has only the original's keys, <c>in what</c> naming a zone building-list
@@ -139,7 +139,7 @@ public class JailSaveTests
         var entry = new FcsInstance { Id = id, Target = record, Position = at };
         entry.States.Add(id + "-S23");
         save.Zones[HouseZone].BuildingList!.Instances.Add(entry);
-        var state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Id = file.Records.Max(r => r.Id) + 1, Name = "0", StringId = id + "-S23" };
+        var state = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Id = file.Records.Max(r => r.Id) + 1, Name = "0", StringId = id + "-S23" };
         handle.Write(state, "handle");
         file.Records.Add(state);
     }

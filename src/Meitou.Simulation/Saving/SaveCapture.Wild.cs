@@ -1,4 +1,3 @@
-using SquadMemoryData = Meitou.Simulation.Dialogue.SquadMemoryData;
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
@@ -7,6 +6,7 @@ using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
+using SquadMemoryData = Meitou.Simulation.Dialogue.SquadMemoryData;
 
 namespace Meitou.Simulation.Saving;
 
@@ -62,17 +62,19 @@ public static partial class SaveCapture
                 if (list is null)
                 {
                     int n = Next();
-                    list = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_TOWN_INSTANCE_LIST, Id = n, Name = "0", StringId = QuickNumberId(n) };
+                    list = new FcsRecord { Type = (int)FcsRecordType.GamestateTownInstanceList, Id = n, Name = "0", StringId = QuickNumberId(n) };
                     quick.Records.Add(list);
                     game.TownInstanceList = list;
                 }
                 var centre = population.WildCentreOf(site.Index) ?? site.Spots[0];
                 entry = new FcsInstance
                 {
-                    Id = QuickNumberId(Next()), Target = nest.Id,
-                    Position = new Vector3(centre.X, world.Walkability.GroundHeight(centre.X, centre.Y), centre.Y), Rotation = new Quaternion(0, 0, 0, 0),
+                    Id = QuickNumberId(Next()),
+                    Target = nest.Id,
+                    Position = new Vector3(centre.X, world.Walkability.GroundHeight(centre.X, centre.Y), centre.Y),
+                    Rotation = new Quaternion(0, 0, 0, 0),
                 };
-                state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_TOWN, Id = Next(), Name = $"{NestStatePrefix}{nest.Name} {++counter}", StringId = entry.Id + TownStateSuffix };
+                state = new FcsRecord { Type = (int)FcsRecordType.GamestateTown, Id = Next(), Name = $"{NestStatePrefix}{nest.Name} {++counter}", StringId = entry.Id + TownStateSuffix };
                 entry.States.Add(state.StringId);
                 list.Instances.Add(entry);
                 entries[entry.Id] = entry;
@@ -80,7 +82,7 @@ public static partial class SaveCapture
                 int at = quick.Records.IndexOf(list);
                 quick.Records.Insert(at < 0 ? quick.Records.Count : at, state);
                 byId[state.StringId] = state;
-                var hand = new Hand((int)FcsRecordType.NEST, ++container, (int)Rng.Mix(Rng.StableHash(entry.Id) ^ seed), 0, 0);
+                var hand = new Hand((int)FcsRecordType.Nest, ++container, (int)Rng.Mix(Rng.StableHash(entry.Id) ^ seed), 0, 0);
                 hand.Write(state, "hand");
                 state.Ints["artifacts count"] = 0;
                 foreach (var k in new[] { "started", "explored", "recently discovered", "discovered", "ded" }) state.Bools[k] = false;

@@ -29,13 +29,13 @@ public static class MachineSave
         {
             if (world.Buildings.Find(m.Site) is not { } site || !game.Zones.TryGetValue(site.Zone, out var zone) || zone.BuildingList is not { } list) continue;
             var file = zone.File;
-            var state = file.Records.FirstOrDefault(r => r.StringId == site.Id + StateSuffix && r.RecordType == FcsRecordType.GAMESTATE_BUILDING);
+            var state = file.Records.FirstOrDefault(r => r.StringId == site.Id + StateSuffix && r.RecordType == FcsRecordType.GamestateBuilding);
             var instance = list.Instances.FirstOrDefault(i => i.Id == site.Id);
             if (state is null || instance is null) continue;
             WriteKeys(state, m, world.GameHours);
             var saveItems = Items(m);
             string inventoryId = site.Id + InventorySuffix;
-            var inventory = file.Records.FirstOrDefault(r => r.StringId == inventoryId && r.RecordType == FcsRecordType.INVENTORY_STATE);
+            var inventory = file.Records.FirstOrDefault(r => r.StringId == inventoryId && r.RecordType == FcsRecordType.InventoryState);
             instance.States.Remove(inventoryId);
             if (saveItems.Count == 0)
             {
@@ -45,7 +45,7 @@ public static class MachineSave
             }
             if (inventory is null)
             {
-                inventory = new FcsRecord { Type = (int)FcsRecordType.INVENTORY_STATE, Id = SaveBuilder.NextNumber(file), Name = "0", StringId = inventoryId };
+                inventory = new FcsRecord { Type = (int)FcsRecordType.InventoryState, Id = SaveBuilder.NextNumber(file), Name = "0", StringId = inventoryId };
                 file.Records.Add(inventory);
             }
             SaveInventory.Replace(file, inventory, saveItems, n => string.Create(CultureInfo.InvariantCulture, $"{n}-zone{site.Zone.X}.{site.Zone.Y}-INGAME"));
@@ -136,7 +136,7 @@ public static class MachineSave
                 if (m.Craft is not null) ReadCraft(state, m, production);
             }
             if (!save.Zones.TryGetValue(site.Zone, out var zone) || zone.BuildingList?.Instances.FirstOrDefault(i => i.Id == site.Id) is not { } instance) continue;
-            var inventory = instance.States.Select(id => zone.File.Records.FirstOrDefault(r => r.StringId == id && r.RecordType == FcsRecordType.INVENTORY_STATE)).FirstOrDefault(r => r is not null);
+            var inventory = instance.States.Select(id => zone.File.Records.FirstOrDefault(r => r.StringId == id && r.RecordType == FcsRecordType.InventoryState)).FirstOrDefault(r => r is not null);
             if (inventory is null) continue;
             var storage = new List<SaveItem>();
             foreach (var item in SaveInventory.Read(zone.File, inventory))

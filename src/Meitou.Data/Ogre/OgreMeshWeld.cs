@@ -74,10 +74,10 @@ public static class OgreMeshWeld
             scratch[0] = Handedness(v, normals, tangents0, binormals0, tangent?.Type == OgreVertexElementType.Float4);
             Put(scratch[..1]);
             for (int b = boneStart[v]; b < boneStart[v + 1]; b++)
-                {
-                    BitConverter.TryWriteBytes(scratch, assignments[b].BoneIndex); Put(scratch[..2]);
-                    BitConverter.TryWriteBytes(scratch, assignments[b].Weight); Put(scratch);
-                }
+            {
+                BitConverter.TryWriteBytes(scratch, assignments[b].BoneIndex); Put(scratch[..2]);
+                BitConverter.TryWriteBytes(scratch, assignments[b].Weight); Put(scratch);
+            }
             if (poseEntries.TryGetValue((uint)v, out var moves))
                 foreach (var (p, m) in moves)
                 {

@@ -143,8 +143,15 @@ public static class SpirvPatch
             else if (samplerType == 0) samplerType = next++;
             var made = new Made
             {
-                OldPtr = ptr, ArrayPtr = next++, ElemPtr = next++, Array = next++, Image = image, Sampled = shape.Elem, Length = shape.Len,
-                Integer = integer, Binding = bindings.GetValueOrDefault(id) + samplerOffset,
+                OldPtr = ptr,
+                ArrayPtr = next++,
+                ElemPtr = next++,
+                Array = next++,
+                Image = image,
+                Sampled = shape.Elem,
+                Length = shape.Len,
+                Integer = integer,
+                Binding = bindings.GetValueOrDefault(id) + samplerOffset,
             };
             if (!integer) { made.SamplerArray = next++; made.SamplerArrayPtr = next++; made.SamplerElemPtr = next++; made.SamplerVar = next++; }
             ours[ptr] = made;
@@ -335,16 +342,16 @@ public static class SpirvPatch
 /// </summary>
 internal sealed unsafe class VulkanProgram : IDisposable
 {
-    readonly VulkanDevice device;
-    readonly DescriptorSetLayout[] ownedSetLayouts;
+    readonly VulkanDevice _device;
+    readonly DescriptorSetLayout[] _ownedSetLayouts;
 
     internal VulkanProgram(VulkanDevice device, ProgramInfo info, DescriptorSetLayout[] setLayouts, DescriptorSetLayout[] ownedSetLayouts,
         PipelineLayout layout, bool pushDescriptors, ShaderStageFlags pushConstantStages)
     {
-        this.device = device;
+        this._device = device;
         Info = info;
         SetLayouts = setLayouts;
-        this.ownedSetLayouts = ownedSetLayouts;
+        this._ownedSetLayouts = ownedSetLayouts;
         Layout = layout;
         PushDescriptors = pushDescriptors;
         PushConstantStages = pushConstantStages;
@@ -393,17 +400,17 @@ internal sealed unsafe class VulkanProgram : IDisposable
         fixed (byte* code = spirv)
         {
             var info = new ShaderModuleCreateInfo { SType = StructureType.ShaderModuleCreateInfo, CodeSize = (nuint)spirv.Length, PCode = (uint*)code };
-            VulkanException.Check(device.Vk.CreateShaderModule(device.Device, &info, null, out var module), "vkCreateShaderModule");
+            VulkanException.Check(_device.Vk.CreateShaderModule(_device.Device, &info, null, out var module), "vkCreateShaderModule");
             return module;
         }
     }
 
     public void Dispose()
     {
-        var (vk, dev) = (device.Vk, device.Device);
-        var (vm, fm, cm, layout, sets) = (VertexModule, FragmentModule, ComputeModule, Layout, ownedSetLayouts);
+        var (vk, dev) = (_device.Vk, _device.Device);
+        var (vm, fm, cm, layout, sets) = (VertexModule, FragmentModule, ComputeModule, Layout, _ownedSetLayouts);
         var (tcm, tem) = (TessControlModule, TessEvaluationModule);
-        device.Frames.DeferDelete(() =>
+        _device.Frames.DeferDelete(() =>
         {
             if (tcm.Handle != 0) vk.DestroyShaderModule(dev, tcm, null);
             if (tem.Handle != 0) vk.DestroyShaderModule(dev, tem, null);
@@ -422,17 +429,17 @@ internal sealed unsafe class VulkanProgram : IDisposable
 /// </summary>
 public sealed unsafe class ShaderLibrary : IGpuShaders
 {
-    readonly VulkanDevice device;
-    readonly List<VulkanProgram> programs = [];
+    readonly VulkanDevice _device;
+    readonly List<VulkanProgram> _programs = [];
 
     public ShaderLibrary(VulkanDevice device)
     {
-        this.device = device;
+        this._device = device;
         Compiler = new GlslProgramCompiler(new ShaderCompileOptions { DepthReversed = true });
     }
 
     /// <summary>The backend's identity of a program handle (the Vulkan-only internals resolve through this).</summary>
-    internal VulkanProgram Backend(GpuProgram program) => programs[program.Index];
+    internal VulkanProgram Backend(GpuProgram program) => _programs[program.Index];
 
     /// <summary>Releases a program (its backend artifacts go once the frames in flight are done); the index is never reused.</summary>
     public void Dispose(GpuProgram program) => Backend(program).Dispose();
@@ -467,7 +474,7 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         Add(c.Vertex, ShaderStageFlags.VertexBit);
         Add(c.Fragment, ShaderStageFlags.FragmentBit);
         int count = bindings.Sum(b => (int)b.DescriptorCount);
-        bool push = device.HasPushDescriptor && count <= device.MaxPushDescriptors;
+        bool push = _device.HasPushDescriptor && count <= _device.MaxPushDescriptors;
         var set0 = CreateSetLayout([.. bindings], push ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0);
         var dynamic = new List<DescriptorSetLayoutBinding>();
         if (c.Vertex.DefaultBlock is not null) dynamic.Add(new DescriptorSetLayoutBinding(0, DescriptorType.UniformBufferDynamic, 1, ShaderStageFlags.VertexBit));
@@ -487,10 +494,19 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         var defaultSlots = new List<GpuSlot>();
         if (c.Vertex.DefaultBlock is not null) defaultSlots.Add(new GpuSlot(0, GpuSlotKind.UniformBuffer, GpuStage.Vertex, 1, OffsetAtBind: true));
         if (c.Fragment.DefaultBlock is not null) defaultSlots.Add(new GpuSlot(1, GpuSlotKind.UniformBuffer, GpuStage.Fragment, 1, OffsetAtBind: true));
-        var info = new ProgramInfo { Index = programs.Count, Name = name, Model = ShaderModel.Legacy, VertexCode = v, FragmentCode = f, Compiled = c,
-            VertexReflection = c.Vertex, FragmentReflection = c.Fragment,
-            NeutralSets = [GpuSetLayout.Written([.. slots]), GpuSetLayout.Fixed([.. defaultSlots])] };
-        programs.Add(new VulkanProgram(device, info, [set0, set1], [set0, set1], layout, push, 0));
+        var info = new ProgramInfo
+        {
+            Index = _programs.Count,
+            Name = name,
+            Model = ShaderModel.Legacy,
+            VertexCode = v,
+            FragmentCode = f,
+            Compiled = c,
+            VertexReflection = c.Vertex,
+            FragmentReflection = c.Fragment,
+            NeutralSets = [GpuSetLayout.Written([.. slots]), GpuSetLayout.Fixed([.. defaultSlots])]
+        };
+        _programs.Add(new VulkanProgram(_device, info, [set0, set1], [set0, set1], layout, push, 0));
         return new GpuProgram(info.Index, info);
     }
 
@@ -510,15 +526,22 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
             if (s.Set == 0 && s.ArrayLength < 0)
                 throw new InvalidOperationException($"{name}: runtime-sized sampler array '{s.Name}' in set 0; declare the bindless table at an extra set (BindlessTable.Declarations(1))");
             else if (s.Set == 0) bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.CombinedImageSampler, (uint)Math.Max(1, s.ArrayLength), ShaderStageFlags.ComputeBit));
-        bool push = device.HasPushDescriptor && bindings.Sum(b => (int)b.DescriptorCount) <= device.MaxPushDescriptors;
+        bool push = _device.HasPushDescriptor && bindings.Sum(b => (int)b.DescriptorCount) <= _device.MaxPushDescriptors;
         var set0 = CreateSetLayout([.. bindings], push ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0);
         uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);
         var sets = new[] { set0 }.Concat(extraSets.Select(VkLayout)).ToArray();
         var layout = CreateLayout(sets, pc, ShaderStageFlags.ComputeBit);
-        var info = new ProgramInfo { Index = programs.Count, Name = name, Model = ShaderModel.Compute, ComputeCode = code,
-            ComputeReflection = SpirvReflection.Parse(code), PushConstantBytes = pc,
-            NeutralSets = [GpuSetLayout.Written([]), .. extraSets] };
-        programs.Add(new VulkanProgram(device, info, sets, [set0], layout, push, pc > 0 ? ShaderStageFlags.ComputeBit : 0));
+        var info = new ProgramInfo
+        {
+            Index = _programs.Count,
+            Name = name,
+            Model = ShaderModel.Compute,
+            ComputeCode = code,
+            ComputeReflection = SpirvReflection.Parse(code),
+            PushConstantBytes = pc,
+            NeutralSets = [GpuSetLayout.Written([]), .. extraSets]
+        };
+        _programs.Add(new VulkanProgram(_device, info, sets, [set0], layout, push, pc > 0 ? ShaderStageFlags.ComputeBit : 0));
         return new GpuProgram(info.Index, info);
     }
 
@@ -526,7 +549,7 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
     /// for descriptor types the reflection does not read (storage images, acceleration structures). Push constants as the shader declares them.</summary>
     public GpuProgram Compute(string glsl, string name, ReadOnlySpan<(uint Binding, DescriptorType Type)> set0, params GpuSetLayout[] extraSets)
     {
-        if (!device.HasPushDescriptor) throw new NotSupportedException($"{name}: needs push descriptors");
+        if (!_device.HasPushDescriptor) throw new NotSupportedException($"{name}: needs push descriptors");
         var code = Compiler.CompileCompute(glsl);
         var r = SpirvReflection.Parse(code);
         var bindings = new DescriptorSetLayoutBinding[set0.Length];
@@ -535,10 +558,17 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);
         var sets = new[] { layout0 }.Concat(extraSets.Select(VkLayout)).ToArray();
         var layout = CreateLayout(sets, pc, ShaderStageFlags.ComputeBit);
-        var info = new ProgramInfo { Index = programs.Count, Name = name, Model = ShaderModel.Compute, ComputeCode = code,
-            ComputeReflection = SpirvReflection.Parse(code), PushConstantBytes = pc,
-            NeutralSets = [GpuSetLayout.Written([]), .. extraSets] };
-        programs.Add(new VulkanProgram(device, info, sets, [layout0], layout, true, pc > 0 ? ShaderStageFlags.ComputeBit : 0));
+        var info = new ProgramInfo
+        {
+            Index = _programs.Count,
+            Name = name,
+            Model = ShaderModel.Compute,
+            ComputeCode = code,
+            ComputeReflection = SpirvReflection.Parse(code),
+            PushConstantBytes = pc,
+            NeutralSets = [GpuSetLayout.Written([]), .. extraSets]
+        };
+        _programs.Add(new VulkanProgram(_device, info, sets, [layout0], layout, true, pc > 0 ? ShaderStageFlags.ComputeBit : 0));
         return new GpuProgram(info.Index, info);
     }
 
@@ -555,11 +585,20 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         var stages = ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit;
         var layouts = setLayouts.Select(VkLayout).ToArray();
         var layout = CreateLayout(layouts, pushConstantBytes, stages);
-        var info = new ProgramInfo { Index = programs.Count, Name = name, Model = ShaderModel.Native, VertexCode = v, FragmentCode = f,
-            VertexReflection = SpirvReflection.Parse(v), FragmentReflection = SpirvReflection.Parse(f),
-            PushConstantBytes = pushConstantBytes, NeutralSets = setLayouts };
-        var program = new VulkanProgram(device, info, layouts, [], layout, false, pushConstantBytes > 0 ? stages : 0);
-        programs.Add(program);
+        var info = new ProgramInfo
+        {
+            Index = _programs.Count,
+            Name = name,
+            Model = ShaderModel.Native,
+            VertexCode = v,
+            FragmentCode = f,
+            VertexReflection = SpirvReflection.Parse(v),
+            FragmentReflection = SpirvReflection.Parse(f),
+            PushConstantBytes = pushConstantBytes,
+            NeutralSets = setLayouts
+        };
+        var program = new VulkanProgram(_device, info, layouts, [], layout, false, pushConstantBytes > 0 ? stages : 0);
+        _programs.Add(program);
         var made = new GpuProgram(info.Index, info);
         program.FragmentSource = fs;
         foreach (var block in info.VertexReflection!.Blocks.Concat(info.FragmentReflection!.Blocks))
@@ -581,22 +620,22 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
     }
 
     /// <summary>The layouts the engine's sets were made into (one per set, shared by every program that uses it).</summary>
-    readonly Dictionary<GpuSetLayout, DescriptorSetLayout> setLayouts = [];
+    readonly Dictionary<GpuSetLayout, DescriptorSetLayout> _setLayouts = [];
 
     /// <summary>Destroys the layouts the engine's sets were made into (once every frame that could use them has finished).</summary>
     public void Dispose()
     {
-        var (vk, dev) = (device.Vk, device.Device);
-        var layouts = setLayouts.Values.ToArray();
-        setLayouts.Clear();
-        device.Frames.DeferDelete(() => { foreach (var l in layouts) vk.DestroyDescriptorSetLayout(dev, l, null); });
+        var (vk, dev) = (_device.Vk, _device.Device);
+        var layouts = _setLayouts.Values.ToArray();
+        _setLayouts.Clear();
+        _device.Frames.DeferDelete(() => { foreach (var l in layouts) vk.DestroyDescriptorSetLayout(dev, l, null); });
     }
 
     /// <summary>The Vulkan layout of a set the engine described: the bindless table's is the table's own, the rest are made here.</summary>
     internal DescriptorSetLayout VkLayout(GpuSetLayout set)
     {
         if (set.IsBindless) return BindlessLayout;
-        if (setLayouts.TryGetValue(set, out var made)) return made;
+        if (_setLayouts.TryGetValue(set, out var made)) return made;
         var bindings = new DescriptorSetLayoutBinding[set.Slots.Length];
         for (int i = 0; i < bindings.Length; i++)
         {
@@ -605,12 +644,12 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
             bindings[i].StageFlags = VkStageFlags(s.Stages);
         }
         var layout = CreateSetLayout(bindings, CanPush(set) ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0);
-        setLayouts[set] = layout;
+        _setLayouts[set] = layout;
         return layout;
     }
 
     /// <summary>Whether the device can push this set's descriptors (the renderers write it for every draw).</summary>
-    internal bool CanPush(GpuSetLayout set) => device.HasPushDescriptor && set.PerDraw && set.Slots.Sum(s => (int)s.Count) <= device.MaxPushDescriptors;
+    internal bool CanPush(GpuSetLayout set) => _device.HasPushDescriptor && set.PerDraw && set.Slots.Sum(s => (int)s.Count) <= _device.MaxPushDescriptors;
 
     /// <summary>Whether set <paramref name="set"/> of <paramref name="program"/> was made as a push-descriptor set: a legacy or compute
     /// program's set 0 as it was compiled (it fit), any other set as <see cref="CanPush"/> made its layout.</summary>
@@ -645,7 +684,7 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
     public GpuProgram NativeTessellated(string vertexGlsl, string controlGlsl, string evaluationGlsl, string fragmentGlsl, string name,
         GpuSetLayout[] setLayouts, uint pushConstantBytes)
     {
-        if (!device.HasTessellation) throw new NotSupportedException($"{name}: the device has no tessellation shaders");
+        if (!_device.HasTessellation) throw new NotSupportedException($"{name}: the device has no tessellation shaders");
         if (pushConstantBytes > 128) throw new ArgumentOutOfRangeException(nameof(pushConstantBytes), "push constants are limited to 128 bytes (the guaranteed minimum)");
         var (es, fs) = InterfaceLocations.Apply(evaluationGlsl, fragmentGlsl);
         var v = Compiler.CompileNative(vertexGlsl, fragment: false);
@@ -657,13 +696,20 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         var layout = CreateLayout(layouts, pushConstantBytes, stages);
         var info = new ProgramInfo
         {
-            Index = programs.Count, Name = name, Model = ShaderModel.Native, VertexCode = v, FragmentCode = f,
-            TessControlCode = tc, TessEvaluationCode = te,
-            VertexReflection = SpirvReflection.Parse(v), FragmentReflection = SpirvReflection.Parse(f),
-            PushConstantBytes = pushConstantBytes, NeutralSets = setLayouts,
+            Index = _programs.Count,
+            Name = name,
+            Model = ShaderModel.Native,
+            VertexCode = v,
+            FragmentCode = f,
+            TessControlCode = tc,
+            TessEvaluationCode = te,
+            VertexReflection = SpirvReflection.Parse(v),
+            FragmentReflection = SpirvReflection.Parse(f),
+            PushConstantBytes = pushConstantBytes,
+            NeutralSets = setLayouts,
         };
-        var program = new VulkanProgram(device, info, layouts, [], layout, false, pushConstantBytes > 0 ? stages : 0);
-        programs.Add(program);
+        var program = new VulkanProgram(_device, info, layouts, [], layout, false, pushConstantBytes > 0 ? stages : 0);
+        _programs.Add(program);
         program.FragmentSource = fs;
         return new GpuProgram(info.Index, info);
     }
@@ -671,7 +717,7 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
     /// <summary>The stages the native model's shared descriptor sets are visible to: vertex and fragment, and the tessellation stages where the
     /// device has them (so a tessellated program can share the sets of the plain ones).</summary>
     public ShaderStageFlags GraphicsStages => ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit |
-        (device.HasTessellation ? ShaderStageFlags.TessellationControlBit | ShaderStageFlags.TessellationEvaluationBit : 0);
+        (_device.HasTessellation ? ShaderStageFlags.TessellationControlBit | ShaderStageFlags.TessellationEvaluationBit : 0);
 
     /// <summary>The bindless table's set layout (set by <see cref="GpuContext"/>), so <see cref="Native"/> can check a program's
     /// declarations of it.</summary>
@@ -683,9 +729,12 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         {
             var info = new DescriptorSetLayoutCreateInfo
             {
-                SType = StructureType.DescriptorSetLayoutCreateInfo, Flags = flags, BindingCount = (uint)bindings.Length, PBindings = pb,
+                SType = StructureType.DescriptorSetLayoutCreateInfo,
+                Flags = flags,
+                BindingCount = (uint)bindings.Length,
+                PBindings = pb,
             };
-            VulkanException.Check(device.Vk.CreateDescriptorSetLayout(device.Device, &info, null, out var layout), "vkCreateDescriptorSetLayout");
+            VulkanException.Check(_device.Vk.CreateDescriptorSetLayout(_device.Device, &info, null, out var layout), "vkCreateDescriptorSetLayout");
             return layout;
         }
     }
@@ -697,10 +746,13 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         {
             var li = new PipelineLayoutCreateInfo
             {
-                SType = StructureType.PipelineLayoutCreateInfo, SetLayoutCount = (uint)sets.Length, PSetLayouts = ps,
-                PushConstantRangeCount = pushBytes > 0 ? 1u : 0, PPushConstantRanges = pushBytes > 0 ? &range : null,
+                SType = StructureType.PipelineLayoutCreateInfo,
+                SetLayoutCount = (uint)sets.Length,
+                PSetLayouts = ps,
+                PushConstantRangeCount = pushBytes > 0 ? 1u : 0,
+                PPushConstantRanges = pushBytes > 0 ? &range : null,
             };
-            VulkanException.Check(device.Vk.CreatePipelineLayout(device.Device, &li, null, out var layout), "vkCreatePipelineLayout");
+            VulkanException.Check(_device.Vk.CreatePipelineLayout(_device.Device, &li, null, out var layout), "vkCreatePipelineLayout");
             return layout;
         }
     }

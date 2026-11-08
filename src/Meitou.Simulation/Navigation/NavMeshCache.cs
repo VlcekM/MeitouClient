@@ -121,8 +121,24 @@ public sealed class NavMeshCache
                 }
             }
             if (r.ReadInt32() != count) return null; // trailer: truncated writes fail here
-            return new ZoneNavMesh { ZoneX = zoneX, ZoneZ = zoneZ, Vertices = vertices, Polygons = polygons, Neighbours = neighbours, Areas = areas, Links = links, Kept = kept, BoundsMin = boundsMin, BoundsMax = boundsMax, DoorIds = doorIds.Length > 0 ? doorIds : null, DoorOf = doorOf, Surfaces = corners.Length > 0 ? new NavSurfaces(corners) : null, Heights = heights,
-                InteriorStart = interiorStart };
+            return new ZoneNavMesh
+            {
+                ZoneX = zoneX,
+                ZoneZ = zoneZ,
+                Vertices = vertices,
+                Polygons = polygons,
+                Neighbours = neighbours,
+                Areas = areas,
+                Links = links,
+                Kept = kept,
+                BoundsMin = boundsMin,
+                BoundsMax = boundsMax,
+                DoorIds = doorIds.Length > 0 ? doorIds : null,
+                DoorOf = doorOf,
+                Surfaces = corners.Length > 0 ? new NavSurfaces(corners) : null,
+                Heights = heights,
+                InteriorStart = interiorStart
+            };
         }
         catch (Exception e) when (e is IOException or EndOfStreamException or InvalidDataException or OverflowException or OutOfMemoryException)
         {

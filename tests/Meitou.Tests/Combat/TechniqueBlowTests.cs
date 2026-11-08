@@ -9,13 +9,13 @@ public class TechniqueBlowTests
 {
     static CombatTechnique Read(Action<FcsRecord> fill)
     {
-        var r = new FcsRecord { StringId = "1-t", Flags = 0x10, Name = "t", RecordType = FcsRecordType.COMBAT_TECHNIQUE };
+        var r = new FcsRecord { StringId = "1-t", Flags = 0x10, Name = "t", RecordType = FcsRecordType.CombatTechnique };
         fill(r);
         var file = new FcsFile();
         file.Records.Add(r);
         var db = new GameDatabase();
         db.Apply(file, "test.mod");
-        return CombatTechnique.From(db.OfType(FcsRecordType.COMBAT_TECHNIQUE).Single());
+        return CombatTechnique.From(db.OfType(FcsRecordType.CombatTechnique).Single());
     }
 
     [Fact]

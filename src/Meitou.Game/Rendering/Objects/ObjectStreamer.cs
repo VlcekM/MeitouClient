@@ -62,7 +62,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// <summary>Unloads <paramref name="coordinate"/>'s zone; a new <see cref="InteriorVersion"/> only when it had interiors.</summary>
     void Drop(ZoneCoordinate coordinate)
     {
-        if (zones.Remove(coordinate, out var gone) && gone.Interiors.Length > 0) InteriorVersion++;
+        if (_zones.Remove(coordinate, out var gone) && gone.Interiors.Length > 0) InteriorVersion++;
     }
 
     public sealed class Zone
@@ -107,24 +107,24 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// </summary>
     public IReadOnlyList<PlacedMesh>? Staged
     {
-        get => staged;
+        get => _staged;
         set
         {
-            var touched = (staged ?? []).Concat(value ?? []).Select(ZoneOf).Distinct().ToList();
-            staged = value;
+            var touched = (_staged ?? []).Concat(value ?? []).Select(ZoneOf).Distinct().ToList();
+            _staged = value;
             foreach (var coordinate in touched)
             {
                 Drop(coordinate);
-                jobs.Remove(coordinate);
-                if (!populated.Any(p => p.Coordinate == coordinate))
+                _jobs.Remove(coordinate);
+                if (!_populated.Any(p => p.Coordinate == coordinate))
                 {
                     var (x, z) = WorldLayout.ZoneOrigin(coordinate);
-                    populated.Add((coordinate, x, z));
+                    _populated.Add((coordinate, x, z));
                 }
             }
         }
     }
-    IReadOnlyList<PlacedMesh>? staged;
+    IReadOnlyList<PlacedMesh>? _staged;
 
     static ZoneCoordinate ZoneOf(PlacedMesh p) => WorldLayout.ZoneOf(p.Transform.M41, p.Transform.M43);
 
@@ -145,7 +145,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     // ---- runtime buildings (WorldObjects.AddRuntime / RemoveRuntime; docs/simulation.md "Buildings", host seam) ----
 
-    readonly List<(ZoneCoordinate Zone, string Id, bool Replace, Task<ZoneObjects> Job)> runtimeJobs = [];
+    readonly List<(ZoneCoordinate Zone, string Id, bool Replace, Task<ZoneObjects> Job)> _runtimeJobs = [];
 
     /// <summary>
     /// A runtime placement was added to <see cref="WorldObjects"/>: a zone laid out later includes it; a zone already laid out gets only its instances (laid
@@ -155,19 +155,19 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     {
         var zone = placement.Zone;
         EnsurePopulated(zone);
-        if (!zones.ContainsKey(zone) && !jobs.ContainsKey(zone)) return;
+        if (!_zones.ContainsKey(zone) && !_jobs.ContainsKey(zone)) return;
         bool replace = placement.DestroyedOverride is not null;
-        if (jobs.ContainsKey(zone) || !replace && fills.Any(f => f.Zone.Coordinate == zone)) { Invalidate(zone); return; }
-        runtimeJobs.RemoveAll(j => j.Id == placement.Key);
-        runtimeJobs.Add((zone, placement.Key, replace, BackgroundWork.Run(() => objects.BuildRuntime(placement))));
+        if (_jobs.ContainsKey(zone) || !replace && _fills.Any(f => f.Zone.Coordinate == zone)) { Invalidate(zone); return; }
+        _runtimeJobs.RemoveAll(j => j.Id == placement.Key);
+        _runtimeJobs.Add((zone, placement.Key, replace, BackgroundWork.Run(() => objects.BuildRuntime(placement))));
     }
 
     /// <summary>A runtime placement was removed from <see cref="WorldObjects"/>: its instances and indoor volume leave the zone.</summary>
     public void RemoveRuntime(string key, string instanceId, ZoneCoordinate zone)
     {
-        runtimeJobs.RemoveAll(j => j.Id == key);
-        if (jobs.ContainsKey(zone) || fills.Any(f => f.Zone.Coordinate == zone)) { Invalidate(zone); return; }
-        if (!zones.TryGetValue(zone, out var z)) return;
+        _runtimeJobs.RemoveAll(j => j.Id == key);
+        if (_jobs.ContainsKey(zone) || _fills.Any(f => f.Zone.Coordinate == zone)) { Invalidate(zone); return; }
+        if (!_zones.TryGetValue(zone, out var z)) return;
         RemoveInstances(z, key, instanceId);
     }
 
@@ -188,16 +188,16 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     void EnsurePopulated(ZoneCoordinate zone)
     {
-        if (!zone.IsInsideGrid || populated.Any(p => p.Coordinate == zone)) return;
+        if (!zone.IsInsideGrid || _populated.Any(p => p.Coordinate == zone)) return;
         var (x, z) = WorldLayout.ZoneOrigin(zone);
-        populated.Add((zone, x, z));
+        _populated.Add((zone, x, z));
     }
 
     void Invalidate(ZoneCoordinate zone)
     {
         Drop(zone);
-        jobs.Remove(zone);
-        runtimeJobs.RemoveAll(j => j.Zone == zone);
+        _jobs.Remove(zone);
+        _runtimeJobs.RemoveAll(j => j.Zone == zone);
         EnsurePopulated(zone);
     }
 
@@ -209,12 +209,12 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
 
     void TakeRuntime()
     {
-        for (int i = runtimeJobs.Count - 1; i >= 0; i--)
+        for (int i = _runtimeJobs.Count - 1; i >= 0; i--)
         {
-            var (zone, id, replace, job) = runtimeJobs[i];
-            if (!job.IsCompleted || fills.Any(f => f.Zone.Coordinate == zone)) continue;
-            runtimeJobs.RemoveAt(i);
-            if (!job.IsCompletedSuccessfully || !objects.HasRuntime(id) || !zones.TryGetValue(zone, out var z)) continue;
+            var (zone, id, replace, job) = _runtimeJobs[i];
+            if (!job.IsCompleted || _fills.Any(f => f.Zone.Coordinate == zone)) continue;
+            _runtimeJobs.RemoveAt(i);
+            if (!job.IsCompletedSuccessfully || !objects.HasRuntime(id) || !_zones.TryGetValue(zone, out var z)) continue;
             var laid = job.Result;
             // Keep the resident zone until the replacement layout is ready; only this house and its furniture change.
             if (replace) RemoveInstances(z, id);
@@ -226,20 +226,20 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         }
     }
 
-    readonly Dictionary<ZoneCoordinate, Zone> zones = [];
-    readonly Dictionary<ZoneCoordinate, Task<ZoneObjects>> jobs = [];
-    readonly List<(ZoneCoordinate Coordinate, double X0, double Z0)> populated =
+    readonly Dictionary<ZoneCoordinate, Zone> _zones = [];
+    readonly Dictionary<ZoneCoordinate, Task<ZoneObjects>> _jobs = [];
+    readonly List<(ZoneCoordinate Coordinate, double X0, double Z0)> _populated =
         objects.PopulatedZones.Where(z => z.IsInsideGrid).Select(z => { var (x, zz) = WorldLayout.ZoneOrigin(z); return (z, x, zz); }).ToList();
-    readonly List<Zone> near = [];
+    readonly List<Zone> _near = [];
 
-    public int Loaded => zones.Count;
-    public Dictionary<ZoneCoordinate, Zone>.ValueCollection AllZones => zones.Values;   // a struct enumerator: walked every frame
-    public Zone? ZoneAt(ZoneCoordinate coordinate) => zones.GetValueOrDefault(coordinate);
+    public int Loaded => _zones.Count;
+    public Dictionary<ZoneCoordinate, Zone>.ValueCollection AllZones => _zones.Values;   // a struct enumerator: walked every frame
+    public Zone? ZoneAt(ZoneCoordinate coordinate) => _zones.GetValueOrDefault(coordinate);
     /// <summary>Zones in range not laid out yet, and those being laid out.</summary>
-    public int Pending => jobs.Count + Wanted + fills.Count;
+    public int Pending => _jobs.Count + Wanted + _fills.Count;
     public int Wanted { get; private set; }
-    public int Instances => zones.Values.Sum(z => z.Real.Count + z.Stand.Count) + (LandmarkZone?.Real.Count ?? 0);
-    public int Resolved => zones.Values.Sum(z => z.Real.Count(i => i.Gpu is not null) + z.Stand.Count(i => i.Gpu is not null)) + (LandmarkZone?.Real.Count(i => i.Gpu is not null) ?? 0);
+    public int Instances => _zones.Values.Sum(z => z.Real.Count + z.Stand.Count) + (LandmarkZone?.Real.Count ?? 0);
+    public int Resolved => _zones.Values.Sum(z => z.Real.Count(i => i.Gpu is not null) + z.Stand.Count(i => i.Gpu is not null)) + (LandmarkZone?.Real.Count(i => i.Gpu is not null) ?? 0);
 
     /// <summary>
     /// Where the camera is about to be (a character flight's arrival eye, docs/render-objects.md "Arrival prefetch"), or null: zones are laid out and kept, and
@@ -340,28 +340,28 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     {
         TakeRuntime();
         int taken = 0;
-        foreach (var (coordinate, task) in jobs.ToArray())
+        foreach (var (coordinate, task) in _jobs.ToArray())
         {
             if (!task.IsCompleted || taken >= maxNew) continue;
-            jobs.Remove(coordinate);
+            _jobs.Remove(coordinate);
             taken++;
             try { Add(task.Result); }
             catch (AggregateException e) { Console.WriteLine($"warning   zone {coordinate}: {e.InnerException?.Message ?? e.Message}"); }
         }
         var wanted = new List<(ZoneCoordinate Coordinate, float Rank, float Distance)>();
-        foreach (var (coordinate, x0, z0) in populated)
+        foreach (var (coordinate, x0, z0) in _populated)
         {
-            if (zones.ContainsKey(coordinate) || jobs.ContainsKey(coordinate)) continue;
+            if (_zones.ContainsKey(coordinate) || _jobs.ContainsKey(coordinate)) continue;
             float distance = NearZone(x0, z0, eye);
             if (distance <= range) wanted.Add((coordinate, RankZone(x0, z0, eye, range), distance));
         }
         foreach (var (coordinate, _, distance) in wanted.OrderBy(w => w.Rank))
         {
-            if (jobs.Count >= (covered ? Math.Max(MaxJobs, BackgroundWork.Threads) : MaxJobs) || WaitForLandmarks) break;
+            if (_jobs.Count >= (covered ? Math.Max(MaxJobs, BackgroundWork.Threads) : MaxJobs) || WaitForLandmarks) break;
             if (Paused && distance > PausedReach) continue;
             var landmarkClass = Landmarks;
-            var extra = staged;
-            jobs[coordinate] = BackgroundWork.Run(() =>
+            var extra = _staged;
+            _jobs[coordinate] = BackgroundWork.Run(() =>
             {
                 var laid = objects.BuildZone(coordinate);
                 if (landmarkClass is not null) laid.Items.RemoveAll(landmarkClass.IsLandmark);   // they live in LandmarkZone
@@ -369,8 +369,8 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
                 return laid;
             });
         }
-        Wanted = wanted.Count(w => !jobs.ContainsKey(w.Coordinate));
-        foreach (var zone in zones.Values.ToArray())
+        Wanted = wanted.Count(w => !_jobs.ContainsKey(w.Coordinate));
+        foreach (var zone in _zones.Values.ToArray())
             if (NearZone(zone.X0, zone.Z0, eye) > range + WorldLayout.ZoneSize) Drop(zone.Coordinate);
         FillZones(maxNew > 8 ? double.MaxValue : covered ? 16 : 1.0);
     }
@@ -383,24 +383,24 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         public int Index;
     }
 
-    readonly Queue<Fill> fills = [];
+    readonly Queue<Fill> _fills = [];
 
     void Add(ZoneObjects laid)
     {
         var (x0, z0) = WorldLayout.ZoneOrigin(laid.Zone);
         var zone = new Zone { Coordinate = laid.Zone, X0 = x0, Z0 = z0, Interiors = [.. laid.Interiors], GateHulls = [.. laid.GateHulls] };
-        if (laid.Interiors.Count > 0 || zones.TryGetValue(laid.Zone, out var old) && old.Interiors.Length > 0) InteriorVersion++;
-        zones[laid.Zone] = zone;
-        fills.Enqueue(new Fill { Zone = zone, Laid = laid });
+        if (laid.Interiors.Count > 0 || _zones.TryGetValue(laid.Zone, out var old) && old.Interiors.Length > 0) InteriorVersion++;
+        _zones[laid.Zone] = zone;
+        _fills.Enqueue(new Fill { Zone = zone, Laid = laid });
     }
 
     /// <summary>Makes the instances of laid-out zones until <paramref name="budgetMs"/> has passed (a big zone has thousands; making them all in one frame cost up to 30 ms).</summary>
     void FillZones(double budgetMs)
     {
         var watch = System.Diagnostics.Stopwatch.StartNew();
-        while (fills.TryPeek(out var f))
+        while (_fills.TryPeek(out var f))
         {
-            if (!zones.TryGetValue(f.Zone.Coordinate, out var current) || !ReferenceEquals(current, f.Zone)) { fills.Dequeue(); continue; }   // dropped meanwhile
+            if (!_zones.TryGetValue(f.Zone.Coordinate, out var current) || !ReferenceEquals(current, f.Zone)) { _fills.Dequeue(); continue; }   // dropped meanwhile
             int real = f.Laid.Items.Count, total = real + f.Laid.Stand.Count;
             while (f.Index < total)
             {
@@ -409,14 +409,14 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
                 else f.Zone.Stand.Add(Make(f.Laid.Stand[i - real], stand: true, f.Zone));
                 if ((f.Index & 63) == 0 && watch.Elapsed.TotalMilliseconds >= budgetMs) return;
             }
-            fills.Dequeue();
+            _fills.Dequeue();
         }
     }
 
     Instance Make(PlacedMesh p, bool stand, Zone zone)
     {
         // A map feature names its texturing "texture mode", a foliage mesh (staged by the Meitou title) "material type"; 2 is TERRAIN in both.
-        bool terrainMode = p.Kind == PlacedKind.MapFeature && p.Source.GetInt(p.Source.Type == Meitou.Data.Fcs.FcsRecordType.FOLIAGE_MESH ? "material type" : "texture mode") == 2;
+        bool terrainMode = p.Kind == PlacedKind.MapFeature && p.Source.GetInt(p.Source.Type == Data.Fcs.FcsRecordType.FoliageMesh ? "material type" : "texture mode") == 2;
         var mesh = meshes.Get(p.MeshPath, distant: stand);
         if (terrainMode) mesh.KeepLevelIndices = true;
         var inst = new Instance { Placed = p, Mesh = mesh, Transform = p.Transform, Centre = p.Transform.Translation, TerrainMode = terrainMode, Stand = stand };
@@ -432,7 +432,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     {
         int waiting = 0, resolved = 0;
         // During a flight the arrival's zones take the resolve budget first.
-        foreach (var zone in Ahead is null ? (IEnumerable<Zone>)zones.Values : zones.Values.OrderBy(z => RankZone(z.X0, z.Z0, eye, objectRange)))
+        foreach (var zone in Ahead is null ? (IEnumerable<Zone>)_zones.Values : _zones.Values.OrderBy(z => RankZone(z.X0, z.Z0, eye, objectRange)))
         {
             var list = zone.Unresolved;
             // Parked instances come back once the eye could be within their range (the zone's square, less the margin and a part's size). The ranges are
@@ -574,22 +574,22 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
     /// <summary>The loaded zones within <paramref name="range"/> of the eye whose square may be seen through <paramref name="frustum"/>.</summary>
     public List<Zone> ZonesNear(Vector3 eye, float range, Vector4[] frustum)
     {
-        near.Clear();
-        foreach (var zone in zones.Values)
+        _near.Clear();
+        foreach (var zone in _zones.Values)
         {
             if (ZoneDistance(zone.X0, zone.Z0, eye) > range) continue;
             var min = new Vector3((float)zone.X0, -2000, (float)zone.Z0);
             var max = new Vector3((float)zone.X0 + WorldLayout.ZoneSize, 20000, (float)zone.Z0 + WorldLayout.ZoneSize);
-            if (WorldCamera.Intersects(frustum, min, max)) near.Add(zone);
+            if (WorldCamera.Intersects(frustum, min, max)) _near.Add(zone);
         }
         // The dictionary enumerates in the order zones were taken in (worker completion), and the batches' and the instances' order, the depth ties and
         // the draw log follow it: by position, a frame draws in the same order whatever the streaming did.
-        near.Sort(static (a, b) => a.X0 != b.X0 ? a.X0.CompareTo(b.X0) : a.Z0.CompareTo(b.Z0));
-        return near;
+        _near.Sort(static (a, b) => a.X0 != b.X0 ? a.X0.CompareTo(b.X0) : a.Z0.CompareTo(b.Z0));
+        return _near;
     }
 
     public void Dispose()
     {
-        foreach (var job in jobs.Values) { try { job.Wait(5000); } catch (AggregateException) { } }
+        foreach (var job in _jobs.Values) { try { job.Wait(5000); } catch (AggregateException) { } }
     }
 }

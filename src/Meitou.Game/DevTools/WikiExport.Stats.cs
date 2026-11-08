@@ -31,7 +31,7 @@ static partial class WikiExport
         var rows = new List<Row>();
         var unlocks = new Dictionary<string, List<UnlockedBy>>(StringComparer.Ordinal);
         var leadsTo = new Dictionary<string, List<string>>(StringComparer.Ordinal);   // research id -> names of research that list it as a requirement
-        var all = db.OfType(FcsRecordType.RESEARCH).Where(r => r.Name.Length > 0).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal).ToList();
+        var all = db.OfType(FcsRecordType.Research).Where(r => r.Name.Length > 0).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal).ToList();
         foreach (var r in all)
         {
             foreach (var field in ResearchData.UnlockFields)
@@ -57,7 +57,7 @@ static partial class WikiExport
                 {
                     ["id"] = req.TargetStringId,
                     ["name"] = target.Name,
-                    ["kind"] = target.Type == FcsRecordType.RESEARCH ? "research" : target.Type.ToString().ToLowerInvariant(),
+                    ["kind"] = target.Type == FcsRecordType.Research ? "research" : target.Type.ToString().ToLowerInvariant(),
                     ["repeat"] = req.Values.Value0,
                 });
             }
@@ -99,7 +99,7 @@ static partial class WikiExport
                 ["leadsTo"] = leadsTo.GetValueOrDefault(r.StringId)?.Distinct().Take(20).ToList() ?? [],
                 ["record"] = r.StringId,
             };
-            if (!FactsOnly && r.GetString("description") is { Length: > 0 } rdesc) data["description"] = Trim(rdesc, 300);
+            if (!s_factsOnly && r.GetString("description") is { Length: > 0 } rdesc) data["description"] = Trim(rdesc, 300);
             if (improves.Count > 0)
             {
                 data["improves"] = improves;
@@ -107,7 +107,7 @@ static partial class WikiExport
                 if (r.GetInt("power increase") != 0) data["powerIncrease"] = r.GetInt("power increase");
                 if (r.GetInt("power capacity increase") != 0) data["capacityIncrease"] = r.GetInt("power capacity increase");
             }
-            string desc = FactsOnly ? "" : r.GetString("description");
+            string desc = s_factsOnly ? "" : r.GetString("description");
             string needs = cost.Count == 0 ? "no items" : string.Join(", ", cost.OfType<SortedDictionary<string, object?>>().Select(c => $"{c["count"]} {c["item"]}"));
             rows.Add(new Row(id(r.Name, r.StringId), r.Name, "research", null, null, null, null, "Observed",
                 $"Research ({r.GetString("category")}), {r.GetInt("time")} base hours, costs {needs}." + (requires.Count > 0 ? " Needs " + string.Join(", ", requires.OfType<SortedDictionary<string, object?>>().Select(q => (string)q["name"]!)) + "." : "") + (desc.Length > 0 ? " " + Trim(desc, 240) : ""),
@@ -165,7 +165,7 @@ static partial class WikiExport
     {
         // Who makes each weapon type: the manufacturers' `weapon types`, their price/weight/damage modifiers and their `weapon models` (grades with their level numbers).
         var makers = new Dictionary<string, List<GameRecord>>(StringComparer.Ordinal);
-        foreach (var m in db.OfType(FcsRecordType.WEAPON_MANUFACTURER))
+        foreach (var m in db.OfType(FcsRecordType.WeaponManufacturer))
             foreach (var t in m.GetReferences("weapon types"))
             {
                 if (!makers.TryGetValue(t.TargetStringId, out var l)) makers[t.TargetStringId] = l = [];
@@ -178,14 +178,14 @@ static partial class WikiExport
         }
 
         var items = new List<Row>();
-        var records = db.OfType(FcsRecordType.WEAPON).Concat(db.OfType(FcsRecordType.CROSSBOW)).Concat(db.OfType(FcsRecordType.ARMOUR)).Concat(db.OfType(FcsRecordType.ITEM))
+        var records = db.OfType(FcsRecordType.Weapon).Concat(db.OfType(FcsRecordType.Crossbow)).Concat(db.OfType(FcsRecordType.Armour)).Concat(db.OfType(FcsRecordType.Item))
             .Where(r => r.Name.Length > 0).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal);
         foreach (var record in records)
         {
             var data = new SortedDictionary<string, object?> { ["value"] = Num(record, "value"), ["weightKg"] = Num(record, "weight kg"), ["record"] = record.StringId };
             string kind, summary;
-            string desc = FactsOnly ? "" : record.GetString("description");
-            if (record.Type == FcsRecordType.WEAPON)
+            string desc = s_factsOnly ? "" : record.GetString("description");
+            if (record.Type == FcsRecordType.Weapon)
             {
                 kind = "weapon";
                 var w = WeaponData.From(record);
@@ -231,7 +231,7 @@ static partial class WikiExport
                 Put(data, "blueprint", Blueprint(record.StringId));
                 summary = $"{cls} weapon, cut x{Round(w.CutDamageMultiplier)}, blunt x{Round(w.BluntDamageMultiplier)}, {(w.CanBlock ? "can block" : "cannot block")}, value {record.GetInt("value")}, weight {Num(record, "weight kg") ?? 0} kg.";
             }
-            else if (record.Type == FcsRecordType.CROSSBOW)
+            else if (record.Type == FcsRecordType.Crossbow)
             {
                 kind = "crossbow";
                 foreach (var key in new[] { "pierce damage min 0", "pierce damage max 0", "pierce damage min 1", "pierce damage max 1", "range", "range 1", "reload time min", "reload time max", "reload time min 1", "reload time max 1", "accuracy deviation at 0 skill", "accuracy deviation at 0 skill 1", "shot speed", "shot speed 1", "bleed mult", "accuracy perfect skill", "num shots", "value 1", "human damage mult", "animal damage mult", "robot damage mult", "material cost", "craft time hrs" })
@@ -241,7 +241,7 @@ static partial class WikiExport
                 Put(data, "blueprint", Blueprint(record.StringId));
                 summary = $"Crossbow, damage {Num(record, "pierce damage min 0")} to {Num(record, "pierce damage max 0")} at the lowest grade ({Num(record, "pierce damage min 1")} to {Num(record, "pierce damage max 1")} at the highest), range {Num(record, "range")}.";
             }
-            else if (record.Type == FcsRecordType.ARMOUR)
+            else if (record.Type == FcsRecordType.Armour)
             {
                 kind = "armour";
                 var a = ArmourData.From(record);
@@ -322,7 +322,7 @@ static partial class WikiExport
         // Nests: every TOWN record of type Nest, with the squads that roam around it.
         var nestSquads = new Dictionary<string, List<string>>(StringComparer.Ordinal);   // nest record -> squad ids
         var nestsOf = new Dictionary<string, List<string>>(StringComparer.Ordinal);      // squad id -> nest names
-        foreach (var r in db.OfType(FcsRecordType.TOWN))
+        foreach (var r in db.OfType(FcsRecordType.Town))
         {
             var t = TownData.From(r);
             if (t.Type != TownType.Nest || t.Name.Length == 0) continue;
@@ -429,7 +429,7 @@ static partial class WikiExport
                 list.Add((t, l));
             }
         var rows = new List<Row>();
-        foreach (var record in db.OfType(FcsRecordType.ANIMAL_CHARACTER).Where(r => r.Name.Length > 0).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.AnimalCharacter).Where(r => r.Name.Length > 0).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
             var race = record.GetReferences("race") is { Count: > 0 } rl ? db.Find(rl[0].TargetStringId) : null;
             var data = new SortedDictionary<string, object?> { ["record"] = record.StringId };
@@ -475,7 +475,7 @@ static partial class WikiExport
             data["smellEggs"] = Round(record.GetFloat("smell eggs"));
             data["turnRate"] = Round(record.GetFloat("turn rate"));
             data["unique"] = record.GetBool("unique");
-            if (record.GetReferences("weapon") is { Count: > 0 } wl && db.Find(wl[0].TargetStringId) is { Type: FcsRecordType.WEAPON } wr)
+            if (record.GetReferences("weapon") is { Count: > 0 } wl && db.Find(wl[0].TargetStringId) is { Type: FcsRecordType.Weapon } wr)
             {
                 var w = WeaponData.From(wr);
                 data["weapon"] = new SortedDictionary<string, object?>

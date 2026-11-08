@@ -17,7 +17,7 @@ public static class MyGuiImages
         int at = int.TryParse(properties.GetValueOrDefault("ImageFrame"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int f) ? f : 0;
         var frame = index?.Elements("Frame").ElementAtOrDefault(at) ?? index?.Elements("Frame").FirstOrDefault();
         if (group is null || frame is null) return null;
-        float[] Pair(string? s) => (s ?? "0 0").Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(v => float.Parse(v, CultureInfo.InvariantCulture)).ToArray();
+        static float[] Pair(string? s) => (s ?? "0 0").Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(v => float.Parse(v, CultureInfo.InvariantCulture)).ToArray();
         var size = Pair((string?)group.Attribute("size")); var point = Pair((string?)frame.Attribute("point"));
         if (size.Length != 2 || point.Length != 2) throw new InvalidDataException("Image set size and point need two coordinates.");
         return new((string?)group.Attribute("texture") ?? "", new(point[0], point[1], size[0], size[1]));

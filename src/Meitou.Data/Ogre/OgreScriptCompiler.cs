@@ -56,18 +56,18 @@ public sealed class OgreScriptFile
 /// </summary>
 public sealed class OgreScriptCompiler
 {
-    readonly Func<string, string?> importResolver;
-    readonly List<OgreScriptDiagnostic> errors = [];
-    readonly Dictionary<string, string> env = [];
+    readonly Func<string, string?> _importResolver;
+    readonly List<OgreScriptDiagnostic> _errors = [];
+    readonly Dictionary<string, string> _env = [];
 
     // Ogre keeps imports in a std::map (sorted by source name, byte order) and requests in a multimap.
-    readonly SortedDictionary<string, List<OgreScriptNode>> imports = new(StringComparer.Ordinal);
-    readonly SortedDictionary<string, List<string>> importRequests = new(StringComparer.Ordinal);
-    readonly List<OgreScriptNode> importTable = [];
-    readonly HashSet<string> loading = new(StringComparer.Ordinal);
+    readonly SortedDictionary<string, List<OgreScriptNode>> _imports = new(StringComparer.Ordinal);
+    readonly SortedDictionary<string, List<string>> _importRequests = new(StringComparer.Ordinal);
+    readonly List<OgreScriptNode> _importTable = [];
+    readonly HashSet<string> _loading = new(StringComparer.Ordinal);
 
     /// <param name="importResolver">Returns the text of a script by bare file name, or null if there is none.</param>
-    OgreScriptCompiler(Func<string, string?> importResolver) => this.importResolver = importResolver;
+    OgreScriptCompiler(Func<string, string?> importResolver) => this._importResolver = importResolver;
 
     /// <summary>
     /// Compiles one file. Lexer and parser errors throw <see cref="OgreScriptException"/> (in Ogre they abort the file);
@@ -80,10 +80,10 @@ public sealed class OgreScriptCompiler
         compiler.ProcessImports(ast);
         compiler.ProcessObjects(ast, ast);
         compiler.ProcessVariables(ast);
-        return new OgreScriptFile { Name = file, Nodes = ast, Diagnostics = compiler.errors };
+        return new OgreScriptFile { Name = file, Nodes = ast, Diagnostics = compiler._errors };
     }
 
-    void AddError(OgreScriptError code, string file, int line, string message = "") => errors.Add(new(code, file, line, message));
+    void AddError(OgreScriptError code, string file, int line, string message = "") => _errors.Add(new(code, file, line, message));
 
     // ---------------------------------------------------------------- concrete tree to objects and properties
 
@@ -133,7 +133,7 @@ public sealed class OgreScriptCompiler
             }
             string name = node.Children[0].Token, value = node.Children[1].Token;
             if (current is OgreScriptObject obj) obj.Variables[name] = value;
-            else env.TryAdd(name, value); // std::map::insert: the first top-level set wins
+            else _env.TryAdd(name, value); // std::map::insert: the first top-level set wins
         }
         else if (node.Type == OgreConcreteNodeType.Variable)
         {
@@ -217,7 +217,7 @@ public sealed class OgreScriptCompiler
         {
             if (nodes[i] is not OgreScriptImport import) { i++; continue; }
 
-            if (!imports.ContainsKey(import.Source) && loading.Add(import.Source))
+            if (!_imports.ContainsKey(import.Source) && _loading.Add(import.Source))
             {
                 // Ogre recurses without a guard; a cyclic import would overflow its stack, so no working script has one.
                 var imported = LoadImport(import);
@@ -225,13 +225,13 @@ public sealed class OgreScriptCompiler
                 {
                     ProcessImports(imported);
                     ProcessObjects(imported, imported);
-                    imports[import.Source] = imported;
+                    _imports[import.Source] = imported;
                 }
-                loading.Remove(import.Source);
+                _loading.Remove(import.Source);
             }
 
-            if (!importRequests.TryGetValue(import.Source, out var requests))
-                importRequests[import.Source] = requests = [];
+            if (!_importRequests.TryGetValue(import.Source, out var requests))
+                _importRequests[import.Source] = requests = [];
             if (import.Target == "*")
             {
                 requests.Clear();
@@ -244,25 +244,25 @@ public sealed class OgreScriptCompiler
         }
 
         // Every imported file (sorted by name) goes to the front of the import table: whole, or just the requested objects.
-        foreach (var (source, imported) in imports)
+        foreach (var (source, imported) in _imports)
         {
-            if (!importRequests.TryGetValue(source, out var requests) || requests.Count == 0) continue;
+            if (!_importRequests.TryGetValue(source, out var requests) || requests.Count == 0) continue;
             if (requests[0] == "*")
             {
-                importTable.InsertRange(0, imported);
+                _importTable.InsertRange(0, imported);
                 continue;
             }
             foreach (var target in requests)
             {
                 var found = LocateTarget(imported, target);
-                if (found is not null) importTable.Insert(0, found);
+                if (found is not null) _importTable.Insert(0, found);
             }
         }
     }
 
     List<OgreScriptNode>? LoadImport(OgreScriptImport import)
     {
-        var text = importResolver(import.Source);
+        var text = _importResolver(import.Source);
         if (text is null)
         {
             AddError(OgreScriptError.ImportNotFound, import.File, import.Line, import.Source);
@@ -286,7 +286,7 @@ public sealed class OgreScriptCompiler
             foreach (var name in obj.Bases)
             {
                 // The current file first, then whatever was imported. Nothing else: other files are not searched.
-                var source = LocateTarget(top, name) ?? LocateTarget(importTable, name);
+                var source = LocateTarget(top, name) ?? LocateTarget(_importTable, name);
                 if (source is not null) Overlay(source, obj);
                 else AddError(OgreScriptError.ObjectBaseNotFound, obj.File, obj.Line, $"base object named \"{name}\" not found in script definition");
             }
@@ -439,28 +439,28 @@ public sealed class OgreScriptCompiler
                     i++;
                     break;
                 case OgreScriptVariableAccess access:
-                {
-                    var scope = Ancestors(access).OfType<OgreScriptObject>().FirstOrDefault();
-                    string? value = scope?.GetVariable(access.Name);
-                    if (value is null && env.TryGetValue(access.Name, out var global)) value = global;
+                    {
+                        var scope = Ancestors(access).OfType<OgreScriptObject>().FirstOrDefault();
+                        string? value = scope?.GetVariable(access.Name);
+                        if (value is null && _env.TryGetValue(access.Name, out var global)) value = global;
 
-                    nodes.RemoveAt(i);
-                    if (value is not null)
-                    {
-                        var expanded = new List<OgreScriptNode>();
-                        foreach (var c in OgreScriptParser.ParseChunk(OgreScriptLexer.Tokenize(value, access.File)))
-                            Visit(c, null, expanded);
-                        foreach (var e in expanded) e.Parent = access.Parent;
-                        ProcessVariables(expanded);
-                        nodes.InsertRange(i, expanded);
-                        i += expanded.Count;
+                        nodes.RemoveAt(i);
+                        if (value is not null)
+                        {
+                            var expanded = new List<OgreScriptNode>();
+                            foreach (var c in OgreScriptParser.ParseChunk(OgreScriptLexer.Tokenize(value, access.File)))
+                                Visit(c, null, expanded);
+                            foreach (var e in expanded) e.Parent = access.Parent;
+                            ProcessVariables(expanded);
+                            nodes.InsertRange(i, expanded);
+                            i += expanded.Count;
+                        }
+                        else
+                        {
+                            AddError(OgreScriptError.UndefinedVariable, access.File, access.Line, access.Name);
+                        }
+                        break;
                     }
-                    else
-                    {
-                        AddError(OgreScriptError.UndefinedVariable, access.File, access.Line, access.Name);
-                    }
-                    break;
-                }
                 default:
                     i++;
                     break;

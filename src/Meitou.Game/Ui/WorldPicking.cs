@@ -34,7 +34,7 @@ sealed class WorldPicking(PlayerInterface player)
         float Above(float t)
         {
             var p = origin + direction * t;
-            return p.Y - player.ground(p.X, p.Z);
+            return p.Y - player.Ground(p.X, p.Z);
         }
         if (Above(0) <= 0) return origin;
         float previous = 0, step = 2;
@@ -49,7 +49,7 @@ sealed class WorldPicking(PlayerInterface player)
                     if (Above(mid) > 0) lo = mid; else hi = mid;
                 }
                 var p = origin + direction * hi;
-                return new Vector3(p.X, player.ground(p.X, p.Z), p.Z);
+                return new Vector3(p.X, player.Ground(p.X, p.Z), p.Z);
             }
             previous = t;
             step = MathF.Max(2, t * 0.01f);
@@ -103,9 +103,9 @@ sealed class WorldPicking(PlayerInterface player)
         if (player.Ray(pixel) is not { } ray) return null;
         CharacterId? best = null;
         float bestT = float.MaxValue;
-        foreach (var c in player.session.CurrentSnapshot.Characters)
+        foreach (var c in player.Session.CurrentSnapshot.Characters)
         {
-            if (!accept(c) || player.stealthView.HiddenInWorld?.Invoke(c.Id) == true) continue;   // not drawn: not picked, as the original's pick needs a visible character
+            if (!accept(c) || player.StealthView.HiddenInWorld?.Invoke(c.Id) == true) continue;   // not drawn: not picked, as the original's pick needs a visible character
             // The drawn body where the renderer has it (every part of a person or an animal, as posed); else a capsule from the feet up.
             float? hit = MeshHit?.Invoke(c.Id, ray.Origin, ray.Direction);
             if (hit is { } meshT)
@@ -113,7 +113,7 @@ sealed class WorldPicking(PlayerInterface player)
                 if (meshT < bestT) (bestT, best) = (meshT, c.Id);
                 continue;
             }
-            var feet = player.where(c);
+            var feet = player.Where(c);
             float distance = Vector3.Distance(player.Eye, feet);
             float radius = MathF.Max(1.0f, distance * 0.012f);
             if (RaySegment(ray.Origin, ray.Direction, feet, feet + new Vector3(0, PlayerInterface.CharacterHeight, 0), radius) is { } t && t < bestT)
@@ -124,8 +124,8 @@ sealed class WorldPicking(PlayerInterface player)
         }
         (CharacterId Id, float T)? picked = best is not { } found || player.Hidden(ray, bestT) ? null : (found, bestT);
         // An occupied cage with occupant selection that the ray meets first gives its occupant (the original's FUN_1407fb410 for the cage's occupant).
-        if (player.furniture.PickCageAt(pixel) is { Cage: { OccupantSelection: true, Occupant: { IsNone: false } occupant }, T: var cageT } && (picked is not { } nearer || cageT < nearer.T)
-            && player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == occupant) is { } held && accept(held) && player.stealthView.HiddenInWorld?.Invoke(occupant) != true)
+        if (player.Furniture.PickCageAt(pixel) is { Cage: { OccupantSelection: true, Occupant: { IsNone: false } occupant }, T: var cageT } && (picked is not { } nearer || cageT < nearer.T)
+            && player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == occupant) is { } held && accept(held) && player.StealthView.HiddenInWorld?.Invoke(occupant) != true)
             return (occupant, cageT);
         return picked;
     }
@@ -145,29 +145,29 @@ sealed class WorldPicking(PlayerInterface player)
         (Picked Kind, float T) best = (Picked.None, float.MaxValue);
         void Offer(Picked kind, float? t) { if (t is { } v && v < best.T) best = (kind, v); }
         if (player.QuickOrder(p) is { Do: not null } order) Offer(Picked.Character, PickWhereAt(p, c => c.Id == order.Target)?.T ?? 0);
-        else if (PickWhereAt(p, _ => true) is { } any && player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == any.Id) is { } held && player.contextMenuWindow.Verbs(held).Count > 0)
+        else if (PickWhereAt(p, _ => true) is { } any && player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == any.Id) is { } held && player.ContextMenuWindow.Verbs(held).Count > 0)
             Offer(Picked.Character, any.T);   // no quick order, but a held click opens its menu
-        var item = player.groundItemPicks.PickGroundItemAt(p);
+        var item = player.GroundItemPicks.PickGroundItemAt(p);
         Offer(Picked.GroundItem, item?.T);
-        var container = player.furniture.PickContainerAt(p);
+        var container = player.Furniture.PickContainerAt(p);
         Offer(Picked.Container, container?.T);
-        Offer(Picked.Door, player.furniture.PickDoorAt(p)?.T);
-        Offer(Picked.Seat, player.furniture.PickSeatAt(p)?.T);
-        var bed = player.furniture.PickBedAt(p);
+        Offer(Picked.Door, player.Furniture.PickDoorAt(p)?.T);
+        Offer(Picked.Seat, player.Furniture.PickSeatAt(p)?.T);
+        var bed = player.Furniture.PickBedAt(p);
         Offer(Picked.Bed, bed?.T);
-        var cage = player.furniture.PickCageAt(p);
+        var cage = player.Furniture.PickCageAt(p);
         Offer(Picked.Cage, cage?.T);
-        Offer(Picked.Dummy, player.furniture.PickDummyAt(p)?.T);
-        Offer(Picked.Rock, player.furniture.PickRockAt(p)?.T);
-        if (player.build.PickSiteAt(p) is { } site && player.build.SiteIsObject(site.Site)) Offer(Picked.Site, site.T);
+        Offer(Picked.Dummy, player.Furniture.PickDummyAt(p)?.T);
+        Offer(Picked.Rock, player.Furniture.PickRockAt(p)?.T);
+        if (player.Build.PickSiteAt(p) is { } site && player.Build.SiteIsObject(site.Site)) Offer(Picked.Site, site.T);
         // An item behind the container, bed or cage met first but lying inside its bounds takes the click (the original's walk, FUN_140800250: the building's box holds the item).
         if (item is { } i && ItemAt(i.Id) is { } at && best.Kind switch
-            {
-                Picked.Container => Holds(container!.Value.Container.Record, container.Value.Container.Position, container.Value.Container.Yaw, at),
-                Picked.Bed => Holds(bed!.Value.Bed.Record, bed.Value.Bed.Position, bed.Value.Bed.Yaw, at),
-                Picked.Cage => Holds(cage!.Value.Cage.Record, cage.Value.Cage.Position, cage.Value.Cage.Yaw, at),
-                _ => false,
-            })
+        {
+            Picked.Container => Holds(container!.Value.Container.Record, container.Value.Container.Position, container.Value.Container.Yaw, at),
+            Picked.Bed => Holds(bed!.Value.Bed.Record, bed.Value.Bed.Position, bed.Value.Bed.Yaw, at),
+            Picked.Cage => Holds(cage!.Value.Cage.Record, cage.Value.Cage.Position, cage.Value.Cage.Yaw, at),
+            _ => false,
+        })
             best = (Picked.GroundItem, i.T);
         return best;
     }
@@ -175,14 +175,14 @@ sealed class WorldPicking(PlayerInterface player)
     /// <summary>Where a ground item is drawn (<see cref="GroundItemPicks.GroundItemShape"/>), else where it lies; null when it is gone.</summary>
     Vector3? ItemAt(int id)
     {
-        foreach (var g in player.session.CurrentSnapshot.GroundItems)
-            if (g.Id == id) return player.groundItemPicks.GroundItemShape?.Invoke(g)?.At ?? g.Position;
+        foreach (var g in player.Session.CurrentSnapshot.GroundItems)
+            if (g.Id == id) return player.GroundItemPicks.GroundItemShape?.Invoke(g)?.At ?? g.Position;
         return null;
     }
 
     /// <summary>Whether a point lies inside the box of a building's collision placed at <paramref name="position"/> turned by <paramref name="yaw"/> (its footprint, from its lowest to its highest point).</summary>
     bool Holds(string record, Vector3 position, float yaw, Vector3 point) =>
-        player.build.buildHost?.Placement.Footprint(record) is { } f && point.Y >= position.Y + f.YMin && point.Y <= position.Y + f.YMax
+        player.Build.Services?.Placement.Footprint(record) is { } f && point.Y >= position.Y + f.YMin && point.Y <= position.Y + f.YMax
         && f.Gap(position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw), new Vector2(point.X, point.Z)) == 0;
 
     /// <summary>The host's test for where a ray enters a building seen from outside (its interior not shown), within a distance; null when none is in the way.</summary>
@@ -195,10 +195,10 @@ sealed class WorldPicking(PlayerInterface player)
     {
         float x0 = MathF.Min(a.X, b.X), x1 = MathF.Max(a.X, b.X), y0 = MathF.Min(a.Y, b.Y), y1 = MathF.Max(a.Y, b.Y);
         var list = new List<CharacterId>();
-        foreach (var c in player.session.CurrentSnapshot.Characters)
+        foreach (var c in player.Session.CurrentSnapshot.Characters)
         {
             if (!c.IsPlayer) continue;
-            var p = player.where(c) + new Vector3(0, PlayerInterface.CharacterHeight / 2, 0);
+            var p = player.Where(c) + new Vector3(0, PlayerInterface.CharacterHeight / 2, 0);
             if (Vector3.Distance(player.Eye, p) > PlayerInterface.BoxSelectRange) continue;
             if (player.Project(p) is { } s && s.X >= x0 && s.X <= x1 && s.Y >= y0 && s.Y <= y1) list.Add(c.Id);
         }
@@ -208,13 +208,13 @@ sealed class WorldPicking(PlayerInterface player)
     // Picking buildings against their collision triangles (docs/game/ui-input.md "Building picking and selection"): the original's pick is a raycast against the collision shapes, not a prism
     // over their merged hull. The hull prism stays as the first, cheap test; a building that has collision files is then tested triangle by triangle, so ground, characters and neighbours
     // next to a building are not taken for it.
-    readonly Dictionary<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> collisionMeshes = [];
+    readonly Dictionary<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _collisionMeshes = [];
 
     IReadOnlyList<(Vector3[] Vertices, int[] Indices)> CollisionMeshOf(string record)
     {
-        if (collisionMeshes.TryGetValue(record, out var known)) return known;
-        var mesh = player.build.buildHost?.Placement.CollisionMesh(record) ?? [];
-        collisionMeshes[record] = mesh;
+        if (_collisionMeshes.TryGetValue(record, out var known)) return known;
+        var mesh = player.Build.Services?.Placement.CollisionMesh(record) ?? [];
+        _collisionMeshes[record] = mesh;
         return mesh;
     }
 

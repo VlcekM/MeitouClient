@@ -32,14 +32,14 @@ sealed class LookPresets(SettingsMenu menu)
         new("Vanilla colours", "example", MeitouVersion, new() { [SettingsMenu.SwitchKey("Tone map and grade")] = 0, [SettingsMenu.SwitchKey("Night grading")] = 0, [SettingsMenu.SwitchKey("Dithering")] = 0 }),
     ];
 
-    List<LookPreset>? looks;
-    internal LookPreset? activeLook;
-    SettingsMenu.Choice? lookChoice, qualityChoice;
-    internal SettingsMenu.Choice LookChoice => lookChoice ??= new(() => Looks().Select(l => l.Source == "built in" ? l.Name : $"{l.Name}  ·  {l.Source}").ToList(),
-        () => Looks().IndexOf(ActiveLook), i => { var look = Looks()[i]; ApplyLook(look); menu.notice = $"{look.Name} loaded."; });
-    internal SettingsMenu.Choice QualityChoice => qualityChoice ??= menu.tiers.PresetEntry.Choice!;
+    List<LookPreset>? _looks;
+    internal LookPreset? ChosenLook;
+    SettingsMenu.Choice? _lookChoice, _qualityChoice;
+    internal SettingsMenu.Choice LookChoice => _lookChoice ??= new(() => Looks().Select(l => l.Source == "built in" ? l.Name : $"{l.Name}  ·  {l.Source}").ToList(),
+        () => Looks().IndexOf(ActiveLook), i => { var look = Looks()[i]; ApplyLook(look); menu.Notice = $"{look.Name} loaded."; });
+    internal SettingsMenu.Choice QualityChoice => _qualityChoice ??= menu.Tiers.PresetEntry.Choice!;
 
-    string PresetFolder => Path.Combine(Path.GetDirectoryName(menu.config.Path) is { Length: > 0 } dir ? dir : ".", LookFolder);
+    string PresetFolder => Path.Combine(Path.GetDirectoryName(menu.Config.Path) is { Length: > 0 } dir ? dir : ".", LookFolder);
 
     /// <summary>The folder of the player's look presets, beside <c>meitou.user.json</c>.</summary>
     internal const string LookFolder = "presets";
@@ -73,19 +73,19 @@ sealed class LookPresets(SettingsMenu menu)
 
     List<LookPreset> Looks()
     {
-        if (looks is not null) return looks;
-        looks = [MeitouLook, .. ExampleLooks];
+        if (_looks is not null) return _looks;
+        _looks = [MeitouLook, .. ExampleLooks];
         try
         {
             if (!menu.NoDiskWrites && Directory.Exists(PresetFolder))
                 foreach (var file in Directory.GetFiles(PresetFolder, "*.json").Order(StringComparer.OrdinalIgnoreCase))
-                    if (ReadLook(File.ReadAllText(file), "mine") is { } look) looks.Add(look with { File = file });
+                    if (ReadLook(File.ReadAllText(file), "mine") is { } look) _looks.Add(look with { File = file });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
-        return looks;
+        return _looks;
     }
 
-    internal LookPreset ActiveLook => activeLook ??= Looks().FirstOrDefault(l => l.Name == menu.config.LookPreset) ?? MeitouLook;
+    internal LookPreset ActiveLook => ChosenLook ??= Looks().FirstOrDefault(l => l.Name == menu.Config.LookPreset) ?? MeitouLook;
 
     // The preset files and share codes are LookPresetFile's (Meitou.Core), the launcher's too.
     static LookPreset? ReadLook(string json, string source) =>
@@ -158,11 +158,11 @@ sealed class LookPresets(SettingsMenu menu)
     };
 
     IEnumerable<(string Key, Toggle Toggle, bool Default)> LookToggles() =>
-        menu.values.Toggles.Select((t, i) => (SettingsMenu.SwitchKey(t.Label), t, menu.toggleDefaults[i]))
+        menu.Values.Toggles.Select((t, i) => (SettingsMenu.SwitchKey(t.Label), t, menu.ToggleDefaults[i]))
             .Where(x => x.t.Remaster && IsLook(x.t.Label, true));
 
     IEnumerable<(string Key, Slider Slider, float Default)> LookSliders() =>
-        menu.values.Sliders.Select((s, i) => (s.Label, s, menu.defaults[i])).Where(x => SettingsMenu.Section(x.s.Label) is not ("Display" or "Advanced") && IsLook(x.s.Label, false));
+        menu.Values.Sliders.Select((s, i) => (s.Label, s, menu.Defaults[i])).Where(x => SettingsMenu.Section(x.s.Label) is not ("Display" or "Advanced") && IsLook(x.s.Label, false));
 
     static float LookValue(LookPreset look, string key, float meitou) => look.Values.TryGetValue(key, out float v) ? v : meitou;
 
@@ -171,7 +171,7 @@ sealed class LookPresets(SettingsMenu menu)
     /// <summary>
     /// Whether Low quality holds this look switch off: one of <see cref="QualityTiers.LowOffSwitches"/> the preset has on, at Low, not kept on.
     /// </summary>
-    bool CutAtLow(string label) => QualityTiers.LowOffSwitches.Contains(label) && !menu.config.KeepAtLow.Contains(label) && !FaithfulLook && PresetHas(label) && menu.tiers.Tier == QualityTiers.LowPreset;
+    bool CutAtLow(string label) => QualityTiers.LowOffSwitches.Contains(label) && !menu.Config.KeepAtLow.Contains(label) && !FaithfulLook && PresetHas(label) && menu.Tiers.Tier == QualityTiers.LowPreset;
 
     internal IEnumerable<string> LowCut() => QualityTiers.LowOffSwitches.Where(CutAtLow);
 
@@ -213,14 +213,14 @@ sealed class LookPresets(SettingsMenu menu)
     /// unknown, it is Faithful while every Faithful / Meitou effect switch is on the game's side (one that does not take, such as indirect light without ray queries, is
     /// ignored; so are the tier's switches and the optional bloom). The guess is not saved: choosing a look saves it.
     /// </summary>
-    internal bool FaithfulLook => menu.config.FaithfulLook ?? menu.values.Toggles
-        .Where(t => IsGraphicsSwitch(t) && !t.Optional && !QualityTiers.PresetToggles.Any(p => p.Label == t.Label) && !stuckSwitches.Contains(t.Label)).All(t => !t.Get());
+    internal bool FaithfulLook => menu.Config.FaithfulLook ?? menu.Values.Toggles
+        .Where(t => IsGraphicsSwitch(t) && !t.Optional && !QualityTiers.PresetToggles.Any(p => p.Label == t.Label) && !StuckSwitches.Contains(t.Label)).All(t => !t.Get());
 
     internal void ApplyLook(LookPreset look)
     {
-        menu.config.FaithfulLook = false;
-        activeLook = look;
-        menu.config.LookPreset = ReferenceEquals(look, MeitouLook) ? null : look.Name;
+        menu.Config.FaithfulLook = false;
+        ChosenLook = look;
+        menu.Config.LookPreset = ReferenceEquals(look, MeitouLook) ? null : look.Name;
         foreach (var (key, toggle, meitou) in LookToggles())
         {
             bool on = LookValue(look, key, meitou ? 1 : 0) >= 0.5f && !CutAtLow(toggle.Label);
@@ -239,23 +239,23 @@ sealed class LookPresets(SettingsMenu menu)
                 if (toggle.Get() != on) toggle.Set(on);
             }
         foreach (var (k, slider, meitou) in LookSliders()) if (k == key) slider.Set(BaseSlider(k, slider, meitou));
-        menu.notice = FaithfulLook ? "Back to the game's value." : $"Back to {ActiveLook.Name}'s value.";
+        menu.Notice = FaithfulLook ? "Back to the game's value." : $"Back to {ActiveLook.Name}'s value.";
     }
 
     internal void SetFaithful(bool faithful)
     {
         // The tier stays: its sliders are measured from the switches' sides (Draw distances, Shadows), so they are set again for the new look.
-        int tier = menu.tiers.CurrentPreset();
-        menu.tiers.tierOverride = tier;
+        int tier = menu.Tiers.CurrentPreset();
+        menu.Tiers.TierOverride = tier;
         try
         {
-            menu.config.FaithfulLook = faithful;
+            menu.Config.FaithfulLook = faithful;
             if (faithful)
             {
-                foreach (var toggle in menu.values.Toggles.Where(t => IsGraphicsSwitch(t) && t.Get()))
+                foreach (var toggle in menu.Values.Toggles.Where(t => IsGraphicsSwitch(t) && t.Get()))
                 {
                     toggle.Set(false);
-                    if (toggle.Get()) stuckSwitches.Add(toggle.Label);
+                    if (toggle.Get()) StuckSwitches.Add(toggle.Label);
                 }
                 foreach (var (_, slider, meitou) in LookSliders()) slider.Set(GameValue(slider, meitou));
             }
@@ -263,20 +263,20 @@ sealed class LookPresets(SettingsMenu menu)
             {
                 // The Meitou quality switches as the tier has them, then the active preset's look.
                 int switches = tier < QualityTiers.CustomPreset ? tier : QualityTiers.HighPreset;
-                for (int i = 0; i < menu.values.Toggles.Count; i++)
-                    if (menu.values.Toggles[i] is var t && IsGraphicsSwitch(t) && !IsLook(t.Label, true))
+                for (int i = 0; i < menu.Values.Toggles.Count; i++)
+                    if (menu.Values.Toggles[i] is var t && IsGraphicsSwitch(t) && !IsLook(t.Label, true))
                     {
-                        bool on = QualityTiers.PresetToggles.FirstOrDefault(p => p.Label == t.Label) is { } tierSwitch ? QualityTiers.SwitchTarget(tierSwitch, menu.toggleDefaults[i], switches) : menu.toggleDefaults[i];
+                        bool on = QualityTiers.PresetToggles.FirstOrDefault(p => p.Label == t.Label) is { } tierSwitch ? QualityTiers.SwitchTarget(tierSwitch, menu.ToggleDefaults[i], switches) : menu.ToggleDefaults[i];
                         if (t.Get() != on) t.Set(on);
                     }
                 ApplyLook(ActiveLook);
             }
             if (tier < QualityTiers.CustomPreset)
-                foreach (var (p, slider) in menu.tiers.PresetPairs()) slider.Set(menu.tiers.PresetTarget(p, slider, tier));
+                foreach (var (p, slider) in menu.Tiers.PresetPairs()) slider.Set(menu.Tiers.PresetTarget(p, slider, tier));
         }
-        finally { menu.tiers.tierOverride = null; }
-        menu.tiers.lastTier = tier;
-        menu.notice = faithful ? "Faithful: every graphics feature as the game ships it." : $"Meitou look: {ActiveLook.Name}.";
+        finally { menu.Tiers.TierOverride = null; }
+        menu.Tiers.LastTier = tier;
+        menu.Notice = faithful ? "Faithful: every graphics feature as the game ships it." : $"Meitou look: {ActiveLook.Name}.";
     }
 
     /// <summary>Saves the look as the player's preset <paramref name="name"/> and makes it the active one; null (the notice says why) when its file could not be written.</summary>
@@ -313,12 +313,12 @@ sealed class LookPresets(SettingsMenu menu)
 
     internal void PasteLook()
     {
-        if (global::Meitou.Settings.LookPresetFile.FromShareCode(menu.player.ClipboardRead?.Invoke()) is not { } read || new LookPreset(read.Name, "pasted", read.Made, read.Values) is not { } pasted)
+        if (global::Meitou.Settings.LookPresetFile.FromShareCode(menu.Player.ClipboardRead?.Invoke()) is not { } read || new LookPreset(read.Name, "pasted", read.Made, read.Values) is not { } pasted)
         {
-            menu.notice = "The clipboard holds no preset code (MT1:…). Copy one with Share first.";
+            menu.Notice = "The clipboard holds no preset code (MT1:…). Copy one with Share first.";
             return;
         }
-        if (SaveLookAs(FreeName(pasted.Name), pasted.Values, pasted.Made) is { } look) menu.notice = $"{look.Name} pasted and loaded (made on Meitou {look.Made}).";
+        if (SaveLookAs(FreeName(pasted.Name), pasted.Values, pasted.Made) is { } look) menu.Notice = $"{look.Name} pasted and loaded (made on Meitou {look.Made}).";
     }
 
     /// <summary>Adds a preset of the player's and makes it the active one; null (the notice says why) when its file could not be written.</summary>
@@ -338,7 +338,7 @@ sealed class LookPresets(SettingsMenu menu)
         try { Directory.CreateDirectory(PresetFolder); File.WriteAllText(look.File!, WriteLook(look)); return true; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            menu.notice = "Could not write the preset: " + e.Message;
+            menu.Notice = "Could not write the preset: " + e.Message;
             return false;
         }
     }
@@ -350,7 +350,7 @@ sealed class LookPresets(SettingsMenu menu)
     internal int ShowcaseLookCount => Looks().Count;
 
     /// <summary>The Faithful / Meitou switches whose reading stays put when set (Indirect light without ray queries); the all switch ignores them.</summary>
-    internal readonly HashSet<string> stuckSwitches = [];
+    internal readonly HashSet<string> StuckSwitches = [];
 
     /// <summary>
     /// A Graphics row, with its performance impact. A look row is marked when it differs from the game's (Faithful) or the active preset's value; a costly look switch
@@ -363,11 +363,12 @@ sealed class LookPresets(SettingsMenu menu)
         if (toggle && entry.Toggle is { } cut && CutAtLow(label) && !cut.Get())
             return entry with
             {
-                Warn = true, Hint = "Off at Low quality. Choose Meitou to keep it on at Low.",
-                Toggle = cut with { Set = v => { if (v && !menu.config.KeepAtLow.Contains(label)) menu.config.KeepAtLow.Add(label); cut.Set(v); } },
+                Warn = true,
+                Hint = "Off at Low quality. Choose Meitou to keep it on at Low.",
+                Toggle = cut with { Set = v => { if (v && !menu.Config.KeepAtLow.Contains(label)) menu.Config.KeepAtLow.Add(label); cut.Set(v); } },
             };
-        if (toggle && entry.Toggle is { } kept && menu.config.KeepAtLow.Contains(label))
-            entry = entry with { Toggle = kept with { Set = v => { if (!v) menu.config.KeepAtLow.Remove(label); kept.Set(v); } } };
+        if (toggle && entry.Toggle is { } kept && menu.Config.KeepAtLow.Contains(label))
+            entry = entry with { Toggle = kept with { Set = v => { if (!v) menu.Config.KeepAtLow.Remove(label); kept.Set(v); } } };
         return entry with { Changed = changes.Contains(key), Reset = () => ResetLook(key) };
     }
 }

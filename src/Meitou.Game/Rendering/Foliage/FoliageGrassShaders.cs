@@ -143,9 +143,18 @@ public static partial class FoliageGrassShaders
 
     static readonly Dictionary<string, string> Map = new()
     {
-        ["uSize"] = Row("size"), ["uColourBounds"] = Row("colourBounds"), ["uSway"] = Row("sway"), ["uRange"] = Row("range"), ["uFrequency"] = Row("frequency"),
-        ["uCross"] = Flag(FlagCross), ["uHasColourMap"] = Flag(FlagColourMap), ["uCoverage"] = Flag(FlagCoverage), ["uWireframe"] = Flag(FlagWireframe),
-        ["uSprite"] = Tex("sprite"), ["uColourMap"] = Tex("colourMap"), ["uNearDepth"] = Tex("nearDepth"),
+        ["uSize"] = Row("size"),
+        ["uColourBounds"] = Row("colourBounds"),
+        ["uSway"] = Row("sway"),
+        ["uRange"] = Row("range"),
+        ["uFrequency"] = Row("frequency"),
+        ["uCross"] = Flag(FlagCross),
+        ["uHasColourMap"] = Flag(FlagColourMap),
+        ["uCoverage"] = Flag(FlagCoverage),
+        ["uWireframe"] = Flag(FlagWireframe),
+        ["uSprite"] = Tex("sprite"),
+        ["uColourMap"] = Tex("colourMap"),
+        ["uNearDepth"] = Tex("nearDepth"),
     };
 
     const string PreludeEnd = "#define gl_VertexID gl_VertexIndex\n";

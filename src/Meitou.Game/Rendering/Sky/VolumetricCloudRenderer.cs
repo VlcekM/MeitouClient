@@ -1,30 +1,29 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using Meitou.Data.World;
 using Meitou.Game.Rendering.Gpu;
-using Vk = Silk.NET.Vulkan;
-
 using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Profiling;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
+using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>Half-resolution clouds, independent view histories and a world-space sun-transmission map.</summary>
 public sealed class VolumetricCloudRenderer : IDisposable
 {
-    readonly IGpuContext gpu;
-    readonly SampledImage noise;
-    readonly LegacyProgram march, resolve, shadow;
-    readonly NativeSegment marchSegment, resolveSegment, shadowSegment;
-    readonly PassTimer mainTimer, mirrorTimer, shadowTimer;
-    readonly List<double> samples = [];
+    readonly IGpuContext _gpu;
+    readonly SampledImage _noise;
+    readonly LegacyProgram _march, _resolve, _shadow;
+    readonly NativeSegment _marchSegment, _resolveSegment, _shadowSegment;
+    readonly PassTimer _mainTimer, _mirrorTimer, _shadowTimer;
+    readonly List<double> _samples = [];
     public double MainGpuMs { get; private set; }
     public double ReflectionGpuMs { get; private set; }
     public double ShadowGpuMs { get; private set; }
-    readonly ViewHistory main = new(), mirror = new();
-    GpuTexture? shadowMap;
+    readonly ViewHistory _main = new(), _mirror = new();
+    GpuTexture? _shadowMap;
     public Vector2 ShadowOrigin { get; private set; }
-    public SampledTexture ShadowMap => shadowMap is null ? default : Sample(shadowMap);
+    public SampledTexture ShadowMap => _shadowMap is null ? default : Sample(_shadowMap);
 
     /// <summary>The slab's base height (the cloud height setting); the top follows at <see cref="VolumetricClouds.Thickness"/> above it.</summary>
     public float Bottom { get; set; } = VolumetricClouds.Bottom;
@@ -47,34 +46,34 @@ public sealed class VolumetricCloudRenderer : IDisposable
 
     public VolumetricCloudRenderer(IGpuContext gpu)
     {
-        this.gpu = gpu;
-        mainTimer = new(gpu); mirrorTimer = new(gpu); shadowTimer = new(gpu);
-        noise = SampledImage.Rgba8(gpu, VolumetricClouds.AtlasSize, VolumetricClouds.AtlasSize, VolumetricClouds.CreateAtlas(), false, false, "cloud noise atlas");
-        march = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.March, "cloud march");
-        resolve = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Resolve, "cloud history");
-        shadow = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Shadow, "cloud shadow map");
-        marchSegment = new(gpu, march, PrimitiveType.Triangles, "cloud march");
-        resolveSegment = new(gpu, resolve, PrimitiveType.Triangles, "cloud history");
-        shadowSegment = new(gpu, shadow, PrimitiveType.Triangles, "cloud shadow map");
+        this._gpu = gpu;
+        _mainTimer = new(gpu); _mirrorTimer = new(gpu); _shadowTimer = new(gpu);
+        _noise = SampledImage.Rgba8(gpu, VolumetricClouds.AtlasSize, VolumetricClouds.AtlasSize, VolumetricClouds.CreateAtlas(), false, false, "cloud noise atlas");
+        _march = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.March, "cloud march");
+        _resolve = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Resolve, "cloud history");
+        _shadow = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Shadow, "cloud shadow map");
+        _marchSegment = new(gpu, _march, PrimitiveType.Triangles, "cloud march");
+        _resolveSegment = new(gpu, _resolve, PrimitiveType.Triangles, "cloud history");
+        _shadowSegment = new(gpu, _shadow, PrimitiveType.Triangles, "cloud shadow map");
     }
 
     GpuTexture Make(int width, int height, InternalFormat format, string name)
     {
-        using var upload = gpu.Uploads.Begin();
+        using var upload = _gpu.Uploads.Begin();
         return upload.Create(new TextureDesc(format, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
     }
 
     SampledTexture Sample(GpuTexture t)
     {
-        var sampler = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
+        var sampler = _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
         return new(sampler, t.View());
     }
 
     void Common(LegacyProgram p, float coverage, Vector2 wind, Vector3 eye)
     {
-        p.Bind(p.Sampler("uNoise"), noise.Sampled());
-        p.Set(p.Uniform("uVolume"), coverage, wind.X, wind.Y, (gpu.Frame.Number % 16) * 0.618033989f);
+        p.Bind(p.Sampler("uNoise"), _noise.Sampled());
+        p.Set(p.Uniform("uVolume"), coverage, wind.X, wind.Y, (_gpu.Frame.Number % 16) * 0.618033989f);
         p.Set(p.Uniform("uEye"), eye);
         p.Set(p.Uniform("uCloudSlab"), Bottom, Bottom + VolumetricClouds.Thickness);
     }
@@ -83,19 +82,19 @@ public sealed class VolumetricCloudRenderer : IDisposable
     {
         var targets = PassTargets.Of(target, null, extra);
         var state = DrawState.For(targets.Formats, false);
-        var cmd = gpu.BeginNative(p.Name);
+        var cmd = _gpu.BeginNative(p.Name);
         cmd.BeginRendering(targets.Rendering);
         state.Record(cmd, targets);
         cmd.BindPipeline(segment.Get(state, targets.Formats, null));
         p.Flush(cmd); cmd.Draw(3); cmd.EndRendering();
         cmd.Order();
-        gpu.EndNative(cmd);
+        _gpu.EndNative(cmd);
     }
 
-    public void Invalidate() { main.Frame = mirror.Frame = -10; MainMotion = null; }
+    public void Invalidate() { _main.Frame = _mirror.Frame = -10; MainMotion = null; }
 
     /// <summary>The main view's history only (its sky left out this frame; the reflection keeps marching).</summary>
-    public void InvalidateMain() { main.Frame = -10; MainMotion = null; }
+    public void InvalidateMain() { _main.Frame = -10; MainMotion = null; }
 
     /// <summary>
     /// The main view's clouds for the upscalers' motion vectors (<see cref="PostProcess"/>'s cloud motion pass, docs/render-clouds.md "Temporal, fog and
@@ -114,83 +113,83 @@ public sealed class VolumetricCloudRenderer : IDisposable
     public SampledTexture Render(Matrix4x4 viewProjection, Vector3 eye, int width, int height, float coverage, Vector2 wind,
         Vector3 key, Vector3 light, Vector3 ambient, bool reflection, bool fogSkip = false)
     {
-        if (gpu.PassOpen) throw new InvalidOperationException("Prepare clouds before opening the scene pass");
+        if (_gpu.PassOpen) throw new InvalidOperationException("Prepare clouds before opening the scene pass");
         if (!Matrix4x4.Invert(viewProjection, out var inverse)) return default;
-        var h = reflection ? mirror : main;
-        var timer = reflection ? mirrorTimer : mainTimer;
+        var h = reflection ? _mirror : _main;
+        var timer = reflection ? _mirrorTimer : _mainTimer;
         if (!reflection) MainMotion = null;
-        samples.Clear();
-        if (timer.Poll(samples) is { } ms) { if (reflection) ReflectionGpuMs = ms; else MainGpuMs = ms; }
+        _samples.Clear();
+        if (timer.Poll(_samples) is { } ms) { if (reflection) ReflectionGpuMs = ms; else MainGpuMs = ms; }
         timer.Begin();
         int w = Math.Max(1, (width + 1) / 2), ht = Math.Max(1, (height + 1) / 2);
         if (h.Current is null || h.Current.Desc.Width != w || h.Current.Desc.Height != ht)
         {
             h.Dispose();
-            h.Current = Make(w, ht, InternalFormat.Rgba16f, "cloud current");
-            h.Distance = Make(w, ht, InternalFormat.R32f, "cloud distance");
-            h.A = Make(w, ht, InternalFormat.Rgba16f, "cloud history a");
-            h.B = Make(w, ht, InternalFormat.Rgba16f, "cloud history b");
+            h.Current = Make(w, ht, InternalFormat.Rgba16F, "cloud current");
+            h.Distance = Make(w, ht, InternalFormat.R32F, "cloud distance");
+            h.A = Make(w, ht, InternalFormat.Rgba16F, "cloud history a");
+            h.B = Make(w, ht, InternalFormat.Rgba16F, "cloud history b");
         }
-        Common(march, coverage, wind, eye);
-        march.Set(march.Uniform("uInverse"), in inverse);
-        march.Set(march.Uniform("uKey"), key); march.Set(march.Uniform("uLight"), light); march.Set(march.Uniform("uAmbient"), ambient);
-        march.ApplyGlobals();
-        march.Set(march.Uniform("uSteps"), gpu.IsIntegrated ? 64 : 96);
+        Common(_march, coverage, wind, eye);
+        _march.Set(_march.Uniform("uInverse"), in inverse);
+        _march.Set(_march.Uniform("uKey"), key); _march.Set(_march.Uniform("uLight"), light); _march.Set(_march.Uniform("uAmbient"), ambient);
+        _march.ApplyGlobals();
+        _march.Set(_march.Uniform("uSteps"), _gpu.IsIntegrated ? 64 : 96);
         // The reach round a texel's centre: the bilinear lookup of the full-size sky reads a texel from up to one texel away, and the fog pass's
         // ray is the unjittered pixel centre (half a full-size pixel, a quarter texel, off); 1.5 texels with room to spare.
-        march.Set(march.Uniform("uFogSkip"), fogSkip ? 1 : 0, FogSkipReach * 2f / w, FogSkipReach * 2f / ht, 0);
-        Draw(march, marchSegment, h.Current, h.Distance);
+        _march.Set(_march.Uniform("uFogSkip"), fogSkip ? 1 : 0, FogSkipReach * 2f / w, FogSkipReach * 2f / ht, 0);
+        Draw(_march, _marchSegment, h.Current, h.Distance);
 
         Vector2 windDelta = wind - h.Wind;
         windDelta -= new Vector2(MathF.Round(windDelta.X), MathF.Round(windDelta.Y));
         var rayA = Vector4.Transform(new Vector4(0, 0, 0, 1), inverse);
         var rayB = Vector4.Transform(new Vector4(0, 0, 1, 1), inverse);
         var forward = Vector3.Normalize(new Vector3(rayB.X, rayB.Y, rayB.Z) / rayB.W - new Vector3(rayA.X, rayA.Y, rayA.Z) / rayA.W);
-        bool valid = gpu.Frame.Number - h.Frame <= 2 && Vector3.DistanceSquared(eye, h.Eye) < 4000000
+        bool valid = _gpu.Frame.Number - h.Frame <= 2 && Vector3.DistanceSquared(eye, h.Eye) < 4000000
             && MathF.Abs(coverage - h.Coverage) < 0.03f && Bottom == h.Bottom && Vector3.DistanceSquared(key, h.Key) < 0.0025f
             && Vector3.Dot(light, h.Light) > 0.999f && Vector3.Dot(forward, h.Forward) > 0.9f
             && Vector3.DistanceSquared(ambient, h.Ambient) < 0.0025f && windDelta.LengthSquared() < 0.0001f;
-        resolve.Bind(resolve.Sampler("uCurrent"), Sample(h.Current));
+        _resolve.Bind(_resolve.Sampler("uCurrent"), Sample(h.Current));
         // Bind the current image on the first frame: never read an uninitialised history attachment.
-        resolve.Bind(resolve.Sampler("uHistory"), Sample(valid ? h.A! : h.Current));
-        resolve.Bind(resolve.Sampler("uDistance"), Sample(h.Distance!));
-        resolve.Set(resolve.Uniform("uInverse"), in inverse); resolve.Set(resolve.Uniform("uPrevious"), in h.Previous);
-        resolve.Set(resolve.Uniform("uEye"), eye); resolve.Set(resolve.Uniform("uPreviousEye"), h.Eye);
-        resolve.Set(resolve.Uniform("uWindDelta"), windDelta.X * VolumetricClouds.PatternPeriod, windDelta.Y * VolumetricClouds.PatternPeriod);
-        resolve.Set(resolve.Uniform("uHistoryWeight"), valid ? 0.85f : 0);
-        Draw(resolve, resolveSegment, h.B!);
+        _resolve.Bind(_resolve.Sampler("uHistory"), Sample(valid ? h.A! : h.Current));
+        _resolve.Bind(_resolve.Sampler("uDistance"), Sample(h.Distance!));
+        _resolve.Set(_resolve.Uniform("uInverse"), in inverse); _resolve.Set(_resolve.Uniform("uPrevious"), in h.Previous);
+        _resolve.Set(_resolve.Uniform("uEye"), eye); _resolve.Set(_resolve.Uniform("uPreviousEye"), h.Eye);
+        _resolve.Set(_resolve.Uniform("uWindDelta"), windDelta.X * VolumetricClouds.PatternPeriod, windDelta.Y * VolumetricClouds.PatternPeriod);
+        _resolve.Set(_resolve.Uniform("uHistoryWeight"), valid ? 0.85f : 0);
+        Draw(_resolve, _resolveSegment, h.B!);
         (h.A, h.B) = (h.B, h.A);
         if (!reflection && valid)
-            MainMotion = new CloudMotion(Sample(h.A!), Sample(h.Distance!), windDelta * VolumetricClouds.PatternPeriod, gpu.Frame.Number);
+            MainMotion = new CloudMotion(Sample(h.A!), Sample(h.Distance!), windDelta * VolumetricClouds.PatternPeriod, _gpu.Frame.Number);
         (h.Previous, h.Eye, h.Key, h.Light, h.Ambient, h.Forward, h.Wind, h.Coverage, h.Bottom, h.Frame) =
-            (viewProjection, eye, key, light, ambient, forward, wind, coverage, Bottom, gpu.Frame.Number);
+            (viewProjection, eye, key, light, ambient, forward, wind, coverage, Bottom, _gpu.Frame.Number);
         timer.End();
         return Sample(h.A!);
     }
 
     public void RenderShadow(Vector3 eye, float coverage, Vector2 wind, Vector3 sun)
     {
-        if (gpu.PassOpen) throw new InvalidOperationException("Prepare cloud shadows before opening the scene pass");
-        samples.Clear();
-        if (shadowTimer.Poll(samples) is { } ms) ShadowGpuMs = ms;
-        shadowTimer.Begin();
-        shadowMap ??= Make(512, 512, InternalFormat.R16f, "cloud shadow map");
+        if (_gpu.PassOpen) throw new InvalidOperationException("Prepare cloud shadows before opening the scene pass");
+        _samples.Clear();
+        if (_shadowTimer.Poll(_samples) is { } ms) ShadowGpuMs = ms;
+        _shadowTimer.Begin();
+        _shadowMap ??= Make(512, 512, InternalFormat.R16F, "cloud shadow map");
         const float texel = VolumetricClouds.ShadowSpan / 512;
         ShadowOrigin = new(MathF.Floor(eye.X / texel) * texel - VolumetricClouds.ShadowSpan * 0.5f,
                            MathF.Floor(eye.Z / texel) * texel - VolumetricClouds.ShadowSpan * 0.5f);
-        Common(shadow, coverage, wind, eye);
-        shadow.Set(shadow.Uniform("uLight"), sun);
-        shadow.Set(shadow.Uniform("uShadowOrigin"), ShadowOrigin.X, ShadowOrigin.Y);
-        Draw(shadow, shadowSegment, shadowMap);
-        shadowTimer.End();
+        Common(_shadow, coverage, wind, eye);
+        _shadow.Set(_shadow.Uniform("uLight"), sun);
+        _shadow.Set(_shadow.Uniform("uShadowOrigin"), ShadowOrigin.X, ShadowOrigin.Y);
+        Draw(_shadow, _shadowSegment, _shadowMap);
+        _shadowTimer.End();
     }
 
     public void Dispose()
     {
-        main.Dispose(); mirror.Dispose(); shadowMap?.Dispose(); shadowMap = null; noise.Dispose();
-        march.Dispose(); resolve.Dispose(); shadow.Dispose();
+        _main.Dispose(); _mirror.Dispose(); _shadowMap?.Dispose(); _shadowMap = null; _noise.Dispose();
+        _march.Dispose(); _resolve.Dispose(); _shadow.Dispose();
     }
 }
 
 /// <summary>One frame's volumetric clouds for the motion vectors (<see cref="VolumetricCloudRenderer.MainMotion"/>).</summary>
-public readonly record struct CloudMotion(SampledTexture Clouds, SampledTexture Distance, System.Numerics.Vector2 Wind, long Frame);
+public readonly record struct CloudMotion(SampledTexture Clouds, SampledTexture Distance, Vector2 Wind, long Frame);

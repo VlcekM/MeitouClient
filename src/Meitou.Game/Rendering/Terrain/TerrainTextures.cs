@@ -47,28 +47,28 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     /// <summary>The native GPU API every texture is made with (phase 8: no GL texture of its own).</summary>
     public IGpuContext Gpu { get; }
-    readonly GameInstall install;
-    readonly AssetLocator assets;
-    readonly int layerSize, levelCount, farSize, farLevels;
-    readonly BlendInfoFile info;
-    readonly List<BiomeTerrain> biomes = [];
-    readonly Dictionary<uint, int> rowOf = [];
-    readonly BiomeState[] state;
-    readonly Dictionary<(string?, string?), Pair> pairs = [];
-    readonly Dictionary<Pair, List<int>> usedBy = [];
-    Pair?[] owner;
-    readonly ConcurrentQueue<Decoded> decoded = new();
-    readonly ConcurrentQueue<string> problems = new();
-    readonly int maxInFlight = Math.Clamp(Environment.ProcessorCount / 2, 2, 6);
-    readonly MapWindows? mapWindows;
-    readonly List<int> needed = [];
+    readonly GameInstall _install;
+    readonly AssetLocator _assets;
+    readonly int _layerSize, _levelCount, _farSize, _farLevels;
+    readonly BlendInfoFile _info;
+    readonly List<BiomeTerrain> _biomes = [];
+    readonly Dictionary<uint, int> _rowOf = [];
+    readonly BiomeState[] _state;
+    readonly Dictionary<(string?, string?), Pair> _pairs = [];
+    readonly Dictionary<Pair, List<int>> _usedBy = [];
+    Pair?[] _owner;
+    readonly ConcurrentQueue<Decoded> _decoded = new();
+    readonly ConcurrentQueue<string> _problems = new();
+    readonly int _maxInFlight = Math.Clamp(Environment.ProcessorCount / 2, 2, 6);
+    readonly MapWindows? _mapWindows;
+    readonly List<int> _needed = [];
     static readonly bool PrivateStatics = Environment.GetEnvironmentVariable("MEITOU_METAL_PRIVATE_STATIC") == "1";
-    TerrainTexture? diffuseArray, normalArray, diffuseFar, normalFar, heightArray, reliefTexture, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture, groundTexture, worldColourTexture;
-    int inFlight, nearLoading, nearPending, nextFree, printed, stamp;
-    long frame;
-    bool cellsDirty = true;
-    Task<MapWindows.Update>? mapJob;
-    bool mapUploading;
+    TerrainTexture? _diffuseArray, _normalArray, _diffuseFar, _normalFar, _heightArray, _reliefTexture, _paramTexture, _cellTexture, _blendTexture, _overlayTexture, _colourTexture, _groundTexture, _worldColourTexture;
+    int _inFlight, _nearLoading, _nearPending, _nextFree, _printed, _stamp;
+    long _frame;
+    bool _cellsDirty = true;
+    Task<MapWindows.Update>? _mapJob;
+    bool _mapUploading;
 
     sealed class Pair
     {
@@ -97,46 +97,46 @@ public sealed unsafe class TerrainTextures : IDisposable
     sealed record Decoded(Pair Pair, bool Near, byte[][]? Diffuse, byte[][]? Normal, byte[][]? Height, float Steep = 0);
 
     /// <summary>Side of the height array's layers (<see cref="GroundRelief"/>): the layer size, at most 512.</summary>
-    int HeightSize => Math.Min(layerSize, 512);
+    int HeightSize => Math.Min(_layerSize, 512);
 
     TerrainTextures(IGpuContext gpu, GameInstall install, AssetLocator assets, BlendInfoFile info, BiomeTerrain[] all, int layerSize, MapWindows? maps)
     {
         Gpu = gpu;
-        this.install = install;
-        this.assets = assets;
-        this.info = info;
-        this.layerSize = layerSize;
-        mapWindows = maps;
-        levelCount = (int)Math.Log2(layerSize) + 1;
-        farSize = Math.Max(layerSize >> FarShift, 4);
-        farLevels = (int)Math.Log2(farSize) + 1;
+        this._install = install;
+        this._assets = assets;
+        this._info = info;
+        this._layerSize = layerSize;
+        _mapWindows = maps;
+        _levelCount = (int)Math.Log2(layerSize) + 1;
+        _farSize = Math.Max(layerSize >> FarShift, 4);
+        _farLevels = (int)Math.Log2(_farSize) + 1;
         CellsX = info.CellsX;
         CellsZ = info.CellsZ;
         foreach (var b in all)
         {
-            if (biomes.Count >= Pending) break;
-            rowOf[b.Index] = biomes.Count;
-            biomes.Add(b);
+            if (_biomes.Count >= Pending) break;
+            _rowOf[b.Index] = _biomes.Count;
+            _biomes.Add(b);
         }
-        state = new BiomeState[biomes.Count];
-        for (int b = 0; b < biomes.Count; b++)
+        _state = new BiomeState[_biomes.Count];
+        for (int b = 0; b < _biomes.Count; b++)
         {
             var layers = new Pair[6];
             for (int l = 0; l < 6; l++)
             {
-                var key = (biomes[b].Diffuse[l]?.ToLowerInvariant(), biomes[b].Normal[l]?.ToLowerInvariant());
-                if (!pairs.TryGetValue(key, out var pair)) pairs[key] = pair = new Pair { Diffuse = biomes[b].Diffuse[l], Normal = biomes[b].Normal[l], Far = pairs.Count };
-                pair.Tile = Math.Max(pair.Tile, 5000 / Math.Max((biomes[b].Tiling[l].X + biomes[b].Tiling[l].Y) / 2, 1e-3f));
+                var key = (_biomes[b].Diffuse[l]?.ToLowerInvariant(), _biomes[b].Normal[l]?.ToLowerInvariant());
+                if (!_pairs.TryGetValue(key, out var pair)) _pairs[key] = pair = new Pair { Diffuse = _biomes[b].Diffuse[l], Normal = _biomes[b].Normal[l], Far = _pairs.Count };
+                pair.Tile = Math.Max(pair.Tile, 5000 / Math.Max((_biomes[b].Tiling[l].X + _biomes[b].Tiling[l].Y) / 2, 1e-3f));
                 if (pair.Far >= MaxFarLayers) pair.Failed = true;
                 layers[l] = pair;
-                if (!usedBy.TryGetValue(pair, out var list)) usedBy[pair] = list = [];
+                if (!_usedBy.TryGetValue(pair, out var list)) _usedBy[pair] = list = [];
                 if (!list.Contains(b)) list.Add(b);
             }
-            state[b] = new BiomeState { Pairs = layers };
+            _state[b] = new BiomeState { Pairs = layers };
         }
-        FarSlots = Math.Min(pairs.Count, MaxFarLayers);
-        Capacity = Math.Min(pairs.Count, NearLayers);
-        owner = new Pair?[Capacity];
+        FarSlots = Math.Min(_pairs.Count, MaxFarLayers);
+        Capacity = Math.Min(_pairs.Count, NearLayers);
+        _owner = new Pair?[Capacity];
     }
 
     public bool HasBiomes { get; private set; }
@@ -152,20 +152,20 @@ public sealed unsafe class TerrainTextures : IDisposable
     public int Capacity { get; private set; }
     public int FarSlots { get; }
     /// <summary>Side of the far arrays' layers.</summary>
-    public int FarSize => farSize;
+    public int FarSize => _farSize;
     /// <summary>Pixels per radian of the picture (<see cref="WorldRenderOptions.TerrainPixelScale"/>, at the render size): the pairs' near ranges scale with it.</summary>
     public float PixelScale { get; set; } = 2400;
-    public int TotalBiomes => biomes.Count;
-    public int TotalPairs => pairs.Count;
+    public int TotalBiomes => _biomes.Count;
+    public int TotalPairs => _pairs.Count;
     /// <summary>Texture pairs being decoded plus map windows being cut or uploaded.</summary>
-    public int Outstanding => inFlight + (mapJob is null && !mapUploading ? 0 : 1);
-    public int ResidentBiomes => state.Count(s => s.Resident);
-    public IEnumerable<BiomeTerrain> Resident => biomes.Where((_, i) => state[i].Resident);
+    public int Outstanding => _inFlight + (_mapJob is null && !_mapUploading ? 0 : 1);
+    public int ResidentBiomes => _state.Count(s => s.Resident);
+    public IEnumerable<BiomeTerrain> Resident => _biomes.Where((_, i) => _state[i].Resident);
     public List<string> Messages { get; } = [];
 
     /// <summary>No decoding or uploading is outstanding for what the last <see cref="Update"/> needed.</summary>
-    public bool Idle => inFlight == 0 && nearPending == 0 && (mapJob is null && !mapUploading || mapTarget is not null) && needed.All(b => state[b].Pairs.All(p => p.FarReady || p.Failed)) &&
-                        !pairs.Values.Any(p => p.Loading) && (MapState != 1 || mapWindows is null);
+    public bool Idle => _inFlight == 0 && _nearPending == 0 && (_mapJob is null && !_mapUploading || _mapTarget is not null) && _needed.All(b => _state[b].Pairs.All(p => p.FarReady || p.Failed)) &&
+                        !_pairs.Values.Any(p => p.Loading) && (MapState != 1 || _mapWindows is null);
 
 
     /// <param name="layerSize">Edge length every layer texture is brought to (the arrays need one size).</param>
@@ -239,27 +239,27 @@ public sealed unsafe class TerrainTextures : IDisposable
         }
         if (source.Blend is { } blend) t.BuildBiomes(blend);
         t.BuildWorld(source);
-        t.biomeMap = source.BiomeMap;
+        t._biomeMap = source.BiomeMap;
         source.ReleaseUploaded();
         return t;
     }
 
-    FoliageBiomeMap? biomeMap;
+    FoliageBiomeMap? _biomeMap;
 
     /// <summary>
     /// Parameter row of the biome a TERRAIN-mode map feature at (x, z) is textured with: the one of <c>biomemap.png</c>
     /// at that point (docs/formats/foliage.md, "TERRAIN-mode meshes"), or -1 when it is not resident.
     /// </summary>
     public int FeatureBiomeRow(float x, float z) =>
-        biomeMap is not null && rowOf.TryGetValue(biomeMap.At(x, z), out int row) && state[row].Resident ? row : -1;
+        _biomeMap is not null && _rowOf.TryGetValue(_biomeMap.At(x, z), out int row) && _state[row].Resident ? row : -1;
 
     /// <summary><see cref="FeatureBiomeRow"/> before the residency test: the row of the biome at (x, z), or -1 when it has none. Fixed per
     /// position; <see cref="FeatureBiomeRow"/> is this when <see cref="ResidentBiomeBits"/> has the row's bit, else -1.</summary>
     public int FeatureBiomeRowAny(float x, float z) =>
-        biomeMap is not null && rowOf.TryGetValue(biomeMap.At(x, z), out int row) ? row : -1;
+        _biomeMap is not null && _rowOf.TryGetValue(_biomeMap.At(x, z), out int row) ? row : -1;
 
     /// <summary>The biome of parameter row <paramref name="row"/> has all its layer textures resident (its parameter row is written).</summary>
-    public bool IsResident(int row) => (uint)row < (uint)state.Length && state[row].Resident;
+    public bool IsResident(int row) => (uint)row < (uint)_state.Length && _state[row].Resident;
 
     /// <summary>
     /// What makes the biome's material what it is, as text for a cache key (docs/impostors.md section 13): its record's id, the six layers' texture names with
@@ -268,17 +268,17 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// </summary>
     public string? BiomeKey(int row)
     {
-        if ((uint)row >= (uint)biomes.Count) return null;
-        var b = biomes[row];
+        if ((uint)row >= (uint)_biomes.Count) return null;
+        var b = _biomes[row];
         var sb = new System.Text.StringBuilder();
         var inv = System.Globalization.CultureInfo.InvariantCulture;
-        sb.Append(inv, $"{b.StringId}|{layerSize}|{b.BrightnessFix:R}|{b.DistortWavelength:R}|{b.DistortAmplitude:R}|{b.SlopeMin}|{b.SlopeMax}|{b.SlopeBlend}|{b.OverlayMult}|{b.GroundColour}|{b.FadeDistance:R}\n");
+        sb.Append(inv, $"{b.StringId}|{_layerSize}|{b.BrightnessFix:R}|{b.DistortWavelength:R}|{b.DistortAmplitude:R}|{b.SlopeMin}|{b.SlopeMax}|{b.SlopeBlend}|{b.OverlayMult}|{b.GroundColour}|{b.FadeDistance:R}\n");
         for (int l = 0; l < 6; l++)
         {
             sb.Append(inv, $"{b.Tiling[l]}");
             foreach (var name in (ReadOnlySpan<string?>)[b.Diffuse[l], b.Normal[l]])
             {
-                string? path = name is null ? null : assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
+                string? path = name is null ? null : _assets.Find(name) ?? _assets.Find(Path.GetFileName(name.Replace('\\', '/')));
                 var info = path is null ? null : new FileInfo(path);
                 sb.Append(inv, $"|{name}|{(info is { Exists: true } ? info.Length : -1)}|{(info is { Exists: true } ? info.LastWriteTimeUtc.Ticks : 0)}");
             }
@@ -291,43 +291,43 @@ public sealed unsafe class TerrainTextures : IDisposable
     public void ResidentBiomeBits(Span<uint> bits)
     {
         bits.Clear();
-        for (int r = 0; r < state.Length && r < bits.Length * 32; r++)
-            if (state[r].Resident) bits[r >> 5] |= 1u << (r & 31);
+        for (int r = 0; r < _state.Length && r < bits.Length * 32; r++)
+            if (_state[r].Resident) bits[r >> 5] |= 1u << (r & 31);
     }
 
     void BuildBiomes(RgbaImage blend)
     {
-        if (biomes.Count == 0) return;
+        if (_biomes.Count == 0) return;
         // The cell table (GL RGBA8UI, nearest, clamped), written whole by UploadCells.
-        cellTexture = Make(InternalFormat.Rgba8ui, CellsX * 2, CellsZ, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+        _cellTexture = Make(InternalFormat.Rgba8Ui, CellsX * 2, CellsZ, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
             TextureWrapMode.ClampToEdge, "terrain cells");
         UploadCells();
 
         // Layers are written as texture pairs arrive; the arrays are allocated whole, with every mip level: the near ones' slots handed out per pair
         // near the eye, the far ones (and the heights) at each pair's fixed index.
-        diffuseArray = AllocateArray(true, Capacity, layerSize, levelCount, "terrain textures diffuse");
-        normalArray = AllocateArray(false, Capacity, layerSize, levelCount, "terrain textures normal");
-        diffuseFar = AllocateArray(true, FarSlots, farSize, farLevels, "terrain textures diffuse far");
-        normalFar = AllocateArray(false, FarSlots, farSize, farLevels, "terrain textures normal far");
+        _diffuseArray = AllocateArray(true, Capacity, _layerSize, _levelCount, "terrain textures diffuse");
+        _normalArray = AllocateArray(false, Capacity, _layerSize, _levelCount, "terrain textures normal");
+        _diffuseFar = AllocateArray(true, FarSlots, _farSize, _farLevels, "terrain textures diffuse far");
+        _normalFar = AllocateArray(false, FarSlots, _farSize, _farLevels, "terrain textures normal far");
         if (GroundRelief.Enabled)
-            try { heightArray = MakeArray(InternalFormat.R8, HeightSize, (int)Math.Log2(HeightSize) + 1, FarSlots, 1, "terrain textures height"); }
+            try { _heightArray = MakeArray(InternalFormat.R8, HeightSize, (int)Math.Log2(HeightSize) + 1, FarSlots, 1, "terrain textures height"); }
             catch (Exception e) { Messages.Add($"terrain height array allocation: {e.Message}; the ground has no relief"); }
         // Each pair's steepness factor (1 / (side × its height's steepness); 0: flat), read by its far index: its depth (GroundRelief.LayerDepthCm).
         if (GroundRelief.Enabled)
         {
-            reliefTexture = Make(InternalFormat.R32f, Math.Max(FarSlots, 1), 1, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+            _reliefTexture = Make(InternalFormat.R32F, Math.Max(FarSlots, 1), 1, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
                 TextureWrapMode.ClampToEdge, "terrain relief depths");
             using var batch = Gpu.Uploads.Begin();
-            batch.Write(reliefTexture.Texture, 0, 0, Rect(0, 0, Math.Max(FarSlots, 1), 1), new byte[Math.Max(FarSlots, 1) * 4]);
+            batch.Write(_reliefTexture.Texture, 0, 0, Rect(0, 0, Math.Max(FarSlots, 1), 1), new byte[Math.Max(FarSlots, 1) * 4]);
         }
 
         // One parameter row per biome; its layer indices are written when the biome becomes resident.
-        paramTexture = Make(InternalFormat.Rgba32f, TerrainShaders.ParamTexels, biomes.Count, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+        _paramTexture = Make(InternalFormat.Rgba32F, TerrainShaders.ParamTexels, _biomes.Count, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
             TextureWrapMode.ClampToEdge, "terrain biome parameters");
         using (var batch = Gpu.Uploads.Begin())
-            batch.Write(paramTexture.Texture, 0, 0, Rect(0, 0, TerrainShaders.ParamTexels, biomes.Count), new byte[biomes.Count * TerrainShaders.ParamTexels * 16]);
+            batch.Write(_paramTexture.Texture, 0, 0, Rect(0, 0, TerrainShaders.ParamTexels, _biomes.Count), new byte[_biomes.Count * TerrainShaders.ParamTexels * 16]);
 
-        blendTexture = Rgba8(blend.Width, blend.Height, blend.Pixels, mipmaps: false, "terrain blend map");
+        _blendTexture = Rgba8(blend.Width, blend.Height, blend.Pixels, mipmaps: false, "terrain blend map");
         HasBiomes = true;
     }
 
@@ -359,10 +359,10 @@ public sealed unsafe class TerrainTextures : IDisposable
     }
 
     /// <summary>Diffuse layers are stored as BC3 (colour + gloss in alpha), normal layers as BC1 (their alpha is not used): see docs/render-terrain.md.</summary>
-    static InternalFormat FormatOf(bool diffuse) => diffuse ? InternalFormat.CompressedRgbaS3TCDxt5Ext : InternalFormat.CompressedRgbS3TCDxt1Ext;
+    static InternalFormat FormatOf(bool diffuse) => diffuse ? InternalFormat.CompressedRgbaS3TcDxt5Ext : InternalFormat.CompressedRgbS3TcDxt1Ext;
 
     /// <summary>GPU memory of the near and far layer arrays (all slots, all mip levels; a BC3 and a BC1 block are 24 bytes).</summary>
-    public long ArrayBytes => Bytes(layerSize, levelCount, Capacity) + Bytes(farSize, farLevels, FarSlots);
+    public long ArrayBytes => Bytes(_layerSize, _levelCount, Capacity) + Bytes(_farSize, _farLevels, FarSlots);
 
     static long Bytes(int size, int levels, int slots) =>
         Enumerable.Range(0, levels).Sum(l => { long s = Math.Max(size >> l, 1); return (s + 3) / 4 * ((s + 3) / 4) * 24; }) * Math.Max(slots, 1);
@@ -398,19 +398,19 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// </summary>
     public void Update(Vector3 eye, float materialDistance, UploadQueue uploads, Vector3? ahead = null, IReadOnlyList<Vector3>? kept = null)
     {
-        frame++;
-        while (problems.TryDequeue(out var m))
-            if (printed++ < 20) Console.WriteLine($"warning   {m}");
+        _frame++;
+        while (_problems.TryDequeue(out var m))
+            if (_printed++ < 20) Console.WriteLine($"warning   {m}");
         if (HasBiomes)
         {
-            if (GroundRelief.FieldCentre is { } fieldCentre && tiles.Length == 0) SetField(fieldCentre, GroundRelief.FieldCliffs ? GroundRelief.FieldTile / 2 : GroundRelief.FieldTile);
-            while (decoded.TryDequeue(out var d)) Install(d, uploads);
+            if (GroundRelief.FieldCentre is { } fieldCentre && _tiles.Length == 0) SetField(fieldCentre, GroundRelief.FieldCliffs ? GroundRelief.FieldTile / 2 : GroundRelief.FieldTile);
+            while (_decoded.TryDequeue(out var d)) Install(d, uploads);
             GrowNear();
             UpdateBiomes(eye, materialDistance, ahead, kept);
         }
         UpdateMaps(eye, uploads, kept);
-        if (cellsDirty) { UploadCells(); fieldDirty = true; }
-        if (fieldDirty) UploadField();
+        if (_cellsDirty) { UploadCells(); _fieldDirty = true; }
+        if (_fieldDirty) UploadField();
     }
 
     /// <summary>The biomes of the cells near <paramref name="eye"/> and, during a character flight, near its arrival eye <paramref name="ahead"/> (kept and loaded alike).</summary>
@@ -420,12 +420,12 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     void UpdateBiomes(Vector3 eye, float materialDistance, Vector3? ahead, IReadOnlyList<Vector3>? kept)
     {
-        stamp++;
-        needed.Clear();
-        double cs = info.CellSize, half = WorldLayout.HalfWorldSize;
+        _stamp++;
+        _needed.Clear();
+        double cs = _info.CellSize, half = WorldLayout.HalfWorldSize;
         double radius = materialDistance + cs / 2;
         var nearest = new Dictionary<int, double>();
-        foreach (int b in pinned) nearest[b] = -1;   // the texture field's biomes first, wherever the eye is
+        foreach (int b in _pinned) nearest[b] = -1;   // the texture field's biomes first, wherever the eye is
         // During a flight the arrival's cells come first: the eye's (the flight path) count as farther than any of them.
         var keptNear = new Dictionary<int, double>();   // the kept points' own distances (without their lead), for the near slots
         void Gather(Vector3 at, double lead, float lift = 0, bool isKept = false)
@@ -441,7 +441,7 @@ public sealed unsafe class TerrainTextures : IDisposable
                     if (d > radius) continue;
                     for (int k = 0; k < BlendInfoFile.SlotsPerCell; k++)
                     {
-                        if (!rowOf.TryGetValue(info.Slot(cx, cz, k), out int row)) continue;
+                        if (!_rowOf.TryGetValue(_info.Slot(cx, cz, k), out int row)) continue;
                         if (!nearest.TryGetValue(row, out double best) || d + lead < best) nearest[row] = d + lead;
                         if (isKept && (!keptNear.TryGetValue(row, out double own) || d < own)) keptNear[row] = d;
                     }
@@ -451,34 +451,34 @@ public sealed unsafe class TerrainTextures : IDisposable
         Gather(eye, ahead is null ? 0 : radius, EyeLift.Of(eye, GroundUnderEye));
         // Kept points (the player's characters) come after the eye's own cells.
         if (kept is not null) foreach (var k in kept) Gather(k, radius * 2, isKept: true);
-        needed.AddRange(nearest.OrderBy(p => p.Value).Select(p => p.Key));
+        _needed.AddRange(nearest.OrderBy(p => p.Value).Select(p => p.Key));
         // A pair within its near range of the eye (the arrival's, the field's) is wanted at full size; the pixels per radian at the sampler's level (an
         // upscaler's negative bias reads finer levels).
         double pixels = PixelScale * Math.Pow(2, -Gpu.LodBias);
         int wantedNear = 0;
-        foreach (int b in needed)
-            foreach (var p in state[b].Pairs)
-                if (p.Needed != stamp && nearest[b] < pixels * p.Tile / layerSize * NearReach) { (p.Needed, p.Used) = (stamp, frame); wantedNear++; }
+        foreach (int b in _needed)
+            foreach (var p in _state[b].Pairs)
+                if (p.Needed != _stamp && nearest[b] < pixels * p.Tile / _layerSize * NearReach) { (p.Needed, p.Used) = (_stamp, _frame); wantedNear++; }
         // Then a pair within its near range of a kept point, measured from the point, while slots are left over (the eye's come first), so a jump
         // to that character lands on full-size ground textures. Without the cap the kept pairs would hold slots the eye's need.
         if (keptNear.Count > 0)
-            foreach (int b in needed)
+            foreach (int b in _needed)
                 if (keptNear.TryGetValue(b, out double own))
-                    foreach (var p in state[b].Pairs)
-                        if (wantedNear < Capacity && p.Needed != stamp && own < pixels * p.Tile / layerSize * NearReach) { (p.Needed, p.Used) = (stamp, frame); wantedNear++; }
+                    foreach (var p in _state[b].Pairs)
+                        if (wantedNear < Capacity && p.Needed != _stamp && own < pixels * p.Tile / _layerSize * NearReach) { (p.Needed, p.Used) = (_stamp, _frame); wantedNear++; }
         // Near slots free or held by a pair not wanted now, less the near decodes that will take one.
-        int room = Capacity - nextFree - nearLoading;
-        foreach (var p in owner) if (p is not null && p.Needed != stamp) room++;
-        nearPending = 0;
-        foreach (int b in needed)
-            foreach (var p in state[b].Pairs)
+        int room = Capacity - _nextFree - _nearLoading;
+        foreach (var p in _owner) if (p is not null && p.Needed != _stamp) room++;
+        _nearPending = 0;
+        foreach (int b in _needed)
+            foreach (var p in _state[b].Pairs)
             {
                 if (p.Loading || p.Failed) continue;
                 bool near = p.FarReady;
-                if (near && (p.Needed != stamp || p.Slot >= 0)) continue;
+                if (near && (p.Needed != _stamp || p.Slot >= 0)) continue;
                 if (near && room <= 0) continue;
-                if (near) nearPending++;
-                if (inFlight >= maxInFlight) continue;
+                if (near) _nearPending++;
+                if (_inFlight >= _maxInFlight) continue;
                 if (near) room--;
                 Start(p, near);
             }
@@ -487,28 +487,28 @@ public sealed unsafe class TerrainTextures : IDisposable
     void Start(Pair pair, bool near)
     {
         pair.Loading = true;
-        inFlight++;
-        if (near) nearLoading++;
-        int size = near ? layerSize : farSize;
+        _inFlight++;
+        if (near) _nearLoading++;
+        int size = near ? _layerSize : _farSize;
         BackgroundWork.Run(() =>
         {
             Decoded result;
             try
             {
                 var local = new List<string>();
-                var d = LoadLayer(assets, pair.Diffuse, size, true, [128, 128, 128, 60], local);
-                var n = LoadLayer(assets, pair.Normal, size, false, [128, 128, 255, 255], local);
+                var d = LoadLayer(_assets, pair.Diffuse, size, true, [128, 128, 128, 60], local);
+                var n = LoadLayer(_assets, pair.Normal, size, false, [128, 128, 255, 255], local);
                 float steep = 0;
-                var h = !near && GroundRelief.Enabled ? LoadHeight(assets, pair.Normal, HeightSize, out steep) : null;
-                foreach (var m in local) problems.Enqueue(m);
+                var h = !near && GroundRelief.Enabled ? LoadHeight(_assets, pair.Normal, HeightSize, out steep) : null;
+                foreach (var m in local) _problems.Enqueue(m);
                 result = new Decoded(pair, near, d, n, h, steep);
             }
             catch (Exception e)
             {
-                problems.Enqueue($"terrain texture {pair.Diffuse}: {e.Message}");
+                _problems.Enqueue($"terrain texture {pair.Diffuse}: {e.Message}");
                 result = new Decoded(pair, near, null, null, null);
             }
-            decoded.Enqueue(result);
+            _decoded.Enqueue(result);
         });
     }
 
@@ -520,10 +520,10 @@ public sealed unsafe class TerrainTextures : IDisposable
     void Install(Decoded d, UploadQueue uploads)
     {
         var pair = d.Pair;
-        if (d.Near) nearLoading--;
-        if (d.Diffuse is null || d.Normal is null) { pair.Loading = false; inFlight--; pair.Failed = !d.Near; return; }
+        if (d.Near) _nearLoading--;
+        if (d.Diffuse is null || d.Normal is null) { pair.Loading = false; _inFlight--; pair.Failed = !d.Near; return; }
         int slot = d.Near ? AllocateSlot() : pair.Far;
-        if (slot < 0) { pair.Loading = false; inFlight--; return; }
+        if (slot < 0) { pair.Loading = false; _inFlight--; return; }
         if (!d.Near) pair.Steep = d.Height is null ? 0 : d.Steep;
         bool far = !d.Near;
         foreach (var (diffuse, levels) in new[] { (true, d.Diffuse), (false, d.Normal) })
@@ -539,41 +539,41 @@ public sealed unsafe class TerrainTextures : IDisposable
                 uploads.Add(() => UploadLevels(far, diffuse, levels, slot, a, b), "layer upload");
             }
         }
-        if (far && heightArray is not null)
+        if (far && _heightArray is not null)
         {
             var height = d.Height ?? FlatHeight(HeightSize);
             uploads.Add(() =>
             {
-                if (heightArray is null) return;
+                if (_heightArray is null) return;
                 using var batch = Gpu.Uploads.Begin();
                 for (int level = 0; level < height.Length; level++)
                 {
                     int s = Math.Max(HeightSize >> level, 1);
-                    batch.Write(heightArray.Texture, level, slot, Rect(0, 0, s, s), height[level]);
+                    batch.Write(_heightArray.Texture, level, slot, Rect(0, 0, s, s), height[level]);
                 }
-                if (reliefTexture is not null) batch.Write(reliefTexture.Texture, 0, 0, Rect(slot, 0, 1, 1), BitConverter.GetBytes(d.Height is null ? 0f : d.Steep));
+                if (_reliefTexture is not null) batch.Write(_reliefTexture.Texture, 0, 0, Rect(slot, 0, 1, 1), BitConverter.GetBytes(d.Height is null ? 0f : d.Steep));
             }, "height upload");
         }
         uploads.Add(() =>
         {
-            inFlight--;
+            _inFlight--;
             pair.Loading = false;
             if (far)
             {
                 pair.FarReady = true;
-                foreach (int b in usedBy[pair]) Refresh(b);
+                foreach (int b in _usedBy[pair]) Refresh(b);
                 return;
             }
             pair.Slot = slot;
-            owner[slot] = pair;
-            foreach (int b in usedBy[pair]) WriteNear(b);
+            _owner[slot] = pair;
+            foreach (int b in _usedBy[pair]) WriteNear(b);
         }, "pair resident");
     }
 
     void UploadLevels(bool far, bool diffuse, byte[][] levels, int slot, int from, int to)
     {
-        if ((far ? diffuse ? diffuseFar : normalFar : diffuse ? diffuseArray : normalArray) is not { } array) return;
-        int size = far ? farSize : layerSize;
+        if ((far ? diffuse ? _diffuseFar : _normalFar : diffuse ? _diffuseArray : _normalArray) is not { } array) return;
+        int size = far ? _farSize : _layerSize;
         using var batch = Gpu.Uploads.Begin();
         for (int level = from; level <= to; level++)
         {
@@ -585,7 +585,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>The most near slots <see cref="Areas"/> may grow the arrays to (the 128 a full-size slot per pair took before the two tiers, ~1.07 GB at 2048²).</summary>
     const int MaxNearSlots = 128;
     /// <summary>The slot count the guard last refused (not asked again for as many or more).</summary>
-    int nearRefused = int.MaxValue;
+    int _nearRefused = int.MaxValue;
 
     /// <summary>
     /// Grows the near arrays to <see cref="NearLayers"/> slots per kept place (<see cref="Areas"/>, at most <see cref="MaxNearSlots"/>) when no layer is in
@@ -594,47 +594,47 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// </summary>
     void GrowNear()
     {
-        int want = Math.Min(Math.Min(pairs.Count, NearLayers * Math.Max(Areas, 1)), MaxNearSlots);
-        if (GpuContext.DiagNoGrow || want <= Capacity || want >= nearRefused || inFlight > 0 || nearLoading > 0 || diffuseArray is null || normalArray is null) return;
-        if (Guard is { } guard && !guard.Allows((ulong)Bytes(layerSize, levelCount, want)))
+        int want = Math.Min(Math.Min(_pairs.Count, NearLayers * Math.Max(Areas, 1)), MaxNearSlots);
+        if (GpuContext.DiagNoGrow || want <= Capacity || want >= _nearRefused || _inFlight > 0 || _nearLoading > 0 || _diffuseArray is null || _normalArray is null) return;
+        if (Guard is { } guard && !guard.Allows((ulong)Bytes(_layerSize, _levelCount, want)))
         {
-            nearRefused = want;
+            _nearRefused = want;
             Console.WriteLine($"terrain   near layer slots not grown to {want}: memory budget (VramGuard)");
             return;
         }
-        var diffuse = AllocateArray(true, want, layerSize, levelCount, "terrain textures diffuse");
-        var normal = AllocateArray(false, want, layerSize, levelCount, "terrain textures normal");
+        var diffuse = AllocateArray(true, want, _layerSize, _levelCount, "terrain textures diffuse");
+        var normal = AllocateArray(false, want, _layerSize, _levelCount, "terrain textures normal");
         if (diffuse is null || normal is null)
         {
             diffuse?.Dispose();
             normal?.Dispose();
-            nearRefused = want;
+            _nearRefused = want;
             return;
         }
-        var (oldDiffuse, oldNormal) = (diffuseArray, normalArray);
-        (diffuseArray, normalArray) = (diffuse, normal);
+        var (oldDiffuse, oldNormal) = (_diffuseArray, _normalArray);
+        (_diffuseArray, _normalArray) = (diffuse, normal);
         Gpu.DeferDelete(() => { oldDiffuse.Dispose(); oldNormal.Dispose(); });
-        foreach (var p in owner) if (p is not null) p.Slot = -1;
-        owner = new Pair?[want];
-        nextFree = 0;
+        foreach (var p in _owner) if (p is not null) p.Slot = -1;
+        _owner = new Pair?[want];
+        _nextFree = 0;
         Capacity = want;
-        for (int b = 0; b < state.Length; b++) WriteNear(b);
-        Console.WriteLine($"terrain   near layer slots grown to {want} for {Areas} kept places ({Bytes(layerSize, levelCount, want) >> 20} MB)");
+        for (int b = 0; b < _state.Length; b++) WriteNear(b);
+        Console.WriteLine($"terrain   near layer slots grown to {want} for {Areas} kept places ({Bytes(_layerSize, _levelCount, want) >> 20} MB)");
     }
 
     /// <summary>A free near slot, else the least recently needed one's of a pair not wanted near now (its biomes' rows drop it at once: they read the far
     /// arrays before the new pair's levels are written), else -1.</summary>
     int AllocateSlot()
     {
-        if (nextFree < Capacity) return nextFree++;
+        if (_nextFree < Capacity) return _nextFree++;
         Pair? victim = null;
-        foreach (var p in owner)
-            if (p is not null && p.Needed != stamp && (victim is null || p.Used < victim.Used)) victim = p;
+        foreach (var p in _owner)
+            if (p is not null && p.Needed != _stamp && (victim is null || p.Used < victim.Used)) victim = p;
         if (victim is null) return -1;
         int slot = victim.Slot;
         victim.Slot = -1;
-        owner[slot] = null;
-        foreach (int b in usedBy[victim]) WriteNear(b);
+        _owner[slot] = null;
+        foreach (int b in _usedBy[victim]) WriteNear(b);
         return slot;
     }
 
@@ -642,9 +642,9 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// indices, 1's W the relief factor GroundRelief.BiomeFactor, 13 and 14 the near slots, -1 for none).</summary>
     void Refresh(int b)
     {
-        var s = state[b];
+        var s = _state[b];
         if (s.Resident || s.Pairs.Any(p => !p.FarReady)) return;
-        var bt = biomes[b];
+        var bt = _biomes[b];
         var tl = bt.Tiling;
         var l = s.Pairs.Select(p => (float)p.Far).ToArray();
         var n = s.Pairs.Select(p => (float)p.Slot).ToArray();
@@ -666,13 +666,13 @@ public sealed unsafe class TerrainTextures : IDisposable
         ];
         WriteRow(b, 0, row);
         s.Resident = true;
-        cellsDirty = true;
+        _cellsDirty = true;
     }
 
     /// <summary>A resident biome's near slots (texels 13 and 14 of its row) after one of its pairs got or lost one.</summary>
     void WriteNear(int b)
     {
-        var s = state[b];
+        var s = _state[b];
         if (!s.Resident) return;
         var n = s.Pairs.Select(p => (float)p.Slot).ToArray();
         WriteRow(b, 13, [new(n[0], n[1], n[2], n[3]), new(n[4], n[5], 0, 0)]);
@@ -687,26 +687,26 @@ public sealed unsafe class TerrainTextures : IDisposable
         var data = new float[values.Length * 4];
         for (int i = 0; i < values.Length; i++) (data[i * 4], data[i * 4 + 1], data[i * 4 + 2], data[i * 4 + 3]) = (values[i].X, values[i].Y, values[i].Z, values[i].W);
         using var batch = Gpu.Uploads.Begin();
-        batch.Write(paramTexture!.Texture, 0, 0, Rect(texel, b, values.Length, 1), System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.AsSpan()));
+        batch.Write(_paramTexture!.Texture, 0, 0, Rect(texel, b, values.Length, 1), System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.AsSpan()));
     }
 
     /// <summary>Cell table, two texels per cell: slots 0..3, then slot 4 in R; a resident biome's row, <see cref="Pending"/> or <see cref="Unused"/>.</summary>
     void UploadCells()
     {
-        cellsDirty = false;
+        _cellsDirty = false;
         var cells = new byte[CellsX * 2 * CellsZ * 4];
         Array.Fill(cells, Unused);
         for (int cz = 0; cz < CellsZ; cz++)
             for (int cx = 0; cx < CellsX; cx++)
                 for (int k = 0; k < BlendInfoFile.SlotsPerCell; k++)
                 {
-                    uint colour = info.Slot(cx, cz, k);
-                    byte v = colour == 0 ? Unused : rowOf.TryGetValue(colour, out int row) ? (state[row].Resident ? (byte)row : Pending) : Unused;
+                    uint colour = _info.Slot(cx, cz, k);
+                    byte v = colour == 0 ? Unused : _rowOf.TryGetValue(colour, out int row) ? (_state[row].Resident ? (byte)row : Pending) : Unused;
                     cells[(cz * CellsX * 2 + cx * 2) * 4 + k] = v;
                 }
-        if (cellTexture is null) return;
+        if (_cellTexture is null) return;
         using var batch = Gpu.Uploads.Begin();
-        batch.Write(cellTexture.Texture, 0, 0, Rect(0, 0, CellsX * 2, CellsZ), cells);
+        batch.Write(_cellTexture.Texture, 0, 0, Rect(0, 0, CellsX * 2, CellsZ), cells);
     }
 
     /// <summary>
@@ -920,7 +920,7 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>Mip levels of the window textures (0..6).</summary>
     const int MapLevels = 7;
 
-    int validPx = int.MinValue, validPz = int.MinValue;
+    int _validPx = int.MinValue, _validPz = int.MinValue;
 
     /// <summary>
     /// A window pair uploaded but not drawn, round a kept point outside the drawn window ("Keep textures at characters"): when the eye arrives there
@@ -932,9 +932,9 @@ public sealed unsafe class TerrainTextures : IDisposable
         public int Px = int.MinValue, Pz = int.MinValue;
         public bool Valid;
     }
-    readonly List<MapStandby> mapStandbys = [];
+    readonly List<MapStandby> _mapStandbys = [];
     /// <summary>The standby the running compose and its upload write, or null: the drawn pair.</summary>
-    MapStandby? mapTarget;
+    MapStandby? _mapTarget;
     /// <summary>At most this many standby pairs (about 45 MB of video memory each: the 2048² RGBA8 overlay and the 4096² BC3 colour with their levels):
     /// one per kept place (<see cref="Areas"/> less the eye's), at least 2, at most 6.</summary>
     int MaxMapStandbys => Math.Clamp(Areas - 1, 2, 6);
@@ -945,36 +945,36 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     void AllocateMaps()
     {
-        overlayTexture = EmptyMap(InternalFormat.Rgba8, mapWindows!.OverlayPixels, MapLevels, "terrain overlay map");
-        colourTexture = EmptyMap(mapWindows.CompressedColour ? FormatOf(diffuse: true) : InternalFormat.Rgba8, mapWindows.ColourPixels, MapLevels, "terrain colour map");
+        _overlayTexture = EmptyMap(InternalFormat.Rgba8, _mapWindows!.OverlayPixels, MapLevels, "terrain overlay map");
+        _colourTexture = EmptyMap(_mapWindows.CompressedColour ? FormatOf(diffuse: true) : InternalFormat.Rgba8, _mapWindows.ColourPixels, MapLevels, "terrain colour map");
     }
 
     void UpdateMaps(Vector3 eye, UploadQueue uploads, IReadOnlyList<Vector3>? kept)
     {
-        if (mapWindows is null || MapState == 0) return;
-        if (mapJob is { IsCompleted: true } job)
+        if (_mapWindows is null || MapState == 0) return;
+        if (_mapJob is { IsCompleted: true } job)
         {
-            mapJob = null;
+            _mapJob = null;
             MapWindows.Update? result = null;
             try { result = job.Result; }
             catch (AggregateException e) { Console.WriteLine($"warning   overlay maps: {e.InnerException?.Message ?? e.Message}"); }
-            if (result is null) { if (MapState == 1 && mapTarget is null) MapState = 0; }
-            else BeginMapUpload(result, uploads, mapTarget);
+            if (result is null) { if (MapState == 1 && _mapTarget is null) MapState = 0; }
+            else BeginMapUpload(result, uploads, _mapTarget);
         }
-        if (mapJob is not null || mapUploading) return;
-        var (px, pz) = mapWindows.DesiredOrigin(eye.X, eye.Z);
+        if (_mapJob is not null || _mapUploading) return;
+        var (px, pz) = _mapWindows.DesiredOrigin(eye.X, eye.Z);
         // In 64 bits: the unset origin is int.MinValue, and 0 - int.MinValue wraps back to it in 32 (Math.Abs then throws).
-        bool Near(int ax, int az, int bx, int bz, int reach) => Math.Abs((long)ax - bx) <= reach && Math.Abs((long)az - bz) <= reach;
-        int recentre = mapWindows.RecentreOverlayPixels;
-        bool far = !Near(px, pz, validPx, validPz, recentre);
-        if (MapState == 2 && far && mapStandbys.Find(s => s.Valid && Near(px, pz, s.Px, s.Pz, recentre)) is { } ready)
+        static bool Near(int ax, int az, int bx, int bz, int reach) => Math.Abs((long)ax - bx) <= reach && Math.Abs((long)az - bz) <= reach;
+        int recentre = _mapWindows.RecentreOverlayPixels;
+        bool far = !Near(px, pz, _validPx, _validPz, recentre);
+        if (MapState == 2 && far && _mapStandbys.Find(s => s.Valid && Near(px, pz, s.Px, s.Pz, recentre)) is { } ready)
         {
             // The eye jumped to a kept character: its standby is drawn at once (a move within the recentre distance follows as usual).
-            (overlayTexture, ready.Overlay) = (ready.Overlay, overlayTexture!);
-            (colourTexture, ready.Colour) = (ready.Colour, colourTexture!);
-            (validPx, ready.Px) = (ready.Px, validPx);
-            (validPz, ready.Pz) = (ready.Pz, validPz);
-            Region = mapWindows.RegionOf(validPx, validPz);
+            (_overlayTexture, ready.Overlay) = (ready.Overlay, _overlayTexture!);
+            (_colourTexture, ready.Colour) = (ready.Colour, _colourTexture!);
+            (_validPx, ready.Px) = (ready.Px, _validPx);
+            (_validPz, ready.Pz) = (ready.Pz, _validPz);
+            Region = _mapWindows.RegionOf(_validPx, _validPz);
             return;
         }
         if (MapState == 2 && !far)
@@ -982,9 +982,9 @@ public sealed unsafe class TerrainTextures : IDisposable
             PrepareMapStandby(kept);
             return;
         }
-        (int, int)? old = MapState == 2 ? (validPx, validPz) : null;
-        mapTarget = null;
-        mapJob = BackgroundWork.Run(() => mapWindows.Compose(px, pz, old));
+        (int, int)? old = MapState == 2 ? (_validPx, _validPz) : null;
+        _mapTarget = null;
+        _mapJob = BackgroundWork.Run(() => _mapWindows.Compose(px, pz, old));
     }
 
     /// <summary>
@@ -993,43 +993,43 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// </summary>
     void PrepareMapStandby(IReadOnlyList<Vector3>? kept)
     {
-        if (kept is null || kept.Count == 0 || mapWindows is not { } windows || Guard is { Pressure: true }) return;
+        if (kept is null || kept.Count == 0 || _mapWindows is not { } windows || Guard is { Pressure: true }) return;
         int recentre = windows.RecentreOverlayPixels, cover = windows.OverlayPixels / 4;
-        bool Near(int ax, int az, int bx, int bz, int reach) => Math.Abs((long)ax - bx) <= reach && Math.Abs((long)az - bz) <= reach;
+        static bool Near(int ax, int az, int bx, int bz, int reach) => Math.Abs((long)ax - bx) <= reach && Math.Abs((long)az - bz) <= reach;
         foreach (var point in kept)
         {
             var (kx, kz) = windows.DesiredOrigin(point.X, point.Z);
-            if (Near(kx, kz, validPx, validPz, cover) || mapStandbys.Any(s => s.Valid && Near(kx, kz, s.Px, s.Pz, recentre))) continue;
-            var slot = mapStandbys.Find(s => !kept.Any(k => { var (x, z) = windows.DesiredOrigin(k.X, k.Z); return s.Valid && Near(x, z, s.Px, s.Pz, recentre); }));
+            if (Near(kx, kz, _validPx, _validPz, cover) || _mapStandbys.Any(s => s.Valid && Near(kx, kz, s.Px, s.Pz, recentre))) continue;
+            var slot = _mapStandbys.Find(s => !kept.Any(k => { var (x, z) = windows.DesiredOrigin(k.X, k.Z); return s.Valid && Near(x, z, s.Px, s.Pz, recentre); }));
             if (slot is null)
             {
-                if (mapStandbys.Count >= MaxMapStandbys) return;
+                if (_mapStandbys.Count >= MaxMapStandbys) return;
                 slot = new MapStandby
                 {
                     Overlay = EmptyMap(InternalFormat.Rgba8, windows.OverlayPixels, MapLevels, "terrain overlay map standby"),
                     Colour = EmptyMap(windows.CompressedColour ? FormatOf(diffuse: true) : InternalFormat.Rgba8, windows.ColourPixels, MapLevels, "terrain colour map standby"),
                 };
-                mapStandbys.Add(slot);
+                _mapStandbys.Add(slot);
             }
             (int, int)? old = slot.Valid ? (slot.Px, slot.Pz) : null;
             slot.Valid = false;   // written from now on
-            mapTarget = slot;
-            mapJob = BackgroundWork.Run(() => windows.Compose(kx, kz, old));
+            _mapTarget = slot;
+            _mapJob = BackgroundWork.Run(() => windows.Compose(kx, kz, old));
             return;
         }
     }
 
     void BeginMapUpload(MapWindows.Update update, UploadQueue uploads, MapStandby? target)
     {
-        var (overlayTarget, colourTarget) = target is null ? (overlayTexture, colourTexture) : (target.Overlay, target.Colour);
-        mapUploading = true;
+        var (overlayTarget, colourTarget) = target is null ? (_overlayTexture, _colourTexture) : (target.Overlay, target.Colour);
+        _mapUploading = true;
         // Every piece comes with its mip levels from the worker and goes up in slabs of about 2 MB: whole rows of pixels, of 4 × 4 blocks for BC3 colour.
         foreach (var piece in update.Pieces)
             for (int level = 0; level < piece.Levels.Length; level++)
             {
                 var (p, lv) = (piece, level);
                 int w = Math.Max(p.Width >> lv, 1), h = Math.Max(p.Height >> lv, 1), x = p.X >> lv, z = p.Z >> lv;
-                bool blocks = p.Colour && mapWindows!.CompressedColour;
+                bool blocks = p.Colour && _mapWindows!.CompressedColour;
                 int unit = blocks ? 4 : 1, rowBytes = blocks ? w / 4 * 16 : w * 4, rowCount = h / unit;
                 int rows = Math.Max(1, (2 << 20) / rowBytes);
                 for (int row = 0; row < rowCount; row += rows)
@@ -1047,11 +1047,11 @@ public sealed unsafe class TerrainTextures : IDisposable
             if (target is not null) (target.Px, target.Pz, target.Valid) = (update.Px0, update.Pz0, true);
             else
             {
-                Region = mapWindows!.RegionOf(update.Px0, update.Pz0);
-                (validPx, validPz) = (update.Px0, update.Pz0);
+                Region = _mapWindows!.RegionOf(update.Px0, update.Pz0);
+                (_validPx, _validPz) = (update.Px0, update.Pz0);
                 MapState = 2;
             }
-            mapUploading = false;
+            _mapUploading = false;
             update.Release();
         }, "map swap");
     }
@@ -1072,12 +1072,12 @@ public sealed unsafe class TerrainTextures : IDisposable
     {
         if (s.Ground is { } ground && s.Blend is { } blend)
         {
-            groundTexture = Rgba8(blend.Width, blend.Height, ground, mipmaps: true, "terrain ground colour");
+            _groundTexture = Rgba8(blend.Width, blend.Height, ground, mipmaps: true, "terrain ground colour");
             HasGround = true;
         }
         if (s.WorldColour is { } colour)
         {
-            worldColourTexture = Rgba8(s.WorldColourSize, s.WorldColourSize, colour, mipmaps: true, "terrain world colour");
+            _worldColourTexture = Rgba8(s.WorldColourSize, s.WorldColourSize, colour, mipmaps: true, "terrain world colour");
             HasWorldColour = true;
         }
     }
@@ -1180,24 +1180,24 @@ public sealed unsafe class TerrainTextures : IDisposable
         TerrainTexture? Overlay, TerrainTexture? Colour, TerrainTexture? Ground, TerrainTexture? WorldColour, TerrainTexture? Height, TerrainTexture? Relief,
         TerrainTexture? Field, TerrainTexture? DiffuseFar, TerrainTexture? NormalFar, float FarLod);
 
-    internal TextureSet Textures => new(diffuseArray, normalArray, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture, groundTexture, worldColourTexture, heightArray,
-        reliefTexture, fieldTexture, diffuseFar, normalFar, FarShift - Gpu.LodBias);
+    internal TextureSet Textures => new(_diffuseArray, _normalArray, _paramTexture, _cellTexture, _blendTexture, _overlayTexture, _colourTexture, _groundTexture, _worldColourTexture, _heightArray,
+        _reliefTexture, _fieldTexture, _diffuseFar, _normalFar, FarShift - Gpu.LodBias);
 
     // ---- the texture field (GroundRelief.FieldCentre: the terrain sandbox) ----
 
     /// <summary>One tile of the texture field: the biome row it is drawn with, the layer it shows, and what to call it.</summary>
     internal readonly record struct FieldEntry(int Row, TerrainLayer Layer, string Label);
 
-    TerrainTexture? fieldTexture;
-    FieldEntry[] tiles = [];
-    int[] pinned = [];
-    bool fieldDirty;
+    TerrainTexture? _fieldTexture;
+    FieldEntry[] _tiles = [];
+    int[] _pinned = [];
+    bool _fieldDirty;
 
     /// <summary>The texture field's lower left corner (world X, Z), tile side, tiles a row and tile count (0: no field).</summary>
     public Vector2 FieldOrigin { get; private set; }
     public float FieldTile { get; private set; }
     public int FieldColumns { get; private set; }
-    public int FieldCount => tiles.Length;
+    public int FieldCount => _tiles.Length;
 
     /// <summary>
     /// Lays the texture field out round <paramref name="centre"/>: one square tile of side <paramref name="tile"/> for each distinct ground texture pair
@@ -1209,56 +1209,56 @@ public sealed unsafe class TerrainTextures : IDisposable
         var seen = new HashSet<(string?, string?)>();
         var entries = new List<FieldEntry>();
         foreach (var layer in GroundRelief.FieldCliffs ? [TerrainLayer.Cliff] : new[] { TerrainLayer.Base, TerrainLayer.Slope, TerrainLayer.Grass, TerrainLayer.Dirt, TerrainLayer.Road })
-            for (int b = 0; b < biomes.Count; b++)
+            for (int b = 0; b < _biomes.Count; b++)
             {
-                var pair = state[b].Pairs[(int)layer];
+                var pair = _state[b].Pairs[(int)layer];
                 if (pair.Normal is null || !seen.Add((pair.Diffuse?.ToLowerInvariant(), pair.Normal.ToLowerInvariant()))) continue;
-                entries.Add(new FieldEntry(b, layer, $"{Path.GetFileNameWithoutExtension(pair.Normal.Replace('\\', '/'))} ({biomes[b].Name}: {layer})"));
+                entries.Add(new FieldEntry(b, layer, $"{Path.GetFileNameWithoutExtension(pair.Normal.Replace('\\', '/'))} ({_biomes[b].Name}: {layer})"));
             }
-        tiles = [.. entries.OrderBy(e => e.Layer).ThenBy(e => e.Label, StringComparer.OrdinalIgnoreCase)];
-        FieldColumns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(tiles.Length)));
-        int rows = (tiles.Length + FieldColumns - 1) / FieldColumns;
+        _tiles = [.. entries.OrderBy(e => e.Layer).ThenBy(e => e.Label, StringComparer.OrdinalIgnoreCase)];
+        FieldColumns = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(_tiles.Length)));
+        int rows = (_tiles.Length + FieldColumns - 1) / FieldColumns;
         FieldTile = tile;
         FieldOrigin = centre - new Vector2(FieldColumns, rows) * tile / 2;
-        pinned = [.. tiles.Select(e => e.Row).Distinct()];
-        fieldTexture ??= Make(InternalFormat.Rgba8ui, Math.Max(tiles.Length, 1), 1, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+        _pinned = [.. _tiles.Select(e => e.Row).Distinct()];
+        _fieldTexture ??= Make(InternalFormat.Rgba8Ui, Math.Max(_tiles.Length, 1), 1, 1, 1, TextureMinFilter.Nearest, TextureMagFilter.Nearest,
             TextureWrapMode.ClampToEdge, "terrain texture field");
-        fieldDirty = true;
-        int needed = pinned.SelectMany(b => state[b].Pairs).Distinct().Count();
-        Console.WriteLine($"field     {tiles.Length} ground textures from {pinned.Length} biomes ({needed} texture pairs kept resident, {Capacity} near slots), {FieldColumns} a row, tiles {tile:0} units, " +
+        _fieldDirty = true;
+        int needed = _pinned.SelectMany(b => _state[b].Pairs).Distinct().Count();
+        Console.WriteLine($"field     {_tiles.Length} ground textures from {_pinned.Length} biomes ({needed} texture pairs kept resident, {Capacity} near slots), {FieldColumns} a row, tiles {tile:0} units, " +
             $"from {FieldOrigin.X:0}, {FieldOrigin.Y:0}");
     }
 
     /// <summary>The texture field's tile at world (<paramref name="x"/>, <paramref name="z"/>): its label, or null outside the field.</summary>
     public string? FieldLabel(float x, float z)
     {
-        if (tiles.Length == 0) return null;
+        if (_tiles.Length == 0) return null;
         int cx = (int)MathF.Floor((x - FieldOrigin.X) / FieldTile), cz = (int)MathF.Floor((z - FieldOrigin.Y) / FieldTile), i = cz * FieldColumns + cx;
-        if (cx < 0 || cz < 0 || cx >= FieldColumns || i >= tiles.Length) return null;
-        var e = tiles[i];
-        var pair = state[e.Row].Pairs[(int)e.Layer];
-        float tile = 5000 / Math.Max((biomes[e.Row].Tiling[(int)e.Layer].X + biomes[e.Row].Tiling[(int)e.Layer].Y) / 2, 1e-3f);
+        if (cx < 0 || cz < 0 || cx >= FieldColumns || i >= _tiles.Length) return null;
+        var e = _tiles[i];
+        var pair = _state[e.Row].Pairs[(int)e.Layer];
+        float tile = 5000 / Math.Max((_biomes[e.Row].Tiling[(int)e.Layer].X + _biomes[e.Row].Tiling[(int)e.Layer].Y) / 2, 1e-3f);
         return string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"{i + 1}/{tiles.Length}  {e.Label}  tile {tile / 10:0.#} m, depth {GroundRelief.LayerDepthCm(pair.Steep, tile) * GroundRelief.BiomeFactor(biomes[e.Row].StringId) * (e.Layer == TerrainLayer.Cliff ? GroundRelief.CliffScale : 1):0.#} cm");
+            $"{i + 1}/{_tiles.Length}  {e.Label}  tile {tile / 10:0.#} m, depth {GroundRelief.LayerDepthCm(pair.Steep, tile) * GroundRelief.BiomeFactor(_biomes[e.Row].StringId) * (e.Layer == TerrainLayer.Cliff ? GroundRelief.CliffScale : 1):0.#} cm");
     }
 
     /// <summary>The field's tiles, one texel each: R biome row, G layer, B 1 once the biome is resident (until then the tile shows the world).</summary>
     void UploadField()
     {
-        fieldDirty = false;
-        if (fieldTexture is null || tiles.Length == 0) return;
-        var texels = new byte[tiles.Length * 4];
-        for (int i = 0; i < tiles.Length; i++)
-            (texels[i * 4], texels[i * 4 + 1], texels[i * 4 + 2]) = ((byte)tiles[i].Row, (byte)tiles[i].Layer, (byte)(state[tiles[i].Row].Resident ? 1 : 0));
+        _fieldDirty = false;
+        if (_fieldTexture is null || _tiles.Length == 0) return;
+        var texels = new byte[_tiles.Length * 4];
+        for (int i = 0; i < _tiles.Length; i++)
+            (texels[i * 4], texels[i * 4 + 1], texels[i * 4 + 2]) = ((byte)_tiles[i].Row, (byte)_tiles[i].Layer, (byte)(_state[_tiles[i].Row].Resident ? 1 : 0));
         using var batch = Gpu.Uploads.Begin();
-        batch.Write(fieldTexture.Texture, 0, 0, Rect(0, 0, tiles.Length, 1), texels);
+        batch.Write(_fieldTexture.Texture, 0, 0, Rect(0, 0, _tiles.Length, 1), texels);
     }
 
     public void Dispose()
     {
-        foreach (var t in new[] { diffuseArray, normalArray, diffuseFar, normalFar, heightArray, reliefTexture, paramTexture, cellTexture, blendTexture, overlayTexture, colourTexture, groundTexture, worldColourTexture, fieldTexture })
+        foreach (var t in new[] { _diffuseArray, _normalArray, _diffuseFar, _normalFar, _heightArray, _reliefTexture, _paramTexture, _cellTexture, _blendTexture, _overlayTexture, _colourTexture, _groundTexture, _worldColourTexture, _fieldTexture })
             t?.Dispose();
-        foreach (var m in mapStandbys) { m.Overlay.Dispose(); m.Colour.Dispose(); }
+        foreach (var m in _mapStandbys) { m.Overlay.Dispose(); m.Colour.Dispose(); }
     }
 }
 
@@ -1270,25 +1270,25 @@ public sealed unsafe class TerrainTextures : IDisposable
 /// </summary>
 internal sealed class TerrainTexture : IDisposable
 {
-    readonly IGpuContext ctx;
-    readonly TextureMinFilter min;
-    readonly TextureMagFilter mag;
-    readonly TextureWrapMode wrap;
-    readonly float anisotropy;
-    readonly bool integer;
-    float cachedBias = float.NaN;
-    int cachedGeneration;
-    SampledTexture cached;
-    BindlessHandle handle;
-    SampledTexture registered;
-    bool hasEntry;
+    readonly IGpuContext _ctx;
+    readonly TextureMinFilter _min;
+    readonly TextureMagFilter _mag;
+    readonly TextureWrapMode _wrap;
+    readonly float _anisotropy;
+    readonly bool _integer;
+    float _cachedBias = float.NaN;
+    int _cachedGeneration;
+    SampledTexture _cached;
+    BindlessHandle _handle;
+    SampledTexture _registered;
+    bool _hasEntry;
 
     public TerrainTexture(IGpuContext ctx, GpuTexture texture, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, float anisotropy = 1)
     {
-        this.ctx = ctx;
+        this._ctx = ctx;
         Texture = texture;
-        (this.min, this.mag, this.wrap, this.anisotropy) = (min, mag, wrap, anisotropy);
-        integer = GlConventions.IsIntegerFormat(texture.Desc.Format);
+        (this._min, this._mag, this._wrap, this._anisotropy) = (min, mag, wrap, anisotropy);
+        _integer = GlConventions.IsIntegerFormat(texture.Desc.Format);
     }
 
     public GpuTexture Texture { get; }
@@ -1296,30 +1296,30 @@ internal sealed class TerrainTexture : IDisposable
     /// <summary>The sampler and view a draw samples it with now (what VkGl's <c>Sampled</c> gave for the GL texture).</summary>
     public SampledTexture Sampled()
     {
-        float bias = ctx.LodBias;
-        if (!(bias == cachedBias) || cachedGeneration != ctx.Samplers.Generation)
+        float bias = _ctx.LodBias;
+        if (!(bias == _cachedBias) || _cachedGeneration != _ctx.Samplers.Generation)
         {
-            var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, anisotropy, integer, bias));
-            (cached, cachedBias, cachedGeneration) = (new SampledTexture(sampler, Texture.View()), bias, ctx.Samplers.Generation);
+            var sampler = _ctx.Samplers.Get(SamplerDesc.FromGl(_min, _mag, _wrap, _wrap, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, _anisotropy, _integer, bias));
+            (_cached, _cachedBias, _cachedGeneration) = (new SampledTexture(sampler, Texture.View()), bias, _ctx.Samplers.Generation);
         }
-        return cached;
+        return _cached;
     }
 
     /// <summary>Its bindless entry for <see cref="Sampled"/> now (usable in the current frame). In Prepare, on the render thread.</summary>
     public BindlessHandle Bindless()
     {
         var s = Sampled();
-        if (hasEntry && registered == s) return handle;
-        if (hasEntry) ctx.Bindless.Free(handle);
+        if (_hasEntry && _registered == s) return _handle;
+        if (_hasEntry) _ctx.Bindless.Free(_handle);
         var kind = BindlessTable.KindFor(Texture.Desc.Format, Texture.Desc.Kind);
-        (handle, registered, hasEntry) = (new BindlessHandle(kind, ctx.Bindless.Register(kind, s)), s, true);
-        return handle;
+        (_handle, _registered, _hasEntry) = (new BindlessHandle(kind, _ctx.Bindless.Register(kind, s)), s, true);
+        return _handle;
     }
 
     public void Dispose()
     {
-        if (hasEntry) ctx.Bindless.Free(handle);
-        hasEntry = false;
+        if (_hasEntry) _ctx.Bindless.Free(_handle);
+        _hasEntry = false;
         Texture.Dispose();
     }
 }
@@ -1334,29 +1334,29 @@ sealed class MapWindows
     /// <summary>Window edge in overlay pixels (36 units each).</summary>
     const int WindowPixels = 2048;
 
-    readonly TileCache overlay;
-    readonly TileCache? colour;
-    readonly BlockTiles? colourBlocks;
-    readonly int overlayTile, colourTile, ratio;
+    readonly TileCache _overlay;
+    readonly TileCache? _colour;
+    readonly BlockTiles? _colourBlocks;
+    readonly int _overlayTile, _colourTile, _ratio;
     /// <summary>The alignment of the window's origin in overlay pixels: the mip level 6 texel (64), and for BC3 colour whole blocks at every colour level.</summary>
-    readonly int align;
-    readonly double overlayUnit;
+    readonly int _align;
+    readonly double _overlayUnit;
 
     MapWindows(TileCache overlay, TileCache? colour, BlockTiles? colourBlocks, int overlayTile, int colourTile)
     {
-        this.overlay = overlay;
-        this.colour = colour;
-        this.colourBlocks = colourBlocks;
-        this.overlayTile = overlayTile;
-        this.colourTile = colourTile;
-        overlayUnit = (double)WorldLayout.WorldSize / (overlayTile * TerrainMaps.OverlayTiles);
-        ratio = Math.Max((int)Math.Round((double)colourTile / overlayTile), 1);
-        if (ratio * overlayTile != colourTile) throw new InvalidDataException($"colour tiles ({colourTile}) are not a whole multiple of overlay tiles ({overlayTile})");
-        align = 64;
+        this._overlay = overlay;
+        this._colour = colour;
+        this._colourBlocks = colourBlocks;
+        this._overlayTile = overlayTile;
+        this._colourTile = colourTile;
+        _overlayUnit = (double)WorldLayout.WorldSize / (overlayTile * TerrainMaps.OverlayTiles);
+        _ratio = Math.Max((int)Math.Round((double)colourTile / overlayTile), 1);
+        if (_ratio * overlayTile != colourTile) throw new InvalidDataException($"colour tiles ({colourTile}) are not a whole multiple of overlay tiles ({overlayTile})");
+        _align = 64;
         if (colourBlocks is null) return;
-        while (align * ratio % TerrainColourCache.Granule != 0) align += 64;
-        if (OverlayPixels % align != 0 || overlayTile * TerrainMaps.OverlayTiles % align != 0)
-            throw new InvalidDataException($"the window ({OverlayPixels}) or the overlay map ({overlayTile * TerrainMaps.OverlayTiles}) is not a multiple of {align}");
+        while (_align * _ratio % TerrainColourCache.Granule != 0) _align += 64;
+        if (OverlayPixels % _align != 0 || overlayTile * TerrainMaps.OverlayTiles % _align != 0)
+            throw new InvalidDataException($"the window ({OverlayPixels}) or the overlay map ({overlayTile * TerrainMaps.OverlayTiles}) is not a multiple of {_align}");
     }
 
     public static MapWindows Open(GameInstall install, List<string> messages)
@@ -1387,27 +1387,27 @@ sealed class MapWindows
     }
 
     /// <summary>Whether the colour window is BC3 (its pieces hold blocks).</summary>
-    public bool CompressedColour => colourBlocks is not null;
+    public bool CompressedColour => _colourBlocks is not null;
 
 
-    public int OverlayPixels => Math.Min(WindowPixels, overlayTile * TerrainMaps.OverlayTiles);
-    public int ColourPixels => OverlayPixels * ratio;
+    public int OverlayPixels => Math.Min(WindowPixels, _overlayTile * TerrainMaps.OverlayTiles);
+    public int ColourPixels => OverlayPixels * _ratio;
 
     /// <summary>When the window's origin (overlay pixels) differs by more than this from the desired one, it moves (4608 units).</summary>
-    public int RecentreOverlayPixels => Math.Max((int)(4608 / overlayUnit), align);
+    public int RecentreOverlayPixels => Math.Max((int)(4608 / _overlayUnit), _align);
 
     /// <summary>Origin (overlay pixels) of a window centred on a point, aligned and kept inside the maps.</summary>
     public (int X, int Z) DesiredOrigin(double x, double z)
     {
-        int full = overlayTile * TerrainMaps.OverlayTiles, size = OverlayPixels;
-        int Axis(double v) => Math.Clamp((int)Math.Round(((v + WorldLayout.HalfWorldSize) / overlayUnit - size / 2.0) / align) * align, 0, full - size);
+        int full = _overlayTile * TerrainMaps.OverlayTiles, size = OverlayPixels;
+        int Axis(double v) => Math.Clamp((int)Math.Round(((v + WorldLayout.HalfWorldSize) / _overlayUnit - size / 2.0) / _align) * _align, 0, full - size);
         return (Axis(x), Axis(z));
     }
 
     /// <summary>x0, z0, 1/width, 1/depth in world units of the window at an origin.</summary>
     public Vector4 RegionOf(int px, int pz) =>
-        new((float)(px * overlayUnit - WorldLayout.HalfWorldSize), (float)(pz * overlayUnit - WorldLayout.HalfWorldSize),
-            (float)(1 / (OverlayPixels * overlayUnit)), (float)(1 / (OverlayPixels * overlayUnit)));
+        new((float)(px * _overlayUnit - WorldLayout.HalfWorldSize), (float)(pz * _overlayUnit - WorldLayout.HalfWorldSize),
+            (float)(1 / (OverlayPixels * _overlayUnit)), (float)(1 / (OverlayPixels * _overlayUnit)));
 
     /// <summary>A rectangle of one texture: its first texel (already wrapped) and the mip levels of its pixels.</summary>
     public sealed record Piece(bool Colour, int X, int Z, int Width, int Height, byte[][] Levels);
@@ -1438,24 +1438,24 @@ sealed class MapWindows
             else if (dz < 0) rects.Add((cx0, pz0, cx1 - cx0, -dz));
         }
         var pieces = new List<Piece>();
-        int cs = size * ratio;
+        int cs = size * _ratio;
         foreach (var (rx, rz, rw, rh) in rects)
             foreach (var (sx, sw) in Wrap(rx, rw, size))
                 foreach (var (sz, sh) in Wrap(rz, rh, size))
                 {
-                    var data = Cut(overlay, overlayTile, sx, sz, sw, sh);
+                    var data = Cut(_overlay, _overlayTile, sx, sz, sw, sh);
                     pieces.Add(new Piece(false, sx % size, sz % size, sw, sh, TerrainTextures.Mips(data, sw, sh, 7, pooled: true)));
-                    var clevels = colourBlocks is not null
-                        ? CutBlocks(colourBlocks, colourTile, sx * ratio, sz * ratio, sw * ratio, sh * ratio)
-                        : TerrainTextures.Mips(Cut(colour!, colourTile, sx * ratio, sz * ratio, sw * ratio, sh * ratio), sw * ratio, sh * ratio, 7, pooled: true);
-                    pieces.Add(new Piece(true, sx * ratio % cs, sz * ratio % cs, sw * ratio, sh * ratio, clevels));
+                    var clevels = _colourBlocks is not null
+                        ? CutBlocks(_colourBlocks, _colourTile, sx * _ratio, sz * _ratio, sw * _ratio, sh * _ratio)
+                        : TerrainTextures.Mips(Cut(_colour!, _colourTile, sx * _ratio, sz * _ratio, sw * _ratio, sh * _ratio), sw * _ratio, sh * _ratio, 7, pooled: true);
+                    pieces.Add(new Piece(true, sx * _ratio % cs, sz * _ratio % cs, sw * _ratio, sh * _ratio, clevels));
                 }
         var update = new Update(px0, pz0, pieces);
         // The pieces own pooled copies of what they need. The overlay tiles stay (the window's 3 x 3, Open): the window moves every 4,608 units, a
         // tile spans ~37,000, so the next compose cuts the same ones, and decoding their PNGs again was 6-29 MB of fresh arrays a move. The
         // uncompressed colour tiles are larger and go.
-        colour?.Clear();
-        colourBlocks?.Clear();
+        _colour?.Clear();
+        _colourBlocks?.Clear();
         return update;
     }
 
@@ -1544,67 +1544,67 @@ sealed class MapWindows
     /// </summary>
     sealed class BlockTiles(GameInstall install)
     {
-        readonly Dictionary<(int, int), TerrainColourCache.Stored?> stored = [];
-        readonly Dictionary<(int, int), TerrainColourCache.Tile?> memory = [];
+        readonly Dictionary<(int, int), TerrainColourCache.Stored?> _stored = [];
+        readonly Dictionary<(int, int), TerrainColourCache.Tile?> _memory = [];
 
         public (TerrainColourCache.Stored? Stored, TerrainColourCache.Tile? Memory) Get(int tx, int tz)
         {
-            lock (stored)
+            lock (_stored)
             {
-                if (stored.TryGetValue((tx, tz), out var file) && file is not null) return (file, null);
-                if (memory.TryGetValue((tx, tz), out var hit)) return (null, hit);
+                if (_stored.TryGetValue((tx, tz), out var file) && file is not null) return (file, null);
+                if (_memory.TryGetValue((tx, tz), out var hit)) return (null, hit);
             }
             var path = TerrainMaps.OverlayTile(install, "colour", tx, tz);
             try
             {
-                if (TerrainColourCache.Locate(path) is { } found) { lock (stored) stored[(tx, tz)] = found; return (found, null); }
+                if (TerrainColourCache.Locate(path) is { } found) { lock (_stored) _stored[(tx, tz)] = found; return (found, null); }
                 var tile = TerrainColourCache.Get(path);
-                lock (stored) memory[(tx, tz)] = tile;
+                lock (_stored) _memory[(tx, tz)] = tile;
                 return (null, tile);
             }
-            catch (InvalidDataException) { lock (stored) memory[(tx, tz)] = null; return (null, null); }   // a tile unfit for blocks: left out, as a missing one
+            catch (InvalidDataException) { lock (_stored) _memory[(tx, tz)] = null; return (null, null); }   // a tile unfit for blocks: left out, as a missing one
         }
 
         public void Clear()
         {
-            lock (stored) memory.Clear();
+            lock (_stored) _memory.Clear();
         }
     }
 
     sealed class TileCache(GameInstall install, string kind, int max)
     {
-        readonly Dictionary<(int, int), (RgbaImage? Image, long Used)> tiles = [];
-        long clock;
+        readonly Dictionary<(int, int), (RgbaImage? Image, long Used)> _tiles = [];
+        long _clock;
 
         public RgbaImage? Get(int tx, int tz)
         {
-            lock (tiles)
-                if (tiles.TryGetValue((tx, tz), out var hit))
+            lock (_tiles)
+                if (_tiles.TryGetValue((tx, tz), out var hit))
                 {
-                    tiles[(tx, tz)] = (hit.Image, ++clock);
+                    _tiles[(tx, tz)] = (hit.Image, ++_clock);
                     return hit.Image;
                 }
             var path = TerrainMaps.OverlayTile(install, kind, tx, tz);
             var img = File.Exists(path) ? TextureLoader.LoadImage(File.ReadAllBytes(path)) : null;
-            lock (tiles) tiles[(tx, tz)] = (img, ++clock);
+            lock (_tiles) _tiles[(tx, tz)] = (img, ++_clock);
             return img;
         }
 
         /// <summary>Drops every decoded tile after a compose has copied what it needs.</summary>
         public void Clear()
         {
-            lock (tiles) tiles.Clear();
+            lock (_tiles) _tiles.Clear();
         }
 
         /// <summary>Drops the least recently used tiles beyond the cache size, keeping the ones just used.</summary>
         public void Trim(List<(int, int)> keep)
         {
-            lock (tiles)
-                while (tiles.Count > Math.Max(max, keep.Count))
+            lock (_tiles)
+                while (_tiles.Count > Math.Max(max, keep.Count))
                 {
-                    var victim = tiles.Where(p => !keep.Contains(p.Key)).OrderBy(p => p.Value.Used).Select(p => ((int, int)?)p.Key).FirstOrDefault();
+                    var victim = _tiles.Where(p => !keep.Contains(p.Key)).OrderBy(p => p.Value.Used).Select(p => ((int, int)?)p.Key).FirstOrDefault();
                     if (victim is null) break;
-                    tiles.Remove(victim.Value);
+                    _tiles.Remove(victim.Value);
                 }
         }
     }

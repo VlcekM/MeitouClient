@@ -23,15 +23,15 @@ public sealed partial class PopulationSystem
     List<TownBuilding> HouseResidents(TownSite site, FactionData? faction, int factionIndex, ulong seed, IWalkability walk,
         List<BuiltSquad> squads, List<(TownBuilding Building, SquadTemplate Template)> homes, IReadOnlySet<string>? playerOwned)
     {
-        string? player = data.PlayerFaction >= 0 ? data.Factions[data.PlayerFaction].Id : null;
-        var housed = ResidentHomes.Assign(data.Db, site.Town, faction, site.Buildings, player, playerOwned);
+        string? player = _data.PlayerFaction >= 0 ? _data.Factions[_data.PlayerFaction].Id : null;
+        var housed = ResidentHomes.Assign(_data.Db, site.Town, faction, site.Buildings, player, playerOwned);
         for (int h = 0; h < housed.Count; h++)
         {
             var (b, t) = housed[h];
             int n = 0;
             foreach (var mate in t.Housemates)
             {
-                if (data.Db.Find(mate.Id) is not { } mr || !SquadFactory.IsTemplate(mr)) continue;
+                if (_data.Db.Find(mate.Id) is not { } mr || !SquadFactory.IsTemplate(mr)) continue;
                 var mt = SquadTemplate.From(mr);
                 int count = mate.V1 > 0 && mate.V1 > mate.V0
                     ? mate.V0 + Rng.Int(Rng.Hash(seed, (ulong)site.Index << 20 ^ (ulong)h, RngPurpose.Spawn, SeedSalts.Housemates + (ulong)n), mate.V1 - mate.V0 + 1)
@@ -63,7 +63,7 @@ public sealed partial class PopulationSystem
     /// </summary>
     Vector3? HomeFloor(IWalkability walk, TownBuilding home, float x, float z, float y)
     {
-        if (data.Db.Find(home.BuildingId) is not { } record || record.GetBool("is gateway") || !record.GetReferences("interior mask").Any()) return null;
+        if (_data.Db.Find(home.BuildingId) is not { } record || record.GetBool("is gateway") || !record.GetReferences("interior mask").Any()) return null;
         float terrain = walk.TerrainHeight(x, z);
         if (HasNode(home))
         {

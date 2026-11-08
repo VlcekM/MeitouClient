@@ -8,8 +8,8 @@ namespace Meitou.Simulation.Ai;
 public sealed partial class AiSystem
 {
     // Set by a think that started a shopper's timer (AiMind.NextBuyTick); the step runs while any shopper is waiting.
-    int shopping;
-    TradeSystem? trade;
+    int _shopping;
+    TradeSystem? _trade;
 
     /// <summary>Ticks between two units (Task_Shopping's timer is 1.0 s, FUN_14033a4c0 / FUN_140337d00, Verified).</summary>
     static long BuyTicks(World world) => (long)MathF.Ceiling(1 / world.TickSeconds);
@@ -42,7 +42,7 @@ public sealed partial class AiSystem
                 mind.ShopAt = null;
             }
         }
-        if (waiting) Interlocked.Exchange(ref shopping, 1);
+        if (waiting) Interlocked.Exchange(ref _shopping, 1);
     }
 
     /// <summary>
@@ -52,9 +52,9 @@ public sealed partial class AiSystem
     /// </summary>
     bool BuyOnce(World world, int slot, AiMind mind, TownBuilding shop)
     {
-        trade ??= world.SystemOf<TradeSystem>();
-        if (trade is null) return false;
-        var market = trade.Market(world);
+        _trade ??= world.SystemOf<TradeSystem>();
+        if (_trade is null) return false;
+        var market = _trade.Market(world);
         var list = mind.Shopping;
         var id = world.Characters.IdOf(slot);
         list.Begin(mind.Squad.Ai?.Town ?? -1, ShoppingList.DayOf(world.GameHours), world.Hour);

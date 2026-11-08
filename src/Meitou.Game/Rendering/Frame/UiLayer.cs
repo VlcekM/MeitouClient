@@ -30,68 +30,68 @@ public sealed class UiLayer : IDisposable
         }
         """;
 
-    readonly IGpuContext gpu;
-    readonly LegacyProgram program;
-    readonly SamplerSlot samplerUi, samplerBack;
-    readonly SampledTexture pointSampler;
-    GpuTexture? texture, final;
+    readonly IGpuContext _gpu;
+    readonly LegacyProgram _program;
+    readonly SamplerSlot _samplerUi, _samplerBack;
+    readonly SampledTexture _pointSampler;
+    GpuTexture? _texture, _final;
 
     public UiLayer(IGpuContext gpu)
     {
-        this.gpu = gpu;
-        program = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, Fragment, "ui composite");
-        samplerUi = program.Sampler("uUi");
-        samplerBack = program.Sampler("uBack");
-        pointSampler = new(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+        this._gpu = gpu;
+        _program = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, Fragment, "ui composite");
+        _samplerUi = _program.Sampler("uUi");
+        _samplerBack = _program.Sampler("uBack");
+        _pointSampler = new(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), default);
     }
 
     /// <summary>What the overlays draw into: valid after <see cref="Clear"/> of the frame.</summary>
-    public GpuTexture? Texture => texture;
+    public GpuTexture? Texture => _texture;
 
     /// <summary>The finished picture (world and interface), top-down: valid after <see cref="Composite"/>. What the present shows and a screenshot reads.</summary>
-    public GpuTexture? Final => final;
+    public GpuTexture? Final => _final;
 
     /// <summary>Makes the texture again when the size changed, and clears it to transparent (the first thing of a frame, before any overlay draws).</summary>
     public GpuTexture Clear(int width, int height)
     {
-        if (texture is null || texture.Desc.Width != width || texture.Desc.Height != height)
+        if (_texture is null || _texture.Desc.Width != width || _texture.Desc.Height != height)
         {
-            texture?.Dispose();   // released after the frames in flight
-            texture = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "ui layer"));
+            _texture?.Dispose();   // released after the frames in flight
+            _texture = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "ui layer"));
         }
-        var cmd = gpu.BeginNative("ui layer clear");
-        cmd.BeginRendering(new RenderingDesc(new RenderTarget(texture.Attachment(), LoadOp.Clear, default), default, width, height));
+        var cmd = _gpu.BeginNative("ui layer clear");
+        cmd.BeginRendering(new RenderingDesc(new RenderTarget(_texture.Attachment(), LoadOp.Clear, default), default, width, height));
         cmd.EndRendering();
-        gpu.EndNative(cmd);
-        return texture;
+        _gpu.EndNative(cmd);
+        return _texture;
     }
 
     /// <summary>Draws the layer over <paramref name="world"/> (the same size) into <see cref="Final"/>, flipped to top-down: <c>ui + world * (1 - ui.a)</c>.</summary>
     public GpuTexture? Composite(GpuTexture world)
     {
-        if (texture is null) return null;
+        if (_texture is null) return null;
         int width = world.Desc.Width, height = world.Desc.Height;
-        if (final is null || final.Desc.Width != width || final.Desc.Height != height)
+        if (_final is null || _final.Desc.Width != width || _final.Desc.Height != height)
         {
-            final?.Dispose();   // released after the frames in flight
-            final = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
+            _final?.Dispose();   // released after the frames in flight
+            _final = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
                 Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "final"));
         }
-        var t = PassTargets.Of(final, null).At(new PixelViewport(0, 0, width, height, 0, 1));
-        var cmd = gpu.BeginNative("ui composite");
+        var t = PassTargets.Of(_final, null).At(new PixelViewport(0, 0, width, height, 0, 1));
+        var cmd = _gpu.BeginNative("ui composite");
         cmd.BeginRendering(t.Rendering);
-        var state = DrawState.For(t.Formats, gpu.DepthClamp);
+        var state = DrawState.For(t.Formats, _gpu.DepthClamp);
         state.Record(cmd, t);
-        cmd.BindPipeline(gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout([]), PrimitiveType.Triangles, t.Formats, "ui composite")));
-        program.Bind(samplerUi, pointSampler with { View = texture.View() });
-        program.Bind(samplerBack, pointSampler with { View = world.View() });
-        program.Flush(cmd);
+        cmd.BindPipeline(_gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout([]), PrimitiveType.Triangles, t.Formats, "ui composite")));
+        _program.Bind(_samplerUi, _pointSampler with { View = _texture.View() });
+        _program.Bind(_samplerBack, _pointSampler with { View = world.View() });
+        _program.Flush(cmd);
         cmd.Draw(3);
         cmd.EndRendering();
-        gpu.EndNative(cmd);
-        return final;
+        _gpu.EndNative(cmd);
+        return _final;
     }
 
-    public void Dispose() { texture?.Dispose(); final?.Dispose(); }
+    public void Dispose() { _texture?.Dispose(); _final?.Dispose(); }
 }

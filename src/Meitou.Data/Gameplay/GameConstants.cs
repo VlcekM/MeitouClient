@@ -111,13 +111,13 @@ public sealed record GameConstants
     /// <summary><c>XP rate medic 99</c>.</summary>
     public float XpRateMedic99 { get; init; }
     /// <summary><c>skill diff xp 2x bonus</c>.</summary>
-    public float SkillDiffXp2xBonus { get; init; }
+    public float SkillDiffXp2XBonus { get; init; }
     /// <summary><c>skill diff xp 0x penalty</c>.</summary>
-    public float SkillDiffXp0xPenalty { get; init; }
+    public float SkillDiffXp0XPenalty { get; init; }
     /// <summary><c>min strength xp mult</c>.</summary>
     public float MinStrengthXpMult { get; init; }
     /// <summary><c>weight strength diff 1x</c>.</summary>
-    public float WeightStrengthDiff1x { get; init; }
+    public float WeightStrengthDiff1X { get; init; }
     /// <summary><c>weight strength diff max</c>.</summary>
     public float WeightStrengthDiffMax { get; init; }
     /// <summary><c>xp rate strength</c>.</summary>
@@ -212,10 +212,10 @@ public sealed record GameConstants
             ExpGainMultiplier = F("exp gain multiplier", 3, 0.25f),
             XpRateMedic1 = F("XP rate medic 1", 10),
             XpRateMedic99 = F("XP rate medic 99", 300),
-            SkillDiffXp2xBonus = F("skill diff xp 2x bonus", 10),
-            SkillDiffXp0xPenalty = F("skill diff xp 0x penalty", 20),
+            SkillDiffXp2XBonus = F("skill diff xp 2x bonus", 10),
+            SkillDiffXp0XPenalty = F("skill diff xp 0x penalty", 20),
             MinStrengthXpMult = F("min strength xp mult", 0.05f),
-            WeightStrengthDiff1x = F("weight strength diff 1x", 20),
+            WeightStrengthDiff1X = F("weight strength diff 1x", 20),
             WeightStrengthDiffMax = F("weight strength diff max", 1.5f),
             XpRateStrength = F("xp rate strength", 1),
             XpRateStrengthFromWalking = F("xp rate strength from walking", 1),

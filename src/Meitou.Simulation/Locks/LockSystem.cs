@@ -1,6 +1,6 @@
 using System.Numerics;
-using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
@@ -43,20 +43,20 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     world.Fixtures.Buy(world, buy);
                     break;
                 case PickLockOrder pick:
-                {
-                    Fixture? cage;
-                    if (pick.Cage is not null) cage = world.Fixtures.Find(pick.Cage) is { Kind: FixtureKind.Cage } empty ? empty : null;
-                    else cage = table.TryResolveNext(pick.Prisoner, out int p) && table.Cold(p) is { IsImprisoned: true, InWhat: { } where } ? world.Fixtures.Find(where) : null;
-                    if (cage is null) break;
-                    foreach (var id in Who(world, pick.Characters))
                     {
-                        if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false } c || !c.CarriedBy.IsNone) continue;
-                        if (c.IsImprisoned && c.InWhat != cage.Id) continue;   // a prisoner reaches only its own cage
-                        // One picker per order (the nearest is not looked for: the first listed whose repertoire has row 76); a prisoner picks where it stands.
-                        if (StartWork(world, s, c.IsImprisoned ? CharacterTask.Idle : CharacterTask.GoTo, TaskType.PICK_LOCK, cage.Id, queued: pick.Queued)) break;
+                        Fixture? cage;
+                        if (pick.Cage is not null) cage = world.Fixtures.Find(pick.Cage) is { Kind: FixtureKind.Cage } empty ? empty : null;
+                        else cage = table.TryResolveNext(pick.Prisoner, out int p) && table.Cold(p) is { IsImprisoned: true, InWhat: { } where } ? world.Fixtures.Find(where) : null;
+                        if (cage is null) break;
+                        foreach (var id in Who(world, pick.Characters))
+                        {
+                            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false } c || !c.CarriedBy.IsNone) continue;
+                            if (c.IsImprisoned && c.InWhat != cage.Id) continue;   // a prisoner reaches only its own cage
+                                                                                   // One picker per order (the nearest is not looked for: the first listed whose repertoire has row 76); a prisoner picks where it stands.
+                            if (StartWork(world, s, c.IsImprisoned ? CharacterTask.Idle : CharacterTask.GoTo, TaskType.PickLock, cage.Id, queued: pick.Queued)) break;
+                        }
+                        break;
                     }
-                    break;
-                }
                 case GetOutOrder getOut:
                     foreach (var id in Who(world, getOut.Characters))
                     {

@@ -35,49 +35,56 @@ public readonly record struct SamplerDesc(TextureMinFilter Min, TextureMagFilter
 /// </summary>
 public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
 {
-    readonly VulkanDevice device;
-    readonly Dictionary<SamplerDesc, int> samplers = [];
+    readonly VulkanDevice _device;
+    readonly Dictionary<SamplerDesc, int> _samplers = [];
 
-    public SamplerCache(VulkanDevice device) => this.device = device;
+    public SamplerCache(VulkanDevice device) => this._device = device;
 
-    public int Count => samplers.Count;
+    public int Count => _samplers.Count;
 
     /// <summary>The Tab panel's anisotropic filtering: the most any sampler gets (1, 2, 4, 8 or 16; 16, the default, leaves every texture as asked). A change bumps <see cref="Generation"/>, which the caches of sampler bindings compare to make theirs again.</summary>
     public int MaxAnisotropy
     {
-        get => maxAnisotropy;
-        set { value = Math.Clamp(value, 1, 16); if (value != maxAnisotropy) (maxAnisotropy, Generation) = (value, Generation + 1); }
+        get => _maxAnisotropy;
+        set { value = Math.Clamp(value, 1, 16); if (value != _maxAnisotropy) (_maxAnisotropy, Generation) = (value, Generation + 1); }
     }
-    int maxAnisotropy = 16;
+    int _maxAnisotropy = 16;
     public int Generation { get; private set; }
 
     public GpuSampler Get(in SamplerDesc desc)
     {
-        var key = device.SamplerAnisotropy ? desc with { Anisotropy = Math.Min(desc.Anisotropy, maxAnisotropy) } : desc with { Anisotropy = 1 };
-        if (samplers.TryGetValue(key, out var index)) return new GpuSampler(index, key);
+        var key = _device.SamplerAnisotropy ? desc with { Anisotropy = Math.Min(desc.Anisotropy, _maxAnisotropy) } : desc with { Anisotropy = 1 };
+        if (_samplers.TryGetValue(key, out var index)) return new GpuSampler(index, key);
         var vkFilters = GlConventions.VkFilters(key.Min);
         var info = new SamplerCreateInfo
         {
             SType = StructureType.SamplerCreateInfo,
-            MinFilter = vkFilters.Min, MagFilter = GlConventions.VkFilter(key.Mag), MipmapMode = vkFilters.Mip,
-            AddressModeU = GlConventions.AddressMode(key.U), AddressModeV = GlConventions.AddressMode(key.V), AddressModeW = GlConventions.AddressMode(key.W),
-            AnisotropyEnable = key.Anisotropy > 1, MaxAnisotropy = key.Anisotropy,
-            CompareEnable = key.Compare, CompareOp = GlConventions.CompareOp(key.Op),
-            MinLod = 0, MaxLod = key.Mipmapped ? Vk.LodClampNone : 0.25f,
+            MinFilter = vkFilters.Min,
+            MagFilter = GlConventions.VkFilter(key.Mag),
+            MipmapMode = vkFilters.Mip,
+            AddressModeU = GlConventions.AddressMode(key.U),
+            AddressModeV = GlConventions.AddressMode(key.V),
+            AddressModeW = GlConventions.AddressMode(key.W),
+            AnisotropyEnable = key.Anisotropy > 1,
+            MaxAnisotropy = key.Anisotropy,
+            CompareEnable = key.Compare,
+            CompareOp = GlConventions.CompareOp(key.Op),
+            MinLod = 0,
+            MaxLod = key.Mipmapped ? Vk.LodClampNone : 0.25f,
             // NVIDIA's OpenGL picks mips a quarter level finer than its Vulkan driver with anisotropic filtering on: matched here
             // (docs/engine.md "Vulkan backend"; measured 1.2 -> 0.001 mean difference on the rock view). Plus the upscaler's bias.
-            MipLodBias = (key.Anisotropy > 1 && device.Properties.VendorID == 0x10DE ? -0.25f : 0) + key.LodBias,
+            MipLodBias = (key.Anisotropy > 1 && _device.Properties.VendorID == 0x10DE ? -0.25f : 0) + key.LodBias,
             BorderColor = key.IntegerFormat ? (key.TransparentBorder ? BorderColor.IntTransparentBlack : BorderColor.IntOpaqueBlack)
                 : key.TransparentBorder ? BorderColor.FloatTransparentBlack : BorderColor.FloatOpaqueWhite,
         };
-        VulkanException.Check(device.Vk.CreateSampler(device.Device, &info, null, out var created), "vkCreateSampler");
-        samplers[key] = device.AddSampler(created);
-        return new GpuSampler(samplers[key], key);
+        VulkanException.Check(_device.Vk.CreateSampler(_device.Device, &info, null, out var created), "vkCreateSampler");
+        _samplers[key] = _device.AddSampler(created);
+        return new GpuSampler(_samplers[key], key);
     }
 
     public void Dispose()
     {
-        foreach (var s in samplers.Values) device.Vk.DestroySampler(device.Device, device.SamplerAt(s), null);
-        samplers.Clear();
+        foreach (var s in _samplers.Values) _device.Vk.DestroySampler(_device.Device, _device.SamplerAt(s), null);
+        _samplers.Clear();
     }
 }

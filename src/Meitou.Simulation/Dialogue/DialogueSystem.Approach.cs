@@ -10,7 +10,7 @@ public sealed partial class DialogueSystem
     /// <summary>An NPC walking up to a player character to talk (the original's task 102 <c>Task_TalktoPlayer</c>), and the game hours it gives up at.</summary>
     sealed record Approach(CharacterId Npc, CharacterId Target, double GiveUpHours);
 
-    readonly List<Approach> approaches = [];
+    readonly List<Approach> _approaches = [];
 
     /// <summary>Game hours an approach may take before the NPC gives up with event 60 (<c>Task_TalktoPlayer</c>: 25 game minutes, <b>Observed</b>).</summary>
     const double ApproachGiveUpHours = 25.0 / 60;
@@ -24,9 +24,9 @@ public sealed partial class DialogueSystem
     void TalkToLeader(World world, Conversation c, CharacterCold mc, CharacterId target, CharacterCold tc)
     {
         if (tc.Faction != world.Player.Faction && !tc.IsPlayer || mc.SquadId < 0 || world.Squads.Find(mc.SquadId) is not { Leader: { IsNone: false } leader }) return;
-        if (open?.Npc == leader || approaches.Any(a => a.Npc == leader)) return;
+        if (_open?.Npc == leader || _approaches.Any(a => a.Npc == leader)) return;
         if (!world.Characters.TryResolveNext(leader, out int l) || !Awake(world.Characters, l)) return;
-        approaches.Add(new Approach(leader, target, world.GameHours + ApproachGiveUpHours));
+        _approaches.Add(new Approach(leader, target, world.GameHours + ApproachGiveUpHours));
         Hold(world, l);
     }
 
@@ -38,17 +38,17 @@ public sealed partial class DialogueSystem
     void StepApproaches(World world)
     {
         var table = world.Characters;
-        for (int k = 0; k < approaches.Count; k++)
+        for (int k = 0; k < _approaches.Count; k++)
         {
-            var a = approaches[k];
+            var a = _approaches[k];
             int n = -1, t = -1;
             bool done = !table.TryResolveNext(a.Npc, out n) || !Awake(table, n) || !table.TryResolveNext(a.Target, out t) || !Awake(table, t);
-            if (!done && open is null && InTalkRange(table, n, t))
+            if (!done && _open is null && InTalkRange(table, n, t))
             {
                 TaskStart.Stand(table, n);
-                approaches.RemoveAt(k--);
+                _approaches.RemoveAt(k--);
                 Start(world, a.Npc, a.Target, DialogueEvents.PlayerTalkToMe, quiet: true);
-                if (open?.Npc != a.Npc) Release(world, a.Npc);
+                if (_open?.Npc != a.Npc) Release(world, a.Npc);
                 continue;
             }
             if (!done && world.GameHours >= a.GiveUpHours && GettingAway(table, n, t))
@@ -61,7 +61,7 @@ public sealed partial class DialogueSystem
             }
             if (done)
             {
-                approaches.RemoveAt(k--);
+                _approaches.RemoveAt(k--);
                 Release(world, a.Npc);
                 continue;
             }
@@ -70,7 +70,7 @@ public sealed partial class DialogueSystem
             ref var nh = ref table.Next[n];
             table.Cold(n)!.Engaged = true;
             if (table.Cold(n)!.InCombat) continue;   // its walk would end the fight it is in (a new task drops the fight task)
-            if (nh.Task != (byte)CharacterTask.GoTo || Vector2.Distance(nh.Goal, to) > TalkReach) TaskStart.Walk(world, n, to, SpeedMode.Free, Meitou.Data.Gameplay.Ai.TaskType.TALKTO_NEAREST_PLAYER_CHARACTER, TaskSource.Npc);
+            if (nh.Task != (byte)CharacterTask.GoTo || Vector2.Distance(nh.Goal, to) > TalkReach) TaskStart.Walk(world, n, to, SpeedMode.Free, Data.Gameplay.Ai.TaskType.TalktoNearestPlayerCharacter, TaskSource.Npc);
         }
     }
 
@@ -80,7 +80,7 @@ public sealed partial class DialogueSystem
     static bool GettingAway(CharacterTable table, int npc, int target)
     {
         var tc = table.Cold(target);
-        if (tc is { Fleeing: true } || tc?.Ai?.Step is Meitou.Data.Gameplay.Ai.TaskType.RUN_AWAY or Meitou.Data.Gameplay.Ai.TaskType.RUN_AWAY_HOMETOWN) return true;
+        if (tc is { Fleeing: true } || tc?.Ai?.Step is Data.Gameplay.Ai.TaskType.RunAway or Data.Gameplay.Ai.TaskType.RunAwayHometown) return true;
         ref readonly var tn = ref table.Next[target];
         if (tn.Task != (byte)CharacterTask.GoTo || tn.Goal == Vector2.Zero) return false;
         var me = new Vector2(table.Next[npc].Position.X, table.Next[npc].Position.Z);
@@ -89,6 +89,6 @@ public sealed partial class DialogueSystem
 
     void HashApproaches(ref StateHasher hasher)
     {
-        foreach (var a in approaches) { hasher.Add(a.Npc); hasher.Add(a.Target); hasher.Add(a.GiveUpHours); }
+        foreach (var a in _approaches) { hasher.Add(a.Npc); hasher.Add(a.Target); hasher.Add(a.GiveUpHours); }
     }
 }

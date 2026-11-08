@@ -1,8 +1,8 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
 using GpuTexture = Meitou.Game.Rendering.Gpu.GpuTexture;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Impostors;
 
@@ -14,29 +14,29 @@ namespace Meitou.Game.Rendering.Impostors;
 /// </summary>
 public sealed class ImpostorTextures : IDisposable
 {
-    readonly IGpuContext gpu;
-    readonly GpuTexture[] maps = new GpuTexture[2];
-    readonly ImpostorTexture?[] sources = new ImpostorTexture?[2];
-    readonly uint[] indices = new uint[2];
-    float indexBias;
-    bool registered;
+    readonly IGpuContext _gpu;
+    readonly GpuTexture[] _maps = new GpuTexture[2];
+    readonly ImpostorTexture?[] _sources = new ImpostorTexture?[2];
+    readonly uint[] _indices = new uint[2];
+    float _indexBias;
+    bool _registered;
 
     /// <summary>The atlas; once <see cref="Complete"/>, only its shape (<see cref="ImpostorAtlas.WithoutLevels"/>): the level data was the CPU copy.</summary>
     public ImpostorAtlas Atlas { get; private set; }
-    readonly int levels;
+    readonly int _levels;
     /// <summary>Top levels left out per map (0 albedo, 1 normal): the foliage path drops those its transition distance never needs
     /// (docs/impostors.md 7, "VRAM").</summary>
-    readonly int[] skips = new int[2];
-    public int SkipOf(int map) => skips[map];
+    readonly int[] _skips = new int[2];
+    public int SkipOf(int map) => _skips[map];
     /// <summary>The levels of a map on the GPU.</summary>
-    public int LevelsOf(int map) => levels - skips[map];
+    public int LevelsOf(int map) => _levels - _skips[map];
     /// <summary>The GPU bytes: the levels kept, of the maps.</summary>
     public long Bytes { get; }
-    public GpuTexture Albedo => maps[0];
-    public GpuTexture Normal => maps[1];
+    public GpuTexture Albedo => _maps[0];
+    public GpuTexture Normal => _maps[1];
     /// <summary>Every level written (<see cref="UploadStep"/> ran <see cref="StepCount"/> times).</summary>
-    public bool Complete => map >= 2;
-    int map, level, row;
+    public bool Complete => _map >= 2;
+    int _map, _level, _row;
 
     /// <summary>The most one <see cref="UploadStep"/> writes: a level is cut into slabs of whole rows (of blocks, for the compressed maps) of about this size.
     /// A level was one step before, up to 9 MB (a 3072² BC1 albedo): the copy into staging alone took 2 to 3 ms of the render thread.</summary>
@@ -56,16 +56,16 @@ public sealed class ImpostorTextures : IDisposable
     /// <param name="made">The maps <see cref="MakeOffThread"/> made with the same skips (an entry null: made here).</param>
     public ImpostorTextures(IGpuContext gpu, ImpostorAtlas atlas, IGpuUploadBatch batch, int skip = 0, int surfaceSkip = 0, GpuTexture?[]? made = null)
     {
-        this.gpu = gpu;
+        this._gpu = gpu;
         Atlas = atlas;
-        levels = atlas.Levels;
-        var descs = Shape(atlas, skip, surfaceSkip, skips);
+        _levels = atlas.Levels;
+        var descs = Shape(atlas, skip, surfaceSkip, _skips);
         for (int i = 0; i < 2; i++)
         {
-            var texture = sources[i] = atlas[Order[i]]!;
-            if (made?[i] is { } image) batch.Commands.InitTexture(maps[i] = image);
-            else maps[i] = batch.Create(descs[i]);
-            for (int l = skips[i]; l < texture.Levels.Length; l++) Bytes += texture.Levels[l].Length;
+            var texture = _sources[i] = atlas[Order[i]]!;
+            if (made?[i] is { } image) batch.Commands.InitTexture(_maps[i] = image);
+            else _maps[i] = batch.Create(descs[i]);
+            for (int l = _skips[i]; l < texture.Levels.Length; l++) Bytes += texture.Levels[l].Length;
         }
     }
 
@@ -80,9 +80,9 @@ public sealed class ImpostorTextures : IDisposable
             var texture = atlas[Order[i]] ?? throw new InvalidDataException($"impostor atlas {atlas.Name} has no {Order[i]} map");
             var format = texture.Encoding switch
             {
-                ImpostorEncoding.Bc3 => InternalFormat.CompressedRgbaS3TCDxt5Ext,
-                ImpostorEncoding.Bc1 => InternalFormat.CompressedRgbaS3TCDxt1Ext,
-                ImpostorEncoding.Bc5 => InternalFormat.CompressedRGRgtc2,
+                ImpostorEncoding.Bc3 => InternalFormat.CompressedRgbaS3TcDxt5Ext,
+                ImpostorEncoding.Bc1 => InternalFormat.CompressedRgbaS3TcDxt1Ext,
+                ImpostorEncoding.Bc5 => InternalFormat.CompressedRgRgtc2,
                 _ => InternalFormat.Rgba8,
             };
             int size = atlas.AtlasPixels >> skips[i];
@@ -103,7 +103,7 @@ public sealed class ImpostorTextures : IDisposable
         for (int i = 0; i < 2; i++)
         {
             try { made[i] = gpu.CreateTextureOffThread(descs[i]); }
-            catch (Meitou.Game.Rendering.Gpu.Core.VulkanException) { }   // no memory now: the constructor makes it (or fails) on the render thread
+            catch (Gpu.Core.VulkanException) { }   // no memory now: the constructor makes it (or fails) on the render thread
         }
         return made;
     }
@@ -145,10 +145,10 @@ public sealed class ImpostorTextures : IDisposable
         get
         {
             if (Complete) return 0;
-            int source = skips[map] + level;
-            var (rows, rowBytes) = RowsOf(sources[map]!.Encoding, Atlas.AtlasPixels >> source);
+            int source = _skips[_map] + _level;
+            var (rows, rowBytes) = RowsOf(_sources[_map]!.Encoding, Atlas.AtlasPixels >> source);
             int perSlab = Math.Max(1, SlabBytes / rowBytes);
-            return (long)Math.Min(perSlab, rows - row) * rowBytes;
+            return (long)Math.Min(perSlab, rows - _row) * rowBytes;
         }
     }
 
@@ -156,28 +156,28 @@ public sealed class ImpostorTextures : IDisposable
     public bool UploadStep(IGpuUploadBatch batch)
     {
         if (Complete) return false;
-        int source = skips[map] + level;
+        int source = _skips[_map] + _level;
         int pixels = Atlas.AtlasPixels >> source;
-        var texture = sources[map]!;
+        var texture = _sources[_map]!;
         var encoding = texture.Encoding;
         var (rows, rowBytes) = RowsOf(encoding, pixels);
         int perSlab = Math.Max(1, SlabBytes / rowBytes);
-        int n = Math.Min(perSlab, rows - row);
+        int n = Math.Min(perSlab, rows - _row);
         int unit = encoding == ImpostorEncoding.Rgba8 ? 1 : 4;   // pixel rows per row
         // A slab of whole block rows; the last one ends at the level's edge.
-        int y = row * unit, height = Math.Min(n * unit, pixels - y);
-        batch.Write(maps[map], level, 0, new PixelRect(0, y, (uint)pixels, (uint)height),
-            texture.Levels[source].Span.Slice(row * rowBytes, n * rowBytes));
-        row += n;
-        if (row >= rows)
+        int y = _row * unit, height = Math.Min(n * unit, pixels - y);
+        batch.Write(_maps[_map], _level, 0, new PixelRect(0, y, (uint)pixels, (uint)height),
+            texture.Levels[source].Span.Slice(_row * rowBytes, n * rowBytes));
+        _row += n;
+        if (_row >= rows)
         {
-            row = 0;
-            if (++level == LevelsOf(map)) (map, level) = (map + 1, 0);
+            _row = 0;
+            if (++_level == LevelsOf(_map)) (_map, _level) = (_map + 1, 0);
         }
         if (Complete)
         {
             // All on the GPU: drop the level data, which otherwise stays in memory for as long as the textures do (up to tens of MB an atlas).
-            sources[0] = sources[1] = null;
+            _sources[0] = _sources[1] = null;
             Atlas = Atlas.WithoutLevels();
         }
         return true;
@@ -196,23 +196,23 @@ public sealed class ImpostorTextures : IDisposable
     /// </summary>
     public uint Index(int map, float bias)
     {
-        if (!registered || bias != indexBias)
+        if (!_registered || bias != _indexBias)
         {
             RenderJobs.AssertNotInJob();
-            if (registered) foreach (var i in indices) gpu.Bindless.Free(BindlessKind.Texture2D, i);
-            var sampler = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
+            if (_registered) foreach (var i in _indices) _gpu.Bindless.Free(BindlessKind.Texture2D, i);
+            var sampler = _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
                 TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, transparentBorder: false, anisotropy: 1, integerFormat: false, bias));
             for (int i = 0; i < 2; i++)
-                indices[i] = gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, maps[i].View(0, LevelsOf(i))));
-            (registered, indexBias) = (true, bias);
+                _indices[i] = _gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, _maps[i].View(0, LevelsOf(i))));
+            (_registered, _indexBias) = (true, bias);
         }
-        return indices[map];
+        return _indices[map];
     }
 
     public void Dispose()
     {
-        if (registered) foreach (var i in indices) gpu.Bindless.Free(BindlessKind.Texture2D, i);
-        registered = false;
-        foreach (var t in maps) t?.Dispose();
+        if (_registered) foreach (var i in _indices) _gpu.Bindless.Free(BindlessKind.Texture2D, i);
+        _registered = false;
+        foreach (var t in _maps) t?.Dispose();
     }
 }

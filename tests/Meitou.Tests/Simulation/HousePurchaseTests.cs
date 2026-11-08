@@ -19,13 +19,13 @@ public class HousePurchaseTests
     internal static (PopulationData Data, TownBuilding House) Setup(bool destroyed = false, bool sale = true, int townType = 2, bool inside = false)
     {
         var db = Db(
-            Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
-            Rec("owner", FcsRecordType.FACTION, r => r.Floats["building cost mult"] = 1),
-            Rec("town", FcsRecordType.TOWN, r => { r.Ints["type"] = townType; r.References["faction"] = [new("owner", 0, 0, 0)]; }),
-            Rec("shell", FcsRecordType.BUILDING_FUNCTIONALITY, r => r.Ints["function"] = 19),
-            Rec("house", FcsRecordType.BUILDING, r => { r.Ints["build materials"] = 32; r.References["functionality"] = [new("shell", 0, 0, 0)]; r.References["doors"] = [new("door", 0, 0, 0)]; }),
-            Rec("door", FcsRecordType.BUILDING),
-            Rec("state", FcsRecordType.GAMESTATE_BUILDING, r => { r.Bools["sell home"] = sale; r.Bools["is inside building"] = inside; r.Bools["destroyed"] = destroyed; }));
+            Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
+            Rec("owner", FcsRecordType.Faction, r => r.Floats["building cost mult"] = 1),
+            Rec("town", FcsRecordType.Town, r => { r.Ints["type"] = townType; r.References["faction"] = [new("owner", 0, 0, 0)]; }),
+            Rec("shell", FcsRecordType.BuildingFunctionality, r => r.Ints["function"] = 19),
+            Rec("house", FcsRecordType.Building, r => { r.Ints["build materials"] = 32; r.References["functionality"] = [new("shell", 0, 0, 0)]; r.References["doors"] = [new("door", 0, 0, 0)]; }),
+            Rec("door", FcsRecordType.Building),
+            Rec("state", FcsRecordType.GamestateBuilding, r => { r.Bools["sell home"] = sale; r.Bools["is inside building"] = inside; r.Bools["destroyed"] = destroyed; }));
         var house = new TownBuilding("home", "house", "House", new(100, 0, 100), 0, false, false, [])
         { LevelState = db.Find("state"), Destroyed = destroyed };
         var data = PopulationData.Create(db, [new TownPlacement("town-instance", "town", house.Position, null)],
@@ -57,7 +57,7 @@ public class HousePurchaseTests
         Assert.All(world.Fixtures.OfBuilding(house.Key).Where(f => f.Kind == FixtureKind.Door), d => Assert.NotEqual(DoorMotion.Closed, d.Motion));   // FUN_1407ad6c0 opens every door
         world.Commands.Enqueue(new BuyBuilding(house.Key, price) { Tick = world.Tick }); world.RunTick();
         Assert.Equal(20000 - price, world.Player.Money);
-        var state = Rec("saved", FcsRecordType.GAMESTATE_BUILDING);
+        var state = Rec("saved", FcsRecordType.GamestateBuilding);
         Assert.True(world.Fixtures.WriteBuilding(house.Key, state));
         Assert.Equal("204-gamedata.base", state.Strings["owner faction ID"]); Assert.False(state.Bools["sell home"]);
         using var loaded = World(data);

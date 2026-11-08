@@ -13,11 +13,11 @@ public sealed class NavRuntimeBuildings
     /// <summary>How far (units) a building reaches past its zone box in the gatherer (<c>BuildingReach</c>) plus the gather margin: the zones a placement can shape.</summary>
     public const float Reach = 600 + 72;
 
-    readonly object gate = new();
-    readonly Dictionary<string, BuildingPlacement> all = new(StringComparer.Ordinal);
-    volatile Dictionary<ZoneCoordinate, BuildingPlacement[]> byZone = [];
+    readonly object _gate = new();
+    readonly Dictionary<string, BuildingPlacement> _all = new(StringComparer.Ordinal);
+    volatile Dictionary<ZoneCoordinate, BuildingPlacement[]> _byZone = [];
 
-    public bool IsEmpty => byZone.Count == 0;
+    public bool IsEmpty => _byZone.Count == 0;
 
     /// <summary>Raised after a placement is added, replaced or removed, with the zone it was placed in (both zones when a replacement moves it): what else keeps zone-wide results (the ragdolls' collision) drops them.</summary>
     public event Action<ZoneCoordinate>? Changed;
@@ -26,11 +26,11 @@ public sealed class NavRuntimeBuildings
     public void Add(BuildingPlacement placement)
     {
         BuildingPlacement? old;
-        lock (gate)
+        lock (_gate)
         {
-            all.TryGetValue(placement.Key, out old);
-            all[placement.Key] = placement;
-            byZone = all.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
+            _all.TryGetValue(placement.Key, out old);
+            _all[placement.Key] = placement;
+            _byZone = _all.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
         }
         if (old is not null && old.Zone != placement.Zone) Changed?.Invoke(old.Zone);
         Changed?.Invoke(placement.Zone);
@@ -40,10 +40,10 @@ public sealed class NavRuntimeBuildings
     public BuildingPlacement? Remove(string instanceId)
     {
         BuildingPlacement? removed;
-        lock (gate)
+        lock (_gate)
         {
-            if (!all.Remove(instanceId, out removed)) return null;
-            byZone = all.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
+            if (!_all.Remove(instanceId, out removed)) return null;
+            _byZone = _all.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
         }
         Changed?.Invoke(removed.Zone);
         return removed;
@@ -53,20 +53,20 @@ public sealed class NavRuntimeBuildings
     public List<BuildingPlacement> Clear()
     {
         List<BuildingPlacement> removed;
-        lock (gate)
+        lock (_gate)
         {
-            removed = all.Values.ToList();
-            all.Clear();
-            byZone = [];
+            removed = _all.Values.ToList();
+            _all.Clear();
+            _byZone = [];
         }
         foreach (var zone in removed.Select(r => r.Zone).Distinct()) Changed?.Invoke(zone);
         return removed;
     }
 
     /// <summary>Every placement now.</summary>
-    public List<BuildingPlacement> All() { lock (gate) return [.. all.Values]; }
+    public List<BuildingPlacement> All() { lock (_gate) return [.. _all.Values]; }
 
-    public IReadOnlyList<BuildingPlacement> In(ZoneCoordinate zone) => byZone.TryGetValue(zone, out var list) ? list : [];
+    public IReadOnlyList<BuildingPlacement> In(ZoneCoordinate zone) => _byZone.TryGetValue(zone, out var list) ? list : [];
 
     /// <summary>The zones whose mesh a building at <paramref name="position"/> can change: its own and the neighbours within <see cref="Reach"/> of it.</summary>
     public static IEnumerable<ZoneCoordinate> ZonesReached(Vector3 position)

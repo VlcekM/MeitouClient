@@ -89,8 +89,8 @@ public sealed partial class CombatSystem : IProjectileSource
         }
     }
 
-    readonly List<Projectile> projectiles = [];
-    int nextProjectile;
+    readonly List<Projectile> _projectiles = [];
+    int _nextProjectile;
 
     /// <summary>Bolts in flight (for tests and the HUD).</summary>
     public int ProjectilesInFlight
@@ -98,23 +98,23 @@ public sealed partial class CombatSystem : IProjectileSource
         get
         {
             int n = 0;
-            foreach (var p in projectiles) if (!p.Stuck) n++;
+            foreach (var p in _projectiles) if (!p.Stuck) n++;
             return n;
         }
     }
 
     /// <summary>Bolts fired so far.</summary>
-    public int ProjectilesFired => nextProjectile;
+    public int ProjectilesFired => _nextProjectile;
 
     public IReadOnlyList<ProjectileSnapshot> PublishProjectiles()
     {
-        if (projectiles.Count == 0) return [];
-        var list = new ProjectileSnapshot[projectiles.Count];
+        if (_projectiles.Count == 0) return [];
+        var list = new ProjectileSnapshot[_projectiles.Count];
         for (int k = 0; k < list.Length; k++)
         {
-            var p = projectiles[k];
+            var p = _projectiles[k];
             list[k] = new ProjectileSnapshot(p.Id, p.Position, p.Direction, p.Stuck ? 1 : MathF.Max(1, p.Speed * 0.005f), p.Stuck, p.Mesh)
-                { Shooter = new CharacterId(p.Shooter, p.ShooterGeneration), Speed = p.Stuck ? 0 : p.Speed };
+            { Shooter = new CharacterId(p.Shooter, p.ShooterGeneration), Speed = p.Stuck ? 0 : p.Speed };
         }
         return list;
     }
@@ -122,10 +122,10 @@ public sealed partial class CombatSystem : IProjectileSource
     void HashRanged(ref StateHasher h)
     {
         // Only once a bolt has flown, so worlds without crossbows hash as before.
-        if (nextProjectile == 0) return;
-        h.Add(nextProjectile);
-        h.Add(projectiles.Count);
-        foreach (var p in projectiles) p.Hash(ref h);
+        if (_nextProjectile == 0) return;
+        h.Add(_nextProjectile);
+        h.Add(_projectiles.Count);
+        foreach (var p in _projectiles) p.Hash(ref h);
     }
 
     // ------------------------------------------------------------------ geometry
@@ -189,7 +189,7 @@ public sealed partial class CombatSystem : IProjectileSource
     bool Hostile(CharacterTable table, int shooter, int shooterGeneration, int faction, int target, int other)
     {
         if (other == target) return true;
-        ref readonly var o = ref read[other];
+        ref readonly var o = ref _read[other];
         if (o.TargetSlot == shooter && o.TargetGeneration == shooterGeneration) return true;
         var oc = table.Cold(other);
         if (oc is null) return false;
@@ -285,7 +285,7 @@ public sealed partial class CombatSystem : IProjectileSource
         foreach (var id in senses.Threats)
         {
             int a = id.Slot;
-            if ((uint)a >= (uint)prev.Length || !prev[a].Alive || prev[a].Generation != id.Generation || read[a].Down) continue;
+            if ((uint)a >= (uint)prev.Length || !prev[a].Alive || prev[a].Generation != id.Generation || _read[a].Down) continue;
             if (table.Cold(a) is not { } c || c.InSomething != global::Meitou.Simulation.Locks.HeldState.None || !c.CarriedBy.IsNone || CharacterFacts.GettingUp(c, world.Tick)) continue;
             var at = prev[a].Position;
             // Full 3D squared distance, strictly under the reach squared (FUN_1404378f0).
@@ -414,8 +414,8 @@ public sealed partial class CombatSystem : IProjectileSource
             s.ReloadLeft = s.ReloadTime;
         }
         s.ReloadLeft -= dt;
-        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
-        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp);
         if (s.ReloadLeft > 0) return;
         s.ReloadLeft = 0;
         s.Loaded = x.NumShots;
@@ -476,8 +476,8 @@ public sealed partial class CombatSystem : IProjectileSource
     {
         var x = cold.Fighter!.Crossbow!;
         s.RangedState = (byte)RangedStates.Aiming;
-        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp);
-        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Crossbows, dt, RangedFormulas.CrossbowXp);
         if (s.Steady > 0)
         {
             s.Steady -= dt;
@@ -533,9 +533,9 @@ public sealed partial class CombatSystem : IProjectileSource
         float w = Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Ranged, counter + 2));
         var dir = RangedFormulas.Deviate(Vector3.Normalize(to), u * deviation, spin);
         var (damage, range, speed) = RangedFormulas.Bolt(x.Stats, h, w);
-        projectiles.Add(new Projectile
+        _projectiles.Add(new Projectile
         {
-            Id = nextProjectile++,
+            Id = _nextProjectile++,
             Shooter = a,
             ShooterGeneration = prev[a].Generation,
             Target = t,
@@ -583,14 +583,14 @@ public sealed partial class CombatSystem : IProjectileSource
     /// </summary>
     void FlyProjectiles(World world)
     {
-        if (projectiles.Count == 0) return;
+        if (_projectiles.Count == 0) return;
         var table = world.Characters;
         var prev = table.Previous;
         float dt = world.TickSeconds;
         var walk = world.Walkability;
-        for (int k = 0; k < projectiles.Count; k++)
+        for (int k = 0; k < _projectiles.Count; k++)
         {
-            var p = projectiles[k];
+            var p = _projectiles[k];
             if (p.Stuck) continue;
             float step = p.Speed * dt;
             p.Flown += dt;
@@ -599,7 +599,7 @@ public sealed partial class CombatSystem : IProjectileSource
             {
                 if (p.RangeLeft < -RangedFormulas.DropAfter)
                 {
-                    projectiles.RemoveAt(k--);
+                    _projectiles.RemoveAt(k--);
                     continue;
                 }
                 // Spent: the nose drops.
@@ -637,9 +637,9 @@ public sealed partial class CombatSystem : IProjectileSource
                     {
                         // A friend in the way (FUN_1404380e0): passed with the shooter's avoidance chance (FRIENDLY_FIRE XP 20), else hit (XP 100).
                         float roll = Rng.Float(Rng.Hash(world.Seed, (ulong)(uint)p.Id, RngPurpose.Ranged, ((ulong)(uint)v << 32) | (uint)prev[v].Generation));
-                        bool pass_ = roll < p.Avoidance;
-                        ShooterXp(table, p, pass_ ? RangedFormulas.FriendlyPassXp : RangedFormulas.FriendlyHitXp);
-                        if (pass_)
+                        bool friendlyPass = roll < p.Avoidance;
+                        ShooterXp(table, p, friendlyPass ? RangedFormulas.FriendlyPassXp : RangedFormulas.FriendlyHitXp);
+                        if (friendlyPass)
                         {
                             p.Passed = v;
                             after = scan.Best;
@@ -648,7 +648,7 @@ public sealed partial class CombatSystem : IProjectileSource
                     }
                     BoltHit(world, p, v, intended);
                     done = true;
-                    projectiles.RemoveAt(k--);
+                    _projectiles.RemoveAt(k--);
                     break;
                 }
                 if (ground >= 0)
@@ -656,12 +656,12 @@ public sealed partial class CombatSystem : IProjectileSource
                     var at = p.Position + seg * ground;
                     var normal = GroundNormal(walk, at.X, at.Z);
                     done = true;
-                    if (!building && MathF.Abs(Vector3.Dot(normal, p.Direction)) < RangedFormulas.Grazing) projectiles.RemoveAt(k--);
+                    if (!building && MathF.Abs(Vector3.Dot(normal, p.Direction)) < RangedFormulas.Grazing) _projectiles.RemoveAt(k--);
                     else
                     {
                         p.Position = at;
                         p.Stuck = true;
-                        projectiles[k] = p;
+                        _projectiles[k] = p;
                         Sound(world, SoundKind.BoltStuck, -1, p.Shooter, at);
                         k = TrimStuck(k, p.Mesh);
                     }
@@ -671,7 +671,7 @@ public sealed partial class CombatSystem : IProjectileSource
             }
             if (done) continue;
             p.Position += seg;
-            projectiles[k] = p;
+            _projectiles[k] = p;
         }
     }
 
@@ -683,15 +683,15 @@ public sealed partial class CombatSystem : IProjectileSource
     {
         int count = 0, worst = -1;
         float longest = -1;
-        for (int j = 0; j < projectiles.Count; j++)
+        for (int j = 0; j < _projectiles.Count; j++)
         {
-            var q = projectiles[j];
+            var q = _projectiles[j];
             if (!q.Stuck || q.Mesh != mesh) continue;
             count++;
             if (q.Flown > longest) { longest = q.Flown; worst = j; }
         }
         if (count <= StuckLimit) return k;
-        projectiles.RemoveAt(worst);
+        _projectiles.RemoveAt(worst);
         return worst <= k ? k - 1 : k;
     }
 
@@ -706,7 +706,7 @@ public sealed partial class CombatSystem : IProjectileSource
     {
         var state = table.Previous;
         if (p.Shooter >= state.Length || !state[p.Shooter].Alive || state[p.Shooter].Generation != p.ShooterGeneration) return;
-        if (table.Cold(p.Shooter) is { Stats: { } stats, Race: { } race }) xp.Continuous(stats, race, StatsEnumerated.FriendlyFire, 1, amount);
+        if (table.Cold(p.Shooter) is { Stats: { } stats, Race: { } race }) _xp.Continuous(stats, race, StatsEnumerated.FriendlyFire, 1, amount);
     }
 
     /// <summary>
@@ -736,37 +736,38 @@ public sealed partial class CombatSystem : IProjectileSource
         var dc = table.Cold(v);
         if (dc is null || dc.Medical is null || dc.Race is null) return;
         int now = (int)world.Tick;
-        ref var D = ref write[v];
+        ref var d = ref _write[v];
         var packet = new DamagePacket(0, 0, p.Damage, 0, RangedFormulas.BoltBleed, 0);
         var ctx = MakeContext(world, v, dc);
-        var events = hitEvents;
+        var events = _hitEvents;
         events.Clear();
         float toughness = dc.Stats is { } ds ? ds[StatsEnumerated.Toughness] * dc.Medical.StatMultiplier(StatsEnumerated.Toughness) : 0;
         ReadOnlySpan<ArmourPiece> armour = dc.Fighter is { } df ? df.Armour : default;
         var cover = new BoltCover(world.Seed, Rng.Key(table.IdOf(v)), p.Id);
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
-        var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, armour, cover, toughness, false, true, combat, events);
+        var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, armour, cover, toughness, false, true, _combat, events);
         FloatHit(world, v, dc, p.ShooterIsPlayer, part, damage, absorbed);
         Sound(world, SoundKind.BoltHit, v, p.Shooter, prev[v].Position, armoured: absorbed.Cut + absorbed.Blunt + absorbed.Pierce > 0, robot: false);
         Splash(world, v, dc, new Vector2(p.Direction.X, p.Direction.Z), damage.Cut + damage.Blunt + damage.Pierce);
 
         StickBolt(world, p, v, dc, part);
-        D.Taken++;
-        D.HitTick = now;
-        D.HitPart = part;
-        D.HitHeavy = false;
+        d.Taken++;
+        d.HitTick = now;
+        d.HitPart = part;
+        d.HitHeavy = false;
         // From behind: the bolt flies the way the victim faces.
-        D.HitBehind = p.Direction.X * MathF.Sin(prev[v].Yaw) + p.Direction.Z * MathF.Cos(prev[v].Yaw) > 0;
+        d.HitBehind = p.Direction.X * MathF.Sin(prev[v].Yaw) + p.Direction.Z * MathF.Cos(prev[v].Yaw) > 0;
         bool knockout = false, death = false;
         foreach (var ev in events)
         {
             switch (ev.Kind)
             {
-                case MedicalEventKind.KnockedOut: knockout = true; if (dc.Stats is { } ko) xp.ToughnessFromKnockOut(ko, dc.Race); break;
+                case MedicalEventKind.KnockedOut: knockout = true; if (dc.Stats is { } ko) _xp.ToughnessFromKnockOut(ko, dc.Race); break;
                 case MedicalEventKind.Died: death = true; break;
                 case MedicalEventKind.Decapitated: table.LimbsChanged.Enqueue((v, -1)); break;   // the look loses its head (nothing drops)
-                case MedicalEventKind.PartSevered: if (dc.Stats is { } st) xp.ToughnessFromLimbLoss(st, dc.Race); table.LimbsChanged.Enqueue((v, dc.Medical.Parts[ev.Part].Template.LimbSlot));
+                case MedicalEventKind.PartSevered:
+                    if (dc.Stats is { } st) _xp.ToughnessFromLimbLoss(st, dc.Race); table.LimbsChanged.Enqueue((v, dc.Medical.Parts[ev.Part].Template.LimbSlot));
                     world.Defer(new Dialogue.DialogueEvent(table.IdOf(v), CharacterId.None, dc.Medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
                     break;
             }
@@ -774,20 +775,20 @@ public sealed partial class CombatSystem : IProjectileSource
         if (knockout || death) Knockdown(world, v, dc, new Vector2(p.Direction.X, p.Direction.Z), damage.Cut + damage.Blunt + damage.Pierce, part);
         if (dc.Medical.Incapacitated)
         {
-            D.Down = true;
-            D.AttackTech = -1;
-            D.CancelTick = now;
-            D.NextBlow = 0;
-            D.ReactTech = -1;
+            d.Down = true;
+            d.AttackTech = -1;
+            d.CancelTick = now;
+            d.NextBlow = 0;
+            d.ReactTech = -1;
             Sound(world, SoundKind.Down, v, p.Shooter, prev[v].Position, fatal: death);
         }
         // Only a heavy bolt staggers (engine choice: the original's reaction to a bolt was not traced).
-        else if (damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, combat))
-            Stagger(world, ref D, v, dc, true, now, (ulong)(uint)p.Id ^ 0x424F4C54UL, bolt: true);
+        else if (damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat))
+            Stagger(world, ref d, v, dc, true, now, (ulong)(uint)p.Id ^ 0x424F4C54UL, bolt: true);
         if (dc.Stats is { } vs && dc.Fighter is { } vf)
-            xp.Combat(vs, dc.Race, XpEvent.HitTaken, vf.Unarmed, StatsEnumerated.None, p.ShooterSkill, StrengthFactor(dc, vf), p.Damage);
+            _xp.Combat(vs, dc.Race, XpEvent.HitTaken, vf.Unarmed, StatsEnumerated.None, p.ShooterSkill, StrengthFactor(dc, vf), p.Damage);
         bool shooterAlive = p.Shooter < prev.Length && prev[p.Shooter].Alive && prev[p.Shooter].Generation == p.ShooterGeneration;
-        if (shooterAlive && intended) write[p.Shooter].Landed++;
+        if (shooterAlive && intended) _write[p.Shooter].Landed++;
         if (shooterAlive) Crimes?.Hit(world, p.Shooter, v);
         if (shooterAlive && !dc.Medical.Incapacitated)
         {
@@ -799,7 +800,7 @@ public sealed partial class CombatSystem : IProjectileSource
         if (death && world.Uniques.RecordOf(world.Characters.IdOf(v)) is { } unique) world.Uniques.Died(unique, p.ShooterIsPlayer, dc.Faction);
         if (death && world.Luckyren) dc.Burst = new Vector2(p.Direction.X, p.Direction.Z);
         if (Settings.RecordLog)
-            log.Add(new CombatLogEntry(now, p.Shooter, v, 0, BlowOutcome.Hit, part, damage.Cut, damage.Blunt, damage.Pierce, damage.ExtraStun, knockout, death) { Ranged = true, Intended = intended });
+            _log.Add(new CombatLogEntry(now, p.Shooter, v, 0, BlowOutcome.Hit, part, damage.Cut, damage.Blunt, damage.Pierce, damage.ExtraStun, knockout, death) { Ranged = true, Intended = intended });
         if (observe && part >= 0)
             world.ObserveCombatHit(new CombatHit(world.Tick, CombatHitSource.Projectile, new(p.Shooter, p.ShooterGeneration), table.IdOf(v),
                 p.Id, -1, part, damage, absorbed, prev[v].Position, p.Direction, prev[v].Yaw,
@@ -838,7 +839,7 @@ public sealed partial class CombatSystem : IProjectileSource
     public RangedLineView? RangedLineOf(World world, CharacterId id, CharacterCold cold)
     {
         if (!IsInCombatMode(world.Characters, id, cold, false, true)) return null;
-        if (cold.Gunning is { } key && turrets.TryGetValue(key, out var t))
+        if (cold.Gunning is { } key && _turrets.TryGetValue(key, out var t))
         {
             bool noPower = t.Gun.IsConsumer && world.Machines.Find(key) is not { HasPower: true };
             return new(t.Reloading, t.Loaded, Math.Max(t.Gun.Gun.NumShots, 1), t.Reloading && t.ReloadTime > 0 ? t.ReloadLeft / t.ReloadTime : 0, noPower);

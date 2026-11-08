@@ -10,32 +10,32 @@ public class OgreSkeletonReaderTests
     /// <summary>Writes Ogre serializer chunks: id, length (by default the true size including the 6-byte header), body.</summary>
     sealed class Builder
     {
-        readonly MemoryStream ms = new();
-        readonly BinaryWriter w;
-        readonly Stack<long> open = new();
+        readonly MemoryStream _ms = new();
+        readonly BinaryWriter _w;
+        readonly Stack<long> _open = new();
 
         public Builder(string version)
         {
-            w = new BinaryWriter(ms);
-            w.Write((ushort)0x1000);
+            _w = new BinaryWriter(_ms);
+            _w.Write((ushort)0x1000);
             String(version);
         }
 
         public Builder Begin(OgreSkeletonChunk id)
         {
-            w.Write((ushort)id);
-            open.Push(ms.Position);
-            w.Write(0u);
+            _w.Write((ushort)id);
+            _open.Push(_ms.Position);
+            _w.Write(0u);
             return this;
         }
 
         /// <param name="declared">Length to store instead of the real one (Ogre's bone chunks leave out the name).</param>
         public Builder End(int? declared = null)
         {
-            long at = open.Pop(), end = ms.Position;
-            ms.Position = at;
-            w.Write((uint)(declared ?? (int)(end - at + 2)));
-            ms.Position = end;
+            long at = _open.Pop(), end = _ms.Position;
+            _ms.Position = at;
+            _w.Write((uint)(declared ?? (int)(end - at + 2)));
+            _ms.Position = end;
             return this;
         }
 
@@ -55,15 +55,15 @@ public class OgreSkeletonReaderTests
             return End();
         }
 
-        public Builder U16(ushort v) { w.Write(v); return this; }
-        public Builder F32(params float[] v) { foreach (var f in v) w.Write(f); return this; }
-        public Builder String(string s) { w.Write(Encoding.UTF8.GetBytes(s + "\n")); return this; }
-        public byte[] ToArray() => ms.ToArray();
+        public Builder U16(ushort v) { _w.Write(v); return this; }
+        public Builder F32(params float[] v) { foreach (var f in v) _w.Write(f); return this; }
+        public Builder String(string s) { _w.Write(Encoding.UTF8.GetBytes(s + "\n")); return this; }
+        public byte[] ToArray() => _ms.ToArray();
     }
 
     static readonly Quaternion Turn = Quaternion.CreateFromAxisAngle(Vector3.UnitY, 0.5f);
 
-    static Builder TwoBones(string version = OgreSkeletonReader.Version1_80) =>
+    static Builder TwoBones(string version = OgreSkeletonReader.Version180) =>
         new Builder(version)
             .Begin(OgreSkeletonChunk.BlendMode).U16(1).End()
             .Bone("Bip01 with a long name", 0, new Vector3(1, 2, 3), Turn)
@@ -99,7 +99,7 @@ public class OgreSkeletonReaderTests
     {
         // A name-inclusive length would look like "has scale" to Ogre; the reader must follow Ogre and
         // read 12 more bytes. Here those bytes are the next chunk, which then breaks parsing.
-        var bytes = new Builder(OgreSkeletonReader.Version1_80)
+        var bytes = new Builder(OgreSkeletonReader.Version180)
             .Begin(OgreSkeletonChunk.Bone).String("Bip01").U16(0).F32(0, 0, 0, 0, 0, 0, 1).End()
             .Begin(OgreSkeletonChunk.Bone).String("Bip02").U16(1).F32(0, 0, 0, 0, 0, 0, 1).End(OgreSkeletonReader.BoneLengthWithoutScale)
             .ToArray();
@@ -178,7 +178,7 @@ public class OgreSkeletonReaderTests
 
     static IEnumerable<string> Check(OgreSkeleton skeleton)
     {
-        const float Tolerance = 1e-3f;
+        const float tolerance = 1e-3f;
         var handles = skeleton.Bones.Select(b => (int)b.Handle).Order().ToList();
         if (!handles.SequenceEqual(Enumerable.Range(0, handles.Count)))
             yield return "bone handles are not contiguous from 0";
@@ -199,7 +199,7 @@ public class OgreSkeletonReaderTests
                     yield return $"bone {bone.Name} is in a parent cycle";
                     break;
                 }
-            if (MathF.Abs(bone.Orientation.Length() - 1) > Tolerance)
+            if (MathF.Abs(bone.Orientation.Length() - 1) > tolerance)
                 yield return $"bone {bone.Name} orientation {bone.Orientation} is not unit length";
         }
 
@@ -214,11 +214,11 @@ public class OgreSkeletonReaderTests
                 float previous = float.NegativeInfinity;
                 foreach (var key in track.KeyFrames)
                 {
-                    if (key.Time < -Tolerance || key.Time > animation.Length + Tolerance)
+                    if (key.Time < -tolerance || key.Time > animation.Length + tolerance)
                         yield return $"animation {animation.Name} bone {track.Bone}: keyframe at {key.Time} outside 0..{animation.Length}";
                     if (key.Time < previous)
                         yield return $"animation {animation.Name} bone {track.Bone}: keyframe times go back ({previous} -> {key.Time})";
-                    if (MathF.Abs(key.Rotation.Length() - 1) > Tolerance)
+                    if (MathF.Abs(key.Rotation.Length() - 1) > tolerance)
                         yield return $"animation {animation.Name} bone {track.Bone}: rotation {key.Rotation} at {key.Time} is not unit length";
                     previous = key.Time;
                 }

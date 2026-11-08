@@ -161,8 +161,12 @@ public sealed record SeasonDef
         if (weathers.Count == 0)
             return new SeasonDef
             {
-                StringId = stringId, Name = name, Weathers = [new SeasonWeather(defaultWeather, 1, FallbackMinMinutes, FallbackMaxMinutes)],
-                StrengthLimitMin = 0, StrengthLimitMax = 1, SunlightColour = sunlight,
+                StringId = stringId,
+                Name = name,
+                Weathers = [new SeasonWeather(defaultWeather, 1, FallbackMinMinutes, FallbackMaxMinutes)],
+                StrengthLimitMin = 0,
+                StrengthLimitMax = 1,
+                SunlightColour = sunlight,
             };
         var list = weathers.ToList();
         if (list.Any(w => w.Weather.HasTimeWindow)) list.Add(new SeasonWeather(defaultWeather, 0, FallbackMinMinutes, FallbackMaxMinutes));
@@ -238,7 +242,7 @@ public sealed class WeatherData
     /// <summary>The StringId of the BIOME_GROUP "NONE" that the areas map's unmatched colours (and positions off the map) belong to (<c>18003-gamedata.base</c>).</summary>
     public const string NoneRegionId = "18003-gamedata.base";
 
-    readonly Dictionary<int, RegionDef> regionsByColour = [];
+    readonly Dictionary<int, RegionDef> _regionsByColour = [];
 
     WeatherData(IReadOnlyList<WeatherDef> weathers, IReadOnlyList<SeasonDef> seasons, IReadOnlyList<RegionDef> regions,
         IReadOnlyList<EffectDef> effects, IReadOnlyList<FogVolumeDef> fogVolumes, int daysPerYear, WeatherDef defaultWeather, RegionDef none)
@@ -246,7 +250,7 @@ public sealed class WeatherData
         Weathers = weathers; Seasons = seasons; Regions = regions; Effects = effects; FogVolumes = fogVolumes;
         DaysPerYear = daysPerYear; Default = defaultWeather; None = none;
         foreach (var r in regions)
-            regionsByColour[r.Index] = r;
+            _regionsByColour[r.Index] = r;
     }
 
     public IReadOnlyList<WeatherDef> Weathers { get; }
@@ -263,7 +267,7 @@ public sealed class WeatherData
     public RegionDef None { get; }
 
     /// <summary>The region painted with <paramref name="colour"/> (0xRRGGBB) in the areas map, or <see cref="None"/>.</summary>
-    public RegionDef RegionOfColour(int colour) => regionsByColour.GetValueOrDefault(colour, None);
+    public RegionDef RegionOfColour(int colour) => _regionsByColour.GetValueOrDefault(colour, None);
 
     /// <summary>The weather whose name matches (exactly, else by substring); null name picks "Default".</summary>
     public WeatherDef? FindWeather(string? name)
@@ -288,7 +292,10 @@ public sealed class WeatherData
 
     static RegionDef MakeNone(WeatherDef def, int daysPerYear) => new()
     {
-        StringId = NoneRegionId, Name = "NONE", HasNoSeasons = true, Index = 0,
+        StringId = NoneRegionId,
+        Name = "NONE",
+        HasNoSeasons = true,
+        Index = 0,
         Seasons = [new RegionSeason(SeasonDef.Build("", "(no seasons)", [], 0, 1, def), 0, 1, daysPerYear)],
     };
 
@@ -299,18 +306,18 @@ public sealed class WeatherData
 
         var effects = new Dictionary<string, EffectDef>(StringComparer.Ordinal);
         var fogVolumes = new Dictionary<string, FogVolumeDef>(StringComparer.Ordinal);
-        foreach (var f in db.OfType(FcsRecordType.EFFECT_FOG_VOLUME))
+        foreach (var f in db.OfType(FcsRecordType.EffectFogVolume))
             fogVolumes[f.StringId] = ReadFogVolume(f);
-        foreach (var e in db.OfType(FcsRecordType.EFFECT))
+        foreach (var e in db.OfType(FcsRecordType.Effect))
             effects[e.StringId] = ReadEffect(e);
 
         var weathers = new Dictionary<string, WeatherDef>(StringComparer.Ordinal);
-        foreach (var w in db.OfType(FcsRecordType.WEATHER))
+        foreach (var w in db.OfType(FcsRecordType.Weather))
             weathers[w.StringId] = ReadWeather(w, effects);
         var defaultWeather = weathers.GetValueOrDefault(DefaultWeatherId) ?? weathers.Values.FirstOrDefault(w => w.Name == "Default") ?? WeatherDef.Clear;
 
         var seasons = new Dictionary<string, SeasonDef>(StringComparer.Ordinal);
-        foreach (var s in db.OfType(FcsRecordType.SEASON))
+        foreach (var s in db.OfType(FcsRecordType.Season))
         {
             var entries = s.GetReferences("weathers")
                 .Where(r => weathers.ContainsKey(r.TargetStringId))
@@ -321,7 +328,7 @@ public sealed class WeatherData
         }
 
         var regions = new List<RegionDef>();
-        foreach (var g in db.OfType(FcsRecordType.BIOME_GROUP))
+        foreach (var g in db.OfType(FcsRecordType.BiomeGroup))
         {
             var listed = g.GetReferences("seasons").Where(r => seasons.ContainsKey(r.TargetStringId))
                 .Select(r => (Season: seasons[r.TargetStringId], Order: r.Values.Value0, Share: (float)r.Values.Value1))
@@ -336,11 +343,17 @@ public sealed class WeatherData
             }
             regions.Add(new RegionDef
             {
-                StringId = g.StringId, Name = g.Name, Index = g.GetInt("index"), Seasons = list, HasNoSeasons = listed.Count == 0,
-                StrengthMultiplierMin = g.GetFloat("weather strength multiplier min", 1), StrengthMultiplierMax = g.GetFloat("weather strength multiplier max", 1),
+                StringId = g.StringId,
+                Name = g.Name,
+                Index = g.GetInt("index"),
+                Seasons = list,
+                HasNoSeasons = listed.Count == 0,
+                StrengthMultiplierMin = g.GetFloat("weather strength multiplier min", 1),
+                StrengthMultiplierMax = g.GetFloat("weather strength multiplier max", 1),
                 Ambience = Enum.IsDefined((Ambience)g.GetInt("ambience", (int)Ambience.Desert)) ? (Ambience)g.GetInt("ambience", (int)Ambience.Desert) : Ambience.Desert,
                 Music = Enum.IsDefined((BiomeMusic)g.GetInt("music", (int)BiomeMusic.None)) ? (BiomeMusic)g.GetInt("music", (int)BiomeMusic.None) : BiomeMusic.None,
-                AcidicGround = g.GetFloat("acidic ground"), AcidicWater = g.GetFloat("acidic water"),
+                AcidicGround = g.GetFloat("acidic ground"),
+                AcidicWater = g.GetFloat("acidic water"),
             });
         }
         var none = regions.FirstOrDefault(r => r.StringId == NoneRegionId) ?? regions.FirstOrDefault(r => r.Name == "NONE" && r.Index == 0) ?? MakeNone(defaultWeather, daysPerYear);
@@ -354,15 +367,27 @@ public sealed class WeatherData
 
     static EffectDef ReadEffect(GameRecord e) => new()
     {
-        StringId = e.StringId, Name = e.Name,
+        StringId = e.StringId,
+        Name = e.Name,
         Type = Enum.IsDefined((EffectType)e.GetInt("type")) ? (EffectType)e.GetInt("type") : EffectType.None,
         ParticleSystem = e.GetString("particle system"),
         AffectType = Enum.IsDefined((WeatherAffecting)e.GetInt("affect type")) ? (WeatherAffecting)e.GetInt("affect type") : WeatherAffecting.None,
-        EffectRadius = e.GetFloat("effect radius"), EffectStrengthMin = e.GetFloat("effect strength min"), EffectStrengthMax = e.GetFloat("effect strength max"),
-        MinAltitude = e.GetFloat("min altitude"), MaxAltitude = e.GetFloat("max altitude"), MinSlope = e.GetFloat("min slope"), MaxSlope = e.GetFloat("max slope"),
-        MinTimeToLive = e.GetFloat("min time to live"), MaxTimeToLive = e.GetFloat("max time to live"), WanderingSpeed = e.GetFloat("wandering speed"),
-        WindAffected = e.GetBool("wind affected"), WindDirectionEmission = e.GetBool("wind direction emission"), WindSpeedMult = e.GetFloat("wind speed mult"),
-        MinWindSpanRate = e.GetFloat("min wind span rate"), MaxWindSpanRate = e.GetFloat("max wind span rate"), GroundColour = e.GetBool("ground colour"),
+        EffectRadius = e.GetFloat("effect radius"),
+        EffectStrengthMin = e.GetFloat("effect strength min"),
+        EffectStrengthMax = e.GetFloat("effect strength max"),
+        MinAltitude = e.GetFloat("min altitude"),
+        MaxAltitude = e.GetFloat("max altitude"),
+        MinSlope = e.GetFloat("min slope"),
+        MaxSlope = e.GetFloat("max slope"),
+        MinTimeToLive = e.GetFloat("min time to live"),
+        MaxTimeToLive = e.GetFloat("max time to live"),
+        WanderingSpeed = e.GetFloat("wandering speed"),
+        WindAffected = e.GetBool("wind affected"),
+        WindDirectionEmission = e.GetBool("wind direction emission"),
+        WindSpeedMult = e.GetFloat("wind speed mult"),
+        MinWindSpanRate = e.GetFloat("min wind span rate"),
+        MaxWindSpanRate = e.GetFloat("max wind span rate"),
+        GroundColour = e.GetBool("ground colour"),
         MaximumViewDistance = e.GetFloat("maximum view distance"),
         FogVolumeIds = e.GetReferences("fog volumes").Select(r => r.TargetStringId).ToList(),
         SoundIds = e.GetReferences("sound").Select(r => r.TargetStringId).ToList(),
@@ -376,19 +401,32 @@ public sealed class WeatherData
         int updateTime = w.GetInt("wind update time");
         return new WeatherDef
         {
-            StringId = w.StringId, Name = w.Name,
+            StringId = w.StringId,
+            Name = w.Name,
             CloudsDensity = w.GetFloat("clouds density"),
             SkyColourMultiplier = SkyWeather.Unpack(w.GetInt("sky color mult", 0)),
-            FogEnabled = w.GetBool("fog enabled"), FogColour = SkyWeather.Unpack(w.GetInt("fog color", 0)),
-            FogDistanceMin = fogMin, FogDistanceMax = fogMax, FogWindMin = fogWindMin, FogWindMax = fogWindMax,
-            WindSpeedMin = w.GetFloat("wind speed min"), WindSpeedMax = w.GetFloat("wind speed max"),
-            WindUpdateMinutes = updateTime == 0 ? WeatherDef.NeverMinutes : updateTime, WindUpdateLimit = w.GetInt("wind update limit"),
-            WindIntensity = w.GetFloat("wind intensity"), RainIntensity = w.GetFloat("rain intensity"), Wetness = w.GetFloat("wetness"),
-            Dust = w.GetFloat("dust"), DustInside = w.GetFloat("dust inside"), DustSlope = w.GetFloat("dust slope"), HeatHaze = w.GetFloat("heat haze"),
+            FogEnabled = w.GetBool("fog enabled"),
+            FogColour = SkyWeather.Unpack(w.GetInt("fog color", 0)),
+            FogDistanceMin = fogMin,
+            FogDistanceMax = fogMax,
+            FogWindMin = fogWindMin,
+            FogWindMax = fogWindMax,
+            WindSpeedMin = w.GetFloat("wind speed min"),
+            WindSpeedMax = w.GetFloat("wind speed max"),
+            WindUpdateMinutes = updateTime == 0 ? WeatherDef.NeverMinutes : updateTime,
+            WindUpdateLimit = w.GetInt("wind update limit"),
+            WindIntensity = w.GetFloat("wind intensity"),
+            RainIntensity = w.GetFloat("rain intensity"),
+            Wetness = w.GetFloat("wetness"),
+            Dust = w.GetFloat("dust"),
+            DustInside = w.GetFloat("dust inside"),
+            DustSlope = w.GetFloat("dust slope"),
+            HeatHaze = w.GetFloat("heat haze"),
             AffectType = Enum.IsDefined((WeatherAffecting)w.GetInt("affect type")) ? (WeatherAffecting)w.GetInt("affect type") : WeatherAffecting.None,
             AffectStrength = w.GetFloat("affect strength"),
             EffectStrength = w.GetFloat("effect strength min", 1),
-            StartTime = w.GetFloat("start time"), EndTime = w.GetFloat("end time"),
+            StartTime = w.GetFloat("start time"),
+            EndTime = w.GetFloat("end time"),
             Effects = w.GetReferences("effects").Where(r => effects.ContainsKey(r.TargetStringId))
                 .Select(r => new WeatherEffectEntry(effects[r.TargetStringId], r.Values.Value0, r.Values.Value1, r.Values.Value2)).ToList(),
         };

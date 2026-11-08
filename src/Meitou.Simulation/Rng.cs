@@ -126,9 +126,9 @@ public static class Rng
 /// </summary>
 public struct RandomStream(ulong seed, ulong entity, RngPurpose purpose)
 {
-    ulong counter;
+    ulong _counter;
 
-    public ulong NextRoll() => Rng.Hash(seed, entity, purpose, counter++);
+    public ulong NextRoll() => Rng.Hash(seed, entity, purpose, _counter++);
     public float NextFloat() => Rng.Float(NextRoll());
     public int NextInt(int bound) => Rng.Int(NextRoll(), bound);
     public readonly ulong At(ulong index) => Rng.Hash(seed, entity, purpose, index);
@@ -137,11 +137,11 @@ public struct RandomStream(ulong seed, ulong entity, RngPurpose purpose)
 /// <summary>An order-sensitive 64 bit hash of the values added, for <see cref="World.StateHash"/>. Written here, no packages.</summary>
 public struct StateHasher
 {
-    ulong h;
+    ulong _h;
 
-    public StateHasher() => h = 0xCBF29CE484222325UL;
+    public StateHasher() => _h = 0xCBF29CE484222325UL;
 
-    public void Add(ulong v) => h = Rng.Mix(h ^ v) * 0x100000001B3UL + 0x1B873593UL;
+    public void Add(ulong v) => _h = Rng.Mix(_h ^ v) * 0x100000001B3UL + 0x1B873593UL;
     public void Add(long v) => Add((ulong)v);
     public void Add(int v) => Add((ulong)(uint)v);
     public void Add(bool v) => Add(v ? 1UL : 0UL);
@@ -151,5 +151,5 @@ public struct StateHasher
     public void Add(System.Numerics.Vector3 v) { Add(v.X); Add(v.Y); Add(v.Z); }
     public void Add(CharacterId id) { Add(id.Slot); Add(id.Generation); }
 
-    public readonly ulong Value => Rng.Mix(h);
+    public readonly ulong Value => Rng.Mix(_h);
 }

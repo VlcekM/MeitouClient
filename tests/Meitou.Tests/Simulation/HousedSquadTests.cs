@@ -11,21 +11,21 @@ namespace Meitou.Tests.Simulation;
 [Slow]
 public class HousedSquadTests(ITestOutputHelper output)
 {
-    static PopulationData? cached;
-    static readonly Lock gate = new();
+    static PopulationData? s_cached;
+    static readonly Lock Gate = new();
 
     static PopulationData Load()
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
-        lock (gate)
+        lock (Gate)
         {
-            if (cached is not null) return cached;
+            if (s_cached is not null) return s_cached;
             var install = InstallData.Install!;
             var db = InstallData.FullLoadOrder!;
             var levels = WorldLevelData.LoadBaseGame(install, includeInteriors: true);
             using var map = TerrainHeightmap.Open(install);
             var buildings = TownBuildings.Build(db, levels, new BuildingLayouts(db, levels.Interiors), (x, z) => map.HeightAt((float)x, (float)z));
-            return cached = PopulationData.Create(db, levels.Towns(), buildings: buildings);
+            return s_cached = PopulationData.Create(db, levels.Towns(), buildings: buildings);
         }
     }
 
@@ -97,7 +97,7 @@ public class HousedSquadTests(ITestOutputHelper output)
         var (site, home) = data.Sites.SelectMany(s => s.Buildings.Select(b => (Site: s, Building: b)))
             .First(x => x.Building.ResidentsTemplate.Length > 0 && x.Building.Fixtures.Any(f => f.HoldsShopStock) && db.Find(x.Building.ResidentsTemplate) is { } r
                 && r.GetReferences("squad").Count + r.GetReferences("squad2").Count + r.GetReferences("animals").Count + r.GetReferences("animals2").Count + r.GetReferences("leader").Count + r.GetReferences("choosefrom list").Count == 0
-                && r.GetReferences("vendors").Count > 0 && site0(x.Site));
+                && r.GetReferences("vendors").Count > 0 && Site0(x.Site));
         using var world = Town(data, site, StandardParts.Trade);
         world.RunTicks(3);
         var held = world.Fixtures.OfBuilding(home.Key).Where(f => f.Contents is not null).Sum(f => f.Contents!.Items.Count);
@@ -105,5 +105,5 @@ public class HousedSquadTests(ITestOutputHelper output)
         Assert.True(held > 0);
     }
 
-    static bool site0(TownSite site) => site.Town.Faction is not null;
+    static bool Site0(TownSite site) => site.Town.Faction is not null;
 }

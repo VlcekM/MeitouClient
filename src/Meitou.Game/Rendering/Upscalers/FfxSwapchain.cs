@@ -41,25 +41,25 @@ public sealed unsafe class FfxSwapchain : IDisposable
         public nint Create, Destroy, GetImages, Acquire, Present, SetHdrMetadata, GetLastPresentCount;
     }
 
-    readonly VulkanDevice device;
-    readonly delegate* unmanaged<nint*, void*, void*, uint> createContext;
-    readonly delegate* unmanaged<nint*, void*, uint> destroyContext;
-    readonly delegate* unmanaged<nint*, void*, uint> query;
-    readonly delegate* unmanaged<nint*, void*, uint> configure;
+    readonly VulkanDevice _device;
+    readonly delegate* unmanaged<nint*, void*, void*, uint> _createContext;
+    readonly delegate* unmanaged<nint*, void*, uint> _destroyContext;
+    readonly delegate* unmanaged<nint*, void*, uint> _query;
+    readonly delegate* unmanaged<nint*, void*, uint> _configure;
     // The create desc and the swapchain handle it points to stay valid as long as the context (ffx_api.h).
-    readonly CreateDesc* desc;
-    readonly SwapchainKHR* swapchainSlot;
-    nint context;
-    bool disposed;
-    delegate* unmanaged<Device, SwapchainCreateInfoKHR*, AllocationCallbacks*, SwapchainKHR*, nint, Result> replaceCreate;
-    delegate* unmanaged<Device, SwapchainKHR, AllocationCallbacks*, nint, void> replaceDestroy;
-    delegate* unmanaged<Device, SwapchainKHR, uint*, Image*, Result> getImages;
-    delegate* unmanaged<Device, SwapchainKHR, ulong, Semaphore, Fence, uint*, Result> acquire;
-    delegate* unmanaged<Queue, PresentInfoKHR*, Result> present;
+    readonly CreateDesc* _desc;
+    readonly SwapchainKHR* _swapchainSlot;
+    nint _context;
+    bool _disposed;
+    delegate* unmanaged<Device, SwapchainCreateInfoKHR*, AllocationCallbacks*, SwapchainKHR*, nint, Result> _replaceCreate;
+    delegate* unmanaged<Device, SwapchainKHR, AllocationCallbacks*, nint, void> _replaceDestroy;
+    delegate* unmanaged<Device, SwapchainKHR, uint*, Image*, Result> _getImages;
+    delegate* unmanaged<Device, SwapchainKHR, ulong, Semaphore, Fence, uint*, Result> _acquire;
+    delegate* unmanaged<Queue, PresentInfoKHR*, Result> _present;
 
     // submitFunc has no queue argument, so each role has a function of its own; one layer at a time per process.
-    static VulkanDevice? submitDevice;
-    static Queue gameQueue, computeQueue, presentQueue, acquireQueue;
+    static VulkanDevice? s_submitDevice;
+    static Queue s_gameQueue, s_computeQueue, s_presentQueue, s_acquireQueue;
     static readonly object ComputeLock = new(), PresentLock = new(), AcquireLock = new();
     // Guards submitDevice: one layer at a time.
     static readonly object LayerLock = new();
@@ -83,13 +83,13 @@ public sealed unsafe class FfxSwapchain : IDisposable
 
     FfxSwapchain(VulkanDevice device, nint library)
     {
-        this.device = device;
-        createContext = (delegate* unmanaged<nint*, void*, void*, uint>)NativeLibrary.GetExport(library, "ffxCreateContext");
-        destroyContext = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDestroyContext");
-        query = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxQuery");
-        configure = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxConfigure");
-        desc = (CreateDesc*)NativeMemory.AllocZeroed((nuint)sizeof(CreateDesc));
-        swapchainSlot = (SwapchainKHR*)NativeMemory.AllocZeroed((nuint)sizeof(SwapchainKHR));
+        this._device = device;
+        _createContext = (delegate* unmanaged<nint*, void*, void*, uint>)NativeLibrary.GetExport(library, "ffxCreateContext");
+        _destroyContext = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDestroyContext");
+        _query = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxQuery");
+        _configure = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxConfigure");
+        _desc = (CreateDesc*)NativeMemory.AllocZeroed((nuint)sizeof(CreateDesc));
+        _swapchainSlot = (SwapchainKHR*)NativeMemory.AllocZeroed((nuint)sizeof(SwapchainKHR));
     }
 
     /// <summary>The layer for <paramref name="device"/>, or null with the reason (library missing, too few queues).</summary>
@@ -103,27 +103,27 @@ public sealed unsafe class FfxSwapchain : IDisposable
         }
         lock (LayerLock)
         {
-            if (submitDevice is not null) { reason = "a swapchain layer already exists"; return null; }
-            submitDevice = device;
+            if (s_submitDevice is not null) { reason = "a swapchain layer already exists"; return null; }
+            s_submitDevice = device;
         }
         var extra = device.ExtraQueues;
-        gameQueue = device.GraphicsQueue;
-        presentQueue = extra[0];
-        acquireQueue = extra[1];
-        computeQueue = extra.Length > 2 ? extra[2] : extra[0];
+        s_gameQueue = device.GraphicsQueue;
+        s_presentQueue = extra[0];
+        s_acquireQueue = extra[1];
+        s_computeQueue = extra.Length > 2 ? extra[2] : extra[0];
         return new FfxSwapchain(device, library);
     }
 
     static Result Submit(Queue queue, object gate, uint count, SubmitInfo* submits, Fence fence)
     {
-        try { lock (gate) return submitDevice!.Vk.QueueSubmit(queue, count, submits, fence); }
+        try { lock (gate) return s_submitDevice!.Vk.QueueSubmit(queue, count, submits, fence); }
         catch (Exception) { return Result.ErrorDeviceLost; }   // nothing may escape into the library
     }
 
-    [UnmanagedCallersOnly] static Result SubmitGame(uint count, SubmitInfo* submits, Fence fence) => Submit(gameQueue, submitDevice!.QueueLock, count, submits, fence);
-    [UnmanagedCallersOnly] static Result SubmitCompute(uint count, SubmitInfo* submits, Fence fence) => Submit(computeQueue, ComputeLock, count, submits, fence);
-    [UnmanagedCallersOnly] static Result SubmitPresent(uint count, SubmitInfo* submits, Fence fence) => Submit(presentQueue, PresentLock, count, submits, fence);
-    [UnmanagedCallersOnly] static Result SubmitAcquire(uint count, SubmitInfo* submits, Fence fence) => Submit(acquireQueue, AcquireLock, count, submits, fence);
+    [UnmanagedCallersOnly] static Result SubmitGame(uint count, SubmitInfo* submits, Fence fence) => Submit(s_gameQueue, s_submitDevice!.QueueLock, count, submits, fence);
+    [UnmanagedCallersOnly] static Result SubmitCompute(uint count, SubmitInfo* submits, Fence fence) => Submit(s_computeQueue, ComputeLock, count, submits, fence);
+    [UnmanagedCallersOnly] static Result SubmitPresent(uint count, SubmitInfo* submits, Fence fence) => Submit(s_presentQueue, PresentLock, count, submits, fence);
+    [UnmanagedCallersOnly] static Result SubmitAcquire(uint count, SubmitInfo* submits, Fence fence) => Submit(s_acquireQueue, AcquireLock, count, submits, fence);
 
     /// <summary>The swapchain the layer made last (changes on a resize or a vsync change); what the frame-generation context is configured with.</summary>
     public SwapchainKHR Swapchain { get; private set; }
@@ -137,15 +137,15 @@ public sealed unsafe class FfxSwapchain : IDisposable
     /// </summary>
     internal bool RegisterUi(FfxApi.Resource? ui)
     {
-        if (context == 0) return false;
-        const uint PremulAlpha = 1 << 0, InternalDoubleBuffering = 1 << 1;
-        var d = new RegisterUiDesc { Header = new ApiHeader { Type = RegisterUiType }, Ui = ui ?? default, Flags = ui is null ? 0 : PremulAlpha | InternalDoubleBuffering };
-        nint c = context;
-        return configure(&c, &d) == 0;
+        if (_context == 0) return false;
+        const uint premulAlpha = 1 << 0, internalDoubleBuffering = 1 << 1;
+        var d = new RegisterUiDesc { Header = new ApiHeader { Type = RegisterUiType }, Ui = ui ?? default, Flags = ui is null ? 0 : premulAlpha | internalDoubleBuffering };
+        nint c = _context;
+        return _configure(&c, &d) == 0;
     }
 
     /// <summary>One line on the queues handed over, for the log.</summary>
-    public string QueueLayout => $"game = graphics queue 0, present = queue 1, image acquire = queue 2, async compute = {(computeQueue.Handle == presentQueue.Handle ? "the present queue" : "queue 3")} (family {device.GraphicsFamily})";
+    public string QueueLayout => $"game = graphics queue 0, present = queue 1, image acquire = queue 2, async compute = {(s_computeQueue.Handle == s_presentQueue.Handle ? "the present queue" : "queue 3")} (family {_device.GraphicsFamily})";
 
     /// <summary>
     /// Makes the swapchain described by <paramref name="info"/> (its <c>OldSwapchain</c> is ignored: the old one is <paramref name="old"/>, destroyed here). The first call
@@ -157,42 +157,42 @@ public sealed unsafe class FfxSwapchain : IDisposable
         swapchain = default;
         info.OldSwapchain = default;
         SurfaceFormat = info.ImageFormat == Format.R8G8B8A8Unorm ? FfxApi.FormatR8G8B8A8Unorm : FfxApi.FormatB8G8R8A8Unorm;
-        if (context == 0)
+        if (_context == 0)
         {
-            *swapchainSlot = old;
-            *desc = new CreateDesc
+            *_swapchainSlot = old;
+            *_desc = new CreateDesc
             {
                 Header = new ApiHeader { Type = CreateSwapchainType },
-                PhysicalDevice = device.PhysicalDevice.Handle,
-                Device = device.Device.Handle,
-                Swapchain = (nint)swapchainSlot,
+                PhysicalDevice = _device.PhysicalDevice.Handle,
+                Device = _device.Device.Handle,
+                Swapchain = (nint)_swapchainSlot,
                 CreateInfo = info,
-                GameQueue = Info(gameQueue, (nint)(delegate* unmanaged<uint, SubmitInfo*, Fence, Result>)&SubmitGame),
-                AsyncComputeQueue = Info(computeQueue, (nint)(delegate* unmanaged<uint, SubmitInfo*, Fence, Result>)&SubmitCompute),
-                PresentQueue = Info(presentQueue, (nint)(delegate* unmanaged<uint, SubmitInfo*, Fence, Result>)&SubmitPresent),
-                ImageAcquireQueue = Info(acquireQueue, (nint)(delegate* unmanaged<uint, SubmitInfo*, Fence, Result>)&SubmitAcquire),
+                GameQueue = Info(s_gameQueue, (nint)(delegate* unmanaged<uint, SubmitInfo*, Fence, Result>)&SubmitGame),
+                AsyncComputeQueue = Info(s_computeQueue, (nint)(delegate* unmanaged<uint, SubmitInfo*, Fence, Result>)&SubmitCompute),
+                PresentQueue = Info(s_presentQueue, (nint)(delegate* unmanaged<uint, SubmitInfo*, Fence, Result>)&SubmitPresent),
+                ImageAcquireQueue = Info(s_acquireQueue, (nint)(delegate* unmanaged<uint, SubmitInfo*, Fence, Result>)&SubmitAcquire),
             };
             nint created = 0;
-            uint rc = createContext(&created, desc, null);
+            uint rc = _createContext(&created, _desc, null);
             if (rc != 0) { why = $"ffxCreateContext (swapchain) returned {rc}"; return false; }
-            context = created;
+            _context = created;
             var q = new FunctionsQuery { Header = new ApiHeader { Type = QueryFunctionsType } };
-            nint c = context;
-            rc = query(&c, &q);
+            nint c = _context;
+            rc = _query(&c, &q);
             if (rc != 0 || q.Create == 0 || q.Destroy == 0 || q.GetImages == 0 || q.Acquire == 0 || q.Present == 0)
             { why = $"ffxQuery (replacement functions) returned {rc}"; return false; }
-            replaceCreate = (delegate* unmanaged<Device, SwapchainCreateInfoKHR*, AllocationCallbacks*, SwapchainKHR*, nint, Result>)q.Create;
-            replaceDestroy = (delegate* unmanaged<Device, SwapchainKHR, AllocationCallbacks*, nint, void>)q.Destroy;
-            getImages = (delegate* unmanaged<Device, SwapchainKHR, uint*, Image*, Result>)q.GetImages;
-            acquire = (delegate* unmanaged<Device, SwapchainKHR, ulong, Semaphore, Fence, uint*, Result>)q.Acquire;
-            present = (delegate* unmanaged<Queue, PresentInfoKHR*, Result>)q.Present;
-            swapchain = Swapchain = *swapchainSlot;
+            _replaceCreate = (delegate* unmanaged<Device, SwapchainCreateInfoKHR*, AllocationCallbacks*, SwapchainKHR*, nint, Result>)q.Create;
+            _replaceDestroy = (delegate* unmanaged<Device, SwapchainKHR, AllocationCallbacks*, nint, void>)q.Destroy;
+            _getImages = (delegate* unmanaged<Device, SwapchainKHR, uint*, Image*, Result>)q.GetImages;
+            _acquire = (delegate* unmanaged<Device, SwapchainKHR, ulong, Semaphore, Fence, uint*, Result>)q.Acquire;
+            _present = (delegate* unmanaged<Queue, PresentInfoKHR*, Result>)q.Present;
+            swapchain = Swapchain = *_swapchainSlot;
             why = null;
             return swapchain.Handle != 0 || Fail(out why, "the context made no swapchain");
         }
-        if (old.Handle != 0) replaceDestroy(device.Device, old, null, context);
+        if (old.Handle != 0) _replaceDestroy(_device.Device, old, null, _context);
         var created2 = default(SwapchainKHR);
-        var r = replaceCreate(device.Device, &info, null, &created2, context);
+        var r = _replaceCreate(_device.Device, &info, null, &created2, _context);
         if (r != Result.Success) { why = $"the replacement vkCreateSwapchainKHR returned {r}"; return false; }
         swapchain = Swapchain = created2;
         why = null;
@@ -201,12 +201,12 @@ public sealed unsafe class FfxSwapchain : IDisposable
         static bool Fail(out string? why, string text) { why = text; return false; }
     }
 
-    static QueueInfo Info(Queue queue, nint submit) => new() { Queue = queue.Handle, FamilyIndex = submitFamily, SubmitFunc = submit };
-    static uint submitFamily => submitDevice!.GraphicsFamily;
+    static QueueInfo Info(Queue queue, nint submit) => new() { Queue = queue.Handle, FamilyIndex = SubmitFamily, SubmitFunc = submit };
+    static uint SubmitFamily => s_submitDevice!.GraphicsFamily;
 
-    public Result GetImages(Device d, SwapchainKHR swapchain, uint* count, Image* images) => getImages(d, swapchain, count, images);
-    public Result Acquire(Device d, SwapchainKHR swapchain, ulong timeout, Semaphore semaphore, Fence fence, uint* index) => acquire(d, swapchain, timeout, semaphore, fence, index);
-    public Result Present(Queue queue, PresentInfoKHR* info) => present(queue, info);
+    public Result GetImages(Device d, SwapchainKHR swapchain, uint* count, Image* images) => _getImages(d, swapchain, count, images);
+    public Result Acquire(Device d, SwapchainKHR swapchain, ulong timeout, Semaphore semaphore, Fence fence, uint* index) => _acquire(d, swapchain, timeout, semaphore, fence, index);
+    public Result Present(Queue queue, PresentInfoKHR* info) => _present(queue, info);
 
     /// <summary>Raised at the start of <see cref="Dispose"/>, while the swapchain still exists: a frame-generation context on it is destroyed then, first, as the FFX API requires.</summary>
     internal event Action? Disposing;
@@ -214,18 +214,18 @@ public sealed unsafe class FfxSwapchain : IDisposable
     /// <summary>Destroys the context, which destroys the swapchain it made. Not before the device is idle.</summary>
     public void Dispose()
     {
-        if (disposed) return;
-        disposed = true;
+        if (_disposed) return;
+        _disposed = true;
         Disposing?.Invoke();
         Disposing = null;
-        if (context != 0)
+        if (_context != 0)
         {
-            nint c = context;
-            destroyContext(&c, null);
-            context = 0;
+            nint c = _context;
+            _destroyContext(&c, null);
+            _context = 0;
         }
-        lock (LayerLock) { if (submitDevice == device) submitDevice = null; }
-        NativeMemory.Free(desc);
-        NativeMemory.Free(swapchainSlot);
+        lock (LayerLock) { if (s_submitDevice == _device) s_submitDevice = null; }
+        NativeMemory.Free(_desc);
+        NativeMemory.Free(_swapchainSlot);
     }
 }

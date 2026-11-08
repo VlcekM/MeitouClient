@@ -73,7 +73,7 @@ public sealed class PostOptions
     public bool NightGrade = true;
     /// <summary>How far the Meitou night grading moves the picture towards the rods' blue-grey at night, 0 to 1, kept while the switch is Faithful;
     /// the adaptation (the auto exposure's mean luminance) decides how much of it applies, so by day it does nothing. Default <see cref="Meitou.Data.World.NightGrade.MeitouStrength"/>.</summary>
-    public float NightGradeStrength = Meitou.Data.World.NightGrade.MeitouStrength;
+    public float NightGradeStrength = Data.World.NightGrade.MeitouStrength;
     public float NightGradeAmount => NightGrade ? NightGradeStrength : 0;
     /// <summary>The Meitou bloom switch (docs/render-post.md "Bloom"), off by default even in the Meitou look; Faithful is the game's, whose bloom ships at magnitude 0.</summary>
     public bool Bloom;

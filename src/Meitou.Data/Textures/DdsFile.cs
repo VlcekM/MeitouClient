@@ -30,7 +30,7 @@ public sealed class DdsFile
     public DdsFormat Format { get; init; }
 
     /// <summary>The legacy pixel-format FourCC (e.g. <c>DXT5</c>), or null for an uncompressed legacy format.</summary>
-    public string? FourCC { get; init; }
+    public string? FourCc { get; init; }
 
     /// <summary>The DXGI format number from the DX10 header, or null without one.</summary>
     public int? DxgiFormat { get; init; }
@@ -55,8 +55,21 @@ public sealed class DdsFile
     /// <summary>The same file over other bytes, with surfaces laid out in them (<see cref="DdsReader.ReadKept"/>).</summary>
     internal DdsFile WithData(byte[] data, IReadOnlyList<DdsSurface> surfaces) => new()
     {
-        Data = data, Width = Width, Height = Height, Depth = Depth, MipCount = MipCount, ImageCount = ImageCount, IsCubemap = IsCubemap, IsVolume = IsVolume,
-        Format = Format, FourCC = FourCC, DxgiFormat = DxgiFormat, Masks = Masks, HeaderFlags = HeaderFlags, HeaderSize = HeaderSize, Surfaces = surfaces,
+        Data = data,
+        Width = Width,
+        Height = Height,
+        Depth = Depth,
+        MipCount = MipCount,
+        ImageCount = ImageCount,
+        IsCubemap = IsCubemap,
+        IsVolume = IsVolume,
+        Format = Format,
+        FourCc = FourCc,
+        DxgiFormat = DxgiFormat,
+        Masks = Masks,
+        HeaderFlags = HeaderFlags,
+        HeaderSize = HeaderSize,
+        Surfaces = surfaces,
     };
 
     public ReadOnlySpan<byte> SurfaceData(DdsSurface surface) => Data.AsSpan(surface.Offset, surface.Length);

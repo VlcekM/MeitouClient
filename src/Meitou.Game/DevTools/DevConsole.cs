@@ -27,29 +27,29 @@ public sealed class DevConsole
 
     const int MaxLines = 100, MaxHistory = 50;
 
-    readonly Dictionary<string, ConsoleCommand> commands = new(StringComparer.OrdinalIgnoreCase);
-    readonly List<Line> lines = [];
-    readonly List<string> history = [];
-    int historyAt = -1;
-    string draft = "";
+    readonly Dictionary<string, ConsoleCommand> _commands = new(StringComparer.OrdinalIgnoreCase);
+    readonly List<Line> _lines = [];
+    readonly List<string> _history = [];
+    int _historyAt = -1;
+    string _draft = "";
 
     public bool Open { get; set; }
     public string Input { get; private set; } = "";
     public int Caret { get; private set; }
     /// <summary>How many visual lines the scrollback is scrolled up from the newest.</summary>
     public int Scroll { get; set; }
-    public IReadOnlyList<Line> Lines => lines;
-    public IEnumerable<ConsoleCommand> Commands => commands.Values.OrderBy(c => c.Name, StringComparer.Ordinal);
+    public IReadOnlyList<Line> Lines => _lines;
+    public IEnumerable<ConsoleCommand> Commands => _commands.Values.OrderBy(c => c.Name, StringComparer.Ordinal);
 
     /// <summary>Called with every non-input line printed (the agent control channel, <c>--control-dir</c>, collects a command's output through it).</summary>
     public Action<string, Kind>? Tap { get; set; }
 
-    public void Register(ConsoleCommand command) => commands[command.Name] = command;
+    public void Register(ConsoleCommand command) => _commands[command.Name] = command;
 
     /// <summary>Gives an already registered command an argument completer (the registration helpers of the control commands have none).</summary>
     public void SetComplete(string name, Func<int, string, IEnumerable<string>> complete)
     {
-        if (commands.TryGetValue(name, out var c)) commands[name] = c with { Complete = complete };
+        if (_commands.TryGetValue(name, out var c)) _commands[name] = c with { Complete = complete };
     }
 
     /// <summary>Candidates for the value after a flag (<c>--id</c> takes character ids); the host sets it. Gets the flag and the text typed so far.</summary>
@@ -63,17 +63,17 @@ public sealed class DevConsole
     {
         foreach (string part in text.ReplaceLineEndings("\n").Split('\n'))
         {
-            lines.Add(new Line(part, kind));
+            _lines.Add(new Line(part, kind));
             if (kind != Kind.Input) Tap?.Invoke(part, kind);
             Console.WriteLine($"console  {(kind == Kind.Error ? "error: " : kind == Kind.Input ? "> " : "")}{part}");
         }
-        if (lines.Count > MaxLines) lines.RemoveRange(0, lines.Count - MaxLines);
+        if (_lines.Count > MaxLines) _lines.RemoveRange(0, _lines.Count - MaxLines);
         Scroll = 0;
     }
 
     public void Error(string text) => Print(text, Kind.Error);
 
-    public void Clear() { lines.Clear(); Scroll = 0; }
+    public void Clear() { _lines.Clear(); Scroll = 0; }
 
     // ---- editing
 
@@ -102,17 +102,17 @@ public sealed class DevConsole
 
     public void HistoryStep(int direction)
     {
-        if (history.Count == 0) return;
-        if (historyAt < 0)
+        if (_history.Count == 0) return;
+        if (_historyAt < 0)
         {
             if (direction > 0) return;
-            draft = Input;
-            historyAt = history.Count;
+            _draft = Input;
+            _historyAt = _history.Count;
         }
-        historyAt += direction;
-        if (historyAt >= history.Count) { historyAt = -1; SetInput(draft); return; }
-        historyAt = Math.Max(historyAt, 0);
-        SetInput(history[historyAt]);
+        _historyAt += direction;
+        if (_historyAt >= _history.Count) { _historyAt = -1; SetInput(_draft); return; }
+        _historyAt = Math.Max(_historyAt, 0);
+        SetInput(_history[_historyAt]);
     }
 
     void SetInput(string text) => (Input, Caret) = (text, text.Length);
@@ -122,10 +122,10 @@ public sealed class DevConsole
     {
         string line = Input.Trim();
         SetInput("");
-        historyAt = -1;
+        _historyAt = -1;
         if (line.Length == 0) return;
-        if (history.Count == 0 || history[^1] != line) history.Add(line);
-        if (history.Count > MaxHistory) history.RemoveAt(0);
+        if (_history.Count == 0 || _history[^1] != line) _history.Add(line);
+        if (_history.Count > MaxHistory) _history.RemoveAt(0);
         Execute(line);
     }
 
@@ -137,7 +137,7 @@ public sealed class DevConsole
         Print(line, Kind.Input);
         var tokens = Tokenize(line, out _);
         if (tokens.Count == 0) return;
-        if (!commands.TryGetValue(tokens[0].Text, out var command)) { Error(UnknownCommand(tokens[0].Text)); return; }
+        if (!_commands.TryGetValue(tokens[0].Text, out var command)) { Error(UnknownCommand(tokens[0].Text)); return; }
         try { command.Run([.. tokens.Skip(1).Select(t => t.Text)], this); }
         catch (Exception e) { Error($"{command.Name} failed: {e.Message}"); }
     }
@@ -146,7 +146,7 @@ public sealed class DevConsole
     string UnknownCommand(string typed)
     {
         string low = typed.ToLowerInvariant();
-        var close = commands.Keys.Where(n => n.StartsWith(low, StringComparison.OrdinalIgnoreCase) || n.Contains(low, StringComparison.OrdinalIgnoreCase) || EditDistance(n, low) <= 2)
+        var close = _commands.Keys.Where(n => n.StartsWith(low, StringComparison.OrdinalIgnoreCase) || n.Contains(low, StringComparison.OrdinalIgnoreCase) || EditDistance(n, low) <= 2)
             .OrderBy(n => EditDistance(n, low)).ThenBy(n => n, StringComparer.Ordinal).Take(5).ToList();
         return $"unknown command '{typed}'" + (close.Count > 0 ? "; did you mean: " + string.Join(", ", close) + "?" : " (help lists them)");
     }
@@ -169,7 +169,7 @@ public sealed class DevConsole
         return row[b.Length];
     }
 
-    public ConsoleCommand? Find(string name) => commands.GetValueOrDefault(name);
+    public ConsoleCommand? Find(string name) => _commands.GetValueOrDefault(name);
 
     /// <summary>Words split at spaces outside double quotes, the quotes removed; each with its start in <paramref name="text"/>. <paramref name="fresh"/>: the text ends where a new word would begin.</summary>
     public static List<(string Text, int Start)> Tokenize(string text, out bool fresh)
@@ -206,10 +206,10 @@ public sealed class DevConsole
         int index = tokens.Count - 1;
         var (typed, start) = tokens[index];
         IEnumerable<string> found;
-        if (index == 0) found = commands.Keys.Where(k => k.StartsWith(typed, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal);
+        if (index == 0) found = _commands.Keys.Where(k => k.StartsWith(typed, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal);
         else
         {
-            var command = commands.GetValueOrDefault(tokens[0].Text);
+            var command = _commands.GetValueOrDefault(tokens[0].Text);
             CompletionArgs = [.. tokens.Skip(1).Take(index - 1).Select(t => t.Text)];
             string previous = index >= 2 ? tokens[index - 1].Text : "";
             if (command is null) found = [];

@@ -21,7 +21,7 @@ public static class BuildingSwapPass
         var owners = new Dictionary<string, string>(StringComparer.Ordinal);
         var towns = new List<(Vector3 At, float Radius, string Faction)>();
         foreach (var t in levels.Towns())
-            if (db.Find(t.TownId) is { Type: Fcs.FcsRecordType.TOWN } record && TownData.From(record) is { Faction: { } faction, Radius: > 0 } data)
+            if (db.Find(t.TownId) is { Type: Fcs.FcsRecordType.Town } record && TownData.From(record) is { Faction: { } faction, Radius: > 0 } data)
                 towns.Add((t.Position, data.Radius, faction));
         int changed = 0;
         foreach (var (zone, zoneDb) in levels.Zones)

@@ -48,7 +48,7 @@ public readonly record struct BodyStatus(float Blood, float WorstPart, float Hun
 public sealed record HealthPartView(string Id, string Name, float Flesh, float Stun, float Bandage, float Rig, float Maximum, bool Robotic)
 {
     /// <summary>The part's limb state (stump, replaced, crushed; <see cref="Bodies.LimbState.Original"/> for a part that is no limb): the medical row's Crushed and Robot layers.</summary>
-    public Bodies.LimbState Limb { get; init; }
+    public LimbState Limb { get; init; }
     /// <summary>The part's LOCATIONAL_DAMAGE <c>death</c> flag (head and torso) and its type (leg, arm...): the medical row's tooltip text (docs/game/ui-screens.md "Tooltips").</summary>
     public bool Vital { get; init; }
     public Meitou.Data.Gameplay.Bodies.BodyPartType Type { get; init; }
@@ -232,7 +232,7 @@ public sealed class CharacterSnapshot
     /// <summary>Null for a character without a body (an animal).</summary>
     public BodyStatus? Body { get; internal set; }
     /// <summary>The stat-driven body of a person (not a robot, not an animal), from its current stats and hunger; null for the others.</summary>
-    public Meitou.Data.Characters.BodyBuild? Build { get; internal set; }
+    public BodyBuild? Build { get; internal set; }
     /// <summary>What a selected character carries, one line per item (empty for the others).</summary>
     public IReadOnlyList<string> Inventory { get; internal set; } = [];
     /// <summary>A selected character's bounties, one line per faction that wants it (empty for the others and for one nobody wants).</summary>
@@ -271,7 +271,7 @@ public sealed class CharacterSnapshot
     /// <summary>The limb (ITEM string id) an animal holds in its <c>mouth</c> point (<see cref="CharacterCold.Mouth"/>); null for none.</summary>
     public string? Mouth { get; internal set; }
     /// <summary>The skin tone of the character that limb was cut from (<see cref="CharacterCold.MouthTone"/>).</summary>
-    public System.Numerics.Vector3 MouthTone { get; internal set; }
+    public Vector3 MouthTone { get; internal set; }
     /// <summary>While it works a machine (playing its clip): the functionality whose <c>animation events</c> sound on that clip; null otherwise. Display only.</summary>
     public WorkEvents? WorkEvents { get; internal set; }
     /// <summary>The size the body is drawn at: an animal's lerp(age, <c>scale min</c>, <c>scale max</c>) (its <c>MedicalState.ScaleK</c>), 1 for people.</summary>

@@ -14,8 +14,8 @@ public sealed record NewGameStart
     public required string Id { get; init; }
     public required string Name { get; init; }
     /// <summary>The name in the data files (<see cref="GameRecord.BaseName"/>), so a start is found by its English name in any language.</summary>
-    public string BaseName { get => baseName ?? Name; init => baseName = value; }
-    string? baseName;
+    public string BaseName { get => _baseName ?? Name; init => _baseName = value; }
+    string? _baseName;
     /// <summary><c>money</c>: "Starting cash".</summary>
     public int Money { get; init; }
     /// <summary><c>start pos X</c> and <c>start pos Z</c>: the place the squad stands when <see cref="ForceStartPos"/> is set; otherwise unused (the town is drawn from <see cref="Towns"/>).</summary>
@@ -57,7 +57,7 @@ public sealed record NewGameStart
     }
 
     /// <summary>The start-offs of the database, in its order.</summary>
-    public static List<NewGameStart> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.NEW_GAME_STARTOFF).Select(From)];
+    public static List<NewGameStart> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.NewGameStartoff).Select(From)];
 
     /// <summary>The standard start of the base game (difficulty "Default", the one with the Wanderer squad).</summary>
     public const string DefaultName = "Wanderer";

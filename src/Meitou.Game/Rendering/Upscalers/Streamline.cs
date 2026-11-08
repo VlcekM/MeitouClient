@@ -68,13 +68,13 @@ public sealed unsafe class Streamline : IDisposable
         public delegate* unmanaged<Device, SwapchainKHR, ulong, VkSemaphore, Fence, uint*, Result> Acquire { get; init; }
     }
 
-    readonly nint library;
-    readonly delegate* unmanaged<int> shutdown;
-    readonly delegate* unmanaged<VulkanInfo*, int> setVulkanInfo;
-    readonly delegate* unmanaged<uint, AdapterInfo*, int> isFeatureSupported;
-    readonly delegate* unmanaged<uint, byte, int> setFeatureLoaded;
-    readonly delegate* unmanaged<uint, byte*, void**, int> getFeatureFunction;
-    readonly delegate* unmanaged<nint*, uint*, int> getNewFrameToken;
+    readonly nint _library;
+    readonly delegate* unmanaged<int> _shutdown;
+    readonly delegate* unmanaged<VulkanInfo*, int> _setVulkanInfo;
+    readonly delegate* unmanaged<uint, AdapterInfo*, int> _isFeatureSupported;
+    readonly delegate* unmanaged<uint, byte, int> _setFeatureLoaded;
+    readonly delegate* unmanaged<uint, byte*, void**, int> _getFeatureFunction;
+    readonly delegate* unmanaged<nint*, uint*, int> _getNewFrameToken;
     internal readonly delegate* unmanaged<void*, nint, void*, int> SetConstants;
     internal readonly delegate* unmanaged<nint, void*, void*, uint, nint, int> SetTagForFrame;
     internal readonly delegate* unmanaged<uint, nint, void**, uint, nint, int> EvaluateFeature;
@@ -82,17 +82,17 @@ public sealed unsafe class Streamline : IDisposable
     internal delegate* unmanaged<void*, void*, int> DlssSetOptions;
     internal delegate* unmanaged<void*, void*, int> DlssgSetOptions;
     internal delegate* unmanaged<void*, void*, void*, int> DlssgGetState;
-    delegate* unmanaged<void*, int> reflexSetOptions;
-    delegate* unmanaged<nint, int> reflexSleep;
-    delegate* unmanaged<uint, nint, int> pclSetMarker;
-    readonly delegate* unmanaged<nint, byte*, nint> interposerGetDeviceProcAddr;
-    readonly delegate* unmanaged<nint, byte*, nint> interposerGetInstanceProcAddr;
-    nint pluginPath, projectId, engineVersion, features;
-    uint frameIndex;
-    nint openToken;
-    (nint Hwnd, nint HInstance) window;
-    VulkanDevice? attached;
-    bool disposed;
+    delegate* unmanaged<void*, int> _reflexSetOptions;
+    delegate* unmanaged<nint, int> _reflexSleep;
+    delegate* unmanaged<uint, nint, int> _pclSetMarker;
+    readonly delegate* unmanaged<nint, byte*, nint> _interposerGetDeviceProcAddr;
+    readonly delegate* unmanaged<nint, byte*, nint> _interposerGetInstanceProcAddr;
+    nint _pluginPath, _projectId, _engineVersion, _features;
+    uint _frameIndex;
+    nint _openToken;
+    (nint Hwnd, nint HInstance) _window;
+    VulkanDevice? _attached;
+    bool _disposed;
 
     public string[] InstanceExtensions { get; private set; } = [];
     public string[] DeviceExtensions { get; private set; } = [];
@@ -100,7 +100,7 @@ public sealed unsafe class Streamline : IDisposable
     public string[] Features13 { get; private set; } = [];
     /// <summary>Queues of the graphics family Streamline's features use (graphics and compute; DLSS frame generation presents on one), created after ours.</summary>
     public int GraphicsQueues { get; private set; }
-    int computeQueues;
+    int _computeQueues;
     /// <summary>After <see cref="Attach"/>: DLSS runs on this device (an NVIDIA GPU with a recent driver and <c>nvngx_dlss.dll</c> in place).</summary>
     public bool DlssSupported { get; private set; }
     /// <summary>DLSS frame generation was asked for and its DLLs loaded (<see cref="TryInit"/>).</summary>
@@ -115,21 +115,21 @@ public sealed unsafe class Streamline : IDisposable
 
     Streamline(nint interposer, string directory, bool frameGeneration)
     {
-        library = interposer;
+        _library = interposer;
         Directory = directory;
         FrameGenerationLoaded = frameGeneration;
-        shutdown = (delegate* unmanaged<int>)NativeLibrary.GetExport(interposer, "slShutdown");
-        setVulkanInfo = (delegate* unmanaged<VulkanInfo*, int>)NativeLibrary.GetExport(interposer, "slSetVulkanInfo");
-        isFeatureSupported = (delegate* unmanaged<uint, AdapterInfo*, int>)NativeLibrary.GetExport(interposer, "slIsFeatureSupported");
-        setFeatureLoaded = (delegate* unmanaged<uint, byte, int>)NativeLibrary.GetExport(interposer, "slSetFeatureLoaded");
-        getFeatureFunction = (delegate* unmanaged<uint, byte*, void**, int>)NativeLibrary.GetExport(interposer, "slGetFeatureFunction");
-        getNewFrameToken = (delegate* unmanaged<nint*, uint*, int>)NativeLibrary.GetExport(interposer, "slGetNewFrameToken");
+        _shutdown = (delegate* unmanaged<int>)NativeLibrary.GetExport(interposer, "slShutdown");
+        _setVulkanInfo = (delegate* unmanaged<VulkanInfo*, int>)NativeLibrary.GetExport(interposer, "slSetVulkanInfo");
+        _isFeatureSupported = (delegate* unmanaged<uint, AdapterInfo*, int>)NativeLibrary.GetExport(interposer, "slIsFeatureSupported");
+        _setFeatureLoaded = (delegate* unmanaged<uint, byte, int>)NativeLibrary.GetExport(interposer, "slSetFeatureLoaded");
+        _getFeatureFunction = (delegate* unmanaged<uint, byte*, void**, int>)NativeLibrary.GetExport(interposer, "slGetFeatureFunction");
+        _getNewFrameToken = (delegate* unmanaged<nint*, uint*, int>)NativeLibrary.GetExport(interposer, "slGetNewFrameToken");
         SetConstants = (delegate* unmanaged<void*, nint, void*, int>)NativeLibrary.GetExport(interposer, "slSetConstants");
         SetTagForFrame = (delegate* unmanaged<nint, void*, void*, uint, nint, int>)NativeLibrary.GetExport(interposer, "slSetTagForFrame");
         EvaluateFeature = (delegate* unmanaged<uint, nint, void**, uint, nint, int>)NativeLibrary.GetExport(interposer, "slEvaluateFeature");
         FreeResources = (delegate* unmanaged<uint, void*, int>)NativeLibrary.GetExport(interposer, "slFreeResources");
-        interposerGetDeviceProcAddr = (delegate* unmanaged<nint, byte*, nint>)NativeLibrary.GetExport(interposer, "vkGetDeviceProcAddr");
-        interposerGetInstanceProcAddr = (delegate* unmanaged<nint, byte*, nint>)NativeLibrary.GetExport(interposer, "vkGetInstanceProcAddr");
+        _interposerGetDeviceProcAddr = (delegate* unmanaged<nint, byte*, nint>)NativeLibrary.GetExport(interposer, "vkGetDeviceProcAddr");
+        _interposerGetInstanceProcAddr = (delegate* unmanaged<nint, byte*, nint>)NativeLibrary.GetExport(interposer, "vkGetInstanceProcAddr");
     }
 
     static string[] Strings(nint array, uint count)
@@ -185,24 +185,29 @@ public sealed unsafe class Streamline : IDisposable
         var init = (delegate* unmanaged<Preferences*, ulong, int>)NativeLibrary.GetExport(lib, "slInit");
         var sl = new Streamline(lib, dir, frameGeneration)
         {
-            pluginPath = Marshal.StringToHGlobalUni(dir),
-            projectId = Marshal.StringToHGlobalAnsi(VendorUpscalers.DlssProjectId),
-            engineVersion = Marshal.StringToHGlobalAnsi(VendorUpscalers.DlssEngineVersion),
+            _pluginPath = Marshal.StringToHGlobalUni(dir),
+            _projectId = Marshal.StringToHGlobalAnsi(VendorUpscalers.DlssProjectId),
+            _engineVersion = Marshal.StringToHGlobalAnsi(VendorUpscalers.DlssEngineVersion),
         };
         uint[] wanted = frameGeneration ? [FeatureDlss, FeatureDlssG, FeatureReflex, FeaturePcl] : [FeatureDlss];
-        sl.features = Marshal.AllocHGlobal(wanted.Length * sizeof(uint));
-        for (int i = 0; i < wanted.Length; i++) ((uint*)sl.features)[i] = wanted[i];
-        nint paths = sl.pluginPath;
+        sl._features = Marshal.AllocHGlobal(wanted.Length * sizeof(uint));
+        for (int i = 0; i < wanted.Length; i++) ((uint*)sl._features)[i] = wanted[i];
+        nint paths = sl._pluginPath;
         var prefs = new Preferences
         {
-            StructType = PreferencesType, StructVersion = 1,
+            StructType = PreferencesType,
+            StructVersion = 1,
             LogLevel = 1,
-            PathsToPlugins = (nint)(&paths), NumPathsToPlugins = 1,
+            PathsToPlugins = (nint)(&paths),
+            NumPathsToPlugins = 1,
             LogMessageCallback = (nint)(delegate* unmanaged<int, byte*, void>)&OnLog,
             // Client state tracking off, manual hooking, frame-based tagging (sl_core_types.h PreferenceFlags); no over-the-air updates.
             Flags = 1UL << 0 | 1UL << 2 | 1UL << 7,
-            FeaturesToLoad = sl.features, NumFeaturesToLoad = (uint)wanted.Length,
-            Engine = 0, EngineVersion = sl.engineVersion, ProjectId = sl.projectId,
+            FeaturesToLoad = sl._features,
+            NumFeaturesToLoad = (uint)wanted.Length,
+            Engine = 0,
+            EngineVersion = sl._engineVersion,
+            ProjectId = sl._projectId,
             RenderApi = 2,
         };
         int rc = init(&prefs, SdkVersion);
@@ -212,14 +217,14 @@ public sealed unsafe class Streamline : IDisposable
         reason = null;
         Console.WriteLine($"streamline {dir}: features [{string.Join(", ", wanted)}] need instance [{string.Join(", ", sl.InstanceExtensions)}], "
             + $"device [{string.Join(", ", sl.DeviceExtensions)}], 1.2 [{string.Join(", ", sl.Features12)}], 1.3 [{string.Join(", ", sl.Features13)}], "
-            + $"queues: {sl.GraphicsQueues - sl.computeQueues} graphics, {sl.computeQueues} compute");
+            + $"queues: {sl.GraphicsQueues - sl._computeQueues} graphics, {sl._computeQueues} compute");
         return sl;
     }
 
     /// <summary>Adds what <paramref name="feature"/> needs (slGetFeatureRequirements) to the union over the loaded features.</summary>
     bool AddRequirements(uint feature, out string? reason)
     {
-        var requirements = (delegate* unmanaged<uint, FeatureRequirements*, int>)NativeLibrary.GetExport(library, "slGetFeatureRequirements");
+        var requirements = (delegate* unmanaged<uint, FeatureRequirements*, int>)NativeLibrary.GetExport(_library, "slGetFeatureRequirements");
         var req = new FeatureRequirements { StructType = RequirementsType, StructVersion = 2 };
         int rc = requirements(feature, &req);
         if (rc != 0) { reason = $"slGetFeatureRequirements({feature}) failed ({rc})"; return false; }
@@ -227,7 +232,7 @@ public sealed unsafe class Streamline : IDisposable
         DeviceExtensions = [.. DeviceExtensions.Union(Strings(req.VkDeviceExtensions, req.VkNumDeviceExtensions))];
         Features12 = [.. Features12.Union(Strings(req.VkFeatures12, req.VkNumFeatures12))];
         Features13 = [.. Features13.Union(Strings(req.VkFeatures13, req.VkNumFeatures13))];
-        computeQueues += (int)req.VkNumComputeQueuesRequired;
+        _computeQueues += (int)req.VkNumComputeQueuesRequired;
         GraphicsQueues += (int)(req.VkNumGraphicsQueuesRequired + req.VkNumComputeQueuesRequired);
         reason = null;
         return true;
@@ -245,7 +250,7 @@ public sealed unsafe class Streamline : IDisposable
     }
 
     /// <summary>The window DLSS frame generation presents to (Win32 handles), set before the device is made.</summary>
-    public void UseWindow(nint hwnd, nint hinstance) => window = (hwnd, hinstance);
+    public void UseWindow(nint hwnd, nint hinstance) => _window = (hwnd, hinstance);
 
     /// <summary>
     /// The window's surface made again through the interposer's <c>vkCreateWin32SurfaceKHR</c>, which records the window behind the surface for DLSS frame
@@ -254,8 +259,8 @@ public sealed unsafe class Streamline : IDisposable
     /// </summary>
     bool ReplaceSurface(VulkanDevice device)
     {
-        if (window.Hwnd == 0 || !device.HasSurface) return false;
-        var surface = CreateWin32Surface(device.Instance, window.Hwnd, window.HInstance);
+        if (_window.Hwnd == 0 || !device.HasSurface) return false;
+        var surface = CreateWin32Surface(device.Instance, _window.Hwnd, _window.HInstance);
         if (surface.Handle == 0) return false;
         device.ReplaceSurface(surface);
         return true;
@@ -264,7 +269,7 @@ public sealed unsafe class Streamline : IDisposable
     SurfaceKHR CreateWin32Surface(Instance instance, nint hwnd, nint hinstance)
     {
         nint fn;
-        fixed (byte* name = "vkCreateWin32SurfaceKHR\0"u8) fn = interposerGetInstanceProcAddr(instance.Handle, name);
+        fixed (byte* name = "vkCreateWin32SurfaceKHR\0"u8) fn = _interposerGetInstanceProcAddr(instance.Handle, name);
         if (fn == 0) return default;
         // VkWin32SurfaceCreateInfoKHR: sType 1000009000, next, flags, hinstance, hwnd.
         var info = stackalloc nint[5];
@@ -281,24 +286,29 @@ public sealed unsafe class Streamline : IDisposable
     void Attach(VulkanDevice device)
     {
         // Streamline's queues follow ours in the graphics family: graphics first, then compute (Apply asked for both there).
-        uint graphics = (uint)(GraphicsQueues - computeQueues);
+        uint graphics = (uint)(GraphicsQueues - _computeQueues);
         var info = new VulkanInfo
         {
-            StructType = VulkanInfoType, StructVersion = 3,
-            Device = device.Device.Handle, Instance = device.Instance.Handle, PhysicalDevice = device.PhysicalDevice.Handle,
-            GraphicsQueueFamily = device.GraphicsFamily, GraphicsQueueIndex = 1,
-            ComputeQueueFamily = device.GraphicsFamily, ComputeQueueIndex = 1 + graphics,
+            StructType = VulkanInfoType,
+            StructVersion = 3,
+            Device = device.Device.Handle,
+            Instance = device.Instance.Handle,
+            PhysicalDevice = device.PhysicalDevice.Handle,
+            GraphicsQueueFamily = device.GraphicsFamily,
+            GraphicsQueueIndex = 1,
+            ComputeQueueFamily = device.GraphicsFamily,
+            ComputeQueueIndex = 1 + graphics,
         };
         if (GraphicsQueues > device.ExtraQueues.Length)
             Console.WriteLine($"streamline the graphics family has {device.ExtraQueues.Length} queues beyond ours, Streamline asked for {GraphicsQueues}");
         // Without DLSS Streamline is shut down at once, so no NVIDIA layer stays attached to another vendor's device (#55).
-        int rc = setVulkanInfo(&info);
+        int rc = _setVulkanInfo(&info);
         if (rc != 0) { Console.WriteLine($"streamline slSetVulkanInfo failed ({rc})"); Dispose(); return; }
         rc = Supported(device, FeatureDlss);
         if (rc != 0) { Console.WriteLine($"streamline DLSS is not supported on {device.DeviceName} ({rc}); Streamline shut down"); Dispose(); return; }
         DlssSetOptions = (delegate* unmanaged<void*, void*, int>)Function(FeatureDlss, "slDLSSSetOptions");
         if (DlssSetOptions == null) { Console.WriteLine("streamline slDLSSSetOptions missing"); Dispose(); return; }
-        fixed (byte* name = "vkQueuePresentKHR\0"u8) PresentProxy = (delegate* unmanaged<Queue, PresentInfoKHR*, Result>)interposerGetDeviceProcAddr(device.Device.Handle, name);
+        fixed (byte* name = "vkQueuePresentKHR\0"u8) PresentProxy = (delegate* unmanaged<Queue, PresentInfoKHR*, Result>)_interposerGetDeviceProcAddr(device.Device.Handle, name);
         DlssSupported = true;
         if (FrameGenerationLoaded) AttachFrameGeneration(device);
     }
@@ -306,20 +316,20 @@ public sealed unsafe class Streamline : IDisposable
     int Supported(VulkanDevice device, uint feature)
     {
         var adapter = new AdapterInfo { StructType = AdapterInfoType, StructVersion = 1, VkPhysicalDevice = device.PhysicalDevice.Handle };
-        return isFeatureSupported(feature, &adapter);
+        return _isFeatureSupported(feature, &adapter);
     }
 
     void* Function(uint feature, string name)
     {
         void* fn = null;
         var bytes = System.Text.Encoding.ASCII.GetBytes(name + "\0");
-        fixed (byte* p = bytes) return getFeatureFunction(feature, p, &fn) == 0 ? fn : null;
+        fixed (byte* p = bytes) return _getFeatureFunction(feature, p, &fn) == 0 ? fn : null;
     }
 
     nint DeviceProc(VulkanDevice device, string name)
     {
         var bytes = System.Text.Encoding.ASCII.GetBytes(name + "\0");
-        fixed (byte* p = bytes) return interposerGetDeviceProcAddr(device.Device.Handle, p);
+        fixed (byte* p = bytes) return _interposerGetDeviceProcAddr(device.Device.Handle, p);
     }
 
     /// <summary>DLSS frame generation and Reflex: supported here, their functions and the swapchain hooks; else unloaded (a loaded DLSS-G makes the swapchain render
@@ -329,15 +339,15 @@ public sealed unsafe class Streamline : IDisposable
         int g = Supported(device, FeatureDlssG), reflex = Supported(device, FeatureReflex), pcl = Supported(device, FeaturePcl);
         DlssgSetOptions = (delegate* unmanaged<void*, void*, int>)Function(FeatureDlssG, "slDLSSGSetOptions");
         DlssgGetState = (delegate* unmanaged<void*, void*, void*, int>)Function(FeatureDlssG, "slDLSSGGetState");
-        reflexSetOptions = (delegate* unmanaged<void*, int>)Function(FeatureReflex, "slReflexSetOptions");
-        reflexSleep = (delegate* unmanaged<nint, int>)Function(FeatureReflex, "slReflexSleep");
-        pclSetMarker = (delegate* unmanaged<uint, nint, int>)Function(FeaturePcl, "slPCLSetMarker");
-        bool functions = DlssgSetOptions != null && DlssgGetState != null && reflexSetOptions != null && reflexSleep != null && pclSetMarker != null;
+        _reflexSetOptions = (delegate* unmanaged<void*, int>)Function(FeatureReflex, "slReflexSetOptions");
+        _reflexSleep = (delegate* unmanaged<nint, int>)Function(FeatureReflex, "slReflexSleep");
+        _pclSetMarker = (delegate* unmanaged<uint, nint, int>)Function(FeaturePcl, "slPCLSetMarker");
+        bool functions = DlssgSetOptions != null && DlssgGetState != null && _reflexSetOptions != null && _reflexSleep != null && _pclSetMarker != null;
         if (g != 0 || reflex != 0 || pcl != 0 || !functions)
         {
             Console.WriteLine($"frame generation  DLSS unavailable on {device.DeviceName}: slIsFeatureSupported DLSS-G {g}, Reflex {reflex}, PCL {pcl}"
                 + (functions ? "" : ", functions missing") + " (DLSS-G needs an RTX 40 or later and Windows' hardware-accelerated GPU scheduling)");
-            setFeatureLoaded(FeatureDlssG, 0);
+            _setFeatureLoaded(FeatureDlssG, 0);
             return;
         }
         var hooks = new SwapchainHooks
@@ -351,17 +361,17 @@ public sealed unsafe class Streamline : IDisposable
         if (hooks.Create == null || hooks.Destroy == null || hooks.GetImages == null || hooks.Acquire == null || waitIdle == null)
         {
             Console.WriteLine("frame generation  DLSS unavailable: the interposer lacks a swapchain hook");
-            setFeatureLoaded(FeatureDlssG, 0);
+            _setFeatureLoaded(FeatureDlssG, 0);
             return;
         }
         if (!ReplaceSurface(device)) Console.WriteLine("frame generation  the window's surface could not be made through Streamline; DLSS-G may not find the window");
         // Reflex must be on while DLSS-G runs (DLSSGStatus eFailReflexNotDetectedAtRuntime otherwise).
         var reflexOptions = new ReflexOptions { StructType = ReflexOptionsType, StructVersion = 1, Mode = 1 };
-        int rc = reflexSetOptions(&reflexOptions);
+        int rc = _reflexSetOptions(&reflexOptions);
         if (rc != 0) Console.WriteLine($"frame generation  slReflexSetOptions failed ({rc})");
         Swapchain = hooks;
         device.WaitIdleFunction = waitIdle;
-        attached = device;
+        _attached = device;
         FrameGenerationSupported = true;
         Console.WriteLine($"frame generation  DLSS supported on {device.DeviceName} (Reflex low latency on)");
     }
@@ -372,47 +382,47 @@ public sealed unsafe class Streamline : IDisposable
     /// </summary>
     public void BeginFrame()
     {
-        if (!FrameGenerationSupported || disposed) return;
-        openToken = NewToken();
-        if (openToken == 0) return;
-        reflexSleep(openToken);
+        if (!FrameGenerationSupported || _disposed) return;
+        _openToken = NewToken();
+        if (_openToken == 0) return;
+        _reflexSleep(_openToken);
         Marker(PclMarker.SimulationStart);
     }
 
     /// <summary>A PC Latency marker for the open frame (none open: nothing).</summary>
     public void Marker(PclMarker marker)
     {
-        if (openToken != 0 && pclSetMarker != null && !disposed) pclSetMarker((uint)marker, openToken);
+        if (_openToken != 0 && _pclSetMarker != null && !_disposed) _pclSetMarker((uint)marker, _openToken);
     }
 
     /// <summary>Ends the frame <see cref="BeginFrame"/> opened (after its present).</summary>
-    public void EndFrame() => openToken = 0;
+    public void EndFrame() => _openToken = 0;
 
     /// <summary>The token of the open frame, else a new one (DLSS upscaling without frame generation: one per evaluation); 0 on failure.</summary>
-    public nint FrameToken() => openToken != 0 ? openToken : NewToken();
+    public nint FrameToken() => _openToken != 0 ? _openToken : NewToken();
 
     nint NewToken()
     {
         nint token;
-        uint index = ++frameIndex;
-        return getNewFrameToken(&token, &index) == 0 ? token : 0;
+        uint index = ++_frameIndex;
+        return _getNewFrameToken(&token, &index) == 0 ? token : 0;
     }
 
     void FreeStrings()
     {
-        Marshal.FreeHGlobal(pluginPath);
-        Marshal.FreeHGlobal(projectId);
-        Marshal.FreeHGlobal(engineVersion);
-        Marshal.FreeHGlobal(features);
-        pluginPath = projectId = engineVersion = features = 0;
+        Marshal.FreeHGlobal(_pluginPath);
+        Marshal.FreeHGlobal(_projectId);
+        Marshal.FreeHGlobal(_engineVersion);
+        Marshal.FreeHGlobal(_features);
+        _pluginPath = _projectId = _engineVersion = _features = 0;
     }
 
     public void Dispose()
     {
-        if (disposed) return;
-        disposed = true;
-        if (attached is not null) attached.WaitIdleFunction = null;   // the proxy goes with Streamline
-        shutdown();
+        if (_disposed) return;
+        _disposed = true;
+        if (_attached is not null) _attached.WaitIdleFunction = null;   // the proxy goes with Streamline
+        _shutdown();
         FreeStrings();
     }
 }

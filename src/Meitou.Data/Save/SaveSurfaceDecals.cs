@@ -17,9 +17,9 @@ public static class SaveSurfaceDecals
     public static List<SurfaceBloodDecal> Read(FcsRecord record)
     {
         var decals = new List<SurfaceBloodDecal>();
-        for (int i = 0; record.Vector3s.TryGetValue(Centre + i, out var centre); i++)
+        for (int i = 0; record.Vector3S.TryGetValue(Centre + i, out var centre); i++)
         {
-            var shape = record.Vector4s.GetValueOrDefault(Shape + i);
+            var shape = record.Vector4S.GetValueOrDefault(Shape + i);
             int kind = record.Ints.GetValueOrDefault(Kind + i);
             if ((kind & 0xFF) > (int)TerrainDecalType.Smear) continue;
             decals.Add(new SurfaceBloodDecal((TerrainDecalType)(kind & 0xFF), (byte)(kind >> 8), centre, shape.X, shape.Y, shape.Z, unchecked((uint)record.Ints.GetValueOrDefault(Colour + i)),
@@ -31,14 +31,14 @@ public static class SaveSurfaceDecals
     /// <summary>Replaces the marks in <paramref name="record"/> with <paramref name="decals"/>.</summary>
     public static void Write(FcsRecord record, IEnumerable<SurfaceBloodDecal> decals)
     {
-        foreach (var key in record.Vector3s.Keys.Where(k => k.StartsWith(Centre, StringComparison.Ordinal)).ToList()) record.Vector3s.Remove(key);
-        foreach (var key in record.Vector4s.Keys.Where(k => k.StartsWith(Centre, StringComparison.Ordinal)).ToList()) record.Vector4s.Remove(key);
+        foreach (var key in record.Vector3S.Keys.Where(k => k.StartsWith(Centre, StringComparison.Ordinal)).ToList()) record.Vector3S.Remove(key);
+        foreach (var key in record.Vector4S.Keys.Where(k => k.StartsWith(Centre, StringComparison.Ordinal)).ToList()) record.Vector4S.Remove(key);
         foreach (var key in record.Ints.Keys.Where(k => k.StartsWith(Centre, StringComparison.Ordinal)).ToList()) record.Ints.Remove(key);
         int i = 0;
         foreach (var d in decals)
         {
-            record.Vector3s[Centre + i] = d.Centre;
-            record.Vector4s[Shape + i] = new Vector4(d.Angle, d.Size, d.Life, 0);
+            record.Vector3S[Centre + i] = d.Centre;
+            record.Vector4S[Shape + i] = new Vector4(d.Angle, d.Size, d.Life, 0);
             record.Ints[Kind + i] = (int)d.Type | d.Variant << 8 | (d.Floor ? 1 << 16 : 0);
             record.Ints[Colour + i] = unchecked((int)d.Colour);
             i++;

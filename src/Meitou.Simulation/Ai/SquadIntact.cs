@@ -34,9 +34,9 @@ static class SquadIntact
     /// <summary>A down member counts as able while its organic first aid need is strictly under the threshold (<c>need &lt; t</c>: the original's <c>need &lt;= t &amp;&amp; need != t</c>).</summary>
     public static bool DownIsAble(float need, bool persistentHome) => need < (persistentHome ? AbleNeedHome : AbleNeed);
 
-    static float Need(World world, CharacterCold c, Bodies.MedicalState med) =>
+    static float Need(World world, CharacterCold c, MedicalState med) =>
         c.Race is { } race
-            ? med.FirstAidNeeds(race, MathF.Max(Bodies.MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1), world.SystemOf<BodySystem>()?.Constants.ExtraBloodLossFromBodyparts ?? 1).Organic
+            ? med.FirstAidNeeds(race, MathF.Max(MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1), world.SystemOf<BodySystem>()?.Constants.ExtraBloodLossFromBodyparts ?? 1).Organic
             : 0;
 
     /// <summary>

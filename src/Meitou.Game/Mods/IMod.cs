@@ -29,19 +29,19 @@ public static class ModApi
     /// <summary>
     /// The newest <c>apiVersion</c> this game runs. 2 added <c>version</c>, <c>dependencies</c> and <see cref="ModContext.Dependency{T}"/>.
     /// </summary>
-    public const int Version = Meitou.Content.CodeModApi.Newest;
+    public const int Version = Content.CodeModApi.Newest;
 
     /// <summary>
     /// The oldest <c>apiVersion</c> this game still runs; a manifest outside <see cref="MinimumVersion"/>..<see cref="Version"/> is refused with a
     /// message.
     /// </summary>
-    public const int MinimumVersion = Meitou.Content.CodeModApi.Oldest;
+    public const int MinimumVersion = Content.CodeModApi.Oldest;
 
     /// <summary>
     /// The first <c>apiVersion</c> whose manifests may declare <c>dependencies</c>, <c>loadAfter</c>, <c>incompatible</c> and <c>gameVersion</c>; an
     /// older game would ignore them (and load a private copy of a framework).
     /// </summary>
-    public const int DependenciesVersion = Meitou.Content.CodeModApi.Dependencies;
+    public const int DependenciesVersion = Content.CodeModApi.Dependencies;
 
     public static bool Supports(int apiVersion) => apiVersion is >= MinimumVersion and <= Version;
 }

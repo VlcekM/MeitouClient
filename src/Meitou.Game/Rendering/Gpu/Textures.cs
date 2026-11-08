@@ -31,11 +31,11 @@ public readonly record struct SampledTexture(GpuSampler Sampler, GpuView View)
 /// </summary>
 public sealed class GpuTexture : IDisposable
 {
-    readonly IGpuContext ctx;
+    readonly IGpuContext _ctx;
 
     internal GpuTexture(IGpuContext ctx, TextureDesc desc, int index)
     {
-        this.ctx = ctx;
+        this._ctx = ctx;
         Desc = desc;
         Index = index;
     }
@@ -57,11 +57,11 @@ public sealed class GpuTexture : IDisposable
             TextureKind.Texture2DArray => GpuViewType.Texture2DArray,
             _ => layerCount > 1 ? GpuViewType.Texture2DArray : GpuViewType.Texture2D,
         };
-        return ctx.View(this, baseLevel, levelCount, baseLayer, layerCount, type, swizzle);
+        return _ctx.View(this, baseLevel, levelCount, baseLayer, layerCount, type, swizzle);
     }
 
     /// <summary>A one-level, one-layer 2D view to render into.</summary>
-    public GpuView Attachment(int level = 0, int layer = 0) => ctx.View(this, level, 1, layer, 1, GpuViewType.Texture2D, default);
+    public GpuView Attachment(int level = 0, int layer = 0) => _ctx.View(this, level, 1, layer, 1, GpuViewType.Texture2D, default);
 
-    public void Dispose() => ctx.ReleaseTexture(this);
+    public void Dispose() => _ctx.ReleaseTexture(this);
 }

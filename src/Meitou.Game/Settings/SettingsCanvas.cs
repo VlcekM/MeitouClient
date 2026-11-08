@@ -11,21 +11,21 @@ sealed class SettingsCanvas(SettingsMenu menu)
     internal static readonly Vector4 LightInk = new(217 / 255f, 206 / 255f, 184 / 255f, 1);
     internal static readonly Vector4 MutedInk = new(0.52f, 0.49f, 0.43f, 1);
     internal static readonly Vector4 Brass = new(196 / 255f, 160 / 255f, 98 / 255f, 1);
-    internal bool Meitou => menu.player.UiMode == UiMode.Meitou;
-    internal int textViewportHeight;
-    readonly Dictionary<(string Text, int Width, int Size, int Height, int Scale, string Language), float> textHeights = [];
+    internal bool Meitou => menu.Player.UiMode == UiMode.Meitou;
+    internal int TextViewportHeight;
+    readonly Dictionary<(string Text, int Width, int Size, int Height, int Scale, string Language), float> _textHeights = [];
 
     internal UiRect R(float x, float y, float w, float h) =>
-        new(MathF.Round(menu.bounds.X + x * menu.scale), menu.bounds.Y + y * menu.scale, MathF.Round(w * menu.scale), MathF.Round(h * menu.scale));
+        new(MathF.Round(menu.Bounds.X + x * menu.Scale), menu.Bounds.Y + y * menu.Scale, MathF.Round(w * menu.Scale), MathF.Round(h * menu.Scale));
 
-    internal void Rect(UiRect at, Vector4 colour, UiRect? clip = null) => menu.controls.Add(new("settings-fill", "Panel", at, "", "", "", true, new Dictionary<string, string>(), colour, Clip: clip, Pickable: false));
+    internal void Rect(UiRect at, Vector4 colour, UiRect? clip = null) => menu.Controls.Add(new("settings-fill", "Panel", at, "", "", "", true, new Dictionary<string, string>(), colour, Clip: clip, Pickable: false));
 
     internal void Text(string caption, UiRect at, float size = 16, Vector4? colour = null, string align = "Left VCenter", UiRect? clip = null, bool wrap = false, bool translate = true)
     {
         if (translate) caption = Loc.Tr(caption);
-        var properties = new Dictionary<string, string> { ["TextAlign"] = align, ["FontName"] = "Kenshi_StandardFont", ["FontPixels"] = ((int)MathF.Round(size * menu.scale)).ToString(System.Globalization.CultureInfo.InvariantCulture) };
+        var properties = new Dictionary<string, string> { ["TextAlign"] = align, ["FontName"] = "Kenshi_StandardFont", ["FontPixels"] = ((int)MathF.Round(size * menu.Scale)).ToString(CultureInfo.InvariantCulture) };
         if (wrap) properties["WordWrap"] = "true";
-        menu.controls.Add(new("settings-text", "TextBox", at, caption, "", "", true, properties, Vector4.Zero, colour ?? MainInk, Clip: clip, Pickable: false, TextScale: size * menu.scale / 16));
+        menu.Controls.Add(new("settings-text", "TextBox", at, caption, "", "", true, properties, Vector4.Zero, colour ?? MainInk, Clip: clip, Pickable: false, TextScale: size * menu.Scale / 16));
     }
 
     internal void Surface(UiRect at, string kind, bool selected = false, bool hover = false, UiRect? clip = null)
@@ -33,53 +33,53 @@ sealed class SettingsCanvas(SettingsMenu menu)
         if (Meitou)
         {
             string texture = kind switch { "window" => "window", "primary" or "paper" => hover ? "paper-hover" : "paper", _ => selected ? "button-selected" : hover ? "button-hover" : "button" };
-            float margin = kind == "window" ? 16 * menu.scale : 0;
+            float margin = kind == "window" ? 16 * menu.Scale : 0;
             bool window = kind == "window";
             var properties = new Dictionary<string, string>
             {
                 ["ImageTexture"] = SettingsMenuArt.SurfacePrefix + texture,
-                ["ImageBorder"] = window ? SettingsMenuArt.WindowBorder.ToString(System.Globalization.CultureInfo.InvariantCulture) : "12",
-                ["ImageBorderScale"] = (window ? menu.scale / SettingsMenuArt.WindowDensity : menu.scale).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["ImageBorder"] = window ? SettingsMenuArt.WindowBorder.ToString(CultureInfo.InvariantCulture) : "12",
+                ["ImageBorderScale"] = (window ? menu.Scale / SettingsMenuArt.WindowDensity : menu.Scale).ToString(CultureInfo.InvariantCulture),
             };
-            menu.controls.Add(new("settings-surface", "ImageBox", new(at.X - margin, at.Y - margin, at.Width + margin * 2, at.Height + margin * 2), "", "", "", true,
+            menu.Controls.Add(new("settings-surface", "ImageBox", new(at.X - margin, at.Y - margin, at.Width + margin * 2, at.Height + margin * 2), "", "", "", true,
                 properties, Vector4.Zero, Clip: clip, Pickable: false));
         }
         else
-            menu.controls.Add(new("settings-surface", "Panel", at, "", "", kind == "window" ? "Kenshi_GenericWindowSkin" : kind == "paper" ? "Kenshi_GenericTextBoxSkin" : "Kenshi_Button1Skin", true,
+            menu.Controls.Add(new("settings-surface", "Panel", at, "", "", kind == "window" ? "Kenshi_GenericWindowSkin" : kind == "paper" ? "Kenshi_GenericTextBoxSkin" : "Kenshi_Button1Skin", true,
                 new Dictionary<string, string> { ["State"] = selected ? "pushed" : hover ? "highlighted" : "normal" },
                 kind == "window" ? new(0.12f, 0.11f, 0.09f, 1) : Vector4.Zero, Clip: clip, Pickable: false));
     }
 
     internal void Button(string label, UiRect at, Action action, bool selected = false, bool primary = false, UiRect? clip = null, float textInset = 0)
     {
-        bool hovered = at.Contains(menu.pointer.X, menu.pointer.Y) && (clip is null || clip.Value.Contains(menu.pointer.X, menu.pointer.Y));
-        float hover = menu.motion.Hover(label, hovered);
-        var drawn = at with { Y = at.Y + (hovered && menu.pointerDown ? menu.scale : 0) };
-        bool pressed = hovered && menu.pointerDown;
+        bool hovered = at.Contains(menu.Pointer.X, menu.Pointer.Y) && (clip is null || clip.Value.Contains(menu.Pointer.X, menu.Pointer.Y));
+        float hover = menu.Motion.Hover(label, hovered);
+        var drawn = at with { Y = at.Y + (hovered && menu.PointerDown ? menu.Scale : 0) };
+        bool pressed = hovered && menu.PointerDown;
         Surface(drawn, primary ? "primary" : "button", selected || pressed, false, clip);
         if (hover > 0)
         {
-            int first = menu.controls.Count;
+            int first = menu.Controls.Count;
             Surface(drawn, primary ? "primary" : "button", selected || pressed, true, clip);
-            menu.motion.Opacity(first, hover);
+            menu.Motion.Opacity(first, hover);
         }
-        var ink = primary && Meitou ? new Vector4(20 / 255f, 8 / 255f, 6 / 255f, 1) : System.Numerics.Vector4.Lerp(MainInk, LightInk, selected ? 1 : hover);
-        var textAt = new UiRect(drawn.X + 10 * menu.scale, drawn.Y, drawn.Width - (20 + textInset) * menu.scale, drawn.Height);
+        var ink = primary && Meitou ? new Vector4(20 / 255f, 8 / 255f, 6 / 255f, 1) : Vector4.Lerp(MainInk, LightInk, selected ? 1 : hover);
+        var textAt = new UiRect(drawn.X + 10 * menu.Scale, drawn.Y, drawn.Width - (20 + textInset) * menu.Scale, drawn.Height);
         Text(label, textAt, primary ? 15 : 13, ink, "Center", clip);
         if (clip is null || at.Intersect(clip.Value).Height >= at.Height - 1)
-            menu.hits.Add(new(at, action, Label: label));
+            menu.Hits.Add(new(at, action, Label: label));
     }
 
     internal void DrawEntries(float top)
     {
         var entries = menu.Entries();
-        menu.maxScroll = Math.Max(0, entries.Sum(EntryHeight) * menu.scale - menu.viewport.Height);
-        menu.motion.AdvanceScroll();
-        float entryY = top - menu.scroll / menu.scale;
+        menu.MaxScroll = Math.Max(0, entries.Sum(EntryHeight) * menu.Scale - menu.Viewport.Height);
+        menu.Motion.AdvanceScroll();
+        float entryY = top - menu.ScrollOffset / menu.Scale;
         foreach (var entry in entries)
         {
             float row = EntryHeight(entry);
-            menu.motion.animationScope = entry.Label;
+            menu.Motion.AnimationScope = entry.Label;
             if (entryY + row >= top && entryY <= 666) DrawEntry(entry, entryY);
             entryY += row;
         }
@@ -89,20 +89,20 @@ sealed class SettingsCanvas(SettingsMenu menu)
     internal float TextHeight(string text, float width, float size)
     {
         if (text.Length == 0) return 0;
-        int px = (int)MathF.Round(size * menu.scale);
-        var key = (text, (int)width, (int)size, textViewportHeight, (int)MathF.Round(menu.scale * 1000), Loc.Language.Code);
-        if (textHeights.TryGetValue(key, out float cached)) return cached;
-        if (menu.player.SettingsPainter is not { } painter) return size * 1.25f;
-        var pixels = painter.MeasurePixelText(text, MathF.Round(width * menu.scale), Math.Clamp(px, 8, 96), size * menu.scale / 16);
-        float measured = pixels.Height / menu.scale;
-        textHeights[key] = measured;
+        int px = (int)MathF.Round(size * menu.Scale);
+        var key = (text, (int)width, (int)size, textViewportHeight: TextViewportHeight, (int)MathF.Round(menu.Scale * 1000), Loc.Language.Code);
+        if (_textHeights.TryGetValue(key, out float cached)) return cached;
+        if (menu.Player.SettingsPainter is not { } painter) return size * 1.25f;
+        var pixels = painter.MeasurePixelText(text, MathF.Round(width * menu.Scale), Math.Clamp(px, 8, 96), size * menu.Scale / 16);
+        float measured = pixels.Height / menu.Scale;
+        _textHeights[key] = measured;
         return measured;
     }
 
     int TextLines(string text, float width, float size)
     {
         if (text.Length == 0) return 0;
-        if (menu.player.SettingsPainter is null) return Math.Max(1, (int)MathF.Ceiling(text.Length / Math.Max(1, width / size)));
+        if (menu.Player.SettingsPainter is null) return Math.Max(1, (int)MathF.Ceiling(text.Length / Math.Max(1, width / size)));
         float wrapped = TextHeight(text, width, size);
         float line = TextHeight("Mg", 0, size);
         return Math.Max(1, (int)MathF.Ceiling(wrapped / Math.Max(1, line)));
@@ -117,8 +117,8 @@ sealed class SettingsCanvas(SettingsMenu menu)
     /// </summary>
     void Arrow(float x, float y, bool down, bool lit, UiRect? clip = null)
     {
-        float w = MathF.Round(21 * menu.scale), h = MathF.Round(14 * menu.scale);
-        menu.controls.Add(new("settings-arrow", "Widget", new(MathF.Round(x - w / 2), MathF.Round(y - h / 2), w, h), "", "", down ? "Kenshi_FloorArrowDownSkin" : "Kenshi_FloorArrowUpSkin", true,
+        float w = MathF.Round(21 * menu.Scale), h = MathF.Round(14 * menu.Scale);
+        menu.Controls.Add(new("settings-arrow", "Widget", new(MathF.Round(x - w / 2), MathF.Round(y - h / 2), w, h), "", "", down ? "Kenshi_FloorArrowDownSkin" : "Kenshi_FloorArrowUpSkin", true,
             new Dictionary<string, string> { ["State"] = lit ? "highlighted" : "normal" }, Vector4.Zero, Clip: clip, Pickable: false));
     }
 
@@ -126,7 +126,7 @@ sealed class SettingsCanvas(SettingsMenu menu)
     internal void DropDown(string label, UiRect at, Action open, UiRect? clip = null)
     {
         Button(label, at, open, clip: clip, textInset: 26);
-        Arrow(at.X + at.Width - 18 * menu.scale, at.Y + at.Height / 2, true, at.Contains(menu.pointer.X, menu.pointer.Y), clip);
+        Arrow(at.X + at.Width - 18 * menu.Scale, at.Y + at.Height / 2, true, at.Contains(menu.Pointer.X, menu.Pointer.Y), clip);
     }
 
     /// <summary>How far a Graphics row's text sits right of the column: the group chevron's room, and one step more inside a group.</summary>
@@ -148,13 +148,13 @@ sealed class SettingsCanvas(SettingsMenu menu)
     internal void DrawEntry(SettingsMenu.Entry entry, float y)
     {
         float row = RowHeight(entry), buttonY = y + (row - 26) / 2;
-        Rect(R(212, y + EntryHeight(entry) - 1, 888, 1), MainInk with { W = 0.075f }, menu.viewport);
-        if (entry.Picture is { } picture && menu.player.SettingsPainter is { } painter)
+        Rect(R(212, y + EntryHeight(entry) - 1, 888, 1), MainInk with { W = 0.075f }, menu.Viewport);
+        if (entry.Picture is { } picture && menu.Player.SettingsPainter is { } painter)
         {
-            menu.art.EnsureLuckyrenImage(painter);
+            menu.Art.EnsureLuckyrenImage(painter);
             if (painter.HasTexture(picture))
-                menu.controls.Add(new("settings-picture", "ImageBox", R(212, y + row - 4, PictureWidth, PictureHeight), "", "", "", true,
-                    new Dictionary<string, string> { ["ImageTexture"] = picture }, Vector4.Zero, Clip: menu.viewport, Pickable: false));
+                menu.Controls.Add(new("settings-picture", "ImageBox", R(212, y + row - 4, PictureWidth, PictureHeight), "", "", "", true,
+                    new Dictionary<string, string> { ["ImageTexture"] = picture }, Vector4.Zero, Clip: menu.Viewport, Pickable: false));
         }
         float indent = Indent(entry), labelSize = entry.Depth > 0 ? 13 : 14;
         string translatedLabel = Loc.Tr(entry.Label);
@@ -163,37 +163,37 @@ sealed class SettingsCanvas(SettingsMenu menu)
         // A feature's settings sit in a darker band with a brass edge under its header; an open header is lightly lit.
         if (entry.Depth > 0)
         {
-            Rect(R(212, y, 888, EntryHeight(entry)), new(0, 0, 0, 0.28f), menu.viewport);
-            Rect(R(214, y, 2, EntryHeight(entry)), Brass with { W = 0.55f }, menu.viewport);
+            Rect(R(212, y, 888, EntryHeight(entry)), new(0, 0, 0, 0.28f), menu.Viewport);
+            Rect(R(214, y, 2, EntryHeight(entry)), Brass with { W = 0.55f }, menu.Viewport);
         }
-        else if (entry.Open == true) Rect(R(212, y, 888, row), MainInk with { W = 0.06f }, menu.viewport);
+        else if (entry.Open == true) Rect(R(212, y, 888, row), MainInk with { W = 0.06f }, menu.Viewport);
         if (entry is { Open: { } open, GroupId: { } group })
         {
             // A feature's header: the arrow, and a click anywhere on its text opens or closes its settings.
             var header = R(212, y, 456, row);
-            if (header.Intersect(menu.viewport).Height >= header.Height - 1)
-                menu.hits.Add(new(header, () => menu.grouping.ToggleGroup(group), Label: entry.Label));
+            if (header.Intersect(menu.Viewport).Height >= header.Height - 1)
+                menu.Hits.Add(new(header, () => menu.Grouping.ToggleGroup(group), Label: entry.Label));
             var mark = R(212, y + 2, 22, entry.Hint.Length > 0 ? 20 : 32);
-            Arrow(mark.X + mark.Width / 2, mark.Y + mark.Height / 2, !open, header.Contains(menu.pointer.X, menu.pointer.Y), menu.viewport);
+            Arrow(mark.X + mark.Width / 2, mark.Y + mark.Height / 2, !open, header.Contains(menu.Pointer.X, menu.Pointer.Y), menu.Viewport);
         }
         // A setting that differs from the preset: its name in brass and a Reset link back to the preset's value (a header's resets the feature).
         var nameInk = entry.Changed ? Brass : MainInk;
-        Text(entry.Label, R(212 + indent, y + 2, 456 - indent, entry.Hint.Length > 0 ? labelHeight + 1 : row - 4), labelSize, nameInk, clip: menu.viewport, wrap: labelWrap);
+        Text(entry.Label, R(212 + indent, y + 2, 456 - indent, entry.Hint.Length > 0 ? labelHeight + 1 : row - 4), labelSize, nameInk, clip: menu.Viewport, wrap: labelWrap);
         if (entry.Impact is { } impact)
             Text(impact, R(212, y + 2, 456, 20), 11, impact.StartsWith("High", StringComparison.Ordinal) ? Brass : impact.StartsWith("Medium", StringComparison.Ordinal) ? MainInk : MutedInk,
-                "Right VCenter", menu.viewport);
+                "Right VCenter", menu.Viewport);
         if (entry is { Changed: true, Reset: { } reset })
         {
             var link = R(612, y + 18, 56, 16);
-            bool over = link.Contains(menu.pointer.X, menu.pointer.Y) && menu.viewport.Contains(menu.pointer.X, menu.pointer.Y);
-            Text("Reset", link, 11, over ? LightInk : Brass, "Right VCenter", menu.viewport);
-            Rect(new(link.X + link.Width - 30 * menu.scale, link.Y + link.Height - menu.scale, 30 * menu.scale, menu.scale), (over ? LightInk : Brass) with { W = 0.6f }, menu.viewport);
-            if (link.Intersect(menu.viewport).Height >= link.Height - 1) menu.hits.Add(new(link, reset, Label: "Reset " + entry.Label));
+            bool over = link.Contains(menu.Pointer.X, menu.Pointer.Y) && menu.Viewport.Contains(menu.Pointer.X, menu.Pointer.Y);
+            Text("Reset", link, 11, over ? LightInk : Brass, "Right VCenter", menu.Viewport);
+            Rect(new(link.X + link.Width - 30 * menu.Scale, link.Y + link.Height - menu.Scale, 30 * menu.Scale, menu.Scale), (over ? LightInk : Brass) with { W = 0.6f }, menu.Viewport);
+            if (link.Intersect(menu.Viewport).Height >= link.Height - 1) menu.Hits.Add(new(link, reset, Label: "Reset " + entry.Label));
         }
         if (entry.Hint.Length > 0)
         {
             float hintHeight = TextHeight(Loc.Tr(entry.Hint), HintWidth(entry), 11);
-            Text(entry.Hint, R(212 + indent, y + 2 + labelHeight + 1, HintWidth(entry), hintHeight + 1), 11, entry.Warn ? Brass : MutedInk, "Left Top", menu.viewport, wrap: true);
+            Text(entry.Hint, R(212 + indent, y + 2 + labelHeight + 1, HintWidth(entry), hintHeight + 1), 11, entry.Warn ? Brass : MutedInk, "Left Top", menu.Viewport, wrap: true);
         }
         if (entry.Toggle is { Remaster: true, Optional: false } remaster)
         {
@@ -204,7 +204,7 @@ sealed class SettingsCanvas(SettingsMenu menu)
         }
         // A switch with its own words (Hear from: Character / Camera): one button showing the current side.
         else if (entry.Toggle is { Text: { } words } worded)
-            Button(words(), R(976, buttonY, 124, 26), () => worded.Set(!worded.Get()), worded.Get(), clip: menu.viewport);
+            Button(words(), R(976, buttonY, 124, 26), () => worded.Set(!worded.Get()), worded.Get(), clip: menu.Viewport);
         // An optional effect (bloom, in neither look) or a plain setting: Off | On in the same control.
         else if (entry.Toggle is { } toggle)
             Segmented(R(920, y + (row - 22) / 2, 180, 22), toggle.Get() ? 1 : 0, i => toggle.Set(i == 1), "Off", "On");
@@ -218,42 +218,44 @@ sealed class SettingsCanvas(SettingsMenu menu)
             var at = R(688, buttonY, 412, 26);
             DropDown(current, at, () =>
             {
-                menu.openChoice = choice; menu.choiceSelection = Math.Clamp(choice.Current(), 0, Math.Max(0, options.Count - 1));
-                menu.choiceScroll = Math.Max(0, menu.choiceSelection - 3); choiceAnchor = at; menu.focus = -1;
-            }, menu.viewport);
+                menu.ActiveChoice = choice; menu.ChoiceSelection = Math.Clamp(choice.Current(), 0, Math.Max(0, options.Count - 1));
+                menu.ChoiceScroll = Math.Max(0, menu.ChoiceSelection - 3); ChoiceAnchor = at; menu.Focus = -1;
+            }, menu.Viewport);
         }
         else if (entry.Slider is { } slider)
         {
             var valueAt = R(908, y, 192, 20);
             // By label: the rows (and their sliders) are built again each frame.
-            bool editing = menu.editingNumber?.Label == slider.Label;
+            bool editing = menu.EditingNumber?.Label == slider.Label;
             if (editing)
             {
-                menu.numberBounds = valueAt;
-                Rect(valueAt, new(0.06f, 0.05f, 0.04f, 0.95f), menu.viewport);
-                var textAt = valueAt with { X = valueAt.X + 6 * menu.scale, Width = valueAt.Width - 12 * menu.scale };
-                menu.controls.Add(new("settings-number", "EditBox", textAt, menu.numberText, "", "", true,
+                menu.NumberBounds = valueAt;
+                Rect(valueAt, new(0.06f, 0.05f, 0.04f, 0.95f), menu.Viewport);
+                var textAt = valueAt with { X = valueAt.X + 6 * menu.Scale, Width = valueAt.Width - 12 * menu.Scale };
+                menu.Controls.Add(new("settings-number", "EditBox", textAt, menu.NumberText, "", "", true,
                     new Dictionary<string, string>
                     {
-                        ["Focused"] = "true", ["Numeric"] = "true", ["TextAlign"] = "Right VCenter",
-                        ["FontPixels"] = ((int)MathF.Round(13 * menu.scale)).ToString(CultureInfo.InvariantCulture),
-                        ["SelectionStart"] = Math.Min(menu.numberCaret, menu.numberAnchor).ToString(CultureInfo.InvariantCulture),
-                        ["SelectionLength"] = Math.Abs(menu.numberCaret - menu.numberAnchor).ToString(CultureInfo.InvariantCulture),
-                        ["CaretIndex"] = menu.numberCaret.ToString(CultureInfo.InvariantCulture),
-                    }, Vector4.Zero, LightInk, Clip: menu.viewport, Pickable: false));
+                        ["Focused"] = "true",
+                        ["Numeric"] = "true",
+                        ["TextAlign"] = "Right VCenter",
+                        ["FontPixels"] = ((int)MathF.Round(13 * menu.Scale)).ToString(CultureInfo.InvariantCulture),
+                        ["SelectionStart"] = Math.Min(menu.NumberCaret, menu.NumberAnchor).ToString(CultureInfo.InvariantCulture),
+                        ["SelectionLength"] = Math.Abs(menu.NumberCaret - menu.NumberAnchor).ToString(CultureInfo.InvariantCulture),
+                        ["CaretIndex"] = menu.NumberCaret.ToString(CultureInfo.InvariantCulture),
+                    }, Vector4.Zero, LightInk, Clip: menu.Viewport, Pickable: false));
             }
             else
             {
-                if (valueAt.Contains(menu.pointer.X, menu.pointer.Y))
+                if (valueAt.Contains(menu.Pointer.X, menu.Pointer.Y))
                 {
-                    Rect(valueAt, MainInk with { W = 0.06f }, menu.viewport);
-                    Rect(valueAt with { Y = valueAt.Y + valueAt.Height - menu.scale, Height = menu.scale }, MainInk with { W = 0.4f }, menu.viewport);
+                    Rect(valueAt, MainInk with { W = 0.06f }, menu.Viewport);
+                    Rect(valueAt with { Y = valueAt.Y + valueAt.Height - menu.Scale, Height = menu.Scale }, MainInk with { W = 0.4f }, menu.Viewport);
                 }
-                Text(slider.Display, R(688, y, 412, 20), 13, entry.Locked ? MutedInk : LightInk, "Right VCenter", menu.viewport);
+                Text(slider.Display, R(688, y, 412, 20), 13, entry.Locked ? MutedInk : LightInk, "Right VCenter", menu.Viewport);
             }
             var track = R(696, y + row - 9, 396, 3);
-            Rect(track, new(0.10f, 0.08f, 0.07f, 1), menu.viewport);
-            Rect(track with { Width = track.Width * slider.Fraction }, entry.Locked ? MutedInk with { W = 0.5f } : Brass with { W = 0.75f }, menu.viewport);
+            Rect(track, new(0.10f, 0.08f, 0.07f, 1), menu.Viewport);
+            Rect(track with { Width = track.Width * slider.Fraction }, entry.Locked ? MutedInk with { W = 0.5f } : Brass with { W = 0.75f }, menu.Viewport);
             if (slider.Faithful is { } faithful) RemasterMark(slider, faithful, track, FaithfulInk);
             if (slider.Meitou is { } meitou) RemasterMark(slider, meitou, track, Brass);
             if (slider.Faithful is { } f && slider.Meitou is { } m && entry.Depth == 0)   // inside a feature its header has the switch
@@ -263,33 +265,33 @@ sealed class SettingsCanvas(SettingsMenu menu)
                 int at = MathF.Abs(now - m) <= near ? 1 : MathF.Abs(now - f) <= near ? 0 : -1;
                 Segmented(R(696, y + 2, 140, 18), at, i => slider.Set(i == 1 ? m : f));
             }
-            var knob = new UiRect(track.X + slider.Fraction * track.Width - 3 * menu.scale, track.Y - 4 * menu.scale, 6 * menu.scale, 11 * menu.scale);
-            Rect(knob, entry.Locked ? MutedInk : LightInk, menu.viewport);
+            var knob = new UiRect(track.X + slider.Fraction * track.Width - 3 * menu.Scale, track.Y - 4 * menu.Scale, 6 * menu.Scale, 11 * menu.Scale);
+            Rect(knob, entry.Locked ? MutedInk : LightInk, menu.Viewport);
             // A locked slider (a mode's value, SettingModes) shows its value but takes no drag, key or typed value.
             if (entry.Locked) return;
             var hit = R(688, y + row - 16, 412, 16);
-            if (hit.Intersect(menu.viewport).Height >= hit.Height - 1) menu.hits.Add(new(hit, () => { }, slider, track, entry.Label));
-            if (valueAt.Intersect(menu.viewport).Height >= valueAt.Height - 1) menu.hits.Add(new(valueAt, () => menu.BeginNumber(slider, valueAt)));
+            if (hit.Intersect(menu.Viewport).Height >= hit.Height - 1) menu.Hits.Add(new(hit, () => { }, slider, track, entry.Label));
+            if (valueAt.Intersect(menu.Viewport).Height >= valueAt.Height - 1) menu.Hits.Add(new(valueAt, () => menu.BeginNumber(slider, valueAt)));
         }
         else if (entry.Binding is { } binding)
         {
-            string label = string.Join(" / ", menu.bindings.Get(binding));
+            string label = string.Join(" / ", menu.Bindings.Get(binding));
             Button(label.Length > 0 ? label : "Unbound", R(688, buttonY, 412, 26), () =>
             {
-                menu.rebinding = binding;
-                menu.notice = "";
-            }, clip: menu.viewport);
+                menu.Rebinding = binding;
+                menu.Notice = "";
+            }, clip: menu.Viewport);
         }
-        else if (entry.Run is { } run) Button("Clear cache", R(944, buttonY, 156, 26), run, clip: menu.viewport);
+        else if (entry.Run is { } run) Button("Clear cache", R(944, buttonY, 156, 26), run, clip: menu.Viewport);
     }
 
     static readonly Vector4 FaithfulInk = new(0.62f, 0.66f, 0.70f, 1);
 
     /// <summary>A notch under a slider's track at <paramref name="value"/>, in the colour of its side of the Faithful | Meitou switch.</summary>
-    void RemasterMark(Meitou.Game.Rendering.Frame.Slider slider, float value, UiRect track, Vector4 ink)
+    void RemasterMark(Rendering.Frame.Slider slider, float value, UiRect track, Vector4 ink)
     {
-        float x = MathF.Round(track.X + slider.FractionOf(value) * track.Width), w = MathF.Max(2, MathF.Round(2 * menu.scale));
-        Rect(new(x - w / 2, track.Y + track.Height + menu.scale, w, MathF.Round(4 * menu.scale)), ink with { W = 0.9f }, menu.viewport);
+        float x = MathF.Round(track.X + slider.FractionOf(value) * track.Width), w = MathF.Max(2, MathF.Round(2 * menu.Scale));
+        Rect(new(x - w / 2, track.Y + track.Height + menu.Scale, w, MathF.Round(4 * menu.Scale)), ink with { W = 0.9f }, menu.Viewport);
     }
 
     /// <summary>
@@ -298,8 +300,8 @@ sealed class SettingsCanvas(SettingsMenu menu)
     /// </summary>
     internal void Segmented(UiRect at, int selected, Action<int> choose, string faithful = "Faithful", string meitou = "Meitou")
     {
-        float line = MathF.Max(1, MathF.Round(menu.scale));
-        Rect(at, new(0.07f, 0.06f, 0.05f, 0.9f), menu.viewport);
+        float line = MathF.Max(1, MathF.Round(menu.Scale));
+        Rect(at, new(0.07f, 0.06f, 0.05f, 0.9f), menu.Viewport);
         string[] names = [faithful, meitou];
         Vector4[] inks = [FaithfulInk, Brass];
         float half = MathF.Round(at.Width / 2);
@@ -307,59 +309,59 @@ sealed class SettingsCanvas(SettingsMenu menu)
         {
             int index = i;
             var part = new UiRect(at.X + i * half, at.Y, i == 0 ? half : at.Width - half, at.Height);
-            bool hovered = part.Contains(menu.pointer.X, menu.pointer.Y) && menu.viewport.Contains(menu.pointer.X, menu.pointer.Y);
-            float hover = menu.motion.Hover(names[i], hovered);
-            if (selected == i) Rect(part, inks[i] with { W = 0.28f }, menu.viewport);
-            else if (hover > 0) Rect(part, MainInk with { W = 0.08f * hover }, menu.viewport);
-            if (selected == i) Rect(part with { Y = part.Y + part.Height - 2 * line, Height = 2 * line }, inks[i] with { W = 0.9f }, menu.viewport);
+            bool hovered = part.Contains(menu.Pointer.X, menu.Pointer.Y) && menu.Viewport.Contains(menu.Pointer.X, menu.Pointer.Y);
+            float hover = menu.Motion.Hover(names[i], hovered);
+            if (selected == i) Rect(part, inks[i] with { W = 0.28f }, menu.Viewport);
+            else if (hover > 0) Rect(part, MainInk with { W = 0.08f * hover }, menu.Viewport);
+            if (selected == i) Rect(part with { Y = part.Y + part.Height - 2 * line, Height = 2 * line }, inks[i] with { W = 0.9f }, menu.Viewport);
             var ink = selected == i ? LightInk : Vector4.Lerp(MutedInk, MainInk, hover);
-            Text(names[i], part, 12, ink, "Center", menu.viewport);
-            if (part.Intersect(menu.viewport).Height >= part.Height - 1) menu.hits.Add(new(part, () => choose(index), Label: names[i]));
+            Text(names[i], part, 12, ink, "Center", menu.Viewport);
+            if (part.Intersect(menu.Viewport).Height >= part.Height - 1) menu.Hits.Add(new(part, () => choose(index), Label: names[i]));
         }
         // The frame and the divider.
         var edge = MainInk with { W = 0.22f };
-        Rect(at with { Height = line }, edge, menu.viewport);
-        Rect(at with { Y = at.Y + at.Height - line, Height = line }, edge, menu.viewport);
-        Rect(at with { Width = line }, edge, menu.viewport);
-        Rect(at with { X = at.X + at.Width - line, Width = line }, edge, menu.viewport);
-        Rect(new(at.X + half, at.Y + 3 * menu.scale, line, at.Height - 6 * menu.scale), edge, menu.viewport);
+        Rect(at with { Height = line }, edge, menu.Viewport);
+        Rect(at with { Y = at.Y + at.Height - line, Height = line }, edge, menu.Viewport);
+        Rect(at with { Width = line }, edge, menu.Viewport);
+        Rect(at with { X = at.X + at.Width - line, Width = line }, edge, menu.Viewport);
+        Rect(new(at.X + half, at.Y + 3 * menu.Scale, line, at.Height - 6 * menu.Scale), edge, menu.Viewport);
     }
 
-    internal UiRect choiceAnchor;
-    internal SettingsMenu.Choice? animatedChoice;
-    float choiceProgress;
+    internal UiRect ChoiceAnchor;
+    internal SettingsMenu.Choice? AnimatedChoice;
+    float _choiceProgress;
 
     internal void DrawChoice(SettingsMenu.Choice choice)
     {
-        if (!ReferenceEquals(animatedChoice, choice)) { animatedChoice = choice; choiceProgress = 0; }
-        choiceProgress = Math.Min(1, choiceProgress + menu.motion.frameDelta / 0.1f);
-        int first = menu.controls.Count;
-        menu.hits.Clear();
+        if (!ReferenceEquals(AnimatedChoice, choice)) { AnimatedChoice = choice; _choiceProgress = 0; }
+        _choiceProgress = Math.Min(1, _choiceProgress + menu.Motion.FrameDelta / 0.1f);
+        int first = menu.Controls.Count;
+        menu.Hits.Clear();
         var options = choice.Options();
         int count = Math.Min(6, options.Count);
-        menu.choiceScroll = Math.Clamp(menu.choiceScroll, 0, Math.Max(0, options.Count - count));
-        float h = (count * 28 + 12) * menu.scale;
-        float y = Math.Min(choiceAnchor.Y + choiceAnchor.Height + 6 * menu.scale, menu.bounds.Y + menu.bounds.Height - 24 * menu.scale - h);
-        var at = new UiRect(choiceAnchor.X, y, choiceAnchor.Width, h);
+        menu.ChoiceScroll = Math.Clamp(menu.ChoiceScroll, 0, Math.Max(0, options.Count - count));
+        float h = (count * 28 + 12) * menu.Scale;
+        float y = Math.Min(ChoiceAnchor.Y + ChoiceAnchor.Height + 6 * menu.Scale, menu.Bounds.Y + menu.Bounds.Height - 24 * menu.Scale - h);
+        var at = new UiRect(ChoiceAnchor.X, y, ChoiceAnchor.Width, h);
         Surface(at, "window");
         for (int i = 0; i < count; i++)
         {
-            int index = menu.choiceScroll + i;
-            Button(options[index], new(at.X + 6 * menu.scale, at.Y + (6 + i * 28) * menu.scale, at.Width - 12 * menu.scale, 24 * menu.scale),
-                () => { choice.Choose(index); menu.openChoice = null; menu.focus = -1; }, index == menu.choiceSelection);
+            int index = menu.ChoiceScroll + i;
+            Button(options[index], new(at.X + 6 * menu.Scale, at.Y + (6 + i * 28) * menu.Scale, at.Width - 12 * menu.Scale, 24 * menu.Scale),
+                () => { choice.Choose(index); menu.ActiveChoice = null; menu.Focus = -1; }, index == menu.ChoiceSelection);
         }
-        menu.motion.Opacity(first, MenuMotion.Ease(choiceProgress));
+        menu.Motion.Opacity(first, MenuMotion.Ease(_choiceProgress));
     }
 
     internal void DrawMessage(string title, string body, Action cancel, Action? confirm = null)
     {
-        menu.hits.Clear();
-        Rect(menu.bounds, new(8 / 255f, 6 / 255f, 5 / 255f, 0.8f));
+        menu.Hits.Clear();
+        Rect(menu.Bounds, new(8 / 255f, 6 / 255f, 5 / 255f, 0.8f));
         var at = R(290, 250, 540, 220);
         Surface(at, "window");
         Text(title, R(316, 264, 488, 30), 20, LightInk);
-        menu.controls.Add(new("settings-message", "TextBox", R(316, 306, 488, 94), body, "", "", true,
-            new Dictionary<string, string> { ["WordWrap"] = "true", ["FontPixels"] = ((int)MathF.Round(14 * menu.scale)).ToString(System.Globalization.CultureInfo.InvariantCulture) }, Vector4.Zero, MainInk, Pickable: false, TextScale: menu.scale));
+        menu.Controls.Add(new("settings-message", "TextBox", R(316, 306, 488, 94), body, "", "", true,
+            new Dictionary<string, string> { ["WordWrap"] = "true", ["FontPixels"] = ((int)MathF.Round(14 * menu.Scale)).ToString(CultureInfo.InvariantCulture) }, Vector4.Zero, MainInk, Pickable: false, TextScale: menu.Scale));
         Button("Cancel", R(500, 420, 138, 32), cancel);
         if (confirm is not null) Button("Confirm", R(650, 420, 154, 32), confirm, primary: true);
     }

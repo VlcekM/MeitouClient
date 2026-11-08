@@ -14,30 +14,30 @@ namespace Meitou.Simulation.Factions;
 /// </summary>
 public sealed class WorldStates(GameDatabase db, FactionRelations relations) : IWorldStates
 {
-    readonly ConcurrentDictionary<string, WorldEventStateData?> states = new(StringComparer.Ordinal);
-    volatile Snapshot current = new(new Dictionary<string, (UniqueState, bool)>(StringComparer.Ordinal), -1);
-    long version = -1;
+    readonly ConcurrentDictionary<string, WorldEventStateData?> _states = new(StringComparer.Ordinal);
+    volatile Snapshot _current = new(new Dictionary<string, (UniqueState, bool)>(StringComparer.Ordinal), -1);
+    long _version = -1;
 
     sealed record Snapshot(IReadOnlyDictionary<string, (UniqueState State, bool Player)> Uniques, int Player);
 
     /// <summary>Takes the unique table's states and the player's faction (serial phase); cheap when nothing changed.</summary>
     public void Refresh(UniqueCharacters uniques, int playerFaction)
     {
-        if (uniques.Version == version && current.Player == playerFaction) return;
-        version = uniques.Version;
+        if (uniques.Version == _version && _current.Player == playerFaction) return;
+        _version = uniques.Version;
         var copy = new Dictionary<string, (UniqueState, bool)>(uniques.Count, StringComparer.Ordinal);
         foreach (var (id, e) in uniques.All) copy[id] = (e.State, e.Player);
-        current = new Snapshot(copy, playerFaction);
+        _current = new Snapshot(copy, playerFaction);
     }
 
     /// <summary>The state's record, read once (null: not a WORLD_EVENT_STATE).</summary>
     public WorldEventStateData? Find(string id) =>
-        states.GetOrAdd(id, static (key, d) => d.Find(key) is { Type: FcsRecordType.WORLD_EVENT_STATE } r ? WorldEventStateData.From(d, r) : null, db);
+        _states.GetOrAdd(id, static (key, d) => d.Find(key) is { Type: FcsRecordType.WorldEventState } r ? WorldEventStateData.From(d, r) : null, db);
 
     public bool IsTrue(string worldStateId)
     {
         if (Find(worldStateId) is not { } s) return false;
-        var now = current;
+        var now = _current;
         (UniqueState State, bool Player) Of(string character) => now.Uniques.TryGetValue(character, out var e) ? e : (UniqueState.Alive, false);
         foreach (var (character, wanted) in s.NpcIs)
         {

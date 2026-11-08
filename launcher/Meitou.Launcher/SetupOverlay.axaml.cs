@@ -12,8 +12,8 @@ namespace Meitou.Launcher;
 /// </summary>
 public sealed partial class SetupOverlay : UserControl
 {
-    readonly LauncherConfig config = new();
-    GameInstall? install;
+    readonly LauncherConfig _config = new();
+    GameInstall? _install;
 
     /// <summary>Raised once Continue saved the folders, with the Kenshi install chosen (null when none was).</summary>
     public event Action<GameInstall?>? Confirmed;
@@ -22,7 +22,7 @@ public sealed partial class SetupOverlay : UserControl
 
     public SetupOverlay(LauncherConfig config, GameInstall? found)
     {
-        this.config = config;
+        this._config = config;
         InitializeComponent();
         InstallBox.Text = LauncherConfig.InstallDirectory;
         ShowKenshi(found, found?.Root ?? config.KenshiPath);
@@ -38,7 +38,7 @@ public sealed partial class SetupOverlay : UserControl
 
     void ShowKenshi(GameInstall? found, string? text)
     {
-        install = found;
+        _install = found;
         KenshiBox.Text = text ?? "";
         KenshiStatus.Text = found is not null ? "The folder with data/gamedata.base."
             : string.IsNullOrWhiteSpace(text) ? "Not found. Browse to your Kenshi folder (it contains data/gamedata.base)."
@@ -66,7 +66,7 @@ public sealed partial class SetupOverlay : UserControl
     void Renderer_Changed(object? sender, SelectionChangedEventArgs e)
     {
         if (RendererBox.SelectedItem is ComboBoxItem { Tag: string renderer } && renderer is "auto" or "metal" or "vulkan")
-            config.Renderer = renderer;
+            _config.Renderer = renderer;
         ShowRendererHint();
     }
 
@@ -74,8 +74,8 @@ public sealed partial class SetupOverlay : UserControl
     {
         if (RendererHint is null) return;
         bool vulkan = MacSupport.VulkanAvailable;
-        string effective = MacSupport.Resolve(config.Renderer) == "metal" ? "Metal" : "Vulkan";
-        string hint = config.Renderer switch
+        string effective = MacSupport.Resolve(_config.Renderer) == "metal" ? "Metal" : "Vulkan";
+        string hint = _config.Renderer switch
         {
             "auto" => vulkan ? "Auto: {1} (Vulkan loader found)." : MacSupport.MetalAvailable ? "Auto: {1} (no Vulkan loader)." : "Auto: {1}.",
             "metal" => MacSupport.MetalAvailable ? "Metal (native)." : "Metal is not available on this Mac; Auto uses Vulkan.",
@@ -92,7 +92,7 @@ public sealed partial class SetupOverlay : UserControl
 
     void KenshiBox_LostFocus(object? sender, RoutedEventArgs e)
     {
-        if (KenshiBox.Text is { } path && path != install?.Root) SetKenshi(path);
+        if (KenshiBox.Text is { } path && path != _install?.Root) SetKenshi(path);
     }
 
     async void BrowseInstall_Click(object? sender, RoutedEventArgs e)
@@ -109,7 +109,7 @@ public sealed partial class SetupOverlay : UserControl
 
     async void Continue_Click(object? sender, RoutedEventArgs e)
     {
-        if (KenshiBox.Text is { } typed && typed != install?.Root) SetKenshi(typed);
+        if (KenshiBox.Text is { } typed && typed != _install?.Root) SetKenshi(typed);
         var folder = (InstallBox.Text ?? "").Trim().Trim('"');
         if (folder.Length == 0 || !Path.IsPathFullyQualified(folder))
         {
@@ -130,13 +130,13 @@ public sealed partial class SetupOverlay : UserControl
             IsEnabled = true;
             return;
         }
-        config.InstallFolder = Path.GetFullPath(folder) == Path.GetFullPath(LauncherConfig.DataDirectory) ? null : folder;
-        if (install is not null) config.KenshiPath = install.Root;
+        _config.InstallFolder = Path.GetFullPath(folder) == Path.GetFullPath(LauncherConfig.DataDirectory) ? null : folder;
+        if (_install is not null) _config.KenshiPath = _install.Root;
         if (RendererBox.SelectedItem is ComboBoxItem { Tag: string renderer } && renderer is "auto" or "metal" or "vulkan")
-            config.Renderer = renderer;
-        if (OperatingSystem.IsWindows()) config.LaunchAsSteamKenshi = SteamBox.IsChecked == true;
-        config.FoldersConfirmed = true;
-        config.Save();
-        Confirmed?.Invoke(install);
+            _config.Renderer = renderer;
+        if (OperatingSystem.IsWindows()) _config.LaunchAsSteamKenshi = SteamBox.IsChecked == true;
+        _config.FoldersConfirmed = true;
+        _config.Save();
+        Confirmed?.Invoke(_install);
     }
 }

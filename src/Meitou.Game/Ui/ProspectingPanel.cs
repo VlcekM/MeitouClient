@@ -13,10 +13,10 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class ProspectingPanel(PlayerInterface player)
 {
-    object? prospectWorld;
-    long prospectSerial;
-    ProspectReport? prospectReport;
-    int prospectRow;
+    object? _prospectWorld;
+    long _prospectSerial;
+    ProspectReport? _prospectReport;
+    int _prospectRow;
 
     /// <summary>
     /// The HUD's Prospect action (<c>FUN_140721800</c>): with the window open it closes it; else the selected character nearest the camera pivot starts prospecting, unless it already does,
@@ -24,8 +24,8 @@ sealed class ProspectingPanel(PlayerInterface player)
     /// </summary>
     internal void ProspectAction()
     {
-        if (player.faithfulScreens.IsOpen("prospect")) { player.faithfulScreens.Close("prospect"); return; }
-        var pivot = player.session.Camera.Current.Target;
+        if (player.FaithfulScreens.IsOpen("prospect")) { player.FaithfulScreens.Close("prospect"); return; }
+        var pivot = player.Session.Camera.Current.Target;
         CharacterSnapshot? nearest = null;
         float best = float.MaxValue;
         foreach (var c in player.Selected())
@@ -34,28 +34,28 @@ sealed class ProspectingPanel(PlayerInterface player)
             if (d < best) (nearest, best) = (c, d);
         }
         if (nearest is null || nearest.Task == CharacterTask.Prospect) return;
-        player.Say(new ProspectOrder(nearest.Id) { Tick = player.session.World.Tick });
-        player.interfaceSounds.Sound("Prospect_Click");
+        player.Say(new ProspectOrder(nearest.Id) { Tick = player.Session.World.Tick });
+        player.InterfaceSounds.Sound("Prospect_Click");
     }
 
     /// <summary>Once a frame: a new finished prospecting opens the results window (the exe shows it the moment the task hands it the spot) and sounds <c>Prospect_Results</c>. A new world only takes the baseline.</summary>
     internal void PollProspect()
     {
-        var world = player.session.World;
-        if (!ReferenceEquals(prospectWorld, world))
+        var world = player.Session.World;
+        if (!ReferenceEquals(_prospectWorld, world))
         {
-            prospectWorld = world;
-            prospectSerial = world.Prospected?.Serial ?? 0;
-            prospectReport = null;
-            prospectMapDrawn = -1;
-            player.faithfulScreens.Close("prospect");
+            _prospectWorld = world;
+            _prospectSerial = world.Prospected?.Serial ?? 0;
+            _prospectReport = null;
+            _prospectMapDrawn = -1;
+            player.FaithfulScreens.Close("prospect");
         }
-        if (world.Prospected is not { } report || report.Serial == prospectSerial) return;
-        prospectSerial = report.Serial;
-        prospectReport = report;
-        prospectRow = 0;
-        player.faithfulScreens.Open("prospect");
-        player.interfaceSounds.Sound("Prospect_Results");
+        if (world.Prospected is not { } report || report.Serial == _prospectSerial) return;
+        _prospectSerial = report.Serial;
+        _prospectReport = report;
+        _prospectRow = 0;
+        player.FaithfulScreens.Open("prospect");
+        player.InterfaceSounds.Sound("Prospect_Results");
     }
 
     internal void BindProspectScreen(UiBindings b)
@@ -70,13 +70,13 @@ sealed class ProspectingPanel(PlayerInterface player)
     /// </summary>
     internal void AddProspectContent(List<UiControl> controls)
     {
-        if (prospectReport is not { } r) return;
+        if (_prospectReport is not { } r) return;
         float row = 20 * player.Height / 1080f, pixels = player.StandardPixels;
-        string N(int v) => v.ToString(CultureInfo.InvariantCulture);
+        static string N(int v) => v.ToString(CultureInfo.InvariantCulture);
         // The ink of the window's text comes from its templates (the overview lines are Kenshi_TextboxStandardText, AddLines' default, the resource values
         // Kenshi_GenericTextBoxFlatSmall), which a UI mod recolours with the window's skin; the fixed palette ink is only the fallback.
-        string labelInk = MyGuiColours.TemplateInk(player.uiResources, "Kenshi_TextboxStandardText");
-        string valueInk = MyGuiColours.TemplateInk(player.uiResources, "Kenshi_GenericTextBoxFlatSmall");
+        string labelInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_TextboxStandardText");
+        string valueInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBoxFlatSmall");
         player.AddLines(controls, "OverviewDatapanel1",
         [
             new("Zone:", r.Zone, PlayerInterface.TitleColour, PlayerInterface.TitleColour),
@@ -98,7 +98,7 @@ sealed class ProspectingPanel(PlayerInterface player)
         {
             var line = r.Resources[i];
             var area = new UiRect(list.Bounds.X, list.Bounds.Y + i * height, list.Bounds.Width, height);
-            bool checkedRow = i == prospectRow;
+            bool checkedRow = i == _prospectRow;
             controls.Add(new($"prospect-row-{i}", "Button", new(area.X, area.Y, area.Width * 0.662835f, area.Height), line.Name, "prospect-row:" + N(i), "Kenshi_TickButton1Skin", true,
                 new Dictionary<string, string> { ["Checked"] = checkedRow ? "true" : "false", ["StateSelected"] = checkedRow ? "true" : "false", ["TextAlign"] = "Center" }, Vector4.Zero, Pickable: true, Clip: list.Bounds));
             string colour = line.Value > 0.75f ? PlayerInterface.GoodColour : line.Value < 0.5f ? PlayerInterface.BadColour : valueInk;
@@ -114,17 +114,17 @@ sealed class ProspectingPanel(PlayerInterface player)
     void AddProspectMap(List<UiControl> controls, ProspectReport r)
     {
         int index = controls.FindIndex(c => c.Name == "Map");
-        if (index < 0 || r.Map is not { } map || player.uiPainter is not { } painter) return;
-        long drawn = r.Serial * 8 + prospectRow;
-        if (drawn != prospectMapDrawn || !painter.HasTexture(ProspectMapTexture))
+        if (index < 0 || r.Map is not { } map || player.UiPainter is not { } painter) return;
+        long drawn = r.Serial * 8 + _prospectRow;
+        if (drawn != _prospectMapDrawn || !painter.HasTexture(ProspectMapTexture))
         {
-            painter.SetImage(ProspectMapTexture, DrawProspectMap(map, prospectRow), srgb: false);
-            prospectMapDrawn = drawn;
+            painter.SetImage(ProspectMapTexture, DrawProspectMap(map, _prospectRow), srgb: false);
+            _prospectMapDrawn = drawn;
         }
         var box = controls[index];
         controls[index] = box with { Properties = new Dictionary<string, string>(box.Properties) { ["ImageTexture"] = ProspectMapTexture } };
 
-        var camera = player.session.Camera.Current;
+        var camera = player.Session.Camera.Current;
         var look = new Vector2(camera.Target.X - camera.Eye.X, camera.Target.Z - camera.Eye.Z);
         float angle = look.LengthSquared() > 1e-8f ? MathF.Acos(Math.Clamp(-Vector2.Normalize(look).Y, -1, 1)) * (look.X < 0 ? -1 : 1) : 0;
         var b = box.Bounds;
@@ -136,16 +136,16 @@ sealed class ProspectingPanel(PlayerInterface player)
     }
 
     const string ProspectMapTexture = "meitou:prospect:map";
-    long prospectMapDrawn = -1;
+    long _prospectMapDrawn = -1;
 
     /// <summary>
     /// The map's picture (<b>Verified</b>, <c>FUN_14049cd60</c>): the ground grey, black up to 500 and brightening to white at 10000; a field resource above 0.01 at a cell adds v² of white to green and
     /// (1 - v) v to red; a rock paints its cell (2 x 2 cells on a map over 40 a side) red (1 - v) v, green v², blue the ground's grey.
     /// </summary>
-    static Meitou.Data.Textures.RgbaImage DrawProspectMap(ProspectMap map, int row)
+    static Data.Textures.RgbaImage DrawProspectMap(ProspectMap map, int row)
     {
         int n = map.Size;
-        var image = new Meitou.Data.Textures.RgbaImage(n, n);
+        var image = new Data.Textures.RgbaImage(n, n);
         var px = image.Pixels;
         var shade = new byte[n * n];
         for (int i = 0; i < shade.Length; i++)
@@ -187,6 +187,6 @@ sealed class ProspectingPanel(PlayerInterface player)
 
     internal void ProspectScreenAction(MyGuiEvent e)
     {
-        if (e.Action.StartsWith("prospect-row:", StringComparison.Ordinal) && int.TryParse(e.Action.AsSpan(13), CultureInfo.InvariantCulture, out int i)) prospectRow = i;
+        if (e.Action.StartsWith("prospect-row:", StringComparison.Ordinal) && int.TryParse(e.Action.AsSpan(13), CultureInfo.InvariantCulture, out int i)) _prospectRow = i;
     }
 }

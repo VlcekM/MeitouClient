@@ -20,7 +20,7 @@ public class UniqueNpcTests(ITestOutputHelper output)
         // Chief (the leader of both Patrols) is unique with a replacement; Hermit (the faction folk's leader) is unique without one and taken before the town is made.
         FcsRecord Person(string id, string name, bool unique)
         {
-            var r = Rec(id, FcsRecordType.CHARACTER, name);
+            var r = Rec(id, FcsRecordType.Character, name);
             r.References["race"] = [Ref("1-t", 100)];
             r.Bools["unique"] = unique;
             return r;
@@ -71,7 +71,7 @@ public class UniqueNpcTests(ITestOutputHelper output)
         {
             int fi = s.Town.Faction is { } f ? data.FactionIndex(f) : -1;
             var faction = fi >= 0 ? data.Factions[fi] : null;
-            foreach (var e in Meitou.Data.World.ResidentHomes.Entries(s.Town, faction).Concat(PopulationSystem.BarEntries(s.Town, faction)))
+            foreach (var e in Data.World.ResidentHomes.Entries(s.Town, faction).Concat(PopulationSystem.BarEntries(s.Town, faction)))
                 if (db.Find(e.Id)?.GetReferences("leader") is [{ TargetStringId: var leader }, ..] && UniqueCharacters.IsUnique(db.Find(leader)))
                     targets.Add((s, leader));
         }
@@ -88,7 +88,7 @@ public class UniqueNpcTests(ITestOutputHelper output)
         var live = new Dictionary<string, int>(StringComparer.Ordinal);
         var table = world.Characters;
         for (int i = 0; i < table.Previous.Length; i++)
-            if (table.Previous[i].Alive && table.Cold(i) is { } c && db.Find(c.RecordId) is { Type: FcsRecordType.CHARACTER } r && UniqueCharacters.IsUnique(r))
+            if (table.Previous[i].Alive && table.Cold(i) is { } c && db.Find(c.RecordId) is { Type: FcsRecordType.Character } r && UniqueCharacters.IsUnique(r))
                 live[c.RecordId] = live.GetValueOrDefault(c.RecordId) + 1;
         output.WriteLine($"{visit.Count} towns, {live.Count} uniques in the world, {world.Uniques.Count} entries");
         Assert.True(live.Count > 5);

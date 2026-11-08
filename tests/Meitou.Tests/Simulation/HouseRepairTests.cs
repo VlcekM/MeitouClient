@@ -38,7 +38,7 @@ public class HouseRepairTests
             (Data, House) = HousePurchaseTests.Setup(destroyed: true);
             Data.Sight = sight;
             var file = new FcsFile();
-            file.Records.Add(new FcsRecord { StringId = BuildingBuildData.BuildingMaterialsItem, RecordType = FcsRecordType.ITEM, Name = "Building Materials", Flags = 0x10 });
+            file.Records.Add(new FcsRecord { StringId = BuildingBuildData.BuildingMaterialsItem, RecordType = FcsRecordType.Item, Name = "Building Materials", Flags = 0x10 });
             Data.Db.Apply(file, "test.mod");
             var constants = BaseGame with { BuildSpeed = 6 };
             Items = new ItemFactory(Data.Db, constants);
@@ -63,7 +63,7 @@ public class HouseRepairTests
         public int Carried => Cold.Inventory!.All().Where(i => i.Record == BuildingBuildData.BuildingMaterialsItem).Sum(i => i.Quantity);
         public FcsRecord Save()
         {
-            var state = new FcsRecord { StringId = "saved", RecordType = FcsRecordType.GAMESTATE_BUILDING };
+            var state = new FcsRecord { StringId = "saved", RecordType = FcsRecordType.GamestateBuilding };
             Assert.True(World.Fixtures.WriteBuilding(House.Key, state));
             var file = new SaveFile(); file.Records.Add(state);
             return Assert.Single(SaveFile.Read(file.ToBytes()).Records);
@@ -108,9 +108,9 @@ public class HouseRepairTests
     public void Engineer_job_survives_a_mid_repair_save_fetches_materials_and_the_finished_house_reloads_in_place()
     {
         using var initial = new Rig(); initial.Buy(); initial.Repair();
-        initial.Say(new AddJob([initial.Builder], TaskType.REPAIR, initial.House.Key) { Tick = initial.World.Tick }); initial.World.RunTicks(250);
+        initial.Say(new AddJob([initial.Builder], TaskType.Repair, initial.House.Key) { Tick = initial.World.Tick }); initial.World.RunTicks(250);
         Assert.False(initial.Site.Complete);
-        Assert.Equal(TaskType.JOB_BUILDER, Assert.Single(initial.Cold.Jobs).Type);
+        Assert.Equal(TaskType.JobBuilder, Assert.Single(initial.Cold.Jobs).Type);
         float progress = initial.Site.Progress, delivered = initial.Site.Materials[0].Delivered;
         var ai = new FcsRecord(); var state = initial.Save();
         PermaJobSave.Write(ai, initial.Cold, initial.World.Buildings, new Dictionary<string, FcsRecord> { [initial.House.Key] = state });
@@ -134,7 +134,7 @@ public class HouseRepairTests
             deliveredAny |= task == CharacterTask.DeliverMaterials;
         }
         Assert.True(fetched); Assert.True(deliveredAny); Assert.True(r.Site.Complete);
-        Assert.Equal(TaskType.JOB_BUILDER, Assert.Single(r.Cold.Jobs).Type);
+        Assert.Equal(TaskType.JobBuilder, Assert.Single(r.Cold.Jobs).Type);
         using var finished = new Rig(r.Save());
         Assert.True(finished.Site.Complete); Assert.False(finished.Site.Destroyed); Assert.False(finished.Site.NeedsWork);
         Assert.NotNull(finished.Site.LevelPlacement);

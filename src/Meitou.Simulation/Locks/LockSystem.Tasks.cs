@@ -16,9 +16,9 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
 {
     static readonly TaskType[] Rows =
     [
-        TaskType.PICK_LOCK, TaskType.PICK_LOCK_ON_SHACKLES, TaskType.CUT_SHACKLES, TaskType.BRUTE_FORCE_SHACKLES, TaskType.None, TaskType.RELEASE_PRISONER, TaskType.USE_CAGE,
-        TaskType.OPEN_DOOR, TaskType.CLOSE_DOOR, TaskType.LOCK_DOOR, TaskType.UNLOCK_DOOR, TaskType.UNLOCK_DOOR_PLAYER_ORDER, TaskType.CUT_LOCK, TaskType.BRUTE_FORCE_LOCK,
-        TaskType.BASH_DOOR_PLAYER_ORDER,
+        TaskType.PickLock, TaskType.PickLockOnShackles, TaskType.CutShackles, TaskType.BruteForceShackles, TaskType.None, TaskType.ReleasePrisoner, TaskType.UseCage,
+        TaskType.OpenDoor, TaskType.CloseDoor, TaskType.LockDoor, TaskType.UnlockDoor, TaskType.UnlockDoorPlayerOrder, TaskType.CutLock, TaskType.BruteForceLock,
+        TaskType.BashDoorPlayerOrder,
     ];
 
     public void RegisterTasks(TaskHandlers tasks)
@@ -35,18 +35,18 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     /// <summary>The row of a shackle job.</summary>
     static TaskType RowOf(ShackleWork work) => work switch
     {
-        ShackleWork.Pick => TaskType.PICK_LOCK_ON_SHACKLES,
-        ShackleWork.Cut => TaskType.CUT_SHACKLES,
-        ShackleWork.Break => TaskType.BRUTE_FORCE_SHACKLES,
+        ShackleWork.Pick => TaskType.PickLockOnShackles,
+        ShackleWork.Cut => TaskType.CutShackles,
+        ShackleWork.Break => TaskType.BruteForceShackles,
         _ => TaskType.None,
     };
 
     /// <summary>The row of a lock forced by <paramref name="force"/>.</summary>
     static TaskType RowOf(LockForce force) => force switch
     {
-        LockForce.Tools => TaskType.CUT_LOCK,
-        LockForce.Strength => TaskType.BRUTE_FORCE_LOCK,
-        _ => TaskType.BASH_DOOR_PLAYER_ORDER,
+        LockForce.Tools => TaskType.CutLock,
+        LockForce.Strength => TaskType.BruteForceLock,
+        _ => TaskType.BashDoorPlayerOrder,
     };
 
     /// <summary>
@@ -96,12 +96,12 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) =>
         new LockWork(kind == 2 ? CharacterTask.Idle : CharacterTask.GoTo, row switch
         {
-            TaskType.PICK_LOCK_ON_SHACKLES => ShackleWork.Pick,
-            TaskType.CUT_SHACKLES => ShackleWork.Cut,
-            TaskType.BRUTE_FORCE_SHACKLES => ShackleWork.Break,
-            TaskType.CUT_LOCK => LockForce.Tools,
-            TaskType.BRUTE_FORCE_LOCK => LockForce.Strength,
-            TaskType.BASH_DOOR_PLAYER_ORDER => LockForce.Smash,
+            TaskType.PickLockOnShackles => ShackleWork.Pick,
+            TaskType.CutShackles => ShackleWork.Cut,
+            TaskType.BruteForceShackles => ShackleWork.Break,
+            TaskType.CutLock => LockForce.Tools,
+            TaskType.BruteForceLock => LockForce.Strength,
+            TaskType.BashDoorPlayerOrder => LockForce.Smash,
             _ => null,
         });
 
@@ -135,41 +135,41 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         }
         switch (request.Row)
         {
-            case TaskType.PICK_LOCK or TaskType.OPEN_DOOR or TaskType.CLOSE_DOOR when world.Fixtures.Find(request.Site!) is { Kind: FixtureKind.Door } door:
-                StartDoor(world, slot, door, request.Row == TaskType.PICK_LOCK);
+            case TaskType.PickLock or TaskType.OpenDoor or TaskType.CloseDoor when world.Fixtures.Find(request.Site!) is { Kind: FixtureKind.Door } door:
+                StartDoor(world, slot, door, request.Row == TaskType.PickLock);
                 break;
-            case TaskType.PICK_LOCK when world.Fixtures.Find(request.Site!) is { Kind: FixtureKind.Cage } cage:
+            case TaskType.PickLock when world.Fixtures.Find(request.Site!) is { Kind: FixtureKind.Cage } cage:
                 c.PickingLock = cage.Id;
                 c.Shackles = null;
                 c.DoorJob = null;
                 if (!c.IsImprisoned) MovementSystem.GoTo(table, slot, new Vector2(cage.Position.X, cage.Position.Z), c.RunSpeed);
                 break;
-            case TaskType.PICK_LOCK:
+            case TaskType.PickLock:
                 // Another faction's locked container, with Alt (the original's FUN_1407fc6e0).
                 var container = world.Fixtures.Find(request.Site!)!;
                 c.Shackles = null;
                 c.PickingLock = container.Id;
                 MovementSystem.GoToFloor(world, slot, container.Position, c.RunSpeed);
                 break;
-            case TaskType.PICK_LOCK_ON_SHACKLES or TaskType.CUT_SHACKLES or TaskType.BRUTE_FORCE_SHACKLES or TaskType.None:
+            case TaskType.PickLockOnShackles or TaskType.CutShackles or TaskType.BruteForceShackles or TaskType.None:
                 c.PickingLock = null;
                 c.Shackles = new ShackleJob(request.Target, (ShackleWork)request.Detail!);
                 if (request.Target != table.IdOf(slot) && table.TryResolveNext(request.Target, out int w)) MovementSystem.GoTo(table, slot, Flat(table.Next[w].Position), c.RunSpeed);
                 break;
-            case TaskType.RELEASE_PRISONER:
+            case TaskType.ReleasePrisoner:
                 ClearWork(c);
                 c.Freeing = request.Target;
                 MovementSystem.GoToFloor(world, slot, world.Fixtures.Find(request.Site!)!.Position, c.RunSpeed);
                 break;
-            case TaskType.USE_CAGE:
+            case TaskType.UseCage:
                 ClearWork(c);
                 c.EnteringCage = request.Site;
                 MovementSystem.GoToFloor(world, slot, world.Fixtures.Find(request.Site!)!.Position, c.RunSpeed);
                 break;
-            case TaskType.LOCK_DOOR or TaskType.UNLOCK_DOOR_PLAYER_ORDER:
-                StartDoorLock(world, slot, world.Fixtures.Find(request.Site!)!, request.Row == TaskType.LOCK_DOOR);
+            case TaskType.LockDoor or TaskType.UnlockDoorPlayerOrder:
+                StartDoorLock(world, slot, world.Fixtures.Find(request.Site!)!, request.Row == TaskType.LockDoor);
                 break;
-            case TaskType.CUT_LOCK or TaskType.BRUTE_FORCE_LOCK or TaskType.BASH_DOOR_PLAYER_ORDER:
+            case TaskType.CutLock or TaskType.BruteForceLock or TaskType.BashDoorPlayerOrder:
                 StartForce(world, slot, world.Fixtures.Find(request.Site!)!, (LockForce)request.Detail!);
                 break;
         }

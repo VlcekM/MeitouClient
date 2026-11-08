@@ -76,25 +76,25 @@ public sealed unsafe class MarkerRenderer : IDisposable
     /// <summary>Samples per pixel of the markers (anti-aliasing: the meshes have many triangles under a pixel; at most what the device allows). 4, not 8: 8 took 127 MB at 1080p.</summary>
     const int WantedSamples = 4;
 
-    readonly IGpuContext gpu;
-    readonly LegacyProgram program;
-    readonly NativeSegment segment;
-    readonly DeviceBuffer vertices;
-    readonly VertexArrayBindings vertexSource;
-    readonly GpuBufferBinding[] bindings = new GpuBufferBinding[2];
-    readonly UniformHandle viewProjection, rotation, offset, sun, colour, depthScale, hiddenPass;
-    readonly SamplerSlot sceneDepth;
-    readonly LegacyProgram composite;
-    readonly NativeSegment compositeSegment;
-    readonly SamplerSlot markerImage;
+    readonly IGpuContext _gpu;
+    readonly LegacyProgram _program;
+    readonly NativeSegment _segment;
+    readonly DeviceBuffer _vertices;
+    readonly VertexArrayBindings _vertexSource;
+    readonly GpuBufferBinding[] _bindings = new GpuBufferBinding[2];
+    readonly UniformHandle _viewProjection, _rotation, _offset, _sun, _colour, _depthScale, _hiddenPass;
+    readonly SamplerSlot _sceneDepth;
+    readonly LegacyProgram _composite;
+    readonly NativeSegment _compositeSegment;
+    readonly SamplerSlot _markerImage;
     // The markers drawn multisampled with a depth of their own, at the picture's size, and resolved.
-    GpuTexture? msColour, msDepth, resolved;
-    int samples;
+    GpuTexture? _msColour, _msDepth, _resolved;
+    readonly int _samples;
     /// <summary>Milliseconds without a marker before the targets are freed (about 70 MB multisampled at 1080p; markers show only for a while after an order).</summary>
     const long IdleReleaseMs = 10_000;
-    long idleSince;
+    long _idleSince;
     // The vertex ranges of the two meshes in the buffer (count 0: the mesh is missing).
-    readonly (int First, int Count) marker, arrow, ring;
+    readonly (int First, int Count) _marker, _arrow, _ring;
 
     /// <summary>Where the movement marker stands (the ground point of the move order).</summary>
     public Vector3 At { get; set; }
@@ -110,36 +110,36 @@ public sealed unsafe class MarkerRenderer : IDisposable
 
     MarkerRenderer(IGpuContext gpu, float[] data, (int, int) marker, (int, int) arrow, (int, int) ring)
     {
-        this.gpu = gpu;
-        this.marker = marker;
-        this.arrow = arrow;
-        this.ring = ring;
-        program = LegacyProgram.Create(gpu, Vertex, Fragment, "markers");
-        segment = new NativeSegment(gpu, program, PrimitiveType.Triangles, "markers");
-        viewProjection = program.Uniform("uViewProjection");
-        rotation = program.Uniform("uRotation");
-        offset = program.Uniform("uOffset");
-        sun = program.Uniform("uSun");
-        colour = program.Uniform("uColour");
-        depthScale = program.Uniform("uDepthScale");
-        hiddenPass = program.Uniform("uHidden");
-        sceneDepth = program.Sampler("uSceneDepth");
-        composite = LegacyProgram.Create(gpu, CompositeVertex, CompositeFragment, "markers composite");
-        compositeSegment = new NativeSegment(gpu, composite, PrimitiveType.Triangles, "markers composite");
-        markerImage = composite.Sampler("uMarker");
-        samples = 1;
+        this._gpu = gpu;
+        this._marker = marker;
+        this._arrow = arrow;
+        this._ring = ring;
+        _program = LegacyProgram.Create(gpu, Vertex, Fragment, "markers");
+        _segment = new NativeSegment(gpu, _program, PrimitiveType.Triangles, "markers");
+        _viewProjection = _program.Uniform("uViewProjection");
+        _rotation = _program.Uniform("uRotation");
+        _offset = _program.Uniform("uOffset");
+        _sun = _program.Uniform("uSun");
+        _colour = _program.Uniform("uColour");
+        _depthScale = _program.Uniform("uDepthScale");
+        _hiddenPass = _program.Uniform("uHidden");
+        _sceneDepth = _program.Sampler("uSceneDepth");
+        _composite = LegacyProgram.Create(gpu, CompositeVertex, CompositeFragment, "markers composite");
+        _compositeSegment = new NativeSegment(gpu, _composite, PrimitiveType.Triangles, "markers composite");
+        _markerImage = _composite.Sampler("uMarker");
+        _samples = 1;
         if (gpu is GpuContext vk)
         {
             var l = vk.Device.Limits;
             uint both = (uint)(l.FramebufferColorSampleCounts & l.FramebufferDepthSampleCounts);
-            while (samples < WantedSamples && (both & (uint)(samples * 2)) != 0) samples *= 2;
+            while (_samples < WantedSamples && (both & (uint)(_samples * 2)) != 0) _samples *= 2;
         }
-        vertices = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)data.Length, BufferUse.Vertex, "markers");
-        using (var batch = gpu.Uploads.Begin()) batch.Write(vertices, 0, MemoryMarshal.AsBytes(data.AsSpan()));
-        vertexSource = new VertexArrayBindings(
+        _vertices = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)data.Length, BufferUse.Vertex, "markers");
+        using (var batch = gpu.Uploads.Begin()) batch.Write(_vertices, 0, MemoryMarshal.AsBytes(data.AsSpan()));
+        _vertexSource = new VertexArrayBindings(
         [
-            new LegacyProgram.Attribute(default, InternalFormat.Rgb32f, 24, false),
-            new LegacyProgram.Attribute(default, InternalFormat.Rgb32f, 24, false),
+            new LegacyProgram.Attribute(default, InternalFormat.Rgb32F, 24, false),
+            new LegacyProgram.Attribute(default, InternalFormat.Rgb32F, 24, false),
         ], default);
     }
 
@@ -189,7 +189,7 @@ public sealed unsafe class MarkerRenderer : IDisposable
     }
 
     /// <summary>Whether anything is to be drawn this frame.</summary>
-    public bool Active => Strength > 0 && marker.Count > 0 || Arrows.Length > 0 && arrow.Count > 0 || Rotation && ring.Count > 0;
+    public bool Active => Strength > 0 && _marker.Count > 0 || Arrows.Length > 0 && _arrow.Count > 0 || Rotation && _ring.Count > 0;
 
     /// <summary>
     /// Draws over the finished <paramref name="picture"/> (after the tone map, so the colours come out as the material gives them, whatever the
@@ -202,12 +202,12 @@ public sealed unsafe class MarkerRenderer : IDisposable
         Matrix4x4 sceneViewProjection, WorldCamera camera, Vector3 sunDirection)
     {
         if (!Active || width <= 0 || height <= 0) return;
-        idleSince = 0;
+        _idleSince = 0;
         EnsureTargets(width, height);
         var arrows = Arrows;
-        var cmd = gpu.BeginNative("markers");
+        var cmd = _gpu.BeginNative("markers");
         var viewport = new PixelViewport(0, 0, width, height, 0, 1);
-        var t = PassTargets.Of(msColour, msDepth).At(viewport);
+        var t = PassTargets.Of(_msColour, _msDepth).At(viewport);
         t = t with
         {
             Colour = t.Colour with { Load = LoadOp.Clear, Clear = new ClearColour(0f, 0f, 0f, 0f) },
@@ -215,61 +215,61 @@ public sealed unsafe class MarkerRenderer : IDisposable
         };
         cmd.BeginRendering(t.Rendering);
         var vp = Matrix4x4.CreateTranslation(camera.Eye) * sceneViewProjection;
-        program.Set(viewProjection, in vp);
-        program.Set(sun, sunDirection);
-        program.Set(depthScale, renderWidth / (float)width, renderHeight / (float)height);
-        program.Bind(sceneDepth, new SampledTexture(Nearest(), sceneDepthTexture.View()));
+        _program.Set(_viewProjection, in vp);
+        _program.Set(_sun, sunDirection);
+        _program.Set(_depthScale, renderWidth / (float)width, renderHeight / (float)height);
+        _program.Bind(_sceneDepth, new SampledTexture(Nearest(), sceneDepthTexture.View()));
         for (int pass = 0; pass < 2; pass++) RecordPass(cmd, t, camera, arrows, hidden: pass == 1);
         cmd.EndRendering();
         cmd.Order();
-        if (samples > 1)
+        if (_samples > 1)
         {
-            cmd.Resolve(msColour, resolved);
+            cmd.Resolve(_msColour, _resolved);
             cmd.Order();
         }
         Composite(cmd, picture, viewport);
-        gpu.EndNative(cmd);
+        _gpu.EndNative(cmd);
     }
 
     static readonly BlendState Premultiplied = new(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
 
     /// <summary>The multisampled targets and the resolved picture at <paramref name="width"/> × <paramref name="height"/>, made again when the size changes.</summary>
-    [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(msColour), nameof(msDepth), nameof(resolved))]
+    [System.Diagnostics.CodeAnalysis.MemberNotNull(nameof(_msColour), nameof(_msDepth), nameof(_resolved))]
     void EnsureTargets(int width, int height)
     {
-        if (msColour is not null && msDepth is not null && resolved is not null &&
-            msColour.Desc.Width == width && msColour.Desc.Height == height) return;
+        if (_msColour is not null && _msDepth is not null && _resolved is not null &&
+            _msColour.Desc.Width == width && _msColour.Desc.Height == height) return;
         ReleaseTargets();
-        var sampled = samples > 1 ? TextureUse.TransferSrc : TextureUse.Sampled;
-        msColour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Samples: samples, Use: TextureUse.ColourTarget | sampled, Name: "markers colour"));
-        msDepth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Samples: samples, Use: TextureUse.DepthTarget, Name: "markers depth"));
-        resolved = samples > 1 ? gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "markers resolved")) : msColour;
+        var sampled = _samples > 1 ? TextureUse.TransferSrc : TextureUse.Sampled;
+        _msColour = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Samples: _samples, Use: TextureUse.ColourTarget | sampled, Name: "markers colour"));
+        _msDepth = _gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Samples: _samples, Use: TextureUse.DepthTarget, Name: "markers depth"));
+        _resolved = _samples > 1 ? _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "markers resolved")) : _msColour;
     }
 
     /// <summary>One of the two passes: the parts in front of the scene, or (<paramref name="hidden"/>) those behind it.</summary>
     void RecordPass(IGpuCommandList cmd, PassTargets t, WorldCamera camera, Arrow[] arrows, bool hidden)
     {
         var eye = camera.Eye;
-        var state = DrawState.For(t.Formats, gpu.DepthClamp, cull: CullMode.Back, depthTest: true, depthWrite: !hidden,
-            compare: DepthConvention.SceneCompare, blend: Premultiplied, depthClamp: gpu.DepthClamp, front: FrontFaceDirection.Ccw);
-        program.Set(hiddenPass, hidden ? 1 : 0);
+        var state = DrawState.For(t.Formats, _gpu.DepthClamp, cull: CullMode.Back, depthTest: true, depthWrite: !hidden,
+            compare: DepthConvention.SceneCompare, blend: Premultiplied, depthClamp: _gpu.DepthClamp, front: FrontFaceDirection.Ccw);
+        _program.Set(_hiddenPass, hidden ? 1 : 0);
         state.Record(cmd, t);
-        cmd.BindPipeline(segment.Get(state, t.Formats, vertexSource));
-        bindings[0] = new GpuBufferBinding(vertices.Handle, 0);
-        bindings[1] = new GpuBufferBinding(vertices.Handle, 12);
-        cmd.BindVertexBuffers(0, bindings);
-        if (Strength > 0 && marker.Count > 0)
+        cmd.BindPipeline(_segment.Get(state, t.Formats, _vertexSource));
+        _bindings[0] = new GpuBufferBinding(_vertices.Handle, 0);
+        _bindings[1] = new GpuBufferBinding(_vertices.Handle, 12);
+        cmd.BindVertexBuffers(0, _bindings);
+        if (Strength > 0 && _marker.Count > 0)
         {
             var c = hidden ? Hidden : Visible;
-            Draw(cmd, marker, At - eye, Matrix4x4.Identity, new Vector4(c.X, c.Y, c.Z, c.W * Strength));
+            Draw(cmd, _marker, At - eye, Matrix4x4.Identity, new Vector4(c.X, c.Y, c.Z, c.W * Strength));
         }
         // The rotation marker's colour has alpha 0: only its opaque visible pass shows. It rides the drawn pivot, not the rig's last tick (FUN_1406b0f90's
         // marker is a child of the camera's pivot node).
-        if (!hidden && Rotation && ring.Count > 0)
-            Draw(cmd, ring, camera.Target + Vector3.UnitY - eye, Matrix4x4.CreateScale(MathF.Max(3, camera.Distance * 0.06f)), Visible);
-        if (arrow.Count > 0)
+        if (!hidden && Rotation && _ring.Count > 0)
+            Draw(cmd, _ring, camera.Target + Vector3.UnitY - eye, Matrix4x4.CreateScale(MathF.Max(3, camera.Distance * 0.06f)), Visible);
+        if (_arrow.Count > 0)
             foreach (var a in arrows)
-                Draw(cmd, arrow, a.At - eye, ArrowScale * PointAlong(a.Direction), new Vector4(a.Colour, hidden ? ArrowHiddenAlpha : 1));
+                Draw(cmd, _arrow, a.At - eye, ArrowScale * PointAlong(a.Direction), new Vector4(a.Colour, hidden ? ArrowHiddenAlpha : 1));
     }
 
     /// <summary>The resolved markers blended over <paramref name="picture"/>.</summary>
@@ -277,21 +277,21 @@ public sealed unsafe class MarkerRenderer : IDisposable
     {
         var over = PassTargets.Of(picture, null).At(viewport);
         cmd.BeginRendering(over.Rendering);
-        composite.Bind(markerImage, new SampledTexture(Nearest(), resolved!.View()));
-        var overState = DrawState.For(over.Formats, gpu.DepthClamp, blend: Premultiplied);
+        _composite.Bind(_markerImage, new SampledTexture(Nearest(), _resolved!.View()));
+        var overState = DrawState.For(over.Formats, _gpu.DepthClamp, blend: Premultiplied);
         overState.Record(cmd, over);
-        cmd.BindPipeline(compositeSegment.Get(overState, over.Formats, null));
-        composite.Flush(cmd);
+        cmd.BindPipeline(_compositeSegment.Get(overState, over.Formats, null));
+        _composite.Flush(cmd);
         cmd.Draw(3);
         cmd.EndRendering();
     }
 
     void Draw(IGpuCommandList cmd, (int First, int Count) mesh, Vector3 relative, Matrix4x4 turn, Vector4 c)
     {
-        program.Set(offset, relative);
-        program.Set(rotation, in turn);
-        program.Set(colour, c);
-        program.Flush(cmd);
+        _program.Set(_offset, relative);
+        _program.Set(_rotation, in turn);
+        _program.Set(_colour, c);
+        _program.Flush(cmd);
         cmd.Draw((uint)mesh.Count, 1, (uint)mesh.First, 0);
     }
 
@@ -311,32 +311,32 @@ public sealed unsafe class MarkerRenderer : IDisposable
         return Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(new Quaternion(Vector3.Cross(from, direction), 1 + dot)));
     }
 
-    GpuSampler Nearest() => gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+    GpuSampler Nearest() => _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
     /// <summary>A frame that draws no marker: the targets are freed once none has been drawn for <see cref="IdleReleaseMs"/>.</summary>
     public void Idle()
     {
-        if (msColour is null) return;
+        if (_msColour is null) return;
         long now = Environment.TickCount64;
-        if (idleSince == 0) idleSince = now;
-        else if (now - idleSince >= IdleReleaseMs) ReleaseTargets();
+        if (_idleSince == 0) _idleSince = now;
+        else if (now - _idleSince >= IdleReleaseMs) ReleaseTargets();
     }
 
     void ReleaseTargets()
     {
-        if (resolved != msColour) resolved?.Dispose();
-        msColour?.Dispose();
-        msDepth?.Dispose();
-        msColour = msDepth = resolved = null;
-        idleSince = 0;
+        if (_resolved != _msColour) _resolved?.Dispose();
+        _msColour?.Dispose();
+        _msDepth?.Dispose();
+        _msColour = _msDepth = _resolved = null;
+        _idleSince = 0;
     }
 
     public void Dispose()
     {
-        vertices.Dispose();
-        if (resolved != msColour) resolved?.Dispose();
-        msColour?.Dispose();
-        msDepth?.Dispose();
+        _vertices.Dispose();
+        if (_resolved != _msColour) _resolved?.Dispose();
+        _msColour?.Dispose();
+        _msDepth?.Dispose();
     }
 }

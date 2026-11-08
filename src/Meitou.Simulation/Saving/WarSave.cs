@@ -32,8 +32,8 @@ internal static class WarSave
             for (int j = 0, n = war.Ints.GetValueOrDefault("num actives"); j < n; j++)
                 byId.TryAdd(war.Ints.GetValueOrDefault($"id c{j}"), Hand.Read(war, $"home c{j}"));
             for (int i = 0, n = war.Ints.GetValueOrDefault("num plats"); i < n; i++)
-                if (Hand.Read(war, $"p{i}") is { Type: 1 or (int)FcsRecordType.PLATOON } h)
-                    homes.TryAdd((h.C, h.CS), byId.GetValueOrDefault(war.Ints.GetValueOrDefault($"forces{i}"), Hand.Null));
+                if (Hand.Read(war, $"p{i}") is { Type: 1 or (int)FcsRecordType.Platoon } h)
+                    homes.TryAdd((h.C, h.Cs), byId.GetValueOrDefault(war.Ints.GetValueOrDefault($"forces{i}"), Hand.Null));
         }
         return homes;
     }
@@ -61,11 +61,20 @@ internal static class WarSave
                 string enemy = war.Strings.GetValueOrDefault($"enemy c{i}", "");
                 var inst = new CampaignInstance
                 {
-                    Faction = m.Faction, Id = war.Ints.GetValueOrDefault($"id c{i}"), CampaignId = id, Target = Town(world, saved, Hand.Read(war, $"target c{i}")),
-                    Home = Town(world, saved, Hand.Read(war, $"home c{i}")), Enemy = enemy.Length > 0 ? data.FactionIndex(enemy) : -1,
-                    Phase = Math.Clamp(war.Ints.GetValueOrDefault($"phase c{i}"), 0, 2), Reached = war.Bools.GetValueOrDefault($"rd c{i}"), Trig = war.Bools.GetValueOrDefault($"trig c{i}"),
-                    PhaseStart = Hour(war, PhaseStartKey + i) ?? now, Required = (int)(c.NumForces * population.Settings.RaidSizeMult),
-                    FightStart = Hour(war, FightStartKey + i) ?? -1, ArrivedAt = Hour(war, ArrivedKey + i) ?? -1, AnnouncedAt = Hour(war, AnnouncedKey + i) ?? -1,
+                    Faction = m.Faction,
+                    Id = war.Ints.GetValueOrDefault($"id c{i}"),
+                    CampaignId = id,
+                    Target = Town(world, saved, Hand.Read(war, $"target c{i}")),
+                    Home = Town(world, saved, Hand.Read(war, $"home c{i}")),
+                    Enemy = enemy.Length > 0 ? data.FactionIndex(enemy) : -1,
+                    Phase = Math.Clamp(war.Ints.GetValueOrDefault($"phase c{i}"), 0, 2),
+                    Reached = war.Bools.GetValueOrDefault($"rd c{i}"),
+                    Trig = war.Bools.GetValueOrDefault($"trig c{i}"),
+                    PhaseStart = Hour(war, PhaseStartKey + i) ?? now,
+                    Required = (int)(c.NumForces * population.Settings.RaidSizeMult),
+                    FightStart = Hour(war, FightStartKey + i) ?? -1,
+                    ArrivedAt = Hour(war, ArrivedKey + i) ?? -1,
+                    AnnouncedAt = Hour(war, AnnouncedKey + i) ?? -1,
                 };
                 if (Hour(war, CarryStartKey + i) is double carry) legacyCarry[inst] = carry;
                 if (inst.Phase == 1 && !c.HasPt2) inst.Phase = 2;
@@ -81,8 +90,11 @@ internal static class WarSave
                 if (population.CampaignOf(id) is null || enemy < 0) continue;
                 m.Requests.Add(new CampaignRequest
                 {
-                    CampaignId = id, Enemy = enemy, Due = war.Floats.GetValueOrDefault($"req time{i}"),
-                    Target = Town(world, saved, Hand.Read(war, $"req targ{i}")), Home = Town(world, saved, Hand.Read(war, $"req home{i}")),
+                    CampaignId = id,
+                    Enemy = enemy,
+                    Due = war.Floats.GetValueOrDefault($"req time{i}"),
+                    Target = Town(world, saved, Hand.Read(war, $"req targ{i}")),
+                    Home = Town(world, saved, Hand.Read(war, $"req home{i}")),
                 });
             }
             for (int i = 0, n = war.Ints.GetValueOrDefault("num poss"); i < n; i++)
@@ -90,7 +102,7 @@ internal static class WarSave
             for (int i = 0, n = war.Ints.GetValueOrDefault("num plats"); i < n; i++)
             {
                 var h = Hand.Read(war, $"p{i}");
-                if (h.Type is not (1 or (int)FcsRecordType.PLATOON) || Platoon(saved, h) is not int pid || world.Platoons.Find(pid) is not { } p || p.Campaign is not null) continue;
+                if (h.Type is not (1 or (int)FcsRecordType.Platoon) || Platoon(saved, h) is not int pid || world.Platoons.Find(pid) is not { } p || p.Campaign is not null) continue;
                 int forces = war.Ints.GetValueOrDefault($"forces{i}");
                 if (m.Actives.FirstOrDefault(a => a.Id == forces) is not { } inst) continue;
                 p.Campaign = inst;
@@ -113,14 +125,14 @@ internal static class WarSave
         else war.Floats.Remove(key);
     }
 
-    static int? Platoon(SavedPopulation saved, Hand h) => !h.IsNull && saved.PlatoonIds.TryGetValue((h.C, h.CS), out int id) ? id : null;
+    static int? Platoon(SavedPopulation saved, Hand h) => !h.IsNull && saved.PlatoonIds.TryGetValue((h.C, h.Cs), out int id) ? id : null;
 
     static CampaignTown Town(World world, SavedPopulation saved, Hand h)
     {
         if (h.IsNull) return CampaignTown.None;
-        if (saved.TownSites.TryGetValue((h.C, h.CS), out int site)) return CampaignTown.OfSite(site);
+        if (saved.TownSites.TryGetValue((h.C, h.Cs), out int site)) return CampaignTown.OfSite(site);
         foreach (var town in world.Buildings.Towns)
-            if (town.SaveHandle is { } t && t.C == h.C && t.CS == h.CS) return CampaignTown.OfPlayer(town.Number);
+            if (town.SaveHandle is { } t && t.C == h.C && t.Cs == h.Cs) return CampaignTown.OfPlayer(town.Number);
         return CampaignTown.None;
     }
 

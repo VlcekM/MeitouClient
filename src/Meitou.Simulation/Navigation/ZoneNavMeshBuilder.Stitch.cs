@@ -109,7 +109,7 @@ internal static partial class ZoneNavMeshBuilder
                     var (q, f, ja, jb) = left[j];
                     if (p == q) continue;
                     Vector3 a0 = vertices[vBase + ia], a1 = vertices[vBase + ib], b0 = vertices[vBase + ja], b1 = vertices[vBase + jb];
-                    if (!SameXZ(a0, b1) && !SameXZ(a1, b0)) continue;
+                    if (!SameXz(a0, b1) && !SameXz(a1, b0)) continue;
                     if (!NavGeometry.FacingOverlap(a0, a1, b0, b1, NavGeometry.NearMissGap, out float lo, out float hi, out float yLo, out float yHi)) continue;
                     if ((hi - lo) * Vector2.Distance(new(a0.X, a0.Z), new(a1.X, a1.Z)) < s.CellSize / 2) continue;
                     if ((Math.Abs(float.Lerp(a0.Y, a1.Y, lo) - yLo) > climb || Math.Abs(float.Lerp(a0.Y, a1.Y, hi) - yHi) > climb)
@@ -172,7 +172,7 @@ internal static partial class ZoneNavMeshBuilder
             return !float.IsNaN(height);
         }
 
-        static bool SameXZ(Vector3 a, Vector3 b) => a.X == b.X && a.Z == b.Z;
+        static bool SameXz(Vector3 a, Vector3 b) => a.X == b.X && a.Z == b.Z;
 
         // Two coinciding edges (height gaps at their ends in cells, length in cells) meet when the gap stays within the climb along at least SeamClimbCells of
         // them: a corner can take a higher neighbouring cell's height on one side (a stair's top beside a raised cheek, Storm House 27.22:1821-), which

@@ -36,11 +36,11 @@ public sealed class WeatherRegion
     /// <summary>The wind change after an update is interpolated over this share of the wind update time.</summary>
     public const double WindInterpolationShare = 0.05;
 
-    Random random;
-    readonly int seed;
-    WindInterpolation wind;
-    RegionFog fogFrom;
-    double fogFadeMinutes;
+    Random _random;
+    readonly int _seed;
+    WindInterpolation _wind;
+    RegionFog _fogFrom;
+    double _fogFadeMinutes;
 
     /// <param name="def">The region's record.</param>
     /// <param name="index">The region's position in the data (it varies the seed).</param>
@@ -50,8 +50,8 @@ public sealed class WeatherRegion
     {
         Def = def;
         Index = index;
-        this.seed = unchecked(seed * 1000003 + index * 7919 + 17);
-        random = new Random(this.seed);
+        this._seed = unchecked(seed * 1000003 + index * 7919 + 17);
+        _random = new Random(this._seed);
         SeasonIndex = 0;
         SeasonEndDay = start.Day + Season.Days;
         StartWeather(start, first: true);
@@ -82,7 +82,7 @@ public sealed class WeatherRegion
     public float WindSpeed { get; private set; }
     /// <summary>The wind's unit direction in the ground plane (x, z).</summary>
     public Vector2 WindDirection { get; private set; } = Vector2.UnitX;
-    public WindInterpolation Wind => wind;
+    public WindInterpolation Wind => _wind;
     public double NextWindUpdateMinute { get; private set; }
 
     /// <summary>Advances the schedule to <paramref name="now"/>: a new season when the day count reaches the season's end, a new weather when the current one has run out, a wind update when it is due.</summary>
@@ -106,7 +106,7 @@ public sealed class WeatherRegion
         SyncWind(t);
     }
 
-    void SyncWind(double minute) => (WindSpeed, WindDirection) = wind.At(minute);
+    void SyncWind(double minute) => (WindSpeed, WindDirection) = _wind.At(minute);
 
     /// <summary>The region's weather fog at a game time: the previous weather's fog fades into the current weather's over the first 2.5 % of its duration.</summary>
     public RegionFog FogAt(double minute)
@@ -114,11 +114,11 @@ public sealed class WeatherRegion
         var w = Weather;
         float targetEnabled = w.FogEnabled ? 1 : 0;
         float targetDistance = w.FogDistanceAt(WindSpeed);
-        float k = fogFadeMinutes <= 0 ? 1 : (float)Math.Clamp((minute - WeatherStartMinute) / fogFadeMinutes, 0, 1);
+        float k = _fogFadeMinutes <= 0 ? 1 : (float)Math.Clamp((minute - WeatherStartMinute) / _fogFadeMinutes, 0, 1);
         // A time before the weather began only comes from a clock moved back (the viewer's time slider, its camera keys' time of day): the fade is over, as it
         // would be after it; holding k at 0 there showed the previous weather's fog (a dust storm's, say) for as long as the clock stayed before the start.
         if (k >= 1 || minute < WeatherStartMinute) return new RegionFog(targetEnabled, w.FogColour, targetDistance);
-        var from = fogFrom;
+        var from = _fogFrom;
         float enabled = from.Enabled + (targetEnabled - from.Enabled) * k;
         // Observed: a side that is off lends its colour and distance to the other, so only the on/off weight fades (an "off" record's distance is not meant to be seen).
         if (from.Enabled <= 0) return new RegionFog(enabled, w.FogColour, targetDistance);
@@ -167,18 +167,18 @@ public sealed class WeatherRegion
         if (first)
         {
             float speed = chosen.Weather.WindSpeedAt(s);
-            var dir = new Vector2(random.NextSingle() * 2 - 1, random.NextSingle() * 2 - 1);
+            var dir = new Vector2(_random.NextSingle() * 2 - 1, _random.NextSingle() * 2 - 1);
             dir = dir.LengthSquared() < 1e-8f ? Vector2.UnitX : Vector2.Normalize(dir);
             float heading = MathF.Atan2(dir.Y, dir.X);
-            wind = new WindInterpolation(t, 0, speed, heading, speed, heading);
-            fogFrom = new RegionFog(chosen.Weather.FogEnabled ? 1 : 0, chosen.Weather.FogColour, chosen.Weather.FogDistanceMax);
-            fogFadeMinutes = 0;
+            _wind = new WindInterpolation(t, 0, speed, heading, speed, heading);
+            _fogFrom = new RegionFog(chosen.Weather.FogEnabled ? 1 : 0, chosen.Weather.FogColour, chosen.Weather.FogDistanceMax);
+            _fogFadeMinutes = 0;
         }
         else
         {
             RetargetWind(t, chosen.Weather, s);
-            fogFrom = previousFog;
-            fogFadeMinutes = FogFadeShare * (end - t);
+            _fogFrom = previousFog;
+            _fogFadeMinutes = FogFadeShare * (end - t);
         }
         NextWindUpdateMinute = t + chosen.Weather.WindUpdateMinutes;
     }
@@ -198,7 +198,7 @@ public sealed class WeatherRegion
         }
         if (candidates.Count == 0) return season.Weathers.Count - 1;
         if (candidates.Count == 1) return candidates[0];
-        double r = random.NextDouble() * sum;
+        double r = _random.NextDouble() * sum;
         long running = 0;
         foreach (int i in candidates)
         {
@@ -212,14 +212,14 @@ public sealed class WeatherRegion
     int RollMinutes(int min, int max)
     {
         max = Math.Max(min, max);
-        return Math.Clamp(min + (int)(random.NextDouble() * (max - min + 1)), min, max);
+        return Math.Clamp(min + (int)(_random.NextDouble() * (max - min + 1)), min, max);
     }
 
     /// <summary><c>clamp(random[limit min, limit max] × random[multiplier min, multiplier max], 0, 1)</c>.</summary>
     float RollStrength(SeasonDef season)
     {
-        float limit = season.StrengthLimitMin + (season.StrengthLimitMax - season.StrengthLimitMin) * random.NextSingle();
-        float mult = Def.StrengthMultiplierMin + (Def.StrengthMultiplierMax - Def.StrengthMultiplierMin) * random.NextSingle();
+        float limit = season.StrengthLimitMin + (season.StrengthLimitMax - season.StrengthLimitMin) * _random.NextSingle();
+        float mult = Def.StrengthMultiplierMin + (Def.StrengthMultiplierMax - Def.StrengthMultiplierMin) * _random.NextSingle();
         return Math.Clamp(limit * mult, 0, 1);
     }
 
@@ -232,13 +232,13 @@ public sealed class WeatherRegion
     /// </summary>
     void RetargetWind(double t, WeatherDef w, float strength)
     {
-        var (speed, direction) = wind.At(t);
+        var (speed, direction) = _wind.At(t);
         float heading = MathF.Acos(Math.Clamp(direction.X, -1f, 1f));
         float k = w.WindUpdateLimit / 360f;
         float targetSpeed = speed + (w.WindSpeedAt(strength) - speed) * k;
-        float targetHeading = WrapPi(heading + (random.NextSingle() * 2 - 1) * MathF.PI * k);
+        float targetHeading = WrapPi(heading + (_random.NextSingle() * 2 - 1) * MathF.PI * k);
         double duration = Math.Round(WindInterpolationShare * w.WindUpdateMinutes, MidpointRounding.AwayFromZero);
-        wind = new WindInterpolation(t, duration, speed, heading, targetSpeed, targetHeading);
+        _wind = new WindInterpolation(t, duration, speed, heading, targetSpeed, targetHeading);
     }
 
     /// <summary>An angle wrapped into [−π, π].</summary>
@@ -247,7 +247,7 @@ public sealed class WeatherRegion
     // ---- saving ----
 
     public WeatherRegionSnapshot Snapshot() => new(Def.StringId, Season.Season.StringId, SeasonIndex, SeasonEndDay, Weather.StringId, WeatherEntryIndex, WeatherStartMinute,
-        WeatherEndMinute, Strength, wind, NextWindUpdateMinute, fogFrom, fogFadeMinutes);
+        WeatherEndMinute, Strength, _wind, NextWindUpdateMinute, _fogFrom, _fogFadeMinutes);
 
     /// <summary>
     /// Continues from a snapshot of this region. The season and the weather are found by their StringIds (so a mod that reorders a list does not
@@ -264,11 +264,11 @@ public sealed class WeatherRegion
         WeatherStartMinute = s.WeatherStartMinute;
         WeatherEndMinute = s.WeatherEndMinute;
         Strength = s.Strength;
-        wind = s.Wind;
+        _wind = s.Wind;
         NextWindUpdateMinute = s.NextWindUpdateMinute;
-        fogFrom = s.FogFrom;
-        fogFadeMinutes = s.FogFadeMinutes;
-        random = new Random(unchecked(seed + SeasonEndDay * 31 + (int)WeatherStartMinute));
+        _fogFrom = s.FogFrom;
+        _fogFadeMinutes = s.FogFadeMinutes;
+        _random = new Random(unchecked(_seed + SeasonEndDay * 31 + (int)WeatherStartMinute));
         Serial++;
         SyncWind(now.Minutes);
     }

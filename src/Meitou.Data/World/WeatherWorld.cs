@@ -20,31 +20,31 @@ public sealed class WeatherWorld
     /// <summary>The fog is sampled at the camera ± this in x and z.</summary>
     public const float FogSampleOffset = 1300;
 
-    readonly WeatherAreas areas;
-    readonly Dictionary<string, int> regionIndex = new(StringComparer.Ordinal);
+    readonly WeatherAreas _areas;
+    readonly Dictionary<string, int> _regionIndex = new(StringComparer.Ordinal);
 
     // camera side
-    bool hasCamera, snapRequested;
-    Vector2 lastCamera;
-    int cellX, cellZ;
-    WeatherDef? skyWeather;
-    Vector3 skyFrom = Vector3.One, skyTo = Vector3.One, sky = Vector3.One;
-    float cloudFrom, cloudTo, cloud, skyElapsed;
-    float wetness, dustX, dustSlope, heatHaze;
+    bool _hasCamera, _snapRequested;
+    Vector2 _lastCamera;
+    int _cellX, _cellZ;
+    WeatherDef? _skyWeather;
+    Vector3 _skyFrom = Vector3.One, _skyTo = Vector3.One, _sky = Vector3.One;
+    float _cloudFrom, _cloudTo, _cloud, _skyElapsed;
+    float _wetness, _dustX, _dustSlope, _heatHaze;
 
-    WeatherDef? forced;
-    float forcedStrength = 1;
+    WeatherDef? _forced;
+    float _forcedStrength = 1;
 
     public WeatherWorld(WeatherData data, WeatherAreas areas, int seed, WeatherTime start)
     {
         Data = data;
-        this.areas = areas;
+        this._areas = areas;
         Seed = seed;
         var regions = new List<WeatherRegion>();
         for (int i = 0; i < data.Regions.Count; i++)
         {
             regions.Add(new WeatherRegion(data.Regions[i], i, seed, start));
-            regionIndex[data.Regions[i].StringId] = i;
+            _regionIndex[data.Regions[i].StringId] = i;
         }
         Regions = regions;
         Time = start;
@@ -55,7 +55,7 @@ public sealed class WeatherWorld
         new(WeatherData.Load(db), WeatherAreas.Load(install), seed, start);
 
     public WeatherData Data { get; }
-    public WeatherAreas Areas => areas;
+    public WeatherAreas Areas => _areas;
     public int Seed { get; }
     /// <summary>Every region's schedule, in <see cref="WeatherData.Regions"/> order.</summary>
     public IReadOnlyList<WeatherRegion> Regions { get; }
@@ -68,7 +68,7 @@ public sealed class WeatherWorld
     public WeatherRegion? CameraRegion { get; private set; }
 
     /// <summary>The weather being forced, or null when the scheduler decides.</summary>
-    public WeatherDef? ForcedWeather => forced;
+    public WeatherDef? ForcedWeather => _forced;
 
     /// <summary>The wind direction a forced weather blows in (the schedule's own wind is not used then).</summary>
     public Vector2 ForcedWindDirection { get; set; } = Vector2.UnitX;
@@ -76,10 +76,10 @@ public sealed class WeatherWorld
     /// <summary>The schedule of the region named <paramref name="name"/> (exact, else by substring); null when there is none.</summary>
     public WeatherRegion? Region(string name) => Data.FindRegion(name) is { } def ? RegionOf(def) : null;
 
-    public WeatherRegion RegionOf(RegionDef def) => Regions[regionIndex[def.StringId]];
+    public WeatherRegion RegionOf(RegionDef def) => Regions[_regionIndex[def.StringId]];
 
     /// <summary>The schedule of the region at a world position.</summary>
-    public WeatherRegion RegionAt(float x, float z) => RegionOf(areas.RegionAt(Data, x, z));
+    public WeatherRegion RegionAt(float x, float z) => RegionOf(_areas.RegionAt(Data, x, z));
 
     /// <summary>The scheduled wind at (x, z): its region's speed and direction (a weather forced at the camera is a view setting and does not change it; what turns the rotors and drives wind generators).</summary>
     public (float Speed, Vector2 Direction) WindAt(float x, float z)
@@ -94,9 +94,9 @@ public sealed class WeatherWorld
     /// </summary>
     public void ForceWeather(WeatherDef? weather, float strength = 1, bool snap = true)
     {
-        forced = weather;
-        forcedStrength = Math.Clamp(strength, 0, 1);
-        snapRequested |= snap;
+        _forced = weather;
+        _forcedStrength = Math.Clamp(strength, 0, 1);
+        _snapRequested |= snap;
     }
 
     /// <summary>Forces the weather whose name matches; false when there is none.</summary>
@@ -109,7 +109,7 @@ public sealed class WeatherWorld
     }
 
     /// <summary>The next update treats the camera as teleported (everything snaps), as a screenshot wants.</summary>
-    public void Snap() => snapRequested = true;
+    public void Snap() => _snapRequested = true;
 
     /// <summary>
     /// One frame. <paramref name="camera"/> is the camera position (X and Z are the ground plane), <paramref name="time"/> the game day and time of day,
@@ -122,12 +122,12 @@ public sealed class WeatherWorld
         double minute = time.Minutes;
 
         var here = new Vector2(camera.X, camera.Z);
-        bool teleport = !hasCamera || snapRequested || Vector2.DistanceSquared(here, lastCamera) > TeleportDistanceSquared;
-        snapRequested = false;
-        (cellX, cellZ) = !hasCamera || WeatherAreas.DistanceSquaredToCell(cellX, cellZ, here.X, here.Y) >= RegionHysteresis * RegionHysteresis
-            ? WeatherAreas.CameraCellOf(here.X, here.Y) : (cellX, cellZ);
-        hasCamera = true;
-        lastCamera = here;
+        bool teleport = !_hasCamera || _snapRequested || Vector2.DistanceSquared(here, _lastCamera) > TeleportDistanceSquared;
+        _snapRequested = false;
+        (_cellX, _cellZ) = !_hasCamera || WeatherAreas.DistanceSquaredToCell(_cellX, _cellZ, here.X, here.Y) >= RegionHysteresis * RegionHysteresis
+            ? WeatherAreas.CameraCellOf(here.X, here.Y) : (_cellX, _cellZ);
+        _hasCamera = true;
+        _lastCamera = here;
 
         WeatherRegion? region = null;
         WeatherDef weather;
@@ -137,40 +137,40 @@ public sealed class WeatherWorld
         float fogEnabled;
         Vector3 fogColour;
         float fogDistance;
-        if (forced is { } f)
+        if (_forced is { } f)
         {
-            weather = f; s = forcedStrength; speed = f.WindSpeedAt(s); direction = ForcedWindDirection; regionName = "";
+            weather = f; s = _forcedStrength; speed = f.WindSpeedAt(s); direction = ForcedWindDirection; regionName = "";
             fogEnabled = f.FogEnabled ? 1 : 0; fogColour = f.FogColour; fogDistance = f.FogDistanceAt(speed);
         }
         else
         {
-            region = RegionOf(areas.RegionOf(Data, cellX, cellZ));
+            region = RegionOf(_areas.RegionOf(Data, _cellX, _cellZ));
             weather = region.Weather; s = region.Strength; speed = region.WindSpeed; direction = region.WindDirection; regionName = region.Def.Name;
             (fogEnabled, fogColour, fogDistance) = BlendFog(here, minute, region);
         }
         CameraRegion = region;
 
         // Sky colour multiplier and cloud density: a linear transition of 30 game-speed seconds from the value at the change.
-        if (teleport || skyWeather is null)
+        if (teleport || _skyWeather is null)
         {
-            sky = skyFrom = skyTo = weather.SkyColourMultiplier;
-            cloud = cloudFrom = cloudTo = weather.CloudsDensity;
-            skyElapsed = SkyTransitionSeconds;
-            skyWeather = weather;
+            _sky = _skyFrom = _skyTo = weather.SkyColourMultiplier;
+            _cloud = _cloudFrom = _cloudTo = weather.CloudsDensity;
+            _skyElapsed = SkyTransitionSeconds;
+            _skyWeather = weather;
         }
         else
         {
-            if (!ReferenceEquals(weather, skyWeather))
+            if (!ReferenceEquals(weather, _skyWeather))
             {
-                skyWeather = weather;
-                skyFrom = sky; cloudFrom = cloud;
-                skyTo = weather.SkyColourMultiplier; cloudTo = weather.CloudsDensity;
-                skyElapsed = 0;
+                _skyWeather = weather;
+                _skyFrom = _sky; _cloudFrom = _cloud;
+                _skyTo = weather.SkyColourMultiplier; _cloudTo = weather.CloudsDensity;
+                _skyElapsed = 0;
             }
-            skyElapsed = MathF.Min(skyElapsed + dt.Game, SkyTransitionSeconds);
-            float u = skyElapsed / SkyTransitionSeconds;
-            sky = Vector3.Lerp(skyFrom, skyTo, u);
-            cloud = cloudFrom + (cloudTo - cloudFrom) * u;
+            _skyElapsed = MathF.Min(_skyElapsed + dt.Game, SkyTransitionSeconds);
+            float u = _skyElapsed / SkyTransitionSeconds;
+            _sky = Vector3.Lerp(_skyFrom, _skyTo, u);
+            _cloud = _cloudFrom + (_cloudTo - _cloudFrom) * u;
         }
 
         // Wetness, dust and heat haze settle on the third time base.
@@ -178,25 +178,34 @@ public sealed class WeatherWorld
         float heatTarget = HeatHaze.Target(weather.HeatHaze, s, sunHeight);
         if (teleport)
         {
-            wetness = wetTarget; dustX = dustTarget; dustSlope = weather.DustSlope; heatHaze = heatTarget;
+            _wetness = wetTarget; _dustX = dustTarget; _dustSlope = weather.DustSlope; _heatHaze = heatTarget;
         }
         else
         {
             float d = dt.Settling;
-            wetness = WeatherRamps.Wetness(wetness, wetTarget, d);
-            dustX = WeatherRamps.Dust(dustX, dustTarget, d);
-            dustSlope = WeatherRamps.DustSlope(dustSlope, weather.DustSlope, d);
-            heatHaze = HeatHaze.Step(heatHaze, heatTarget, d);
+            _wetness = WeatherRamps.Wetness(_wetness, wetTarget, d);
+            _dustX = WeatherRamps.Dust(_dustX, dustTarget, d);
+            _dustSlope = WeatherRamps.DustSlope(_dustSlope, weather.DustSlope, d);
+            _heatHaze = HeatHaze.Step(_heatHaze, heatTarget, d);
         }
 
         return Current = new WeatherState
         {
-            Weather = weather, RegionName = regionName, Strength = s,
-            WindDirection = direction, WindSpeed = speed,
-            SkyColourMultiplier = sky, CloudDensity = cloud, CloudDrift = direction * speed,
-            FogEnabled = fogEnabled, FogColour = fogColour, FogDistance = fogDistance,
-            Rain = weather.RainIntensity * s, Wetness = wetness,
-            DustAmount = new Vector3(dustX, dustX * weather.DustInside, dustSlope), HeatHaze = heatHaze,
+            Weather = weather,
+            RegionName = regionName,
+            Strength = s,
+            WindDirection = direction,
+            WindSpeed = speed,
+            SkyColourMultiplier = _sky,
+            CloudDensity = _cloud,
+            CloudDrift = direction * speed,
+            FogEnabled = fogEnabled,
+            FogColour = fogColour,
+            FogDistance = fogDistance,
+            Rain = weather.RainIntensity * s,
+            Wetness = _wetness,
+            DustAmount = new Vector3(_dustX, _dustX * weather.DustInside, _dustSlope),
+            HeatHaze = _heatHaze,
         };
     }
 
@@ -216,13 +225,13 @@ public sealed class WeatherWorld
             float d2 = WeatherAreas.DistanceSquaredToCell(cx, cz, x, z);
             float w = 1 - MathF.Min(1, d2 / (FogSampleOffset * FogSampleOffset));
             if (w <= 0) continue;
-            var region = RegionOf(areas.RegionOf(Data, cx, cz));
+            var region = RegionOf(_areas.RegionOf(Data, cx, cz));
             int at = list.FindIndex(e => ReferenceEquals(e.Item1, region));
             if (at >= 0) list[at] = (region, list[at].Item2 + w);
             else list.Add((region, w));
             total += w;
         }
-        if (list.Count == 0 || total <= 0) return [(RegionOf(areas.RegionAt(Data, x, z)), 1f)];
+        if (list.Count == 0 || total <= 0) return [(RegionOf(_areas.RegionAt(Data, x, z)), 1f)];
         for (int i = 0; i < list.Count; i++) list[i] = (list[i].Item1, list[i].Item2 / total);
         return list;
     }
@@ -258,7 +267,7 @@ public sealed class WeatherWorld
     public void Restore(IEnumerable<WeatherRegionSnapshot> snapshots, WeatherTime now)
     {
         foreach (var s in snapshots)
-            if (regionIndex.TryGetValue(s.RegionId, out int i)) Regions[i].Restore(s, now);
+            if (_regionIndex.TryGetValue(s.RegionId, out int i)) Regions[i].Restore(s, now);
         Snap();
     }
 }

@@ -96,50 +96,50 @@ public sealed unsafe class GpuAllocator : IDisposable
     const ulong RebarMinHeap = 1UL << 30;
     const ulong RebarMaxRequest = 16UL << 20;
 
-    readonly VulkanDevice dev;
-    readonly Vk vk;
-    readonly ulong blockSize;
-    readonly object gate = new();
-    readonly Dictionary<PoolKey, List<MemoryBlock>> pools = new();
-    readonly HashSet<BufferAllocation> liveBuffers = new();
-    readonly HashSet<ImageAllocation> liveImages = new();
-    PhysicalDeviceMemoryProperties memProps;
-    ulong totalAllocated;
-    ulong totalUsed;
-    int blockCount;
-    int allocationCount;
-    bool disposed;
+    readonly VulkanDevice _dev;
+    readonly Vk _vk;
+    readonly ulong _blockSize;
+    readonly object _gate = new();
+    readonly Dictionary<PoolKey, List<MemoryBlock>> _pools = new();
+    readonly HashSet<BufferAllocation> _liveBuffers = new();
+    readonly HashSet<ImageAllocation> _liveImages = new();
+    PhysicalDeviceMemoryProperties _memProps;
+    ulong _totalAllocated;
+    ulong _totalUsed;
+    int _blockCount;
+    int _allocationCount;
+    bool _disposed;
 
     // A pool that keeps needing new blocks gets one made ahead on a worker (a spare), and blocks that empty out are given back to the driver
     // on a worker: vkAllocateMemory of 64 MB takes 0.3 to 1 ms and sometimes 10 to 50, vkFreeMemory 0.5 to 5 and sometimes 30, and neither
     // belongs on the render thread (2026-10-10, docs/renderer-native.md "Upload steps").
-    readonly Dictionary<PoolKey, MemoryBlock> spares = new();
-    readonly HashSet<PoolKey> sparing = new();
-    readonly Dictionary<PoolKey, int> misses = new();
+    readonly Dictionary<PoolKey, MemoryBlock> _spares = new();
+    readonly HashSet<PoolKey> _sparing = new();
+    readonly Dictionary<PoolKey, int> _misses = new();
     /// <summary>Spares being made and blocks being given back on workers.</summary>
-    int workersBusy;
+    int _workersBusy;
     /// <summary>A pool makes spares once it has needed this many new blocks (a pool that never grows keeps none).</summary>
     const int SpareAfterMisses = 2;
 
     internal GpuAllocator(VulkanDevice dev, ulong blockSize = DefaultBlockSize)
     {
-        this.dev = dev;
-        vk = dev.Vk;
-        this.blockSize = blockSize;
-        vk.GetPhysicalDeviceMemoryProperties(dev.PhysicalDevice, out memProps);
+        this._dev = dev;
+        _vk = dev.Vk;
+        this._blockSize = blockSize;
+        _vk.GetPhysicalDeviceMemoryProperties(dev.PhysicalDevice, out _memProps);
     }
 
-    public ulong BlockSize => blockSize;
+    public ulong BlockSize => _blockSize;
     /// <summary>Bytes of device memory held in blocks.</summary>
-    public ulong TotalAllocatedBytes { get { lock (gate) return totalAllocated; } }
+    public ulong TotalAllocatedBytes { get { lock (_gate) return _totalAllocated; } }
     /// <summary>Bytes handed out to allocations.</summary>
-    public ulong TotalUsedBytes { get { lock (gate) return totalUsed; } }
-    public int BlockCount { get { lock (gate) return blockCount; } }
-    public int AllocationCount { get { lock (gate) return allocationCount; } }
+    public ulong TotalUsedBytes { get { lock (_gate) return _totalUsed; } }
+    public int BlockCount { get { lock (_gate) return _blockCount; } }
+    public int AllocationCount { get { lock (_gate) return _allocationCount; } }
     /// <summary>Blocks made ahead on a worker for pools that keep growing (counted in <see cref="BlockCount"/> and <see cref="TotalAllocatedBytes"/>, not in <see cref="GetBlocks"/>).</summary>
-    public int SpareBlocks { get { lock (gate) return spares.Count; } }
+    public int SpareBlocks { get { lock (_gate) return _spares.Count; } }
     /// <summary>Buffers and images still alive (destroyed on dispose).</summary>
-    public int LiveResourceCount { get { lock (gate) return liveBuffers.Count + liveImages.Count; } }
+    public int LiveResourceCount { get { lock (_gate) return _liveBuffers.Count + _liveImages.Count; } }
 
     /// <summary>
     /// The live resources by owner, largest first: buffers and images grouped by <see cref="Owner"/>, with the count, the bytes of their
@@ -154,10 +154,10 @@ public sealed unsafe class GpuAllocator : IDisposable
             var g = groups.GetValueOrDefault(key);
             groups[key] = (g.Count + 1, g.Bytes + bytes, g.DeviceLocal + (kind == MemoryKind.DeviceLocal ? bytes : 0));
         }
-        lock (gate)
+        lock (_gate)
         {
-            foreach (var b in liveBuffers) Add(b.Name, b.Allocation.Size, b.Kind);
-            foreach (var i in liveImages) Add(i.Name, i.Allocation.Size, i.Kind);
+            foreach (var b in _liveBuffers) Add(b.Name, b.Allocation.Size, b.Kind);
+            foreach (var i in _liveImages) Add(i.Name, i.Allocation.Size, i.Kind);
         }
         return groups.Select(g => (g.Key, g.Value.Count, g.Value.Bytes, g.Value.DeviceLocal)).OrderByDescending(g => g.Bytes).ToList();
     }
@@ -182,18 +182,18 @@ public sealed unsafe class GpuAllocator : IDisposable
     {
         var rows = new List<(ulong Bytes, string Line)>();
         var blocks = new List<(uint Type, ulong Size, string Line)>();
-        lock (gate)
+        lock (_gate)
         {
-            foreach (var b in liveBuffers)
+            foreach (var b in _liveBuffers)
                 rows.Add((b.Allocation.Size, $"{Mb(b.Allocation.Size),10:0.000}  {b.Kind,-11}  buffer  {b.Name}  [{b.Size} bytes, {b.Usage}]"));
-            foreach (var i in liveImages)
+            foreach (var i in _liveImages)
                 rows.Add((i.Allocation.Size, $"{Mb(i.Allocation.Size),10:0.000}  {i.Kind,-11}  image   {i.Name}  [{i.Format} {i.Extent.Width}x{i.Extent.Height}"
                     + (i.Extent.Depth > 1 ? $"x{i.Extent.Depth}" : "") + $", {i.MipLevels} levels, {i.ArrayLayers} layers" + (i.Samples != SampleCountFlags.Count1Bit ? $", {i.Samples}" : "") + "]"));
             void Block(uint type, MemoryBlock b, bool spare) => blocks.Add((type, b.Size, $"{Mb(b.Size),10:0.000}  {Mb(b.Used),10:0.000}  {b.Free.Count,5}  type {type} "
-                + $"{memProps.MemoryTypes[(int)type].PropertyFlags}" + (b.Optimal ? " images" : " buffers") + (b.Slot > 0 ? $" streamed, slots of {Mb(b.Slot):0.000} MB" : "") + (b.Dedicated ? " dedicated" : "")
+                + $"{_memProps.MemoryTypes[(int)type].PropertyFlags}" + (b.Optimal ? " images" : " buffers") + (b.Slot > 0 ? $" streamed, slots of {Mb(b.Slot):0.000} MB" : "") + (b.Dedicated ? " dedicated" : "")
                 + (spare ? " spare" : "")));
-            foreach (var (key, list) in pools) foreach (var b in list) Block(key.Type, b, false);
-            foreach (var (key, b) in spares) Block(key.Type, b, true);
+            foreach (var (key, list) in _pools) foreach (var b in list) Block(key.Type, b, false);
+            foreach (var (key, b) in _spares) Block(key.Type, b, true);
         }
         w.WriteLine($"resources ({rows.Count}, MB  memory  what  name  [details]):");
         foreach (var (_, line) in rows.OrderByDescending(r => r.Bytes)) w.WriteLine(line);
@@ -212,11 +212,11 @@ public sealed unsafe class GpuAllocator : IDisposable
     {
         ulong empty = 0, spare = 0, scattered = 0;
         int parts = 0;
-        lock (gate)
+        lock (_gate)
         {
-            foreach (var ((type, _, _), blocks) in pools)
+            foreach (var ((type, _, _), blocks) in _pools)
             {
-                if ((memProps.MemoryTypes[(int)type].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) == 0) continue;
+                if ((_memProps.MemoryTypes[(int)type].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) == 0) continue;
                 foreach (var b in blocks)
                 {
                     if (b.Dedicated) continue;
@@ -224,8 +224,8 @@ public sealed unsafe class GpuAllocator : IDisposable
                     else if (b.Used < b.Size) { scattered += b.Size - b.Used; parts++; }
                 }
             }
-            foreach (var ((type, _, _), b) in spares)
-                if ((memProps.MemoryTypes[(int)type].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) != 0) spare += b.Size;
+            foreach (var ((type, _, _), b) in _spares)
+                if ((_memProps.MemoryTypes[(int)type].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) != 0) spare += b.Size;
         }
         return (empty, spare, scattered, parts);
     }
@@ -237,14 +237,14 @@ public sealed unsafe class GpuAllocator : IDisposable
     public ulong Trim()
     {
         var release = new List<MemoryBlock>();
-        lock (gate)
+        lock (_gate)
         {
-            if (disposed) return 0;
-            foreach (var blocks in pools.Values)
+            if (_disposed) return 0;
+            foreach (var blocks in _pools.Values)
                 for (int i = blocks.Count - 1; i >= 0; i--)
                     if (!blocks[i].Dedicated && blocks[i].Used == 0) { release.Add(blocks[i]); ReleaseBlock(blocks, blocks[i]); }
-            foreach (var b in spares.Values) { release.Add(b); totalAllocated -= b.Size; blockCount--; }
-            spares.Clear();
+            foreach (var b in _spares.Values) { release.Add(b); _totalAllocated -= b.Size; _blockCount--; }
+            _spares.Clear();
         }
         ulong bytes = 0;
         foreach (var b in release) { bytes += b.Size; GiveBack(b); }
@@ -257,22 +257,22 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// </summary>
     public bool Lean
     {
-        get => lean;
+        get => _lean;
         set
         {
-            if (lean == value) return;
-            lean = value;
+            if (_lean == value) return;
+            _lean = value;
             if (value) Trim();
         }
     }
-    volatile bool lean;
+    volatile bool _lean;
 
     public List<BlockInfo> GetBlocks()
     {
-        lock (gate)
+        lock (_gate)
         {
             var list = new List<BlockInfo>();
-            foreach (var (key, blocks) in pools)
+            foreach (var (key, blocks) in _pools)
             {
                 foreach (var b in blocks)
                 {
@@ -287,21 +287,21 @@ public sealed unsafe class GpuAllocator : IDisposable
 
     bool IsRebarType(uint i)
     {
-        var t = memProps.MemoryTypes[(int)i];
+        var t = _memProps.MemoryTypes[(int)i];
         const MemoryPropertyFlags f = MemoryPropertyFlags.DeviceLocalBit | MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit;
-        return (t.PropertyFlags & f) == f && memProps.MemoryHeaps[(int)t.HeapIndex].Size >= RebarMinHeap;
+        return (t.PropertyFlags & f) == f && _memProps.MemoryHeaps[(int)t.HeapIndex].Size >= RebarMinHeap;
     }
 
     List<uint> Candidates(uint typeBits, MemoryKind kind, ulong size)
     {
         var scored = new List<(int Score, uint Index)>();
-        for (uint i = 0; i < memProps.MemoryTypeCount; i++)
+        for (uint i = 0; i < _memProps.MemoryTypeCount; i++)
         {
             if ((typeBits & (1u << (int)i)) == 0)
             {
                 continue;
             }
-            var f = memProps.MemoryTypes[(int)i].PropertyFlags;
+            var f = _memProps.MemoryTypes[(int)i].PropertyFlags;
             bool local = (f & MemoryPropertyFlags.DeviceLocalBit) != 0;
             bool visible = (f & MemoryPropertyFlags.HostVisibleBit) != 0;
             bool coherent = (f & MemoryPropertyFlags.HostCoherentBit) != 0;
@@ -363,7 +363,7 @@ public sealed unsafe class GpuAllocator : IDisposable
             // emptied (on the render thread, Reclaim), once.
             if (!ReleaseSpares() && (attempt == 2 || Reclaim?.Invoke() != true)) break;
         }
-        Interlocked.Increment(ref failures);
+        Interlocked.Increment(ref _failures);
         throw last ?? new VulkanException("Allocation failed");
     }
 
@@ -372,8 +372,8 @@ public sealed unsafe class GpuAllocator : IDisposable
     public Func<bool>? Reclaim { get; set; }
 
     /// <summary>Allocations the driver refused after every retry (the VRAM guard enters pressure when it sees one).</summary>
-    public int Failures => Volatile.Read(ref failures);
-    int failures;
+    public int Failures => Volatile.Read(ref _failures);
+    int _failures;
 
     /// <summary>
     /// Whether a buffer of <paramref name="size"/> bytes in device-local memory would be carved from free space in blocks the driver already
@@ -382,12 +382,12 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// </summary>
     public bool FitsInFreeSpace(ulong size)
     {
-        if (size > blockSize / 2) return false;
-        lock (gate)
+        if (size > _blockSize / 2) return false;
+        lock (_gate)
         {
-            foreach (var ((type, optimal, _), blocks) in pools)
+            foreach (var ((type, optimal, _), blocks) in _pools)
             {
-                if (optimal || (memProps.MemoryTypes[(int)type].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) == 0) continue;
+                if (optimal || (_memProps.MemoryTypes[(int)type].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) == 0) continue;
                 foreach (var b in blocks)
                 {
                     if (b.Dedicated) continue;
@@ -405,27 +405,27 @@ public sealed unsafe class GpuAllocator : IDisposable
 
     Allocation AllocateFrom(uint type, ulong size, ulong alignment, bool optimal, bool streamed, bool ownMemory)
     {
-        bool dedicated = size > blockSize / 2 || streamed && ownMemory && size >= OwnMemoryBytes;
+        bool dedicated = size > _blockSize / 2 || streamed && ownMemory && size >= OwnMemoryBytes;
         ulong slot = streamed && !dedicated ? AlignUp(size, Math.Max(alignment, SlotGranule)) : 0;
         if (slot > 0) size = slot;   // every allocation of the pool is a whole slot: a freed one is exactly the room the next needs
         var key = new PoolKey(type, optimal, slot);
         MemoryBlock? fresh = null;
         while (true)
         {
-            lock (gate)
+            lock (_gate)
             {
-                if (!pools.TryGetValue(key, out var blocks))
+                if (!_pools.TryGetValue(key, out var blocks))
                 {
-                    pools[key] = blocks = new List<MemoryBlock>();
+                    _pools[key] = blocks = new List<MemoryBlock>();
                 }
                 if (fresh is not null)
                 {
                     // The block made outside the lock (a dedicated one holds just this allocation).
                     blocks.Add(fresh);
-                    totalAllocated += fresh.Size;
-                    blockCount++;
+                    _totalAllocated += fresh.Size;
+                    _blockCount++;
                     var made = Carve(fresh, 0, 0, size);
-                    if (!dedicated && slot == 0 && misses.GetValueOrDefault(key) >= SpareAfterMisses) MaybeStartSpare(key);
+                    if (!dedicated && slot == 0 && _misses.GetValueOrDefault(key) >= SpareAfterMisses) MaybeStartSpare(key);
                     return made;
                 }
                 if (!dedicated)
@@ -435,18 +435,18 @@ public sealed unsafe class GpuAllocator : IDisposable
                         return Carve(f.Block, f.Index, AlignUp(f.Block.Free[f.Index].Offset, alignment), size);
                     }
                     // A spare made ahead is the next block (its bytes were counted when it was made).
-                    if (spares.Remove(key, out var spare))
+                    if (_spares.Remove(key, out var spare))
                     {
                         blocks.Add(spare);
                         var made = Carve(spare, 0, 0, size);
                         MaybeStartSpare(key);
                         return made;
                     }
-                    if (slot == 0) misses[key] = misses.GetValueOrDefault(key) + 1;
+                    if (slot == 0) _misses[key] = _misses.GetValueOrDefault(key) + 1;
                 }
             }
             // No room: a new block, made outside the lock so a slow vkAllocateMemory does not hold up the other threads' allocations.
-            fresh = CreateBlock(type, optimal, dedicated ? size : slot > 0 ? slot * Math.Max(SlotBlockBytes / slot, 1) : blockSize, dedicated, slot);
+            fresh = CreateBlock(type, optimal, dedicated ? size : slot > 0 ? slot * Math.Max(SlotBlockBytes / slot, 1) : _blockSize, dedicated, slot);
         }
     }
 
@@ -507,27 +507,27 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// <summary>Under the lock: makes the pool's next block on a worker unless there is one or it is being made.</summary>
     void MaybeStartSpare(PoolKey key)
     {
-        if (disposed || lean || spares.ContainsKey(key) || !sparing.Add(key)) return;
-        Interlocked.Increment(ref workersBusy);
+        if (_disposed || _lean || _spares.ContainsKey(key) || !_sparing.Add(key)) return;
+        Interlocked.Increment(ref _workersBusy);
         ThreadPool.UnsafeQueueUserWorkItem(_ =>
         {
             MemoryBlock? block = null;
-            try { block = CreateBlock(key.Type, key.Optimal, blockSize, false, key.Slot); }
+            try { block = CreateBlock(key.Type, key.Optimal, _blockSize, false, key.Slot); }
             catch (VulkanException) { }   // out of memory: no spare, the pool asks again at its next miss
             bool keep = false;
-            lock (gate)
+            lock (_gate)
             {
-                sparing.Remove(key);
-                if (block is not null && !disposed)
+                _sparing.Remove(key);
+                if (block is not null && !_disposed)
                 {
-                    spares[key] = block;
-                    totalAllocated += block.Size;
-                    blockCount++;
+                    _spares[key] = block;
+                    _totalAllocated += block.Size;
+                    _blockCount++;
                     keep = true;
                 }
             }
-            if (!keep && block is not null) vk.FreeMemory(dev.Device, block.Memory, null);
-            Interlocked.Decrement(ref workersBusy);
+            if (!keep && block is not null) _vk.FreeMemory(_dev.Device, block.Memory, null);
+            Interlocked.Decrement(ref _workersBusy);
         }, null);
     }
 
@@ -535,14 +535,14 @@ public sealed unsafe class GpuAllocator : IDisposable
     bool ReleaseSpares()
     {
         List<MemoryBlock> mine;
-        lock (gate)
+        lock (_gate)
         {
-            if (spares.Count == 0) return false;
-            mine = [.. spares.Values];
-            spares.Clear();
-            foreach (var b in mine) { totalAllocated -= b.Size; blockCount--; }
+            if (_spares.Count == 0) return false;
+            mine = [.. _spares.Values];
+            _spares.Clear();
+            foreach (var b in mine) { _totalAllocated -= b.Size; _blockCount--; }
         }
-        foreach (var b in mine) vk.FreeMemory(dev.Device, b.Memory, null);
+        foreach (var b in mine) _vk.FreeMemory(_dev.Device, b.Memory, null);
         return true;
     }
 
@@ -568,8 +568,8 @@ public sealed unsafe class GpuAllocator : IDisposable
             }
         }
         block.Used += size;
-        totalUsed += size;
-        allocationCount++;
+        _totalUsed += size;
+        _allocationCount++;
         return new Allocation
         {
             Block = block,
@@ -585,13 +585,13 @@ public sealed unsafe class GpuAllocator : IDisposable
         long profileStart = UploadProfile.Begin();
         // With ray queries every block may hold acceleration structures, their build inputs or scratch, which are reached by device address.
         var addressFlags = new MemoryAllocateFlagsInfo { SType = StructureType.MemoryAllocateFlagsInfo, Flags = MemoryAllocateFlags.DeviceAddressBit };
-        var info = new MemoryAllocateInfo { SType = StructureType.MemoryAllocateInfo, AllocationSize = size, MemoryTypeIndex = type, PNext = dev.HasRayQuery && !optimal ? &addressFlags : null };
-        var r = vk.AllocateMemory(dev.Device, in info, null, out var mem);
+        var info = new MemoryAllocateInfo { SType = StructureType.MemoryAllocateInfo, AllocationSize = size, MemoryTypeIndex = type, PNext = _dev.HasRayQuery && !optimal ? &addressFlags : null };
+        var r = _vk.AllocateMemory(_dev.Device, in info, null, out var mem);
         if (r != Result.Success)
         {
             throw new VulkanException($"vkAllocateMemory({size} bytes, type {type}) failed: {r}", r);
         }
-        var flags = memProps.MemoryTypes[(int)type].PropertyFlags;
+        var flags = _memProps.MemoryTypes[(int)type].PropertyFlags;
         var block = new MemoryBlock
         {
             Memory = mem,
@@ -605,10 +605,10 @@ public sealed unsafe class GpuAllocator : IDisposable
         if ((flags & MemoryPropertyFlags.HostVisibleBit) != 0)
         {
             void* p;
-            var mr = vk.MapMemory(dev.Device, mem, 0, Vk.WholeSize, 0, &p);
+            var mr = _vk.MapMemory(_dev.Device, mem, 0, Vk.WholeSize, 0, &p);
             if (mr != Result.Success)
             {
-                vk.FreeMemory(dev.Device, mem, null);
+                _vk.FreeMemory(_dev.Device, mem, null);
                 throw new VulkanException($"vkMapMemory failed: {mr}", mr);
             }
             block.Mapped = (IntPtr)p;
@@ -629,7 +629,7 @@ public sealed unsafe class GpuAllocator : IDisposable
             return;
         }
         MemoryBlock? release = null;
-        lock (gate)
+        lock (_gate)
         {
             if (a.Freed)
             {
@@ -638,9 +638,9 @@ public sealed unsafe class GpuAllocator : IDisposable
             a.Freed = true;
             var b = a.Block;
             b.Used -= a.Size;
-            totalUsed -= a.Size;
-            allocationCount--;
-            var blocks = pools[Key(b)];
+            _totalUsed -= a.Size;
+            _allocationCount--;
+            var blocks = _pools[Key(b)];
             if (b.Dedicated)
             {
                 ReleaseBlock(blocks, b);
@@ -653,7 +653,7 @@ public sealed unsafe class GpuAllocator : IDisposable
                 {
                     // Another empty block in the pool, or a spare made ahead, is the room to grow into: this one goes back. A block of slots goes
                     // back at once (a pool per size: kept empties would add up).
-                    bool otherEmpty = spares.ContainsKey(Key(b));
+                    bool otherEmpty = _spares.ContainsKey(Key(b));
                     foreach (var o in blocks)
                     {
                         if (o != b && !o.Dedicated && o.Used == 0)
@@ -662,7 +662,7 @@ public sealed unsafe class GpuAllocator : IDisposable
                             break;
                         }
                     }
-                    if (otherEmpty || lean || b.Slot > 0)
+                    if (otherEmpty || _lean || b.Slot > 0)
                     {
                         ReleaseBlock(blocks, b);
                         release = b;
@@ -679,18 +679,18 @@ public sealed unsafe class GpuAllocator : IDisposable
     /// </summary>
     void GiveBack(MemoryBlock b)
     {
-        if (disposed)
+        if (_disposed)
         {
-            vk.FreeMemory(dev.Device, b.Memory, null);
+            _vk.FreeMemory(_dev.Device, b.Memory, null);
             return;
         }
-        Interlocked.Increment(ref workersBusy);
+        Interlocked.Increment(ref _workersBusy);
         ThreadPool.UnsafeQueueUserWorkItem(_ =>
         {
             long start = UploadProfile.Begin();
-            vk.FreeMemory(dev.Device, b.Memory, null);   // unmapping is implicit
+            _vk.FreeMemory(_dev.Device, b.Memory, null);   // unmapping is implicit
             UploadProfile.EndBlock(false, start, b.Size, b.MemoryTypeIndex, b.Optimal, b.Dedicated);
-            Interlocked.Decrement(ref workersBusy);
+            Interlocked.Decrement(ref _workersBusy);
         }, null);
     }
 
@@ -719,8 +719,8 @@ public sealed unsafe class GpuAllocator : IDisposable
     void ReleaseBlock(List<MemoryBlock> blocks, MemoryBlock b)
     {
         blocks.Remove(b);
-        totalAllocated -= b.Size;
-        blockCount--;
+        _totalAllocated -= b.Size;
+        _blockCount--;
     }
 
     static PoolKey Key(MemoryBlock b) => new(b.MemoryTypeIndex, b.Optimal, b.Slot);
@@ -739,7 +739,7 @@ public sealed unsafe class GpuAllocator : IDisposable
         {
             return;
         }
-        ulong atom = Math.Max(dev.Properties.Limits.NonCoherentAtomSize, 1);
+        ulong atom = Math.Max(_dev.Properties.Limits.NonCoherentAtomSize, 1);
         ulong start = a.Offset + offset;
         ulong len = size == Vk.WholeSize ? a.Size - offset : size;
         ulong alignedStart = start / atom * atom;
@@ -753,11 +753,11 @@ public sealed unsafe class GpuAllocator : IDisposable
         };
         if (invalidate)
         {
-            vk.InvalidateMappedMemoryRanges(dev.Device, 1, in range);
+            _vk.InvalidateMappedMemoryRanges(_dev.Device, 1, in range);
         }
         else
         {
-            vk.FlushMappedMemoryRanges(dev.Device, 1, in range);
+            _vk.FlushMappedMemoryRanges(_dev.Device, 1, in range);
         }
     }
 
@@ -779,8 +779,8 @@ public sealed unsafe class GpuAllocator : IDisposable
             Usage = usage,
             SharingMode = SharingMode.Exclusive,
         };
-        VulkanException.Check(vk.CreateBuffer(dev.Device, in info, null, out var buffer), "vkCreateBuffer");
-        vk.GetBufferMemoryRequirements(dev.Device, buffer, out var req);
+        VulkanException.Check(_vk.CreateBuffer(_dev.Device, in info, null, out var buffer), "vkCreateBuffer");
+        _vk.GetBufferMemoryRequirements(_dev.Device, buffer, out var req);
         Allocation alloc;
         try
         {
@@ -788,25 +788,25 @@ public sealed unsafe class GpuAllocator : IDisposable
         }
         catch
         {
-            vk.DestroyBuffer(dev.Device, buffer, null);
+            _vk.DestroyBuffer(_dev.Device, buffer, null);
             throw;
         }
-        var r = vk.BindBufferMemory(dev.Device, buffer, alloc.Memory, alloc.Offset);
+        var r = _vk.BindBufferMemory(_dev.Device, buffer, alloc.Memory, alloc.Offset);
         if (r != Result.Success)
         {
-            vk.DestroyBuffer(dev.Device, buffer, null);
+            _vk.DestroyBuffer(_dev.Device, buffer, null);
             Free(alloc);
             throw new VulkanException($"vkBindBufferMemory failed: {r}", r);
         }
         var gb = new BufferAllocation { Buffer = buffer, Allocation = alloc, Size = size, Usage = usage, Name = name ?? "", Kind = kind };
-        gb.Index = dev.AddBuffer(new BufferEntry(buffer, gb));
-        lock (gate)
+        gb.Index = _dev.AddBuffer(new BufferEntry(buffer, gb));
+        lock (_gate)
         {
-            liveBuffers.Add(gb);
+            _liveBuffers.Add(gb);
         }
         if (name != null)
         {
-            dev.SetName(ObjectType.Buffer, buffer.Handle, name);
+            _dev.SetName(ObjectType.Buffer, buffer.Handle, name);
         }
         return gb;
     }
@@ -821,8 +821,8 @@ public sealed unsafe class GpuAllocator : IDisposable
 
     ImageAllocation CreateImageCore(in ImageCreateInfo info, MemoryKind kind, string? name, bool streamed, bool ownMemory)
     {
-        VulkanException.Check(vk.CreateImage(dev.Device, in info, null, out var image), "vkCreateImage");
-        vk.GetImageMemoryRequirements(dev.Device, image, out var req);
+        VulkanException.Check(_vk.CreateImage(_dev.Device, in info, null, out var image), "vkCreateImage");
+        _vk.GetImageMemoryRequirements(_dev.Device, image, out var req);
         Allocation alloc;
         try
         {
@@ -830,13 +830,13 @@ public sealed unsafe class GpuAllocator : IDisposable
         }
         catch
         {
-            vk.DestroyImage(dev.Device, image, null);
+            _vk.DestroyImage(_dev.Device, image, null);
             throw;
         }
-        var r = vk.BindImageMemory(dev.Device, image, alloc.Memory, alloc.Offset);
+        var r = _vk.BindImageMemory(_dev.Device, image, alloc.Memory, alloc.Offset);
         if (r != Result.Success)
         {
-            vk.DestroyImage(dev.Device, image, null);
+            _vk.DestroyImage(_dev.Device, image, null);
             Free(alloc);
             throw new VulkanException($"vkBindImageMemory failed: {r}", r);
         }
@@ -853,13 +853,13 @@ public sealed unsafe class GpuAllocator : IDisposable
             Name = name ?? "",
             Kind = kind,
         };
-        lock (gate)
+        lock (_gate)
         {
-            liveImages.Add(gi);
+            _liveImages.Add(gi);
         }
         if (name != null)
         {
-            dev.SetName(ObjectType.Image, image.Handle, name);
+            _dev.SetName(ObjectType.Image, image.Handle, name);
         }
         return gi;
     }
@@ -871,18 +871,18 @@ public sealed unsafe class GpuAllocator : IDisposable
         {
             return;
         }
-        lock (gate)
+        lock (_gate)
         {
             if (b.Freed)
             {
                 return;
             }
             b.Freed = true;
-            liveBuffers.Remove(b);
+            _liveBuffers.Remove(b);
         }
         long profileStart = UploadProfile.Begin();
-        vk.DestroyBuffer(dev.Device, b.Buffer, null);
-        dev.RemoveBuffer(b.Index);
+        _vk.DestroyBuffer(_dev.Device, b.Buffer, null);
+        _dev.RemoveBuffer(b.Index);
         Free(b.Allocation);
         UploadProfile.End(UploadProfile.Part.FreeBuffer, profileStart);
     }
@@ -893,17 +893,17 @@ public sealed unsafe class GpuAllocator : IDisposable
         {
             return;
         }
-        lock (gate)
+        lock (_gate)
         {
             if (i.Freed)
             {
                 return;
             }
             i.Freed = true;
-            liveImages.Remove(i);
+            _liveImages.Remove(i);
         }
         long profileStart = UploadProfile.Begin();
-        vk.DestroyImage(dev.Device, i.Image, null);
+        _vk.DestroyImage(_dev.Device, i.Image, null);
         Free(i.Allocation);
         UploadProfile.End(UploadProfile.Part.FreeImage, profileStart);
     }
@@ -913,36 +913,36 @@ public sealed unsafe class GpuAllocator : IDisposable
     {
         BufferAllocation[] bs;
         ImageAllocation[] ims;
-        lock (gate)
+        lock (_gate)
         {
-            if (disposed)
+            if (_disposed)
             {
                 return;
             }
-            disposed = true;
-            bs = liveBuffers.ToArray();
-            ims = liveImages.ToArray();
+            _disposed = true;
+            bs = _liveBuffers.ToArray();
+            ims = _liveImages.ToArray();
         }
         foreach (var b in bs) Free(b);
         foreach (var i in ims) Free(i);
         // Workers making spares or giving blocks back finish before the rest goes (a spare made after disposed was set frees itself).
         var wait = new SpinWait();
-        while (Volatile.Read(ref workersBusy) > 0) wait.SpinOnce();
-        lock (gate)
+        while (Volatile.Read(ref _workersBusy) > 0) wait.SpinOnce();
+        lock (_gate)
         {
-            foreach (var blocks in pools.Values)
+            foreach (var blocks in _pools.Values)
             {
                 foreach (var b in blocks)
                 {
-                    vk.FreeMemory(dev.Device, b.Memory, null);
+                    _vk.FreeMemory(_dev.Device, b.Memory, null);
                 }
             }
-            foreach (var b in spares.Values) vk.FreeMemory(dev.Device, b.Memory, null);
-            spares.Clear();
-            pools.Clear();
-            totalAllocated = 0;
-            totalUsed = 0;
-            blockCount = 0;
+            foreach (var b in _spares.Values) _vk.FreeMemory(_dev.Device, b.Memory, null);
+            _spares.Clear();
+            _pools.Clear();
+            _totalAllocated = 0;
+            _totalUsed = 0;
+            _blockCount = 0;
         }
     }
 }

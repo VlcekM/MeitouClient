@@ -75,35 +75,35 @@ internal sealed class MeshMorphs
 /// </summary>
 internal sealed class MorphArena : IDisposable
 {
-    readonly IGpuContext gpu;
-    DeviceBuffer buffer;
-    Vector4[] host;
-    int used = 2;   // entries 0 and 1 are never a set's base, so a base of 0 can mean "no morph"
-    readonly Dictionary<string, uint> known = [];
+    readonly IGpuContext _gpu;
+    DeviceBuffer _buffer;
+    Vector4[] _host;
+    int _used = 2;   // entries 0 and 1 are never a set's base, so a base of 0 can mean "no morph"
+    readonly Dictionary<string, uint> _known = [];
 
     public MorphArena(IGpuContext gpu)
     {
-        this.gpu = gpu;
-        host = new Vector4[4096];
-        buffer = DeviceBuffer.Create(gpu, (ulong)host.Length * 16, BufferUse.Storage, "character morphs");
+        this._gpu = gpu;
+        _host = new Vector4[4096];
+        _buffer = DeviceBuffer.Create(gpu, (ulong)_host.Length * 16, BufferUse.Storage, "character morphs");
     }
 
-    public int Entries => used;
-    public long Bytes => (long)host.Length * 16;
+    public int Entries => _used;
+    public long Bytes => (long)_host.Length * 16;
 
     /// <summary>The base to give instances of the character: the vertex program reads entry <c>base + slot</c>.</summary>
     public uint Add(string key, Vector4[] deltas)
     {
-        if (known.TryGetValue(key, out uint existing)) return existing;
+        if (_known.TryGetValue(key, out uint existing)) return existing;
         int first = Reserve(deltas.Length);
         Write(first, deltas);
         uint baseIndex = (uint)(first - 1);   // slot 1 is entry `first`
-        known[key] = baseIndex;
+        _known[key] = baseIndex;
         return baseIndex;
     }
 
-    /// <summary>Three regions of <see cref="scratchSlots"/> entries (the frames in flight and one more) that <see cref="Scratch"/> rewrites in turn.</summary>
-    int scratchFirst, scratchSlots, scratchTurn;
+    /// <summary>Three regions of <see cref="_scratchSlots"/> entries (the frames in flight and one more) that <see cref="Scratch"/> rewrites in turn.</summary>
+    int _scratchFirst, _scratchSlots, _scratchTurn;
 
     /// <summary>
     /// The base for a morph that changes every frame (the character editor's blend between two looks): <paramref name="deltas"/> written into the next of three
@@ -111,12 +111,12 @@ internal sealed class MorphArena : IDisposable
     /// </summary>
     public uint Scratch(Vector4[] deltas)
     {
-        if (deltas.Length > scratchSlots)
+        if (deltas.Length > _scratchSlots)
         {
-            scratchFirst = Reserve(3 * deltas.Length);
-            scratchSlots = deltas.Length;
+            _scratchFirst = Reserve(3 * deltas.Length);
+            _scratchSlots = deltas.Length;
         }
-        int first = scratchFirst + scratchTurn++ % 3 * scratchSlots;
+        int first = _scratchFirst + _scratchTurn++ % 3 * _scratchSlots;
         Write(first, deltas);
         return (uint)(first - 1);
     }
@@ -124,32 +124,32 @@ internal sealed class MorphArena : IDisposable
     /// <summary>Makes room for <paramref name="count"/> entries at the end and returns where they start; growing makes a new buffer and rewrites every set from the host copy.</summary>
     int Reserve(int count)
     {
-        int first = used;
-        used += count;
-        if (used > host.Length)
+        int first = _used;
+        _used += count;
+        if (_used > _host.Length)
         {
-            Array.Resize(ref host, Math.Max(host.Length * 2, used));
-            buffer.Dispose();
-            buffer = DeviceBuffer.Create(gpu, (ulong)host.Length * 16, BufferUse.Storage, "character morphs");
-            Upload(0, MemoryMarshal.AsBytes(host.AsSpan(0, first)));
+            Array.Resize(ref _host, Math.Max(_host.Length * 2, _used));
+            _buffer.Dispose();
+            _buffer = DeviceBuffer.Create(_gpu, (ulong)_host.Length * 16, BufferUse.Storage, "character morphs");
+            Upload(0, MemoryMarshal.AsBytes(_host.AsSpan(0, first)));
         }
         return first;
     }
 
     void Write(int first, Vector4[] deltas)
     {
-        deltas.CopyTo(host, first);
+        deltas.CopyTo(_host, first);
         Upload((ulong)first * 16, MemoryMarshal.AsBytes(deltas.AsSpan()));
     }
 
     void Upload(ulong offset, ReadOnlySpan<byte> data)
     {
-        gpu.EnsureFrame();
-        using var batch = gpu.Uploads.Begin();
-        batch.Write(buffer, offset, data);
+        _gpu.EnsureFrame();
+        using var batch = _gpu.Uploads.Begin();
+        batch.Write(_buffer, offset, data);
     }
 
-    public GpuBufferBinding Binding(IGpuFrame frame) => buffer.Binding(frame);
+    public GpuBufferBinding Binding(IGpuFrame frame) => _buffer.Binding(frame);
 
-    public void Dispose() => buffer.Dispose();
+    public void Dispose() => _buffer.Dispose();
 }

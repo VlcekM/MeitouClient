@@ -53,10 +53,10 @@ public sealed class FcsRecord
     public OrderedDictionary<string, bool> Bools { get; } = [];
     public OrderedDictionary<string, float> Floats { get; } = [];
     public OrderedDictionary<string, int> Ints { get; } = [];
-    public OrderedDictionary<string, Vector3> Vector3s { get; } = [];
+    public OrderedDictionary<string, Vector3> Vector3S { get; } = [];
 
     /// <summary>Quaternion-valued fields, stored x, y, z, w.</summary>
-    public OrderedDictionary<string, Vector4> Vector4s { get; } = [];
+    public OrderedDictionary<string, Vector4> Vector4S { get; } = [];
     public OrderedDictionary<string, string> Strings { get; } = [];
     public OrderedDictionary<string, string> Filenames { get; } = [];
 

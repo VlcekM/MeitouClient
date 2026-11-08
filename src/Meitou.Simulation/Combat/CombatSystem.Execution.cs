@@ -26,17 +26,17 @@ public sealed partial class CombatSystem
         float skill = Eff(ac, fighter.WeaponSkill);
         float str = Eff(ac, StatsEnumerated.Strength);
         var packet = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind, race.StringId, fighter.DamageOutput, combat)
-            : DamageFormulas.Packet(skill, Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, kind, race.StringId, fighter.DamageOutput, combat);
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind, race.StringId, fighter.DamageOutput, _combat)
+            : DamageFormulas.Packet(skill, Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, kind, race.StringId, fighter.DamageOutput, _combat);
         var ctx = MakeContext(world, d, dc);
-        var events = hitEvents;
+        var events = _hitEvents;
         events.Clear();
         ReadOnlySpan<ArmourPiece> armour = dc.Fighter is { } df ? df.Armour : default;
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, blow, 0);
         bool wasIncapacitated = medical.Incapacitated;
-        var (part, damage, absorbed) = HitResolver.LandDetailed(medical, ctx, packet, armour, cover, toughness, false, false, combat, events);
+        var (part, damage, absorbed) = HitResolver.LandDetailed(medical, ctx, packet, armour, cover, toughness, false, false, _combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
-        ref var D = ref write[d];
+        ref var D = ref _write[d];
         D.Taken++;
         D.HitTick = (int)world.Tick;
         D.HitPart = part;
@@ -48,7 +48,7 @@ public sealed partial class CombatSystem
                 case MedicalEventKind.Died: death = true; break;
                 case MedicalEventKind.Decapitated: table.LimbsChanged.Enqueue((d, -1)); break;   // the look loses its head (nothing drops)
                 case MedicalEventKind.PartSevered:
-                    xp.ToughnessFromLimbLoss(dc.Stats!, race);
+                    _xp.ToughnessFromLimbLoss(dc.Stats!, race);
                     table.LimbsChanged.Enqueue((d, medical.Parts[ev.Part].Template.LimbSlot));
                     world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None, medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
                     break;

@@ -1,4 +1,3 @@
-using WorldLayout = Meitou.Data.World.WorldLayout;
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data;
@@ -9,6 +8,7 @@ using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Player;
+using WorldLayout = Meitou.Data.World.WorldLayout;
 
 namespace Meitou.Simulation.Bodies;
 
@@ -37,19 +37,19 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
 
     public GameConstants Constants { get; } = constants;
     public BodyOptions Options { get; } = options ?? BodyOptions.Default;
-    CameraViewCommand? view;
+    CameraViewCommand? _view;
 
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var c in commands)
-            if (c is CameraViewCommand v) (view, world.View) = (v, v);
+            if (c is CameraViewCommand v) (_view, world.View) = (v, v);
     }
 
     /// <summary>The <see cref="MedicalContext.BodyTimeScale"/> every character gets (default 1: the documented rates).</summary>
     public float BodyTimeScale { get; } = bodyTimeScale;
-    readonly XpService xp = new(constants, options ?? BodyOptions.Default);
+    readonly XpService _xp = new(constants, options ?? BodyOptions.Default);
     /// <summary>A bed record's kind and healing value without research (<see cref="BedOf"/>); filled from the parallel phase.</summary>
-    readonly ConcurrentDictionary<string, (BedKind Kind, float Factor)> beds = new();
+    readonly ConcurrentDictionary<string, (BedKind Kind, float Factor)> _beds = new();
 
     /// <summary>How far from a bed's spot an AI sleeper counts as lying in it (it sleeps at the spot without being held in the bed).</summary>
     const float BedReach = 3;
@@ -69,9 +69,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     {
         if (db is null) return (BedKind.None, 1);
         var fixture = cold.InSomething == Locks.HeldState.Bed && cold.InWhat is { } id ? world.Fixtures.Find(id)
-            : n.Task == (byte)CharacterTask.Rest && cold.Ai?.Behaviour == Ai.AiBehaviour.Sleep ? world.Fixtures.BedAt(n.Position, BedReach) : null;
+            : n.Task == (byte)CharacterTask.Rest && cold.Ai?.Behaviour == AiBehaviour.Sleep ? world.Fixtures.BedAt(n.Position, BedReach) : null;
         if (fixture is null) return cold.InSomething == Locks.HeldState.Bed ? (BedKind.Bed, 1) : (BedKind.None, 1);
-        var (kind, factor) = beds.GetOrAdd(fixture.RecordId, rid =>
+        var (kind, factor) = _beds.GetOrAdd(fixture.RecordId, rid =>
         {
             if (db.Find(rid) is not { } bed) return (BedKind.Bed, 1);
             foreach (var f in bed.GetReferences("functionality").Select(r => db.Find(r.TargetStringId)))
@@ -97,13 +97,13 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     }
 
     /// <summary>The character loop's update budgets, for the second add to the medical time (<see cref="MedicalContext.BudgetSeconds"/>); run by <see cref="Schedule"/>.</summary>
-    readonly MedicalTimeBudget medicalBudget = new();
+    readonly MedicalTimeBudget _medicalBudget = new();
 
     /// <summary>Per slot: not safe to get up this tick (<see cref="MedicalContext.PlayDead"/>), from <see cref="Schedule"/>.</summary>
-    bool[] playDead = [];
+    bool[] _playDead = [];
 
     /// <summary>Per slot: the get-up test could not be asked this tick (<see cref="MedicalContext.GetUpUnasked"/>), from <see cref="Schedule"/>.</summary>
-    bool[] unasked = [];
+    bool[] _unasked = [];
 
     /// <summary>How often a character playing dead looks again whether it is safe (engine choice, in ticks; the first test, as its knockout ends, is at once).</summary>
     const int PlayDeadRecheckTicks = 15;
@@ -117,21 +117,21 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// </summary>
     public void Schedule(World world)
     {
-        medicalBudget.Run(world);
+        _medicalBudget.Run(world);
         var table = world.Characters;
-        if (playDead.Length < table.HighWater) Array.Resize(ref playDead, table.HighWater);
-        if (unasked.Length < table.HighWater) Array.Resize(ref unasked, table.HighWater);
+        if (_playDead.Length < table.HighWater) Array.Resize(ref _playDead, table.HighWater);
+        if (_unasked.Length < table.HighWater) Array.Resize(ref _unasked, table.HighWater);
         var combat = world.SystemOf<Combat.CombatSystem>();
         for (int i = 0; i < table.HighWater; i++)
         {
-            bool was = playDead[i];
-            playDead[i] = unasked[i] = false;
+            bool was = _playDead[i];
+            _playDead[i] = _unasked[i] = false;
             if (!table.Previous[i].Alive || table.Cold(i) is not { Animal: null, Medical: { Unconscious: true, Dead: false, HasStatsObject: true } medical } cold) continue;
-            if (medical.PlayingDead && was && (world.Tick + i) % PlayDeadRecheckTicks != 0) { playDead[i] = true; continue; }
-            if (Unasked(world, combat, i, cold)) { unasked[i] = true; continue; }
+            if (medical.PlayingDead && was && (world.Tick + i) % PlayDeadRecheckTicks != 0) { _playDead[i] = true; continue; }
+            if (Unasked(world, combat, i, cold)) { _unasked[i] = true; continue; }
             // The window is the longest step Act may take (a far or skipped character's), so a knockout on a timer is asked on the tick it ends.
             float step = Math.Max(world.SpeedSteps, world.StepTicks(i)) * world.TickSeconds;
-            if (medical.PlayingDead || medical.WakesWithin(step + cold.MedicalBudgetSeconds)) playDead[i] = !SafeToGetUp(world, combat, i, cold);
+            if (medical.PlayingDead || medical.WakesWithin(step + cold.MedicalBudgetSeconds)) _playDead[i] = !SafeToGetUp(world, combat, i, cold);
         }
     }
 
@@ -170,7 +170,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         cold.OrderedUp = true;
         if (world.SystemOf<Combat.CombatSystem>() is not { } combat || cold is not { Stats: { } stats, Race: { } race, Medical: { } medical }) return;
         var (enemies, neutrals, allies) = Senses(world, combat, slot, cold);
-        if (enemies + neutrals >= 1 && allies == 0) xp.ToughnessFromGettingUp(stats, race, medical, enemies);
+        if (enemies + neutrals >= 1 && allies == 0) _xp.ToughnessFromGettingUp(stats, race, medical, enemies);
     }
 
     public void Act(World world, Partition part, EffectBuffer effects)
@@ -207,7 +207,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             // The load: the inventory weight, plus carry person weight while carrying someone, against the strength the injuries leave (character-stats.md "Encumbrance and carrying").
             float load = cold.Inventory?.ContentWeight(world.Player.Held) ?? 0;
             bool carrying = !cold.Carrying.IsNone;
-            float encumbrance = load <= 0 && !carrying ? 1 : Encumbrance.Factor(Constants, load, carrying, stats.Strength, medical.StatMultiplier(Meitou.Data.Gameplay.Bodies.StatsEnumerated.Strength));
+            float encumbrance = load <= 0 && !carrying ? 1 : Encumbrance.Factor(Constants, load, carrying, stats.Strength, medical.StatMultiplier(StatsEnumerated.Strength));
             var (bed, bedFactor) = BedOf(world, cold, in n);
             var ctx = new MedicalContext(Constants, Options, race)
             {
@@ -224,8 +224,8 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
                 Resting = bed != BedKind.None,
                 HungerFloor = HungerFloor(world, cold, medical),
                 HealMult = cold.InSomething == Locks.HeldState.Imprisoned ? 2 : 1,
-                PlayDead = i < playDead.Length && playDead[i],
-                GetUpUnasked = i < unasked.Length && unasked[i],
+                PlayDead = i < _playDead.Length && _playDead[i],
+                GetUpUnasked = i < _unasked.Length && _unasked[i],
                 Still = Still(cold, in n),
                 UseHungerRate = UseHungerRate(cold, in n),
                 Idle = AmIdle(world, cold, medical, in n),
@@ -246,7 +246,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
             // The stealth XP the listeners' hearing checks gave since the last tick (FUN_1408c7330, summed by AggroSystem.Apply; docs/game/character-stats.md "Stealth (heard check)").
             if (cold.HearingXp != 0)
             {
-                xp.HearingCheck(stats, race, cold.HearingXp);
+                _xp.HearingCheck(stats, race, cold.HearingXp);
                 cold.HearingXp = 0;
             }
             // Sneak XP (FUN_1408586d0 / FUN_1408c65a0, Verified): the player's faction only, not in a bed or cage or carried, while moving, and only with someone about; a watcher
@@ -272,7 +272,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// grows; walking, a smear every 4 units, as opaque as the bleeding (at most 1); carried, drops of min(0.5, bleeding / 10) once a build-up of random × bleeding × dt × 10
     /// passes 1, where it has moved more than a unit. Display only (<see cref="World.BloodMarks"/>): the trail's state on the cold row is not hashed.
     /// </summary>
-    static void BloodTrail(World world, System.Collections.Concurrent.ConcurrentQueue<BloodMark> marks, int slot, CharacterCold cold, float bleeding, RaceData race, in CharacterHot n)
+    static void BloodTrail(World world, ConcurrentQueue<BloodMark> marks, int slot, CharacterCold cold, float bleeding, RaceData race, in CharacterHot n)
     {
         var table = world.Characters;
         var id = table.IdOf(slot);
@@ -340,7 +340,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         float toughness = XpService.ToughnessFactor(medical);
         bool rest = ctx.Resting || medical.Unconscious || medical.Dead;
         float hunger = race.HungerRate * MedicalState.HungerSituationFactor(Constants, rest, ctx.Still, ctx.Idle, encumbrance, ctx.UseHungerRate);
-        return new ExtendedStats(XpService.AthleticsRate(encumbrance, speed, runValue), xp.StrengthCarryRate(encumbrance, carrying), toughness,
+        return new ExtendedStats(XpService.AthleticsRate(encumbrance, speed, runValue), _xp.StrengthCarryRate(encumbrance, carrying), toughness,
             MedicalState.KoPoint(Constants, stats.ScaledToughness), speed, runValue, hunger, rest, WorkHungerRate: ctx.UseHungerRate, Idle: ctx.Idle);
     }
 
@@ -352,9 +352,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     internal ExtendedStats WithCombatMode(ExtendedStats x, CharacterCold cold, bool combatMode)
     {
         if (!combatMode || cold.Stats is not { } stats || cold.Medical is not { } medical) return x;
-        bool fists = Combat.CombatSystem.HandCategory(cold) == (int)Meitou.Data.Gameplay.Combat.WeaponCategory.Unarmed;
+        bool fists = Combat.CombatSystem.HandCategory(cold) == (int)Data.Gameplay.Combat.WeaponCategory.Unarmed;
         float rate = fists ? 1 - (cold.Fighter?.EncumbranceFactor ?? 1)
-            : xp.WeaponWeightStrengthFactor(Combat.CombatSystem.HandWeight(cold), stats.Strength, medical.StatMultiplier(Meitou.Data.Gameplay.Bodies.StatsEnumerated.Strength));
+            : _xp.WeaponWeightStrengthFactor(Combat.CombatSystem.HandWeight(cold), stats.Strength, medical.StatMultiplier(StatsEnumerated.Strength));
         return x with { StrengthXp = rate, Fighting = true, Fists = fists };
     }
 
@@ -388,7 +388,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         cold.StealthFactor = 1;   // the sneak XP step resets the hearing checks' exposure factor (FUN_1408c65a0)
         var exposure = PaidExposureOf(world, cold);
         if (cold.Pending is not null && exposure == StealthExposure.Unobserved) exposure = StealthExposure.Near;   // the 'observed' argument is forced by a pending crime
-        if (exposure != StealthExposure.Unobserved || SomeoneAbout(world, i)) xp.Sneaking(stats, race, exposure, dt, moving);
+        if (exposure != StealthExposure.Unobserved || SomeoneAbout(world, i)) _xp.Sneaking(stats, race, exposure, dt, moving);
     }
 
     /// <summary>The speed above which a sneaker counts as moving for its XP (engine stand-in for the movement's moving flag).</summary>
@@ -437,18 +437,18 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         if (speed <= MoveXpSpeed) return;
         if (deepWater)
         {
-            xp.SwimmingInWater(stats, race, carrying, dt);
+            _xp.SwimmingInWater(stats, race, carrying, dt);
             return;
         }
-        xp.AthleticsFromRunning(stats, race, encumbrance, speed, Speed.RunValue(race, stats.Athletics), dt);
-        if (encumbrance < 1) xp.StrengthFromCarrying(stats, race, encumbrance, dt, carrying);
+        _xp.AthleticsFromRunning(stats, race, encumbrance, speed, Speed.RunValue(race, stats.Athletics), dt);
+        if (encumbrance < 1) _xp.StrengthFromCarrying(stats, race, encumbrance, dt, carrying);
     }
 
     /// <summary>The speed above which moving trains (<c>DAT_141682ad0</c>).</summary>
     const float MoveXpSpeed = 2;
 
     /// <summary>The <c>malnourished</c> squads' hunger floors (<see cref="HungerFloor"/>), by squad id; filled from the parallel phase.</summary>
-    readonly ConcurrentDictionary<int, float> squadFloors = new();
+    readonly ConcurrentDictionary<int, float> _squadFloors = new();
 
     /// <summary>
     /// The hunger level a character is kept at for free (character slot <c>0x348</c>, <c>FUN_1405c9ca0</c>, <b>Verified</b> decompile; docs/game/character-stats.md "Free food"):
@@ -459,19 +459,19 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// </summary>
     internal float HungerFloor(World world, CharacterCold cold, MedicalState medical)
     {
-        const float None = MedicalContext.NoHungerFloor;
+        const float none = MedicalContext.NoHungerFloor;
         if (cold.SlaveState == 1) return 1;
         if (cold.IsImprisoned)
         {
             var holder = cold.InWhat is { } id ? world.Fixtures.Find(id) : null;
-            if (holder is not null && holder.Owner >= 0 && holder.Owner == world.Player.Faction) return None;
+            if (holder is not null && holder.Owner >= 0 && holder.Owner == world.Player.Faction) return none;
             return cold.SlaveState == 0 ? 2 : 1.15f;
         }
-        if (cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction) return None;
-        if (db is null) return None;   // a world without data (tests, tools): nobody is fed for free
+        if (cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction) return none;
+        if (db is null) return none;   // a world without data (tests, tools): nobody is fed for free
         if (cold.SquadId < 0 || world.Squads.Find(cold.SquadId) is not { } squad) return MedicalState.MaxHunger;
         // A static factory with its argument: a capturing lambda would allocate a closure on every call (per character, per tick).
-        return squadFloors.GetOrAdd(squad.Id, static (id, a) => a.Db.Find(a.Template)?.GetBool("malnourished") == true
+        return _squadFloors.GetOrAdd(squad.Id, static (id, a) => a.Db.Find(a.Template)?.GetBool("malnourished") == true
             ? 1 + 1.2f * Rng.Float(Rng.Hash(a.Seed, (ulong)id, RngPurpose.Malnourished, 0)) : MedicalState.MaxHunger, (Db: db, Template: squad.TemplateId, world.Seed));
     }
 
@@ -528,7 +528,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     static void Flies(World world, int slot, CharacterCold cold)
     {
         var at = world.Characters.Next[slot].Position;
-        bool calm = cold.Race is { IsRobot: false } && world.Weather?.At(at.X, at.Z) is { Affect: Meitou.Data.World.WeatherAffecting.None };
+        bool calm = cold.Race is { IsRobot: false } && world.Weather?.At(at.X, at.Z) is { Affect: Data.World.WeatherAffecting.None };
         if (!calm) cold.HasFlies = false;
         else if (!cold.HasFlies && (world.Tick - cold.DiedTick) * world.TickSeconds > FliesHours * World.SecondsPerGameHour) cold.HasFlies = true;
     }

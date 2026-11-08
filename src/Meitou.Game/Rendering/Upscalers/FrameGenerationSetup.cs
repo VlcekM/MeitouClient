@@ -64,17 +64,17 @@ static class FrameGenerationSetup
     /// </summary>
     internal sealed class SystemPointer
     {
-        string? shown;
-        StandardCursor standard = StandardCursor.Default;
+        string? _shown;
+        StandardCursor _standard = StandardCursor.Default;
 
         public void Show(ICursor cursor, PlayerInterface player, string name)
         {
-            if (name == shown) return;
-            shown = name;
-            if (player.pointerPanel.PointerImage(name) is not { } pointer)
+            if (name == _shown) return;
+            _shown = name;
+            if (player.PointerPanel.PointerImage(name) is not { } pointer)
             {
                 cursor.Type = CursorType.Standard;
-                cursor.StandardCursor = standard = StandardCursor.Default;
+                cursor.StandardCursor = _standard = StandardCursor.Default;
                 return;
             }
             cursor.Type = CursorType.Custom;
@@ -86,9 +86,9 @@ static class FrameGenerationSetup
         /// <summary>Back to a system cursor (Hardware mouse, or frame generation off): the arrow, or the enhanced Hardware mouse's hand.</summary>
         public void Standard(ICursor cursor, StandardCursor kind = StandardCursor.Default)
         {
-            if (shown is null && kind == standard) return;
-            shown = null;
-            standard = kind;
+            if (_shown is null && kind == _standard) return;
+            _shown = null;
+            _standard = kind;
             cursor.Type = CursorType.Standard;
             cursor.StandardCursor = kind;
         }

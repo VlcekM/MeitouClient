@@ -110,5 +110,5 @@ public sealed record TownData
     }
 
     /// <summary>Every TOWN record, in the database's order.</summary>
-    public static List<TownData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.TOWN).Select(From)];
+    public static List<TownData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.Town).Select(From)];
 }

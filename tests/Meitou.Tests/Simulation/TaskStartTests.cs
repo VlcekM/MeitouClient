@@ -42,28 +42,28 @@ public class TaskStartTests
     {
         var db = FirstAidTests.KitDatabase();
         static FcsRecord Rec(string id, FcsRecordType type, string name) => new() { StringId = id, Flags = 0x10, Name = name, RecordType = type };
-        var water = Rec("50-t", FcsRecordType.ITEM, "Water");
+        var water = Rec("50-t", FcsRecordType.Item, "Water");
         water.Floats["weight kg"] = 1;
-        var wellFn = Rec("80-t", FcsRecordType.BUILDING_FUNCTIONALITY, "80-t");
+        var wellFn = Rec("80-t", FcsRecordType.BuildingFunctionality, "80-t");
         wellFn.Ints["function"] = MachineData.MineFunction;
         wellFn.Ints["stat used"] = (int)StatsEnumerated.Labouring;
         wellFn.References["produces"] = [new FcsReference("50-t", 10, 0, 0)];
-        var well = Rec(Well, FcsRecordType.BUILDING, "Test Well");
+        var well = Rec(Well, FcsRecordType.Building, "Test Well");
         well.References["functionality"] = [new FcsReference("80-t", 0, 0, 0)];
-        var shed = Rec(Shed, FcsRecordType.BUILDING, "Test Shed");
+        var shed = Rec(Shed, FcsRecordType.Building, "Test Shed");
         shed.Ints["build materials"] = 4;
-        var bedFn = Rec("90-t", FcsRecordType.BUILDING_FUNCTIONALITY, "90-t");
+        var bedFn = Rec("90-t", FcsRecordType.BuildingFunctionality, "90-t");
         bedFn.Ints["function"] = TownBuildings.BedFunction;
-        var bed = Rec(Bed, FcsRecordType.BUILDING, "Test Bed");
+        var bed = Rec(Bed, FcsRecordType.Building, "Test Bed");
         bed.References["functionality"] = [new FcsReference("90-t", 0, 0, 0)];
-        var cageFn = Rec("91-t", FcsRecordType.BUILDING_FUNCTIONALITY, "91-t");
+        var cageFn = Rec("91-t", FcsRecordType.BuildingFunctionality, "91-t");
         cageFn.Ints["function"] = TownBuildings.CageFunction;
         cageFn.Floats["use range"] = 25;
-        var cage = Rec(Cage, FcsRecordType.BUILDING, "Test Cage");
+        var cage = Rec(Cage, FcsRecordType.Building, "Test Cage");
         cage.References["functionality"] = [new FcsReference("91-t", 0, 0, 0)];
-        var storeFn = Rec("92-t", FcsRecordType.BUILDING_FUNCTIONALITY, "92-t");
+        var storeFn = Rec("92-t", FcsRecordType.BuildingFunctionality, "92-t");
         storeFn.Ints["function"] = MachineData.GeneralStorageFunction;
-        var store = Rec(Store, FcsRecordType.BUILDING, "Test Store");
+        var store = Rec(Store, FcsRecordType.Building, "Test Store");
         store.Bools["has inventory"] = true;
         store.References["functionality"] = [new FcsReference("92-t", 0, 0, 0)];
         var file = new FcsFile();
@@ -85,35 +85,35 @@ public class TaskStartTests
         public CharacterId Fighter, Enemy, OtherEnemy, Mate, Carried, Downed, Awake, Prisoner;
         public string WellSite = "", ShedSite = "", BedFixture = "", EmptyCage = "", LockedCage = "", StoreSite = "";
         public int Item;
-        readonly OpenGroundWalkability walk = new(SyntheticTown.Ground);
-        internal readonly ItemFactory items;
+        readonly OpenGroundWalkability _walk = new(SyntheticTown.Ground);
+        internal readonly ItemFactory Items;
 
         public Rig(bool carrying, bool decide = false, bool slaves = false, bool senses = false, FactionRelations? relations = null)
         {
             var db = Database();
             var data = PopulationData.Create(db, []);
-            items = new ItemFactory(db, BaseGame);
+            Items = new ItemFactory(db, BaseGame);
             Combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths, new CombatOptions { SelfApproach = false, TickMedical = false });
             var carry = new CarrySystem(BaseGame, BodyOptions.Default);
             var crime = new CrimeSystem(data.Relations);
             var systems = new List<ITickSystem>
             {
-                new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new FirstAidSystem(BaseGame, BodyOptions.Default, items, new FirstAidSettings { AutoNpcs = false }),
+                new PlayerSystem(), new MovementSystem(new PathService(_walk, true)), new FirstAidSystem(BaseGame, BodyOptions.Default, Items, new FirstAidSettings { AutoNpcs = false }),
                 new BodySystem(BaseGame, BodyOptions.Default), carry, new BedSystem(data) { Carry = carry },
-                new ConstructionSystem(db, BaseGame, BodyOptions.Default, items, [], ""), new ProductionSystem(db, BaseGame, BodyOptions.Default, items, null), Combat,
+                new ConstructionSystem(db, BaseGame, BodyOptions.Default, Items, [], ""), new ProductionSystem(db, BaseGame, BodyOptions.Default, Items, null), Combat,
                 crime, new ArrestSystem(crime, BaseGame) { Carry = carry }, new LockSystem(BaseGame, BodyOptions.Default) { Crimes = crime },
             };
             // The decision step's goals (docs/simulation.md "Decision step"): food on the ground and self-defence, in the game's order after combat.
             if (decide)
             {
                 systems.Insert(systems.IndexOf(carry) + 1, new TownDutySystem(data, new PopulationSystem(data), carry));
-                systems.InsertRange(systems.IndexOf(Combat) + 1, [new FeedSystem(items), new RetaliationSystem(Combat)]);
+                systems.InsertRange(systems.IndexOf(Combat) + 1, [new FeedSystem(Items), new RetaliationSystem(Combat)]);
                 // The senses the protect-allies finder reads (15, docs/game/ai-tasks.md "Combat goals"); attack on sight stays off so the other scenarios are not changed.
                 if (senses) systems.Insert(systems.IndexOf(Combat) + 3, new AggroSystem(relations ?? data.Relations, new AggroSettings { AttackOnSight = false }));
             }
             // The slaves' Obedient Slave job (187) is the captive system's.
             if (slaves) systems.Add(new CaptiveSystem(data, Combat));
-            World = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false }, walk, systems);
+            World = new SimWorld(new WorldSettings { Seed = 7, PublishSnapshots = false }, _walk, systems);
             if (relations is not null) Combat.Relations = relations;
             World.Player.Faction = 1;
             string Site(string record, float x, float z, bool complete)
@@ -141,7 +141,7 @@ public class TaskStartTests
                 StoreSite = Site(Store, 1100, 2000, complete: true);
                 World.Buildings.Find(StoreSite)!.Town = town;
             }
-            World.GroundItems.Drop(items.Create("72-t")!, new Vector3(1000, 300, 1800), 0);
+            World.GroundItems.Drop(Items.Create("72-t")!, new Vector3(1000, 300, 1800), 0);
             Item = World.GroundItems.All[^1].Id;
             Fighter = Add(1000, 2000, player: true, "72-t", "74-t");
             Mate = Add(1040, 2000, player: true);
@@ -167,7 +167,7 @@ public class TaskStartTests
             cold.Race = Person;
             cold.Stats![StatsEnumerated.Medic] = 50;
             cold.Inventory = new Inventory();
-            foreach (var k in kits) cold.Inventory.Add(items.Create(k)!);
+            foreach (var k in kits) cold.Inventory.Add(Items.Create(k)!);
             cold.IsPlayer = player;
             cold.Faction = player ? 1 : 2;
             return World.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 300, z), MaxSpeed = 40, WalkSpeed = 15 }, cold, 0);
@@ -244,7 +244,7 @@ public class TaskStartTests
     public void A_stolen_ground_item_needs_alt_to_be_picked_up(bool alt)
     {
         using var rig = new Rig(carrying: false);
-        int stolen = rig.World.GroundItems.Place(rig.items.Create("72-t")!, new Vector3(1000, 300, 1800), 0, null, owner: 2);
+        int stolen = rig.World.GroundItems.Place(rig.Items.Create("72-t")!, new Vector3(1000, 300, 1800), 0, null, owner: 2);
         rig.World.RunTicks(3);
         rig.World.TakeMessages();
         rig.Say(new PickUpItemOrder([rig.Fighter], stolen) { Tick = rig.World.Tick, Alt = alt });
@@ -302,30 +302,30 @@ public class TaskStartTests
     /// <summary>The row of each start (docs/simulation.md "Task eligibility") and the repertoires the original registers it for (docs/game/ai-tasks.md "TaskData registry").</summary>
     public static Dictionary<TaskType, int> StartRows => new()
     {
-        { TaskType.MOVE_CUS_ORDERED, H | A | Cr }, { TaskType.STAY_CLOSE_TO_TARGET, H | A | Cr }, { TaskType.BODYGUARD, H | A | Cr }, { TaskType.Unnamed289, A },
-        { TaskType.FOCUSED_MELEE_ATTACK, H | A | Cr }, { TaskType.ATTACK_ATTACKERS_OF, H | A | Cr }, { TaskType.ATTACK_ENEMIES, H | A | Cr },
-        { TaskType.FIRST_AID_ORDER, H | I | Cr }, { TaskType.SPLINT_ORDER, H | I | Cr }, { TaskType.SPLINT_JOB, H | I }, { TaskType.JOB_MEDIC, H | I | Cr }, { TaskType.JOB_REPAIR_ROBOT, H | I | Cr },
-        { TaskType.LOOT_TARGET, H | I | Cr }, { TaskType.LOOT_THE_DEAD, H | I | Cr }, { TaskType.NOT_BE_UNARMED, H | I | Cr },
-        { TaskType.LIFT_PERSON_PLAYER_ORDER, H }, { TaskType.KIDNAP_ORDER, H }, { TaskType.FIND_AND_RESCUE_IF_THERES_BEDS, H }, { TaskType.LOOT_ANIMALS_JOB, H },
-        { TaskType.DEAD_GUYS_GO_IN_THE_POT, H }, { TaskType.PICKUP_INTRUDERS, H }, { TaskType.PICKUP_INTRUDERS_TOWN, H }, { TaskType.PUT_DOWN_OBJECT, H }, { TaskType.STEALTH_KNOCKOUT, H },
-        { TaskType.OPERATE_MACHINERY, H }, { TaskType.USE_TRAINING_DUMMY, H }, { TaskType.OPERATE_STORAGE, H }, { TaskType.USE_TURRET, H }, { TaskType.PROSPECTING, H | Cr },
-        { TaskType.BUILD, H }, { TaskType.REPAIR, H }, { TaskType.DISMANTLE, H }, { TaskType.USE_BED, H | Cr }, { TaskType.PUT_SOMEONE_IN_BED, H }, { TaskType.FIND_BED_AND_PUT_IN, H },
-        { TaskType.OPERATE_AUTOMATIC_MACHINERY, H }, { TaskType.MAN_A_TURRET_PLAYER_JOB, H }, { TaskType.JOB_BUILDER, H },
-        { TaskType.DITCH_ALL_RESOURCES, H }, { TaskType.GO_HOME_AND_GO_TO_BED, H | Cr }, { TaskType.SIT_AROUND, H },
-        { TaskType.PICK_LOCK, H | I | Ch | Cr }, { TaskType.PICK_LOCK_ON_SHACKLES, H | I | Ch | Cr }, { TaskType.CUT_SHACKLES, H | I | Ch | Cr }, { TaskType.BRUTE_FORCE_SHACKLES, H | I | Ch | Cr },
-        { TaskType.RELEASE_PRISONER, H }, { TaskType.USE_CAGE, H | I | Ch | Cr }, { TaskType.OPEN_DOOR, H | Cr }, { TaskType.CLOSE_DOOR, H | Cr }, { TaskType.LOCK_DOOR, H | Cr },
-        { TaskType.UNLOCK_DOOR, H | I | Cr }, { TaskType.UNLOCK_DOOR_PLAYER_ORDER, H }, { TaskType.CUT_LOCK, H | I | Ch | Cr }, { TaskType.BRUTE_FORCE_LOCK, H | I | Ch | Cr },
-        { TaskType.BASH_DOOR_PLAYER_ORDER, H | A }, { TaskType.PICKUP, H | I | A | Cr }, { TaskType.PUT_IN_CAGE, H },
+        { TaskType.MoveCusOrdered, H | A | Cr }, { TaskType.StayCloseToTarget, H | A | Cr }, { TaskType.Bodyguard, H | A | Cr }, { TaskType.Unnamed289, A },
+        { TaskType.FocusedMeleeAttack, H | A | Cr }, { TaskType.AttackAttackersOf, H | A | Cr }, { TaskType.AttackEnemies, H | A | Cr },
+        { TaskType.FirstAidOrder, H | I | Cr }, { TaskType.SplintOrder, H | I | Cr }, { TaskType.SplintJob, H | I }, { TaskType.JobMedic, H | I | Cr }, { TaskType.JobRepairRobot, H | I | Cr },
+        { TaskType.LootTarget, H | I | Cr }, { TaskType.LootTheDead, H | I | Cr }, { TaskType.NotBeUnarmed, H | I | Cr },
+        { TaskType.LiftPersonPlayerOrder, H }, { TaskType.KidnapOrder, H }, { TaskType.FindAndRescueIfTheresBeds, H }, { TaskType.LootAnimalsJob, H },
+        { TaskType.DeadGuysGoInThePot, H }, { TaskType.PickupIntruders, H }, { TaskType.PickupIntrudersTown, H }, { TaskType.PutDownObject, H }, { TaskType.StealthKnockout, H },
+        { TaskType.OperateMachinery, H }, { TaskType.UseTrainingDummy, H }, { TaskType.OperateStorage, H }, { TaskType.UseTurret, H }, { TaskType.Prospecting, H | Cr },
+        { TaskType.Build, H }, { TaskType.Repair, H }, { TaskType.Dismantle, H }, { TaskType.UseBed, H | Cr }, { TaskType.PutSomeoneInBed, H }, { TaskType.FindBedAndPutIn, H },
+        { TaskType.OperateAutomaticMachinery, H }, { TaskType.ManATurretPlayerJob, H }, { TaskType.JobBuilder, H },
+        { TaskType.DitchAllResources, H }, { TaskType.GoHomeAndGoToBed, H | Cr }, { TaskType.SitAround, H },
+        { TaskType.PickLock, H | I | Ch | Cr }, { TaskType.PickLockOnShackles, H | I | Ch | Cr }, { TaskType.CutShackles, H | I | Ch | Cr }, { TaskType.BruteForceShackles, H | I | Ch | Cr },
+        { TaskType.ReleasePrisoner, H }, { TaskType.UseCage, H | I | Ch | Cr }, { TaskType.OpenDoor, H | Cr }, { TaskType.CloseDoor, H | Cr }, { TaskType.LockDoor, H | Cr },
+        { TaskType.UnlockDoor, H | I | Cr }, { TaskType.UnlockDoorPlayerOrder, H }, { TaskType.CutLock, H | I | Ch | Cr }, { TaskType.BruteForceLock, H | I | Ch | Cr },
+        { TaskType.BashDoorPlayerOrder, H | A }, { TaskType.Pickup, H | I | A | Cr }, { TaskType.PutInCage, H },
         // The engine's starts: arrest, kidnap, captive jobs, town duties, smell, food, dialogue acts, flight, population, the standing tasks.
-        { TaskType.ARREST_TARGET, H }, { TaskType.FIND_CAGE_AND_PUT_IN, H }, { TaskType.FIND_AND_KIDNAP, H }, { TaskType.CARRY_WOUNDED_SLAVES, H }, { TaskType.CAPTURE_NEW_SLAVES, H },
-        { TaskType.KILL_CAGE_OCCUPANT, H }, { TaskType.EAT_TARGET_ALIVE, H | A | Cr }, { TaskType.PROCESS_AND_STRIP_NEW_SLAVE, H }, { TaskType.GET_SLAVE, H }, { TaskType.GIVE_ALL_MY_SLAVES_TO, H },
-        { TaskType.SLAVE_GET_IN_MY_MASTERS_CAGE, H | I | Ch | Cr }, { TaskType.WORK_THE_SLAVES, H }, { TaskType.EAT_CROPS, H | A | Cr }, { TaskType.WORSHIP_TARGET, H | Cr },
-        { TaskType.PLAY_BECAUSE_I_HAVE_A_LIMB_IN_MOUTH, A }, { TaskType.CHASE_ALLY_DOGS_WITH_MOUTH_LIMBS, A }, { TaskType.ANIMAL_FETCH_A_LIMB, A },
-        { TaskType.TAKE_INTRUDER_OUTSIDE_TOWN, H | Cr }, { TaskType.AQUIRE_FOOD_AT_HOMEBASE, H | A | Cr }, { TaskType.LOOT_STOLEN_GOODS, H | I | Cr }, { TaskType.LOOT_FOOD_AND_STUFF, H },
-        { TaskType.PUT_LOOT_IN_STORAGE, H }, { TaskType.HUNTING_BLOODSMELL, H | A | Cr }, { TaskType.EAT_FOOD_ON_GROUND, H | Ch | A | Cr },
-        { TaskType.RUN_AWAY_FORCED, H | A | Cr }, { TaskType.GO_HOMEBUILDING, H | A | Cr }, { TaskType.MOVE_ON_FREE_WILL_FAST, H | A | Cr }, { TaskType.FOLLOW_WHILE_TALKING, H | Cr },
-        { TaskType.TOWN_STALKER, H }, { TaskType.MOVE_ON_FREE_WILL, H | A | Cr }, { TaskType.RUN_AWAY, H | A | Cr }, { TaskType.TRAVEL_TO_TARGET_TOWN, H | A | Cr },
-        { TaskType.TRAVEL_TO_TARGET_PACKAGE, H | A | Cr }, { TaskType.FOLLOW_SQUADLEADER, H | A | Cr }, { TaskType.WANDERER, H | A }, { TaskType.IDLE, H | I | Ch | A | Cr },
+        { TaskType.ArrestTarget, H }, { TaskType.FindCageAndPutIn, H }, { TaskType.FindAndKidnap, H }, { TaskType.CarryWoundedSlaves, H }, { TaskType.CaptureNewSlaves, H },
+        { TaskType.KillCageOccupant, H }, { TaskType.EatTargetAlive, H | A | Cr }, { TaskType.ProcessAndStripNewSlave, H }, { TaskType.GetSlave, H }, { TaskType.GiveAllMySlavesTo, H },
+        { TaskType.SlaveGetInMyMastersCage, H | I | Ch | Cr }, { TaskType.WorkTheSlaves, H }, { TaskType.EatCrops, H | A | Cr }, { TaskType.WorshipTarget, H | Cr },
+        { TaskType.PlayBecauseIHaveALimbInMouth, A }, { TaskType.ChaseAllyDogsWithMouthLimbs, A }, { TaskType.AnimalFetchALimb, A },
+        { TaskType.TakeIntruderOutsideTown, H | Cr }, { TaskType.AquireFoodAtHomebase, H | A | Cr }, { TaskType.LootStolenGoods, H | I | Cr }, { TaskType.LootFoodAndStuff, H },
+        { TaskType.PutLootInStorage, H }, { TaskType.HuntingBloodsmell, H | A | Cr }, { TaskType.EatFoodOnGround, H | Ch | A | Cr },
+        { TaskType.RunAwayForced, H | A | Cr }, { TaskType.GoHomebuilding, H | A | Cr }, { TaskType.MoveOnFreeWillFast, H | A | Cr }, { TaskType.FollowWhileTalking, H | Cr },
+        { TaskType.TownStalker, H }, { TaskType.MoveOnFreeWill, H | A | Cr }, { TaskType.RunAway, H | A | Cr }, { TaskType.TravelToTargetTown, H | A | Cr },
+        { TaskType.TravelToTargetPackage, H | A | Cr }, { TaskType.FollowSquadleader, H | A | Cr }, { TaskType.Wanderer, H | A }, { TaskType.Idle, H | I | Ch | A | Cr },
     };
 
     /// <summary>
@@ -364,9 +364,9 @@ public class TaskStartTests
         Assert.Equal(Cr, Repertoire.Of(world, Make(stump: true)));
         Assert.Equal(Cr, Repertoire.Of(world, Make(low: true)));
         Assert.Equal(Cr, Repertoire.Of(world, Make(animal: true, low: true)));
-        Assert.False(TaskStart.Eligible(world, Make(stump: true), TaskType.BUILD));
-        Assert.False(TaskStart.Eligible(world, Make(animal: true), TaskType.LIFT_PERSON_PLAYER_ORDER));
-        Assert.True(TaskStart.Eligible(world, Make(animal: true), TaskType.REST));
+        Assert.False(TaskStart.Eligible(world, Make(stump: true), TaskType.Build));
+        Assert.False(TaskStart.Eligible(world, Make(animal: true), TaskType.LiftPersonPlayerOrder));
+        Assert.True(TaskStart.Eligible(world, Make(animal: true), TaskType.Rest));
     }
 
     /// <summary>A system that sets slot 0's task in the slow world: directly, or through <see cref="TaskStart.Step"/>.</summary>

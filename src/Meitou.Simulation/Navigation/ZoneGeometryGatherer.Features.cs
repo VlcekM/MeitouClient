@@ -8,7 +8,7 @@ internal sealed partial class ZoneGeometryGatherer
 {
     // ---- map features ----
 
-    MapFeatureFile? features;
+    MapFeatureFile? _features;
 
     /// <summary>
     /// The collision of the map features (<c>features.dat</c>: rocks, cliffs, the Rebirth statue, gravel piles, trestle bridges) placed in the zone and its eight
@@ -26,8 +26,8 @@ internal sealed partial class ZoneGeometryGatherer
             for (int i = 0; i < features.Zones[index].Count; i++)
             {
                 var f = features.Zones[index][i];
-                if (db.Find(f.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record || record.GetPath("collision") is not { Length: > 0 } path) continue;
-                if (collision.Get(path) is not { } prepared) continue;
+                if (_db.Find(f.StringId) is not { Type: FcsRecordType.MapFeatures } record || record.GetPath("collision") is not { Length: > 0 } path) continue;
+                if (_collision.Get(path) is not { } prepared) continue;
                 var node = WorldObjectLayout.InstanceTransform(f.Position, f.Rotation, f.Scale);
                 int solids = g.Solids.Count, meshSolids = g.MeshSolids.Count;
                 foreach (var shape in prepared.Shapes) AddShape(g, shape, node, TerrainSlopeDegrees, carve: false, meshSolid: true);
@@ -39,7 +39,7 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     MapFeatureFile Features() =>
-        features ??= File.Exists(Path.Combine(install.DataDirectory, MapFeatureFile.RelativePath)) ? MapFeatureFile.Open(install) : new MapFeatureFile();
+        _features ??= File.Exists(Path.Combine(_install.DataDirectory, MapFeatureFile.RelativePath)) ? MapFeatureFile.Open(_install) : new MapFeatureFile();
 
     /// <summary>
     /// The collision triangles of the map features that ragdolls land on (docs/game/ragdolls.md "Collision groups": an outdoor body, group 3, hits group 14, the
@@ -55,8 +55,8 @@ internal sealed partial class ZoneGeometryGatherer
             if (index >= features.Zones.Count) continue;
             foreach (var f in features.Zones[index])
             {
-                if (db.Find(f.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record || record.GetPath("collision") is not { Length: > 0 } path) continue;
-                if (collision.Get(path) is not { } prepared) continue;
+                if (_db.Find(f.StringId) is not { Type: FcsRecordType.MapFeatures } record || record.GetPath("collision") is not { Length: > 0 } path) continue;
+                if (_collision.Get(path) is not { } prepared) continue;
                 var node = WorldObjectLayout.InstanceTransform(f.Position, f.Rotation, f.Scale);
                 foreach (var shape in prepared.Shapes)
                     for (int t = 0; t + 2 < shape.Indices.Length; t += 3)

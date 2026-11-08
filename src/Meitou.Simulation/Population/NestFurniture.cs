@@ -134,10 +134,10 @@ public sealed class NestBuildings
 {
     sealed record Camp(NestLayout Layout, int Owner, Vector2 Centre, string Record);
 
-    readonly SortedDictionary<int, Camp> camps = [];
-    readonly HashSet<int> stocked = [];
-    IReadOnlyList<BuildingSnapshot>? published;
-    IReadOnlyList<NestMesh>? meshes;
+    readonly SortedDictionary<int, Camp> _camps = [];
+    readonly HashSet<int> _stocked = [];
+    IReadOnlyList<BuildingSnapshot>? _published;
+    IReadOnlyList<NestMesh>? _meshes;
 
     /// <summary>The camp key of town site <paramref name="site"/> (a wild site's key is its index).</summary>
     public static int TownCamp(int site) => -1 - site;
@@ -145,42 +145,42 @@ public sealed class NestBuildings
     /// <summary>Bumped when a camp's buildings or meshes come or go: the host diffs <see cref="Published"/> and <see cref="Meshes"/> when it changes.</summary>
     public long Revision { get; private set; }
 
-    public IReadOnlyList<NestPiece> Of(int camp) => camps.TryGetValue(camp, out var c) ? c.Layout.Pieces : [];
+    public IReadOnlyList<NestPiece> Of(int camp) => _camps.TryGetValue(camp, out var c) ? c.Layout.Pieces : [];
 
     /// <summary>The TOWN record a camp was stood up from (null: none standing).</summary>
-    public string? RecordOf(int camp) => camps.TryGetValue(camp, out var c) ? c.Record : null;
+    public string? RecordOf(int camp) => _camps.TryGetValue(camp, out var c) ? c.Record : null;
 
     /// <summary>The nests standing (not the towns), by wild site, with where each stands.</summary>
-    public IEnumerable<(int Site, Vector2 Centre)> Standing => camps.Where(kv => kv.Key >= 0).Select(kv => (kv.Key, kv.Value.Centre));
+    public IEnumerable<(int Site, Vector2 Centre)> Standing => _camps.Where(kv => kv.Key >= 0).Select(kv => (kv.Key, kv.Value.Centre));
 
     public void Set(int camp, NestLayout layout, int owner, Vector2 centre, string record)
     {
-        camps[camp] = new Camp(layout, owner, centre, record);
+        _camps[camp] = new Camp(layout, owner, centre, record);
         Changed();
     }
 
     public bool Remove(int camp)
     {
-        if (!camps.Remove(camp)) return false;
+        if (!_camps.Remove(camp)) return false;
         Changed();
         return true;
     }
 
     /// <summary>True the first time a camp asks in this world (it lays its items now; the caller asks only for a zone the loaded save has no file of).</summary>
-    public bool Stock(int camp) => stocked.Add(camp);
+    public bool Stock(int camp) => _stocked.Add(camp);
 
     void Changed()
     {
-        published = null;
-        meshes = null;
+        _published = null;
+        _meshes = null;
         Revision++;
     }
 
     /// <summary>Every camp building as a complete building of its camp's faction, for the host's render and navmesh overlays.</summary>
-    public IReadOnlyList<BuildingSnapshot> Published() => published ??= [.. camps.Values.SelectMany(c => c.Layout.Pieces.Select(p => Snapshot(p, c.Owner)))];
+    public IReadOnlyList<BuildingSnapshot> Published() => _published ??= [.. _camps.Values.SelectMany(c => c.Layout.Pieces.Select(p => Snapshot(p, c.Owner)))];
 
     /// <summary>Every camp's debris meshes, for the host's render overlay.</summary>
-    public IReadOnlyList<NestMesh> Meshes() => meshes ??= [.. camps.Values.SelectMany(c => c.Layout.Meshes)];
+    public IReadOnlyList<NestMesh> Meshes() => _meshes ??= [.. _camps.Values.SelectMany(c => c.Layout.Meshes)];
 
     static BuildingSnapshot Snapshot(NestPiece p, int owner) => new(p.Id, p.Record, p.Position, p.Rotation, 0, null, owner, 0, 0, [], true, false);
 }

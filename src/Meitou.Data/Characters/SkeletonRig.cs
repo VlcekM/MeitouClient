@@ -83,21 +83,21 @@ public sealed class SkeletonRig
     /// attaches its animation controller (docs/formats/ogre-skeleton.md, <b>Verified</b>), so posing never uses it.
     /// </summary>
     public readonly bool AverageBlend;
-    readonly Dictionary<string, int> handles = new(StringComparer.Ordinal);
-    readonly ConcurrentDictionary<string, AnimationClip?> clips = new(StringComparer.OrdinalIgnoreCase);
-    readonly ConcurrentDictionary<string, LayerDef?> layers = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, int> _handles = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<string, AnimationClip?> _clips = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, LayerDef?> _layers = new(StringComparer.OrdinalIgnoreCase);
     // The binding pose in model space, with neutral shape: what the skin matrices are relative to (Ogre's OldBone::_getOffsetTransform).
     public readonly Vector3[] BindPosition = [], BindScale = [];
     public readonly Quaternion[] BindRotationInverse = [];
 
     // The skeletons the instance links (docs/animation.md, "Animation files"), read when a clip is first looked for past the own ones.
-    readonly IReadOnlyList<Lazy<OgreSkeleton?>> linked;
+    readonly IReadOnlyList<Lazy<OgreSkeleton?>> _linked;
 
     /// <param name="linked">The linked animation sources in link order: a clip the skeleton lacks is taken from the first that has it, its tracks applied by bone handle.</param>
     public SkeletonRig(OgreSkeleton skeleton, IReadOnlyList<Lazy<OgreSkeleton?>>? linked = null)
     {
         Skeleton = skeleton;
-        this.linked = linked ?? [];
+        this._linked = linked ?? [];
         BoneCount = skeleton.Bones.Count == 0 ? 0 : skeleton.Bones.Max(b => b.Handle) + 1;
         ByHandle = new OgreBone?[BoneCount];
         Parent = new int[BoneCount];
@@ -105,7 +105,7 @@ public sealed class SkeletonRig
         foreach (var b in skeleton.Bones)
         {
             ByHandle[b.Handle] = b;
-            handles.TryAdd(b.Name, b.Handle);
+            _handles.TryAdd(b.Name, b.Handle);
         }
         foreach (var b in skeleton.Bones)
             if (b.Parent is { } p && p < BoneCount && ByHandle[p] is not null) Parent[b.Handle] = p;
@@ -131,35 +131,35 @@ public sealed class SkeletonRig
         for (int h = 0; h < BoneCount; h++) BindRotationInverse[h] = Quaternion.Inverse(scratch.DerivedRotation[h]);
     }
 
-    readonly System.Collections.Concurrent.ConcurrentBag<PoseScratch> scratches = [];
+    readonly ConcurrentBag<PoseScratch> _scratches = [];
 
     // The scratch the thread gave back last, kept on the thread: a crowd of one rig posed in parallel then takes no lock (the shared bag's were contended).
-    [ThreadStatic] static PoseScratch? threadScratch;
+    [ThreadStatic] static PoseScratch? s_threadScratch;
 
     /// <summary>A working set for posing on the calling thread; give it back with <see cref="Return"/>.</summary>
     public PoseScratch Rent()
     {
-        if (threadScratch is { } kept && kept.Rig == this) { threadScratch = null; return kept; }
-        return scratches.TryTake(out var s) ? s : new PoseScratch(this);
+        if (s_threadScratch is { } kept && kept.Rig == this) { s_threadScratch = null; return kept; }
+        return _scratches.TryTake(out var s) ? s : new PoseScratch(this);
     }
 
     public void Return(PoseScratch scratch)
     {
-        if (threadScratch is { } kept) kept.Rig.scratches.Add(kept);
-        threadScratch = scratch;
+        if (s_threadScratch is { } kept) kept.Rig._scratches.Add(kept);
+        s_threadScratch = scratch;
     }
 
     /// <summary>Handle of the bone called <paramref name="name"/>, or null.</summary>
-    public int? Handle(string name) => handles.TryGetValue(name, out var h) ? h : null;
+    public int? Handle(string name) => _handles.TryGetValue(name, out var h) ? h : null;
 
     /// <summary>The animation called <paramref name="name"/> as arrays, the skeleton's own else the first linked source's (null: none has it).</summary>
     public AnimationClip? Clip(string name)
     {
-        if (clips.TryGetValue(name, out var cached)) return cached;
+        if (_clips.TryGetValue(name, out var cached)) return cached;
         var animation = Find(Skeleton, name);
-        for (int i = 0; animation is null && i < linked.Count; i++)
-            if (linked[i].Value is { } source) animation = Find(source, name);
-        return clips[name] = animation is null ? null : Compile(animation);
+        for (int i = 0; animation is null && i < _linked.Count; i++)
+            if (_linked[i].Value is { } source) animation = Find(source, name);
+        return _clips[name] = animation is null ? null : Compile(animation);
     }
 
     static OgreAnimation? Find(OgreSkeleton skeleton, string name) =>
@@ -185,16 +185,16 @@ public sealed class SkeletonRig
     /// (whose masks, <c>delete tail</c> above all, would hit the animal's like-named bones); ANIMAL_ANIMATION records are not preprocessed, so a clip plays whole.</param>
     public LayerDef? Layer(GameDatabase? db, string name, bool animal = false)
     {
-        if (layers.TryGetValue(animal ? "\u0001" + name : name, out var cached)) return cached;
+        if (_layers.TryGetValue(animal ? "\u0001" + name : name, out var cached)) return cached;
         var def = Build(db, name, animal);
-        layers[animal ? "\u0001" + name : name] = def;
+        _layers[animal ? "\u0001" + name : name] = def;
         return def;
     }
 
     LayerDef? Build(GameDatabase? db, string name, bool animal)
     {
         var mask = !animal ? AnimationMask.Find(db, name)
-            : db?.OfType(Meitou.Data.Fcs.FcsRecordType.COMBAT_TECHNIQUE).FirstOrDefault(r => r.Name == name) is { } technique ? AnimationMask.FromTechnique(technique)
+            : db?.OfType(Fcs.FcsRecordType.CombatTechnique).FirstOrDefault(r => r.Name == name) is { } technique ? AnimationMask.FromTechnique(technique)
             : AnimationMask.Plain(name);
         var clip = Clip(mask.AnimationName) ?? Clip(name);
         LayerDef? def = null;
@@ -231,18 +231,18 @@ public sealed class SkeletonRig
 /// </summary>
 public sealed class PoseScratch
 {
-    readonly SkeletonRig rig;
-    internal SkeletonRig Rig => rig;
-    readonly Vector3[] pos, scale;
-    readonly Quaternion[] rot;
+    readonly SkeletonRig _rig;
+    internal SkeletonRig Rig => _rig;
+    readonly Vector3[] _pos, _scale;
+    readonly Quaternion[] _rot;
     public readonly Vector3[] DerivedPosition, DerivedScale;
     public readonly Quaternion[] DerivedRotation;
 
     public PoseScratch(SkeletonRig rig)
     {
-        this.rig = rig;
+        this._rig = rig;
         int n = rig.BoneCount;
-        pos = new Vector3[n]; scale = new Vector3[n]; rot = new Quaternion[n];
+        _pos = new Vector3[n]; _scale = new Vector3[n]; _rot = new Quaternion[n];
         DerivedPosition = new Vector3[n]; DerivedScale = new Vector3[n]; DerivedRotation = new Quaternion[n];
     }
 
@@ -254,7 +254,7 @@ public sealed class PoseScratch
     public void Pose(BodyShapeData? shape, ReadOnlySpan<ActiveLayer> layers, Span<Matrix4x4> skin, BonePose? overrides = null)
     {
         PoseDerived(shape, layers, overrides);
-        for (int h = 0; h < rig.BoneCount; h++) skin[h] = Offset(h);
+        for (int h = 0; h < _rig.BoneCount; h++) skin[h] = Offset(h);
     }
 
     /// <summary>The posed derived (model-space) transform of a bone: scale, rotation, translation.</summary>
@@ -274,13 +274,13 @@ public sealed class PoseScratch
     /// <summary>Poses the derived transforms; <paramref name="overrides"/> (null: none) replaces the model-space rotations of some bones afterwards, and their children follow.</summary>
     public void PoseDerived(BodyShapeData? shape, ReadOnlySpan<ActiveLayer> layers, BonePose? overrides = null)
     {
-        int count = rig.BoneCount;
+        int count = _rig.BoneCount;
         for (int h = 0; h < count; h++)
         {
-            var b = rig.ByHandle[h];
-            pos[h] = b?.Position ?? Vector3.Zero;
-            rot[h] = b?.Orientation ?? Quaternion.Identity;
-            scale[h] = b?.Scale ?? Vector3.One;
+            var b = _rig.ByHandle[h];
+            _pos[h] = b?.Position ?? Vector3.Zero;
+            _rot[h] = b?.Orientation ?? Quaternion.Identity;
+            _scale[h] = b?.Scale ?? Vector3.One;
         }
         float movement = shape?.MovementScale ?? 1;
 
@@ -299,8 +299,8 @@ public sealed class PoseScratch
                     {
                         // Kenshi's override bones: pull the accumulated rotation back toward the binding one by the weight
                         // (fully at 0.99 and above) before adding this animation's rotation.
-                        if (h >= count || rig.ByHandle[h] is not { } b) continue;
-                        rot[h] = w >= 0.99f ? b.Orientation : Nlerp(rot[h], b.Orientation, w);
+                        if (h >= count || _rig.ByHandle[h] is not { } b) continue;
+                        _rot[h] = w >= 0.99f ? b.Orientation : Nlerp(_rot[h], b.Orientation, w);
                     }
                 var clip = layer.Def.Clip;
                 var excluded = layer.Def.Excluded;
@@ -311,31 +311,31 @@ public sealed class PoseScratch
                     if (track is null || excluded is not null && excluded[h]) continue;
                     Sample(track, time, out var t, out var r, out var s);
                     if (h == layer.Def.RootMotionBone) t = new Vector3(0, t.Y, 0);
-                    pos[h] += t * (w * movement);
-                    rot[h] = Quaternion.Normalize(rot[h] * Nlerp(Quaternion.Identity, r, w));   // Node::rotate, local space
-                    if (s != Vector3.One) scale[h] *= Vector3.One + (s - Vector3.One) * w;
+                    _pos[h] += t * (w * movement);
+                    _rot[h] = Quaternion.Normalize(_rot[h] * Nlerp(Quaternion.Identity, r, w));   // Node::rotate, local space
+                    if (s != Vector3.One) _scale[h] *= Vector3.One + (s - Vector3.One) * w;
                 }
             }
         }
 
         var boneSize = shape?.BoneSize;
         var positionalSize = shape?.PositionalSize;
-        foreach (int h in rig.Order)
+        foreach (int h in _rig.Order)
         {
-            int parent = rig.Parent[h];
+            int parent = _rig.Parent[h];
             var size = boneSize is null ? Vector3.One : boneSize[h];
             if (parent < 0)
             {
-                DerivedPosition[h] = pos[h]; DerivedRotation[h] = rot[h]; DerivedScale[h] = size * scale[h];
+                DerivedPosition[h] = _pos[h]; DerivedRotation[h] = _rot[h]; DerivedScale[h] = size * _scale[h];
             }
             else
             {
                 // Kenshi's modified Ogre: derived scale = bone size × own scale (not inherited); the child's offset × its positional size
                 // is scaled by the Y component of the parent's derived scale on all axes.
                 var positional = positionalSize is null ? Vector3.One : positionalSize[h];
-                DerivedRotation[h] = DerivedRotation[parent] * rot[h];
-                DerivedScale[h] = size * scale[h];
-                DerivedPosition[h] = Vector3.Transform(pos[h] * positional * DerivedScale[parent].Y, DerivedRotation[parent]) + DerivedPosition[parent];
+                DerivedRotation[h] = DerivedRotation[parent] * _rot[h];
+                DerivedScale[h] = size * _scale[h];
+                DerivedPosition[h] = Vector3.Transform(_pos[h] * positional * DerivedScale[parent].Y, DerivedRotation[parent]) + DerivedPosition[parent];
             }
             if (overrides is not null && h < overrides.Set.Length && overrides.Set[h])
             {
@@ -354,9 +354,9 @@ public sealed class PoseScratch
     /// </summary>
     Matrix4x4 Offset(int h)
     {
-        var s = DerivedScale[h] / rig.BindScale[h];
-        var r = DerivedRotation[h] * rig.BindRotationInverse[h];
-        return Matrix4x4.CreateTranslation(-rig.BindPosition[h]) * Matrix4x4.CreateScale(s) * Matrix4x4.CreateFromQuaternion(r)
+        var s = DerivedScale[h] / _rig.BindScale[h];
+        var r = DerivedRotation[h] * _rig.BindRotationInverse[h];
+        return Matrix4x4.CreateTranslation(-_rig.BindPosition[h]) * Matrix4x4.CreateScale(s) * Matrix4x4.CreateFromQuaternion(r)
             * Matrix4x4.CreateTranslation(DerivedPosition[h]);
     }
 

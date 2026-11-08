@@ -54,17 +54,17 @@ public sealed partial class FixtureRegistry
         bool destroyed = IsDestroyed(b);
         var relaid = data.Relay(site, b, interior, exterior, naming);
         if (relaid.LayoutName(exterior: false) == b.LayoutName(exterior: false) && relaid.LayoutName(exterior: true) == b.LayoutName(exterior: true)) return;
-        ruins[b.Key] = new RuinedBuilding(relaid, destroyed);
+        _ruins[b.Key] = new RuinedBuilding(relaid, destroyed);
         RuinsRevision++;
         world.ItemSlots.RelayBuilding(world, data, site, b, relaid);
-        if (!destroyed && sites.Contains(site) && data.Sight is { } sight) world.Sight.Relay(sight, relaid);
+        if (!destroyed && _sites.Contains(site) && data.Sight is { } sight) world.Sight.Relay(sight, relaid);
     }
 
     /// <summary>A building laid out afresh: its placement names its layouts (<see cref="TownBuildings.Relay"/>).</summary>
     static bool Relaid(TownBuilding b) => b.Resolved?.Placement.InteriorLayout is not null;
 
     /// <summary>Writes a building's layout names into its saved record when it was laid out afresh.</summary>
-    static void WriteLayouts(TownBuilding b, Meitou.Data.Fcs.FcsRecord state)
+    static void WriteLayouts(TownBuilding b, Data.Fcs.FcsRecord state)
     {
         if (b.Resolved?.Placement is not { InteriorLayout: { } interior } placement) return;
         state.Strings[ResidentRuins.InteriorKey] = interior;

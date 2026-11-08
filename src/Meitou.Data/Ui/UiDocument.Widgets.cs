@@ -167,7 +167,10 @@ public static partial class MyGuiPresentation
             if (row.Intersect(rowClip).Height <= 0) continue;
             var rowProperties = new Dictionary<string, string>
             {
-                ["ListOwner"] = scrollKey, ["ListCount"] = count, ["FontName"] = props.GetValueOrDefault("LineFont") ?? "Kenshi_StandardFont_Medium", ["TextAlign"] = "Left VCenter",
+                ["ListOwner"] = scrollKey,
+                ["ListCount"] = count,
+                ["FontName"] = props.GetValueOrDefault("LineFont") ?? "Kenshi_StandardFont_Medium",
+                ["TextAlign"] = "Left VCenter",
             };
             if (lineSkin is null) rowProperties["TextPadding"] = "4 2 4 2";
             if (lineSkin is null || props.ContainsKey("TextColour")) rowProperties["TextColour"] = ink;
@@ -356,7 +359,11 @@ public static partial class MyGuiPresentation
         if (y + length > viewport.Height) y = bounds.Y - length >= 0 ? bounds.Y - length : Math.Max(0, viewport.Height - length);
         var properties = new Dictionary<string, string>(list.Properties, StringComparer.Ordinal)
         {
-            ["ListSource"] = w.Name, ["ListSel"] = w.Name, ["ListScroll"] = w.Name + "@popup", ["RowAction"] = "mygui:combo", ["ListBar"] = "true",
+            ["ListSource"] = w.Name,
+            ["ListSel"] = w.Name,
+            ["ListScroll"] = w.Name + "@popup",
+            ["RowAction"] = "mygui:combo",
+            ["ListBar"] = "true",
         };
         properties.Remove("Visible"); properties.Remove("TemplateReferenceWidth"); properties.Remove("TemplateReferenceHeight");
         var popup = list with { Position = new(bounds.X, y, bounds.Width, length), RealPosition = false, Properties = properties };
@@ -391,11 +398,15 @@ public static partial class MyGuiPresentation
             b.Actions[button.Name] = $"mygui:sort:{w.Name}:{i}";
             if (button.DescendantsAndSelf().FirstOrDefault(n => n.Properties.GetValueOrDefault("TemplatePart") == "Image") is { } image)
                 b.Properties[image.Name] = new Dictionary<string, string>(b.Properties.GetValueOrDefault(image.Name) ?? new Dictionary<string, string>(), StringComparer.Ordinal)
-                    { ["ImageName"] = i == sortColumn ? ascending ? "Up" : "Down" : "None" };
+                { ["ImageName"] = i == sortColumn ? ascending ? "Up" : "Down" : "None" };
             visit(button, header.Bounds, headerClip, enabled, alpha);
             var list = CloneAs(listPrototype, name + "-list", new(x, 0, width, client.Bounds.Height), new Dictionary<string, string>
             {
-                ["ListSource"] = w.Name, ["ListSel"] = w.Name, ["ListScroll"] = w.Name, ["ListColumn"] = i.ToString(Inv), ["ListBar"] = i == columns.Count - 1 ? "true" : "false",
+                ["ListSource"] = w.Name,
+                ["ListSel"] = w.Name,
+                ["ListScroll"] = w.Name,
+                ["ListColumn"] = i.ToString(Inv),
+                ["ListBar"] = i == columns.Count - 1 ? "true" : "false",
             });
             visit(list, client.Bounds, clientClip, enabled, alpha);
             x += width;

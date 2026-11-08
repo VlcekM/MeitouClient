@@ -9,7 +9,7 @@ public sealed partial class World
     public bool PreparePopulation(Vector3 cameraFocus)
     {
         if (Characters.Phase != TablePhase.Outside) throw new InvalidOperationException("population loading requires a tick boundary");
-        var population = systems.OfType<PopulationSystem>().FirstOrDefault();
+        var population = _systems.OfType<PopulationSystem>().FirstOrDefault();
         if (population is null) return true;
         bool ready;
         Characters.BeginTick();
@@ -23,7 +23,7 @@ public sealed partial class World
         if (Settings.PublishSnapshots)
         {
             Publish();
-            KeepPrevious(Snapshot, shownBuffer);
+            KeepPrevious(Snapshot, _shownBuffer);
         }
         return ready;
     }

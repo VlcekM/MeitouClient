@@ -28,7 +28,7 @@ public sealed partial class World
         try
         {
             // The systems that take these commands: every order's owner, and the others' handlers.
-            foreach (var system in systems)
+            foreach (var system in _systems)
                 if (system is IOrderOwner or PlayerSystem or Trading.TradeSystem or Dialogue.DialogueSystem or Combat.CombatSystem)
                     system.Inputs(this, due);
             Decisions.Run(this, paused: true);   // addOrder replans at once: the order queues' fronts
@@ -38,20 +38,20 @@ public sealed partial class World
             Characters.Phase = TablePhase.Outside;
             Characters.EndTick();
         }
-        foreach (var trade in systems.OfType<Trading.TradeSystem>()) trade.RefreshView(this);
-        foreach (var talk in systems.OfType<Dialogue.DialogueSystem>()) talk.RefreshView(this);
+        foreach (var trade in _systems.OfType<Trading.TradeSystem>()) trade.RefreshView(this);
+        foreach (var talk in _systems.OfType<Dialogue.DialogueSystem>()) talk.RefreshView(this);
         if (Settings.PublishSnapshots)
         {
-            var (previous, buffer) = (PreviousSnapshot, previousBuffer);
+            var (previous, buffer) = (PreviousSnapshot, _previousBuffer);
             Publish();
             KeepPrevious(previous, buffer);
         }
     }
 
     /// <summary>The first system of type <typeparamref name="T"/> this world runs, or null. Remembered per type (the finders ask once per candidate pair; any thread).</summary>
-    internal T? SystemOf<T>() where T : class => (T?)systemsByType.GetOrAdd(typeof(T), static (_, list) => list.OfType<T>().FirstOrDefault(), systems);
+    internal T? SystemOf<T>() where T : class => (T?)_systemsByType.GetOrAdd(typeof(T), static (_, list) => list.OfType<T>().FirstOrDefault(), _systems);
 
-    readonly System.Collections.Concurrent.ConcurrentDictionary<Type, object?> systemsByType = new();
+    readonly System.Collections.Concurrent.ConcurrentDictionary<Type, object?> _systemsByType = new();
 
     /// <summary>
     /// Puts the item on the mouse back where it came from (<see cref="PlayerState.Held"/>, <see cref="PlayerSystem.ReturnHeldItem"/>): a save does this first, so the item is saved in its

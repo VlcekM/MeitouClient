@@ -44,8 +44,8 @@ public sealed partial class CombatSystem
         if (c is not { Fighter: { } f, Stats: not null, Medical: not null }) return 0;
         float str = Eff(c, StatsEnumerated.Strength);
         return (f.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, slot, c, f), Eff(c, StatsEnumerated.Toughness), str, f.FistsItem, TargetKind.None, null, f.DamageOutput, combat)
-            : DamageFormulas.Packet(Eff(c, f.WeaponSkill), Eff(c, StatsEnumerated.Dexterity) * f.DexterityMult, str, f.Weapon!, TargetKind.None, null, f.DamageOutput, combat)).Sum;
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, slot, c, f), Eff(c, StatsEnumerated.Toughness), str, f.FistsItem, TargetKind.None, null, f.DamageOutput, _combat)
+            : DamageFormulas.Packet(Eff(c, f.WeaponSkill), Eff(c, StatsEnumerated.Dexterity) * f.DexterityMult, str, f.Weapon!, TargetKind.None, null, f.DamageOutput, _combat)).Sum;
     }
 
     /// <summary>
@@ -86,7 +86,7 @@ public sealed partial class CombatSystem
     /// </summary>
     int Ticks(CombatTechnique t, float rate, float dt, CharacterCold cold)
     {
-        float clip = lengths.For(cold.Fighter is { IsAnimal: true } ? cold.Race?.StringId : null).Of(t.AnimName);
+        float clip = _lengths.For(cold.Fighter is { IsAnimal: true } ? cold.Race?.StringId : null).Of(t.AnimName);
         if (clip <= 0) clip = CombatTuning.DefaultClipSeconds;
         return Math.Max(2, (int)MathF.Ceiling(clip / (MathF.Max(t.AnimSpeedMult, 0.1f) * MathF.Max(rate, 0.05f)) / dt));
     }
@@ -99,10 +99,10 @@ public sealed partial class CombatSystem
     public float AnimalBashSeconds(CharacterCold cold)
     {
         if (cold.Fighter is not { IsAnimal: true } f) return 0;
-        foreach (var t in asWritten)
+        foreach (var t in _asWritten)
         {
             if (t.Disabled || t.IsBlock || t.IsDodge || !TechniqueChooser.Fits(t, f.AnimalCategory)) continue;
-            return lengths.For(cold.Race?.StringId).Of(t.AnimName) / MathF.Max(t.AnimSpeedMult, 0.1f);
+            return _lengths.For(cold.Race?.StringId).Of(t.AnimName) / MathF.Max(t.AnimSpeedMult, 0.1f);
         }
         return 0;
     }
@@ -147,7 +147,7 @@ public sealed partial class CombatSystem
     {
         var fighter = cold.Fighter!;
         float weight = fighter.Unarmed ? 0 : fighter.Weapon!.Stats.Weight;
-        float f = Math.Clamp(xp.WeaponWeightStrengthFactor(weight, cold.Stats![StatsEnumerated.Strength], cold.Medical!.StatMultiplier(StatsEnumerated.Strength)), 0, 1);
+        float f = Math.Clamp(_xp.WeaponWeightStrengthFactor(weight, cold.Stats![StatsEnumerated.Strength], cold.Medical!.StatMultiplier(StatsEnumerated.Strength)), 0, 1);
         float g = (0.5f + 0.5f * MathF.Min(1, fighter.EncumbranceFactor + 0.5f) * (1 - f)) * fighter.CombatSpeed;
         float dex = Eff(cold, StatsEnumerated.Dexterity) * fighter.DexterityMult;
         float skill = attack ? AttackRating(world, slot, cold, fighter) : DefenceRating(world, slot, cold, fighter);
@@ -160,7 +160,7 @@ public sealed partial class CombatSystem
     /// Each character's fight as its body step left it (<see cref="BeforeAct"/>): what <see cref="Act"/> reads of another character's fight, which that one's own Act may end meanwhile
     /// (<see cref="EndFight(CharacterTable, int, ref CombatSlot)"/>). Derived each tick, not hashed.
     /// </summary>
-    bool[] inFight = [];
+    bool[] _inFight = [];
 
     /// <summary>
     /// Step 1 of a fighter's update, the body (bleeding, healing, waking, the arms, getting up, the fight's end on going down), for every character before any of them decides
@@ -178,8 +178,8 @@ public sealed partial class CombatSystem
         {
             if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;   // the far cadence: a skipped fighter's tick timers run on, it acts on them at its step
             var cold = table.Cold(i)!;
-            Body(world, i, cold, ref write[i], now, dt, ref events);
-            inFight[i] = cold.InCombat;
+            Body(world, i, cold, ref _write[i], now, dt, ref events);
+            _inFight[i] = cold.InCombat;
         }
     }
 
@@ -200,7 +200,7 @@ public sealed partial class CombatSystem
         if (cold.Fighter.SetArms(cold.Medical.ArmWorks(left: false), cold.Medical.ArmWorks(left: true)))
         {
             // The weapon put away ends the block it was held in (FUN_1405cc230 sheathes it on an arm's change); a dodge needs no weapon.
-            if (s.ReactTech >= 0 && !cold.Fighter.CanBlock && !techniques[s.ReactTech].IsDodge) s.ReactTech = -1;
+            if (s.ReactTech >= 0 && !cold.Fighter.CanBlock && !_techniques[s.ReactTech].IsDodge) s.ReactTech = -1;
             if (cold.InCombat && !s.Ranged) cold.DrawnWeapon = MeleeDrawn(cold.Fighter);
             else if (!cold.InCombat && cold.DrawnWeapon != WeaponKinds.None && cold.DrawnWeapon != HandHold.OfCategory((int)WeaponCategory.Bow).Weapon) cold.DrawnWeapon = MeleeDrawn(cold.Fighter);   // a weapon out on a walk follows the arms too
         }
@@ -275,7 +275,7 @@ public sealed partial class CombatSystem
             if (!prev[i].Alive || prev[i].Dormant || !world.Steps(i)) continue;
             var cold = table.Cold(i)!;
             if (cold.Fighter is null || cold.Stats is null || cold.Medical is null || cold.Race is null) continue;
-            ref var s = ref write[i];
+            ref var s = ref _write[i];
             // Down or getting up (the body step, BeforeAct): it neither fights nor defends.
             if (s.Down || CharacterFacts.GettingUp(cold, now)) continue;
             ulong key = Rng.Key(table.IdOf(i));
@@ -313,8 +313,8 @@ public sealed partial class CombatSystem
             // way, the player's pick too (FUN_14060d6a0: down, dead, ragdolled or carried; imprisoned unless the fighter itself stumbles, which skips this step).
             bool fighting = s.TargetSlot >= 0;
             // The target's fight ended since it let this one close in: its engaged list was emptied (FUN_1406659b0 mode 2), the fighter keeps its target and asks again below.
-            if (s.Engaged && fighting && (uint)s.TargetSlot < (uint)prev.Length && !Listed(in s, in read[s.TargetSlot])) s.Engaged = false;
-            if (fighting && !(s.TargetSlot < prev.Length && prev[s.TargetSlot].Alive && prev[s.TargetSlot].Generation == s.TargetGeneration && !read[s.TargetSlot].Down
+            if (s.Engaged && fighting && (uint)s.TargetSlot < (uint)prev.Length && !Listed(in s, in _read[s.TargetSlot])) s.Engaged = false;
+            if (fighting && !(s.TargetSlot < prev.Length && prev[s.TargetSlot].Alive && prev[s.TargetSlot].Generation == s.TargetGeneration && !_read[s.TargetSlot].Down
                 && table.Cold(s.TargetSlot) is { IsImprisoned: false, CarriedBy.IsNone: true, Medical.Incapacitated: false })
                 && !FinishingSwing(in s, prev, now))
             {
@@ -393,7 +393,7 @@ public sealed partial class CombatSystem
             bool aborted = false;
             if (s.AttackTech >= 0)
             {
-                var tech = techniques[s.AttackTech];
+                var tech = _techniques[s.AttackTech];
                 // Given up to defend: still in the first half of the swing while a blow at it is past its half (docs/game/combat.md "Pacing").
                 // It goes straight to the defence; one that may not defend yet (after a failed roll) keeps swinging.
                 if (incoming >= CombatTuning.AbortIncomingProgress && SwingProgress(in s, now) < CombatTuning.AbortOwnProgress && now >= s.DefendReadyTick)
@@ -415,7 +415,7 @@ public sealed partial class CombatSystem
             if (s.AttackTech >= 0 && now >= s.AttackEnd)
             {
                 // A swing that ran to its end waits in state 6 (FUN_14060d6a0): no deciding, so no attack and no defence, until the pause is out.
-                bool ran = s.AttackEnd >= s.AttackStart + Math.Max(1, (int)MathF.Ceiling(Math.Max(techniques[s.AttackTech].EndProgress, CombatTuning.SwingFinished) * s.AttackTicks));
+                bool ran = s.AttackEnd >= s.AttackStart + Math.Max(1, (int)MathF.Ceiling(Math.Max(_techniques[s.AttackTech].EndProgress, CombatTuning.SwingFinished) * s.AttackTicks));
                 s.AttackTech = -1;
                 s.NextBlow = 0;
                 float pause = s.LastOutcome switch
@@ -438,9 +438,9 @@ public sealed partial class CombatSystem
                 if (fighting && !s.Engaged)
                 {
                     s.Engaged = MayJoin(world, i, s.TargetSlot, now);
-                    if (s.Engaged) s.JoinedEpoch = read[s.TargetSlot].ListEpoch;
+                    if (s.Engaged) s.JoinedEpoch = _read[s.TargetSlot].ListEpoch;
                 }
-                bool yielded = fighting && read[s.TargetSlot].YieldTo == i && now < read[s.TargetSlot].YieldUntil;
+                bool yielded = fighting && _read[s.TargetSlot].YieldTo == i && now < _read[s.TargetSlot].YieldUntil;
                 bool paused = now < s.PauseUntil;
                 if (!aborted && fighting && !paused && (now >= s.ReadyTick || incoming >= 0 || yielded))
                 {
@@ -476,7 +476,7 @@ public sealed partial class CombatSystem
         var medical = cold.Medical!;
         float length = fighter.WeaponLength;
         // The gap to where the target will be (a target that is not fighting is led by LeadSeconds, FUN_1402b4570).
-        var aim = prev[t].Position + (inFight[t] ? Vector3.Zero : prev[t].Velocity * CombatTuning.AimLeadSeconds);
+        var aim = prev[t].Position + (_inFight[t] ? Vector3.Zero : prev[t].Velocity * CombatTuning.AimLeadSeconds);
         float e = fighter.EncumbranceFactor;
         var query = new AttackQuery
         {
@@ -490,17 +490,17 @@ public sealed partial class CombatSystem
             Scale = medical.ScaleK,
             Gap = CombatTuning.Gap(prev[i].Position, aim, cold, tc),
             Previous = s.LastTech,
-            TargetStaggered = now < read[t].StunUntil,
+            TargetStaggered = now < _read[t].StunUntil,
             LeftArm = medical.ArmWorks(left: true),
             RightArm = medical.ArmWorks(left: false),
             LegDown = LegDown(medical),
         };
         float roll = CombatRolls.Float(world.Seed, key, CombatRoll.Technique, (ulong)(s.AttackSeq + 1));
-        int pick = TechniqueChooser.ChooseAttack(techniques, query, roll, out s.Reach);
+        int pick = TechniqueChooser.ChooseAttack(_techniques, query, roll, out s.Reach);
         if (pick < 0) return;
         // In reach with a technique: ask the target (and hold an attack slot).
         if (!HasSlot(world, i, t, tc, now) || !HasInitiative(world, i, ref s, t, cold, tc, now, effects)) return;
-        var tech = techniques[pick];
+        var tech = _techniques[pick];
         s.AttackSeq++;
         s.AttackTech = pick;
         s.LastTech = pick;
@@ -523,7 +523,7 @@ public sealed partial class CombatSystem
     /// </summary>
     bool HasInitiative(World world, int i, ref CombatSlot s, int t, CharacterCold cold, CharacterCold tc, int now, EffectBuffer effects)
     {
-        ref readonly var target = ref read[t];
+        ref readonly var target = ref _read[t];
         var prev = world.Characters.Previous;
         bool atMe = target.TargetSlot == i && target.TargetGeneration == prev[i].Generation;
         if (target.YieldTo == i && now < target.YieldUntil) return true;
@@ -536,7 +536,7 @@ public sealed partial class CombatSystem
         float skillI = Eff(cold, cold.Fighter!.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack);
         float skillT = Eff(tc, tc.Fighter!.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack);
         float lowSkill = lo == i ? skillI : skillT, highSkill = lo == i ? skillT : skillI;
-        float a = 1 + combat.AttackChanceFactor * MathF.Max(0, highSkill - lowSkill), b = 1 + combat.AttackChanceFactor * MathF.Max(0, lowSkill - highSkill);
+        float a = 1 + _combat.AttackChanceFactor * MathF.Max(0, highSkill - lowSkill), b = 1 + _combat.AttackChanceFactor * MathF.Max(0, lowSkill - highSkill);
         float k = b / a, lowWins = k >= 1 ? 1 - 1 / (2 * k) : k / 2;
         ulong pair = ((ulong)(uint)lo << 32) | (uint)hi;
         float roll = CombatRolls.Float(world.Seed, pair, CombatRoll.Initiative, (ulong)(uint)now);
@@ -568,7 +568,7 @@ public sealed partial class CombatSystem
     /// </summary>
     bool Open(int t, CharacterCold tc, int now)
     {
-        ref readonly var target = ref read[t];
+        ref readonly var target = ref _read[t];
         return now < target.StunUntil || target.Down || target.TargetSlot < 0 || tc.Fighter is not { CanAttack: true }
             || Orders.Has(tc, CharacterOrders.Block);
     }
@@ -584,10 +584,10 @@ public sealed partial class CombatSystem
         var range = world.Grid.Range(prev[i].Position.X, prev[i].Position.Z, CombatTuning.ReactionScanRadius);
         int generation = prev[i].Generation;
         float best = float.NegativeInfinity;
-        foreach (var (_, x, z, other) in index.AttackersOf(i))
+        foreach (var (_, x, z, other) in _index.AttackersOf(i))
         {
             if (other == i || !range.Holds((x, z))) continue;
-            ref readonly var a = ref read[other];
+            ref readonly var a = ref _read[other];
             if (a.AttackTech < 0 || a.TargetGeneration != generation || a.AttackTicks <= 0) continue;
             float progress = SwingProgress(in a, now);
             if (progress >= CombatTuning.BreakOutFrom && progress < CombatTuning.BreakOutTo) best = MathF.Max(best, a.AttackSkill);
@@ -596,7 +596,7 @@ public sealed partial class CombatSystem
         rolled = true;
         var fighter = cold.Fighter!;
         float effective = DefenceFormulas.EffectiveDefence(Eff(cold, StatsEnumerated.MartialArts), fighter.EncumbranceFactor, Speed.LegFactor(cold.Medical!), fighter.DefenceBonus, Guarding(cold));
-        float chance = DefenceFormulas.BlockChance(effective, best, combat, 0, 95);
+        float chance = DefenceFormulas.BlockChance(effective, best, _combat, 0, 95);
         return CombatRolls.Float(world.Seed, key, CombatRoll.Block, (ulong)(uint)now ^ 0x42524B4FUL) * 100 < chance;
     }
 
@@ -611,17 +611,17 @@ public sealed partial class CombatSystem
         var range = world.Grid.Range(prev[i].Position.X, prev[i].Position.Z, CombatTuning.ReactionScanRadius);
         int generation = prev[i].Generation;
         yielder = -1;
-        foreach (var (_, other) in index.YieldingTo(i))
+        foreach (var (_, other) in _index.YieldingTo(i))
         {
-            if (other == i || !range.Holds(index.CellOf(other))) continue;
-            ref readonly var a = ref read[other];
+            if (other == i || !range.Holds(_index.CellOf(other))) continue;
+            ref readonly var a = ref _read[other];
             if (now < a.YieldUntil && !a.Down && (yielder < 0 || other < yielder)) yielder = other;
         }
         float most = -1;
-        foreach (var (_, x, z, other) in index.AttackersOf(i))
+        foreach (var (_, x, z, other) in _index.AttackersOf(i))
         {
             if (other == i || !range.Holds((x, z))) continue;
-            ref readonly var a = ref read[other];
+            ref readonly var a = ref _read[other];
             if (a.AttackTech < 0 || a.NextBlow == 0 || a.TargetGeneration != generation || a.AttackTicks <= 0) continue;
             float v = SwingProgress(in a, now);
             if (v > 0 && v < 1) most = MathF.Max(most, v);
@@ -640,7 +640,7 @@ public sealed partial class CombatSystem
         if ((uint)s.TargetSlot >= (uint)prev.Length || prev[s.TargetSlot].Generation != s.TargetGeneration) return false;
 
         float clip = (now - s.AttackStart) / (float)s.AttackTicks;
-        return clip < techniques[s.AttackTech].EndProgress;
+        return clip < _techniques[s.AttackTech].EndProgress;
     }
 
     /// <summary>
@@ -653,7 +653,7 @@ public sealed partial class CombatSystem
         if (a.AttackTech < 0 || a.AttackTicks <= 0) return 0;
         if (a.NextBlow == 0) return 1;
         float clip = Math.Clamp((now - a.AttackStart) / (float)a.AttackTicks, 0, 1);
-        float strike = techniques[a.AttackTech].StrikeProgress(a.NextBlow);
+        float strike = _techniques[a.AttackTech].StrikeProgress(a.NextBlow);
         return strike > 0 ? clip / strike : 1;
     }
 
@@ -670,7 +670,7 @@ public sealed partial class CombatSystem
         var table = world.Characters;
         var prev = table.Previous;
         if ((uint)i >= (uint)prev.Length) return false;
-        ref readonly var s = ref read[i];
+        ref readonly var s = ref _read[i];
         int t = s.TargetSlot, now = (int)world.Tick;
         if (s.AttackTech < 0 || s.NextBlow != 1 || s.Ranged || (uint)t >= (uint)prev.Length || !prev[t].Alive || s.TargetGeneration != prev[t].Generation) return false;
         if (table.Cold(t) is not { Fighter: { } target, Stats: not null, Medical: not null } tc) return false;
@@ -701,7 +701,7 @@ public sealed partial class CombatSystem
         dir = default;
         var prev = world.Characters.Previous;
         if ((uint)i >= (uint)prev.Length) return false;
-        ref readonly var s = ref read[i];
+        ref readonly var s = ref _read[i];
         int a = s.ReactedSlot;
         if (s.ReactTech < 0 || (uint)a >= (uint)prev.Length || a == i || !prev[a].Alive) return false;
         if (!DefenceFaces(s.ReactTech)) return false;
@@ -716,7 +716,7 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>Whether a defence with technique <paramref name="tech"/> turns to the swing it follows: not a block of a rear direction (7, 8 or 9, <c>FUN_140666400</c>).</summary>
-    internal bool DefenceFaces(int tech) => !(techniques[tech].IsBlock && techniques[tech].AttackDirection1 is 7 or 8 or 9);
+    internal bool DefenceFaces(int tech) => !(_techniques[tech].IsBlock && _techniques[tech].AttackDirection1 is 7 or 8 or 9);
 
     /// <summary>Any leg part is down (flesh - stun + rig &lt; 0): the original's two leg parts at medical +0x4d8 / +0x4e0 in the kick factor (<c>FUN_140886030</c>).</summary>
     static bool LegDown(MedicalState medical)
@@ -734,7 +734,7 @@ public sealed partial class CombatSystem
     /// </summary>
     bool HasSlot(World world, int i, int t, CharacterCold tc, int now)
     {
-        int slots = read[t].AttackTech >= 0 || now < read[t].StunUntil ? 1 : Math.Clamp(AttackSlots + (tc.Race?.ExtraAttackSlots ?? 0), 1, MaxAttackSlots);
+        int slots = _read[t].AttackTech >= 0 || now < _read[t].StunUntil ? 1 : Math.Clamp(AttackSlots + (tc.Race?.ExtraAttackSlots ?? 0), 1, MaxAttackSlots);
         var table = world.Characters;
         var prev = table.Previous;
         // The fighters at the target within EngageScanRadius of it (the index's list, kept to the grid's cells round it).
@@ -742,18 +742,18 @@ public sealed partial class CombatSystem
         int generation = prev[t].Generation, holders = 0, ahead = 0;
         var at = prev[t].Position;
         bool open = Open(t, tc, now);
-        foreach (var (_, x, z, other) in index.AttackersOf(t))
+        foreach (var (_, x, z, other) in _index.AttackersOf(t))
         {
             if (other == i || !range.Holds((x, z))) continue;
-            ref readonly var o = ref read[other];
+            ref readonly var o = ref _read[other];
             if (o.TargetGeneration != generation || o.Down || o.Ranged) continue;
             // A swing holds its slot unless the target (a blocker) freed its slots after the swing started, or it has run past SlotHoldSeconds (FUN_140668000).
-            if (o.AttackTech >= 0 && o.NextBlow > 0 && o.AttackStart >= read[t].SlotsCleared && now - o.AttackStart <= (int)MathF.Ceiling(SlotHoldSeconds / world.TickSeconds))
+            if (o.AttackTech >= 0 && o.NextBlow > 0 && o.AttackStart >= _read[t].SlotsCleared && now - o.AttackStart <= (int)MathF.Ceiling(SlotHoldSeconds / world.TickSeconds))
             {
                 if (++holders + ahead >= slots) return false;
                 continue;
             }
-            if (other > i || now < o.StunUntil || now < o.PauseUntil && o.AttackTech < 0 && o.ReactTech < 0 || !Listed(in o, in read[t]) && !MayJoin(world, other, t, now)) continue;
+            if (other > i || now < o.StunUntil || now < o.PauseUntil && o.AttackTech < 0 && o.ReactTech < 0 || !Listed(in o, in _read[t]) && !MayJoin(world, other, t, now)) continue;
             // It decides this tick when its swing or reaction ends now (Act's steps 4 and 5): a block's end and a swing's end start a pause (cut short by a blow at it).
             int ready = o.ReadyTick;
             if (o.AttackTech >= 0)
@@ -766,7 +766,7 @@ public sealed partial class CombatSystem
                 if (!ReactionEnds(world, other, in o, now, out bool wait)) continue;
                 if (wait) ready = Math.Max(ready, now + (int)MathF.Ceiling(CombatTuning.AfterBlockPause / world.TickSeconds));
             }
-            if (now < ready && !(read[t].YieldTo == other && now < read[t].YieldUntil) && Incoming(world, other, now, out _) < 0) continue;
+            if (now < ready && !(_read[t].YieldTo == other && now < _read[t].YieldUntil) && Incoming(world, other, now, out _) < 0) continue;
             // A yielder asks in vain unless the target is open (HasInitiative).
             if (o.YieldTo == t && now < o.YieldUntil && !open) continue;
             // Its reach is known from its last ask (StartAttack); one that has never asked counts.
@@ -802,12 +802,12 @@ public sealed partial class CombatSystem
         var prev = world.Characters.Previous;
         var range = world.Grid.Range(prev[t].Position.X, prev[t].Position.Z, CombatTuning.EngageScanRadius);
         int generation = prev[t].Generation, count = 0;
-        foreach (var (_, x, z, other) in index.AttackersOf(t))
+        foreach (var (_, x, z, other) in _index.AttackersOf(t))
         {
             if (other == i || !range.Holds((x, z))) continue;
-            ref readonly var o = ref read[other];
+            ref readonly var o = ref _read[other];
             if (o.TargetGeneration != generation || o.Down || o.Ranged) continue;
-            if (!Listed(in o, in read[t]) && (other > i || !MayDecide(in o, now))) continue;
+            if (!Listed(in o, in _read[t]) && (other > i || !MayDecide(in o, now))) continue;
             if (++count >= MaxEngaged) return false;
         }
         return count < MaxEngaged;
@@ -846,7 +846,7 @@ public sealed partial class CombatSystem
             ref readonly var p = ref table.Previous[c];
             if (!p.Alive || MathF.Abs(p.Position.Y - q.At.Y) >= FlockHeight) return;
             if (table.Cold(c) is not { } oc || CombatSteering.OutOfFlock(p, oc)) return;
-            ref readonly var o = ref q.Self.read[c];
+            ref readonly var o = ref q.Self._read[c];
             if (o.TargetSlot == q.Me && o.TargetGeneration == table.Previous[q.Me].Generation) return;
             bool enemy = q.Self.Relations is { } relations ? AggroSystem.IsEnemy(relations, q.Faction, oc.Faction) : oc.Faction != q.Faction;
             if (enemy) return;
@@ -861,7 +861,7 @@ public sealed partial class CombatSystem
         now >= o.StunUntil && (o.ReactTech < 0 || now >= o.ReactStart + o.ReactTicks)
         && (o.AttackTech < 0 || now >= o.AttackEnd || SwingProgress(in o, now) < CombatTuning.AbortOwnProgress);
 
-    readonly AttackerIndex index = new();
+    readonly AttackerIndex _index = new();
 
     /// <summary>
     /// Lists who is after whom from the combat state as it stands (<see cref="AttackerIndex"/>), for <see cref="FightersAt"/> and the act's checks; serial phases only. Combat's
@@ -869,28 +869,28 @@ public sealed partial class CombatSystem
     /// </summary>
     public void IndexAttackers(World world)
     {
-        index.Build(read, world.Characters, world.Grid);
+        _index.Build(_read, world.Characters, world.Grid);
         // FightersAt's counts, once per target: asked per attacker, a crowd round one target would walk its list once per member.
         int n = world.Characters.HighWater;
-        if (fightersAt.Length < n) fightersAt = new int[Math.Max(n, fightersAt.Length * 2)];
-        for (int t = 0; t < n; t++) fightersAt[t] = index.AttackersOf(t).IsEmpty ? 0 : CountFightersAt(world, t);
+        if (_fightersAt.Length < n) _fightersAt = new int[Math.Max(n, _fightersAt.Length * 2)];
+        for (int t = 0; t < n; t++) _fightersAt[t] = _index.AttackersOf(t).IsEmpty ? 0 : CountFightersAt(world, t);
     }
 
-    int[] fightersAt = [];
+    int[] _fightersAt = [];
 
     /// <summary>The melee fighters (engaged or circling) at <paramref name="t"/>, as of the last tick: the original's engaged count plus the askers it turned away (<c>FUN_140666e20</c>).
     /// After <see cref="IndexAttackers"/>.</summary>
-    public int FightersAt(World world, int t) => (uint)t < (uint)world.Characters.HighWater && t < fightersAt.Length ? fightersAt[t] : 0;
+    public int FightersAt(World world, int t) => (uint)t < (uint)world.Characters.HighWater && t < _fightersAt.Length ? _fightersAt[t] : 0;
 
     int CountFightersAt(World world, int t)
     {
         var prev = world.Characters.Previous;
         var range = world.Grid.Range(prev[t].Position.X, prev[t].Position.Z, CombatTuning.EngageScanRadius);
         int generation = prev[t].Generation, count = 0;
-        foreach (var (_, x, z, other) in index.AttackersOf(t))
+        foreach (var (_, x, z, other) in _index.AttackersOf(t))
         {
             if (!range.Holds((x, z))) continue;
-            ref readonly var o = ref read[other];
+            ref readonly var o = ref _read[other];
             if (o.TargetGeneration == generation && !o.Down && !o.Ranged) count++;
         }
         return count;
@@ -918,14 +918,14 @@ public sealed partial class CombatSystem
         var range = world.Grid.Range(prev[i].Position.X, prev[i].Position.Z, CombatTuning.ReactionScanRadius);
         int generation = prev[i].Generation;
         var best = new IncomingBlow(-1, 0, 0, 0, 0);
-        foreach (var (_, x, z, other) in index.AttackersOf(i))
+        foreach (var (_, x, z, other) in _index.AttackersOf(i))
         {
             if (other == i || !range.Holds((x, z))) continue;
-            ref readonly var a = ref read[other];
+            ref readonly var a = ref _read[other];
             if (a.AttackTech < 0 || a.NextBlow == 0 || a.TargetGeneration != generation || a.AttackTicks <= 0) continue;
 
             // A blow is on its way until the attacker's state shows it struck (a far attacker strikes at its own step, after the landing tick; strikes apply after every Act).
-            int lands = a.AttackStart + (int)MathF.Ceiling(techniques[a.AttackTech].StrikeProgress(a.NextBlow) * a.AttackTicks);
+            int lands = a.AttackStart + (int)MathF.Ceiling(_techniques[a.AttackTech].StrikeProgress(a.NextBlow) * a.AttackTicks);
             float v = SwingProgress(in a, now);
             if (v <= 0 || !landing && v >= 1) continue;
             if (best.Attacker >= 0 && !Ahead(v, other, in best, keep)) continue;
@@ -950,7 +950,7 @@ public sealed partial class CombatSystem
             wait = true;
             return true;
         }
-        return techniques[s.ReactTech].IsDodge && now - s.ReactStart > HitOutcomes.DodgeTo * s.ReactTicks;
+        return _techniques[s.ReactTech].IsDodge && now - s.ReactStart > HitOutcomes.DodgeTo * s.ReactTicks;
     }
 
     /// <summary>
@@ -989,10 +989,10 @@ public sealed partial class CombatSystem
         s.ReactedSlot = swing.Attacker;
         s.ReactedSeq = swing.Seq;
         s.ReactedBlow = swing.Blow;
-        if (techniques[s.ReactTech].IsDodge || !changed && now < s.ReactCheckTick) return;
+        if (_techniques[s.ReactTech].IsDodge || !changed && now < s.ReactCheckTick) return;
 
         s.ReactCheckTick = now + (int)MathF.Ceiling(CombatTuning.DefenceRecheckSeconds / dt);
-        if (techniques[s.ReactTech].AttackDirection1 == BlowSide(world, i, in swing)) return;
+        if (_techniques[s.ReactTech].AttackDirection1 == BlowSide(world, i, in swing)) return;
         if (!Startable(in swing, i))
         {
             // A new start that fails (too early, or not in the attacker's zone) ends the defence (state 4).
@@ -1010,7 +1010,7 @@ public sealed partial class CombatSystem
     int BlowSide(World world, int i, in IncomingBlow swing)
     {
         var prev = world.Characters.Previous;
-        var tech = techniques[read[swing.Attacker].AttackTech];
+        var tech = _techniques[_read[swing.Attacker].AttackTech];
         return HitOutcomes.Facing(tech.DirectionOf(swing.Blow), HitOutcomes.Behind(prev[swing.Attacker].Position, prev[i].Position, prev[i].Yaw));
     }
 
@@ -1033,7 +1033,7 @@ public sealed partial class CombatSystem
         s.LastTech = -1;   // the original's current technique (+0x150) is now a defence, which the next attack choice does not count as its last
         if (pick == s.ReactTech) return;   // the same technique again: its clip plays on (FUN_1405b7600 finds the playing layer)
 
-        var reaction = techniques[pick];
+        var reaction = _techniques[pick];
         int ticks = Ticks(reaction, PlayRate(world, i, cold, reaction, attack: false), dt, cold);
         // The clip starts at once. With LateDefences (Meitou balance choice, docs/simulation.md "Combat") it is never too little along for the roll it passed to count: a late one
         // joins its clip partway.
@@ -1052,7 +1052,7 @@ public sealed partial class CombatSystem
     int ChooseDefence(World world, int i, CharacterCold cold, ulong key, int now, in IncomingBlow swing, bool stumbling)
     {
         var table = world.Characters;
-        ref readonly var attack = ref read[swing.Attacker];
+        ref readonly var attack = ref _read[swing.Attacker];
         var fighter = cold.Fighter!;
         float meleeDefence = Trained(cold, StatsEnumerated.MeleeDefence);
         ulong counter = CombatRolls.BlowCounter(swing.Attacker, attack.AttackSeq, swing.Blow, 0) ^ (ulong)(uint)now * 0x9E3779B97F4A7C15UL;
@@ -1062,16 +1062,16 @@ public sealed partial class CombatSystem
         if (fighter.CanBlock)
         {
             float d = DefenceFormulas.Defence(meleeDefence, fighter.Weapon!.Stats.DefenceMod, true, fighter.DefenceBonus + IndoorsMod(world, i, fighter), Guarding(cold));
-            block = DefenceFormulas.BlockChance(d, attack.AttackSkill, combat);
+            block = DefenceFormulas.BlockChance(d, attack.AttackSkill, _combat);
             if (table.Cold(swing.Attacker)?.Fighter is { Unarmed: true, IsAnimal: false }) block *= DefenceFormulas.FistBlockFactor(cold.Stats![StatsEnumerated.MartialArts]);
         }
         else
         {
             block = 0;
             float effective = DefenceFormulas.EffectiveDefence(Eff(cold, StatsEnumerated.MartialArts), fighter.EncumbranceFactor, Speed.LegFactor(cold.Medical!), fighter.DefenceBonus, Guarding(cold));
-            dodge = DefenceFormulas.BlockChance(effective, attack.AttackSkill, combat, 0, 95);
+            dodge = DefenceFormulas.BlockChance(effective, attack.AttackSkill, _combat, 0, 95);
         }
         int direction = BlowSide(world, i, in swing);
-        return TechniqueChooser.ChooseReaction(techniques, fighter.TechniqueCategory, cold.Medical!.Prone, fighter.CanBlock, direction, block, dodge, chanceRoll, pickRoll, stumbling);
+        return TechniqueChooser.ChooseReaction(_techniques, fighter.TechniqueCategory, cold.Medical!.Prone, fighter.CanBlock, direction, block, dodge, chanceRoll, pickRoll, stumbling);
     }
 }

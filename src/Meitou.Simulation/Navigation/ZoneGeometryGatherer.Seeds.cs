@@ -36,7 +36,7 @@ internal sealed partial class ZoneGeometryGatherer
         foreach (var (at, bottom) in g.DoorMarkers)
         {
             float y = RayDown(g, at.X, at.Y, highest: true, float.MinValue, 0, g.TriangleCount, out float hit, maxY: bottom + DoorSeedRise)
-                ? hit : Math.Max(map.HeightAt(at.X, at.Y), WorldWater.Height);
+                ? hit : Math.Max(_map.HeightAt(at.X, at.Y), WorldWater.Height);
             g.Seeds.Add(new Vector3(at.X, y, at.Y));
         }
     }
@@ -51,7 +51,7 @@ internal sealed partial class ZoneGeometryGatherer
     static bool DoorMarkers(GameRecord door, PreparedShape shape, Matrix4x4 node, out Vector3 behind, out Vector3 ahead)
     {
         behind = ahead = default;
-        if (shape.Kind != Meitou.Data.Physics.CollisionShapeKind.Box || shape.Vertices.Length != 8) return false;
+        if (shape.Kind != Data.Physics.CollisionShapeKind.Box || shape.Vertices.Length != 8) return false;
         var v = shape.Vertices.Select(p => Vector3.Transform(p, node)).ToArray();
         int axis = Math.Clamp(door.GetInt("door navmesh axis"), 0, 2);
         var along = axis switch { 0 => v[1] - v[0], 1 => v[2] - v[0], _ => v[4] - v[0] };
@@ -94,7 +94,7 @@ internal sealed partial class ZoneGeometryGatherer
             bool noHeight = s.Y < NoHeightBelow;
             bool hit = HitsBuilding(s.X, s.Z, out float top);
             if (hit && !noHeight) { g.Stats.SeedsDropped++; continue; }
-            float y = noHeight ? (hit ? top : Math.Max(map.HeightAt(s.X, s.Z), water)) : s.Y;
+            float y = noHeight ? (hit ? top : Math.Max(_map.HeightAt(s.X, s.Z), water)) : s.Y;
             g.Seeds.Add(new Vector3(s.X, y, s.Z));
         }
         if (fileSeeds.Count == 0)
@@ -105,7 +105,7 @@ internal sealed partial class ZoneGeometryGatherer
                 {
                     float x = g.ZoneMin.X + WorldLayout.ZoneSize * (2 * i + 1) / 6f, z = g.ZoneMin.Y + WorldLayout.ZoneSize * (2 * j + 1) / 6f;
                     if (HitsBuilding(x, z, out _)) continue;
-                    g.Seeds.Add(new Vector3(x, Math.Max(map.HeightAt(x, z), water), z));
+                    g.Seeds.Add(new Vector3(x, Math.Max(_map.HeightAt(x, z), water), z));
                 }
         }
         AddLinkedWallSeeds(g, HitsBuilding);
@@ -127,10 +127,10 @@ internal sealed partial class ZoneGeometryGatherer
             if (position.X < g.ZoneMin.X - WallReach || position.X > g.ZoneMax.X + WallReach || position.Z < g.ZoneMin.Y - WallReach || position.Z > g.ZoneMax.Y + WallReach) continue;
             var node = NodeMatrix(record, position, b.Rotation);
             var points = new List<Vector3>();
-            foreach (var mesh in WorldObjectLayout.Building(db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed)))
+            foreach (var mesh in WorldObjectLayout.Building(_db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed)))
             {
                 string path = mesh.CollisionPath(destroyed);
-                if (path.Length == 0 || collision.Get(path) is not { } prepared) continue;
+                if (path.Length == 0 || _collision.Get(path) is not { } prepared) continue;
                 foreach (var shape in prepared.Shapes) foreach (var v in shape.Vertices) points.Add(Vector3.Transform(v, node));
             }
             if (points.Count < 2) continue;
@@ -148,7 +148,7 @@ internal sealed partial class ZoneGeometryGatherer
                 if (leaves)
                 {
                     var clamped = Vector2.Clamp(at, g.ZoneMin, g.ZoneMax);
-                    if (!hits(clamped.X, clamped.Y, out _)) { g.Seeds.Add(new Vector3(clamped.X, Math.Max(map.HeightAt(clamped.X, clamped.Y), water), clamped.Y)); g.Stats.WallSeeds++; }
+                    if (!hits(clamped.X, clamped.Y, out _)) { g.Seeds.Add(new Vector3(clamped.X, Math.Max(_map.HeightAt(clamped.X, clamped.Y), water), clamped.Y)); g.Stats.WallSeeds++; }
                 }
             }
         }

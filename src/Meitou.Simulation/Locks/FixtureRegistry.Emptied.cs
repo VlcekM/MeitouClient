@@ -8,14 +8,14 @@ namespace Meitou.Simulation.Locks;
 /// </summary>
 public sealed partial class FixtureRegistry
 {
-    long emptiedRevision;
-    (long Revision, TownBuilding[] List) publishedEmptied = (-1, []);
+    long _emptiedRevision;
+    (long Revision, TownBuilding[] List) _publishedEmptied = (-1, []);
 
     /// <summary>Whether a town building is a house the player bought: its interior layout's furniture and loose-item slots are gone.</summary>
-    public bool IsEmptied(string building) => properties.TryGetValue(building, out var p) && p.Purchased;
+    public bool IsEmptied(string building) => _properties.TryGetValue(building, out var p) && p.Purchased;
 
     /// <summary>Counts changes of <see cref="PublishedEmptied"/>.</summary>
-    public long EmptiedRevision => emptiedRevision;
+    public long EmptiedRevision => _emptiedRevision;
 
     /// <summary>
     /// The bought houses without a construction site, by key (a site's own placement says it, <see cref="Construction.BuildSite.LevelPlacement"/>): the host draws, paths and lights
@@ -23,16 +23,16 @@ public sealed partial class FixtureRegistry
     /// </summary>
     public IReadOnlyList<TownBuilding> PublishedEmptied()
     {
-        if (publishedEmptied.Revision == emptiedRevision) return publishedEmptied.List;
-        var list = properties.Values.Where(p => p.Purchased && p.Construction is null).Select(p => p.Building).OrderBy(b => b.Key, StringComparer.Ordinal);
-        publishedEmptied = (emptiedRevision, [.. list]);
-        return publishedEmptied.List;
+        if (_publishedEmptied.Revision == _emptiedRevision) return _publishedEmptied.List;
+        var list = _properties.Values.Where(p => p.Purchased && p.Construction is null).Select(p => p.Building).OrderBy(b => b.Key, StringComparer.Ordinal);
+        _publishedEmptied = (_emptiedRevision, [.. list]);
+        return _publishedEmptied.List;
     }
 
     /// <summary>A registered town's bought houses lose their furniture as at the purchase; what a container held in a save from before that is dropped where it stood.</summary>
     void EmptyPurchased(World world, int site)
     {
-        foreach (var p in properties.Values)
+        foreach (var p in _properties.Values)
             if (p.Site == site && p.Purchased) EmptyInterior(world, p.Building.Key, spill: true);
     }
 
@@ -43,19 +43,19 @@ public sealed partial class FixtureRegistry
     /// </summary>
     void EmptyInterior(World world, string building, bool spill)
     {
-        emptiedRevision++;
+        _emptiedRevision++;
         RemoveSeats(building);
-        if (!byBuilding.TryGetValue(building, out var list)) return;
+        if (!_byBuilding.TryGetValue(building, out var list)) return;
         foreach (var f in list.Where(f => f.Kind != FixtureKind.Door && f.Id != building).ToArray())
         {
             LetOut(world, f);
             if (spill && f.Contents is { } box) Spill(world, f, box);
             list.Remove(f);
-            all.Remove(f);
-            byId.Remove(f.Id);
+            _all.Remove(f);
+            _byId.Remove(f.Id);
         }
-        containerSpots = null;
-        bedSpots = null; cageList = null; publishedCages = null; dummySpots = null;
+        _containerSpots = null;
+        _bedSpots = null; _cageList = null; _publishedCages = null; _dummySpots = null;
     }
 
     void LetOut(World world, Fixture f)
@@ -66,7 +66,7 @@ public sealed partial class FixtureRegistry
         f.Occupant = CharacterId.None;
     }
 
-    static void Spill(World world, Fixture f, Meitou.Simulation.Items.Inventory box)
+    static void Spill(World world, Fixture f, Items.Inventory box)
     {
         foreach (var item in box.Items.ToArray())
         {

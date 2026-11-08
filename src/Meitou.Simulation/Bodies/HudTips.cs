@@ -44,7 +44,7 @@ static class HudTips
         int dust = (int)(med.DustInEffect * 10);
         bool defensive = (cold.Orders & CharacterOrders.Block) != 0;
         HudStatLine Line(string label, StatsEnumerated stat, float factor = 1) =>
-            new(label, (stats[stat] + Combat.CombatSystem.GearBonus(cold, stat)) * med.StatMultiplier(stat) * factor, stats[stat]);
+            new(label, (stats[stat] + CombatSystem.GearBonus(cold, stat)) * med.StatMultiplier(stat) * factor, stats[stat]);
         // An animal's age (slot 0x398) scales its fighting numbers (the stats multiplier, already in Stored); a person's is 1.
         var animal = cold.Animal;
         float age = animal is null ? 1 : stats.Scale;
@@ -60,8 +60,11 @@ static class HudTips
             // The gear's ranged factor as the breakdown's Total has it.
             lines.Add(Line("Crossbows:", StatsEnumerated.Crossbows, factors.Ranged) with { Tip = Breakdown(med, stats, factors, StatsEnumerated.Crossbows, "Crossbows") });
             lines.Add(Line("Precision:", StatsEnumerated.FriendlyFire, factors.Ranged) with { Tip = Breakdown(med, stats, factors, StatsEnumerated.FriendlyFire, "Careful Shooting") });
-            lines.Add(Line("Perception:", StatsEnumerated.Perception) with { Tip = Breakdown(med, stats, factors, StatsEnumerated.Perception, "Perception",
-                Combat.CombatSystem.GearBonus(cold, StatsEnumerated.Perception)) });
+            lines.Add(Line("Perception:", StatsEnumerated.Perception) with
+            {
+                Tip = Breakdown(med, stats, factors, StatsEnumerated.Perception, "Perception",
+                CombatSystem.GearBonus(cold, StatsEnumerated.Perception))
+            });
         }
         else if (displayMode == 1 && animal is null)
         {
@@ -151,7 +154,7 @@ static class HudTips
     /// base and current swim speeds. Rows without a number in the original have none here.
     /// </summary>
     public static Dictionary<StatsEnumerated, IReadOnlyList<StatReadout>> StatsWindow(CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, HudCombat? hc,
-        GameConstants? constants, Meitou.Data.GameDatabase? db = null)
+        GameConstants? constants, Data.GameDatabase? db = null)
     {
         float e = cold.Fighter?.EncumbranceFactor ?? 1;
         var factors = (cold.Fighter?.Factors ?? StatFactors.None) with { Stun = med.DustStatFactor };
@@ -222,7 +225,7 @@ static class HudTips
     static Items.ItemInstance? CombatWeapon(CharacterCold cold)
     {
         if (cold.Inventory?.Items is not { } items) return null;
-        Items.ItemInstance? In(string section) => items.FirstOrDefault(i => i.Section == section && i.Type == Meitou.Data.Fcs.FcsRecordType.WEAPON);
+        Items.ItemInstance? In(string section) => items.FirstOrDefault(i => i.Section == section && i.Type == Data.Fcs.FcsRecordType.Weapon);
         return cold.Fighter is { Weapon: not null } f ? In(f.WeaponIsBack ? "back" : "hip") : In("hip") ?? In("back");
     }
 
@@ -233,9 +236,9 @@ static class HudTips
     /// The weapon model a weaponsmith of <paramref name="level"/> makes (<c>FUN_1408b0f90</c>): of <c>PLAYER_WEAPONS</c>' <c>weapon models</c>, the highest v0 above 0 and at or below
     /// the level, else the record <c>913-gamedata.base</c>'s name.
     /// </summary>
-    static string? WeaponModel(Meitou.Data.GameDatabase db, float level)
+    static string? WeaponModel(Data.GameDatabase db, float level)
     {
-        var best = (db.Find(Meitou.Data.Gameplay.Construction.CraftBench.PlayerWeapons)?.GetReferences("weapon models") ?? [])
+        var best = (db.Find(Data.Gameplay.Construction.CraftBench.PlayerWeapons)?.GetReferences("weapon models") ?? [])
             .Select(r => (Record: db.Find(r.TargetStringId), Level: r.Values.Value0)).Where(m => m.Record is not null && m.Level > 0 && m.Level <= level)
             .OrderByDescending(m => m.Level).FirstOrDefault();
         return (best.Record ?? db.Find("913-gamedata.base"))?.Name;

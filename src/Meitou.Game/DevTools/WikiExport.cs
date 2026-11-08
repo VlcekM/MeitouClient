@@ -29,11 +29,11 @@ static partial class WikiExport
     static readonly string[] DroppedProseFields = ["item description", "research description", "dialogue lines (never read)", "lore and book contents (never read)", "character and squad flavour text (never read)"];
 
     /// <summary>True under <c>--facts-only</c>: no description text from the game goes into the files.</summary>
-    static bool FactsOnly;
+    static bool s_factsOnly;
 
     public static int Run(string outDir, GameInstall install, bool factsOnly = false)
     {
-        FactsOnly = factsOnly;
+        s_factsOnly = factsOnly;
         Directory.CreateDirectory(outDir);
         var order = LoadOrder.FromInstall(install);
         var db = GameDatabase.Load(order);
@@ -60,7 +60,7 @@ static partial class WikiExport
         var townAt = new Dictionary<string, (float X, float Z)>(StringComparer.Ordinal);
         foreach (var placement in world.Towns().OrderBy(p => p.TownId, StringComparer.Ordinal).ThenBy(p => p.InstanceId, StringComparer.Ordinal))
         {
-            if (db.Find(placement.TownId) is not { Type: FcsRecordType.TOWN } record) continue;
+            if (db.Find(placement.TownId) is not { Type: FcsRecordType.Town } record) continue;
             var town = TownData.From(record);
             if (town.Type is TownType.NestMarker or TownType.Null || town.Name.Length == 0) continue;
             var zone = WorldLayout.ZoneOf(placement.Position.X, placement.Position.Z);
@@ -115,13 +115,13 @@ static partial class WikiExport
         // Factions.
         var factions = new List<Row>();
         var player = db.Find(FactionData.PlayerId);
-        foreach (var record in db.OfType(FcsRecordType.FACTION).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.Faction).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
             var f = FactionData.From(record);
             if (f.Name.Length == 0) continue;
             var relations = new SortedDictionary<string, object?>(StringComparer.Ordinal);
             foreach (var (other, value) in f.Relations)
-                if (db.Find(other) is { Type: FcsRecordType.FACTION } o && o.Name.Length > 0) relations[o.Name] = value;
+                if (db.Find(other) is { Type: FcsRecordType.Faction } o && o.Name.Length > 0) relations[o.Name] = value;
             var data = new SortedDictionary<string, object?>
             {
                 ["fundamentalType"] = f.FundamentalType.ToString(),
@@ -146,7 +146,7 @@ static partial class WikiExport
         var npcs = new List<Row>();
         var residentOf = new Dictionary<string, string>(StringComparer.Ordinal);   // squad id -> town record
         foreach (var t in world.Towns())
-            if (db.Find(t.TownId) is { Type: FcsRecordType.TOWN } tr)
+            if (db.Find(t.TownId) is { Type: FcsRecordType.Town } tr)
                 foreach (var l in TownData.From(tr).Residents.Concat(TownData.From(tr).BarSquads))
                     residentOf.TryAdd(l.Id, t.TownId);
         var allSquads = SquadTemplate.LoadAll(db);
@@ -188,11 +188,11 @@ static partial class WikiExport
 
         // Character types (humans and animals), without position.
         var seenCharacters = new HashSet<string>(npcs.Select(n => n.Record ?? ""), StringComparer.Ordinal);
-        foreach (var record in db.OfType(FcsRecordType.CHARACTER).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.Character).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
             if (record.Name.Length == 0 || seenCharacters.Contains(record.StringId) || characterRecords.Contains(record.StringId)) continue;
             string faction = record.GetReferences("faction") is { Count: > 0 } fl ? FactionName(fl[0].TargetStringId) : "";
-            bool animal = record.Type == FcsRecordType.ANIMAL_CHARACTER;
+            bool animal = record.Type == FcsRecordType.AnimalCharacter;
             npcs.Add(new Row(Id(record.Name, record.StringId), record.Name, animal ? "animal" : "npc", faction.Length == 0 ? null : faction, null, null, null, "Observed",
                 (animal ? "Animal" : "Character") + " record" + (faction.Length == 0 ? "" : $" of faction {faction}") + "; no position (spawned by squads and towns).", record.StringId,
                 new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy }));
@@ -205,7 +205,7 @@ static partial class WikiExport
 
         // Buildings (named records only).
         var buildings = new List<Row>();
-        foreach (var record in db.OfType(FcsRecordType.BUILDING).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.Building).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
             if (record.Name.Length == 0) continue;
             buildings.Add(new Row(Id(record.Name, record.StringId), record.Name, "building", null, null, null, null, "Observed",

@@ -36,7 +36,7 @@ public readonly record struct GpuDependency(Access From, Access To)
 /// </summary>
 public sealed class ResourceStates
 {
-    readonly Dictionary<object, Access> last = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<object, Access> _last = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// The dependencies <paramref name="uses"/> needs after what was recorded, in
@@ -47,13 +47,13 @@ public sealed class ResourceStates
         int count = 0;
         foreach (var u in uses)
         {
-            if (last.TryGetValue(u.Resource, out var previous))
+            if (_last.TryGetValue(u.Resource, out var previous))
             {
                 // Write then anything: make the write available and visible. Read then write: an execution dependency suffices.
                 if (Writes(previous)) dependencies[count++] = new GpuDependency(previous, u.Access);
                 else if (Writes(u.Access)) dependencies[count++] = new GpuDependency(previous, u.Access);
             }
-            last[u.Resource] = u.Access;
+            _last[u.Resource] = u.Access;
         }
         return count;
     }
@@ -70,9 +70,9 @@ public sealed class ResourceStates
     }
 
     /// <summary>After a full barrier (a seam crossing, the start of a frame): nothing is pending.</summary>
-    public void AssumeFullBarrier() => last.Clear();
+    public void AssumeFullBarrier() => _last.Clear();
 
-    public int Tracked => last.Count;
+    public int Tracked => _last.Count;
 }
 
 /// <summary>
@@ -82,14 +82,14 @@ public sealed class ResourceStates
 /// </summary>
 public readonly ref struct GpuPass
 {
-    readonly IGpuCommandList cmd;
+    readonly IGpuCommandList _cmd;
 
     public GpuPass(GpuFrame frame, IGpuCommandList cmd, string label, ReadOnlySpan<PassUse> uses)
     {
-        this.cmd = cmd;
+        this._cmd = cmd;
         frame.States.Use(cmd, uses);
         cmd.BeginLabel(label);
     }
 
-    public void Dispose() => cmd.EndLabel();
+    public void Dispose() => _cmd.EndLabel();
 }

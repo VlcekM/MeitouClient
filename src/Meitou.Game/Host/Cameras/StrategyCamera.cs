@@ -29,21 +29,21 @@ public sealed class StrategyCamera
 
     const float DegreesToRadians = MathF.PI / 180;
 
-    readonly Func<float, float, float> ground, pivotGround;
-    readonly CameraSettings settings;
-    readonly SmoothedInput yawInput = new(KenshiCamera.YawSmoothing, KenshiCamera.SmoothingFrames);
-    readonly SmoothedInput pitchInput = new(KenshiCamera.PitchSmoothing, KenshiCamera.SmoothingFrames);
-    float pivotY;
-    float heightGoal;
-    float heightSpeed;
+    readonly Func<float, float, float> _ground, _pivotGround;
+    readonly CameraSettings _settings;
+    readonly SmoothedInput _yawInput = new(KenshiCamera.YawSmoothing, KenshiCamera.SmoothingFrames);
+    readonly SmoothedInput _pitchInput = new(KenshiCamera.PitchSmoothing, KenshiCamera.SmoothingFrames);
+    float _pivotY;
+    float _heightGoal;
+    float _heightSpeed;
 
     /// <param name="ground">The ground under the eye.</param>
     /// <param name="pivotGround">The ground under the pivot (the game's pivot ray also hits buildings' floors, its eye ray does not raise the eye for them); the eye's by default.</param>
     public StrategyCamera(Func<float, float, float> ground, CameraSettings? settings = null, Func<float, float, float>? pivotGround = null)
     {
-        this.ground = ground;
-        this.pivotGround = pivotGround ?? ground;
-        this.settings = settings ?? new CameraSettings();
+        this._ground = ground;
+        this._pivotGround = pivotGround ?? ground;
+        this._settings = settings ?? new CameraSettings();
         Pitch = KenshiCamera.InitialPitchDegrees * MathF.PI / 180;
         Distance = KenshiCamera.InitialDistance;
         SettleHeight();
@@ -51,7 +51,7 @@ public sealed class StrategyCamera
     }
 
     /// <summary>Pivot position on the ground plane.</summary>
-    public Vector2 PivotXZ { get; private set; }
+    public Vector2 PivotXz { get; private set; }
     /// <summary>Radians; the view's heading (0 looks along -Z), as <see cref="CameraState.Yaw"/>.</summary>
     public float Yaw { get; private set; }
     /// <summary>The pitch (eye above the horizon, radians): the pivot's, which the ground never changes.</summary>
@@ -61,7 +61,7 @@ public sealed class StrategyCamera
     /// <summary>The camera as of the last <see cref="Update"/> or placement.</summary>
     public CameraState State { get; private set; }
 
-    public Vector3 Pivot => new(PivotXZ.X, pivotY, PivotXZ.Y);
+    public Vector3 Pivot => new(PivotXz.X, _pivotY, PivotXz.Y);
 
     /// <summary>
     /// Where the pointer is in the view as a fraction of its width and height (0..1), for edge scrolling; null when it must not scroll
@@ -70,9 +70,9 @@ public sealed class StrategyCamera
     public Vector2? EdgePointer { get; set; }
 
     /// <summary>Sets the pivot and view (yaw wrapped, pitch kept within the pitch limits, boom within the zoom limits); the pivot's height is found at once.</summary>
-    public void Place(Vector2 pivotXZ, float yaw, float pitch, float distance)
+    public void Place(Vector2 pivotXz, float yaw, float pitch, float distance)
     {
-        PivotXZ = pivotXZ;
+        PivotXz = pivotXz;
         Yaw = Interp.WrapAngle(yaw);
         Pitch = Math.Clamp(pitch, MinPitch, MaxPitch);
         Distance = Math.Clamp(distance, KenshiCamera.MinDistance, KenshiCamera.MaxDistance);
@@ -94,7 +94,7 @@ public sealed class StrategyCamera
     public void PitchStep(float delta)
     {
         if (delta == 0 || !float.IsFinite(delta)) return;
-        int pieces = (int)Math.Ceiling(Math.Abs(delta) / settings.MaxPitchSubStep);
+        int pieces = (int)Math.Ceiling(Math.Abs(delta) / _settings.MaxPitchSubStep);
         float piece = delta / pieces;
         for (int i = 0; i < pieces; i++)
         {
@@ -103,7 +103,7 @@ public sealed class StrategyCamera
             Pitch += piece;
             State = Compute();
         }
-        if (settings.HardPitchClamp)
+        if (_settings.HardPitchClamp)
         {
             Pitch = Math.Clamp(Pitch, MinPitch, MaxPitch);
             State = Compute();
@@ -122,14 +122,14 @@ public sealed class StrategyCamera
     {
         var f = new Vector2(-MathF.Sin(Yaw), -MathF.Cos(Yaw));
         var r = new Vector2(MathF.Cos(Yaw), -MathF.Sin(Yaw));
-        PivotXZ += f * forward + r * right;
+        PivotXz += f * forward + r * right;
         State = Compute();
     }
 
     /// <summary>One tick: zoom (wheel and keys), pan (keys and edges), turn and tilt (keys and mouse drag), then the pivot's height, in game-sized frames.</summary>
     public void Update(float dt, ActionState a)
     {
-        int frames = Math.Max(1, (int)MathF.Round(dt / settings.ReferenceFrameSeconds));
+        int frames = Math.Max(1, (int)MathF.Round(dt / _settings.ReferenceFrameSeconds));
         float h = dt / frames;
         for (int i = 0; i < frames; i++) Frame(h, a, 1f / frames);
         State = Compute();
@@ -151,7 +151,7 @@ public sealed class StrategyCamera
         // Pan: the keys and the pointer at an edge add up; the direction is unit length whatever it is made of.
         float fwd = (a.Held(InputAction.MoveForward) ? 1 : 0) - (a.Held(InputAction.MoveBack) ? 1 : 0);
         float right = (a.Held(InputAction.MoveRight) ? 1 : 0) - (a.Held(InputAction.MoveLeft) ? 1 : 0);
-        if (settings.EdgeScroll && EdgePointer is { } p)
+        if (_settings.EdgeScroll && EdgePointer is { } p)
         {
             if (p.X < KenshiCamera.EdgeMargin) right -= 1;
             if (p.X > 1 - KenshiCamera.EdgeMargin) right += 1;
@@ -165,16 +165,16 @@ public sealed class StrategyCamera
         float tilt = (a.Held(InputAction.PitchUp) ? KenshiCamera.TiltKeyInput : 0) - (a.Held(InputAction.PitchDown) ? KenshiCamera.TiltKeyInput : 0);
         if (a.Held(InputAction.Orbit))
         {
-            yaw -= a.MouseDelta.X * share * settings.MouseSpeedX;
-            tilt -= a.MouseDelta.Y * share * settings.MouseSpeedY;
+            yaw -= a.MouseDelta.X * share * _settings.MouseSpeedX;
+            tilt -= a.MouseDelta.Y * share * _settings.MouseSpeedY;
         }
-        float turn = yawInput.Push(yaw);
-        float lean = pitchInput.Push(tilt);
+        float turn = _yawInput.Push(yaw);
+        float lean = _pitchInput.Push(tilt);
         if (turn != 0 || lean != 0)
         {
-            Yaw = Interp.WrapAngle(Yaw + settings.RotateSpeedX * turn * h * (settings.InvertX ? -1 : 1) * DegreesToRadians);
+            Yaw = Interp.WrapAngle(Yaw + _settings.RotateSpeedX * turn * h * (_settings.InvertX ? -1 : 1) * DegreesToRadians);
             State = Compute();
-            PitchStep(settings.RotateSpeedY * lean * h * (settings.InvertY ? -1 : 1) * DegreesToRadians);
+            PitchStep(_settings.RotateSpeedY * lean * h * (_settings.InvertY ? -1 : 1) * DegreesToRadians);
         }
 
         FollowHeight(h);
@@ -183,7 +183,7 @@ public sealed class StrategyCamera
     /// <summary>A zoom step of <paramref name="input"/>; the boom closes on its new length at <see cref="KenshiCamera.ZoomFollowRate"/> per second.</summary>
     void ZoomBy(float input, float h)
     {
-        float target = KenshiCamera.ZoomedDistance(Distance, settings.ZoomSpeed, input);
+        float target = KenshiCamera.ZoomedDistance(Distance, _settings.ZoomSpeed, input);
         Distance += (target - Distance) * MathF.Min(KenshiCamera.ZoomFollowRate * h, 1);
     }
 
@@ -197,15 +197,15 @@ public sealed class StrategyCamera
         var r = new Vector2(MathF.Cos(Yaw), -MathF.Sin(Yaw));
         var direction = f * (forward * MathF.Cos(Pitch)) + r * right;
         if (direction.LengthSquared() < 1e-12f) return;
-        PivotXZ += Vector2.Normalize(direction) * (KenshiCamera.PanSpeed(settings.MoveSpeed, Distance) * h);
+        PivotXz += Vector2.Normalize(direction) * (KenshiCamera.PanSpeed(_settings.MoveSpeed, Distance) * h);
     }
 
     /// <summary>The height the pivot is heading for, given its height now (the game's per-frame ground step; the view direction is not touched).</summary>
     float HeightGoal(float y)
     {
-        var eye = CameraState.EyeFor(new Vector3(PivotXZ.X, y, PivotXZ.Y), Yaw, Pitch, Distance);
-        float groundAtPivot = pivotGround(PivotXZ.X, PivotXZ.Y);
-        float groundAtEye = ground(eye.X, eye.Z);
+        var eye = CameraState.EyeFor(new Vector3(PivotXz.X, y, PivotXz.Y), Yaw, Pitch, Distance);
+        float groundAtPivot = _pivotGround(PivotXz.X, PivotXz.Y);
+        float groundAtEye = _ground(eye.X, eye.Z);
         float drop = MathF.Min(0, groundAtEye - y);   // a pivot above the ground under the eye comes down to it ...
         float required = groundAtEye + KenshiCamera.EyeClearance(Distance);
         float goal = y + drop;
@@ -216,10 +216,10 @@ public sealed class StrategyCamera
     /// <summary>Puts the pivot at its goal height at once (a placement, not a frame).</summary>
     void SettleHeight()
     {
-        pivotY = pivotGround(PivotXZ.X, PivotXZ.Y);
-        for (int i = 0; i < 3; i++) pivotY = HeightGoal(pivotY);
-        heightGoal = pivotY;
-        heightSpeed = 0;
+        _pivotY = _pivotGround(PivotXz.X, PivotXz.Y);
+        for (int i = 0; i < 3; i++) _pivotY = HeightGoal(_pivotY);
+        _heightGoal = _pivotY;
+        _heightSpeed = 0;
     }
 
     /// <summary>
@@ -228,32 +228,32 @@ public sealed class StrategyCamera
     /// </summary>
     void FollowHeight(float h)
     {
-        float goal = HeightGoal(pivotY);
+        float goal = HeightGoal(_pivotY);
         float y;
-        if (MathF.Abs(goal - pivotY) > KenshiCamera.HeightSnap)
+        if (MathF.Abs(goal - _pivotY) > KenshiCamera.HeightSnap)
         {
-            if (goal != heightGoal)
+            if (goal != _heightGoal)
             {
-                heightGoal = goal;
-                heightSpeed = (goal - pivotY) * KenshiCamera.HeightRate;
+                _heightGoal = goal;
+                _heightSpeed = (goal - _pivotY) * KenshiCamera.HeightRate;
             }
-            y = pivotY + heightSpeed * h;
-            if (heightSpeed > 0 ? y >= heightGoal : y <= heightGoal)
+            y = _pivotY + _heightSpeed * h;
+            if (_heightSpeed > 0 ? y >= _heightGoal : y <= _heightGoal)
             {
-                y = heightGoal;
-                heightSpeed = 0;
+                y = _heightGoal;
+                _heightSpeed = 0;
             }
         }
         else
         {
             y = goal;
-            heightGoal = goal;
-            heightSpeed = 0;
+            _heightGoal = goal;
+            _heightSpeed = 0;
         }
         // Engine choice: the lag never shows the eye under the ground (the game's smoothing alone lets a fast climb dip into it for a few frames).
-        var eye = CameraState.EyeFor(new Vector3(PivotXZ.X, y, PivotXZ.Y), Yaw, Pitch, Distance);
-        float shortfall = ground(eye.X, eye.Z) + KenshiCamera.EyeClearance(Distance) - eye.Y;
-        pivotY = shortfall > 0 ? y + shortfall : y;
+        var eye = CameraState.EyeFor(new Vector3(PivotXz.X, y, PivotXz.Y), Yaw, Pitch, Distance);
+        float shortfall = _ground(eye.X, eye.Z) + KenshiCamera.EyeClearance(Distance) - eye.Y;
+        _pivotY = shortfall > 0 ? y + shortfall : y;
     }
 
     CameraState Compute()
@@ -267,17 +267,17 @@ public sealed class StrategyCamera
     /// <summary>The average of the last frames' input with weights 1, a, a², ... from the newest back (the game's turn and tilt smoothing).</summary>
     sealed class SmoothedInput(float decay, int frames)
     {
-        readonly float[] samples = new float[frames];
-        int newest;
+        readonly float[] _samples = new float[frames];
+        int _newest;
 
         public float Push(float value)
         {
-            newest = (newest + 1) % samples.Length;
-            samples[newest] = value;
+            _newest = (_newest + 1) % _samples.Length;
+            _samples[_newest] = value;
             float sum = 0, weights = 0, weight = 1;
-            for (int i = 0; i < samples.Length; i++)
+            for (int i = 0; i < _samples.Length; i++)
             {
-                sum += weight * samples[(newest - i + samples.Length) % samples.Length];
+                sum += weight * _samples[(_newest - i + _samples.Length) % _samples.Length];
                 weights += weight;
                 weight *= decay;
             }

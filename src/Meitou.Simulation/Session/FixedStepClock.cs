@@ -17,7 +17,7 @@ public sealed class FixedStepClock
     // Float noise from summing many frame times: a total that is a whole number of ticks within this counts as reached.
     const double Epsilon = 1e-9;
 
-    double accumulated;
+    double _accumulated;
 
     public FixedStepClock(double tickRate = DefaultTickRate, int maxCatchUp = DefaultMaxCatchUp)
     {
@@ -43,7 +43,7 @@ public sealed class FixedStepClock
     /// <summary>Drops the time owed towards the next tick, so the next tick is a whole tick away (a restarted scene that must replay frame for frame).</summary>
     public void ResetPhase()
     {
-        accumulated = 0;
+        _accumulated = 0;
         Alpha = 0;
     }
 
@@ -55,15 +55,15 @@ public sealed class FixedStepClock
     {
         if (!(realSeconds >= 0) || double.IsInfinity(realSeconds)) throw new ArgumentOutOfRangeException(nameof(realSeconds));
         ArgumentOutOfRangeException.ThrowIfLessThan(maxTicks, 1);
-        accumulated += realSeconds * TickRate;
-        double whole = Math.Floor(accumulated + Epsilon);
-        accumulated = Math.Max(accumulated - whole, 0);
+        _accumulated += realSeconds * TickRate;
+        double whole = Math.Floor(_accumulated + Epsilon);
+        _accumulated = Math.Max(_accumulated - whole, 0);
         long due = (long)whole;
         int run = (int)Math.Min(due, maxTicks);
         DroppedTicks += due - run;
         TotalTicks += run;
         // Rounding up to a tick boundary can leave a hair below zero or at one: keep alpha in [0, 1).
-        Alpha = (float)Math.Clamp(accumulated, 0, 1 - 1e-7);
+        Alpha = (float)Math.Clamp(_accumulated, 0, 1 - 1e-7);
         return run;
     }
 }

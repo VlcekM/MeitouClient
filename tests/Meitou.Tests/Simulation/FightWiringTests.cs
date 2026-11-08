@@ -68,7 +68,7 @@ public class FightWiringTests
     public void The_medical_state_is_ticked_once_per_tick_by_the_body_system()
     {
         var (world, _, a, _, _) = Fight(5, 1, distance: 100000);   // nobody can reach anybody
-        using var _w = world;
+        using var w = world;
         var hunger = world.Characters.Cold(a.Slot)!.Medical!.Hunger;
         world.RunTicks(1000);
         float once = hunger - world.Characters.Cold(a.Slot)!.Medical!.Hunger;
@@ -87,7 +87,7 @@ public class FightWiringTests
     internal static List<ulong> Hashes(int threads)
     {
         var (world, _, _, _, _) = Fight(11, threads, distance: 60);
-        using var _w = world;
+        using var w = world;
         var hashes = new List<ulong>();
         int ran = 0;
         foreach (int target in new[] { 1, 60, 200, 600, 1500 })

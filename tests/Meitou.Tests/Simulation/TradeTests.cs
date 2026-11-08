@@ -28,20 +28,20 @@ public class TradeTests
     internal static PopulationData Data(params FcsRecord[] extra)
     {
         var db = Db([
-            Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
-            Rec("f-t", FcsRecordType.FACTION, r => { r.Name = "Traders"; r.References["trade culture"] = [Ref("cf-t")]; }),
-            Rec("cf-t", FcsRecordType.ITEMS_CULTURE, r => r.References["trade prices"] = [Ref("cloth-t", 200)]),
-            Rec("ct-t", FcsRecordType.ITEMS_CULTURE, r => r.References["trade prices"] = [Ref("katana-t", 150)]),
-            Rec("t1-t", FcsRecordType.TOWN, r => { r.Ints["type"] = 2; r.References["faction"] = [Ref("f-t")]; r.References["trade culture"] = [Ref("ct-t")]; }),
-            Rec("t2-t", FcsRecordType.TOWN, r => r.Ints["type"] = 2),
-            Rec("t3-t", FcsRecordType.TOWN, r => r.Ints["type"] = 3),
-            Rec("n-t", FcsRecordType.TOWN, r => r.Ints["type"] = 0),
-            Rec("katana-t", FcsRecordType.WEAPON, r => r.Ints["value"] = 500),
-            Rec("cloth-t", FcsRecordType.ITEM, r => { r.Ints["value"] = 100; r.Bools["trade item"] = true; r.Ints["stackable"] = 20; }),
-            Rec("junk-t", FcsRecordType.ITEM, r => r.Ints["value"] = 100),
-            Rec("ration-t", FcsRecordType.ITEM, r => { r.Ints["value"] = 10; r.Ints["item function"] = 3; r.Floats["charges"] = 100; r.Ints["stackable"] = 10; }),
-            Rec("cats-t", FcsRecordType.ITEM, r => { r.Name = Market.MoneyItemName; r.Ints["value"] = 1; r.Ints["stackable"] = 100; }),
-            Rec("atg-t", FcsRecordType.VENDOR_LIST, r => { r.Name = Market.AllTradeGoods; r.References["items"] = [Ref("cloth-t", 100)]; }),
+            Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
+            Rec("f-t", FcsRecordType.Faction, r => { r.Name = "Traders"; r.References["trade culture"] = [Ref("cf-t")]; }),
+            Rec("cf-t", FcsRecordType.ItemsCulture, r => r.References["trade prices"] = [Ref("cloth-t", 200)]),
+            Rec("ct-t", FcsRecordType.ItemsCulture, r => r.References["trade prices"] = [Ref("katana-t", 150)]),
+            Rec("t1-t", FcsRecordType.Town, r => { r.Ints["type"] = 2; r.References["faction"] = [Ref("f-t")]; r.References["trade culture"] = [Ref("ct-t")]; }),
+            Rec("t2-t", FcsRecordType.Town, r => r.Ints["type"] = 2),
+            Rec("t3-t", FcsRecordType.Town, r => r.Ints["type"] = 3),
+            Rec("n-t", FcsRecordType.Town, r => r.Ints["type"] = 0),
+            Rec("katana-t", FcsRecordType.Weapon, r => r.Ints["value"] = 500),
+            Rec("cloth-t", FcsRecordType.Item, r => { r.Ints["value"] = 100; r.Bools["trade item"] = true; r.Ints["stackable"] = 20; }),
+            Rec("junk-t", FcsRecordType.Item, r => r.Ints["value"] = 100),
+            Rec("ration-t", FcsRecordType.Item, r => { r.Ints["value"] = 10; r.Ints["item function"] = 3; r.Floats["charges"] = 100; r.Ints["stackable"] = 10; }),
+            Rec("cats-t", FcsRecordType.Item, r => { r.Name = Market.MoneyItemName; r.Ints["value"] = 1; r.Ints["stackable"] = 100; }),
+            Rec("atg-t", FcsRecordType.VendorList, r => { r.Name = Market.AllTradeGoods; r.References["items"] = [Ref("cloth-t", 100)]; }),
             .. extra]);
         TownPlacement At(string town, float x) => new("i-" + town, town, new Vector3(x, 0, 0), null);
         return PopulationData.Create(db, [At("t1-t", 0), At("t2-t", 1000), At("t3-t", 500_000), At("n-t", 500_100)]);
@@ -53,27 +53,27 @@ public class TradeTests
     /// <summary>A trader template (10 items from one list that always adds 500 cats) and a fence that buys stolen goods.</summary>
     internal static readonly FcsRecord[] Shops =
     [
-        Rec("vl-t", FcsRecordType.VENDOR_LIST, r =>
+        Rec("vl-t", FcsRecordType.VendorList, r =>
         {
             r.References["items"] = [Ref("cloth-t", 100), Ref("junk-t", 0)];
             r.Floats["money item prob"] = 100;   // percent-looking, as in the data: always pays
             r.Ints["money item min"] = 500;
             r.Ints["money item max"] = 500;
         }),
-        Rec("shop-t", FcsRecordType.SQUAD_TEMPLATE, r =>
+        Rec("shop-t", FcsRecordType.SquadTemplate, r =>
         {
             r.Bools["is trader"] = true;
             r.References["vendors"] = [Ref("vl-t", 100)];
             r.Ints["vendors fill total amount"] = 10;
             r.Floats["vendors refresh time"] = 24;
         }),
-        Rec("fence-t", FcsRecordType.SQUAD_TEMPLATE, r =>
+        Rec("fence-t", FcsRecordType.SquadTemplate, r =>
         {
             r.Bools["is trader"] = true;
             r.Bools["buys stolen"] = true;
             r.References["vendors"] = [Ref("vl-t", 100)];
         }),
-        Rec("bshop-t", FcsRecordType.SQUAD_TEMPLATE, r =>
+        Rec("bshop-t", FcsRecordType.SquadTemplate, r =>
         {
             r.Bools["is trader"] = true;
             r.References["vendors"] = [Ref("vl-t", 100)];
@@ -135,7 +135,7 @@ public class TradeTests
         {
             var squad = new Squad { Id = World.Squads.NextId(), TemplateId = template, Faction = faction, Town = 0, HomeCentre = at, HomeRadius = 10 };
             World.Squads.Add(squad);
-            var cold = new Meitou.Tests.Combat.Combatant { Name = name }.MakeCold();
+            var cold = new Combat.Combatant { Name = name }.MakeCold();
             cold.Faction = faction;
             cold.IsPlayer = player;
             cold.Inventory = new Inventory();
@@ -210,14 +210,14 @@ public class TradeTests
     public void A_caravan_without_is_trader_trades_from_an_empty_stock_and_stays_no_trader()
     {
         using var b = new Bazaar(talk: true,
-            Rec("caravan-t", FcsRecordType.SQUAD_TEMPLATE, r => r.References["vendors"] = [Ref("vl-t", 100)]),
-            Rec("boss-t", FcsRecordType.CHARACTER, r => { r.Name = "Boss"; r.Bools["is trader"] = true; r.References["dialogue"] = [Ref("hello-t")]; }),
-            Rec("trader-c", FcsRecordType.DIALOG_ACTION, r => r.Ints["condition name"] = 9),
-            Rec("trade-a", FcsRecordType.DIALOG_ACTION, r => r.Ints["action name"] = DialogueActions.Trade),
-            Rec("hello-t", FcsRecordType.DIALOGUE, r => r.References["lines"] = [Ref("hello-l")]),
-            Rec("hello-l", FcsRecordType.DIALOGUE_LINE, r => { r.Strings["text0"] = "Supplies?"; r.References["lines"] = [Ref("trade-l"), Ref("shop-l")]; }),
-            Rec("trade-l", FcsRecordType.DIALOGUE_LINE, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Show me."; r.References["effects"] = [Ref("trade-a")]; }),
-            Rec("shop-l", FcsRecordType.DIALOGUE_LINE, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "A trader!"; r.References["conditions"] = [Ref("trader-c", 1)]; }));
+            Rec("caravan-t", FcsRecordType.SquadTemplate, r => r.References["vendors"] = [Ref("vl-t", 100)]),
+            Rec("boss-t", FcsRecordType.Character, r => { r.Name = "Boss"; r.Bools["is trader"] = true; r.References["dialogue"] = [Ref("hello-t")]; }),
+            Rec("trader-c", FcsRecordType.DialogAction, r => r.Ints["condition name"] = 9),
+            Rec("trade-a", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.Trade),
+            Rec("hello-t", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("hello-l")]),
+            Rec("hello-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "Supplies?"; r.References["lines"] = [Ref("trade-l"), Ref("shop-l")]; }),
+            Rec("trade-l", FcsRecordType.DialogueLine, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Show me."; r.References["effects"] = [Ref("trade-a")]; }),
+            Rec("shop-l", FcsRecordType.DialogueLine, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "A trader!"; r.References["conditions"] = [Ref("trader-c", 1)]; }));
         var hero = b.Spawn("hero", new Vector2(0, 0), b.Data.PlayerFaction, true);
         var boss = b.Spawn("Boss", new Vector2(10, 0), b.Data.FactionIndex("f-t"), false, "caravan-t");
         b.World.Characters.Cold(boss.Slot)!.RecordId = "boss-t";
@@ -249,7 +249,7 @@ public class TradeTests
         Assert.Single(b.SquadOf(boss).Shop!.Stock.Items);   // never filled
     }
 
-    static FcsRecord BackpackRecord() => Rec("bag-t", FcsRecordType.CONTAINER, r =>
+    static FcsRecord BackpackRecord() => Rec("bag-t", FcsRecordType.Container, r =>
     {
         r.Ints["value"] = 100; r.Ints["inventory footprint width"] = 4; r.Ints["inventory footprint height"] = 4;
         r.Ints["storage size width"] = 6; r.Ints["storage size height"] = 8;

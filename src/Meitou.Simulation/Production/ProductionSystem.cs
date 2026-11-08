@@ -1,8 +1,8 @@
-using Meitou.Data.Gameplay.Ai;
 using System.Numerics;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Simulation.Ai;
@@ -54,37 +54,37 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>The research falloff per earlier contribution in the same tick (<b>Observed</b>, <c>FUN_140836b70</c>).</summary>
     public const float ResearchFalloff = 0.6f;
 
-    readonly GameDatabase db;
-    readonly GameConstants constants;
-    readonly ItemFactory items;
-    readonly XpService xp;
-    readonly ResourceField resources;
-    readonly IResourceNodes? nodes;
-    readonly Dictionary<string, MachineData?> machineData = new(StringComparer.Ordinal);
-    readonly Dictionary<string, ResearchData?> researchData = new(StringComparer.Ordinal);
-    List<ResearchData>? allResearch;
-    ResearchSnapshot? publishedResearch;
-    long researchVersion = -1, machinesVersion = -1;
+    readonly GameDatabase _db;
+    readonly GameConstants _constants;
+    readonly ItemFactory _items;
+    readonly XpService _xp;
+    readonly ResourceField _resources;
+    readonly IResourceNodes? _nodes;
+    readonly Dictionary<string, MachineData?> _machineData = new(StringComparer.Ordinal);
+    readonly Dictionary<string, ResearchData?> _researchData = new(StringComparer.Ordinal);
+    List<ResearchData>? _allResearch;
+    ResearchSnapshot? _publishedResearch;
+    long _researchVersion = -1, _machinesVersion = -1;
     /// <summary>Where the camera looks (the last <see cref="FocusCommand"/>; null: not told, as in headless runs): research costs are counted round it. Derived from the commands, not saved or hashed.</summary>
-    Vector3? focus;
-    /// <summary>The focus zone <see cref="publishedResearch"/> was built for.</summary>
-    Meitou.Data.World.ZoneCoordinate? researchZone;
-    /// <summary>The research lists' sizes and the tick <see cref="publishedResearch"/> was built at (<see cref="ResearchView"/>).</summary>
-    (int, int, int, int) researchLists;
-    long researchBuilt;
+    Vector3? _focus;
+    /// <summary>The focus zone <see cref="_publishedResearch"/> was built for.</summary>
+    Meitou.Data.World.ZoneCoordinate? _researchZone;
+    /// <summary>The research lists' sizes and the tick <see cref="_publishedResearch"/> was built at (<see cref="ResearchView"/>).</summary>
+    (int, int, int, int) _researchLists;
+    long _researchBuilt;
     const int ResearchRefreshTicks = 30;
     // Some character may still hold a machine that is gone.
-    bool sweep;
+    bool _sweep;
 
     public ProductionSystem(GameDatabase db, GameConstants constants, BodyOptions options, ItemFactory items, BiomeMap? biomes, ProductionSettings? settings = null, IResourceNodes? nodes = null)
     {
-        this.db = db;
-        this.constants = constants;
-        this.items = items;
+        this._db = db;
+        this._constants = constants;
+        this._items = items;
         Settings = settings ?? new ProductionSettings();
-        xp = new XpService(constants, options);
-        resources = new ResourceField(db, biomes, nodes);
-        this.nodes = nodes;
+        _xp = new XpService(constants, options);
+        _resources = new ResourceField(db, biomes, nodes);
+        this._nodes = nodes;
         UnloadedProduction = Settings.UnloadedProduction;
     }
 
@@ -96,22 +96,22 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     public ProductionSettings Settings { get; }
     /// <summary>See <see cref="ProductionSettings.UnloadedProduction"/>; the host sets it live.</summary>
     public bool UnloadedProduction { get; set; }
-    public ItemFactory Items => items;
+    public ItemFactory Items => _items;
     /// <summary>The construction system the engineer job (125) builds through; null: the job never runs.</summary>
     public ConstructionSystem? Construction { get; init; }
 
     /// <summary>What a BUILDING does once built (null for one that neither works nor stores); read once.</summary>
     public MachineData? Data(string record)
     {
-        if (!machineData.TryGetValue(record, out var data))
-            machineData[record] = data = db.Find(record) is { Type: FcsRecordType.BUILDING } r ? MachineData.From(db, r) : null;
+        if (!_machineData.TryGetValue(record, out var data))
+            _machineData[record] = data = _db.Find(record) is { Type: FcsRecordType.Building } r ? MachineData.From(_db, r) : null;
         return data;
     }
 
     ResearchData? Research(string id)
     {
-        if (!researchData.TryGetValue(id, out var data))
-            researchData[id] = data = db.Find(id) is { Type: FcsRecordType.RESEARCH } r ? ResearchData.From(r) : null;
+        if (!_researchData.TryGetValue(id, out var data))
+            _researchData[id] = data = _db.Find(id) is { Type: FcsRecordType.Research } r ? ResearchData.From(r) : null;
         return data;
     }
 
@@ -134,12 +134,12 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             Site = site.Id,
             Data = data,
             Position = site.Position,
-            WindRotor = data.IsWind && db.Find(site.Record) is { } record ? Meitou.Data.World.WorldObjectLayout.WindRotor(db, record, site.Position) : null,
+            WindRotor = data.IsWind && _db.Find(site.Record) is { } record ? Meitou.Data.World.WorldObjectLayout.WindRotor(_db, record, site.Position) : null,
             Inputs = [.. data.Inputs.Select(i => new InputSlot(i))],
             Output = data.Output is { } o ? new OutputSlot(o) : null,
             Storage = data.HasInventory ? new Inventory(data.StorageWidth, data.StorageHeight) { StackBonusMult = data.StackBonusMult, Limited = data.StorageLimit.Count > 0 }
                 : data.IsFurnace ? FurnaceGrid() : null,
-            Farm = data.Farm is { } fd ? new FarmState(Meitou.Data.Gameplay.Construction.FarmLayout.Count(fd)) : null,
+            Farm = data.Farm is { } fd ? new FarmState(FarmLayout.Count(fd)) : null,
             Craft = data.IsCrafting ? new CraftState() : null,
             Status = (byte)(data.IsProducer ? 2 : 0),   // the constructor FUN_1402a3750 starts a production building at 2 (not saved, so a load does too)
         };
@@ -147,18 +147,18 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (data.Farm is { } farm)
         {
             // Every farm alike (FUN_1400e8420): the fertility effect 0 of a hydroponic one makes the ground matter only at or below the minimum, the biome's water usage applies, and the crop match is the biome's unless the farm stands inside a building.
-            float fertility = resources.Value(MachineData.GroundResource, p.X, p.Y, p.Z);
+            float fertility = _resources.Value(MachineData.GroundResource, p.X, p.Y, p.Z);
             m.Yield = farm.FertilityFactor(fertility);
             m.Indoors = IsIndoors(data, site);   // the power tick keeps it
-            m.CropMatch = resources.CropMatch(farm, p.X, p.Z, m.Indoors);
-            m.WaterRate = farm.ConsumptionRate / MachineData.DaySeconds * resources.WaterUsage(p.X, p.Z);
+            m.CropMatch = _resources.CropMatch(farm, p.X, p.Z, m.Indoors);
+            m.WaterRate = farm.ConsumptionRate / MachineData.DaySeconds * _resources.WaterUsage(p.X, p.Z);
             Replant(world, m);
         }
         // The yield (FUN_14029c670, Verified): a rock its own value, at least 0.1; any other building what the ground or the nearest rock gives, and 0 becomes 0.5 for one not the
         // player's (FUN_140546dd0), so only the player's own mines can stand on nothing.
         else if (data.Resource != 0)
         {
-            m.Yield = IsNatural(site.Id) ? resources.NodeYield(data.Resource, p) : resources.Yield(data.Resource, p);
+            m.Yield = IsNatural(site.Id) ? _resources.NodeYield(data.Resource, p) : _resources.Yield(data.Resource, p);
             if (!IsNatural(site.Id) && m.Yield == 0 && site.Owner != world.Player.Faction) m.Yield = 0.5f;
         }
         return m;
@@ -184,7 +184,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         {
             DropAll(world, m);
             world.Machines.Remove(m.Site);
-            sweep = true;
+            _sweep = true;
         }
     }
 
@@ -199,7 +199,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         {
             DropAll(world, old);
             world.Machines.Remove(old.Site);
-            sweep = true;
+            _sweep = true;
             return;
         }
         var at = old.Position;
@@ -208,12 +208,12 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         {
             if (i.Count <= 0) continue;
             if (Array.Find(m.Inputs, n => n.Item == i.Item) is { } into) { into.Count += i.Count; into.Level = Math.Max(into.Level, i.Level); }
-            else Drop(items.Create(i.Item, i.Count));
+            else Drop(_items.Create(i.Item, i.Count));
         }
         if (old.Output is { Count: > 0 } o)
         {
             if (m.Output is { } no && no.Recipe.Item == o.Recipe.Item) { no.Count = o.Count; no.Progress = o.Progress; }
-            else Drop(items.Create(o.Recipe.Item, o.Count));
+            else Drop(_items.Create(o.Recipe.Item, o.Count));
         }
         if (old.Storage is { } store)
             foreach (var item in store.Items.ToList())
@@ -236,7 +236,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
         (m.PowerOn, m.GetsBattery, m.Charge, m.Broken) = (old.PowerOn, old.GetsBattery, old.Charge, old.Broken);
         world.Machines.Replace(m);
-        sweep = true;
+        _sweep = true;
     }
 
     /// <summary>Puts what a removed machine held on the ground at its last position (engine choice: the original's dismantle leaves items too, the details are Unknown).</summary>
@@ -244,8 +244,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         var at = m.Position;
         void Drop(ItemInstance? item) { if (item is not null) world.GroundItems.Drop(item, at, 0); }
-        foreach (var i in m.Inputs) if (i.Count > 0) Drop(items.Create(i.Item, i.Count));
-        if (m.Output is { Count: > 0 } o) Drop(items.Create(o.Recipe.Item, o.Count));
+        foreach (var i in m.Inputs) if (i.Count > 0) Drop(_items.Create(i.Item, i.Count));
+        if (m.Output is { Count: > 0 } o) Drop(_items.Create(o.Recipe.Item, o.Count));
         if (m.Storage is { } s) foreach (var item in s.Items.ToList()) Drop(item);
         if (m.Craft is { } c) foreach (var item in c.Done) Drop(item);
     }
@@ -261,24 +261,24 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             switch (command)
             {
                 case OperateOrder order:
-                {
-                    var site = Site(world, order.Site);
-                    if (site is not { Complete: true } || (Ensure(world, site) is not { } machine)) break;
-                    var table = world.Characters;
-                    // On a storage it is one haul trip there (order 124 without Shift, FUN_1407fa650's one-shot dispatch), no job.
-                    if (machine.Data.IsStorage && !machine.Data.Operable)
                     {
+                        var site = Site(world, order.Site);
+                        if (site is not { Complete: true } || (Ensure(world, site) is not { } machine)) break;
+                        var table = world.Characters;
+                        // On a storage it is one haul trip there (order 124 without Shift, FUN_1407fa650's one-shot dispatch), no job.
+                        if (machine.Data.IsStorage && !machine.Data.Operable)
+                        {
+                            foreach (var id in Who(world, order.Characters))
+                                if (table.TryResolveNext(id, out int hauler)) PlayerOrders.Give(world, hauler, new OrderEntry(TaskType.OperateStorage, this) { Site = site.Id }, order.Queued);
+                            break;
+                        }
+                        if (!(machine.Data.Operable || machine.Data.IsTraining || IsSeat(machine))) break;
+                        var row = machine.Data.IsTraining ? TaskType.UseTrainingDummy : TaskType.OperateMachinery;
                         foreach (var id in Who(world, order.Characters))
-                            if (table.TryResolveNext(id, out int hauler)) PlayerOrders.Give(world, hauler, new OrderEntry(TaskType.OPERATE_STORAGE, this) { Site = site.Id }, order.Queued);
+                            if (table.TryResolveNext(id, out int slot) && PlayerOrders.Give(world, slot, new OrderEntry(row, this) { Site = site.Id }, order.Queued) is { Posted: true })
+                                break;   // the machine is in use: said once
                         break;
                     }
-                    if (!(machine.Data.Operable || machine.Data.IsTraining || IsSeat(machine))) break;
-                    var row = machine.Data.IsTraining ? TaskType.USE_TRAINING_DUMMY : TaskType.OPERATE_MACHINERY;
-                    foreach (var id in Who(world, order.Characters))
-                        if (table.TryResolveNext(id, out int slot) && PlayerOrders.Give(world, slot, new OrderEntry(row, this) { Site = site.Id }, order.Queued) is { Posted: true })
-                            break;   // the machine is in use: said once
-                    break;
-                }
                 case UseTurretOrder turret: UseTurret(world, turret); break;
                 case ProspectOrder prospect: ProspectBegin(world, prospect); break;
                 case AddJob add: AddJobs(world, add); break;
@@ -288,7 +288,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 case MoveJob move: MoveJobTo(world, move); break;
                 case PutInMachine put: Put(world, put); break;
                 case TakeFromMachine take: Take(world, take); break;
-                case FocusCommand look: focus = look.Position; break;
+                case FocusCommand look: _focus = look.Position; break;
                 case QueueResearch queue: Queue(world, queue.Research); break;
                 case CancelResearch cancel: world.Research.Dequeue(cancel.Research); break;
                 case QueueCraft craft: QueueCraft(world, craft); break;
@@ -314,14 +314,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     void UseTurret(World world, UseTurretOrder order)
     {
         if (Site(world, order.Site) is not { Complete: true } site || TurretPostOf(site) is not { } post || Ensure(world, site) is not { } m) return;
-        var spot = Ai.AiSystem.TurretSpot(world, post);
+        var spot = AiSystem.TurretSpot(world, post);
         var table = world.Characters;
         int best = -1;
         float bestGap = float.MaxValue;
         foreach (var id in Who(world, order.Characters))
-            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold && Able(cold) && TaskStart.Eligible(world, cold, TaskType.USE_TURRET) && Gap(table.Next[slot].Position, spot) is var gap && gap < bestGap)
+            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { IsPlayer: true } cold && Able(cold) && TaskStart.Eligible(world, cold, TaskType.UseTurret) && Gap(table.Next[slot].Position, spot) is var gap && gap < bestGap)
                 (best, bestGap) = (slot, gap);
-        if (best >= 0) PlayerOrders.Give(world, best, new OrderEntry(TaskType.USE_TURRET, this) { Site = site.Id }, order.Queued);
+        if (best >= 0) PlayerOrders.Give(world, best, new OrderEntry(TaskType.UseTurret, this) { Site = site.Id }, order.Queued);
     }
 
     /// <summary>
@@ -333,10 +333,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         var cold = world.Characters.Cold(slot)!;
         if (!cold.IsPlayer) return OrderCheck.Gone;
-        if (order.Row == TaskType.PROSPECTING) return Able(cold) && cold.WaterState != 3 ? OrderCheck.Run : OrderCheck.Blocked();
+        if (order.Row == TaskType.Prospecting) return Able(cold) && cold.WaterState != 3 ? OrderCheck.Run : OrderCheck.Blocked();
         if (order.Site is not { } id || Site(world, id) is not { Complete: true } site || world.Machines.Find(id) is not { } m
-            || order.Row == TaskType.USE_TURRET && TurretPostOf(site) is null) return OrderCheck.Gone;
-        if (order.Row == TaskType.OPERATE_STORAGE) return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
+            || order.Row == TaskType.UseTurret && TurretPostOf(site) is null) return OrderCheck.Gone;
+        if (order.Row == TaskType.OperateStorage) return Able(cold) ? OrderCheck.Run : OrderCheck.Blocked();
         if (cold.OperateSite == id) return OrderCheck.Run;
         if (!Able(cold)) return OrderCheck.Blocked();
         if (IsSeat(m) && SeatOccupied(world, site)) return OrderCheck.Blocked($"{site.Name} is already in use.", posted: true);
@@ -348,11 +348,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         var table = world.Characters;
         switch (order.Row)
         {
-            case TaskType.PROSPECTING:
-                if (table.Next[slot].Task != (byte)CharacterTask.Prospect) TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Prospect, TaskType.PROSPECTING, TaskSource.Order));   // one at it keeps its progress
+            case TaskType.Prospecting:
+                if (table.Next[slot].Task != (byte)CharacterTask.Prospect) TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Prospect, TaskType.Prospecting, TaskSource.Order));   // one at it keeps its progress
                 break;
-            case TaskType.OPERATE_STORAGE:
-                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Haul, TaskType.OPERATE_STORAGE, TaskSource.Order) { Site = order.Site });
+            case TaskType.OperateStorage:
+                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Haul, TaskType.OperateStorage, TaskSource.Order) { Site = order.Site });
                 break;
             default:
                 if (table.Cold(slot)!.OperateSite != order.Site) TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Operate, order.Row, TaskSource.Order) { Site = order.Site });
@@ -363,7 +363,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// <summary>A player turret's post (its functionality's <c>use range</c> and <c>gun turret</c>), null for a building that is no turret.</summary>
     Meitou.Data.World.TurretPost? TurretPostOf(BuildSite site)
     {
-        if (db.Find(site.Record) is not { } record || (record.GetReferences("functionality") is [var link, ..] ? db.Find(link.TargetStringId) : null) is not { } fn
+        if (_db.Find(site.Record) is not { } record || (record.GetReferences("functionality") is [var link, ..] ? _db.Find(link.TargetStringId) : null) is not { } fn
             || fn.GetInt("function") != Meitou.Data.World.ObjectRanges.TurretFunction) return null;
         var forward = Vector3.Transform(Vector3.UnitZ, site.Rotation);
         return new Meitou.Data.World.TurretPost(site.Position, MathF.Atan2(forward.X, forward.Z), fn.GetFloat("use range", 10),
@@ -378,8 +378,8 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && TurretPostOf(site) is { } post)
         {
-            var spot = Ai.AiSystem.TurretSpot(world, post);
-            return turretSpots[site.Id] = new Vector2(spot.X, spot.Z);
+            var spot = AiSystem.TurretSpot(world, post);
+            return _turretSpots[site.Id] = new Vector2(spot.X, spot.Z);
         }
         var at = world.Walkability.FloorNear(site.Position.X, site.Position.Z, site.Position.Y, MovementSystem.FloorSlack) ?? site.Position;
         return new Vector2(at.X, at.Z);
@@ -390,11 +390,11 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         n.Goal = goal;
         n.Flags |= (ushort)MoveFlags.NeedPath;
-        (cold.GoalHeight, cold.GoalHeightAt) = turretSpots.ContainsKey(site.Id) ? (float.NaN, default) : (site.Position.Y, n.Goal);
+        (cold.GoalHeight, cold.GoalHeightAt) = _turretSpots.ContainsKey(site.Id) ? (float.NaN, default) : (site.Position.Y, n.Goal);
     }
 
     // The gunner spots of the player's turrets, as their walks found them (derived from the site and the ground; not saved, not hashed).
-    readonly Dictionary<string, Vector2> turretSpots = [];
+    readonly Dictionary<string, Vector2> _turretSpots = [];
 
     /// <summary>
     /// A character that can work: awake, not carrying or carried. A fight is no gate: an order's new task ends it (<see cref="TaskStart.Start"/>; docs/game/combat.md "Fight lifecycle and
@@ -433,13 +433,13 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     bool AtSite(World world, in CharacterHot n, BuildSite site, Machine m)
     {
         // A turret's gunner stands at its spot (once its walk has found it).
-        if (turretSpots.TryGetValue(site.Id, out var spot))
+        if (_turretSpots.TryGetValue(site.Id, out var spot))
         {
             float off = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), spot);
-            return off <= Ai.AiSystem.TurretSlack || ((n.Flags & (ushort)MoveFlags.AnyPath) == 0 && off <= Ai.AiSystem.TurretSlack + Settings.SettleReach);
+            return off <= AiSystem.TurretSlack || ((n.Flags & (ushort)MoveFlags.AnyPath) == 0 && off <= AiSystem.TurretSlack + Settings.SettleReach);
         }
         // A rock: inside its footprint scaled 1.2, or within its use range of the box's centre (the original measures to its position marker; a rock's origin can lie off its pile).
-        if (naturalBounds.TryGetValue(site.Id, out var rock))
+        if (_naturalBounds.TryGetValue(site.Id, out var rock))
             return rock.Touches(n.Position) || SiteReach.Within(n, Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), rock.Flat), m.Data.UseRange);
         // The machine's use range (UseableStuff::getReachRange).
         return SiteReach.Within(n, GapTo(site, n.Position), m.Data.UseRange) && SiteReach.AtHeight(n, site, world.Fixtures.DoorsByBuilding[site.Id].Any());
@@ -453,7 +453,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     float GapTo(BuildSite site, Vector3 from)
     {
         if (!IsNatural(site.Id)) return SiteReach.Gap(Settings.EdgeGap, site, from);
-        return naturalBounds.TryGetValue(site.Id, out var rock) ? rock.Gap(from) : SiteReach.Gap(null, site, from);
+        return _naturalBounds.TryGetValue(site.Id, out var rock) ? rock.Gap(from) : SiteReach.Gap(null, site, from);
     }
 
     /// <summary>
@@ -462,7 +462,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// </summary>
     float FacingTo(in CharacterHot n, BuildSite site)
     {
-        var at = naturalBounds.TryGetValue(site.Id, out var rock) ? rock.Flat : new Vector2(site.Position.X, site.Position.Z);
+        var at = _naturalBounds.TryGetValue(site.Id, out var rock) ? rock.Flat : new Vector2(site.Position.X, site.Position.Z);
         return MathF.Atan2(at.X - n.Position.X, at.Y - n.Position.Z);
     }
 
@@ -489,7 +489,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
         var site = Site(world, request.Site!)!;
         var m = Ensure(world, site)!;
-        if (request.Task == CharacterTask.Haul) StartHaulTrip(world, slot, site, m, ditch: request.Row == TaskType.DITCH_ALL_RESOURCES);
+        if (request.Task == CharacterTask.Haul) StartHaulTrip(world, slot, site, m, ditch: request.Row == TaskType.DitchAllResources);
         else Begin(world, slot, site, m);
     }
 
@@ -530,7 +530,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         cold.HaulTo = null;
         var goal = GoalOf(world, site, m);
         if (!AtSite(world, n, site, m)) WalkToSite(ref n, cold, site, goal);
-        sweep = true;
+        _sweep = true;
     }
 
     /// <summary>
@@ -555,7 +555,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     public void Schedule(World world)
     {
         // The jobs are the decision step's (RegisterSources); with no machine a sleeper of the "Sleep when injured" option still lets go of its bed here once up.
-        if (world.Machines.Count == 0 && !sweep && !(Beds is not null && (world.Player.SquadAi & SquadAi.Sleep) != 0 && world.Fixtures.Count > 0)) return;
+        if (world.Machines.Count == 0 && !_sweep && !(Beds is not null && (world.Player.SquadAi & SquadAi.Sleep) != 0 && world.Fixtures.Count > 0)) return;
         var table = world.Characters;
         float dt = world.TickSeconds;
         for (int i = 0; i < table.HighWater; i++)
@@ -582,7 +582,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
                 cold.HaulSite = null;
                 cold.HaulFetch = null;
                 cold.Operating = false;
-            if (cold.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the work
+                if (cold.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the work
                 continue;
             }
             var site = Site(world, id);
@@ -596,26 +596,26 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             if (Hauling(world, cold) is { } haul) (site, m) = haul;
             Approach(world, ref n, cold, site, m, dt);
         }
-        if (world.Machines.Count == 0) sweep = false;
+        if (world.Machines.Count == 0) _sweep = false;
     }
 
     /// <summary>Walks a character to a building: at it, its path is dropped; else a path is asked for, again every <see cref="PursuitSystem.RepathSeconds"/> while it has none.</summary>
     void Approach(World world, ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt)
     {
-        const ushort Path = (ushort)MoveFlags.AnyPath;
-        if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && !turretSpots.ContainsKey(site.Id)) GoalOf(world, site, m);
+        const ushort path = (ushort)MoveFlags.AnyPath;
+        if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction && !_turretSpots.ContainsKey(site.Id)) GoalOf(world, site, m);
         if (AtSite(world, n, site, m))
         {
-            if ((n.Flags & Path) != 0)
+            if ((n.Flags & path) != 0)
             {
-                n.Flags = (ushort)(n.Flags & ~Path);
+                n.Flags = (ushort)(n.Flags & ~path);
                 n.PathCursor = 0;
                 cold.PathRequest = 0;
             }
             n.TaskTime = 0;
             return;
         }
-        if ((n.Flags & Path) != 0) return;
+        if ((n.Flags & path) != 0) return;
         n.TaskTime -= dt;
         if (n.TaskTime > 0) return;
         WalkToSite(ref n, cold, site, GoalOf(world, site, m));
@@ -629,14 +629,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// The number of the nearest town of <paramref name="cold"/>'s faction whose radius holds <paramref name="at"/>, 0 for none. A method of its own: lambdas capturing the
     /// operator in the loop over every character made a closure per character each tick.
     /// </summary>
-    static int NearestOwnTown(World world, CharacterCold cold, System.Numerics.Vector2 at)
+    static int NearestOwnTown(World world, CharacterCold cold, Vector2 at)
     {
         int best = 0;
         float bestD2 = float.MaxValue;
         foreach (var t in world.Buildings.Towns)
         {
-            var centre = new System.Numerics.Vector2(t.Position.X, t.Position.Z);
-            float d2 = System.Numerics.Vector2.DistanceSquared(centre, at);
+            var centre = new Vector2(t.Position.X, t.Position.Z);
+            float d2 = Vector2.DistanceSquared(centre, at);
             if (t.Owner != cold.Faction || d2 > t.Radius * t.Radius || d2 >= bestD2) continue;
             (best, bestD2) = (t.Number, d2);
         }
@@ -662,7 +662,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         if (bench > research.BenchLevel)
         {
             research.BenchLevel = bench;
-            publishedResearch = null;
+            _publishedResearch = null;
         }
         if (world.Machines.Count == 0) return;
         float dt = world.TickSeconds;
@@ -718,7 +718,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             if (cold.Faction == world.Player.Faction && site.Owner != cold.Faction && IsNatural(site.Id))
             {
                 site.Owner = cold.Faction;
-                site.Town = NearestOwnTown(world, cold, new System.Numerics.Vector2(site.Position.X, site.Position.Z));
+                site.Town = NearestOwnTown(world, cold, new Vector2(site.Position.X, site.Position.Z));
             }
             // A turret: manned, facing it; the combat system fires it (docs/simulation.md "Combat", turrets). Its gunner counts as an operator, so it draws its power.
             if (m.Data.Function == Meitou.Data.World.ObjectRanges.TurretFunction)
@@ -785,7 +785,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         if (stat <= 0) return;
         cold.UseSkill((StatsEnumerated)stat, world.Tick);
-        if (cold.Stats is { } stats && cold.Race is { } race) xp.Continuous(stats, race, (StatsEnumerated)stat, dt, OperateXp(stat));
+        if (cold.Stats is { } stats && cold.Race is { } race) _xp.Continuous(stats, race, (StatsEnumerated)stat, dt, OperateXp(stat));
     }
 
     /// <summary>The operating XP amount of a stat (<b>Observed</b>, <c>FUN_1408c7250</c>): 0.5, stats 10 and 37 0.1, 11 1, 24 3, 35 1.2 (0.8 falling into the farming case), 12 (farming) 0.75.</summary>
@@ -804,7 +804,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     bool ProduceStep(World world, Machine m, float s, float dt)
     {
         if (m.Output is not { } output) return false;
-        float amount = m.Yield * m.Data.Rate * WorkFactor(world, m) * dt * constants.ProductionSpeed * s * Settings.ProductionOption;
+        float amount = m.Yield * m.Data.Rate * WorkFactor(world, m) * dt * _constants.ProductionSpeed * s * Settings.ProductionOption;
         foreach (var input in m.Inputs)
         {
             float rate = input.Rate;
@@ -1021,7 +1021,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         var f = m.Farm!;
         var fd = m.Data.Farm!;
-        float work = m.Health * m.Power * constants.ProductionSpeed * dt * s;
+        float work = m.Health * m.Power * _constants.ProductionSpeed * dt * s;
         if (f.Growth >= 1 && f.Death < fd.DeathThreshold && f.Harvested < f.Plants.Length)
         {
             if (m.Output is not { } output || f.Status == FarmStatus.OutputFull) return false;   // status 1: the work function does nothing (FUN_1400e59e0)
@@ -1110,10 +1110,10 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             research.Dequeue(item.Id);
             return false;
         }
-        if (item.Seconds > data.Hours(constants, Settings.ResearchOption, world.Research.Times(data.Id)) * (MachineData.DaySeconds / 24))
+        if (item.Seconds > data.Hours(_constants, Settings.ResearchOption, world.Research.Times(data.Id)) * (MachineData.DaySeconds / 24))
         {
-            research.Complete(db, item.Id);
-            publishedResearch = null;
+            research.Complete(_db, item.Id);
+            _publishedResearch = null;
             world.Post(Loc.Tr("Research complete: {1}", data.Name));
         }
         return true;
@@ -1136,18 +1136,18 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
             world.Post(Loc.Tr("Research already known"));
             return false;
         }
-        world.Research.Complete(db, id);
-        publishedResearch = null;
+        world.Research.Complete(_db, id);
+        _publishedResearch = null;
         world.Post(Loc.Tr("Research complete: {1}", data.Name));
         return true;
     }
 
     /// <summary><see cref="Learn(World, string)"/> for a blueprint item (false for any other item).</summary>
-    public bool Learn(World world, ItemInstance blueprint) => items.ResearchOf(blueprint) is { } research && Learn(world, research.StringId);
+    public bool Learn(World world, ItemInstance blueprint) => _items.ResearchOf(blueprint) is { } research && Learn(world, research.StringId);
 
     /// <summary>The research the player may queue now (<b>Observed</b>, <c>FUN_1408333b0</c>): not blueprint-only, not exhausted (every repetition done) or queued, <c>level</c> within the tech level, requirements met.</summary>
     public bool Available(World world, ResearchData r) =>
-        !r.BlueprintOnly && !world.Research.Exhausted(db, r.Id) && !world.Research.IsQueued(r.Id) && r.LevelAt(world.Research.Times(r.Id)) <= world.Research.TechLevel && Met(world, r.Requirements, lenient: true);
+        !r.BlueprintOnly && !world.Research.Exhausted(_db, r.Id) && !world.Research.IsQueued(r.Id) && r.LevelAt(world.Research.Times(r.Id)) <= world.Research.TechLevel && Met(world, r.Requirements, lenient: true);
 
     bool Met(World world, ResearchData r) => Met(world, r.Requirements, lenient: false);
 
@@ -1159,16 +1159,16 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     {
         foreach (var req in requirements)
         {
-            var record = db.Find(req);
+            var record = _db.Find(req);
             if (record is null) continue;
-            if (record.Type == FcsRecordType.RESEARCH ? world.Research.IsDone(req) : world.Research.IsUnlocked(req)) continue;
+            if (record.Type == FcsRecordType.Research ? world.Research.IsDone(req) : world.Research.IsUnlocked(req)) continue;
             if (!lenient || !Met(world, record.GetReferences("requirements").Select(l => l.TargetStringId), lenient: false)) return false;
         }
         return true;
     }
 
     /// <summary>The zone of the camera focus, null while none was told.</summary>
-    Meitou.Data.World.ZoneCoordinate? FocusZone() => focus is { } f ? Meitou.Data.World.WorldLayout.ZoneOf(f.X, f.Z) : null;
+    Meitou.Data.World.ZoneCoordinate? FocusZone() => _focus is { } f ? Meitou.Data.World.WorldLayout.ZoneOf(f.X, f.Z) : null;
 
     /// <summary>
     /// The items of the player's research benches where costs are counted and paid (<b>Verified</b>, <c>FUN_14082e750</c>, <c>FUN_14082e810</c>, <c>FUN_14082e900</c>, <c>FUN_1409fc450</c>): only the benches
@@ -1238,35 +1238,37 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     public ResearchSnapshot ResearchView(World world)
     {
         var zone = FocusZone();
-        if (publishedResearch is not null && researchVersion == world.Research.Version && machinesVersion == world.Machines.Version && researchZone == zone) return publishedResearch;
+        if (_publishedResearch is not null && _researchVersion == world.Research.Version && _machinesVersion == world.Machines.Version && _researchZone == zone) return _publishedResearch;
         // Progress, bench stock and the focus zone (each zone crossed in a flight) move often: those refresh at most once a second; finishing, queueing or paying at once.
         var lists = (world.Research.Completed.Count, world.Research.Queue.Count, world.Research.Paid.Count, world.Research.BenchLevel);
-        if (publishedResearch is not null && researchLists == lists && (ulong)(world.Tick - researchBuilt) < ResearchRefreshTicks) return publishedResearch;
-        researchLists = lists;
-        researchBuilt = world.Tick;
-        researchZone = zone;
-        researchVersion = world.Research.Version;
-        machinesVersion = world.Machines.Version;
-        allResearch ??= ResearchData.LoadAll(db);
+        if (_publishedResearch is not null && _researchLists == lists && (ulong)(world.Tick - _researchBuilt) < ResearchRefreshTicks) return _publishedResearch;
+        _researchLists = lists;
+        _researchBuilt = world.Tick;
+        _researchZone = zone;
+        _researchVersion = world.Research.Version;
+        _machinesVersion = world.Machines.Version;
+        _allResearch ??= ResearchData.LoadAll(_db);
         var state = world.Research;
-        var queue = state.Queue.Select(q => (q.Id, Research(q.Id)?.Name ?? q.Id, Research(q.Id) is { } d ? Math.Clamp(q.Seconds / (d.Hours(constants, Settings.ResearchOption, state.Times(q.Id)) * (MachineData.DaySeconds / 24)), 0, 1) : 0)).ToArray();
-        var available = allResearch.Where(r => Available(world, r))
-            .Select(r => new ResearchOption(r.Id, r.Name, r.Category, r.LevelAt(state.Times(r.Id)), r.Hours(constants, Settings.ResearchOption, state.Times(r.Id)), Affordable(world, r), r.LevelAt(state.Times(r.Id)) > state.BenchLevel,
-                state.Partial.TryGetValue(r.Id, out float s) ? Math.Clamp(s / (r.Hours(constants, Settings.ResearchOption, state.Times(r.Id)) * (MachineData.DaySeconds / 24)), 0, 1) : 0)
+        var queue = state.Queue.Select(q => (q.Id, Research(q.Id)?.Name ?? q.Id, Research(q.Id) is { } d ? Math.Clamp(q.Seconds / (d.Hours(_constants, Settings.ResearchOption, state.Times(q.Id)) * (MachineData.DaySeconds / 24)), 0, 1) : 0)).ToArray();
+        var available = _allResearch.Where(r => Available(world, r))
+            .Select(r => new ResearchOption(r.Id, r.Name, r.Category, r.LevelAt(state.Times(r.Id)), r.Hours(_constants, Settings.ResearchOption, state.Times(r.Id)), Affordable(world, r), r.LevelAt(state.Times(r.Id)) > state.BenchLevel,
+                state.Partial.TryGetValue(r.Id, out float s) ? Math.Clamp(s / (r.Hours(_constants, Settings.ResearchOption, state.Times(r.Id)) * (MachineData.DaySeconds / 24)), 0, 1) : 0)
             {
                 Description = r.Description,
                 Paid = state.Paid.Contains(r.Id, StringComparer.Ordinal),
                 Cost = state.Paid.Contains(r.Id, StringComparer.Ordinal) ? []
-                    : [.. r.CostAt(state.Times(r.Id)).Select(c => (items.Info(c.Item)?.Name ?? c.Item, c.Count, CountInBenches(world, c.Item) >= c.Count))],
+                    : [.. r.CostAt(state.Times(r.Id)).Select(c => (_items.Info(c.Item)?.Name ?? c.Item, c.Count, CountInBenches(world, c.Item) >= c.Count))],
                 // The description lists the RESEARCH requirements only (FUN_140495e00 looks them up as type 21).
-                Requirements = [.. r.Requirements.Select(db.Find).Where(q => q is { Type: FcsRecordType.RESEARCH })
+                Requirements = [.. r.Requirements.Select(_db.Find).Where(q => q is { Type: FcsRecordType.Research })
                     .Select(q => (q!.Name, state.IsDone(q.StringId), state.IsQueued(q.StringId)))],
-                Unlocks = [.. r.Unlocks.Select(u => (u.Field, db.Find(u.Id)?.Name)).Where(u => u.Name is not null).Select(u => (u.Field, u.Name!))],
+                Unlocks = [.. r.Unlocks.Select(u => (u.Field, _db.Find(u.Id)?.Name)).Where(u => u.Name is not null).Select(u => (u.Field, u.Name!))],
             }).ToArray();
-        return publishedResearch = new ResearchSnapshot(state.TechLevel, state.BenchLevel, queue, state.Rate, available) {
-            Finished = state.Completed.Count, Known = state.Completed.ToHashSet(StringComparer.Ordinal),
+        return _publishedResearch = new ResearchSnapshot(state.TechLevel, state.BenchLevel, queue, state.Rate, available)
+        {
+            Finished = state.Completed.Count,
+            Known = state.Completed.ToHashSet(StringComparer.Ordinal),
             // Strict, as the blueprint tooltip asks (FUN_1407ab430 calls FUN_140832fa0 with the lenient flag clear, like learning); the research list is the lenient one.
-            RequirementsMet = allResearch.Where(r => Met(world, r)).Select(r => r.Id).ToHashSet(StringComparer.Ordinal),
+            RequirementsMet = _allResearch.Where(r => Met(world, r)).Select(r => r.Id).ToHashSet(StringComparer.Ordinal),
         };
     }
 
@@ -1422,7 +1424,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
         }
         (string Item, int Count) held = take.Slot == -2 ? (m.Output?.Recipe.Item ?? "", m.Output?.Count ?? 0) : take.Slot >= 0 && take.Slot < m.Inputs.Length ? (m.Inputs[take.Slot].Item, m.Inputs[take.Slot].Count) : ("", 0);
         if (take.Count > 0) held.Count = Math.Min(held.Count, take.Count);
-        if (held.Count <= 0 || items.Create(held.Item, held.Count) is not { } made) return;
+        if (held.Count <= 0 || _items.Create(held.Item, held.Count) is not { } made) return;
         int moved = Placed(root, made);
         if (moved <= 0) return;
         if (take.Slot == -2) m.Output!.Count -= moved;

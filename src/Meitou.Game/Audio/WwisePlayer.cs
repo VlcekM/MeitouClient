@@ -18,27 +18,27 @@ namespace Meitou.Game.Audio;
 /// </summary>
 public sealed partial class WwisePlayer : IDisposable
 {
-    readonly WwiseCodebookLibrary library;
-    readonly string bankDirectory;
-    readonly int outputRate;
-    readonly ConcurrentQueue<Action> commands = new();
-    readonly ConcurrentDictionary<string, Task> loading = new(StringComparer.OrdinalIgnoreCase);
-    readonly Random random = new();
+    readonly WwiseCodebookLibrary _library;
+    readonly string _bankDirectory;
+    readonly int _outputRate;
+    readonly ConcurrentQueue<Action> _commands = new();
+    readonly ConcurrentDictionary<string, Task> _loading = new(StringComparer.OrdinalIgnoreCase);
+    readonly Random _random = new();
 
     // Owned by the audio thread.
-    readonly Dictionary<uint, WwiseObject> objects = [];
-    readonly Dictionary<uint, MediaClip> media = [];
-    readonly PcmCache pcm = new();
-    readonly Dictionary<uint, float> parameters = [];
-    readonly Dictionary<uint, uint> states = [];
-    readonly Dictionary<uint, List<uint>> history = [];
-    readonly List<Instance> roots = [];
-    readonly List<SoundInstance> sounds = [];
-    readonly List<(double At, uint EventId, ulong Object, double Expires)> pending = [];
-    readonly List<(double At, WwiseAction Action, ulong Object)> delayed = [];
-    readonly Dictionary<string, (WwiseObject[] Objects, uint[] Media)> bankContents = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<uint, WwiseObject> _objects = [];
+    readonly Dictionary<uint, MediaClip> _media = [];
+    readonly PcmCache _pcm = new();
+    readonly Dictionary<uint, float> _parameters = [];
+    readonly Dictionary<uint, uint> _states = [];
+    readonly Dictionary<uint, List<uint>> _history = [];
+    readonly List<Instance> _roots = [];
+    readonly List<SoundInstance> _sounds = [];
+    readonly List<(double At, uint EventId, ulong Object, double Expires)> _pending = [];
+    readonly List<(double At, WwiseAction Action, ulong Object)> _delayed = [];
+    readonly Dictionary<string, (WwiseObject[] Objects, uint[] Media)> _bankContents = new(StringComparer.OrdinalIgnoreCase);
     // The block being mixed covers [blockStart, time); runTime is when the action being run takes effect (music starts at that point).
-    double time, blockStart, runTime;
+    double _time, _blockStart, _runTime;
 
     /// <summary>Overall gain, linear (the ambience slider's).</summary>
     public float Gain { get; set; } = 1;
@@ -70,14 +70,14 @@ public sealed partial class WwisePlayer : IDisposable
     /// <summary>How much louder a sound mixed in the last block counts for the cap (a factor on its level).</summary>
     const float CapHysteresis = 1.5f;
 
-    float[] loudness = new float[64];
-    int[] order = new int[64];
-    readonly HashSet<int> silenced = [];
+    float[] _loudness = new float[64];
+    int[] _order = new int[64];
+    readonly HashSet<int> _silenced = [];
 
     /// <summary>True once the bank has been read and handed to the audio thread (and not unloaded since).</summary>
-    public bool IsBankLoaded(string name) => loadedBanks.ContainsKey(Normalize(name));
+    public bool IsBankLoaded(string name) => _loadedBanks.ContainsKey(Normalize(name));
 
-    readonly ConcurrentDictionary<string, bool> loadedBanks = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, bool> _loadedBanks = new(StringComparer.OrdinalIgnoreCase);
 
     static string Normalize(string name) => name.EndsWith(".bnk", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name;
 
@@ -87,15 +87,15 @@ public sealed partial class WwisePlayer : IDisposable
     /// </summary>
     public WwisePlayer(WwiseCodebookLibrary library, string bankDirectory, int outputRate)
     {
-        this.library = library;
-        this.bankDirectory = bankDirectory;
-        this.outputRate = outputRate;
+        this._library = library;
+        this._bankDirectory = bankDirectory;
+        this._outputRate = outputRate;
         var init = Path.Combine(bankDirectory, "Init.bnk");
         if (File.Exists(init))
         {
             var bank = WwiseBank.ReadFile(init);
-            foreach (var (id, value) in bank.GameParameterDefaults) parameters[id] = value;
-            foreach (var o in bank.Objects) objects.TryAdd(o.Id, o);
+            foreach (var (id, value) in bank.GameParameterDefaults) _parameters[id] = value;
+            foreach (var o in bank.Objects) _objects.TryAdd(o.Id, o);
         }
     }
 
@@ -103,21 +103,21 @@ public sealed partial class WwisePlayer : IDisposable
     /// Reads a bank and converts its WEMs on a worker thread, then hands the objects and clips to the audio thread. Loading a bank that is
     /// loaded or loading returns the same task.
     /// </summary>
-    public Task LoadBank(string name) => loading.GetOrAdd(Normalize(name), n => Task.Run(() =>
+    public Task LoadBank(string name) => _loading.GetOrAdd(Normalize(name), n => Task.Run(() =>
     {
-        var bank = WwiseBank.ReadFile(Path.Combine(bankDirectory, n + ".bnk"));
+        var bank = WwiseBank.ReadFile(Path.Combine(_bankDirectory, n + ".bnk"));
         var clips = new ConcurrentBag<MediaClip>();
         Parallel.ForEach(bank.Media, m =>
         {
             var wem = WwiseVorbis.Read(bank.MediaBytes(m));
-            clips.Add(new MediaClip(m.Id, wem.ToOgg(library), wem.Channels, wem.SampleRate, wem.SampleCount));
+            clips.Add(new MediaClip(m.Id, wem.ToOgg(_library), wem.Channels, wem.SampleRate, wem.SampleCount));
         });
-        commands.Enqueue(() =>
+        _commands.Enqueue(() =>
         {
-            foreach (var o in bank.Objects) objects.TryAdd(o.Id, o);
-            foreach (var c in clips) media.TryAdd(c.Id, c);
-            bankContents[n] = ([.. bank.Objects], [.. clips.Select(c => c.Id)]);
-            loadedBanks[n] = true;
+            foreach (var o in bank.Objects) _objects.TryAdd(o.Id, o);
+            foreach (var c in clips) _media.TryAdd(c.Id, c);
+            _bankContents[n] = ([.. bank.Objects], [.. clips.Select(c => c.Id)]);
+            _loadedBanks[n] = true;
             RetryPending();
         });
     }));
@@ -131,19 +131,19 @@ public sealed partial class WwisePlayer : IDisposable
     {
         var n = Normalize(name);
         // At once, so that a load or a check right after sees the bank gone; the audio thread then drops what it holds, before any new load adds.
-        if (!loadedBanks.TryRemove(n, out _)) return;
-        loading.TryRemove(n, out _);
-        commands.Enqueue(() =>
+        if (!_loadedBanks.TryRemove(n, out _)) return;
+        _loading.TryRemove(n, out _);
+        _commands.Enqueue(() =>
         {
-            if (!bankContents.Remove(n, out var contents)) return;
+            if (!_bankContents.Remove(n, out var contents)) return;
             var own = new HashSet<WwiseObject>(contents.Objects, ReferenceEqualityComparer.Instance);
-            foreach (var r in roots)
+            foreach (var r in _roots)
                 if (own.Contains(r.Node)) r.End();
             foreach (var o in contents.Objects)
-                if (objects.TryGetValue(o.Id, out var held) && own.Contains(held)) objects.Remove(o.Id);
-            foreach (var other in bankContents.Values)
-                foreach (var o in other.Objects) objects.TryAdd(o.Id, o);
-            foreach (var id in contents.Media) media.Remove(id);
+                if (_objects.TryGetValue(o.Id, out var held) && own.Contains(held)) _objects.Remove(o.Id);
+            foreach (var other in _bankContents.Values)
+                foreach (var o in other.Objects) _objects.TryAdd(o.Id, o);
+            foreach (var id in contents.Media) _media.Remove(id);
         });
     }
 
@@ -151,9 +151,9 @@ public sealed partial class WwisePlayer : IDisposable
     public void Post(string eventName) => Post(WwiseHash.Id(eventName), 0);
     public void Post(uint eventId) => Post(eventId, 0);
     public void SetParameter(string name, float value) => SetParameter(WwiseHash.Id(name), value);
-    public void SetParameter(uint id, float value) => commands.Enqueue(() => parameters[id] = value);
+    public void SetParameter(uint id, float value) => _commands.Enqueue(() => _parameters[id] = value);
     public void SetState(string group, string state) => SetState(WwiseHash.Id(group), WwiseHash.Id(state));
-    public void SetState(uint group, uint state) => commands.Enqueue(() => ChangeState(group, state));
+    public void SetState(uint group, uint state) => _commands.Enqueue(() => ChangeState(group, state));
 
     /// <summary>Sets a switch group (<c>Biomes</c>, <c>General</c>): switches and states share the ids of their groups, so it is a state change.</summary>
     public void SetSwitch(string group, string value) => SetState(group, value);
@@ -161,53 +161,53 @@ public sealed partial class WwisePlayer : IDisposable
     /// <summary>Called by the output: runs the queued commands, advances every instance and adds the voices to <paramref name="mix"/>.</summary>
     public void Mix(float[] mix, int frames)
     {
-        blockStart = runTime = time;
-        while (commands.TryDequeue(out var command)) command();
-        double dt = (double)frames / outputRate;
-        time += dt;
-        volumeOffsets.Advance(dt);
-        pitchOffsets.Advance(dt);
-        lowPassOffsets.Advance(dt);
-        busVolumes.Advance(dt);
-        for (int i = delayed.Count - 1; i >= 0; i--)
-            if (delayed[i].At <= time)
+        _blockStart = _runTime = _time;
+        while (_commands.TryDequeue(out var command)) command();
+        double dt = (double)frames / _outputRate;
+        _time += dt;
+        _volumeOffsets.Advance(dt);
+        _pitchOffsets.Advance(dt);
+        _lowPassOffsets.Advance(dt);
+        _busVolumes.Advance(dt);
+        for (int i = _delayed.Count - 1; i >= 0; i--)
+            if (_delayed[i].At <= _time)
             {
-                var (_, action, gameObject) = delayed[i];
-                runTime = Math.Max(delayed[i].At, blockStart);
-                delayed.RemoveAt(i);
+                var (_, action, gameObject) = _delayed[i];
+                _runTime = Math.Max(_delayed[i].At, _blockStart);
+                _delayed.RemoveAt(i);
                 Run(action, gameObject);
             }
-        runTime = blockStart;
-        for (int i = roots.Count - 1; i >= 0; i--)
+        _runTime = _blockStart;
+        for (int i = _roots.Count - 1; i >= 0; i--)
         {
-            roots[i].Advance(dt);
-            if (roots[i].Done) roots.RemoveAt(i);
+            _roots[i].Advance(dt);
+            if (_roots[i].Done) _roots.RemoveAt(i);
         }
         int voices = 0, music = 0;
-        for (int i = sounds.Count - 1; i >= 0; i--)
-            if (sounds[i].Done)
+        for (int i = _sounds.Count - 1; i >= 0; i--)
+            if (_sounds[i].Done)
             {
-                sounds[i].Dispose();
-                sounds.RemoveAt(i);
+                _sounds[i].Dispose();
+                _sounds.RemoveAt(i);
             }
         // The voice cap (Meitou's rule, docs/audio.md "Voice cap"): past VoiceCap sounds, only the loudest at the listener are mixed; the rest keep their place silently.
         int cap = VoiceCap, cappable = 0;
-        if (loudness.Length < sounds.Count) (loudness, order) = (new float[sounds.Count * 2], new int[sounds.Count * 2]);
-        for (int i = 0; i < sounds.Count; i++)
+        if (_loudness.Length < _sounds.Count) (_loudness, _order) = (new float[_sounds.Count * 2], new int[_sounds.Count * 2]);
+        for (int i = 0; i < _sounds.Count; i++)
         {
             // A sound heard last block counts half as loud again: one at the cap's edge must get clearly quieter to give way, not flip every block.
-            float heard = sounds[i].Prepare(Gain) * (sounds[i].Heard ? CapHysteresis : 1);
-            if (cap > 0 && sounds[i].Cappable) { loudness[cappable] = -heard; order[cappable++] = i; }
+            float heard = _sounds[i].Prepare(Gain) * (_sounds[i].Heard ? CapHysteresis : 1);
+            if (cap > 0 && _sounds[i].Cappable) { _loudness[cappable] = -heard; _order[cappable++] = i; }
         }
         if (cap > 0 && cappable > cap)
         {
-            Array.Sort(loudness, order, 0, cappable);
-            for (int k = cap; k < cappable; k++) silenced.Add(order[k]);
+            Array.Sort(_loudness, _order, 0, cappable);
+            for (int k = cap; k < cappable; k++) _silenced.Add(_order[k]);
         }
-        for (int i = 0; i < sounds.Count; i++)
+        for (int i = 0; i < _sounds.Count; i++)
         {
-            var s = sounds[i];
-            if (silenced.Contains(i))
+            var s = _sounds[i];
+            if (_silenced.Contains(i))
             {
                 // Heard last block: one more block fading to silence (the voice's gain ramp), then silent.
                 if (s.Heard) s.FadeOut(mix, frames);
@@ -220,33 +220,33 @@ public sealed partial class WwisePlayer : IDisposable
             voices++;
             if (s.IsMusic) music++;
         }
-        Silenced = silenced.Count;
-        silenced.Clear();
+        Silenced = _silenced.Count;
+        _silenced.Clear();
         MixAuxBuses(mix, frames);
-        Stats = (roots.Count, voices, loading.Count, media.Count);
+        Stats = (_roots.Count, voices, _loading.Count, _media.Count);
         MusicVoices = music;
     }
 
     void RetryPending()
     {
-        var waiting = pending.ToList();
-        pending.Clear();
+        var waiting = _pending.ToList();
+        _pending.Clear();
         foreach (var p in waiting) PostNow(p.EventId, p.Object, p.Expires);
     }
 
     void PostNow(uint eventId, ulong gameObject, double expires)
     {
-        if (!objects.TryGetValue(eventId, out var o) || o is not WwiseEvent e)
+        if (!_objects.TryGetValue(eventId, out var o) || o is not WwiseEvent e)
         {
             // Its bank is still loading: try again when a bank arrives, for a while.
-            if (time < expires) pending.Add((time, eventId, gameObject, expires));
+            if (_time < expires) _pending.Add((_time, eventId, gameObject, expires));
             return;
         }
         foreach (var actionId in e.Actions)
         {
-            if (!objects.TryGetValue(actionId, out var a) || a is not WwiseAction action) continue;
+            if (!_objects.TryGetValue(actionId, out var a) || a is not WwiseAction action) continue;
             int delay = action.Properties.Int(WwisePropertyId.Delay);
-            if (delay > 0) delayed.Add((time + delay / 1000.0, action, gameObject));
+            if (delay > 0) _delayed.Add((_time + delay / 1000.0, action, gameObject));
             else Run(action, gameObject);
         }
     }
@@ -265,32 +265,32 @@ public sealed partial class WwisePlayer : IDisposable
         switch (action.Kind)
         {
             case WwiseActionKind.Play:
-                postingObject = gameObject;
+                _postingObject = gameObject;
                 try
                 {
-                    if (objects.TryGetValue(action.Target, out var node) && Create(node, null) is { } instance)
+                    if (_objects.TryGetValue(action.Target, out var node) && Create(node, null) is { } instance)
                     {
                         instance.FadeIn(fade);
-                        roots.Add(instance);
+                        _roots.Add(instance);
                         instance.Start();
                     }
                 }
-                finally { postingObject = 0; }
+                finally { _postingObject = 0; }
                 break;
             case WwiseActionKind.Stop:
-                foreach (var r in roots) r.StopMatching(action.Target, fade, ObjectScoped(action) ? gameObject : null);
+                foreach (var r in _roots) r.StopMatching(action.Target, fade, ObjectScoped(action) ? gameObject : null);
                 break;
             case WwiseActionKind.SetState:
                 ChangeState(action.GroupId, action.StateId);
                 break;
-            case WwiseActionKind.SetVolume: volumeOffsets.Set(action.Target, scopeObject, action.Value, fade); break;
-            case WwiseActionKind.ResetVolume: volumeOffsets.Reset(action.Target, scopeObject, fade); break;
-            case WwiseActionKind.SetPitch: pitchOffsets.Set(action.Target, scopeObject, action.Value, fade); break;
-            case WwiseActionKind.ResetPitch: pitchOffsets.Reset(action.Target, scopeObject, fade); break;
-            case WwiseActionKind.SetLowPass: lowPassOffsets.Set(action.Target, scopeObject, action.Value, fade); break;
-            case WwiseActionKind.ResetLowPass: lowPassOffsets.Reset(action.Target, scopeObject, fade); break;
-            case WwiseActionKind.SetBusVolume: busVolumes.Set(action.Target, scopeObject, action.Value, fade); break;
-            case WwiseActionKind.ResetBusVolume: busVolumes.Reset(action.Target, scopeObject, fade); break;
+            case WwiseActionKind.SetVolume: _volumeOffsets.Set(action.Target, scopeObject, action.Value, fade); break;
+            case WwiseActionKind.ResetVolume: _volumeOffsets.Reset(action.Target, scopeObject, fade); break;
+            case WwiseActionKind.SetPitch: _pitchOffsets.Set(action.Target, scopeObject, action.Value, fade); break;
+            case WwiseActionKind.ResetPitch: _pitchOffsets.Reset(action.Target, scopeObject, fade); break;
+            case WwiseActionKind.SetLowPass: _lowPassOffsets.Set(action.Target, scopeObject, action.Value, fade); break;
+            case WwiseActionKind.ResetLowPass: _lowPassOffsets.Reset(action.Target, scopeObject, fade); break;
+            case WwiseActionKind.SetBusVolume: _busVolumes.Set(action.Target, scopeObject, action.Value, fade); break;
+            case WwiseActionKind.ResetBusVolume: _busVolumes.Reset(action.Target, scopeObject, fade); break;
             case WwiseActionKind.BypassFx:
                 if (action.TargetIsBus) ApplyBypass(action.Target, action.Bypass, action.BypassMask);
                 break;
@@ -299,9 +299,9 @@ public sealed partial class WwisePlayer : IDisposable
 
     void ChangeState(uint group, uint state)
     {
-        if (states.TryGetValue(group, out var old) && old == state) return;
-        states[group] = state;
-        foreach (var r in roots) r.StateChanged(group);
+        if (_states.TryGetValue(group, out var old) && old == state) return;
+        _states[group] = state;
+        foreach (var r in _roots) r.StateChanged(group);
     }
 
     Instance? Create(WwiseObject node, Instance? parent) => node switch
@@ -338,70 +338,70 @@ public sealed partial class WwisePlayer : IDisposable
         {
             yield return o;
             uint parent = NodeOf(o)?.ParentId ?? 0;
-            o = parent != 0 && objects.TryGetValue(parent, out var p) ? p : null;
+            o = parent != 0 && _objects.TryGetValue(parent, out var p) ? p : null;
         }
     }
 
-    float Parameter(uint id) => parameters.TryGetValue(id, out var v) ? v : 0;
+    float Parameter(uint id) => _parameters.TryGetValue(id, out var v) ? v : 0;
 
     public void Dispose()
     {
-        foreach (var s in sounds) s.Dispose();
-        sounds.Clear();
+        foreach (var s in _sounds) s.Dispose();
+        _sounds.Clear();
     }
 
     /// <summary>A played node. Gains multiply down the instance tree (fades); a stopped instance fades out and ends.</summary>
     abstract class Instance(WwisePlayer player, WwiseObject node, Instance? parent)
     {
-        protected readonly WwisePlayer Player = player;
+        protected readonly WwisePlayer _player = player;
         public readonly WwiseObject Node = node;
         public readonly Instance? Parent = parent;
 
         /// <summary>The game object this plays on: the one the event was posted on (inherited from the parent).</summary>
-        public readonly ulong GameObject = parent?.GameObject ?? player.postingObject;
-        protected readonly List<Instance> Children = [];
-        float fade = 1, fadeTarget = 1, fadeRate;
-        bool stopping;
+        public readonly ulong GameObject = parent?.GameObject ?? player._postingObject;
+        protected readonly List<Instance> _children = [];
+        float _fade = 1, _fadeTarget = 1, _fadeRate;
+        bool _stopping;
 
         public bool Done { get; protected set; }
 
         /// <summary>When this instance starts (player time, seconds): the point in the block being mixed that music aligns to.</summary>
-        public double StartTime = player.runTime;
+        public double StartTime = player._runTime;
 
-        protected bool Stopping => stopping;
+        protected bool Stopping => _stopping;
 
         /// <summary>This instance's fade times its parents'.</summary>
-        public float Fade => fade * (Parent?.Fade ?? 1);
+        public float Fade => _fade * (Parent?.Fade ?? 1);
 
         public void FadeIn(float seconds)
         {
             if (seconds <= 0) return;
-            fade = 0;
-            fadeTarget = 1;
-            fadeRate = 1 / seconds;
+            _fade = 0;
+            _fadeTarget = 1;
+            _fadeRate = 1 / seconds;
         }
 
         public abstract void Start();
 
         public virtual void Advance(double dt)
         {
-            if (fade != fadeTarget)
+            if (_fade != _fadeTarget)
             {
-                float step = fadeRate <= 0 ? 1 : (float)(fadeRate * dt);
-                fade = fade < fadeTarget ? Math.Min(fadeTarget, fade + step) : Math.Max(fadeTarget, fade - step);
+                float step = _fadeRate <= 0 ? 1 : (float)(_fadeRate * dt);
+                _fade = _fade < _fadeTarget ? Math.Min(_fadeTarget, _fade + step) : Math.Max(_fadeTarget, _fade - step);
             }
-            if (stopping && fade <= 0)
+            if (_stopping && _fade <= 0)
             {
                 End();
                 return;
             }
-            for (int i = Children.Count - 1; i >= 0; i--)
+            for (int i = _children.Count - 1; i >= 0; i--)
             {
-                Children[i].Advance(dt);
-                if (Children[i].Done)
+                _children[i].Advance(dt);
+                if (_children[i].Done)
                 {
-                    var child = Children[i];
-                    Children.RemoveAt(i);
+                    var child = _children[i];
+                    _children.RemoveAt(i);
                     ChildEnded(child);
                 }
             }
@@ -409,15 +409,15 @@ public sealed partial class WwisePlayer : IDisposable
 
         protected virtual void ChildEnded(Instance child)
         {
-            if (Children.Count == 0) End();
+            if (_children.Count == 0) End();
         }
 
         public virtual void End()
         {
             if (Done) return;
             Done = true;
-            foreach (var c in Children) c.End();
-            Children.Clear();
+            foreach (var c in _children) c.End();
+            _children.Clear();
         }
 
         public void Stop(float seconds)
@@ -427,9 +427,9 @@ public sealed partial class WwisePlayer : IDisposable
                 End();
                 return;
             }
-            stopping = true;
-            fadeTarget = 0;
-            fadeRate = Math.Max(fadeRate, fade / seconds);
+            _stopping = true;
+            _fadeTarget = 0;
+            _fadeRate = Math.Max(_fadeRate, _fade / seconds);
         }
 
         /// <summary>
@@ -439,24 +439,24 @@ public sealed partial class WwisePlayer : IDisposable
         public void StopMatching(uint target, float seconds, ulong? onlyObject = null)
         {
             if (Done || onlyObject is { } only && only != GameObject) return;
-            if (Player.Chain(Node).Any(n => n.Id == target))
+            if (_player.Chain(Node).Any(n => n.Id == target))
             {
                 Stop(seconds);
                 return;
             }
-            foreach (var c in Children) c.StopMatching(target, seconds, onlyObject);
+            foreach (var c in _children) c.StopMatching(target, seconds, onlyObject);
         }
 
         public virtual void StateChanged(uint group)
         {
-            foreach (var c in Children) c.StateChanged(group);
+            foreach (var c in _children) c.StateChanged(group);
         }
 
         protected void Play(uint childId)
         {
-            if (Player.objects.TryGetValue(childId, out var o) && Player.Create(o, this) is { } child)
+            if (_player._objects.TryGetValue(childId, out var o) && _player.Create(o, this) is { } child)
             {
-                Children.Add(child);
+                _children.Add(child);
                 child.Start();
             }
         }
@@ -468,7 +468,7 @@ public sealed partial class WwisePlayer : IDisposable
         public override void Start()
         {
             foreach (var c in children) Play(c);
-            if (Children.Count == 0) End();
+            if (_children.Count == 0) End();
         }
     }
 
@@ -478,8 +478,8 @@ public sealed partial class WwisePlayer : IDisposable
     /// </summary>
     sealed class RandomSequenceInstance(WwisePlayer player, WwiseRandomSequence node, Instance? parent) : Instance(player, node, parent)
     {
-        int index, played;
-        double wait = -1;
+        int _index, _played;
+        double _wait = -1;
 
         bool Continuous => (node.Flags & 0x08) != 0;
 
@@ -494,21 +494,21 @@ public sealed partial class WwisePlayer : IDisposable
                 return;
             }
             int total = Continuous && node.LoopCount > 0 ? node.LoopCount * list.Length : 1;
-            if (Continuous ? node.LoopCount > 0 && played >= total : played >= 1)
+            if (Continuous ? node.LoopCount > 0 && _played >= total : _played >= 1)
             {
                 End();
                 return;
             }
-            played++;
+            _played++;
             uint pick;
-            if (node.Mode == 1) pick = list[index++ % list.Length].Item1;
+            if (node.Mode == 1) pick = list[_index++ % list.Length].Item1;
             else
             {
-                if (!Player.history.TryGetValue(node.Id, out var recent)) Player.history[node.Id] = recent = [];
+                if (!_player._history.TryGetValue(node.Id, out var recent)) _player._history[node.Id] = recent = [];
                 var allowed = list.Where(e => !recent.Contains(e.Item1)).ToArray();
                 if (allowed.Length == 0) allowed = list;
                 long sum = allowed.Sum(e => (long)Math.Max(1, e.Item2));
-                long roll = (long)(Player.random.NextDouble() * sum);
+                long roll = (long)(_player._random.NextDouble() * sum);
                 pick = allowed[^1].Item1;
                 foreach (var e in allowed)
                 {
@@ -523,27 +523,27 @@ public sealed partial class WwisePlayer : IDisposable
                 while (recent.Count > Math.Min(node.AvoidRepeatCount, list.Length - 1)) recent.RemoveAt(0);
             }
             Play(pick);
-            if (Children.Count == 0 && !Done) wait = 0.1; // a child that cannot play (its media is in a bank not loaded): try the next soon
+            if (_children.Count == 0 && !Done) _wait = 0.1; // a child that cannot play (its media is in a bank not loaded): try the next soon
         }
 
         public override void Advance(double dt)
         {
             base.Advance(dt);
-            if (Done || wait < 0) return;
-            wait -= dt;
-            if (wait < 0) Next();
+            if (Done || _wait < 0) return;
+            _wait -= dt;
+            if (_wait < 0) Next();
         }
 
         protected override void ChildEnded(Instance child)
         {
-            if (Done || Children.Count > 0) return;
+            if (Done || _children.Count > 0) return;
             if (!Continuous)
             {
                 End();
                 return;
             }
             // Transition mode 3 waits the transition time between children; the others (0 none, 1/2 crossfades) start the next at once.
-            if (node.TransitionMode == 3) wait = node.TransitionTime / 1000.0;
+            if (node.TransitionMode == 3) _wait = node.TransitionTime / 1000.0;
             else Next();
         }
     }
@@ -551,23 +551,23 @@ public sealed partial class WwisePlayer : IDisposable
     /// <summary>A switch container on a state group: plays the children of the current state, swapping them (with the fades) when it changes.</summary>
     sealed class SwitchInstance(WwisePlayer player, WwiseSwitchContainer node, Instance? parent) : Instance(player, node, parent)
     {
-        uint current;
+        uint _current;
 
         public override void Start()
         {
             Switch();
-            if (!node.ContinuousValidation && Children.Count == 0) End();
+            if (!node.ContinuousValidation && _children.Count == 0) End();
         }
 
         void Switch()
         {
-            current = Player.TryGetGroupValue(node.GroupId, GameObject, out var s) ? s : node.DefaultSwitch;
-            var list = node.Switches.FirstOrDefault(w => w.SwitchId == current).Nodes ?? [];
+            _current = _player.TryGetGroupValue(node.GroupId, GameObject, out var s) ? s : node.DefaultSwitch;
+            var list = node.Switches.FirstOrDefault(w => w.SwitchId == _current).Nodes ?? [];
             foreach (var c in list)
             {
                 Play(c);
                 var fadeIn = node.NodeParameters.FirstOrDefault(p => p.NodeId == c).FadeIn;
-                if (fadeIn > 0 && Children.Count > 0) Children[^1].FadeIn(fadeIn / 1000f);
+                if (fadeIn > 0 && _children.Count > 0) _children[^1].FadeIn(fadeIn / 1000f);
             }
         }
 
@@ -576,9 +576,9 @@ public sealed partial class WwisePlayer : IDisposable
             if (Done || Stopping) return;
             base.StateChanged(group);
             if (!node.ContinuousValidation || group != node.GroupId) return;
-            uint state = Player.TryGetGroupValue(group, GameObject, out var s) ? s : node.DefaultSwitch;
-            if (state == current) return;
-            foreach (var c in Children) c.Stop(Math.Max(0, node.NodeParameters.FirstOrDefault(p => p.NodeId == c.Node.Id).FadeOut) / 1000f);
+            uint state = _player.TryGetGroupValue(group, GameObject, out var s) ? s : node.DefaultSwitch;
+            if (state == _current) return;
+            foreach (var c in _children) c.Stop(Math.Max(0, node.NodeParameters.FirstOrDefault(p => p.NodeId == c.Node.Id).FadeOut) / 1000f);
             Switch();
         }
 
@@ -596,20 +596,20 @@ public sealed partial class WwisePlayer : IDisposable
     /// </summary>
     sealed class SoundInstance : Instance, IDisposable
     {
-        readonly Voice? voice;
-        readonly WwiseObject[] chain;
-        readonly float rolledVolume, rolledPitch, rolledLowPass;
-        readonly WwisePositioning? path;
-        readonly int pathIndex;
+        readonly Voice? _voice;
+        readonly WwiseObject[] _chain;
+        readonly float _rolledVolume, _rolledPitch, _rolledLowPass;
+        readonly WwisePositioning? _path;
+        readonly int _pathIndex;
         // 3D by the game object's place (no paths): the attenuation, if the positioning names one.
-        readonly bool placed3D;
-        readonly WwiseAttenuation? attenuation;
-        readonly GameObjectState? objectState;
-        readonly uint outputBus;
-        readonly AuxBusState[] sends = [];
-        readonly VoiceSend[] targets = new VoiceSend[Voice.MaxSends];
-        double age;
-        double delayFrames;
+        readonly bool _placed3D;
+        readonly WwiseAttenuation? _attenuation;
+        readonly GameObjectState? _objectState;
+        readonly uint _outputBus;
+        readonly AuxBusState[] _sends = [];
+        readonly VoiceSend[] _targets = new VoiceSend[Voice.MaxSends];
+        double _age;
+        double _delayFrames;
 
         public bool IsMusic { get; }
 
@@ -629,32 +629,32 @@ public sealed partial class WwisePlayer : IDisposable
         {
             IsMusic = musicClip is not null;
             if (musicClip is not null) StartTime = startTime;
-            chain = [.. player.Chain(node)];
-            outputBus = chain.Select(n => NodeOf(n)!.OverrideBusId).FirstOrDefault(b => b != 0);
-            foreach (var n in chain)
+            _chain = [.. player.Chain(node)];
+            _outputBus = _chain.Select(n => NodeOf(n)!.OverrideBusId).FirstOrDefault(b => b != 0);
+            foreach (var n in _chain)
             {
                 var props = NodeOf(n)!.Properties;
-                rolledVolume += Roll(props, WwisePropertyId.Volume);
-                rolledPitch += Roll(props, WwisePropertyId.Pitch);
-                rolledLowPass += Roll(props, WwisePropertyId.LowPass);
+                _rolledVolume += Roll(props, WwisePropertyId.Volume);
+                _rolledPitch += Roll(props, WwisePropertyId.Pitch);
+                _rolledLowPass += Roll(props, WwisePropertyId.LowPass);
             }
-            var positioning = chain.Select(n => NodeOf(n)!.Positioning).FirstOrDefault(p => p.OverridesParent);
+            var positioning = _chain.Select(n => NodeOf(n)!.Positioning).FirstOrDefault(p => p.OverridesParent);
             if (positioning is { HasPaths: true })
             {
-                path = positioning;
-                pathIndex = player.random.Next(positioning.Paths.Length);
+                _path = positioning;
+                _pathIndex = player._random.Next(positioning.Paths.Length);
             }
             else if (positioning is { IsGameDefined: true })
             {
-                placed3D = true;
-                if (positioning.AttenuationId != 0 && player.objects.TryGetValue(positioning.AttenuationId, out var a)) attenuation = a as WwiseAttenuation;
-                player.gameObjects.TryGetValue(GameObject, out objectState);
+                _placed3D = true;
+                if (positioning.AttenuationId != 0 && player._objects.TryGetValue(positioning.AttenuationId, out var a)) _attenuation = a as WwiseAttenuation;
+                player._gameObjects.TryGetValue(GameObject, out _objectState);
             }
             // The sends: the nearest node that sets user-defined sends (bit 2 overrides, bit 3 lists the buses) decides; a node that overrides with no buses sends nowhere.
-            var sender = chain.Select(n => NodeOf(n)!).FirstOrDefault(n => (n.AuxBits & 0x0C) != 0);
+            var sender = _chain.Select(n => NodeOf(n)!).FirstOrDefault(n => (n.AuxBits & 0x0C) != 0);
             if (sender is not null)
-                sends = [.. sender.AuxBuses.Where(b => b != 0).Take(Voice.MaxSends).Select(b => player.AuxBus(b)).OfType<AuxBusState>()];
-            if (source.IsVorbis && player.media.TryGetValue(source.SourceId, out var clip))
+                _sends = [.. sender.AuxBuses.Where(b => b != 0).Take(Voice.MaxSends).Select(b => player.AuxBus(b)).OfType<AuxBusState>()];
+            if (source.IsVorbis && player._media.TryGetValue(source.SourceId, out var clip))
             {
                 // Plays: 0 = forever, n = n times; absent = once. A music clip plays from its begin trim to its end trim.
                 long skip = 0, limit = -1;
@@ -665,62 +665,62 @@ public sealed partial class WwisePlayer : IDisposable
                     if (musicClip.BeginTrim > 0.5 || musicClip.EndTrim < -0.5)
                         limit = (long)Math.Round(Math.Max(0, musicClip.SourceDuration + musicClip.EndTrim - musicClip.BeginTrim) / 1000 * clip.SampleRate);
                     // Starts at the first output frame at or after the start time; the clip's position there is the part of a frame the start is early.
-                    double at = Math.Max(0, (StartTime - player.blockStart) * player.outputRate);
-                    delayFrames = Math.Ceiling(at - 1e-6);
-                    phase = Math.Max(0, delayFrames - at) * clip.SampleRate / player.outputRate;
+                    double at = Math.Max(0, (StartTime - player._blockStart) * player._outputRate);
+                    _delayFrames = Math.Ceiling(at - 1e-6);
+                    phase = Math.Max(0, _delayFrames - at) * clip.SampleRate / player._outputRate;
                 }
                 // A sound plays from the shared decoded samples (PcmCache) when its clip is short; a music clip (trimmed, long) streams.
-                voice = new Voice(clip, plays, skip, limit, phase, musicClip is null ? player.pcm.Get(clip) : null);
+                _voice = new Voice(clip, plays, skip, limit, phase, musicClip is null ? player._pcm.Get(clip) : null);
             }
         }
 
         float Roll((IReadOnlyDictionary<byte, uint> Values, IReadOnlyDictionary<byte, (float Min, float Max)> Ranges) props, byte id) =>
-            props.Ranges.TryGetValue(id, out var r) ? r.Min + (float)Player.random.NextDouble() * (r.Max - r.Min) : 0;
+            props.Ranges.TryGetValue(id, out var r) ? r.Min + (float)_player._random.NextDouble() * (r.Max - r.Min) : 0;
 
         float Roll(WwiseProperties props, byte id) => Roll((props.Values, props.Ranges), id);
 
         public override void Start()
         {
-            if (voice is null) End();
-            else Player.sounds.Add(this);
+            if (_voice is null) End();
+            else _player._sounds.Add(this);
         }
 
         public override void Advance(double dt)
         {
             base.Advance(dt);
-            age += dt;
-            if (voice is { Ended: true }) End();
+            _age += dt;
+            if (_voice is { Ended: true }) End();
         }
 
         // This block's gains, from Prepare: the level, the dry and send attenuations, the pan, the low-pass coefficient and the resampling rate.
-        float level, dry, send, panLeft, panRight, lowPassCoefficient;
-        double rate;
+        float _level, _dry, _send, _panLeft, _panRight, _lowPassCoefficient;
+        double _rate;
 
         /// <summary>Whether the player may leave this sound silent for a block (<see cref="VoiceCap"/>): any but a music clip, while its voice can keep its place.</summary>
-        public bool Cappable => !IsMusic && voice is { CanSkip: true };
+        public bool Cappable => !IsMusic && _voice is { CanSkip: true };
 
         /// <summary>The frames of this block before the sound starts (a music clip starting inside it), taken off the pending delay.</summary>
         bool Start(int frames, out int first)
         {
             first = 0;
-            if (delayFrames <= 0) return true;
-            if (delayFrames >= frames)
+            if (_delayFrames <= 0) return true;
+            if (_delayFrames >= frames)
             {
-                delayFrames -= frames;
+                _delayFrames -= frames;
                 return false;
             }
-            first = (int)delayFrames;
-            delayFrames = 0;
+            first = (int)_delayFrames;
+            _delayFrames = 0;
             return true;
         }
 
         /// <summary>Mixes the block with the gains <see cref="Prepare"/> worked out.</summary>
         public void Mix(float[] mix, int frames)
         {
-            if (voice is null || Done || !Start(frames, out int first)) return;
-            for (int i = 0; i < sends.Length; i++)
-                targets[i] = new VoiceSend(sends[i].Prepare(frames), level * send * panLeft, level * send * panRight);
-            voice.Mix(mix, frames, rate, level * dry * panLeft, level * dry * panRight, lowPassCoefficient, first, targets.AsSpan(0, sends.Length));
+            if (_voice is null || Done || !Start(frames, out int first)) return;
+            for (int i = 0; i < _sends.Length; i++)
+                _targets[i] = new VoiceSend(_sends[i].Prepare(frames), _level * _send * _panLeft, _level * _send * _panRight);
+            _voice.Mix(mix, frames, _rate, _level * _dry * _panLeft, _level * _dry * _panRight, _lowPassCoefficient, first, _targets.AsSpan(0, _sends.Length));
         }
 
         /// <summary>Mixed in the last block (the voice cap's hysteresis and fade-out).</summary>
@@ -729,39 +729,39 @@ public sealed partial class WwisePlayer : IDisposable
         /// <summary>Mixes the block ramping from the last gains to silence: a sound the cap silences fades out over one block instead of cutting.</summary>
         public void FadeOut(float[] mix, int frames)
         {
-            (level, dry, send) = (0, 0, 0);
+            (_level, _dry, _send) = (0, 0, 0);
             Mix(mix, frames);
         }
 
         /// <summary>Leaves the block silent: the voice's clock runs on (<see cref="Voice.Skip"/>).</summary>
         public void Skip(int frames)
         {
-            if (voice is null || Done || !Start(frames, out int first)) return;
-            voice.Skip(frames, rate, first);
+            if (_voice is null || Done || !Start(frames, out int first)) return;
+            _voice.Skip(frames, _rate, first);
         }
 
         /// <summary>Works out the block's gains (the node chain, the buses, the place); returns how loud the sound is at the listener, dry or sent, for the voice cap.</summary>
         public float Prepare(float masterGain)
         {
-            if (voice is null || Done) return 0;
-            float db = rolledVolume, cents = rolledPitch, lowPass = rolledLowPass, linear = 1;
+            if (_voice is null || Done) return 0;
+            float db = _rolledVolume, cents = _rolledPitch, lowPass = _rolledLowPass, linear = 1;
             WwiseObject? child = null;
-            foreach (var n in chain)
+            foreach (var n in _chain)
             {
                 var node = NodeOf(n)!;
                 db += node.Properties.Float(WwisePropertyId.Volume);
                 cents += node.Properties.Float(WwisePropertyId.Pitch);
                 lowPass += node.Properties.Float(WwisePropertyId.LowPass);
-                db += Player.volumeOffsets.Get(n.Id, GameObject);
-                cents += Player.pitchOffsets.Get(n.Id, GameObject);
-                lowPass += Player.lowPassOffsets.Get(n.Id, GameObject);
+                db += _player._volumeOffsets.Get(n.Id, GameObject);
+                cents += _player._pitchOffsets.Get(n.Id, GameObject);
+                lowPass += _player._lowPassOffsets.Get(n.Id, GameObject);
                 foreach (var rtpc in node.Rtpcs) Apply(rtpc, ref db, ref linear, ref cents, ref lowPass);
                 if (n is WwiseLayerContainer layers && child is not null)
                     foreach (var layer in layers.Layers)
                         foreach (var (childId, curve) in layer.Associations)
                         {
                             if (childId != child.Id) continue;
-                            if (layer.CrossfadeParameterId != 0 && curve.Length > 0) linear *= Math.Max(0, WwiseCurves.Evaluate(curve, Player.Parameter(layer.CrossfadeParameterId, GameObject)));
+                            if (layer.CrossfadeParameterId != 0 && curve.Length > 0) linear *= Math.Max(0, WwiseCurves.Evaluate(curve, _player.Parameter(layer.CrossfadeParameterId, GameObject)));
                             foreach (var rtpc in layer.Rtpcs) Apply(rtpc, ref db, ref linear, ref cents, ref lowPass);
                         }
                 child = n;
@@ -769,38 +769,38 @@ public sealed partial class WwisePlayer : IDisposable
             // The voice's level before the output bus and the distance: what the sends start from.
             float voiceGain = WwiseCurves.DbToGain(db) * linear * Fade * masterGain;
             // The output bus: the nearest node that overrides it, then the bus's parents (bus volume, the pause ducking, the user volume curves).
-            float busGain = Player.BusGain(outputBus, GameObject);
+            float busGain = _player.BusGain(_outputBus, GameObject);
 
             float dry = 1, send = 1, pan = 0;
-            if (path is not null)
+            if (_path is not null)
             {
                 var (x, z) = PathPosition();
                 pan = MathF.Sqrt(x * x + z * z) < 1e-3f ? 0 : x / MathF.Sqrt(x * x + z * z);
             }
-            else if (placed3D && objectState is not null && objectState.TryGetPlace(out var position, out var front))
+            else if (_placed3D && _objectState is not null && _objectState.TryGetPlace(out var position, out var front))
             {
                 // Game-defined: at the object, attenuated by the distance. An object never placed is heard at the listener.
-                var ears = Player.CurrentListener();
+                var ears = _player.CurrentListener();
                 float distance;
                 (distance, pan) = Spatial.Locate(position, ears);
-                if (attenuation is not null)
+                if (_attenuation is not null)
                 {
-                    distance /= Player.Reach;
-                    dry = Spatial.VolumeGain(attenuation.Curve(WwiseAttenuation.VolumeDry), distance);
-                    send = Spatial.VolumeGain(attenuation.Curve(WwiseAttenuation.AuxUserDefined), distance);
-                    if (attenuation.Curve(WwiseAttenuation.LowPass) is { } lp && lp.Points.Length > 0) lowPass += WwiseCurves.Evaluate(lp.Points, distance);
-                    var (coneGain, coneLowPass) = Spatial.Cone(attenuation.Cone, front, position, ears.Position);
+                    distance /= _player.Reach;
+                    dry = Spatial.VolumeGain(_attenuation.Curve(WwiseAttenuation.VolumeDry), distance);
+                    send = Spatial.VolumeGain(_attenuation.Curve(WwiseAttenuation.AuxUserDefined), distance);
+                    if (_attenuation.Curve(WwiseAttenuation.LowPass) is { } lp && lp.Points.Length > 0) lowPass += WwiseCurves.Evaluate(lp.Points, distance);
+                    var (coneGain, coneLowPass) = Spatial.Cone(_attenuation.Cone, front, position, ears.Position);
                     dry *= coneGain;
                     send *= coneGain;
                     lowPass += coneLowPass;
                 }
             }
-            (panLeft, panRight) = Spatial.PanGains(pan);
-            level = voiceGain * busGain;
-            (this.dry, this.send) = (dry, send);
-            lowPassCoefficient = LowPassCoefficient(lowPass);
-            rate = (double)voice.Clip.SampleRate / Player.outputRate * Math.Pow(2, cents / 1200.0);
-            return level * Math.Max(dry, sends.Length > 0 ? send : 0);
+            (_panLeft, _panRight) = Spatial.PanGains(pan);
+            _level = voiceGain * busGain;
+            (this._dry, this._send) = (dry, send);
+            _lowPassCoefficient = LowPassCoefficient(lowPass);
+            _rate = (double)_voice.Clip.SampleRate / _player._outputRate * Math.Pow(2, cents / 1200.0);
+            return _level * Math.Max(dry, _sends.Length > 0 ? send : 0);
         }
 
         /// <summary>
@@ -809,7 +809,7 @@ public sealed partial class WwisePlayer : IDisposable
         /// </summary>
         void Apply(WwiseRtpc rtpc, ref float db, ref float linear, ref float cents, ref float lowPass)
         {
-            float y = WwiseCurves.Evaluate(rtpc.Points, Player.Parameter(rtpc.GameParameterId, GameObject));
+            float y = WwiseCurves.Evaluate(rtpc.Points, _player.Parameter(rtpc.GameParameterId, GameObject));
             switch (rtpc.ParameterId)
             {
                 case WwisePropertyId.Volume when rtpc.Scaling == 2: linear *= Math.Max(0, 1 + y); break;
@@ -827,16 +827,16 @@ public sealed partial class WwisePlayer : IDisposable
         {
             if (value <= 0.5f) return 1;
             float cutoff = 20000 * MathF.Pow(2, -Math.Clamp(value, 0, 100) / 10);
-            return 1 - MathF.Exp(-2 * MathF.PI * cutoff / Player.outputRate);
+            return 1 - MathF.Exp(-2 * MathF.PI * cutoff / _player._outputRate);
         }
 
         /// <summary>Where the sound is on its path now: the vertices in order, each reached after its duration; listener-relative x (right) and z.</summary>
         (float X, float Z) PathPosition()
         {
-            var (first, count) = path!.Paths[pathIndex];
-            var vertices = path.Vertices.AsSpan((int)first, (int)Math.Min(count, (uint)path.Vertices.Length - first));
+            var (first, count) = _path!.Paths[_pathIndex];
+            var vertices = _path.Vertices.AsSpan((int)first, (int)Math.Min(count, (uint)_path.Vertices.Length - first));
             if (vertices.Length == 0) return (0, 0);
-            double t = age * 1000;
+            double t = _age * 1000;
             for (int i = 0; i < vertices.Length - 1; i++)
             {
                 double d = Math.Max(1, vertices[i].Duration);
@@ -850,6 +850,6 @@ public sealed partial class WwisePlayer : IDisposable
             return (vertices[^1].X, vertices[^1].Z);
         }
 
-        public void Dispose() => voice?.Dispose();
+        public void Dispose() => _voice?.Dispose();
     }
 }

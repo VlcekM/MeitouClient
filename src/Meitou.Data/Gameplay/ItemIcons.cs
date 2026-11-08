@@ -27,7 +27,7 @@ public sealed class ItemIcons(GameDatabase database, Func<string, string?> resol
     /// CROSSBOW, ITEM, NEST_ITEM and WEAPON, false for ARMOUR, CONTAINER, LIMB_REPLACEMENT and MAP_ITEM; the base game's records all store it).
     /// </summary>
     public static bool Renders(GameRecord record) =>
-        record.Type == FcsRecordType.WEAPON || record.GetBool("auto icon image", record.Type is FcsRecordType.ITEM or FcsRecordType.CROSSBOW or FcsRecordType.NEST_ITEM);
+        record.Type == FcsRecordType.Weapon || record.GetBool("auto icon image", record.Type is FcsRecordType.Item or FcsRecordType.Crossbow or FcsRecordType.NestItem);
 
     /// <summary>
     /// The icon of an item of record <paramref name="record"/> made of <paramref name="material"/> (the instance's <c>material sid</c>, "" for none) dyed with <paramref name="colour"/> (its
@@ -52,7 +52,7 @@ public sealed class ItemIcons(GameDatabase database, Func<string, string?> resol
     /// <summary>The material record an icon is drawn with: <paramref name="materialId"/> (the instance's), else the item's first (likeliest) <c>material</c> reference.</summary>
     public static GameRecord? MaterialOf(GameDatabase db, GameRecord item, string materialId)
     {
-        static bool IsSpec(GameRecord? r) => r is { Type: FcsRecordType.MATERIAL_SPECS_CLOTHING or FcsRecordType.MATERIAL_SPEC or FcsRecordType.MATERIAL_SPECS_WEAPON };
+        static bool IsSpec(GameRecord? r) => r is { Type: FcsRecordType.MaterialSpecsClothing or FcsRecordType.MaterialSpec or FcsRecordType.MaterialSpecsWeapon };
         if (materialId.Length > 0 && db.Find(materialId) is { } chosen && IsSpec(chosen)) return chosen;
         return item.GetReferences("material").OrderByDescending(r => r.Values.Value0).Select(r => db.Find(r.TargetStringId)).FirstOrDefault(IsSpec);
     }
@@ -63,7 +63,7 @@ public sealed class ItemIcons(GameDatabase database, Func<string, string?> resol
     /// </summary>
     public static GameRecord? ColourOf(GameDatabase db, GameRecord item, GameRecord? material, string colourId = "") =>
         material?.GetPath("color map") is { Length: > 0 } && !item.GetBool("dont colorise")
-            ? colourId.Length > 0 ? db.Find(colourId) is { Type: FcsRecordType.COLOR_DATA } own ? own : null : ItemColours.Of(db, item)
+            ? colourId.Length > 0 ? db.Find(colourId) is { Type: FcsRecordType.ColorData } own ? own : null : ItemColours.Of(db, item)
             : null;
 }
 
@@ -89,10 +89,10 @@ public sealed record ItemIconStyle(string Mesh, float Zoom, float OffsetH, float
     /// <summary>The size the image is made at: each side rounded up to a power of two (the original's textures; the saved files are 256 x 256 for a 5 x 4 bag, 512 x 64 for 7 x 1).</summary>
     public (int Width, int Height) TextureSize => (PowerOfTwo(Width), PowerOfTwo(Height));
 
-    static int PowerOfTwo(int n) => (int)System.Numerics.BitOperations.RoundUpToPowerOf2((uint)Math.Max(n, 1));
+    static int PowerOfTwo(int n) => (int)BitOperations.RoundUpToPowerOf2((uint)Math.Max(n, 1));
 
     /// <summary>The mesh field the icon is drawn from: a weapon's <c>bare sword</c> (its sheath is left out), else <c>mesh</c>; "" when the record names none.</summary>
-    public static string MeshOf(GameRecord item) => item.GetPath(item.Type == FcsRecordType.WEAPON ? "bare sword" : "mesh");
+    public static string MeshOf(GameRecord item) => item.GetPath(item.Type == FcsRecordType.Weapon ? "bare sword" : "mesh");
 
     /// <summary>
     /// The style of <paramref name="item"/>, with <paramref name="material"/> (its material record, for a weapon's scale) when known. A WEAPON is turned by the fixed -90, -90, 90 and scaled by its
@@ -101,7 +101,7 @@ public sealed record ItemIconStyle(string Mesh, float Zoom, float OffsetH, float
     /// </summary>
     public static ItemIconStyle Of(GameRecord item, GameRecord? material = null)
     {
-        bool weapon = item.Type == FcsRecordType.WEAPON, crossbow = item.Type == FcsRecordType.CROSSBOW;
+        bool weapon = item.Type == FcsRecordType.Weapon, crossbow = item.Type == FcsRecordType.Crossbow;
         float zoom = item.GetFloat("icon zoom", weapon || crossbow ? 1 : 2.7f), v = item.GetFloat("icon offset V", weapon || crossbow ? 0 : -8), h = item.GetFloat("icon offset H", weapon ? -4 : 0);
         var scale = Vector3.One;
         if (weapon)
@@ -138,7 +138,7 @@ public sealed record ItemIconStyle(string Mesh, float Zoom, float OffsetH, float
 /// </summary>
 public sealed class ItemIconCache
 {
-    readonly Dictionary<string, List<(string Material, string Colour, string Path)>> byItem = new(StringComparer.Ordinal);
+    readonly Dictionary<string, List<(string Material, string Colour, string Path)>> _byItem = new(StringComparer.Ordinal);
 
     /// <summary>Indexes the PNGs of <paramref name="directories"/> (one that does not exist adds none); for the same ids the first directory's file is found.</summary>
     public ItemIconCache(params string[] directories)
@@ -148,8 +148,8 @@ public sealed class ItemIconCache
             if (!Directory.Exists(directory)) continue;
             foreach (string file in Directory.EnumerateFiles(directory, "*.png"))
             {
-                if (Parse(System.IO.Path.GetFileNameWithoutExtension(file)) is not var (item, material, colour)) continue;
-                if (!byItem.TryGetValue(item, out var list)) byItem[item] = list = [];
+                if (Parse(Path.GetFileNameWithoutExtension(file)) is not var (item, material, colour)) continue;
+                if (!_byItem.TryGetValue(item, out var list)) _byItem[item] = list = [];
                 list.Add((material, colour, file));
             }
         }
@@ -185,5 +185,5 @@ public sealed class ItemIconCache
     /// A picture of another material or colour would show another texture, and the renderer draws the exact one.
     /// </summary>
     public string? Find(string item, string material, string colour = "") =>
-        byItem.TryGetValue(item, out var list) ? list.FirstOrDefault(f => f.Material == material && f.Colour == colour).Path : null;
+        _byItem.TryGetValue(item, out var list) ? list.FirstOrDefault(f => f.Material == material && f.Colour == colour).Path : null;
 }

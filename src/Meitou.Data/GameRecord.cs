@@ -8,8 +8,8 @@ namespace Meitou.Data;
 /// </summary>
 public sealed class GameRecord
 {
-    readonly OrderedDictionary<string, OrderedDictionary<string, ReferenceValues>> references = new(StringComparer.Ordinal);
-    readonly OrderedDictionary<string, GameInstance> instances = new(StringComparer.Ordinal);
+    readonly OrderedDictionary<string, OrderedDictionary<string, ReferenceValues>> _references = new(StringComparer.Ordinal);
+    readonly OrderedDictionary<string, GameInstance> _instances = new(StringComparer.Ordinal);
 
     internal GameRecord(string stringId, FcsRecordType type, string name, string definedBy)
     {
@@ -24,17 +24,17 @@ public sealed class GameRecord
     /// <summary>The name shown to the player: a translation file renames records (docs/formats/localisation.md), so this is in the active language.</summary>
     public string Name { get; internal set; }
 
-    string? baseName;
+    string? _baseName;
 
     /// <summary>
     /// The name the data files gave the record, before a translation file renamed it. Code that finds a record by its English name (the player's
     /// faction, a start, the global constants) must compare this, never <see cref="Name"/>.
     /// </summary>
-    public string BaseName => baseName ?? Name;
+    public string BaseName => _baseName ?? Name;
 
     internal void Translate(string translated)
     {
-        baseName ??= Name;
+        _baseName ??= Name;
         Name = translated;
     }
 
@@ -57,19 +57,19 @@ public sealed class GameRecord
     public IReadOnlyDictionary<string, bool> Bools => BoolTable;
     public IReadOnlyDictionary<string, float> Floats => FloatTable;
     public IReadOnlyDictionary<string, int> Ints => IntTable;
-    public IReadOnlyDictionary<string, Vector3> Vector3s => Vector3Table;
-    public IReadOnlyDictionary<string, Vector4> Vector4s => Vector4Table;
+    public IReadOnlyDictionary<string, Vector3> Vector3S => Vector3Table;
+    public IReadOnlyDictionary<string, Vector4> Vector4S => Vector4Table;
     public IReadOnlyDictionary<string, string> Strings => StringTable;
 
     /// <summary>File path fields (a separate table from <see cref="Strings"/>).</summary>
     public IReadOnlyDictionary<string, string> Filenames => FilenameTable;
 
-    public IEnumerable<string> ReferenceLists => references.Keys;
+    public IEnumerable<string> ReferenceLists => _references.Keys;
 
     public IReadOnlyList<GameReference> GetReferences(string list) =>
-        references.TryGetValue(list, out var refs) ? refs.Select(kv => new GameReference(kv.Key, kv.Value)).ToList() : [];
+        _references.TryGetValue(list, out var refs) ? refs.Select(kv => new GameReference(kv.Key, kv.Value)).ToList() : [];
 
-    public IReadOnlyDictionary<string, GameInstance> Instances => instances;
+    public IReadOnlyDictionary<string, GameInstance> Instances => _instances;
 
     public bool GetBool(string key, bool fallback = false) => BoolTable.GetValueOrDefault(key, fallback);
     public float GetFloat(string key, float fallback = 0) => FloatTable.GetValueOrDefault(key, fallback);
@@ -79,12 +79,12 @@ public sealed class GameRecord
 
     internal OrderedDictionary<string, ReferenceValues> ReferenceList(string list)
     {
-        if (!references.TryGetValue(list, out var refs))
-            references[list] = refs = new(StringComparer.Ordinal);
+        if (!_references.TryGetValue(list, out var refs))
+            _references[list] = refs = new(StringComparer.Ordinal);
         return refs;
     }
 
-    internal OrderedDictionary<string, GameInstance> MutableInstances => instances;
+    internal OrderedDictionary<string, GameInstance> MutableInstances => _instances;
 
     public override string ToString() => $"{StringId} {Name} ({Type})";
 }

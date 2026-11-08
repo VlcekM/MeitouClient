@@ -34,20 +34,20 @@ public class ArrestTests
     internal static PopulationData Town(IEnumerable<FcsRecord>? extra = null)
     {
         static FcsRecord Rec(string id, FcsRecordType type, string name) => SyntheticTown.Rec(id, type, name);
-        var city = Rec("50-a", FcsRecordType.FACTION, "city");
+        var city = Rec("50-a", FcsRecordType.Faction, "city");
         city.Bools["offers bounties"] = true;
-        var nameless = Rec("204-gamedata.base", FcsRecordType.FACTION, "Nameless");
-        var door = Rec("51-a", FcsRecordType.BUILDING, "Door");
-        var house = Rec("52-a", FcsRecordType.BUILDING, "House");
+        var nameless = Rec("204-gamedata.base", FcsRecordType.Faction, "Nameless");
+        var door = Rec("51-a", FcsRecordType.Building, "Door");
+        var house = Rec("52-a", FcsRecordType.Building, "House");
         house.Floats["hardness"] = 40;
         house.References["doors"] = [SyntheticTown.Ref("51-a"), SyntheticTown.Ref("51-a")];
-        var function = Rec("53-a", FcsRecordType.BUILDING_FUNCTIONALITY, "Cage");
+        var function = Rec("53-a", FcsRecordType.BuildingFunctionality, "Cage");
         function.Ints["function"] = TownBuildings.CageFunction;
         function.Floats["use range"] = 25;
-        var cage = Rec("54-a", FcsRecordType.BUILDING, "Prisoner Cage");
+        var cage = Rec("54-a", FcsRecordType.Building, "Prisoner Cage");
         cage.Floats["hardness"] = 50;
         cage.References["functionality"] = [SyntheticTown.Ref("53-a")];
-        var town = Rec("55-a", FcsRecordType.TOWN, "Jailtown");
+        var town = Rec("55-a", FcsRecordType.Town, "Jailtown");
         town.Ints["type"] = 2;
         town.Floats["size radius"] = 600;
         town.References["faction"] = [SyntheticTown.Ref("50-a")];

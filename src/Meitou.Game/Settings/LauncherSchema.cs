@@ -20,8 +20,16 @@ static class LauncherSchema
 
     static SettingDescription Graphics(string label, float min, float max, float step, float shown) => new()
     {
-        Key = label, Graphics = true, Kind = SettingKind.Slider, Name = SettingsMenu.Label(label), Description = SettingHints.SliderHint(label),
-        Min = min, Max = max, Step = step, Shown = shown, Impact = LookPresets.ImpactOf(label),
+        Key = label,
+        Graphics = true,
+        Kind = SettingKind.Slider,
+        Name = SettingsMenu.Label(label),
+        Description = SettingHints.SliderHint(label),
+        Min = min,
+        Max = max,
+        Step = step,
+        Shown = shown,
+        Impact = LookPresets.ImpactOf(label),
     };
 
     static readonly string[] LowMediumHigh = ["Low", "Medium", "High"];
@@ -29,8 +37,8 @@ static class LauncherSchema
     /// <summary>The Tab panel sliders of the Vulkan renderer (WorldFrame.CreateSettingsPanel) with their ranges; the game clamps a saved value to its slider.</summary>
     static IEnumerable<SettingDescription> GraphicsSliders() =>
     [
-        Graphics(WorldFrame.TextureQualitySlider, 0, Meitou.Data.Textures.TextureQuality.Maximum, 1, 0) with
-            { Name = "Texture quality", Labels = [.. Meitou.Data.Textures.TextureQuality.Labels], Reversed = true },
+        Graphics(WorldFrame.TextureQualitySlider, 0, Data.Textures.TextureQuality.Maximum, 1, 0) with
+            { Name = "Texture quality", Labels = [.. Data.Textures.TextureQuality.Labels], Reversed = true },
         Graphics(WorldFrame.FilteringSlider, 0, 4, 1, 4) with { Name = "Texture filtering", Labels = ["1x", "2x", "4x", "8x", "16x"] },
         Graphics(WorldFrame.UpscalerSliders[0], 0, 5, 1, 3) with { Name = "Anti-aliasing/upscaling", Labels = ["Off", "FXAA", "SMAA", "TAA", "FSR", "DLSS"] },
         Graphics(WorldFrame.DlssPresetSlider, 0, UpscaleOptions.DlssPresets.Length - 1, 1, 0) with
@@ -114,8 +122,15 @@ static class LauncherSchema
     {
         static SettingDescription Switch(string label, string off, string on, bool shown) => new()
         {
-            Key = SettingsMenu.SwitchKeyPrefix + label, Graphics = true, Kind = SettingKind.Toggle, Name = SettingsMenu.Label(label),
-            Description = SettingHints.ToggleHint(label), Off = off, On = on, Shown = shown ? 1 : 0, Impact = LookPresets.ImpactOf(label),
+            Key = SettingsMenu.SwitchKeyPrefix + label,
+            Graphics = true,
+            Kind = SettingKind.Toggle,
+            Name = SettingsMenu.Label(label),
+            Description = SettingHints.ToggleHint(label),
+            Off = off,
+            On = on,
+            Shown = shown ? 1 : 0,
+            Impact = LookPresets.ImpactOf(label),
         };
         foreach (var e in WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).Where(e => !LookPresets.HiddenSwitch(e.Name)))
             yield return Switch(e.Name, e.Faithful is "off" or "none" ? "Off" : $"Faithful: {e.Faithful}", $"Meitou: {e.Meitou}", e.IsMeitou);
@@ -190,8 +205,12 @@ static class LauncherSchema
             ],
             Presets = new SettingsPresets
             {
-                Key = Key(nameof(UserConfig.GraphicsPreset)), Name = "Quality preset", Description = QualityTiers.PresetHint,
-                Names = [.. QualityTiers.PresetChoices], Custom = QualityTiers.PresetChoices[^1], Default = QualityTiers.DefaultPreset,
+                Key = Key(nameof(UserConfig.GraphicsPreset)),
+                Name = "Quality preset",
+                Description = QualityTiers.PresetHint,
+                Names = [.. QualityTiers.PresetChoices],
+                Custom = QualityTiers.PresetChoices[^1],
+                Default = QualityTiers.DefaultPreset,
                 Keys = [.. QualityTiers.PresetKeys()],
                 Detect = Program.HardwareProbeFlag,
             },
@@ -209,11 +228,13 @@ static class LauncherSchema
         var shown = switches.Concat(sliders).ToDictionary(s => s.Key, s => s.Shown);
         var keys = LookPresets.LookKeys(switches.Select(s => s.Key[SettingsMenu.SwitchKeyPrefix.Length..]), sliders.Select(s => s.Key)).ToList();
         var tier = LookPresets.TierSwitchKeys.ToHashSet();
-        bool IsSwitch(string key) => key.StartsWith(SettingsMenu.SwitchKeyPrefix, StringComparison.Ordinal);
+        static bool IsSwitch(string key) => key.StartsWith(SettingsMenu.SwitchKeyPrefix, StringComparison.Ordinal);
         return new SettingsLooks
         {
-            Name = "Look", Description = LookPresets.LookHint,
-            FaithfulKey = Key(nameof(UserConfig.FaithfulLook)), PresetKey = Key(nameof(UserConfig.LookPreset)),
+            Name = "Look",
+            Description = LookPresets.LookHint,
+            FaithfulKey = Key(nameof(UserConfig.FaithfulLook)),
+            PresetKey = Key(nameof(UserConfig.LookPreset)),
             Faithful = keys.ToDictionary(k => k, k => IsSwitch(k) ? 0 : LookPresets.UnderSwitch(k) ? shown[k] : LookPresets.LabelGameValue(k) ?? shown[k]),
             Meitou = keys.Where(k => !tier.Contains(k)).ToDictionary(k => k, k => shown[k]),
             Presets = [.. LookPresets.BuiltInLooks.Select(l => new SettingsLook { Name = l.Name, Values = new(l.Values) })],
@@ -223,17 +244,17 @@ static class LauncherSchema
         };
     }
 
-    static readonly Lazy<(Dictionary<string, SettingDescription> Find, Dictionary<string, int> Order)> catalogue = new(() =>
+    static readonly Lazy<(Dictionary<string, SettingDescription> Find, Dictionary<string, int> Order)> Catalogue = new(() =>
     {
         var all = Create().Sections.SelectMany(section => section.Settings).ToList();
         return (all.ToDictionary(s => s.Key), all.Select((s, i) => (s.Key, i)).ToDictionary(x => x.Key, x => x.i));
     });
 
     /// <summary>A setting's description by its key (a slider's label, <c>Meitou: </c> and a switch's label, a top-level key such as <c>fpsLimit</c>); null when not listed.</summary>
-    internal static SettingDescription? Find(string key) => catalogue.Value.Find.GetValueOrDefault(key);
+    internal static SettingDescription? Find(string key) => Catalogue.Value.Find.GetValueOrDefault(key);
 
     /// <summary>Where a setting comes on its page (the launcher's order, the game's too); unlisted ones go last, in their own order.</summary>
-    internal static int Order(string key) => catalogue.Value.Order.GetValueOrDefault(key, int.MaxValue);
+    internal static int Order(string key) => Catalogue.Value.Order.GetValueOrDefault(key, int.MaxValue);
 
     /// <summary><c>--settings-schema &lt;file&gt;</c>: writes the schema and exits, before anything else starts.</summary>
     public static int Write(string path)

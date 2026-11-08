@@ -1,7 +1,7 @@
+using Meitou.Game.Rendering.Frame;
 using Silk.NET.GLFW;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
-using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game.Rendering.Display;
 
@@ -15,7 +15,7 @@ namespace Meitou.Game.Rendering.Display;
 public static class BorderlessFullScreen
 {
     /// <summary>The window's place before full screen off Windows, put back when it leaves (one window per process: the game or the viewer).</summary>
-    static Vector2D<int> windowedPosition, windowedSize;
+    static Vector2D<int> s_windowedPosition, s_windowedSize;
 
     public static bool IsOn(IWindow window) => window.WindowBorder == WindowBorder.Hidden || FullScreen(window);
 
@@ -37,8 +37,8 @@ public static class BorderlessFullScreen
         if (monitor == null) return null;
         var mode = glfw.GetVideoMode(monitor);
         if (mode == null) return null;
-        windowedPosition = window.Position;
-        windowedSize = window.Size;
+        s_windowedPosition = window.Position;
+        s_windowedSize = window.Size;
         if (OperatingSystem.IsLinux()) glfw.SetWindowAttrib((WindowHandle*)handle, WindowAttributeSetter.AutoIconify, false);
         glfw.SetWindowMonitor((WindowHandle*)handle, monitor, 0, 0, mode->Width, mode->Height, mode->RefreshRate);
         return new Vector2D<int>(mode->Width, mode->Height);
@@ -49,8 +49,8 @@ public static class BorderlessFullScreen
     static unsafe void LeaveFullScreen(IWindow window, nint handle)
     {
         var glfw = GlfwProvider.GLFW.Value;
-        if (windowedSize.X <= 0 || windowedSize.Y <= 0) windowedSize = window.Size;
-        glfw.SetWindowMonitor((WindowHandle*)handle, null, windowedPosition.X, windowedPosition.Y, windowedSize.X, windowedSize.Y, 0);
+        if (s_windowedSize.X <= 0 || s_windowedSize.Y <= 0) s_windowedSize = window.Size;
+        glfw.SetWindowMonitor((WindowHandle*)handle, null, s_windowedPosition.X, s_windowedPosition.Y, s_windowedSize.X, s_windowedSize.Y, 0);
         glfw.MaximizeWindow((WindowHandle*)handle);
     }
 

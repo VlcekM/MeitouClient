@@ -56,13 +56,13 @@ public sealed class AudioSystem : IDisposable
     /// <summary>The game object of the interface sounds (<c>RegisterGameObj(110, "GUI")</c>).</summary>
     public const ulong GuiObject = 110;
 
-    readonly AudioOutput output;
-    bool paused;
+    readonly AudioOutput _output;
+    bool _paused;
 
     public WwisePlayer Player { get; }
     public AmbienceDirector Ambience { get; }
     public MusicDirector Music { get; }
-    public string DeviceName => output.DeviceName;
+    public string DeviceName => _output.DeviceName;
 
     /// <summary>The options last applied (<see cref="Apply"/>).</summary>
     public AudioSettings Settings { get; private set; }
@@ -70,7 +70,7 @@ public sealed class AudioSystem : IDisposable
     AudioSystem(WwisePlayer player, AudioOutput output, MusicDirector music, AudioSettings settings)
     {
         Player = player;
-        this.output = output;
+        this._output = output;
         Music = music;
         Settings = settings;
         Ambience = new AmbienceDirector(player);
@@ -134,13 +134,13 @@ public sealed class AudioSystem : IDisposable
     /// </summary>
     public void SetPaused(bool pause)
     {
-        if (pause == paused) return;
-        paused = pause;
+        if (pause == _paused) return;
+        _paused = pause;
         Player.Post(pause ? "Pause_Game" : "Resume_Game", MusicObject);
     }
 
     /// <summary>Whether <see cref="SetPaused"/> last paused.</summary>
-    public bool Paused => paused;
+    public bool Paused => _paused;
 
     /// <summary>
     /// Where the ears are: the camera's eye and the way it faces. Meitou gives the listener the camera's true front and up; the original sets the
@@ -175,7 +175,7 @@ public sealed class AudioSystem : IDisposable
     {
         string music = Music.Remembered is null ? "nothing to post" : Music.Volume <= 0 ? "volume 0" : $"next in {Math.Max(0, Music.SecondsToNext):0} s";
         string biome = Ambience.Biome is { } heard ? $"{heard} {(Ambience.Night ? "night" : "day")}" : "no biome";
-        return $"{biome}{(Ambience.Raining ? ", rain" : "")}{(Ambience.Windy ? ", wind" : "")}{(paused ? ", paused" : "")}: {Player.Stats.Voices} voices{(Player.Silenced > 0 ? $" ({Player.Silenced} capped)" : "")}, {Player.Stats.Clips} clips loaded; " +
+        return $"{biome}{(Ambience.Raining ? ", rain" : "")}{(Ambience.Windy ? ", wind" : "")}{(_paused ? ", paused" : "")}: {Player.Stats.Voices} voices{(Player.Silenced > 0 ? $" ({Player.Silenced} capped)" : "")}, {Player.Stats.Clips} clips loaded; " +
             $"music {(Music.TitleScreen ? "main theme" : Music.Biome ?? "none")}, {music}, {Player.MusicVoices} voices";
     }
 
@@ -203,7 +203,7 @@ public sealed class AudioSystem : IDisposable
 
     public void Dispose()
     {
-        output.Dispose();
+        _output.Dispose();
         Player.Dispose();
     }
 }

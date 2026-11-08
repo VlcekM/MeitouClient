@@ -146,11 +146,11 @@ public static class FoliageLodBuilder
         var fromOriginal = new List<(Vector3, Vector3)>();
         var used = new HashSet<uint>();
         foreach (uint i in original) if (used.Add(i)) fromOriginal.Add((vertices[i].Position, Vector3.Zero));
-        foreach (var t in originalTriangles) fromOriginal.Add(((t.A + t.B + t.C) / 3, Normalized(t.NA + t.NB + t.NC)));
+        foreach (var t in originalTriangles) fromOriginal.Add(((t.A + t.B + t.C) / 3, Normalized(t.Na + t.Nb + t.Nc)));
         var fromLevel = new List<(Vector3, Vector3)>();
         foreach (var t in levelTriangles)
         {
-            fromLevel.Add(((t.A + t.B + t.C) / 3, Normalized(t.NA + t.NB + t.NC)));
+            fromLevel.Add(((t.A + t.B + t.C) / 3, Normalized(t.Na + t.Nb + t.Nc)));
             fromLevel.Add(((t.A + t.B) / 2, Vector3.Zero));
             fromLevel.Add(((t.B + t.C) / 2, Vector3.Zero));
             fromLevel.Add(((t.C + t.A) / 2, Vector3.Zero));
@@ -173,7 +173,7 @@ public static class FoliageLodBuilder
         return result;
     }
 
-    readonly record struct Tri(Vector3 A, Vector3 B, Vector3 C, Vector3 NA, Vector3 NB, Vector3 NC, Vector3 Min, Vector3 Max);
+    readonly record struct Tri(Vector3 A, Vector3 B, Vector3 C, Vector3 Na, Vector3 Nb, Vector3 Nc, Vector3 Min, Vector3 Max);
 
     static Tri[] Triangles(Vertex[] vertices, uint[] indices)
     {
@@ -210,7 +210,7 @@ public static class FoliageLodBuilder
             {
                 ref readonly var t = ref triangles[bestTriangle];
                 var (u, v, w) = Barycentric(ClosestPoint(p, t.A, t.B, t.C), t.A, t.B, t.C);
-                var other = Normalized(t.NA * u + t.NB * v + t.NC * w);
+                var other = Normalized(t.Na * u + t.Nb * v + t.Nc * w);
                 if (other != Vector3.Zero) angles.Add(MathF.Acos(Math.Clamp(twoSided ? MathF.Abs(Vector3.Dot(n, other)) : Vector3.Dot(n, other), -1f, 1f)));
             }
         }

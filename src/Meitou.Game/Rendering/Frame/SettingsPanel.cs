@@ -66,161 +66,161 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     /// <summary>The sliders' and the checkboxes' columns.</summary>
     const int Columns = 3;
     /// <summary>The main sliders, then the side ones.</summary>
-    readonly IReadOnlyList<Slider> sliders = [.. mainSliders, .. sideSliders ?? []];
+    readonly IReadOnlyList<Slider> _sliders = [.. mainSliders, .. sideSliders ?? []];
     /// <summary>Nearly opaque: the panel is drawn over the statistics and the profiler.</summary>
     static readonly Vector4 Background = new(0.05f, 0.05f, 0.06f, 0.95f);
     const string ResetLabel = "Reset to defaults";
 
-    readonly float[] defaults = [.. mainSliders.Concat(sideSliders ?? []).Select(s => s.Get())];
-    readonly IReadOnlyList<Toggle> toggles = toggles ?? [];
-    readonly bool[] toggleDefaults = (toggles ?? []).Select(t => t.Get()).ToArray();
+    readonly float[] _defaults = [.. mainSliders.Concat(sideSliders ?? []).Select(s => s.Get())];
+    readonly IReadOnlyList<Toggle> _toggles = toggles ?? [];
+    readonly bool[] _toggleDefaults = (toggles ?? []).Select(t => t.Get()).ToArray();
 
-    readonly IReadOnlyList<PanelAction> actions = actions ?? [];
+    readonly IReadOnlyList<PanelAction> _actions = actions ?? [];
     /// <summary>The action waiting for Yes / No (-1 none), its question, and the last action's result (shown until the next click on the panel).</summary>
-    int confirming = -1;
-    string? question, message;
-    readonly IReadOnlyList<PanelChoice> choices = choices ?? [];
+    int _confirming = -1;
+    string? _question, _message;
+    readonly IReadOnlyList<PanelChoice> _choices = choices ?? [];
     /// <summary>The open drop-down list (-1 none) and its options as they were when it opened.</summary>
-    int open = -1;
-    IReadOnlyList<string> openOptions = [];
+    int _open = -1;
+    IReadOnlyList<string> _openOptions = [];
 
     /// <summary>Hiding the panel drops a pending question and the last result.</summary>
     public bool Visible
     {
-        get => visible;
-        set { visible = value; if (!value) { confirming = -1; open = -1; question = message = null; } }
+        get => _visible;
+        set { _visible = value; if (!value) { _confirming = -1; _open = -1; _question = _message = null; } }
     }
-    bool visible;
-    public IReadOnlyList<PanelAction> Actions => actions;
+    bool _visible;
+    public IReadOnlyList<PanelAction> Actions => _actions;
     /// <summary>The sliders (the game saves their values in its user config, by label).</summary>
-    public IReadOnlyList<Slider> Sliders => sliders;
+    public IReadOnlyList<Slider> Sliders => _sliders;
     /// <summary>The checkboxes (saved like the sliders, by label).</summary>
-    public IReadOnlyList<Toggle> Toggles => toggles;
-    public IReadOnlyList<PanelChoice> Choices => choices;
+    public IReadOnlyList<Toggle> Toggles => _toggles;
+    public IReadOnlyList<PanelChoice> Choices => _choices;
 
     /// <summary>Sets every slider back to its value when the panel was made.</summary>
     public void Reset()
     {
-        for (int i = 0; i < sliders.Count; i++) sliders[i].Set(defaults[i]);
-        for (int i = 0; i < toggles.Count; i++) if (toggles[i].Get() != toggleDefaults[i]) toggles[i].Set(toggleDefaults[i]);
+        for (int i = 0; i < _sliders.Count; i++) _sliders[i].Set(_defaults[i]);
+        for (int i = 0; i < _toggles.Count; i++) if (_toggles[i].Get() != _toggleDefaults[i]) _toggles[i].Set(_toggleDefaults[i]);
     }
 
-    float TogglesTop => panelY0 + Pad + overlay.LineHeight * 1.5f + Rows * rowHeight;
+    float TogglesTop => _panelY0 + Pad + overlay.LineHeight * 1.5f + Rows * RowHeight;
     /// <summary>The checkboxes' heading, then their rows (down the first column, then the next, as the sliders).</summary>
-    int ToggleRows => (toggles.Count + Columns - 1) / Columns;
+    int ToggleRows => (_toggles.Count + Columns - 1) / Columns;
     float ToggleHeight => overlay.LineHeight + 8;
-    float TogglesHeight => toggles.Count == 0 ? 0 : overlay.LineHeight * 1.5f + ToggleRows * ToggleHeight + RowGap;
+    float TogglesHeight => _toggles.Count == 0 ? 0 : overlay.LineHeight * 1.5f + ToggleRows * ToggleHeight + RowGap;
     float ToggleTop(int i) => TogglesTop + overlay.LineHeight * 1.5f + i % ToggleRows * ToggleHeight;
-    float ToggleX(int i) => panelX0 + Pad + i / ToggleRows * (columnWidth + ColumnGap);
+    float ToggleX(int i) => _panelX0 + Pad + i / ToggleRows * (_columnWidth + ColumnGap);
     float ButtonTop => TogglesTop + TogglesHeight;
     float ButtonBottom => ButtonTop + overlay.LineHeight + 8;
     /// <summary>The question with Yes / No, or the last result: a row under the buttons while there is one.</summary>
-    string? Notice => confirming >= 0 ? question : message;
+    string? Notice => _confirming >= 0 ? _question : _message;
     /// <summary>The open list's rows, under the buttons.</summary>
     float ListTop => ButtonBottom + 2;
-    float ListHeight => open < 0 ? 0 : openOptions.Count * ToggleHeight + 2;
-    float ListWidth => open < 0 ? 0 : ListWidthFor(open);
+    float ListHeight => _open < 0 ? 0 : _openOptions.Count * ToggleHeight + 2;
+    float ListWidth => _open < 0 ? 0 : ListWidthFor(_open);
     float NoticeTop => ButtonBottom + RowGap + ListHeight;
-    float ListWidthFor(int i) => Math.Max(BoxWidth(ChoiceText(choices[i])), openOptions.Select(o => BoxWidth("x " + o)).DefaultIfEmpty(0).Max());
+    float ListWidthFor(int i) => Math.Max(BoxWidth(ChoiceText(_choices[i])), _openOptions.Select(o => BoxWidth("x " + o)).DefaultIfEmpty(0).Max());
     float NoticeBottom => Notice is null ? ListTop + ListHeight : NoticeTop + overlay.LineHeight + 8;
     const string Yes = "Yes", No = "No";
     float BoxWidth(string label) => label.Length * overlay.CharWidth + 16;
-    float ActionX(int i) => panelX0 + Pad + ButtonWidth + 8 + actions.Take(i).Sum(a => BoxWidth(a.Label) + 8);
-    float ChoiceX(int i) => ActionX(actions.Count) + choices.Take(i).Sum(c => BoxWidth(ChoiceText(c)) + 8);
+    float ActionX(int i) => _panelX0 + Pad + ButtonWidth + 8 + _actions.Take(i).Sum(a => BoxWidth(a.Label) + 8);
+    float ChoiceX(int i) => ActionX(_actions.Count) + _choices.Take(i).Sum(c => BoxWidth(ChoiceText(c)) + 8);
     static string ChoiceText(PanelChoice c) => c.Label() + " v";
-    float YesX => panelX0 + Pad + (question?.Length ?? 0) * overlay.CharWidth + 16;
+    float YesX => _panelX0 + Pad + (_question?.Length ?? 0) * overlay.CharWidth + 16;
     float NoX => YesX + BoxWidth(Yes) + 8;
     static bool In(Vector2 p, float x0, float y0, float x1, float y1) => p.X >= x0 && p.X <= x1 && p.Y >= y0 && p.Y <= y1;
 
-    int dragging = -1;
-    float panelX0, panelY0, panelX1, panelY1, columnWidth;
-    float rowHeight => overlay.LineHeight + TrackHeight + RowGap;
+    int _dragging = -1;
+    float _panelX0, _panelY0, _panelX1, _panelY1, _columnWidth;
+    float RowHeight => overlay.LineHeight + TrackHeight + RowGap;
 
     float ButtonWidth => ResetLabel.Length * overlay.CharWidth + 16;
 
-    float LabelWidth => Math.Max(sliders.Max(s => s.Label.Length + 9), toggles.Count == 0 ? 0 : toggles.Max(t => t.Label.Length + 4 + (t.Text?.Invoke().Length ?? 0) + 2)) * overlay.CharWidth;
+    float LabelWidth => Math.Max(_sliders.Max(s => s.Label.Length + 9), _toggles.Count == 0 ? 0 : _toggles.Max(t => t.Label.Length + 4 + (t.Text?.Invoke().Length ?? 0) + 2)) * overlay.CharWidth;
 
     /// <summary>The sliders run down the first column, then the second and the third.</summary>
-    int Rows => (sliders.Count + Columns - 1) / Columns;
+    int Rows => (_sliders.Count + Columns - 1) / Columns;
 
     void Layout(int width)
     {
-        columnWidth = Math.Max(LabelWidth, MinTrackWidth);
-        panelX0 = Margin;
-        panelX1 = panelX0 + 2 * Pad + Columns * columnWidth + (Columns - 1) * ColumnGap;
-        panelY0 = Margin;
-        panelY1 = NoticeBottom + Pad;
-        if (open >= 0) panelX1 = Math.Max(panelX1, ChoiceX(open) + ListWidth + Pad);
-        if (choices.Count > 0) panelX1 = Math.Max(panelX1, ChoiceX(choices.Count) + Pad);
+        _columnWidth = Math.Max(LabelWidth, MinTrackWidth);
+        _panelX0 = Margin;
+        _panelX1 = _panelX0 + 2 * Pad + Columns * _columnWidth + (Columns - 1) * ColumnGap;
+        _panelY0 = Margin;
+        _panelY1 = NoticeBottom + Pad;
+        if (_open >= 0) _panelX1 = Math.Max(_panelX1, ChoiceX(_open) + ListWidth + Pad);
+        if (_choices.Count > 0) _panelX1 = Math.Max(_panelX1, ChoiceX(_choices.Count) + Pad);
         // A long question or result widens the panel.
-        if (Notice is { } notice) panelX1 = Math.Max(panelX1, (confirming >= 0 ? NoX + BoxWidth(No) : panelX0 + Pad + notice.Length * overlay.CharWidth) + Pad);
+        if (Notice is { } notice) _panelX1 = Math.Max(_panelX1, (_confirming >= 0 ? NoX + BoxWidth(No) : _panelX0 + Pad + notice.Length * overlay.CharWidth) + Pad);
     }
 
-    float TrackX(int i) => panelX0 + Pad + i / Rows * (columnWidth + ColumnGap);
-    float TrackTop(int i) => panelY0 + Pad + overlay.LineHeight * 1.5f + i % Rows * rowHeight + overlay.LineHeight + 2;
+    float TrackX(int i) => _panelX0 + Pad + i / Rows * (_columnWidth + ColumnGap);
+    float TrackTop(int i) => _panelY0 + Pad + overlay.LineHeight * 1.5f + i % Rows * RowHeight + overlay.LineHeight + 2;
 
     /// <summary>Whether a point (window pixels) is on the panel.</summary>
-    public bool Contains(Vector2 p) => Visible && p.X >= panelX0 && p.X <= panelX1 && p.Y >= panelY0 && p.Y <= panelY1;
+    public bool Contains(Vector2 p) => Visible && p.X >= _panelX0 && p.X <= _panelX1 && p.Y >= _panelY0 && p.Y <= _panelY1;
 
     /// <summary>Starts dragging the slider under the pointer; true when the panel took the click.</summary>
     public bool MouseDown(Vector2 p)
     {
         if (!Contains(p)) return false;
-        if (confirming >= 0)
+        if (_confirming >= 0)
         {
             // Only Yes runs the action; any other click on the panel answers No.
-            if (In(p, YesX, NoticeTop, YesX + BoxWidth(Yes), NoticeBottom)) message = actions[confirming].Run();
-            confirming = -1;
-            question = null;
+            if (In(p, YesX, NoticeTop, YesX + BoxWidth(Yes), NoticeBottom)) _message = _actions[_confirming].Run();
+            _confirming = -1;
+            _question = null;
             return true;
         }
-        message = null;
-        if (open >= 0)
+        _message = null;
+        if (_open >= 0)
         {
             // A click on an option chooses it; any other click closes the list (and goes on to what it hit, unless that was the list's own button).
-            int was = open;
-            open = -1;
+            int was = _open;
+            _open = -1;
             float x = ChoiceX(was);
-            for (int k = 0; k < openOptions.Count; k++)
+            for (int k = 0; k < _openOptions.Count; k++)
                 if (In(p, x, ListTop + k * ToggleHeight, x + ListWidthFor(was), ListTop + (k + 1) * ToggleHeight))
                 {
-                    message = choices[was].Choose(k);
+                    _message = _choices[was].Choose(k);
                     return true;
                 }
-            if (In(p, x, ButtonTop, x + BoxWidth(ChoiceText(choices[was])), ButtonBottom)) return true;
+            if (In(p, x, ButtonTop, x + BoxWidth(ChoiceText(_choices[was])), ButtonBottom)) return true;
         }
-        for (int i = 0; i < choices.Count; i++)
-            if (In(p, ChoiceX(i), ButtonTop, ChoiceX(i) + BoxWidth(ChoiceText(choices[i])), ButtonBottom))
+        for (int i = 0; i < _choices.Count; i++)
+            if (In(p, ChoiceX(i), ButtonTop, ChoiceX(i) + BoxWidth(ChoiceText(_choices[i])), ButtonBottom))
             {
-                (open, openOptions) = (i, choices[i].Options());
+                (_open, _openOptions) = (i, _choices[i].Options());
                 return true;
             }
-        if (p.Y >= ButtonTop && p.Y <= ButtonBottom && p.X >= panelX0 + Pad && p.X <= panelX0 + Pad + ButtonWidth)
+        if (p.Y >= ButtonTop && p.Y <= ButtonBottom && p.X >= _panelX0 + Pad && p.X <= _panelX0 + Pad + ButtonWidth)
         {
             Reset();
             return true;
         }
-        for (int i = 0; i < actions.Count; i++)
-            if (In(p, ActionX(i), ButtonTop, ActionX(i) + BoxWidth(actions[i].Label), ButtonBottom))
+        for (int i = 0; i < _actions.Count; i++)
+            if (In(p, ActionX(i), ButtonTop, ActionX(i) + BoxWidth(_actions[i].Label), ButtonBottom))
             {
-                (confirming, question) = (i, actions[i].Question());
+                (_confirming, _question) = (i, _actions[i].Question());
                 return true;
             }
-        for (int i = 0; i < toggles.Count; i++)
+        for (int i = 0; i < _toggles.Count; i++)
         {
             float top = ToggleTop(i), x = ToggleX(i);
-            if (p.Y >= top - 2 && p.Y < top + ToggleHeight - 2 && p.X >= x - Pad / 2 && p.X <= x + columnWidth + Pad / 2)
+            if (p.Y >= top - 2 && p.Y < top + ToggleHeight - 2 && p.X >= x - Pad / 2 && p.X <= x + _columnWidth + Pad / 2)
             {
-                toggles[i].Set(!toggles[i].Get());
+                _toggles[i].Set(!_toggles[i].Get());
                 return true;
             }
         }
-        for (int i = 0; i < sliders.Count; i++)
+        for (int i = 0; i < _sliders.Count; i++)
         {
             float top = TrackTop(i), x = TrackX(i);
-            if (p.Y >= top - overlay.LineHeight - 2 && p.Y <= top + TrackHeight + RowGap * 0.5f && p.X >= x - Pad / 2 && p.X <= x + columnWidth + Pad / 2)
+            if (p.Y >= top - overlay.LineHeight - 2 && p.Y <= top + TrackHeight + RowGap * 0.5f && p.X >= x - Pad / 2 && p.X <= x + _columnWidth + Pad / 2)
             {
-                dragging = i;
+                _dragging = i;
                 MouseMove(p);
                 break;
             }
@@ -231,16 +231,16 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     /// <summary>Moves the dragged slider; true while one is being dragged.</summary>
     public bool MouseMove(Vector2 p)
     {
-        if (dragging < 0) return false;
-        sliders[dragging].SetFraction((p.X - TrackX(dragging)) / columnWidth);
+        if (_dragging < 0) return false;
+        _sliders[_dragging].SetFraction((p.X - TrackX(_dragging)) / _columnWidth);
         return true;
     }
 
     /// <summary>Ends a drag; true when one was in progress.</summary>
     public bool MouseUp()
     {
-        bool was = dragging >= 0;
-        dragging = -1;
+        bool was = _dragging >= 0;
+        _dragging = -1;
         return was;
     }
 
@@ -249,58 +249,58 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         if (!Visible) return;
         Layout(width);
         Vector4 track = new(0.3f, 0.3f, 0.32f, 1), fill = new(0.85f, 0.65f, 0.35f, 1), dim = new(0.7f, 0.7f, 0.68f, 1);
-        overlay.Rect(panelX0, panelY0, panelX1, panelY1, Background);
-        overlay.Text(title, panelX0 + Pad, panelY0 + Pad, DebugOverlay.TextColour);
-        for (int i = 0; i < sliders.Count; i++)
+        overlay.Rect(_panelX0, _panelY0, _panelX1, _panelY1, Background);
+        overlay.Text(title, _panelX0 + Pad, _panelY0 + Pad, DebugOverlay.TextColour);
+        for (int i = 0; i < _sliders.Count; i++)
         {
-            var s = sliders[i];
+            var s = _sliders[i];
             float top = TrackTop(i), x = TrackX(i);
-            overlay.Text(s.Label, x, top - overlay.LineHeight - 2, i == dragging ? fill : DebugOverlay.TextColour);
+            overlay.Text(s.Label, x, top - overlay.LineHeight - 2, i == _dragging ? fill : DebugOverlay.TextColour);
             string value = s.Display;
-            overlay.Text(value, x + columnWidth - value.Length * overlay.CharWidth, top - overlay.LineHeight - 2, dim);
+            overlay.Text(value, x + _columnWidth - value.Length * overlay.CharWidth, top - overlay.LineHeight - 2, dim);
             float t = s.Fraction;
-            overlay.Rect(x, top, x + columnWidth, top + TrackHeight, track);
-            overlay.Rect(x, top, x + columnWidth * t, top + TrackHeight, fill);
-            float knob = x + columnWidth * t;
+            overlay.Rect(x, top, x + _columnWidth, top + TrackHeight, track);
+            overlay.Rect(x, top, x + _columnWidth * t, top + TrackHeight, fill);
+            float knob = x + _columnWidth * t;
             overlay.Rect(knob - 3, top - 4, knob + 3, top + TrackHeight + 4, DebugOverlay.TextColour);
         }
-        if (toggles.Count > 0) overlay.Text(togglesTitle, panelX0 + Pad, TogglesTop, DebugOverlay.TextColour);
-        for (int i = 0; i < toggles.Count; i++)
+        if (_toggles.Count > 0) overlay.Text(togglesTitle, _panelX0 + Pad, TogglesTop, DebugOverlay.TextColour);
+        for (int i = 0; i < _toggles.Count; i++)
         {
-            var t = toggles[i];
+            var t = _toggles[i];
             float top = ToggleTop(i), x = ToggleX(i), box = overlay.LineHeight - 2;
             overlay.Rect(x, top, x + box, top + box, track);
             if (t.Get()) overlay.Rect(x + 3, top + 3, x + box - 3, top + box - 3, fill);
             overlay.Text(t.Label, x + box + overlay.CharWidth, top, DebugOverlay.TextColour);
-            if (t.Text?.Invoke() is { } text) overlay.Text(text, x + columnWidth - text.Length * overlay.CharWidth, top, dim);
+            if (t.Text?.Invoke() is { } text) overlay.Text(text, x + _columnWidth - text.Length * overlay.CharWidth, top, dim);
         }
-        overlay.Rect(panelX0 + Pad, ButtonTop, panelX0 + Pad + ButtonWidth, ButtonBottom, track);
-        overlay.Text(ResetLabel, panelX0 + Pad + 8, ButtonTop + 4, DebugOverlay.TextColour);
-        for (int i = 0; i < actions.Count; i++)
+        overlay.Rect(_panelX0 + Pad, ButtonTop, _panelX0 + Pad + ButtonWidth, ButtonBottom, track);
+        overlay.Text(ResetLabel, _panelX0 + Pad + 8, ButtonTop + 4, DebugOverlay.TextColour);
+        for (int i = 0; i < _actions.Count; i++)
         {
             float x = ActionX(i);
-            overlay.Rect(x, ButtonTop, x + BoxWidth(actions[i].Label), ButtonBottom, i == confirming ? fill * new Vector4(0.6f, 0.6f, 0.6f, 1) : track);
-            overlay.Text(actions[i].Label, x + 8, ButtonTop + 4, DebugOverlay.TextColour);
+            overlay.Rect(x, ButtonTop, x + BoxWidth(_actions[i].Label), ButtonBottom, i == _confirming ? fill * new Vector4(0.6f, 0.6f, 0.6f, 1) : track);
+            overlay.Text(_actions[i].Label, x + 8, ButtonTop + 4, DebugOverlay.TextColour);
         }
-        for (int i = 0; i < choices.Count; i++)
+        for (int i = 0; i < _choices.Count; i++)
         {
             float x = ChoiceX(i);
-            string label = ChoiceText(choices[i]);
-            overlay.Rect(x, ButtonTop, x + BoxWidth(label), ButtonBottom, i == open ? fill * new Vector4(0.6f, 0.6f, 0.6f, 1) : track);
+            string label = ChoiceText(_choices[i]);
+            overlay.Rect(x, ButtonTop, x + BoxWidth(label), ButtonBottom, i == _open ? fill * new Vector4(0.6f, 0.6f, 0.6f, 1) : track);
             overlay.Text(label, x + 8, ButtonTop + 4, DebugOverlay.TextColour);
         }
-        if (open >= 0)
+        if (_open >= 0)
         {
-            float x = ChoiceX(open), w = ListWidthFor(open);
-            int current = choices[open].Current();
+            float x = ChoiceX(_open), w = ListWidthFor(_open);
+            int current = _choices[_open].Current();
             overlay.Rect(x, ListTop, x + w, ListTop + ListHeight, new Vector4(0.12f, 0.12f, 0.13f, 1));
-            for (int k = 0; k < openOptions.Count; k++)
-                overlay.Text((k == current ? "x " : "  ") + openOptions[k], x + 8, ListTop + k * ToggleHeight + 4, k == current ? fill : DebugOverlay.TextColour);
+            for (int k = 0; k < _openOptions.Count; k++)
+                overlay.Text((k == current ? "x " : "  ") + _openOptions[k], x + 8, ListTop + k * ToggleHeight + 4, k == current ? fill : DebugOverlay.TextColour);
         }
         if (Notice is { } notice)
         {
-            overlay.Text(notice, panelX0 + Pad, NoticeTop + 4, confirming >= 0 ? fill : dim);
-            if (confirming >= 0)
+            overlay.Text(notice, _panelX0 + Pad, NoticeTop + 4, _confirming >= 0 ? fill : dim);
+            if (_confirming >= 0)
             {
                 overlay.Rect(YesX, NoticeTop, YesX + BoxWidth(Yes), NoticeBottom, track);
                 overlay.Text(Yes, YesX + 8, NoticeTop + 4, DebugOverlay.TextColour);

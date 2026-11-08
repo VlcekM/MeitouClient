@@ -1,7 +1,7 @@
-using Meitou.Game.Rendering.Gpu;
 using System.Runtime.InteropServices;
-using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Post;
+using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Upscalers;
 
@@ -29,21 +29,21 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
     // NVSDK_NGX_DLSS_Feature_Flags
     const int FlagHdr = 1 << 0, FlagMotionLowRes = 1 << 1, FlagAutoExposure = 1 << 6;
 
-    readonly Ngx ngx;
-    readonly GpuContext ctx;
-    readonly void* parameters;
-    void* feature;
-    (int Mode, int RenderWidth, int RenderHeight, int DisplayWidth, int DisplayHeight, uint Preset, bool AutoExposure) options;
-    bool failed;
+    readonly Ngx _ngx;
+    readonly GpuContext _ctx;
+    readonly void* _parameters;
+    void* _feature;
+    (int Mode, int RenderWidth, int RenderHeight, int DisplayWidth, int DisplayHeight, uint Preset, bool AutoExposure) _options;
+    bool _failed;
 
     public UpscalerKind Kind => UpscalerKind.Dlss;
     public string Name { get; private set; } = "dlss";
 
     NgxDlssUpscaler(Ngx ngx, GpuContext ctx, void* parameters)
     {
-        this.ngx = ngx;
-        this.ctx = ctx;
-        this.parameters = parameters;
+        this._ngx = ngx;
+        this._ctx = ctx;
+        this._parameters = parameters;
     }
 
     public static NgxDlssUpscaler? TryCreate(Ngx? ngx, GpuContext ctx, out string? reason)
@@ -69,31 +69,36 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
     };
 
     /// <summary>An image for NGX; only the output is written (read-write).</summary>
-    VkResource Resource(Meitou.Game.Rendering.Gpu.GpuTexture texture, bool output = false)
+    VkResource Resource(GpuTexture texture, bool output = false)
     {
         var d = texture.Desc;
         return new VkResource
         {
-            View = (nint)ctx.Device.NativeView(texture).Handle, Image = (nint)ctx.Device.NativeImage(texture).Handle,
-            Aspect = (uint)GlConventions.VkAspect(d), Levels = 1, Layers = 1,
-            Format = (uint)GlConventions.VkFormat(d.Format), Width = (uint)d.Width, Height = (uint)d.Height,
+            View = (nint)_ctx.Device.NativeView(texture).Handle,
+            Image = (nint)_ctx.Device.NativeImage(texture).Handle,
+            Aspect = (uint)GlConventions.VkAspect(d),
+            Levels = 1,
+            Layers = 1,
+            Format = (uint)GlConventions.VkFormat(d.Format),
+            Width = (uint)d.Width,
+            Height = (uint)d.Height,
             ReadWrite = (byte)(output ? 1 : 0),
         };
     }
 
     public bool Dispatch(UpscaleInputs i)
     {
-        if (failed) return false;
+        if (_failed) return false;
         var wanted = (Mode(i.RenderWidth / (float)i.DisplayWidth), i.RenderWidth, i.RenderHeight, i.DisplayWidth, i.DisplayHeight,
             VendorUpscalers.DlssPreset(i.Preset), i.Exposure is null);
-        if (feature != null && options != wanted) Release();
+        if (_feature != null && _options != wanted) Release();
 
-        var list = (CommandList)ctx.BeginNative("dlss upscale");
+        var list = (CommandList)_ctx.BeginNative("dlss upscale");
         var cb = list.Handle.Handle;
         try
         {
-            if (feature == null && !Create(cb, wanted)) return false;
-            var p = parameters;
+            if (_feature == null && !Create(cb, wanted)) return false;
+            var p = _parameters;
             // Every native image stays in GENERAL: NGX reads the inputs as sampled images and writes the output as a storage image.
             var colour = Resource(i.Colour);
             var depth = Resource(i.Depth);
@@ -121,7 +126,7 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
             NgxParameters.SetFloat(p, "DLSS.Pre.Exposure\0"u8, 1);
             NgxParameters.SetFloat(p, "DLSS.Exposure.Scale\0"u8, 1);
             NgxParameters.SetFloat(p, "FrameTimeDeltaInMsec\0"u8, i.DeltaSeconds * 1000);
-            int rc = ngx.EvaluateFeature(cb, feature, p, 0);
+            int rc = _ngx.EvaluateFeature(cb, _feature, p, 0);
             // The map keeps what it was given: the images' descriptions are this call's locals, so they do not outlive it (a later CreateFeature1 reads the map).
             NgxParameters.SetPointer(p, "Color\0"u8, null);
             NgxParameters.SetPointer(p, "Depth\0"u8, null);
@@ -133,14 +138,14 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
         }
         finally
         {
-            ctx.EndNative(list);
+            _ctx.EndNative(list);
         }
         return true;
     }
 
     bool Create(nint cb, (int Mode, int RenderWidth, int RenderHeight, int DisplayWidth, int DisplayHeight, uint Preset, bool AutoExposure) o)
     {
-        var p = parameters;
+        var p = _parameters;
         NgxParameters.SetUInt(p, "CreationNodeMask\0"u8, 1);
         NgxParameters.SetUInt(p, "VisibilityNodeMask\0"u8, 1);
         NgxParameters.SetUInt(p, "Width\0"u8, (uint)o.RenderWidth);
@@ -157,10 +162,10 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
         NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.UltraPerformance\0"u8, o.Preset);
         NgxParameters.SetUInt(p, "DLSS.Hint.Render.Preset.UltraQuality\0"u8, o.Preset);
         void* handle;
-        int rc = ngx.CreateFeature(ctx.Device.Device.Handle, cb, Ngx.FeatureSuperSampling, p, &handle);
+        int rc = _ngx.CreateFeature(_ctx.Device.Device.Handle, cb, Ngx.FeatureSuperSampling, p, &handle);
         if (rc != Ngx.ResultSuccess) return Fail($"NVSDK_NGX_VULKAN_CreateFeature1 failed ({rc:x})");
-        feature = handle;
-        options = o;
+        _feature = handle;
+        _options = o;
         Name = $"dlss {o.RenderWidth}x{o.RenderHeight}";
         return true;
     }
@@ -168,23 +173,23 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
     /// <summary>Releases the feature once every frame that may use it has finished (a frame being recorded may have created or evaluated it).</summary>
     void Release()
     {
-        if (feature == null) return;
-        var f = feature;
-        ctx.Device.Frames.DeferDelete(() => ngx.ReleaseFeature(f));
-        feature = null;
+        if (_feature == null) return;
+        var f = _feature;
+        _ctx.Device.Frames.DeferDelete(() => _ngx.ReleaseFeature(f));
+        _feature = null;
     }
 
     bool Fail(string message)
     {
         Console.WriteLine($"upscaler  {message}");
-        failed = true;
+        _failed = true;
         return false;
     }
 
     public void Dispose()
     {
         Release();
-        var p = parameters;
-        ctx.Device.Frames.DeferDelete(() => ngx.DestroyParameters(p));
+        var p = _parameters;
+        _ctx.Device.Frames.DeferDelete(() => _ngx.DestroyParameters(p));
     }
 }

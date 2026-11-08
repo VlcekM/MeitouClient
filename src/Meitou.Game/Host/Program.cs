@@ -77,8 +77,8 @@ static class Program
         if (game.WikiExport is { } wikiDir) return WikiExport.Run(wikiDir, install, game.WikiFactsOnly);
         if (game.DataCheck)
         {
-            var checkedDb = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));
-            var levels = Meitou.Data.World.WorldLevelData.Load(install, includeInteriors: true);
+            var checkedDb = Data.GameDatabase.Load(Data.LoadOrder.FromInstall(install));
+            var levels = Data.World.WorldLevelData.Load(install, includeInteriors: true);
             var levelProblems = levels.Problems();
             Console.WriteLine($"load order: {string.Join(", ", checkedDb.Files)}");
             foreach (var (what, issues) in new[] { ("game data", checkedDb.Issues), ("world levels", levelProblems) })
@@ -95,13 +95,13 @@ static class Program
         // A native splash at once, until the game window draws (docs/engine.md "Loading"); not for pictures, a listing or a hidden window.
         using var splash = world.Screenshot is null && !game.ListStarts && !world.HiddenWindow && !world.Headless ? SplashWindow.Show(install.DataDirectory) : null;
         var config = UserConfig.Load();
-        Meitou.Localisation.Loc.Use(install);   // the language of settings.cfg: texts from locale/<code>/LC_MESSAGES/main.mo (docs/formats/localisation.md)
+        Loc.Use(install);   // the language of settings.cfg: texts from locale/<code>/LC_MESSAGES/main.mo (docs/formats/localisation.md)
         // The saved texture quality before the world loads: the terrain's layer arrays are sized from it once (the Tab panel's restore after
         // the boot reaches only the other textures). --texture-quality, --low-end and --benchmark-baseline choose it for this run instead.
         if (!args.Contains("--texture-quality") && !args.Contains("--low-end") && !game.BenchmarkBaseline && config.Graphics.TryGetValue(WorldFrame.TextureQualitySlider, out float savedQuality))
-            world.TextureQuality = Math.Clamp((int)MathF.Round(savedQuality), 0, Meitou.Data.Textures.TextureQuality.Maximum);
-        Meitou.Data.GameDatabase? db = null;
-        Meitou.Data.Gameplay.NewGameStart? start = null;
+            world.TextureQuality = Math.Clamp((int)MathF.Round(savedQuality), 0, Data.Textures.TextureQuality.Maximum);
+        Data.GameDatabase? db = null;
+        Data.Gameplay.NewGameStart? start = null;
         if (game.Battle is not null && (game.NewGame || game.NoPopulation || game.Load is not null || game.Duel || game.Sandbox > 0))
         {
             Console.Error.WriteLine("--battle makes its own characters: drop --new-game, --no-population, --load, --duel and --sandbox (--battle-map sandbox is its flat floor).");
@@ -110,7 +110,7 @@ static class Program
         if (game.Sandbox > 0 || game.Battle is not null && game.BattleFlat)
         {
             // The animation sandbox: no world, a flat floor (docs/simulation.md "Sandbox"). The real game data is still loaded for the characters and animations.
-            db = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));
+            db = Data.GameDatabase.Load(Data.LoadOrder.FromInstall(install));
             (world.NoTextures, world.NoObjects, world.NoFoliage, world.NoWater, world.NoFogFeatures, world.WaterReflection, world.DistantZones) = (true, true, true, true, true, 0, 0);
             world.Post.Ssao = false;   // SSAO bands a perfectly flat floor; the Tab panel can turn it back on
             world.NoParticles = true;   // no weather or map effects to show (the effect library and every map placer would be read)
@@ -132,8 +132,8 @@ static class Program
             }
             game.NoPopulation = true;
             (world.X, world.Z, world.Town, world.Zone) = (field.X, field.Z, null, null);
-            Meitou.Game.Rendering.Terrain.GroundRelief.FieldCentre = new Vector2(field.X, field.Z);
-            Meitou.Game.Rendering.Terrain.GroundRelief.FieldCliffs = game.TerrainSandboxCliffs;
+            GroundRelief.FieldCentre = new Vector2(field.X, field.Z);
+            GroundRelief.FieldCliffs = game.TerrainSandboxCliffs;
             (world.NoFoliage, world.NoObjects) = (true, true);   // the ground alone: no grass, rocks or scattered objects over the tiles
             world.Weather ??= "Default";
             if (!rest.Contains("--time")) world.Hour = 10;
@@ -168,18 +168,18 @@ static class Program
         }
         if (game.ListStarts || game.NewGame)
         {
-            db = Meitou.Data.GameDatabase.Load(Meitou.Data.LoadOrder.FromInstall(install));
-            var starts = Meitou.Data.Gameplay.NewGameStart.LoadAll(db);
+            db = Data.GameDatabase.Load(Data.LoadOrder.FromInstall(install));
+            var starts = Data.Gameplay.NewGameStart.LoadAll(db);
             if (game.ListStarts)
             {
                 foreach (var s in starts.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase))
                     Console.WriteLine($"{s.Name,-28} {s.Money,7} cats  {s.Squad.Count} squad links  {(s.ForceStartPos ? "fixed position" : s.Towns.Count + " town(s)")}");
                 return 0;
             }
-            start = Meitou.Data.Gameplay.NewGameStart.Find(starts, game.NewGameName ?? Meitou.Data.Gameplay.NewGameStart.DefaultName);
+            start = Data.Gameplay.NewGameStart.Find(starts, game.NewGameName ?? Data.Gameplay.NewGameStart.DefaultName);
             if (start is null)
             {
-                Console.Error.WriteLine($"No start '{game.NewGameName ?? Meitou.Data.Gameplay.NewGameStart.DefaultName}'; --list-starts shows them.");
+                Console.Error.WriteLine($"No start '{game.NewGameName ?? Data.Gameplay.NewGameStart.DefaultName}'; --list-starts shows them.");
                 return 2;
             }
             if (game.NoPopulation)
@@ -188,14 +188,14 @@ static class Program
                 return 2;
             }
             // Load the world round the place the squad will stand: the start's town drawn with the world's seed, as StartPlayer draws it.
-            var at = Meitou.Simulation.Population.PopulationSystem.StartPlace(
-                Meitou.Simulation.Population.PopulationData.Create(db, Meitou.Data.World.WorldLevelData.Load(install).Towns()), game.Seed, start).Centre;
+            var at = Simulation.Population.PopulationSystem.StartPlace(
+                Simulation.Population.PopulationData.Create(db, Data.World.WorldLevelData.Load(install).Towns()), game.Seed, start).Centre;
             (world.X, world.Z) = (at.X, at.Y);
             world.Town = null;
-            if (!rest.Contains("--time")) world.Hour = (float)Meitou.Simulation.Session.GameClock.DefaultStartHour;
+            if (!rest.Contains("--time")) world.Hour = (float)Simulation.Session.GameClock.DefaultStartHour;
             Console.WriteLine($"new game  {start.Name}: {start.Money} cats, {start.Squad.Count} squad link(s), at {at.X:0}, {at.Y:0}");
         }
-        Meitou.Data.Save.SaveGame? save = null;
+        Data.Save.SaveGame? save = null;
         if (game.Load is { } folder)
         {
             if (game.NewGame || game.NoPopulation || game.Duel)
@@ -203,7 +203,7 @@ static class Program
                 Console.Error.WriteLine("--load starts in the save: drop --new-game, --no-population and --duel.");
                 return 2;
             }
-            try { save = Meitou.Data.Save.SaveGame.Load(folder); }
+            try { save = Data.Save.SaveGame.Load(folder); }
             catch (Exception e) when (e is IOException or FormatException or ArgumentException or UnauthorizedAccessException)
             {
                 Console.Error.WriteLine($"--load {folder}: {e.Message}");

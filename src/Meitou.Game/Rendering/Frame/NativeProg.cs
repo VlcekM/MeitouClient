@@ -9,36 +9,36 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 internal sealed class NativeProg : IDisposable
 {
-    readonly IGpuContext ctx;
+    readonly IGpuContext _ctx;
     public readonly GpuProgram P;
-    readonly int[] locations;
-    readonly Meitou.Game.Rendering.Gpu.Shaders.ScalarKind[] kinds;
+    readonly int[] _locations;
+    readonly Meitou.Game.Rendering.Gpu.Shaders.ScalarKind[] _kinds;
     /// <summary>The program's own input locations (below the instance rows): 0 .. Own − 1.</summary>
     public readonly int Own;
-    VertexLayout? last;
+    VertexLayout? _last;
 
     public NativeProg(IGpuContext ctx, NativeFrame frame, string vertex, string fragment, string name, params GpuSetLayout[] own)
     {
-        this.ctx = ctx;
+        this._ctx = ctx;
         P = frame.Program(vertex, fragment, name, own);
         var inputs = P.Info.VertexReflection!.Inputs;
-        locations = [.. inputs.SelectMany(i => Enumerable.Range(i.Location, i.Slots))];
-        kinds = [.. inputs.SelectMany(i => Enumerable.Repeat(i.Kind, i.Slots))];
-        Own = locations.Where(l => l < FoliageShaders.InstanceLocation).DefaultIfEmpty(-1).Max() + 1;
+        _locations = [.. inputs.SelectMany(i => Enumerable.Range(i.Location, i.Slots))];
+        _kinds = [.. inputs.SelectMany(i => Enumerable.Repeat(i.Kind, i.Slots))];
+        Own = _locations.Where(l => l < FoliageShaders.InstanceLocation).DefaultIfEmpty(-1).Max() + 1;
     }
 
     public VertexLayout Layout(ReadOnlySpan<LegacyProgram.Attribute?> byLocation)
     {
-        Span<VertexInput> inputs = stackalloc VertexInput[locations.Length];
+        Span<VertexInput> inputs = stackalloc VertexInput[_locations.Length];
         for (int i = 0; i < inputs.Length; i++)
         {
-            int loc = locations[i];
+            int loc = _locations[i];
             inputs[i] = loc < byLocation.Length && byLocation[loc] is { } a
                 ? new VertexInput((uint)loc, a.Format, a.Stride, a.PerInstance)
-                : new VertexInput((uint)loc, GlConventions.DummyVertexFormat(kinds[i]), ctx.ConstantVertexAttributes ? 0u : 16u, false);
+                : new VertexInput((uint)loc, GlConventions.DummyVertexFormat(_kinds[i]), _ctx.ConstantVertexAttributes ? 0u : 16u, false);
         }
-        if (last is { } l && inputs.SequenceEqual(l.Inputs)) return l;
-        return last = new VertexLayout(inputs.ToArray());
+        if (_last is { } l && inputs.SequenceEqual(l.Inputs)) return l;
+        return _last = new VertexLayout(inputs.ToArray());
     }
 
     /// <summary>Locations 0 .. <paramref name="count"/> − 1 as one array for one bind: each attribute's buffer, GL's constant where none.</summary>
@@ -47,19 +47,19 @@ internal sealed class NativeProg : IDisposable
         var result = new GpuBufferBinding[count];
         for (int loc = 0; loc < count; loc++)
         {
-            int input = Array.IndexOf(locations, loc);
+            int input = Array.IndexOf(_locations, loc);
             result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
                 ? a.Buffer
-                : ctx.ConstantVertexAttributes
-                        ? new GpuBufferBinding(ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float))
-                        : new GpuBufferBinding(ctx.DummyVertexArray(input >= 0 ? kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float), 0);
+                : _ctx.ConstantVertexAttributes
+                        ? new GpuBufferBinding(_ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float))
+                        : new GpuBufferBinding(_ctx.DummyVertexArray(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float), 0);
         }
         return result;
     }
 
     public void Dispose()
     {
-        ctx.Pipelines.Forget(P);
-        ctx.Shaders.Dispose(P);
+        _ctx.Pipelines.Forget(P);
+        _ctx.Shaders.Dispose(P);
     }
 }

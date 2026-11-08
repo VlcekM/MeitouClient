@@ -28,32 +28,32 @@ public class CombatDataTests
     [Fact]
     public void Records_read_into_typed_views()
     {
-        var constants = Rec("1-t", FcsRecordType.CONSTANTS, "GLOBAL CONSTANTS");
+        var constants = Rec("1-t", FcsRecordType.Constants, "GLOBAL CONSTANTS");
         constants.Floats["damage multiplier"] = 0.5f;
         constants.Floats["cut damage 1"] = 10;
         constants.Floats["cut damage 99"] = 100;
         constants.Floats["block chance increase per 10levels"] = 20;
         constants.Ints["stumble damage max"] = 40;
-        var weapon = Rec("2-t", FcsRecordType.WEAPON, "Blade");
+        var weapon = Rec("2-t", FcsRecordType.Weapon, "Blade");
         weapon.Ints["skill category"] = 1;
         weapon.Ints["attack mod"] = 3;
         weapon.Floats["cut damage multiplier"] = 1.5f;
         weapon.Floats["armour penetration"] = -0.2f;
         weapon.Bools["can block"] = true;
         weapon.References["race damage"] = [new FcsReference("9-t", 150, 0, 0)];
-        var maker = Rec("3-t", FcsRecordType.WEAPON_MANUFACTURER, "Maker");
+        var maker = Rec("3-t", FcsRecordType.WeaponManufacturer, "Maker");
         maker.Floats["cut damage mod"] = 1.1f;
         maker.Ints["min cut damage"] = 2;
         maker.References["weapon models"] = [new FcsReference("4-t", 50, 100, 0)];
-        var model = Rec("4-t", FcsRecordType.MATERIAL_SPECS_WEAPON, "Mk V");
+        var model = Rec("4-t", FcsRecordType.MaterialSpecsWeapon, "Mk V");
         model.Ints["defence mod"] = -2;
-        var armour = Rec("5-t", FcsRecordType.ARMOUR, "Plate");
+        var armour = Rec("5-t", FcsRecordType.Armour, "Plate");
         armour.Ints["class"] = 3;
         armour.Ints["material type"] = 3;
         armour.Ints["slot"] = 8;
         armour.Floats["cut into stun"] = 0.4f;
         armour.References["part coverage"] = [new FcsReference("101-t", 70, 0, 0)];
-        var technique = Rec("6-t", FcsRecordType.COMBAT_TECHNIQUE, "Slash");
+        var technique = Rec("6-t", FcsRecordType.CombatTechnique, "Slash");
         technique.Strings["anim name"] = "chop";
         technique.Bools["katanas"] = true;
         technique.Bools["1 handed"] = true;
@@ -102,21 +102,21 @@ public class CombatDataTests
 [Slow]
 public class CombatInstallTests
 {
-    static GameDatabase? cached;
-    static CombatDatabase? combat;
-    static readonly Lock gate = new();
+    static GameDatabase? s_cached;
+    static CombatDatabase? s_combat;
+    static readonly Lock Gate = new();
 
     static GameDatabase Database()
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install!));
+        lock (Gate) return s_cached ??= GameDatabase.Load(LoadOrder.BaseGame(install!));
     }
 
     static CombatDatabase Combat()
     {
         var db = Database();
-        lock (gate) return combat ??= CombatDatabase.From(db);
+        lock (Gate) return s_combat ??= CombatDatabase.From(db);
     }
 
     [Fact]
@@ -156,19 +156,19 @@ public class CombatInstallTests
 [Slow]
 public class RealDuelTests(ITestOutputHelper output)
 {
-    static readonly Lock gate = new();
-    static (GameDatabase Db, CombatDatabase Combat, AnimationLengths Lengths, RaceData Race, GameInstall Install)? cached;
+    static readonly Lock Gate = new();
+    static (GameDatabase Db, CombatDatabase Combat, AnimationLengths Lengths, RaceData Race, GameInstall Install)? s_cached;
 
     static (GameDatabase Db, CombatDatabase Combat, AnimationLengths Lengths, RaceData Race, GameInstall Install) Data()
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
-        lock (gate)
+        lock (Gate)
         {
-            if (cached is { } c) return c;
+            if (s_cached is { } c) return c;
             var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
-            var race = RaceData.From(db.OfType(FcsRecordType.RACE).First(r => r.Name == "Greenlander"), db);
-            return (cached = (db, CombatDatabase.From(db), AnimationLengths.Load(install!.Root), race, install!)).Value;
+            var race = RaceData.From(db.OfType(FcsRecordType.Race).First(r => r.Name == "Greenlander"), db);
+            return (s_cached = (db, CombatDatabase.From(db), AnimationLengths.Load(install!.Root), race, install!)).Value;
         }
     }
 
@@ -178,20 +178,20 @@ public class RealDuelTests(ITestOutputHelper output)
         var katana = data.Weapon("476-gamedata.base")!;
         var maker = data.Manufacturers.First(m => m.Models.Any(e => e.Level == 50));
         var model = data.WeaponMaterial(maker.Models.First(e => e.Level == 50).ModelStringId)!;
-        var chest = db.OfType(FcsRecordType.LOCATIONAL_DAMAGE).First(r => r.Name == "Chest").StringId;
+        var chest = db.OfType(FcsRecordType.LocationalDamage).First(r => r.Name == "Chest").StringId;
         var armour = data.Armours.Where(a => a.Class == ArmourClass.Heavy && a.CoverageOf(chest) >= 90).OrderBy(a => a.StringId, StringComparer.Ordinal).First();
         var constants = GameConstants.FromDatabase(db);
         var combat = new CombatSystem(data.Techniques, data.Constants, constants, BodyOptions.Default, lengths, new CombatOptions { RecordLog = true });
         var world = new Meitou.Simulation.World(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 },
-            new Meitou.Simulation.OpenGroundWalkability((_, _) => 150), [combat]);
+            new OpenGroundWalkability((_, _) => 150), [combat]);
         CharacterId Spawn(string name, float skill, ArmourData? worn, float x)
         {
             var stats = new CharacterStats();
             foreach (var s in new[] { StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Katanas, StatsEnumerated.Dexterity, StatsEnumerated.Strength, StatsEnumerated.Toughness })
                 stats[s] = skill;
             var fighter = new Fighter(WeaponInstance.Create(0.5f, katana, maker, model, data.Constants), worn is null ? [] : [ArmourPiece.Create(worn, 0.6f)]);
-            var cold = new Meitou.Simulation.CharacterCold { Name = name, Stats = stats, Race = race, Medical = MedicalState.Create(race, stats.Strength), Fighter = fighter };
-            return world.Characters.Spawn(new Meitou.Simulation.CharacterHot { Position = new(x, 150, 1000), Health = 100 }, cold, 0);
+            var cold = new CharacterCold { Name = name, Stats = stats, Race = race, Medical = MedicalState.Create(race, stats.Strength), Fighter = fighter };
+            return world.Characters.Spawn(new CharacterHot { Position = new(x, 150, 1000), Health = 100 }, cold, 0);
         }
         var a = Spawn("Plated", 45, armour, 1000);
         var b = Spawn("Bare", 55, null, 1014);

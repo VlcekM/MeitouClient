@@ -44,8 +44,8 @@ public sealed class ParticleSimulation
     /// <summary>The longest step a single <see cref="Advance"/> takes; a longer interval is split.</summary>
     public const float MaxStep = 1f / 20;
 
-    readonly Random random;
-    readonly TechniqueState[] techniques;
+    readonly Random _random;
+    readonly TechniqueState[] _techniques;
 
     public PuSystemDef Definition { get; }
     /// <summary>The system's place in the world: the emitters' origin and the frame the observers compare positions in. Set it before <see cref="Advance"/>.</summary>
@@ -61,14 +61,14 @@ public sealed class ParticleSimulation
     public bool EmissionStopped { get; set; }
     /// <summary>Seconds since the system started.</summary>
     public float Time { get; private set; }
-    public int ParticleCount => techniques.Sum(t => t.Count);
+    public int ParticleCount => _techniques.Sum(t => t.Count);
     public IReadOnlyList<PuTechniqueDef> Techniques => Definition.Techniques;
 
     public ParticleSimulation(PuSystemDef definition, int seed)
     {
         Definition = definition;
-        random = new Random(seed);
-        techniques = [.. definition.Techniques.Select(t => new TechniqueState(t))];
+        _random = new Random(seed);
+        _techniques = [.. definition.Techniques.Select(t => new TechniqueState(t))];
     }
 
     sealed class EmitterState
@@ -89,7 +89,7 @@ public sealed class ParticleSimulation
         public int Count;
         public float[] X = [], Y = [], Z = [], Vx = [], Vy = [], Vz = [];
         public float[] Age = [], Life = [], Width = [], Height = [], Depth = [], Rotation = [], RotationSpeed = [];
-        public float[] R = [], G = [], B = [], A = [], ER = [], EG = [], EB = [], EA = [];
+        public float[] R = [], G = [], B = [], A = [], Er = [], Eg = [], Eb = [], Ea = [];
         public uint[] Seed = [];
         public byte[] Emitter = [];
         public float ObserverClock;
@@ -112,7 +112,7 @@ public sealed class ParticleSimulation
             Array.Resize(ref Age, n); Array.Resize(ref Life, n); Array.Resize(ref Width, n); Array.Resize(ref Height, n); Array.Resize(ref Depth, n);
             Array.Resize(ref Rotation, n); Array.Resize(ref RotationSpeed, n);
             Array.Resize(ref R, n); Array.Resize(ref G, n); Array.Resize(ref B, n); Array.Resize(ref A, n);
-            Array.Resize(ref ER, n); Array.Resize(ref EG, n); Array.Resize(ref EB, n); Array.Resize(ref EA, n);
+            Array.Resize(ref Er, n); Array.Resize(ref Eg, n); Array.Resize(ref Eb, n); Array.Resize(ref Ea, n);
             Array.Resize(ref Seed, n); Array.Resize(ref Emitter, n);
         }
 
@@ -130,7 +130,7 @@ public sealed class ParticleSimulation
             X[i] = X[last]; Y[i] = Y[last]; Z[i] = Z[last]; Vx[i] = Vx[last]; Vy[i] = Vy[last]; Vz[i] = Vz[last];
             Age[i] = Age[last]; Life[i] = Life[last]; Width[i] = Width[last]; Height[i] = Height[last]; Depth[i] = Depth[last];
             Rotation[i] = Rotation[last]; RotationSpeed[i] = RotationSpeed[last];
-            R[i] = R[last]; G[i] = G[last]; B[i] = B[last]; A[i] = A[last]; ER[i] = ER[last]; EG[i] = EG[last]; EB[i] = EB[last]; EA[i] = EA[last];
+            R[i] = R[last]; G[i] = G[last]; B[i] = B[last]; A[i] = A[last]; Er[i] = Er[last]; Eg[i] = Eg[last]; Eb[i] = Eb[last]; Ea[i] = Ea[last];
             Seed[i] = Seed[last]; Emitter[i] = Emitter[last];
         }
     }
@@ -159,7 +159,7 @@ public sealed class ParticleSimulation
     void Step(float dt, in ParticleEnvironment env)
     {
         Time += dt;
-        foreach (var t in techniques)
+        foreach (var t in _techniques)
         {
             if (!t.Def.Enabled) continue;
             t.Step++;
@@ -183,7 +183,7 @@ public sealed class ParticleSimulation
             if (!def.Enabled || def.Type is PuEmitterType.Slave or PuEmitterType.Unknown) continue;
             st.Age += dt;
             if (!Working(def, st, dt)) continue;
-            float rate = def.Rate.Evaluate(st.Age, random) * env.EmissionScale;
+            float rate = def.Rate.Evaluate(st.Age, _random) * env.EmissionScale;
             st.Accumulator += Math.Max(rate, 0) * dt;
             int n = (int)st.Accumulator;
             st.Accumulator -= n;
@@ -195,21 +195,21 @@ public sealed class ParticleSimulation
     bool Working(PuEmitterDef def, EmitterState st, float dt)
     {
         if (def.Duration is not { } duration) return true;
-        if (st.Cycle < 0) st.Cycle = Math.Max(duration.Evaluate(0, random), 0);
+        if (st.Cycle < 0) st.Cycle = Math.Max(duration.Evaluate(0, _random), 0);
         st.Clock += dt;
         if (!st.Resting)
         {
             if (st.Clock < st.Cycle) return true;
             if (def.RepeatDelay is null) { st.Cycle = float.PositiveInfinity; st.Resting = true; return false; }
             st.Clock = 0;
-            st.Cycle = Math.Max(def.RepeatDelay.Evaluate(0, random), 0);
+            st.Cycle = Math.Max(def.RepeatDelay.Evaluate(0, _random), 0);
             st.Resting = true;
             return false;
         }
         if (st.Clock >= st.Cycle)
         {
             st.Clock = 0;
-            st.Cycle = Math.Max(duration.Evaluate(0, random), 0);
+            st.Cycle = Math.Max(duration.Evaluate(0, _random), 0);
             st.Resting = false;
             return true;
         }
@@ -226,23 +226,23 @@ public sealed class ParticleSimulation
                 offset = new Vector3(Centered() * e.BoxSize.X, Centered() * e.BoxSize.Y, Centered() * e.BoxSize.Z) * scale;
                 break;
             case PuEmitterType.Circle:
-            {
-                float angle = e.EmitRandom ? random.NextSingle() * MathF.Tau : (Time / Math.Max(e.Step, 1e-3f)) % MathF.Tau;
-                offset = new Vector3(MathF.Cos(angle), 0, MathF.Sin(angle)) * (e.Radius * scale.X);
-                break;
-            }
+                {
+                    float angle = e.EmitRandom ? _random.NextSingle() * MathF.Tau : (Time / Math.Max(e.Step, 1e-3f)) % MathF.Tau;
+                    offset = new Vector3(MathF.Cos(angle), 0, MathF.Sin(angle)) * (e.Radius * scale.X);
+                    break;
+                }
             case PuEmitterType.SphereSurface:
-            {
-                float z = random.NextSingle() * 2 - 1, a = random.NextSingle() * MathF.Tau, r = MathF.Sqrt(Math.Max(1 - z * z, 0));
-                offset = new Vector3(r * MathF.Cos(a), z, r * MathF.Sin(a)) * (e.Radius * scale.X);
-                break;
-            }
+                {
+                    float z = _random.NextSingle() * 2 - 1, a = _random.NextSingle() * MathF.Tau, r = MathF.Sqrt(Math.Max(1 - z * z, 0));
+                    offset = new Vector3(r * MathF.Cos(a), z, r * MathF.Sin(a)) * (e.Radius * scale.X);
+                    break;
+                }
             case PuEmitterType.Line:
-                offset = (e.End * random.NextSingle()) * scale;
+                offset = (e.End * _random.NextSingle()) * scale;
                 break;
         }
         var direction = e.AutoDirection && offset.LengthSquared() > 1e-12f ? Vector3.Normalize(offset)
-            : Cone(e.Direction.LengthSquared() > 1e-12f ? Vector3.Normalize(e.Direction) : Vector3.UnitY, e.Angle.Evaluate(0, random));
+            : Cone(e.Direction.LengthSquared() > 1e-12f ? Vector3.Normalize(e.Direction) : Vector3.UnitY, e.Angle.Evaluate(0, _random));
         if (!Orientation.IsIdentity)
         {
             offset = Vector3.Transform(offset, Orientation);
@@ -255,13 +255,13 @@ public sealed class ParticleSimulation
             direction = new Vector3(w.X, direction.Y, w.Y);
         }
         // The emitter's attributes are read at the system's age (Verified, the plugin's _initParticleVelocity / TimeToLive / Dimensions).
-        float speed = e.Velocity.Evaluate(Time, random) * Definition.ScaleVelocity;
-        float life = Math.Max(e.Life.Evaluate(Time, random) * LifeScale, 1e-3f);
+        float speed = e.Velocity.Evaluate(Time, _random) * Definition.ScaleVelocity;
+        float life = Math.Max(e.Life.Evaluate(Time, _random) * LifeScale, 1e-3f);
         // all_particle_dimensions is one draw for the three and wins over the per-axis sizes; each per-axis one draws its own.
         float width, height, depth;
-        if (e.AllDimensions is not null) width = height = depth = e.AllDimensions.Evaluate(Time, random);
+        if (e.AllDimensions is not null) width = height = depth = e.AllDimensions.Evaluate(Time, _random);
         else if (e.Width is null && e.Height is null && e.Depth is null) (width, height, depth) = (t.Def.DefaultWidth, t.Def.DefaultHeight, t.Def.DefaultDepth);
-        else (width, height, depth) = (e.Width?.Evaluate(Time, random) ?? 0, e.Height?.Evaluate(Time, random) ?? 0, e.Depth?.Evaluate(Time, random) ?? 0);
+        else (width, height, depth) = (e.Width?.Evaluate(Time, _random) ?? 0, e.Height?.Evaluate(Time, _random) ?? 0, e.Depth?.Evaluate(Time, _random) ?? 0);
         // A size of 0 is not set (the plugin's setOwnDimensions); the game's pooled particle then keeps its last one, here the technique's default.
         if (width == 0) width = t.Def.DefaultWidth;
         if (height == 0) height = t.Def.DefaultHeight;
@@ -271,7 +271,7 @@ public sealed class ParticleSimulation
         {
             var a = e.ColourStart ?? e.Colour;
             var b = e.ColourEnd ?? e.Colour;
-            colour = Vector4.Lerp(a, b, random.NextSingle());
+            colour = Vector4.Lerp(a, b, _random.NextSingle());
         }
 
         t.Grow();
@@ -282,8 +282,8 @@ public sealed class ParticleSimulation
         t.Vx[i] = direction.X * speed; t.Vy[i] = direction.Y * speed; t.Vz[i] = direction.Z * speed;
         t.Age[i] = 0; t.Life[i] = life;
         t.Width[i] = width * scale.X * Size; t.Height[i] = height * scale.Y * Size; t.Depth[i] = depth * scale.Z * Size;
-        t.R[i] = t.ER[i] = colour.X; t.G[i] = t.EG[i] = colour.Y; t.B[i] = t.EB[i] = colour.Z; t.A[i] = t.EA[i] = colour.W;
-        t.Seed[i] = (uint)random.Next();
+        t.R[i] = t.Er[i] = colour.X; t.G[i] = t.Eg[i] = colour.Y; t.B[i] = t.Eb[i] = colour.Z; t.A[i] = t.Ea[i] = colour.W;
+        t.Seed[i] = (uint)_random.Next();
         t.Emitter[i] = (byte)emitterIndex;
         t.Rotation[i] = 0;
         t.RotationSpeed[i] = 0;
@@ -291,21 +291,21 @@ public sealed class ParticleSimulation
         {
             if (a.Type != PuAffectorType.TextureRotator || !a.Enabled || a.ExcludedEmitters.Contains(e.Name)) continue;
             // Degrees and degrees per second (Observed: the scripts use 0..360 for the start and small numbers for the speed).
-            if (a.Rotation is not null) t.Rotation[i] = a.Rotation.Evaluate(0, random) * (MathF.PI / 180);
-            if (a.RotationSpeed is not null) t.RotationSpeed[i] = a.RotationSpeed.Evaluate(0, random) * (MathF.PI / 180);
+            if (a.Rotation is not null) t.Rotation[i] = a.Rotation.Evaluate(0, _random) * (MathF.PI / 180);
+            if (a.RotationSpeed is not null) t.RotationSpeed[i] = a.RotationSpeed.Evaluate(0, _random) * (MathF.PI / 180);
             break;
         }
     }
 
-    float Centered() => random.NextSingle() - 0.5f;
+    float Centered() => _random.NextSingle() - 0.5f;
 
     /// <summary>A random direction within <paramref name="halfAngle"/> degrees of <paramref name="axis"/> (uniform over the cap).</summary>
     Vector3 Cone(Vector3 axis, float halfAngle)
     {
         if (halfAngle <= 0) return axis;
         float cos = MathF.Cos(Math.Min(halfAngle, 180) * (MathF.PI / 180));
-        float c = 1 + (cos - 1) * random.NextSingle();
-        float s = MathF.Sqrt(Math.Max(1 - c * c, 0)), phi = random.NextSingle() * MathF.Tau;
+        float c = 1 + (cos - 1) * _random.NextSingle();
+        float s = MathF.Sqrt(Math.Max(1 - c * c, 0)), phi = _random.NextSingle() * MathF.Tau;
         var helper = MathF.Abs(axis.Y) < 0.99f ? Vector3.UnitY : Vector3.UnitX;
         var u = Vector3.Normalize(Vector3.Cross(axis, helper));
         var v = Vector3.Cross(axis, u);
@@ -354,7 +354,7 @@ public sealed class ParticleSimulation
                         {
                             if (excluded?[t.Emitter[i]] == true) continue;
                             var c = Ramp(a.TimeColours, t.Age[i] / t.Life[i]);
-                            if (a.MultiplyColour) c *= new Vector4(t.ER[i], t.EG[i], t.EB[i], t.EA[i]);
+                            if (a.MultiplyColour) c *= new Vector4(t.Er[i], t.Eg[i], t.Eb[i], t.Ea[i]);
                             t.R[i] = c.X; t.G[i] = c.Y; t.B[i] = c.Z; t.A[i] = c.W;
                         }
                     });
@@ -388,125 +388,125 @@ public sealed class ParticleSimulation
                     });
                     break;
                 case PuAffectorType.LinearForce:
-                {
-                    var f = a.Force * dt;
-                    bool average = a.AverageForce;
-                    ForRange(n, (lo, hi) =>
                     {
-                        for (int i = lo; i < hi; i++)
+                        var f = a.Force * dt;
+                        bool average = a.AverageForce;
+                        ForRange(n, (lo, hi) =>
                         {
-                            if (excluded?[t.Emitter[i]] == true) continue;
-                            if (average)
+                            for (int i = lo; i < hi; i++)
                             {
-                                // "average": the velocity moves halfway towards the force vector's direction at its strength
-                                t.Vx[i] = (t.Vx[i] + a.Force.X) * 0.5f; t.Vy[i] = (t.Vy[i] + a.Force.Y) * 0.5f; t.Vz[i] = (t.Vz[i] + a.Force.Z) * 0.5f;
+                                if (excluded?[t.Emitter[i]] == true) continue;
+                                if (average)
+                                {
+                                    // "average": the velocity moves halfway towards the force vector's direction at its strength
+                                    t.Vx[i] = (t.Vx[i] + a.Force.X) * 0.5f; t.Vy[i] = (t.Vy[i] + a.Force.Y) * 0.5f; t.Vz[i] = (t.Vz[i] + a.Force.Z) * 0.5f;
+                                }
+                                else { t.Vx[i] += f.X; t.Vy[i] += f.Y; t.Vz[i] += f.Z; }
                             }
-                            else { t.Vx[i] += f.X; t.Vy[i] += f.Y; t.Vz[i] += f.Z; }
-                        }
-                    });
-                    break;
-                }
-                case PuAffectorType.Vortex:
-                {
-                    var axis = a.Axis.LengthSquared() > 1e-12f ? Vector3.Normalize(a.Axis) : Vector3.UnitY;
-                    var centre = Origin + a.Position * Definition.Scale;
-                    if (t.Def.KeepLocal) centre = a.Position * Definition.Scale;
-                    ForRange(n, (lo, hi) =>
-                    {
-                        for (int i = lo; i < hi; i++)
-                        {
-                            if (excluded?[t.Emitter[i]] == true) continue;
-                            // Rotates the particle about the axis through the affector's position, speed in radians per second (Unknown: the unit).
-                            float speed = a.RotationSpeed?.Evaluate(t.Age[i] / t.Life[i]) ?? 0;
-                            var q = Quaternion.CreateFromAxisAngle(axis, speed * dt);
-                            var p = Vector3.Transform(new Vector3(t.X[i], t.Y[i], t.Z[i]) - centre, q) + centre;
-                            t.X[i] = p.X; t.Y[i] = p.Y; t.Z[i] = p.Z;
-                            var v = Vector3.Transform(new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]), q);
-                            t.Vx[i] = v.X; t.Vy[i] = v.Y; t.Vz[i] = v.Z;
-                        }
-                    });
-                    break;
-                }
-                case PuAffectorType.Gravity:
-                {
-                    // Attracts towards the affector's position (Unknown: the strength law; here g / max(d, 1)).
-                    var centre = (t.Def.KeepLocal ? Vector3.Zero : Origin) + a.Position * Definition.Scale;
-                    float g = a.Strength?.Evaluate(0) ?? 0;
-                    ForRange(n, (lo, hi) =>
-                    {
-                        for (int i = lo; i < hi; i++)
-                        {
-                            if (excluded?[t.Emitter[i]] == true) continue;
-                            var d = centre - new Vector3(t.X[i], t.Y[i], t.Z[i]);
-                            float len = Math.Max(d.Length(), 1);
-                            var dv = d / len * (g / len) * dt;
-                            t.Vx[i] += dv.X; t.Vy[i] += dv.Y; t.Vz[i] += dv.Z;
-                        }
-                    });
-                    break;
-                }
-                case PuAffectorType.Jet:
-                {
-                    float acc = a.Strength?.Evaluate(0) ?? 0;
-                    ForRange(n, (lo, hi) =>
-                    {
-                        for (int i = lo; i < hi; i++)
-                        {
-                            if (excluded?[t.Emitter[i]] == true) continue;
-                            var v = new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]);
-                            float len = v.Length();
-                            if (len < 1e-4f) continue;
-                            v += v / len * acc * dt;
-                            t.Vx[i] = v.X; t.Vy[i] = v.Y; t.Vz[i] = v.Z;
-                        }
-                    });
-                    break;
-                }
-                case PuAffectorType.SineForce:
-                {
-                    // force_vector · sin(2π f t) with f between min and max frequency by the particle's own seed (Unknown: the exact form).
-                    float tt = Time;
-                    ForRange(n, (lo, hi) =>
-                    {
-                        for (int i = lo; i < hi; i++)
-                        {
-                            if (excluded?[t.Emitter[i]] == true) continue;
-                            float f = a.MinFrequency + (a.MaxFrequency - a.MinFrequency) * Hash01(t.Seed[i]);
-                            var dv = a.Force * (MathF.Sin(MathF.Tau * f * tt) * dt);
-                            t.Vx[i] += dv.X; t.Vy[i] += dv.Y; t.Vz[i] += dv.Z;
-                        }
-                    });
-                    break;
-                }
-                case PuAffectorType.Randomiser:
-                {
-                    // Every time_step seconds (each step when 0) the particle's position is nudged by a random amount up to ± max_deviation
-                    // per axis; a step shorter than 1/60 s is scaled to it, so the drift does not depend on the frame rate (Observed: the
-                    // scripts' small deviations make a falling flake flutter; the plugin's exact rule is Unknown).
-                    float stepTime = a.TimeStep;
-                    float scale = 1;
-                    if (stepTime > 0)
-                    {
-                        t.RandomiserClock[k] += dt;
-                        if (t.RandomiserClock[k] < stepTime) break;
-                        t.RandomiserClock[k] -= stepTime;
+                        });
+                        break;
                     }
-                    else scale = Math.Min(dt * 60, 4);
-                    uint step = t.Step * 2654435761u + (uint)k * 40503u;
-                    var dev = a.MaxDeviation * scale;
-                    ForRange(n, (lo, hi) =>
+                case PuAffectorType.Vortex:
                     {
-                        for (int i = lo; i < hi; i++)
+                        var axis = a.Axis.LengthSquared() > 1e-12f ? Vector3.Normalize(a.Axis) : Vector3.UnitY;
+                        var centre = Origin + a.Position * Definition.Scale;
+                        if (t.Def.KeepLocal) centre = a.Position * Definition.Scale;
+                        ForRange(n, (lo, hi) =>
                         {
-                            if (excluded?[t.Emitter[i]] == true) continue;
-                            uint s = t.Seed[i] ^ step;
-                            t.X[i] += (Hash01(s * 3 + 1) * 2 - 1) * dev.X;
-                            t.Y[i] += (Hash01(s * 3 + 2) * 2 - 1) * dev.Y;
-                            t.Z[i] += (Hash01(s * 3 + 3) * 2 - 1) * dev.Z;
+                            for (int i = lo; i < hi; i++)
+                            {
+                                if (excluded?[t.Emitter[i]] == true) continue;
+                                // Rotates the particle about the axis through the affector's position, speed in radians per second (Unknown: the unit).
+                                float speed = a.RotationSpeed?.Evaluate(t.Age[i] / t.Life[i]) ?? 0;
+                                var q = Quaternion.CreateFromAxisAngle(axis, speed * dt);
+                                var p = Vector3.Transform(new Vector3(t.X[i], t.Y[i], t.Z[i]) - centre, q) + centre;
+                                t.X[i] = p.X; t.Y[i] = p.Y; t.Z[i] = p.Z;
+                                var v = Vector3.Transform(new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]), q);
+                                t.Vx[i] = v.X; t.Vy[i] = v.Y; t.Vz[i] = v.Z;
+                            }
+                        });
+                        break;
+                    }
+                case PuAffectorType.Gravity:
+                    {
+                        // Attracts towards the affector's position (Unknown: the strength law; here g / max(d, 1)).
+                        var centre = (t.Def.KeepLocal ? Vector3.Zero : Origin) + a.Position * Definition.Scale;
+                        float g = a.Strength?.Evaluate(0) ?? 0;
+                        ForRange(n, (lo, hi) =>
+                        {
+                            for (int i = lo; i < hi; i++)
+                            {
+                                if (excluded?[t.Emitter[i]] == true) continue;
+                                var d = centre - new Vector3(t.X[i], t.Y[i], t.Z[i]);
+                                float len = Math.Max(d.Length(), 1);
+                                var dv = d / len * (g / len) * dt;
+                                t.Vx[i] += dv.X; t.Vy[i] += dv.Y; t.Vz[i] += dv.Z;
+                            }
+                        });
+                        break;
+                    }
+                case PuAffectorType.Jet:
+                    {
+                        float acc = a.Strength?.Evaluate(0) ?? 0;
+                        ForRange(n, (lo, hi) =>
+                        {
+                            for (int i = lo; i < hi; i++)
+                            {
+                                if (excluded?[t.Emitter[i]] == true) continue;
+                                var v = new Vector3(t.Vx[i], t.Vy[i], t.Vz[i]);
+                                float len = v.Length();
+                                if (len < 1e-4f) continue;
+                                v += v / len * acc * dt;
+                                t.Vx[i] = v.X; t.Vy[i] = v.Y; t.Vz[i] = v.Z;
+                            }
+                        });
+                        break;
+                    }
+                case PuAffectorType.SineForce:
+                    {
+                        // force_vector · sin(2π f t) with f between min and max frequency by the particle's own seed (Unknown: the exact form).
+                        float tt = Time;
+                        ForRange(n, (lo, hi) =>
+                        {
+                            for (int i = lo; i < hi; i++)
+                            {
+                                if (excluded?[t.Emitter[i]] == true) continue;
+                                float f = a.MinFrequency + (a.MaxFrequency - a.MinFrequency) * Hash01(t.Seed[i]);
+                                var dv = a.Force * (MathF.Sin(MathF.Tau * f * tt) * dt);
+                                t.Vx[i] += dv.X; t.Vy[i] += dv.Y; t.Vz[i] += dv.Z;
+                            }
+                        });
+                        break;
+                    }
+                case PuAffectorType.Randomiser:
+                    {
+                        // Every time_step seconds (each step when 0) the particle's position is nudged by a random amount up to ± max_deviation
+                        // per axis; a step shorter than 1/60 s is scaled to it, so the drift does not depend on the frame rate (Observed: the
+                        // scripts' small deviations make a falling flake flutter; the plugin's exact rule is Unknown).
+                        float stepTime = a.TimeStep;
+                        float scale = 1;
+                        if (stepTime > 0)
+                        {
+                            t.RandomiserClock[k] += dt;
+                            if (t.RandomiserClock[k] < stepTime) break;
+                            t.RandomiserClock[k] -= stepTime;
                         }
-                    });
-                    break;
-                }
+                        else scale = Math.Min(dt * 60, 4);
+                        uint step = t.Step * 2654435761u + (uint)k * 40503u;
+                        var dev = a.MaxDeviation * scale;
+                        ForRange(n, (lo, hi) =>
+                        {
+                            for (int i = lo; i < hi; i++)
+                            {
+                                if (excluded?[t.Emitter[i]] == true) continue;
+                                uint s = t.Seed[i] ^ step;
+                                t.X[i] += (Hash01(s * 3 + 1) * 2 - 1) * dev.X;
+                                t.Y[i] += (Hash01(s * 3 + 2) * 2 - 1) * dev.Y;
+                                t.Z[i] += (Hash01(s * 3 + 3) * 2 - 1) * dev.Z;
+                            }
+                        });
+                        break;
+                    }
             }
         }
     }
@@ -562,7 +562,7 @@ public sealed class ParticleSimulation
     /// <summary>Moves every world-space particle by <paramref name="delta"/> (re-basing the simulation's coordinates; the caller shifts <see cref="Origin"/> alike).</summary>
     public void Translate(Vector3 delta)
     {
-        foreach (var t in techniques)
+        foreach (var t in _techniques)
         {
             if (t.Def.KeepLocal) continue;
             for (int i = 0; i < t.Count; i++) { t.X[i] += delta.X; t.Y[i] += delta.Y; t.Z[i] += delta.Z; }
@@ -578,7 +578,7 @@ public sealed class ParticleSimulation
     public void Wrap(Vector3 centre, float halfExtent)
     {
         float edge = halfExtent * 2;
-        foreach (var t in techniques)
+        foreach (var t in _techniques)
         {
             if (t.Def.KeepLocal) continue;
             for (int i = 0; i < t.Count; i++)
@@ -601,7 +601,7 @@ public sealed class ParticleSimulation
     {
         float r2 = radius * radius, far2 = r2 * 1.5f;
         var shift = ahead * (radius * 1.5f);
-        foreach (var t in techniques)
+        foreach (var t in _techniques)
         {
             if (t.Def.KeepLocal) continue;
             for (int i = 0; i < t.Count; i++)
@@ -639,7 +639,7 @@ public sealed class ParticleSimulation
     /// still moves every frame).</param>
     public int Collect(int index, Span<ParticleInstance> destination, Vector3 tint, float alpha, Vector3 worldOffset = default, float ahead = 0)
     {
-        var t = techniques[index];
+        var t = _techniques[index];
         int n = Math.Min(t.Count, destination.Length);
         var offset = (t.Def.KeepLocal ? Origin : Vector3.Zero) + worldOffset;
         for (int i = 0; i < n; i++)
@@ -651,25 +651,27 @@ public sealed class ParticleSimulation
                 Position = new Vector3(t.X[i], t.Y[i], t.Z[i]) + offset + v * ahead,
                 Rotation = t.Rotation[i],
                 Direction = len > 1e-4f ? v / len : Vector3.Zero,
-                Width = t.Width[i], Height = t.Height[i], Depth = t.Depth[i],
+                Width = t.Width[i],
+                Height = t.Height[i],
+                Depth = t.Depth[i],
                 Colour = new Vector4(t.R[i] * tint.X, t.G[i] * tint.Y, t.B[i] * tint.Z, t.A[i] * alpha),
             };
         }
         return n;
     }
 
-    public int TechniqueParticleCount(int index) => techniques[index].Count;
+    public int TechniqueParticleCount(int index) => _techniques[index].Count;
 
     /// <summary>Particle positions of a technique (for tests): copies of x, y, z.</summary>
     public (float[] X, float[] Y, float[] Z) Positions(int index)
     {
-        var t = techniques[index];
+        var t = _techniques[index];
         return (t.X[..t.Count], t.Y[..t.Count], t.Z[..t.Count]);
     }
 
     public (float[] Age, float[] Life) Ages(int index)
     {
-        var t = techniques[index];
+        var t = _techniques[index];
         return (t.Age[..t.Count], t.Life[..t.Count]);
     }
 

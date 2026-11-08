@@ -138,7 +138,7 @@ public sealed class RaceData
         var anatomy = new List<AnatomyEntry>();
         foreach (var reference in r.GetReferences("combat anatomy"))
         {
-            if (db.Find(reference.TargetStringId) is not { Type: Fcs.FcsRecordType.LOCATIONAL_DAMAGE } part) continue;
+            if (db.Find(reference.TargetStringId) is not { Type: Fcs.FcsRecordType.LocationalDamage } part) continue;
             float hp = reference.Values.Value1;
             anatomy.Add(new AnatomyEntry(BodyPartTemplate.From(part), reference.Values.Value0, hp < 1 ? 100 : hp));
         }

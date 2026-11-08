@@ -39,9 +39,9 @@ public sealed partial class WorldObjectRenderer
     }
 
     // By placement, part and pivot (a part record used twice in one building is two parts).
-    readonly Dictionary<(string Placement, string Part, Vector3 Pivot), RotorState> rotors = [];
-    readonly List<(string, string, Vector3)> rotorsGone = [];
-    long rotorFrame;
+    readonly Dictionary<(string Placement, string Part, Vector3 Pivot), RotorState> _rotors = [];
+    readonly List<(string, string, Vector3)> _rotorsGone = [];
+    long _rotorFrame;
 
     /// <summary>
     /// One frame of every part's turning by <paramref name="dt"/> game seconds (0 while paused; <c>RotatingEnt::update</c> with the frame time <c>DAT_142133798</c>, <b>Verified</b>):
@@ -50,11 +50,11 @@ public sealed partial class WorldObjectRenderer
     /// </summary>
     public void AdvanceRotors(float dt)
     {
-        rotorFrame++;
-        rotorsGone.Clear();
-        foreach (var (key, r) in rotors)
+        _rotorFrame++;
+        _rotorsGone.Clear();
+        foreach (var (key, r) in _rotors)
         {
-            if (rotorFrame - r.Seen > RotorKeepFrames) { rotorsGone.Add(key); continue; }
+            if (_rotorFrame - r.Seen > RotorKeepFrames) { _rotorsGone.Add(key); continue; }
             if (RotorUnbuilt?.Invoke(r.Placed) == true) continue;
             var spec = r.Spec;
             if (spec.Function == RotorSpec.WindDirection) { StepHead(r, dt); continue; }
@@ -68,7 +68,7 @@ public sealed partial class WorldObjectRenderer
             r.Angle = MathF.IEEERemainder(r.Angle + speed * dt, MathF.Tau);
             r.Moved = true;
         }
-        foreach (var key in rotorsGone) rotors.Remove(key);
+        foreach (var key in _rotorsGone) _rotors.Remove(key);
     }
 
     /// <summary>
@@ -101,9 +101,9 @@ public sealed partial class WorldObjectRenderer
     {
         var spec = joint.Rotor!;
         var key = (placed.PlacementId, joint.PartId, joint.Pivot);
-        if (!rotors.TryGetValue(key, out var r))
-            rotors[key] = r = new RotorState(spec, placed, joint.Pivot) { Angle = spec.Function == RotorSpec.WindDirection ? spec.Start : 0, Seen = rotorFrame };
-        r.Seen = rotorFrame;
+        if (!_rotors.TryGetValue(key, out var r))
+            _rotors[key] = r = new RotorState(spec, placed, joint.Pivot) { Angle = spec.Function == RotorSpec.WindDirection ? spec.Start : 0, Seen = _rotorFrame };
+        r.Seen = _rotorFrame;
         bool shown = r.Moved || spec.Function == RotorSpec.WindDirection;
         return shown ? r.Angle - spec.Start : 0;
     }

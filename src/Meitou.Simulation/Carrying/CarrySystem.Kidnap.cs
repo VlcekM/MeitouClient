@@ -20,7 +20,7 @@ public sealed partial class CarrySystem
     /// <summary>Asleep (the original's state 1): in a bed, or resting with the sleep behaviour; awake otherwise, and never when down.</summary>
     public static bool Asleep(CharacterTable table, int slot) =>
         table.Cold(slot) is { Medical.Incapacitated: false } c
-        && (c.InSomething == Locks.HeldState.Bed || table.Next[slot].Task == (byte)CharacterTask.Rest && c.Ai?.Behaviour == Ai.AiBehaviour.Sleep);
+        && (c.InSomething == Locks.HeldState.Bed || table.Next[slot].Task == (byte)CharacterTask.Rest && c.Ai?.Behaviour == AiBehaviour.Sleep);
 
     /// <summary>A sleeping character a kidnap may go for: of a <c>carriable</c> race, free, not carried.</summary>
     public static bool CanBeKidnapped(CharacterTable table, int slot) =>
@@ -36,7 +36,7 @@ public sealed partial class CarrySystem
     {
         if (CharacterFacts.Down(target) && !CharacterFacts.GettingUp(target, tick)) return 100;
         if (kidnapper.Stats is not { } a || target.Stats is not { } t) return 0;
-        float Skill(CharacterCold c, CharacterStats s, StatsEnumerated stat) => s[stat] * (c.Medical?.StatMultiplier(stat) ?? 1) * Combat.CombatSystem.GearFactor(c, stat);
+        static float Skill(CharacterCold c, CharacterStats s, StatsEnumerated stat) => s[stat] * (c.Medical?.StatMultiplier(stat) ?? 1) * Combat.CombatSystem.GearFactor(c, stat);
         float defence = Skill(target, t, StatsEnumerated.Assassination);
         defence = MathF.Max(defence, Skill(target, t, StatsEnumerated.Thieving) * 0.5f);
         defence = MathF.Max(defence, Orders.Stealth(target) * 100 * 0.5f);
@@ -68,7 +68,7 @@ public sealed partial class CarrySystem
         // A miss always trains assassination by 300; a hit by 100 only on a victim neither out nor dead (the branch that knocks it out, FUN_14034ffa0).
         void Train(float amount)
         {
-            if (cold.Stats is { } stats && cold.Race is { } race) (xp ??= new XpService(Constants, bodyOptions)).Continuous(stats, race, StatsEnumerated.Assassination, 1, amount);
+            if (cold.Stats is { } stats && cold.Race is { } race) (_xp ??= new XpService(Constants, _bodyOptions)).Continuous(stats, race, StatsEnumerated.Assassination, 1, amount);
         }
         if (success)
         {
@@ -96,7 +96,7 @@ public sealed partial class CarrySystem
         if (asleep)
         {
             if (victim.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, victimId);
-            TaskStart.Become(world, b, CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.IDLE, TaskSource.Reaction);
+            TaskStart.Become(world, b, CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.Idle, TaskSource.Reaction);
             if (decides)
             {
                 victim.OrderQueue.Clear();   // order 116 Getting out of bed replaces the whole queue (FUN_1405d20d0, clear flag 1)

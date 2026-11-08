@@ -18,13 +18,13 @@ namespace Meitou.Simulation.Ai;
 public sealed partial class AiSystem
 {
     // Resolved in the serial step, read by the think (null before the first tick: no finder finds anything).
-    AggroSystem? aggro;
+    AggroSystem? _aggro;
 
     // Set by a think that asked for a fight (AiMind.FightTarget).
-    int fighting;
+    int _fighting;
 
     /// <summary>Whether a combat goal defends someone (its plan row is 13 Attacking attackers of, a defence) rather than attacking (row 4 / 16).</summary>
-    static bool Protects(TaskType type) => type is TaskType.PROTECT_OWN_SQUAD or TaskType.PROTECT_ALLIES or TaskType.PROTECT_ALLIES_STAY_IN_TOWN;
+    static bool Protects(TaskType type) => type is TaskType.ProtectOwnSquad or TaskType.ProtectAllies or TaskType.ProtectAlliesStayInTown;
 
     /// <summary>
     /// A combat goal's desire before its finder (docs/game/ai-tasks.md "Combat goals" and "Desire and commitment"): 16 <c>scoreAttackEnemies</c> is 0 while Passive, sneaking outside a fight or
@@ -39,10 +39,10 @@ public sealed partial class AiSystem
         bool passive = (cold.Orders & CharacterOrders.Passive) != 0, sneaking = (cold.Orders & CharacterOrders.Sneak) != 0 && !cold.InCombat;
         return type switch
         {
-            TaskType.ATTACK_ENEMIES => passive || sneaking || medical.Prone ? 0 : 1,
-            TaskType.PROTECT_ALLIES or TaskType.PROTECT_ALLIES_STAY_IN_TOWN => passive || sneaking || cold.SlaveState == 1 && cold.SlaveMaster >= 0 ? 0 : ProtectScan(world, slot, type, mind).First * (cold.Carrying.IsNone ? 1 : 0.5f),
+            TaskType.AttackEnemies => passive || sneaking || medical.Prone ? 0 : 1,
+            TaskType.ProtectAllies or TaskType.ProtectAlliesStayInTown => passive || sneaking || cold.SlaveState == 1 && cold.SlaveMaster >= 0 ? 0 : ProtectScan(world, slot, type, mind).First * (cold.Carrying.IsNone ? 1 : 0.5f),
             // 41's desire is the constant 2 (AI slot 0x178, FUN_1406415d0, Verified): the slave's Slave list weighs it above the other fighting goals.
-            TaskType.ATTACK_ENEMIES_OF_MY_SLAVEMASTER => MasterDesire,
+            TaskType.AttackEnemiesOfMySlavemaster => MasterDesire,
             _ => 1,
         };
     }
@@ -60,12 +60,12 @@ public sealed partial class AiSystem
         if (Protects(type)) return ProtectPick(world, slot, type, mind, pending: pending);
         var foe = type switch
         {
-            TaskType.SELF_PRESERVATION => SelfDefencePick(world, slot, pending),
-            TaskType.ATTACK_ENEMIES => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.Enemies, pending),
-            TaskType.ATTACK_ENEMIES_AND_NEUTRALS => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.EnemiesAndNeutrals, pending),
-            TaskType.TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.Territory, pending),
-            TaskType.ATTACK_TROUBLE_MAKERS => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.TroubleMakers, pending),
-            TaskType.ATTACK_ENEMIES_OF_MY_SLAVEMASTER => aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.MasterEnemies, pending),
+            TaskType.SelfPreservation => SelfDefencePick(world, slot, pending),
+            TaskType.AttackEnemies => _aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.Enemies, pending),
+            TaskType.AttackEnemiesAndNeutrals => _aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.EnemiesAndNeutrals, pending),
+            TaskType.TerritorialAggressionButDontLeaveHome => _aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.Territory, pending),
+            TaskType.AttackTroubleMakers => _aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.TroubleMakers, pending),
+            TaskType.AttackEnemiesOfMySlavemaster => _aggro?.FindFoe(world, slot, AggroSystem.FoeFinder.MasterEnemies, pending),
             _ => null,
         } ?? CharacterId.None;
         if (!foe.IsNone && AttacksThroughRow(type) && AttackRowBlocked(world, slot, foe)) return (0, CharacterId.None);
@@ -73,7 +73,7 @@ public sealed partial class AiSystem
     }
 
     /// <summary>The attack goals whose plan is the melee row (4 Attacking, or 227 for an animal): 16, 21, 144 and 34 (docs/game/ai-tasks.md "Combat goals").</summary>
-    static bool AttacksThroughRow(TaskType type) => type is TaskType.ATTACK_ENEMIES or TaskType.ATTACK_ENEMIES_AND_NEUTRALS or TaskType.TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME or TaskType.ATTACK_TROUBLE_MAKERS;
+    static bool AttacksThroughRow(TaskType type) => type is TaskType.AttackEnemies or TaskType.AttackEnemiesAndNeutrals or TaskType.TerritorialAggressionButDontLeaveHome or TaskType.AttackTroubleMakers;
 
     /// <summary>
     /// The reaches of the states <c>isWithin10Meters</c> (40) and <c>isWithin50Meters</c> (41): world units are decimetres, so 100 and 500 (the exe's literals, docs/game/ai-tasks.md "States").
@@ -104,7 +104,7 @@ public sealed partial class AiSystem
         if (mind.Goal?.Task.Type == type && world.Characters.Cold(slot) is { InCombat: true } cold && OwnsFight(cold, mind))
         {
             if (Protects(type)) return ProtectPick(world, slot, type, mind, attacker: false).Factor;
-            if (aggro?.SensesOf(slot) is { Enemies: > 0 }) return 1;
+            if (_aggro?.SensesOf(slot) is { Enemies: > 0 }) return 1;
         }
         return FightPick(world, slot, type, mind).Factor;
     }
@@ -116,10 +116,10 @@ public sealed partial class AiSystem
     /// </summary>
     float SelfPreservationDesire(World world, int slot, AiMind mind)
     {
-        if ((ThreatSource ?? combat) is not { } source) return 0;
+        if ((ThreatSource ?? _combat) is not { } source) return 0;
         float level = source.ThreatLevel(world, slot, out _);
         if (level > 0) return level;
-        return mind.Goal?.Task.Type == TaskType.SELF_PRESERVATION && world.Characters.Cold(slot) is { InCombat: true } cold && OwnsFight(cold, mind) && source.Threatened(world, slot)
+        return mind.Goal?.Task.Type == TaskType.SelfPreservation && world.Characters.Cold(slot) is { InCombat: true } cold && OwnsFight(cold, mind) && source.Threatened(world, slot)
             ? SelfPreservation.Attacking : 0;
     }
 
@@ -132,7 +132,7 @@ public sealed partial class AiSystem
     internal CharacterId SelfDefencePick(World world, int slot, IReadOnlyDictionary<int, int>? pending = null)
     {
         var table = world.Characters;
-        if ((ThreatSource ?? combat) is not { } source || table.Cold(slot) is not { Fighter.CanAttack: true, Medical.Crawling: false } cold) return CharacterId.None;
+        if ((ThreatSource ?? _combat) is not { } source || table.Cold(slot) is not { Fighter.CanAttack: true, Medical.Crawling: false } cold) return CharacterId.None;
         int foe = source.BestAttackerOf(world, slot, slot, pending);
         if (foe < 0) return CharacterId.None;
         var id = new CharacterId(foe, table.Previous[foe].Generation);
@@ -144,7 +144,7 @@ public sealed partial class AiSystem
     {
         mind.FightTarget = FightPick(world, slot, type, mind).Target;
         mind.FightGoal = type;
-        if (!mind.FightTarget.IsNone) Interlocked.Exchange(ref fighting, 1);
+        if (!mind.FightTarget.IsNone) Interlocked.Exchange(ref _fighting, 1);
     }
 
     /// <summary>
@@ -161,10 +161,10 @@ public sealed partial class AiSystem
     {
         var table = world.Characters;
         var prev = table.Previous;
-        if (combat is not { } fights || aggro is not { } look || look.SensesOf(slot) is not { } senses || table.Cold(slot) is not { } me) return (-1, 0, 0);
+        if (_combat is not { } fights || _aggro is not { } look || look.SensesOf(slot) is not { } senses || table.Cold(slot) is not { } me) return (-1, 0, 0);
         int best = -1;
         float value = 0, first = 0;
-        if (type == TaskType.PROTECT_OWN_SQUAD)
+        if (type == TaskType.ProtectOwnSquad)
         {
             foreach (var m in mind.Squad.Members)
             {
@@ -189,7 +189,7 @@ public sealed partial class AiSystem
     /// looker senses now, that are not down and below slave state 2, valued at their fight threat x 0.1 (<c>DAT_14167fad0</c>), not those whose own target is an ally of the looker
     /// (<c>FUN_140998790</c>, relation 50). The best, the first above 0 for the desire's stop-at-first call.
     /// </summary>
-    (int Best, float Value, float First) OwnedScan(World world, int slot, AiMind mind, Combat.CombatSystem fights, AggroSystem look, SenseBlock senses)
+    (int Best, float Value, float First) OwnedScan(World world, int slot, AiMind mind, CombatSystem fights, AggroSystem look, SenseBlock senses)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -211,7 +211,7 @@ public sealed partial class AiSystem
     /// 143's fallback when no squad mate scores (<c>FUN_14099d510</c>, <b>Verified</b>): the looker's Ownerships list, the characters the looker senses now (no state or down filter, unlike 15 / 288's
     /// <see cref="OwnedScan"/>), by their fight threat x 0.1 (<see cref="OwnedFactor"/>); the best (the first on a tie), the first above 0 for the stop-at-first call.
     /// </summary>
-    (int Best, float Value, float First) OwnedFallback(World world, int slot, AiMind mind, Combat.CombatSystem fights, AggroSystem look, SenseBlock senses)
+    (int Best, float Value, float First) OwnedFallback(World world, int slot, AiMind mind, CombatSystem fights, AggroSystem look, SenseBlock senses)
     {
         var table = world.Characters;
         var prev = table.Previous;
@@ -234,7 +234,7 @@ public sealed partial class AiSystem
     /// <summary>Whether the character in <paramref name="owned"/> fights someone whose faction is the looker's or its ally (relation 50; <c>FUN_140998790</c> over <c>FUN_1406b2630</c>).</summary>
     bool TargetsAnAlly(World world, int looker, int owned)
     {
-        var fights = combat;
+        var fights = _combat;
         var id = new CharacterId(owned, world.Characters.Previous[owned].Generation);
         if (fights?.TargetOf(owned, id.Generation) is not { Slot: >= 0 } t || (uint)t.Slot >= (uint)world.Characters.HighWater || world.Characters.Cold(t.Slot) is not { } target
             || world.Characters.Cold(looker) is not { } me) return false;
@@ -251,10 +251,10 @@ public sealed partial class AiSystem
     {
         var (best, value, _) = ProtectScan(world, slot, type, mind);
         var prev = world.Characters.Previous;
-        if (best < 0 || combat is not { } fights) return (0, CharacterId.None);
-        if (!attacker) return (MathF.Min(value, Combat.CombatSystem.ProtectCap), CharacterId.None);
+        if (best < 0 || _combat is not { } fights) return (0, CharacterId.None);
+        if (!attacker) return (MathF.Min(value, CombatSystem.ProtectCap), CharacterId.None);
         int foe = fights.BestAttackerOf(world, best, slot, pending);
-        return foe < 0 ? (0, CharacterId.None) : (MathF.Min(value, Combat.CombatSystem.ProtectCap), new CharacterId(foe, prev[foe].Generation));
+        return foe < 0 ? (0, CharacterId.None) : (MathF.Min(value, CombatSystem.ProtectCap), new CharacterId(foe, prev[foe].Generation));
     }
 
     /// <summary>
@@ -265,7 +265,7 @@ public sealed partial class AiSystem
     internal bool AlliesFighting(World world, int slot)
     {
         var prev = world.Characters.Previous;
-        if (combat is not { } fights || aggro is not { } look || look.SensesOf(slot) is not { } senses) return false;
+        if (_combat is not { } fights || _aggro is not { } look || look.SensesOf(slot) is not { } senses) return false;
         foreach (var e in senses.Entries)
         {
             int a = e.Target;
@@ -287,7 +287,7 @@ public sealed partial class AiSystem
     void SendFights(World world)
     {
         var table = world.Characters;
-        pendingFights.Clear();
+        _pendingFights.Clear();
         for (int s = 0; s < table.HighWater; s++)
         {
             if (table.Cold(s) is not { Ai: { } mind } cold || mind.FightTarget.IsNone) continue;
@@ -295,21 +295,21 @@ public sealed partial class AiSystem
             var goal = mind.FightGoal;
             mind.FightTarget = CharacterId.None;
             if (!table.Next[s].Alive || cold.InCombat) continue;
-            if (pendingFights.Count > 0 && FightPick(world, s, goal, mind, pendingFights).Target is { IsNone: false } again) foe = again;
+            if (_pendingFights.Count > 0 && FightPick(world, s, goal, mind, _pendingFights).Target is { IsNone: false } again) foe = again;
             if (!table.TryResolveNext(foe, out int f) || table.Cold(f) is not { Medical.Incapacitated: false }) continue;
-            bool self = goal == TaskType.SELF_PRESERVATION, protects = self || Protects(goal);
+            bool self = goal == TaskType.SelfPreservation, protects = self || Protects(goal);
             world.Defer(new AttackOrder([table.IdOf(s)], foe) { Tick = world.Tick + 1, Source = TaskSource.Goal, Defensive = protects });
             mind.FightFrom = world.Tick + 1;
-            pendingFights[f] = pendingFights.GetValueOrDefault(f) + 1;
+            _pendingFights[f] = _pendingFights.GetValueOrDefault(f) + 1;
             // A self-defence is no combat goal's fight: not in the aggro log.
-            if (!self) aggro?.GoalFight(world, s, f, voice: !protects);
+            if (!self) _aggro?.GoalFight(world, s, f, voice: !protects);
             foreach (var m in mind.Squad.Members)
                 if (m.Slot != s && table.TryResolveNext(m, out int ms) && table.Cold(ms) is { InCombat: false, Ai: { } mate }) mate.Replan = true;
         }
     }
 
     // The targets of the fights SendFights started in its pass, with how many (derived, not hashed).
-    readonly Dictionary<int, int> pendingFights = [];
+    readonly Dictionary<int, int> _pendingFights = [];
 
     /// <summary>
     /// Ends the fights whose fighter's think chose a goal that is no fight (<see cref="InFight"/>; serial, slot order): the fight task ends as any task's start ends it (<see cref="TaskStart.Become"/>,
@@ -322,7 +322,7 @@ public sealed partial class AiSystem
         {
             if (table.Cold(s) is not { Ai: { LeaveFight: true } mind } cold) continue;
             mind.LeaveFight = false;
-            if (table.Next[s].Alive && cold.InCombat) TaskStart.Become(world, s, CharacterTask.Idle, TaskType.IDLE, TaskSource.Goal);
+            if (table.Next[s].Alive && cold.InCombat) TaskStart.Become(world, s, CharacterTask.Idle, TaskType.Idle, TaskSource.Goal);
             mind.Replan = true;
         }
     }

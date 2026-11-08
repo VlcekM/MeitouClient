@@ -15,32 +15,32 @@ sealed class ModsPage(SettingsMenu menu)
     /// <summary>Most issue lines the text area shows; Copy takes them all.</summary>
     const int ModIssueCap = 200;
 
-    int modsSelected = -1;
-    internal float modsDetailScroll;
+    int _modsSelected = -1;
+    internal float ModsDetailScroll;
 
     /// <summary>The text area under the list (and its Copy buttons), in pixels.</summary>
-    internal UiRect ModsDetail => menu.canvas.R(212, 440, 888, 226);
+    internal UiRect ModsDetail => menu.Canvas.R(212, 440, 888, 226);
 
     /// <summary>The summary line under the version text, left of the page buttons' divider; a click opens the MODS page.</summary>
     internal void DrawModsSummary()
     {
-        if (menu.player.titleMenu.Mods is not { } mods) return;
-        var at = menu.canvas.R(28, 646, 160, 16);
-        bool lit = at.Contains(menu.pointer.X, menu.pointer.Y) || menu.page == SettingsMenu.ModsPageIndex;
+        if (menu.Player.TitleMenu.Mods is not { } mods) return;
+        var at = menu.Canvas.R(28, 646, 160, 16);
+        bool lit = at.Contains(menu.Pointer.X, menu.Pointer.Y) || menu.Page == SettingsMenu.ModsPageIndex;
         var ink = lit ? SettingsCanvas.LightInk : mods.Problems > 0 ? SettingsCanvas.Brass : SettingsCanvas.MutedInk;
-        menu.canvas.Text(mods.Summary, at, 10, ink, translate: false);
-        menu.hits.Add(new(at, () => menu.Navigate(SettingsMenu.ModsPageIndex)));
+        menu.Canvas.Text(mods.Summary, at, 10, ink, translate: false);
+        menu.Hits.Add(new(at, () => menu.Navigate(SettingsMenu.ModsPageIndex)));
     }
 
     internal void DrawMods()
     {
-        var report = menu.player.titleMenu.Mods;
+        var report = menu.Player.TitleMenu.Mods;
         var rows = report?.Rows ?? [];
         var lines = ModsLines(rows);
-        menu.viewport = menu.canvas.R(212, 98, 888, 296);
-        menu.maxScroll = Math.Max(0, lines.Sum(LineHeight) * menu.scale - menu.viewport.Height);
-        menu.motion.AdvanceScroll();
-        float y = 98 - menu.scroll / menu.scale;
+        menu.Viewport = menu.Canvas.R(212, 98, 888, 296);
+        menu.MaxScroll = Math.Max(0, lines.Sum(LineHeight) * menu.Scale - menu.Viewport.Height);
+        menu.Motion.AdvanceScroll();
+        float y = 98 - menu.ScrollOffset / menu.Scale;
         foreach (var line in lines)
         {
             float height = LineHeight(line);
@@ -48,12 +48,12 @@ sealed class ModsPage(SettingsMenu menu)
             y += height;
         }
 
-        menu.canvas.Button("Copy", menu.canvas.R(212, 402, 120, 28), CopyMod);
-        menu.canvas.Button("Copy all problems", menu.canvas.R(340, 402, 200, 28), CopyProblems);
+        menu.Canvas.Button("Copy", menu.Canvas.R(212, 402, 120, 28), CopyMod);
+        menu.Canvas.Button("Copy all problems", menu.Canvas.R(340, 402, 200, 28), CopyProblems);
         DrawModsDetail(report);
     }
 
-    float LineHeight(ModsLine line) => line.Entry is { } entry ? menu.canvas.EntryHeight(entry) : ModRowHeight;
+    float LineHeight(ModsLine line) => line.Entry is { } entry ? menu.Canvas.EntryHeight(entry) : ModRowHeight;
 
     void DrawModsLine(IReadOnlyList<ModRow> rows, ModsLine line, float y)
     {
@@ -64,63 +64,63 @@ sealed class ModsPage(SettingsMenu menu)
         }
 
         // By key: every mod's group header is labelled Settings.
-        menu.motion.animationScope = entry.Raw ?? entry.Label;
-        menu.canvas.DrawEntry(entry, y);
+        menu.Motion.AnimationScope = entry.Raw ?? entry.Label;
+        menu.Canvas.DrawEntry(entry, y);
     }
 
     void DrawModRow(ModRow row, int index, float y)
     {
-        var at = menu.canvas.R(212, y, 888, ModRowHeight);
+        var at = menu.Canvas.R(212, y, 888, ModRowHeight);
         if (row.Separator)
         {
-            menu.canvas.Rect(at, SettingsCanvas.MainInk with { W = 0.06f }, menu.viewport);
-            menu.canvas.Text(row.Name, menu.canvas.R(224, y, 864, ModRowHeight), 12, SettingsCanvas.Brass, clip: menu.viewport, translate: false);
+            menu.Canvas.Rect(at, SettingsCanvas.MainInk with { W = 0.06f }, menu.Viewport);
+            menu.Canvas.Text(row.Name, menu.Canvas.R(224, y, 864, ModRowHeight), 12, SettingsCanvas.Brass, clip: menu.Viewport, translate: false);
             return;
         }
 
-        bool hovered = at.Contains(menu.pointer.X, menu.pointer.Y) && menu.viewport.Contains(menu.pointer.X, menu.pointer.Y);
-        if (index == modsSelected) menu.canvas.Rect(at, SettingsCanvas.Brass with { W = 0.18f }, menu.viewport);
-        else if (hovered) menu.canvas.Rect(at, SettingsCanvas.MainInk with { W = 0.06f }, menu.viewport);
-        menu.canvas.Rect(menu.canvas.R(212, y + ModRowHeight - 1, 888, 1), SettingsCanvas.MainInk with { W = 0.075f }, menu.viewport);
-        var nameInk = index == modsSelected || hovered ? SettingsCanvas.LightInk : SettingsCanvas.MainInk;
-        menu.canvas.Text(row.Name, menu.canvas.R(224, y, 520, ModRowHeight), 14, nameInk, clip: menu.viewport, translate: false);
+        bool hovered = at.Contains(menu.Pointer.X, menu.Pointer.Y) && menu.Viewport.Contains(menu.Pointer.X, menu.Pointer.Y);
+        if (index == _modsSelected) menu.Canvas.Rect(at, SettingsCanvas.Brass with { W = 0.18f }, menu.Viewport);
+        else if (hovered) menu.Canvas.Rect(at, SettingsCanvas.MainInk with { W = 0.06f }, menu.Viewport);
+        menu.Canvas.Rect(menu.Canvas.R(212, y + ModRowHeight - 1, 888, 1), SettingsCanvas.MainInk with { W = 0.075f }, menu.Viewport);
+        var nameInk = index == _modsSelected || hovered ? SettingsCanvas.LightInk : SettingsCanvas.MainInk;
+        menu.Canvas.Text(row.Name, menu.Canvas.R(224, y, 520, ModRowHeight), 14, nameInk, clip: menu.Viewport, translate: false);
         if (row.Issues.Count > 0)
         {
             string issues = Loc.Plural("{1} issue", "{1} issues", row.Issues.Count, row.Issues.Count);
-            var issuesAt = menu.canvas.R(750, y, 200, ModRowHeight);
-            menu.canvas.Text(issues, issuesAt, 12, SettingsCanvas.Brass, "Right VCenter", menu.viewport, translate: false);
+            var issuesAt = menu.Canvas.R(750, y, 200, ModRowHeight);
+            menu.Canvas.Text(issues, issuesAt, 12, SettingsCanvas.Brass, "Right VCenter", menu.Viewport, translate: false);
         }
 
         if (row.Version is { } version)
         {
             string text = $"{Loc.Tr("Version")}: {version.ToString(CultureInfo.InvariantCulture)}";
-            var versionAt = menu.canvas.R(960, y, 128, ModRowHeight);
-            menu.canvas.Text(text, versionAt, 12, SettingsCanvas.MutedInk, "Right VCenter", menu.viewport, translate: false);
+            var versionAt = menu.Canvas.R(960, y, 128, ModRowHeight);
+            menu.Canvas.Text(text, versionAt, 12, SettingsCanvas.MutedInk, "Right VCenter", menu.Viewport, translate: false);
         }
 
-        if (at.Intersect(menu.viewport).Height >= at.Height - 1)
-            menu.hits.Add(new(at, () => { modsSelected = modsSelected == index ? -1 : index; modsDetailScroll = 0; }));
+        if (at.Intersect(menu.Viewport).Height >= at.Height - 1)
+            menu.Hits.Add(new(at, () => { _modsSelected = _modsSelected == index ? -1 : index; ModsDetailScroll = 0; }));
     }
 
     void DrawModsDetail(ModReport? report)
     {
         var area = ModsDetail;
-        menu.canvas.Rect(area, new(0.07f, 0.06f, 0.05f, 0.6f));
+        menu.Canvas.Rect(area, new(0.07f, 0.06f, 0.05f, 0.6f));
         string text = SelectedMod(report) is { } row ? ModText(row, ModIssueCap) : SummaryText(report);
-        float height = menu.canvas.TextHeight(text, 864, 12);
+        float height = menu.Canvas.TextHeight(text, 864, 12);
         float max = Math.Max(0, height + 12 - 226);
-        modsDetailScroll = Math.Clamp(modsDetailScroll, 0, max);
-        var textAt = menu.canvas.R(224, 446 - modsDetailScroll, 864, height + 2);
-        menu.canvas.Text(text, textAt, 12, SettingsCanvas.MainInk, "Left Top", area, wrap: true, translate: false);
+        ModsDetailScroll = Math.Clamp(ModsDetailScroll, 0, max);
+        var textAt = menu.Canvas.R(224, 446 - ModsDetailScroll, 864, height + 2);
+        menu.Canvas.Text(text, textAt, 12, SettingsCanvas.MainInk, "Left Top", area, wrap: true, translate: false);
         if (max <= 0) return;
 
         float thumb = Math.Max(24, 226 * 226 / (226 + max));
-        menu.canvas.Rect(menu.canvas.R(1092, 440, 3, 226), SettingsCanvas.MainInk with { W = 0.1f });
-        menu.canvas.Rect(menu.canvas.R(1092, 440 + (226 - thumb) * modsDetailScroll / max, 3, thumb), SettingsCanvas.Brass with { W = 0.75f });
+        menu.Canvas.Rect(menu.Canvas.R(1092, 440, 3, 226), SettingsCanvas.MainInk with { W = 0.1f });
+        menu.Canvas.Rect(menu.Canvas.R(1092, 440 + (226 - thumb) * ModsDetailScroll / max, 3, thumb), SettingsCanvas.Brass with { W = 0.75f });
     }
 
     ModRow? SelectedMod(ModReport? report) =>
-        report is not null && modsSelected >= 0 && modsSelected < report.Rows.Count ? report.Rows[modsSelected] : null;
+        report is not null && _modsSelected >= 0 && _modsSelected < report.Rows.Count ? report.Rows[_modsSelected] : null;
 
     /// <summary>A mod's name, version, author, description and issue lines (the first <paramref name="cap"/>, then "... N more").</summary>
     static string ModText(ModRow row, int cap)
@@ -164,15 +164,15 @@ sealed class ModsPage(SettingsMenu menu)
     /// <summary>Copy: the selected mod in full, else the summary.</summary>
     void CopyMod()
     {
-        string text = SelectedMod(menu.player.titleMenu.Mods) is { } row ? ModText(row, int.MaxValue) : SummaryText(menu.player.titleMenu.Mods);
-        menu.player.ClipboardWrite?.Invoke(text);
-        menu.notice = "Copied to the clipboard.";
+        string text = SelectedMod(menu.Player.TitleMenu.Mods) is { } row ? ModText(row, int.MaxValue) : SummaryText(menu.Player.TitleMenu.Mods);
+        menu.Player.ClipboardWrite?.Invoke(text);
+        menu.Notice = "Copied to the clipboard.";
     }
 
     /// <summary>Copy all problems: every mod with issues and its lines, then the ones no mod owns.</summary>
     void CopyProblems()
     {
-        if (menu.player.titleMenu.Mods is not { Problems: > 0 } report) { menu.notice = "There are no problems to copy."; return; }
+        if (menu.Player.TitleMenu.Mods is not { Problems: > 0 } report) { menu.Notice = "There are no problems to copy."; return; }
 
         var lines = new List<string> { report.Summary };
         foreach (var row in report.Rows.Where(r => r.Issues.Count > 0))
@@ -187,15 +187,15 @@ sealed class ModsPage(SettingsMenu menu)
             lines.Add("");
             lines.AddRange(report.OtherIssues);
         }
-        menu.player.ClipboardWrite?.Invoke(string.Join('\n', lines));
-        menu.notice = "Copied to the clipboard.";
+        menu.Player.ClipboardWrite?.Invoke(string.Join('\n', lines));
+        menu.Notice = "Copied to the clipboard.";
     }
 
     // The settings code mods registered with <c>ModContext.AddSettings</c> (docs/modding.md "Settings"), on the MODS page: a group under its mod's row,
     // drawn with the page's own rows. A change sets the mod's property at once and is kept in UserConfig.ModSettings.
 
     /// <summary>Mod groups shown once already: a group starts open the first time it is shown.</summary>
-    readonly HashSet<string> modGroupsSeen = [];
+    readonly HashSet<string> _modGroupsSeen = [];
 
     /// <summary>A line of the MODS list: the mod row <see cref="Row"/>, or a settings row (<see cref="Entry"/>).</summary>
     readonly record struct ModsLine(int Row, SettingsMenu.Entry? Entry);
@@ -223,8 +223,8 @@ sealed class ModsPage(SettingsMenu menu)
     void AddModGroup(List<ModsLine> lines, ModSettingsGroup group, string label)
     {
         string id = "mod:" + group.ModId;
-        if (modGroupsSeen.Add(id)) menu.grouping.openGroups.Add(id);
-        bool open = menu.grouping.openGroups.Contains(id);
+        if (_modGroupsSeen.Add(id)) menu.Grouping.OpenGroups.Add(id);
+        bool open = menu.Grouping.OpenGroups.Contains(id);
         bool changed = group.Settings.Any(s => !s.IsDefault);
         Action? reset = changed ? () => ResetModGroup(group) : null;
         lines.Add(new(-1, new(label, "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset)));
@@ -251,9 +251,9 @@ sealed class ModsPage(SettingsMenu menu)
     Slider ModSlider(ModSetting setting, string raw)
     {
         string format = setting.Whole ? "0" : "0.##";
-        float Get() => System.Convert.ToSingle(setting.Get(), System.Globalization.CultureInfo.InvariantCulture);
+        float Get() => Convert.ToSingle(setting.Get(), CultureInfo.InvariantCulture);
         return new Slider(raw, (float)setting.Min, (float)setting.Max, Get, v => SetModSetting(setting, (double)v), format,
-            Faithful: System.Convert.ToSingle(setting.Default, System.Globalization.CultureInfo.InvariantCulture), Step: (float)setting.Step);
+            Faithful: Convert.ToSingle(setting.Default, CultureInfo.InvariantCulture), Step: (float)setting.Step);
     }
 
     void ResetModGroup(ModSettingsGroup group)
@@ -267,7 +267,7 @@ sealed class ModsPage(SettingsMenu menu)
     {
         foreach (var group in menu.ModSettings())
             ResetModGroup(group);
-        menu.config.ModSettings.Clear();
+        menu.Config.ModSettings.Clear();
     }
 
     void SetModSetting(ModSetting setting, object value) => ChangeModSetting(setting, () => setting.Set(value));
@@ -285,7 +285,7 @@ sealed class ModsPage(SettingsMenu menu)
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {setting.Group.ModId}: setting '{setting.Key}' failed: {e}");
-            menu.notice = $"{setting.Group.Name}: {e.GetBaseException().Message}";
+            menu.Notice = $"{setting.Group.Name}: {e.GetBaseException().Message}";
         }
         KeepModSetting(setting);
     }
@@ -293,9 +293,9 @@ sealed class ModsPage(SettingsMenu menu)
     void KeepModSetting(ModSetting setting)
     {
         string mod = setting.Group.ModId;
-        if (!menu.config.ModSettings.TryGetValue(mod, out var saved)) menu.config.ModSettings[mod] = saved = [];
+        if (!menu.Config.ModSettings.TryGetValue(mod, out var saved)) menu.Config.ModSettings[mod] = saved = [];
         if (setting.IsDefault) saved.Remove(setting.Key);
         else saved[setting.Key] = setting.Text;
-        if (saved.Count == 0) menu.config.ModSettings.Remove(mod);
+        if (saved.Count == 0) menu.Config.ModSettings.Remove(mod);
     }
 }

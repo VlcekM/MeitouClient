@@ -1,5 +1,5 @@
-using Silk.NET.Vulkan;
 using Meitou.Game.Rendering.Frame;
+using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Gpu;
 
@@ -36,21 +36,21 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
         public bool Grew;
     }
 
-    readonly Slot[] slots = Enumerable.Range(0, ctx.FramesInFlight).Select(_ => new Slot()).ToArray();
-    readonly ulong[] recent = new ulong[Window];
-    int recentIndex;
-    int slot = -1;
-    long frame = -1;
-    ulong frameNeed, frameDemand;
+    readonly Slot[] _slots = Enumerable.Range(0, ctx.FramesInFlight).Select(_ => new Slot()).ToArray();
+    readonly ulong[] _recent = new ulong[Window];
+    int _recentIndex;
+    int _slot = -1;
+    long _frame = -1;
+    ulong _frameNeed, _frameDemand;
 
     /// <summary>The most one frame slot may hold (settable: the guard lowers it under pressure).</summary>
     public ulong Cap { get; set; } = cap;
     /// <summary>Bytes of device memory held now, over all slots.</summary>
-    public ulong AllocatedBytes => slots.Aggregate(0ul, (s, x) => s + x.Capacity);
+    public ulong AllocatedBytes => _slots.Aggregate(0ul, (s, x) => s + x.Capacity);
     /// <summary>The bytes the last finished frame took, and the largest and the mean over all frames so far (frames that took none count).</summary>
     public ulong LastNeed { get; private set; }
     public ulong PeakNeed { get; private set; }
-    public double MeanNeed => frames == 0 ? 0 : (double)totalNeed / frames;
+    public double MeanNeed => _frames == 0 ? 0 : (double)_totalNeed / _frames;
     /// <summary>The most any frame asked for, refused requests included (so the shortfall shows).</summary>
     public ulong PeakDemand { get; private set; }
     /// <summary>Requests refused for the cap (or for the driver's memory), and frames in which that happened.</summary>
@@ -61,21 +61,21 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
     public long Rebuilds { get; private set; }
     /// <summary>Rebuilds whose replacement was refused: the slot kept (the largest of) its old buffers.</summary>
     public long KeptOnRefusal { get; private set; }
-    long frames;
-    double totalNeed;
+    long _frames;
+    double _totalNeed;
 
     void NewFrame()
     {
         var f = ctx.Frame;
-        if (frame == f.Number) return;
-        if (slot >= 0) EndFrame();
-        (frame, slot, frameNeed, frameDemand) = (f.Number, f.Slot, 0, 0);
+        if (_frame == f.Number) return;
+        if (_slot >= 0) EndFrame();
+        (_frame, _slot, _frameNeed, _frameDemand) = (f.Number, f.Slot, 0, 0);
         OverflowedThisFrame = false;
-        var s = slots[slot];
+        var s = _slots[_slot];
         // The slot's previous frame has finished (its fence was waited for): its buffers may be replaced. One buffer of what the trailing
         // window needed with headroom; more than that, or in pieces, or too small for what its last frame took: rebuilt.
         ulong window = 0;
-        foreach (ulong r in recent) window = Math.Max(window, r);
+        foreach (ulong r in _recent) window = Math.Max(window, r);
         ulong want = Round(Math.Max(window, s.Used) + (Math.Max(window, s.Used) >> 2));
         want = Math.Min(Math.Max(want, minimum), Cap);
         if (s.Grew || s.Buffers.Count > 1 || s.Capacity > want * 2 || s.Capacity > Cap)
@@ -106,13 +106,13 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
 
     void EndFrame()
     {
-        LastNeed = frameNeed;
-        PeakNeed = Math.Max(PeakNeed, frameNeed);
-        PeakDemand = Math.Max(PeakDemand, frameDemand);
-        totalNeed += frameNeed;
-        frames++;
-        recent[recentIndex] = frameNeed;
-        recentIndex = (recentIndex + 1) % Window;
+        LastNeed = _frameNeed;
+        PeakNeed = Math.Max(PeakNeed, _frameNeed);
+        PeakDemand = Math.Max(PeakDemand, _frameDemand);
+        _totalNeed += _frameNeed;
+        _frames++;
+        _recent[_recentIndex] = _frameNeed;
+        _recentIndex = (_recentIndex + 1) % Window;
         if (OverflowedThisFrame) OverflowFrames++;
     }
 
@@ -125,8 +125,8 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
     {
         if (s.Capacity + size > Cap) return false;
         if (MayGrow is { } may && !may(size)) return false;
-        try { s.Buffers.Add(DeviceBuffer.Create(ctx, size, use, $"{name} {slot}")); }
-        catch (Meitou.Game.Rendering.Gpu.Core.VulkanException) { return false; }
+        try { s.Buffers.Add(DeviceBuffer.Create(ctx, size, use, $"{name} {_slot}")); }
+        catch (Core.VulkanException) { return false; }
         s.Capacity += size;
         return true;
     }
@@ -135,9 +135,9 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
     public bool TryAllocate(ulong bytes, out GpuBuffer buffer, out ulong offset)
     {
         NewFrame();
-        var s = slots[slot];
+        var s = _slots[_slot];
         bytes = (bytes + Align - 1) / Align * Align;
-        frameDemand += bytes;
+        _frameDemand += bytes;
         while (true)
         {
             if (s.Index < s.Buffers.Count && s.Offset + bytes <= s.Buffers[s.Index].Size)
@@ -145,7 +145,7 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
                 (buffer, offset) = (s.Buffers[s.Index].Handle, s.Offset);
                 s.Offset += bytes;
                 s.Used += bytes;
-                frameNeed += bytes;
+                _frameNeed += bytes;
                 return true;
             }
             if (s.Index + 1 < s.Buffers.Count) { s.Index++; s.Offset = 0; continue; }   // the tail is left; the next buffer may take it
@@ -165,7 +165,7 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
 
     public void Dispose()
     {
-        foreach (var s in slots)
+        foreach (var s in _slots)
         {
             foreach (var b in s.Buffers) b.Dispose();
             s.Buffers.Clear();

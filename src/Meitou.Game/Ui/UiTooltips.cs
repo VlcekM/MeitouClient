@@ -41,8 +41,16 @@ public static class UiTooltips
     /// <summary>The tone of an inline colour tag <c>#rrggbb</c> (the exe's static colour strings), else <see cref="TooltipTone.Default"/>.</summary>
     public static TooltipTone ToneOf(string hex) => hex.ToLowerInvariant() switch
     {
-        "#afa68b" => TooltipTone.Main, "#140806" => TooltipTone.Ink, "#492620" => TooltipTone.Title, "#59231a" => TooltipTone.Bad, "#bf4834" => TooltipTone.BadBright,
-        "#a8b774" => TooltipTone.Good, "#444444" => TooltipTone.Grey, "#777777" => TooltipTone.GreyBright, "#14ffdc" => TooltipTone.Cyan, _ => TooltipTone.Default,
+        "#afa68b" => TooltipTone.Main,
+        "#140806" => TooltipTone.Ink,
+        "#492620" => TooltipTone.Title,
+        "#59231a" => TooltipTone.Bad,
+        "#bf4834" => TooltipTone.BadBright,
+        "#a8b774" => TooltipTone.Good,
+        "#444444" => TooltipTone.Grey,
+        "#777777" => TooltipTone.GreyBright,
+        "#14ffdc" => TooltipTone.Cyan,
+        _ => TooltipTone.Default,
     };
 
     /// <summary>Splits a leading <c>#rrggbb</c> colour tag off <paramref name="text"/>.</summary>

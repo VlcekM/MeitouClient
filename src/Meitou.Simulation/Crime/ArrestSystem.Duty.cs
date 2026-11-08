@@ -29,7 +29,7 @@ public sealed partial class ArrestSystem
             {
                 if (!table.TryResolveNext(member, out int g) || table.Cold(g) is not { InCombat: false } gc || !Ai.AiSystem.Holds(table.Next[g], gc) || gc.Fighter is not { CanAttack: true } || Busy(member)) continue;
                 int role = (int)Ai.AiSystem.RoleOf(squad, member, gc);
-                if (listed[role] < 0) listed[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.HUNT_BOUNTIES) ? 1 : 0;
+                if (listed[role] < 0) listed[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.HuntBounties) ? 1 : 0;
                 if (listed[role] == 0 || !FreeCageExists(world, g) || BountyTarget(world, g, gc) is not (>= 0 and var t)) continue;
                 Start(world, g, t, force: true);
             }

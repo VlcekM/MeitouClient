@@ -24,7 +24,7 @@ public class HousePurchaseUiTests
     public void Sale_price_opens_confirmation_and_purchase_updates_the_panel(UiMode mode)
     {
         var install = GameInstall.Locate(); Assert.SkipWhen(install is null, "No Kenshi install configured");
-        var chinese = Meitou.Localisation.GettextCatalog.Load(GameFiles.Resolve(Path.Combine(install.Root, "locale/zh_CN/LC_MESSAGES")));
+        var chinese = Localisation.GettextCatalog.Load(GameFiles.Resolve(Path.Combine(install.Root, "locale/zh_CN/LC_MESSAGES")));
         Assert.Equal("待售：", chinese.Find("For sale:"));
         Assert.False(string.IsNullOrEmpty(chinese.Find("Do you want to buy this building for c.{1,num}?")));
         var (data, house) = HousePurchaseTests.Setup(destroyed: true);
@@ -36,24 +36,24 @@ public class HousePurchaseUiTests
         var resources = OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install));
         var ui = new PlayerInterface(session, (_, _) => 0, c => c.Position) { Width = 1600, Height = 900, FactionName = _ => "Nameless" };
         ui.LoadUi(mode, name => resources.Find(name));
-        ui.frontend.ConfigureFrontend(data.Db, () => [], "");
+        ui.Frontend.ConfigureFrontend(data.Db, () => [], "");
         // Open to public needs an interior (docs/game/ui-screens.md "Selected building"); the fixture house has none of its own.
-        ui.buildingSelection.BuildingData = id => Meitou.Data.Gameplay.Construction.BuildingBuildData.From(data.Db.Find(id)!) with { HasInterior = true };
-        ui.buildingSelection.BuildTarget = id => ui.buildingSelection.BuildingData(id)?.Target;
+        ui.BuildingSelection.BuildingData = id => Data.Gameplay.Construction.BuildingBuildData.From(data.Db.Find(id)!) with { HasInterior = true };
+        ui.BuildingSelection.BuildTarget = id => ui.BuildingSelection.BuildingData(id)?.Target;
         try
         {
             var focus = new BuildingSelection.SelectedBuilding("House", null, "Owner", "Town", null, house.Key, house.Position, null, Record: house.BuildingId, Destroyed: house.Destroyed);
-            ui.buildingSelection.SetBuilding(focus); world.RunTick();
+            ui.BuildingSelection.SetBuilding(focus); world.RunTick();
             void CheckRuinCondition()
             {
-                var condition = Assert.Single(ui.buildingSelection.BuildingRows(focus), row => row.Name == "Condition");
+                var condition = Assert.Single(ui.BuildingSelection.BuildingRows(focus), row => row.Name == "Condition");
                 Assert.Equal("0", condition.Value);
                 Assert.Equal(0, condition.Green);
                 Assert.Equal(0, condition.Yellow);
                 Assert.Equal(0, condition.Red);
             }
             CheckRuinCondition();
-            var sale = Assert.Single(ui.buildingSelection.BuildingLines(focus).Stats, line => line.Action == "meitou:building-buy");
+            var sale = Assert.Single(ui.BuildingSelection.BuildingLines(focus).Stats, line => line.Action == "meitou:building-buy");
             Assert.Equal("For sale:", sale.Label); Assert.Equal("c.4,800", sale.Value); Assert.Equal(0.4f, sale.ButtonWidth);
             void Click(string name)
             {
@@ -69,7 +69,7 @@ public class HousePurchaseUiTests
             Click("ButtonB"); world.RunTick(); Assert.Equal(10000, world.Player.Money);
             Click(ui.UiFrame.Single(c => c.Action == "meitou:building-buy").Name); Click("ButtonA"); world.RunTick();
             Assert.Equal(5200, world.Player.Money);
-            var lines = ui.buildingSelection.BuildingLines(focus);
+            var lines = ui.BuildingSelection.BuildingLines(focus);
             Assert.Equal("Nameless", lines.Name.Value);
             Assert.DoesNotContain(lines.Stats, line => line.Action == "meitou:building-buy");
             Assert.Contains(lines.Stats, line => line.Action == "meitou:building-public");

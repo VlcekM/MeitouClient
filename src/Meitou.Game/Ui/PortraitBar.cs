@@ -43,7 +43,7 @@ sealed class PortraitBar(PlayerInterface player)
         into.Clear();
         foreach (var c in SquadBarMembers())
             if (into.Count < FullRateCount) into.Add(c.Id);
-        foreach (var squad in player.session.CurrentSnapshot.PlayerSquads)
+        foreach (var squad in player.Session.CurrentSnapshot.PlayerSquads)
             foreach (var id in squad.Members)
                 if (into.Count < FullRateCount) into.Add(id);
         if (player.Selected().FirstOrDefault() is { } first) into.Add(first.Id);
@@ -52,7 +52,7 @@ sealed class PortraitBar(PlayerInterface player)
     /// <summary>The characters the squad bar shows, the active squad's in order: the first atlas cells (<see cref="PortraitMembers"/>).</summary>
     public IReadOnlyList<CharacterSnapshot> SquadBarMembers()
     {
-        var byId = player.session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
+        var byId = player.Session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
         return [.. player.ActiveSquadMembers().Select(byId.GetValueOrDefault).OfType<CharacterSnapshot>().Take(DialogueNpcCell)];
     }
 
@@ -63,19 +63,19 @@ sealed class PortraitBar(PlayerInterface player)
     public IReadOnlyList<CharacterSnapshot> PortraitMembers()
     {
         var bar = SquadBarMembers();
-        if (!player.squadWindows.SquadsShown) return bar;   // the others are drawn (and posed out of range) only while the squads screen shows them
-        var byId = player.session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
+        if (!player.SquadWindows.SquadsShown) return bar;   // the others are drawn (and posed out of range) only while the squads screen shows them
+        var byId = player.Session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToDictionary(c => c.Id);
         var shown = bar.Select(c => c.Id).ToHashSet();
-        var rest = player.session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Where(id => shown.Add(id)).Select(byId.GetValueOrDefault).OfType<CharacterSnapshot>();
+        var rest = player.Session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Where(id => shown.Add(id)).Select(byId.GetValueOrDefault).OfType<CharacterSnapshot>();
         return [.. bar.Concat(rest).Take(DialogueNpcCell)];
     }
 
     /// <summary>The speaker and the player character of the open conversation, whose portraits the host draws into <see cref="DialogueNpcCell"/> and <see cref="DialoguePlayerCell"/>.</summary>
     public (CharacterId Npc, CharacterId Player)? DialoguePortraitCharacters() =>
-        player.session.CurrentSnapshot.Conversation is { } talk ? (talk.Speaker.IsNone ? talk.Npc : talk.Speaker, talk.Player) : null;
+        player.Session.CurrentSnapshot.Conversation is { } talk ? (talk.Speaker.IsNone ? talk.Npc : talk.Speaker, talk.Player) : null;
 
     /// <summary>The number that turns a character's portrait camera (<see cref="CharacterSnapshot.PortraitSerial"/>; 0 for one not in the snapshot).</summary>
-    public uint PortraitSerial(CharacterId id) => player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.PortraitSerial ?? 0;
+    public uint PortraitSerial(CharacterId id) => player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.PortraitSerial ?? 0;
 
     /// <summary>The conversation window's two portraits over the layout's <c>NpcPortrait</c> and <c>PlayerPortrait</c> frames.</summary>
     internal void AddDialoguePortraits(List<UiControl> controls)
@@ -90,16 +90,16 @@ sealed class PortraitBar(PlayerInterface player)
     }
 
     /// <summary>The squad bar's page, its row height and how far its rows are scrolled (the ItemBox scrolls a row per wheel notch).</summary>
-    UiRect squadBarPage;
-    internal float squadBarRow, squadBarScroll;
+    UiRect _squadBarPage;
+    internal float SquadBarRow, SquadBarScroll;
 
     /// <summary>The wheel over the squad bar scrolls its rows; clamped when the bar is laid out.</summary>
     internal bool SquadBarWheel(Vector2 p, float steps)
     {
-        if (squadBarRow <= 0 || !squadBarPage.Contains(p.X, p.Y)) return false;
-        squadBarScroll -= MathF.Sign(steps) * squadBarRow;
-        if (player.scrollBars.inventoryViews.TryGetValue("SquadPanel", out var view))
-            squadBarScroll = player.scrollBars.inventoryScroll["SquadPanel"] = Math.Clamp(squadBarScroll, 0, view.Maximum);
+        if (SquadBarRow <= 0 || !_squadBarPage.Contains(p.X, p.Y)) return false;
+        SquadBarScroll -= MathF.Sign(steps) * SquadBarRow;
+        if (player.ScrollBars.InventoryViews.TryGetValue("SquadPanel", out var view))
+            SquadBarScroll = player.ScrollBars.InventoryScroll["SquadPanel"] = Math.Clamp(SquadBarScroll, 0, view.Maximum);
         return true;
     }
 
@@ -135,27 +135,27 @@ sealed class PortraitBar(PlayerInterface player)
             columns = Math.Max(1, (int)(page.Width / size));
             rows = (members.Count + columns - 1) / columns;
             maximum = Math.Max(0, rows * size - page.Height);
-            squadBarScroll = Math.Clamp(player.scrollBars.inventoryScroll.GetValueOrDefault("SquadPanel"), 0, maximum);
-            player.scrollBars.inventoryScroll["SquadPanel"] = squadBarScroll;
-            player.scrollBars.inventoryViews["SquadPanel"] = (page, maximum);
-            player.scrollBars.AddScrollBar("SquadPanel", controls, new(page.X + page.Width, page.Y, barWidth, page.Height), page.Height,
-                page.Height + maximum, squadBarScroll, maximum, panel, "hud-squad");
+            SquadBarScroll = Math.Clamp(player.ScrollBars.InventoryScroll.GetValueOrDefault("SquadPanel"), 0, maximum);
+            player.ScrollBars.InventoryScroll["SquadPanel"] = SquadBarScroll;
+            player.ScrollBars.InventoryViews["SquadPanel"] = (page, maximum);
+            player.ScrollBars.AddScrollBar("SquadPanel", controls, new(page.X + page.Width, page.Y, barWidth, page.Height), page.Height,
+                page.Height + maximum, SquadBarScroll, maximum, panel, "hud-squad");
         }
         else
         {
-            player.scrollBars.inventoryViews.Remove("SquadPanel");
-            player.scrollBars.inventoryTracks.Remove("SquadPanel");
-            squadBarScroll = 0;
+            player.ScrollBars.InventoryViews.Remove("SquadPanel");
+            player.ScrollBars.InventoryTracks.Remove("SquadPanel");
+            SquadBarScroll = 0;
         }
-        squadBarPage = page;
-        squadBarRow = size;
-        squadBarScroll = Math.Clamp(squadBarScroll, 0, Math.Max(0, rows * size - page.Height));
-        var camera = player.session.Camera.Current;
+        _squadBarPage = page;
+        SquadBarRow = size;
+        SquadBarScroll = Math.Clamp(SquadBarScroll, 0, Math.Max(0, rows * size - page.Height));
+        var camera = player.Session.Camera.Current;
         PrunePortraitFlashes(members);
         for (int i = 0; i < members.Count; i++)
         {
             var m = members[i];
-            float left = page.X + i % columns * size, top = page.Y + i / columns * size - squadBarScroll;
+            float left = page.X + i % columns * size, top = page.Y + i / columns * size - SquadBarScroll;
             if (top + size <= page.Y || top >= page.Y + page.Height) continue;
             UiRect At(float x, float y, float w, float h) => new(left + x * k, top + y * k, w * k, h * k);
             // The layout's depths, back to front: background, back overlay, portrait, front overlay, name, frame.
@@ -193,7 +193,7 @@ sealed class PortraitBar(PlayerInterface player)
     }
 
     /// <summary>When each member's flash started (<see cref="Stopwatch"/> ticks); a member leaves when its flash stops.</summary>
-    internal readonly Dictionary<CharacterId, long> portraitFlashes = [];
+    internal readonly Dictionary<CharacterId, long> PortraitFlashes = [];
 
     /// <summary>
     /// The original's flags (<c>FUN_140414dc0</c>). Its danger test reads a float of the character's AI that is not decoded (eating also waits while it is above 0); Meitou takes
@@ -224,11 +224,11 @@ sealed class PortraitBar(PlayerInterface player)
     {
         if ((s & PortraitState.Hurt) == 0 || (s & PortraitState.Faded) != 0)
         {
-            portraitFlashes.Remove(id);
+            PortraitFlashes.Remove(id);
             return 1;
         }
         long now = Stopwatch.GetTimestamp();
-        if (!portraitFlashes.TryGetValue(id, out long start)) portraitFlashes[id] = start = now;
+        if (!PortraitFlashes.TryGetValue(id, out long start)) PortraitFlashes[id] = start = now;
         double t = Stopwatch.GetElapsedTime(start, now).TotalSeconds;
         return (float)Math.Abs(1 - 2 * (t - Math.Floor(t)));
     }
@@ -236,9 +236,9 @@ sealed class PortraitBar(PlayerInterface player)
     /// <summary>Drops the flashes of characters no longer on the squad bar.</summary>
     void PrunePortraitFlashes(IReadOnlyList<CharacterSnapshot> members)
     {
-        if (portraitFlashes.Count == 0) return;
-        foreach (var id in portraitFlashes.Keys.ToList())
-            if (!members.Any(m => m.Id == id)) portraitFlashes.Remove(id);
+        if (PortraitFlashes.Count == 0) return;
+        foreach (var id in PortraitFlashes.Keys.ToList())
+            if (!members.Any(m => m.Id == id)) PortraitFlashes.Remove(id);
     }
 
     static string BackOverlayName(PortraitState s) => (s & PortraitState.Combat) != 0 ? "Combat" : (s & PortraitState.Hunger) != 0 ? "Hunger" : "";

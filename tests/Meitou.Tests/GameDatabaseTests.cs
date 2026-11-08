@@ -8,7 +8,7 @@ public class GameDatabaseTests
 {
     const uint New = 0x10, Modified = 0x11, Renamed = 0x13;
 
-    static FcsRecord Record(string id, uint flags, string name = "thing", FcsRecordType type = FcsRecordType.ITEM) =>
+    static FcsRecord Record(string id, uint flags, string name = "thing", FcsRecordType type = FcsRecordType.Item) =>
         new() { StringId = id, Flags = flags, Name = name, RecordType = type };
 
     static FcsFile File(params FcsRecord[] records)
@@ -107,7 +107,7 @@ public class GameDatabaseTests
         var defined = files.SelectMany(f => f.Records).Where(r => !r.IsModified).Select(r => r.StringId).ToHashSet();
         var everRemoved = files.SelectMany(f => f.Records).Where(r => r.IsRemoved).Select(r => r.StringId).ToHashSet();
         // The gear blueprints' research is made at load, one <id>.TECH.1 per ARMOUR, CONTAINER and CROSSBOW (GameDatabase.AddGearBlueprints).
-        defined.UnionWith(db.Records.Values.Where(r => r.Type is FcsRecordType.ARMOUR or FcsRecordType.CONTAINER or FcsRecordType.CROSSBOW).Select(r => r.StringId + ".TECH.1"));
+        defined.UnionWith(db.Records.Values.Where(r => r.Type is FcsRecordType.Armour or FcsRecordType.Container or FcsRecordType.Crossbow).Select(r => r.StringId + ".TECH.1"));
 
         // Every surviving record was defined somewhere; every defined record either survives or was removed.
         Assert.All(db.Records.Keys, id => Assert.Contains(id, defined));

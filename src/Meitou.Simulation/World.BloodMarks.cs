@@ -25,13 +25,13 @@ public readonly record struct BloodMark(BloodMarkKind Kind, CharacterId Who, Vec
 
 public sealed partial class World
 {
-    volatile System.Collections.Concurrent.ConcurrentQueue<BloodMark>? bloodMarks;
+    volatile System.Collections.Concurrent.ConcurrentQueue<BloodMark>? _bloodMarks;
 
     /// <summary>
     /// Where the bodies and combat queue the blood they leave on the ground; null (the default) records none, which is also the game's <c>Blood</c> setting off.
     /// The host sets it and empties it every frame. Nothing in the simulation reads it, so it cannot change a run.
     /// </summary>
-    public System.Collections.Concurrent.ConcurrentQueue<BloodMark>? BloodMarks { get => bloodMarks; set => bloodMarks = value; }
+    public System.Collections.Concurrent.ConcurrentQueue<BloodMark>? BloodMarks { get => _bloodMarks; set => _bloodMarks = value; }
 
     /// <summary>
     /// luckyren Mode (the Meitou settings menu; off by default): a character killed by a hit bursts. Its gear falls round the spot, the body is gone the same tick and an

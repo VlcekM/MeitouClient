@@ -35,12 +35,12 @@ public sealed partial class CombatSystem
         if (e.Kind == FireEffect) { ApplyFire(world, e); return; }
         if (e.Kind == ReloadEffect) { ApplyReload(world, e); return; }
         if (e.Kind == ZoneBuildingsEffect) { ApplyZoneBuildings(world, e); return; }
-        if (e.Kind == MassCombatEffect) { if (world.Characters.Cold(e.Target) is { Stats: { } asked }) xp.MassCombat(asked); return; }
+        if (e.Kind == MassCombatEffect) { if (world.Characters.Cold(e.Target) is { Stats: { } asked }) _xp.MassCombat(asked); return; }
         if (e.Kind != BlowEffect) return;
         var table = world.Characters;
         int a = e.Source, d = e.Target, blow = e.Arg, seq = (int)e.Amount, now = (int)world.Tick;
-        ref var A = ref write[a];
-        ref var D = ref write[d];
+        ref var A = ref _write[a];
+        ref var D = ref _write[d];
         // A blow thrown in Act lands even when Act then ended or restarted the swing on the same tick (the original resolves it inside the swing update); only a hit, knock-out
         // or kill applied earlier this tick takes the swing away from its attacker. It carries its technique, and touches the attacker's swing only while that is still the one.
         if (A.CancelTick == now) return;
@@ -48,12 +48,12 @@ public sealed partial class CombatSystem
         var ac = table.Cold(a);
         var dc = table.Cold(d);
         if (ac is null || dc is null || ac.Fighter is null || dc.Fighter is null || ac.Stats is null || dc.Stats is null || ac.Medical is null || dc.Medical is null || ac.Race is null || dc.Race is null) return;
-        var tech = techniques[(int)e.Position.X];
+        var tech = _techniques[(int)e.Position.X];
         var prev = table.Previous;
         int direction = HitOutcomes.Facing(tech.DirectionOf(blow), HitOutcomes.Behind(table.Previous[a].Position, table.Previous[d].Position, table.Previous[d].Yaw));
 
         // The defender was in the attack zone when the blow arrived (Strike); its own block or dodge decides the outcome.
-        CombatTechnique? reaction = D.ReactTech >= 0 && !D.Down && now >= D.StunUntil ? techniques[D.ReactTech] : null;
+        CombatTechnique? reaction = D.ReactTech >= 0 && !D.Down && now >= D.StunUntil ? _techniques[D.ReactTech] : null;
         float progress = reaction is not null ? Math.Clamp((now - D.ReactStart) / (float)D.ReactTicks, 0, 1) : 0;
         var outcome = HitOutcomes.Decide(reaction, progress, direction);
 
@@ -73,9 +73,9 @@ public sealed partial class CombatSystem
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, XpEvent.Defended);
                 // A dodge technique that counts as a block (the base game's "Dodge back" rows are flagged both) is silent: it looks like a dodge, and the block impact sounds like a hit.
                 bool parry = IsParry(ac, dc, tech, blow);
-                if (!techniques[D.ReactTech].IsDodge) Sound(world, SoundKind.Blocked, d, a, prev[d].Position, unarmed: !parry, robot: false);
+                if (!_techniques[D.ReactTech].IsDodge) Sound(world, SoundKind.Blocked, d, a, prev[d].Position, unarmed: !parry, robot: false);
                 // A parry throws sparks at the parrying weapon (FUN_1404394f0, IsParry); a fist blow of a plain hand-to-hand impact does not.
-                if (!techniques[D.ReactTech].IsDodge && parry) world.BlockSparks?.Enqueue(Id(world, d));
+                if (!_techniques[D.ReactTech].IsDodge && parry) world.BlockSparks?.Enqueue(Id(world, d));
                 if (live) Stop(ref A, tech, blow);
                 Punch(world, a, ac, dc, tech, blow, 5);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
@@ -85,7 +85,7 @@ public sealed partial class CombatSystem
                 D.Dodges++;
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
                 var dodgeStats = dc.Stats;
-                xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge, 0.25f * xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
+                _xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge, 0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
                 Punch(world, a, ac, dc, tech, blow, 0);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
@@ -100,18 +100,18 @@ public sealed partial class CombatSystem
         float dex = Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult;
         float str = Eff(ac, StatsEnumerated.Strength);
         var packet = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind, dc.Race.StringId, fighter.DamageOutput, combat)
-            : DamageFormulas.Packet(skill, dex, str, fighter.Weapon!, kind, dc.Race.StringId, fighter.DamageOutput, combat);
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind, dc.Race.StringId, fighter.DamageOutput, _combat)
+            : DamageFormulas.Packet(skill, dex, str, fighter.Weapon!, kind, dc.Race.StringId, fighter.DamageOutput, _combat);
         packet = Powered(packet, tech, blow);
 
         var ctx = MakeContext(world, d, dc);
-        var events = hitEvents;   // Apply is serial, so one list serves every hit
+        var events = _hitEvents;   // Apply is serial, so one list serves every hit
         events.Clear();
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, seq, blow);
         bool observe = world.WantsCombatHits;
         bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
         bool intended = observe && d == A.TargetSlot && prev[d].Generation == A.TargetGeneration;
-        var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, combat, events);
+        var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, _combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
         A.Landed++;
         D.Taken++;
@@ -127,10 +127,11 @@ public sealed partial class CombatSystem
         {
             switch (ev.Kind)
             {
-                case MedicalEventKind.KnockedOut: knockout = true; xp.ToughnessFromKnockOut(dc.Stats, dc.Race); break;
+                case MedicalEventKind.KnockedOut: knockout = true; _xp.ToughnessFromKnockOut(dc.Stats, dc.Race); break;
                 case MedicalEventKind.Died: death = true; break;
                 case MedicalEventKind.Decapitated: table.LimbsChanged.Enqueue((d, -1)); break;   // the look loses its head (nothing drops)
-                case MedicalEventKind.PartSevered: xp.ToughnessFromLimbLoss(dc.Stats, dc.Race); table.LimbsChanged.Enqueue((d, dc.Medical.Parts[ev.Part].Template.LimbSlot));
+                case MedicalEventKind.PartSevered:
+                    _xp.ToughnessFromLimbLoss(dc.Stats, dc.Race); table.LimbsChanged.Enqueue((d, dc.Medical.Parts[ev.Part].Template.LimbSlot));
                     world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None, dc.Medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });   // LOST_LEG / LOST_ARM
                     break;
             }
@@ -150,7 +151,7 @@ public sealed partial class CombatSystem
             D.NextBlow = 0;
             D.ReactTech = -1;
         }
-        else Stagger(world, ref D, d, dc, damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, combat), now, CombatRolls.BlowCounter(a, seq, blow, 0));
+        else Stagger(world, ref D, d, dc, damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat), now, CombatRolls.BlowCounter(a, seq, blow, 0));
         GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
         Punch(world, a, ac, dc, tech, blow, 2);
         Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: D.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race.IsRobot);
@@ -191,8 +192,8 @@ public sealed partial class CombatSystem
         if (dc.Race!.IsRobot) material = 1;
         var (cut, blunt) = material switch { 1 => (2f, 2f), 5 => (5f, 1f), 6 => (1f, 1f), _ => (0f, 1f) };
         var stats = ac.Stats!;
-        float k = (1 - 0.5f * (UnarmedRating(world, a, ac, f) + stats.ScaledToughness) * 0.01f) * options.GlobalDamageMultiplier * f.FistInjury;
-        if (ac.Medical!.PunchDamage(limb, cut * k, blunt * k, constants)) xp.ToughnessFromDamage(stats, ac.Race, material);
+        float k = (1 - 0.5f * (UnarmedRating(world, a, ac, f) + stats.ScaledToughness) * 0.01f) * _options.GlobalDamageMultiplier * f.FistInjury;
+        if (ac.Medical!.PunchDamage(limb, cut * k, blunt * k, _constants)) _xp.ToughnessFromDamage(stats, ac.Race, material);
     }
 
     /// <summary>
@@ -307,18 +308,18 @@ public sealed partial class CombatSystem
         var af = attacker.Fighter!;
         var df = defender.Fighter!;
         float aStrength = StrengthFactor(attacker, af);
-        xp.Combat(attacker.Stats!, attacker.Race!, attackerEvent, af.Unarmed, af.Unarmed ? StatsEnumerated.None : af.Weapon!.Skill, Eff(defender, StatsEnumerated.MeleeDefence), aStrength);
+        _xp.Combat(attacker.Stats!, attacker.Race!, attackerEvent, af.Unarmed, af.Unarmed ? StatsEnumerated.None : af.Weapon!.Skill, Eff(defender, StatsEnumerated.MeleeDefence), aStrength);
         if (defenderEvent is { } ev)
         {
             float dStrength = StrengthFactor(defender, df);
             var weaponStat = df.Unarmed || ev == XpEvent.HitTaken ? StatsEnumerated.None : df.Weapon!.Skill;
-            xp.Combat(defender.Stats!, defender.Race!, ev, df.Unarmed, weaponStat, Eff(attacker, af.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack), dStrength, damageTaken);
+            _xp.Combat(defender.Stats!, defender.Race!, ev, df.Unarmed, weaponStat, Eff(attacker, af.Unarmed ? StatsEnumerated.MartialArts : StatsEnumerated.MeleeAttack), dStrength, damageTaken);
         }
     }
 
     float StrengthFactor(CharacterCold c, Fighter f) => f.Unarmed
         ? 1 - f.EncumbranceFactor
-        : xp.WeaponWeightStrengthFactor(f.Weapon!.Stats.Weight, c.Stats![StatsEnumerated.Strength], c.Medical!.StatMultiplier(StatsEnumerated.Strength));
+        : _xp.WeaponWeightStrengthFactor(f.Weapon!.Stats.Weight, c.Stats![StatsEnumerated.Strength], c.Medical!.StatMultiplier(StatsEnumerated.Strength));
 
     /// <summary>Queues the damage floater of a landed hit when the host shows them (<see cref="World.Floaters"/>).</summary>
     void FloatHit(World world, int d, CharacterCold dc, bool sourceIsPlayer, int part, in HitDamage damage, in ArmourAbsorbed absorbed)
@@ -327,11 +328,12 @@ public sealed partial class CombatSystem
         var id = world.Characters.IdOf(d);
         bool tagged = Memory is { } memory && world.Player.Squad >= 0;
         queue.Enqueue(Floater.Hit(id, world.Characters.Previous[d].Position, dc.IsPlayer, sourceIsPlayer, dc.Medical!.Parts[part].Template.Name, damage, absorbed)
-            with { TargetTempEnemy = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempEnemy), TargetTempAlly = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempAlly) });
+            with
+        { TargetTempEnemy = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempEnemy), TargetTempAlly = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempAlly) });
     }
 
     void Record(int now, int a, int d, int blow, BlowOutcome outcome, int part, in HitDamage damage, bool knockout, bool death)
     {
-        if (Settings.RecordLog) log.Add(new CombatLogEntry(now, a, d, blow, outcome, part, damage.Cut, damage.Blunt, damage.Pierce, damage.ExtraStun, knockout, death));
+        if (Settings.RecordLog) _log.Add(new CombatLogEntry(now, a, d, blow, outcome, part, damage.Cut, damage.Blunt, damage.Pierce, damage.ExtraStun, knockout, death));
     }
 }

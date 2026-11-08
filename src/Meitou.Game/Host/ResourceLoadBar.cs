@@ -12,49 +12,49 @@ namespace Meitou.Game.Host;
 sealed class ResourceLoadBar
 {
     const int Delay = 6;
-    int previous, total, done, wait = Delay;
-    bool visible;
-    MyGuiLayout? layout;
-    string? trackSkin;
-    MyGuiResources? laidOutFor;
+    int _previous, _total, _done, _wait = Delay;
+    bool _visible;
+    MyGuiLayout? _layout;
+    string? _trackSkin;
+    MyGuiResources? _laidOutFor;
 
     /// <summary>One frame of the loader with <paramref name="pending"/> requests waiting (Meitou: the objects' and characters' pending loads; engine choice).</summary>
     public void Update(int pending)
     {
         pending = Math.Max(pending, 0);
-        if (pending > previous) total += pending - previous;
-        else done += previous - pending;
-        if (pending == 0) total = done = 0;
-        previous = pending;
+        if (pending > _previous) _total += pending - _previous;
+        else _done += _previous - pending;
+        if (pending == 0) _total = _done = 0;
+        _previous = pending;
         // Shown with the wait as it was before this frame's step, as the original tests it before counting down.
-        visible = total != 0 && wait == 0;
-        if (total == 0) wait = Delay;
-        else if (wait > 0) wait--;
+        _visible = _total != 0 && _wait == 0;
+        if (_total == 0) _wait = Delay;
+        else if (_wait > 0) _wait--;
     }
 
-    public bool Visible => visible;
+    public bool Visible => _visible;
 
     /// <summary>The bar's parts for a <paramref name="width"/> × <paramref name="height"/> screen, its fill added in the template's <c>TrackPlace</c>; empty while hidden.</summary>
     public IReadOnlyList<UiControl> Controls(MyGuiResources resources, int width, int height)
     {
-        if (!visible) return [];
-        if (!ReferenceEquals(resources, laidOutFor))
+        if (!_visible) return [];
+        if (!ReferenceEquals(resources, _laidOutFor))
         {
-            laidOutFor = resources;
-            layout = MyGuiTemplates.Expand(MyGuiReader.ParseLayout(
+            _laidOutFor = resources;
+            _layout = MyGuiTemplates.Expand(MyGuiReader.ParseLayout(
                 """<MyGUI type="Layout"><Widget type="ProgressBar" skin="Kenshi_ProgressBarFill" position_real="0.9 0 0.1 0.02" layer="Top" name="LoadBar"/></MyGUI>"""), resources);
-            trackSkin = resources.Templates.TryGetValue("Kenshi_ProgressBarFill", out var template)
+            _trackSkin = resources.Templates.TryGetValue("Kenshi_ProgressBarFill", out var template)
                 ? MyGuiReader.ReadResourceLayout(template).Roots.FirstOrDefault()?.UserStrings.GetValueOrDefault("TrackSkin") : null;
         }
-        if (layout is null) return [];
-        var controls = MyGuiPresentation.Arrange(layout, width, height, new UiBindings(), resources.Layers).ToList();
+        if (_layout is null) return [];
+        var controls = MyGuiPresentation.Arrange(_layout, width, height, new UiBindings(), resources.Layers).ToList();
         int place = controls.FindIndex(c => c.Properties.GetValueOrDefault("TemplateOwner") == "LoadBar" && c.Properties.GetValueOrDefault("TemplatePart") == "TrackPlace");
-        if (place >= 0 && trackSkin is not null && total > 0)
+        if (place >= 0 && _trackSkin is not null && _total > 0)
         {
             // TrackFill: the track runs from the start of TrackPlace to the position (MyGUI ProgressBar), drawn under the frame that follows it.
             var bounds = controls[place].Bounds;
-            float fraction = Math.Clamp(done / (float)total, 0, 1);
-            controls.Insert(place + 1, new UiControl("LoadBar@track", "Widget", bounds with { Width = MathF.Round(bounds.Width * fraction) }, "", "", trackSkin, true,
+            float fraction = Math.Clamp(_done / (float)_total, 0, 1);
+            controls.Insert(place + 1, new UiControl("LoadBar@track", "Widget", bounds with { Width = MathF.Round(bounds.Width * fraction) }, "", "", _trackSkin, true,
                 new Dictionary<string, string>(), Vector4.Zero, Pickable: false));
         }
         return controls;

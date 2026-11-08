@@ -138,7 +138,7 @@ public static class WorldLights
     /// </summary>
     public static WorldLight FromPlaced(PlacedLight p, bool interior, bool? powerOn = null, bool indoors = false) =>
         FromRecord(p.Light, p.Position, p.Direction, p.Power, indoors ? WorldLightRule.WhenBuildingOn : WorldLightRule.Night, p.PlacementId, p.Owner.StringId,
-            interior, p.Holder.Type == FcsRecordType.BUILDING_PART ? p.Holder.GetInt("building floor") : 0, powerOn);
+            interior, p.Holder.Type == FcsRecordType.BuildingPart ? p.Holder.GetInt("building floor") : 0, powerOn);
 
     /// <summary>A LIGHT record at <paramref name="position"/> with its rolled <paramref name="power"/>; <paramref name="ownerId"/> is the record that carries it.</summary>
     public static WorldLight FromRecord(GameRecord light, Vector3 position, Vector3 direction, float power, WorldLightRule rule, string placementId, string ownerId,

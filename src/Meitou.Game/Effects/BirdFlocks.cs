@@ -79,24 +79,24 @@ public sealed class BirdFlocks
     const float FarSpawn = 1000, NeighbourRadius = 100, WideNeighbourRadius = 1000, FrustumMargin = -10;
     const float TooLow = 30, ClimbRate = 5, HeightScale = 2000, TurnPi = 3.14159f, FollowOffset = 100;
 
-    readonly Group[] groups;
-    readonly Func<float, float, float> ground;
-    readonly Random random;
+    readonly Group[] _groups;
+    readonly Func<float, float, float> _ground;
+    readonly Random _random;
 
     /// <param name="ground">The terrain's height at a world x, z.</param>
     /// <param name="groupOfCell">The BIOME_GROUP id of a weather cell (null: none).</param>
     public BirdFlocks(IReadOnlyList<BirdFlockData> kinds, Func<float, float, float> ground, Func<int, int, string?> groupOfCell, int seed = 1)
     {
-        groups = [.. kinds.Where(k => k.Speed > 0 && k.SpawnCount > 0).Select(k => new Group(k, groupOfCell))];
-        foreach (var g in groups) g.BuildSums();
-        this.ground = ground;
-        random = new Random(seed);
+        _groups = [.. kinds.Where(k => k.Speed > 0 && k.SpawnCount > 0).Select(k => new Group(k, groupOfCell))];
+        foreach (var g in _groups) g.BuildSums();
+        this._ground = ground;
+        _random = new Random(seed);
     }
 
-    public int BirdCount => groups.Sum(g => g.Birds.Count);
+    public int BirdCount => _groups.Sum(g => g.Birds.Count);
 
     /// <summary>The birds in state <paramref name="state"/>.</summary>
-    public int CountIn(BirdState state) => groups.Sum(g => g.Birds.Count(b => b.State == state));
+    public int CountIn(BirdState state) => _groups.Sum(g => g.Birds.Count(b => b.State == state));
 
     /// <summary>
     /// Moves the birds by <paramref name="dt"/> real seconds. <paramref name="eye"/> is the camera's position, <paramref name="focus"/> the camera controller's (where new flocks look), and
@@ -104,7 +104,7 @@ public sealed class BirdFlocks
     /// </summary>
     public void Update(float dt, Vector3 eye, Vector3 focus, Vector4[]? frustum)
     {
-        foreach (var g in groups)
+        foreach (var g in _groups)
         {
             var range = CellsAround(g, eye);
             if (g.Birds.Count + g.Kind.SpawnCount <= range.Total) SpawnFlock(g, range, focus);
@@ -117,7 +117,7 @@ public sealed class BirdFlocks
     /// <summary>Gives the attractors of this frame (<c>FUN_140260880</c>: one the world no longer has is dropped, one it has gains its place with no birds on it).</summary>
     public void SetAttractors(IReadOnlyList<BirdAttractor> attractors)
     {
-        foreach (var g in groups)
+        foreach (var g in _groups)
         {
             var mine = new Dictionary<object, BirdAttractor>();
             foreach (var a in attractors)
@@ -154,21 +154,25 @@ public sealed class BirdFlocks
     void SpawnFlock(Group g, CellRange range, Vector3 focus)
     {
         var kind = g.Kind;
-        int pick = random.Next(0, range.Matches + 1);
+        int pick = _random.Next(0, range.Matches + 1);
         (int X, int Z)? cell = null;
         for (int x = range.MinX; x <= range.MaxX && pick >= 1; x++)
             for (int z = range.MinZ; z <= range.MaxZ && pick >= 1; z++)
                 if (AmountOf(g, x, z) is not null) { cell = (x, z); pick--; }
         if (cell is not { } c) return;
         var (x0, z0, x1, z1) = WeatherAreas.CellRect(c.X, c.Z);
-        float px = x0 + (x1 - x0) * Next(), pz = z0 + (z1 - z0) * Next(), py = ground(px, pz);
+        float px = x0 + (x1 - x0) * Next(), pz = z0 + (z1 - z0) * Next(), py = _ground(px, pz);
         if (new Vector2(px - focus.X, pz - focus.Z).LengthSquared() < FarSpawn * FarSpawn || py <= kind.SpawnHeightMin || py >= kind.SpawnHeightMax) return;
         var at = new Vector3(px, py, pz);
         for (int i = 0; i < kind.SpawnCount; i++)
         {
             g.Birds.Add(new Bird
             {
-                Position = at, Forward = Normalise(focus - at), State = BirdState.Wander, Timer = Range(30, 180), Scale = Range(kind.ScaleMin, kind.ScaleMax),
+                Position = at,
+                Forward = Normalise(focus - at),
+                State = BirdState.Wander,
+                Timer = Range(30, 180),
+                Scale = Range(kind.ScaleMin, kind.ScaleMax),
             });
             at += Normalise(new Vector3(Range(-1, 1), 0, Range(-1, 1))) * 5;
         }
@@ -189,7 +193,7 @@ public sealed class BirdFlocks
             b.Target = b.Position - stride;
             ReleaseAttractor(b);
         }
-        float groundY = ground(b.Position.X, b.Position.Z);
+        float groundY = _ground(b.Position.X, b.Position.Z);
         var desired = Desire(g, b, inside, dt, ref groundY);
         Turn(b, desired, index, groundY, dt, kind);
         if (b.State is BirdState.Wander or BirdState.Circle) TakeAttractor(g, b);
@@ -219,7 +223,7 @@ public sealed class BirdFlocks
     Vector3 Normal(Vector3 p)
     {
         const float e = 16;
-        float dx = ground(p.X + e, p.Z) - ground(p.X - e, p.Z), dz = ground(p.X, p.Z + e) - ground(p.X, p.Z - e);
+        float dx = _ground(p.X + e, p.Z) - _ground(p.X - e, p.Z), dz = _ground(p.X, p.Z + e) - _ground(p.X, p.Z - e);
         return Vector3.Normalize(new Vector3(-dx, 2 * e, -dz));
     }
 
@@ -400,7 +404,7 @@ public sealed class BirdFlocks
         b.State = b.Mate is null ? BirdState.Wander : BirdState.Follow;
     }
 
-    float Next() => (float)random.NextDouble();
+    float Next() => (float)_random.NextDouble();
     float Range(float min, float max) => min + Next() * (max - min);
 
     static Vector3 Normalise(Vector3 v) => v.LengthSquared() < 1e-12f ? v : Vector3.Normalize(v);
@@ -408,7 +412,7 @@ public sealed class BirdFlocks
     /// <summary>This frame's birds as loose meshes, appended to <paramref name="pieces"/> (the mesh faces along its own +z); <paramref name="ready"/> says per mesh whether it is loaded (null: all are).</summary>
     public void AddPieces(List<DebrisPiece> pieces, Func<string, bool>? ready = null)
     {
-        foreach (var g in groups)
+        foreach (var g in _groups)
         {
             if (g.Kind.Mesh.Length == 0 || g.Birds.Count == 0 || ready is not null && !ready(g.Mesh)) continue;
             foreach (var b in g.Birds) pieces.Add(new DebrisPiece(g.Mesh, b.Scale, Orientation(b.Forward), b.Position));
@@ -432,35 +436,35 @@ public sealed class BirdFlocks
 /// </summary>
 public sealed class BirdThread
 {
-    readonly Action work;
-    readonly SemaphoreSlim go = new(0);
-    volatile bool busy;
-    Exception? failure;
+    readonly Action _work;
+    readonly SemaphoreSlim _go = new(0);
+    volatile bool _busy;
+    Exception? _failure;
 
     public BirdThread(Action work)
     {
-        this.work = work;
+        this._work = work;
         new Thread(Run) { IsBackground = true, Name = "Birds" }.Start();
     }
 
-    public bool Busy => busy;
+    public bool Busy => _busy;
 
     /// <summary>Runs the work once on the thread; the caller waits for <see cref="Busy"/> to clear first. A step that failed throws here, on the host's thread.</summary>
     public void Start()
     {
-        if (failure is { } e) { failure = null; throw new InvalidOperationException("The bird thread failed.", e); }
-        busy = true;
-        go.Release();
+        if (_failure is { } e) { _failure = null; throw new InvalidOperationException("The bird thread failed.", e); }
+        _busy = true;
+        _go.Release();
     }
 
     void Run()
     {
         while (true)
         {
-            go.Wait();
-            try { work(); }
-            catch (Exception e) { failure = e; }
-            busy = false;
+            _go.Wait();
+            try { _work(); }
+            catch (Exception e) { _failure = e; }
+            _busy = false;
         }
     }
 }

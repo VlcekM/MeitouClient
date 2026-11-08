@@ -1,8 +1,8 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Impostors;
 
@@ -17,54 +17,54 @@ internal enum ImpostorProgram { Plain, Caster, Rock, Prepass, AfterPrepass }
 
 internal sealed class ImpostorDraw : IDisposable
 {
-    readonly IGpuContext gpu;
-    readonly NativeProg plain, caster, rock, prepass, afterPrepass;
-    readonly DeviceBuffer quad;
-    readonly Dictionary<(ImpostorProgram, DrawStateKey, AttachmentFormats), GpuPipeline> pipelines = [];
+    readonly IGpuContext _gpu;
+    readonly NativeProg _plain, _caster, _rock, _prepass, _afterPrepass;
+    readonly DeviceBuffer _quad;
+    readonly Dictionary<(ImpostorProgram, DrawStateKey, AttachmentFormats), GpuPipeline> _pipelines = [];
 
     /// <summary>What of a <see cref="DrawState"/> is in a pipeline (the dynamic parts are not).</summary>
     readonly record struct DrawStateKey(BlendState Blend, ColorMask Mask, PolygonKind Polygon, bool AlphaToCoverage, bool DepthClamp);
 
     public ImpostorDraw(IGpuContext gpu, NativeFrame frame)
     {
-        this.gpu = gpu;
-        plain = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.FragmentNative(), "impostors");
-        caster = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.DepthFragmentNative(), "impostor casters");
-        rock = new NativeProg(gpu, frame, ImpostorShaders.RockVertexNative(), ImpostorShaders.RockFragmentNative(), "impostors of rocks");
-        prepass = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.PrepassFragmentNative(), "impostor prepass");
-        afterPrepass = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.FragmentAfterPrepassNative(), "impostors after prepass");
-        quad = DeviceBuffer.Create(gpu, 6 * sizeof(uint), BufferUse.Index, "impostor quad");
+        this._gpu = gpu;
+        _plain = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.FragmentNative(), "impostors");
+        _caster = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.DepthFragmentNative(), "impostor casters");
+        _rock = new NativeProg(gpu, frame, ImpostorShaders.RockVertexNative(), ImpostorShaders.RockFragmentNative(), "impostors of rocks");
+        _prepass = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.PrepassFragmentNative(), "impostor prepass");
+        _afterPrepass = new NativeProg(gpu, frame, ImpostorShaders.VertexNative(), ImpostorShaders.FragmentAfterPrepassNative(), "impostors after prepass");
+        _quad = DeviceBuffer.Create(gpu, 6 * sizeof(uint), BufferUse.Index, "impostor quad");
         using var batch = gpu.Uploads.Begin();
-        batch.Write(quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes<uint>([0, 1, 2, 3, 4, 5]));
+        batch.Write(_quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes<uint>([0, 1, 2, 3, 4, 5]));
     }
 
     /// <summary>Every native program's layout is compatible (the shared push range and sets).</summary>
-    public GpuProgram Program => plain.P;
+    public GpuProgram Program => _plain.P;
 
     /// <summary>The six-entry index buffer (0 to 5).</summary>
-    public GpuBufferBinding Quad => new(quad.Handle, 0, quad.Size);
+    public GpuBufferBinding Quad => new(_quad.Handle, 0, _quad.Size);
 
     /// <summary>The pipeline for <paramref name="state"/>'s fixed-function part into <paramref name="formats"/>. Render thread (Prepare).</summary>
     public GpuPipeline Pipeline(ImpostorProgram which, DrawState state, AttachmentFormats formats)
     {
         var key = (which, new DrawStateKey(state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp), formats);
-        if (pipelines.TryGetValue(key, out var p)) return p;
-        var program = which switch { ImpostorProgram.Caster => caster, ImpostorProgram.Rock => rock, ImpostorProgram.Prepass => prepass, ImpostorProgram.AfterPrepass => afterPrepass, _ => plain };
+        if (_pipelines.TryGetValue(key, out var p)) return p;
+        var program = which switch { ImpostorProgram.Caster => _caster, ImpostorProgram.Rock => _rock, ImpostorProgram.Prepass => _prepass, ImpostorProgram.AfterPrepass => _afterPrepass, _ => _plain };
         Span<LegacyProgram.Attribute?> rows = new LegacyProgram.Attribute?[FoliageShaders.InstanceLocation + 4];
         for (int a = 0; a < 4; a++)
-            rows[FoliageShaders.InstanceLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32f, 64, true);
-        p = gpu.Pipelines.Get(state.Pipeline(program.P, program.Layout(rows), PrimitiveType.Triangles, formats, program.P.Name));
-        pipelines[key] = p;
+            rows[FoliageShaders.InstanceLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32F, 64, true);
+        p = _gpu.Pipelines.Get(state.Pipeline(program.P, program.Layout(rows), PrimitiveType.Triangles, formats, program.P.Name));
+        _pipelines[key] = p;
         return p;
     }
 
     public void Dispose()
     {
-        plain.Dispose();
-        caster.Dispose();
-        rock.Dispose();
-        prepass.Dispose();
-        afterPrepass.Dispose();
-        quad.Dispose();
+        _plain.Dispose();
+        _caster.Dispose();
+        _rock.Dispose();
+        _prepass.Dispose();
+        _afterPrepass.Dispose();
+        _quad.Dispose();
     }
 }

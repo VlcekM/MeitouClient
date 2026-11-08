@@ -13,7 +13,7 @@ internal sealed partial class ZoneGeometryGatherer
     {
         var (ox, oz) = WorldLayout.ZoneOrigin(zone);
         var (c0, r0) = WorldLayout.ToSample(ox, oz);
-        return map.ReadWindow((int)Math.Floor(c0) - 1, (int)Math.Floor(r0) - 1, WorldLayout.SamplesPerZone + 3, WorldLayout.SamplesPerZone + 3);
+        return _map.ReadWindow((int)Math.Floor(c0) - 1, (int)Math.Floor(r0) - 1, WorldLayout.SamplesPerZone + 3, WorldLayout.SamplesPerZone + 3);
     }
 
     /// <summary>Heightmap samples per terrain quad edge.</summary>
@@ -30,7 +30,7 @@ internal sealed partial class ZoneGeometryGatherer
         int c1 = (int)Math.Ceiling(WorldLayout.ToSample(g.ZoneMax.X + g.Margin, g.ZoneMax.Y + g.Margin).Column);
         int r1 = (int)Math.Ceiling(WorldLayout.ToSample(g.ZoneMax.X + g.Margin, g.ZoneMax.Y + g.Margin).Row);
         int cols = (c1 - c0 + step - 1) / step + 1, rows = (r1 - r0 + step - 1) / step + 1;
-        var win = map.ReadWindow(c0, r0, cols, rows, step);
+        var win = _map.ReadWindow(c0, r0, cols, rows, step);
         float water = WorldWater.Height;
         var index = new int[cols * rows];
         var depth = new float[cols * rows];   // under the water level; 0 or less: dry

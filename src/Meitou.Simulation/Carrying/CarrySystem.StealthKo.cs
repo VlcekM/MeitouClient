@@ -35,16 +35,16 @@ public sealed partial class CarrySystem
     /// <summary>The senses the walk checks (a target that spotted the attacker turns round); null: never spotted.</summary>
     public AggroSystem? Aggro { get; set; }
 
-    readonly List<StealthKoEntry> knockouts = [];
-    XpService? xp;
+    readonly List<StealthKoEntry> _knockouts = [];
+    XpService? _xp;
 
     /// <summary>The swings rolled since the last <see cref="TakeKnockouts"/> (the host shows them as "*Thunk*" or "Failed!").</summary>
-    public IReadOnlyList<StealthKoEntry> Knockouts => knockouts;
+    public IReadOnlyList<StealthKoEntry> Knockouts => _knockouts;
 
     public StealthKoEntry[] TakeKnockouts()
     {
-        StealthKoEntry[] all = [.. knockouts];
-        knockouts.Clear();
+        StealthKoEntry[] all = [.. _knockouts];
+        _knockouts.Clear();
         return all;
     }
 
@@ -71,7 +71,7 @@ public sealed partial class CarrySystem
     public static float StealthKoChance(CharacterCold attacker, CharacterCold target, bool spotted = false, bool heard = false, bool noticedInFight = false)
     {
         if (spotted || noticedInFight || attacker.Stats is not { } a || target.Stats is not { } t) return 0;
-        float Skill(CharacterCold c, CharacterStats s, StatsEnumerated stat) => s[stat] * (c.Medical?.StatMultiplier(stat) ?? 1) * Combat.CombatSystem.GearFactor(c, stat);
+        static float Skill(CharacterCold c, CharacterStats s, StatsEnumerated stat) => s[stat] * (c.Medical?.StatMultiplier(stat) ?? 1) * CombatSystem.GearFactor(c, stat);
         float defence = Skill(target, t, StatsEnumerated.Assassination);
         defence = MathF.Max(defence, Skill(target, t, StatsEnumerated.Thieving) * 0.5f);
         defence = MathF.Max(defence, Orders.Stealth(target) * 100 * 0.5f);
@@ -87,7 +87,7 @@ public sealed partial class CarrySystem
         var table = world.Characters;
         if (!table.TryResolveNext(order.Target, out int target) || !CanBeKnockedOut(table.Cold(target)!)) return;
         // The first that can go, in the order given (the selection's order), so the chance the interface showed is the one rolled.
-        var entry = new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.STEALTH_KNOCKOUT, this) { Target = order.Target };
+        var entry = new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.StealthKnockout, this) { Target = order.Target };
         foreach (var id in Who(world, order.Attackers))
             if (table.TryResolveNext(id, out int attacker) && PlayerOrders.CanRun(world, attacker, entry).CanRun)
             {
@@ -163,7 +163,7 @@ public sealed partial class CarrySystem
     {
         var attackerId = table.IdOf(attacker);
         return Aggro?.Spotted(target, attackerId) == true
-            || world.SystemOf<Combat.CombatSystem>()?.StateOf(table.IdOf(target)) is { } fight && fight.TargetSlot == attacker && fight.TargetGeneration == attackerId.Generation;
+            || world.SystemOf<CombatSystem>()?.StateOf(table.IdOf(target)) is { } fight && fight.TargetSlot == attacker && fight.TargetGeneration == attackerId.Generation;
     }
 
     static void Face(ref CharacterHot n, in CharacterHot target)
@@ -213,7 +213,7 @@ public sealed partial class CarrySystem
         var targetId = table.IdOf(t);
         bool spotted = Aggro?.Spotted(t, attackerId) == true;
         // Fighting and aware of the attacker (having an entry for it: it saw or heard it, or is fighting it) while the attacker is not unseen: no chance (FUN_1408852f0, FUN_1408593d0 makes an entry on a sight or a hearing).
-        bool aware = spotted || cold.KnockoutHeard || world.SystemOf<Combat.CombatSystem>()?.StateOf(targetId) is { } fight && fight.TargetSlot == i && fight.TargetGeneration == attackerId.Generation;
+        bool aware = spotted || cold.KnockoutHeard || world.SystemOf<CombatSystem>()?.StateOf(targetId) is { } fight && fight.TargetSlot == i && fight.TargetGeneration == attackerId.Generation;
         bool noticed = target.InCombat && aware && Aggro?.Unseen(table, attackerId) == false;
         float chance = StealthKoChance(cold, target, spotted, cold.KnockoutHeard, noticed);
         float roll = Rng.Float(Rng.Hash(world.Seed, Rng.Key(attackerId), RngPurpose.StealthKo, (ulong)world.Tick)) * 100;
@@ -224,13 +224,13 @@ public sealed partial class CarrySystem
         if (!noXp && cold.Stats is { } stats && cold.Race is { } race)
         {
             float f = target.IsImprisoned ? 0.07f : Asleep(table, t) ? 0.5f : 1;
-            (xp ??= new XpService(Constants, bodyOptions)).Continuous(stats, race, StatsEnumerated.Assassination, 1, f * (success ? 100 : 300));
+            (_xp ??= new XpService(Constants, _bodyOptions)).Continuous(stats, race, StatsEnumerated.Assassination, 1, f * (success ? 100 : 300));
         }
         if (success)
         {
             if (target.Medical is { } medical && target.Race is { } targetRace)
             {
-                var ctx = new MedicalContext(Constants, bodyOptions, targetRace) { Toughness = target.Stats?.ScaledToughness ?? 0, Strength = target.Stats?.Strength ?? 50, HasStats = target.Stats is not null };
+                var ctx = new MedicalContext(Constants, _bodyOptions, targetRace) { Toughness = target.Stats?.ScaledToughness ?? 0, Strength = target.Stats?.Strength ?? 50, HasStats = target.Stats is not null };
                 float assassination = (cold.Stats?[StatsEnumerated.Assassination] ?? 0) * (cold.Medical?.StatMultiplier(StatsEnumerated.Assassination) ?? 1);
                 medical.KnockOut(medical.PutDownKoSeconds(ctx, assassination * 0.01f));
                 TaskStart.Stand(table, t);
@@ -249,12 +249,12 @@ public sealed partial class CarrySystem
                 talk.TagEnemy(world, i, t);
             }
             if (DecisionSystem.Decides(target)) Engage(world, t, i);   // a player character: attackTarget's replan, the step decides (CarrySystem.Engage)
-            else world.Defer(new Combat.AttackOrder([targetId], attackerId) { Tick = world.Tick + 1, Defensive = true });
+            else world.Defer(new AttackOrder([targetId], attackerId) { Tick = world.Tick + 1, Defensive = true });
         }
         // The swing books an Assault on the target's faction at the roll, hit or miss (the pending-crime setter FUN_140852c80 with code 5, called unconditionally, Verified).
         Crimes?.SetPending(world, i, Crime.CrimeCode.Assault, target.Faction, targetId, Crime.CrimeSystem.MinTimer);
         // The floater over the attacker, shown to anyone (Verified): "*Thunk*" or "Failed!" + " (No XP)".
         world.Floaters?.Enqueue(Floater.Strike(attackerId, table.Next[i].Position, success ? Loc.Tr("*Thunk*") : Loc.Tr("Failed!") + (noXp ? Loc.Tr(" (No XP)") : ""), success));
-        knockouts.Add(new StealthKoEntry(world.Tick, attackerId, targetId, chance, success, noXp));
+        _knockouts.Add(new StealthKoEntry(world.Tick, attackerId, targetId, chance, success, noXp));
     }
 }

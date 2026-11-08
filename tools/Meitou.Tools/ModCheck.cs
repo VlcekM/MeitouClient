@@ -29,7 +29,7 @@ static class ModCheck
     sealed record Setup(GameDatabase Db, PopulationData Data, IWalkability Walk);
 
     // The world being run, for the mods' Enqueue and Tick.
-    static World? current;
+    static World? s_current;
 
     public static int Run(GameInstall install, string[] args)
     {
@@ -109,7 +109,7 @@ static class ModCheck
             return null;
         }
         Console.WriteLine($"mods      running the code of {string.Join(", ", enabled.Select(m => m.Name))}");
-        var mods = ModHost.Load(new ModHostOptions(enabled, setup.Db, setup.Data, () => current));
+        var mods = ModHost.Load(new ModHostOptions(enabled, setup.Db, setup.Data, () => s_current));
         foreach (var notice in mods.Notices) Console.Error.WriteLine($"mods      {notice}");
         return mods.Mods.Count > 0 ? mods : null;
     }
@@ -161,12 +161,12 @@ static class ModCheck
         }).Systems;
         var settings = new WorldSettings { Seed = 1, Threads = threads, MinPartitionSize = 32, PublishSnapshots = false };
         using var world = new World(settings, walk, systems);
-        current = world;
+        s_current = world;
         SaveLoader.Load(world, save, setup.Data, new SaveLoadOptions { Appearances = setup.Data.Appearances });
         mods?.RestoreSaveData(world, save.ModData);
         Focus(world);
         try { return Record(world, options.Ticks, mods); }
-        finally { current = null; }
+        finally { s_current = null; }
     }
 
     static void Focus(World world)

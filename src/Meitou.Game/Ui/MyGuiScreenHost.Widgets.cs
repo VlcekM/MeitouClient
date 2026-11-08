@@ -38,42 +38,42 @@ public sealed partial class MyGuiScreenHost
     sealed record LegacySlide(string Screen, string Widget, string Action, string Argument, UiRect Track);
     sealed record WindowGrab(string Screen, Vector2 At, UiRect Start, Vector4 Scale);
 
-    Grab? grab;
-    LegacySlide? legacy;
-    WindowGrab? windowGrab;
-    (string Screen, string Combo)? openCombo;
+    Grab? _grab;
+    LegacySlide? _legacy;
+    WindowGrab? _windowGrab;
+    (string Screen, string Combo)? _openCombo;
     /// <summary>The list or combo box that has the keyboard (the last one clicked): its screen and selection key.</summary>
-    (string Screen, string Key)? keyFocus;
-    readonly Dictionary<string, UiBindings> lastBindings = new(StringComparer.Ordinal);
+    (string Screen, string Key)? _keyFocus;
+    readonly Dictionary<string, UiBindings> _lastBindings = new(StringComparer.Ordinal);
 
     const double RepeatDelay = 0.5, RepeatStep = 0.1, SnapDistance = 10;
-    bool CapturesWidget => grab is not null || legacy is not null || windowGrab is not null;
+    bool CapturesWidget => _grab is not null || _legacy is not null || _windowGrab is not null;
 
-    public float GetScroll(string id, string key) => screens[id].Scroll.GetValueOrDefault(key);
-    public void SetScroll(string id, string key, float value) => screens[id].Scroll[key] = value;
+    public float GetScroll(string id, string key) => _screens[id].Scroll.GetValueOrDefault(key);
+    public void SetScroll(string id, string key, float value) => _screens[id].Scroll[key] = value;
     /// <summary>Back to the top (a new content for the screen's lists and scroll views).</summary>
-    public void ResetScroll(string id) => screens[id].Scroll.Clear();
+    public void ResetScroll(string id) => _screens[id].Scroll.Clear();
 
-    IReadOnlyList<UiControl>? Controls(string id) => frame.FirstOrDefault(f => f.Id == id)?.Controls;
+    IReadOnlyList<UiControl>? Controls(string id) => _frame.FirstOrDefault(f => f.Id == id)?.Controls;
     UiControl? Find(string id, string name) => Controls(id)?.LastOrDefault(c => c.Name == name);
     static float Num(UiControl c, string key, float fallback = 0) => MyGuiPresentation.Num(c.Properties, key, fallback);
 
     void PushWidgetState(string id, Screen s, UiBindings b)
     {
         foreach (var t in s.Sorts) b.Sorts[t.Key] = t.Value;
-        if (openCombo is { } popup && popup.Screen == id) b.OpenCombo = popup.Combo;
-        if (grab is { } g && g.Screen == id) b.States[g.Control] = "pushed";
-        lastBindings[id] = b;
+        if (_openCombo is { } popup && popup.Screen == id) b.OpenCombo = popup.Combo;
+        if (_grab is { } g && g.Screen == id) b.States[g.Control] = "pushed";
+        _lastBindings[id] = b;
     }
 
     void ForgetWidgets(string id)
     {
-        if (grab?.Screen == id) grab = null;
-        if (legacy?.Screen == id) legacy = null;
-        if (windowGrab?.Screen == id) windowGrab = null;
-        if (openCombo?.Screen == id) openCombo = null;
-        if (keyFocus?.Screen == id) keyFocus = null;
-        lastBindings.Remove(id);
+        if (_grab?.Screen == id) _grab = null;
+        if (_legacy?.Screen == id) _legacy = null;
+        if (_windowGrab?.Screen == id) _windowGrab = null;
+        if (_openCombo?.Screen == id) _openCombo = null;
+        if (_keyFocus?.Screen == id) _keyFocus = null;
+        _lastBindings.Remove(id);
     }
 
     // ---- pointer
@@ -82,31 +82,31 @@ public sealed partial class MyGuiScreenHost
     bool PressWidget(string id, UiControl c, Vector2 p)
     {
         PressOutside(c);
-        var s = screens[id];
+        var s = _screens[id];
         var parts = c.Action.Split(':');
         if (parts.Length >= 4 && parts[0] == "mygui")
         {
             switch (parts[1])
             {
-                case "list": keyFocus = (id, parts[2]); return false;
+                case "list": _keyFocus = (id, parts[2]); return false;
                 case "bar": BarPress(id, c, parts[2], parts[3], p); return true;
                 case "combo": ComboPress(id, parts[2], parts[3]); return true;
                 case "sort":
-                    if (lastBindings.TryGetValue(id, out var b)) s.Sorts[parts[2]] = b.Sorts.TryGetValue(parts[2], out var now) && now.Column == int.Parse(parts[3], CultureInfo.InvariantCulture)
+                    if (_lastBindings.TryGetValue(id, out var b)) s.Sorts[parts[2]] = b.Sorts.TryGetValue(parts[2], out var now) && now.Column == int.Parse(parts[3], CultureInfo.InvariantCulture)
                         ? (now.Column, !now.Ascending) : (int.Parse(parts[3], CultureInfo.InvariantCulture), true);
-                    keyFocus = (id, parts[2]);
+                    _keyFocus = (id, parts[2]);
                     return true;
                 case "step":
                     Activated?.Invoke(new(id, parts[2], "step", parts[3], parts[3] == "start" ? -1 : 1));
                     return true;
             }
         }
-        else keyFocus = null;
+        else _keyFocus = null;
         if (c.Properties.ContainsKey("WindowAction") || c.Properties.ContainsKey("WindowScale")) return BeginWindowAction(id, s, c, p);
         if (c.Properties.GetValueOrDefault("Slider") == "true")
         {
             Blur();
-            legacy = new(id, c.Name, c.Action, c.Argument, c.Bounds);
+            _legacy = new(id, c.Name, c.Action, c.Argument, c.Bounds);
             Slide(p);
             return true;
         }
@@ -116,13 +116,13 @@ public sealed partial class MyGuiScreenHost
     /// <summary>A press that is not on a combo box's popup closes the popup (MyGUI: the list loses key focus); null: outside every window.</summary>
     void PressOutside(UiControl? c)
     {
-        if (openCombo is { } popup && (c is null || !(c.Name.StartsWith(popup.Combo + "@List#", StringComparison.Ordinal) || c.Action.StartsWith($"mygui:combo:{popup.Combo}:", StringComparison.Ordinal)))) openCombo = null;
-        if (c is null) keyFocus = null;
+        if (_openCombo is { } popup && (c is null || !(c.Name.StartsWith(popup.Combo + "@List#", StringComparison.Ordinal) || c.Action.StartsWith($"mygui:combo:{popup.Combo}:", StringComparison.Ordinal)))) _openCombo = null;
+        if (c is null) _keyFocus = null;
     }
 
     void Slide(Vector2 p)
     {
-        if (legacy is not { } s) return;
+        if (_legacy is not { } s) return;
         float t = s.Track.Width > 0 ? Math.Clamp((p.X - s.Track.X) / s.Track.Width, 0, 1) : 0;
         Activated?.Invoke(new(s.Screen, s.Widget, s.Action, s.Argument, t));
     }
@@ -141,18 +141,18 @@ public sealed partial class MyGuiScreenHost
         var track = Controls(id)!.LastOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == bar && c.Properties.GetValueOrDefault("TemplatePart") == "Track")?.Bounds ?? default;
         float thumb = vertical ? track.Height : track.Width;
         float coord = vertical ? p.Y : p.X;
-        keyFocus = null;
-        if (part == "track") { grab = new(id, bar, pressed.Name, place, thumb, vertical, true, 0) { Offset = coord - (vertical ? track.Y : track.X) }; return; }
+        _keyFocus = null;
+        if (part == "track") { _grab = new(id, bar, pressed.Name, place, thumb, vertical, true, 0) { Offset = coord - (vertical ? track.Y : track.X) }; return; }
         if (part is "first" or "second" && pr.GetValueOrDefault("BarMove") == "true")
         {
             if (thumb <= 0) return;
-            grab = new(id, bar, pressed.Name, place, thumb, vertical, true, 0) { Offset = thumb / 2 };
-            DragThumb(grab, p);
+            _grab = new(id, bar, pressed.Name, place, thumb, vertical, true, 0) { Offset = thumb / 2 };
+            DragThumb(_grab, p);
             return;
         }
         float delta = part switch { "start" => -page, "end" => page, "first" => -viewPage, _ => viewPage };
         StepBar(id, root, delta);
-        grab = new(id, bar, pressed.Name, place, thumb, vertical, false, repeat ? delta : 0) { Next = Stopwatch.GetTimestamp() + (long)(RepeatDelay * Stopwatch.Frequency) };
+        _grab = new(id, bar, pressed.Name, place, thumb, vertical, false, repeat ? delta : 0) { Next = Stopwatch.GetTimestamp() + (long)(RepeatDelay * Stopwatch.Frequency) };
     }
 
     void DragThumb(Grab g, Vector2 p)
@@ -165,7 +165,7 @@ public sealed partial class MyGuiScreenHost
     }
 
     float BarPosition(string id, UiControl root) =>
-        Math.Clamp(screens[id].Scroll.TryGetValue(root.Properties.GetValueOrDefault("BarKey") ?? "", out float stored) ? stored : Num(root, "BarPos"), 0, Num(root, "BarMax"));
+        Math.Clamp(_screens[id].Scroll.TryGetValue(root.Properties.GetValueOrDefault("BarKey") ?? "", out float stored) ? stored : Num(root, "BarPos"), 0, Num(root, "BarMax"));
     void StepBar(string id, UiControl root, float delta) => SetBar(id, root, BarPosition(id, root) + delta);
 
     /// <summary>Moves a scroll bar to <paramref name="value"/> (clamped): the position is the host's; a bar no widget drives raises <c>scroll</c>.</summary>
@@ -173,28 +173,28 @@ public sealed partial class MyGuiScreenHost
     {
         float v = Math.Clamp(value, 0, Num(root, "BarMax"));
         if (v == BarPosition(id, root)) return;
-        screens[id].Scroll[root.Properties["BarKey"]] = v;
+        _screens[id].Scroll[root.Properties["BarKey"]] = v;
         if (root.Properties.GetValueOrDefault("BarOwned") != "true") Activated?.Invoke(new(id, root.Properties.GetValueOrDefault("BarName") ?? root.Name, "scroll", "", v));
     }
 
     /// <summary>Held arrows and track parts repeat on real time (the arrangement runs every frame).</summary>
     void RepeatTick()
     {
-        if (grab is not { } g || g.Delta == 0 || Stopwatch.GetTimestamp() < g.Next) return;
+        if (_grab is not { } g || g.Delta == 0 || Stopwatch.GetTimestamp() < g.Next) return;
         if (Find(g.Screen, g.Bar) is { } root) StepBar(g.Screen, root, g.Delta);
         g.Next = Stopwatch.GetTimestamp() + (long)(RepeatStep * Stopwatch.Frequency);
     }
 
     bool MoveWidget(Vector2 p)
     {
-        if (grab is { Thumbing: true } g) { DragThumb(g, p); return true; }
-        if (grab is not null) return true;
-        if (legacy is not null) { Slide(p); return true; }
-        if (windowGrab is not null) { ResizeWindow(p); return true; }
+        if (_grab is { Thumbing: true } g) { DragThumb(g, p); return true; }
+        if (_grab is not null) return true;
+        if (_legacy is not null) { Slide(p); return true; }
+        if (_windowGrab is not null) { ResizeWindow(p); return true; }
         return false;
     }
 
-    void ReleaseWidget() { grab = null; legacy = null; windowGrab = null; }
+    void ReleaseWidget() { _grab = null; _legacy = null; _windowGrab = null; }
 
     // ---- wheel
 
@@ -206,7 +206,7 @@ public sealed partial class MyGuiScreenHost
     {
         if (Controls(id) is not { } controls || steps == 0) return;
         float sign = steps > 0 ? -1 : 1;
-        var s = screens[id];
+        var s = _screens[id];
         for (int i = controls.Count - 1; i >= 0; i--)
         {
             var c = controls[i];
@@ -216,7 +216,7 @@ public sealed partial class MyGuiScreenHost
             if (pr.ContainsKey("ComboCount"))
             {
                 string key = pr["ListKey"];
-                if (keyFocus == (id, key) && openCombo != (id, key) && int.Parse(pr["ComboCount"], CultureInfo.InvariantCulture) is var count and > 0)
+                if (_keyFocus == (id, key) && _openCombo != (id, key) && int.Parse(pr["ComboCount"], CultureInfo.InvariantCulture) is var count and > 0)
                 {
                     int selected = s.Selected.TryGetValue(key, out int chosen) ? chosen : (int)Num(c, "ComboSelected", -1);
                     SelectItem(id, key, Math.Clamp(selected + (int)sign, 0, count - 1));
@@ -237,24 +237,24 @@ public sealed partial class MyGuiScreenHost
     /// <summary>Selects the row <paramref name="source"/> (a row of the bound list) and raises <c>select</c> with the item's id.</summary>
     void SelectItem(string id, string key, int source)
     {
-        if (!lastBindings.TryGetValue(id, out var b) || !b.Lists.TryGetValue(key, out var items) || source < 0 || source >= items.Count) return;
-        screens[id].Selected[key] = source;
+        if (!_lastBindings.TryGetValue(id, out var b) || !b.Lists.TryGetValue(key, out var items) || source < 0 || source >= items.Count) return;
+        _screens[id].Selected[key] = source;
         Activated?.Invoke(new(id, key, "select", items[source].Id, source));
     }
 
     void ComboPress(string id, string combo, string what)
     {
-        keyFocus = (id, combo);
-        if (what == "toggle") { openCombo = openCombo == (id, combo) ? null : (id, combo); return; }
-        openCombo = null;
+        _keyFocus = (id, combo);
+        if (what == "toggle") { _openCombo = _openCombo == (id, combo) ? null : (id, combo); return; }
+        _openCombo = null;
         SelectItem(id, combo, int.Parse(what, CultureInfo.InvariantCulture));
     }
 
     /// <summary>Closes an open combo box popup (Esc); false: none was open.</summary>
     bool CloseCombo()
     {
-        if (openCombo is null) return false;
-        openCombo = null;
+        if (_openCombo is null) return false;
+        _openCombo = null;
         return true;
     }
 
@@ -264,17 +264,17 @@ public sealed partial class MyGuiScreenHost
     /// </summary>
     public bool ListKey(UiListKey key)
     {
-        if (keyFocus is not { } f || !open.Contains(f.Screen) || !lastBindings.TryGetValue(f.Screen, out var b) || Controls(f.Screen) is not { } controls) return false;
+        if (_keyFocus is not { } f || !_open.Contains(f.Screen) || !_lastBindings.TryGetValue(f.Screen, out var b) || Controls(f.Screen) is not { } controls) return false;
         var owner = controls.LastOrDefault(c => c.Properties.GetValueOrDefault("ListKey") == f.Key);
         if (owner is null || !b.Lists.TryGetValue(f.Key, out var items)) return false;
-        var s = screens[f.Screen];
+        var s = _screens[f.Screen];
         int[] order = MyGuiPresentation.ListOrder(b, f.Key);
         int source = s.Selected.TryGetValue(f.Key, out int chosen) ? chosen : b.SelectedItems.GetValueOrDefault(f.Key, -1);
         int old = source < 0 ? -1 : Array.IndexOf(order, source), sel = old, count = order.Length;
         bool combo = owner.Properties.ContainsKey("ComboCount");
-        if (combo && openCombo != f)
+        if (combo && _openCombo != f)
         {
-            if (key == UiListKey.Down) { openCombo = f; return true; }
+            if (key == UiListKey.Down) { _openCombo = f; return true; }
             if (key == UiListKey.Accept && old >= 0) { Activated?.Invoke(new(f.Screen, f.Key, "accept", items[source].Id, source)); return true; }
             return false;
         }
@@ -286,7 +286,7 @@ public sealed partial class MyGuiScreenHost
             case UiListKey.Accept:
                 if (old < 0) return false;
                 Activated?.Invoke(new(f.Screen, f.Key, "accept", items[source].Id, source));
-                if (combo) openCombo = null;
+                if (combo) _openCombo = null;
                 return true;
             case UiListKey.Up: if (sel != 0) sel = sel < 0 ? 0 : sel - 1; break;
             case UiListKey.Down: sel = sel < 0 ? 0 : sel + 1; if (sel >= count) sel = old; break;
@@ -362,15 +362,15 @@ public sealed partial class MyGuiScreenHost
     /// </summary>
     void DragWindow((string Screen, Vector2 At, Vector2 Offset) d, Vector2 p)
     {
-        var was = screens[d.Screen].Offset;
+        var was = _screens[d.Screen].Offset;
         MoveWindow(d, p);
-        var moved = screens[d.Screen].Offset - was;
-        foreach (var (follower, leader) in leaders) if (leader == d.Screen) screens[follower].Offset += moved;
+        var moved = _screens[d.Screen].Offset - was;
+        foreach (var (follower, leader) in _leaders) if (leader == d.Screen) _screens[follower].Offset += moved;
     }
 
     void MoveWindow((string Screen, Vector2 At, Vector2 Offset) d, Vector2 p)
     {
-        var s = screens[d.Screen];
+        var s = _screens[d.Screen];
         var want = d.Offset + p - d.At;
         if (s.Viewport == default) { s.Offset = want; return; }
         var vp = s.Viewport; var size = s.PlacedSize;
@@ -407,16 +407,16 @@ public sealed partial class MyGuiScreenHost
         bool resizes = scale.Z != 0 || scale.W != 0;
         if (!resizes && !s.Movable) return true;
         if (scale == default) return true;
-        if (!resizes) { drag = (id, p, s.Offset); return true; }
-        windowGrab = new(id, p, new(s.Placed.X, s.Placed.Y, s.PlacedSize.X, s.PlacedSize.Y), scale);
+        if (!resizes) { _drag = (id, p, s.Offset); return true; }
+        _windowGrab = new(id, p, new(s.Placed.X, s.Placed.Y, s.PlacedSize.X, s.PlacedSize.Y), scale);
         return true;
     }
 
     /// <summary>A resize grip's drag (Verified against MyGUI 3.2.2 Window.cpp): the start rectangle plus the scale times the travel, the size within <c>MinSize</c> / <c>MaxSize</c> (a left / top edge then keeps the far edge).</summary>
     void ResizeWindow(Vector2 p)
     {
-        if (windowGrab is not { } g || !open.Contains(g.Screen)) return;
-        var s = screens[g.Screen];
+        if (_windowGrab is not { } g || !_open.Contains(g.Screen)) return;
+        var s = _screens[g.Screen];
         var travel = p - g.At;
         var (min, max) = SizeLimits(s.Layout.Roots.FirstOrDefault(r => r.Type == "Window" || s.CentreRoot) ?? s.Layout.Roots[0]);
         float x = g.Start.X + g.Scale.X * travel.X, y = g.Start.Y + g.Scale.Y * travel.Y;

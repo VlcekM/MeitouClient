@@ -28,12 +28,12 @@ public class StatsTests
     [Fact]
     public void Race_record_scan_continues_past_a_stored_zero_and_stops_at_the_first_missing_key()
     {
-        var part = new FcsRecord { StringId = "1-t", Flags = 0x10, Name = "Head", RecordType = FcsRecordType.LOCATIONAL_DAMAGE };
+        var part = new FcsRecord { StringId = "1-t", Flags = 0x10, Name = "Head", RecordType = FcsRecordType.LocationalDamage };
         part.Ints["body part type"] = 3;
         part.Bools["death"] = true;
         part.Bools["collapses"] = true;
         part.Ints["collapse part"] = 1;
-        var race = new FcsRecord { StringId = "2-t", Flags = 0x10, Name = "Test", RecordType = FcsRecordType.RACE };
+        var race = new FcsRecord { StringId = "2-t", Flags = 0x10, Name = "Test", RecordType = FcsRecordType.Race };
         race.Ints["stats good0"] = 0;
         race.Ints["stats good1"] = 4;
         race.Ints["stats good3"] = 13;   // after a gap: never read

@@ -30,7 +30,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     /// <summary>The chance at or above the lock's level, and the skill a caged picker loses for the roll (<b>Verified</b>).</summary>
     public const float MaxChance = 0.9f, CagedPenalty = 10;
 
-    readonly XpService xp = new(constants, options);
+    readonly XpService _xp = new(constants, options);
 
     /// <summary><c>p = 0.9</c> when <paramref name="skill"/> &gt;= <paramref name="level"/>, else <c>0.9 / 2^((level - skill) / 10)</c> (<c>FUN_140297dc0</c>, <b>Verified</b>).</summary>
     public static float Chance(int level, float skill) => skill >= level ? MaxChance : MaxChance / MathF.Pow(2, (level - skill) / 10f);
@@ -87,7 +87,7 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
         {
             l.NextRoll = LockState.RetryMin + (LockState.RetryMax - LockState.RetryMin) * Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Lock, counter + 1));
         }
-        if (c.Stats is { } stats && c.Race is { } race) xp.Lockpicking(stats, race, success);
+        if (c.Stats is { } stats && c.Race is { } race) _xp.Lockpicking(stats, race, success);
         return success ? PickOutcome.Success : PickOutcome.Failed;
     }
 

@@ -17,16 +17,16 @@ public sealed partial class UiPainter
     /// <summary>Frames a record is kept without being drawn.</summary>
     const int PaintRecordLife = 120;
 
-    readonly Dictionary<PaintKey, PaintRecord> painted = new(PaintKeyComparer.Instance);
-    (int Width, int Height, float MinimumPixels, UiMode Mode, int Textures, int Fonts) paintedFor;
-    long paintFrame;
-    int textureVersion;
+    readonly Dictionary<PaintKey, PaintRecord> _painted = new(PaintKeyComparer.Instance);
+    (int Width, int Height, float MinimumPixels, UiMode Mode, int Textures, int Fonts) _paintedFor;
+    long _paintFrame;
+    int _textureVersion;
 
     /// <summary>Set while a control is painted when its picture changes on its own (it is never recorded).</summary>
-    bool paintVolatile;
+    bool _paintVolatile;
 
-    readonly List<DebugOverlay.OverlayPass.Recorded> recordAdds = [];
-    readonly List<float> recordFloats = [];
+    readonly List<DebugOverlay.OverlayPass.Recorded> _recordAdds = [];
+    readonly List<float> _recordFloats = [];
 
     readonly record struct PaintKey(UiControl Control, byte State);
 
@@ -43,31 +43,31 @@ public sealed partial class UiPainter
     /// <summary>A new frame of <see cref="Draw"/>: every record dropped when what they were painted against changed; old ones dropped now and then.</summary>
     void BeginPaintFrame(int width, int height, float minimumTextPixels)
     {
-        paintFrame++;
-        var now = (width, height, minimumTextPixels, Mode, textureVersion, UiFont.Changes);
-        if (now != paintedFor)
+        _paintFrame++;
+        var now = (width, height, minimumTextPixels, Mode, textureVersion: _textureVersion, UiFont.Changes);
+        if (now != _paintedFor)
         {
-            painted.Clear();
-            paintedFor = now;
+            _painted.Clear();
+            _paintedFor = now;
         }
 
-        if (paintFrame % 60 != 0) return;
-        foreach (var (key, record) in painted)
-            if (record.Seen < paintFrame - PaintRecordLife) painted.Remove(key);
+        if (_paintFrame % 60 != 0) return;
+        foreach (var (key, record) in _painted)
+            if (record.Seen < _paintFrame - PaintRecordLife) _painted.Remove(key);
     }
 
     void PaintCached(UiControl c, int width, int height, Vector2 mouse, string? active, float minimumTextPixels, DebugOverlay.OverlayPass pass)
     {
         bool hovered = c.Bounds.Contains(mouse.X, mouse.Y), pushed = active is not null && active == c.Action;
         var key = new PaintKey(c, (byte)((hovered ? 1 : 0) | (pushed ? 2 : 0)));
-        if (!painted.TryGetValue(key, out var record))
+        if (!_painted.TryGetValue(key, out var record))
         {
-            painted[key] = new PaintRecord { Seen = paintFrame };
+            _painted[key] = new PaintRecord { Seen = _paintFrame };
             PaintControl(c, width, height, mouse, active, minimumTextPixels, pass);
             return;
         }
 
-        record.Seen = paintFrame;
+        record.Seen = _paintFrame;
         if (record.Ready) Replay(record, pass);
         else if (record.Volatile) PaintControl(c, width, height, mouse, active, minimumTextPixels, pass);
         else Record(record, c, width, height, mouse, active, minimumTextPixels, pass);
@@ -76,18 +76,18 @@ public sealed partial class UiPainter
     void Replay(PaintRecord record, DebugOverlay.OverlayPass pass)
     {
         // The fonts draw into the painter's target, as painting sets them (the loading screen's and the HUD's targets differ).
-        foreach (var add in record.Adds) add.Owner.Target = overlay.Target;
+        foreach (var add in record.Adds) add.Owner.Target = _overlay.Target;
         pass.Replay(record.Floats, record.Adds);
-        opaqueRects.AddRange(record.Opaque);
-        editBoxes.AddRange(record.Edits);
+        _opaqueRects.AddRange(record.Opaque);
+        _editBoxes.AddRange(record.Edits);
     }
 
     /// <summary>Paints the control while the pass records what it adds; kept unless the control turned out to change on its own.</summary>
     void Record(PaintRecord record, UiControl c, int width, int height, Vector2 mouse, string? active, float minimumTextPixels, DebugOverlay.OverlayPass pass)
     {
-        int opaqueFrom = opaqueRects.Count, editsFrom = editBoxes.Count, fonts = UiFont.Changes, textures = textureVersion;
-        paintVolatile = false;
-        pass.BeginRecording(recordAdds, recordFloats);
+        int opaqueFrom = _opaqueRects.Count, editsFrom = _editBoxes.Count, fonts = UiFont.Changes, textures = _textureVersion;
+        _paintVolatile = false;
+        pass.BeginRecording(_recordAdds, _recordFloats);
         try
         {
             PaintControl(c, width, height, mouse, active, minimumTextPixels, pass);
@@ -98,18 +98,18 @@ public sealed partial class UiPainter
         }
 
         // A texture loaded or an atlas grown while it was painted: the next frame starts afresh anyway.
-        if (paintVolatile || fonts != UiFont.Changes || textures != textureVersion) record.Volatile = paintVolatile;
+        if (_paintVolatile || fonts != UiFont.Changes || textures != _textureVersion) record.Volatile = _paintVolatile;
         else
         {
-            record.Floats = [.. recordFloats];
-            record.Adds = [.. recordAdds];
-            record.Opaque = [.. CollectionsMarshal.AsSpan(opaqueRects)[opaqueFrom..]];
-            record.Edits = [.. CollectionsMarshal.AsSpan(editBoxes)[editsFrom..]];
+            record.Floats = [.. _recordFloats];
+            record.Adds = [.. _recordAdds];
+            record.Opaque = [.. CollectionsMarshal.AsSpan(_opaqueRects)[opaqueFrom..]];
+            record.Edits = [.. CollectionsMarshal.AsSpan(_editBoxes)[editsFrom..]];
             record.Ready = true;
         }
 
-        recordAdds.Clear();
-        recordFloats.Clear();
+        _recordAdds.Clear();
+        _recordFloats.Clear();
     }
 
     /// <summary>Controls equal in everything the painter reads: their fields and their properties' contents.</summary>

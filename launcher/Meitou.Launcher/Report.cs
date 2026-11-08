@@ -24,7 +24,7 @@ public sealed partial class MainWindow
 
     void ShowReportButton() => ReportButton.IsVisible = ReportsUrl.Length > 0;
 
-    async void Report_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    async void Report_Click(object? sender, RoutedEventArgs e)
     {
         List<RoadmapRow> rows;
         try
@@ -94,7 +94,7 @@ public sealed partial class MainWindow
         var works = new RadioButton { Content = "Works for me", GroupName = "verdict", IsChecked = true, Margin = new(0, 0, 16, 0) };
         var broken = new RadioButton { Content = "Broken", GroupName = "verdict" };
         var version = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
-        foreach (var v in installedVersions) version.Items.Add(new ComboBoxItem { Content = v, Tag = v });
+        foreach (var v in _installedVersions) version.Items.Add(new ComboBoxItem { Content = v, Tag = v });
         version.SelectedItem = version.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag! == PlayVersion) ?? version.Items.OfType<ComboBoxItem>().FirstOrDefault();
         var note = new TextBox { PlaceholderText = "What you did or saw (needed for Broken)", MaxLength = 300 };
         var attach = new CheckBox { Content = "Attach the end of this version's log.txt (it can show folder names, such as your user name)" };
@@ -140,7 +140,7 @@ public sealed partial class MainWindow
             var body = new JsonObject
             {
                 ["row"] = row.Id, ["verdict"] = isBroken ? "broken" : "works", ["build"] = build ?? "unknown", ["platform"] = Platform(),
-                ["modded"] = mods.Any(m => m.Enabled), ["note"] = note.Text?.Trim(), ["source"] = "launcher",
+                ["modded"] = _mods.Any(m => m.Enabled), ["note"] = note.Text?.Trim(), ["source"] = "launcher",
             };
             if (attach.IsChecked == true && build is not null && ReadLogTail(build) is { } log) body["log"] = log;
             send.IsEnabled = false;
@@ -163,7 +163,7 @@ public sealed partial class MainWindow
                 send.IsEnabled = true;
             }
         };
-        LauncherText.TranslateTree(plate, originalUiText);
+        LauncherText.TranslateTree(plate, _originalUiText);
         SetupHost.Child = plate;
         SetupHost.IsVisible = true;
         Dispatcher.UIThread.Post(() => system.Focus());

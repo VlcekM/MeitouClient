@@ -25,7 +25,7 @@ public sealed partial class FoliageRenderer
         internal long Stamp = -1;
     }
 
-    readonly Dictionary<MeshAsset, RayMesh> rayMeshes = [];
+    readonly Dictionary<MeshAsset, RayMesh> _rayMeshes = [];
     /// <summary>The usage a mesh buffer needs to be built into the traced scene (none without ray queries).</summary>
     BufferUse RayInput => Gpu.HasRayQuery ? BufferUse.RayInput : 0;
 
@@ -35,7 +35,7 @@ public sealed partial class FoliageRenderer
     /// </summary>
     internal void RayInstances(Vector3 eye, float range, float minRadius, List<(RayMesh Mesh, Matrix4x4 Transform, float Distance)> into)
     {
-        foreach (var zone in zones.Values)
+        foreach (var zone in _zones.Values)
         {
             if (!zone.Ready) continue;
             foreach (var g in zone.Groups)
@@ -70,7 +70,7 @@ public sealed partial class FoliageRenderer
     RayMesh? RayMeshFor(MeshAsset a)
     {
         if (!a.Resident || a.Main is not { } main) return null;
-        if (rayMeshes.TryGetValue(a, out var m) && ReferenceEquals(m.Key, main)) return m;
+        if (_rayMeshes.TryGetValue(a, out var m) && ReferenceEquals(m.Key, main)) return m;
         var parts = new List<RayPart>();
         var maps = new List<(WorldTexture?, WorldTexture?)>();
         float mainCut = a.MainMaterial?.AlphaThreshold ?? 0;
@@ -87,9 +87,9 @@ public sealed partial class FoliageRenderer
                 maps.Add((a.LeavesMaterial?.Diffuse, a.LeavesMaterial?.Normal));
             }
         m = new RayMesh { Key = main, Parts = [.. parts], Rock = a.Terrain, Textures = new (uint, uint)[parts.Count], Maps = [.. maps] };
-        rayMeshes[a] = m;
+        _rayMeshes[a] = m;
         return m;
     }
 
-    uint RayTexture(WorldTexture? t) => t is { Key: > 0 } ? textures.Index(t.Key, Gpu.LodBias, 0) : 0;
+    uint RayTexture(WorldTexture? t) => t is { Key: > 0 } ? _textures.Index(t.Key, Gpu.LodBias, 0) : 0;
 }

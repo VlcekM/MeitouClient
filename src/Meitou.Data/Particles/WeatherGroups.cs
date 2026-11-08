@@ -22,22 +22,22 @@ public sealed class WeatherGroups : IDisposable
 {
     public const float MaxAutoPrewarm = EffectSet.MaxAutoPrewarm;
 
-    readonly ParticleLibrary library;
-    readonly EffectWorld world;
-    readonly List<EffectGroup> groups = [];
-    readonly List<WeatherEffectEntry> skipped = [];
-    bool applied;
-    WeatherEffectInput? wanted, failed;
-    double wantedSince, wantedDwell;
-    EffectSet? building;
-    double lastNow;
+    readonly ParticleLibrary _library;
+    readonly EffectWorld _world;
+    readonly List<EffectGroup> _groups = [];
+    readonly List<WeatherEffectEntry> _skipped = [];
+    bool _applied;
+    WeatherEffectInput? _wanted, _failed;
+    double _wantedSince, _wantedDwell;
+    EffectSet? _building;
+    double _lastNow;
 
     /// <summary>Seconds from the weather being wanted to its groups being shown, for the last change (the dwell and the warm-up; for the log).</summary>
     public double SwapLatency { get; private set; }
 
-    readonly EffectWarmer warmer = new();   // its thread is made now, not at the first change: starting one in a frame can stall that frame
+    readonly EffectWarmer _warmer = new();   // its thread is made now, not at the first change: starting one in a frame can stall that frame
 
-    public WeatherGroups(ParticleLibrary library, EffectWorld world) => (this.library, this.world) = (library, world);
+    public WeatherGroups(ParticleLibrary library, EffectWorld world) => (this._library, this._world) = (library, world);
 
     /// <summary>The seed of the groups' random numbers (a group takes the seed plus its place in the list).</summary>
     public int Seed { get; set; } = 1;
@@ -49,16 +49,16 @@ public sealed class WeatherGroups : IDisposable
     public bool Background { get; set; } = true;
 
     /// <summary>The groups shown (the same list object for ever: it is replaced in place by <see cref="Advance"/>).</summary>
-    public IReadOnlyList<EffectGroup> Groups => groups;
-    public IReadOnlyList<WeatherEffectEntry> Skipped => skipped;
+    public IReadOnlyList<EffectGroup> Groups => _groups;
+    public IReadOnlyList<WeatherEffectEntry> Skipped => _skipped;
     /// <summary>The weather the groups were made for, with the latest strength and wind.</summary>
     public WeatherEffectInput Input { get; private set; } = WeatherEffectInput.None;
     /// <summary>A change is waiting out its dwell or being made.</summary>
-    public bool Changing => wanted is not null;
+    public bool Changing => _wanted is not null;
     /// <summary>The groups of a change are being simulated on the worker.</summary>
-    public bool Building => building is not null;
+    public bool Building => _building is not null;
     /// <summary>The groups being warmed (empty when none are): for whoever wants to prepare what they draw with.</summary>
-    public IReadOnlyList<EffectGroup> BuildingGroups => building?.Groups ?? [];
+    public IReadOnlyList<EffectGroup> BuildingGroups => _building?.Groups ?? [];
 
     /// <summary>
     /// What the weather is now, every frame (<paramref name="now"/> in seconds on any steady clock). The weather of the groups shown only updates their
@@ -66,13 +66,13 @@ public sealed class WeatherGroups : IDisposable
     /// </summary>
     public void Want(WeatherEffectInput weather, double now)
     {
-        if (applied && weather.SameEffects(Input)) { Input = weather; wanted = null; return; }   // back to the shown weather: the change is off
-        if (wanted is not null && weather.SameEffects(wanted)) { wanted = weather; return; }
-        if (failed is not null && weather.SameEffects(failed)) return;   // its warm-up threw: not tried again until the weather changes
-        failed = null;
-        wanted = weather;
-        wantedSince = now;
-        wantedDwell = applied && Background && RegionDwell > 0 && weather.Region.Length > 0 && Input.Region.Length > 0 && weather.Region != Input.Region ? RegionDwell : 0;
+        if (_applied && weather.SameEffects(Input)) { Input = weather; _wanted = null; return; }   // back to the shown weather: the change is off
+        if (_wanted is not null && weather.SameEffects(_wanted)) { _wanted = weather; return; }
+        if (_failed is not null && weather.SameEffects(_failed)) return;   // its warm-up threw: not tried again until the weather changes
+        _failed = null;
+        _wanted = weather;
+        _wantedSince = now;
+        _wantedDwell = _applied && Background && RegionDwell > 0 && weather.Region.Length > 0 && Input.Region.Length > 0 && weather.Region != Input.Region ? RegionDwell : 0;
     }
 
     /// <summary>
@@ -81,38 +81,38 @@ public sealed class WeatherGroups : IDisposable
     /// </summary>
     public bool Advance(in EffectCamera camera, double now)
     {
-        lastNow = now;
+        _lastNow = now;
         bool changed = false;
-        if (building is { } set)
+        if (_building is { } set)
         {
-            if (wanted is null || !set.Source.SameEffects(wanted)) { set.Cancel(); building = null; }   // the weather moved on, or came back to the shown one
+            if (_wanted is null || !set.Source.SameEffects(_wanted)) { set.Cancel(); _building = null; }   // the weather moved on, or came back to the shown one
             else if (set.Ready)
             {
-                building = null;
+                _building = null;
                 if (set.Failure is { } failure)
                 {
                     Console.WriteLine($"warning   weather particles: the warm-up failed ({failure.Message}); keeping the groups shown");
-                    (failed, wanted) = (wanted, null);
+                    (_failed, _wanted) = (_wanted, null);
                 }
-                else { Swap(set, wanted); wanted = null; changed = true; }
+                else { Swap(set, _wanted); _wanted = null; changed = true; }
             }
         }
-        if (building is null && wanted is { } next && (!applied || !Background || now - wantedSince >= wantedDwell))
+        if (_building is null && _wanted is { } next && (!_applied || !Background || now - _wantedSince >= _wantedDwell))
         {
-            if (!applied || !Background)
+            if (!_applied || !Background)
             {
-                var made = EffectSet.Begin(next, library, Seed, world, PrewarmSeconds, camera);
+                var made = EffectSet.Begin(next, _library, Seed, _world, PrewarmSeconds, camera);
                 made.SimulateNow();
                 Swap(made, next);
-                wanted = null;
+                _wanted = null;
                 changed = true;
             }
             else
             {
-                var made = EffectSet.BeginInBackground(next, library, Seed, world, PrewarmSeconds, camera, warmer);
+                var made = EffectSet.BeginInBackground(next, _library, Seed, _world, PrewarmSeconds, camera, _warmer);
                 LastStartTicks = made.StartTicks;
-                if (made.Ready) { Swap(made, next); wanted = null; changed = true; }   // no groups at all (a clear weather)
-                else building = made;
+                if (made.Ready) { Swap(made, next); _wanted = null; changed = true; }   // no groups at all (a clear weather)
+                else _building = made;
             }
         }
         return changed;
@@ -121,13 +121,13 @@ public sealed class WeatherGroups : IDisposable
     void Swap(EffectSet set, WeatherEffectInput weather)
     {
         long start = Stopwatch.GetTimestamp();
-        SwapLatency = lastNow - wantedSince;
-        groups.Clear();
-        groups.AddRange(set.Groups);
-        skipped.Clear();
-        skipped.AddRange(set.Skipped);
+        SwapLatency = _lastNow - _wantedSince;
+        _groups.Clear();
+        _groups.AddRange(set.Groups);
+        _skipped.Clear();
+        _skipped.AddRange(set.Skipped);
         Input = weather;
-        applied = true;
+        _applied = true;
         LastSwapTicks = Stopwatch.GetTimestamp() - start;
     }
 
@@ -137,8 +137,8 @@ public sealed class WeatherGroups : IDisposable
 
     public void Dispose()
     {
-        building?.Cancel();
-        building = null;
-        warmer.Dispose();
+        _building?.Cancel();
+        _building = null;
+        _warmer.Dispose();
     }
 }

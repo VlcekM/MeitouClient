@@ -1,8 +1,8 @@
 using System.Numerics;
 using Meitou.Game.Host.Cameras;
 using Meitou.Game.Host.Input;
-using Meitou.Simulation.Session;
 using Meitou.Simulation;
+using Meitou.Simulation.Session;
 
 namespace Meitou.Game.Host;
 
@@ -34,15 +34,15 @@ public sealed class WorldSession : IDisposable
         Clock = clock ?? new GameClock(startHour);
         Bindings = bindings ?? new InputBindings();
         // The game keeps its cameras above the water surface too (docs/formats/camera.md): the lowest ground is the sea.
-        Camera = new CameraRig((x, z) => MathF.Max(ground(x, z), Meitou.Data.World.WorldWater.Height));
-        worldSettings = settings;
-        worldWalkability = walkability ?? new OpenGroundWalkability(ground);
-        World = new World(settings, worldWalkability, systems);
-        World.Fixtures.Doors = worldWalkability as Meitou.Simulation.Locks.IDoorGate;
+        Camera = new CameraRig((x, z) => MathF.Max(ground(x, z), Data.World.WorldWater.Height));
+        _worldSettings = settings;
+        _worldWalkability = walkability ?? new OpenGroundWalkability(ground);
+        World = new World(settings, _worldWalkability, systems);
+        World.Fixtures.Doors = _worldWalkability as Simulation.Locks.IDoorGate;
     }
 
-    readonly WorldSettings worldSettings;
-    readonly IWalkability worldWalkability;
+    readonly WorldSettings _worldSettings;
+    readonly IWalkability _worldWalkability;
 
     /// <summary>The point the world was loaded around.</summary>
     public Vector3 Focus { get; }
@@ -59,26 +59,26 @@ public sealed class WorldSession : IDisposable
     /// The snapshot the last simulation tick published and the one before it, for interpolating by <see cref="SimulationAlpha"/>. While ticks run ahead
     /// (<see cref="BeginTickAhead"/>) or wait to fall due, the pair from before them: the picture moves on only when the clock reaches the last of them.
     /// </summary>
-    public WorldSnapshot CurrentSnapshot => held ? heldCurrent! : World.Snapshot;
-    public WorldSnapshot PreviousSnapshot => held ? heldPrevious! : World.PreviousSnapshot;
+    public WorldSnapshot CurrentSnapshot => _held ? _heldCurrent! : World.Snapshot;
+    public WorldSnapshot PreviousSnapshot => _held ? _heldPrevious! : World.PreviousSnapshot;
     /// <summary>The world tick the shown snapshot is of (<see cref="World.Tick"/> less the ticks run ahead).</summary>
-    public long ShownTick => held ? heldTick : World.Tick;
+    public long ShownTick => _held ? _heldTick : World.Tick;
 
     // The ticks run ahead (docs/simulation.md "Tick ahead"): the shown pair and its tick held meanwhile, the runner, and how many are run but not yet due.
-    bool held;
-    long heldTick;
-    int aheadTicks;
+    bool _held;
+    long _heldTick;
+    int _aheadTicks;
     // The ticks a frame owes, smoothed (how many the next batch runs ahead), and the speed they were owed at.
-    double owedPerFrame = 1, owedSpeed;
-    WorldSnapshot? heldCurrent, heldPrevious;
-    TickRunner? runner;
-    bool running;
+    double _owedPerFrame = 1, _owedSpeed;
+    WorldSnapshot? _heldCurrent, _heldPrevious;
+    TickRunner? _runner;
+    bool _running;
 
     /// <summary>The wall time (ms) of the last ticks run ahead, 0 once taken (for the profiler).</summary>
-    public double TakeAheadMs() { double ms = aheadMs; aheadMs = 0; return ms; }
+    public double TakeAheadMs() { double ms = _aheadMs; _aheadMs = 0; return ms; }
     /// <summary>The last ticks run ahead's ms, left for <see cref="TakeAheadMs"/>.</summary>
-    public double AheadMs => aheadMs;
-    double aheadMs;
+    public double AheadMs => _aheadMs;
+    double _aheadMs;
 
     /// <summary>A world tick's wall time (ms), smoothed over the last ten or so ticks, whether run in the frame or ahead (the host's dynamic tick ahead reads it).</summary>
     public double TickMs { get; private set; }
@@ -89,7 +89,7 @@ public sealed class WorldSession : IDisposable
     public InputBindings Bindings { get; }
     public CameraRig Camera { get; }
     /// <summary>The eye the simulation takes as the camera's (<see cref="World.ViewPosition"/>) instead of the rig's, while the host holds the view elsewhere (a character flight, a cinema take); null: the rig's.</summary>
-    public System.Numerics.Vector3? ViewEye { get; set; }
+    public Vector3? ViewEye { get; set; }
     /// <summary>Where the frame is between the previous and the current control tick (camera interpolation).</summary>
     public float Alpha => (float)Ticks.Alpha;
     /// <summary>The speed: 0 while paused by the player, else 1, 2 or 5.</summary>
@@ -115,20 +115,20 @@ public sealed class WorldSession : IDisposable
         if (!Simulation.IsPaused)
         {
             // A speed change scales the estimate at once: a batch sized for 5x would hold the picture for frames at 1x.
-            if (owedSpeed > 0 && Simulation.Speed != owedSpeed) owedPerFrame *= Simulation.Speed / owedSpeed;
-            owedSpeed = Simulation.Speed;
-            owedPerFrame += (n - owedPerFrame) * 0.25;
+            if (_owedSpeed > 0 && Simulation.Speed != _owedSpeed) _owedPerFrame *= Simulation.Speed / _owedSpeed;
+            _owedSpeed = Simulation.Speed;
+            _owedPerFrame += (n - _owedPerFrame) * 0.25;
         }
         int run = n;
         // Ticks run ahead are the first ones owed; the shown pair moves on once the last of them is due. Paused, they are taken at once (the shown pair
         // jumps), so what the interface changes shows.
-        if (aheadTicks > 0 && (n > 0 || Simulation.IsPaused))
+        if (_aheadTicks > 0 && (n > 0 || Simulation.IsPaused))
         {
-            int take = Simulation.IsPaused ? aheadTicks : Math.Min(n, aheadTicks);
+            int take = Simulation.IsPaused ? _aheadTicks : Math.Min(n, _aheadTicks);
             for (int i = 0; i < take; i++) Clock.Advance(Simulation.TickSeconds);
-            aheadTicks -= take;
+            _aheadTicks -= take;
             run -= Math.Min(run, take);
-            if (aheadTicks == 0) (held, heldPrevious, heldCurrent) = (false, null, null);
+            if (_aheadTicks == 0) (_held, _heldPrevious, _heldCurrent) = (false, null, null);
         }
         // Only a frame's last two ticks publish: the host draws between those two snapshots, and the ones before would go unseen.
         for (int i = 0; i < run; i++) SimulationTick(publish: i >= run - 2);
@@ -169,102 +169,102 @@ public sealed class WorldSession : IDisposable
     public void BeginTickAhead()
     {
         EnsureNotRunning();
-        if (aheadTicks > 0 || Simulation.IsPaused) return;
+        if (_aheadTicks > 0 || Simulation.IsPaused) return;
         // Rounded down (a tick short runs in the next frame; one too many holds the picture a frame), plus a hair: the average nears a steady count from below.
-        int count = (int)Math.Clamp(Math.Floor(owedPerFrame + 0.1), 1, Simulation.MaxTicksPerFrame * Simulation.Speed);
-        (heldPrevious, heldCurrent, heldTick, held) = (World.PreviousSnapshot, World.Snapshot, World.Tick, true);
+        int count = (int)Math.Clamp(Math.Floor(_owedPerFrame + 0.1), 1, Simulation.MaxTicksPerFrame * Simulation.Speed);
+        (_heldPrevious, _heldCurrent, _heldTick, _held) = (World.PreviousSnapshot, World.Snapshot, World.Tick, true);
         // Each tick's start, as SimulationTick sets it (the clock summed tick by tick); the game clock moves when the ticks fall due.
         var starts = new (double Hours, bool Daytime)[count];
         double seconds = Clock.GameSeconds;
         for (int i = 0; i < count; i++, seconds += Simulation.TickSeconds) starts[i] = (Clock.TotalHoursAt(seconds), Clock.IsDaytimeAt(seconds));
         World.PhysicsSpeed = (float)Simulation.Speed;   // the ragdoll physics steps in real time
         World.ViewPosition = ViewEye ?? Camera.Current.Eye;
-        runner ??= new TickRunner();
-        runner.Start(World, starts);
-        running = true;
-        aheadTicks = count;
+        _runner ??= new TickRunner();
+        _runner.Start(World, starts);
+        _running = true;
+        _aheadTicks = count;
     }
 
     /// <summary>Waits for the ticks <see cref="BeginTickAhead"/> started (rethrowing what they threw); they then wait to fall due.</summary>
     public void EndTickAhead()
     {
-        if (!running) return;
-        running = false;
-        aheadMs = runner!.Wait();   // one batch a frame at most: the last one, whether or not the profiler took the one before
-        Measure(aheadMs / aheadTicks);
+        if (!_running) return;
+        _running = false;
+        _aheadMs = _runner!.Wait();   // one batch a frame at most: the last one, whether or not the profiler took the one before
+        Measure(_aheadMs / _aheadTicks);
     }
 
     /// <summary>Takes the ticks run ahead as run now: the game clock moves by them and the snapshots shown are the world's again (before a save, say).</summary>
     public void SettleAhead()
     {
         EnsureNotRunning();
-        if (aheadTicks == 0) return;
-        for (; aheadTicks > 0; aheadTicks--) Clock.Advance(Simulation.TickSeconds);
-        (held, heldPrevious, heldCurrent) = (false, null, null);
+        if (_aheadTicks == 0) return;
+        for (; _aheadTicks > 0; _aheadTicks--) Clock.Advance(Simulation.TickSeconds);
+        (_held, _heldPrevious, _heldCurrent) = (false, null, null);
     }
 
     void EnsureNotRunning()
     {
-        if (running) throw new InvalidOperationException("a simulation tick is running ahead: call EndTickAhead first");
+        if (_running) throw new InvalidOperationException("a simulation tick is running ahead: call EndTickAhead first");
     }
 
     /// <summary>The thread ticks run ahead on (one per session, idle between batches).</summary>
     sealed class TickRunner : IDisposable
     {
-        readonly Thread thread;
-        readonly SemaphoreSlim start = new(0), done = new(0);
-        World? world;
-        (double Hours, bool Daytime)[] starts = [];
-        double ms;
-        System.Runtime.ExceptionServices.ExceptionDispatchInfo? failure;
-        volatile bool stopping;
+        readonly Thread _thread;
+        readonly SemaphoreSlim _start = new(0), _done = new(0);
+        World? _world;
+        (double Hours, bool Daytime)[] _starts = [];
+        double _ms;
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? _failure;
+        volatile bool _stopping;
 
         public TickRunner()
         {
-            thread = new Thread(Run) { IsBackground = true, Name = "Meitou.Tick" };
-            thread.Start();
+            _thread = new Thread(Run) { IsBackground = true, Name = "Meitou.Tick" };
+            _thread.Start();
         }
 
         public void Start(World w, (double Hours, bool Daytime)[] tickStarts)
         {
-            (world, starts, failure) = (w, tickStarts, null);
-            start.Release();
+            (_world, _starts, _failure) = (w, tickStarts, null);
+            _start.Release();
         }
 
         public double Wait()
         {
-            done.Wait();
-            world = null;
-            failure?.Throw();
-            return ms;
+            _done.Wait();
+            _world = null;
+            _failure?.Throw();
+            return _ms;
         }
 
         void Run()
         {
             while (true)
             {
-                start.Wait();
-                if (stopping) return;
+                _start.Wait();
+                if (_stopping) return;
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
                 try
                 {
                     // Only the last two publish, as in a frame (the shown pair keeps its buffers: World's snapshot ring).
-                    for (int i = 0; i < starts.Length; i++)
+                    for (int i = 0; i < _starts.Length; i++)
                     {
-                        (world!.GameHours, world.Daytime) = starts[i];
-                        world.RunTick(publish: i >= starts.Length - 2);
+                        (_world!.GameHours, _world.Daytime) = _starts[i];
+                        _world.RunTick(publish: i >= _starts.Length - 2);
                     }
                 }
-                catch (Exception e) { failure = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e); }
-                ms = System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
-                done.Release();
+                catch (Exception e) { _failure = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e); }
+                _ms = System.Diagnostics.Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
+                _done.Release();
             }
         }
 
         public void Dispose()
         {
-            stopping = true;
-            start.Release();
+            _stopping = true;
+            _start.Release();
         }
     }
 
@@ -291,7 +291,7 @@ public sealed class WorldSession : IDisposable
     {
         EnsureNotRunning();
         var list = systems.ToList();
-        var next = new World(worldSettings, worldWalkability, list);
+        var next = new World(_worldSettings, _worldWalkability, list);
         next.Floaters = World.Floaters;   // the host keeps drawing the floaters across the swap
         next.BenchFacingFix = World.BenchFacingFix;
         try { setup?.Invoke(next); }
@@ -303,10 +303,10 @@ public sealed class WorldSession : IDisposable
         var old = World;
         World = next;
         // Ticks the old world ran ahead go with it.
-        (aheadTicks, held, heldPrevious, heldCurrent) = (0, false, null, null);
+        (_aheadTicks, _held, _heldPrevious, _heldCurrent) = (0, false, null, null);
         Discard(old);
         // The navmesh door table follows the new world: the old one's locked doors are forgotten, the new one's told.
-        if (worldWalkability is Meitou.Simulation.Locks.IDoorGate gate) { gate.ResetDoors(); next.Fixtures.Doors = gate; }
+        if (_worldWalkability is Simulation.Locks.IDoorGate gate) { gate.ResetDoors(); next.Fixtures.Doors = gate; }
         return next;
     }
 
@@ -319,8 +319,8 @@ public sealed class WorldSession : IDisposable
     /// <summary>Called when the session is disposed, for the systems that own threads.</summary>
     public void Dispose()
     {
-        if (running) { running = false; try { runner!.Wait(); } catch (Exception) { } }   // a tick still ahead finishes first; what it threw no longer matters
-        runner?.Dispose();
+        if (_running) { _running = false; try { _runner!.Wait(); } catch (Exception) { } }   // a tick still ahead finishes first; what it threw no longer matters
+        _runner?.Dispose();
         Discard(World);
     }
 

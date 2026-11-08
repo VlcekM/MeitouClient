@@ -114,19 +114,19 @@ public sealed class Model
             case OgreOperationType.TriangleList:
                 return src;
             case OgreOperationType.TriangleStrip:
-            {
-                var list = new List<uint>();
-                for (int i = 2; i < src.Length; i++)
-                    if (i % 2 == 0) list.AddRange([src[i - 2], src[i - 1], src[i]]);
-                    else list.AddRange([src[i - 1], src[i - 2], src[i]]);
-                return [.. list];
-            }
+                {
+                    var list = new List<uint>();
+                    for (int i = 2; i < src.Length; i++)
+                        if (i % 2 == 0) list.AddRange([src[i - 2], src[i - 1], src[i]]);
+                        else list.AddRange([src[i - 1], src[i - 2], src[i]]);
+                    return [.. list];
+                }
             case OgreOperationType.TriangleFan:
-            {
-                var list = new List<uint>();
-                for (int i = 2; i < src.Length; i++) list.AddRange([src[0], src[i - 1], src[i]]);
-                return [.. list];
-            }
+                {
+                    var list = new List<uint>();
+                    for (int i = 2; i < src.Length; i++) list.AddRange([src[0], src[i - 1], src[i]]);
+                    return [.. list];
+                }
             default:
                 warnings.Add($"submesh {s}: operation {sub.Operation} not drawn");
                 return null;
@@ -206,8 +206,14 @@ public sealed class Model
 
         return new ModelPart
         {
-            SubMeshIndex = s, MaterialName = sub.MaterialName, Vertices = verts, Indices = indices,
-            HasUv = uvs is not null, HasTangents = tangents is not null, HasColours = colours is not null, Skinned = skinned,
+            SubMeshIndex = s,
+            MaterialName = sub.MaterialName,
+            Vertices = verts,
+            Indices = indices,
+            HasUv = uvs is not null,
+            HasTangents = tangents is not null,
+            HasColours = colours is not null,
+            Skinned = skinned,
         };
     }
 

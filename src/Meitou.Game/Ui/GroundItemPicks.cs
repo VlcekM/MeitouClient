@@ -11,7 +11,7 @@ namespace Meitou.Game.Ui;
 sealed class GroundItemPicks(PlayerInterface player)
 {
     /// <summary>What the ray meets of a ground item where it is drawn: its triangles in its own space, its place and turn (the host sets it; null: no item is picked but by its label).</summary>
-    public Func<Meitou.Simulation.Items.GroundItemSnapshot, (IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh, Vector3 At, Quaternion Rotation)?>? GroundItemShape { get; set; }
+    public Func<Simulation.Items.GroundItemSnapshot, (IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh, Vector3 At, Quaternion Rotation)?>? GroundItemShape { get; set; }
 
     /// <summary>Whether a ground item is not drawn, being above the shown floor of its building (the host sets it; null: none): it has no label and is not picked.</summary>
     public Func<int, bool>? GroundItemHidden { get; set; }
@@ -20,7 +20,7 @@ sealed class GroundItemPicks(PlayerInterface player)
     public Vector3? HighlightFocus;
 
     /// <summary>The labels drawn last frame, front to back, for <see cref="PickGroundItem"/>.</summary>
-    readonly List<(int Id, UiRect Rect)> itemLabels = [];
+    readonly List<(int Id, UiRect Rect)> _itemLabels = [];
 
     /// <summary>
     /// The ground item whose label is under the pixel, else the nearest the ray meets on its collision (<see cref="GroundItemShape"/>), as the original's pick hits an item's
@@ -32,7 +32,7 @@ sealed class GroundItemPicks(PlayerInterface player)
     internal int? LabelAt(Vector2 pixel)
     {
         if (HighlightFocus is null) return null;
-        foreach (var (id, rect) in itemLabels)
+        foreach (var (id, rect) in _itemLabels)
             if (rect.Contains(pixel.X, pixel.Y)) return id;
         return null;
     }
@@ -44,26 +44,26 @@ sealed class GroundItemPicks(PlayerInterface player)
         if (player.Ray(pixel) is not { } ray || GroundItemShape is not { } shapeOf) return null;
         (int, float)? best = null;
         float bestT = float.MaxValue;
-        foreach (var g in player.session.CurrentSnapshot.GroundItems)
+        foreach (var g in player.Session.CurrentSnapshot.GroundItems)
             if (GroundItemHidden?.Invoke(g.Id) != true && shapeOf(g) is { } shape && RayNears(ray, shape.Mesh, shape.At, shape.Rotation) && WorldPicking.RayMesh(ray, shape.Mesh, shape.At, shape.Rotation) is { } t && t < bestT && !player.Hidden(ray, t))
                 (best, bestT) = ((g.Id, t), t);
         return best;
     }
 
     /// <summary>Each ground item shape's bounding sphere in its own space, by the shape (the host keeps one per record): the cheap test before its triangles.</summary>
-    readonly Dictionary<IReadOnlyList<(Vector3[] Vertices, int[] Indices)>, (Vector3 Centre, float Radius)> shapeSpheres = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<IReadOnlyList<(Vector3[] Vertices, int[] Indices)>, (Vector3 Centre, float Radius)> _shapeSpheres = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Whether the ray passes through the bounding sphere of the shape put at <paramref name="at"/> turned by <paramref name="rotation"/> (a hit on its triangles is inside it).</summary>
     internal bool RayNears((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
     {
-        if (!shapeSpheres.TryGetValue(mesh, out var sphere))
+        if (!_shapeSpheres.TryGetValue(mesh, out var sphere))
         {
             var min = new Vector3(float.MaxValue);
             var max = new Vector3(float.MinValue);
             foreach (var (vertices, _) in mesh) foreach (var v in vertices) { min = Vector3.Min(min, v); max = Vector3.Max(max, v); }
             float reach = 0;
             foreach (var (vertices, _) in mesh) foreach (var v in vertices) reach = MathF.Max(reach, Vector3.Distance(v, (min + max) / 2));
-            shapeSpheres[mesh] = sphere = ((min + max) / 2, reach * 1.001f + 1e-3f);   // widened a little for rounding
+            _shapeSpheres[mesh] = sphere = ((min + max) / 2, reach * 1.001f + 1e-3f);   // widened a little for rounding
         }
         var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
         var toCentre = at + Vector3.Transform(sphere.Centre, q) - ray.Origin;
@@ -78,12 +78,12 @@ sealed class GroundItemPicks(PlayerInterface player)
     internal bool GroundItemClick(Vector2 p)
     {
         if (player.SelectedIds().Count == 0 || PickGroundItem(p) is not { } item) return false;
-        player.Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = player.session.World.Tick, Alt = player.AltHeld });
+        player.Say(new Simulation.Items.PickUpItemOrder([], item) { Tick = player.Session.World.Tick, Alt = player.AltHeld });
         return true;
     }
 
     /// <summary>The ground item whose label took the left press, until the release.</summary>
-    internal int? labelPress;
+    internal int? LabelPress;
 
     /// <summary>
     /// A left click released on an item's name label (<c>FUN_1401638f0</c>, the label's eventMouseButtonReleased handler, button Left only): the pick-up order for the selection, as the right
@@ -92,7 +92,7 @@ sealed class GroundItemPicks(PlayerInterface player)
     internal void LabelPickUp(int item)
     {
         if (player.SelectedIds().Count == 0) return;
-        player.Say(new Meitou.Simulation.Items.PickUpItemOrder([], item) { Tick = player.session.World.Tick });
+        player.Say(new Simulation.Items.PickUpItemOrder([], item) { Tick = player.Session.World.Tick });
     }
 
     /// <summary>
@@ -103,11 +103,11 @@ sealed class GroundItemPicks(PlayerInterface player)
     /// </summary>
     internal void AddItemLabels(List<UiControl> controls)
     {
-        itemLabels.Clear();
-        if (HighlightFocus is not { } focus || player.uiPainter is not { } painter || player.characterEditor.EditorOpen) return;
+        _itemLabels.Clear();
+        if (HighlightFocus is not { } focus || player.UiPainter is not { } painter || player.CharacterEditor.EditorOpen) return;
         float scale = player.Height / 1080f, height = player.Height * 0.0259259f, em = 20 * 50f / 72f * scale;
-        var near = new List<(Meitou.Simulation.Items.GroundItemSnapshot Item, float Distance, Vector2 At)>();
-        foreach (var g in player.session.CurrentSnapshot.GroundItems)
+        var near = new List<(Simulation.Items.GroundItemSnapshot Item, float Distance, Vector2 At)>();
+        foreach (var g in player.Session.CurrentSnapshot.GroundItems)
         {
             if (g.Name.Length == 0 || GroundItemHidden?.Invoke(g.Id) == true || Vector3.DistanceSquared(focus, g.Position) > PointerView.HighlightRadius * PointerView.HighlightRadius) continue;
             var middle = g.Position + new Vector3(0, 0.5f, 0);
@@ -129,8 +129,8 @@ sealed class GroundItemPicks(PlayerInterface player)
             }
             placed.Add((g.Id, rect));
         }
-        itemLabels.AddRange(placed);
-        int? hovered = PickGroundItem(player.mouse);
+        _itemLabels.AddRange(placed);
+        int? hovered = PickGroundItem(player.Mouse);
         // Drawn far to near so the nearer labels lie on top.
         for (int i = placed.Count - 1; i >= 0; i--)
         {
@@ -147,9 +147,9 @@ sealed class GroundItemPicks(PlayerInterface player)
 
     /// <summary>Picking the item up would be stealing it: its owner's faction (<see cref="Meitou.Simulation.Items.GroundItem.OwnedBy"/>) is not the player's.</summary>
     /// <summary>The ground item under <paramref name="pixel"/> belongs to another faction: its pointer is <c>steal</c> (<c>FUN_1407fc440</c>), and a right click without Alt only walks to it.</summary>
-    internal bool StealsGroundItem(Vector2 pixel) => PickGroundItem(pixel) is { } id && player.session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == id) is { } g && Stealing(g);
+    internal bool StealsGroundItem(Vector2 pixel) => PickGroundItem(pixel) is { } id && player.Session.CurrentSnapshot.GroundItems.FirstOrDefault(g => g.Id == id) is { } g && Stealing(g);
 
-    bool Stealing(Meitou.Simulation.Items.GroundItemSnapshot g) => g.OwnedBy >= 0 && g.OwnedBy != player.session.World.Player.Faction;
+    bool Stealing(Simulation.Items.GroundItemSnapshot g) => g.OwnedBy >= 0 && g.OwnedBy != player.Session.World.Player.Faction;
 
     /// <summary>Whether an ITEM record is an artifact (its <c>artifact</c> field); the host sets it.</summary>
     public Func<string, bool>? ArtifactOf { get; set; }
@@ -158,14 +158,14 @@ sealed class GroundItemPicks(PlayerInterface player)
     /// A label's own colour (docs/game/ui-input.md "Ground item labels"): a plain ITEM's <c>ItemArtifact</c> or <c>ItemStandard</c>; a weapon, armour, backpack, nest item, map item,
     /// crossbow or limb its <c>ItemGrade</c> by its <see cref="Meitou.Simulation.Items.ItemInstance.GearLevel"/> below 16/36/51/66/81 (grades 4 and 5 share the yellow); anything else <c>DropItemLabelBackDefault</c>.
     /// </summary>
-    string ItemLabelColour(Meitou.Simulation.Items.GroundItemSnapshot g)
+    string ItemLabelColour(Simulation.Items.GroundItemSnapshot g)
     {
-        int level = Meitou.Simulation.Items.ItemInstance.GearLevelOf(g.Type, g.Level);
+        int level = Simulation.Items.ItemInstance.GearLevelOf(g.Type, g.Level);
         return g.Type switch
         {
-            FcsRecordType.ITEM => TooltipRuntime.TipHex(ArtifactOf?.Invoke(g.Record) == true ? "0dfceb" : "e0cccc"),
-            FcsRecordType.WEAPON or FcsRecordType.ARMOUR or FcsRecordType.CONTAINER or FcsRecordType.NEST_ITEM or FcsRecordType.MAP_ITEM or FcsRecordType.CROSSBOW
-                or FcsRecordType.LIMB_REPLACEMENT => TooltipRuntime.TipHex(level < 16 ? "666666" : level < 36 ? "d9ccbf" : level < 51 ? "4099b3" : level < 66 ? "66fc80" : "fceb0d"),
+            FcsRecordType.Item => TooltipRuntime.TipHex(ArtifactOf?.Invoke(g.Record) == true ? "0dfceb" : "e0cccc"),
+            FcsRecordType.Weapon or FcsRecordType.Armour or FcsRecordType.Container or FcsRecordType.NestItem or FcsRecordType.MapItem or FcsRecordType.Crossbow
+                or FcsRecordType.LimbReplacement => TooltipRuntime.TipHex(level < 16 ? "666666" : level < 36 ? "d9ccbf" : level < 51 ? "4099b3" : level < 66 ? "66fc80" : "fceb0d"),
             _ => "1 1 1",
         };
     }

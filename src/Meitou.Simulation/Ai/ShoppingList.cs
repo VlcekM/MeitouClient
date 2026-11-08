@@ -23,20 +23,20 @@ public sealed class ShoppingList
     /// <summary>The hour the day's reset waits for (the original tests the game clock's hour above 7).</summary>
     const int ResetAfterHour = 7;
 
-    readonly int[] function, wanted, done;
-    int day = int.MinValue, town = -1;
+    readonly int[] _function, _wanted, _done;
+    int _day = int.MinValue, _town = -1;
 
     internal ShoppingList(int[] function, int[] wanted)
     {
-        this.function = function;
-        this.wanted = wanted;
-        done = new int[function.Length];
+        this._function = function;
+        this._wanted = wanted;
+        _done = new int[function.Length];
     }
 
     /// <summary>A list that wants nothing.</summary>
     public ShoppingList() : this([], []) { }
 
-    public int Count => function.Length;
+    public int Count => _function.Length;
 
     /// <summary>The game day <paramref name="gameHours"/> falls in.</summary>
     public static int DayOf(double gameHours) => (int)Math.Floor(gameHours / 24);
@@ -67,7 +67,7 @@ public sealed class ShoppingList
                 any = true;
                 if (Rng.Int(Rng.Hash(seed, key, RngPurpose.Spawn, EntryRoll + (ulong)k), 101) > values.Value1) continue;
                 // Only ITEM records count (the original looks the name up among those); an unknown name is skipped.
-                if (db.Find(links[k].TargetStringId) is not { Type: FcsRecordType.ITEM } item) continue;
+                if (db.Find(links[k].TargetStringId) is not { Type: FcsRecordType.Item } item) continue;
                 functions.Add(item.GetInt("item function"));
                 counts.Add(values.Value0);
             }
@@ -79,7 +79,7 @@ public sealed class ShoppingList
     /// <summary>Starts the day's list over once a new game day has begun and it is past 07:00.</summary>
     void NewDay(int today, int hour)
     {
-        if (today == day || hour <= ResetAfterHour) return;
+        if (today == _day || hour <= ResetAfterHour) return;
         StartOver(today);
     }
 
@@ -88,21 +88,21 @@ public sealed class ShoppingList
     {
         NewDay(today, hour);
         // Standing in another town than the one it last bought in starts the list over at every evaluation, as the day's reset does, which also records the day (FUN_140998fa0 calls FUN_140998e40, Verified).
-        if (town >= 0 && site >= 0 && town != site) StartOver(today);
-        for (int k = 0; k < function.Length; k++)
-            if (wanted[k] > done[k]) return true;
+        if (_town >= 0 && site >= 0 && _town != site) StartOver(today);
+        for (int k = 0; k < _function.Length; k++)
+            if (_wanted[k] > _done[k]) return true;
         return false;
     }
 
     /// <summary>The day's reset (<c>FUN_140998e40</c>): remembers <paramref name="today"/> and sets every done back to 0.</summary>
     void StartOver(int today)
     {
-        day = today;
-        Array.Clear(done);
+        _day = today;
+        Array.Clear(_done);
     }
 
     /// <summary>The item function of entry <paramref name="k"/> while it still has units to buy today, else -1.</summary>
-    public int OpenFunction(int k) => wanted[k] > done[k] ? function[k] : -1;
+    public int OpenFunction(int k) => _wanted[k] > _done[k] ? _function[k] : -1;
 
     /// <summary>
     /// Starts a buying call at a shop of the town <paramref name="site"/> (<c>FUN_1409a14b0</c> opens with <c>FUN_140998da0</c>, <b>Verified</b>): the list starts over when the buyer is
@@ -111,29 +111,29 @@ public sealed class ShoppingList
     public void Begin(int site, int today, int hour)
     {
         NewDay(today, hour);
-        if (town != site)
+        if (_town != site)
         {
-            town = site;
-            Array.Clear(done);
+            _town = site;
+            Array.Clear(_done);
         }
     }
 
     /// <summary>The first entry that still has units to buy today and whose item function is not in <paramref name="skipped"/> (the functions no seller had an item of in this call); -1 when none.</summary>
     public int NextOpen(ReadOnlySpan<int> skipped)
     {
-        for (int k = 0; k < function.Length; k++)
-            if (wanted[k] > done[k] && !skipped.Contains(function[k])) return k;
+        for (int k = 0; k < _function.Length; k++)
+            if (_wanted[k] > _done[k] && !skipped.Contains(_function[k])) return k;
         return -1;
     }
 
     /// <summary>The item function of entry <paramref name="k"/>.</summary>
-    public int FunctionOf(int k) => function[k];
+    public int FunctionOf(int k) => _function[k];
 
     /// <summary>Whether entry <paramref name="k"/> still has units to buy today.</summary>
-    public bool IsOpen(int k) => wanted[k] > done[k];
+    public bool IsOpen(int k) => _wanted[k] > _done[k];
 
     /// <summary>Counts one unit of entry <paramref name="k"/> as bought. The original does so before the sale, so a unit the buyer cannot pay for or has no room for is used up too.</summary>
-    public void Use(int k) => done[k]++;
+    public void Use(int k) => _done[k]++;
 
     /// <summary>Whether the function mask has the item function <paramref name="f"/> (functions of 64 or more are never in a mask).</summary>
     public static bool Stocks(ulong mask, int f) => (uint)f < 64 && (mask >> f & 1) != 0;
@@ -144,9 +144,9 @@ public sealed class ShoppingList
     internal void Hash(ref StateHasher hasher)
     {
         // A list nobody has asked yet is the one its seed makes: nothing to add.
-        if (day == int.MinValue && town < 0) return;
-        hasher.Add(day);
-        hasher.Add(town);
-        for (int k = 0; k < done.Length; k++) hasher.Add(done[k]);
+        if (_day == int.MinValue && _town < 0) return;
+        hasher.Add(_day);
+        hasher.Add(_town);
+        for (int k = 0; k < _done.Length; k++) hasher.Add(_done[k]);
     }
 }

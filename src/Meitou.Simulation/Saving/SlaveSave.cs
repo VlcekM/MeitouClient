@@ -25,7 +25,7 @@ public static class SlaveSave
 
         // The owner character, found once it is in the world; a handle of another class (a squad) is not mapped.
         if (cold.SlaveState == 0 || cold.Save is not { } link) return;
-        if (Hand.Read(state, SlaverKey) is { RecordType: FcsRecordType.CHARACTER } slaver) link.Slaver = slaver;
+        if (Hand.Read(state, SlaverKey) is { RecordType: FcsRecordType.Character } slaver) link.Slaver = slaver;
     }
 
     public static void Write(FcsRecord state, CharacterCold cold, PopulationData data)

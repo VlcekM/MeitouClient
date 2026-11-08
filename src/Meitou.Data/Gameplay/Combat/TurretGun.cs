@@ -33,7 +33,7 @@ public sealed record TurretGun
     /// <summary>The gun of a BUILDING with a <c>gun turret</c> GUN_DATA; null for a building without one (the original throws "has no gun data").</summary>
     public static TurretGun? From(GameDatabase db, GameRecord building)
     {
-        if (building.GetReferences("gun turret") is not [var link, ..] || db.Find(link.TargetStringId) is not { Type: FcsRecordType.GUN_DATA } gun) return null;
+        if (building.GetReferences("gun turret") is not [var link, ..] || db.Find(link.TargetStringId) is not { Type: FcsRecordType.GunData } gun) return null;
         var parts = new List<TurretPart>();
         TurretRig.Collect(db, building, -1, Vector3.Zero, parts, 0);
         float scale = building.GetFloat("scale", 1);
@@ -77,7 +77,7 @@ public static class TurretRig
         if (depth > 8) return;
         foreach (var reference in holder.GetReferences("parts"))
         {
-            if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.BUILDING_PART } part) continue;
+            if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.BuildingPart } part) continue;
             var offset = carried + (part.GetBool("is for position marker") ? Vector3.Zero : new Vector3(part.GetFloat("offset X"), part.GetFloat("offset Y"), part.GetFloat("offset Z")));
             if (part.GetInt("rotation function") == 5)
             {
@@ -131,16 +131,16 @@ public static class TurretRig
 /// <summary>The turret guns of a database by BUILDING id, built once each (thread-safe).</summary>
 public sealed class TurretCatalog(GameDatabase db)
 {
-    readonly Dictionary<string, TurretGun?> guns = new(StringComparer.Ordinal);
-    readonly Dictionary<string, float> outputs = new(StringComparer.Ordinal);
+    readonly Dictionary<string, TurretGun?> _guns = new(StringComparer.Ordinal);
+    readonly Dictionary<string, float> _outputs = new(StringComparer.Ordinal);
 
     /// <summary>The gun of BUILDING <paramref name="buildingId"/>; null when it is no turret.</summary>
     public TurretGun? Get(string buildingId)
     {
-        lock (guns)
+        lock (_guns)
         {
-            if (!guns.TryGetValue(buildingId, out var gun))
-                guns[buildingId] = gun = db.Find(buildingId) is { Type: FcsRecordType.BUILDING } r ? TurretGun.From(db, r) : null;
+            if (!_guns.TryGetValue(buildingId, out var gun))
+                _guns[buildingId] = gun = db.Find(buildingId) is { Type: FcsRecordType.Building } r ? TurretGun.From(db, r) : null;
             return gun;
         }
     }
@@ -148,10 +148,10 @@ public sealed class TurretCatalog(GameDatabase db)
     /// <summary>A building's output value (<see cref="TurretGun.Output"/>): the turret bonus in percent of the wall a turret is mounted on; 0 for an unknown record.</summary>
     public float OutputOf(string buildingId)
     {
-        lock (outputs)
+        lock (_outputs)
         {
-            if (!outputs.TryGetValue(buildingId, out float value))
-                outputs[buildingId] = value = db.Find(buildingId) is { Type: FcsRecordType.BUILDING } r ? TurretGun.Output(db, r) : 0;
+            if (!_outputs.TryGetValue(buildingId, out float value))
+                _outputs[buildingId] = value = db.Find(buildingId) is { Type: FcsRecordType.Building } r ? TurretGun.Output(db, r) : 0;
             return value;
         }
     }

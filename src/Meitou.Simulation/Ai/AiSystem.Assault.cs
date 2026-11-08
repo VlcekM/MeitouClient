@@ -9,12 +9,12 @@ namespace Meitou.Simulation.Ai;
 public sealed partial class AiSystem
 {
     // Resolved in the serial step; the think only reads it (null before the first tick: only the mission target itself is then known).
-    CombatSystem? combat;
+    CombatSystem? _combat;
 
     // Set by a think that picked someone to assault (<see cref="AiMind.AssaultTarget"/>).
-    int assaulting;
+    int _assaulting;
     // Characters holding a dialogue's Assault order (AiMind.ForcedAssault): SendAssaults keeps running while any is left.
-    int forcedAssaults;
+    int _forcedAssaults;
 
     /// <summary>
     /// A dialogue attack effect's Assault order for the speaker (<c>FUN_140680560</c> cases 6, 0x37 and 0x39: <c>FUN_1405d20d0(speaker, 0, 0x65 | 0xf8, target)</c>, <b>Verified</b>; goal 101, 248 for
@@ -26,7 +26,7 @@ public sealed partial class AiSystem
         if (!world.Characters.TryResolveNext(speaker, out int s) || world.Characters.Cold(s)?.Ai is not { } mind) return false;
         if (world.Characters.Cold(s)!.Faction == world.Player.Faction) return true;   // the player's faction's speaker gets no order
         mind.ForcedAssault = target;
-        Interlocked.Exchange(ref forcedAssaults, 1);
+        Interlocked.Exchange(ref _forcedAssaults, 1);
         return true;
     }
 
@@ -49,7 +49,7 @@ public sealed partial class AiSystem
         foreach (var m in squad.Members)
         {
             if (m.Slot == slot || !table.IsAlive(m) || table.Cold(m.Slot) is not { IsImprisoned: false, Medical: { Incapacitated: false, Prone: false } } c) continue;
-            var fight = combat?.StateOf(m) ?? CombatSlot.Fresh(m.Generation);
+            var fight = _combat?.StateOf(m) ?? CombatSlot.Fresh(m.Generation);
             var at = prev[m.Slot].Position;
             // Known: an entry of its senses, any tag or age (FUN_140855960 without its flag), or the contract's own target (the branch of the test that reads a stored hand is
             // Unknown, docs/game/ai-tasks.md).
@@ -63,7 +63,7 @@ public sealed partial class AiSystem
             var candidate = new TargetCandidate
             {
                 Staggered = fight.StumbleClip >= 0 && world.Tick < fight.StunUntil,
-                Attackers = combat?.AttackerCount(world, m.Slot) ?? 0,
+                Attackers = _combat?.AttackerCount(world, m.Slot) ?? 0,
                 Taunt = (c.Orders & CharacterOrders.Taunt) != 0,
                 Passive = (c.Orders & CharacterOrders.Passive) != 0,
                 Distance = MathF.Sqrt((here.X - at.X) * (here.X - at.X) + (here.Z - at.Z) * (here.Z - at.Z)),
@@ -99,6 +99,6 @@ public sealed partial class AiSystem
             mind.AssaultTarget = CharacterId.None;
             if (table.Next[s].Alive && table.TryResolveNext(foe, out _)) world.Defer(new AttackOrder([table.IdOf(s)], foe) { Tick = world.Tick + 1 });
         }
-        Interlocked.Exchange(ref forcedAssaults, left);
+        Interlocked.Exchange(ref _forcedAssaults, left);
     }
 }

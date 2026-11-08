@@ -12,7 +12,7 @@ static class EyeLift
 {
     /// <summary>The eye's height over <paramref name="ground"/> beyond the game's camera heights; 0 with the ground unknown (not finite).</summary>
     public static float Of(Vector3 eye, float ground) =>
-        float.IsFinite(ground) ? Math.Max(0, eye.Y - ground - Meitou.Data.World.KenshiCamera.MaxHeightAbovePivot) : 0;
+        float.IsFinite(ground) ? Math.Max(0, eye.Y - ground - Data.World.KenshiCamera.MaxHeightAbovePivot) : 0;
 
     /// <summary><paramref name="groundDistance"/> with <paramref name="lift"/> added as a third side.</summary>
     public static float Apply(float groundDistance, float lift) => lift == 0 ? groundDistance : MathF.Sqrt(groundDistance * groundDistance + lift * lift);

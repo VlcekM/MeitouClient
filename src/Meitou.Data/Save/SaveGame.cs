@@ -104,25 +104,25 @@ public sealed partial class SaveGame
         Platoons.Clear();
         var wars = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
         foreach (var r in Quick.Records)
-            if (r.RecordType == FcsRecordType.WAR_SAVESTATE && r.Strings.TryGetValue("faction", out var f)) wars.TryAdd(f, r);
+            if (r.RecordType == FcsRecordType.WarSavestate && r.Strings.TryGetValue("faction", out var f)) wars.TryAdd(f, r);
         foreach (var r in Quick.Records)
         {
             switch (r.RecordType)
             {
-                case FcsRecordType.CAMERA: Camera = new SaveCamera(r); break;
-                case FcsRecordType.GAMESTATE_FACTION:
+                case FcsRecordType.Camera: Camera = new SaveCamera(r); break;
+                case FcsRecordType.GamestateFaction:
                     var faction = new SaveFaction(r, null);
                     faction.War = wars.GetValueOrDefault(faction.Id);
                     Factions.Add(faction);
                     break;
-                case FcsRecordType.GAMESTATE_TOWN: Towns.Add(new SaveTown(r)); break;
-                case FcsRecordType.PLATOON: Platoons.Add(new SavePlatoon(r, files.GetValueOrDefault(r))); break;
-                case FcsRecordType.INSTANCE_COLLECTION: FactionCollections.Add(r); break;
-                case FcsRecordType.GAMESTATE_TOWN_INSTANCE_LIST: TownInstanceList = r; break;
-                case FcsRecordType.BIOMES: Biomes = r; break;
-                case FcsRecordType.RESEARCH: Research = r; break;
-                case FcsRecordType.TERRAIN_DECALS: Decals = r; break;
-                case FcsRecordType.SAVED_STATE: if (r.StringId.EndsWith("5-redirect", StringComparison.Ordinal) || r.Name == "5-redirect") Redirect = r; break;
+                case FcsRecordType.GamestateTown: Towns.Add(new SaveTown(r)); break;
+                case FcsRecordType.Platoon: Platoons.Add(new SavePlatoon(r, files.GetValueOrDefault(r))); break;
+                case FcsRecordType.InstanceCollection: FactionCollections.Add(r); break;
+                case FcsRecordType.GamestateTownInstanceList: TownInstanceList = r; break;
+                case FcsRecordType.Biomes: Biomes = r; break;
+                case FcsRecordType.Research: Research = r; break;
+                case FcsRecordType.TerrainDecals: Decals = r; break;
+                case FcsRecordType.SavedState: if (r.StringId.EndsWith("5-redirect", StringComparison.Ordinal) || r.Name == "5-redirect") Redirect = r; break;
             }
         }
         if (Camera is null) throw new FcsFormatException("quick.save has no CAMERA record.", 0);
@@ -144,12 +144,12 @@ public sealed partial class SaveGame
                 if (!byId.TryGetValue(id, out var s)) continue;
                 switch (s.RecordType)
                 {
-                    case FcsRecordType.GAMESTATE_CHARACTER: c.GameState = s; break;
-                    case FcsRecordType.GAMESTATE_AI: c.Ai = s; break;
-                    case FcsRecordType.INVENTORY_STATE: c.Inventory = s; break;
-                    case FcsRecordType.MEDICAL_STATE: c.Medical = s; break;
-                    case FcsRecordType.STATS: c.Stats = s; break;
-                    case FcsRecordType.CHARACTER_APPEARANCE: c.Appearance = s; break;
+                    case FcsRecordType.GamestateCharacter: c.GameState = s; break;
+                    case FcsRecordType.GamestateAi: c.Ai = s; break;
+                    case FcsRecordType.InventoryState: c.Inventory = s; break;
+                    case FcsRecordType.MedicalState: c.Medical = s; break;
+                    case FcsRecordType.Stats: c.Stats = s; break;
+                    case FcsRecordType.CharacterAppearance: c.Appearance = s; break;
                 }
             }
             platoon.Characters.Add(c);
@@ -221,7 +221,7 @@ public sealed partial class SaveGame
         foreach (var file in AllFiles().Select(f => f.File))
             foreach (var r in file.Records)
                 foreach (var prefix in Hand.Prefixes(r))
-                    if (Hand.Read(r, prefix) is { IsNull: false, Type: (int)FcsRecordType.TOWN or 85 } h)
+                    if (Hand.Read(r, prefix) is { IsNull: false, Type: (int)FcsRecordType.Town or 85 } h)
                         townContainers.Add(h.C);
         var lists = Quick.SlotLists;
         while (lists.Count < 4) lists.Add(lists.Count >= 2 ? Enumerable.Range(1, ZoneContainerCount).ToArray() : []);
@@ -257,9 +257,9 @@ public sealed partial class SaveGame
         if (r.Instances.Count == 0) return 0;
         switch (r.RecordType)
         {
-            case FcsRecordType.INVENTORY_STATE or FcsRecordType.INVENTORY_ITEM_STATE or FcsRecordType.ITEM_PLACEMENT_GROUP:
+            case FcsRecordType.InventoryState or FcsRecordType.InventoryItemState or FcsRecordType.ItemPlacementGroup:
                 return (uint)r.Instances.Count;
-            case FcsRecordType.INSTANCE_COLLECTION:
+            case FcsRecordType.InstanceCollection:
                 return fileName == SaveFolder.QuickSaveName || r.StringId.EndsWith("-itemlist", StringComparison.Ordinal) ? (uint)r.Instances.Count : 0;
             default:
                 return 0;
@@ -359,39 +359,39 @@ public sealed partial class SaveGame
 /// </summary>
 public sealed class SaveHandles
 {
-    readonly Dictionary<int, SavePlatoon> platoons = [];
-    readonly Dictionary<(int C, int I), SaveCharacter> characters = [];
-    readonly Dictionary<int, SaveTown> towns = [];
-    readonly Dictionary<(int C, int I), FcsRecord> buildings = [];
+    readonly Dictionary<int, SavePlatoon> _platoons = [];
+    readonly Dictionary<(int C, int I), SaveCharacter> _characters = [];
+    readonly Dictionary<int, SaveTown> _towns = [];
+    readonly Dictionary<(int C, int I), FcsRecord> _buildings = [];
 
     internal SaveHandles(SaveGame game)
     {
         foreach (var p in game.Platoons)
         {
-            if (!p.Handle.IsNull) platoons[p.Handle.C] = p;
+            if (!p.Handle.IsNull) _platoons[p.Handle.C] = p;
             foreach (var c in p.Characters)
-                if (!c.Handle.IsNull) characters[(c.Handle.C, c.Handle.I)] = c;
+                if (!c.Handle.IsNull) _characters[(c.Handle.C, c.Handle.I)] = c;
         }
         foreach (var t in game.Towns)
-            if (!t.Handle.IsNull) towns[t.Handle.C] = t;
+            if (!t.Handle.IsNull) _towns[t.Handle.C] = t;
         foreach (var z in game.Zones.Values)
             foreach (var s in z.BuildingStates)
-                if (Hand.Read(s, "handle") is { IsNull: false } h) buildings[(h.C, h.I)] = s;
+                if (Hand.Read(s, "handle") is { IsNull: false } h) _buildings[(h.C, h.I)] = s;
     }
 
-    public SavePlatoon? Platoon(Hand h) => h.Type == (int)FcsRecordType.PLATOON ? platoons.GetValueOrDefault(h.C) : null;
-    public SaveCharacter? Character(Hand h) => h.Type == (int)FcsRecordType.CHARACTER ? characters.GetValueOrDefault((h.C, h.I)) : null;
-    public SaveTown? Town(Hand h) => h.Type is (int)FcsRecordType.TOWN or 85 ? towns.GetValueOrDefault(h.C) : null;
-    public FcsRecord? Building(Hand h) => h.Type == (int)FcsRecordType.BUILDING ? buildings.GetValueOrDefault((h.C, h.I)) : null;
+    public SavePlatoon? Platoon(Hand h) => h.Type == (int)FcsRecordType.Platoon ? _platoons.GetValueOrDefault(h.C) : null;
+    public SaveCharacter? Character(Hand h) => h.Type == (int)FcsRecordType.Character ? _characters.GetValueOrDefault((h.C, h.I)) : null;
+    public SaveTown? Town(Hand h) => h.Type is (int)FcsRecordType.Town or 85 ? _towns.GetValueOrDefault(h.C) : null;
+    public FcsRecord? Building(Hand h) => h.Type == (int)FcsRecordType.Building ? _buildings.GetValueOrDefault((h.C, h.I)) : null;
 
     /// <summary>The object a non-null handle names, or null when this save does not hold it.</summary>
     public object? Resolve(Hand h) =>
         h.IsNull ? null : h.Type switch
         {
-            (int)FcsRecordType.PLATOON => Platoon(h),
-            (int)FcsRecordType.CHARACTER => Character(h),
-            (int)FcsRecordType.TOWN or 85 => Town(h),
-            (int)FcsRecordType.BUILDING => Building(h),
+            (int)FcsRecordType.Platoon => Platoon(h),
+            (int)FcsRecordType.Character => Character(h),
+            (int)FcsRecordType.Town or 85 => Town(h),
+            (int)FcsRecordType.Building => Building(h),
             _ => null,
         };
 }

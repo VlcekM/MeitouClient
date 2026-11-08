@@ -10,18 +10,18 @@ public sealed class BuildingSwaps
 {
     sealed record Swap(HashSet<string> Replace, (string Id, int Weight)[] With);
 
-    readonly Dictionary<string, Swap[]> byFaction;
+    readonly Dictionary<string, Swap[]> _byFaction;
 
-    BuildingSwaps(Dictionary<string, Swap[]> byFaction) => this.byFaction = byFaction;
+    BuildingSwaps(Dictionary<string, Swap[]> byFaction) => this._byFaction = byFaction;
 
     /// <summary>Whether any faction has a swap.</summary>
-    public bool Any => byFaction.Count > 0;
+    public bool Any => _byFaction.Count > 0;
 
     /// <summary>Reads the swaps of every faction of the database (a swap record the faction lists but the database lacks is skipped).</summary>
     public static BuildingSwaps From(GameDatabase db)
     {
         var result = new Dictionary<string, Swap[]>(StringComparer.Ordinal);
-        foreach (var faction in db.OfType(Fcs.FcsRecordType.FACTION))
+        foreach (var faction in db.OfType(Fcs.FcsRecordType.Faction))
         {
             var sets = new List<Swap>();
             foreach (var link in faction.GetReferences("buildings replacements"))
@@ -42,7 +42,7 @@ public sealed class BuildingSwaps
     /// </summary>
     public string? Replacement(string factionId, string buildingId, float roll)
     {
-        if (!byFaction.TryGetValue(factionId, out var sets)) return null;
+        if (!_byFaction.TryGetValue(factionId, out var sets)) return null;
         foreach (var set in sets)
         {
             if (!set.Replace.Contains(buildingId)) continue;

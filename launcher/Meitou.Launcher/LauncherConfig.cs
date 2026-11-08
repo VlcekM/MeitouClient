@@ -18,14 +18,14 @@ public sealed class LauncherConfig
     /// <summary>Where <c>versions/</c> and <c>downloads/</c> go: <see cref="InstallFolder"/>, else <see cref="DataDirectory"/>.</summary>
     public static string InstallDirectory { get; private set; } = DataDirectory;
 
-    string? installFolder;
+    string? _installFolder;
     public string? InstallFolder
     {
-        get => installFolder;
+        get => _installFolder;
         set
         {
-            installFolder = string.IsNullOrWhiteSpace(value) ? null : value;
-            InstallDirectory = installFolder ?? DataDirectory;
+            _installFolder = string.IsNullOrWhiteSpace(value) ? null : value;
+            InstallDirectory = _installFolder ?? DataDirectory;
         }
     }
 
@@ -40,22 +40,22 @@ public sealed class LauncherConfig
     /// Other platforms always use Vulkan.</summary>
     public string Renderer
     {
-        get => renderer;
-        set => renderer = value is "auto" or "metal" or "vulkan" ? value : "auto";
+        get => _renderer;
+        set => _renderer = value is "auto" or "metal" or "vulkan" ? value : "auto";
     }
-    string renderer = "auto";
+    string _renderer = "auto";
     /// <summary>macOS Metal: the soft GPU allocation budget in MB (5120 safe, 6144 balanced, 8120 high). It is a
     /// VramGuard ceiling, not a hard reservation; Vulkan ignores it.</summary>
     public int MetalMemoryBudget
     {
-        get => metalMemoryBudget;
+        get => _metalMemoryBudget;
         set
         {
-            if (value is not (5120 or 6144 or 8120)) { metalMemoryBudget = 5120; return; }
-            metalMemoryBudget = value == 8120 && !MacSupport.CanUseHighBudget ? 5120 : value;
+            if (value is not (5120 or 6144 or 8120)) { _metalMemoryBudget = 5120; return; }
+            _metalMemoryBudget = value == 8120 && !MacSupport.CanUseHighBudget ? 5120 : value;
         }
     }
-    int metalMemoryBudget = 5120;
+    int _metalMemoryBudget = 5120;
     public string? SelectedVersion { get; set; }
     /// <summary>A game release the user chose not to be offered as an update; a newer one is offered again.</summary>
     public string? SkippedVersion { get; set; }

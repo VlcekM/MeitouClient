@@ -14,7 +14,7 @@ public class SaveReadTests
     {
         // The ids of TERRAIN_DECALS instances are raw 4-byte integers in a string slot.
         var file = new SaveFile();
-        var decals = new FcsRecord { Type = (int)FcsRecordType.TERRAIN_DECALS, StringId = "1--INGAME" };
+        var decals = new FcsRecord { Type = (int)FcsRecordType.TerrainDecals, StringId = "1--INGAME" };
         decals.Instances.Add(new FcsInstance { Id = LosslessUtf8.GetString([0x81, 0, 0, 0]), Target = "-" });
         decals.Instances.Add(new FcsInstance { Id = LosslessUtf8.GetString([0xC3, 0xA9, 0xFF, 0xFE]), Target = "é" });
         file.Records.Add(decals);
@@ -38,7 +38,7 @@ public class SaveReadTests
         var d = SaveDecals.Unpack(saved)!.Value;
         Assert.Equal(new TerrainDecal(0x00192161, TerrainDecalType.Splash, 7, 0x037A, -40, 0x0676, 0x0676, 0x0837, 0xFF8000FF, 96.79353f), d);
 
-        var record = new FcsRecord { Type = (int)FcsRecordType.TERRAIN_DECALS, StringId = "1-quick.save-INGAME" };
+        var record = new FcsRecord { Type = (int)FcsRecordType.TerrainDecals, StringId = "1-quick.save-INGAME" };
         SaveDecals.Write(record, [d, d]);
         var file = new SaveFile();
         file.Records.Add(record);
@@ -61,7 +61,7 @@ public class SaveReadTests
             new(TerrainDecalType.Splash, 7, new Vector3(-1234.5f, 210.9f, 88.25f), 1.25f, 0.6f, 42.5f, 0xFF8000FF, false),
             new(TerrainDecalType.Pool, 3, new Vector3(10, 20, 30), -0.5f, 1.1f, 99, 0x80102030, true),
         ];
-        var record = new FcsRecord { Type = (int)FcsRecordType.TERRAIN_DECALS, StringId = "1-quick.save-INGAME" };
+        var record = new FcsRecord { Type = (int)FcsRecordType.TerrainDecals, StringId = "1-quick.save-INGAME" };
         SaveDecals.Write(record, []);
         SaveSurfaceDecals.Write(record, [marks[0], marks[0], marks[0]]);
         SaveSurfaceDecals.Write(record, marks);

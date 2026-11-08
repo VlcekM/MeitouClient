@@ -18,25 +18,25 @@ public sealed record AnimationSoundEvent(string Event, string OverrideState, str
 public sealed class AnimationSoundEvents
 {
     static readonly string[] Lists = ["events", "animation events"];
-    readonly Dictionary<string, AnimationSoundEvent[]> byRecord = new(StringComparer.Ordinal);
+    readonly Dictionary<string, AnimationSoundEvent[]> _byRecord = new(StringComparer.Ordinal);
 
     AnimationSoundEvents() { }
 
     public static AnimationSoundEvents FromDatabase(GameDatabase db)
     {
         var result = new AnimationSoundEvents();
-        foreach (var type in new[] { FcsRecordType.ANIMATION, FcsRecordType.ANIMAL_ANIMATION, FcsRecordType.COMBAT_TECHNIQUE, FcsRecordType.BUILDING_FUNCTIONALITY })
+        foreach (var type in new[] { FcsRecordType.Animation, FcsRecordType.AnimalAnimation, FcsRecordType.CombatTechnique, FcsRecordType.BuildingFunctionality })
             foreach (var record in db.OfType(type))
             {
                 List<AnimationSoundEvent>? list = null;
                 foreach (var name in Lists)
                     foreach (var reference in record.GetReferences(name))
                     {
-                        if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.ANIMATION_EVENT } def || def.GetString("event") is not { Length: > 0 } ev) continue;
+                        if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.AnimationEvent } def || def.GetString("event") is not { Length: > 0 } ev) continue;
                         var sound = new AnimationSoundEvent(ev, def.GetString("override state"), def.GetString("override value"), def.GetString("stop"), ev == "Footsteps", reference.Values.Value0 * 0.01f);
                         Insert(list ??= [], sound);
                     }
-                if (list is not null) result.byRecord[record.StringId] = [.. list];
+                if (list is not null) result._byRecord[record.StringId] = [.. list];
             }
         return result;
     }
@@ -65,10 +65,10 @@ public sealed class AnimationSoundEvents
     }
 
     /// <summary>The events of the record with this string id, in time order; null when it has none.</summary>
-    public AnimationSoundEvent[]? Of(string recordId) => byRecord.GetValueOrDefault(recordId);
+    public AnimationSoundEvent[]? Of(string recordId) => _byRecord.GetValueOrDefault(recordId);
 
     /// <summary>How many records carry events.</summary>
-    public int Records => byRecord.Count;
+    public int Records => _byRecord.Count;
 }
 
 /// <summary>

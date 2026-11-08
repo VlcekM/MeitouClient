@@ -8,15 +8,15 @@ public class WwiseBankInstallTests
 {
     static readonly string[] Biomes = ["Ashlands", "Boneyard", "Canyons", "Coast", "Desert", "Forest", "Jungle", "Plains", "Swamplands", "Tarsands"];
 
-    static readonly Lazy<List<(string Name, WwiseBank Bank)>?> banks = new(() => InstallData.Install is { } install
+    static readonly Lazy<List<(string Name, WwiseBank Bank)>?> BankCache = new(() => InstallData.Install is { } install
         ? Directory.GetFiles(Path.Combine(install.DataDirectory, "audio"), "*.bnk").Order(StringComparer.OrdinalIgnoreCase)
             .Select(f => (Path.GetFileNameWithoutExtension(f), WwiseBank.ReadFile(f))).ToList()
         : null);
 
     static List<(string Name, WwiseBank Bank)> Banks()
     {
-        Assert.SkipWhen(banks.Value is null, "Kenshi install not found");
-        return banks.Value!;
+        Assert.SkipWhen(BankCache.Value is null, "Kenshi install not found");
+        return BankCache.Value!;
     }
 
     static WwiseBank Bank(string name) => Banks().Single(b => b.Name == name).Bank;

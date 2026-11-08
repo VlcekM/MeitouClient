@@ -1,12 +1,11 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
-using Silk.NET.Vulkan;
-using StbTrueTypeSharp;
-
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Ui;
+using Silk.NET.Vulkan;
+using StbTrueTypeSharp;
 
 namespace Meitou.Game.Rendering.Overlays;
 
@@ -21,8 +20,8 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// <summary>The baked characters: printable ASCII and Latin-1 up to the middle dot (U+00B7), which the Meitou UI joins details with.</summary>
     const int FirstChar = 32, CharCount = 0xB8 - FirstChar;
     // The size the glyphs are baked at (16 px; a display face is baked larger so it stays sharp drawn big) and the atlas side that holds them.
-    readonly float PixelHeight = 16;
-    readonly int AtlasSize = 512;
+    readonly float _pixelHeight = 16;
+    readonly int _atlasSize = 512;
 
     static readonly string[] FontCandidates =
     [
@@ -69,24 +68,24 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     /// <summary>The native GPU API (docs/renderer-native.md 7.1 step 8).</summary>
     public IGpuContext Gpu { get; }
-    readonly GpuTexture? atlas;
-    readonly SampledTexture atlasSampled;
-    readonly LegacyProgram program;
-    readonly UniformHandle uScreen;
-    readonly UniformHandle uImage;
-    SampledTexture? imageBatch;
-    readonly SamplerSlot samplerAtlas;
-    readonly StbTrueType.stbtt_bakedchar[] glyphs = new StbTrueType.stbtt_bakedchar[CharCount];
-    readonly List<float> batch = [];
+    readonly GpuTexture? _atlas;
+    readonly SampledTexture _atlasSampled;
+    readonly LegacyProgram _program;
+    readonly UniformHandle _uScreen;
+    readonly UniformHandle _uImage;
+    SampledTexture? _imageBatch;
+    readonly SamplerSlot _samplerAtlas;
+    readonly StbTrueType.stbtt_bakedchar[] _glyphs = new StbTrueType.stbtt_bakedchar[CharCount];
+    readonly List<float> _batch = [];
     const int Stride = 8;
     /// <summary>Queued text geometry by caption, position, scale and colour; for a UI font valid for one <see cref="UiFont.Generation"/> of its atlas.</summary>
-    readonly Dictionary<(string Text, float X, float Top, float Scale, Vector4 Colour), (float[] Vertices, float Width)> textGeometry = [];
-    int cachedTextFloats;
+    readonly Dictionary<(string Text, float X, float Top, float Scale, Vector4 Colour), (float[] Vertices, float Width)> _textGeometry = [];
+    int _cachedTextFloats;
     /// <summary>The glyph-cache font this overlay draws and measures with (null: the stb_truetype faces).</summary>
-    readonly UiFont? uiFont;
-    int cacheGeneration;
-    /// <summary>Where, in <see cref="batch"/>, the quads of each atlas texture begin (a UI font's atlas can be replaced while quads are queued).</summary>
-    readonly List<(int Start, SampledTexture Texture)> atlasRuns = [];
+    readonly UiFont? _uiFont;
+    int _cacheGeneration;
+    /// <summary>Where, in <see cref="_batch"/>, the quads of each atlas texture begin (a UI font's atlas can be replaced while quads are queued).</summary>
+    readonly List<(int Start, SampledTexture Texture)> _atlasRuns = [];
 
     public float LineHeight { get; }
     public float CharWidth { get; }
@@ -99,49 +98,49 @@ public sealed unsafe class DebugOverlay : IDisposable
     DebugOverlay(IGpuContext gpu, byte[] font, float pixelHeight = 16)
     {
         Gpu = gpu;
-        PixelHeight = pixelHeight;
+        _pixelHeight = pixelHeight;
         // The smallest square the glyphs fit in (the baker says how many rows it used, negative when they did not fit), at most 2048.
         byte[] pixels;
-        for (AtlasSize = 256; ; AtlasSize *= 2)
+        for (_atlasSize = 256; ; _atlasSize *= 2)
         {
-            pixels = new byte[AtlasSize * AtlasSize];
+            pixels = new byte[_atlasSize * _atlasSize];
             int rows;
             fixed (byte* f = font)
             fixed (byte* p = pixels)
-            fixed (StbTrueType.stbtt_bakedchar* g = glyphs)
-                rows = StbTrueType.stbtt_BakeFontBitmap(f, 0, PixelHeight, p, AtlasSize, AtlasSize, FirstChar, CharCount, g);
-            if (rows > 0 || AtlasSize >= 2048) break;
+            fixed (StbTrueType.stbtt_bakedchar* g = _glyphs)
+                rows = StbTrueType.stbtt_BakeFontBitmap(f, 0, _pixelHeight, p, _atlasSize, _atlasSize, FirstChar, CharCount, g);
+            if (rows > 0 || _atlasSize >= 2048) break;
         }
-        LineHeight = PixelHeight * 1.25f;
-        CharWidth = glyphs['M' - FirstChar].xadvance;
+        LineHeight = _pixelHeight * 1.25f;
+        CharWidth = _glyphs['M' - FirstChar].xadvance;
 
         // The glyphs (R8), sampled as the GL texture was: linear, repeating, no mips.
         using (var upload = gpu.Uploads.Begin())
         {
-            atlas = upload.Create(new TextureDesc(InternalFormat.R8, AtlasSize, AtlasSize, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "debug overlay font"));
-            upload.Write(atlas, 0, 0, new PixelRect(0, 0, (uint)AtlasSize, (uint)AtlasSize), pixels);
+            _atlas = upload.Create(new TextureDesc(InternalFormat.R8, _atlasSize, _atlasSize, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "debug overlay font"));
+            upload.Write(_atlas, 0, 0, new PixelRect(0, 0, (uint)_atlasSize, (uint)_atlasSize), pixels);
         }
-        atlasSampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.Repeat,
-            TextureWrapMode.Repeat, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), atlas!.View());
+        _atlasSampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.Repeat,
+            TextureWrapMode.Repeat, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), _atlas!.View());
 
-        program = LegacyProgram.Create(gpu, Vertex, Fragment, "debug overlay");
-        uScreen = program.Uniform("uScreen");
-        uImage = program.Uniform("uImage");
-        samplerAtlas = program.Sampler("uAtlas");
+        _program = LegacyProgram.Create(gpu, Vertex, Fragment, "debug overlay");
+        _uScreen = _program.Uniform("uScreen");
+        _uImage = _program.Uniform("uImage");
+        _samplerAtlas = _program.Sampler("uAtlas");
     }
 
     /// <summary>An overlay that draws and measures with the glyph-cache font <paramref name="font"/> (owned from here on).</summary>
     DebugOverlay(IGpuContext gpu, UiFont font)
     {
         Gpu = gpu;
-        uiFont = font;
-        cacheGeneration = font.Generation;
+        _uiFont = font;
+        _cacheGeneration = font.Generation;
         LineHeight = font.LineHeight;
         CharWidth = font.CharWidth;
-        program = LegacyProgram.Create(gpu, Vertex, Fragment, "debug overlay");
-        uScreen = program.Uniform("uScreen");
-        uImage = program.Uniform("uImage");
-        samplerAtlas = program.Sampler("uAtlas");
+        _program = LegacyProgram.Create(gpu, Vertex, Fragment, "debug overlay");
+        _uScreen = _program.Uniform("uScreen");
+        _uImage = _program.Uniform("uImage");
+        _samplerAtlas = _program.Sampler("uAtlas");
     }
 
     /// <summary>
@@ -167,7 +166,7 @@ public sealed unsafe class DebugOverlay : IDisposable
     float Step(int codePoint, ref int previous, float scale)
     {
         float advance;
-        if (uiFont is { } ui)
+        if (_uiFont is { } ui)
         {
             advance = ui.Lookup(codePoint).Advance * scale;
             if (previous >= 0) advance += ui.Kern(previous, codePoint) * scale;
@@ -176,7 +175,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         {
             int index = codePoint - FirstChar;
             if (index < 0 || index >= CharCount) index = '?' - FirstChar;
-            advance = glyphs[index].xadvance * scale;
+            advance = _glyphs[index].xadvance * scale;
         }
         previous = codePoint;
         return advance;
@@ -377,38 +376,38 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     public float TextScaled(string s, float x, float top, Vector4 colour, float scale)
     {
-        if (imageBatch is not null) throw new InvalidOperationException("Flush UI images before queuing text.");
+        if (_imageBatch is not null) throw new InvalidOperationException("Flush UI images before queuing text.");
         var key = (s, x, top, scale, colour);
-        if (uiFont is { } ui)
+        if (_uiFont is { } ui)
         {
             // A new atlas texture or a restart moves glyph rectangles: geometry made before it samples the wrong texels.
-            if (ui.Generation != cacheGeneration) DropCachedGeometry(ui.Generation);
-            if (textGeometry.TryGetValue(key, out var hit))
+            if (ui.Generation != _cacheGeneration) DropCachedGeometry(ui.Generation);
+            if (_textGeometry.TryGetValue(key, out var hit))
             {
                 NoteAtlas(ui);
-                batch.AddRange(hit.Vertices.AsSpan());
+                _batch.AddRange(hit.Vertices.AsSpan());
                 return hit.Width;
             }
             ui.Ensure(s);
-            if (ui.Generation != cacheGeneration) DropCachedGeometry(ui.Generation);
+            if (ui.Generation != _cacheGeneration) DropCachedGeometry(ui.Generation);
             return UiText(ui, key);
         }
         // The stb faces are immutable. Bound the cache even for scrolling text and continuously changing counters.
-        if (textGeometry.TryGetValue(key, out var cached))
+        if (_textGeometry.TryGetValue(key, out var cached))
         {
-            batch.AddRange(cached.Vertices.AsSpan());
+            _batch.AddRange(cached.Vertices.AsSpan());
             return cached.Width;
         }
-        int first = batch.Count;
-        float start = x, baseline = top + PixelHeight * scale;
+        int first = _batch.Count;
+        float start = x, baseline = top + _pixelHeight * scale;
         foreach (var rune in s.EnumerateRunes())
         {
             int index = rune.Value - FirstChar;
             if (index < 0 || index >= CharCount) index = '?' - FirstChar;
-            var g = glyphs[index];
+            var g = _glyphs[index];
             float x0 = MathF.Round(x + g.xoff * scale), y0 = MathF.Round(baseline + g.yoff * scale);
             Quad(x0, y0, x0 + (g.x1 - g.x0) * scale, y0 + (g.y1 - g.y0) * scale,
-                g.x0 / (float)AtlasSize, g.y0 / (float)AtlasSize, g.x1 / (float)AtlasSize, g.y1 / (float)AtlasSize, colour);
+                g.x0 / (float)_atlasSize, g.y0 / (float)_atlasSize, g.x1 / (float)_atlasSize, g.y1 / (float)_atlasSize, colour);
             x += g.xadvance * scale;
         }
         Remember(key, first, x - start);
@@ -418,36 +417,36 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// <summary>Caches the quads queued since <paramref name="first"/> as the geometry of <paramref name="key"/> (bounded in entries and floats).</summary>
     void Remember((string Text, float X, float Top, float Scale, Vector4 Colour) key, int first, float width)
     {
-        int added = batch.Count - first;
+        int added = _batch.Count - first;
         if (added > 16384) return;
-        if (textGeometry.Count >= 512 || cachedTextFloats + added > 262144)
+        if (_textGeometry.Count >= 512 || _cachedTextFloats + added > 262144)
         {
-            textGeometry.Clear();
-            cachedTextFloats = 0;
+            _textGeometry.Clear();
+            _cachedTextFloats = 0;
         }
-        textGeometry[key] = (CollectionsMarshal.AsSpan(batch)[first..].ToArray(), width);
-        cachedTextFloats += added;
+        _textGeometry[key] = (CollectionsMarshal.AsSpan(_batch)[first..].ToArray(), width);
+        _cachedTextFloats += added;
     }
 
     void DropCachedGeometry(int generation)
     {
-        textGeometry.Clear();
-        cachedTextFloats = 0;
-        cacheGeneration = generation;
+        _textGeometry.Clear();
+        _cachedTextFloats = 0;
+        _cacheGeneration = generation;
     }
 
     /// <summary>Starts a run of quads for the UI font's current atlas texture when the last quads were queued against another one.</summary>
     void NoteAtlas(UiFont ui)
     {
         var texture = ui.Sampled;
-        if (atlasRuns.Count == 0 || atlasRuns[^1].Texture != texture) atlasRuns.Add((batch.Count, texture));
+        if (_atlasRuns.Count == 0 || _atlasRuns[^1].Texture != texture) _atlasRuns.Add((_batch.Count, texture));
     }
 
     /// <summary>Queues the glyph quads of a UI-font line (every glyph exists: <see cref="UiFont.Ensure"/> ran) and caches them.</summary>
     float UiText(UiFont ui, (string Text, float X, float Top, float Scale, Vector4 Colour) key)
     {
         var (s, x, top, scale, colour) = key;
-        int first = batch.Count, generation = ui.Generation;
+        int first = _batch.Count, generation = ui.Generation;
         float start = x, baseline = top + ui.Baseline * scale, side = ui.Side;
         int previous = -1;
         foreach (var rune in s.EnumerateRunes())
@@ -497,24 +496,24 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// <summary>Widget and font batches share one rendering; scissors and draw order still change per flush.</summary>
     public void Flush(int width, int height, Meitou.Data.Ui.UiRect? clip, OverlayPass? pass)
     {
-        if (batch.Count == 0 || width <= 0 || height <= 0 || Target is null) { batch.Clear(); imageBatch = null; atlasRuns.Clear(); return; }
+        if (_batch.Count == 0 || width <= 0 || height <= 0 || Target is null) { _batch.Clear(); _imageBatch = null; _atlasRuns.Clear(); return; }
         var scissor = Scissor(Target, width, height, clip);
         // The atlas texture of run `run` of the batch: a UI font's (it can change within a batch), else the baked one.
-        SampledTexture AtlasAt(int run) => atlasRuns.Count > 0 ? atlasRuns[run].Texture : uiFont is { } ui ? ui.Sampled : atlasSampled;
+        SampledTexture AtlasAt(int run) => _atlasRuns.Count > 0 ? _atlasRuns[run].Texture : _uiFont is { } ui ? ui.Sampled : _atlasSampled;
         if (pass is not null)
         {
             // Only the scissor goes to the pass (the whole target without a clip, as PassTargets.At gives).
-            var all = CollectionsMarshal.AsSpan(batch);
-            if (atlasRuns.Count <= 1) pass.Add(this, all, imageBatch, scissor, imageBatch is null ? AtlasAt(0) : null);
+            var all = CollectionsMarshal.AsSpan(_batch);
+            if (_atlasRuns.Count <= 1) pass.Add(this, all, _imageBatch, scissor, _imageBatch is null ? AtlasAt(0) : null);
             else
-                for (int run = 0; run < atlasRuns.Count; run++)
+                for (int run = 0; run < _atlasRuns.Count; run++)
                 {
-                    int from = run == 0 ? 0 : atlasRuns[run].Start, to = run + 1 < atlasRuns.Count ? atlasRuns[run + 1].Start : all.Length;
-                    pass.Add(this, all[from..to], null, scissor, atlasRuns[run].Texture);
+                    int from = run == 0 ? 0 : _atlasRuns[run].Start, to = run + 1 < _atlasRuns.Count ? _atlasRuns[run + 1].Start : all.Length;
+                    pass.Add(this, all[from..to], null, scissor, _atlasRuns[run].Texture);
                 }
-            batch.Clear();
-            atlasRuns.Clear();
-            imageBatch = null;
+            _batch.Clear();
+            _atlasRuns.Clear();
+            _imageBatch = null;
             return;
         }
         // A native segment of its own. It is begun first: the overlay is also drawn after a frame ended (a screenshot's key list), and the
@@ -524,9 +523,9 @@ public sealed unsafe class DebugOverlay : IDisposable
         var t = PassTargets.Of(Target, null).At(new PixelViewport(0, 0, width, height, 0, 1)) with { Scissor = scissor };
         var cmd = Gpu.BeginNative("debug overlay");
         cmd.BeginRendering(t.Rendering);
-        program.Set(uScreen, (float)width, height);
-        program.Set(uImage, imageBatch is null ? 0 : 1);
-        var floats = CollectionsMarshal.AsSpan(batch);
+        _program.Set(_uScreen, (float)width, height);
+        _program.Set(_uImage, _imageBatch is null ? 0 : 1);
+        var floats = CollectionsMarshal.AsSpan(_batch);
         var vertices = Gpu.Frame.AllocateConstants((ulong)(floats.Length * 4), 16);
         MemoryMarshal.AsBytes(floats).CopyTo(new Span<byte>(vertices.Pointer, floats.Length * 4));
         // As the GL version drew: no depth test or culling, blended over by alpha. The alpha channel accumulates as "over" does, so a transparent target
@@ -535,54 +534,54 @@ public sealed unsafe class DebugOverlay : IDisposable
         state.Record(cmd, t);
         Span<LegacyProgram.Attribute?> attributes =
         [
-            new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset), InternalFormat.RG32f, Stride * 4, false),
-            new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 8), InternalFormat.RG32f, Stride * 4, false),
-            new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 16), InternalFormat.Rgba32f, Stride * 4, false),
+            new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset), InternalFormat.Rg32F, Stride * 4, false),
+            new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 8), InternalFormat.Rg32F, Stride * 4, false),
+            new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 16), InternalFormat.Rgba32F, Stride * 4, false),
         ];
-        var pipeline = Gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout(attributes), PrimitiveType.Triangles, t.Formats, "debug overlay"));
+        var pipeline = Gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout(attributes), PrimitiveType.Triangles, t.Formats, "debug overlay"));
         cmd.BindPipeline(pipeline);
         Span<GpuBufferBinding> buffers = [attributes[0]!.Value.Buffer, attributes[1]!.Value.Buffer, attributes[2]!.Value.Buffer];
         cmd.BindVertexBuffers(0, buffers);
-        if (imageBatch is not null || atlasRuns.Count <= 1)
+        if (_imageBatch is not null || _atlasRuns.Count <= 1)
         {
-            program.Bind(samplerAtlas, imageBatch ?? AtlasAt(0));
-            program.Flush(cmd);
+            _program.Bind(_samplerAtlas, _imageBatch ?? AtlasAt(0));
+            _program.Flush(cmd);
             cmd.Draw((uint)(floats.Length / Stride));
         }
         else
-            for (int run = 0; run < atlasRuns.Count; run++)
+            for (int run = 0; run < _atlasRuns.Count; run++)
             {
-                int from = run == 0 ? 0 : atlasRuns[run].Start, to = run + 1 < atlasRuns.Count ? atlasRuns[run + 1].Start : floats.Length;
-                program.Bind(samplerAtlas, atlasRuns[run].Texture);
-                program.Flush(cmd);
+                int from = run == 0 ? 0 : _atlasRuns[run].Start, to = run + 1 < _atlasRuns.Count ? _atlasRuns[run + 1].Start : floats.Length;
+                _program.Bind(_samplerAtlas, _atlasRuns[run].Texture);
+                _program.Flush(cmd);
                 cmd.Draw((uint)((to - from) / Stride), firstVertex: (uint)(from / Stride));
             }
         cmd.EndRendering();
         Gpu.EndNative(cmd);
-        batch.Clear();
-        atlasRuns.Clear();
-        imageBatch = null;
+        _batch.Clear();
+        _atlasRuns.Clear();
+        _imageBatch = null;
     }
 
     /// <summary>Collects painter-ordered batches, coalescing adjacent compatible draws into one upload and rendering.</summary>
     public sealed class OverlayPass(IGpuContext gpu, int width, int height) : IDisposable
     {
-        readonly List<float> vertices = [];
-        readonly List<Run> runs = [];
-        DebugOverlay? renderer;
-        GpuTexture? target;
+        readonly List<float> _vertices = [];
+        readonly List<Run> _runs = [];
+        DebugOverlay? _renderer;
+        GpuTexture? _target;
         readonly record struct Run(SampledTexture Texture, bool Image, PixelRect Scissor, int First, int Count);
 
         /// <summary>One <see cref="Add"/> as recorded: its arguments, the data at <paramref name="First"/> in the recording's floats.</summary>
         public readonly record struct Recorded(DebugOverlay Owner, SampledTexture? Image, PixelRect Clip, SampledTexture? Atlas, int First, int Count);
 
-        List<Recorded>? recording;
-        List<float>? recordedFloats;
+        List<Recorded>? _recording;
+        List<float>? _recordedFloats;
 
         /// <summary>Until <see cref="EndRecording"/>, every <see cref="Add"/> is also written to <paramref name="adds"/> and <paramref name="floats"/>.</summary>
-        public void BeginRecording(List<Recorded> adds, List<float> floats) => (recording, recordedFloats) = (adds, floats);
+        public void BeginRecording(List<Recorded> adds, List<float> floats) => (_recording, _recordedFloats) = (adds, floats);
 
-        public void EndRecording() => (recording, recordedFloats) = (null, null);
+        public void EndRecording() => (_recording, _recordedFloats) = (null, null);
 
         /// <summary>Adds again what was recorded.</summary>
         public void Replay(float[] floats, Recorded[] adds)
@@ -593,21 +592,21 @@ public sealed unsafe class DebugOverlay : IDisposable
         public OverlayPass Reset(int newWidth, int newHeight)
         {
             width = newWidth; height = newHeight;
-            vertices.Clear(); runs.Clear(); renderer = null; target = null;
+            _vertices.Clear(); _runs.Clear(); _renderer = null; _target = null;
             return this;
         }
 
         /// <param name="atlas">The font atlas texture the glyph quads of <paramref name="data"/> sample (a UI font's can change between runs); null: the owner's baked one.</param>
         public void Add(DebugOverlay owner, ReadOnlySpan<float> data, SampledTexture? image, PixelRect clip, SampledTexture? atlas = null)
         {
-            if (owner.Gpu != gpu || target is not null && target != owner.Target)
+            if (owner.Gpu != gpu || _target is not null && _target != owner.Target)
                 throw new InvalidOperationException("An overlay pass must share its GPU and target.");
-            renderer ??= owner;
-            target = owner.Target;
-            if (recording is not null && recordedFloats is not null)
+            _renderer ??= owner;
+            _target = owner.Target;
+            if (_recording is not null && _recordedFloats is not null)
             {
-                recording.Add(new(owner, image, clip, atlas, recordedFloats.Count, data.Length));
-                recordedFloats.AddRange(data);
+                _recording.Add(new(owner, image, clip, atlas, _recordedFloats.Count, data.Length));
+                _recordedFloats.AddRange(data);
             }
             // If no geometry reaches outside this scissor, the full viewport clips it identically.
             // Different widget clips can then share a draw without changing their pixels.
@@ -620,20 +619,20 @@ public sealed unsafe class DebugOverlay : IDisposable
                 solid &= data[i + 2] < 0;
             }
             if (contained) clip = new PixelRect(0, 0, (uint)width, (uint)height);
-            var texture = image ?? atlas ?? owner.atlasSampled;
+            var texture = image ?? atlas ?? owner._atlasSampled;
             bool isImage = image.HasValue;
-            int first = vertices.Count / Stride, count = data.Length / Stride;
-            vertices.AddRange(data);
-            if (runs.Count > 0)
+            int first = _vertices.Count / Stride, count = data.Length / Stride;
+            _vertices.AddRange(data);
+            if (_runs.Count > 0)
             {
-                var last = runs[^1];
+                var last = _runs[^1];
                 if (SameClip(last.Scissor, clip) && (solid || last.Texture == texture && last.Image == isImage))
                 {
-                    runs[^1] = last with { Count = last.Count + count };
+                    _runs[^1] = last with { Count = last.Count + count };
                     return;
                 }
             }
-            runs.Add(new(texture, isImage, clip, first, count));
+            _runs.Add(new(texture, isImage, clip, first, count));
         }
 
         static bool SameClip(PixelRect a, PixelRect b) => a.X == b.X && a.Y == b.Y
@@ -641,35 +640,35 @@ public sealed unsafe class DebugOverlay : IDisposable
 
         public void Dispose()
         {
-            if (renderer is not { } painter || target is null || runs.Count == 0) return;
+            if (_renderer is not { } painter || _target is null || _runs.Count == 0) return;
             var cmd = gpu.BeginNative("UI overlay");
-            var targets = PassTargets.Of(target, null).At(new PixelViewport(0, 0, width, height, 0, 1));
+            var targets = PassTargets.Of(_target, null).At(new PixelViewport(0, 0, width, height, 0, 1));
             cmd.BeginRendering(targets.Rendering);
             try
             {
                 var state = DrawState.For(targets.Formats, gpu.DepthClamp, blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One, AlphaDst: BlendingFactor.OneMinusSrcAlpha));
                 state.Record(cmd, targets);
-                var data = CollectionsMarshal.AsSpan(vertices);
+                var data = CollectionsMarshal.AsSpan(_vertices);
                 var upload = gpu.Frame.AllocateConstants((ulong)(data.Length * 4), 16);
                 MemoryMarshal.AsBytes(data).CopyTo(new Span<byte>(upload.Pointer, data.Length * 4));
                 Span<LegacyProgram.Attribute?> attributes =
                 [
-                    new(new GpuBufferBinding(upload.Handle, upload.Offset), InternalFormat.RG32f, Stride * 4, false),
-                    new(new GpuBufferBinding(upload.Handle, upload.Offset + 8), InternalFormat.RG32f, Stride * 4, false),
-                    new(new GpuBufferBinding(upload.Handle, upload.Offset + 16), InternalFormat.Rgba32f, Stride * 4, false),
+                    new(new GpuBufferBinding(upload.Handle, upload.Offset), InternalFormat.Rg32F, Stride * 4, false),
+                    new(new GpuBufferBinding(upload.Handle, upload.Offset + 8), InternalFormat.Rg32F, Stride * 4, false),
+                    new(new GpuBufferBinding(upload.Handle, upload.Offset + 16), InternalFormat.Rgba32F, Stride * 4, false),
                 ];
-                var program = painter.program;
+                var program = painter._program;
                 var pipeline = gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout(attributes), PrimitiveType.Triangles, targets.Formats, "UI overlay"));
                 cmd.BindPipeline(pipeline);
                 Span<GpuBufferBinding> buffers = [attributes[0]!.Value.Buffer, attributes[1]!.Value.Buffer, attributes[2]!.Value.Buffer];
                 cmd.BindVertexBuffers(0, buffers);
-                program.Set(painter.uScreen, (float)width, height);
+                program.Set(painter._uScreen, (float)width, height);
                 var scissor = targets.Scissor;
-                foreach (var run in runs)
+                foreach (var run in _runs)
                 {
                     if (!SameClip(scissor, run.Scissor)) { cmd.SetScissor(run.Scissor); scissor = run.Scissor; }
-                    program.Set(painter.uImage, run.Image ? 1 : 0);
-                    program.Bind(painter.samplerAtlas, run.Texture);
+                    program.Set(painter._uImage, run.Image ? 1 : 0);
+                    program.Bind(painter._samplerAtlas, run.Texture);
                     program.Flush(cmd);
                     cmd.Draw((uint)run.Count, firstVertex: (uint)run.First);
                 }
@@ -678,25 +677,25 @@ public sealed unsafe class DebugOverlay : IDisposable
             {
                 cmd.EndRendering();
                 gpu.EndNative(cmd);
-                vertices.Clear(); runs.Clear(); renderer = null; target = null;
+                _vertices.Clear(); _runs.Clear(); _renderer = null; _target = null;
             }
         }
     }
     /// <summary>Queues a texture rectangle. Flush before switching between image and font batches.</summary>
     public void Image(SampledTexture texture, Vector4 destination, Vector4 uv, Vector4 colour)
     {
-        if (batch.Count > 0 && (imageBatch is null || imageBatch.Value != texture))
+        if (_batch.Count > 0 && (_imageBatch is null || _imageBatch.Value != texture))
             throw new InvalidOperationException("Flush before switching overlay textures.");
-        imageBatch = texture;
+        _imageBatch = texture;
         Quad(destination.X, destination.Y, destination.Z, destination.W, uv.X, uv.Y, uv.Z, uv.W, colour);
     }
 
     /// <summary>Queues a texture rectangle turned by <paramref name="angle"/> radians (clockwise on screen) about its centre.</summary>
     public void ImageRotated(SampledTexture texture, Vector4 destination, Vector4 uv, Vector4 colour, float angle)
     {
-        if (batch.Count > 0 && (imageBatch is null || imageBatch.Value != texture))
+        if (_batch.Count > 0 && (_imageBatch is null || _imageBatch.Value != texture))
             throw new InvalidOperationException("Flush before switching overlay textures.");
-        imageBatch = texture;
+        _imageBatch = texture;
         var centre = new Vector2(destination.X + destination.Z, destination.Y + destination.W) / 2;
         var half = new Vector2(destination.Z - destination.X, destination.W - destination.Y) / 2;
         var (sin, cos) = MathF.SinCos(angle);
@@ -748,17 +747,17 @@ public sealed unsafe class DebugOverlay : IDisposable
 
     Span<OverlayVertex> Reserve(int count)
     {
-        int start = batch.Count;
+        int start = _batch.Count;
         int added = count * Stride;
-        batch.EnsureCapacity(start + added);
-        CollectionsMarshal.SetCount(batch, start + added);
-        return MemoryMarshal.Cast<float, OverlayVertex>(CollectionsMarshal.AsSpan(batch).Slice(start, added));
+        _batch.EnsureCapacity(start + added);
+        CollectionsMarshal.SetCount(_batch, start + added);
+        return MemoryMarshal.Cast<float, OverlayVertex>(CollectionsMarshal.AsSpan(_batch).Slice(start, added));
     }
 
     public void Dispose()
     {
-        atlas?.Dispose();
-        uiFont?.Dispose();
-        program.Dispose();
+        _atlas?.Dispose();
+        _uiFont?.Dispose();
+        _program.Dispose();
     }
 }

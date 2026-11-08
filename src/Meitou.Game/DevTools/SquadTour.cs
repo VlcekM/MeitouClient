@@ -22,53 +22,53 @@ sealed class SquadTour
     /// <summary>How much steeper the camera looks down at the top of an arc (radians), and its limit.</summary>
     const float PitchLift = 0.35f, MaxPitch = 1.35f;
 
-    readonly List<CharacterId> stops = [];
-    int next;
-    float time, yaw, pitch, distance;
-    Vector3 from;
-    bool holding;
+    readonly List<CharacterId> _stops = [];
+    int _next;
+    float _time, _yaw, _pitch, _distance;
+    Vector3 _from;
+    bool _holding;
 
     public bool Active { get; private set; }
     /// <summary>The camera is on a hop now (not on a hold between hops).</summary>
-    public bool Moving => Active && !holding;
+    public bool Moving => Active && !_holding;
 
     /// <summary>Starts at the camera's view of <paramref name="members"/>[0] (flying there first when the view is elsewhere).</summary>
     public void Start(WorldCamera camera, IReadOnlyList<CharacterId> members, Func<CharacterId, Vector3?> position)
     {
-        stops.Clear();
-        stops.AddRange(members);
-        if (!Active) (yaw, pitch, distance) = (camera.Yaw, camera.Pitch, camera.Distance);   // a new flight mid-flight keeps the view it left from
-        next = 0;
-        if (stops.Count > 0 && position(stops[0]) is { } first && Ground(first - camera.Target) < 0.25f * distance) next = 1;
-        Active = next < stops.Count;
+        _stops.Clear();
+        _stops.AddRange(members);
+        if (!Active) (_yaw, _pitch, _distance) = (camera.Yaw, camera.Pitch, camera.Distance);   // a new flight mid-flight keeps the view it left from
+        _next = 0;
+        if (_stops.Count > 0 && position(_stops[0]) is { } first && Ground(first - camera.Target) < 0.25f * _distance) _next = 1;
+        Active = _next < _stops.Count;
         if (Active) BeginHop(camera, position);
     }
 
     /// <summary>One hop from the camera's view to <paramref name="id"/>, ending on it.</summary>
     public void Fly(WorldCamera camera, CharacterId id, Func<CharacterId, Vector3?> position)
     {
-        stops.Clear();
-        stops.Add(id);
-        if (!Active) (yaw, pitch, distance) = (camera.Yaw, camera.Pitch, camera.Distance);   // a new flight mid-flight keeps the view it left from
-        next = 0;
+        _stops.Clear();
+        _stops.Add(id);
+        if (!Active) (_yaw, _pitch, _distance) = (camera.Yaw, camera.Pitch, camera.Distance);   // a new flight mid-flight keeps the view it left from
+        _next = 0;
         Active = true;
         BeginHop(camera, position);
     }
 
     /// <summary>The member the camera is on or flying to.</summary>
-    public CharacterId? Current => next < stops.Count ? stops[next] : stops.Count > 0 ? stops[^1] : null;
+    public CharacterId? Current => _next < _stops.Count ? _stops[_next] : _stops.Count > 0 ? _stops[^1] : null;
 
     /// <summary>Ends the hop under way at once: the camera cuts to the view it was flying to.</summary>
     public void Finish(WorldCamera camera, Func<CharacterId, Vector3?> position)
     {
-        if (Current is { } id && position(id) is { } at) (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (at, yaw, pitch, distance);
+        if (Current is { } id && position(id) is { } at) (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (at, _yaw, _pitch, _distance);
         Active = false;
     }
 
     /// <summary>The eye of the view the hop under way lands on (the next stop's during a hold), for the streaming to load there first; null with no flight.</summary>
     public Vector3? ArrivalEye(Func<CharacterId, Vector3?> position) =>
         Active && Current is { } id && position(id) is { } at
-            ? at + new Vector3(MathF.Cos(pitch) * MathF.Sin(yaw), MathF.Sin(pitch), MathF.Cos(pitch) * MathF.Cos(yaw)) * distance   // WorldCamera.Eye's boom
+            ? at + new Vector3(MathF.Cos(_pitch) * MathF.Sin(_yaw), MathF.Sin(_pitch), MathF.Cos(_pitch) * MathF.Cos(_yaw)) * _distance   // WorldCamera.Eye's boom
             : null;
 
     public void Stop() => Active = false;
@@ -77,37 +77,37 @@ sealed class SquadTour
     public bool Advance(double dt, WorldCamera camera, Func<CharacterId, Vector3?> position)
     {
         if (!Active) return false;
-        time += (float)dt;
-        if (holding)
+        _time += (float)dt;
+        if (_holding)
         {
-            if (position(stops[next - 1]) is { } held) camera.Target = held;
-            if (time < Hold) return true;
+            if (position(_stops[_next - 1]) is { } held) camera.Target = held;
+            if (_time < Hold) return true;
             BeginHop(camera, position);
             if (!Active) return false;
         }
         // A member gone mid-hop (dead and removed, left the squad): the hop ends where the camera is.
-        var to = position(stops[next]) ?? camera.Target;
-        float s = Math.Clamp(time / HopSeconds, 0, 1);
+        var to = position(_stops[_next]) ?? camera.Target;
+        float s = Math.Clamp(_time / HopSeconds, 0, 1);
         // A brachistochrone (cycloid) arch, upside down for a climb: its angle runs evenly in time, so the camera rises first (the ground move
         // starts as the cube of time, the lift as its square), crosses fastest at the top and slows into the descent onto the member.
         float theta = 2 * MathF.PI * s;
         float across = (theta - MathF.Sin(theta)) / (2 * MathF.PI);
         float lift = (1 - MathF.Cos(theta)) / 2;
-        float height = MathF.Max(LiftPerDistance * Ground(to - from), MinLift * distance);
-        camera.Target = Vector3.Lerp(from, to, across);
-        camera.Yaw = yaw;
-        camera.Pitch = pitch + (MathF.Max(MathF.Min(pitch + PitchLift, MaxPitch), pitch) - pitch) * lift;
-        camera.Distance = MathF.Min(distance + height * lift, camera.ViewDistance * 0.5f);
-        if (s >= 1) { next++; holding = true; time = 0; if (next >= stops.Count) { Active = false; return false; } }
+        float height = MathF.Max(LiftPerDistance * Ground(to - _from), MinLift * _distance);
+        camera.Target = Vector3.Lerp(_from, to, across);
+        camera.Yaw = _yaw;
+        camera.Pitch = _pitch + (MathF.Max(MathF.Min(_pitch + PitchLift, MaxPitch), _pitch) - _pitch) * lift;
+        camera.Distance = MathF.Min(_distance + height * lift, camera.ViewDistance * 0.5f);
+        if (s >= 1) { _next++; _holding = true; _time = 0; if (_next >= _stops.Count) { Active = false; return false; } }
         return true;
     }
 
     void BeginHop(WorldCamera camera, Func<CharacterId, Vector3?> position)
     {
-        while (next < stops.Count && position(stops[next]) is null) next++;
-        if (next >= stops.Count) { Active = false; return; }
-        from = camera.Target;
-        (time, holding) = (0, false);
+        while (_next < _stops.Count && position(_stops[_next]) is null) _next++;
+        if (_next >= _stops.Count) { Active = false; return; }
+        _from = camera.Target;
+        (_time, _holding) = (0, false);
     }
 
     static float Ground(Vector3 v) => new Vector2(v.X, v.Z).Length();

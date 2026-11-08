@@ -150,7 +150,7 @@ static class SettingHints
         InputAction.ChangeSquad => "Show the next squad in the squad bar.",
         InputAction.SelectAll => "Select the whole squad (Shift adds it to the selection).",
         >= InputAction.SelectMember1 and <= InputAction.SelectMember10 => "Select this member of the squad bar (Shift adds them to the selection; press twice to centre on them).",
-        InputAction.NextCharacter =>"Select the next member of the character's squad.",
+        InputAction.NextCharacter => "Select the next member of the character's squad.",
         InputAction.PreviousCharacter => "Select the previous member of the character's squad.",
         InputAction.FocusCharacter => "Centre the camera on the selected character.",
         InputAction.StopMovement => "Stop the selected characters.",

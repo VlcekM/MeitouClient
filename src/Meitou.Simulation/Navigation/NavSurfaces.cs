@@ -14,36 +14,36 @@ public sealed class NavSurfaces
 
     /// <summary>Three corners per triangle, world coordinates.</summary>
     public Vector3[] Corners { get; }
-    readonly Vector2 min;
-    readonly int columns, rows;
-    readonly int[][] cells;
+    readonly Vector2 _min;
+    readonly int _columns, _rows;
+    readonly int[][] _cells;
     /// <summary>Each triangle's box, so most of a cell's triangles are passed over without the exact tests.</summary>
-    readonly Box[] boxes;
+    readonly Box[] _boxes;
 
     readonly record struct Box(float X0, float X1, float Y0, float Y1, float Z0, float Z1);
 
     public NavSurfaces(Vector3[] corners)
     {
         Corners = corners;
-        if (corners.Length == 0) { cells = []; boxes = []; return; }
+        if (corners.Length == 0) { _cells = []; _boxes = []; return; }
         var lo = new Vector2(float.MaxValue);
         var hi = new Vector2(float.MinValue);
         foreach (var c in corners) { lo = Vector2.Min(lo, new(c.X, c.Z)); hi = Vector2.Max(hi, new(c.X, c.Z)); }
-        min = lo;
-        columns = (int)((hi.X - lo.X) / Cell) + 1;
-        rows = (int)((hi.Y - lo.Y) / Cell) + 1;
-        var lists = new List<int>?[columns * rows];
-        boxes = new Box[corners.Length / 3];
+        _min = lo;
+        _columns = (int)((hi.X - lo.X) / Cell) + 1;
+        _rows = (int)((hi.Y - lo.Y) / Cell) + 1;
+        var lists = new List<int>?[_columns * _rows];
+        _boxes = new Box[corners.Length / 3];
         for (int t = 0; t < corners.Length / 3; t++)
         {
             var a = corners[t * 3]; var b = corners[t * 3 + 1]; var c = corners[t * 3 + 2];
-            boxes[t] = new Box(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Min(a.Y, MathF.Min(b.Y, c.Y)),
+            _boxes[t] = new Box(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Min(a.Y, MathF.Min(b.Y, c.Y)),
                 MathF.Max(a.Y, MathF.Max(b.Y, c.Y)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
             var (x0, x1, z0, z1) = Range(t);
             for (int z = z0; z <= z1; z++)
-                for (int x = x0; x <= x1; x++) (lists[z * columns + x] ??= []).Add(t);
+                for (int x = x0; x <= x1; x++) (lists[z * _columns + x] ??= []).Add(t);
         }
-        cells = [.. lists.Select(l => l is null ? [] : l.ToArray())];
+        _cells = [.. lists.Select(l => l is null ? [] : l.ToArray())];
     }
 
     public int TriangleCount => Corners.Length / 3;
@@ -54,8 +54,8 @@ public sealed class NavSurfaces
         return (Col(MathF.Min(a.X, MathF.Min(b.X, c.X))), Col(MathF.Max(a.X, MathF.Max(b.X, c.X))), Row(MathF.Min(a.Z, MathF.Min(b.Z, c.Z))), Row(MathF.Max(a.Z, MathF.Max(b.Z, c.Z))));
     }
 
-    int Col(float x) => Math.Clamp((int)((x - min.X) / Cell), 0, columns - 1);
-    int Row(float z) => Math.Clamp((int)((z - min.Y) / Cell), 0, rows - 1);
+    int Col(float x) => Math.Clamp((int)((x - _min.X) / Cell), 0, _columns - 1);
+    int Row(float z) => Math.Clamp((int)((z - _min.Y) / Cell), 0, _rows - 1);
 
     /// <summary>
     /// How far (units) beside a surface's edge its edge height still counts (engine choice: two Recast cells). The mesh reaches a cell or two past the
@@ -75,17 +75,17 @@ public sealed class NavSurfaces
     {
         height = y;
         beside = false;
-        if (cells.Length == 0) return false;
+        if (_cells.Length == 0) return false;
         float best = range, bestEdge = range, edgeHeight = y;
         bool found = false, foundEdge = false;
-        int x0 = Math.Max(0, (int)MathF.Floor((x - EdgeReach - min.X) / Cell)), x1 = Math.Min(columns - 1, (int)MathF.Floor((x + EdgeReach - min.X) / Cell));
-        int z0 = Math.Max(0, (int)MathF.Floor((z - EdgeReach - min.Y) / Cell)), z1 = Math.Min(rows - 1, (int)MathF.Floor((z + EdgeReach - min.Y) / Cell));
+        int x0 = Math.Max(0, (int)MathF.Floor((x - EdgeReach - _min.X) / Cell)), x1 = Math.Min(_columns - 1, (int)MathF.Floor((x + EdgeReach - _min.X) / Cell));
+        int z0 = Math.Max(0, (int)MathF.Floor((z - EdgeReach - _min.Y) / Cell)), z1 = Math.Min(_rows - 1, (int)MathF.Floor((z + EdgeReach - _min.Y) / Cell));
         for (int cz = z0; cz <= z1; cz++)
             for (int cx = x0; cx <= x1; cx++)
-                foreach (int t in cells[cz * columns + cx])
+                foreach (int t in _cells[cz * _columns + cx])
                 {
                     // Neither over the triangle nor within EdgeReach of it, or its heights all farther from y than what would still count.
-                    ref readonly var box = ref boxes[t];
+                    ref readonly var box = ref _boxes[t];
                     float reachY = MathF.Max(best, bestEdge);
                     if (x < box.X0 - EdgeReach || x > box.X1 + EdgeReach || z < box.Z0 - EdgeReach || z > box.Z1 + EdgeReach
                         || box.Y0 - y > reachY || y - box.Y1 > reachY) continue;

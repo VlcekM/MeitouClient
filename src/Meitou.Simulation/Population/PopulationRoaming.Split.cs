@@ -28,15 +28,30 @@ public sealed partial class PopulationSystem
             var at = table.Previous[slot].Position;
             var np = new Platoon
             {
-                Id = world.Platoons.NextId(), Origin = p.Origin, TemplateId = p.TemplateId, Faction = p.Faction, Key = p.Key ^ (ulong)(squad.Members.Count + 1) * 0x9E3779B97F4A7C15UL,
-                Size = 1, Position = new Vector2(at.X, at.Z), State = PlatoonState.Loaded, DwellLeft = 5,
-                Persistent = PersistentPlatoon(p) || Meitou.Simulation.Factions.UniqueCharacters.IsUnique(data.Db.Find(cold.RecordId)),
+                Id = world.Platoons.NextId(),
+                Origin = p.Origin,
+                TemplateId = p.TemplateId,
+                Faction = p.Faction,
+                Key = p.Key ^ (ulong)(squad.Members.Count + 1) * 0x9E3779B97F4A7C15UL,
+                Size = 1,
+                Position = new Vector2(at.X, at.Z),
+                State = PlatoonState.Loaded,
+                DwellLeft = 5,
+                Persistent = PersistentPlatoon(p) || UniqueCharacters.IsUnique(_data.Db.Find(cold.RecordId)),
             };
             string package = cold.SlaveState == 1 ? SlaveOnlyPackage : CapturedPackage;
             var made = new Squad
             {
-                Id = world.Squads.NextId(), TemplateId = squad.TemplateId, Name = squad.Name, Faction = squad.Faction, Town = squad.Town, PlatoonId = np.Id,
-                Position = at, HomeCentre = new Vector2(at.X, at.Z), HomeRadius = squad.HomeRadius, SpawnSize = 1,
+                Id = world.Squads.NextId(),
+                TemplateId = squad.TemplateId,
+                Name = squad.Name,
+                Faction = squad.Faction,
+                Town = squad.Town,
+                PlatoonId = np.Id,
+                Position = at,
+                HomeCentre = new Vector2(at.X, at.Z),
+                HomeRadius = squad.HomeRadius,
+                SpawnSize = 1,
                 SavedAi = PackageNamed(package) is { } found ? new Saving.AiSave(null, 0, found) : null,
             };
             squad.Members.Remove(id);
@@ -57,5 +72,5 @@ public sealed partial class PopulationSystem
 
     /// <summary>The id of the AI_PACKAGE the original looks up by name (<c>FUN_1406bfe60</c>); null when the data has none.</summary>
     string? PackageNamed(string name) =>
-        data.Db.Find(name) is { Type: FcsRecordType.AI_PACKAGE } r ? r.StringId : data.Db.OfType(FcsRecordType.AI_PACKAGE).FirstOrDefault(x => x.Name == name)?.StringId;
+        _data.Db.Find(name) is { Type: FcsRecordType.AiPackage } r ? r.StringId : _data.Db.OfType(FcsRecordType.AiPackage).FirstOrDefault(x => x.Name == name)?.StringId;
 }

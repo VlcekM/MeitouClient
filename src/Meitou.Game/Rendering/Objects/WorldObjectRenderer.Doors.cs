@@ -8,8 +8,8 @@ namespace Meitou.Game.Rendering.Objects;
 
 public sealed partial class WorldObjectRenderer
 {
-    readonly AssetLocator assets;
-    readonly ConcurrentDictionary<string, DoorFrame> doorFrames = new(StringComparer.OrdinalIgnoreCase);
+    readonly AssetLocator _assets;
+    readonly ConcurrentDictionary<string, DoorFrame> _doorFrames = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The open amount (0..1) of each door that is not closed, by (placement id, index in the building's <c>doors</c> list); a door missing is drawn closed. Read on the
@@ -27,7 +27,7 @@ public sealed partial class WorldObjectRenderer
         if (doa > 0)
         {
             var leaf = DoorLeaf.Of(inst.Placed.Owner);
-            var local = leaf.LocalOffset(doa, doorFrames.GetOrAdd(inst.Placed.Source.GetPath("xml collision"), DoorFrameOf));
+            var local = leaf.LocalOffset(doa, _doorFrames.GetOrAdd(inst.Placed.Source.GetPath("xml collision"), DoorFrameOf));
             var shift = Unit(m.M11, m.M12, m.M13) * local.X + Unit(m.M21, m.M22, m.M23) * local.Y + Unit(m.M31, m.M32, m.M33) * local.Z;
             m.M41 += shift.X; m.M42 += shift.Y; m.M43 += shift.Z;
         }
@@ -40,7 +40,7 @@ public sealed partial class WorldObjectRenderer
     /// <summary>A mesh's local bounds from its file's bounds chunk (empty when the file is not found).</summary>
     (Vector3, Vector3) MeshBounds(string name)
     {
-        var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
+        var path = _assets.Find(name) ?? _assets.Find(Path.GetFileName(name.Replace('\\', '/')));
         return path is not null && OgreMeshReader.TryReadBounds(path, out var b) && b.Max.X >= b.Min.X ? (b.Min, b.Max) : default;
     }
 

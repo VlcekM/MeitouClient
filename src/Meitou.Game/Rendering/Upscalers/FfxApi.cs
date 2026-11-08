@@ -19,13 +19,13 @@ internal static unsafe class FfxApi
 
     internal static uint SurfaceFormat(InternalFormat f) => f switch
     {
-        InternalFormat.Rgba16f => 4,
-        InternalFormat.Rgba32f => 3,
-        InternalFormat.RG16f => 18,
-        InternalFormat.R32f => 28,
+        InternalFormat.Rgba16F => 4,
+        InternalFormat.Rgba32F => 3,
+        InternalFormat.Rg16F => 18,
+        InternalFormat.R32F => 28,
         InternalFormat.Rgba8 => FormatR8G8B8A8Unorm,
         InternalFormat.R8 => 25,
-        InternalFormat.R11fG11fB10f => 16,
+        InternalFormat.R11FG11FB10F => 16,
         _ => 0,
     };
 

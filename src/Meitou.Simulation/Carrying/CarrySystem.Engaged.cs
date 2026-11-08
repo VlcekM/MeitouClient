@@ -16,7 +16,7 @@ public sealed partial class CarrySystem
     /// <summary>One victim engaged by an attacker until a tick (the forced sense's alert timer, <see cref="AggroSystem.AlarmSeconds"/>).</summary>
     readonly record struct Engagement(CharacterId Victim, CharacterId Attacker, long Until);
 
-    readonly List<Engagement> engagements = [];
+    readonly List<Engagement> _engagements = [];
 
     /// <summary>
     /// Makes <paramref name="attacker"/> known to the player character <paramref name="victim"/> and asks the decision step to decide it again: the forced sense (the attacker is a seen
@@ -27,8 +27,8 @@ public sealed partial class CarrySystem
         var table = world.Characters;
         Aggro?.Force(world, victim, attacker);
         var id = table.IdOf(victim);
-        engagements.RemoveAll(e => e.Victim == id || e.Until < world.Tick);
-        engagements.Add(new Engagement(id, table.IdOf(attacker), world.Tick + (long)MathF.Round(AggroSystem.AlarmSeconds / world.TickSeconds)));
+        _engagements.RemoveAll(e => e.Victim == id || e.Until < world.Tick);
+        _engagements.Add(new Engagement(id, table.IdOf(attacker), world.Tick + (long)MathF.Round(AggroSystem.AlarmSeconds / world.TickSeconds)));
         DecisionSystem.Request(world, victim);
     }
 
@@ -37,7 +37,7 @@ public sealed partial class CarrySystem
     {
         var table = world.Characters;
         var id = table.IdOf(slot);
-        foreach (var e in engagements)
+        foreach (var e in _engagements)
             if (e.Victim == id && e.Until >= world.Tick && table.TryResolveNext(e.Attacker, out int a) && table.Cold(a) is { Medical.Incapacitated: false }) return a;
         return -1;
     }
@@ -73,8 +73,8 @@ public sealed partial class CarrySystem
             var table = world.Characters;
             int a = owner.EngagedFoe(world, slot);
             var id = table.IdOf(slot);
-            owner.engagements.RemoveAll(e => e.Victim == id);
-            world.Defer(new Combat.AttackOrder([id], table.IdOf(a)) { Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal });
+            owner._engagements.RemoveAll(e => e.Victim == id);
+            world.Defer(new AttackOrder([id], table.IdOf(a)) { Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal });
         }
     }
 }

@@ -139,8 +139,15 @@ public sealed class RagdollDefinition
             bodyOfBone[bone] = bodies.Count;
             bodies.Add(new RagdollBody
             {
-                Bone = bone, Name = actor.Name, Type = shape.Type, Size = size, Hull = points, Mass = actor.Mass > 0 ? actor.Mass : 1,
-                Bind = bind, BoneInBody = boneBind.Then(bind.Inverse()), Actor = boneBind.Position,
+                Bone = bone,
+                Name = actor.Name,
+                Type = shape.Type,
+                Size = size,
+                Hull = points,
+                Mass = actor.Mass > 0 ? actor.Mass : 1,
+                Bind = bind,
+                BoneInBody = boneBind.Then(bind.Inverse()),
+                Actor = boneBind.Position,
             });
         }
         if (bodies.Count == 0) return null;
@@ -162,11 +169,20 @@ public sealed class RagdollDefinition
             float deg = MathF.PI / 180;
             joints.Add(new RagdollJoint
             {
-                Type = j.Type, A = a, B = b,
-                OffsetA = A.Inverse().Apply(anchor), OffsetB = B.Inverse().Apply(anchor),
-                BasisA = Quaternion.Normalize(Quaternion.Inverse(A.Rotation) * basis), BasisB = Quaternion.Normalize(Quaternion.Inverse(B.Rotation) * basis),
-                SpringStiffness = j.Type == PhysicsJointType.Revolute && j.Spring1 is { Spring: > 0 } ? j.Spring1.Value.Spring : 0, SpringDamper = j.Spring1?.Damper ?? 0, SpringTarget = (j.Spring1?.Target ?? 0) * deg,
-                Limits = j.LimitsOn, Low = Math.Min(j.Low, j.High) * deg, High = Math.Max(j.Low, j.High) * deg, Swing = Math.Clamp(j.Swing, 1, 179) * deg,
+                Type = j.Type,
+                A = a,
+                B = b,
+                OffsetA = A.Inverse().Apply(anchor),
+                OffsetB = B.Inverse().Apply(anchor),
+                BasisA = Quaternion.Normalize(Quaternion.Inverse(A.Rotation) * basis),
+                BasisB = Quaternion.Normalize(Quaternion.Inverse(B.Rotation) * basis),
+                SpringStiffness = j.Type == PhysicsJointType.Revolute && j.Spring1 is { Spring: > 0 } ? j.Spring1.Value.Spring : 0,
+                SpringDamper = j.Spring1?.Damper ?? 0,
+                SpringTarget = (j.Spring1?.Target ?? 0) * deg,
+                Limits = j.LimitsOn,
+                Low = Math.Min(j.Low, j.High) * deg,
+                High = Math.Max(j.Low, j.High) * deg,
+                Swing = Math.Clamp(j.Swing, 1, 179) * deg,
             });
             if (a < 64) joined[b] |= 1UL << a;
             if (b < 64) joined[a] |= 1UL << b;

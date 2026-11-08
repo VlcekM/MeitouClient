@@ -104,21 +104,21 @@ static class ImpostorApp
     sealed class Frames(VulkanDisplay display)
     {
         public GpuContext Gpu { get; } = display.Context;
-        bool open;
+        bool _open;
 
         public void Open()
         {
-            if (open) return;
+            if (_open) return;
             Gpu.BeginFrame();
-            open = true;
+            _open = true;
         }
 
         public void Flush()
         {
-            if (!open) return;
+            if (!_open) return;
             Gpu.EndFrame();
             Gpu.Device.Frames.WaitAll();
-            open = false;
+            _open = false;
         }
 
         public void Next()

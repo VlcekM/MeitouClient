@@ -110,7 +110,7 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         if (sceneColour is null || sceneColour.Desc.Width != sceneWidth || sceneColour.Desc.Height != sceneHeight)
         {
             sceneColour?.Dispose();
-            sceneColour = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, sceneWidth, sceneHeight,
+            sceneColour = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, sceneWidth, sceneHeight,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "scene colour"));
         }
         // The scene targets are Metal's own depth and albedo (the GI resolve is off, but the lit programs always write albedo).
@@ -193,11 +193,11 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
             low.Depth?.Dispose();
             low.AccumFar?.Dispose();
             low.DepthFar?.Dispose();
-            low.Accum = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, w, h,
+            low.Accum = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, w, h,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: $"post particle accumulation 1/{div}"));
             low.Depth = ctx.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h,
                 Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: $"post particle depth 1/{div}"));
-            low.AccumFar = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, w, h,
+            low.AccumFar = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, w, h,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: $"post particle accumulation far 1/{div}"));
             low.DepthFar = ctx.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h,
                 Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: $"post particle depth far 1/{div}"));

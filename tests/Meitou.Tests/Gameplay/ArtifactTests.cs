@@ -30,20 +30,20 @@ public class ArtifactTests
     public void Gear_gives_each_town_one_unit_then_the_rest_by_draws_and_items_are_spread_by_the_towns_maxima()
     {
         var db = Db(
-            Rec("book", FcsRecordType.ITEM, r => r.Ints["value"] = 100),
-            Rec("core", FcsRecordType.ITEM, r => r.Ints["value"] = 1000),
-            Rec("relic", FcsRecordType.ITEM, r => r.Ints["value"] = 50000),
-            Rec("plate", FcsRecordType.ARMOUR, r => r.Ints["value"] = 500),
-            Rec("sword", FcsRecordType.WEAPON, r => r.Ints["value"] = 10),
-            Rec("axe", FcsRecordType.WEAPON, r => r.Ints["value"] = 10),
-            Rec("mk1", FcsRecordType.MATERIAL_SPECS_WEAPON),
-            Rec("smith", FcsRecordType.WEAPON_MANUFACTURER, r =>
+            Rec("book", FcsRecordType.Item, r => r.Ints["value"] = 100),
+            Rec("core", FcsRecordType.Item, r => r.Ints["value"] = 1000),
+            Rec("relic", FcsRecordType.Item, r => r.Ints["value"] = 50000),
+            Rec("plate", FcsRecordType.Armour, r => r.Ints["value"] = 500),
+            Rec("sword", FcsRecordType.Weapon, r => r.Ints["value"] = 10),
+            Rec("axe", FcsRecordType.Weapon, r => r.Ints["value"] = 10),
+            Rec("mk1", FcsRecordType.MaterialSpecsWeapon),
+            Rec("smith", FcsRecordType.WeaponManufacturer, r =>
             {
                 r.Floats["price mod"] = 1;
                 r.References["weapon models"] = [Ref("mk1", 50)];
                 r.References["weapon types"] = [Ref("sword"), Ref("axe")];
             }),
-            Rec("art", FcsRecordType.ARTIFACTS, r =>
+            Rec("art", FcsRecordType.Artifacts, r =>
             {
                 r.References["items"] = [Ref("book", 4), Ref("core", 2), Ref("relic", 1)];
                 r.References["armours"] = [Ref("plate", 3)];
@@ -64,7 +64,7 @@ public class ArtifactTests
         Assert.False(plan.ContainsKey(3));
     }
 
-    static FcsRecord Town(string id, int itemMin, int itemMax, int gearMin, int gearMax, int type = 2) => Rec(id, FcsRecordType.TOWN, r =>
+    static FcsRecord Town(string id, int itemMin, int itemMax, int gearMin, int gearMax, int type = 2) => Rec(id, FcsRecordType.Town, r =>
     {
         r.Ints["type"] = type;
         (r.Ints["item artifacts min value"], r.Ints["item artifacts max value"]) = (itemMin, itemMax);

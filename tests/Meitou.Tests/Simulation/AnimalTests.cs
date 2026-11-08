@@ -36,7 +36,7 @@ public class AnimalTests(ITestOutputHelper output)
         var db = Db();
         var factory = new BodyFactory(db);
         var beak = db.Find(BeakThing)!;
-        Assert.Equal(FcsRecordType.ANIMAL_CHARACTER, beak.Type);
+        Assert.Equal(FcsRecordType.AnimalCharacter, beak.Type);
         var animal = AnimalData.From(beak)!;
         Assert.Equal((60, 1f, 0.3f, 1f), (animal.AnimalStrength, animal.HpMult, animal.ScaleMin, animal.ScaleMax));
         var (race, stats, medical) = factory.Create(Race(db, beak), beak, 1, 2);
@@ -93,7 +93,7 @@ public class AnimalTests(ITestOutputHelper output)
     }
 
     /// <summary>A CHARACTER of the base game with a race of its own (so it has a body without a generated look): the human opponent.</summary>
-    static string Human(GameDatabase db) => db.OfType(FcsRecordType.CHARACTER)
+    static string Human(GameDatabase db) => db.OfType(FcsRecordType.Character)
         .First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0 && db.Find(x.TargetStringId)?.Name == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
 
     /// <summary>
@@ -117,7 +117,7 @@ public class AnimalTests(ITestOutputHelper output)
         stats[StatsEnumerated.Toughness] = 50;
         int mine = table.Cold(me.Slot)!.Faction, theirs = table.Cold(dog.Slot)!.Faction;
         Assert.True(AggroSystem.IsEnemy(data.Relations, theirs, mine));
-        world.Commands.Enqueue(new Meitou.Simulation.Combat.AttackOrder([dog], me) { Tick = world.Tick });
+        world.Commands.Enqueue(new AttackOrder([dog], me) { Tick = world.Tick });
         world.RunTicks(60);
         Assert.True(table.Cold(dog.Slot)!.InCombat, "the dog attacks the player");
         world.RunTicks(1800);

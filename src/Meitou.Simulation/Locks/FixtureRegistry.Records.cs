@@ -21,12 +21,12 @@ public sealed partial class FixtureRegistry
 {
     const string DesignationKey = "meitou designation", TemplateKey = "meitou template", PublicDayKey = "is public day";
 
-    readonly Dictionary<string, BuildingRecord> records = new(StringComparer.Ordinal);
+    readonly Dictionary<string, BuildingRecord> _records = new(StringComparer.Ordinal);
 
     /// <summary>The record of a building, null before any squad was housed in it.</summary>
-    public BuildingRecord? RecordOf(string building) => records.GetValueOrDefault(building);
+    public BuildingRecord? RecordOf(string building) => _records.GetValueOrDefault(building);
 
-    BuildingRecord RecordFor(string building) => records.TryGetValue(building, out var r) ? r : records[building] = new BuildingRecord();
+    BuildingRecord RecordFor(string building) => _records.TryGetValue(building, out var r) ? r : _records[building] = new BuildingRecord();
 
     /// <summary>The house setup for a template (<c>FUN_14057f1f0</c>, Verified): its designation when the building has none, its public day over the building's byte (the last setup wins).</summary>
     public void NoteSetup(string building, SquadTemplate t)
@@ -48,7 +48,7 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>The building's stored public day byte, null when no setup wrote it.</summary>
-    public bool? PublicDayOf(string building) => records.TryGetValue(building, out var r) ? r.PublicDay : null;
+    public bool? PublicDayOf(string building) => _records.TryGetValue(building, out var r) ? r.PublicDay : null;
 
     /// <summary>Whether the building is public as far as a flag says: the player's toggle, else the stored public day; null when neither exists.</summary>
     public bool? PublicFlagOf(string building) => PublicOf(building) ?? PublicDayOf(building);
@@ -56,7 +56,7 @@ public sealed partial class FixtureRegistry
     void ReadRecord(string building, FcsRecord state)
     {
         if (!state.Ints.ContainsKey(DesignationKey) && !state.Strings.ContainsKey(TemplateKey)) return;
-        records[building] = new BuildingRecord
+        _records[building] = new BuildingRecord
         {
             Designation = state.Ints.GetValueOrDefault(DesignationKey),
             Template = state.Strings.GetValueOrDefault(TemplateKey) is { Length: > 0 } id ? id : null,
@@ -66,16 +66,16 @@ public sealed partial class FixtureRegistry
 
     void WriteRecord(string building, FcsRecord state)
     {
-        if (!records.TryGetValue(building, out var r)) return;
+        if (!_records.TryGetValue(building, out var r)) return;
         state.Ints[DesignationKey] = r.Designation;
         if (r.Template is { } id) state.Strings[TemplateKey] = id; else state.Strings.Remove(TemplateKey);
-        if (r.PublicDay is { } open && !publicFlags.ContainsKey(building)) state.Bools[PublicDayKey] = open;
+        if (r.PublicDay is { } open && !_publicFlags.ContainsKey(building)) state.Bools[PublicDayKey] = open;
     }
 
     void HashRecords(ref StateHasher h)
     {
-        if (records.Count == 0) return;   // only once a squad was housed, so worlds without one hash as before
-        foreach (var (b, r) in records.OrderBy(p => p.Key, StringComparer.Ordinal))
+        if (_records.Count == 0) return;   // only once a squad was housed, so worlds without one hash as before
+        foreach (var (b, r) in _records.OrderBy(p => p.Key, StringComparer.Ordinal))
         {
             h.Add(Rng.StableHash(b));
             h.Add(r.Designation);

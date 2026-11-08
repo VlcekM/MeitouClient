@@ -37,11 +37,12 @@ public sealed class HeldItem
 /// The held item as the interface draws it (published with the snapshot): its icon's record and material, its footprint and count, its charge bar, its type and armour slot (which
 /// sections take it), the window it came from and, for a bag, how many items are in it (-1: not a bag).
 /// </summary>
-public sealed record HeldItemView(string Record, string Name, string Material, Meitou.Data.Fcs.FcsRecordType Type, string EquipmentSection, int Quantity, int Width, int Height,
+public sealed record HeldItemView(string Record, string Name, string Material, Data.Fcs.FcsRecordType Type, string EquipmentSection, int Quantity, int Width, int Height,
     float? Charge, ItemOwner From, int BagItems)
 {
     public static HeldItemView Of(HeldItem held) => new(held.Item.Record, held.Item.Name, held.Item.MaterialId, held.Item.Type, held.Item.EquipmentSection, held.Item.Quantity,
-        held.Item.Width, held.Item.Height, held.Item.ChargeFraction, held.From, held.Item.Contents?.Items.Count ?? -1) { WornOnlyBy = held.Item.WornOnlyBy, WornNeverBy = held.Item.WornNeverBy, Colour = held.Item.ColourId };
+        held.Item.Width, held.Item.Height, held.Item.ChargeFraction, held.From, held.Item.Contents?.Items.Count ?? -1)
+    { WornOnlyBy = held.Item.WornOnlyBy, WornNeverBy = held.Item.WornNeverBy, Colour = held.Item.ColourId };
 
     /// <summary>The COLOR_DATA it is dyed with (<see cref="ItemInstance.ColourId"/>).</summary>
     public string Colour { get; init; } = "";

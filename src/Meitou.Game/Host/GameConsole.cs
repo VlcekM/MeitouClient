@@ -32,7 +32,7 @@ static partial class GameConsole
     const int StdOutputHandle = -11;
     const uint FileTypeDisk = 1, FileTypePipe = 3;
 
-    static TextWriter? log;
+    static TextWriter? s_log;
 
     /// <summary>Starts log.txt (after <see cref="AttachToParent"/>): output and error go to it as well, and so does an exception that ends the game.</summary>
     public static void StartLog()
@@ -40,7 +40,7 @@ static partial class GameConsole
         AppDomain.CurrentDomain.UnhandledException += (_, e) => ExplainBlocked(e.ExceptionObject as Exception);
         if (GameLog.Open() is not { } file) return;
         var shared = TextWriter.Synchronized(file);   // one lock for output and error
-        log = shared;
+        s_log = shared;
         Bind(Console.Out, Console.Error);
         AppDomain.CurrentDomain.UnhandledException += (_, e) => shared.WriteLine($"unhandled {e.ExceptionObject}");
     }
@@ -73,8 +73,8 @@ static partial class GameConsole
 
     static void Bind(TextWriter output, TextWriter error)
     {
-        Console.SetOut(log is null ? output : new TeeWriter(log, output));
-        Console.SetError(log is null ? error : new TeeWriter(log, error));
+        Console.SetOut(s_log is null ? output : new TeeWriter(s_log, output));
+        Console.SetError(s_log is null ? error : new TeeWriter(s_log, error));
     }
 
     /// <summary>A console to ask a question on: the attached one, else a new window that closes again when this is disposed.</summary>

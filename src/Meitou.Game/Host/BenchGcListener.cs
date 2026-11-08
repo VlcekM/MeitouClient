@@ -11,14 +11,14 @@ sealed class BenchGcListener : EventListener
 {
     public readonly record struct Collection(double AtMs, int Generation, int Reason, double PauseMs);
 
-    readonly object gate = new();
-    readonly Dictionary<string, long> allocated = [];
-    readonly List<Collection> collections = [];
-    double suspendAt = -1;
-    int depth = -1, reason = -1;
+    readonly object _gate = new();
+    readonly Dictionary<string, long> _allocated = [];
+    readonly List<Collection> _collections = [];
+    double _suspendAt = -1;
+    int _depth = -1, _reason = -1;
 
     /// <summary>Milliseconds since the listener started (the collections' <see cref="Collection.AtMs"/>).</summary>
-    public double NowMs => (DateTime.UtcNow - started).TotalMilliseconds;
+    public double NowMs => (DateTime.UtcNow - _started).TotalMilliseconds;
 
     protected override void OnEventSourceCreated(EventSource source)
     {
@@ -28,7 +28,7 @@ sealed class BenchGcListener : EventListener
 
     protected override void OnEventWritten(EventWrittenEventArgs e)
     {
-        lock (gate)
+        lock (_gate)
         {
             switch (e.EventName)
             {
@@ -36,32 +36,32 @@ sealed class BenchGcListener : EventListener
                     var names = e.PayloadNames;
                     string type = names is not null && names.IndexOf("TypeName") is var t and >= 0 ? e.Payload![t] as string ?? "?" : "?";
                     long amount = names is not null && names.IndexOf("AllocationAmount64") is var a and >= 0 ? Convert.ToInt64(e.Payload![a]) : 100_000;
-                    allocated[type] = allocated.GetValueOrDefault(type) + amount;
+                    _allocated[type] = _allocated.GetValueOrDefault(type) + amount;
                     break;
                 case "GCSuspendEEBegin_V1":
-                    suspendAt = Ms(e);
+                    _suspendAt = Ms(e);
                     break;
                 case "GCStart_V2" or "GCStart_V1" or "GCStart":
-                    depth = Payload<int>(e, "Depth");
-                    reason = Payload<int>(e, "Reason");
+                    _depth = Payload<int>(e, "Depth");
+                    _reason = Payload<int>(e, "Reason");
                     break;
-                case "GCRestartEEEnd_V1" when suspendAt >= 0:
-                    if (depth >= 0) collections.Add(new Collection(suspendAt, depth, reason, Ms(e) - suspendAt));
-                    (suspendAt, depth, reason) = (-1, -1, -1);
+                case "GCRestartEEEnd_V1" when _suspendAt >= 0:
+                    if (_depth >= 0) _collections.Add(new Collection(_suspendAt, _depth, _reason, Ms(e) - _suspendAt));
+                    (_suspendAt, _depth, _reason) = (-1, -1, -1);
                     break;
             }
         }
     }
 
     // The event's own time (the runtime's events reach the listener in batches, later), in this clock.
-    double Ms(EventWrittenEventArgs e) => (e.TimeStamp.ToUniversalTime() - started).TotalMilliseconds;
-    readonly DateTime started = DateTime.UtcNow;
+    double Ms(EventWrittenEventArgs e) => (e.TimeStamp.ToUniversalTime() - _started).TotalMilliseconds;
+    readonly DateTime _started = DateTime.UtcNow;
 
     static T Payload<T>(EventWrittenEventArgs e, string name) =>
         e.PayloadNames is { } n && n.IndexOf(name) is var i and >= 0 ? (T)Convert.ChangeType(e.Payload![i]!, typeof(T)) : default!;
 
     public (Dictionary<string, long> Allocated, List<Collection> Collections) Take()
     {
-        lock (gate) return (new(allocated), [.. collections]);
+        lock (_gate) return (new(_allocated), [.. _collections]);
     }
 }

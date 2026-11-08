@@ -30,33 +30,33 @@ public struct Effect
 /// </summary>
 public sealed class EffectBuffer
 {
-    readonly List<Effect> items = [];
-    int lastSource = -1;
-    int sequence;
+    readonly List<Effect> _items = [];
+    int _lastSource = -1;
+    int _sequence;
 
     internal int System { get; set; }
-    internal List<Effect> Items => items;
+    internal List<Effect> Items => _items;
 
     public void Emit(int source, int target, int kind, float amount = 0, Vector3 position = default, int arg = 0)
     {
-        sequence = source == lastSource ? sequence + 1 : 0;
-        lastSource = source;
-        items.Add(new Effect { Target = target, Source = source, System = System, Sequence = sequence, Kind = kind, Amount = amount, Position = position, Arg = arg });
+        _sequence = source == _lastSource ? _sequence + 1 : 0;
+        _lastSource = source;
+        _items.Add(new Effect { Target = target, Source = source, System = System, Sequence = _sequence, Kind = kind, Amount = amount, Position = position, Arg = arg });
     }
 
     internal void Reset()
     {
-        items.Clear();
-        lastSource = -1;
-        sequence = 0;
+        _items.Clear();
+        _lastSource = -1;
+        _sequence = 0;
     }
 
     /// <summary>Starts a new system's run over this buffer, so sequences restart even when the same source comes first again.</summary>
     internal void BeginSystem(int system)
     {
         System = system;
-        lastSource = -1;
-        sequence = 0;
+        _lastSource = -1;
+        _sequence = 0;
     }
 
     internal static readonly Comparison<Effect> Order = static (a, b) =>

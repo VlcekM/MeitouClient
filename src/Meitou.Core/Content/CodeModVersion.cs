@@ -111,12 +111,12 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
 /// </summary>
 public sealed class CodeModVersionRange
 {
-    readonly List<(string Op, CodeModVersion Version)> comparators;
+    readonly List<(string Op, CodeModVersion Version)> _comparators;
 
     CodeModVersionRange(string text, List<(string, CodeModVersion)> comparators)
     {
         Text = text;
-        this.comparators = comparators;
+        this._comparators = comparators;
     }
 
     public string Text { get; }
@@ -138,12 +138,12 @@ public sealed class CodeModVersionRange
     }
 
     public bool Contains(CodeModVersion version) =>
-        comparators.All(c => Holds(c.Op, version.CompareTo(c.Version))) && (!version.IsPrerelease || OptsIntoPrerelease(version));
+        _comparators.All(c => Holds(c.Op, version.CompareTo(c.Version))) && (!version.IsPrerelease || OptsIntoPrerelease(version));
 
     /// <summary>Whether a comparator names a pre-release; <c>gameVersion</c> refuses such a range, as it compares releases only.</summary>
-    public bool NamesPrerelease => comparators.Any(c => c.Version.IsPrerelease);
+    public bool NamesPrerelease => _comparators.Any(c => c.Version.IsPrerelease);
 
-    bool OptsIntoPrerelease(CodeModVersion version) => comparators.Any(c => c.Version.IsPrerelease && c.Version.SameRelease(version));
+    bool OptsIntoPrerelease(CodeModVersion version) => _comparators.Any(c => c.Version.IsPrerelease && c.Version.SameRelease(version));
 
     static bool Holds(string op, int order) => op switch
     {

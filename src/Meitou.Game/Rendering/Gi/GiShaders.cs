@@ -165,7 +165,7 @@ static class GiShaders
         #extension GL_EXT_buffer_reference_uvec2 : require
         #extension GL_EXT_scalar_block_layout : require
         layout(local_size_x = {{rays}}) in;
-        {{Meitou.Game.Rendering.Gpu.BindlessTable.Declarations(1)}}
+        {{Gpu.BindlessTable.Declarations(1)}}
 
         layout(set = 0, binding = 0) uniform accelerationStructureEXT uScene;
         struct Geometry { uvec2 vertices; uvec2 indices; uint stride; uint kind; uint diffuse; uint alphaMap; float alphaThreshold; uint emitter; uint pad1; uint pad2; };
@@ -218,7 +218,7 @@ static class GiShaders
         vec3 skyIrradiance(vec3 n)
         {
             if (maps.x < 0.5) return vec3(1.09, 1.20, 1.51);
-            vec4 t = textureLod(uAtmoIrradiance, n, {{F(Meitou.Data.World.KenshiLighting.IrradianceLevel)}});
+            vec4 t = textureLod(uAtmoIrradiance, n, {{F(Data.World.KenshiLighting.IrradianceLevel)}});
             return t.rgb * t.a * 4.0;
         }
         vec2 hitUv(Geometry g, uvec3 tri, vec2 bary)
@@ -291,7 +291,7 @@ static class GiShaders
             uint slot = gl_WorkGroupID.x * gl_WorkGroupSize.x + ray;
             if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionTriangleEXT)
             {
-                rays[slot] = vec4(skyIrradiance(dir) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * am.rgb * env, 1e6);
+                rays[slot] = vec4(skyIrradiance(dir) * {{F(1 - Data.World.KenshiLighting.DielectricSpecular)}} * am.rgb * env, 1e6);
                 return;
             }
             float t = rayQueryGetIntersectionTEXT(rq, true);
@@ -326,10 +326,10 @@ static class GiShaders
                     hit - origin.xyz + n * (0.5 + t * 0.001), 0.0, l, 1e5);
                 TRACE(shadow)
                 if (rayQueryGetIntersectionTypeEXT(shadow, true) == gl_RayQueryCommittedIntersectionNoneEXT)
-                    sun = {{F(MathF.PI * (1 - Meitou.Data.World.KenshiLighting.DielectricSpecular))}} * nl * sunLight.rgb * amHit.a * 2.0;
+                    sun = {{F(MathF.PI * (1 - Data.World.KenshiLighting.DielectricSpecular))}} * nl * sunLight.rgb * amHit.a * 2.0;
             }
             vec4 bounce = giIrradiance(hit, n, -dir);
-            vec3 ambient = mix(skyIrradiance(n) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * amHit.rgb * env, bounce.rgb, bounce.a);
+            vec3 ambient = mix(skyIrradiance(n) * {{F(1 - Data.World.KenshiLighting.DielectricSpecular)}} * amHit.rgb * env, bounce.rgb, bounce.a);
             // The lamps around the hit; indoor sources are visibility-tested so occluded lamp light cannot bounce through walls.
             vec3 lamps = vec3(0.0), lampSpecular = vec3(0.0);
             if (uLightGrid.w > 0.5) lampLight(hit, n, -dir, 1.0, 1.0, lamps, lampSpecular);

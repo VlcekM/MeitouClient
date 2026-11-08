@@ -51,17 +51,17 @@ sealed class TitleMenu(PlayerInterface player)
     static Vector4 Hex(int r, int g, int b, float a = 1) => new(r / 255f, g / 255f, b / 255f, a);
     static readonly Vector4 InkMain = Hex(175, 166, 139), InkLight = Hex(217, 206, 184), InkPaper = Hex(20, 8, 6), InkDanger = Hex(191, 72, 52);
 
-    float menuArtScale;
-    Dictionary<string, (float Progress, long At)>? menuHover;
-    readonly Dictionary<UiRect, UiRect> menuIconBounds = [];
-    (string Folder, DateTime Modified, SaveSlotInfo? Info) continueInfo;
+    float _menuArtScale;
+    Dictionary<string, (float Progress, long At)>? _menuHover;
+    readonly Dictionary<UiRect, UiRect> _menuIconBounds = [];
+    (string Folder, DateTime Modified, SaveSlotInfo? Info) _continueInfo;
 
     /// <summary>The kit's scale for this frame: 1 at 900 pixels high.</summary>
     float MenuScale => player.Height / 900f;
 
     float TitleHover(string name, bool hovered)
     {
-        var states = menuHover ??= [];
+        var states = _menuHover ??= [];
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         states.TryGetValue(name, out var previous);
         float dt = previous.At == 0 ? 0 : Math.Clamp((float)System.Diagnostics.Stopwatch.GetElapsedTime(previous.At, now).TotalSeconds, 0, 0.05f);
@@ -106,7 +106,7 @@ sealed class TitleMenu(PlayerInterface player)
             var c = controls[i];
             if (c.Type != "Button") continue;
             var b = c.Bounds;
-            bool hover = c.Enabled && b.Contains(player.mouse.X, player.mouse.Y);
+            bool hover = c.Enabled && b.Contains(player.Mouse.X, player.Mouse.Y);
             float hoverAmount = TitleHover(c.Name, hover);
             if (c.Name == "ContinueButton")
             {
@@ -131,7 +131,7 @@ sealed class TitleMenu(PlayerInterface player)
                 colour: FormattableString.Invariant($"1 1 1 {hoverAmount}")));
             // Use the sprite's tight visible box (stray pixels from neighbouring sprites dropped), fit it into the shared 24×20 slot
             // without upscaling, and centre it on the slot.
-            var tight = menuIconBounds.TryGetValue(icon, out var cached) ? cached : player.UiAtlas() is { } atlas ? menuIconBounds[icon] = VisibleBounds(atlas, icon) : icon;
+            var tight = _menuIconBounds.TryGetValue(icon, out var cached) ? cached : player.UiAtlas() is { } atlas ? _menuIconBounds[icon] = VisibleBounds(atlas, icon) : icon;
             float fit = Math.Min(1f, Math.Min(24 / tight.Width, 20 / tight.Height)) * s;
             float iconX = b.X + 24 * s - tight.Width * fit / 2;
             float iconY = b.Y + b.Height / 2 - tight.Height * fit / 2 + 1.0f * s;
@@ -212,15 +212,15 @@ sealed class TitleMenu(PlayerInterface player)
     /// <summary>The save card's lines, from the newest save: "Save · Day N · Place" and "Squad · c.N · M members" (the squad when it is not the save's name).</summary>
     (string Line, string Meta) ContinueText()
     {
-        if (player.frontend.slots.FirstOrDefault() is not { } slot) return ("", "");
-        if (continueInfo.Folder != slot.Folder || continueInfo.Modified != slot.ModifiedUtc)
+        if (player.Frontend.Slots.FirstOrDefault() is not { } slot) return ("", "");
+        if (_continueInfo.Folder != slot.Folder || _continueInfo.Modified != slot.ModifiedUtc)
         {
             SaveSlotInfo? info = null;
             try { info = SaveCatalog.ReadInfo(slot); }
             catch (Exception e) when (e is IOException or FormatException or ArgumentException) { }
-            continueInfo = (slot.Folder, slot.ModifiedUtc, info);
+            _continueInfo = (slot.Folder, slot.ModifiedUtc, info);
         }
-        if (continueInfo.Info is not { } i) return (slot.Name, "");
+        if (_continueInfo.Info is not { } i) return (slot.Name, "");
         var line = string.Join(" · ", new[] { slot.Name, $"Day {i.Day}", i.Area }.Where(p => !string.IsNullOrWhiteSpace(p)));
         string squad = string.Equals(i.Faction, slot.Name, StringComparison.OrdinalIgnoreCase) ? "" : i.Faction;
         string money = $"c.{i.Funds.ToString("N0", CultureInfo.InvariantCulture)} · {i.Members} {(i.Members == 1 ? "member" : "members")}";
@@ -231,9 +231,9 @@ sealed class TitleMenu(PlayerInterface player)
     /// <summary>Whether the menu's surfaces are on the GPU at this frame's size; bakes and uploads them when not (the atlas is read once).</summary>
     bool MenuArtReady()
     {
-        if (player.uiPainter is not { } painter) return false;
+        if (player.UiPainter is not { } painter) return false;
         float s = MenuScale;
-        if (menuArtScale == s && painter.HasTexture(MenuPlateHover)) return true;
+        if (_menuArtScale == s && painter.HasTexture(MenuPlateHover)) return true;
         if (player.UiAtlas() is not { } uiAtlas) return false;
         int W(float v) => Math.Max(1, (int)MathF.Round(v * s));
         var paper = new UiRect(352, 457, 164, 81);   // GenericTextBoxSkin inside its soft alpha rim and worn corners (kit "paper-inner", cropped further)
@@ -243,21 +243,21 @@ sealed class TitleMenu(PlayerInterface player)
         painter.SetImage(MenuPlateHover, MenuArt.Plate(uiAtlas, new(612, 766, 118, 45), W(MenuWidth), W(MenuButton), s, 0.85f), srgb: false);
         painter.SetImage(MenuKey, MenuArt.Chip(W(44), W(16), 4 * s, Hex(20, 8, 6, 0.6f), null), srgb: false);
         painter.SetImage(MenuVignette, MenuArt.Vignette(256, 160), srgb: false);
-        menuArtScale = s;
+        _menuArtScale = s;
         return true;
     }
     internal const string TitleLogoTexture = "meitou:title-logo";
     /// <summary>Makes the Meitou title's wordmark (<see cref="TitleLogo"/>); asked once, null keeps the plain lettering.</summary>
     public Func<RgbaImage?>? TitleLogoSource { get; set; }
-    Lazy<RgbaImage?>? titleLogo;
+    Lazy<RgbaImage?>? _titleLogo;
 
     /// <summary>Whether the wordmark can be drawn; the first ask makes it and hands it to the painter.</summary>
     internal bool TitleLogoReady()
     {
-        if (player.uiPainter is not { } painter || TitleLogoSource is not { } source) return false;
+        if (player.UiPainter is not { } painter || TitleLogoSource is not { } source) return false;
         if (painter.HasTexture(TitleLogoTexture)) return true;
-        titleLogo ??= new(source);
-        if (titleLogo.Value is not { } image) return false;
+        _titleLogo ??= new(source);
+        if (_titleLogo.Value is not { } image) return false;
         painter.SetImage(TitleLogoTexture, image);
         return true;
     }
@@ -265,6 +265,6 @@ sealed class TitleMenu(PlayerInterface player)
     /// <summary>The wordmark's texture goes while the title is closed (its image stays, so it is uploaded again when the title opens).</summary>
     internal void ReleaseTitleLogo()
     {
-        if (player.uiPainter is { } painter && painter.HasTexture(TitleLogoTexture)) painter.Forget(TitleLogoTexture);
+        if (player.UiPainter is { } painter && painter.HasTexture(TitleLogoTexture)) painter.Forget(TitleLogoTexture);
     }
 }

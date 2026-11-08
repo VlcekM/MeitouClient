@@ -29,11 +29,11 @@ public sealed class WorldEmitters(WwisePlayer player)
         public float Level = sound.Intensity * 100;
     }
 
-    readonly Dictionary<string, Emitter> emitters = new(StringComparer.Ordinal);
-    ulong next = FirstObject;
+    readonly Dictionary<string, Emitter> _emitters = new(StringComparer.Ordinal);
+    ulong _next = FirstObject;
 
     /// <summary>Emitters that exist (their building is complete and standing).</summary>
-    public int Count => emitters.Count;
+    public int Count => _emitters.Count;
 
     /// <summary>Emitters playing now.</summary>
     public int Started { get; private set; }
@@ -56,13 +56,13 @@ public sealed class WorldEmitters(WwisePlayer player)
             e.Powered = true;
             e.Level = efficiency * placed.Sound.EfficiencyMultiplier * 100 + placed.Sound.Intensity * 100;
         }
-        emitters[placed.Key] = e;
+        _emitters[placed.Key] = e;
     }
 
     /// <summary>Removes the emitter: <c>Stop_Emitter</c> if it plays, then its object is unregistered at once, which cuts what is left of the sound (the game's <c>FUN_140258260</c>).</summary>
     public void Remove(string key)
     {
-        if (!emitters.Remove(key, out var e)) return;
+        if (!_emitters.Remove(key, out var e)) return;
         if (e.Started)
         {
             Started--;
@@ -72,19 +72,19 @@ public sealed class WorldEmitters(WwisePlayer player)
         if (e.Object != 0) player.UnregisterObject(e.Object);
     }
 
-    public bool Contains(string key) => emitters.ContainsKey(key);
+    public bool Contains(string key) => _emitters.ContainsKey(key);
 
     /// <summary>Moves an emitter that follows something (an effect's node, <c>FUN_140258120</c>): the next <see cref="Update"/> measures the range from the new place, and a registered object is placed there.</summary>
     public void Move(string key, Vector3 position)
     {
-        if (!emitters.TryGetValue(key, out var e)) return;
+        if (!_emitters.TryGetValue(key, out var e)) return;
         e.Position = position;
         if (e.Object != 0) player.SetPosition(e.Object, position);
     }
 
     public void Clear()
     {
-        foreach (string key in emitters.Keys.ToArray()) Remove(key);
+        foreach (string key in _emitters.Keys.ToArray()) Remove(key);
     }
 
     /// <summary>
@@ -95,7 +95,7 @@ public sealed class WorldEmitters(WwisePlayer player)
     {
         float nearest = float.PositiveInfinity;
         NearestName = null;
-        foreach (var e in emitters.Values)
+        foreach (var e in _emitters.Values)
         {
             float range = e.Sound.Range;
             float d2 = player.HeardDistanceSquared(e.Position, eye);
@@ -122,7 +122,7 @@ public sealed class WorldEmitters(WwisePlayer player)
     /// </summary>
     public void SetPower(string key, float efficiency, bool powered)
     {
-        if (!emitters.TryGetValue(key, out var e)) return;
+        if (!_emitters.TryGetValue(key, out var e)) return;
         e.Powered = powered;
         if (e.Far) return;
         float level = efficiency * e.Sound.EfficiencyMultiplier * 100 + e.Sound.Intensity * 100;
@@ -161,7 +161,7 @@ public sealed class WorldEmitters(WwisePlayer player)
 
     void Register(Emitter e)
     {
-        e.Object = next++;
+        e.Object = _next++;
         player.RegisterObject(e.Object);
         player.SetSwitch("Emitters", e.Sound.Emitter, e.Object);
         player.SetPosition(e.Object, e.Position);

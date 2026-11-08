@@ -9,19 +9,19 @@ namespace Meitou.Data.Gameplay.Economy;
 /// </summary>
 public sealed class TradeCulture
 {
-    readonly Dictionary<string, float> prices = new(StringComparer.Ordinal);
-    readonly HashSet<string> illegal = new(StringComparer.Ordinal);
-    readonly HashSet<string> forbidden = new(StringComparer.Ordinal);
+    readonly Dictionary<string, float> _prices = new(StringComparer.Ordinal);
+    readonly HashSet<string> _illegal = new(StringComparer.Ordinal);
+    readonly HashSet<string> _forbidden = new(StringComparer.Ordinal);
 
     /// <summary>Items with a price factor of their own.</summary>
-    public IReadOnlyDictionary<string, float> Prices => prices;
+    public IReadOnlyDictionary<string, float> Prices => _prices;
     /// <summary><c>illegal goods</c>: contraband here.</summary>
-    public IReadOnlySet<string> Illegal => illegal;
+    public IReadOnlySet<string> Illegal => _illegal;
     /// <summary><c>forbidden items</c>: never spawn here.</summary>
-    public IReadOnlySet<string> Forbidden => forbidden;
+    public IReadOnlySet<string> Forbidden => _forbidden;
 
     /// <summary>The price factor of an item record, if this culture names it.</summary>
-    public bool TryPrice(string itemId, out float factor) => prices.TryGetValue(itemId, out factor);
+    public bool TryPrice(string itemId, out float factor) => _prices.TryGetValue(itemId, out factor);
 
     /// <summary>
     /// The culture object of a <c>trade culture</c> list; null when the list has no ITEMS_CULTURE record (the game then has no object, and the price lookup falls through to the
@@ -32,12 +32,12 @@ public sealed class TradeCulture
         TradeCulture? culture = null;
         foreach (var link in cultures)
         {
-            if (db.Find(link.Id) is not { Type: FcsRecordType.ITEMS_CULTURE } record) continue;
+            if (db.Find(link.Id) is not { Type: FcsRecordType.ItemsCulture } record) continue;
             culture ??= new TradeCulture();
             foreach (var p in record.GetReferences("trade prices"))
-                culture.prices[p.TargetStringId] = (p.Values.Value0 == 0 ? 100 : p.Values.Value0) * 0.01f;
-            foreach (var p in record.GetReferences("illegal goods")) culture.illegal.Add(p.TargetStringId);
-            foreach (var p in record.GetReferences("forbidden items")) culture.forbidden.Add(p.TargetStringId);
+                culture._prices[p.TargetStringId] = (p.Values.Value0 == 0 ? 100 : p.Values.Value0) * 0.01f;
+            foreach (var p in record.GetReferences("illegal goods")) culture._illegal.Add(p.TargetStringId);
+            foreach (var p in record.GetReferences("forbidden items")) culture._forbidden.Add(p.TargetStringId);
         }
         return culture;
     }

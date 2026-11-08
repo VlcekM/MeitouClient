@@ -12,18 +12,18 @@ namespace Meitou.Game.Audio;
 public sealed partial class WwisePlayer
 {
     // The objects the host registered; positions are written from the host's threads and read by the mixer (a tiny lock), the rest is the audio thread's.
-    readonly ConcurrentDictionary<ulong, GameObjectState> gameObjects = new();
-    readonly object listenerGate = new();
-    Listener listener = Listener.Default;
+    readonly ConcurrentDictionary<ulong, GameObjectState> _gameObjects = new();
+    readonly object _listenerGate = new();
+    Listener _listener = Listener.Default;
 
     /// <summary>The object an action's sounds are made on while <see cref="Run"/> plays it (instances take it from their parent otherwise).</summary>
-    ulong postingObject;
+    ulong _postingObject;
 
     sealed class GameObjectState
     {
-        readonly object gate = new();
-        Vector3 position, front;
-        bool placed;
+        readonly object _gate = new();
+        Vector3 _position, _front;
+        bool _placed;
 
         /// <summary>Per-object game parameter values (override the global ones) and switch values: the audio thread's.</summary>
         public readonly Dictionary<uint, float> Parameters = [];
@@ -31,26 +31,26 @@ public sealed partial class WwisePlayer
 
         public void Place(Vector3 position, Vector3 front)
         {
-            lock (gate)
+            lock (_gate)
             {
-                this.position = position;
-                this.front = front;
-                placed = true;
+                this._position = position;
+                this._front = front;
+                _placed = true;
             }
         }
 
         public bool TryGetPlace(out Vector3 position, out Vector3 front)
         {
-            lock (gate)
+            lock (_gate)
             {
-                position = this.position;
-                front = this.front;
-                return placed;
+                position = this._position;
+                front = this._front;
+                return _placed;
             }
         }
     }
 
-    GameObjectState ObjectState(ulong id) => gameObjects.GetOrAdd(id, _ => new GameObjectState());
+    GameObjectState ObjectState(ulong id) => _gameObjects.GetOrAdd(id, _ => new GameObjectState());
 
     /// <summary>
     /// Makes the object known (a game object exists from its first use anyway; this is for hosts that want to say so). Registering an object that
@@ -64,15 +64,15 @@ public sealed partial class WwisePlayer
     /// </summary>
     public void UnregisterObject(ulong id)
     {
-        gameObjects.TryRemove(id, out _);
-        commands.Enqueue(() =>
+        _gameObjects.TryRemove(id, out _);
+        _commands.Enqueue(() =>
         {
-            foreach (var r in roots)
+            foreach (var r in _roots)
                 if (r.GameObject == id) r.End();
-            volumeOffsets.ForgetObject(id);
-            pitchOffsets.ForgetObject(id);
-            lowPassOffsets.ForgetObject(id);
-            busVolumes.ForgetObject(id);
+            _volumeOffsets.ForgetObject(id);
+            _pitchOffsets.ForgetObject(id);
+            _lowPassOffsets.ForgetObject(id);
+            _busVolumes.ForgetObject(id);
         });
     }
 
@@ -88,12 +88,12 @@ public sealed partial class WwisePlayer
     public void SetListener(Vector3 position, Vector3 front, Vector3 up)
     {
         if (front.LengthSquared() < 1e-12f || up.LengthSquared() < 1e-12f) return;
-        lock (listenerGate) listener = new Listener(position, front, up);
+        lock (_listenerGate) _listener = new Listener(position, front, up);
     }
 
     Listener CurrentListener()
     {
-        lock (listenerGate) return listener;
+        lock (_listenerGate) return _listener;
     }
 
     /// <summary>Posts an event on a game object: its sounds are placed at the object and stopped by stop actions restricted to the object.</summary>
@@ -102,7 +102,7 @@ public sealed partial class WwisePlayer
     public void Post(uint eventId, ulong gameObject)
     {
         ObjectState(gameObject);
-        commands.Enqueue(() => PostNow(eventId, gameObject, expires: time + 10));
+        _commands.Enqueue(() => PostNow(eventId, gameObject, expires: _time + 10));
     }
 
     /// <summary>Sets a game parameter for one object (overriding the global value for the sounds playing on it).</summary>
@@ -116,7 +116,7 @@ public sealed partial class WwisePlayer
             return;
         }
         var state = ObjectState(gameObject);
-        commands.Enqueue(() => state.Parameters[id] = value);
+        _commands.Enqueue(() => state.Parameters[id] = value);
     }
 
     /// <summary>Sets a switch group for one object (<c>Emitters</c> on an emitter, <c>Indoors</c>); object 0 sets the global value, as <see cref="SetState(string, string)"/>.</summary>
@@ -130,23 +130,23 @@ public sealed partial class WwisePlayer
             return;
         }
         var state = ObjectState(gameObject);
-        commands.Enqueue(() =>
+        _commands.Enqueue(() =>
         {
             if (state.Switches.TryGetValue(group, out var old) && old == value) return;
             state.Switches[group] = value;
-            foreach (var r in roots)
+            foreach (var r in _roots)
                 if (r.GameObject == gameObject) r.StateChanged(group);
         });
     }
 
     /// <summary>A game parameter's value for an object: its own if the object has one, else the global one.</summary>
     float Parameter(uint id, ulong gameObject) =>
-        gameObject != 0 && gameObjects.TryGetValue(gameObject, out var state) && state.Parameters.TryGetValue(id, out var v) ? v : Parameter(id);
+        gameObject != 0 && _gameObjects.TryGetValue(gameObject, out var state) && state.Parameters.TryGetValue(id, out var v) ? v : Parameter(id);
 
     /// <summary>A state or switch group's value for an object: its own switch if it has one, else the global value (0 when never set).</summary>
     bool TryGetGroupValue(uint group, ulong gameObject, out uint value)
     {
-        if (gameObject != 0 && gameObjects.TryGetValue(gameObject, out var state) && state.Switches.TryGetValue(group, out value)) return true;
-        return states.TryGetValue(group, out value);
+        if (gameObject != 0 && _gameObjects.TryGetValue(gameObject, out var state) && state.Switches.TryGetValue(group, out value)) return true;
+        return _states.TryGetValue(group, out value);
     }
 }

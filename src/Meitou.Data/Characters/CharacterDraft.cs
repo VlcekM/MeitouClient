@@ -42,9 +42,9 @@ public sealed record EditorRaceGroup(GameRecord Group, IReadOnlyList<GameRecord>
 /// </summary>
 public sealed class CharacterDraft
 {
-    readonly GameDatabase db;
-    readonly string installRoot;
-    readonly Dictionary<(string, bool), AppearanceLimits?> limitsCache;
+    readonly GameDatabase _db;
+    readonly string _installRoot;
+    readonly Dictionary<(string, bool), AppearanceLimits?> _limitsCache;
 
     /// <summary>The record as edited so far.</summary>
     public FcsRecord Record { get; private set; }
@@ -57,12 +57,12 @@ public sealed class CharacterDraft
 
     public CharacterDraft(GameDatabase db, string installRoot, FcsRecord appearance, string name)
     {
-        this.db = db;
-        this.installRoot = installRoot;
+        this._db = db;
+        this._installRoot = installRoot;
         Record = Copy(appearance);
         Name = name;
-        limitsCache = [];
-        Race = RaceOf(db, Record) ?? db.OfType(FcsRecordType.RACE).First();
+        _limitsCache = [];
+        Race = RaceOf(db, Record) ?? db.OfType(FcsRecordType.Race).First();
         Limits = LimitsFor(Race, Female);
     }
 
@@ -73,8 +73,8 @@ public sealed class CharacterDraft
         foreach (var (k, v) in source.Bools) copy.Bools[k] = v;
         foreach (var (k, v) in source.Floats) copy.Floats[k] = v;
         foreach (var (k, v) in source.Ints) copy.Ints[k] = v;
-        foreach (var (k, v) in source.Vector3s) copy.Vector3s[k] = v;
-        foreach (var (k, v) in source.Vector4s) copy.Vector4s[k] = v;
+        foreach (var (k, v) in source.Vector3S) copy.Vector3S[k] = v;
+        foreach (var (k, v) in source.Vector4S) copy.Vector4S[k] = v;
         foreach (var (k, v) in source.Strings) copy.Strings[k] = v;
         foreach (var (k, v) in source.Filenames) copy.Filenames[k] = v;
         foreach (var (k, v) in source.References) copy.References[k] = [.. v];
@@ -83,7 +83,7 @@ public sealed class CharacterDraft
 
     /// <summary>The RACE an appearance record names, or null.</summary>
     public static GameRecord? RaceOf(GameDatabase db, FcsRecord record) =>
-        record.References.TryGetValue("race", out var refs) && refs.Count > 0 && db.Find(refs[0].TargetStringId) is { Type: FcsRecordType.RACE } race ? race : null;
+        record.References.TryGetValue("race", out var refs) && refs.Count > 0 && db.Find(refs[0].TargetStringId) is { Type: FcsRecordType.Race } race ? race : null;
 
     /// <summary>
     /// IMPORT: takes a body file's whole look, race and sex included, made valid for its race (<see cref="Sanitize"/>); the draft keeps its own record id.
@@ -91,8 +91,8 @@ public sealed class CharacterDraft
     /// </summary>
     public bool Import(FcsRecord appearance)
     {
-        if (RaceOf(db, appearance) is not { } race) return false;
-        var taken = Sanitize(db, installRoot, appearance, race);
+        if (RaceOf(_db, appearance) is not { } race) return false;
+        var taken = Sanitize(_db, _installRoot, appearance, race);
         (taken.Type, taken.Id, taken.Name, taken.StringId, taken.Flags) = (Record.Type, Record.Id, Record.Name, Record.StringId, Record.Flags);
         Record = taken;
         Race = race;
@@ -113,8 +113,8 @@ public sealed class CharacterDraft
 
     AppearanceLimits? LimitsFor(GameRecord race, bool female)
     {
-        if (limitsCache.TryGetValue((race.StringId, female), out var cached)) return cached;
-        return limitsCache[(race.StringId, female)] = ReadLimits(db, installRoot, race, female);
+        if (_limitsCache.TryGetValue((race.StringId, female), out var cached)) return cached;
+        return _limitsCache[(race.StringId, female)] = ReadLimits(_db, _installRoot, race, female);
     }
 
     /// <summary>The race's <c>editor limits</c> config of one gender, or null (no file, unreadable, no config).</summary>
@@ -133,13 +133,13 @@ public sealed class CharacterDraft
     /// to be completely playable it must have a editor limits file and be on any race group"); groups left empty are not offered.
     /// </summary>
     public static IReadOnlyList<EditorRaceGroup> PlayableRaces(GameDatabase db) =>
-        playableRaces.GetValue(db, static db => [.. db.OfType(FcsRecordType.RACE_GROUP)
-            .Select(g => new EditorRaceGroup(g, [.. g.GetReferences("races").Select(r => db.Find(r.TargetStringId))
-                .Where(r => r is { Type: FcsRecordType.RACE } && r.GetBool("playable", true) && r.GetPath("editor limits").Length > 0).Select(r => r!)]))
-            .Where(g => g.Races.Count > 0)]);
+        PlayableRaceCache.GetValue(db, static db => [.. Enumerable
+            .Where<EditorRaceGroup>(db.OfType(FcsRecordType.RaceGroup)
+                .Select(g => new EditorRaceGroup(g, [.. g.GetReferences("races").Select(r => db.Find(r.TargetStringId))
+                    .Where(r => r is { Type: FcsRecordType.Race } && r.GetBool("playable", true) && r.GetPath("editor limits").Length > 0).Select(r => r!)])), g => g.Races.Count > 0)]);
 
     /// <summary>The playable races by database, made once: the editor's interface asks every frame, and the search walks every record.</summary>
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GameDatabase, IReadOnlyList<EditorRaceGroup>> playableRaces = new();
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GameDatabase, IReadOnlyList<EditorRaceGroup>> PlayableRaceCache = new();
 
     /// <summary>
     /// <see cref="PlayableRaces(GameDatabase)"/> limited to <paramref name="only"/> (a start's <c>force race</c>); when that leaves none, the original says "Game start has
@@ -158,11 +158,11 @@ public sealed class CharacterDraft
     /// in data order, that are <c>idle</c>, not <c>disabled</c>, of no <c>weather type</c>, not on the <c>overlay</c> layer, with no weapon in either hand and not
     /// <c>crouched</c>.
     /// </summary>
-    public IReadOnlyList<string> IdleStances => idleStances ??= [.. db.OfType(FcsRecordType.ANIMATION)
+    public IReadOnlyList<string> IdleStances => _idleStances ??= [.. _db.OfType(FcsRecordType.Animation)
         .Where(a => a.GetBool("idle") && !a.GetBool("disabled") && a.GetInt("weather type") < 1 && a.GetString("layer", "") != "overlay"
             && a.GetInt("has weapon L") == 0 && a.GetInt("has weapon R") == 0 && !a.GetBool("crouched"))
         .Select(a => a.Name)];
-    IReadOnlyList<string>? idleStances;
+    IReadOnlyList<string>? _idleStances;
 
     /// <summary>
     /// The controls of a tab in the original's order (<c>FUN_1405ebd50</c>): BODY the Idle stance slider, <c>Skin Tone</c> (with more than one colour), the body
@@ -208,7 +208,7 @@ public sealed class CharacterDraft
                 float plus = F(r.Target!, c.Mid * 0.01f), minus = r.TargetOpposite is { } o ? F(o, 0) : 0;
                 return CharacterGenerator.Round((minus > 0 && plus <= 0 ? -minus : plus) * 100);
             case EditorControlKind.Colour:
-                return Record.Vector3s.TryGetValue(c.Label, out var colour) ? Nearest(c.Colour!, colour) : c.Mid;
+                return Record.Vector3S.TryGetValue(c.Label, out var colour) ? Nearest(c.Colour!, colour) : c.Mid;
             case EditorControlKind.HairHue: return CharacterGenerator.Round(F("Hair Colour", 0));
             case EditorControlKind.HairSaturation: return CharacterGenerator.Round(F("Hair Saturation", 0));
             case EditorControlKind.HairBrightness: return CharacterGenerator.Round(F("Hair Brightness", 100));
@@ -257,7 +257,7 @@ public sealed class CharacterDraft
                 }
                 else record.Floats[r.Target!] = value * 0.01f;
                 break;
-            case EditorControlKind.Colour: record.Vector3s[c.Label] = c.Colour!.ColourAt(value); break;
+            case EditorControlKind.Colour: record.Vector3S[c.Label] = c.Colour!.ColourAt(value); break;
             case EditorControlKind.HairHue: record.Floats["Hair Colour"] = value; break;
             case EditorControlKind.HairSaturation: record.Floats["Hair Saturation"] = value; break;
             case EditorControlKind.HairBrightness: record.Floats["Hair Brightness"] = value; break;
@@ -265,7 +265,7 @@ public sealed class CharacterDraft
     }
 
     /// <summary>A picker's choices: the race's heads of the gender (with a texture map), its hairs of the slot; hair and beard start with "none".</summary>
-    public IReadOnlyList<GameRecord?> Options(EditorControlKind kind) => OptionsFor(db, Race, Female, kind);
+    public IReadOnlyList<GameRecord?> Options(EditorControlKind kind) => OptionsFor(_db, Race, Female, kind);
 
     static IReadOnlyList<GameRecord?> OptionsFor(GameDatabase db, GameRecord race, bool female, EditorControlKind kind)
     {
@@ -275,7 +275,7 @@ public sealed class CharacterDraft
         var slot = kind == EditorControlKind.Beard ? AttachSlot.Beard : AttachSlot.Hair;
         var list = new List<GameRecord?> { null };
         list.AddRange(race.GetReferences("hairs").Select(r => db.Find(r.TargetStringId))
-            .Where(h => h is { Type: FcsRecordType.ATTACHMENT } && (AttachSlot)h.GetInt("attach slot", (int)AttachSlot.Hair) == slot));
+            .Where(h => h is { Type: FcsRecordType.Attachment } && (AttachSlot)h.GetInt("attach slot", (int)AttachSlot.Hair) == slot));
         return list;
     }
 
@@ -340,7 +340,7 @@ public sealed class CharacterDraft
         {
             foreach (var r in limits.Ranges)
                 Write(record, new EditorControl(r.Name, r.Target is null ? EditorControlKind.Slider : EditorControlKind.Pose, r.Min, r.Max, r.Mid) { Range = r }, r.Target is null ? r.Mid : 0);
-            foreach (var c in limits.Colours) record.Vector3s[c.Name] = c.ColourAt(c.Mid);
+            foreach (var c in limits.Colours) record.Vector3S[c.Name] = c.ColourAt(c.Mid);
         }
         record.Floats["Posture"] = 20;
         record.Floats["Hair Colour"] = 0;
@@ -352,7 +352,7 @@ public sealed class CharacterDraft
     }
 
     /// <summary>The look the character had as each race and gender it was shown as, by race id and gender (the original's per-character map, <c>FUN_1405eadc0</c>).</summary>
-    readonly Dictionary<(string Race, bool Female), FcsRecord> looks = [];
+    readonly Dictionary<(string Race, bool Female), FcsRecord> _looks = [];
 
     /// <summary>Changes race (a single-gender race makes the character male): the look comes back as it was for that race and gender, else a new one is rolled.</summary>
     public void SetRace(GameRecord race, int seed)
@@ -376,7 +376,7 @@ public sealed class CharacterDraft
     void SwitchLook(GameRecord race, bool female, int seed)
     {
         var next = SwitchedLook(race, female, seed);
-        looks[(Race.StringId, Female)] = Copy(Record);
+        _looks[(Race.StringId, Female)] = Copy(Record);
         Race = race;
         Limits = LimitsFor(Race, female);
         Record = next;
@@ -387,7 +387,7 @@ public sealed class CharacterDraft
     public FcsRecord SwitchedLook(GameRecord race, bool female, int seed)
     {
         FcsRecord next;
-        if (looks.TryGetValue((race.StringId, female), out var kept))
+        if (_looks.TryGetValue((race.StringId, female), out var kept))
         {
             next = Copy(kept);
             if (Record.Strings.TryGetValue("idle stance", out var stance)) next.Strings["idle stance"] = stance;
@@ -400,11 +400,11 @@ public sealed class CharacterDraft
             next.Bools["sex female"] = female;
             next.References["race"] = [new FcsReference(race.StringId, 0, 0, 0)];
             next.Floats.Clear();
-            next.Vector3s.Clear();
+            next.Vector3S.Clear();
             Defaults(next, LimitsFor(race, female));
             if (Record.Strings.TryGetValue("idle stance", out var own)) next.Strings["idle stance"] = own;
-            next.Strings["head"] = CharacterGenerator.HeadOptions(db, race, next).FirstOrDefault().Item?.StringId ?? "";
-            CharacterGenerator.RollHair(db, race, null, next, MsvcRandom.FromSeed(seed));
+            next.Strings["head"] = CharacterGenerator.HeadOptions(_db, race, next).FirstOrDefault().Item?.StringId ?? "";
+            CharacterGenerator.RollHair(_db, race, null, next, MsvcRandom.FromSeed(seed));
         }
         return next;
     }
@@ -419,8 +419,8 @@ public sealed class CharacterDraft
     {
         var next = Copy(Record);
         var rng = MsvcRandom.FromSeed(seed);
-        if (tab is null or EditorTab.Hair) CharacterGenerator.RollHair(db, Race, null, next, rng);
-        if (tab is null or EditorTab.Face) CharacterGenerator.RollFace(db, Race, Limits, next, rng);
+        if (tab is null or EditorTab.Hair) CharacterGenerator.RollHair(_db, Race, null, next, rng);
+        if (tab is null or EditorTab.Face) CharacterGenerator.RollFace(_db, Race, Limits, next, rng);
         if (tab is null or EditorTab.Body) CharacterGenerator.RollBody(Limits, next, rng, skinReroll: false);
         if (tab is null or EditorTab.Face) CharacterGenerator.RollFacePoses(Limits, next, rng);
         return next;
@@ -465,10 +465,10 @@ public sealed class CharacterDraft
                     CharacterGenerator.Round(Math.Clamp(value, range.Min, range.Max)));
             }
         }
-        foreach (var key in r.Vector3s.Keys.ToArray())
+        foreach (var key in r.Vector3S.Keys.ToArray())
         {
-            var v = r.Vector3s[key];
-            r.Vector3s[key] = Vector3.Clamp(float.IsFinite(v.X + v.Y + v.Z) ? v : new Vector3(0.5f), Vector3.Zero, Vector3.One);
+            var v = r.Vector3S[key];
+            r.Vector3S[key] = Vector3.Clamp(float.IsFinite(v.X + v.Y + v.Z) ? v : new Vector3(0.5f), Vector3.Zero, Vector3.One);
         }
         return r;
     }

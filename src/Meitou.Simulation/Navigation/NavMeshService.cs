@@ -22,37 +22,37 @@ public sealed record NavZoneReady(ZoneCoordinate Zone, NavMeshOrigin Origin, dou
 /// </summary>
 internal sealed class NavMeshService : IDisposable
 {
-    readonly GameInstall install;
-    readonly GameDatabase db;
-    readonly WorldLevelData levels;
-    readonly CollisionCache collisions;
-    readonly NavRuntimeBuildings? runtime;
+    readonly GameInstall _install;
+    readonly GameDatabase _db;
+    readonly WorldLevelData _levels;
+    readonly CollisionCache _collisions;
+    readonly NavRuntimeBuildings? _runtime;
     // Bumped by Rebuild: a zone whose build started before the bump is queued again after it publishes (its gather may have missed the change).
-    readonly ConcurrentDictionary<ZoneCoordinate, int> rebuilds = new();
-    readonly BlockingCollection<ZoneCoordinate> queue = [];
-    readonly ConcurrentDictionary<ZoneCoordinate, TaskCompletionSource<NavZoneReady>> pending = new();
-    readonly Thread worker;
-    readonly object publishLock = new();
+    readonly ConcurrentDictionary<ZoneCoordinate, int> _rebuilds = new();
+    readonly BlockingCollection<ZoneCoordinate> _queue = [];
+    readonly ConcurrentDictionary<ZoneCoordinate, TaskCompletionSource<NavZoneReady>> _pending = new();
+    readonly Thread _worker;
+    readonly object _publishLock = new();
     // The loaded zones' meshes with their pruned polygons, for resolving the kept regions (worker thread, KeepAt and Unload, under publishLock).
-    readonly Dictionary<ZoneCoordinate, ZoneNavMesh> full = [];
+    readonly Dictionary<ZoneCoordinate, ZoneNavMesh> _full = [];
     // The kept sets the loaded world was published with, and the points whose regions KeepAt keeps.
-    readonly Dictionary<ZoneCoordinate, bool[]> live = [];
-    readonly Dictionary<ZoneCoordinate, List<Vector3>> standing = [];
-    volatile bool disposed;
+    readonly Dictionary<ZoneCoordinate, bool[]> _live = [];
+    readonly Dictionary<ZoneCoordinate, List<Vector3>> _standing = [];
+    volatile bool _disposed;
 
     public NavMeshService(GameInstall install, GameDatabase db, WorldLevelData levels, NavmeshWalkability walkability, NavBuildSettings? settings = null, NavMeshCache? cache = null,
         NavRuntimeBuildings? runtime = null)
     {
-        this.install = install;
-        this.db = db;
-        this.levels = levels;
-        this.runtime = runtime;
+        this._install = install;
+        this._db = db;
+        this._levels = levels;
+        this._runtime = runtime;
         Walkability = walkability;
         Settings = settings ?? new NavBuildSettings();
         Cache = cache ?? new NavMeshCache();
-        collisions = new CollisionCache(install);
-        worker = new Thread(Work) { Name = "NavMeshBuilder", IsBackground = true, Priority = ThreadPriority.BelowNormal };
-        worker.Start();
+        _collisions = new CollisionCache(install);
+        _worker = new Thread(Work) { Name = "NavMeshBuilder", IsBackground = true, Priority = ThreadPriority.BelowNormal };
+        _worker.Start();
     }
 
     public NavmeshWalkability Walkability { get; }
@@ -75,8 +75,8 @@ internal sealed class NavMeshService : IDisposable
     {
         if (Walkability.World.Find(zone) is { } loaded) return Task.FromResult(new NavZoneReady(zone, NavMeshOrigin.Cache, 0, loaded.PolygonCount));
         var tcs = new TaskCompletionSource<NavZoneReady>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var existing = pending.GetOrAdd(zone, tcs);
-        if (ReferenceEquals(existing, tcs)) queue.Add(zone);
+        var existing = _pending.GetOrAdd(zone, tcs);
+        if (ReferenceEquals(existing, tcs)) _queue.Add(zone);
         return existing.Task;
     }
 
@@ -86,12 +86,12 @@ internal sealed class NavMeshService : IDisposable
     /// </summary>
     public Task<NavZoneReady> Rebuild(ZoneCoordinate zone)
     {
-        rebuilds.AddOrUpdate(zone, 1, (_, n) => n + 1);
+        _rebuilds.AddOrUpdate(zone, 1, (_, n) => n + 1);
         // A queued or running build sees the bump and builds again after it publishes.
-        if (Walkability.World.Find(zone) is null) return pending.TryGetValue(zone, out var queued) ? queued.Task : Task.FromCanceled<NavZoneReady>(new CancellationToken(true));
+        if (Walkability.World.Find(zone) is null) return _pending.TryGetValue(zone, out var queued) ? queued.Task : Task.FromCanceled<NavZoneReady>(new CancellationToken(true));
         var tcs = new TaskCompletionSource<NavZoneReady>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var existing = pending.GetOrAdd(zone, tcs);
-        if (ReferenceEquals(existing, tcs)) queue.Add(zone);
+        var existing = _pending.GetOrAdd(zone, tcs);
+        if (ReferenceEquals(existing, tcs)) _queue.Add(zone);
         return existing.Task;
     }
 
@@ -103,12 +103,12 @@ internal sealed class NavMeshService : IDisposable
     public bool KeepAt(Vector3 at)
     {
         var zone = WorldLayout.ZoneOf(at.X, at.Z);
-        lock (publishLock)
+        lock (_publishLock)
         {
-            if (!full.TryGetValue(zone, out var mesh) || !live.TryGetValue(zone, out var kept) || Walkability.World.Find(zone) is null) return false;
+            if (!_full.TryGetValue(zone, out var mesh) || !_live.TryGetValue(zone, out var kept) || Walkability.World.Find(zone) is null) return false;
             var test = (bool[])kept.Clone();
             if (!SeedPruner.Extend(mesh, test, [at], Settings)) return false;
-            (standing.TryGetValue(zone, out var points) ? points : standing[zone] = []).Add(at);
+            (_standing.TryGetValue(zone, out var points) ? points : _standing[zone] = []).Add(at);
             Walkability.SetWorld(Publish(Walkability.World));
             return true;
         }
@@ -116,15 +116,15 @@ internal sealed class NavMeshService : IDisposable
 
     /// <summary>
     /// Resolves the loaded zones' kept sets (<see cref="ZoneKeptClosure.Resolve"/>) and returns <paramref name="world"/> with every zone whose set changed, or
-    /// which it lacks, published again (<see cref="NavWorld.With"/> relinks its borders). Under <see cref="publishLock"/>.
+    /// which it lacks, published again (<see cref="NavWorld.With"/> relinks its borders). Under <see cref="_publishLock"/>.
     /// </summary>
     NavWorld Publish(NavWorld world)
     {
-        foreach (var (zone, keep) in ZoneKeptClosure.Resolve(full, Settings, standing))
+        foreach (var (zone, keep) in ZoneKeptClosure.Resolve(_full, Settings, _standing))
         {
-            if (live.TryGetValue(zone, out var before) && before.AsSpan().SequenceEqual(keep) && world.Find(zone) is not null) continue;
-            live[zone] = keep;
-            world = world.With(full[zone].WithKept(keep).WithoutPruned());
+            if (_live.TryGetValue(zone, out var before) && before.AsSpan().SequenceEqual(keep) && world.Find(zone) is not null) continue;
+            _live[zone] = keep;
+            world = world.With(_full[zone].WithKept(keep).WithoutPruned());
         }
         return world;
     }
@@ -139,37 +139,37 @@ internal sealed class NavMeshService : IDisposable
     public void Unload(IReadOnlyCollection<ZoneCoordinate> zones)
     {
         var cancelled = new List<TaskCompletionSource<NavZoneReady>>();
-        lock (publishLock)
+        lock (_publishLock)
         {
             var world = Walkability.World;
             bool published = false;
             foreach (var zone in zones)
             {
                 world = world.Without(zone);
-                published |= full.Remove(zone);
-                live.Remove(zone);
-                standing.Remove(zone);
-                if (pending.TryRemove(zone, out var tcs)) cancelled.Add(tcs);
+                published |= _full.Remove(zone);
+                _live.Remove(zone);
+                _standing.Remove(zone);
+                if (_pending.TryRemove(zone, out var tcs)) cancelled.Add(tcs);
             }
             // Its neighbours' border regions toward it are kept again (a zone never published changed nothing).
-            Walkability.SetWorld(published && full.Count > 0 ? Publish(world) : world);
+            Walkability.SetWorld(published && _full.Count > 0 ? Publish(world) : world);
         }
         foreach (var tcs in cancelled) tcs.TrySetCanceled();
     }
 
     void Work()
     {
-        using var gatherer = new ZoneGeometryGatherer(install, db, levels, collisions, runtime);
-        uint settingsHash = NavMeshCache.SettingsHash(Settings) * 16777619 ^ NavMeshCache.ContentHash(install, db);
-        foreach (var zone in queue.GetConsumingEnumerable())
+        using var gatherer = new ZoneGeometryGatherer(_install, _db, _levels, _collisions, _runtime);
+        uint settingsHash = NavMeshCache.SettingsHash(Settings) * 16777619 ^ NavMeshCache.ContentHash(_install, _db);
+        foreach (var zone in _queue.GetConsumingEnumerable())
         {
-            if (disposed) break;
+            if (_disposed) break;
             // Unloaded while it waited, or published by an earlier entry.
-            if (!pending.ContainsKey(zone)) continue;
+            if (!_pending.ContainsKey(zone)) continue;
             var watch = Stopwatch.StartNew();
             try
             {
-                int rebuildVersion = rebuilds.GetValueOrDefault(zone);
+                int rebuildVersion = _rebuilds.GetValueOrDefault(zone);
                 uint hash = gatherer.BuildingHash(zone);
                 var mesh = Cache.TryLoad(zone.X, zone.Y, hash, settingsHash);
                 var origin = NavMeshOrigin.Cache;
@@ -185,11 +185,11 @@ internal sealed class NavMeshService : IDisposable
                 mesh.Terrain = gatherer.ZoneHeights(zone);
                 int polygons;
                 TaskCompletionSource<NavZoneReady>? tcs;
-                lock (publishLock)
+                lock (_publishLock)
                 {
                     // Unloaded while it was built: only the cache keeps it (in `full` it would spread kept regions into its neighbours).
-                    if (!pending.TryRemove(zone, out tcs)) continue;
-                    full[zone] = mesh;
+                    if (!_pending.TryRemove(zone, out tcs)) continue;
+                    _full[zone] = mesh;
                     // Neighbours whose kept regions changed with this zone (grown from its border, or no longer kept toward it) are published again.
                     var world = Publish(Walkability.World);
                     polygons = world.Find(zone)!.PolygonCount;
@@ -199,20 +199,20 @@ internal sealed class NavMeshService : IDisposable
                 tcs.TrySetResult(ready);
                 ZoneReady?.Invoke(ready);
                 // The buildings changed while this one was built: it may have missed it.
-                if (rebuilds.GetValueOrDefault(zone) != rebuildVersion) _ = Rebuild(zone);
+                if (_rebuilds.GetValueOrDefault(zone) != rebuildVersion) _ = Rebuild(zone);
             }
             catch (Exception e)
             {
-                if (pending.TryRemove(zone, out var tcs)) tcs.TrySetException(e);
+                if (_pending.TryRemove(zone, out var tcs)) tcs.TrySetException(e);
             }
         }
     }
 
     public void Dispose()
     {
-        disposed = true;
-        queue.CompleteAdding();
-        worker.Join(TimeSpan.FromSeconds(30));
-        foreach (var tcs in pending.Values) tcs.TrySetCanceled();
+        _disposed = true;
+        _queue.CompleteAdding();
+        _worker.Join(TimeSpan.FromSeconds(30));
+        foreach (var tcs in _pending.Values) tcs.TrySetCanceled();
     }
 }

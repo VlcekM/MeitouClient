@@ -6,29 +6,29 @@ namespace Meitou.Game.Settings;
 /// <summary>The settings window's motion: its open and close fade, the page fade, hover fades and smooth scrolling.</summary>
 sealed class MenuMotion(SettingsMenu menu)
 {
-    internal float menuProgress, contentProgress, frameDelta;
-    internal long lastFrameAt;
-    internal string? animationScope;
-    Dictionary<string, float>? hoverProgress;
+    internal float MenuProgress, ContentProgress, FrameDelta;
+    internal long LastFrameAt;
+    internal string? AnimationScope;
+    Dictionary<string, float>? _hoverProgress;
 
     internal static float Ease(float t) => t * t * (3 - 2 * t);
 
     internal void AdvanceMotion()
     {
         long now = Stopwatch.GetTimestamp();
-        frameDelta = lastFrameAt == 0 ? 1 / 60f : Math.Clamp((float)Stopwatch.GetElapsedTime(lastFrameAt, now).TotalSeconds, 0, 0.05f);
-        lastFrameAt = now;
-        menuProgress = Math.Clamp(menuProgress + frameDelta / (menu.visible ? 0.14f : -0.1f), 0, 1);
-        contentProgress = Math.Min(1, contentProgress + frameDelta / 0.12f);
-        if (!menu.visible && menuProgress == 0) menu.player.SetSettingsOpen(false);
+        FrameDelta = LastFrameAt == 0 ? 1 / 60f : Math.Clamp((float)Stopwatch.GetElapsedTime(LastFrameAt, now).TotalSeconds, 0, 0.05f);
+        LastFrameAt = now;
+        MenuProgress = Math.Clamp(MenuProgress + FrameDelta / (menu.MenuOpen ? 0.14f : -0.1f), 0, 1);
+        ContentProgress = Math.Min(1, ContentProgress + FrameDelta / 0.12f);
+        if (!menu.MenuOpen && MenuProgress == 0) menu.Player.SetSettingsOpen(false);
     }
 
     internal float Hover(string label, bool hovered)
     {
-        var states = hoverProgress ??= [];
-        string key = $"{menu.page}:{menu.graphicsPage}:{animationScope}:{label}";
+        var states = _hoverProgress ??= [];
+        string key = $"{menu.Page}:{menu.GraphicsPage}:{AnimationScope}:{label}";
         states.TryGetValue(key, out float progress);
-        progress = Math.Clamp(progress + frameDelta / (hovered ? 0.16f : -0.16f), 0, 1);
+        progress = Math.Clamp(progress + FrameDelta / (hovered ? 0.16f : -0.16f), 0, 1);
         states[key] = progress;
         return Ease(progress);
     }
@@ -36,11 +36,11 @@ sealed class MenuMotion(SettingsMenu menu)
     internal void Opacity(int first, float amount)
     {
         if (amount >= 1) return;
-        for (int i = first; i < menu.controls.Count; i++)
+        for (int i = first; i < menu.Controls.Count; i++)
         {
-            var control = menu.controls[i];
+            var control = menu.Controls[i];
             float old = float.TryParse(control.Properties.GetValueOrDefault("Alpha"), NumberStyles.Float, CultureInfo.InvariantCulture, out float alpha) ? alpha : 1;
-            menu.controls[i] = control with
+            menu.Controls[i] = control with
             {
                 Properties = new Dictionary<string, string>(control.Properties) { ["Alpha"] = (old * amount).ToString(CultureInfo.InvariantCulture) },
             };
@@ -49,9 +49,9 @@ sealed class MenuMotion(SettingsMenu menu)
 
     internal void AdvanceScroll()
     {
-        menu.scrollTarget = Math.Clamp(menu.scrollTarget, 0, menu.maxScroll);
-        menu.scroll += (menu.scrollTarget - menu.scroll) * (1 - MathF.Exp(-frameDelta * 20));
-        if (MathF.Abs(menu.scrollTarget - menu.scroll) < 0.1f) menu.scroll = menu.scrollTarget;
-        menu.scroll = Math.Clamp(menu.scroll, 0, menu.maxScroll);
+        menu.ScrollTarget = Math.Clamp(menu.ScrollTarget, 0, menu.MaxScroll);
+        menu.ScrollOffset += (menu.ScrollTarget - menu.ScrollOffset) * (1 - MathF.Exp(-FrameDelta * 20));
+        if (MathF.Abs(menu.ScrollTarget - menu.ScrollOffset) < 0.1f) menu.ScrollOffset = menu.ScrollTarget;
+        menu.ScrollOffset = Math.Clamp(menu.ScrollOffset, 0, menu.MaxScroll);
     }
 }

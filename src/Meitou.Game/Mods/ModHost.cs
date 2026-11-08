@@ -2,8 +2,8 @@ using System.Reflection;
 using HarmonyLib;
 using Meitou.Content;
 using Meitou.Data;
-using Meitou.Simulation;
 using Meitou.Game.Ui;
+using Meitou.Simulation;
 using Meitou.Simulation.Population;
 
 namespace Meitou.Modding;
@@ -52,38 +52,38 @@ public sealed record ModHostOptions(
 /// </summary>
 public sealed class ModHost
 {
-    readonly ModRegistry registry = new();
-    readonly List<LoadedMod> mods = [];
-    readonly List<string> notices = [];
-    readonly CodeModPass pass = new();
+    readonly ModRegistry _registry = new();
+    readonly List<LoadedMod> _mods = [];
+    readonly List<string> _notices = [];
+    readonly CodeModPass _pass = new();
 
     ModHost() { }
 
-    public IReadOnlyList<LoadedMod> Mods => mods;
+    public IReadOnlyList<LoadedMod> Mods => _mods;
 
     /// <summary>What went wrong or was left out, one line per mod, for the player's notices.</summary>
-    public IReadOnlyList<string> Notices => notices;
+    public IReadOnlyList<string> Notices => _notices;
 
     /// <summary>The reason each refused code mod was not loaded, by mod name (the <c>.mod</c> file's stem, as in mods.cfg).</summary>
-    public IReadOnlyDictionary<string, string> Refused => pass.Refusals;
+    public IReadOnlyDictionary<string, string> Refused => _pass.Refusals;
 
     /// <summary>What every world is built with; null without registrations.</summary>
-    public SimulationExtensions? Simulation => registry.Simulation.IsEmpty ? null : registry.Simulation;
+    public SimulationExtensions? Simulation => _registry.Simulation.IsEmpty ? null : _registry.Simulation;
 
-    public IReadOnlyList<IUiExtension> UiExtensions => registry.Ui;
-    public IReadOnlyList<ModDebugCommand> DebugCommands => registry.DebugCommands;
+    public IReadOnlyList<IUiExtension> UiExtensions => _registry.Ui;
+    public IReadOnlyList<ModDebugCommand> DebugCommands => _registry.DebugCommands;
 
     /// <summary>A mod registered a combat hit feed: the host then gives each world a <see cref="World.CombatHitFeed"/> and drains it every frame.</summary>
-    public bool WantsCombatHits => registry.HitFeeds.Count > 0;
+    public bool WantsCombatHits => _registry.HitFeeds.Count > 0;
 
     /// <summary>
     /// The hits published since the last frame to every mod's feed, in load order, on the host's thread; a feed that throws is logged and gets
     /// no more.
     /// </summary>
-    public void DeliverCombatHits(IReadOnlyList<Meitou.Simulation.Combat.CombatHit> hits)
+    public void DeliverCombatHits(IReadOnlyList<Simulation.Combat.CombatHit> hits)
     {
         if (hits.Count == 0) return;
-        foreach (var feed in registry.HitFeeds)
+        foreach (var feed in _registry.HitFeeds)
         {
             if (feed.Faulted) continue;
             try { feed.Run(hits); }
@@ -96,10 +96,10 @@ public sealed class ModHost
     }
 
     /// <summary>The settings the mods registered, in load order (docs/modding.md "Settings").</summary>
-    public IReadOnlyList<ModSettingsGroup> Settings => registry.Settings;
+    public IReadOnlyList<ModSettingsGroup> Settings => _registry.Settings;
 
     /// <summary>The record types mods claimed (number, mod's name for it).</summary>
-    public IReadOnlyDictionary<int, string> RecordTypes => registry.RecordTypes;
+    public IReadOnlyDictionary<int, string> RecordTypes => _registry.RecordTypes;
 
     /// <summary>The enabled mods of <c>mods.cfg</c>, in order, that carry code (<see cref="ModInfo.HasCode"/>).</summary>
     public static List<ModInfo> EnabledCodeMods(GameInstall install) => CodeMods(install).Enabled;
@@ -139,8 +139,8 @@ public sealed class ModHost
         {
             mod = Prepare(info, entries, index, options.GameVersion);
             Initialize(mod, options);
-            mods.Add(mod);
-            pass.Loaded(info.Name, mod.Manifest);
+            _mods.Add(mod);
+            _pass.Loaded(info.Name, mod.Manifest);
             string assemblies = string.Join(", ", mod.Assemblies.Select(a => a.GetName().Name));
             Console.WriteLine($"mod       {mod.Manifest.Id}: loaded from {info.Name} ({assemblies})");
         }
@@ -158,8 +158,8 @@ public sealed class ModHost
     void Refuse(string mod, string reason)
     {
         Console.Error.WriteLine($"mod       {mod}: not loaded: {reason}");
-        notices.Add($"Mod {mod} not loaded: {reason}");
-        pass.Refused(mod, reason);
+        _notices.Add($"Mod {mod} not loaded: {reason}");
+        _pass.Refused(mod, reason);
     }
 
     /// <summary>The manifest checks, the assemblies and the entry instance.</summary>
@@ -171,7 +171,7 @@ public sealed class ModHost
         {
             throw new ModLoadException($"bad {ModList.CodeManifestFile}: {e.Message}");
         }
-        if (CodeModChecks.Problems(manifest, index, entries, pass, gameVersion) is [var problem, ..]) throw new ModLoadException(problem);
+        if (CodeModChecks.Problems(manifest, index, entries, _pass, gameVersion) is [var problem, ..]) throw new ModLoadException(problem);
         var mod = new LoadedMod(info, manifest);
         mod.Dependencies = LoadedDependencies(manifest);
         var imports = Imports(mod.Dependencies);
@@ -190,7 +190,7 @@ public sealed class ModHost
         var resolved = new List<LoadedMod>();
         foreach (var dependency in manifest.DependsOn)
         {
-            if (mods.FirstOrDefault(m => m.Manifest.Id == dependency.Id) is { } loaded) resolved.Add(loaded);
+            if (_mods.FirstOrDefault(m => m.Manifest.Id == dependency.Id) is { } loaded) resolved.Add(loaded);
             else Console.WriteLine($"mod       {manifest.Id}: optional dependency '{dependency.Id}' did not load; going on without it");
         }
         return resolved;
@@ -248,7 +248,7 @@ public sealed class ModHost
     /// <summary>Runs <see cref="IMod.Initialize"/>; commits the registrations when it returns, removes the mod's patches when it throws.</summary>
     void Initialize(LoadedMod mod, ModHostOptions options)
     {
-        var context = new ModContext(mod, registry, options.Data, options.Population, options.World, options.SavedSettings?.Invoke(mod.Manifest.Id));
+        var context = new ModContext(mod, _registry, options.Data, options.Population, options.World, options.SavedSettings?.Invoke(mod.Manifest.Id));
         try { mod.Instance!.Initialize(context); }
         catch
         {
@@ -257,7 +257,7 @@ public sealed class ModHost
             throw;
         }
         finally { context.Open = false; }
-        registry.Commit(context.Id, context.Pending);
+        _registry.Commit(context.Id, context.Pending);
     }
 
     /// <summary>
@@ -293,7 +293,7 @@ public sealed class ModHost
     /// </summary>
     public CodeModEnvironment Environment(string gameVersion)
     {
-        var entries = mods.Select(m => new CodeModEnvironmentEntry(m.Manifest.Id, m.Manifest.Version?.ToString(), m.Info.Name));
+        var entries = _mods.Select(m => new CodeModEnvironmentEntry(m.Manifest.Id, m.Manifest.Version?.ToString(), m.Info.Name));
         return new CodeModEnvironment(gameVersion, [.. entries]);
     }
 
@@ -329,7 +329,7 @@ public sealed class ModHost
     IEnumerable<(IModSaveData System, ModSystemTag Tag)> SaveableSystems(World world)
     {
         foreach (var system in world.Systems)
-            if (system is IModSaveData saveable && registry.TagOf(system) is { } tag) yield return (saveable, tag);
+            if (system is IModSaveData saveable && _registry.TagOf(system) is { } tag) yield return (saveable, tag);
     }
 
     static byte[] Written(IModSaveData system)
@@ -340,13 +340,13 @@ public sealed class ModHost
     }
 
     /// <summary>The mod and the registered name of a world's system; null for a standard system.</summary>
-    public (string ModId, string Name)? OwnerOf(ITickSystem system) => registry.TagOf(system) is { } tag ? (tag.ModId, tag.Name) : null;
+    public (string ModId, string Name)? OwnerOf(ITickSystem system) => _registry.TagOf(system) is { } tag ? (tag.ModId, tag.Name) : null;
 
     /// <summary>Registers the mods' interface extensions with a new interface; one that throws is logged and skipped.</summary>
     public List<IDisposable> RegisterUi(Func<IUiExtension, IDisposable> register)
     {
         var registrations = new List<IDisposable>();
-        foreach (var extension in registry.Ui)
+        foreach (var extension in _registry.Ui)
         {
             try { registrations.Add(register(extension)); }
             catch (Exception e) { Console.Error.WriteLine($"mod       interface extension {extension.Id} not registered: {e}"); }

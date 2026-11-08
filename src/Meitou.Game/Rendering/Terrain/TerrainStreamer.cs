@@ -16,38 +16,38 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 public sealed class UploadQueue
 {
-    readonly Queue<(Action Step, string Label)> steps = new();
-    readonly StepCosts costs = new();
-    readonly Func<double> clock;
+    readonly Queue<(Action Step, string Label)> _steps = new();
+    readonly StepCosts _costs = new();
+    readonly Func<double> _clock;
 
     /// <param name="clockMs">Milliseconds on any scale that only moves forward (tests pass their own); the real time by default.</param>
-    public UploadQueue(Func<double>? clockMs = null) => clock = clockMs ?? (() => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency);
+    public UploadQueue(Func<double>? clockMs = null) => _clock = clockMs ?? (() => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency);
 
-    public int Count => steps.Count;
+    public int Count => _steps.Count;
 
     /// <summary>Labels of the steps the last <see cref="Run"/> executed (for diagnosing slow frames).</summary>
     public string LastRun { get; private set; } = "";
 
     /// <summary>What steps with <paramref name="label"/> have cost lately, in milliseconds (0 before the first).</summary>
-    public double ExpectedMs(string label) => costs.Expected(label);
+    public double ExpectedMs(string label) => _costs.Expected(label);
 
-    public void Add(Action step, string label = "step") => steps.Enqueue((step, label));
+    public void Add(Action step, string label = "step") => _steps.Enqueue((step, label));
 
     /// <summary>Runs queued steps until <paramref name="budgetMs"/> has passed or the next one is expected to end more than <see cref="StepCosts.Slack"/> past it (always at least one, if any).</summary>
     public void Run(double budgetMs)
     {
         LastRun = "";
-        double start = clock();
+        double start = _clock();
         int ran = 0;
-        while (steps.TryPeek(out var next))
+        while (_steps.TryPeek(out var next))
         {
-            double elapsed = clock() - start;
-            if (ran > 0 && (elapsed >= budgetMs || !costs.Fits(next.Label, elapsed, budgetMs))) break;
-            var item = steps.Dequeue();
-            double began = clock();
+            double elapsed = _clock() - start;
+            if (ran > 0 && (elapsed >= budgetMs || !_costs.Fits(next.Label, elapsed, budgetMs))) break;
+            var item = _steps.Dequeue();
+            double began = _clock();
             item.Step();
-            double ms = clock() - began;
-            costs.Learn(item.Label, ms);
+            double ms = _clock() - began;
+            _costs.Learn(item.Label, ms);
             ran++;
             LastRun += item.Label + ", ";
             if (ms > 3) SpikeLog.Note($"slow terrain step {item.Label}", ms: ms);   // with --log-spikes
@@ -69,17 +69,17 @@ public sealed class TerrainStreamer : IDisposable
     /// <summary>The eye may drift this fraction of the window's width from its centre before a new window is read.</summary>
     const double RecentreFraction = 0.15;
 
-    readonly TerrainRenderer terrain;
-    readonly TerrainTextures? textures;
-    readonly UploadQueue uploads = new();
-    readonly TerrainHeightmap map;
-    readonly int cells, step;
-    Task<(HeightWindow Window, TerrainHeightBounds.Patch Bounds)>? job;
+    readonly TerrainRenderer _terrain;
+    readonly TerrainTextures? _textures;
+    readonly UploadQueue _uploads = new();
+    readonly TerrainHeightmap _map;
+    readonly int _cells, _step;
+    Task<(HeightWindow Window, TerrainHeightBounds.Patch Bounds)>? _job;
     /// <summary>The standby the running job (and its upload) makes, or null: the job makes the drawn window.</summary>
-    bool jobStandby;
-    bool swapping, standbyUploading;
+    bool _jobStandby;
+    bool _swapping, _standbyUploading;
     /// <summary>Uploaded windows round kept points far from the eye's window (<see cref="Kept"/>), swapped in when the eye arrives.</summary>
-    readonly List<TerrainRenderer.FineStandby> standbys = [];
+    readonly List<TerrainRenderer.FineStandby> _standbys = [];
 
     /// <summary>At most this many standby windows (about 5 MB of video memory and 5 MB of memory each at step 1): one per kept place
     /// (<see cref="Areas"/> less the eye's), at least 3, at most <see cref="StandbyCeiling"/>.</summary>
@@ -102,28 +102,28 @@ public sealed class TerrainStreamer : IDisposable
 
     public TerrainStreamer(GameInstall install, TerrainRenderer terrain, TerrainTextures? textures, int step)
     {
-        this.terrain = terrain;
-        this.textures = textures;
-        this.step = Math.Max(step, 1);
-        cells = Math.Max(WindowCells, terrain.Fine.Columns - 1);
+        this._terrain = terrain;
+        this._textures = textures;
+        this._step = Math.Max(step, 1);
+        _cells = Math.Max(WindowCells, terrain.Fine.Columns - 1);
         // A second handle on the file: the worker must not share the render thread's stream.
-        map = TerrainHeightmap.Open(install);
+        _map = TerrainHeightmap.Open(install);
     }
 
     /// <summary>A line about what is loaded, for the log.</summary>
     public string Describe() =>
-        $"height windows {HeightWindows}" + (textures is null ? "" :
-            $", biomes {textures.ResidentBiomes}/{textures.TotalBiomes} resident ({string.Join(", ", textures.Resident.Select(b => b.Name.Trim()))}), overlay/colour maps {(textures.MapState == 2 ? "loaded" : "missing")}");
+        $"height windows {HeightWindows}" + (_textures is null ? "" :
+            $", biomes {_textures.ResidentBiomes}/{_textures.TotalBiomes} resident ({string.Join(", ", _textures.Resident.Select(b => b.Name.Trim()))}), overlay/colour maps {(_textures.MapState == 2 ? "loaded" : "missing")}");
 
     // A standby's read is not waited for (a far squad member does not hold up the loading screen).
-    public bool Idle => (job is null || jobStandby) && !swapping && uploads.Count == 0 && (textures?.Idle ?? true);
+    public bool Idle => (_job is null || _jobStandby) && !_swapping && _uploads.Count == 0 && (_textures?.Idle ?? true);
 
     /// <summary>Work in flight (decodes, window reads, queued upload steps), for the window title.</summary>
-    public int Pending => (job is null ? 0 : 1) + uploads.Count + (textures?.Outstanding ?? 0);
+    public int Pending => (_job is null ? 0 : 1) + _uploads.Count + (_textures?.Outstanding ?? 0);
 
     /// <summary>Render-thread time of the last <see cref="Update(Vector3)"/>.</summary>
     public double LastUpdateMs { get; private set; }
-    public string LastSteps => uploads.LastRun;
+    public string LastSteps => _uploads.LastRun;
 
     /// <summary>A character flight's arrival eye: the biome textures there load during the flight (the height window still moves only with the eye).</summary>
     public Vector3? Ahead { get; set; }
@@ -144,21 +144,21 @@ public sealed class TerrainStreamer : IDisposable
 
     void Update(Vector3 eye, double budgetMs)
     {
-        if (job is { IsCompleted: true } done)
+        if (_job is { IsCompleted: true } done)
         {
-            job = null;
+            _job = null;
             try
             {
                 var (window, bounds) = done.Result;
-                if (jobStandby)
+                if (_jobStandby)
                 {
-                    standbyUploading = true;
-                    terrain.BeginFineStandby(window, bounds, uploads, s => { standbys.Add(s); standbyUploading = false; });
+                    _standbyUploading = true;
+                    _terrain.BeginFineStandby(window, bounds, _uploads, s => { _standbys.Add(s); _standbyUploading = false; });
                 }
                 else
                 {
-                    swapping = true;
-                    terrain.BeginFineUpload(window, bounds, uploads, () => { swapping = false; HeightWindows++; });
+                    _swapping = true;
+                    _terrain.BeginFineUpload(window, bounds, _uploads, () => { _swapping = false; HeightWindows++; });
                 }
             }
             catch (AggregateException e)
@@ -166,27 +166,27 @@ public sealed class TerrainStreamer : IDisposable
                 Console.WriteLine($"warning   height window: {e.InnerException?.Message ?? e.Message}");
             }
         }
-        if (job is null && !swapping && !standbyUploading && NeedsWindow(terrain.Fine, eye, out int column0, out int row0))
+        if (_job is null && !_swapping && !_standbyUploading && NeedsWindow(_terrain.Fine, eye, out int column0, out int row0))
         {
             // A standby round where the eye now is (it jumped to a kept character): drawn at once, the window it replaces kept as a standby for where the eye was.
-            int ready = standbys.FindIndex(s => !NeedsWindow(s.Window, eye, out _, out _));
-            if (ready >= 0) { standbys[ready] = terrain.SwapFine(standbys[ready]); HeightWindows++; }
+            int ready = _standbys.FindIndex(s => !NeedsWindow(s.Window, eye, out _, out _));
+            if (ready >= 0) { _standbys[ready] = _terrain.SwapFine(_standbys[ready]); HeightWindows++; }
             else Read(column0, row0, standby: false);
         }
-        else if (job is null && !swapping && !standbyUploading && step < WorldFrame.CoarseStep && Guard is not { Pressure: true }) PrepareStandby();
-        if (textures is not null) (textures.GroundUnderEye, textures.Guard, textures.Areas) = (GroundUnderEye, Guard, Areas);
-        textures?.Update(eye, MaterialDistance, uploads, Ahead, Kept);
-        uploads.Run(budgetMs);
+        else if (_job is null && !_swapping && !_standbyUploading && _step < WorldFrame.CoarseStep && Guard is not { Pressure: true }) PrepareStandby();
+        if (_textures is not null) (_textures.GroundUnderEye, _textures.Guard, _textures.Areas) = (GroundUnderEye, Guard, Areas);
+        _textures?.Update(eye, MaterialDistance, _uploads, Ahead, Kept);
+        _uploads.Run(budgetMs);
     }
 
     void Read(int column0, int row0, bool standby)
     {
         var watch = Stopwatch.StartNew();
-        jobStandby = standby;
-        job = BackgroundWork.Run(() =>
+        _jobStandby = standby;
+        _job = BackgroundWork.Run(() =>
         {
-            var window = map.ReadWindow(column0, row0, cells + 1, cells + 1, step);
-            var bounds = terrain.MeasureBounds(window);
+            var window = _map.ReadWindow(column0, row0, _cells + 1, _cells + 1, _step);
+            var bounds = _terrain.MeasureBounds(window);
             LastWindowMs = watch.Elapsed.TotalMilliseconds;
             return (window, bounds);
         });
@@ -200,15 +200,15 @@ public sealed class TerrainStreamer : IDisposable
     {
         foreach (var point in Kept)
         {
-            if (Within(terrain.Fine, point, CoverFraction) || standbys.Any(s => Within(s.Window, point, RecentreFraction))) continue;
-            if (standbys.Count >= MaxStandbys)
+            if (Within(_terrain.Fine, point, CoverFraction) || _standbys.Any(s => Within(s.Window, point, RecentreFraction))) continue;
+            if (_standbys.Count >= MaxStandbys)
             {
-                int idle = standbys.FindIndex(s => !Kept.Any(k => Within(s.Window, k, RecentreFraction)));
+                int idle = _standbys.FindIndex(s => !Kept.Any(k => Within(s.Window, k, RecentreFraction)));
                 if (idle < 0) return;
-                terrain.DropFine(standbys[idle]);
-                standbys.RemoveAt(idle);
+                _terrain.DropFine(_standbys[idle]);
+                _standbys.RemoveAt(idle);
             }
-            if (NeedsWindow(terrain.Fine, point, out int column0, out int row0)) Read(column0, row0, standby: true);
+            if (NeedsWindow(_terrain.Fine, point, out int column0, out int row0)) Read(column0, row0, standby: true);
             return;
         }
     }
@@ -225,14 +225,14 @@ public sealed class TerrainStreamer : IDisposable
     bool NeedsWindow(HeightWindow fine, Vector3 eye, out int column0, out int row0)
     {
         (column0, row0) = (0, 0);
-        if (step >= WorldFrame.CoarseStep) return false;   // as coarse as the whole-world grid: nothing to gain
+        if (_step >= WorldFrame.CoarseStep) return false;   // as coarse as the whole-world grid: nothing to gain
         if (Within(fine, eye, RecentreFraction)) return false;
-        int align = step * 64, span = cells * step, max = map.Size - 1 - span;
+        int align = _step * 64, span = _cells * _step, max = _map.Size - 1 - span;
         var (sc, sr) = WorldLayout.ToSample(eye.X, eye.Z);
         int Axis(double s) => Math.Clamp((int)Math.Round((s - span / 2.0) / align) * align, 0, Math.Max(max, 0));
         (column0, row0) = (Axis(sc), Axis(sr));
         // Already there (the eye is past the edge of the world, or the window covers it all).
-        return column0 != fine.Column0 || row0 != fine.Row0 || fine.Columns != cells + 1;
+        return column0 != fine.Column0 || row0 != fine.Row0 || fine.Columns != _cells + 1;
     }
 
     /// <summary>Waits for everything wanted around the eye to be loaded and uploaded (offscreen rendering).</summary>
@@ -251,9 +251,9 @@ public sealed class TerrainStreamer : IDisposable
 
     public void Dispose()
     {
-        try { job?.Wait(5000); } catch (AggregateException) { }
-        foreach (var s in standbys) terrain.DropFine(s);
-        standbys.Clear();
-        map.Dispose();
+        try { _job?.Wait(5000); } catch (AggregateException) { }
+        foreach (var s in _standbys) _terrain.DropFine(s);
+        _standbys.Clear();
+        _map.Dispose();
     }
 }

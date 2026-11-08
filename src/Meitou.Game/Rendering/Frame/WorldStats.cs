@@ -42,7 +42,7 @@ static class WorldStats
         var (vramUsed, vramBudget) = context.Device.VideoMemory();
         stats.Add($"  video memory  {vramUsed / 1073741824.0:0.00} of {vramBudget / 1073741824.0:0.0} GB");
         if (gpu.Guard is { Active: true } vramGuard) stats.Add($"  {vramGuard.Status}");
-        stats.Add($"  ram           {(GC.GetGCMemoryInfo().HeapSizeBytes + Meitou.Data.NativeBuffer.LiveBytes) / 1073741824.0:0.00} GB");
+        stats.Add($"  ram           {(GC.GetGCMemoryInfo().HeapSizeBytes + Data.NativeBuffer.LiveBytes) / 1073741824.0:0.00} GB");
 
         stats.Add("");
         stats.Add("World");

@@ -270,8 +270,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public void Alarm(World world, CharacterId listener, CharacterId target)
     {
         var prev = world.Characters.Previous;
-        if (listener.Slot >= slots.Length || slots[listener.Slot].Generation != listener.Generation || target.Slot >= world.Characters.HighWater || prev[target.Slot].Generation != target.Generation) return;
-        ref var heard = ref slots[listener.Slot].Heard;
+        if (listener.Slot >= _slots.Length || _slots[listener.Slot].Generation != listener.Generation || target.Slot >= world.Characters.HighWater || prev[target.Slot].Generation != target.Generation) return;
+        ref var heard = ref _slots[listener.Slot].Heard;
         long until = world.Tick + (long)MathF.Round(AlarmSeconds / world.TickSeconds);
         int k = FindHeard(heard, target.Slot, target.Generation);
         if (k >= 0) heard![k] = heard[k] with { AlarmUntil = until };
@@ -347,33 +347,33 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// <summary>A sneaking target the looker sees this scan, with its spot time.</summary>
     readonly record struct Sighting(int Target, int Generation, float Seconds);
 
-    [ThreadStatic] static List<Sighting>? sightings;
+    [ThreadStatic] static List<Sighting>? s_sightings;
 
-    Slot[] slots = [];
-    int size;
-    readonly List<AggroEntry> log = [];
-    readonly HashSet<int> taken = [];
-    long takenTick = -1;
+    Slot[] _slots = [];
+    int _size;
+    readonly List<AggroEntry> _log = [];
+    readonly HashSet<int> _taken = [];
+    long _takenTick = -1;
     /// <summary>
     /// This tick's targets of the player characters whose look (or a squad mate's) found an enemy, for row 16 Attacking enemies: Hold's goal (<see cref="HoldAttack"/>) and the job
     /// (<see cref="AttackJob"/>).
     /// </summary>
-    readonly Dictionary<int, CharacterId> offers = [];
-    long offersTick = -1;
+    readonly Dictionary<int, CharacterId> _offers = [];
+    long _offersTick = -1;
 
     public void RegisterSources(DecisionSystem decisions)
     {
         decisions.Register(new HoldAttack(this));
-        decisions.RegisterJob(Meitou.Data.Gameplay.Ai.TaskType.ATTACK_ENEMIES, new AttackJob(this));
+        decisions.RegisterJob(Data.Gameplay.Ai.TaskType.AttackEnemies, new AttackJob(this));
     }
 
-    /// <summary>The enemy this tick's look offered the player character for row 16 (<see cref="offers"/>), -1 for none.</summary>
+    /// <summary>The enemy this tick's look offered the player character for row 16 (<see cref="_offers"/>), -1 for none.</summary>
     int Offered(World world, int slot) =>
-        offersTick == world.Tick && offers.TryGetValue(slot, out var id) && world.Characters.TryResolveNext(id, out int t) && world.Characters.Cold(t) is { Medical.Incapacitated: false } ? t : -1;
+        _offersTick == world.Tick && _offers.TryGetValue(slot, out var id) && world.Characters.TryResolveNext(id, out int t) && world.Characters.Cold(t) is { Medical.Incapacitated: false } ? t : -1;
 
     /// <summary>The senses of the character in <paramref name="slot"/> as of its last look (null: none yet). Read after this system's <c>Act</c>, or by a system whose <c>Act</c> runs before it.</summary>
     public SenseBlock? SensesOf(int slot) =>
-        (uint)slot < (uint)slots.Length && slots[slot].Senses is { } b && slots[slot].Generation >= 0 ? b : null;
+        (uint)slot < (uint)_slots.Length && _slots[slot].Senses is { } b && _slots[slot].Generation >= 0 ? b : null;
 
     /// <summary>
     /// The job 16 Attacking enemies (Shift with an attack; it runs with the jobs switch off, docs/game/ai-tasks.md "Perma-jobs") as the decision step's contributor (step 5): its finder is the
@@ -386,7 +386,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         {
             var table = world.Characters;
             var cold = table.Cold(slot)!;
-            if (cold.Running is { Source: TaskSource.Job, Row: Meitou.Data.Gameplay.Ai.TaskType.ATTACK_ENEMIES } run && run.Job == k && run.Runs((CharacterTask)table.Next[slot].Task)) return DecisionCheck.Runs;
+            if (cold.Running is { Source: TaskSource.Job, Row: Data.Gameplay.Ai.TaskType.AttackEnemies } run && run.Job == k && run.Runs((CharacterTask)table.Next[slot].Task)) return DecisionCheck.Runs;
             if (!WantsToAttack(cold)) return DecisionCheck.No("desire 0 (Passive, sneaking or not standing)");
             return owner.Offered(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("no enemy sighted");
         }
@@ -419,7 +419,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             var table = world.Characters;
             var cold = table.Cold(slot)!;
             var task = (CharacterTask)table.Next[slot].Task;
-            if (task == CharacterTask.Attack && cold.Running is { Row: Meitou.Data.Gameplay.Ai.TaskType.ATTACK_ENEMIES, Source: TaskSource.Goal } run && run.Runs(task)) return DecisionCheck.Runs;
+            if (task == CharacterTask.Attack && cold.Running is { Row: Data.Gameplay.Ai.TaskType.AttackEnemies, Source: TaskSource.Goal } run && run.Runs(task)) return DecisionCheck.Runs;
             if (!Orders.Holding(cold)) return DecisionCheck.No("not on Hold");
             if (!HoldsGround(cold)) return DecisionCheck.No("desire 0 (Passive, sneaking or not standing)");
             return owner.Offered(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("no enemy sighted");
@@ -440,13 +440,13 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public AggroSettings Settings { get; } = settings ?? new AggroSettings();
     public FactionRelations Relations { get; } = relations;
     /// <summary>The fights started since the last <see cref="TakeLog"/> (with <see cref="AggroSettings.RecordLog"/>).</summary>
-    public IReadOnlyList<AggroEntry> Log => log;
+    public IReadOnlyList<AggroEntry> Log => _log;
 
     /// <summary>Takes the log (the host, between ticks).</summary>
     public AggroEntry[] TakeLog()
     {
-        AggroEntry[] all = [.. log];
-        log.Clear();
+        AggroEntry[] all = [.. _log];
+        _log.Clear();
         return all;
     }
 
@@ -491,71 +491,71 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     void Sync(CharacterTable table)
     {
         int n = table.HighWater;
-        if (slots.Length < n)
+        if (_slots.Length < n)
         {
-            int old = slots.Length;
-            Array.Resize(ref slots, Math.Max(n, slots.Length * 2));
-            for (int i = old; i < slots.Length; i++) slots[i] = new Slot { Generation = -1, Task = NoTask, ChaseStart = -1 };
+            int old = _slots.Length;
+            Array.Resize(ref _slots, Math.Max(n, _slots.Length * 2));
+            for (int i = old; i < _slots.Length; i++) _slots[i] = new Slot { Generation = -1, Task = NoTask, ChaseStart = -1 };
         }
-        size = Math.Max(size, n);
+        _size = Math.Max(_size, n);
         var next = table.Next;
-        if (present.Length != Relations.Count) { present = new bool[Relations.Count]; hasEnemy = new bool[Relations.Count]; }
-        Array.Clear(present);
-        sneakers.Clear();
-        playerSlots.Clear();
-        fighterSlots.Clear();
+        if (_present.Length != Relations.Count) { _present = new bool[Relations.Count]; _hasEnemy = new bool[Relations.Count]; }
+        Array.Clear(_present);
+        _sneakers.Clear();
+        _playerSlots.Clear();
+        _fighterSlots.Clear();
         for (int i = 0; i < n; i++)
         {
             int generation = next[i].Alive ? next[i].Generation : -1;
-            if (slots[i].Generation != generation) slots[i] = new Slot { Generation = generation, Task = NoTask, ChaseStart = -1 };
+            if (_slots[i].Generation != generation) _slots[i] = new Slot { Generation = generation, Task = NoTask, ChaseStart = -1 };
             if (generation >= 0 && table.Cold(i) is { } pc)
             {
-                if (pc.IsPlayer) playerSlots.Add(i);
-                if (pc.InCombat) fighterSlots.Add(i);
+                if (pc.IsPlayer) _playerSlots.Add(i);
+                if (pc.InCombat) _fighterSlots.Add(i);
             }
             if (generation >= 0 && table.Cold(i) is { Medical: not null } c && Relations.Contains(c.Faction))
             {
-                present[c.Faction] = true;
-                if ((c.Orders & CharacterOrders.Sneak) != 0 && !c.Medical.Incapacitated) sneakers.Add(next[i].Position);
+                _present[c.Faction] = true;
+                if ((c.Orders & CharacterOrders.Sneak) != 0 && !c.Medical.Incapacitated) _sneakers.Add(next[i].Position);
             }
         }
         // Which factions have an enemy among the factions present: a peaceful crowd skips its looks. Worked out again only when the set changes.
-        if (present.AsSpan().SequenceEqual(presentBefore) && Relations.Changes == changesBefore) return;
-        presentBefore = (bool[])present.Clone();
-        changesBefore = Relations.Changes;
-        presentList.Clear();
-        for (int f = 0; f < present.Length; f++) if (present[f]) presentList.Add(f);
-        foreach (int f in presentList)
+        if (_present.AsSpan().SequenceEqual(_presentBefore) && Relations.Changes == _changesBefore) return;
+        _presentBefore = (bool[])_present.Clone();
+        _changesBefore = Relations.Changes;
+        _presentList.Clear();
+        for (int f = 0; f < _present.Length; f++) if (_present[f]) _presentList.Add(f);
+        foreach (int f in _presentList)
         {
-            hasEnemy[f] = false;
-            foreach (int g in presentList)
-                if (AttacksOnSight(Relations, f, g)) { hasEnemy[f] = true; break; }
+            _hasEnemy[f] = false;
+            foreach (int g in _presentList)
+                if (AttacksOnSight(Relations, f, g)) { _hasEnemy[f] = true; break; }
         }
     }
 
     /// <summary>The player's characters this tick (<see cref="Sync"/>; read only during the looks): a player's character always senses the others (<see cref="VisitKin"/>).</summary>
-    readonly List<int> playerSlots = [];
+    readonly List<int> _playerSlots = [];
 
     /// <summary>The characters in a fight this tick (<see cref="Sync"/>; read only during the looks): sensed within reach whatever the caps (<see cref="VisitFighters"/>).</summary>
-    readonly List<int> fighterSlots = [];
+    readonly List<int> _fighterSlots = [];
 
     /// <summary>Where the awake sneaking characters stand this tick (read only during the looks): a looker that picks no fights looks only when one is in its range.</summary>
-    readonly List<Vector3> sneakers = [];
+    readonly List<Vector3> _sneakers = [];
 
     bool SneakerWithin(Vector3 eye, float range)
     {
-        foreach (var p in sneakers) if (Vector3.DistanceSquared(p, eye) <= range * range) return true;
+        foreach (var p in _sneakers) if (Vector3.DistanceSquared(p, eye) <= range * range) return true;
         return false;
     }
 
     /// <summary>An NPC that keeps spot meters without picking fights: awake, not fighting, not held (carried, caged, in bed or asleep), not attacking or treating.</summary>
     static bool Watches(CharacterCold c, byte task) =>
         c is { IsPlayer: false, InCombat: false, IsImprisoned: false, Medical.Incapacitated: false } && c.CarriedBy.IsNone && c.InSomething != Locks.HeldState.Bed
-        && c.Ai is not { Behaviour: Ai.AiBehaviour.Sleep } && task is not ((byte)CharacterTask.Attack or (byte)CharacterTask.Treat);
+        && c.Ai is not { Behaviour: AiBehaviour.Sleep } && task is not ((byte)CharacterTask.Attack or (byte)CharacterTask.Treat);
 
-    bool[] present = [], presentBefore = [], hasEnemy = [];
-    long changesBefore = -1;
-    readonly List<int> presentList = [];
+    bool[] _present = [], _presentBefore = [], _hasEnemy = [];
+    long _changesBefore = -1;
+    readonly List<int> _presentList = [];
 
     // ------------------------------------------------------------------ look
 
@@ -589,9 +589,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         /// <summary>The best target's score (<see cref="Combat.TargetScore"/>).</summary>
         public float BestScore;
         /// <summary>The combat state the score reads (null: hand-built worlds without one, every candidate counts as unfought).</summary>
-        public Combat.CombatSystem? Combat;
+        public CombatSystem? Combat;
         /// <summary>The fights the senses read (threats, who fights whom): <see cref="Combat"/>, else the world's combat system.</summary>
-        public Combat.CombatSystem? Fights;
+        public CombatSystem? Fights;
         /// <summary>The looker: one of the player's, on Hold (and its hold point), crawling, an animal.</summary>
         public bool Player, Hold, HoldPost, Prone, Animal;
         public Vector3 HoldPoint;
@@ -665,15 +665,15 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         int every = world.Every(Settings.ScanEveryTicks);
         for (int i = part.Start; i < part.End; i++)
         {
-            if (!prev[i].Alive || prev[i].Dormant || i >= slots.Length || !world.Turn(i, every)) continue;   // its turn (the far cadence, World.Turn)
-            if (slots[i].Heard is { } heard) slots[i].Heard = PruneHeard(heard, world);
+            if (!prev[i].Alive || prev[i].Dormant || i >= _slots.Length || !world.Turn(i, every)) continue;   // its turn (the far cadence, World.Turn)
+            if (_slots[i].Heard is { } heard) _slots[i].Heard = PruneHeard(heard, world);
             if (table.Cold(i) is not { Medical: not null } cold) continue;
             byte task = next[i].Task;
             var war = cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { War.IsSet: true } assaulting ? assaulting.War : WarTargets.None;
             // One that could pick a fight now: free, able, of a faction with an enemy about (or at war, or with a TEMP_ENEMY tag of its squad).
             bool looks = Settings.AttackOnSight && !Busy(cold, task)
                 && cold is { InCombat: false, Fleeing: false, IsImprisoned: false, SlaveState: not 1, Fighter.CanAttack: true, Medical.Incapacitated: false }
-                && Relations.Contains(cold.Faction) && (hasEnemy[cold.Faction] || war.IsSet || (Memory?.AnyTempEnemy(cold.SquadId) ?? false));
+                && Relations.Contains(cold.Faction) && (_hasEnemy[cold.Faction] || war.IsSet || (Memory?.AnyTempEnemy(cold.SquadId) ?? false));
             // The player's characters attack on sight with the job or Hold's goal (offered to the decision step); an NPC decides by its own goals in the chooser.
             bool targets = looks && cold.IsPlayer && (HuntsEnemies(cold) || HoldsGround(cold));
             var scan = NewScan(world, i, cold, war, MathF.Max(0, RangeOf(cold, Settings.SightRange)), effects);
@@ -683,12 +683,12 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             // Every awake NPC keeps spot meters on the sneakers it sees, not only those it would fight (the original's per-looker SpottingPeopleMgr): they feed the crime
             // witnesses, the stealth knock-out and the sneaker's arrows.
             bool picks = targets || looks && cold.Ai is not null;
-            scan.Meters = sneakers.Count > 0 && (picks || Watches(cold, task) && SneakerWithin(prev[i].Position, scan.Range));
+            scan.Meters = _sneakers.Count > 0 && (picks || Watches(cold, task) && SneakerWithin(prev[i].Position, scan.Range));
             scan.Sightings!.Clear();
             scan.FullTags = (world.Tick / every + i) % FarLooks == 0;
             scan.Far = picks || cold.InCombat || scan.FullTags;
             Look(ref scan);
-            slots[i].Heard = scan.Heard;
+            _slots[i].Heard = scan.Heard;
             if (cold.Medical.Incapacitated) continue;   // lying: senses only, no fight to pick
             if (targets)
             {
@@ -697,9 +697,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             }
             // An NPC with a mind that senses a new enemy thinks again, and its squad mates with it (the sighting is shared): a replan trigger (engine stand-in), whatever its goals; a
             // fighter only in its own fight (in another, the AI weighs nothing but the run).
-            else if (scan.NewEnemy >= 0 && cold.Ai is not null && (cold.InCombat ? Ai.AiSystem.Holds(next[i], cold) : looks))
+            else if (scan.NewEnemy >= 0 && cold.Ai is not null && (cold.InCombat ? AiSystem.Holds(next[i], cold) : looks))
                 effects.Emit(i, scan.NewEnemy, SightEffect, Vector3.Distance(prev[i].Position, prev[scan.NewEnemy].Position));
-            if (scan.Meters && (scan.Spots is not null || scan.Sightings!.Count > 0)) slots[i].Spots = AdvanceSpots(scan.Spots, scan.Sightings!, every * world.TickSeconds, table);
+            if (scan.Meters && (scan.Spots is not null || scan.Sightings!.Count > 0)) _slots[i].Spots = AdvanceSpots(scan.Spots, scan.Sightings!, every * world.TickSeconds, table);
         }
     }
 
@@ -720,17 +720,48 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         var prev = world.Characters.Previous;
         return new Scan
         {
-            Table = world.Characters, Relations = Relations, World = world, Memory = Memory, Self = i, Faction = cold.Faction, Squad = cold.SquadId,
-            Eye = prev[i].Position, Cold = cold, Range = world.Sight.MaxRange(i, outdoor), Outdoor = outdoor, Sight = world.Sight, Best = -1, BestD2 = float.MaxValue, NewEnemy = -1,
-            BestScore = float.NegativeInfinity, Combat = Combat, Fights = Combat ?? world.SystemOf<Combat.CombatSystem>(), Player = cold.IsPlayer, Hold = Orders.Holding(cold) && cold.Fighter?.Crossbow is null,
-            HoldPost = Orders.Holding(cold) && !Orders.RangedExempt(cold), Prone = cold.Medical?.Prone == true, Animal = cold.Fighter?.IsAnimal == true, HoldPoint = Orders.HoldPointOf(cold, prev[i].Position),
-            Seed = world.Seed, Key = Rng.Key(new CharacterId(i, prev[i].Generation)), Tick = (ulong)world.Tick,
-            Finder = finder, War = war, Towns = Towns, PlayerSlots = playerSlots, FighterSlots = fighterSlots,
-            Employer = EmployerOf(world, cold, out bool allies, out bool defending), EmployerAllies = allies, EmployerTags = allies || defending,
+            Table = world.Characters,
+            Relations = Relations,
+            World = world,
+            Memory = Memory,
+            Self = i,
+            Faction = cold.Faction,
+            Squad = cold.SquadId,
+            Eye = prev[i].Position,
+            Cold = cold,
+            Range = world.Sight.MaxRange(i, outdoor),
+            Outdoor = outdoor,
+            Sight = world.Sight,
+            Best = -1,
+            BestD2 = float.MaxValue,
+            NewEnemy = -1,
+            BestScore = float.NegativeInfinity,
+            Combat = Combat,
+            Fights = Combat ?? world.SystemOf<CombatSystem>(),
+            Player = cold.IsPlayer,
+            Hold = Orders.Holding(cold) && cold.Fighter?.Crossbow is null,
+            HoldPost = Orders.Holding(cold) && !Orders.RangedExempt(cold),
+            Prone = cold.Medical?.Prone == true,
+            Animal = cold.Fighter?.IsAnimal == true,
+            HoldPoint = Orders.HoldPointOf(cold, prev[i].Position),
+            Seed = world.Seed,
+            Key = Rng.Key(new CharacterId(i, prev[i].Generation)),
+            Tick = (ulong)world.Tick,
+            Finder = finder,
+            War = war,
+            Towns = Towns,
+            PlayerSlots = _playerSlots,
+            FighterSlots = _fighterSlots,
+            Employer = EmployerOf(world, cold, out bool allies, out bool defending),
+            EmployerAllies = allies,
+            EmployerTags = allies || defending,
             Home = finder == FoeFinder.Territory ? Territory(cold) : default,
-            Spots = slots[i].Spots, Heard = slots[i].Heard, Sightings = effects is null ? null : sightings ??= [], Effects = effects,
-            Block = keepSenses ? slots[i].Senses ??= new SenseBlock() : slots[i].Senses ?? new SenseBlock(),
-            FightTarget = cold.InCombat && (Combat ?? world.SystemOf<Combat.CombatSystem>()) is { } combat ? combat.StateOf(new CharacterId(i, prev[i].Generation)).TargetSlot : -1,
+            Spots = _slots[i].Spots,
+            Heard = _slots[i].Heard,
+            Sightings = effects is null ? null : s_sightings ??= [],
+            Effects = effects,
+            Block = keepSenses ? _slots[i].Senses ??= new SenseBlock() : _slots[i].Senses ?? new SenseBlock(),
+            FightTarget = cold.InCombat && (Combat ?? world.SystemOf<CombatSystem>()) is { } combat ? combat.StateOf(new CharacterId(i, prev[i].Generation)).TargetSlot : -1,
         };
     }
 
@@ -742,13 +773,13 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     static void Look(ref Scan s)
     {
         var b = s.Block;
-        b.threats.Clear();
+        b.ThreatList.Clear();
         b.Enemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
         b.ThreatToMe = b.ThreatToAllies = 0;
         b.Faded = false;
         var table = s.Table;
         var prev = table.Previous;
-        var list = b.entries;
+        var list = b.EntryList;
         int w = 0;
         for (int k = 0; k < list.Count; k++)
         {
@@ -779,13 +810,13 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     static void Fade(ref Scan s)
     {
         var b = s.Block;
-        b.threats.Clear();
+        b.ThreatList.Clear();
         b.Enemies = b.Neutrals = b.Allies = b.AlliesDown = 0;
         b.ThreatToMe = b.ThreatToAllies = 0;
         b.Faded = true;
         var table = s.Table;
         var prev = table.Previous;
-        var list = b.entries;
+        var list = b.EntryList;
         int w = 0;
         for (int k = 0; k < list.Count; k++)
         {
@@ -807,20 +838,20 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         var table = world.Characters;
         var prev = table.Previous;
-        if (looker == target || (uint)looker >= (uint)slots.Length || (uint)target >= (uint)table.HighWater || slots[looker].Generation < 0 || !prev[looker].Alive || !prev[target].Alive
+        if (looker == target || (uint)looker >= (uint)_slots.Length || (uint)target >= (uint)table.HighWater || _slots[looker].Generation < 0 || !prev[looker].Alive || !prev[target].Alive
             || table.Cold(looker) is not { Medical: not null } cold || table.Cold(target) is not { } tc) return;
-        var b = slots[looker].Senses ??= new SenseBlock();
+        var b = _slots[looker].Senses ??= new SenseBlock();
         int gen = prev[target].Generation, k = b.IndexOf(target, gen);
         if (k >= 0)
         {
-            var e = b.entries[k];
+            var e = b.EntryList[k];
             e.Seen = true;
-            b.entries[k] = e;
+            b.EntryList[k] = e;
             var id = new CharacterId(target, gen);
-            if (!b.threats.Contains(id) && tc.Faction != cold.Faction && tc.InCombat && tc.Medical is { Incapacitated: false } && (Combat ?? world.SystemOf<Combat.CombatSystem>()) is { } fights
+            if (!b.ThreatList.Contains(id) && tc.Faction != cold.Faction && tc.InCombat && tc.Medical is { Incapacitated: false } && (Combat ?? world.SystemOf<CombatSystem>()) is { } fights
                 && fights.TargetOf(target, gen) == (looker, prev[looker].Generation))
             {
-                b.threats.Add(id);
+                b.ThreatList.Add(id);
                 b.ThreatToMe += 1;
             }
             return;
@@ -861,7 +892,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     }
 
     /// <summary>Whether the NPC in slot <paramref name="looker"/> has spotted the sneaker <paramref name="target"/> (its spot meter is full; serial phases).</summary>
-    public bool Spotted(int looker, CharacterId target) => looker < slots.Length && SpotOf(slots[looker].Spots, target.Slot, target.Generation) > 1;
+    public bool Spotted(int looker, CharacterId target) => looker < _slots.Length && SpotOf(_slots[looker].Spots, target.Slot, target.Generation) > 1;
 
     /// <summary>
     /// Whether the sneaker <paramref name="target"/> is unseen (Character +0xe8 = 1, docs/game/perception.md "Spotting a sneaker"): not fighting, and no looker's spot meter on it is
@@ -870,8 +901,8 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     public bool Unseen(CharacterTable table, CharacterId target)
     {
         if (table.Cold(target.Slot) is { InCombat: true }) return false;
-        for (int k = 0; k < size && k < slots.Length; k++)
-            if (SpotOf(slots[k].Spots, target.Slot, target.Generation) > 0) return false;
+        for (int k = 0; k < _size && k < _slots.Length; k++)
+            if (SpotOf(_slots[k].Spots, target.Slot, target.Generation) > 0) return false;
         return true;
     }
 
@@ -916,7 +947,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         float d2 = Vector2.DistanceSquared(new Vector2(other.Position.X, other.Position.Z), new Vector2(s.Eye.X, s.Eye.Z));
         if (s.FarPass ? d2 <= GatherNear * GatherNear || s.Gathered >= GatherCap || d2 > s.Range * s.Range && d2 > NoiseFar * NoiseFar
             : d2 > GatherNear * GatherNear || s.Gathered >= GatherCap + GatherExtra) return;
-        var list = s.Block.entries;
+        var list = s.Block.EntryList;
         int at = s.Block.LowerBound(slot);
         if (at < list.Count && list[at].Target == slot) return;
         s.Gathered++;
@@ -960,7 +991,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         var prev = s.Table.Previous;
         if (slot == s.Self || (uint)slot >= (uint)prev.Length || !prev[slot].Alive || prev[slot].Generation != generation) return false;
-        var list = s.Block.entries;
+        var list = s.Block.EntryList;
         int at = s.Block.LowerBound(slot);
         if (at < list.Count && list[at].Target == slot) return false;
         if (s.Table.Cold(slot) is not { } c || !SenseOne(ref s, slot, c, out bool seen, out bool heard)) return false;
@@ -975,7 +1006,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// <summary>Puts a new entry at <paramref name="at"/>; with the block full the entry sensed longest ago (before <paramref name="tick"/>) makes room, else the new one is not kept.</summary>
     static bool Insert(SenseBlock b, int at, in SenseEntry e, long tick, bool kin = false)
     {
-        var list = b.entries;
+        var list = b.EntryList;
         if (list.Count >= SenseBlock.Cap)
         {
             int oldest = -1;
@@ -1054,7 +1085,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             var (ft, fg) = combat.TargetOf(slot, other.Generation);
             if (ft == s.Self && fg == prev[s.Self].Generation)
             {
-                b.threats.Add(new CharacterId(slot, other.Generation));
+                b.ThreatList.Add(new CharacterId(slot, other.Generation));
                 b.ThreatToMe += 1;
             }
             else if (ft >= 0 && ft < s.Table.HighWater && prev[ft].Generation == fg && s.Table.Cold(ft) is { } fc && fc.Faction == s.Faction) b.ThreatToAllies += 1;
@@ -1086,7 +1117,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (s.Cold is not { } me || (e.Tags & (SenseTag.Ally | SenseTag.Ko)) != 0 || c.Fighter?.IsAnimal == true || me.SlaveState == 1 || me.IsImprisoned) return false;
         if (!(me.InCombat || c.InCombat || c.Pending is not null)) return false;
         if (me.NpcClass != FundamentalType.Bandit && c.NpcClass != FundamentalType.Bandit) return false;
-        return s.Towns is { } towns && Ai.AiSystem.TownAt(towns, s.World, at).IsNone;
+        return s.Towns is { } towns && AiSystem.TownAt(towns, s.World, at).IsNone;
     }
 
     /// <summary>
@@ -1199,7 +1230,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// </summary>
     static void Pick(ref Scan s)
     {
-        var list = s.Block.entries;
+        var list = s.Block.EntryList;
         for (int k = 0; k < list.Count; k++)
             if (list[k].Now && s.Table.Cold(list[k].Target) is { } c) Candidate(ref s, list[k].Target, c);
     }
@@ -1216,13 +1247,13 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         var table = world.Characters;
         if (finder == FoeFinder.MasterEnemies) return FindMasterFoe(world, slot, pending);
-        if (!Settings.AttackOnSight || (uint)slot >= (uint)slots.Length || slots[slot].Senses is not { } own
+        if (!Settings.AttackOnSight || (uint)slot >= (uint)_slots.Length || _slots[slot].Senses is not { } own
             || table.Cold(slot) is not { Medical: not null, SlaveState: not 1, Fighter.CanAttack: true } cold || !Relations.Contains(cold.Faction)) return CharacterId.None;
         var war = cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { War.IsSet: true } assaulting ? assaulting.War : WarTargets.None;
         if (finder == FoeFinder.TroubleMakers) return FindTroubleMaker(world, slot, cold, own, war, pending);
         bool neutrals = finder == FoeFinder.EnemiesAndNeutrals;
         // As the look's own gate: no enemy faction about, no neutrals wanted, no war and no TEMP_ENEMY tag of its squad leave nothing to find.
-        if (!(cold.Faction < hasEnemy.Length && hasEnemy[cold.Faction]) && !neutrals && !war.IsSet && !(Memory?.AnyTempEnemy(cold.SquadId) ?? false)) return CharacterId.None;
+        if (!(cold.Faction < _hasEnemy.Length && _hasEnemy[cold.Faction]) && !neutrals && !war.IsSet && !(Memory?.AnyTempEnemy(cold.SquadId) ?? false)) return CharacterId.None;
         float range = MathF.Max(0, RangeOf(cold, Settings.SightRange));
         var scan = NewScan(world, slot, cold, war, range, null, keepSenses: false, finder);
         scan.Pending = pending;
@@ -1235,9 +1266,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             var wanted = SenseTag.Enemy | (neutrals ? SenseTag.Neutral : SenseTag.None);
             foreach (var m in squad.Members)
             {
-                if (m.Slot == slot || (uint)m.Slot >= (uint)slots.Length || slots[m.Slot].Generation != m.Generation || slots[m.Slot].Senses is not { } mate
+                if (m.Slot == slot || (uint)m.Slot >= (uint)_slots.Length || _slots[m.Slot].Generation != m.Generation || _slots[m.Slot].Senses is not { } mate
                     || mate.Enemies + (neutrals ? mate.Neutrals : 0) == 0) continue;
-                foreach (var e in mate.entries)
+                foreach (var e in mate.EntryList)
                 {
                     int t = e.Target;
                     if (!e.Now || t == slot || (e.Tags & wanted) == 0 || (e.Tags & SenseTag.Ko) != 0 || (uint)t >= (uint)table.HighWater || !prev[t].Alive || prev[t].Generation != e.Generation
@@ -1259,11 +1290,11 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         var table = world.Characters;
         var prev = table.Previous;
-        if (slot >= slots.Length || slots[slot].Senses is not { } own || table.Cold(slot) is not { Medical: not null, SlaveState: 1, SlaveMaster: >= 0, Fighter.CanAttack: true } cold
+        if (slot >= _slots.Length || _slots[slot].Senses is not { } own || table.Cold(slot) is not { Medical: not null, SlaveState: 1, SlaveMaster: >= 0, Fighter.CanAttack: true } cold
             || world.Squads.Find(cold.SlaveMaster) is not { } master || !Relations.Contains(master.Faction)) return CharacterId.None;
         var scan = NewScan(world, slot, cold, WarTargets.None, MathF.Max(0, RangeOf(cold, Settings.SightRange)), null, keepSenses: false, FoeFinder.MasterEnemies);
         scan.Pending = pending;
-        foreach (var e in own.entries)
+        foreach (var e in own.EntryList)
         {
             int t = e.Target;
             if ((e.Tags & (SenseTag.Ko | SenseTag.Imprisoned)) != 0 || (uint)t >= (uint)table.HighWater || t == slot || !prev[t].Alive || prev[t].Generation != e.Generation
@@ -1297,13 +1328,13 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (Towns is not { } towns) return CharacterId.None;
         var table = world.Characters;
         var prev = table.Previous;
-        var town = Ai.AiSystem.TownAt(towns, world, prev[slot].Position);
+        var town = AiSystem.TownAt(towns, world, prev[slot].Position);
         if (town.IsNone) return CharacterId.None;
         int owner = town.Site >= 0 && town.Site < towns.SiteFactions.Count ? towns.SiteFactions[town.Site] : -1;
-        var fights = Combat ?? world.SystemOf<Combat.CombatSystem>();
+        var fights = Combat ?? world.SystemOf<CombatSystem>();
         var scan = NewScan(world, slot, cold, war, MathF.Max(0, RangeOf(cold, Settings.SightRange)), null, keepSenses: false, FoeFinder.TroubleMakers);
         scan.Pending = pending;
-        foreach (var e in own.entries)
+        foreach (var e in own.EntryList)
         {
             int t = e.Target;
             bool enemy = (e.Tags & SenseTag.Enemy) != 0;
@@ -1311,16 +1342,16 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
                 || table.Cold(t) is not { Medical.Incapacitated: false, IsImprisoned: false } c) continue;
             var id = new CharacterId(t, e.Generation);
             bool aggressor = Memory is { } memory && cold.SquadId >= 0 && memory.HasShort(world, cold.SquadId, id, Dialogue.MemoryTag.Aggressor);
-            bool intends = Ai.TaskAggression.OfGoal(c) > 0;
+            bool intends = TaskAggression.OfGoal(c) > 0;
             if (!enemy)
             {
                 if (c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat or FundamentalType.Slaver) continue;
                 if (c.NpcClass == FundamentalType.Military && (c.Faction == owner || world.Squads.Find(c.SquadId)?.Ai?.Town == town.Site && town.Site >= 0)) continue;
-                if (!(intends || aggressor || Ai.TaskAggression.OfTask(c) > 0 && (c.NpcClass == FundamentalType.Bandit || c.Fighter?.IsAnimal == true))) continue;
+                if (!(intends || aggressor || TaskAggression.OfTask(c) > 0 && (c.NpcClass == FundamentalType.Bandit || c.Fighter?.IsAnimal == true))) continue;
                 if (!AttacksProtected(world, fights, cold, c, t, e.Generation)) continue;
             }
             else if (!intends && !aggressor) continue;
-            if (Ai.AiSystem.TownAt(towns, world, prev[t].Position) != town || PursuitSystem.PathImpossible(cold, id, world.Tick)) continue;
+            if (AiSystem.TownAt(towns, world, prev[t].Position) != town || PursuitSystem.PathImpossible(cold, id, world.Tick)) continue;
             float d2 = Vector3.DistanceSquared(prev[t].Position, scan.Eye);
             float score = Score(ref scan, t, c, d2) ?? float.NegativeInfinity;
             if (!(score > scan.BestScore)) continue;
@@ -1337,7 +1368,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// is in combat mode, or holds position with the victim within <see cref="HoldDefenceRange"/> (<c>FUN_1405c92d0</c>: the attacker's own mode and target, not the victim's); and the victim is the
     /// looker's ally (its own faction or an allied one) or an <see cref="Innocent"/>.
     /// </summary>
-    bool AttacksProtected(World world, Combat.CombatSystem? fights, CharacterCold looker, CharacterCold attacker, int slot, int generation)
+    bool AttacksProtected(World world, CombatSystem? fights, CharacterCold looker, CharacterCold attacker, int slot, int generation)
     {
         var table = world.Characters;
         if (fights is null || attacker.Medical is { Incapacitated: true } or { PlayingDead: true } || fights.TargetOf(slot, generation) is not { Slot: >= 0 } v || (uint)v.Slot >= (uint)table.HighWater
@@ -1435,9 +1466,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     static float? Score(ref Scan s, int slot, CharacterCold c, float d2)
     {
         ref readonly var other = ref s.Table.Previous[slot];
-        var fight = s.Combat?.StateOf(new CharacterId(slot, other.Generation)) ?? Meitou.Simulation.Combat.CombatSlot.Fresh(other.Generation);
+        var fight = s.Combat?.StateOf(new CharacterId(slot, other.Generation)) ?? CombatSlot.Fresh(other.Generation);
         if (s.HoldPost && !Orders.HoldPost(s.Eye, s.HoldPoint, other.Position, other.Velocity, other.Yaw, c.Medical!.Crawling || fight.AttackTech >= 0, c.InCombat)) return null;
-        var candidate = new Meitou.Simulation.Combat.TargetCandidate
+        var candidate = new TargetCandidate
         {
             Staggered = fight.StumbleClip >= 0 && (int)s.Tick < fight.StunUntil,
             Attackers = (s.Combat?.AttackerCount(s.World, slot) ?? 0) + (s.Pending is { } pending ? pending.GetValueOrDefault(slot) : 0),
@@ -1451,7 +1482,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             GettingUp = CharacterFacts.GettingUp(c, (long)s.Tick),
         };
         // No player range clamp: only the in-fight chooser sets the clamp flag of FUN_14059e300 (param_7), every goal finder and the look pass 0 (Verified), so the attack-on-sight look reaches beyond 400.
-        return Meitou.Simulation.Combat.TargetScore.Score(candidate, false, s.Hold, s.Prone, s.Animal, s.Cold?.Manoeuvre ?? ManoeuvreMode.RoamFar);
+        return TargetScore.Score(candidate, false, s.Hold, s.Prone, s.Animal, s.Cold?.Manoeuvre ?? ManoeuvreMode.RoamFar);
     }
 
     /// <summary>
@@ -1462,7 +1493,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         relations.Contains(theirs) && !relations.IsAlly(mine, theirs) && !relations.IsHostile(mine, theirs) && !relations.Coexists(mine, theirs);
 
     /// <summary>A character the AI put to bed or sat down (<see cref="Ai.AiBehaviour.Sleep"/>, <see cref="Ai.AiBehaviour.Sit"/>): unlike one resting by order, it can be roused into a fight.</summary>
-    static bool AiSleeper(CharacterCold? cold) => cold?.Ai is { Behaviour: Ai.AiBehaviour.Sleep or Ai.AiBehaviour.Sit };
+    static bool AiSleeper(CharacterCold? cold) => cold?.Ai is { Behaviour: AiBehaviour.Sleep or AiBehaviour.Sit };
 
     /// <summary>
     /// The passing-by assault's update adds to its target set every character in its members' sensed lists with the enemy tag and not the KO one that is in a town, alive, awake and at
@@ -1470,7 +1501,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// </summary>
     static bool AssaultSensed(ref Scan s, in SenseEntry e, CharacterCold c, Vector3 at) =>
         (e.Tags & (SenseTag.Enemy | SenseTag.Ko)) == SenseTag.Enemy && c.Medical is { Dead: false, Incapacitated: false } && CharacterFacts.PostureZero(c)
-        && s.Towns is { } towns && !Ai.AiSystem.TownAt(towns, s.World, at).IsNone;
+        && s.Towns is { } towns && !AiSystem.TownAt(towns, s.World, at).IsNone;
 
     /// <summary>
     /// Whether the package sensing hooks run for a sensed character (<c>FUN_140859680</c>, <b>Verified</b>): when the listener or the target is on screen (<c>+0x1a9</c>, <see cref="MedicalClock.OnScreen"/>) or the
@@ -1495,7 +1526,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (c.Faction == war.Faction) return true;
         if (!war.Everyone || c.Fighter?.IsAnimal == true || !s.Relations.Contains(c.Faction) || s.Relations.Factions[c.Faction] is { NotReal: true } or { FundamentalType: FundamentalType.Bandit }) return false;
         if (s.Towns is not { } towns) return true;
-        var town = Ai.AiSystem.TownAt(towns, s.World, at);
+        var town = AiSystem.TownAt(towns, s.World, at);
         return town.IsNone || town == war.Town;
     }
 
@@ -1541,7 +1572,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
         if (e.Kind == AssaultTargetEffect)
         {
-            if (world.Characters.Cold(e.Source) is { SquadId: >= 0 } member && world.Squads.Find(member.SquadId)?.Ai is { CurrentClass: Ai.PackageClass.PassingAssault } board)
+            if (world.Characters.Cold(e.Source) is { SquadId: >= 0 } member && world.Squads.Find(member.SquadId)?.Ai is { CurrentClass: PackageClass.PassingAssault } board)
                 board.AssaultTargets.Add(world.Characters.IdOf(e.Target));
             return;
         }
@@ -1552,7 +1583,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             return;
         }
         if (e.Kind != SightEffect) return;
-        if (takenTick != world.Tick) { taken.Clear(); takenTick = world.Tick; }
+        if (_takenTick != world.Tick) { _taken.Clear(); _takenTick = world.Tick; }
         var table = world.Characters;
         var next = table.Next;
         int i = e.Source, t = e.Target;
@@ -1567,15 +1598,15 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         }
         // A player character takes this fight through row 16 only, Hold's goal (priority 3) or its job: it and its free mates whose own look would take the target are offered it, and the
         // decision step weighs it against their orders, goals and jobs.
-        if (table.Cold(i) is not { IsPlayer: true } || !Free(table, i, taken)) return;
+        if (table.Cold(i) is not { IsPlayer: true } || !Free(table, i, _taken)) return;
         var fighters = new List<CharacterId> { table.IdOf(i) };
-        taken.Add(i);
+        _taken.Add(i);
         JoinMates(world, table, i, t, target, fighters);
         var targetId = table.IdOf(t);
-        if (offersTick != world.Tick) { offers.Clear(); offersTick = world.Tick; }
+        if (_offersTick != world.Tick) { _offers.Clear(); _offersTick = world.Tick; }
         foreach (var f in fighters)
         {
-            offers.TryAdd(f.Slot, targetId);
+            _offers.TryAdd(f.Slot, targetId);
             DecisionSystem.Request(table.Cold(f.Slot)!);
         }
     }
@@ -1590,10 +1621,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     {
         var table = world.Characters;
         if (table.Cold(target) is not { Stats: not null, Medical: { } medical } cold) return;
-        float amount = Bodies.XpService.HearingAmount(enemy, InListenersHome(world, listener, target, cold) || cold.SlaveState == 1, heard);
+        float amount = XpService.HearingAmount(enemy, InListenersHome(world, listener, target, cold) || cold.SlaveState == 1, heard);
         if (medical.Dead || medical.Incapacitated || !cold.CarriedBy.IsNone || cold.InSomething != Locks.HeldState.None) amount = 0;
         cold.HearingXp += amount * cold.StealthFactor;
-        cold.StealthFactor *= Bodies.XpService.HearingFactorDecay;
+        cold.StealthFactor *= XpService.HearingFactorDecay;
     }
 
     /// <summary>
@@ -1641,9 +1672,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
                 if (!cold.InCombat) mate.Replan = true;
                 continue;
             }
-            if (fighters is null || !cold.IsPlayer || !Free(table, s, taken) || !Takes(world, s, cold, target, targetCold)) continue;
+            if (fighters is null || !cold.IsPlayer || !Free(table, s, _taken) || !Takes(world, s, cold, target, targetCold)) continue;
             fighters.Add(m);
-            taken.Add(s);
+            _taken.Add(s);
         }
     }
 
@@ -1659,7 +1690,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         Started++;
         if (voice) world.Sounds?.Enqueue(new SoundEvent(SoundKind.Alert, id, targetId, table.Next[target].Position));
         if (Settings.RecordLog)
-            log.Add(new AggroEntry(world.Tick, id, targetId, table.Cold(slot)!.Faction, table.Cold(target)!.Faction, Vector3.Distance(table.Next[slot].Position, table.Next[target].Position)));
+            _log.Add(new AggroEntry(world.Tick, id, targetId, table.Cold(slot)!.Faction, table.Cold(target)!.Faction, Vector3.Distance(table.Next[slot].Position, table.Next[target].Position)));
     }
 
     /// <summary>
@@ -1680,7 +1711,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         if (taken.Contains(slot) || !table.Next[slot].Alive) return false;
         byte task = table.Next[slot].Task;
         if (Busy(table.Cold(slot), task)) return false;
-        return table.Cold(slot) is { InCombat: false, Fleeing: false, IsImprisoned: false, Fighter.CanAttack: true, Medical.Incapacitated: false, Gunning: null, Ai: null or { Behaviour: not Ai.AiBehaviour.Turret } } cold
+        return table.Cold(slot) is { InCombat: false, Fleeing: false, IsImprisoned: false, Fighter.CanAttack: true, Medical.Incapacitated: false, Gunning: null, Ai: null or { Behaviour: not AiBehaviour.Turret } } cold
             // a carrier fights like anyone (docs/game/carry-loot.md "A carrier in a fight"); a turret guard keeps to its turret (task 146: only a melee attacker takes it off)
             && (!cold.IsPlayer || HuntsEnemies(cold) || HoldsGround(cold));
     }
@@ -1707,7 +1738,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// Whether one of the player's characters looks for enemies like an NPC: it has the job 16 "Attacking enemies" and the row's desire (<see cref="WantsToAttack"/>). Whether its
     /// sighting is attacked is the decision step's (<see cref="AttackJob"/>: its orders, goals and higher jobs first).
     /// </summary>
-    static bool HuntsEnemies(CharacterCold cold) => WantsToAttack(cold) && Production.PermaJobs.IndexOf(cold, Meitou.Data.Gameplay.Ai.TaskType.ATTACK_ENEMIES) >= 0;
+    static bool HuntsEnemies(CharacterCold cold) => WantsToAttack(cold) && Production.PermaJobs.IndexOf(cold, Data.Gameplay.Ai.TaskType.AttackEnemies) >= 0;
 
     // ------------------------------------------------------------------ chase give-up and stand down
 
@@ -1731,7 +1762,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             var cold = table.Cold(i)!;
             // The player's characters never give up a chase (the original's gate: the chaser's faction is not the player's); after a fight they are decided again (the decision step).
             if (DecisionSystem.Decides(cold)) continue;
-            ref var s = ref slots[i];
+            ref var s = ref _slots[i];
             if (n.Task == (byte)CharacterTask.Attack)
             {
                 s.Tracked = true;
@@ -1811,10 +1842,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
                     if (Relations.AtWar(a, b)) { hasher.Add(a); hasher.Add(b); }
             }
         }
-        hasher.Add(size);
-        for (int i = 0; i < size; i++)
+        hasher.Add(_size);
+        for (int i = 0; i < _size; i++)
         {
-            ref readonly var s = ref slots[i];
+            ref readonly var s = ref _slots[i];
             hasher.Add(s.Generation);
             hasher.Add(s.Tracked);
             hasher.Add(s.Task);

@@ -37,22 +37,22 @@ public class ConstructionTests
     {
         FcsRecord Item(string id, string name)
         {
-            var r = Rec(id, FcsRecordType.ITEM, name);
+            var r = Rec(id, FcsRecordType.Item, name);
             r.Floats["weight kg"] = 1;
             return r;
         }
-        var hut = Rec(Hut, FcsRecordType.BUILDING, "Test Hut");
+        var hut = Rec(Hut, FcsRecordType.Building, "Test Hut");
         hut.References["construction"] = [new FcsReference(Plank, 3, 0, 0), new FcsReference(Iron, 2, 0, 0)];
         hut.Floats["build speed mult"] = 2;
-        var shed = Rec(Shed, FcsRecordType.BUILDING, "Test Shed");
+        var shed = Rec(Shed, FcsRecordType.Building, "Test Shed");
         shed.Ints["build materials"] = 4;
-        var research = Rec(Research, FcsRecordType.RESEARCH, "Test Research");
-        var outpost = Rec(Outpost, FcsRecordType.BUILDING, "Test Camp Hut");
+        var research = Rec(Research, FcsRecordType.Research, "Test Research");
+        var outpost = Rec(Outpost, FcsRecordType.Building, "Test Camp Hut");
         outpost.Ints["build materials"] = 2;
         outpost.Bools["creates player town"] = true;
         FcsRecord Wall(string id, string name, int linkType, float length, int materials)
         {
-            var r = Rec(id, FcsRecordType.BUILDING, name);
+            var r = Rec(id, FcsRecordType.Building, name);
             r.Bools["links together"] = true;
             r.Ints["link type"] = linkType;
             r.Floats["link length"] = length;
@@ -73,7 +73,7 @@ public class ConstructionTests
         // A storage chain: its machine's inventory is where an upgrade takes materials from.
         FcsRecord Store(string id, string name, int materials, int size)
         {
-            var r = Rec(id, FcsRecordType.BUILDING, name);
+            var r = Rec(id, FcsRecordType.Building, name);
             r.Ints["build materials"] = materials;
             r.Bools["has inventory"] = true;
             (r.Ints["storage size width"], r.Ints["storage size height"]) = (size, size);
@@ -228,7 +228,7 @@ public class ConstructionTests
     [Fact]
     public void A_creates_player_town_building_makes_an_outpost_that_round_trips_through_the_save()
     {
-        const string PlayerFactionId = "204-gamedata.base";
+        const string playerFactionId = "204-gamedata.base";
         var campAt = ShedAt + new Vector3(3000, 0, 0);
         using var rig = new Rig();
         rig.Say(new PlaceBuildings([new PlannedBuilding(Shed, ShedAt, Quaternion.Identity)]) { Tick = 0 });
@@ -241,9 +241,9 @@ public class ConstructionTests
         Assert.All(rig.World.Buildings.All, s => Assert.Equal(1, s.Town));
 
         var builder = new SaveBuilder(1);
-        builder.AddFaction(PlayerFactionId, "Nameless", true, 1000, []);
+        builder.AddFaction(playerFactionId, "Nameless", true, 1000, []);
         builder.AddEmptyWorldState();
-        BuildingSave.Write(builder.Game, rig.World, PlayerFactionId, 5);
+        BuildingSave.Write(builder.Game, rig.World, playerFactionId, 5);
         string dir = Path.Combine(Path.GetTempPath(), "meitou-outpost-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -252,16 +252,16 @@ public class ConstructionTests
             var entry = Assert.Single(save.TownInstanceList!.Instances);
             Assert.Equal(PlayerTown.Template, entry.Target);
             var state = Assert.Single(save.Towns).Record;
-            Assert.Equal((entry.Id + "-S5e", "Town state Your Outpost", entry.Id, PlayerFactionId), (state.StringId, state.Name, state.Strings["instance"], state.Strings["faction"]));
+            Assert.Equal((entry.Id + "-S5e", "Town state Your Outpost", entry.Id, playerFactionId), (state.StringId, state.Name, state.Strings["instance"], state.Strings["faction"]));
 
             using var back = new Rig();
-            Assert.Equal(2, BuildingSave.Read(save, back.World, back.Db, PlayerFactionId, Rig.PlayerFaction));
+            Assert.Equal(2, BuildingSave.Read(save, back.World, back.Db, playerFactionId, Rig.PlayerFaction));
             var read = Assert.Single(back.World.Buildings.Towns);
             Assert.Equal((town.Name, town.Position, entry.Id, Hand.Read(state, "hand")), (read.Name, read.Position, read.SaveInstance, read.SaveHandle!.Value));
             Assert.All(back.World.Buildings.All, s => Assert.Equal(read.Number, s.Town));
 
             var again = new SaveBuilder(save.Clone(), 1);
-            BuildingSave.Write(again.Game, back.World, PlayerFactionId, 7);
+            BuildingSave.Write(again.Game, back.World, playerFactionId, 7);
             Assert.Equal(entry.Id, Assert.Single(again.Game.TownInstanceList!.Instances).Id);
             Assert.Equal(Hand.Read(state, "hand"), Hand.Read(Assert.Single(again.Game.Towns).Record, "hand"));
         }
@@ -280,7 +280,7 @@ public class ConstructionTests
     [Fact]
     public void A_short_at_a_wall_end_is_built_by_its_wall_and_reattaches_after_a_save_while_a_gate_takes_no_connector()
     {
-        const string PlayerFactionId = "204-gamedata.base";
+        const string playerFactionId = "204-gamedata.base";
         var wallAt = new Vector3(2000, 300, 3000);
         var gateAt = new Vector3(2600, 300, 3000);
         using var rig = new Rig();
@@ -304,15 +304,15 @@ public class ConstructionTests
         Assert.Equal(0, rig.Carried(builder, BuildingBuildData.BuildingMaterialsItem));
 
         var save = new SaveBuilder(1);
-        save.AddFaction(PlayerFactionId, "Nameless", true, 1000, []);
+        save.AddFaction(playerFactionId, "Nameless", true, 1000, []);
         save.AddEmptyWorldState();
-        BuildingSave.Write(save.Game, rig.World, PlayerFactionId, 5);
+        BuildingSave.Write(save.Game, rig.World, playerFactionId, 5);
         string dir = Path.Combine(Path.GetTempPath(), "meitou-wall-" + Guid.NewGuid().ToString("N"));
         try
         {
             save.Game.Write(dir);
             using var back = new Rig();
-            Assert.Equal(4, BuildingSave.Read(SaveGame.Load(dir), back.World, back.Db, PlayerFactionId, Rig.PlayerFaction));
+            Assert.Equal(4, BuildingSave.Read(SaveGame.Load(dir), back.World, back.Db, playerFactionId, Rig.PlayerFaction));
             var read = back.World.Buildings.Find(piece.Id)!;
             Assert.Equal(wall.Id, read.WallParent);
             Assert.True(read.Complete);
@@ -352,7 +352,7 @@ public class ConstructionTests
         rig.World.RunTick();
         Assert.Equal((GateMk1, 55f, true, 55f, false), (gate.Record, gate.Target, gate.Complete, gate.Progress, gate.Upgrading));
 
-        const string Materials = BuildingBuildData.BuildingMaterialsItem;
+        const string materials = BuildingBuildData.BuildingMaterialsItem;
         rig.Say(new PlaceBuildings([new PlannedBuilding(StoreMk1, ShedAt, Quaternion.Identity)]) { Tick = rig.World.Tick });
         rig.World.RunTick();
         var store = rig.World.Buildings.All.Single(s => s.Record == StoreMk1);
@@ -360,7 +360,7 @@ public class ConstructionTests
         (store.Progress, store.Complete) = (store.Target, true);
         rig.World.RunTick();
         var stock = rig.World.Machines.Find(store.Id)!.Storage!;
-        for (int i = 0; i < 5; i++) Assert.True(stock.Add(rig.Items.Create(Materials, 1)!));
+        for (int i = 0; i < 5; i++) Assert.True(stock.Add(rig.Items.Create(materials, 1)!));
         Assert.True(stock.Add(rig.Items.Create(Plank, 1)!));
 
         rig.Say(new UpgradeSite(store.Id) { Tick = rig.World.Tick });

@@ -64,40 +64,40 @@ public readonly record struct SlottedPackage(int Slot, AiPackage Package);
 /// </summary>
 public sealed class AiDatabase(GameDatabase db)
 {
-    readonly Dictionary<string, AiTask?> tasks = [];
-    readonly Dictionary<string, AiPackage?> packages = [];
-    readonly Dictionary<string, IReadOnlyList<SlottedPackage>> templates = [];
-    readonly Dictionary<string, IReadOnlyList<AiGoal>> races = [];
-    readonly object gate = new();
-    int problems;
+    readonly Dictionary<string, AiTask?> _tasks = [];
+    readonly Dictionary<string, AiPackage?> _packages = [];
+    readonly Dictionary<string, IReadOnlyList<SlottedPackage>> _templates = [];
+    readonly Dictionary<string, IReadOnlyList<AiGoal>> _races = [];
+    readonly object _gate = new();
+    int _problems;
 
-    public int Problems { get { lock (gate) return problems; } }
+    public int Problems { get { lock (_gate) return _problems; } }
 
     public AiTask? Task(string id)
     {
-        lock (gate) return TaskLocked(id);
+        lock (_gate) return TaskLocked(id);
     }
 
     AiTask? TaskLocked(string id)
     {
-        if (tasks.TryGetValue(id, out var known)) return known;
+        if (_tasks.TryGetValue(id, out var known)) return known;
         var r = db.Find(id);
-        var task = r is { Type: FcsRecordType.AI_TASK } ? AiTask.From(r) : null;
-        tasks[id] = task;
+        var task = r is { Type: FcsRecordType.AiTask } ? AiTask.From(r) : null;
+        _tasks[id] = task;
         return task;
     }
 
     public AiPackage? Package(string id)
     {
-        lock (gate) return PackageLocked(id);
+        lock (_gate) return PackageLocked(id);
     }
 
     AiPackage? PackageLocked(string id)
     {
-        if (packages.TryGetValue(id, out var known)) return known;
+        if (_packages.TryGetValue(id, out var known)) return known;
         var r = db.Find(id);
         AiPackage? package = null;
-        if (r is { Type: FcsRecordType.AI_PACKAGE })
+        if (r is { Type: FcsRecordType.AiPackage })
         {
             var roles = new List<AiGoal>[5];
             for (int i = 0; i < roles.Length; i++) roles[i] = [];
@@ -114,7 +114,7 @@ public sealed class AiDatabase(GameDatabase db)
                 Roles = [.. roles],
             };
         }
-        packages[id] = package;
+        _packages[id] = package;
         return package;
     }
 
@@ -128,16 +128,16 @@ public sealed class AiDatabase(GameDatabase db)
     {
         if (r.GetReferences("contract end talk passive") is [var own, ..]) return own.TargetStringId;
         foreach (var parent in r.GetReferences("inherits from"))
-            if (depth < 8 && db.Find(parent.TargetStringId) is { Type: FcsRecordType.AI_PACKAGE } p && EndTalk(p, depth + 1) is { } inherited) return inherited;
+            if (depth < 8 && db.Find(parent.TargetStringId) is { Type: FcsRecordType.AiPackage } p && EndTalk(p, depth + 1) is { } inherited) return inherited;
         return null;
     }
 
     void Load(GameRecord r, List<AiGoal>[] roles, HashSet<string> visiting)
     {
-        if (!visiting.Add(r.StringId)) { problems++; return; }
+        if (!visiting.Add(r.StringId)) { _problems++; return; }
         // visiting is the chain being loaded, not every record seen: two parents may share an ancestor (warrior guild), whose second load adds nothing.
         foreach (var parent in r.GetReferences("inherits from"))
-            if (db.Find(parent.TargetStringId) is { Type: FcsRecordType.AI_PACKAGE } p) Load(p, roles, visiting);
+            if (db.Find(parent.TargetStringId) is { Type: FcsRecordType.AiPackage } p) Load(p, roles, visiting);
         visiting.Remove(r.StringId);
         var leader = r.GetReferences("Leader AI Goals");
         var squad = r.GetReferences("Squad AI Goals");
@@ -161,7 +161,7 @@ public sealed class AiDatabase(GameDatabase db)
     {
         foreach (var e in entries)
         {
-            if (TaskLocked(e.TargetStringId) is not { } task) { problems++; continue; }
+            if (TaskLocked(e.TargetStringId) is not { } task) { _problems++; continue; }
             if (list.Exists(g => g.Task.Type == task.Type && SameHand(g.Task.Target, task.Target))) continue;
             // val2 is the weight x 100, 0 meaning 1.
             float weight = e.Values.Value2 == 0 ? 1 : e.Values.Value2 * 0.01f;
@@ -172,16 +172,16 @@ public sealed class AiDatabase(GameDatabase db)
     /// <summary>A template's <c>AI packages</c> with their slots (v0), in the listed order; links that are not AI_PACKAGE records are skipped.</summary>
     public IReadOnlyList<SlottedPackage> Packages(SquadTemplate template)
     {
-        lock (gate)
+        lock (_gate)
         {
-            if (templates.TryGetValue(template.Id, out var known)) return known;
+            if (_templates.TryGetValue(template.Id, out var known)) return known;
             var list = new List<SlottedPackage>();
             foreach (var link in template.AiPackages)
             {
                 if (PackageLocked(link.Id) is { } package) list.Add(new SlottedPackage(Math.Max(0, link.V0), package));
-                else problems++;
+                else _problems++;
             }
-            templates[template.Id] = list;
+            _templates[template.Id] = list;
             return list;
         }
     }
@@ -192,17 +192,17 @@ public sealed class AiDatabase(GameDatabase db)
     /// </summary>
     public IReadOnlyList<AiGoal> RaceGoals(string raceId)
     {
-        lock (gate)
+        lock (_gate)
         {
-            if (races.TryGetValue(raceId, out var known)) return known;
+            if (_races.TryGetValue(raceId, out var known)) return known;
             var list = new List<AiGoal>();
             if (db.Find(raceId) is { } race)
                 foreach (var e in race.GetReferences("AI Goals"))
                 {
                     if (TaskLocked(e.TargetStringId) is { } task) list.Add(new AiGoal(task with { Target = TaskTargetType.Specific }, 0, 100, e.Values.Value1 * 0.01f));
-                    else problems++;
+                    else _problems++;
                 }
-            races[raceId] = list;
+            _races[raceId] = list;
             return list;
         }
     }

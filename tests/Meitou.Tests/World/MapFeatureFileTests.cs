@@ -28,6 +28,6 @@ public class MapFeatureFileTests
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var found = all.Where(a => db.Find(a.Feature.StringId) is not null).ToList();
         Assert.Equal(1810, found.Count);
-        Assert.All(found, a => Assert.Equal(FcsRecordType.MAP_FEATURES, db.Find(a.Feature.StringId)!.Type));
+        Assert.All(found, a => Assert.Equal(FcsRecordType.MapFeatures, db.Find(a.Feature.StringId)!.Type));
     }
 }

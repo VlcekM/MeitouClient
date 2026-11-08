@@ -159,7 +159,7 @@ public sealed class RawHeightTile
 
     public ushort this[int column, int row] => Samples[row * Size + column];
 
-    public static RawHeightTile ReadFile(string path) => Read(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static RawHeightTile ReadFile(string path) => Read(File.ReadAllBytes(GameFiles.Resolve(path)));
 
     public static RawHeightTile Read(ReadOnlySpan<byte> data)
     {

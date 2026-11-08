@@ -26,28 +26,28 @@ internal sealed class PreparedCollision(PreparedShape[] shapes, Meitou.Data.Worl
 /// <summary>Loads and triangulates collision files by record path, once each; safe from several threads.</summary>
 internal sealed class CollisionCache(GameInstall install)
 {
-    readonly ConcurrentDictionary<string, PreparedCollision?> files = new(StringComparer.OrdinalIgnoreCase);
-    int missing;
+    readonly ConcurrentDictionary<string, PreparedCollision?> _files = new(StringComparer.OrdinalIgnoreCase);
+    int _missing;
 
     /// <summary>Number of lookups that found no file (or an unreadable one).</summary>
-    public int Missing => missing;
+    public int Missing => _missing;
 
     /// <summary>The prepared file, or null when the record's path is empty, the file is not in the install, or it cannot be read.</summary>
     public PreparedCollision? Get(string recordPath)
     {
         if (string.IsNullOrWhiteSpace(recordPath)) return null;
-        return files.GetOrAdd(recordPath, Load);
+        return _files.GetOrAdd(recordPath, Load);
     }
 
     PreparedCollision? Load(string recordPath)
     {
         var path = CollisionPaths.Resolve(install, recordPath);
-        if (path is null) { Interlocked.Increment(ref missing); return null; }
+        if (path is null) { Interlocked.Increment(ref _missing); return null; }
         CollisionFile file;
         try { file = CollisionFile.ReadFile(path); }
         catch (Exception e) when (e is InvalidDataException or IOException or System.Xml.XmlException or FormatException)
         {
-            Interlocked.Increment(ref missing);
+            Interlocked.Increment(ref _missing);
             return null;
         }
         var shapes = new List<PreparedShape>();
@@ -63,7 +63,7 @@ internal sealed class CollisionCache(GameInstall install)
             if (s.Kind == CollisionShapeKind.TriangleMesh) FixClosedWinding(world, indices);
             shapes.Add(new PreparedShape(s.Kind, world, indices, convex));
         }
-        return new PreparedCollision([.. shapes], Meitou.Data.World.DoorFrame.Of(file));
+        return new PreparedCollision([.. shapes], Data.World.DoorFrame.Of(file));
     }
 
     /// <summary>What <see cref="FixClosedWinding"/> found.</summary>

@@ -17,30 +17,30 @@ sealed class BuildingSelection(PlayerInterface player)
     internal sealed record SelectedBuilding(string Name, string? Type, string? Owner, string? Town, string? SiteId, string Instance, Vector3 Position, Vector2[]? Hull,
         bool PublicDay = false, bool PublicNight = false, string? Record = null, bool Destroyed = false);
 
-    internal SelectedBuilding? selectedBuilding;
+    internal SelectedBuilding? Selected;
 
     /// <summary>A left click on the ground ends the building's selection (Advanced settings "Click away deselects"); false: it stays, as in the game.</summary>
     public bool DeselectBuildings { get; set; } = true;
 
     /// <summary>The selected building's instance (a level building's placement key, a site's id), null when none: the building the interior editor shows.</summary>
-    public string? SelectedBuildingKey => selectedBuilding?.Instance;
+    public string? SelectedBuildingKey => Selected?.Instance;
 
     /// <summary>Makes <paramref name="building"/> the selected one (null: none) and tells the simulation, which then publishes its doors.</summary>
     internal void SetBuilding(SelectedBuilding? building)
     {
-        if (ReferenceEquals(selectedBuilding, building)) return;
-        selectedBuilding = building;
-        player.production.closedMachine = null;   // clicking a building asks for its window again, also when the player closed it before (the mark only held until another was selected)
+        if (ReferenceEquals(Selected, building)) return;
+        Selected = building;
+        player.Production.ClosedMachine = null;   // clicking a building asks for its window again, also when the player closed it before (the mark only held until another was selected)
         // Selecting calls the building's select sound (FUN_1405504a0: Buildings_Click = its `select sound`, none for 0); a click on the same building picks it anew and sounds again.
-        if (building?.Record is { } record) player.interfaceSounds.Sound("Building_Click", building: record);
-        player.Say(new InspectBuildingCommand(building?.Instance) { Tick = player.session.World.Tick });
+        if (building?.Record is { } record) player.InterfaceSounds.Sound("Building_Click", building: record);
+        player.Say(new InspectBuildingCommand(building?.Instance) { Tick = player.Session.World.Tick });
     }
 
     /// <summary>The selected building while it still exists (a site that was cancelled or dismantled drops the selection).</summary>
     internal SelectedBuilding? BuildingFocus()
     {
-        if (selectedBuilding is { SiteId: { } id } && !Meitou.Simulation.Production.ProductionSystem.IsNatural(id) && !player.session.CurrentSnapshot.Buildings.Any(s => s.Id == id)) SetBuilding(null);
-        return selectedBuilding;
+        if (Selected is { SiteId: { } id } && !Simulation.Production.ProductionSystem.IsNatural(id) && !player.Session.CurrentSnapshot.Buildings.Any(s => s.Id == id)) SetBuilding(null);
+        return Selected;
     }
 
     /// <summary>
@@ -50,15 +50,15 @@ sealed class BuildingSelection(PlayerInterface player)
     public List<(string Key, float Floor, Vector4 Colour)> OutlinedBuildings(bool hover)
     {
         var list = new List<(string Key, float Floor, Vector4 Colour)>(2);
-        if (selectedBuilding is { } b) list.Add((b.Instance, b.Position.Y, PointerView.WhiteOutline));
-        if (hover && player.pointerPanel.HoverBuilding is { } h && h.Key != selectedBuilding?.Instance) list.Add(h);
+        if (Selected is { } b) list.Add((b.Instance, b.Position.Y, PointerView.WhiteOutline));
+        if (hover && player.PointerPanel.HoverBuilding is { } h && h.Key != Selected?.Instance) list.Add(h);
         return list;
     }
 
     /// <summary>A site of the player's as a selected building (what a left click on it selects).</summary>
-    internal SelectedBuilding SiteBuilding(Meitou.Simulation.Construction.BuildingSnapshot site) =>
-        new(player.build.SiteName(site), null, player.FactionName?.Invoke(player.session.World.Player.Faction), null, site.Id, site.Id, site.Position,
-            (player.build.buildHost?.Placement.Footprint(site.Record) ?? player.build.buildHost?.Placement.Plot(site.Record)) is { } f ? f.Place(site.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, Meitou.Game.Building.PlacementCheck.YawOf(site.Rotation))) : null,
+    internal SelectedBuilding SiteBuilding(Simulation.Construction.BuildingSnapshot site) =>
+        new(player.Build.SiteName(site), null, player.FactionName?.Invoke(player.Session.World.Player.Faction), null, site.Id, site.Id, site.Position,
+            (player.Build.Services?.Placement.Footprint(site.Record) ?? player.Build.Services?.Placement.Plot(site.Record)) is { } f ? f.Place(site.Position, Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation))) : null,
             Record: site.Record);
 
     /// <summary>The nearest building under the pixel, a site of the player's or a level-data one, when the ray meets it before the ground.</summary>
@@ -69,35 +69,35 @@ sealed class BuildingSelection(PlayerInterface player)
     {
         if (player.Ray(pixel) is not { } ray) return null;
         // A visible bed takes the click over the house around it, as a plain building is no right-click candidate (PickAt); a nearer object site or rock still wins.
-        if (player.furniture.PickBedAt(pixel) is { } bedHit && !(player.build.PickSiteAt(pixel) is { } before && before.Site.Id + "@bed0" != bedHit.Bed.Id && player.build.SiteIsObject(before.Site) && before.T < bedHit.T)
-            && !(player.furniture.PickRockAt(pixel) is { } stone && stone.T < bedHit.T))
+        if (player.Furniture.PickBedAt(pixel) is { } bedHit && !(player.Build.PickSiteAt(pixel) is { } before && before.Site.Id + "@bed0" != bedHit.Bed.Id && player.Build.SiteIsObject(before.Site) && before.T < bedHit.T)
+            && !(player.Furniture.PickRockAt(pixel) is { } stone && stone.T < bedHit.T))
         {
             var bed = bedHit.Bed;
-            if (player.session.CurrentSnapshot.Buildings.FirstOrDefault(s => bed.Id == s.Id + "@bed0") is { } bedSite)
+            if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => bed.Id == s.Id + "@bed0") is { } bedSite)
                 return (SiteBuilding(bedSite), bedHit.T);
-            var spot = new SelectedBuilding(player.build.buildHost?.ItemName(bed.Record) ?? bed.Record, null, player.FactionName?.Invoke(bed.Owner), null,
+            var spot = new SelectedBuilding(player.Build.Services?.ItemName(bed.Record) ?? bed.Record, null, player.FactionName?.Invoke(bed.Owner), null,
                 null, bed.Id, bed.Position, null, Record: bed.Record);
             return (spot, bedHit.T);
         }
-        float limit = player.picking.GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
+        float limit = player.Picking.GroundHit(ray.Origin, ray.Direction) is { } groundPoint ? Vector3.Distance(ray.Origin, groundPoint) : 6000;
         float bestT = limit;
         SelectedBuilding? best = null;
-        var site = player.build.PickSiteAt(pixel);
+        var site = player.Build.PickSiteAt(pixel);
         if (site is { } nearest && nearest.T < bestT)
         {
             bestT = nearest.T;
             best = SiteBuilding(nearest.Site);
         }
-        Meitou.Simulation.Navigation.PlacedBuilding? level = null;
-        if (player.build.buildHost is { } host)
+        Simulation.Navigation.PlacedBuilding? level = null;
+        if (player.Build.Services is { } host)
             foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, limit))
             {
                 var b = candidate.Placement;
-                if (player.levelEditorPanel.levelHost?.IsCleared(b.Key) == true) continue;   // the level editor cleared it
-                float y = b.WorldY ?? player.ground(b.Position.X, b.Position.Z) + b.Position.Y;
+                if (player.LevelEditorPanel.Services?.IsCleared(b.Key) == true) continue;   // the level editor cleared it
+                float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
                 var hull = candidate.Footprint.Place(b.Position, b.Rotation);
                 float? hit = candidate.Plot ? WorldPicking.PlotT(ray, hull, limit < 6000 ? limit : null)
-                    : player.picking.BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax, b.BuildingId, b.Position, y, b.Rotation);
+                    : player.Picking.BuildingRayT(ray, hull, candidate.Footprint.YMin, candidate.Footprint.YMax, b.BuildingId, b.Position, y, b.Rotation);
                 if (hit is not { } t || t >= bestT) continue;
                 bestT = t;
                 level = candidate;
@@ -109,7 +109,7 @@ sealed class BuildingSelection(PlayerInterface player)
             bestT = inner.T;
             best = SiteBuilding(inner.Site);
         }
-        if (player.furniture.PickRockAt(pixel) is { } rock && rock.T < bestT) (best, bestT) = (player.furniture.RockBuilding(rock.Rock), rock.T);
+        if (player.Furniture.PickRockAt(pixel) is { } rock && rock.T < bestT) (best, bestT) = (player.Furniture.RockBuilding(rock.Rock), rock.T);
         return best is { } found ? (found, bestT) : null;
     }
 
@@ -117,8 +117,8 @@ sealed class BuildingSelection(PlayerInterface player)
     /// Whether a site met behind a level building's hit stands inside that building and the view shows it there (furniture in a bought house): the level building is tested against its
     /// whole collision, roof included, while the original passes a building's hidden roof and upper floors in the interior view (docs/game/ui-input.md "Building picking and selection").
     /// </summary>
-    bool SiteShownInside((Vector3 Origin, Vector3 Direction) ray, Meitou.Simulation.Navigation.PlacedBuilding level, (Meitou.Simulation.Construction.BuildingSnapshot Site, float T) site) =>
-        !level.Plot && !player.Hidden(ray, site.T) && player.furniture.AboveViewedFloor?.Invoke(site.Site.Position) != true
+    bool SiteShownInside((Vector3 Origin, Vector3 Direction) ray, Simulation.Navigation.PlacedBuilding level, (Simulation.Construction.BuildingSnapshot Site, float T) site) =>
+        !level.Plot && !player.Hidden(ray, site.T) && player.Furniture.AboveViewedFloor?.Invoke(site.Site.Position) != true
         && level.Footprint.Gap(level.Placement.Position, level.Placement.Rotation, new Vector2(site.Site.Position.X, site.Site.Position.Z)) == 0;
 
     /// <summary>The colour of the [PAUSED] caption (the exe's static <c>#777777</c>).</summary>
@@ -140,15 +140,15 @@ sealed class BuildingSelection(PlayerInterface player)
         string status = "Normal";
         bool bad = false;
         bool own = focus.SiteId is not null;
-        bool playerSite = focus.SiteId is { } siteId && !Meitou.Simulation.Production.ProductionSystem.IsNatural(siteId);
-        var site = player.session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == focus.Instance);
+        bool playerSite = focus.SiteId is { } siteId && !Simulation.Production.ProductionSystem.IsNatural(siteId);
+        var site = player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == focus.Instance);
         // A town building the player owns (bought, or the player's in the save) gets the buttons of a building of the player's (the original's slot 79: the owner is the player's faction).
-        var detail = player.session.CurrentSnapshot.InspectedBuilding is { } d && d.Instance == focus.Instance ? d : null;
+        var detail = player.Session.CurrentSnapshot.InspectedBuilding is { } d && d.Instance == focus.Instance ? d : null;
         bool mine = playerSite || detail is { Owned: true };
         if (focus.Type is { Length: > 0 } type) state.Add(new("Type:", type));
-        var inspected = player.session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance ? ir : (Meitou.Simulation.Production.RichnessView?)null;
+        var inspected = player.Session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance ? ir : (Simulation.Production.RichnessView?)null;
         if ((focus.Town ?? site?.TownName ?? detail?.Bed?.Town ?? inspected?.TownName) is { Length: > 0 } town) state.Add(new("Town:", town));
-        if (own && player.session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance) AddHeightLines(turret, state);
+        if (own && player.Session.CurrentSnapshot.InspectedTurret is { } turret && turret.Instance == focus.Instance) AddHeightLines(turret, state);
         if (detail?.Bed is { } bed)
         {
             if (bed.Cost != 0)
@@ -164,7 +164,7 @@ sealed class BuildingSelection(PlayerInterface player)
                 : new("", Loc.Tr("PAUSE CONSTRUCTION"), ValueColour: PlayerInterface.MainColour, Action: "meitou:building-pause"));
         }
         // Slot 114 asks slot 97 (broken, +0x3b6) before completion: a machine being dismantled reads Broken, not Under construction. A generator's own word still comes after.
-        var unfinished = site is { Complete: false } && own ? player.production.Machine(focus.SiteId) : null;
+        var unfinished = site is { Complete: false } && own ? player.Production.Machine(focus.SiteId) : null;
         if (site is { Destroyed: true } || unfinished is { Broken: true }) { status = "Broken"; bad = true; }
         else if (site is { Complete: false })
         {
@@ -187,10 +187,10 @@ sealed class BuildingSelection(PlayerInterface player)
                 stats.Add(new(mine ? "" : "Security:", $"{Loc.Tr(locked ? "Locked" : "Unlocked")} ({Loc.Tr("lvl {1,num}", door.Level)})", PlayerInterface.MainColour, locked ? PlayerInterface.BadBrightColour : PlayerInterface.GoodColour,
                     door.Locked ? "The door is locked and will keep out intruders." : locked ? "The door will lock when it closes." : "The door is unlocked.", mine ? "meitou:building-locks" : null));
             }
-            var rich = player.session.CurrentSnapshot.InspectedRichness is { } r && r.Instance == focus.Instance ? r : (Meitou.Simulation.Production.RichnessView?)null;
+            var rich = player.Session.CurrentSnapshot.InspectedRichness is { } r && r.Instance == focus.Instance ? r : (Simulation.Production.RichnessView?)null;
             if (rich is { } richness) ProductionWindows.AddRichnessLine(richness, stats);
-            if (detail?.Bed is null && own && player.production.Machine(focus.SiteId) is { } machine) player.production.AddMachineLines(machine, stats, extended, ref status, ref bad, rich,
-                player.session.CurrentSnapshot.InspectedTurret is { } tp && tp.Instance == focus.Instance ? tp : null, mine);
+            if (detail?.Bed is null && own && player.Production.Machine(focus.SiteId) is { } machine) player.Production.AddMachineLines(machine, stats, extended, ref status, ref bad, rich,
+                player.Session.CurrentSnapshot.InspectedTurret is { } tp && tp.Instance == focus.Instance ? tp : null, mine);
             else if (rich is { Efficiency: { } e } unmined)
             {
                 // A rock nobody has mined yet has no machine; the original shows its lines all the same.
@@ -208,7 +208,7 @@ sealed class BuildingSelection(PlayerInterface player)
         }
         else if (!mine && (focus.PublicDay || focus.PublicNight))
         {
-            bool open = player.session.Clock.IsDaytime ? focus.PublicDay : focus.PublicNight;
+            bool open = player.Session.Clock.IsDaytime ? focus.PublicDay : focus.PublicNight;
             stats.Add(new("Open to public:", open ? "Public" : "Private", PlayerInterface.MainColour, open ? PlayerInterface.GoodColour : PlayerInterface.BadColour));
         }
         if (detail?.SalePrice is { } price)
@@ -216,27 +216,27 @@ sealed class BuildingSelection(PlayerInterface player)
         // A rock (slot 113): the player's faction once a player character has worked it, else its owner nofac's name ("No Faction"; its town NO_TOWN is explored, not secret).
         string? owner = focus.Owner;
         if (own && !playerSite)
-            owner = inspected is { Owner: >= 0 and var by } ? player.FactionName?.Invoke(by) : player.RecordName?.Invoke(Meitou.Simulation.Factions.SquadManagement.DismissFallbackFaction);
-        return (new(detail?.Bed?.Name ?? focus.Name, mine ? player.FactionName?.Invoke(player.session.World.Player.Faction) ?? "" : owner ?? "", PlayerInterface.TitleColour, PlayerInterface.TitleColour), [.. state], [.. stats], status, bad, [.. extended]);
+            owner = inspected is { Owner: >= 0 and var by } ? player.FactionName?.Invoke(by) : player.RecordName?.Invoke(Simulation.Factions.SquadManagement.DismissFallbackFaction);
+        return (new(detail?.Bed?.Name ?? focus.Name, mine ? player.FactionName?.Invoke(player.Session.World.Player.Faction) ?? "" : owner ?? "", PlayerInterface.TitleColour, PlayerInterface.TitleColour), [.. state], [.. stats], status, bad, [.. extended]);
     }
 
     /// <summary>The upgrade chain of a BUILDING record and its build data (the panel's [UPGRADE] / [DOWNGRADE] and their tooltips); the host sets them.</summary>
     public Func<string, string?>? UpgradeOf { get; set; }
     public Func<string, string?>? DowngradeOf { get; set; }
-    public Func<string, Meitou.Data.Gameplay.Construction.BuildingBuildData?>? BuildingData { get; set; }
-    readonly Dictionary<string, Meitou.Data.Gameplay.Construction.BuildingBuildData?> buildingData = new(StringComparer.Ordinal);
+    public Func<string, Data.Gameplay.Construction.BuildingBuildData?>? BuildingData { get; set; }
+    readonly Dictionary<string, Data.Gameplay.Construction.BuildingBuildData?> _buildingData = new(StringComparer.Ordinal);
 
-    Meitou.Data.Gameplay.Construction.BuildingBuildData? DataOf(string record) =>
-        buildingData.TryGetValue(record, out var data) ? data : buildingData[record] = BuildingData?.Invoke(record);
+    Data.Gameplay.Construction.BuildingBuildData? DataOf(string record) =>
+        _buildingData.TryGetValue(record, out var data) ? data : _buildingData[record] = BuildingData?.Invoke(record);
 
     /// <summary>
     /// The upgrade lines of a site of the player's (Building slot 116, docs/game/ui-screens.md "Selected building"): <c>[UPGRADE]</c> in Good when its record upgrades to a BUILDING research
     /// has unlocked, <c>[DOWNGRADE]</c> in Main while it is unfinished and some BUILDING upgrades to it. Each button's tooltip names the record it becomes; the upgrade's also lists the
     /// materials still owed (the new record's, less what is delivered of each item) and the power output's change. Engine scope as the simulation's: no walls.
     /// </summary>
-    void AddUpgradeLines(Meitou.Simulation.Construction.BuildingSnapshot site, List<PlayerInterface.HudLine> state)
+    void AddUpgradeLines(Simulation.Construction.BuildingSnapshot site, List<PlayerInterface.HudLine> state)
     {
-        var snapshot = player.session.CurrentSnapshot;
+        var snapshot = player.Session.CurrentSnapshot;
         if (site.WallParent is not null || DataOf(site.Record) is not ({ LinksTogether: false } or { IsWallGate: true })) return;
         if (UpgradeOf?.Invoke(site.Record) is { } up && snapshot.UnlockedBuildings.Contains(up) && DataOf(up) is { } higher)
         {
@@ -248,7 +248,7 @@ sealed class BuildingSelection(PlayerInterface player)
                 float delivered = Math.Min(had.GetValueOrDefault(cost.Item), cost.Required);
                 had[cost.Item] = had.GetValueOrDefault(cost.Item) - delivered;
                 if (cost.Required - delivered > 0)
-                    tip.Append(CultureInfo.InvariantCulture, $"\n      {player.build.buildHost?.ItemName(cost.Item) ?? cost.Item} +{(cost.Required - delivered).ToString("0.##", CultureInfo.InvariantCulture)}");
+                    tip.Append(CultureInfo.InvariantCulture, $"\n      {player.Build.Services?.ItemName(cost.Item) ?? cost.Item} +{(cost.Required - delivered).ToString("0.##", CultureInfo.InvariantCulture)}");
             }
             if (PowerOutput?.Invoke(up) - PowerOutput?.Invoke(site.Record) is { } power and not 0) tip.Append(CultureInfo.InvariantCulture, $"\n{Loc.Tr("Power")} {power}");
             state.Add(new("", $"[{Loc.Tr("Upgrade").ToUpper(CultureInfo.CurrentCulture)}]", ValueColour: PlayerInterface.GoodColour, Tooltip: tip.ToString(), Action: "meitou:building-upgrade"));
@@ -266,7 +266,7 @@ sealed class BuildingSelection(PlayerInterface player)
     /// at."; <c>Height bonus:</c> "+" int((h - 1) x 100)% with the bonus text naming the height in the Title tag (the penalty text only for a negative h, which h never is). The original
     /// leaves out Height for some buildings (slots 0x268 / 0x270 / 0x228, not decoded) and reads the ground under the building before any aim; Meitou shows it once the turret has aimed.
     /// </summary>
-    static void AddHeightLines(Meitou.Simulation.Combat.TurretPanelView turret, List<PlayerInterface.HudLine> state)
+    static void AddHeightLines(Simulation.Combat.TurretPanelView turret, List<PlayerInterface.HudLine> state)
     {
         string metres = Loc.Tr("{1,num} m", turret.HeightMetres ?? 0);
         if (turret.HeightMetres is not null) state.Add(new("Height:", metres, Tooltip: Loc.Tr("The turrets height above the last target we aimed at.")));
@@ -280,7 +280,7 @@ sealed class BuildingSelection(PlayerInterface player)
     /// The gun's <c>Loaded</c> bar (<c>GunClass</c> slot 14 <c>FUN_14030ce20</c> section 4, <b>Observed</b>): "{loaded}/{shots}", filled (loaded + 1 - the reload still to go) / shots; its rows
     /// Base Reload Speed (the reload times, 2 decimals), User Skill and, with a gunner, User Reload Speed from the gunner's Crossbows level (stat 0x23, as the base class reads it).
     /// </summary>
-    static PlayerInterface.MedicalRow LoadedRow(Meitou.Simulation.Combat.TurretPanelView g)
+    static PlayerInterface.MedicalRow LoadedRow(Simulation.Combat.TurretPanelView g)
     {
         static string F2(float v) => v.ToString("F2", CultureInfo.InvariantCulture);
         float fill = g.Shots > 0 ? Math.Clamp((g.Loaded + 1 - g.ReloadLeft) / g.Shots, 0, 1) : 0;
@@ -288,15 +288,15 @@ sealed class BuildingSelection(PlayerInterface player)
             Loc.Tr("User Skill:") + " " + ((int)(g.Crossbows ?? 0)).ToString(CultureInfo.InvariantCulture) };
         if (g.Crossbows is { } level)
         {
-            float time = Meitou.Simulation.Combat.RangedFormulas.ReloadTime(level * 0.01f, g.ReloadMin, g.ReloadMax);
+            float time = Simulation.Combat.RangedFormulas.ReloadTime(level * 0.01f, g.ReloadMin, g.ReloadMax);
             tip.Add(Loc.Tr("User Reload Speed:") + " " + Loc.Tr((int)time == 1 ? "{1} second" : "{1} seconds", F2(time)));
         }
         return new(Loc.Tr("Loaded"), 0, fill, 0, $"{g.Loaded}/{g.Shots}", "", false, string.Join("\n", tip));
     }
 
     /// <summary>The selected building's first door as the simulation publishes it, or null.</summary>
-    internal Meitou.Simulation.Locks.DoorDetail? FirstDoor(SelectedBuilding focus) =>
-        player.session.CurrentSnapshot.InspectedBuilding is { } detail && detail.Instance == focus.Instance && detail.Doors.Count > 0 ? detail.Doors[0] : null;
+    internal Simulation.Locks.DoorDetail? FirstDoor(SelectedBuilding focus) =>
+        player.Session.CurrentSnapshot.InspectedBuilding is { } detail && detail.Instance == focus.Instance && detail.Doors.Count > 0 ? detail.Doors[0] : null;
 
     /// <summary>
     /// The medical panel's rows of a selected building (its section 4, docs/game/ui-screens.md "Selected building"): the first door's <c>Door Condition</c>, then <c>Building Condition</c>
@@ -310,7 +310,7 @@ sealed class BuildingSelection(PlayerInterface player)
         var door = FirstDoor(focus);
         if (door is { Record.Length: > 0 } && BuildTarget?.Invoke(door.Value.Record) is { } doorTarget)
             rows.Add(Bar(Loc.Tr("Door Condition"), 1, ((int)doorTarget).ToString(CultureInfo.InvariantCulture), "The door is in good condition."));
-        var site = player.session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == focus.Instance);
+        var site = player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == focus.Instance);
         float? target = site?.Target ?? (focus.Record is { } record ? BuildTarget?.Invoke(record) : null);
         if (target is not { } total) return rows;
         float progress = (site?.Destroyed ?? focus.Destroyed) ? 0 : site?.Progress ?? total;
@@ -320,7 +320,7 @@ sealed class BuildingSelection(PlayerInterface player)
             : fraction >= 1 ? Loc.Tr("The building is in good condition.") : Loc.Tr("The building is damaged.");
         rows.Add(Bar(Loc.Tr(door is null ? "Condition" : "Building Condition"), fraction, ((int)progress).ToString(CultureInfo.InvariantCulture), tip));
         // A wind generator's rows (WindGeneratorBuilding::getGUIPower section 4): Wind, its share as a whole percent and the bar; Power Output, the output as an int over the rated.
-        if (site is { Complete: true } && player.production.Machine(site.Id) is { Wind: { Rated: > 0 } wind, Power: { } power })
+        if (site is { Complete: true } && player.Production.Machine(site.Id) is { Wind: { Rated: > 0 } wind, Power: { } power })
         {
             string windTip = Loc.Tr("The current amount of wind.");
             if (wind.Range is { } range)
@@ -332,14 +332,14 @@ sealed class BuildingSelection(PlayerInterface player)
                 : "Power output is at maximum.";
             rows.Add(Bar(Loc.Tr("Power Output"), output / wind.Rated, ((int)output).ToString(CultureInfo.InvariantCulture), outputTip));
         }
-        if (site is { Complete: true } && player.session.CurrentSnapshot.InspectedTurret is { } gun && gun.Instance == focus.Instance) rows.Add(LoadedRow(gun));
+        if (site is { Complete: true } && player.Session.CurrentSnapshot.InspectedTurret is { } gun && gun.Instance == focus.Instance) rows.Add(LoadedRow(gun));
         if (site is { Complete: false })
             foreach (var m in site.Materials)
             {
                 float share = m.Required > 0 ? Math.Min(m.Delivered / m.Required, 1) : 1;
                 string need = m.Delivered >= m.Required ? Loc.Tr("All necessary materials are ready.")
                     : Loc.Tr("{1} more 'Building Materials' will be needed to complete this construction.", (m.Required - m.Delivered).ToString("0.##", CultureInfo.InvariantCulture));
-                rows.Add(Bar(player.build.buildHost?.ItemName(m.Item) ?? m.Item, share, $"{(int)m.Delivered}/{(int)m.Required}", need));
+                rows.Add(Bar(player.Build.Services?.ItemName(m.Item) ?? m.Item, share, $"{(int)m.Delivered}/{(int)m.Required}", need));
             }
         return rows;
 
@@ -350,64 +350,64 @@ sealed class BuildingSelection(PlayerInterface player)
     /// <summary>
     /// Whether a building of the player's is open to the public: a site's flag; a town building's as the player set it, else as its state reads (<c>is public day</c>, Building+0xc8).
     /// </summary>
-    static bool PublicOf(SelectedBuilding focus, Meitou.Simulation.Construction.BuildingSnapshot? site, Meitou.Simulation.Locks.BuildingDetail? detail) =>
+    static bool PublicOf(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site, Simulation.Locks.BuildingDetail? detail) =>
         site?.Public ?? detail?.Public ?? focus.PublicDay;
 
     /// <summary>The panel's own buttons on a selected building of the player's: Dismantle (after the original's "Are you sure?"), pause, upgrade, downgrade, the doors, their locks and Open to public.</summary>
     internal void BuildingAction(string action)
     {
         if (BuildingFocus() is not { } focus) return;
-        var detail = player.session.CurrentSnapshot.InspectedBuilding is { } d && d.Instance == focus.Instance ? d : null;
+        var detail = player.Session.CurrentSnapshot.InspectedBuilding is { } d && d.Instance == focus.Instance ? d : null;
         if (action == "building-buy" && detail?.SalePrice is { } price)
         {
             string instance = focus.Instance;
-            player.interfaceSounds.Sound("General_Click");
+            player.InterfaceSounds.Sound("General_Click");
             player.Confirm(focus.Name, Loc.Tr("Do you want to buy this building for c.{1,num}?", price),
-                () => player.Say(new Meitou.Simulation.Locks.BuyBuilding(instance, price) { Tick = player.session.World.Tick }), yes: "Yes", cancel: "No");
+                () => player.Say(new Simulation.Locks.BuyBuilding(instance, price) { Tick = player.Session.World.Tick }), yes: "Yes", cancel: "No");
             return;
         }
         if (focus.SiteId is null && detail is { Owned: true })
         {
             // A town building the player owns: its doors and the public toggle.
-            if (action == "building-doors") player.Say(new Meitou.Simulation.Locks.ToggleDoorsOrder(focus.Instance) { Tick = player.session.World.Tick });
-            else if (action == "building-locks") player.Say(new Meitou.Simulation.Locks.ToggleDoorLocksOrder(focus.Instance) { Tick = player.session.World.Tick });
+            if (action == "building-doors") player.Say(new Simulation.Locks.ToggleDoorsOrder(focus.Instance) { Tick = player.Session.World.Tick });
+            else if (action == "building-locks") player.Say(new Simulation.Locks.ToggleDoorLocksOrder(focus.Instance) { Tick = player.Session.World.Tick });
             else if (action == "building-public")
             {
-                player.interfaceSounds.Sound("General_Click");
-                player.Say(new Meitou.Simulation.Construction.SetBuildingPublic(focus.Instance, !PublicOf(focus, null, detail)) { Tick = player.session.World.Tick });
+                player.InterfaceSounds.Sound("General_Click");
+                player.Say(new Simulation.Construction.SetBuildingPublic(focus.Instance, !PublicOf(focus, null, detail)) { Tick = player.Session.World.Tick });
             }
             return;
         }
-        if (focus.SiteId is not { } id || Meitou.Simulation.Production.ProductionSystem.IsNatural(id)) return;
-        var site = player.session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id);
-        if (action == "building-upgrade") player.Say(new Meitou.Simulation.Construction.UpgradeSite(id) { Tick = player.session.World.Tick });
-        else if (action == "building-downgrade") player.Say(new Meitou.Simulation.Construction.DowngradeSite(id) { Tick = player.session.World.Tick });
+        if (focus.SiteId is not { } id || Simulation.Production.ProductionSystem.IsNatural(id)) return;
+        var site = player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id);
+        if (action == "building-upgrade") player.Say(new Simulation.Construction.UpgradeSite(id) { Tick = player.Session.World.Tick });
+        else if (action == "building-downgrade") player.Say(new Simulation.Construction.DowngradeSite(id) { Tick = player.Session.World.Tick });
         else if (action == "building-public" && site is not null)
         {
-            player.interfaceSounds.Sound("General_Click");
-            player.Say(new Meitou.Simulation.Construction.SetBuildingPublic(id, !site.Public) { Tick = player.session.World.Tick });
+            player.InterfaceSounds.Sound("General_Click");
+            player.Say(new Simulation.Construction.SetBuildingPublic(id, !site.Public) { Tick = player.Session.World.Tick });
         }
         if (action == "building-dismantle" && site?.LevelPlacement is null)
         {
             // Slot 84 (FUN_14054db30): with furniture in it the furniture warning, else "Are you sure?"; Yes dismantles it at once (Building::confirmDismantle).
-            bool furnished = player.session.CurrentSnapshot.Buildings.Any(b => b.Parent == id);
+            bool furnished = player.Session.CurrentSnapshot.Buildings.Any(b => b.Parent == id);
             player.Confirm("Dismantle", furnished ? "Dismantling this building will destroy all furniture.\nDo you want to continue?" : "Are you sure?",
-                () => player.Say(new Meitou.Simulation.Construction.ConfirmDismantle(id) { Tick = player.session.World.Tick }));
+                () => player.Say(new Simulation.Construction.ConfirmDismantle(id) { Tick = player.Session.World.Tick }));
         }
-        else if (action is "machine-power" or "machine-battery" && player.production.Machine(id) is { Power: { } pw } machine)
+        else if (action is "machine-power" or "machine-battery" && player.Production.Machine(id) is { Power: { } pw } machine)
         {
             // A click flips the toggle, sets the Generator switch and posts UI_Generator (vfunc 161, FUN_140297a60).
             bool on = action == "machine-power" ? !(machine.Wind?.PowerOn ?? pw.PowerOn) : !pw.GetsBattery;
-            player.interfaceSounds.Sound("UI_Generator", "Generator", on ? "On" : "Off");
-            player.Say(action == "machine-power" ? new Meitou.Simulation.Production.SetMachinePower(id, PowerOn: on) { Tick = player.session.World.Tick } : new Meitou.Simulation.Production.SetMachinePower(id, GetsBattery: on) { Tick = player.session.World.Tick });
+            player.InterfaceSounds.Sound("UI_Generator", "Generator", on ? "On" : "Off");
+            player.Say(action == "machine-power" ? new Simulation.Production.SetMachinePower(id, PowerOn: on) { Tick = player.Session.World.Tick } : new Simulation.Production.SetMachinePower(id, GetsBattery: on) { Tick = player.Session.World.Tick });
         }
-        else if (action == "machine-incinerate" && player.production.Machine(id) is { Furnace: not null })
+        else if (action == "machine-incinerate" && player.Production.Machine(id) is { Furnace: not null })
         {
-            player.interfaceSounds.Sound("General_Click");   // engine choice: the button's own sound is not traced
-            player.Say(new Meitou.Simulation.Production.IncinerateFurnace(id) { Tick = player.session.World.Tick });
+            player.InterfaceSounds.Sound("General_Click");   // engine choice: the button's own sound is not traced
+            player.Say(new Simulation.Production.IncinerateFurnace(id) { Tick = player.Session.World.Tick });
         }
-        else if (action == "building-pause" && site is { Complete: false }) player.Say(new Meitou.Simulation.Construction.PauseSite(id, !site.Paused) { Tick = player.session.World.Tick });
-        else if (action == "building-doors") player.Say(new Meitou.Simulation.Locks.ToggleDoorsOrder(id) { Tick = player.session.World.Tick });
-        else if (action == "building-locks") player.Say(new Meitou.Simulation.Locks.ToggleDoorLocksOrder(id) { Tick = player.session.World.Tick });
+        else if (action == "building-pause" && site is { Complete: false }) player.Say(new Simulation.Construction.PauseSite(id, !site.Paused) { Tick = player.Session.World.Tick });
+        else if (action == "building-doors") player.Say(new Simulation.Locks.ToggleDoorsOrder(id) { Tick = player.Session.World.Tick });
+        else if (action == "building-locks") player.Say(new Simulation.Locks.ToggleDoorLocksOrder(id) { Tick = player.Session.World.Tick });
     }
 }

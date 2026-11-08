@@ -98,11 +98,11 @@ public sealed partial class CombatSystem
         }
     }
 
-    readonly SortedDictionary<string, TurretState> turrets = new(StringComparer.Ordinal);
+    readonly SortedDictionary<string, TurretState> _turrets = new(StringComparer.Ordinal);
 
     /// <summary>The turret a character mans as of the last tick (its <see cref="CharacterCold.Gunning"/> key), for the snapshot; null when it mans none.</summary>
     public TurretView? TurretOf(string? key) =>
-        key is not null && turrets.TryGetValue(key, out var t) ? new TurretView(t.Gun.BuildingId, t.Gun.Gun.StringId, t.Position, t.Yaw, t.Aim, [.. t.Angles]) : null;
+        key is not null && _turrets.TryGetValue(key, out var t) ? new TurretView(t.Gun.BuildingId, t.Gun.Gun.StringId, t.Position, t.Yaw, t.Aim, [.. t.Angles]) : null;
 
     /// <summary>
     /// The gun numbers of the turret building <paramref name="instance"/> for its panel (<see cref="TurretPanelView"/>); a turret nobody has manned yet has the gun's fresh state.
@@ -112,7 +112,7 @@ public sealed partial class CombatSystem
     {
         if (instance is null || TurretGuns is not { } catalog || world.Buildings.Find(instance) is not { } site || catalog.Get(site.Record) is not { } gun) return null;
         var g = gun.Gun;
-        if (!turrets.TryGetValue(instance, out var t))
+        if (!_turrets.TryGetValue(instance, out var t))
             return new(instance, g.Range, g.AimSpeed, g.AccuracyDeviationAtZeroSkill, 1, 1, 0, null) { Shots = g.NumShots, ReloadMin = g.ReloadTimeMin, ReloadMax = g.ReloadTimeMax };
         float? perception = null, crossbows = null;
         if (t.User >= 0 && t.User < world.Characters.HighWater && world.Characters.Previous[t.User].Generation == t.UserGeneration && world.Characters.Cold(t.User) is { Stats: not null, Medical: not null } user)
@@ -123,8 +123,13 @@ public sealed partial class CombatSystem
         float height = t.Aim is { } aim ? RangedFormulas.HeightFactor(t.Position.Y, aim.Y) : 1;
         return new(instance, g.Range, g.AimSpeed, g.AccuracyDeviationAtZeroSkill, t.Mount, height, t.UserSkill, perception)
         {
-            HeightMetres = t.Aim is { } at ? (int)((site.Position.Y - at.Y) * 0.1f) : null, Loaded = t.Loaded, Shots = g.NumShots,
-            ReloadLeft = t.Reloading && t.ReloadTime > 0 ? t.ReloadLeft / t.ReloadTime : 1, ReloadMin = g.ReloadTimeMin, ReloadMax = g.ReloadTimeMax, Crossbows = crossbows,
+            HeightMetres = t.Aim is { } at ? (int)((site.Position.Y - at.Y) * 0.1f) : null,
+            Loaded = t.Loaded,
+            Shots = g.NumShots,
+            ReloadLeft = t.Reloading && t.ReloadTime > 0 ? t.ReloadLeft / t.ReloadTime : 1,
+            ReloadMin = g.ReloadTimeMin,
+            ReloadMax = g.ReloadTimeMax,
+            Crossbows = crossbows,
         };
     }
 
@@ -145,18 +150,18 @@ public sealed partial class CombatSystem
     /// Writes the loaded harpoons of every turret manned since loading into its building's state (<paramref name="buildings"/>, by <see cref="BuildingKey"/>); the others keep the
     /// loaded record's value. The reload, aim and turn are not saved, as in the original.
     /// </summary>
-    public void WriteTurretShots(World world, IReadOnlyDictionary<string, Meitou.Data.Fcs.FcsRecord> buildings)
+    public void WriteTurretShots(World world, IReadOnlyDictionary<string, Data.Fcs.FcsRecord> buildings)
     {
-        foreach (var t in turrets.Values)
+        foreach (var t in _turrets.Values)
             if (buildings.TryGetValue(SaveKeyOf(world, t.Key), out var state)) state.Ints[ShotsKey] = t.Loaded;
     }
 
     void HashTurrets(ref StateHasher h)
     {
         // Only once a turret has been manned, so worlds without gunners hash as before.
-        if (turrets.Count == 0) return;
-        h.Add(turrets.Count);
-        foreach (var t in turrets.Values) t.Hash(ref h);
+        if (_turrets.Count == 0) return;
+        h.Add(_turrets.Count);
+        foreach (var t in _turrets.Values) t.Hash(ref h);
     }
 
     /// <summary>A gunner's turret this tick: its key, BUILDING, place, facing, mount bonus, efficiency and research damage multiplier.</summary>
@@ -201,17 +206,17 @@ public sealed partial class CombatSystem
     {
         if (TurretGuns is null) return;
         var table = world.Characters;
-        foreach (var t in turrets.Values) t.Manned = false;
+        foreach (var t in _turrets.Values) t.Manned = false;
         for (int i = 0; i < table.HighWater; i++)
         {
             var cold = table.Cold(i);
             if (cold is null) continue;
             cold.Gunning = null;
             if (!table.Next[i].Alive || Manning(world, i, cold) is not { } post) { cold.TurretTarget = CharacterId.None; continue; }
-            if (!turrets.TryGetValue(post.Key, out var t))
+            if (!_turrets.TryGetValue(post.Key, out var t))
             {
                 if (TurretGuns.Get(post.BuildingId) is not { } gun) continue;
-                turrets[post.Key] = t = new TurretState(post.Key, gun, post.Position, post.Yaw, post.Mount);
+                _turrets[post.Key] = t = new TurretState(post.Key, gun, post.Position, post.Yaw, post.Mount);
                 t.Loaded = SavedShots(world, post.Key, gun);
             }
             // One gunner a turret (max operators 1): the lowest slot.
@@ -233,7 +238,7 @@ public sealed partial class CombatSystem
                 t.Target = -1;
             }
         }
-        foreach (var t in turrets.Values)
+        foreach (var t in _turrets.Values)
         {
             if (t.Manned) TickTurret(world, t);
             else if (t.Gunner >= 0)
@@ -283,8 +288,8 @@ public sealed partial class CombatSystem
         var at = prev[g].Position;
         float h = RangedFormulas.HeightFactor(at.Y, prev[target].Position.Y);
         if (!RangedFormulas.InRange(Vector3.DistanceSquared(at, prev[target].Position), gun.Range, h)) return;
-        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp);
-        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Turrets, dt, TurretFormulas.TurretXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Perception, dt, RangedFormulas.PerceptionXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Turrets, dt, TurretFormulas.TurretXp);
         // The fire decision (FUN_140437ad0): aimed within a degree, then the steady time, then the line along the barrel.
         if (t.Worst > TurretFormulas.AimedDegrees) return;
         t.Steady -= dt;
@@ -322,8 +327,8 @@ public sealed partial class CombatSystem
             t.Loaded = Math.Max(gun.NumShots, 1);
             t.Steady = RangedFormulas.SteadyAim;
         }
-        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Turrets, dt, TurretFormulas.TurretXp);
-        xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Turrets, dt, TurretFormulas.TurretXp);
+        _xp.Continuous(cold.Stats!, cold.Race!, StatsEnumerated.Dexterity, dt, RangedFormulas.DexterityReloadXp);
         return false;
     }
 
@@ -333,7 +338,7 @@ public sealed partial class CombatSystem
         public List<int> Found;
     }
 
-    [ThreadStatic] static List<int>? turretCandidates;
+    [ThreadStatic] static List<int>? s_turretCandidates;
 
     /// <summary>
     /// The target choice (<c>FUN_140437f40</c>, <c>FUN_1404374d0</c>, the score <c>FUN_140435d70</c>): every candidate within 1.5 x range of the gunner scores
@@ -368,7 +373,7 @@ public sealed partial class CombatSystem
             if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, gc, table.Cold(ordered)) && !CharacterFacts.TargetDown(table.Cold(ordered)) && (talk is null || !talk.RegardsFriendly(world, g, ordered))) return ordered;   // row 235 ends on state 7 (isTargetDown: crawling too)
             gc.TurretTarget = CharacterId.None;
         }
-        var found = turretCandidates ??= [];
+        var found = s_turretCandidates ??= [];
         found.Clear();
         var scan = new TurretScan { Table = table, Found = found };
         world.Grid.Query(at.X, at.Z, range * 1.5f, ref scan, static (int other, ref TurretScan st) => st.Found.Add(other));
@@ -389,7 +394,7 @@ public sealed partial class CombatSystem
             if (distance >= rangeFactor * range) return s;
             s *= TurretFormulas.Arc(facing, there - t.Position, Indoors(world, g, o));
             if (s <= 0) return 0;
-            if (read[o].TargetSlot == g && read[o].TargetGeneration == generation) s *= 1.5f;
+            if (_read[o].TargetSlot == g && _read[o].TargetGeneration == generation) s *= 1.5f;
             if (o == current) s += 0.1f;
             return s;
         }
@@ -412,7 +417,7 @@ public sealed partial class CombatSystem
             if (o == g || !prev[o].Alive) continue;
             var oc = table.Cold(o);
             if (oc is null) continue;
-            bool enemy = read[o].TargetSlot == g && read[o].TargetGeneration == generation
+            bool enemy = _read[o].TargetSlot == g && _read[o].TargetGeneration == generation
                 || (Relations is not null ? AggroSystem.IsEnemy(Relations, gc.Faction, oc.Faction) : oc.Faction != gc.Faction);
             if (!enemy) continue;
             float s = Score(o, TurretFormulas.FullRange);
@@ -439,7 +444,7 @@ public sealed partial class CombatSystem
         {
             if (o == g || !prev[o].Alive || table.Cold(o) is not { } oc) continue;
             bool hostile = Relations.Contains(oc.Faction) && Relations.Factions[oc.Faction].DefaultRelation < FactionRelations.HostileThreshold;
-            int their = read[o].TargetSlot;
+            int their = _read[o].TargetSlot;
             bool attacksFriend = their >= 0 && their < prev.Length && prev[their].Alive && table.Cold(their) is { } victim && victim.Faction == gc.Faction;
             if (!hostile && !attacksFriend) continue;
             float s = Score(o, TurretFormulas.FullRange);
@@ -467,9 +472,9 @@ public sealed partial class CombatSystem
         float hm = RangedFormulas.HeightFactor(muzzle.Y, prev[target].Position.Y) * t.Mount;
         var (lo, hi) = TurretFormulas.PierceEnds(t.Gun.Damage * t.DamageMult);
         var (damage, range, speed) = TurretFormulas.Harpoon(lo, hi, gun.Range, gun.ShotSpeed, TurretFormulas.PowerFactor(t.Efficiency), hm, w);
-        projectiles.Add(new Projectile
+        _projectiles.Add(new Projectile
         {
-            Id = nextProjectile++,
+            Id = _nextProjectile++,
             Shooter = g,
             ShooterGeneration = prev[g].Generation,
             Target = target,

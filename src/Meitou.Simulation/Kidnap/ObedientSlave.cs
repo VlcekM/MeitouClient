@@ -19,7 +19,7 @@ namespace Meitou.Simulation.Kidnap;
 public static class ObedientSlave
 {
     /// <summary>The job is in the character's list.</summary>
-    public static bool HasJob(CharacterCold cold) => cold.Jobs.Exists(j => j.Type == TaskType._SLAVE_OBEDIENCE);
+    public static bool HasJob(CharacterCold cold) => cold.Jobs.Exists(j => j.Type == TaskType.SlaveObedience);
 
     /// <summary>
     /// The branch's gate in <c>FUN_14050e5b0</c> (<b>Verified</b>): the character is in slave state 1 and not sneaking (<c>Character::isStealthMode</c>, <c>FUN_1405c9750</c>, the Sneak order).
@@ -38,7 +38,7 @@ public static class ObedientSlave
             Reset(world, cold);
             return;
         }
-        int at = cold.Jobs.FindIndex(j => j.Type == TaskType._SLAVE_OBEDIENCE);
+        int at = cold.Jobs.FindIndex(j => j.Type == TaskType.SlaveObedience);
         if (at < 0)
         {
             Destroy(world, cold);
@@ -57,7 +57,7 @@ public static class ObedientSlave
         if (!cold.IsPlayer) return;
         Destroy(world, cold);
         var owner = OwnerOf(world, cold);
-        PermaJobs.Add(cold, TaskType._SLAVE_OBEDIENCE, owner is { } o ? PermaJob.OfCharacter(TaskType._SLAVE_OBEDIENCE, o) : PermaJob.Untargeted(TaskType._SLAVE_OBEDIENCE));
+        PermaJobs.Add(cold, TaskType.SlaveObedience, owner is { } o ? PermaJob.OfCharacter(TaskType.SlaveObedience, o) : PermaJob.Untargeted(TaskType.SlaveObedience));
     }
 
     /// <summary>Destroys the character's perma-jobs and order queue (<c>FUN_140507280</c>, <c>FUN_140507530</c>).</summary>
@@ -139,7 +139,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
     }
 
     // The building each slave works at and the picks it made (runtime only, never hashed: the pick is a roll of the character and the epoch).
-    readonly Dictionary<CharacterId, WorkSpot> works = [];
+    readonly Dictionary<CharacterId, WorkSpot> _works = [];
 
     readonly record struct Choice(TaskType Type, float Score);
 
@@ -160,14 +160,14 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         if (!ObedientSlave.Obeys(cold) || Choose(world, slot, cold, k) is not { } pick) return;
         switch (pick.Type)
         {
-            case TaskType.FOLLOW_SLAVEMASTER when FollowTarget(world, slot, cold, k) is { } target:
-                MovementSystem.Follow(world, new FollowOrder([table.IdOf(slot)], target) { Tick = world.Tick }, TaskSource.Job, k, TaskType.FOLLOW_SLAVEMASTER);
+            case TaskType.FollowSlavemaster when FollowTarget(world, slot, cold, k) is { } target:
+                MovementSystem.Follow(world, new FollowOrder([table.IdOf(slot)], target) { Tick = world.Tick }, TaskSource.Job, k, TaskType.FollowSlavemaster);
                 break;
-            case TaskType.AUTO_LABOURING_MINES or TaskType.AUTO_LABOURING_MINES_PRETEND:
+            case TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend:
                 StartWork(world, slot, cold, k, pick.Type);
                 break;
-            case TaskType.IDLE:
-                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Idle, TaskType.IDLE, TaskSource.Job) { Job = k });
+            case TaskType.Idle:
+                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Idle, TaskType.Idle, TaskSource.Job) { Job = k });
                 break;
         }
     }
@@ -176,7 +176,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
     public void Stop(World world, int slot, int k)
     {
         var cold = world.Characters.Cold(slot)!;
-        if (cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == TaskType.FOLLOW_SLAVEMASTER) cold.FollowOrder = CharacterId.None;
+        if (cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == TaskType.FollowSlavemaster) cold.FollowOrder = CharacterId.None;
         TaskStart.End(world, slot, TaskEnd.Stopped);
     }
 
@@ -212,9 +212,9 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
     /// <summary>How much the goal is wanted: 1 when its finder finds a target, 0 when it finds none or Meitou does not act it out.</summary>
     float Desire(World world, int slot, CharacterCold cold, int k, TaskType type) => type switch
     {
-        TaskType.FOLLOW_SLAVEMASTER => FollowTarget(world, slot, cold, k) is null ? 0 : 1,
-        TaskType.AUTO_LABOURING_MINES or TaskType.AUTO_LABOURING_MINES_PRETEND => world.SystemOf<AiSystem>() is { } ai && ai.HasWorkplaces(TownPoint(world, slot, cold)) ? 1 : 0,
-        TaskType.IDLE => 1,
+        TaskType.FollowSlavemaster => FollowTarget(world, slot, cold, k) is null ? 0 : 1,
+        TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend => world.SystemOf<AiSystem>() is { } ai && ai.HasWorkplaces(TownPoint(world, slot, cold)) ? 1 : 0,
+        TaskType.Idle => 1,
         _ => 0,
     };
 
@@ -246,12 +246,12 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         var task = (CharacterTask)world.Characters.Next[slot].Task;
         switch (type)
         {
-            case TaskType.FOLLOW_SLAVEMASTER:
+            case TaskType.FollowSlavemaster:
                 return run.Runs(task) && FollowTarget(world, slot, cold, k) is { } target && cold.FollowOrder == target;
-            case TaskType.IDLE:
+            case TaskType.Idle:
                 return run.Runs(task);
             default:
-                return works.TryGetValue(world.Characters.IdOf(slot), out var spot) && run.Runs(task) && (task == CharacterTask.GoTo || cold.ActionClip == spot.Clip);
+                return _works.TryGetValue(world.Characters.IdOf(slot), out var spot) && run.Runs(task) && (task == CharacterTask.GoTo || cold.ActionClip == spot.Clip);
         }
     }
 
@@ -261,7 +261,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         var id = table.IdOf(slot);
         if (world.SystemOf<AiSystem>() is not { } ai) return;
         var at = TownPoint(world, slot, cold);
-        bool again = works.TryGetValue(id, out var spot) && cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == type;
+        bool again = _works.TryGetValue(id, out var spot) && cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == type;
         if (again && table.Next[slot].Task == (byte)CharacterTask.Idle && cold.Running!.Task == CharacterTask.GoTo)
         {
             // The walk ended: at the building it works, short of it the walk is asked again, a few times.
@@ -271,7 +271,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         // A new pick: another roll each time it starts working anew.
         int epoch = spot is null ? 0 : spot.Epoch + 1;
         if (ai.WorkAt(world, id, at, epoch) is not { } found) return;
-        works[id] = new WorkSpot { Building = found.Building, Clip = found.Clip, Functionality = found.Functionality, Epoch = epoch };
+        _works[id] = new WorkSpot { Building = found.Building, Clip = found.Clip, Functionality = found.Functionality, Epoch = epoch };
         if (Near(table.Next[slot].Position, found.Building)) Work(world, slot, k, type);
         else Walk(world, slot, k, type, found.Building);
     }
@@ -300,7 +300,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
             return;
         }
         MovementSystem.Stop(table, slot);
-        if (!works.TryGetValue(table.IdOf(slot), out var spot)) return;
+        if (!_works.TryGetValue(table.IdOf(slot), out var spot)) return;
         ref var n = ref table.Next[slot];
         float dx = spot.Building.Position.X - n.Position.X, dz = spot.Building.Position.Z - n.Position.Z;
         if (dx * dx + dz * dz > 1e-4f) n.Yaw = MathF.Atan2(dx, dz);
@@ -312,7 +312,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
         var cold = world.Characters.Cold(slot)!;
-        if (works.TryGetValue(world.Characters.IdOf(slot), out var spot) && cold.ActionClip == spot.Clip)
+        if (_works.TryGetValue(world.Characters.IdOf(slot), out var spot) && cold.ActionClip == spot.Clip)
         {
             cold.ActionClip = null;
             cold.ActionWork = null;

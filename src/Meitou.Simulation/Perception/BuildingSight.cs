@@ -10,10 +10,10 @@ namespace Meitou.Simulation.Perception;
 /// </summary>
 sealed class BuildingSight(GameInstall install, GameDatabase db, WorldLevelData levels, BuildingLayouts layouts) : ISightSource
 {
-    readonly InteriorCollisions collisions = new(install);
+    readonly InteriorCollisions _collisions = new(install);
 
     public InteriorVolume? Room(TownBuilding building) =>
-        building.Resolved is { } r ? InteriorVolume.For(db, r.Record, building.Key, r.Position, r.Placement.Rotation, collisions) : null;
+        building.Resolved is { } r ? InteriorVolume.For(db, r.Record, building.Key, r.Position, r.Placement.Rotation, _collisions) : null;
 
     public IReadOnlyList<WorldLight> Lights(TownBuilding building) =>
         building.Resolved is { } r ? WorldLights.ForBuilding(db, levels, r, layouts) : [];
@@ -21,7 +21,7 @@ sealed class BuildingSight(GameInstall install, GameDatabase db, WorldLevelData 
     public bool EnforcesCeiling(TownBuilding building) => db.Find(building.BuildingId)?.GetBool("enforce ceiling") == true;
 
     /// <summary>A completed player building's lamps, placed as the renderer lights them (<c>GameHost.UpdateLamps</c>: its own lights, no interior layouts).</summary>
-    public IReadOnlyList<WorldLight> SiteLights(Meitou.Simulation.Construction.BuildSite site)
+    public IReadOnlyList<WorldLight> SiteLights(Construction.BuildSite site)
     {
         if (db.Find(site.Record) is not { } record) return [];
         var placed = new List<PlacedLight>();

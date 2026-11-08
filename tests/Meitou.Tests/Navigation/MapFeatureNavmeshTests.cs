@@ -14,7 +14,7 @@ namespace Meitou.Tests.Navigation;
 public class MapFeatureNavmeshTests
 {
     static readonly object Gate = new();
-    static readonly Dictionary<ZoneCoordinate, (ZoneGeometry Geometry, ZoneNavMesh Kept)> built = [];
+    static readonly Dictionary<ZoneCoordinate, (ZoneGeometry Geometry, ZoneNavMesh Kept)> Built = [];
 
     static readonly ZoneCoordinate Rebirth = new(21, 19), Mourn = new(34, 46), Squin = new(18, 35);
 
@@ -23,11 +23,11 @@ public class MapFeatureNavmeshTests
         var install = InstallData.Install!;
         lock (Gate)
         {
-            if (built.TryGetValue(zone, out var b)) return b;
+            if (Built.TryGetValue(zone, out var b)) return b;
             using var gatherer = new ZoneGeometryGatherer(install, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!, new CollisionCache(install));
             var settings = new NavBuildSettings();
             var g = gatherer.Gather(zone);
-            return built[zone] = (g, ZoneKeptClosure.ResolveAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _), settings));
+            return Built[zone] = (g, ZoneKeptClosure.ResolveAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _), settings));
         }
     }
 

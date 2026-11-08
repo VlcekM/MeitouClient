@@ -28,7 +28,7 @@ public sealed partial class SaveFolder
 
     const char Backslash = (char)92;
 
-    readonly Dictionary<string, string> files = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, string> _files = new(StringComparer.OrdinalIgnoreCase);
 
     /// <param name="layers">Folders from the base layer to the topmost; a file of a later folder hides one of the same name in an earlier one.</param>
     public SaveFolder(IEnumerable<string> layers)
@@ -38,7 +38,7 @@ public sealed partial class SaveFolder
         {
             if (!Directory.Exists(layer)) continue;
             foreach (var file in Directory.EnumerateFiles(layer, "*", SearchOption.AllDirectories))
-                files[System.IO.Path.GetRelativePath(layer, file).Replace(Backslash, '/')] = file;
+                _files[Path.GetRelativePath(layer, file).Replace(Backslash, '/')] = file;
         }
     }
 
@@ -50,12 +50,12 @@ public sealed partial class SaveFolder
     public string TopLayer => Layers[^1];
 
     /// <summary>Every relative name in the map, ordinal order.</summary>
-    public IEnumerable<string> Names => files.Keys.Order(StringComparer.Ordinal);
+    public IEnumerable<string> Names => _files.Keys.Order(StringComparer.Ordinal);
 
-    public bool Exists(string name) => files.ContainsKey(Normalize(name));
+    public bool Exists(string name) => _files.ContainsKey(Normalize(name));
 
     /// <summary>The full path a name resolves to, or null.</summary>
-    public string? Resolve(string name) => files.GetValueOrDefault(Normalize(name));
+    public string? Resolve(string name) => _files.GetValueOrDefault(Normalize(name));
 
     public byte[] ReadAllBytes(string name) =>
         File.ReadAllBytes(Resolve(name) ?? throw new FileNotFoundException($"'{name}' is not in the save folder '{TopLayer}'."));

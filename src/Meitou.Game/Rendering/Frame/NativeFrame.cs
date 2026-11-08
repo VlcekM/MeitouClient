@@ -21,20 +21,20 @@ namespace Meitou.Game.Rendering.Frame;
 /// </remarks>
 sealed unsafe class NativeFrame : IDisposable
 {
-    readonly IGpuContext ctx;
-    readonly ulong align;
-    FrameConstants constants;
-    FrameConstants written;
-    long writtenFrame = -1;
-    Transient frameSlice;
-    long bonesFrame = -1;
-    Transient bones;
-    int resolvedVersion = -1;
-    FrameGlobals.Uniform?[] uniforms = [];
-    Func<SampledTexture>?[] textures = [];
-    Func<GpuBufferBinding>?[] blocks = [];
-    readonly (SampledTexture Texture, uint Index, bool Has)[] entries = new (SampledTexture, uint, bool)[FrameConstants.Textures.Length];
-    readonly SamplerInfo[] standIns;
+    readonly IGpuContext _ctx;
+    readonly ulong _align;
+    FrameConstants _constants;
+    FrameConstants _written;
+    long _writtenFrame = -1;
+    Transient _frameSlice;
+    long _bonesFrame = -1;
+    Transient _bones;
+    int _resolvedVersion = -1;
+    FrameGlobals.Uniform?[] _uniforms = [];
+    Func<SampledTexture>?[] _textures = [];
+    Func<GpuBufferBinding>?[] _blocks = [];
+    readonly (SampledTexture Texture, uint Index, bool Has)[] _entries = new (SampledTexture, uint, bool)[FrameConstants.Textures.Length];
+    readonly SamplerInfo[] _standIns;
 
     /// <summary>The shadow blocks of set 0: name, binding, std140 size.</summary>
     static readonly (string Name, uint Binding, int Size)[] Blocks =
@@ -49,20 +49,20 @@ sealed unsafe class NativeFrame : IDisposable
     static readonly byte[] NoBones = new byte[BonesBytes];
 
     /// <summary>Storage buffers a consumer's own programs read at set 0, bindings 6 and up (<c>readonly buffer</c> in the shader), given to <see cref="Bind"/>.</summary>
-    readonly int extraStorage;
+    readonly int _extraStorage;
 
     public NativeFrame(IGpuContext ctx, int extraStorage = 0)
     {
-        this.ctx = ctx;
-        this.extraStorage = extraStorage;
-        align = Math.Max(ctx.UniformBufferAlign, 16);
+        this._ctx = ctx;
+        this._extraStorage = extraStorage;
+        _align = Math.Max(ctx.UniformBufferAlign, 16);
         SetLayout = GpuSetLayout.Written(
         [
             .. Enumerable.Range(0, 6).Select(b => new GpuSlot((uint)b, GpuSlotKind.UniformBuffer, GpuStage.All)),
             .. Enumerable.Range(6, extraStorage).Select(b => new GpuSlot((uint)b, GpuSlotKind.StorageBuffer, GpuStage.All)),
         ]);
         SetLayouts = [SetLayout, GpuSetLayout.Bindless];
-        standIns = [.. FrameConstants.Textures.Select(t => FrameGlobals.Sampler2D(t.Name, cube: t.Kind == BindlessKind.Cube,
+        _standIns = [.. FrameConstants.Textures.Select(t => FrameGlobals.Sampler2D(t.Name, cube: t.Kind == BindlessKind.Cube,
             shadow: t.Kind is BindlessKind.Shadow2D or BindlessKind.ShadowArray, arrayed: t.Kind is BindlessKind.Texture2DArray or BindlessKind.ShadowArray))];
     }
 
@@ -74,18 +74,18 @@ sealed unsafe class NativeFrame : IDisposable
     /// <summary>A native program with the model's layout, then the consumer's <paramref name="own"/> sets (set 2 and up), and the shared
     /// push-constant range (<see cref="NativeShaders.PushBytes"/>).</summary>
     public GpuProgram Program(string vertexGlsl, string fragmentGlsl, string name, params GpuSetLayout[] own) =>
-        ctx.Shaders.Native(vertexGlsl, fragmentGlsl, name, [.. SetLayouts, .. own], NativeShaders.PushBytes);
+        _ctx.Shaders.Native(vertexGlsl, fragmentGlsl, name, [.. SetLayouts, .. own], NativeShaders.PushBytes);
 
     /// <summary>The frame constants as the last <see cref="Bind"/> wrote them (diagnostics and tests).</summary>
-    public FrameConstants Constants => constants;
+    public FrameConstants Constants => _constants;
 
     void Resolve()
     {
-        var g = ctx.Globals;
-        resolvedVersion = g.Version;
-        uniforms = [.. FrameConstants.Uniforms.Select(u => g.UniformValue(u.Name))];
-        textures = [.. FrameConstants.Textures.Select(t => g.Texture(t.Name))];
-        blocks = [.. Blocks.Select(b => g.Block(b.Name))];
+        var g = _ctx.Globals;
+        _resolvedVersion = g.Version;
+        _uniforms = [.. FrameConstants.Uniforms.Select(u => g.UniformValue(u.Name))];
+        _textures = [.. FrameConstants.Textures.Select(t => g.Texture(t.Name))];
+        _blocks = [.. Blocks.Select(b => g.Block(b.Name))];
     }
 
     /// <summary>
@@ -106,57 +106,57 @@ sealed unsafe class NativeFrame : IDisposable
     public FrameBinding Prepare(in ViewConstants view, ReadOnlySpan<GpuBufferBinding> extra = default)
     {
         RenderJobs.AssertNotInJob();
-        if (extra.Length != extraStorage) throw new ArgumentException($"this frame's set has {extraStorage} extra storage bindings, {extra.Length} given", nameof(extra));
-        var frame = ctx.Frame;
-        var g = ctx.Globals;
-        if (g.Version != resolvedVersion) Resolve();
+        if (extra.Length != _extraStorage) throw new ArgumentException($"this frame's set has {_extraStorage} extra storage bindings, {extra.Length} given", nameof(extra));
+        var frame = _ctx.Frame;
+        var g = _ctx.Globals;
+        if (g.Version != _resolvedVersion) Resolve();
         g.ApplyCount++;   // owners whose getters share one computation do it once for this segment (FrameGlobals.ApplyCount)
-        var bytes = MemoryMarshal.AsBytes(new Span<FrameConstants>(ref constants));
-        for (int i = 0; i < uniforms.Length; i++)
-            if (uniforms[i] is { } u)
+        var bytes = MemoryMarshal.AsBytes(new Span<FrameConstants>(ref _constants));
+        for (int i = 0; i < _uniforms.Length; i++)
+            if (_uniforms[i] is { } u)
             {
                 var (_, offset, size) = FrameConstants.Uniforms[i];
                 u.TryRead(bytes.Slice(offset, size));
             }
-        for (int i = 0; i < textures.Length; i++)
+        for (int i = 0; i < _textures.Length; i++)
         {
-            var t = textures[i] is { } get ? get() : default;
-            if (t.IsNull) t = ctx.Dummy(standIns[i]);
+            var t = _textures[i] is { } get ? get() : default;
+            if (t.IsNull) t = _ctx.Dummy(_standIns[i]);
             var (_, kind, offset) = FrameConstants.Textures[i];
             MemoryMarshal.Write(bytes[offset..], Entry(i, kind, t));
         }
         // The frame block again only when it changed (the usual case within a frame: the same bytes, the same slice).
-        if (writtenFrame != frame.Number || !bytes.SequenceEqual(MemoryMarshal.AsBytes(new Span<FrameConstants>(ref written))))
+        if (_writtenFrame != frame.Number || !bytes.SequenceEqual(MemoryMarshal.AsBytes(new Span<FrameConstants>(ref _written))))
         {
-            frameSlice = frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<FrameConstants>(in constants)), align);
-            (written, writtenFrame) = (constants, frame.Number);
+            _frameSlice = frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<FrameConstants>(in _constants)), _align);
+            (_written, _writtenFrame) = (_constants, frame.Number);
             frame.Stats.ConstantBytes += sizeof(FrameConstants);
         }
-        var viewSlice = frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<ViewConstants>(in view)), align);
+        var viewSlice = frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<ViewConstants>(in view)), _align);
         frame.Stats.ConstantBytes += sizeof(ViewConstants);
         // Skinning matrices: no consumer skins yet; the block is valid memory that is never read (uSkinned is 0).
-        if (bonesFrame != frame.Number) { bones = frame.WriteConstants(NoBones, align); bonesFrame = frame.Number; }
+        if (_bonesFrame != frame.Number) { _bones = frame.WriteConstants(NoBones, _align); _bonesFrame = frame.Number; }
 
-        int count = 6 + extraStorage;
+        int count = 6 + _extraStorage;
         var result = new FrameBinding { Count = count };
         Span<GpuBinding> bindings = result.Bindings;
-        bindings[(int)NativeShaders.FrameBinding] = GpuBinding.Uniform(NativeShaders.FrameBinding, new GpuBufferBinding(frameSlice.Handle, frameSlice.Offset, (ulong)sizeof(FrameConstants)));
+        bindings[(int)NativeShaders.FrameBinding] = GpuBinding.Uniform(NativeShaders.FrameBinding, new GpuBufferBinding(_frameSlice.Handle, _frameSlice.Offset, (ulong)sizeof(FrameConstants)));
         bindings[(int)NativeShaders.ViewBinding] = GpuBinding.Uniform(NativeShaders.ViewBinding, new GpuBufferBinding(viewSlice.Handle, viewSlice.Offset, (ulong)sizeof(ViewConstants)));
-        bindings[(int)NativeShaders.BonesBinding] = GpuBinding.Uniform(NativeShaders.BonesBinding, new GpuBufferBinding(bones.Handle, bones.Offset, BonesBytes));
+        bindings[(int)NativeShaders.BonesBinding] = GpuBinding.Uniform(NativeShaders.BonesBinding, new GpuBufferBinding(_bones.Handle, _bones.Offset, BonesBytes));
         for (int i = 0; i < Blocks.Length; i++)
         {
             var (name, binding, size) = Blocks[i];
-            var value = blocks[i] is { } get ? get() : default;
+            var value = _blocks[i] is { } get ? get() : default;
             if (value.IsNull)
             {
                 // Nothing published (no world program linked yet): zeros, as ShadowShaders.Bind's default blocks (shadows off).
-                var zeros = frame.WriteConstants(new byte[size], align);
+                var zeros = frame.WriteConstants(new byte[size], _align);
                 value = zeros.Binding;
             }
             ulong range = value.Size == GpuBufferBinding.WholeSize ? (ulong)size : Math.Min((ulong)size, value.Size);
             bindings[(int)binding] = GpuBinding.Uniform(binding, new GpuBufferBinding(value.Buffer, value.Offset, range));
         }
-        for (int i = 0; i < extraStorage; i++) bindings[6 + i] = GpuBinding.Storage((uint)(6 + i), extra[i]);
+        for (int i = 0; i < _extraStorage; i++) bindings[6 + i] = GpuBinding.Storage((uint)(6 + i), extra[i]);
         return result;
     }
 
@@ -175,17 +175,17 @@ sealed unsafe class NativeFrame : IDisposable
     /// <summary>A frame texture's bindless index: the same while its view and sampler are, a new one (the old freed) after a change.</summary>
     uint Entry(int i, BindlessKind kind, in SampledTexture t)
     {
-        ref var e = ref entries[i];
+        ref var e = ref _entries[i];
         if (e.Has && e.Texture == t) return e.Index;
-        if (e.Has) ctx.Bindless.Free(kind, e.Index);
-        e = (t, ctx.Bindless.Register(kind, t), true);
+        if (e.Has) _ctx.Bindless.Free(kind, e.Index);
+        e = (t, _ctx.Bindless.Register(kind, t), true);
         return e.Index;
     }
 
     public void Dispose()
     {
-        for (int i = 0; i < entries.Length; i++)
-            if (entries[i].Has) ctx.Bindless.Free(FrameConstants.Textures[i].Kind, entries[i].Index);
+        for (int i = 0; i < _entries.Length; i++)
+            if (_entries[i].Has) _ctx.Bindless.Free(FrameConstants.Textures[i].Kind, _entries[i].Index);
     }
 }
 

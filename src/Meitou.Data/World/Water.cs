@@ -86,7 +86,7 @@ public sealed record BiomeWater
     public static Dictionary<uint, BiomeWater> ByIndex(GameDatabase db)
     {
         var result = new Dictionary<uint, BiomeWater>();
-        foreach (var r in db.OfType(FcsRecordType.BIOMES).OrderBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var r in db.OfType(FcsRecordType.Biomes).OrderBy(r => r.StringId, StringComparer.Ordinal))
             result.TryAdd((uint)r.GetInt("index") & 0xFFFFFF, FromRecord(r));
         return result;
     }

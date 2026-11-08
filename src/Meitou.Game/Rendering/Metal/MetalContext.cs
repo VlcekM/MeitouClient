@@ -703,7 +703,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             depth = CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, SceneWidth, SceneHeight,
                 Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: "depth"));
             albedo?.Dispose();
-            albedo = CreateTexture(new TextureDesc(InternalFormat.Rgba8ui, SceneWidth, SceneHeight, Use: TextureUse.ColourTarget, Name: "gi albedo"));
+            albedo = CreateTexture(new TextureDesc(InternalFormat.Rgba8Ui, SceneWidth, SceneHeight, Use: TextureUse.ColourTarget, Name: "gi albedo"));
         }
         frameNumber++;
         slot = (slot + 1) % FrameRingDepth;
@@ -1153,8 +1153,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         if (dummies.TryGetValue(key, out var made)) return made;
         var format = sampler.Depth ? InternalFormat.DepthComponent24 : sampler.SampledKind switch
         {
-            ScalarKind.UInt => InternalFormat.R32ui,
-            ScalarKind.Int => InternalFormat.R32i,
+            ScalarKind.UInt => InternalFormat.R32Ui,
+            ScalarKind.Int => InternalFormat.R32I,
             _ => InternalFormat.Rgba8,
         };
         // A cube's six faces are its type's slices, not array layers: Layers is 1 for a plain cube (CreateTexture sets

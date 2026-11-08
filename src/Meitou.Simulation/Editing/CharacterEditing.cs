@@ -40,7 +40,7 @@ public static class CharacterEditing
     public const float SurgeonReach = 60;
 
     /// <summary>What <paramref name="id"/>'s surgery costs: its record's dialogue, or its squad template's leader dialogue when it leads the squad; null: not a surgeon.</summary>
-    internal static int? SurgeryCost(World world, Meitou.Data.Characters.SurgeonDialogues surgeons, CharacterId id, CharacterCold cold)
+    internal static int? SurgeryCost(World world, SurgeonDialogues surgeons, CharacterId id, CharacterCold cold)
     {
         var squad = cold.SquadId >= 0 ? world.Squads.Find(cold.SquadId) : null;
         return surgeons.CostOf(cold.RecordId, squad?.TemplateId, squad is not null && squad.Leader == id);
@@ -67,7 +67,7 @@ public static class CharacterEditing
             return;
         }
         var proposedRace = appearance.References.TryGetValue("race", out var refs) && refs.Count > 0 ? data.Db.Find(refs[0].TargetStringId) : null;
-        if (proposedRace is not { Type: FcsRecordType.RACE }) { world.Post("The edited look has no race."); return; }
+        if (proposedRace is not { Type: FcsRecordType.Race }) { world.Post("The edited look has no race."); return; }
         if (!Admit(world, data, edit, appearance, slot, look, proposedRace)) return;
 
         Remake(world, data, edit.Character, slot, cold, appearance, proposedRace);
@@ -134,7 +134,7 @@ public static class CharacterEditing
             cold.Medical = medical;
             cold.FootprintRadius = raceData.PathfindFootprintRadius;
             ref var hot = ref world.Characters.Next[slot];
-            hot.MaxSpeed = Bodies.Speed.Run(raceData, stats, medical, 1);
+            hot.MaxSpeed = Speed.Run(raceData, stats, medical, 1);
             hot.WalkSpeed = raceData.WalkSpeed;
         }
 
@@ -154,11 +154,11 @@ public static class CharacterEditing
     /// The prosthetics a body wears (a start's <c>robot limbs</c>), to fit on the body a race switched in the creator gives it: without them the new body has natural limbs while their
     /// items still sit in the limb sections, so only the default race kept them (#360).
     /// </summary>
-    static List<(Meitou.Data.Gameplay.Bodies.LimbReplacement Limb, Items.ItemInstance? Item)> Prosthetics(Bodies.MedicalState? medical)
+    static List<(Meitou.Data.Gameplay.Bodies.LimbReplacement Limb, Items.ItemInstance? Item)> Prosthetics(MedicalState? medical)
     {
         var list = new List<(Meitou.Data.Gameplay.Bodies.LimbReplacement, Items.ItemInstance?)>();
         for (int k = 0; k < 4; k++)
-            if (medical?.LimbPart(k) is { Limb: Bodies.LimbState.Replaced, Replacement: { } limb } part) list.Add((limb, part.ReplacementItem));
+            if (medical?.LimbPart(k) is { Limb: LimbState.Replaced, Replacement: { } limb } part) list.Add((limb, part.ReplacementItem));
         return list;
     }
 

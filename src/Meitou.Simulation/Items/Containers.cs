@@ -52,7 +52,7 @@ namespace Meitou.Simulation.Player
             bool theirs = fixture.Owner >= 0 && fixture.Owner != world.Player.Faction;
             bool locked = fixture.Lock is { EffectivelyLocked: true };
             // Another faction's locked container is picked (76) with Alt (the original's FUN_1407fc6e0); the rest is row 3, a walk to it.
-            var row = locked && theirs && order.Alt ? Meitou.Data.Gameplay.Ai.TaskType.PICK_LOCK : Meitou.Data.Gameplay.Ai.TaskType.PICKUP;
+            var row = locked && theirs && order.Alt ? Meitou.Data.Gameplay.Ai.TaskType.PickLock : Meitou.Data.Gameplay.Ai.TaskType.Pickup;
             foreach (var id in order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray())
             {
                 if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } c || !c.CarriedBy.IsNone
@@ -93,7 +93,7 @@ namespace Meitou.Simulation.Player
         {
             var request = new TaskRequest(CharacterTask.GoTo, order.Row, TaskSource.Order) { Site = order.Site, Point = order.Point, Detail = order.Detail };
             var at = world.Characters.Next[slot].Position;
-            bool walk = order.Row != Meitou.Data.Gameplay.Ai.TaskType.PICKUP || order.Detail == ContainerWalk
+            bool walk = order.Row != Meitou.Data.Gameplay.Ai.TaskType.Pickup || order.Detail == ContainerWalk
                 || Vector2.Distance(Flat(at), Flat(order.Point)) > ContainerReach || !SameFloor(at, order.Point);
             TaskStart.Start(world, slot, walk ? request : request with { Task = CharacterTask.Idle });
         }

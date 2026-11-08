@@ -86,7 +86,7 @@ public class CoreTests
             var world = new Meitou.Simulation.World(new WorldSettings { Seed = 3 }, new OpenGroundWalkability(SyntheticTown.Ground));
             CharacterId Add(Vector3 at, Action<CharacterCold> shape)
             {
-                var cold = new Meitou.Tests.Combat.Combatant().MakeCold();
+                var cold = new Combat.Combatant().MakeCold();
                 shape(cold);
                 return world.Characters.Spawn(new CharacterHot { Position = at }, cold, 0);
             }

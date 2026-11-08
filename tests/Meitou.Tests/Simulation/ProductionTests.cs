@@ -39,17 +39,17 @@ public class ProductionTests
     /// </summary>
     static GameDatabase Database()
     {
-        FcsRecord Item(string id, string name) { var r = Rec(id, FcsRecordType.ITEM, name); r.Floats["weight kg"] = 1; r.Ints["stackable"] = 100; return r; }
+        FcsRecord Item(string id, string name) { var r = Rec(id, FcsRecordType.Item, name); r.Floats["weight kg"] = 1; r.Ints["stackable"] = 100; return r; }
         FcsRecord Function(string id, int function, int stat)
         {
-            var r = Rec(id, FcsRecordType.BUILDING_FUNCTIONALITY, id);
+            var r = Rec(id, FcsRecordType.BuildingFunctionality, id);
             r.Ints["function"] = function;
             r.Ints["stat used"] = stat;
             return r;
         }
         FcsRecord Building(string id, string name, string function)
         {
-            var r = Rec(id, FcsRecordType.BUILDING, name);
+            var r = Rec(id, FcsRecordType.Building, name);
             r.References["functionality"] = [new FcsReference(function, 0, 0, 0)];
             return r;
         }
@@ -63,7 +63,7 @@ public class ProductionTests
         farmFn.References["produces"] = [new FcsReference(Crop, 20, 0, 0)];
         var benchFn = Function("82-t", MachineData.ResearchFunction, (int)StatsEnumerated.Science);
         benchFn.Ints["tech level"] = 1;
-        var farmData = Rec("83-t", FcsRecordType.FARM_DATA, "Test Crop");
+        var farmData = Rec("83-t", FcsRecordType.FarmData, "Test Crop");
         farmData.Ints["amount"] = 4;
         // An indoor crop (fertility effect 0) whose minimum fertility the bare test ground (0) clears, as the shipped indoor farms' -1.
         farmData.Floats["minimum fertility"] = -1;
@@ -75,7 +75,7 @@ public class ProductionTests
         bench.Bools["has inventory"] = true;
         bench.Ints["storage size width"] = 4;
         bench.Ints["storage size height"] = 4;
-        var study = Rec(Study, FcsRecordType.RESEARCH, "Test Study");
+        var study = Rec(Study, FcsRecordType.Research, "Test Study");
         study.Ints["level"] = 1;
         study.Ints["time"] = 1;
         study.References["cost"] = [new FcsReference(Book, 2, 0, 0)];
@@ -208,13 +208,13 @@ public class ProductionTests
     public void An_npc_worker_operates_its_town_buildings_machine_and_then_empties_its_output()
     {
         using var rig = new Rig(Database(), Constants, []);
-        const int Town = 7;
+        const int town = 7;
         var building = new TownBuilding("well", Well, "Well", At, 0, false, false, []);
         var stats = new CharacterStats();
         stats[StatsEnumerated.Labouring] = Unit;
-        var squad = new Squad { Id = 1, TemplateId = "t", Faction = Town };
-        var cold = new CharacterCold { Name = "miner", Race = Human, Stats = stats, Medical = MedicalState.Create(Human, 50), Inventory = new Inventory(), Faction = Town };
-        cold.Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, Behaviour = Meitou.Simulation.Ai.AiBehaviour.Work, WorkOperate = building, WorkOwner = Town };
+        var squad = new Squad { Id = 1, TemplateId = "t", Faction = town };
+        var cold = new CharacterCold { Name = "miner", Race = Human, Stats = stats, Medical = MedicalState.Create(Human, 50), Inventory = new Inventory(), Faction = town };
+        cold.Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, Behaviour = Meitou.Simulation.Ai.AiBehaviour.Work, WorkOperate = building, WorkOwner = town };
         var worker = rig.World.Characters.Spawn(new CharacterHot { Position = At + new Vector3(0, 0, 10), MaxSpeed = 40, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
         rig.World.RunTicks(600);
         var machine = rig.World.Machines.Find(ProductionSystem.TownWorkId(building));
@@ -285,11 +285,11 @@ public class ProductionTests
     public void A_rock_becomes_the_players_once_a_player_character_works_it()
     {
         var db = Database();
-        var rockFn = Rec("89-t", FcsRecordType.BUILDING_FUNCTIONALITY, "Rock Mine");
+        var rockFn = Rec("89-t", FcsRecordType.BuildingFunctionality, "Rock Mine");
         rockFn.Ints["function"] = MachineData.MineFunction;
         rockFn.Ints["world resource mining"] = ResourceField.IronResource;
         rockFn.References["produces"] = [new FcsReference(Crop, 10, 0, 0)];
-        var rockRecord = Rec("90-t", FcsRecordType.BUILDING, "Test Rock");
+        var rockRecord = Rec("90-t", FcsRecordType.Building, "Test Rock");
         rockRecord.Bools["is foliage"] = true;
         rockRecord.References["functionality"] = [new FcsReference("89-t", 0, 0, 0)];
         var file = new FcsFile();
@@ -313,7 +313,7 @@ public class ProductionTests
     [Fact]
     public void A_craft_rebinds_its_section_draws_ingredients_waits_to_be_taken_and_saves()
     {
-        const string PlayerFactionId = "204-gamedata.base";
+        const string playerFactionId = "204-gamedata.base";
         var db = Database();
         using var rig = new Rig(db, Constants, [Workshop]);
         var worker = rig.Add(0, StatsEnumerated.Engineering, Unit, (Water, 2), (Crop, 5));
@@ -346,17 +346,17 @@ public class ProductionTests
         var job = Assert.Single(craft.Queue);
 
         var builder = new Meitou.Data.Save.SaveBuilder(1);
-        builder.AddFaction(PlayerFactionId, "Nameless", true, 1000, []);
+        builder.AddFaction(playerFactionId, "Nameless", true, 1000, []);
         builder.AddEmptyWorldState();
-        Meitou.Simulation.Saving.BuildingSave.Write(builder.Game, rig.World, PlayerFactionId, 5);
+        Meitou.Simulation.Saving.BuildingSave.Write(builder.Game, rig.World, playerFactionId, 5);
         Meitou.Simulation.Saving.MachineSave.Write(builder.Game, rig.World);
         string dir = Path.Combine(Path.GetTempPath(), "meitou-craft-" + Guid.NewGuid().ToString("N"));
         try
         {
             builder.Game.Write(dir);
-            var save = Meitou.Data.Save.SaveGame.Load(dir);
+            var save = Data.Save.SaveGame.Load(dir);
             using var back = new Rig(db, Constants, []);
-            Meitou.Simulation.Saving.BuildingSave.Read(save, back.World, db, PlayerFactionId, PlayerFaction);
+            Meitou.Simulation.Saving.BuildingSave.Read(save, back.World, db, playerFactionId, PlayerFaction);
             Meitou.Simulation.Saving.MachineSave.Read(save, back.World, back.Production, back.Items);
             var read = back.World.Machines.Find(rig.Sites[0])!;
             var again = Assert.Single(read.Craft!.Queue);
@@ -422,9 +422,9 @@ public class ProductionTests
     [Fact]
     public void An_ore_mine_yields_its_nearest_rock_with_distance_falloff()
     {
-        var resources = Rec("91-t", FcsRecordType.ENVIRONMENT_RESOURCES, "Ore ground");
+        var resources = Rec("91-t", FcsRecordType.EnvironmentResources, "Ore ground");
         resources.Floats["iron mult"] = 0.6f;
-        var group = Rec("90-t", FcsRecordType.BIOME_GROUP, "Ore lands");
+        var group = Rec("90-t", FcsRecordType.BiomeGroup, "Ore lands");
         group.References["resources"] = [new FcsReference("91-t", 0, 0, 0)];
         var file = new FcsFile();
         file.Records.AddRange([resources, group]);
@@ -509,8 +509,8 @@ public class ProductionTests
         using var rig = new Rig(Database(), Constants, [Well, Well]);
         var w = rig.Add(0, StatsEnumerated.Labouring, Unit);
         rig.World.RunTick();
-        rig.World.Commands.Enqueue(new AddJob([w], Meitou.Data.Gameplay.Ai.TaskType.OPERATE_MACHINERY, rig.Sites[0]) { Tick = rig.World.Tick });
-        rig.World.Commands.Enqueue(new AddJob([w], Meitou.Data.Gameplay.Ai.TaskType.OPERATE_MACHINERY, rig.Sites[1]) { Tick = rig.World.Tick });
+        rig.World.Commands.Enqueue(new AddJob([w], Data.Gameplay.Ai.TaskType.OperateMachinery, rig.Sites[0]) { Tick = rig.World.Tick });
+        rig.World.Commands.Enqueue(new AddJob([w], Data.Gameplay.Ai.TaskType.OperateMachinery, rig.Sites[1]) { Tick = rig.World.Tick });
         var cold = rig.World.Characters.Cold(w.Slot)!;
         void Look() => rig.World.RunTicks(2 * ProductionSystem.JobCheckTicks);
         Look();
@@ -542,8 +542,8 @@ public class ProductionTests
         using var rig = new Rig(Database(), Constants, [Well, Well]);
         var (far, near) = (rig.Add(0, new Vector3(0, 0, 6600), StatsEnumerated.Labouring, Unit), rig.Add(1, new Vector3(0, 0, 6400), StatsEnumerated.Labouring, Unit));
         rig.World.RunTick();
-        rig.World.Commands.Enqueue(new AddJob([far], Meitou.Data.Gameplay.Ai.TaskType.OPERATE_MACHINERY, rig.Sites[0]) { Tick = rig.World.Tick });
-        rig.World.Commands.Enqueue(new AddJob([near], Meitou.Data.Gameplay.Ai.TaskType.OPERATE_MACHINERY, rig.Sites[1]) { Tick = rig.World.Tick });
+        rig.World.Commands.Enqueue(new AddJob([far], Data.Gameplay.Ai.TaskType.OperateMachinery, rig.Sites[0]) { Tick = rig.World.Tick });
+        rig.World.Commands.Enqueue(new AddJob([near], Data.Gameplay.Ai.TaskType.OperateMachinery, rig.Sites[1]) { Tick = rig.World.Tick });
         rig.World.RunTicks(2 * ProductionSystem.JobCheckTicks);
         Assert.Equal((-1, 0), (JobOf(rig.World, far), JobOf(rig.World, near)));
     }
@@ -559,8 +559,8 @@ public class ProductionTests
         var farmer = rig.Add(0, StatsEnumerated.Farming, Unit);
         rig.World.RunTick();
         var (farm, well) = (rig.Machine(0), rig.Machine(1).Output!);
-        rig.World.Commands.Enqueue(new AddJob([farmer], Meitou.Data.Gameplay.Ai.TaskType.OPERATE_MACHINERY, rig.Sites[0]) { Tick = rig.World.Tick });
-        rig.World.Commands.Enqueue(new AddJob([farmer], Meitou.Data.Gameplay.Ai.TaskType.OPERATE_MACHINERY, rig.Sites[1]) { Tick = rig.World.Tick });
+        rig.World.Commands.Enqueue(new AddJob([farmer], Data.Gameplay.Ai.TaskType.OperateMachinery, rig.Sites[0]) { Tick = rig.World.Tick });
+        rig.World.Commands.Enqueue(new AddJob([farmer], Data.Gameplay.Ai.TaskType.OperateMachinery, rig.Sites[1]) { Tick = rig.World.Tick });
         var cold = rig.World.Characters.Cold(farmer.Slot)!;
         bool pumped = false;
         for (int t = 0; t < 30000 && farm.Inputs[0].Count == 0; t++)
@@ -580,25 +580,25 @@ public class ProductionTests
         var cold = new CharacterCold();
         var (a, b) = (rig.Sites[0], rig.Sites[1]);
         // 25 (first aid) becomes the medic job 58; 152 brings its companion 124 on the same target; the switch turns on.
-        Assert.True(PermaJobs.Add(cold, Meitou.Data.Gameplay.Ai.TaskType.FIRST_AID_ORDER, new PermaJob(Meitou.Data.Gameplay.Ai.TaskType.FIRST_AID_ORDER, null, Meitou.Data.Save.Hand.Null)));
-        Assert.True(PermaJobs.Add(cold, Meitou.Data.Gameplay.Ai.TaskType.OPERATE_AUTOMATIC_MACHINERY, new PermaJob(Meitou.Data.Gameplay.Ai.TaskType.OPERATE_AUTOMATIC_MACHINERY, a)));
+        Assert.True(PermaJobs.Add(cold, Data.Gameplay.Ai.TaskType.FirstAidOrder, new PermaJob(Data.Gameplay.Ai.TaskType.FirstAidOrder, null, Data.Save.Hand.Null)));
+        Assert.True(PermaJobs.Add(cold, Data.Gameplay.Ai.TaskType.OperateAutomaticMachinery, new PermaJob(Data.Gameplay.Ai.TaskType.OperateAutomaticMachinery, a)));
         Assert.Equal([(58, (string?)null), (152, a), (124, a)], cold.Jobs.Select(j => ((int)j.Type, j.Site)));
         Assert.True((cold.Orders & CharacterOrders.Jobs) != 0);
         // The same target twice, and a single-target type twice, are refused; 98 (sleeping) is no job.
-        Assert.False(PermaJobs.Add(cold, Meitou.Data.Gameplay.Ai.TaskType.OPERATE_AUTOMATIC_MACHINERY, new PermaJob(Meitou.Data.Gameplay.Ai.TaskType.OPERATE_AUTOMATIC_MACHINERY, a)));
-        Assert.False(PermaJobs.Add(cold, Meitou.Data.Gameplay.Ai.TaskType.FIRST_AID_ORDER, new PermaJob(Meitou.Data.Gameplay.Ai.TaskType.FIRST_AID_ORDER, b)));
-        Assert.True(PermaJobs.Add(cold, Meitou.Data.Gameplay.Ai.TaskType.OPERATE_AUTOMATIC_MACHINERY, new PermaJob(Meitou.Data.Gameplay.Ai.TaskType.OPERATE_AUTOMATIC_MACHINERY, b)));
-        Assert.Null(PermaJobs.JobOf(Meitou.Data.Gameplay.Ai.TaskType.USE_BED));
+        Assert.False(PermaJobs.Add(cold, Data.Gameplay.Ai.TaskType.OperateAutomaticMachinery, new PermaJob(Data.Gameplay.Ai.TaskType.OperateAutomaticMachinery, a)));
+        Assert.False(PermaJobs.Add(cold, Data.Gameplay.Ai.TaskType.FirstAidOrder, new PermaJob(Data.Gameplay.Ai.TaskType.FirstAidOrder, b)));
+        Assert.True(PermaJobs.Add(cold, Data.Gameplay.Ai.TaskType.OperateAutomaticMachinery, new PermaJob(Data.Gameplay.Ai.TaskType.OperateAutomaticMachinery, b)));
+        Assert.Null(PermaJobs.JobOf(Data.Gameplay.Ai.TaskType.UseBed));
 
         // A job list saves its switch off and reads back without doubling companions.
         var saved = new CharacterCold();
-        PermaJobs.Add(saved, Meitou.Data.Gameplay.Ai.TaskType.OPERATE_AUTOMATIC_MACHINERY, new PermaJob(Meitou.Data.Gameplay.Ai.TaskType.OPERATE_AUTOMATIC_MACHINERY, a));
+        PermaJobs.Add(saved, Data.Gameplay.Ai.TaskType.OperateAutomaticMachinery, new PermaJob(Data.Gameplay.Ai.TaskType.OperateAutomaticMachinery, a));
         saved.Orders &= ~CharacterOrders.Jobs;
-        var ai = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_AI, Name = "ai" };
+        var ai = new FcsRecord { Type = (int)FcsRecordType.GamestateAi, Name = "ai" };
         Meitou.Simulation.Saving.PermaJobSave.Write(ai, saved, rig.World.Buildings, new Dictionary<string, FcsRecord>());
         Assert.Equal((152, 124, false), (ai.Ints["pjob0"], ai.Ints["pjob1"], ai.Bools["jobs"]));
         var quick = new Meitou.Data.Save.SaveFile();
-        quick.Data.Records.Add(new FcsRecord { Type = (int)FcsRecordType.CAMERA, StringId = "1051", Name = "camera" });
+        quick.Data.Records.Add(new FcsRecord { Type = (int)FcsRecordType.Camera, StringId = "1051", Name = "camera" });
         var back = new CharacterCold { Orders = Orders.PlayerDefaults };
         Meitou.Simulation.Saving.PermaJobSave.Read(ai, null, back, rig.World.Buildings, new Meitou.Data.Save.SaveGame(quick).BuildHandles(), new Dictionary<FcsRecord, string>(), new HashSet<string>());
         // Re-adding 152 brings 124 again and the saved 124 is then refused as a duplicate; the switch is read last.
@@ -617,17 +617,17 @@ public class ProductionTests
         var smith = rig.Machine(0).Data;
         var maker = db!.Find(CraftBench.PlayerWeapons)!;
         var models = db.Find(db.Find("2033-gamedata.base")!.GetReferences("functionality")[0].TargetStringId)!.GetReferences("weapon crafts").Select(r => r.TargetStringId).ToHashSet();
-        int types = maker.GetReferences("weapon types").Count(t => db.Find(t.TargetStringId) is { Type: FcsRecordType.WEAPON });
+        int types = maker.GetReferences("weapon types").Count(t => db.Find(t.TargetStringId) is { Type: FcsRecordType.Weapon });
         int listed = maker.GetReferences("weapon models").Count(m => models.Contains(m.TargetStringId));
         Assert.Equal(types * listed, smith.Craft!.Options.Count);
 
-        var katana = db.OfType(FcsRecordType.WEAPON).First(r => r.Name == "Katana");
+        var katana = db.OfType(FcsRecordType.Weapon).First(r => r.Name == "Katana");
         var recipe = smith.Craft.Recipe(db, constants, new CraftOption(CraftKind.Weapon, katana.StringId, null, 30, 1), smith.Inputs);
         Assert.Equal(0.09f * 100 * katana.GetInt("value") / 300f * 2 / constants.ProductionSpeed, recipe.Hours, 0.001f);
         Assert.Equal((smith.Inputs[0].Item, (float)katana.GetInt("material cost")), (recipe.Inputs[0].Item, recipe.Inputs[0].PerItem));
 
         var bench = rig.Machine(1).Data;
-        var hat = db.OfType(FcsRecordType.ARMOUR).First(r => r.Name == "Tricorn Hat");
+        var hat = db.OfType(FcsRecordType.Armour).First(r => r.Name == "Tricorn Hat");
         float coverage = hat.GetReferences("part coverage").Sum(p => p.TargetStringId == "101-gamedata.quack" ? (int)(p.Values.Value0 * 1.5) : p.Values.Value0) / 100f;
         var hatRecipe = bench.Craft!.Recipe(db, constants, bench.Craft.Options.First(o => o.Item == hat.StringId), bench.Inputs);
         Assert.Equal(MathF.Max(1, coverage * 2.6f) * 0.6f, hatRecipe.Hours, 0.001f);
@@ -636,7 +636,7 @@ public class ProductionTests
         Assert.Equal(coverage * hat.GetFloat("fabrics amount", 0.2f), hatRecipe.Inputs.Single(i => i.Item == CraftBench.Fabrics).PerItem, 0.001f);
 
         Assert.DoesNotContain(rig.Production.CraftOptions(rig.World, rig.Sites[0]), o => o.Unlocked);
-        rig.World.Research.Set(db, [.. db.OfType(FcsRecordType.RESEARCH).Select(r => r.StringId)]);
+        rig.World.Research.Set(db, [.. db.OfType(FcsRecordType.Research).Select(r => r.StringId)]);
         Assert.Contains(rig.Production.CraftOptions(rig.World, rig.Sites[0]), o => o.Unlocked);
     }
 
@@ -689,11 +689,11 @@ public class ProductionTests
         var tech = db!.Records.Values.Where(r => r.StringId.EndsWith(".TECH.1", StringComparison.Ordinal)).ToList();
         Assert.Equal(GearCount, tech.Count);
         // Priced from the item: only the shackles, worth nothing, give a free blueprint.
-        Assert.All(tech, r => Assert.True(r.Type == FcsRecordType.RESEARCH && r.GetBool("blueprint only") && (r.GetInt("money") > 0 || db.Find(r.StringId[..^7])!.GetBool("is locked")), r.StringId));
-        var armour = db.OfType(FcsRecordType.ARMOUR).First();
+        Assert.All(tech, r => Assert.True(r.Type == FcsRecordType.Research && r.GetBool("blueprint only") && (r.GetInt("money") > 0 || db.Find(r.StringId[..^7])!.GetBool("is locked")), r.StringId));
+        var armour = db.OfType(FcsRecordType.Armour).First();
         Assert.Contains(db.Find(armour.StringId + ".TECH.1")!.GetReferences("enable armour"), e => e.TargetStringId == armour.StringId);
 
-        var locked = db.OfType(FcsRecordType.RESEARCH).First(r => r.GetBool("blueprint only") && r.GetReferences("requirements").Any(q => db.Find(q.TargetStringId)?.Type == FcsRecordType.RESEARCH));
+        var locked = db.OfType(FcsRecordType.Research).First(r => r.GetBool("blueprint only") && r.GetReferences("requirements").Any(q => db.Find(q.TargetStringId)?.Type == FcsRecordType.Research));
         var gear = db.Find(armour.StringId + ".TECH.1")!;
         using var rig = new Rig(db, GameConstants.FromDatabase(db), []);
         var who = rig.World.Characters.Spawn(new CharacterHot { Position = At, Task = (byte)CharacterTask.Idle },
@@ -733,7 +733,7 @@ public class ProductionTests
         Assert.SkipWhen(db is null, "Kenshi install not found");
         using var rig = new Rig(db!, GameConstants.FromDatabase(db!), ["1976-gamedata.base", "1855-gamedata.base", "1999-gamedata.base"]);
         string[] names = ["Upgraded Small Generators", "Battery Power", "Advanced Battery Power", "Battery Capacity", "Advanced Battery Capacity"];
-        rig.World.Research.Set(db!, [.. names.Select(n => db!.OfType(FcsRecordType.RESEARCH).First(r => r.Name == n).StringId)]);
+        rig.World.Research.Set(db!, [.. names.Select(n => db!.OfType(FcsRecordType.Research).First(r => r.Name == n).StringId)]);
         rig.World.Weather = new Wind(30);
         rig.World.RunTick();
         rig.Production.Ensure(rig.World, rig.World.Buildings.Find(rig.Sites[0])!)!.Inputs[0].Count = 10;
@@ -744,10 +744,10 @@ public class ProductionTests
 
         // The Water Tower (1950) takes only Water and Storage: Ore only Raw Iron (1866), both resource storages with stacks x 100 (docs/game/buildings-production.md "Storage").
         var tower = MachineData.From(db!, db!.Find("1950-gamedata.base")!)!;
-        var ore = MachineData.From(db!, db!.OfType(FcsRecordType.BUILDING).First(r => r.Name == "Storage: Ore"))!;
-        string water = db!.OfType(FcsRecordType.ITEM).First(r => r.Name == "Water").StringId, iron = "1866-gamedata.base";
+        var ore = MachineData.From(db!, db!.OfType(FcsRecordType.Building).First(r => r.Name == "Storage: Ore"))!;
+        string water = db!.OfType(FcsRecordType.Item).First(r => r.Name == "Water").StringId, iron = "1866-gamedata.base";
         Assert.True(tower.IsStorage && ore.IsStorage);
-        Assert.Equal((true, false, false, true), (tower.Accepts(water, FcsRecordType.ITEM), tower.Accepts(iron, FcsRecordType.ITEM), ore.Accepts(water, FcsRecordType.ITEM), ore.Accepts(iron, FcsRecordType.ITEM)));
+        Assert.Equal((true, false, false, true), (tower.Accepts(water, FcsRecordType.Item), tower.Accepts(iron, FcsRecordType.Item), ore.Accepts(water, FcsRecordType.Item), ore.Accepts(iron, FcsRecordType.Item)));
         Assert.Equal((100f, 100f), (tower.StackBonusMult, ore.StackBonusMult));
     }
 

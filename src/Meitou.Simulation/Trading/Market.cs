@@ -38,38 +38,38 @@ public sealed class Market
     /// <summary>The price factor of armour that is a faction's uniform, in both directions (<c>Armour::vfunc_81</c> <c>FUN_1408a9c20</c>, <b>Verified</b>: the constant 0.3 the loader writes itself, not a CONSTANTS field).</summary>
     public const float UniformPriceMult = 0.3f;
 
-    readonly PopulationData data;
-    readonly ConcurrentDictionary<(string Record, float Quality, string Company), int> baseValues = new();
-    readonly TradeCulture?[] siteCultures, factionCultures;
-    readonly Lazy<MarketFactors> factors;
+    readonly PopulationData _data;
+    readonly ConcurrentDictionary<(string Record, float Quality, string Company), int> _baseValues = new();
+    readonly TradeCulture?[] _siteCultures, _factionCultures;
+    readonly Lazy<MarketFactors> _factors;
 
     public PriceConstants Constants { get; }
-    public ItemFactory Items => data.Items;
+    public ItemFactory Items => _data.Items;
 
     public Market(PopulationData data, ulong seed)
     {
-        this.data = data;
+        this._data = data;
         Constants = PriceConstants.FromDatabase(data.Db);
-        siteCultures = [.. data.Sites.Select(s => TradeCulture.From(data.Db, s.Town.TradeCulture))];
-        factionCultures = [.. data.Factions.Select(f => TradeCulture.From(data.Db, f.TradeCulture))];
-        factors = new(() => MarketFactors.Roll(data, Constants.TradeProfitMargins, seed));
+        _siteCultures = [.. data.Sites.Select(s => TradeCulture.From(data.Db, s.Town.TradeCulture))];
+        _factionCultures = [.. data.Factions.Select(f => TradeCulture.From(data.Db, f.TradeCulture))];
+        _factors = new(() => MarketFactors.Roll(data, Constants.TradeProfitMargins, seed));
     }
 
     /// <summary>The culture of a town (null: none, or no such town).</summary>
-    public TradeCulture? SiteCulture(int site) => (uint)site < (uint)siteCultures.Length ? siteCultures[site] : null;
+    public TradeCulture? SiteCulture(int site) => (uint)site < (uint)_siteCultures.Length ? _siteCultures[site] : null;
     /// <summary>The culture of a faction (null: none).</summary>
-    public TradeCulture? FactionCulture(int faction) => (uint)faction < (uint)factionCultures.Length ? factionCultures[faction] : null;
+    public TradeCulture? FactionCulture(int faction) => (uint)faction < (uint)_factionCultures.Length ? _factionCultures[faction] : null;
 
     /// <summary>The quality <c>ItemValue</c> gets: <see cref="ItemInstance.GearLevel"/>, never the saved `quality` (armour at level 0 is worth its record's own value).</summary>
     static float QualityOf(ItemInstance item) => item.GearLevel;
 
     /// <summary><c>ItemValue(record, quality, 1, manufacturer)</c> of an item (0 for a record the data does not have).</summary>
-    public int BaseValue(ItemInstance item) => baseValues.GetOrAdd((item.Record, QualityOf(item), item.CompanyId), static (key, m) =>
+    public int BaseValue(ItemInstance item) => _baseValues.GetOrAdd((item.Record, QualityOf(item), item.CompanyId), static (key, m) =>
     {
-        var db = m.data.Db;
+        var db = m._data.Db;
         if (db.Find(key.Record) is not { } record) return 0;
         var maker = key.Company.Length > 0 ? db.Find(key.Company) : null;
-        return ItemValue.Of(db, record, key.Quality, true, m.Constants, maker is { Type: FcsRecordType.WEAPON_MANUFACTURER } ? maker : null);
+        return ItemValue.Of(db, record, key.Quality, true, m.Constants, maker is { Type: FcsRecordType.WeaponManufacturer } ? maker : null);
     }, this);
 
     /// <summary>
@@ -79,9 +79,9 @@ public sealed class Market
     /// </summary>
     public static (int Value, int Sell)? GearPrices(GameDatabase db, PriceConstants k, string record, float level, string company)
     {
-        if (db.Find(record) is not { Type: FcsRecordType.ARMOUR or FcsRecordType.WEAPON or FcsRecordType.CROSSBOW } r) return null;
+        if (db.Find(record) is not { Type: FcsRecordType.Armour or FcsRecordType.Weapon or FcsRecordType.Crossbow } r) return null;
         var maker = company.Length > 0 ? db.Find(company) : null;
-        int value = ItemValue.Of(db, r, level, true, k, maker is { Type: FcsRecordType.WEAPON_MANUFACTURER } ? maker : null);
+        int value = ItemValue.Of(db, r, level, true, k, maker is { Type: FcsRecordType.WeaponManufacturer } ? maker : null);
         return (value, (int)(value * k.LootPriceMultGear));
     }
 
@@ -89,7 +89,7 @@ public sealed class Market
     /// The <c>Avg. Price</c> an ITEM's tooltip prints when it is a <c>trade item</c> (<c>FUN_1407ae130</c>, <b>Observed</b> in the disassembly): <c>ItemValue</c> at the item's level (the
     /// item's slot 87, 0 for a plain item, so quality plays no part) with the category rows and no manufacturer, i.e. the base value with no town or trader factor. Null otherwise.
     /// </summary>
-    public int? AveragePrice(ItemInstance item) => item.Type == FcsRecordType.ITEM && Items.Info(item.Record) is { TradeItem: true } ? BaseValue(item) : null;
+    public int? AveragePrice(ItemInstance item) => item.Type == FcsRecordType.Item && Items.Info(item.Record) is { TradeItem: true } ? BaseValue(item) : null;
 
     /// <summary>
     /// The culture price of an item record for a trader (section 6, <c>FUN_14092bec0</c>, <b>Observed</b>): the trader's town's culture if it has one and names the item, else the
@@ -97,9 +97,9 @@ public sealed class Market
     /// </summary>
     public float CulturePrice(string record, Trader trader)
     {
-        if ((uint)trader.Site >= (uint)data.Sites.Count) return 1;
+        if ((uint)trader.Site >= (uint)_data.Sites.Count) return 1;
         if (SiteCulture(trader.Site) is { } town && town.TryPrice(record, out float f)) return f;
-        return FactionCulture(data.SiteFactions[trader.Site]) is { } owner && owner.TryPrice(record, out f) ? f : 1;
+        return FactionCulture(_data.SiteFactions[trader.Site]) is { } owner && owner.TryPrice(record, out f) ? f : 1;
     }
 
     /// <summary>
@@ -110,12 +110,12 @@ public sealed class Market
     {
         if (trader == Trader.None) return 1;
         float t = trader.BuyMult;
-        if (item.IsStolenFor(holderFaction, data) && item.StolenFrom == data.PlayerFaction) t *= 0.5f;
+        if (item.IsStolenFor(holderFaction, _data) && item.StolenFrom == _data.PlayerFaction) t *= 0.5f;
         return t * CulturePrice(item.Record, trader);
     }
 
     /// <summary>The market factor of an item record in a town (section 7.2): 1 for an item outside <c>all trade goods</c> or a town without factors.</summary>
-    public float MarketFactor(int site, string record) => factors.Value.Of(site, record);
+    public float MarketFactor(int site, string record) => _factors.Value.Of(site, record);
 
     /// <summary>
     /// The price of one unit (the item classes' slot 81, section 5), <paramref name="sell"/> true when the player sells it to <paramref name="trader"/>:
@@ -135,30 +135,30 @@ public sealed class Market
         var k = Constants;
         switch (item.Type)
         {
-            case FcsRecordType.WEAPON or FcsRecordType.CROSSBOW:
-            {
-                int stored = BaseValue(item);
-                return sell ? (int)(t * stored * (item.Crafter.Length > 0 ? k.LootPriceMultPlayerWeapons : k.LootPriceMultGear)) : (int)(t * stored);
-            }
-            case FcsRecordType.ARMOUR:
-            {
-                float v = BaseValue(item);
-                if (sell) v *= item.Crafter.Length > 0 ? k.LootPriceMultPlayerArmour : k.LootPriceMultGear;
-                if (item.Uniform.Length > 0 && Items.Db.Find(item.Uniform) is { Type: FcsRecordType.FACTION }) v *= UniformPriceMult;
-                return (int)(t * v);
-            }
-            case FcsRecordType.MAP_ITEM or FcsRecordType.BLUEPRINT:
-            {
-                int value = item.Type == FcsRecordType.BLUEPRINT ? Items.ResearchOf(item)?.GetInt("money") ?? 0 : Items.Info(item.Record)?.Value ?? 0;
-                if (!sell) return (int)(t * value);
-                return (int)(t * value * (item.Type == FcsRecordType.MAP_ITEM ? k.LootPriceMult : k.LootPriceMultGear));
-            }
+            case FcsRecordType.Weapon or FcsRecordType.Crossbow:
+                {
+                    int stored = BaseValue(item);
+                    return sell ? (int)(t * stored * (item.Crafter.Length > 0 ? k.LootPriceMultPlayerWeapons : k.LootPriceMultGear)) : (int)(t * stored);
+                }
+            case FcsRecordType.Armour:
+                {
+                    float v = BaseValue(item);
+                    if (sell) v *= item.Crafter.Length > 0 ? k.LootPriceMultPlayerArmour : k.LootPriceMultGear;
+                    if (item.Uniform.Length > 0 && Items.Db.Find(item.Uniform) is { Type: FcsRecordType.Faction }) v *= UniformPriceMult;
+                    return (int)(t * v);
+                }
+            case FcsRecordType.MapItem or FcsRecordType.Blueprint:
+                {
+                    int value = item.Type == FcsRecordType.Blueprint ? Items.ResearchOf(item)?.GetInt("money") ?? 0 : Items.Info(item.Record)?.Value ?? 0;
+                    if (!sell) return (int)(t * value);
+                    return (int)(t * value * (item.Type == FcsRecordType.MapItem ? k.LootPriceMult : k.LootPriceMultGear));
+                }
         }
         var info = Items.Info(item.Record);
-        if (item.Type == FcsRecordType.ITEM && info?.BaseName == MoneyItemName) return info.Value;
+        if (item.Type == FcsRecordType.Item && info?.BaseName == MoneyItemName) return info.Value;
         int u = BaseValue(item);
         if (trader.Site >= 0) u = (int)(u * MarketFactor(trader.Site, item.Record));
-        if (sell && !(info is { TradeItem: true } && !item.IsStolenFor(holderFaction, data))) u = (int)(u * k.LootPriceMult);
+        if (sell && !(info is { TradeItem: true } && !item.IsStolenFor(holderFaction, _data))) u = (int)(u * k.LootPriceMult);
         if (item.Quantity == 1 && item.MaxCharges > 0) u = (int)(u * item.Charges / item.MaxCharges);
         return (int)(t * u);
     }
@@ -185,23 +185,23 @@ public sealed class Market
 /// </summary>
 sealed class MarketFactors
 {
-    readonly Dictionary<string, int> itemIndex;
-    readonly float[]?[] bySite;
+    readonly Dictionary<string, int> _itemIndex;
+    readonly float[]?[] _bySite;
 
     MarketFactors(Dictionary<string, int> itemIndex, float[]?[] bySite)
     {
-        this.itemIndex = itemIndex;
-        this.bySite = bySite;
+        this._itemIndex = itemIndex;
+        this._bySite = bySite;
     }
 
     public float Of(int site, string record) =>
-        (uint)site < (uint)bySite.Length && bySite[site] is { } f && itemIndex.TryGetValue(record, out int i) ? f[i] : 1;
+        (uint)site < (uint)_bySite.Length && _bySite[site] is { } f && _itemIndex.TryGetValue(record, out int i) ? f[i] : 1;
 
     public static bool HasMarket(TownType type) => type is not (TownType.Nest or TownType.NestMarker or TownType.PointOfInterest or TownType.Null);
 
     public static MarketFactors Roll(PopulationData data, float margin, ulong seed)
     {
-        var list = data.Db.OfType(FcsRecordType.VENDOR_LIST).FirstOrDefault(r => r.Name == Market.AllTradeGoods);
+        var list = data.Db.OfType(FcsRecordType.VendorList).FirstOrDefault(r => r.Name == Market.AllTradeGoods);
         var index = new Dictionary<string, int>(StringComparer.Ordinal);
         if (list is not null)
             foreach (var r in list.GetReferences("items")) index.TryAdd(r.TargetStringId, index.Count);

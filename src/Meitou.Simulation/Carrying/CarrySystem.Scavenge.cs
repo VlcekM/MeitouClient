@@ -41,18 +41,18 @@ public sealed partial class CarrySystem
             duty.Fill(-1);
             foreach (var member in squad.Members)
             {
-                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || table.Cold(slot) is not { IsPlayer: false, Inventory: not null } cold || !Ai.AiSystem.Holds(table.Next[slot], cold)) continue;
-                int role = (int)Ai.AiSystem.RoleOf(squad, member, cold);
-                if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LOOT_THE_DEAD) ? 1 : 0;
+                if (!table.TryResolveNext(member, out int slot) || !world.Turn(slot, every) || table.Cold(slot) is not { IsPlayer: false, Inventory: not null } cold || !AiSystem.Holds(table.Next[slot], cold)) continue;
+                int role = (int)AiSystem.RoleOf(squad, member, cold);
+                if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.LootTheDead) ? 1 : 0;
                 if (duty[role] == 0) continue;
                 goals ??= SquadGoals.Of(world);
                 bodies ??= LootableBodies(table);
-                if (!TaskStart.Eligible(world, cold, TaskType.LOOT_THE_DEAD)) continue;
+                if (!TaskStart.Eligible(world, cold, TaskType.LootTheDead)) continue;
                 int target = LootTarget(world, table, slot, cold, goals, bodies, memory);
                 if (target < 0) continue;
                 goals.Add(cold.SquadId, table.IdOf(slot), GoalTarget.Of(table.IdOf(target)));
                 var task = (CharacterTask)table.Next[slot].Task;
-                Start(world, slot, CharacterTask.Loot, TaskType.LOOT_THE_DEAD, TaskSource.Npc, table.IdOf(target), TaskStart.Standing(cold, task));
+                Start(world, slot, CharacterTask.Loot, TaskType.LootTheDead, TaskSource.Npc, table.IdOf(target), TaskStart.Standing(cold, task));
             }
         }
     }
@@ -125,7 +125,7 @@ public sealed partial class CarrySystem
     /// </summary>
     bool ScrewsOver(World world, int looterSlot, CharacterCold looter, int targetSlot, CharacterCold target, SquadMemory? memory)
     {
-        if (world.SystemOf<Dialogue.DialogueSystem>() is { } dialogue) return dialogue.ScrewOver(world, looterSlot, targetSlot);
+        if (world.SystemOf<DialogueSystem>() is { } dialogue) return dialogue.ScrewOver(world, looterSlot, targetSlot);
         var targetId = world.Characters.IdOf(targetSlot);
         bool yes = looter.NpcClass == FundamentalType.Bandit || target.NpcClass == FundamentalType.Bandit;
         if (looter.NpcClass == target.NpcClass) yes = false;
@@ -173,7 +173,7 @@ public sealed partial class CarrySystem
             return;
         }
         if (!foodOnly && !notPlayerSide && !animal && cold.LiftTime > NpcWeaponGrabSeconds && (flags & LootStart.WantsWeapon) != 0)
-            moved = Take(cold, victim, victim.Inventory!.Items.Where(x => x.Type == FcsRecordType.WEAPON && x.Section is "hip" or "back").Take(1).ToList());
+            moved = Take(cold, victim, victim.Inventory!.Items.Where(x => x.Type == FcsRecordType.Weapon && x.Section is "hip" or "back").Take(1).ToList());
         else if (cold.LiftTime > (animal ? NpcLootAnimalSeconds : NpcLootSeconds)) moved = NpcTake(cold, victim, notPlayerSide && !foodOnly);
         else return;
         Butcher(world, i, t, death);
@@ -238,18 +238,18 @@ public sealed partial class CarrySystem
         int moved = 0;
         // One weapon at a time, each only while one of the looter's weapon sections is still empty (FUN_140342de0 mode 2; its police and imprisoned exceptions never reach here).
         if (!WeaponEquipped(looter))
-            foreach (var weapon in from.Items.Where(x => x.Type == FcsRecordType.WEAPON).ToList())
+            foreach (var weapon in from.Items.Where(x => x.Type == FcsRecordType.Weapon).ToList())
                 if (WeaponSectionFree(looter)) moved += Take(looter, victim, [weapon]);
         foreach (int function in (ReadOnlySpan<int>)[FeedSystem.FoodFunction, FeedSystem.RawFoodFunction])
-            items.AddRange(from.Items.Where(x => x.Type == FcsRecordType.ITEM && x.ItemFunction == function));
-        if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.ITEM && x.ItemFunction == FeedSystem.FoodFunction));
+            items.AddRange(from.Items.Where(x => x.Type == FcsRecordType.Item && x.ItemFunction == function));
+        if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.Item && x.ItemFunction == FeedSystem.FoodFunction));
         if (everything)
         {
-            items.AddRange(from.Items.Where(x => x.Type is FcsRecordType.ITEM or FcsRecordType.ARMOUR && !items.Contains(x) && !(x.Type == FcsRecordType.ARMOUR && x.Uniform.Length > 0)));   // a uniform piece is skipped outright (FUN_140342de0 mode 3)
-            if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.ITEM && !items.Contains(x)));
+            items.AddRange(from.Items.Where(x => x.Type is FcsRecordType.Item or FcsRecordType.Armour && !items.Contains(x) && !(x.Type == FcsRecordType.Armour && x.Uniform.Length > 0)));   // a uniform piece is skipped outright (FUN_140342de0 mode 3)
+            if (bag is not null) items.AddRange(bag.Items.Where(x => x.Type == FcsRecordType.Item && !items.Contains(x)));
         }
         moved += Take(looter, victim, items);
-        if (everything) foreach (var piece in items.Where(x => x.Type == FcsRecordType.ARMOUR)) WearIfBetter(looter, piece);
+        if (everything) foreach (var piece in items.Where(x => x.Type == FcsRecordType.Armour)) WearIfBetter(looter, piece);
         return moved;
     }
 
@@ -306,8 +306,8 @@ public sealed partial class CarrySystem
     }
 
     /// <summary><c>AI::hasWeapon</c> (engine reading): an animal (its natural weapon), or any weapon in the inventory or backpack.</summary>
-    static bool HasWeapon(CharacterCold c) => c.Fighter is { IsAnimal: true } || c.Inventory?.All().Any(x => x.Type == FcsRecordType.WEAPON) == true;
+    static bool HasWeapon(CharacterCold c) => c.Fighter is { IsAnimal: true } || c.Inventory?.All().Any(x => x.Type == FcsRecordType.Weapon) == true;
 
     /// <summary><c>Inventory::hasWeaponEquipped</c>: a weapon in a worn section (hip or back).</summary>
-    static bool WeaponEquipped(CharacterCold c) => c.Inventory?.Items.Any(x => x.Type == FcsRecordType.WEAPON && InventoryCommands.IsEquipmentSection(x.Section)) == true;
+    static bool WeaponEquipped(CharacterCold c) => c.Inventory?.Items.Any(x => x.Type == FcsRecordType.Weapon && InventoryCommands.IsEquipmentSection(x.Section)) == true;
 }

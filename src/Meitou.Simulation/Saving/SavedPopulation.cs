@@ -74,9 +74,9 @@ public sealed class SavedPlatoon
     /// <summary>Its squad's shop when its characters last left the world (<see cref="ShopSave"/>); null: none, or never in the world (the save's is read when it is made).</summary>
     public Trading.Shop? Shop { get; set; }
     /// <summary>Its contract and <c>change AI</c>: the save's until its squad first leaves the world, then the squad's.</summary>
-    public AiSave? Ai { get => aiSet ? ai : AiSave.Read(Source.Record); set { ai = value; aiSet = true; } }
-    AiSave? ai;
-    bool aiSet;
+    public AiSave? Ai { get => _aiSet ? _ai : AiSave.Read(Source.Record); set { _ai = value; _aiSet = true; } }
+    AiSave? _ai;
+    bool _aiSet;
     /// <summary>What its squad remembered when it last left the world (<see cref="MemorySet"/>; else the record's keys are the memory, read when its squad is made).</summary>
     public Dialogue.SquadMemoryData? Memory { get; set; }
     public bool MemorySet { get; set; }
@@ -96,8 +96,8 @@ public sealed class SavedPopulation
     public required SaveHandles Handles { get; init; }
     public required IReadOnlyDictionary<FcsRecord, string> InstanceOf { get; init; }
     /// <summary>The instance ids of <see cref="InstanceOf"/>, as a set (made on first use).</summary>
-    public IReadOnlySet<string> InstanceIds => instanceIds ??= new(InstanceOf.Values, StringComparer.Ordinal);
-    HashSet<string>? instanceIds;
+    public IReadOnlySet<string> InstanceIds => _instanceIds ??= new(InstanceOf.Values, StringComparer.Ordinal);
+    HashSet<string>? _instanceIds;
     public IAppearanceSource? Appearances { get; init; }
     /// <summary>The save's clock, which is world tick 0 (bounty timers are read against it).</summary>
     public SaveClock Clock { get; init; }
@@ -127,26 +127,26 @@ public sealed class SavedPopulation
     /// Items made from the save whose <c>ownedby</c> names a character of another faction than their holder's (docs/game/economy.md "Fencing, stealing and smuggling"): stolen from that
     /// faction at once, and from the character itself once it is in the world (<see cref="ResolveOwners"/>).
     /// </summary>
-    readonly List<(ItemInstance Item, Hand Owner, StolenMark Interim)> owners = [];
+    readonly List<(ItemInstance Item, Hand Owner, StolenMark Interim)> _owners = [];
 
     /// <summary>Marks the items of a character just made whose saved <c>ownedby</c> names a character of the save of another faction than <paramref name="holderFaction"/>.</summary>
     internal void NoteOwners(Inventory inventory, int holderFaction, PopulationData data)
     {
         foreach (var item in inventory.All())
         {
-            if (item.Saved is not { } r || Hand.Read(r, "ownedby") is not { Type: (int)FcsRecordType.CHARACTER } h || Handles.Character(h) is not { } owner) continue;
+            if (item.Saved is not { } r || Hand.Read(r, "ownedby") is not { Type: (int)FcsRecordType.Character } h || Handles.Character(h) is not { } owner) continue;
             int faction = data.FactionIndex(owner.Platoon.FactionId);
             if (faction < 0 || faction == holderFaction) continue;
             item.Mark = StolenMark.OfFaction(faction);
-            lock (owners) owners.Add((item, h, item.Mark));
+            lock (_owners) _owners.Add((item, h, item.Mark));
         }
     }
 
     /// <summary>Gives each noted item whose owner is now in the world the whole mark (the owner and its squad); one whose mark changed since is dropped from the list.</summary>
     internal void ResolveOwners(World world)
     {
-        lock (owners)
-            owners.RemoveAll(o =>
+        lock (_owners)
+            _owners.RemoveAll(o =>
             {
                 if (o.Item.Mark != o.Interim) return true;
                 if (CharacterOf(o.Owner) is not { } id || !world.Characters.TryResolveNext(id, out int slot) || world.Characters.Cold(slot) is not { } cold) return false;
@@ -156,14 +156,14 @@ public sealed class SavedPopulation
     }
 
     /// <summary>Lines for the host's log (each platoon made, characters left out); taken by <see cref="TakeLog"/>.</summary>
-    readonly List<string> log = [];
-    internal void Log(string line) { lock (log) log.Add(line); }
+    readonly List<string> _log = [];
+    internal void Log(string line) { lock (_log) _log.Add(line); }
     public List<string> TakeLog()
     {
-        lock (log)
+        lock (_log)
         {
-            var list = new List<string>(log);
-            log.Clear();
+            var list = new List<string>(_log);
+            _log.Clear();
             return list;
         }
     }
@@ -340,9 +340,9 @@ internal static class SavedCharacters
     {
         if (world.Saved is not { } context || site.Buildings.Count == 0) return null;
         var h = Hand.Read(sp.Source.Record, "homebuilding");
-        if (h.IsNull || h.Type != (int)FcsRecordType.BUILDING) return null;
+        if (h.IsNull || h.Type != (int)FcsRecordType.Building) return null;
         int c = h.C - 1;
-        var zone = new Meitou.Data.World.ZoneCoordinate(c % Meitou.Data.World.WorldLayout.ZoneCount, c / Meitou.Data.World.WorldLayout.ZoneCount);
+        var zone = new Meitou.Data.World.ZoneCoordinate(c % Data.World.WorldLayout.ZoneCount, c / Data.World.WorldLayout.ZoneCount);
         if (context.Handles.Building(h) is { } state)
         {
             if (!state.StringId.EndsWith("-S23", StringComparison.Ordinal)) return null;

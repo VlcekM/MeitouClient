@@ -112,7 +112,7 @@ public class RangedTests(ITestOutputHelper output)
     [Fact]
     public void Strength_xp_in_combat_mode_takes_the_drawn_weapons_weight_or_fists()
     {
-        var bodies = new BodySystem(Meitou.Tests.Bodies.BodyFixtures.BaseGame);
+        var bodies = new BodySystem(Bodies.BodyFixtures.BaseGame);
         var cold = Shooter(50, 50, 0);
         cold.Fighter = new Fighter(cold.Fighter!.Weapon) { Crossbow = CrossbowInstance.Create(0, Ranger, Constants, 1, weight: 75), EncumbranceFactor = 0.6f };
         float strength = cold.Stats!.Strength, mult = cold.Medical!.StatMultiplier(StatsEnumerated.Strength);
@@ -216,7 +216,7 @@ public class RangedTests(ITestOutputHelper output)
 [Slow]
 public class RangedInstallTests(ITestOutputHelper output)
 {
-    static Meitou.Data.GameDatabase Db()
+    static Data.GameDatabase Db()
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
         return InstallData.BaseGame!;
@@ -228,9 +228,9 @@ public class RangedInstallTests(ITestOutputHelper output)
         var db = Db();
         var combatData = CombatDatabase.From(db);
         var constants = GameConstants.FromDatabase(db);
-        var race = RaceData.From(db.OfType(FcsRecordType.RACE).First(r => r.Name == "Greenlander"), db);
+        var race = RaceData.From(db.OfType(FcsRecordType.Race).First(r => r.Name == "Greenlander"), db);
         var combat = new CombatSystem(combatData.Techniques, combatData.Constants, constants, BodyOptions.Default, new AnimationLengths(), new CombatOptions { RecordLog = true });
-        using var world = new SimWorld(new WorldSettings { Seed = 3, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), [combat, CombatFixtures.Senses(combat)]);
+        using var world = new SimWorld(new WorldSettings { Seed = 3, PublishSnapshots = false }, new OpenGroundWalkability((_, _) => 150), [combat, Senses(combat)]);
         var items = new ItemFactory(db, constants);
         var ranger = combatData.Crossbows.Single(x => x.Name == "Ranger");
         CharacterCold Make(bool shooter, int faction)

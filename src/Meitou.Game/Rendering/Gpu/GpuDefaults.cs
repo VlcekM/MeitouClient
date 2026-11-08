@@ -16,12 +16,12 @@ public sealed unsafe class GpuDefaults : IDisposable
     /// <summary>Byte offset of the integer (0, 0, 0, 1) in <see cref="DummyVertex"/>.</summary>
     public const ulong DummyIntOffset = 16;
 
-    readonly VulkanDevice device;
-    readonly Dictionary<(int Slot, ScalarKind Kind, bool Depth), DummyTexture> textures = [];
+    readonly VulkanDevice _device;
+    readonly Dictionary<(int Slot, ScalarKind Kind, bool Depth), DummyTexture> _textures = [];
 
     public GpuDefaults(VulkanDevice device)
     {
-        this.device = device;
+        this._device = device;
         DummyVertex = device.Allocator.CreateBuffer(32, BufferUsageFlags.VertexBufferBit, MemoryKind.Upload, "dummy vertex");
         var p = (float*)DummyVertex.Mapped;
         p[0] = p[1] = p[2] = 0; p[3] = 1;
@@ -41,32 +41,43 @@ public sealed unsafe class GpuDefaults : IDisposable
     {
         // VkGl's key: the slot and kind for colour, and the same for depth (the kind does not change a depth dummy's contents).
         var key = (slot, kind, depth);
-        if (textures.TryGetValue(key, out var d)) return d;
+        if (_textures.TryGetValue(key, out var d)) return d;
         var format = depth ? InternalFormat.DepthComponent24 : kind switch
         {
-            ScalarKind.UInt => InternalFormat.R32ui,
-            ScalarKind.Int => InternalFormat.R32i,
+            ScalarKind.UInt => InternalFormat.R32Ui,
+            ScalarKind.Int => InternalFormat.R32I,
             _ => InternalFormat.Rgba8,
         };
         int layers = slot == 2 ? 6 : 1;
         var info = new ImageCreateInfo
         {
-            SType = StructureType.ImageCreateInfo, ImageType = ImageType.Type2D, Format = GlConventions.VkFormat(format), Extent = new Extent3D(1, 1, 1),
-            MipLevels = 1, ArrayLayers = (uint)layers, Samples = SampleCountFlags.Count1Bit, Tiling = ImageTiling.Optimal,
-            Usage = ImageUsageFlags.SampledBit | ImageUsageFlags.TransferDstBit, SharingMode = SharingMode.Exclusive,
+            SType = StructureType.ImageCreateInfo,
+            ImageType = ImageType.Type2D,
+            Format = GlConventions.VkFormat(format),
+            Extent = new Extent3D(1, 1, 1),
+            MipLevels = 1,
+            ArrayLayers = (uint)layers,
+            Samples = SampleCountFlags.Count1Bit,
+            Tiling = ImageTiling.Optimal,
+            Usage = ImageUsageFlags.SampledBit | ImageUsageFlags.TransferDstBit,
+            SharingMode = SharingMode.Exclusive,
             Flags = slot == 2 ? ImageCreateFlags.CreateCubeCompatibleBit : 0,
         };
-        var image = device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, "dummy texture");
-        var vk = device.Vk;
-        var cb = device.BeginImmediate();
+        var image = _device.Allocator.CreateImage(in info, MemoryKind.DeviceLocal, "dummy texture");
+        var vk = _device.Vk;
+        var cb = _device.BeginImmediate();
         var range = new ImageSubresourceRange(depth ? ImageAspectFlags.DepthBit : ImageAspectFlags.ColorBit, 0, 1, 0, (uint)layers);
         var barrier = new ImageMemoryBarrier2
         {
             SType = StructureType.ImageMemoryBarrier2,
-            SrcStageMask = PipelineStageFlags2.None, SrcAccessMask = AccessFlags2.None,
-            DstStageMask = PipelineStageFlags2.AllCommandsBit, DstAccessMask = AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit,
-            OldLayout = ImageLayout.Undefined, NewLayout = ImageLayout.General,
-            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored, DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            SrcStageMask = PipelineStageFlags2.None,
+            SrcAccessMask = AccessFlags2.None,
+            DstStageMask = PipelineStageFlags2.AllCommandsBit,
+            DstAccessMask = AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit,
+            OldLayout = ImageLayout.Undefined,
+            NewLayout = ImageLayout.General,
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
             Image = image.Image,
             SubresourceRange = new ImageSubresourceRange(range.AspectMask, 0, Vk.RemainingMipLevels, 0, Vk.RemainingArrayLayers),
         };
@@ -82,16 +93,16 @@ public sealed unsafe class GpuDefaults : IDisposable
             var value = kind is ScalarKind.UInt or ScalarKind.Int ? new ClearColorValue(uint32_0: 0, uint32_1: 0, uint32_2: 0, uint32_3: 1) : new ClearColorValue(0f, 0f, 0f, 1f);
             vk.CmdClearColorImage(cb, image.Image, ImageLayout.General, &value, 1, &range);
         }
-        device.EndImmediate(cb);
+        _device.EndImmediate(cb);
         d = new DummyTexture(image, format, layers, slot);
-        textures[key] = d;
+        _textures[key] = d;
         return d;
     }
 
     public void Dispose()
     {
-        device.Allocator.Free(DummyVertex);
-        foreach (var t in textures.Values) device.DeferFree(t.Image);
-        textures.Clear();
+        _device.Allocator.Free(DummyVertex);
+        foreach (var t in _textures.Values) _device.DeferFree(t.Image);
+        _textures.Clear();
     }
 }

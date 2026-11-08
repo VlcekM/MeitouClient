@@ -15,68 +15,68 @@ namespace Meitou.Data.Particles;
 /// </summary>
 public sealed class EffectSimulator : IDisposable
 {
-    readonly BlockingCollection<Job> queue = [];
-    readonly Thread thread;
+    readonly BlockingCollection<Job> _queue = [];
+    readonly Thread _thread;
 
     public EffectSimulator()
     {
-        thread = new Thread(() =>
+        _thread = new Thread(() =>
         {
-            foreach (var job in queue.GetConsumingEnumerable()) job.Work();
+            foreach (var job in _queue.GetConsumingEnumerable()) job.Work();
         })
         { IsBackground = true, Name = "meitou-particles", Priority = ThreadPriority.AboveNormal };
-        thread.Start();
+        _thread.Start();
     }
 
     /// <summary>Queues <paramref name="units"/> (heaviest first is best).</summary>
     public Job Start(EffectUnit[] units)
     {
         var job = new Job(units);
-        if (units.Length > 0) queue.Add(job);
+        if (units.Length > 0) _queue.Add(job);
         return job;
     }
 
-    public void Dispose() => queue.CompleteAdding();
+    public void Dispose() => _queue.CompleteAdding();
 
     /// <summary>One frame's simulation.</summary>
     public sealed class Job
     {
-        readonly EffectUnit[] units;
-        readonly ManualResetEventSlim done = new(false);
-        readonly long queuedAt = Stopwatch.GetTimestamp();
-        long startedAt;
-        int started, next, finished;
-        ExceptionDispatchInfo? failure;
+        readonly EffectUnit[] _units;
+        readonly ManualResetEventSlim _done = new(false);
+        readonly long _queuedAt = Stopwatch.GetTimestamp();
+        long _startedAt;
+        int _started, _next, _finished;
+        ExceptionDispatchInfo? _failure;
 
         internal Job(EffectUnit[] units)
         {
-            this.units = units;
-            if (units.Length == 0) done.Set();
+            this._units = units;
+            if (units.Length == 0) _done.Set();
         }
 
         /// <summary>Stopwatch ticks from queuing to the first unit's start, and from there to the last unit's end (valid once <see cref="Wait"/> has returned).</summary>
         public long QueueTicks { get; private set; }
         public long RunTicks { get; private set; }
-        public bool IsCompleted => done.IsSet;
+        public bool IsCompleted => _done.IsSet;
 
         /// <summary>Runs units until none is left to claim (callable from any number of threads).</summary>
         internal void Work()
         {
-            if (Interlocked.Exchange(ref started, 1) == 0)
+            if (Interlocked.Exchange(ref _started, 1) == 0)
             {
-                startedAt = Stopwatch.GetTimestamp();
-                QueueTicks = startedAt - queuedAt;
+                _startedAt = Stopwatch.GetTimestamp();
+                QueueTicks = _startedAt - _queuedAt;
             }
             while (true)
             {
-                int i = Interlocked.Increment(ref next) - 1;
-                if (i >= units.Length) return;
-                try { units[i].Advance(); }
-                catch (Exception e) { Interlocked.CompareExchange(ref failure, ExceptionDispatchInfo.Capture(e), null); }
-                if (Interlocked.Increment(ref finished) == units.Length)
+                int i = Interlocked.Increment(ref _next) - 1;
+                if (i >= _units.Length) return;
+                try { _units[i].Advance(); }
+                catch (Exception e) { Interlocked.CompareExchange(ref _failure, ExceptionDispatchInfo.Capture(e), null); }
+                if (Interlocked.Increment(ref _finished) == _units.Length)
                 {
-                    RunTicks = Stopwatch.GetTimestamp() - startedAt;
-                    done.Set();
+                    RunTicks = Stopwatch.GetTimestamp() - _startedAt;
+                    _done.Set();
                     return;
                 }
             }
@@ -86,8 +86,8 @@ public sealed class EffectSimulator : IDisposable
         public void Wait()
         {
             Work();
-            done.Wait();
-            failure?.Throw();
+            _done.Wait();
+            _failure?.Throw();
         }
     }
 }

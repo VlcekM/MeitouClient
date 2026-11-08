@@ -47,7 +47,7 @@ public class RoamingTests
         for (int i = 0; i < 200 && travellers.Any(p => p.State != PlatoonState.Loaded); i++) w.RunTicks(150);
         Assert.All(travellers, p => Assert.Equal(PlatoonState.Loaded, p.State));
         Assert.All(travellers, p => Assert.Equal(3, w.Squads.Find(p.SquadId)!.Members.Count));
-        Assert.All(travellers, p => Assert.Contains(Meitou.Data.World.WorldLayout.ZoneOf(p.Position.X, p.Position.Y), population.ActiveZones));
+        Assert.All(travellers, p => Assert.Contains(Data.World.WorldLayout.ZoneOf(p.Position.X, p.Position.Y), population.ActiveZones));
     }
 
     /// <summary>A platoon with 2 or more members whose zone is left puts each imprisoned member in a squad and platoon of its own first (<c>FUN_14079c1c0</c>).</summary>

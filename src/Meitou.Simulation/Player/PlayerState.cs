@@ -51,10 +51,10 @@ public sealed class PlayerState
     /// </summary>
     public CharacterId Pointed
     {
-        get { long v = Volatile.Read(ref pointed); return new((int)v, (int)(v >> 32)); }
-        set => Volatile.Write(ref pointed, (long)value.Generation << 32 | (uint)value.Slot);
+        get { long v = Volatile.Read(ref _pointed); return new((int)v, (int)(v >> 32)); }
+        set => Volatile.Write(ref _pointed, (long)value.Generation << 32 | (uint)value.Slot);
     }
-    long pointed = (long)CharacterId.None.Generation << 32 | (uint)CharacterId.None.Slot;
+    long _pointed = (long)CharacterId.None.Generation << 32 | (uint)CharacterId.None.Slot;
     /// <summary>The instance id of the building the HUD shows (<see cref="InspectBuildingCommand"/>), or null. Display only: not hashed and not saved.</summary>
     public string? InspectedBuilding { get; set; }
     /// <summary>The characters the pinned inventory windows show (<see cref="ShowInventoryCommand"/>). Display only: not hashed and not saved.</summary>
@@ -188,7 +188,7 @@ public sealed record RenameFactionCommand(string Name) : SimCommand;
 /// <summary>Applies the player's selection and stop commands (step 1 of the tick). Move orders are the movement system's.</summary>
 public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSystem
 {
-    readonly CharacterAssembly? assembly = data is null ? null : new(data);
+    readonly CharacterAssembly? _assembly = data is null ? null : new(data);
     internal PopulationData? Data => data;
     /// <summary>The longest faction name taken (engine choice: the original's box limit is <b>Unknown</b>).</summary>
     public const int FactionNameLength = 64;
@@ -211,15 +211,38 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
     /// <summary>The characters a right-click order goes to (an empty list: the selection), null for any other command.</summary>
     static IReadOnlyList<CharacterId>? Ordered(SimCommand command) => command switch
     {
-        MoveOrder o => o.Characters, FollowOrder o => o.Characters, Combat.AttackOrder o => o.Attackers, Combat.ShootAtOrder o => o.Gunners,
-        Carrying.PickUpOrder o => o.Carriers, Carrying.PutDownOrder o => o.Carriers, Carrying.LootOrder o => o.Looters, Carrying.OpenLootOrder o => o.Looters,
-        Carrying.StealthKoOrder o => o.Attackers, FirstAid.TreatOrder o => o.Medics, FirstAid.SplintOrder o => o.Medics, Locks.PickLockOrder o => o.Characters,
-        Locks.UseBedOrder o => o.Characters, Production.OperateOrder o => o.Characters, Construction.BuildOrder o => o.Characters,
+        MoveOrder o => o.Characters,
+        FollowOrder o => o.Characters,
+        AttackOrder o => o.Attackers,
+        ShootAtOrder o => o.Gunners,
+        Carrying.PickUpOrder o => o.Carriers,
+        Carrying.PutDownOrder o => o.Carriers,
+        Carrying.LootOrder o => o.Looters,
+        Carrying.OpenLootOrder o => o.Looters,
+        Carrying.StealthKoOrder o => o.Attackers,
+        FirstAid.TreatOrder o => o.Medics,
+        FirstAid.SplintOrder o => o.Medics,
+        Locks.PickLockOrder o => o.Characters,
+        Locks.UseBedOrder o => o.Characters,
+        Production.OperateOrder o => o.Characters,
+        Construction.BuildOrder o => o.Characters,
         // Every other right-click verb that names characters goes through the same dispatcher (FUN_1407f9e20 :96 sets the flag before any order-specific code); only the job giver's orders (45, 0x111, 0xdf) skip it.
-        Dialogue.TalkOrder o => [o.Talker], FirstAid.RestOrder o => o.Characters, Items.OpenContainerOrder o => o.Characters, Items.PickUpItemOrder o => o.Characters,
-        Locks.DoorOrder o => o.Characters, Locks.DoorLockOrder o => o.Characters, Locks.ForceLockOrder o => o.Characters, Locks.PutShacklesOrder o => o.Characters, Locks.ShackleOrder o => o.Characters,
-        Locks.SetFreeOrder o => o.Characters, Locks.GetInCageOrder o => o.Characters, Locks.GetOutOrder o => o.Characters, Locks.PutInBedOrder o => o.Carriers, Crime.PutInCageOrder o => o.Carriers,
-        Construction.DismantleOrder o => o.Characters, Production.ProspectOrder o => [o.Character],
+        Dialogue.TalkOrder o => [o.Talker],
+        FirstAid.RestOrder o => o.Characters,
+        Items.OpenContainerOrder o => o.Characters,
+        Items.PickUpItemOrder o => o.Characters,
+        Locks.DoorOrder o => o.Characters,
+        Locks.DoorLockOrder o => o.Characters,
+        Locks.ForceLockOrder o => o.Characters,
+        Locks.PutShacklesOrder o => o.Characters,
+        Locks.ShackleOrder o => o.Characters,
+        Locks.SetFreeOrder o => o.Characters,
+        Locks.GetInCageOrder o => o.Characters,
+        Locks.GetOutOrder o => o.Characters,
+        Locks.PutInBedOrder o => o.Carriers,
+        Crime.PutInCageOrder o => o.Carriers,
+        Construction.DismantleOrder o => o.Characters,
+        Production.ProspectOrder o => [o.Character],
         _ => null,
     };
 
@@ -338,10 +361,10 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
                     if (data is not null) Editing.CharacterEditing.Apply(world, data, edit);
                     break;
                 case DebugCommand debug:
-                    DebugCheats.Apply(world, data, assembly, debug);
+                    DebugCheats.Apply(world, data, _assembly, debug);
                     break;
                 case Editing.FinishCreation:
-                    if (player.InCreation) Editing.CharacterEditing.EndCreation(world, assembly);
+                    if (player.InCreation) Editing.CharacterEditing.EndCreation(world, _assembly);
                     player.InCreation = false;
                     break;
                 case Items.PickUpItemOrder pick:
@@ -357,8 +380,8 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
 
     public void SlowWorld(World world)
     {
-        DebugCheats.GodTick(world, data, assembly);
-        DebugCheats.GuardTick(world, data, assembly);
+        DebugCheats.GodTick(world, data, _assembly);
+        DebugCheats.GuardTick(world, data, _assembly);
         SquadManagement.BuryDead(world, data?.Db);
         world.Player.Prune(world.Characters);
         SquadManagement.KeepActive(world);
@@ -374,7 +397,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
         if (data is null || !table.TryResolveNext(read.Character, out int owner) || table.Cold(owner) is not { IsPlayer: true, Inventory: { } inventory }) return;
         var t = read.Item;
         var item = inventory.All().ElementAtOrDefault(t.Index);
-        if (item is null || item.Record != t.Record || item.Section != t.Section || item.X != t.X || item.Y != t.Y || item.Type != Meitou.Data.Fcs.FcsRecordType.MAP_ITEM
+        if (item is null || item.Record != t.Record || item.Section != t.Section || item.X != t.X || item.Y != t.Y || item.Type != Meitou.Data.Fcs.FcsRecordType.MapItem
             || data.Db.Find(item.Record) is not { } record) return;
         var sites = Items.MapItems.Reveals(data, record, world.Player.Towns, world.Seed);
         if (sites.Count == 0) { world.Post("You already know all these locations, no new information can be learned."); return; }
@@ -439,7 +462,7 @@ public static class SquadAiKeys
     /// <summary>The Meitou-only options' CAMERA bools, written only while on.</summary>
     public static readonly (SquadAi Option, string Key)[] MeitouKeys = [(SquadAi.HealNeutrals, "meitou heal neutrals"), (SquadAi.HealAll, "meitou heal all")];
 
-    public static void Write(Meitou.Data.Fcs.FcsRecord camera, SquadAi options)
+    public static void Write(Data.Fcs.FcsRecord camera, SquadAi options)
     {
         foreach (var (option, key) in Keys) camera.Bools[key] = (options & option) != 0;
         foreach (var (option, key) in MeitouKeys)
@@ -448,7 +471,7 @@ public static class SquadAiKeys
     }
 
     /// <summary>The options a CAMERA record holds; an absent key keeps the option's default (<see cref="SquadAi.Defaults"/>).</summary>
-    public static SquadAi Read(Meitou.Data.Fcs.FcsRecord camera)
+    public static SquadAi Read(Data.Fcs.FcsRecord camera)
     {
         var options = SquadAi.Defaults;
         foreach (var (option, key) in Keys.Concat(MeitouKeys))
@@ -460,7 +483,7 @@ public static class SquadAiKeys
     public const string FormationKey = "formation";
 
     /// <summary>Sets <paramref name="faction"/>'s formation in <see cref="World.FactionFormations"/> (made from <paramref name="factions"/> when the population has not set it yet).</summary>
-    public static void SetFormation(World world, int faction, int formation, IReadOnlyList<Meitou.Data.Gameplay.FactionData>? factions)
+    public static void SetFormation(World world, int faction, int formation, IReadOnlyList<Data.Gameplay.FactionData>? factions)
     {
         var list = world.FactionFormations?.ToArray() ?? factions?.Select(f => f.SquadFormation).ToArray();
         if (list is null || (uint)faction >= (uint)list.Length) return;
@@ -469,7 +492,7 @@ public static class SquadAiKeys
     }
 
     /// <summary>The player faction's formation as the AI tab and the save see it: the population's list, else the data's value, else RANDOM.</summary>
-    public static int FormationOf(World world, int faction, IReadOnlyList<Meitou.Data.Gameplay.FactionData>? factions) =>
+    public static int FormationOf(World world, int faction, IReadOnlyList<Data.Gameplay.FactionData>? factions) =>
         world.FactionFormations is { } list && (uint)faction < (uint)list.Count ? list[faction]
         : factions is not null && (uint)faction < (uint)factions.Count ? factions[faction].SquadFormation : (int)SquadFormation.Random;
 }

@@ -14,7 +14,7 @@ public sealed partial class WorldObjectRenderer
         public bool[] Shown = [];
     }
 
-    readonly Dictionary<string, FarmSlot> farmSlots = new(StringComparer.Ordinal);
+    readonly Dictionary<string, FarmSlot> _farmSlots = new(StringComparer.Ordinal);
 
     /// <summary>
     /// A farm's plants (docs/game/buildings-production.md "Farm plants"): <paramref name="meshes"/> are its plant meshes (the same list keeps its instances),
@@ -23,12 +23,12 @@ public sealed partial class WorldObjectRenderer
     /// </summary>
     public void SetFarmPlants(string site, IReadOnlyList<PlacedMesh> meshes, IReadOnlyList<Matrix4x4?> transforms, IReadOnlyList<Vector3> tints)
     {
-        if (!farmSlots.TryGetValue(site, out var slot)) farmSlots[site] = slot = new();
+        if (!_farmSlots.TryGetValue(site, out var slot)) _farmSlots[site] = slot = new();
         if (!ReferenceEquals(slot.Meshes, meshes))
         {
             DropFarm(slot);
             slot.Meshes = meshes;
-            foreach (var p in meshes) slot.Instances.Add(streamer.MakeLoose(p));
+            foreach (var p in meshes) slot.Instances.Add(_streamer.MakeLoose(p));
             slot.Shown = new bool[meshes.Count];
         }
         for (int i = 0; i < slot.Instances.Count; i++)
@@ -58,7 +58,7 @@ public sealed partial class WorldObjectRenderer
     /// <summary>A farm's plants are gone (the building is).</summary>
     public void RemoveFarmPlants(string site)
     {
-        if (farmSlots.Remove(site, out var slot)) DropFarm(slot);
+        if (_farmSlots.Remove(site, out var slot)) DropFarm(slot);
     }
 
     /// <summary>The top of a mesh (its bounds' maximum y), from its file's bounds chunk; 0 when not found.</summary>
@@ -66,15 +66,15 @@ public sealed partial class WorldObjectRenderer
 
     void DropFarm(FarmSlot slot)
     {
-        foreach (var inst in slot.Instances) streamer.DropLoose(inst);
+        foreach (var inst in slot.Instances) _streamer.DropLoose(inst);
         slot.Instances.Clear();
         slot.Meshes = null;
     }
 
     void DrawFarms(float range, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, long now)
     {
-        foreach (var slot in farmSlots.Values)
+        foreach (var slot in _farmSlots.Values)
             for (int i = 0; i < slot.Instances.Count; i++)
-                if (slot.Shown[i]) DrawReal(streamer.Loose, slot.Instances[i], range, eye, frustum, options, now);
+                if (slot.Shown[i]) DrawReal(_streamer.Loose, slot.Instances[i], range, eye, frustum, options, now);
     }
 }

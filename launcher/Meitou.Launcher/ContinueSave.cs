@@ -16,11 +16,11 @@ public sealed partial class MainWindow
     /// <summary>Shows Continue with the newest save's name while there is a save (rescanned when the window is activated).</summary>
     async Task RefreshContinueAsync()
     {
-        var slot = install is { } gameInstall ? await Task.Run(() => NewestSave(gameInstall)) : null;
+        var slot = _install is { } gameInstall ? await Task.Run(() => NewestSave(gameInstall)) : null;
         ContinueButton.IsVisible = slot is not null;
         // Its fixed least width (the footer not moving between Play texts) would crowd the footer beside Continue.
         PlayButton.MinWidth = slot is null ? 312 : 0;
-        if (download is null) ShowPlayText();
+        if (_download is null) ShowPlayText();
         if (slot is null) return;
 
         ContinueSaveText.Text = slot.Name;
@@ -43,13 +43,13 @@ public sealed partial class MainWindow
     async Task<SaveModSlot?> ContinueTarget(GameInstall gameInstall)
     {
         if (!ModsReady()) return null;
-        if (SplitArguments(config.LaunchArguments).FirstOrDefault(StartOptions.Contains) is { } option)
+        if (SplitArguments(_config.LaunchArguments).FirstOrDefault(StartOptions.Contains) is { } option)
         {
             Status(Tr("Launch arguments have {1}, which picks the start itself: remove it to continue a save.", option));
             return null;
         }
 
-        var enabled = mods.Where(m => m.Enabled).Select(m => m.Name).ToList();
+        var enabled = _mods.Where(m => m.Enabled).Select(m => m.Name).ToList();
         try
         {
             var (slot, problem) = await Task.Run(() => CheckNewestSave(gameInstall, enabled));

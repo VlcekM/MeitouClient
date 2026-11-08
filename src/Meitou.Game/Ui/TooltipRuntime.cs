@@ -30,17 +30,17 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// <summary>The control property that makes an item cell show an item tooltip: the key of its <see cref="ItemTip"/>.</summary>
     internal const string ItemTipKey = "tooltip_item";
 
-    string? tipTarget;
-    Vector2 tipPoint;
-    long tipSince;
-    bool tipShown;
-    internal readonly Dictionary<string, ItemTip> itemTips = [];
+    string? _tipTarget;
+    Vector2 _tipPoint;
+    long _tipSince;
+    bool _tipShown;
+    internal readonly Dictionary<string, ItemTip> ItemTips = [];
 
     /// <summary>A press hides the tooltip (MyGUI hides it while the mouse is captured) and the delay starts again.</summary>
     internal void HideTooltip()
     {
-        tipTarget = null;
-        tipShown = false;
+        _tipTarget = null;
+        _tipShown = false;
     }
 
     /// <summary>
@@ -49,22 +49,22 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// </summary>
     internal void AddHoverLabel(List<UiControl> controls)
     {
-        if (player.inventoryWindows.held is not null || player.ordersPanel.jobDrag is not null || player.dragging || player.uiPainter is not { } painter) { HideTooltip(); return; }
+        if (player.InventoryWindows.Held is not null || player.OrdersPanel.JobDrag is not null || player.Dragging || player.UiPainter is not { } painter) { HideTooltip(); return; }
         if (TooltipTarget(controls) is not { } hit) { HideTooltip(); return; }
         long now = Stopwatch.GetTimestamp();
-        if (hit.Name != tipTarget)
+        if (hit.Name != _tipTarget)
         {
-            (tipTarget, tipPoint, tipSince, tipShown) = (hit.Name, player.mouse, now, false);
+            (_tipTarget, _tipPoint, _tipSince, _tipShown) = (hit.Name, player.Mouse, now, false);
         }
-        else if (!tipShown && player.mouse != tipPoint)
+        else if (!_tipShown && player.Mouse != _tipPoint)
         {
             // Moving before it shows starts the delay again; once shown it follows the pointer.
-            (tipPoint, tipSince) = (player.mouse, now);
+            (_tipPoint, _tipSince) = (player.Mouse, now);
         }
         if (ResolveTooltip(hit) is not var (lines, kind) || lines.Count == 0) return;
         // An item's (ToolTipInventory) shows at once: the inventory's mouse-move hook shows it, not MyGUI's tooltip timer (ToolTipInventory::vfunc_6, Verified). The Meitou UI shows every one at once.
-        if (!tipShown && (kind == TooltipKind.Inventory || player.UiMode == UiMode.Meitou || Stopwatch.GetElapsedTime(tipSince, now).TotalSeconds >= UiTooltips.ShowDelaySeconds)) tipShown = true;
-        if (!tipShown) return;
+        if (!_tipShown && (kind == TooltipKind.Inventory || player.UiMode == UiMode.Meitou || Stopwatch.GetElapsedTime(_tipSince, now).TotalSeconds >= UiTooltips.ShowDelaySeconds)) _tipShown = true;
+        if (!_tipShown) return;
         // A static tooltip is shown in a widget of its own (the class names it: "static:AIToolTip"); an item's sits beside the window holding the item.
         UiRect? panel = kind == TooltipKind.Inventory ? ItemWindow(controls, hit) : null;
         if (kind == TooltipKind.Static)
@@ -93,7 +93,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// </summary>
     UiControl? TooltipTarget(IReadOnlyList<UiControl> controls)
     {
-        var top = MyGuiPresentation.HitTest(controls, player.mouse.X, player.mouse.Y);
+        var top = MyGuiPresentation.HitTest(controls, player.Mouse.X, player.Mouse.Y);
         int from = 0;
         if (top is not null)
             for (int i = controls.Count - 1; i >= 0; i--)
@@ -101,7 +101,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         for (int i = controls.Count - 1; i >= from; i--)
         {
             var c = controls[i];
-            if (CarriesTooltip(c) && c.Bounds.Contains(player.mouse.X, player.mouse.Y) && (c.Clip is null || c.Clip.Value.Contains(player.mouse.X, player.mouse.Y)) && c.Properties.GetValueOrDefault("NeedMouse") != "false") return c;
+            if (CarriesTooltip(c) && c.Bounds.Contains(player.Mouse.X, player.Mouse.Y) && (c.Clip is null || c.Clip.Value.Contains(player.Mouse.X, player.Mouse.Y)) && c.Properties.GetValueOrDefault("NeedMouse") != "false") return c;
         }
         return top is not null && CarriesTooltip(top) ? top : null;
     }
@@ -110,10 +110,12 @@ sealed class TooltipRuntime(PlayerInterface player)
     (IReadOnlyList<TooltipLine>, TooltipKind)? ResolveTooltip(UiControl hit)
     {
         var p = hit.Properties;
-        if (p.TryGetValue(ItemTipKey, out string? key) && itemTips.TryGetValue(key, out var item)) return (ItemLines(item), TooltipKind.Inventory);
+        if (p.TryGetValue(ItemTipKey, out string? key) && ItemTips.TryGetValue(key, out var item)) return (ItemLines(item), TooltipKind.Inventory);
         var kind = p.GetValueOrDefault(UiTooltips.Class) switch
         {
-            "fixed" => TooltipKind.Fixed, "inventory" => TooltipKind.Inventory, { } c when c.StartsWith("static:", StringComparison.Ordinal) => TooltipKind.Static, _ => TooltipKind.Floating,
+            "fixed" => TooltipKind.Fixed,
+            "inventory" => TooltipKind.Inventory, { } c when c.StartsWith("static:", StringComparison.Ordinal) => TooltipKind.Static,
+            _ => TooltipKind.Floating,
         };
         switch (p.GetValueOrDefault(UiTooltips.Type))
         {
@@ -161,7 +163,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         // The tooltip texts the code sets are messages of the game's catalog: shown in the active language (a row's "-" mark of an indented key stays).
         if (Loc.Translating)
             lines = [.. lines.Select(l => l with { Key = l.Key.StartsWith('-') ? "-" + TipTr(l.Key[1..]) : TipTr(l.Key), Value = TipTr(l.Value) })];
-        var layout = UiTooltips.Arrange(lines, kind, player.Width, player.Height, point ?? player.mouse, anchor, Measure);
+        var layout = UiTooltips.Arrange(lines, kind, player.Width, player.Height, point ?? player.Mouse, anchor, Measure);
         var panel = layout.Panel;
         float scale = player.Height / 1080f;
         bool meitou = kind != TooltipKind.Static && player.UiMode == UiMode.Meitou && TooltipPlateReady(painter);
@@ -171,8 +173,12 @@ sealed class TooltipRuntime(PlayerInterface player)
         {
             float margin = TipPlateMargin * scale;
             controls.Add(new($"{prefix}-plate", "ImageBox", new(panel.X - margin, panel.Y - margin, panel.Width + 2 * margin, panel.Height + 2 * margin), "", "", "", true,
-                new Dictionary<string, string> { ["ImageTexture"] = TipPlate, ["ImageBorder"] = (TipPlateMargin + TipPlateRadius).ToString(CultureInfo.InvariantCulture),
-                    ["ImageBorderScale"] = scale.ToString(CultureInfo.InvariantCulture) }, none, Pickable: false));
+                new Dictionary<string, string>
+                {
+                    ["ImageTexture"] = TipPlate,
+                    ["ImageBorder"] = (TipPlateMargin + TipPlateRadius).ToString(CultureInfo.InvariantCulture),
+                    ["ImageBorderScale"] = scale.ToString(CultureInfo.InvariantCulture)
+                }, none, Pickable: false));
         }
         else if (kind == TooltipKind.Floating)
             controls.Add(new($"{prefix}-panel", "Widget", panel, "", "", "Kenshi_GenericTextBoxSkin", true, new Dictionary<string, string>(), none, Pickable: false));
@@ -210,19 +216,35 @@ sealed class TooltipRuntime(PlayerInterface player)
     internal static string TipColour(TooltipTone tone, bool plate) => tone switch
     {
         // The armour grades (ItemGrade0 to ItemGrade4 of kenshi_colours.xml) in both modes.
-        TooltipTone.Grade0 => TipHex("666666"), TooltipTone.Grade1 => TipHex("d9ccbf"), TooltipTone.Grade2 => TipHex("4099b3"), TooltipTone.Grade3 => TipHex("66fc80"), TooltipTone.Grade4 => TipHex("fceb0d"),
+        TooltipTone.Grade0 => TipHex("666666"),
+        TooltipTone.Grade1 => TipHex("d9ccbf"),
+        TooltipTone.Grade2 => TipHex("4099b3"),
+        TooltipTone.Grade3 => TipHex("66fc80"),
+        TooltipTone.Grade4 => TipHex("fceb0d"),
         _ => plate ? PlateColour(tone) : ParchmentColour(tone),
     };
     static string PlateColour(TooltipTone tone) => tone switch
-        {
-            TooltipTone.Title => TipHex("d9ceb8"), TooltipTone.Bad or TooltipTone.BadBright => TipHex("bf4834"), TooltipTone.Good => TipHex("a8b774"),
-            TooltipTone.Grey or TooltipTone.GreyBright => TipHex("777777"), TooltipTone.Cyan => TipHex("c4a062"), _ => TipHex("afa68b"),
-        };
+    {
+        TooltipTone.Title => TipHex("d9ceb8"),
+        TooltipTone.Bad or TooltipTone.BadBright => TipHex("bf4834"),
+        TooltipTone.Good => TipHex("a8b774"),
+        TooltipTone.Grey or TooltipTone.GreyBright => TipHex("777777"),
+        TooltipTone.Cyan => TipHex("c4a062"),
+        _ => TipHex("afa68b"),
+    };
     static string ParchmentColour(TooltipTone tone) => tone switch
-        {
-            TooltipTone.Main => PlayerInterface.MainColour, TooltipTone.Ink => MyGuiColours.InkText, TooltipTone.Title => PlayerInterface.TitleColour, TooltipTone.Bad => PlayerInterface.BadColour, TooltipTone.BadBright => PlayerInterface.BadBrightColour,
-            TooltipTone.Good => PlayerInterface.GoodColour, TooltipTone.Grey => PlayerInterface.GreyColour, TooltipTone.GreyBright => TipHex("777777"), TooltipTone.Cyan => TipHex("14ffdc"), _ => MyGuiColours.InkText,
-        };
+    {
+        TooltipTone.Main => PlayerInterface.MainColour,
+        TooltipTone.Ink => MyGuiColours.InkText,
+        TooltipTone.Title => PlayerInterface.TitleColour,
+        TooltipTone.Bad => PlayerInterface.BadColour,
+        TooltipTone.BadBright => PlayerInterface.BadBrightColour,
+        TooltipTone.Good => PlayerInterface.GoodColour,
+        TooltipTone.Grey => PlayerInterface.GreyColour,
+        TooltipTone.GreyBright => TipHex("777777"),
+        TooltipTone.Cyan => TipHex("14ffdc"),
+        _ => MyGuiColours.InkText,
+    };
 
     /// <summary>Bakes the Meitou tooltip plate once (rust under the kit's tint, rounded, with its drop shadow; drawn nine-sliced).</summary>
     bool TooltipPlateReady(UiPainter painter)
@@ -235,7 +257,7 @@ sealed class TooltipRuntime(PlayerInterface player)
 
     /// <summary>The HUD's <c>TooltipPanel</c> (the <c>ToolTipFixed</c> anchor, <c>FUN_14072d3b0</c>): the tooltip grows up from its bottom edge, starting at its left.</summary>
     UiRect HudTooltipAnchor() =>
-        player.faithfulHud.Find("TooltipPanel") is { } panel ? panel.Position.RelativeTo(new(0, 0, player.Width, player.Height), true) : new(0.319792f * player.Width, 0.712963f * player.Height, 0.208333f * player.Width, 0.0666667f * player.Height);
+        player.FaithfulHud.Find("TooltipPanel") is { } panel ? panel.Position.RelativeTo(new(0, 0, player.Width, player.Height), true) : new(0.319792f * player.Width, 0.712963f * player.Height, 0.208333f * player.Width, 0.0666667f * player.Height);
 
     // ---- HUD tooltips (FUN_14072b540, FUN_14072d3b0: Verified) ----
 
@@ -267,7 +289,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// A selected building's status word (the medical header) and the tooltip the building classes give it (<b>Observed</b>: the strings of the <c>vfunc_114</c> status functions, a title
     /// followed by its text; the machine classes' words, Meitou applies them to every building).
     /// </summary>
-    static string? BuildingStatusTip(string status, Meitou.Simulation.Production.MachineSnapshot? machine) => status switch
+    static string? BuildingStatusTip(string status, Simulation.Production.MachineSnapshot? machine) => status switch
     {
         "Working" => WorkingTip(machine),
         "Switched off" => "This machine is switched off.",
@@ -299,14 +321,14 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// granted share of it; at most 0.9 it names that share (Title tag, the whole percent, then ink), else, or with neither, "This machine is working fine.". The output now of a
     /// generator that reads Working is health x P (<c>FUN_140297760</c>), so its share is the health; a wind generator's is that x the blades' share, 0 when under 1 unit (<c>FUN_140297810</c>).
     /// </summary>
-    static string WorkingTip(Meitou.Simulation.Production.MachineSnapshot? machine)
+    static string WorkingTip(Simulation.Production.MachineSnapshot? machine)
     {
         float health = machine?.Efficiency?.Health ?? 1;
         float? share = machine?.Power switch
         {
-            { Kind: Meitou.Simulation.Production.PowerKind.Generator } when machine.Wind is { } w => w.Share * health * w.Rated < 1 ? 0 : w.Share * health,
-            { Kind: Meitou.Simulation.Production.PowerKind.Generator } => health,
-            { Kind: Meitou.Simulation.Production.PowerKind.Consumer, Demand: > 0 } p => p.Granted / p.Demand,
+            { Kind: Simulation.Production.PowerKind.Generator } when machine.Wind is { } w => w.Share * health * w.Rated < 1 ? 0 : w.Share * health,
+            { Kind: Simulation.Production.PowerKind.Generator } => health,
+            { Kind: Simulation.Production.PowerKind.Consumer, Demand: > 0 } p => p.Granted / p.Demand,
             _ => null,
         };
         return share is <= 0.9f and { } s
@@ -322,7 +344,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// <c>-Wanted For: </c> with the first four crimes and a <c> </c> row with the rest; then the imprisonment row, or a rule, the turn-in line and the local faction's expiry.
     /// <paramref name="everyExpiry"/> (Meitou UI): each faction's expiry under its own rows instead.
     /// </summary>
-    static List<(string Key, string Value)> BountyRows(IReadOnlyList<Meitou.Simulation.Crime.BountyLine> bounties, PrisonView? prison, bool everyExpiry)
+    static List<(string Key, string Value)> BountyRows(IReadOnlyList<Simulation.Crime.BountyLine> bounties, PrisonView? prison, bool everyExpiry)
     {
         var rows = new List<(string, string)>();
         foreach (var bounty in bounties)
@@ -350,7 +372,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         return rows;
 
         // FUN_1405d1110: int(lifetime - elapsed) hours, "Notorious" in Title above 9999 (the lifetime is then 9999999).
-        static string Expiry(Meitou.Simulation.Crime.BountyLine bounty)
+        static string Expiry(Simulation.Crime.BountyLine bounty)
         {
             if (double.IsPositiveInfinity(bounty.HoursLeft)) return TitleTag + Loc.Tr("Notorious: The bounty will never expire.");
             int hours = (int)bounty.HoursLeft;
@@ -362,7 +384,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// The bounty panel's own text (the other output of <c>FUN_1405d2da0</c>): wanted by the local faction, Title <c>Bounty:</c> and its amount in Main; else both Greyed
     /// with the largest bounty (<c>FUN_140853740</c>).
     /// </summary>
-    internal static PlayerInterface.HudLine BountyLine(IReadOnlyList<Meitou.Simulation.Crime.BountyLine> bounties) =>
+    internal static PlayerInterface.HudLine BountyLine(IReadOnlyList<Simulation.Crime.BountyLine> bounties) =>
         bounties.FirstOrDefault(v => v.Local) is { Amount: > 0 } local
             ? new(Loc.Tr("Bounty:"), Loc.Tr("c.{1,num}", local.Amount), PlayerInterface.TitleColour, PlayerInterface.MainColour)
             : new(Loc.Tr("Bounty:"), Loc.Tr("c.{1,num}", bounties.Count == 0 ? 0 : bounties.Max(v => v.Amount)), PlayerInterface.GreyColour, PlayerInterface.GreyColour);
@@ -455,10 +477,10 @@ sealed class TooltipRuntime(PlayerInterface player)
                 b.Properties[name] = properties;
             }
         }
-        if (player.buildingSelection.BuildingFocus() is { } focus)
+        if (player.BuildingSelection.BuildingFocus() is { } focus)
         {
-            var (_, _, _, status, _, _) = player.buildingSelection.BuildingLines(focus);
-            if (BuildingStatusTip(status, player.production.Machine(focus.SiteId)) is { } tip) Add("HealthText", tip);
+            var (_, _, _, status, _, _) = player.BuildingSelection.BuildingLines(focus);
+            if (BuildingStatusTip(status, player.Production.Machine(focus.SiteId)) is { } tip) Add("HealthText", tip);
         }
         else if (player.Lead() is { Body: not null } lead) Add("HealthText", HudPanels.HealthWord(lead).Tip);
     }
@@ -491,11 +513,11 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// <summary>A weather kind's name in item tooltips (<c>FUN_140796480</c>).</summary>
     static string WeatherKindName(Meitou.Data.World.WeatherAffecting kind) => kind switch
     {
-        Meitou.Data.World.WeatherAffecting.DustStorm => "Duststorms",
-        Meitou.Data.World.WeatherAffecting.Acid => "Acid",
-        Meitou.Data.World.WeatherAffecting.Burning => "Burning",
-        Meitou.Data.World.WeatherAffecting.Gas => "Gas",
-        Meitou.Data.World.WeatherAffecting.Rain => "Rain",
+        Data.World.WeatherAffecting.DustStorm => "Duststorms",
+        Data.World.WeatherAffecting.Acid => "Acid",
+        Data.World.WeatherAffecting.Burning => "Burning",
+        Data.World.WeatherAffecting.Gas => "Gas",
+        Data.World.WeatherAffecting.Rain => "Rain",
         _ => "None",
     };
 
@@ -504,14 +526,14 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// per stat whose multiplier at that level is not 1 (<see cref="Meitou.Data.Gameplay.Bodies.LimbReplacement.Multiplier"/>) as int((m - 1) x 100) percent with its sign, a bonus in
     /// the good colour and a penalty in the bad one, <c>-Unarmed damage bonus</c> when not 0, and a rule (the weight follows).
     /// </summary>
-    static IEnumerable<TooltipLine> LimbRows(Meitou.Data.Gameplay.Bodies.LimbReplacement limb, int level)
+    static IEnumerable<TooltipLine> LimbRows(LimbReplacement limb, int level)
     {
         int grade = ArmourTooltip.GradeOf(level);
         yield return new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", GradeTone(grade));
         float t = Math.Clamp(level * 0.01f, 0, 1);
         yield return new("-Max HP", Number(MathF.Floor(limb.Hp(t))), TooltipTone.Title, TooltipTone.Ink);
         yield return new("-----STATS-----", "", TooltipTone.Grey);
-        foreach (var stat in Enum.GetValues<Meitou.Data.Gameplay.Bodies.StatsEnumerated>())
+        foreach (var stat in Enum.GetValues<StatsEnumerated>())
         {
             float m = limb.Multiplier(stat, t);
             if (m == 1) continue;
@@ -528,7 +550,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// effect</c>) x 100)% (Title), <c>-Combat skills bonus</c> when not 0 (Bad, or Good with a plus), then <c>-Athletics effect</c>, <c>-Combat speed effect</c>, <c>-Stealth skill
     /// effect</c> and <c>-Dodge skill effect</c> (both the <c>stealth mult</c>) as <c>0.00x</c>, Bad below 1, Good above, Main at 1.
     /// </summary>
-    static IEnumerable<TooltipLine> ContainerRows(Meitou.Data.GameRecord pack)
+    static IEnumerable<TooltipLine> ContainerRows(GameRecord pack)
     {
         yield return new("------------");
         float encumbrance = MathF.Max(pack.GetFloat("encumbrance effect", 1), 0);
@@ -562,9 +584,9 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// level (<c>uses_level</c>), "Needs research bench level {1,num}" (BadBright); requirements met, "Right-click to learn tech" (Title), else "Cannot learn this yet" (BadBright). Then
     /// <c>Tech Level</c> (ink) with the level (Main).
     /// </summary>
-    IEnumerable<TooltipLine> BlueprintRows(Meitou.Data.GameRecord research)
+    IEnumerable<TooltipLine> BlueprintRows(GameRecord research)
     {
-        var state = player.session.CurrentSnapshot.Research;
+        var state = player.Session.CurrentSnapshot.Research;
         int level = research.GetInt("level");
         yield return state.Known.Contains(research.StringId) ? new(Loc.Tr("Research already known"), "", TooltipTone.Title)
             : level > state.BenchLevel ? new(Loc.Tr("Needs research bench level {1,num}", level), "", TooltipTone.BadBright)
@@ -578,14 +600,14 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// cyan when finished and BadBright when not (the original packs the first into one row and the rest, ", "-joined, into a second; Meitou gives each its own row, one tone per value),
     /// then a row per <c>enable buildings</c>, <c>enable weapon type</c>, <c>enable weapon model</c>, <c>enable armour</c> and <c>enable item</c> reference with the name in Good.
     /// </summary>
-    IEnumerable<TooltipLine> UnlockRows(Meitou.Data.GameRecord research)
+    IEnumerable<TooltipLine> UnlockRows(GameRecord research)
     {
-        var known = player.session.CurrentSnapshot.Research.Known;
+        var known = player.Session.CurrentSnapshot.Research.Known;
         bool first = true;
         foreach (var req in research.GetReferences("requirements"))
         {
             if (player.RecordName?.Invoke(req.TargetStringId) is not { Length: > 0 } name) continue;
-            bool done = known.Contains(req.TargetStringId) || player.session.CurrentSnapshot.UnlockedBuildings.Contains(req.TargetStringId);
+            bool done = known.Contains(req.TargetStringId) || player.Session.CurrentSnapshot.UnlockedBuildings.Contains(req.TargetStringId);
             yield return new(first ? Loc.Tr("Requirements:") : "", name, TooltipTone.Default, done ? TooltipTone.Cyan : TooltipTone.BadBright);
             first = false;
         }
@@ -605,10 +627,10 @@ sealed class TooltipRuntime(PlayerInterface player)
         var record = ItemRecordOf?.Invoke(t.Record);
         var type = record?.Type;
         // A weapon's grade is its model ("Mk I"), shown under the name in the colour of its level's grade; a brief tooltip puts it before the name ("Mk I Fragment Axe").
-        string? model = type == Meitou.Data.Fcs.FcsRecordType.WEAPON && t.Material.Length > 0 && player.RecordName?.Invoke(t.Material) is { Length: > 0 } m ? m : null;
+        string? model = type == Data.Fcs.FcsRecordType.Weapon && t.Material.Length > 0 && player.RecordName?.Invoke(t.Material) is { Length: > 0 } m ? m : null;
         // A blueprint is titled with its research (BlueprintItem's first tooltip function, FUN_1407ab430): the name, "Research Blueprint", its state and Tech Level (BlueprintRows);
         // the requirement and unlock rows follow the prices.
-        var research = ItemRecordOf?.Invoke(t.Company) is { Type: Meitou.Data.Fcs.FcsRecordType.RESEARCH } r ? r : null;
+        var research = ItemRecordOf?.Invoke(t.Company) is { Type: Data.Fcs.FcsRecordType.Research } r ? r : null;
         string name = research?.Name ?? (t.Brief && model is not null ? model + " " + t.Name : t.Name);
         // An empty bag: " (" + "empty" + ")" after its name (FUN_1407aa090).
         if (!t.Brief && t.BagItems == 0) name += " (" + Loc.Tr("empty") + ")";
@@ -622,20 +644,20 @@ sealed class TooltipRuntime(PlayerInterface player)
         }
         // Every grade line (weapon model, armour, crossbow, prosthetic) goes right under the name, as in the original.
         if (model is not null) lines.Add(new(model, "", GradeTone(WeaponGrade(t.Level))));
-        else if (type == Meitou.Data.Fcs.FcsRecordType.CROSSBOW)
+        else if (type == Data.Fcs.FcsRecordType.Crossbow)
         {
             int grade = ArmourTooltip.GradeOf(t.Level);
             lines.Add(new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", GradeTone(grade)));
         }
         var combat = CombatOf?.Invoke();
-        var armour = type == Meitou.Data.Fcs.FcsRecordType.ARMOUR ? combat?.Armour(t.Record) : null;
+        var armour = type == Data.Fcs.FcsRecordType.Armour ? combat?.Armour(t.Record) : null;
         var armourHead = armour is not null ? ArmourTooltip.Head(armour, t.Level).Select(ArmourRow).ToList() : null;
-        var limbRows = type == Meitou.Data.Fcs.FcsRecordType.LIMB_REPLACEMENT ? LimbRows(Meitou.Data.Gameplay.Bodies.LimbReplacement.From(record!), t.Level).ToList() : null;
+        var limbRows = type == Data.Fcs.FcsRecordType.LimbReplacement ? LimbRows(LimbReplacement.From(record!), t.Level).ToList() : null;
         if (armourHead is not null) { lines.Add(armourHead[0]); armourHead.RemoveAt(0); }
         if (limbRows is not null) { lines.Add(limbRows[0]); limbRows.RemoveAt(0); }
-        int function = type == Meitou.Data.Fcs.FcsRecordType.ITEM ? record!.GetInt("item function") : 0;
+        int function = type == Data.Fcs.FcsRecordType.Item ? record!.GetInt("item function") : 0;
         // A bag's own weight, without its contents (Item +0x120, FUN_1407aa090).
-        float unitWeight = type == Meitou.Data.Fcs.FcsRecordType.CONTAINER ? record!.GetFloat("weight kg") : t.Quantity > 0 ? t.Weight / t.Quantity : t.Weight;
+        float unitWeight = type == Data.Fcs.FcsRecordType.Container ? record!.GetFloat("weight kg") : t.Quantity > 0 ? t.Weight / t.Quantity : t.Weight;
         TooltipLine Row(string label, string value, TooltipTone valueTone = TooltipTone.Ink) => new("-" + label, value, TooltipTone.Ink, valueTone);
         // The kind markers in the original's order (FUN_1407ae130): Ammunition, Research Artifact (the record's artifact flag), Unique (the item's flag; both Special, #14ffdc), Book, Food.
         if (function == 16) lines.Add(new("[Ammunition]", "", TooltipTone.Main));
@@ -675,7 +697,7 @@ sealed class TooltipRuntime(PlayerInterface player)
             int n = (int)value;
             if (n != 0) lines.Add(Row(label, (n > 0 ? "+" : "") + n.ToString(CultureInfo.InvariantCulture) + "%", n > 0 ? TooltipTone.Good : TooltipTone.Bad));
         }
-        if (type == Meitou.Data.Fcs.FcsRecordType.CROSSBOW && combat?.Crossbow(t.Record) is { } bow)
+        if (type == Data.Fcs.FcsRecordType.Crossbow && combat?.Crossbow(t.Record) is { } bow)
         {
             // A crossbow's own rows (FUN_1407b0750, Observed): the gun's numbers at the item's level x 0.01 (CrossbowData.At), the weight whole kg truncated.
             var gun = CrossbowInstance.Create(t.Level * 0.01f, bow, combat.Constants, RangedDamageMultiplier?.Invoke() ?? 1).Stats;
@@ -697,15 +719,20 @@ sealed class TooltipRuntime(PlayerInterface player)
             weightText = I(unitWeight) + " kg";
             lines.Add(Row("Weight", weightText));
         }
-        else if (type == Meitou.Data.Fcs.FcsRecordType.WEAPON && combat?.Weapon(t.Record) is { } weapon)
+        else if (type == Data.Fcs.FcsRecordType.Weapon && combat?.Weapon(t.Record) is { } weapon)
         {
             var maker = combat.Manufacturer(t.Company) ?? WeaponManufacturer.Neutral;
             var stats = WeaponStats.Compute(t.Level * 0.01f, weapon, maker, combat.WeaponMaterial(t.Material) ?? WeaponMaterial.None, combat.Constants);
             string? className = weapon.SkillCategory switch
             {
-                (int)WeaponCategory.Katanas => "Katana class", (int)WeaponCategory.Sabres => "Sabre class", (int)WeaponCategory.Blunt => "Blunt weapon class",
-                (int)WeaponCategory.Heavy => "Heavy weapons class", (int)WeaponCategory.Hackers => "Hacker class", (int)WeaponCategory.Bow => "Crossbow class",
-                (int)WeaponCategory.Polearms => "Polearm class", _ => null,
+                (int)WeaponCategory.Katanas => "Katana class",
+                (int)WeaponCategory.Sabres => "Sabre class",
+                (int)WeaponCategory.Blunt => "Blunt weapon class",
+                (int)WeaponCategory.Heavy => "Heavy weapons class",
+                (int)WeaponCategory.Hackers => "Hacker class",
+                (int)WeaponCategory.Bow => "Crossbow class",
+                (int)WeaponCategory.Polearms => "Polearm class",
+                _ => null,
             };
             if (className is not null) lines.Add(new(className, "", TooltipTone.Main));
             lines.Add(Row("Cutting damage", Fixed2(stats.CutMultiplier), TooltipTone.Main));
@@ -731,7 +758,7 @@ sealed class TooltipRuntime(PlayerInterface player)
             if (limbRows is not null) lines.AddRange(limbRows);
             // "{n} x {unit} kg ({total} kg)" for a stack.
             // An armour piece and a backpack print whole kilograms, truncated (FUN_1407a1650, FUN_1407aa090, Observed).
-            bool wholeKg = armour is not null || type == Meitou.Data.Fcs.FcsRecordType.CONTAINER;
+            bool wholeKg = armour is not null || type == Data.Fcs.FcsRecordType.Container;
             weightText = wholeKg ? ((int)unitWeight).ToString(CultureInfo.InvariantCulture) + " kg"
                 : (t.Quantity > 1 ? $"{t.Quantity} x " : "") + Number(unitWeight) + " kg" + (t.Quantity > 1 ? $" ({Number(t.Weight)} kg)" : "");
             lines.Add(Row("Weight", weightText));
@@ -759,10 +786,10 @@ sealed class TooltipRuntime(PlayerInterface player)
             lines.Add(new("-Value", "c." + TradeWindows.Money(prices.Value), TooltipTone.Ink, TooltipTone.Ink));
             lines.Add(new("-Sell value", "c." + TradeWindows.Money(prices.Sell), TooltipTone.Ink, TooltipTone.Ink));
         }
-        if (type == Meitou.Data.Fcs.FcsRecordType.CONTAINER) lines.AddRange(ContainerRows(record!));
+        if (type == Data.Fcs.FcsRecordType.Container) lines.AddRange(ContainerRows(record!));
         if (research is not null) lines.AddRange(UnlockRows(research));
         // A trade item's average price follows the prices, in and out of a trade; while trading, the mark-up of the town and trader factors, Bad above 1 and Good below (FUN_1407ae130).
-        if (type == Meitou.Data.Fcs.FcsRecordType.ITEM && player.PricesOf?.Invoke(t) is { Average: { } average })
+        if (type == Data.Fcs.FcsRecordType.Item && player.PricesOf?.Invoke(t) is { Average: { } average })
         {
             lines.Add(new("-Avg. Price", "c." + TradeWindows.Money(average), TooltipTone.Ink, TooltipTone.Ink));
             if (t.Trade is { } quote)
@@ -790,7 +817,7 @@ sealed class TooltipRuntime(PlayerInterface player)
                     : Loc.Tr("Crafted by the smith {1} of {2}.", t.Crafter, faction), "", TooltipTone.Title, Paragraph: true));
             }
         }
-        if (type == Meitou.Data.Fcs.FcsRecordType.ITEM && function is not (3 or 16))
+        if (type == Data.Fcs.FcsRecordType.Item && function is not (3 or 16))
         {
             if (t.MaxCharges > 1) lines.Add(Row("Charges", $"{Number(t.Charges)}/{Number(t.MaxCharges)}"));
             // FUN_1407ae130: shown whenever the quality is not 1 (an ITEM carries its record's quality, 1 unless the data sets it).
@@ -801,7 +828,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         // The record's description closes every other item's tooltip, with no blank row before it (the second tooltip function, FUN_14079f4d0 and its overrides).
         if (armour is null && record?.GetString("description") is { Length: > 0 } text)
             lines.Add(new(text, "", TooltipTone.Ink, Paragraph: true));
-        if (type == Meitou.Data.Fcs.FcsRecordType.WEAPON) lines.AddRange(WeaponTail(t, model));
+        if (type == Data.Fcs.FcsRecordType.Weapon) lines.AddRange(WeaponTail(t, model));
         return lines;
     }
 

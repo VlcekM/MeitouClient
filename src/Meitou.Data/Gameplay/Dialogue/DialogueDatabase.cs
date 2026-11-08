@@ -33,7 +33,7 @@ public sealed class DialogueNode
 
     public GameRecord Record { get; }
     public string StringId => Record.StringId;
-    public bool IsRoot => Record.Type == FcsRecordType.DIALOGUE;
+    public bool IsRoot => Record.Type == FcsRecordType.Dialogue;
     public Talker Speaker { get; internal set; }
     public bool Interjection { get; internal set; }
     /// <summary>The non-empty <c>text0</c>..<c>textN</c>; one is picked at random each time the line is said.</summary>
@@ -127,19 +127,19 @@ public sealed class DialogueSet
     public IReadOnlySet<string> Packages { get; }
     public IReadOnlyList<DialogueNode> For(int ev) => ByEvent.GetValueOrDefault(ev) ?? [];
 
-    int trades;   // 0 not yet known, 1 no, 2 yes
+    int _trades;   // 0 not yet known, 1 no, 2 yes
     /// <summary>A line under its event-1 dialogue has the Trade effect (conditions not checked): the character trades when talked to, as only the shopkeeper of most trader squads does.</summary>
     public bool Trades
     {
         get
         {
-            if (trades == 0)
+            if (_trades == 0)
             {
                 var seen = new HashSet<DialogueNode>();
                 bool Walk(DialogueNode n) => seen.Add(n) && (n.Effects.Any(e => e.Action == DialogueActions.Trade) || n.Children.Any(Walk));
-                trades = For(DialogueEvents.PlayerTalkToMe).Any(Walk) ? 2 : 1;
+                _trades = For(DialogueEvents.PlayerTalkToMe).Any(Walk) ? 2 : 1;
             }
-            return trades == 2;
+            return _trades == 2;
         }
     }
 }
@@ -150,14 +150,14 @@ public sealed class DialogueSet
 /// </summary>
 public sealed class DialogueDatabase(GameDatabase db)
 {
-    readonly Lock gate = new();
-    readonly Dictionary<string, DialogueNode> nodes = new(StringComparer.Ordinal);
-    readonly ConcurrentDictionary<(string Character, string Template, bool Leader, bool Player, bool Animal, string PlayerFaction), DialogueSet> sets = new();
-    Dictionary<string, DialogueNode>? wordSwaps;
+    readonly Lock _gate = new();
+    readonly Dictionary<string, DialogueNode> _nodes = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<(string Character, string Template, bool Leader, bool Player, bool Animal, string PlayerFaction), DialogueSet> _sets = new();
+    Dictionary<string, DialogueNode>? _wordSwaps;
 
     public GameDatabase Db => db;
 
-    Dictionary<string, (string Group, string[] Races)>? raceGroups;
+    Dictionary<string, (string Group, string[] Races)>? _raceGroups;
 
     /// <summary>
     /// The RACE_GROUP a race belongs to and the group's races (the game's race loader, <c>FUN_140430070</c>): each group's <c>races</c> in data order,
@@ -165,16 +165,16 @@ public sealed class DialogueDatabase(GameDatabase db)
     /// </summary>
     public (string Group, string[] Races)? RaceGroupOf(string raceId)
     {
-        var map = Volatile.Read(ref raceGroups);
+        var map = Volatile.Read(ref _raceGroups);
         if (map is null)
         {
             map = new(StringComparer.Ordinal);
-            foreach (var g in db.OfType(FcsRecordType.RACE_GROUP))
+            foreach (var g in db.OfType(FcsRecordType.RaceGroup))
             {
                 string[] races = [.. g.GetReferences("races").Select(r => r.TargetStringId)];
                 foreach (string r in races) map[r] = (g.StringId, races);
             }
-            Volatile.Write(ref raceGroups, map);
+            Volatile.Write(ref _raceGroups, map);
         }
         return map.TryGetValue(raceId, out var group) ? group : null;
     }
@@ -192,11 +192,11 @@ public sealed class DialogueDatabase(GameDatabase db)
     /// <summary>The node of a dialogue record; null when it is none (or its name marks it <c>Unfinished</c>, which the game skips).</summary>
     public DialogueNode? Node(string id)
     {
-        lock (gate)
+        lock (_gate)
         {
-            if (nodes.TryGetValue(id, out var known)) return known;
-            if (db.Find(id) is not { Type: FcsRecordType.DIALOGUE or FcsRecordType.DIALOGUE_LINE or FcsRecordType.WORD_SWAPS } record) return null;
-            if (record.Type == FcsRecordType.DIALOGUE && record.Name.Contains("Unfinished", StringComparison.Ordinal)) return null;
+            if (_nodes.TryGetValue(id, out var known)) return known;
+            if (db.Find(id) is not { Type: FcsRecordType.Dialogue or FcsRecordType.DialogueLine or FcsRecordType.WordSwaps } record) return null;
+            if (record.Type == FcsRecordType.Dialogue && record.Name.Contains("Unfinished", StringComparison.Ordinal)) return null;
             var built = new List<DialogueNode>();
             var node = Build(record, built);
             foreach (var n in built) Finish(n);
@@ -208,13 +208,13 @@ public sealed class DialogueDatabase(GameDatabase db)
     public DialogueNode? WordSwap(string token)
     {
         Dictionary<string, DialogueNode>? map;
-        lock (gate) map = wordSwaps;
+        lock (_gate) map = _wordSwaps;
         if (map is null)
         {
             map = new(StringComparer.Ordinal);
-            foreach (var r in db.OfType(FcsRecordType.WORD_SWAPS).OrderBy(r => r.StringId, StringComparer.Ordinal))
+            foreach (var r in db.OfType(FcsRecordType.WordSwaps).OrderBy(r => r.StringId, StringComparer.Ordinal))
                 if (Node(r.StringId) is { } n) map.TryAdd(r.Name.Trim(), n);
-            lock (gate) wordSwaps = map;
+            lock (_gate) _wordSwaps = map;
         }
         return map.GetValueOrDefault(token);
     }
@@ -225,7 +225,7 @@ public sealed class DialogueDatabase(GameDatabase db)
     /// an NPC leader its template's <c>dialog leader</c>, else its own <c>dialogue package</c>, else <c>dialog squad</c>; the others <c>dialog squad</c>, else the character's <c>dialogue package</c>.
     /// </summary>
     public DialogueSet SetFor(string characterId, string? templateId, bool leader, bool player, bool animal, string? playerFactionId = null) =>
-        sets.GetOrAdd((characterId, templateId ?? "", leader, player, animal, playerFactionId ?? ""), Make);
+        _sets.GetOrAdd((characterId, templateId ?? "", leader, player, animal, playerFactionId ?? ""), Make);
 
     DialogueSet Make((string Character, string Template, bool Leader, bool Player, bool Animal, string PlayerFaction) key)
     {
@@ -259,7 +259,7 @@ public sealed class DialogueDatabase(GameDatabase db)
         }
         void Package(string id)
         {
-            if (!seen.Add(id) || db.Find(id) is not { Type: FcsRecordType.DIALOGUE_PACKAGE } p || p.Name.Contains("Unfinished", StringComparison.Ordinal)) return;
+            if (!seen.Add(id) || db.Find(id) is not { Type: FcsRecordType.DialoguePackage } p || p.Name.Contains("Unfinished", StringComparison.Ordinal)) return;
             packageIds.Add(id);   // an Unfinished package is neither a package of the character nor followed (FUN_14067fab0)
             foreach (var parent in p.GetReferences("inheritsFrom")) Package(parent.TargetStringId);
             foreach (var d in p.GetReferences("dialogs"))
@@ -278,7 +278,7 @@ public sealed class DialogueDatabase(GameDatabase db)
     DialogueNode Build(GameRecord record, List<DialogueNode> built)
     {
         var node = new DialogueNode(record);
-        nodes[record.StringId] = node;
+        _nodes[record.StringId] = node;
         built.Add(node);
         node.Speaker = (Talker)record.GetInt("speaker");
         node.Interjection = record.GetBool("interjection");
@@ -366,8 +366,8 @@ public sealed class DialogueDatabase(GameDatabase db)
         var children = new List<DialogueNode>();
         foreach (var l in record.GetReferences("lines"))
         {
-            if (db.Find(l.TargetStringId) is not { Type: FcsRecordType.DIALOGUE_LINE } line) continue;
-            var child = nodes.GetValueOrDefault(line.StringId) ?? Build(line, built);
+            if (db.Find(l.TargetStringId) is not { Type: FcsRecordType.DialogueLine } line) continue;
+            var child = _nodes.GetValueOrDefault(line.StringId) ?? Build(line, built);
             if (!children.Contains(child)) children.Add(child);
         }
         node.Children = children;

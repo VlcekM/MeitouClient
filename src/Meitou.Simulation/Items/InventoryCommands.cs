@@ -23,7 +23,7 @@ public static class InventoryCommands
     {
         "head" => race.NoHats,
         "shirt" => race.NoShirts,
-        "boots" => race.NoShoes || wearer.Medical is { } m && m.LimbPart(2) is { Limb: not Bodies.LimbState.Original } && m.LimbPart(3) is { Limb: not Bodies.LimbState.Original },
+        "boots" => race.NoShoes || wearer.Medical is { } m && m.LimbPart(2) is { Limb: not LimbState.Original } && m.LimbPart(3) is { Limb: not LimbState.Original },
         _ => false,
     };
 
@@ -44,7 +44,7 @@ public static class InventoryCommands
     /// </summary>
     public static bool TryWearBag(Inventory root, ItemInstance item, CharacterCold? wearer)
     {
-        if (item.Type != Meitou.Data.Fcs.FcsRecordType.CONTAINER || item.Contents is null || item.Quantity != 1 || root.Backpack is not null || !WearableBy(item, wearer)) return false;
+        if (item.Type != FcsRecordType.Container || item.Contents is null || item.Quantity != 1 || root.Backpack is not null || !WearableBy(item, wearer)) return false;
         item.Section = "backpack_attach";
         item.X = 0;
         item.Y = 0;
@@ -85,9 +85,15 @@ public static class InventoryCommands
     // Engine slot capacities, in inventory cells. Clothing and backpack slots hold one item.
     public static (int Width, int Height) SectionSize(string section) => section switch
     {
-        "back" => (10, 2), "hip" => (7, 1), "backpack_attach" => (5, 4),
-        "shirt" or "boots" => (4, 2), "head" => (4, 3), "legs" => (4, 5),
-        "armour" => (4, 6), "belt" => (2, 2), _ => (0, 0),
+        "back" => (10, 2),
+        "hip" => (7, 1),
+        "backpack_attach" => (5, 4),
+        "shirt" or "boots" => (4, 2),
+        "head" => (4, 3),
+        "legs" => (4, 5),
+        "armour" => (4, 6),
+        "belt" => (2, 2),
+        _ => (0, 0),
     };
 
     /// <summary>
@@ -98,9 +104,9 @@ public static class InventoryCommands
     /// </summary>
     public static bool TryEquip(Inventory root, ItemInstance item, CharacterCold? wearer = null)
     {
-        if (!WearableBy(item, wearer) ||item.Quantity != 1 || item.Width <= 0 || item.Height <= 0) return false;
-        string[] sections = item.Type is Meitou.Data.Fcs.FcsRecordType.WEAPON or Meitou.Data.Fcs.FcsRecordType.CROSSBOW ? ["back", "hip"]
-            : item.Type is Meitou.Data.Fcs.FcsRecordType.ARMOUR or Meitou.Data.Fcs.FcsRecordType.ITEM && IsEquipmentSection(item.EquipmentSection) && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") ? [item.EquipmentSection] : [];
+        if (!WearableBy(item, wearer) || item.Quantity != 1 || item.Width <= 0 || item.Height <= 0) return false;
+        string[] sections = item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow ? ["back", "hip"]
+            : item.Type is FcsRecordType.Armour or FcsRecordType.Item && IsEquipmentSection(item.EquipmentSection) && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") ? [item.EquipmentSection] : [];
         foreach (string section in sections)
         {
             if (SectionClosed(wearer, section)) continue;
@@ -180,15 +186,15 @@ public static class InventoryCommands
         {
             bool allowed = section switch
             {
-                "back" or "hip" => item.Type is Meitou.Data.Fcs.FcsRecordType.WEAPON or Meitou.Data.Fcs.FcsRecordType.CROSSBOW,
-                "backpack_attach" => item.Type == Meitou.Data.Fcs.FcsRecordType.CONTAINER && item.Contents is not null,
-                _ => item.Type is Meitou.Data.Fcs.FcsRecordType.ARMOUR or Meitou.Data.Fcs.FcsRecordType.ITEM && item.EquipmentSection == section,
+                "back" or "hip" => item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow,
+                "backpack_attach" => item.Type == FcsRecordType.Container && item.Contents is not null,
+                _ => item.Type is FcsRecordType.Armour or FcsRecordType.Item && item.EquipmentSection == section,
             };
             if (!allowed || item.Quantity != 1) return false;
             if (section is not ("back" or "hip") && (x != 0 || y != 0 || target.Items.Any(i => i != item && i.Section == section))) return false;
         }
         // A prosthetic slot holds one LIMB_REPLACEMENT; whether it fits the limb is the caller's check (PlayerState).
-        if (IsLimbSection(section) && (item.Type != Meitou.Data.Fcs.FcsRecordType.LIMB_REPLACEMENT || item.Quantity != 1 || x != 0 || y != 0 || target.Items.Any(i => i != item && i.Section == section))) return false;
+        if (IsLimbSection(section) && (item.Type != FcsRecordType.LimbReplacement || item.Quantity != 1 || x != 0 || y != 0 || target.Items.Any(i => i != item && i.Section == section))) return false;
         foreach (var other in target.Items)
             if (other != item && other.Section == section && x < other.X + other.Width && other.X < x + item.Width && y < other.Y + other.Height && other.Y < y + item.Height) return false;
         if (owner != target) { owner.Items.Remove(item); target.Items.Add(item); }
@@ -233,7 +239,7 @@ public static class InventoryCommands
     /// The types that never stack (<c>FUN_14075e090</c>): WEAPON, ARMOUR, CONTAINER, MAP_ITEM, CROSSBOW, LIMB_REPLACEMENT; the others stack up to their record's <c>stackable</c>.
     /// </summary>
     public static bool NeverStacks(FcsRecordType type) =>
-        type is FcsRecordType.WEAPON or FcsRecordType.ARMOUR or FcsRecordType.CONTAINER or FcsRecordType.MAP_ITEM or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT;
+        type is FcsRecordType.Weapon or FcsRecordType.Armour or FcsRecordType.Container or FcsRecordType.MapItem or FcsRecordType.Crossbow or FcsRecordType.LimbReplacement;
 
     /// <summary>
     /// Whether a held item joins the stack it is dropped on (<c>FUN_140715560</c>): same record (so type), material and quality, of a type that stacks; Meitou also keeps stolen, death
@@ -274,10 +280,10 @@ public static class InventoryCommands
         if (!wearable) return "Can't wear that item.";
         bool takes = section switch
         {
-            "back" or "hip" => type is FcsRecordType.WEAPON or FcsRecordType.CROSSBOW,
-            "backpack_attach" => type == FcsRecordType.CONTAINER && bagItems >= 0,
-            _ when IsLimbSection(section) => type == FcsRecordType.LIMB_REPLACEMENT,
-            _ when IsEquipmentSection(section) => type is FcsRecordType.ARMOUR or FcsRecordType.ITEM && equipmentSection == section,
+            "back" or "hip" => type is FcsRecordType.Weapon or FcsRecordType.Crossbow,
+            "backpack_attach" => type == FcsRecordType.Container && bagItems >= 0,
+            _ when IsLimbSection(section) => type == FcsRecordType.LimbReplacement,
+            _ when IsEquipmentSection(section) => type is FcsRecordType.Armour or FcsRecordType.Item && equipmentSection == section,
             _ => false,
         };
         return takes ? null : "Invalid container type.";

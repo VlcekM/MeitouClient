@@ -17,18 +17,18 @@ public class CanOrderTests
     /// <summary>The order rows the menu gives, by the name <see cref="TaskStartTests.Order"/> uses, with their target and site.</summary>
     static (TaskType Row, CharacterId Target, string? Site) Row(TaskStartTests.Rig rig, string name) => name switch
     {
-        "move" => (TaskType.MOVE_CUS_ORDERED, CharacterId.None, null),
-        "follow" => (TaskType.STAY_CLOSE_TO_TARGET, rig.Mate, null),
-        "first aid" => (TaskType.FIRST_AID_ORDER, rig.Mate, null),
-        "rest" => (TaskType.REST, CharacterId.None, null),
-        "pick up" => (TaskType.LIFT_PERSON_PLAYER_ORDER, rig.Downed, null),
-        "loot" => (TaskType.LOOT_TARGET, rig.Downed, null),
-        "stealth ko" => (TaskType.STEALTH_KNOCKOUT, rig.Awake, null),
-        "operate" => (TaskType.OPERATE_MACHINERY, CharacterId.None, rig.WellSite),
-        "build" => (TaskType.BUILD, CharacterId.None, rig.ShedSite),
-        "dismantle" => (TaskType.DISMANTLE, CharacterId.None, rig.WellSite),
-        "use bed" => (TaskType.USE_BED, CharacterId.None, rig.BedFixture),
-        "attack" => (TaskType.FOCUSED_MELEE_ATTACK, rig.OtherEnemy, null),
+        "move" => (TaskType.MoveCusOrdered, CharacterId.None, null),
+        "follow" => (TaskType.StayCloseToTarget, rig.Mate, null),
+        "first aid" => (TaskType.FirstAidOrder, rig.Mate, null),
+        "rest" => (TaskType.Rest, CharacterId.None, null),
+        "pick up" => (TaskType.LiftPersonPlayerOrder, rig.Downed, null),
+        "loot" => (TaskType.LootTarget, rig.Downed, null),
+        "stealth ko" => (TaskType.StealthKnockout, rig.Awake, null),
+        "operate" => (TaskType.OperateMachinery, CharacterId.None, rig.WellSite),
+        "build" => (TaskType.Build, CharacterId.None, rig.ShedSite),
+        "dismantle" => (TaskType.Dismantle, CharacterId.None, rig.WellSite),
+        "use bed" => (TaskType.UseBed, CharacterId.None, rig.BedFixture),
+        "attack" => (TaskType.FocusedMeleeAttack, rig.OtherEnemy, null),
         _ => throw new ArgumentException(name),
     };
 
@@ -88,7 +88,7 @@ public class CanOrderTests
     {
         using var rig = new TaskStartTests.Rig(carrying: false);
         rig.World.RunTicks(3);
-        Assert.Equal((false, null), rig.World.CanOrder(TaskType.REST, CharacterId.None));
+        Assert.Equal((false, null), rig.World.CanOrder(TaskType.Rest, CharacterId.None));
         Assert.Equal((false, null), rig.World.CanOrder(TaskType.None, rig.Fighter));
     }
 
@@ -102,7 +102,7 @@ public class CanOrderTests
         using var world = new SimWorld(new WorldSettings { Seed = 3 }, new OpenGroundWalkability(SyntheticTown.Ground));
         CharacterId Add(int faction, Action<CharacterCold>? shape = null)
         {
-            var cold = new Meitou.Tests.Combat.Combatant().MakeCold();
+            var cold = new Combat.Combatant().MakeCold();
             cold.Faction = faction;
             shape?.Invoke(cold);
             return world.Characters.Spawn(new CharacterHot { Position = new(100 + world.Characters.HighWater * 20, 300, 100) }, cold, 0);
@@ -135,7 +135,7 @@ public class CanOrderTests
         var tone = new System.Numerics.Vector3(0.2f, 0.4f, 0.6f);
         CharacterId Add(Action<CharacterCold>? shape = null)
         {
-            var cold = new Meitou.Tests.Combat.Combatant().MakeCold();
+            var cold = new Combat.Combatant().MakeCold();
             shape?.Invoke(cold);
             return world.Characters.Spawn(new CharacterHot { Position = new(100 + world.Characters.HighWater * 20, 300, 100) }, cold, 0);
         }

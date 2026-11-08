@@ -72,8 +72,11 @@ public static class OgreScriptParser
                             throw new OgreScriptException($"expected variable name at line {node.Line}", node.File, node.Line);
                         node.Children.Add(new OgreConcreteNode
                         {
-                            Type = OgreConcreteNodeType.Variable, Token = tokens[i].Lexeme, File = tokens[i].File,
-                            Line = tokens[i].Line, Parent = node,
+                            Type = OgreConcreteNodeType.Variable,
+                            Token = tokens[i].Lexeme,
+                            File = tokens[i].File,
+                            Line = tokens[i].Line,
+                            Parent = node,
                         });
                         i++;
                         if (i >= tokens.Count || tokens[i].Type is not (OgreScriptTokenType.Word or OgreScriptTokenType.Quote))
@@ -103,51 +106,54 @@ public static class OgreScriptParser
                 switch (token.Type)
                 {
                     case OgreScriptTokenType.Newline:
-                    {
-                        // A line ends the current word's node unless the next real token opens a block.
-                        int next = SkipNewlines(tokens, i);
-                        if (next >= tokens.Count || tokens[next].Type != OgreScriptTokenType.LeftBrace)
+                        {
+                            // A line ends the current word's node unless the next real token opens a block.
+                            int next = SkipNewlines(tokens, i);
+                            if (next >= tokens.Count || tokens[next].Type != OgreScriptTokenType.LeftBrace)
+                            {
+                                parent = parent?.Parent;
+                                inObject = false;
+                            }
+                            break;
+                        }
+                    case OgreScriptTokenType.Colon:
+                        {
+                            var node = New(OgreConcreteNodeType.Colon, token, token.Lexeme);
+                            int j = SkipNewlines(tokens, i + 1);
+                            if (j >= tokens.Count || tokens[j].Type is not (OgreScriptTokenType.Word or OgreScriptTokenType.Quote))
+                                throw new OgreScriptException($"expected object identifier at line {node.Line}", node.File, node.Line);
+                            // Base names keep their quotes: Ogre does not strip them here.
+                            for (; j < tokens.Count && tokens[j].Type is OgreScriptTokenType.Word or OgreScriptTokenType.Quote; j++)
+                                node.Children.Add(new OgreConcreteNode
+                                {
+                                    Type = tokens[j].Type == OgreScriptTokenType.Word ? OgreConcreteNodeType.Word : OgreConcreteNodeType.Quote,
+                                    Token = tokens[j].Lexeme,
+                                    File = tokens[j].File,
+                                    Line = tokens[j].Line,
+                                    Parent = node,
+                                });
+                            i = j - 1;
+                            Insert(node);
+                            break;
+                        }
+                    case OgreScriptTokenType.LeftBrace:
+                        {
+                            var node = New(OgreConcreteNodeType.LeftBrace, token, token.Lexeme);
+                            Insert(node);
+                            parent = node;
+                            inObject = false;
+                            break;
+                        }
+                    case OgreScriptTokenType.RightBrace:
                         {
                             parent = parent?.Parent;
+                            if (parent is { Type: OgreConcreteNodeType.LeftBrace, Parent: not null })
+                                parent = parent.Parent;
+                            Insert(New(OgreConcreteNodeType.RightBrace, token, token.Lexeme));
+                            parent = parent?.Parent;
                             inObject = false;
+                            break;
                         }
-                        break;
-                    }
-                    case OgreScriptTokenType.Colon:
-                    {
-                        var node = New(OgreConcreteNodeType.Colon, token, token.Lexeme);
-                        int j = SkipNewlines(tokens, i + 1);
-                        if (j >= tokens.Count || tokens[j].Type is not (OgreScriptTokenType.Word or OgreScriptTokenType.Quote))
-                            throw new OgreScriptException($"expected object identifier at line {node.Line}", node.File, node.Line);
-                        // Base names keep their quotes: Ogre does not strip them here.
-                        for (; j < tokens.Count && tokens[j].Type is OgreScriptTokenType.Word or OgreScriptTokenType.Quote; j++)
-                            node.Children.Add(new OgreConcreteNode
-                            {
-                                Type = tokens[j].Type == OgreScriptTokenType.Word ? OgreConcreteNodeType.Word : OgreConcreteNodeType.Quote,
-                                Token = tokens[j].Lexeme, File = tokens[j].File, Line = tokens[j].Line, Parent = node,
-                            });
-                        i = j - 1;
-                        Insert(node);
-                        break;
-                    }
-                    case OgreScriptTokenType.LeftBrace:
-                    {
-                        var node = New(OgreConcreteNodeType.LeftBrace, token, token.Lexeme);
-                        Insert(node);
-                        parent = node;
-                        inObject = false;
-                        break;
-                    }
-                    case OgreScriptTokenType.RightBrace:
-                    {
-                        parent = parent?.Parent;
-                        if (parent is { Type: OgreConcreteNodeType.LeftBrace, Parent: not null })
-                            parent = parent.Parent;
-                        Insert(New(OgreConcreteNodeType.RightBrace, token, token.Lexeme));
-                        parent = parent?.Parent;
-                        inObject = false;
-                        break;
-                    }
                     case OgreScriptTokenType.Variable:
                         Insert(New(OgreConcreteNodeType.Variable, token, token.Lexeme));
                         break;

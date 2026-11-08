@@ -1,6 +1,6 @@
-using Meitou.Data.Gameplay.Ai;
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Combat;
 using Meitou.Simulation.Aggro;
@@ -33,32 +33,32 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// <summary>The squad memory (set by the standard systems): the damage floater reads the active squad's TEMP ENEMY / TEMP ALLY tags (<c>FUN_1406508d0</c>).</summary>
     public Dialogue.SquadMemory? Memory { get; set; }
 
-    readonly CombatTechnique[] techniques, asWritten;
-    readonly CombatConstants combat;
-    readonly GameConstants constants;
-    readonly BodyOptions options;
-    readonly AnimationLengths lengths;
-    readonly XpService xp;
-    readonly List<CombatLogEntry> log = [];
-    readonly List<MedicalEvent> hitEvents = [];
-    CombatSlot[] read = [];
-    CombatSlot[] write = [];
+    readonly CombatTechnique[] _techniques, _asWritten;
+    readonly CombatConstants _combat;
+    readonly GameConstants _constants;
+    readonly BodyOptions _options;
+    readonly AnimationLengths _lengths;
+    readonly XpService _xp;
+    readonly List<CombatLogEntry> _log = [];
+    readonly List<MedicalEvent> _hitEvents = [];
+    CombatSlot[] _read = [];
+    CombatSlot[] _write = [];
 
     public CombatSystem(IEnumerable<CombatTechnique> techniques, CombatConstants combat, GameConstants constants, BodyOptions options, AnimationLengths lengths, CombatOptions? settings = null)
     {
-        this.techniques = [.. techniques];
-        asWritten = [.. this.techniques];
-        this.combat = combat;
-        this.constants = constants;
-        this.options = options;
-        this.lengths = lengths;
+        this._techniques = [.. techniques];
+        _asWritten = [.. this._techniques];
+        this._combat = combat;
+        this._constants = constants;
+        this._options = options;
+        this._lengths = lengths;
         Settings = settings ?? new CombatOptions();
         UseAttackSlots(Settings.AttackSlots);
         LateDefences = Settings.LateDefences;
         GunnerFacesBarrel = Settings.GunnerFacesBarrel;
         PunchReachFix = Settings.PunchReachFix;
         StuckLimit = Math.Clamp(Settings.StuckLimit, RangedTuning.MinStuckLimit, RangedTuning.MaxStuckLimit);
-        xp = new XpService(constants, options);
+        _xp = new XpService(constants, options);
     }
 
     public CombatOptions Settings { get; }
@@ -67,7 +67,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public int AttackSlots { get; set; }
 
     /// <summary>Sets <see cref="AttackSlots"/> to a setting's value, or to the loaded CONSTANTS <c>max num attack slots</c> for null (the Faithful meaning, <c>FUN_1406661d0</c>, <b>Verified</b>).</summary>
-    public void UseAttackSlots(int? slots) => AttackSlots = Math.Max(1, slots ?? combat.MaxNumAttackSlots);
+    public void UseAttackSlots(int? slots) => AttackSlots = Math.Max(1, slots ?? _combat.MaxNumAttackSlots);
 
     /// <summary>Stuck bolts kept in the world per bolt mesh (the settings' <c>harpoonLimit</c>, <see cref="CombatOptions.StuckLimit"/>): past it the one that flew longest goes (<c>FUN_14043acf0</c>).</summary>
     public int StuckLimit { get; set; }
@@ -84,16 +84,16 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// </summary>
     public bool PunchReachFix
     {
-        get => punchReachFix;
+        get => _punchReachFix;
         set
         {
-            punchReachFix = value;
-            for (int t = 0; t < techniques.Length; t++)
-                techniques[t] = value && asWritten[t] is { IsBlock: false, IsDodge: false, AttackDistance: < 0 and > -100 } w && (w.Kinds & WeaponKinds.Unarmed) != 0
-                    ? w with { AttackDistance = -w.AttackDistance } : asWritten[t];
+            _punchReachFix = value;
+            for (int t = 0; t < _techniques.Length; t++)
+                _techniques[t] = value && _asWritten[t] is { IsBlock: false, IsDodge: false, AttackDistance: < 0 and > -100 } w && (w.Kinds & WeaponKinds.Unarmed) != 0
+                    ? w with { AttackDistance = -w.AttackDistance } : _asWritten[t];
         }
     }
-    bool punchReachFix;
+    bool _punchReachFix;
 
     /// <summary>The buildings' collision that stops bolts and lines of fire (the ragdolls' environment, <see cref="SolidHits"/>); null: the terrain only.</summary>
     public Ragdolls.IRagdollEnvironment? Buildings { get; set; }
@@ -137,24 +137,24 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
     /// <summary>The outdoor sight a fighter senses a current target within (before the race's multiplier; <see cref="AggroSettings.SightRange"/>'s default).</summary>
     public float SenseRange { get; set; } = AggroSystem.OutdoorSight;
-    public IReadOnlyList<CombatTechnique> Techniques => techniques;
+    public IReadOnlyList<CombatTechnique> Techniques => _techniques;
 
     /// <summary>The resolved blows so far (when <see cref="CombatOptions.RecordLog"/> is on).</summary>
-    public IReadOnlyList<CombatLogEntry> Log => log;
+    public IReadOnlyList<CombatLogEntry> Log => _log;
 
     /// <summary>Whom the character in <paramref name="slot"/> (of <paramref name="generation"/>) fights as of the last tick (slot -1: nobody); a cheap read of <see cref="StateOf"/>, any thread after Schedule.</summary>
     public (int Slot, int Generation) TargetOf(int slot, int generation) =>
-        (uint)slot < (uint)read.Length && read[slot].Generation == generation ? (read[slot].TargetSlot, read[slot].TargetGeneration) : (-1, 0);
+        (uint)slot < (uint)_read.Length && _read[slot].Generation == generation ? (_read[slot].TargetSlot, _read[slot].TargetGeneration) : (-1, 0);
 
     /// <summary>The combat state of a character as of the last finished tick (default when it has none).</summary>
-    public CombatSlot StateOf(CharacterId id) => id.Slot >= 0 && id.Slot < read.Length && read[id.Slot].Generation == id.Generation ? read[id.Slot] : CombatSlot.Fresh(id.Generation);
+    public CombatSlot StateOf(CharacterId id) => id.Slot >= 0 && id.Slot < _read.Length && _read[id.Slot].Generation == id.Generation ? _read[id.Slot] : CombatSlot.Fresh(id.Generation);
 
     /// <summary>The technique a character is playing and its progress (0 to 1), for the animation layer; null when it is not attacking or reacting.</summary>
     public (CombatTechnique Technique, float Progress, bool IsAttack)? Playing(CharacterId id, long tick)
     {
         var s = StateOf(id);
-        if (s.AttackTech >= 0 && s.AttackTicks > 0) return (techniques[s.AttackTech], Math.Clamp((tick - s.AttackStart) / (float)s.AttackTicks, 0, 1), true);
-        if (s.ReactTech >= 0 && s.ReactTicks > 0) return (techniques[s.ReactTech], Math.Clamp((tick - s.ReactStart) / (float)s.ReactTicks, 0, 1), false);
+        if (s.AttackTech >= 0 && s.AttackTicks > 0) return (_techniques[s.AttackTech], Math.Clamp((tick - s.AttackStart) / (float)s.AttackTicks, 0, 1), true);
+        if (s.ReactTech >= 0 && s.ReactTicks > 0) return (_techniques[s.ReactTech], Math.Clamp((tick - s.ReactStart) / (float)s.ReactTicks, 0, 1), false);
         return null;
     }
 
@@ -163,35 +163,35 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     void Sync(CharacterTable table)
     {
         int n = table.HighWater;
-        if (read.Length < n)
+        if (_read.Length < n)
         {
-            int size = Math.Max(n, read.Length * 2);
-            int old = read.Length;
-            Array.Resize(ref read, size);
-            Array.Resize(ref write, size);
-            for (int i = old; i < size; i++) { read[i] = CombatSlot.Fresh(-1); write[i] = CombatSlot.Fresh(-1); }
+            int size = Math.Max(n, _read.Length * 2);
+            int old = _read.Length;
+            Array.Resize(ref _read, size);
+            Array.Resize(ref _write, size);
+            for (int i = old; i < size; i++) { _read[i] = CombatSlot.Fresh(-1); _write[i] = CombatSlot.Fresh(-1); }
             ResizeZones(size);
         }
-        if (inFight.Length < read.Length) inFight = new bool[read.Length];
+        if (_inFight.Length < _read.Length) _inFight = new bool[_read.Length];
         var next = table.Next;
         for (int i = 0; i < n; i++)
         {
             int generation = next[i].Alive ? next[i].Generation : -1;
-            if (read[i].Generation == generation) continue;
-            read[i] = CombatSlot.Fresh(generation);
-            zoneCountRead[i] = 0;
+            if (_read[i].Generation == generation) continue;
+            _read[i] = CombatSlot.Fresh(generation);
+            _zoneCountRead[i] = 0;
         }
     }
 
     public void Hash(ref StateHasher hasher)
     {
-        hasher.Add(read.Length);
-        for (int i = 0; i < read.Length; i++)
+        hasher.Add(_read.Length);
+        for (int i = 0; i < _read.Length; i++)
         {
-            read[i].Hash(ref hasher);
+            _read[i].Hash(ref hasher);
             HashZone(ref hasher, i);
         }
-        hasher.Add(log.Count);
+        hasher.Add(_log.Count);
         HashRanged(ref hasher);
         HashTurrets(ref hasher);
     }
@@ -208,23 +208,23 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             switch (command)
             {
                 case AttackOrder order:
-                {
-                    // The order itself changes no relation (the original's relation events come from the blows, Deeds); an attack that is not self-defence is an assault.
-                    // Whether the victim is in melee combat mode is read before the order engages anyone.
-                    bool victimFighting = VictimFighting(table, order.Target);
-                    foreach (var id in order.Attackers)
                     {
-                        // The player's pick (row 5) is an order: it goes into the attacker's queue. Another fight (a reaction's, a goal's) starts at once.
-                        if (order.Picked)
+                        // The order itself changes no relation (the original's relation events come from the blows, Deeds); an attack that is not self-defence is an assault.
+                        // Whether the victim is in melee combat mode is read before the order engages anyone.
+                        bool victimFighting = VictimFighting(table, order.Target);
+                        foreach (var id in order.Attackers)
                         {
-                            if (table.TryResolveNext(id, out int a))
-                                PlayerOrders.Give(world, a, new OrderEntry(order.Unprovoked ? TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK : TaskType.FOCUSED_MELEE_ATTACK, this) { Target = order.Target, Detail = new PickedAttack(order, victimFighting, world.Tick) }, order.Queued);
-                            continue;
+                            // The player's pick (row 5) is an order: it goes into the attacker's queue. Another fight (a reaction's, a goal's) starts at once.
+                            if (order.Picked)
+                            {
+                                if (table.TryResolveNext(id, out int a))
+                                    PlayerOrders.Give(world, a, new OrderEntry(order.Unprovoked ? TaskType.UnprovokedFocusedMeleeAttack : TaskType.FocusedMeleeAttack, this) { Target = order.Target, Detail = new PickedAttack(order, victimFighting, world.Tick) }, order.Queued);
+                                continue;
+                            }
+                            if (Engage(world, table, id, order, now)) Assaulted(world, table, id, order, victimFighting);
                         }
-                        if (Engage(world, table, id, order, now)) Assaulted(world, table, id, order, victimFighting);
+                        break;
                     }
-                    break;
-                }
                 case ShootAtOrder shoot:
                     foreach (var id in shoot.Gunners.Count > 0 ? shoot.Gunners : world.Player.Selection.ToArray())
                         if (table.TryResolveNext(id, out int g) && table.Cold(g) is { IsPlayer: true, Gunning: not null } gunner && table.TryResolveNext(shoot.Target, out int victim) && victim != g
@@ -261,7 +261,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         // A fighter turns on no one it found no path to lately unless the player picked it (isPathImpossible in every finder's score, docs/game/combat.md "Target score"): a mate
         // that is called in on a sighting or an attack and cannot reach the enemy (a cage, a locked room) would otherwise stand at the nearest spot for ever.
         if (!order.Picked && PursuitSystem.PathImpossible(cold, target, now)) return false;
-        var (row, source) = order.Picked ? (order.Unprovoked ? TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK : TaskType.FOCUSED_MELEE_ATTACK, TaskSource.Order) : order.Defensive ? (TaskType.ATTACK_ATTACKERS_OF, TaskSource.Reaction) : (TaskType.ATTACK_ENEMIES, TaskSource.Goal);
+        var (row, source) = order.Picked ? (order.Unprovoked ? TaskType.UnprovokedFocusedMeleeAttack : TaskType.FocusedMeleeAttack, TaskSource.Order) : order.Defensive ? (TaskType.AttackAttackersOf, TaskSource.Reaction) : (TaskType.AttackEnemies, TaskSource.Goal);
         return TaskStart.Start(world, a, new TaskRequest(CharacterTask.Attack, row, order.Source ?? source) { Target = target, Job = order.Job }) == StartResult.Started;
     }
 
@@ -286,7 +286,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     // Saved: the pick is rebuilt from its attacker and target; the victim's combat mode is read when the order starts (a tick that is never the world's).
     int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is PickedAttack ? 0 : -1;
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) =>
-        new PickedAttack(new AttackOrder([self], target) { Picked = true, Unprovoked = row == TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK, Tick = world.Tick }, false, -1);
+        new PickedAttack(new AttackOrder([self], target) { Picked = true, Unprovoked = row == TaskType.UnprovokedFocusedMeleeAttack, Tick = world.Tick }, false, -1);
 
     /// <summary>
     /// The attack order (row 5) needs a target that is there, awake and has a body (else it leaves the queue), and an attacker able to fight: a fighter, awake, not carried (<see cref="Engage"/>).
@@ -318,8 +318,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         var cold = table.Cold(a)!;
         var target = request.Target;
         int t = target.Slot, now = (int)world.Tick;
-        bool picked = request.Row is TaskType.FOCUSED_MELEE_ATTACK or TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK;
-        ref var s = ref read[a];
+        bool picked = request.Row is TaskType.FocusedMeleeAttack or TaskType.UnprovokedFocusedMeleeAttack;
+        ref var s = ref _read[a];
         if (s.TargetSlot != t || s.TargetGeneration != target.Generation)
         {
             s.Engaged = false;
@@ -350,11 +350,11 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
 
     void Disengage(CharacterTable table, int slot)
     {
-        if (slot < read.Length)
+        if (slot < _read.Length)
         {
-            if (table.Cold(slot)!.InCombat) { read[slot].ListEpoch++; write[slot].ListEpoch++; }
-            Drop(ref read[slot]);
-            Drop(ref write[slot]);
+            if (table.Cold(slot)!.InCombat) { _read[slot].ListEpoch++; _write[slot].ListEpoch++; }
+            Drop(ref _read[slot]);
+            Drop(ref _write[slot]);
         }
         EndFight(table, slot);
 
@@ -378,7 +378,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
 
     void LeaveFight(CharacterTable table, CharacterId id)
     {
-        if (table.TryResolveNext(id, out int slot) && (table.Cold(slot)!.InCombat || read[slot].TargetSlot >= 0)) Disengage(table, slot);
+        if (table.TryResolveNext(id, out int slot) && (table.Cold(slot)!.InCombat || _read[slot].TargetSlot >= 0)) Disengage(table, slot);
     }
 
     /// <summary>
@@ -414,11 +414,11 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public void Schedule(World world)
     {
         Sync(world.Characters);
-        Array.Copy(read, write, world.Characters.HighWater);
+        Array.Copy(_read, _write, world.Characters.HighWater);
         CopyZones(world.Characters.HighWater);
         FlyProjectiles(world);
         TickTurrets(world);
-        index.Build(read, world.Characters, world.Grid);
+        _index.Build(_read, world.Characters, world.Grid);
     }
 
     public void Move(World world, Partition part)
@@ -431,7 +431,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         for (int i = part.Start; i < part.End; i++)
         {
             if (!prev[i].Alive || !world.Steps(i) || next[i].Task != (byte)CharacterTask.Attack) continue;
-            ref readonly var s = ref read[i];
+            ref readonly var s = ref _read[i];
             int t = s.TargetSlot;
             if (t < 0 || t >= prev.Length || !prev[t].Alive || prev[t].Generation != s.TargetGeneration) continue;
             var cold = table.Cold(i)!;
@@ -474,7 +474,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     MedicalContext MakeContext(World world, int slot, CharacterCold cold) =>
-        new(constants, options, cold.Race!)
+        new(_constants, _options, cold.Race!)
         {
             Toughness = cold.Stats!.ScaledToughness,
             Strength = cold.Stats[StatsEnumerated.Strength],
@@ -488,9 +488,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public void SlowWorld(World world)
     {
         RepeatAssaults(world);
-        (read, write) = (write, read);
+        (_read, _write) = (_write, _read);
         SwapZones();
-        swappedTick = world.Tick;
+        _swappedTick = world.Tick;
     }
 
     /// <summary>
@@ -503,7 +503,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.Next[s].Alive || table.Cold(s) is not { Running: { Task: CharacterTask.Attack, Row: TaskType.UNPROVOKED_FOCUSED_MELEE_ATTACK } }) continue;
+            if (!table.Next[s].Alive || table.Cold(s) is not { Running: { Task: CharacterTask.Attack, Row: TaskType.UnprovokedFocusedMeleeAttack } }) continue;
             var fight = StateOf(table.IdOf(s));
             if (fight.TargetSlot < 0 || !table.TryResolveNext(new CharacterId(fight.TargetSlot, fight.TargetGeneration), out int victim)) continue;
             Crimes.Assault(world, s, victim, VictimFighting(table, table.IdOf(victim)));
@@ -511,11 +511,11 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>The tick whose slow world swapped the state arrays last.</summary>
-    long swappedTick = -1;
+    long _swappedTick = -1;
 
     /// <summary>
     /// The combat state as of now in a serial phase: <c>read</c> in the inputs (and between ticks) and after this tick's swap, <c>write</c> from the schedule until the swap.
     /// </summary>
     CombatSlot[] Live(World world) =>
-        world.Characters.Phase is TablePhase.Inputs or TablePhase.Outside || world.Characters.Phase == TablePhase.SlowWorld && swappedTick == world.Tick ? read : write;
+        world.Characters.Phase is TablePhase.Inputs or TablePhase.Outside || world.Characters.Phase == TablePhase.SlowWorld && _swappedTick == world.Tick ? _read : _write;
 }

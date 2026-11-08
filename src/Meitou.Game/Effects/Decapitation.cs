@@ -35,10 +35,10 @@ sealed class Decapitation(GameHost host)
         public float Landed = float.NaN, RestY;
     }
 
-    readonly List<FallingHead> heads = [];
-    /// <summary>The characters whose cut was looked at (a head spawned, or none to spawn: drawn headless already, or not drawn), for <see cref="headsEpoch"/>.</summary>
-    readonly HashSet<CharacterId> headsSeen = [];
-    long headsEpoch = -1;
+    readonly List<FallingHead> _heads = [];
+    /// <summary>The characters whose cut was looked at (a head spawned, or none to spawn: drawn headless already, or not drawn), for <see cref="_headsEpoch"/>.</summary>
+    readonly HashSet<CharacterId> _headsSeen = [];
+    long _headsEpoch = -1;
     /// <summary>How far above what it lies on the head bone rests (about a head's half height).</summary>
     const float HeadRestHeight = 1.3f;
     /// <summary>A body's bones a falling head can land on (the torso thicker than the limbs), and how far from a bone it still lands on it.</summary>
@@ -54,10 +54,10 @@ sealed class Decapitation(GameHost host)
     /// <summary>A headless character listed this frame: its head falls if the renderer drew it with one in its last update.</summary>
     internal void CutHead(CharacterSnapshot c, CharacterAppearance look)
     {
-        if (!look.Headless || host.gpu.Characters is not { } characters || !headsSeen.Add(c.Id)) return;
+        if (!look.Headless || host.Gpu.Characters is not { } characters || !_headsSeen.Add(c.Id)) return;
         long from = host.DrawKey(c.Id), key = from ^ (1L << 54);
         if (characters.LastDrawn(from, "Bip01 Head") is not ({ } world, { Headless: false } before, var start) || !characters.HoldPose(key, from)) return;
-        ulong roll = unchecked((ulong)from * 0x9E3779B97F4A7C15UL ^ (ulong)host.session.ShownTick * 0xBF58476D1CE4E5B9UL);   // a look, not the simulation's: no world roll
+        ulong roll = unchecked((ulong)from * 0x9E3779B97F4A7C15UL ^ (ulong)host.Session.ShownTick * 0xBF58476D1CE4E5B9UL);   // a look, not the simulation's: no world roll
         roll ^= roll >> 31;
         float angle = (roll & 0xFFFF) / 65536f * MathF.Tau, reach = 3 + ((roll >> 16) & 0xFFFF) / 65536f * 4;
         var thrown = c.Knockdown;
@@ -66,26 +66,33 @@ sealed class Decapitation(GameHost host)
         if (flat.LengthSquared() > 1) angle = MathF.Atan2(flat.Y, flat.X);
         var head = new FallingHead
         {
-            Key = key, From = from, Look = before.SeveredHead(), World = world, Start = start,
+            Key = key,
+            From = from,
+            Look = before.SeveredHead(),
+            World = world,
+            Start = start,
             Aside = new Vector2(start.X + MathF.Cos(angle) * reach, start.Z + MathF.Sin(angle) * reach),
-            Axis = new Vector3(-MathF.Sin(angle), 0, MathF.Cos(angle)), Spin = 2.5f + ((roll >> 32) & 0xFFFF) / 65536f * 3 + flat.Length() * 0.1f, Velocity = thrown,
-            Flight = MathF.Sqrt(2 * MathF.Max(start.Y - host.session.World.Walkability.GroundHeight(start.X, start.Z, start.Y) - HeadRestHeight, 0) / Debris.FallGravity), Blood = c.BloodAmounts,
+            Axis = new Vector3(-MathF.Sin(angle), 0, MathF.Cos(angle)),
+            Spin = 2.5f + ((roll >> 32) & 0xFFFF) / 65536f * 3 + flat.Length() * 0.1f,
+            Velocity = thrown,
+            Flight = MathF.Sqrt(2 * MathF.Max(start.Y - host.Session.World.Walkability.GroundHeight(start.X, start.Z, start.Y) - HeadRestHeight, 0) / Debris.FallGravity),
+            Blood = c.BloodAmounts,
         };
-        heads.Add(head);
+        _heads.Add(head);
         characters.Prefetch(head.Look);
         Spurt(from, look, start);
-        while (heads.Count > Math.Max(host.config.GroundItemLimit, 1)) heads.RemoveAt(0);
+        while (_heads.Count > Math.Max(host.Config.GroundItemLimit, 1)) _heads.RemoveAt(0);
     }
 
     /// <summary>The heads, each placed where its fall has it now: the head bone along the drop, the whole head turned about it until it lands.</summary>
     internal void AddHeads(CharacterDrawList list)
     {
-        if (headsEpoch != host.saves.worldEpoch) { heads.Clear(); headsSeen.Clear(); spurts.Clear(); headsEpoch = host.saves.worldEpoch; }
+        if (_headsEpoch != host.Saves.WorldEpoch) { _heads.Clear(); _headsSeen.Clear(); _spurts.Clear(); _headsEpoch = host.Saves.WorldEpoch; }
         UpdateSpurts();
-        if (heads.Count == 0 || host.gpu.Characters is not { } characters) return;
-        double clock = host.session.ShownTick + host.session.SimulationAlpha;
-        float tick = host.session.World.TickSeconds;
-        foreach (var h in heads)
+        if (_heads.Count == 0 || host.Gpu.Characters is not { } characters) return;
+        double clock = host.Session.ShownTick + host.Session.SimulationAlpha;
+        float tick = host.Session.World.TickSeconds;
+        foreach (var h in _heads)
         {
             // Its clock starts with the first frame its look is drawn; until then it is listed (so it gets ready) where it was cut.
             if (double.IsNaN(h.Tick) && characters.IsPrepared(h.Look)) h.Tick = clock;
@@ -111,8 +118,8 @@ sealed class Decapitation(GameHost host)
     /// </summary>
     float SurfaceUnder(Rendering.Characters.CharacterRenderer characters, Vector2 at, FallingHead head)
     {
-        float ground = host.session.World.Walkability.GroundHeight(at.X, at.Y, head.Start.Y), top = ground;
-        foreach (var c in host.session.CurrentSnapshot.Characters)
+        float ground = host.Session.World.Walkability.GroundHeight(at.X, at.Y, head.Start.Y), top = ground;
+        foreach (var c in host.Session.CurrentSnapshot.Characters)
         {
             if (Vector2.DistanceSquared(new Vector2(c.Position.X, c.Position.Z), at) > 30 * 30) continue;
             long key = host.DrawKey(c.Id);
@@ -149,8 +156,8 @@ sealed class Decapitation(GameHost host)
         public Vector3 Jitter;
     }
 
-    readonly List<NeckSpurt> spurts = [];
-    readonly Dictionary<string, RaceData> bloodRaces = new(StringComparer.Ordinal);
+    readonly List<NeckSpurt> _spurts = [];
+    readonly Dictionary<string, RaceData> _bloodRaces = new(StringComparer.Ordinal);
     const int SpurtPulses = 6;
     /// <summary>Seconds between pulses, and how far (units) the first pulse's blood lands from the neck.</summary>
     const float SpurtGap = 0.35f, SpurtReach = 18;
@@ -158,23 +165,23 @@ sealed class Decapitation(GameHost host)
     /// <summary>Starts the neck's spurts for the character drawn as <paramref name="from"/>, whose head was at <paramref name="head"/>.</summary>
     void Spurt(long from, CharacterAppearance look, Vector3 head)
     {
-        if (host.bloodDecals.decalStore is null || host.scene.Database is not { } db) return;
-        if (!bloodRaces.TryGetValue(look.Race.StringId, out var race)) bloodRaces[look.Race.StringId] = race = RaceData.From(look.Race, db);
+        if (host.BloodDecals.DecalStore is null || host.Scene.Database is not { } db) return;
+        if (!_bloodRaces.TryGetValue(look.Race.StringId, out var race)) _bloodRaces[look.Race.StringId] = race = RaceData.From(look.Race, db);
         if (race.BleedRate <= 0) return;
         var recolour = BloodDecals.BloodRecolour(race.BloodColour);
-        spurts.Add(new NeckSpurt { From = from, Colour = 0xFF000000 | BloodDecals.Abgr(race.BloodColour), Recolour = recolour, Neck = host.gpu.Characters?.BonePosition(from, "Bip01 Neck") ?? head });
-        host.gpu.Particles?.Burst(Debris.BurstSplash, head, Quaternion.Identity, 0.2f, 1.2f, 1.5f, recolour);
+        _spurts.Add(new NeckSpurt { From = from, Colour = 0xFF000000 | BloodDecals.Abgr(race.BloodColour), Recolour = recolour, Neck = host.Gpu.Characters?.BonePosition(from, "Bip01 Neck") ?? head });
+        host.Gpu.Particles?.Burst(Debris.BurstSplash, head, Quaternion.Identity, 0.2f, 1.2f, 1.5f, recolour);
     }
 
     /// <summary>Follows the neck with the pulse emitting now and fires the pulses that are due.</summary>
     void UpdateSpurts()
     {
-        if (spurts.Count == 0) return;
-        double clock = host.session.ShownTick + host.session.SimulationAlpha;
-        float tick = host.session.World.TickSeconds;
-        for (int i = spurts.Count - 1; i >= 0; i--)
+        if (_spurts.Count == 0) return;
+        double clock = host.Session.ShownTick + host.Session.SimulationAlpha;
+        float tick = host.Session.World.TickSeconds;
+        for (int i = _spurts.Count - 1; i >= 0; i--)
         {
-            var s = spurts[i];
+            var s = _spurts[i];
             if (double.IsNaN(s.Next)) s.Next = clock;
             TrackNeck(s);
             if (s.Left > 0 && clock >= s.Next)
@@ -183,16 +190,16 @@ sealed class Decapitation(GameHost host)
                 s.Next += SpurtGap / MathF.Max(tick, 1e-4f);
                 s.Left--;
             }
-            else if (s.Emitting is { Stopped: false } unit) host.gpu.Particles?.MoveBurst(unit, s.Neck, Debris.Turn(Vector3.UnitZ, SprayDirection(s)));
+            else if (s.Emitting is { Stopped: false } unit) host.Gpu.Particles?.MoveBurst(unit, s.Neck, Debris.Turn(Vector3.UnitZ, SprayDirection(s)));
             // Done once the last pulse has emitted (or a gap after it: particles turned off stop the units' clock).
-            if (s.Left <= 0 && (s.Emitting is null or { Stopped: true } || clock >= s.Next)) spurts.RemoveAt(i);
+            if (s.Left <= 0 && (s.Emitting is null or { Stopped: true } || clock >= s.Next)) _spurts.RemoveAt(i);
         }
     }
 
     /// <summary>The neck and the stump's direction as the body was drawn last; kept from the last time while it is not drawn.</summary>
     void TrackNeck(NeckSpurt s)
     {
-        if (host.gpu.Characters is not { } characters || characters.BonePosition(s.From, "Bip01 Neck") is not { } neck) return;
+        if (host.Gpu.Characters is not { } characters || characters.BonePosition(s.From, "Bip01 Neck") is not { } neck) return;
         s.Neck = neck;
         if (characters.BonePosition(s.From, "Bip01 Spine2") is { } spine && Vector3.DistanceSquared(neck, spine) > 1e-4f) s.Along = Vector3.Normalize(neck - spine);
     }
@@ -203,23 +210,23 @@ sealed class Decapitation(GameHost host)
     void Pulse(NeckSpurt s)
     {
         float strength = s.Left / (float)SpurtPulses;
-        s.Jitter = new Vector3(host.bloodDecals.bloodRandom.NextSingle() - 0.5f, host.bloodDecals.bloodRandom.NextSingle() * 0.5f, host.bloodDecals.bloodRandom.NextSingle() - 0.5f) * 0.6f;
+        s.Jitter = new Vector3(host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() * 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f) * 0.6f;
         var dir = SprayDirection(s);
-        s.Emitting = host.gpu.Particles?.Burst(Debris.BurstSpray, s.Neck, Debris.Turn(Vector3.UnitZ, dir), 0.15f + 0.25f * strength, 0.8f + 0.6f * strength, 1.5f, s.Recolour);
+        s.Emitting = host.Gpu.Particles?.Burst(Debris.BurstSpray, s.Neck, Debris.Turn(Vector3.UnitZ, dir), 0.15f + 0.25f * strength, 0.8f + 0.6f * strength, 1.5f, s.Recolour);
         SpurtSplash(s, dir, strength);
     }
 
     /// <summary>The pulse's splash on the ground, out along the spray, nearer for a weaker pulse.</summary>
     void SpurtSplash(NeckSpurt s, Vector3 dir, float strength)
     {
-        if (host.bloodDecals.decalStore is not { } store) return;
+        if (host.BloodDecals.DecalStore is not { } store) return;
         var flat = new Vector2(dir.X, dir.Z);
-        flat = flat.LengthSquared() > 1e-6f ? Vector2.Normalize(flat) : host.debris.RandomDirection();
-        float far = SpurtReach * strength * (0.5f + host.bloodDecals.bloodRandom.NextSingle() * 0.5f);
+        flat = flat.LengthSquared() > 1e-6f ? Vector2.Normalize(flat) : host.Debris.RandomDirection();
+        float far = SpurtReach * strength * (0.5f + host.BloodDecals.BloodRandom.NextSingle() * 0.5f);
         var at = s.Neck + new Vector3(flat.X, 0, flat.Y) * far;
-        at.Y = host.session.World.Walkability.GroundHeight(at.X, at.Z, s.Neck.Y);
+        at.Y = host.Session.World.Walkability.GroundHeight(at.X, at.Z, s.Neck.Y);
         float size = 0.15f + 0.25f * strength;
-        if (host.gpu.Decals is { Surfaces: true } surfaces) surfaces.AddSurface(TerrainDecalType.Splash, at, flat, size, s.Colour, host.bloodDecals.bloodRandom);
-        if (at.Y <= host.gpu.Terrain.HeightAt(at.X, at.Z) + BloodDecals.BloodAboveGround) store.Add(TerrainDecalType.Splash, at, flat, size, s.Colour, TerrainDecalStore.NewLife, host.bloodDecals.bloodRandom);
+        if (host.Gpu.Decals is { Surfaces: true } surfaces) surfaces.AddSurface(TerrainDecalType.Splash, at, flat, size, s.Colour, host.BloodDecals.BloodRandom);
+        if (at.Y <= host.Gpu.Terrain.HeightAt(at.X, at.Z) + BloodDecals.BloodAboveGround) store.Add(TerrainDecalType.Splash, at, flat, size, s.Colour, TerrainDecalStore.NewLife, host.BloodDecals.BloodRandom);
     }
 }

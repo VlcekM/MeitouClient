@@ -19,7 +19,7 @@ public interface IWorldStates
 
     /// <summary>One <c>world state</c> list entry: the state holds exactly when <paramref name="v0"/> is 1. A record the data lacks passes, as the original skips it.</summary>
     public static bool Passes(IWorldStates states, GameDatabase db, string worldStateId, int v0) =>
-        db.Find(worldStateId) is not { Type: FcsRecordType.WORLD_EVENT_STATE } || states.IsTrue(worldStateId) == (v0 == 1);
+        db.Find(worldStateId) is not { Type: FcsRecordType.WorldEventState } || states.IsTrue(worldStateId) == (v0 == 1);
 
     sealed class NoStates : IWorldStates
     {
@@ -58,7 +58,7 @@ public sealed record SquadPlan(SquadTemplate Template, IReadOnlyList<MemberPlan>
 public static class SquadFactory
 {
     /// <summary>Whether a record is something a squad is made from: a SQUAD_TEMPLATE or a UNIQUE_SQUAD_TEMPLATE (null: no).</summary>
-    public static bool IsTemplate(GameRecord? record) => record is { Type: FcsRecordType.SQUAD_TEMPLATE or FcsRecordType.UNIQUE_SQUAD_TEMPLATE };
+    public static bool IsTemplate(GameRecord? record) => record is { Type: FcsRecordType.SquadTemplate or FcsRecordType.UniqueSquadTemplate };
 
     /// <summary>The count of one member list entry (section 5.1): the range rule, then the multiplier.</summary>
     public static int Count(int v0, int v1, float multiplier, bool dontMultiply, ulong roll)

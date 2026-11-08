@@ -69,7 +69,7 @@ public class SlaveListTests
     {
         var (world, captive, city, cage) = Town();
         using var _ = world;
-        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.WORK_THE_SLAVES)], [], []));
+        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.WorkTheSlaves)], [], []));
         var worker = Member(world, master, cage.Position + new Vector3(60, 0, 0));
         var slave = ObeyingSlave(world, city, master, cage.Position + new Vector3(80, 0, 0));
         world.RunTicks(61);
@@ -83,13 +83,13 @@ public class SlaveListTests
     /// </summary>
     sealed class HomeWalker(Func<CharacterId> who, Vector2 to) : ITickSystem
     {
-        bool done;
+        bool _done;
 
         public void SlowWorld(SimWorld world)
         {
-            if (done || !world.Characters.TryResolveNext(who(), out int slot)) return;
-            done = true;
-            TaskStart.Walk(world, slot, to, SpeedMode.Walk, TaskType.STAY_IN_HOME, TaskSource.Goal);
+            if (_done || !world.Characters.TryResolveNext(who(), out int slot)) return;
+            _done = true;
+            TaskStart.Walk(world, slot, to, SpeedMode.Walk, TaskType.StayInHome, TaskSource.Goal);
             world.Characters.Cold(slot)!.Engaged = false;
         }
     }
@@ -107,7 +107,7 @@ public class SlaveListTests
         var (world, captive, city, cage) = Town(new MovementSystem(new PathService(walkability, true)), new HomeWalker(() => worker, new Vector2(2200 + 600, 2000)));
         using var _ = world;
         Assert.Equal((2200f, 2000f), (cage.Position.X, cage.Position.Z));
-        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.GATHER_SLAVES_FROM_CAGES)], [], []));
+        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.GatherSlavesFromCages)], [], []));
         // Held off the sweep until it walks home (HomeWalker), a walk the AI holds (43's act-out).
         worker = Member(world, master, cage.Position + new Vector3(150, 0, 0), c => (c.Ai!.Behaviour, c.Engaged) = (AiBehaviour.Post, true));
         var prisoner = Member(world, NewSquad(world, city, Board([], [], [], [], [])), cage.Position);
@@ -125,14 +125,14 @@ public class SlaveListTests
     [Fact]
     public void A_worker_ends_its_shout_job_on_its_line_and_starts_another()
     {
-        var shouter = SyntheticTown.Rec("shouter-c", Meitou.Data.Fcs.FcsRecordType.CHARACTER, "Workmaster");
+        var shouter = SyntheticTown.Rec("shouter-c", Data.Fcs.FcsRecordType.Character, "Workmaster");
         shouter.References["dialogue package"] = [SyntheticTown.Ref("shout-p")];
-        var package = SyntheticTown.Rec("shout-p", Meitou.Data.Fcs.FcsRecordType.DIALOGUE_PACKAGE, "Shouts");
+        var package = SyntheticTown.Rec("shout-p", Data.Fcs.FcsRecordType.DialoguePackage, "Shouts");
         package.References["dialogs"] = [SyntheticTown.Ref("shout-d", CaptiveSystem.ShoutAtSlaveWorker)];
-        var dialog = SyntheticTown.Rec("shout-d", Meitou.Data.Fcs.FcsRecordType.DIALOGUE, "Shout");
+        var dialog = SyntheticTown.Rec("shout-d", Data.Fcs.FcsRecordType.Dialogue, "Shout");
         dialog.Bools["monologue"] = true;
         dialog.References["lines"] = [SyntheticTown.Ref("shout-l")];
-        var line = SyntheticTown.Rec("shout-l", Meitou.Data.Fcs.FcsRecordType.DIALOGUE_LINE, "Shout line");
+        var line = SyntheticTown.Rec("shout-l", Data.Fcs.FcsRecordType.DialogueLine, "Shout line");
         line.Strings["text0"] = "Back to work!";
         var data = ArrestTests.Town([shouter, package, dialog, line]);
         var captive = new CaptiveSystem(data, null, new CaptiveSettings { RecordLog = true });
@@ -141,7 +141,7 @@ public class SlaveListTests
         world.Fixtures.RegisterSite(world, data, 0);
         int city = data.FactionIndex("50-a");
         var cage = world.Fixtures.Find("0.0:cageA")!;
-        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.WORK_THE_SLAVES)], [], []));
+        var master = NewSquad(world, city, Board([], [], [Goal(TaskType.WorkTheSlaves)], [], []));
         var worker = Member(world, master, cage.Position + new Vector3(60, 0, 0), c => c.RecordId = "shouter-c");
         ObeyingSlave(world, city, master, cage.Position + new Vector3(80, 0, 0));
 
@@ -181,7 +181,7 @@ public class SlaveListTests
     {
         var (world, captive, city, cage) = Town();
         using var _ = world;
-        var watcher = Member(world, NewSquad(world, city, Board([], [], [Goal(TaskType.SLAVE_WATCHING)], [], [])), cage.Position + new Vector3(60, 0, 0));
+        var watcher = Member(world, NewSquad(world, city, Board([], [], [Goal(TaskType.SlaveWatching)], [], [])), cage.Position + new Vector3(60, 0, 0));
         var slave = LooseSlave(world, city, cage.Position + new Vector3(80, 0, 0), shaven: true, shackled: true);
         bool Watched() => captive.Log.Any(e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Process } && e.Worker == watcher && e.Captive == slave);
         world.RunTicks(61);
@@ -205,7 +205,7 @@ public class SlaveListTests
             var log = new EventLog();
             var (world, captive, city, cage) = Town(log);
             using var _ = world;
-            var watcher = Member(world, NewSquad(world, city, Board([], [], [Goal(TaskType.SLAVE_WATCHING)], [], [])), cage.Position + new Vector3(60, 0, 0));
+            var watcher = Member(world, NewSquad(world, city, Board([], [], [Goal(TaskType.SlaveWatching)], [], [])), cage.Position + new Vector3(60, 0, 0));
             var slave = LooseSlave(world, city, cage.Position + new Vector3(70, 0, 0), shaven, shackled: false);
             bool Enslaved() => captive.Log.Any(e => e is { Kind: CaptiveEventKind.Enslaved } && e.Worker == watcher && e.Captive == slave);
             for (int t = 0; t < 1200 && !Enslaved(); t++) world.RunTicks(1);
@@ -223,22 +223,22 @@ public class SlaveListTests
     /// </summary>
     sealed class HomeSitter(Func<CharacterId> who) : ITickSystem
     {
-        bool seated, stood;
+        bool _seated, _stood;
 
         public bool Up { get; set; }
 
         public void SlowWorld(SimWorld world)
         {
             if (!world.Characters.TryResolveNext(who(), out int slot)) return;
-            if (!seated)
+            if (!_seated)
             {
-                seated = true;
-                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Rest, TaskType.STAY_IN_HOME, TaskSource.Goal));
+                _seated = true;
+                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Rest, TaskType.StayInHome, TaskSource.Goal));
                 world.Characters.Cold(slot)!.Engaged = false;
             }
-            else if (Up && !stood)
+            else if (Up && !_stood)
             {
-                stood = true;
+                _stood = true;
                 TaskStart.Stand(world.Characters, slot);
             }
         }
@@ -257,12 +257,12 @@ public class SlaveListTests
         var sitter = new HomeSitter(() => eater);
         var (world, captive, city, cage) = Town(sitter);
         using var _ = world;
-        var squad = NewSquad(world, city, Board([], [], [Goal(TaskType.EAT_A_RANDOM_CAGE_OCCUPANT)], [], []));
+        var squad = NewSquad(world, city, Board([], [], [Goal(TaskType.EatARandomCageOccupant)], [], []));
         var prisoner = Member(world, NewSquad(world, city, Board([], [], [], [], [])), cage.Position);
         Assert.True(world.Fixtures.Imprison(world, prisoner, cage));
         // Held off the sweep until it sits (HomeSitter).
         eater = Member(world, squad, cage.Position + new Vector3(60, 0, 0),
-            c => (c.Ai!.Behaviour, c.DrawnWeapon, c.Engaged) = (AiBehaviour.Sit, Meitou.Data.Gameplay.WeaponKinds.Katana, true));
+            c => (c.Ai!.Behaviour, c.DrawnWeapon, c.Engaged) = (AiBehaviour.Sit, Data.Gameplay.WeaponKinds.Katana, true));
         var cold = world.Characters.Cold(eater.Slot)!;
         for (int t = 0; t < 61; t++)
         {
@@ -270,15 +270,15 @@ public class SlaveListTests
             Assert.Equal(0, world.DeferredCount);
         }
         Assert.Equal(CharacterTask.Rest, (CharacterTask)world.Characters.Next[eater.Slot].Task);
-        Assert.Equal([(TaskType.EAT_A_RANDOM_CAGE_OCCUPANT, 1f)], cold.Ai!.CaptiveOffers);
-        Assert.Equal((null, Meitou.Data.Gameplay.WeaponKinds.Katana), (cold.Ai.FateCage, cold.DrawnWeapon));
+        Assert.Equal([(TaskType.EatARandomCageOccupant, 1f)], cold.Ai!.CaptiveOffers);
+        Assert.Equal((null, Data.Gameplay.WeaponKinds.Katana), (cold.Ai.FateCage, cold.DrawnWeapon));
         Assert.DoesNotContain(captive.Log, e => e.Worker == eater);
 
         sitter.Up = true;
         world.RunTicks(31);
         Assert.Contains(captive.Log,
             e => e is { Kind: CaptiveEventKind.Started, Job: CaptiveJobKind.Eat } && e.Worker == eater && e.Captive == prisoner);
-        Assert.Equal((cage.Id, Meitou.Data.Gameplay.WeaponKinds.None), (cold.Ai.FateCage, cold.DrawnWeapon));
+        Assert.Equal((cage.Id, Data.Gameplay.WeaponKinds.None), (cold.Ai.FateCage, cold.DrawnWeapon));
         Assert.Empty(cold.Ai.CaptiveOffers);
     }
 }

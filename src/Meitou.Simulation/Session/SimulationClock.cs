@@ -27,50 +27,50 @@ public sealed class SimulationClock
     /// <summary>Default most ticks a frame may run at speed 1 (engine choice): 1/15 s of game time; times the speed at the others.</summary>
     public const int DefaultMaxTicksPerFrame = 2;
 
-    readonly FixedStepClock steps = new(TickRate);
-    readonly double[] speeds = [.. DefaultSpeeds];
-    double speed = 1;
-    double lastSpeed = 1;
-    double rememberedSpeed;
-    bool rememberedSet;
-    int maxTicksPerFrame;
+    readonly FixedStepClock _steps = new(TickRate);
+    readonly double[] _speeds = [.. DefaultSpeeds];
+    double _speed = 1;
+    double _lastSpeed = 1;
+    double _rememberedSpeed;
+    bool _rememberedSet;
+    int _maxTicksPerFrame;
 
     public SimulationClock(int maxTicksPerFrame = DefaultMaxTicksPerFrame) => MaxTicksPerFrame = maxTicksPerFrame;
 
     /// <summary>The speeds the speed actions and buttons step through: 1, then the two fast ones (the game's 2 and 5 by default).</summary>
-    public IReadOnlyList<double> Speeds => speeds;
+    public IReadOnlyList<double> Speeds => _speeds;
     /// <summary>The step of <see cref="Speeds"/> that is <paramref name="value"/>, or -1.</summary>
-    public int StepOf(double value) => Array.IndexOf(speeds, value);
+    public int StepOf(double value) => Array.IndexOf(_speeds, value);
 
     /// <summary>Length of one tick in game seconds.</summary>
-    public double TickSeconds => steps.TickSeconds;
+    public double TickSeconds => _steps.TickSeconds;
 
     /// <summary>Most ticks one frame may run at speed 1; the budget at speed s is this times s.</summary>
     public int MaxTicksPerFrame
     {
-        get => maxTicksPerFrame;
+        get => _maxTicksPerFrame;
         set
         {
             ArgumentOutOfRangeException.ThrowIfLessThan(value, 1);
-            maxTicksPerFrame = value;
+            _maxTicksPerFrame = value;
         }
     }
 
     /// <summary>The speed: 0 (paused by the player) or above; one of <see cref="Speeds"/> but for the console's and benches' own.</summary>
-    public double Speed => speed;
+    public double Speed => _speed;
     /// <summary>The speed pause returns to.</summary>
-    public double LastNonZeroSpeed => lastSpeed;
+    public double LastNonZeroSpeed => _lastSpeed;
     /// <summary>The world is stopped from outside (menus, loading) without touching the speed.</summary>
     public bool RequestedPause { get; set; }
     /// <summary>No ticks run: a requested pause or speed 0.</summary>
-    public bool IsPaused => RequestedPause || speed == 0;
+    public bool IsPaused => RequestedPause || _speed == 0;
 
     /// <summary>Sets the speed: 0 pauses; any other finite one runs (the buttons and keys pick one of <see cref="Speeds"/>).</summary>
     public void SetSpeed(double value)
     {
         if (!(value >= 0) || double.IsInfinity(value)) throw new ArgumentOutOfRangeException(nameof(value), "a speed is 0 or above");
-        speed = value;
-        if (value != 0) lastSpeed = value;
+        _speed = value;
+        if (value != 0) _lastSpeed = value;
     }
 
     /// <summary>
@@ -79,18 +79,18 @@ public sealed class SimulationClock
     /// </summary>
     public void SetFastSpeeds(double fast, double fastest)
     {
-        double[] old = [.. speeds];
-        speeds[1] = Math.Clamp(fast, MinFastSpeed, MaxFastSpeed);
-        speeds[2] = Math.Clamp(fastest, MinFastestSpeed, MaxFastestSpeed);
-        speed = Remap(old, speed);
-        lastSpeed = Remap(old, lastSpeed);
-        rememberedSpeed = Remap(old, rememberedSpeed);
+        double[] old = [.. _speeds];
+        _speeds[1] = Math.Clamp(fast, MinFastSpeed, MaxFastSpeed);
+        _speeds[2] = Math.Clamp(fastest, MinFastestSpeed, MaxFastestSpeed);
+        _speed = Remap(old, _speed);
+        _lastSpeed = Remap(old, _lastSpeed);
+        _rememberedSpeed = Remap(old, _rememberedSpeed);
     }
 
-    double Remap(double[] old, double value) => Array.IndexOf(old, value) is var i and > 0 ? speeds[i] : value;
+    double Remap(double[] old, double value) => Array.IndexOf(old, value) is var i and > 0 ? _speeds[i] : value;
 
     /// <summary>The pause action: speed 0, or back to the last non-zero speed.</summary>
-    public void TogglePause() => SetSpeed(speed == 0 ? lastSpeed : 0);
+    public void TogglePause() => SetSpeed(_speed == 0 ? _lastSpeed : 0);
 
     /// <summary>
     /// The original's pause function (docs/game/game-loop.md "Speed and pause"): the speed it resumes at is kept apart from the speed buttons. A
@@ -98,8 +98,8 @@ public sealed class SimulationClock
     /// </summary>
     void Remember()
     {
-        if (!rememberedSet) { rememberedSpeed = speed; rememberedSet = true; }
-        if (speed > 0) rememberedSpeed = speed;
+        if (!_rememberedSet) { _rememberedSpeed = _speed; _rememberedSet = true; }
+        if (_speed > 0) _rememberedSpeed = _speed;
     }
 
     /// <summary>A player pause that the pause key resumes: stores the speed, then speed 0 (no change when already paused).</summary>
@@ -112,23 +112,23 @@ public sealed class SimulationClock
     /// <summary>The pause key: running, it pauses (<see cref="Pause"/>); paused, it sets the stored speed, which stays paused when that is 0 (after a speed button paused before the key stored one).</summary>
     public void PauseKey()
     {
-        if (speed > 0) { Pause(); return; }
+        if (_speed > 0) { Pause(); return; }
         Remember();
-        SetSpeed(rememberedSpeed);
+        SetSpeed(_rememberedSpeed);
     }
 
     /// <summary>Steps to the next of <see cref="Speeds"/> above the last speed (the top one at the top); from a pause, resumes there.</summary>
-    public void Faster() => SetSpeed(speeds.FirstOrDefault(s => s > lastSpeed, speeds[^1]));
+    public void Faster() => SetSpeed(_speeds.FirstOrDefault(s => s > _lastSpeed, _speeds[^1]));
 
     /// <summary>Steps to the next of <see cref="Speeds"/> below the last speed (1 at the bottom); from a pause, resumes there.</summary>
-    public void Slower() => SetSpeed(speeds.LastOrDefault(s => s < lastSpeed, speeds[0]));
+    public void Slower() => SetSpeed(_speeds.LastOrDefault(s => s < _lastSpeed, _speeds[0]));
 
     /// <summary>Ticks run so far.</summary>
-    public long TotalTicks => steps.TotalTicks;
+    public long TotalTicks => _steps.TotalTicks;
     /// <summary>Ticks dropped so far because frames owed more than the budget.</summary>
-    public long DroppedTicks => steps.DroppedTicks;
+    public long DroppedTicks => _steps.DroppedTicks;
     /// <summary>Position between the previous tick (0) and the next (1, exclusive), for interpolating the snapshots.</summary>
-    public float Alpha => steps.Alpha;
+    public float Alpha => _steps.Alpha;
     /// <summary>The speed the last <see cref="Advance"/> achieved: the asked speed scaled by the share of the owed ticks that ran.</summary>
     public double AchievedSpeed { get; private set; } = 1;
 
@@ -136,7 +136,7 @@ public sealed class SimulationClock
     public static double AchievedSpeedOver(double speed, long ran, long dropped) => ran + dropped == 0 ? speed : speed * ran / (ran + dropped);
 
     /// <summary>Drops the game time owed towards the next tick (<see cref="FixedStepClock.ResetPhase"/>): the duel's restart, so each lap ticks on the same frames.</summary>
-    public void ResetPhase() => steps.ResetPhase();
+    public void ResetPhase() => _steps.ResetPhase();
 
     /// <summary>Adds a frame's real time and returns how many simulation ticks to run now.</summary>
     public int Advance(double realSeconds)
@@ -144,14 +144,14 @@ public sealed class SimulationClock
         if (!(realSeconds >= 0) || double.IsInfinity(realSeconds)) throw new ArgumentOutOfRangeException(nameof(realSeconds));
         if (IsPaused)
         {
-            steps.Advance(0);
-            AchievedSpeed = speed;
+            _steps.Advance(0);
+            AchievedSpeed = _speed;
             return 0;
         }
-        long droppedBefore = steps.DroppedTicks;
-        int run = steps.Advance(Math.Min(realSeconds, MaxFrameSeconds) * speed, (int)Math.Min(Math.Ceiling(maxTicksPerFrame * speed), int.MaxValue));
-        long dropped = steps.DroppedTicks - droppedBefore;
-        AchievedSpeed = AchievedSpeedOver(speed, run, dropped);
+        long droppedBefore = _steps.DroppedTicks;
+        int run = _steps.Advance(Math.Min(realSeconds, MaxFrameSeconds) * _speed, (int)Math.Min(Math.Ceiling(_maxTicksPerFrame * _speed), int.MaxValue));
+        long dropped = _steps.DroppedTicks - droppedBefore;
+        AchievedSpeed = AchievedSpeedOver(_speed, run, dropped);
         return run;
     }
 }

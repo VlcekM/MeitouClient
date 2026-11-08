@@ -16,13 +16,13 @@ public sealed class FreeCamera
 {
     const float PitchLimit = 1.5f;
 
-    readonly Func<float, float, float> ground;
-    readonly CameraSettings settings;
+    readonly Func<float, float, float> _ground;
+    readonly CameraSettings _settings;
 
     public FreeCamera(Func<float, float, float> ground, CameraSettings? settings = null)
     {
-        this.ground = ground;
-        this.settings = settings ?? new CameraSettings();
+        this._ground = ground;
+        this._settings = settings ?? new CameraSettings();
     }
 
     public Vector3 Position { get; private set; }
@@ -31,12 +31,12 @@ public sealed class FreeCamera
     /// <summary>Radians; positive looks down (the strategy camera's convention).</summary>
     public float Pitch { get; private set; }
     /// <summary>What <see cref="State"/> reports as <see cref="CameraState.Distance"/>: the boom of the strategy camera it came from.</summary>
-    public float ReportedDistance { get; set; } = Meitou.Data.World.KenshiCamera.InitialDistance;
+    public float ReportedDistance { get; set; } = Data.World.KenshiCamera.InitialDistance;
 
     public Vector3 Forward => -new Vector3(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
 
     /// <summary>The speed at the current height above the ground, units per second.</summary>
-    public float Speed => Math.Clamp((Position.Y - ground(Position.X, Position.Z)) * settings.FreeSpeedPerHeight, settings.FreeMinSpeed, settings.FreeMaxSpeed);
+    public float Speed => Math.Clamp((Position.Y - _ground(Position.X, Position.Z)) * _settings.FreeSpeedPerHeight, _settings.FreeMinSpeed, _settings.FreeMaxSpeed);
 
     /// <summary>Starts flying from a camera state, at rest, looking the same way.</summary>
     public void Enter(CameraState from)
@@ -62,12 +62,12 @@ public sealed class FreeCamera
     {
         float turn = (a.Held(InputAction.RotateLeft) ? 1 : 0) - (a.Held(InputAction.RotateRight) ? 1 : 0);
         float tilt = (a.Held(InputAction.PitchDown) ? 1 : 0) - (a.Held(InputAction.PitchUp) ? 1 : 0);
-        Yaw = Interp.WrapAngle(Yaw + turn * settings.RotateSpeed * dt);
-        Pitch += tilt * settings.RotateSpeed * dt;
+        Yaw = Interp.WrapAngle(Yaw + turn * _settings.RotateSpeed * dt);
+        Pitch += tilt * _settings.RotateSpeed * dt;
         if (a.Held(InputAction.Orbit))
         {
-            Yaw = Interp.WrapAngle(Yaw - a.MouseDelta.X * settings.MouseSensitivity);
-            Pitch += a.MouseDelta.Y * settings.MouseSensitivity;
+            Yaw = Interp.WrapAngle(Yaw - a.MouseDelta.X * _settings.MouseSensitivity);
+            Pitch += a.MouseDelta.Y * _settings.MouseSensitivity;
         }
         Pitch = Math.Clamp(Pitch, -PitchLimit, PitchLimit);
 
@@ -81,14 +81,14 @@ public sealed class FreeCamera
         var wish = f * fwd + side * right + Vector3.UnitY * up;
         bool shift = a.Input.IsDown(Key.LeftShift) || a.Input.IsDown(Key.RightShift);
         var target = wish.LengthSquared() > 1e-6f ? Vector3.Normalize(wish) * Speed * (shift ? 2 : 1) : Vector3.Zero;
-        Velocity = Vector3.Lerp(Velocity, target, 1 - MathF.Exp(-settings.FreeResponse * dt));
+        Velocity = Vector3.Lerp(Velocity, target, 1 - MathF.Exp(-_settings.FreeResponse * dt));
         Position += Velocity * dt;
         KeepAboveGround();
     }
 
     void KeepAboveGround()
     {
-        float min = ground(Position.X, Position.Z) + settings.FreeClearance;
+        float min = _ground(Position.X, Position.Z) + _settings.FreeClearance;
         if (Position.Y >= min) return;
         Position = new Vector3(Position.X, min, Position.Z);
         if (Velocity.Y < 0) Velocity = new Vector3(Velocity.X, 0, Velocity.Z);
@@ -108,17 +108,17 @@ public sealed class FreeCamera
             prevT = t;
             t = MathF.Min(t + MathF.Max(5, t * 0.02f), maxRange);
             var p = Position + f * t;
-            if (p.Y <= ground(p.X, p.Z))
+            if (p.Y <= _ground(p.X, p.Z))
             {
                 float lo = prevT, hi = t;
                 for (int i = 0; i < 24; i++)
                 {
                     float mid = (lo + hi) / 2;
                     var q = Position + f * mid;
-                    if (q.Y <= ground(q.X, q.Z)) hi = mid; else lo = mid;
+                    if (q.Y <= _ground(q.X, q.Z)) hi = mid; else lo = mid;
                 }
                 var hit = Position + f * hi;
-                return new Vector3(hit.X, ground(hit.X, hit.Z), hit.Z);
+                return new Vector3(hit.X, _ground(hit.X, hit.Z), hit.Z);
             }
         }
         return null;

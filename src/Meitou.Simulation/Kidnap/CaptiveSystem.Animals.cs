@@ -32,7 +32,7 @@ public sealed partial class CaptiveSystem
         float best = float.MaxValue;
         for (int s = 0; s < data.Sites.Count; s++)
         {
-            if (data.Sites[s].Town.Type == Meitou.Data.Gameplay.TownType.NestMarker) continue;   // a nest stands on it
+            if (data.Sites[s].Town.Type == Data.Gameplay.TownType.NestMarker) continue;   // a nest stands on it
             float d = Vector2.DistanceSquared(here, new Vector2(data.Sites[s].Position.X, data.Sites[s].Position.Z));
             if (d < best) (best, site) = (d, s);
         }
@@ -43,7 +43,7 @@ public sealed partial class CaptiveSystem
         }
         var cages = nest >= 0 ? NestCages(world, nest) : site >= 0 ? CagesOf(world, site) : [];
         foreach (var cage in cages)
-            if (OccupantSlot(world, cage) >= 0 && jobs.Any(j => j.Kind == CaptiveJobKind.Eat && j.Captive == cage.Occupant && j.Phase == CaptivePhase.Work)) return cage;
+            if (OccupantSlot(world, cage) >= 0 && _jobs.Any(j => j.Kind == CaptiveJobKind.Eat && j.Captive == cage.Occupant && j.Phase == CaptivePhase.Work)) return cage;
         return null;
     }
 
@@ -91,7 +91,7 @@ public sealed partial class CaptiveSystem
     {
         cold.PickingUpItem = limb.Id;
         if (Vector3.Distance(world.Characters.Next[slot].Position, limb.Position) > PlayerSystem.PickUpReach)
-            TaskStart.Walk(world, slot, limb.Position, SpeedMode.Run, TaskType.ANIMAL_FETCH_A_LIMB, TaskSource.Goal);
+            TaskStart.Walk(world, slot, limb.Position, SpeedMode.Run, TaskType.AnimalFetchALimb, TaskSource.Goal);
     }
 
     /// <summary>277's finder (a pure read): the limb <see cref="Fetch"/> goes for, null when none or the animal does not want one.</summary>
@@ -101,12 +101,12 @@ public sealed partial class CaptiveSystem
         if (cold.Age > 0.9f && (med.Fed > 0 || med.Hunger > 2.75f)) return null;
         var at = world.Characters.Next[slot].Position;
         Items.GroundItem? best = null;
-        float d2best = FetchRange * FetchRange;
+        float d2Best = FetchRange * FetchRange;
         foreach (var g in world.GroundItems.All)
         {
             if (g.Item.ItemFunction != Items.FeedSystem.LimbFunction || g.Slot is not null) continue;
             float d2 = Vector3.DistanceSquared(at, g.Position);
-            if (d2 < d2best) (best, d2best) = (g, d2);
+            if (d2 < d2Best) (best, d2Best) = (g, d2);
         }
         return best;
     }

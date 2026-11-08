@@ -42,9 +42,9 @@ sealed class DebugMenu(GameHost host)
         var layout = new List<(string?, int)>();
         foreach (var (title, rows) in DebugCheatSections)
             for (int k = 0; k < rows.Length; k++) layout.Add((k == 0 ? title : null, (int)rows[k]));
-        for (int m = DebugLabels.Length; m < host.modding.DebugRowCount; m++) layout.Add((m == DebugLabels.Length ? "Mods" : null, m));
-        if (debugToolsOn)
-            for (int t = 0; t < DebugTools.Length; t++) layout.Add((t == 0 || DebugTools[t].Section != DebugTools[t - 1].Section ? DebugTools[t].Section : null, host.modding.DebugRowCount + t));
+        for (int m = DebugLabels.Length; m < host.Modding.DebugRowCount; m++) layout.Add((m == DebugLabels.Length ? "Mods" : null, m));
+        if (DebugToolsOn)
+            for (int t = 0; t < DebugTools.Length; t++) layout.Add((t == 0 || DebugTools[t].Section != DebugTools[t - 1].Section ? DebugTools[t].Section : null, host.Modding.DebugRowCount + t));
         return layout;
     }
 
@@ -52,22 +52,22 @@ sealed class DebugMenu(GameHost host)
     const int DebugLabelWidth = 30, DebugKeyWidth = 10;
 
     // The rows' typed text: the vanilla rows', then one per code mod row (EnsureDebugFields).
-    internal readonly List<string> debugFields = ["", "", "", "1000", "", "", "", "20", "", "1", "", "", ""];
-    readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> debugMatches = [];
-    internal bool debugMenuOpen;
-    int debugRow;
-    string debugStatus = "";
+    internal readonly List<string> DebugFields = ["", "", "", "1000", "", "", "", "20", "", "1", "", "", ""];
+    readonly Dictionary<(bool Character, string Text), (string Id, string Name)?> _debugMatches = [];
+    internal bool DebugMenuOpen;
+    int _debugRow;
+    string _debugStatus = "";
     /// <summary>
     /// The open row's sub-list (Enter or Right opens it, Esc or Left closes it). Damage and Force hits: "Random" or "Off", then the first target's parts as (template id, name);
     /// Clear bounties: "All factions", then each faction with a bounty as (faction index, name and total).
     /// </summary>
-    internal (string? Id, string Name)[]? debugParts;
-    int debugPart;
+    internal (string? Id, string Name)[]? DebugParts;
+    int _debugPart;
     // The overlays the menu's tool rows switch, also on their own keys (F11, Ctrl+F9, F12).
-    internal bool statsVisible, fpsVisible;
-    internal FrameProfiler? profiler;
+    internal bool StatsVisible, FpsVisible;
+    internal FrameProfiler? Profiler;
     /// <summary>Whether the Tools section is shown: the Vulkan game loop has these tools, the Metal one does not.</summary>
-    internal bool debugToolsOn;
+    internal bool DebugToolsOn;
 
     /// <summary>A tool row: its section, label, key hint ("" for none), its state for the value column ("on", "off", a mode, "" for none) and what Enter does.</summary>
     readonly record struct DebugTool(string Section, string Label, string Key, Func<string> State, Action Switch)
@@ -79,22 +79,22 @@ sealed class DebugMenu(GameHost host)
     static string OnOff(bool on) => on ? "on" : "off";
 
     /// <summary>The tool rows below the cheats: each opens a tool or switches an overlay; a new tool adds its row here (tools first, then the Overlays section).</summary>
-    DebugTool[] DebugTools => debugTools ??=
+    DebugTool[] DebugTools => _debugTools ??=
     [
-        new("Tools", "Pick & collision inspector...", "", () => "", () => { debugMenuOpen = false; inspectorMenuOpen = true; }),
-        new("Tools", "Interior editor...", "", () => "", host.interiorEditorHost.OpenInteriorEditor),
-        new("Tools", "Level editor...", "Shift+F12", () => "", host.levelEditorHost.OpenLevelEditor),
-        new("Tools", "Teleport on map...", "", () => OnOff(host.player.worldMap.MapPickSticky), ToggleMapTeleport) { IsSwitch = true },
-        new("Overlays", "Navmesh view", "Shift+F11", () => host.debugOverlays.navView.ToString().ToLowerInvariant(), host.debugOverlays.ToggleNavOverlay),
-        new("Overlays", "Frame statistics", "F11", () => OnOff(statsVisible), () => { statsVisible = !statsVisible; FoliageGpuCull.CountTriangles = statsVisible; }) { IsSwitch = true },
-        new("Overlays", "  Character boxes", "", () => OnOff(host.debugOverlays.characterBoxes), () => host.debugOverlays.characterBoxes = !host.debugOverlays.characterBoxes) { IsSwitch = true },
-        new("Overlays", "  Walk paths", "", () => OnOff(host.debugOverlays.walkPaths), () => host.debugOverlays.walkPaths = !host.debugOverlays.walkPaths) { IsSwitch = true },
-        new("Overlays", "Fps counter", "Ctrl+F9", () => OnOff(fpsVisible), () => fpsVisible = !fpsVisible) { IsSwitch = true },
-        new("Overlays", "VRAM pie", "Ctrl+F12", () => OnOff(profiler?.ShowVram == true), () => { if (profiler is not null) profiler.ShowVram = !profiler.ShowVram; }) { IsSwitch = true },
-        new("Overlays", "Profiler", "F12", () => (profiler?.Showing ?? FrameProfiler.Mode.Off).ToString().ToLowerInvariant(),
-            () => { if (profiler is not null) profiler.Showing = (FrameProfiler.Mode)(((int)profiler.Showing + 1) % 3); }),
+        new("Tools", "Pick & collision inspector...", "", () => "", () => { DebugMenuOpen = false; InspectorMenuOpen = true; }),
+        new("Tools", "Interior editor...", "", () => "", host.InteriorEditorHost.OpenInteriorEditor),
+        new("Tools", "Level editor...", "Shift+F12", () => "", host.LevelEditorHost.OpenLevelEditor),
+        new("Tools", "Teleport on map...", "", () => OnOff(host.Player.WorldMap.MapPickSticky), ToggleMapTeleport) { IsSwitch = true },
+        new("Overlays", "Navmesh view", "Shift+F11", () => host.DebugOverlays.NavViewMode.ToString().ToLowerInvariant(), host.DebugOverlays.ToggleNavOverlay),
+        new("Overlays", "Frame statistics", "F11", () => OnOff(StatsVisible), () => { StatsVisible = !StatsVisible; FoliageGpuCull.CountTriangles = StatsVisible; }) { IsSwitch = true },
+        new("Overlays", "  Character boxes", "", () => OnOff(host.DebugOverlays.CharacterBoxes), () => host.DebugOverlays.CharacterBoxes = !host.DebugOverlays.CharacterBoxes) { IsSwitch = true },
+        new("Overlays", "  Walk paths", "", () => OnOff(host.DebugOverlays.WalkPaths), () => host.DebugOverlays.WalkPaths = !host.DebugOverlays.WalkPaths) { IsSwitch = true },
+        new("Overlays", "Fps counter", "Ctrl+F9", () => OnOff(FpsVisible), () => FpsVisible = !FpsVisible) { IsSwitch = true },
+        new("Overlays", "VRAM pie", "Ctrl+F12", () => OnOff(Profiler?.ShowVram == true), () => { if (Profiler is not null) Profiler.ShowVram = !Profiler.ShowVram; }) { IsSwitch = true },
+        new("Overlays", "Profiler", "F12", () => (Profiler?.Showing ?? FrameProfiler.Mode.Off).ToString().ToLowerInvariant(),
+            () => { if (Profiler is not null) Profiler.Showing = (FrameProfiler.Mode)(((int)Profiler.Showing + 1) % 3); }),
     ];
-    DebugTool[]? debugTools;
+    DebugTool[]? _debugTools;
 
     /// <summary>
     /// The "Teleport on map" switch, level-triggered: on, every left click on the open Map tab sends the selected characters (else the lead) to the clicked spot, and the camera there, until it is
@@ -102,40 +102,40 @@ sealed class DebugMenu(GameHost host)
     /// </summary>
     internal void SetMapTeleport(bool on)
     {
-        if (on) host.player.worldMap.ArmMapPick(TeleportToMapPoint);
-        else host.player.worldMap.DisarmMapPick();
-        mapTeleportNote = "";
-        debugStatus = on ? "map teleport on: close this menu, open the map, click a spot" : "map teleport off";
+        if (on) host.Player.WorldMap.ArmMapPick(TeleportToMapPoint);
+        else host.Player.WorldMap.DisarmMapPick();
+        _mapTeleportNote = "";
+        _debugStatus = on ? "map teleport on: close this menu, open the map, click a spot" : "map teleport off";
     }
 
-    void ToggleMapTeleport() => SetMapTeleport(!host.player.worldMap.MapPickSticky);
+    void ToggleMapTeleport() => SetMapTeleport(!host.Player.WorldMap.MapPickSticky);
 
     /// <summary>The result of the last map click, shown in the map's hint.</summary>
-    string mapTeleportNote = "";
+    string _mapTeleportNote = "";
 
     void TeleportToMapPoint(Vector3 at)
     {
-        var who = host.player.agentOrders.ControlOrderers();
+        var who = host.Player.AgentOrders.ControlOrderers();
         string lead = "";
         if (who.Count == 0)
         {
             // Nothing selected (a click in the world deselects): the switch still teleports, the lead.
-            if (host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is not { } first)
+            if (host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.IsPlayer) is not { } first)
             {
-                mapTeleportNote = "no player character to teleport";
-                host.session.World.Post("Teleport on map: " + mapTeleportNote);
+                _mapTeleportNote = "no player character to teleport";
+                host.Session.World.Post("Teleport on map: " + _mapTeleportNote);
                 return;
             }
-            host.session.World.Commands.Enqueue(new DebugTeleport([first.Id], at) { Tick = host.session.World.Tick });
+            host.Session.World.Commands.Enqueue(new DebugTeleport([first.Id], at) { Tick = host.Session.World.Tick });
             lead = $" (nothing selected: the lead, {first.Name})";
-            debugStatus = mapTeleportNote = $"teleported 1 to {at.X:0}, {at.Z:0}{lead}";
-            host.session.World.Post("Teleport on map: " + mapTeleportNote);
+            _debugStatus = _mapTeleportNote = $"teleported 1 to {at.X:0}, {at.Z:0}{lead}";
+            host.Session.World.Post("Teleport on map: " + _mapTeleportNote);
         }
         else
         {
-            debugStatus = DebugApply(DebugRow.Teleport, "", at: at);
-            mapTeleportNote = debugStatus;
-            if (debugFailed) { host.session.World.Post("Teleport on map: " + mapTeleportNote); return; }
+            _debugStatus = DebugApply(DebugRow.Teleport, "", at: at);
+            _mapTeleportNote = _debugStatus;
+            if (DebugFailed) { host.Session.World.Post("Teleport on map: " + _mapTeleportNote); return; }
         }
         CentreCameraOn(at.X, at.Z);
     }
@@ -143,18 +143,18 @@ sealed class DebugMenu(GameHost host)
     /// <summary>Puts the camera's target on world X Z, keeping its angle and distance (the characters just teleported there; a followed one is followed on).</summary>
     internal void CentreCameraOn(float x, float z)
     {
-        var view = host.session.Camera.Current;
-        host.session.Camera.Place(new Vector2(x, z), view.Yaw, view.Pitch, view.Distance);
+        var view = host.Session.Camera.Current;
+        host.Session.Camera.Place(new Vector2(x, z), view.Yaw, view.Pitch, view.Distance);
     }
 
     // ---- Explode on click ----
 
     /// <summary>The "Explode on click" switch (F10 Combat row, console <c>explode-click</c>): the world it was switched on in and the explode flags used for each click.</summary>
-    World? explodeClickWorld;
-    string explodeClickArgs = "";
+    World? _explodeClickWorld;
+    string _explodeClickArgs = "";
     /// <summary>The explosion level (1 to 5, F10 "Explosion level" row) used by <c>explode</c>, the F10 row and each click unless a <c>--level</c> says otherwise; 3 is normal. A click's normal level is larger than a plain explode's (<see cref="ExplodeLevels.Values"/>).</summary>
-    int explodeLevel = ExplodeLevels.Normal;
-    internal bool ExplodeClickOn => explodeClickWorld is not null && ReferenceEquals(explodeClickWorld, host.session.World);
+    int _explodeLevel = ExplodeLevels.Normal;
+    internal bool ExplodeClickOn => _explodeClickWorld is not null && ReferenceEquals(_explodeClickWorld, host.Session.World);
 
     /// <summary>
     /// <paramref name="field"/> is empty (toggle) or <c>[on|off] [&lt;level 1-5&gt;] [--level &lt;1-5|name&gt;] [--radius &lt;m&gt;] [--force &lt;n&gt;] [--damage &lt;n&gt;] [--squad]</c>. While on, a left click on the ground blows it up (<see cref="DebugExplodeApply"/>)
@@ -183,13 +183,13 @@ sealed class DebugMenu(GameHost host)
         bool turnOn = on ?? (kept.Count > 0 || !ExplodeClickOn);
         if (turnOn)
         {
-            explodeClickWorld = host.session.World;
-            if (kept.Count > 0 || !ExplodeClickOn) explodeClickArgs = string.Join(' ', kept);
-            host.player.picking.WorldClick = ExplodeClickPress;
-            return $"explode-click on{(explodeClickArgs.Length > 0 ? " (" + explodeClickArgs + ")" : "")}: a left click on the ground explodes it (game unpaused only); explode-click off ends it";
+            _explodeClickWorld = host.Session.World;
+            if (kept.Count > 0 || !ExplodeClickOn) _explodeClickArgs = string.Join(' ', kept);
+            host.Player.Picking.WorldClick = ExplodeClickPress;
+            return $"explode-click on{(_explodeClickArgs.Length > 0 ? " (" + _explodeClickArgs + ")" : "")}: a left click on the ground explodes it (game unpaused only); explode-click off ends it";
         }
-        explodeClickWorld = null;
-        host.player.picking.WorldClick = null;
+        _explodeClickWorld = null;
+        host.Player.Picking.WorldClick = null;
         return "explode-click off";
     }
 
@@ -197,18 +197,18 @@ sealed class DebugMenu(GameHost host)
     bool ExplodeClickPress(Vector3? ground)
     {
         if (!ExplodeClickOn) return false;
-        if (debugMenuOpen || host.devConsoleHost.ConsoleOpen) return false;   // clicks on the F10 menu and the console are theirs
+        if (DebugMenuOpen || host.DevConsoleHost.ConsoleOpen) return false;   // clicks on the F10 menu and the console are theirs
         if (ground is not { } at) return true;
-        debugStatus = DebugExplodeApply(host.session.World, string.Create(CultureInfo.InvariantCulture, $"{at.X} {at.Z} {explodeClickArgs}"), host.session.World.Tick, click: true);
+        _debugStatus = DebugExplodeApply(host.Session.World, string.Create(CultureInfo.InvariantCulture, $"{at.X} {at.Z} {_explodeClickArgs}"), host.Session.World.Tick, click: true);
         return true;
     }
 
     /// <summary>The level each click uses: the one in the switch's flags, else the F10 row's.</summary>
     int ExplodeClickLevel()
     {
-        var words = explodeClickArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var words = _explodeClickArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         int at = Array.LastIndexOf(words, "--level");
-        return at >= 0 && at + 1 < words.Length && ExplodeLevels.TryParse(words[at + 1], out int level) ? level : explodeLevel;
+        return at >= 0 && at + 1 < words.Length && ExplodeLevels.TryParse(words[at + 1], out int level) ? level : _explodeLevel;
     }
 
     /// <summary>The hint while the switch is on.</summary>
@@ -216,8 +216,8 @@ sealed class DebugMenu(GameHost host)
     {
         int level = ExplodeClickLevel();
         var v = ExplodeLevels.Values(level, true);
-        string text = $"explode-click ON: left click = explode, {ExplodeLevels.Label(level)} (r={v.Radius:0.#}, force {v.Force:0.#}, dmg {v.Damage:0.#}{(explodeClickArgs.Length > 0 ? ", then " + explodeClickArgs : "")}). Switch off: explode-click off"
-            + (host.session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
+        string text = $"explode-click ON: left click = explode, {ExplodeLevels.Label(level)} (r={v.Radius:0.#}, force {v.Force:0.#}, dmg {v.Damage:0.#}{(_explodeClickArgs.Length > 0 ? ", then " + _explodeClickArgs : "")}). Switch off: explode-click off"
+            + (host.Session.Simulation.IsPaused ? "   PAUSED: unpause, the blast runs in the next tick" : "");
         float w = text.Length * o.CharWidth + 20, x = (width - w) / 2;
         o.Rect(x, 8, x + w, 8 + o.LineHeight + 12, DebugOverlay.PanelColour);
         o.Text(text, x + 10, 12, new Vector4(1f, 0.9f, 0.4f, 1));
@@ -228,7 +228,7 @@ sealed class DebugMenu(GameHost host)
     internal void DrawMapPickHint(DebugOverlay o, int width, int height)
     {
         string text = "Teleport on map: ON, every click teleports (F10 > Teleport on map or 'tpmap off' ends it)";
-        string note = mapTeleportNote;
+        string note = _mapTeleportNote;
         float w = Math.Max(text.Length, note.Length) * o.CharWidth + 20, x = (width - w) / 2, h = o.LineHeight * (note.Length > 0 ? 2 : 1) + 8;
         o.Rect(x, 8, x + w, 8 + h + 8, DebugOverlay.PanelColour);
         o.Text(text, x + 10, 12, new Vector4(1f, 0.9f, 0.4f, 1));
@@ -237,10 +237,10 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>The rows of the menu: the cheats, the code mods' rows (<see cref="GameMods.DebugRowCount"/>), then the tool rows.</summary>
-    int DebugMenuRows => host.modding.DebugRowCount + (debugToolsOn ? DebugTools.Length : 0);
-    bool DebugIsTool(int row) => row >= host.modding.DebugRowCount;
+    int DebugMenuRows => host.Modding.DebugRowCount + (DebugToolsOn ? DebugTools.Length : 0);
+    bool DebugIsTool(int row) => row >= host.Modding.DebugRowCount;
 
-    bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? host.modding.ModDebugRows[row - DebugLabels.Length].HasField
+    bool DebugHasField(int row) => !DebugIsTool(row) && (row >= DebugLabels.Length ? host.Modding.ModDebugRows[row - DebugLabels.Length].HasField
         : (DebugRow)row is not (DebugRow.Teleport or DebugRow.Heal or DebugRow.HealFully or DebugRow.MaxSkills or DebugRow.ForceHits or DebugRow.UnlockResearch or DebugRow.ClearBounties or DebugRow.Godmode or DebugRow.Guard or DebugRow.ExplodeLevel or DebugRow.Explode or DebugRow.ExplodeClick));
 
     /// <summary>The rows that open the body part list.</summary>
@@ -250,48 +250,48 @@ sealed class DebugMenu(GameHost host)
     int DebugStep(int delta)
     {
         var layout = DebugLayout();
-        int at = layout.FindIndex(l => l.Row == debugRow);
+        int at = layout.FindIndex(l => l.Row == _debugRow);
         return layout[((at < 0 ? 0 : at) + delta + layout.Count) % layout.Count].Row;
     }
 
     internal void DebugMenuKey(EngineKey key)
     {
-        host.modding.EnsureDebugFields();
-        string field = DebugIsTool(debugRow) ? "" : debugFields[debugRow];
-        if (debugParts is { } parts)
+        host.Modding.EnsureDebugFields();
+        string field = DebugIsTool(_debugRow) ? "" : DebugFields[_debugRow];
+        if (DebugParts is { } parts)
         {
             switch (key)
             {
-                case EngineKey.Escape or EngineKey.Left: debugParts = null; break;
-                case EngineKey.Up: debugPart = (debugPart + parts.Length - 1) % parts.Length; break;
-                case EngineKey.Down: debugPart = (debugPart + 1) % parts.Length; break;
-                case EngineKey.Backspace when field.Length > 0: debugFields[debugRow] = field[..^1]; break;
-                case EngineKey.Enter: debugStatus = DebugApply((DebugRow)debugRow, field.Trim(), parts[debugPart]); break;
+                case EngineKey.Escape or EngineKey.Left: DebugParts = null; break;
+                case EngineKey.Up: _debugPart = (_debugPart + parts.Length - 1) % parts.Length; break;
+                case EngineKey.Down: _debugPart = (_debugPart + 1) % parts.Length; break;
+                case EngineKey.Backspace when field.Length > 0: DebugFields[_debugRow] = field[..^1]; break;
+                case EngineKey.Enter: _debugStatus = DebugApply((DebugRow)_debugRow, field.Trim(), parts[_debugPart]); break;
             }
             return;
         }
         switch (key)
         {
-            case EngineKey.Enter or EngineKey.Left or EngineKey.Right when debugRow < DebugLabels.Length && (DebugRow)debugRow == DebugRow.ExplodeLevel:
-                explodeLevel = key == EngineKey.Left ? Math.Max(1, explodeLevel - 1) : key == EngineKey.Right ? Math.Min(5, explodeLevel + 1) : explodeLevel % 5 + 1;
-                var shown = ExplodeLevels.Values(explodeLevel, false);
-                debugStatus = $"explosion {ExplodeLevels.Label(explodeLevel)}: r={shown.Radius:0.#}, force {shown.Force:0.#}, dmg {shown.Damage:0.#} (click: r={ExplodeLevels.Values(explodeLevel, true).Radius:0.#}, force {ExplodeLevels.Values(explodeLevel, true).Force:0.#}, dmg {ExplodeLevels.Values(explodeLevel, true).Damage:0.#})";
+            case EngineKey.Enter or EngineKey.Left or EngineKey.Right when _debugRow < DebugLabels.Length && (DebugRow)_debugRow == DebugRow.ExplodeLevel:
+                _explodeLevel = key == EngineKey.Left ? Math.Max(1, _explodeLevel - 1) : key == EngineKey.Right ? Math.Min(5, _explodeLevel + 1) : _explodeLevel % 5 + 1;
+                var shown = ExplodeLevels.Values(_explodeLevel, false);
+                _debugStatus = $"explosion {ExplodeLevels.Label(_explodeLevel)}: r={shown.Radius:0.#}, force {shown.Force:0.#}, dmg {shown.Damage:0.#} (click: r={ExplodeLevels.Values(_explodeLevel, true).Radius:0.#}, force {ExplodeLevels.Values(_explodeLevel, true).Force:0.#}, dmg {ExplodeLevels.Values(_explodeLevel, true).Damage:0.#})";
                 break;
-            case EngineKey.Enter or EngineKey.Right when DebugPicksPart(debugRow):
-                debugParts = (DebugRow)debugRow == DebugRow.ClearBounties ? DebugBountyList() : DebugPartList();
-                if (debugParts is not null) debugPart = Math.Min(debugPart, debugParts.Length - 1);
+            case EngineKey.Enter or EngineKey.Right when DebugPicksPart(_debugRow):
+                DebugParts = (DebugRow)_debugRow == DebugRow.ClearBounties ? DebugBountyList() : DebugPartList();
+                if (DebugParts is not null) _debugPart = Math.Min(_debugPart, DebugParts.Length - 1);
                 break;
-            case EngineKey.Escape: debugMenuOpen = false; break;
-            case EngineKey.Up: debugRow = DebugStep(-1); break;
-            case EngineKey.Down: debugRow = DebugStep(1); break;
-            case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right when DebugIsTool(debugRow):
-                var tool = DebugTools[debugRow - host.modding.DebugRowCount];
+            case EngineKey.Escape: DebugMenuOpen = false; break;
+            case EngineKey.Up: _debugRow = DebugStep(-1); break;
+            case EngineKey.Down: _debugRow = DebugStep(1); break;
+            case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right when DebugIsTool(_debugRow):
+                var tool = DebugTools[_debugRow - host.Modding.DebugRowCount];
                 // Left means off and Right on, so Left then Right never ends up flipping a switch twice.
                 if (tool.IsSwitch && key is EngineKey.Left or EngineKey.Right && (tool.State() == "on") == (key == EngineKey.Right)) break;
                 tool.Switch();
                 break;
-            case EngineKey.Backspace when field.Length > 0: debugFields[debugRow] = field[..^1]; break;
-            case EngineKey.Enter: debugStatus = DebugApply((DebugRow)debugRow, field.Trim()); break;
+            case EngineKey.Backspace when field.Length > 0: DebugFields[_debugRow] = field[..^1]; break;
+            case EngineKey.Enter: _debugStatus = DebugApply((DebugRow)_debugRow, field.Trim()); break;
         }
     }
 
@@ -299,28 +299,28 @@ sealed class DebugMenu(GameHost host)
     {
         if (DebugTargets() is not [var first, ..])
         {
-            debugStatus = "select or inspect a character first";
+            _debugStatus = "select or inspect a character first";
             return null;
         }
-        var table = host.session.World.Characters;
+        var table = host.Session.World.Characters;
         var body = table.TryResolveNext(first, out int slot) ? table.Cold(slot)?.Medical?.Parts : null;
         var parts = (body ?? []).Select(p => ((string?)p.Template.StringId, p.Template.Name.Length > 0 ? p.Template.Name : p.Template.StringId));
-        return [(null, (DebugRow)debugRow == DebugRow.Damage ? "Random (as a blow)" : "Off (as a blow)"), .. parts];
+        return [(null, (DebugRow)_debugRow == DebugRow.Damage ? "Random (as a blow)" : "Off (as a blow)"), .. parts];
     }
 
     /// <summary>The Clear bounties list: every faction with a bounty on the selected characters (else on any player character), with its total.</summary>
     (string? Id, string Name)[]? DebugBountyList()
     {
-        var table = host.session.World.Characters;
-        var selected = host.session.World.Player.Selection.ToArray();
-        var ledgers = new List<Meitou.Simulation.Crime.BountyLedger>();
+        var table = host.Session.World.Characters;
+        var selected = host.Session.World.Player.Selection.ToArray();
+        var ledgers = new List<Simulation.Crime.BountyLedger>();
         for (int s = 0; s < table.HighWater; s++)
             if (table.Next[s].Alive && table.Cold(s) is { Bounties: { } ledger } c && (selected.Length > 0 ? selected.Contains(table.IdOf(s)) : c.IsPlayer)) ledgers.Add(ledger);
         var factions = ledgers.SelectMany(l => l.Entries).GroupBy(e => e.Faction).OrderBy(g => g.Key)
             .Select(g => ((string?)g.Key.ToString(CultureInfo.InvariantCulture), $"{g.First().FactionName}   c.{g.Sum(e => e.Amount).ToString("N0", CultureInfo.InvariantCulture)}")).ToArray();
         if (factions.Length == 0)
         {
-            debugStatus = selected.Length > 0 ? "no bounties on the selected characters" : "no bounties on your characters";
+            _debugStatus = selected.Length > 0 ? "no bounties on the selected characters" : "no bounties on your characters";
             return null;
         }
         return [(null, "All factions"), .. factions];
@@ -328,24 +328,24 @@ sealed class DebugMenu(GameHost host)
 
     internal void DebugMenuText(char c)
     {
-        host.modding.EnsureDebugFields();
-        if (DebugHasField(debugRow) && !char.IsControl(c)) debugFields[debugRow] += c;
+        host.Modding.EnsureDebugFields();
+        if (DebugHasField(_debugRow) && !char.IsControl(c)) DebugFields[_debugRow] += c;
     }
 
     /// <summary>Heal, max skills and damage: the selected characters, else the inspected one.</summary>
     CharacterId[] DebugTargets()
     {
-        var player = host.session.World.Player;
-        var selected = host.player.agentOrders.ControlOrderers().ToArray();   // includes a select issued this tick (--setup / --exec run commands in one frame)
+        var player = host.Session.World.Player;
+        var selected = host.Player.AgentOrders.ControlOrderers().ToArray();   // includes a select issued this tick (--setup / --exec run commands in one frame)
         return selected.Length > 0 ? selected : player.Inspected.IsNone ? [] : [player.Inspected];
     }
 
     /// <summary>Set by <see cref="DebugFail"/> while <see cref="DebugApply"/> runs: the last action did not happen (the console prints it as an error).</summary>
-    internal bool debugFailed;
+    internal bool DebugFailed;
 
     string DebugFail(string message)
     {
-        debugFailed = true;
+        DebugFailed = true;
         return message;
     }
 
@@ -383,7 +383,7 @@ sealed class DebugMenu(GameHost host)
     string DebugExplodeApply(World world, string field, long tick, bool click = false)
     {
         const string usage = "usage: explode [<x> <z>|<level 1-5>] [--level <1-5|name>] [--id <c:slot.gen>] [--radius <m>] [--force <n>] [--damage <n>] [--squad]";
-        int level = explodeLevel;
+        int level = _explodeLevel;
         (float radius, float force, float damage) = ExplodeLevels.Values(level, click);
         bool squad = false;
         var numbers = new List<float>();
@@ -429,7 +429,7 @@ sealed class DebugMenu(GameHost host)
         if (numbers.Count is not (0 or 2)) return DebugFail(usage);
         Vector2 at;
         string onName = "";
-        var snap = host.session.CurrentSnapshot;
+        var snap = host.Session.CurrentSnapshot;
         if (numbers.Count == 2 && byId is null) at = new Vector2(numbers[0], numbers[1]);
         else
         {
@@ -451,18 +451,18 @@ sealed class DebugMenu(GameHost host)
     }
 
     /// <summary>
-    /// The one implementation of the cheats, for the menu's rows and the dev console's commands (<see cref="debugFailed"/> says whether it worked). <paramref name="at"/> is where teleport and spawn go
+    /// The one implementation of the cheats, for the menu's rows and the dev console's commands (<see cref="DebugFailed"/> says whether it worked). <paramref name="at"/> is where teleport and spawn go
     /// (the camera's target, the middle of the screen, without it).
     /// </summary>
     internal string DebugApply(DebugRow row, string field, (string? Id, string Name) part = default, Vector3? at = null)
     {
-        debugFailed = false;
-        var world = host.session.World;
+        DebugFailed = false;
+        var world = host.Session.World;
         long tick = world.Tick;
-        var selected = host.player.agentOrders.ControlOrderers().ToArray();
+        var selected = host.Player.AgentOrders.ControlOrderers().ToArray();
         var targets = DebugTargets();
-        var here = at ?? host.session.Camera.Current.Target;
-        if ((int)row >= DebugLabels.Length) return host.modding.ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
+        var here = at ?? host.Session.Camera.Current.Target;
+        if ((int)row >= DebugLabels.Length) return host.Modding.ModDebugApply((int)row - DebugLabels.Length, field, selected, here, tick);
         switch (row)
         {
             case DebugRow.Teleport:
@@ -504,7 +504,7 @@ sealed class DebugMenu(GameHost host)
             case DebugRow.ClearBounties:
                 int? faction = part.Id is { } f ? int.Parse(f, CultureInfo.InvariantCulture) : null;
                 world.Commands.Enqueue(new DebugClearBounties(selected, faction) { Tick = tick });
-                debugParts = null;
+                DebugParts = null;
                 string whose = selected.Length > 0 ? $"{selected.Length} selected" : "your characters";
                 return faction is null ? $"every bounty cleared on {whose}" : $"{part.Name?.Split("   ")[0]} bounties cleared on {whose}";
             case DebugRow.Godmode:
@@ -528,14 +528,14 @@ sealed class DebugMenu(GameHost host)
     /// <summary>Puts items on the first selected character (the menu's Give item row; the console's <c>give</c>): the record by name, the quantity 1 to 1000, the quality 0 to 100.</summary>
     internal string DebugGive(string name, int quantity, int quality, bool equip = false)
     {
-        debugFailed = false;
-        var selected = host.player.agentOrders.ControlOrderers().ToArray();
+        DebugFailed = false;
+        var selected = host.Player.AgentOrders.ControlOrderers().ToArray();
         if (selected.Length == 0) return DebugFail("select a character first");
         quantity = Math.Clamp(quantity, 1, 1000);
         quality = Math.Clamp(quality, 0, 100);
         if (DebugRecord(name, character: false) is not { } item) return DebugFail($"no item record matches '{name}'");
-        host.session.World.Commands.Enqueue(new DebugGiveItem(selected[0], item.Id, quantity, quality) { Tick = host.session.World.Tick, Equip = equip });
-        if (host.scene.Database is { } db && db.Find(item.Id)?.Type == Meitou.Data.Fcs.FcsRecordType.WEAPON && DebugGiveItem.Grade(db, quality) is { } grade)
+        host.Session.World.Commands.Enqueue(new DebugGiveItem(selected[0], item.Id, quantity, quality) { Tick = host.Session.World.Tick, Equip = equip });
+        if (host.Scene.Database is { } db && db.Find(item.Id)?.Type == FcsRecordType.Weapon && DebugGiveItem.Grade(db, quality) is { } grade)
             return $"gave {quantity} x {grade.Name} {item.Name} (level {grade.Level})";
         return $"gave {quantity} x {item.Name}{(DebugHasQuality(item.Id) ? $" (quality {quality})" : "")}";
     }
@@ -553,51 +553,51 @@ sealed class DebugMenu(GameHost host)
         return (field, quantity, quality);
     }
 
-    bool DebugHasQuality(string record) => host.scene.Database?.Find(record) is { } r && DebugGiveItem.QualityTypes.Contains(r.Type);
+    bool DebugHasQuality(string record) => host.Scene.Database?.Find(record) is { } r && DebugGiveItem.QualityTypes.Contains(r.Type);
 
     /// <summary>The character (or item) record a typed name means: its string id, the name exactly, else the shortest name containing it (ignoring case).</summary>
     internal (string Id, string Name)? DebugRecord(string text, bool character)
     {
         text = text.Trim();
-        if (text.Length == 0 || host.scene.Database is not { } db) return null;
-        if (debugMatches.TryGetValue((character, text), out var cached)) return cached;
-        bool Fits(FcsRecordType t) => character ? t is FcsRecordType.CHARACTER or FcsRecordType.ANIMAL_CHARACTER : DebugGiveItem.ItemTypes.Contains(t);
+        if (text.Length == 0 || host.Scene.Database is not { } db) return null;
+        if (_debugMatches.TryGetValue((character, text), out var cached)) return cached;
+        bool Fits(FcsRecordType t) => character ? t is FcsRecordType.Character or FcsRecordType.AnimalCharacter : DebugGiveItem.ItemTypes.Contains(t);
         var candidates = db.Records.Values.Where(r => Fits(r.Type));
         var hit = db.Find(text) is { } exact && Fits(exact.Type) ? exact
             : candidates.FirstOrDefault(r => string.Equals(r.Name, text, StringComparison.OrdinalIgnoreCase))
             ?? candidates.Where(r => r.Name.Contains(text, StringComparison.OrdinalIgnoreCase)).OrderBy(r => r.Name.Length).ThenBy(r => r.Name, StringComparer.Ordinal).FirstOrDefault();
         (string, string)? found = hit is null ? null : (hit.StringId, hit.Name);
-        debugMatches[(character, text)] = found;
+        _debugMatches[(character, text)] = found;
         return found;
     }
 
     internal void DrawDebugMenu(DebugOverlay o, int width, int height, float top, string close = "F10", bool atRight = false)
     {
-        var world = host.session.World;
-        var here = host.session.Camera.Current.Target;
+        var world = host.Session.World;
+        var here = host.Session.Camera.Current.Target;
         // Each line: its text, the row it belongs to (-1 for a section title and a part list line), and whether it is the highlighted one.
         var lines = new List<(string Text, bool Title, bool Highlight, bool On)>();
         var onNames = new List<string>();
-        host.modding.EnsureDebugFields();
+        host.Modding.EnsureDebugFields();
         foreach (var (header, i) in DebugLayout())
         {
             if (header is not null) lines.Add((header, true, false, false));
-            bool current = i == debugRow;
-            string mark = current && debugParts is null ? "> " : "  ";
+            bool current = i == _debugRow;
+            string mark = current && DebugParts is null ? "> " : "  ";
             if (DebugIsTool(i))
             {
-                var tool = DebugTools[i - host.modding.DebugRowCount];
+                var tool = DebugTools[i - host.Modding.DebugRowCount];
                 string state = tool.State();
                 bool toolOn = tool.IsSwitch ? state == "on" : state is not ("" or "off");
                 if (toolOn) onNames.Add(DebugShortName(tool.Label));
-                lines.Add((mark + DebugColumns(tool.Label, tool.Key, state), false, current && debugParts is null, toolOn));
+                lines.Add((mark + DebugColumns(tool.Label, tool.Key, state), false, current && DebugParts is null, toolOn));
                 continue;
             }
             string value = "";
             bool rowOn = false;
             if (DebugHasField(i))
             {
-                string field = debugFields[i];
+                string field = DebugFields[i];
                 value = field + (current ? "_" : "");
                 if (i < DebugLabels.Length && (DebugRow)i is DebugRow.SpawnNpc or DebugRow.GiveItem && field.Trim().Length > 0)
                     value += DebugRecord((DebugRow)i == DebugRow.GiveItem ? DebugItemField(field.Trim()).Name : field, (DebugRow)i == DebugRow.SpawnNpc) is { } r ? $"   -> {r.Name}" : "   -> no match";
@@ -606,26 +606,26 @@ sealed class DebugMenu(GameHost host)
                 switch ((DebugRow)i)
                 {
                     case DebugRow.DamageMultiplier:
-                        float multiplier = host.popData?.BodyOptions.GlobalDamageMultiplier ?? 1;
+                        float multiplier = host.PopData?.BodyOptions.GlobalDamageMultiplier ?? 1;
                         value += $"   now x{multiplier:0.##}";
                         rowOn = multiplier != 1;
                         break;
-                    case DebugRow.ForceHits: value = host.popData?.BodyOptions.ForcedHitPart?.Name ?? "off"; rowOn = host.popData?.BodyOptions.ForcedHitPart is not null; break;
-                    case DebugRow.ExplodeLevel: value = $"{explodeLevel} {ExplodeLevels.Names[explodeLevel - 1]}"; rowOn = explodeLevel != ExplodeLevels.Normal; break;
+                    case DebugRow.ForceHits: value = host.PopData?.BodyOptions.ForcedHitPart?.Name ?? "off"; rowOn = host.PopData?.BodyOptions.ForcedHitPart is not null; break;
+                    case DebugRow.ExplodeLevel: value = $"{_explodeLevel} {ExplodeLevels.Names[_explodeLevel - 1]}"; rowOn = _explodeLevel != ExplodeLevels.Normal; break;
                     case DebugRow.Godmode: value = OnOff(world.Player.Godmode); rowOn = world.Player.Godmode; break;
-                    case DebugRow.ExplodeClick: rowOn = ExplodeClickOn; value = ExplodeClickOn ? $"on{(explodeClickArgs.Length > 0 ? ", " + explodeClickArgs : "")}" : "off"; break;
+                    case DebugRow.ExplodeClick: rowOn = ExplodeClickOn; value = ExplodeClickOn ? $"on{(_explodeClickArgs.Length > 0 ? ", " + _explodeClickArgs : "")}" : "off"; break;
                     case DebugRow.Guard: rowOn = world.Player.Guard; value = world.Player.Guard ? $"on, {world.Player.GuardRadius:0.#} m{(world.Player.GuardAnimals ? ", animals" : "")}" : "off"; break;
                 }
-            if (DebugPicksPart(i) && current && debugParts is null) value += (value.Length > 0 ? "   " : "") + ((DebugRow)i == DebugRow.ClearBounties ? "Enter/Right: pick the faction" : "Enter/Right: pick the body part");
-            if (rowOn) onNames.Add(DebugShortName(host.modding.DebugLabel(i)) + ((DebugRow)i == DebugRow.DamageMultiplier && i < DebugLabels.Length ? $" x{host.popData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}" : ""));
-            lines.Add((mark + DebugColumns(host.modding.DebugLabel(i), "", value), false, current && debugParts is null, rowOn));
-            if (DebugPicksPart(i) && current && debugParts is { } parts)
+            if (DebugPicksPart(i) && current && DebugParts is null) value += (value.Length > 0 ? "   " : "") + ((DebugRow)i == DebugRow.ClearBounties ? "Enter/Right: pick the faction" : "Enter/Right: pick the body part");
+            if (rowOn) onNames.Add(DebugShortName(host.Modding.DebugLabel(i)) + ((DebugRow)i == DebugRow.DamageMultiplier && i < DebugLabels.Length ? $" x{host.PopData?.BodyOptions.GlobalDamageMultiplier ?? 1:0.##}" : ""));
+            lines.Add((mark + DebugColumns(host.Modding.DebugLabel(i), "", value), false, current && DebugParts is null, rowOn));
+            if (DebugPicksPart(i) && current && DebugParts is { } parts)
                 for (int k = 0; k < parts.Length; k++)
-                    lines.Add(((k == debugPart ? "    > " : "      ") + parts[k].Name, false, k == debugPart, false));
+                    lines.Add(((k == _debugPart ? "    > " : "      ") + parts[k].Name, false, k == _debugPart, false));
         }
         string info = $"{world.Player.Selection.Count} selected   here {here.X:0}, {here.Z:0}   money c.{world.Player.Money.ToString("N0", CultureInfo.InvariantCulture)}";
-        string hint = debugParts is null ? $"Up/Down pick   type to edit   Enter apply / switch   Esc/{close} close"
-            : $"Up/Down pick {((DebugRow)debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   {((DebugRow)debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc/Left back";
+        string hint = DebugParts is null ? $"Up/Down pick   type to edit   Enter apply / switch   Esc/{close} close"
+            : $"Up/Down pick {((DebugRow)_debugRow == DebugRow.ClearBounties ? "a faction" : "a part")}   {((DebugRow)_debugRow == DebugRow.Damage ? "type the damage   " : "")}Enter apply   Esc/Left back";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float pad = 10, y0 = top + 16;
         int chars = Math.Max(lines.Max(l => l.Text.Length), Math.Max(info.Length, Math.Max(hint.Length, 30)));
@@ -667,7 +667,7 @@ sealed class DebugMenu(GameHost host)
         o.Text(info, x0 + pad, y, dim);
         o.Text(hint, x0 + pad, y + o.LineHeight, dim);
         // The status never sets the panel's width: it wraps to it, at most three lines, cut with "...".
-        var status = WrapStatus(debugStatus, chars, 3);
+        var status = WrapStatus(_debugStatus, chars, 3);
         for (int k = 0; k < status.Count; k++) o.Text(status[k], x0 + pad, y + (2 + k) * o.LineHeight, new Vector4(1f, 0.9f, 0.4f, 1));
         o.Flush(width, height);
     }
@@ -739,15 +739,15 @@ sealed class DebugMenu(GameHost host)
         "Close",
     ];
 
-    internal bool inspectorMenuOpen;
-    int inspectorRow;
+    internal bool InspectorMenuOpen;
+    int _inspectorRow;
 
     bool InspectorValue(int row) => row switch
     {
-        0 => host.player.inspector.InspectorPanel,
-        1 => host.player.inspector.InspectorHull,
-        2 => host.player.inspector.InspectorShapes,
-        3 => host.player.inspector.InspectorMesh,
+        0 => host.Player.Inspector.InspectorPanel,
+        1 => host.Player.Inspector.InspectorHull,
+        2 => host.Player.Inspector.InspectorShapes,
+        3 => host.Player.Inspector.InspectorMesh,
         _ => false,
     };
 
@@ -755,10 +755,10 @@ sealed class DebugMenu(GameHost host)
     {
         switch (key)
         {
-            case EngineKey.Escape: inspectorMenuOpen = false; break;
-            case EngineKey.Up: inspectorRow = (inspectorRow + InspectorLabels.Length - 1) % InspectorLabels.Length; break;
-            case EngineKey.Down: inspectorRow = (inspectorRow + 1) % InspectorLabels.Length; break;
-            case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right: InspectorSwitch(inspectorRow); break;
+            case EngineKey.Escape: InspectorMenuOpen = false; break;
+            case EngineKey.Up: _inspectorRow = (_inspectorRow + InspectorLabels.Length - 1) % InspectorLabels.Length; break;
+            case EngineKey.Down: _inspectorRow = (_inspectorRow + 1) % InspectorLabels.Length; break;
+            case EngineKey.Enter or EngineKey.Space or EngineKey.Left or EngineKey.Right: InspectorSwitch(_inspectorRow); break;
         }
     }
 
@@ -766,14 +766,14 @@ sealed class DebugMenu(GameHost host)
     {
         switch (row)
         {
-            case 0: host.player.inspector.InspectorPanel = !host.player.inspector.InspectorPanel; break;
-            case 1: host.player.inspector.InspectorHull = !host.player.inspector.InspectorHull; break;
-            case 2: host.player.inspector.InspectorShapes = !host.player.inspector.InspectorShapes; break;
-            case 3: host.player.inspector.InspectorMesh = !host.player.inspector.InspectorMesh; break;
-            case 4: host.debugOverlays.ToggleNavOverlay(); break;
-            default: inspectorMenuOpen = false; break;
+            case 0: host.Player.Inspector.InspectorPanel = !host.Player.Inspector.InspectorPanel; break;
+            case 1: host.Player.Inspector.InspectorHull = !host.Player.Inspector.InspectorHull; break;
+            case 2: host.Player.Inspector.InspectorShapes = !host.Player.Inspector.InspectorShapes; break;
+            case 3: host.Player.Inspector.InspectorMesh = !host.Player.Inspector.InspectorMesh; break;
+            case 4: host.DebugOverlays.ToggleNavOverlay(); break;
+            default: InspectorMenuOpen = false; break;
         }
-        host.player.inspector.InspectorChanged();
+        host.Player.Inspector.InspectorChanged();
     }
 
     internal void DrawInspectorMenu(DebugOverlay o, int width, int height, float top)
@@ -781,13 +781,13 @@ sealed class DebugMenu(GameHost host)
         var lines = new List<string>();
         for (int i = 0; i < InspectorLabels.Length; i++)
         {
-            string state = i < 4 ? (InspectorValue(i) ? "[x] " : "[ ] ") : i == 4 ? $"[{host.debugOverlays.navView.ToString().ToLowerInvariant()}] " : "    ";
-            lines.Add((i == inspectorRow ? "> " : "  ") + state + InspectorLabels[i]);
+            string state = i < 4 ? (InspectorValue(i) ? "[x] " : "[ ] ") : i == 4 ? $"[{host.DebugOverlays.NavViewMode.ToString().ToLowerInvariant()}] " : "    ";
+            lines.Add((i == _inspectorRow ? "> " : "  ") + state + InspectorLabels[i]);
         }
-        const string Hint = "Up/Down pick   Enter/Space switch   Esc close (switches stay on)";
+        const string hint = "Up/Down pick   Enter/Space switch   Esc close (switches stay on)";
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
         float pad = 10, x0 = 16, y0 = top + 16;
-        int chars = Math.Max(lines.Max(l => l.Length), Hint.Length);
+        int chars = Math.Max(lines.Max(l => l.Length), hint.Length);
         float w = chars * o.CharWidth + 2 * pad, h = (lines.Count + 4) * o.LineHeight + 2 * pad;
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
         float y = y0 + pad;
@@ -795,10 +795,10 @@ sealed class DebugMenu(GameHost host)
         y += 1.5f * o.LineHeight;
         for (int i = 0; i < lines.Count; i++, y += o.LineHeight)
         {
-            if (i == inspectorRow) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
+            if (i == _inspectorRow) o.Rect(x0 + 4, y, x0 + w - 4, y + o.LineHeight, new Vector4(0.25f, 0.4f, 0.65f, 0.6f));
             o.Text(lines[i], x0 + pad, y, DebugOverlay.TextColour);
         }
-        o.Text(Hint, x0 + pad, y + 0.5f * o.LineHeight, dim);
+        o.Text(hint, x0 + pad, y + 0.5f * o.LineHeight, dim);
         o.Flush(width, height);
     }
 }

@@ -54,12 +54,16 @@ public sealed record EffectRecord(string Name, EffectType Type, string ParticleS
         UnpackRgb(r.GetInt("colour multiplier", 0xFFFFFF)), r.GetFloat("sky colour multiplier", 1), r.GetBool("ground colour"), r.GetFloat("maximum view distance"),
         r.GetFloat("particle fade out delay"), r.GetFloat("min time to live"), r.GetFloat("max time to live", 30), r.GetFloat("wandering speed", 10))
     {
-        MinAltitude = r.GetFloat("min altitude", 200), MaxAltitude = r.GetFloat("max altitude", 100000),
-        MinSlope = r.GetFloat("min slope"), MaxSlope = r.GetFloat("max slope", 1),
-        FogFadeIn = r.GetFloat("fog fade in duration"), FogFadeOut = r.GetFloat("fog fade out duration"),
+        MinAltitude = r.GetFloat("min altitude", 200),
+        MaxAltitude = r.GetFloat("max altitude", 100000),
+        MinSlope = r.GetFloat("min slope"),
+        MaxSlope = r.GetFloat("max slope", 1),
+        FogFadeIn = r.GetFloat("fog fade in duration"),
+        FogFadeOut = r.GetFloat("fog fade out duration"),
         AffectType = Enum.IsDefined((World.WeatherAffecting)r.GetInt("affect type")) ? (World.WeatherAffecting)r.GetInt("affect type") : World.WeatherAffecting.None,
-        EffectRadius = r.GetFloat("effect radius"), EffectStrength = r.GetFloat("effect strength min"),
-        FogVolumes = db is null ? [] : [.. r.GetReferences("fog volumes").Select(f => db.Find(f.TargetStringId)).Where(f => f is { Type: FcsRecordType.EFFECT_FOG_VOLUME }).Select(f => EffectFogVolume.From(f!))],
+        EffectRadius = r.GetFloat("effect radius"),
+        EffectStrength = r.GetFloat("effect strength min"),
+        FogVolumes = db is null ? [] : [.. r.GetReferences("fog volumes").Select(f => db.Find(f.TargetStringId)).Where(f => f is { Type: FcsRecordType.EffectFogVolume }).Select(f => EffectFogVolume.From(f!))],
         Lights = db is null ? [] : [.. r.GetReferences("lights").Select(l => db.Find(l.TargetStringId)?.Name ?? "?")],
         Sound = db is null ? null : World.AmbientSound.FirstOf(db, r, "sound") is { } sound ? sound with { NeedsPower = false, EfficiencyMultiplier = 0 } : null,
     };
@@ -105,7 +109,7 @@ public static class WeatherEffectAdapter
     /// <summary>The WEATHER record named <paramref name="name"/> (exact, else a substring, as <see cref="World.SkyWeather.Find"/>), or null.</summary>
     public static GameRecord? FindWeather(GameDatabase db, string? name)
     {
-        var all = db.OfType(FcsRecordType.WEATHER).ToList();
+        var all = db.OfType(FcsRecordType.Weather).ToList();
         name ??= "Default";
         return all.FirstOrDefault(w => w.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
             ?? all.FirstOrDefault(w => w.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
@@ -116,7 +120,7 @@ public static class WeatherEffectAdapter
     {
         var entries = new List<WeatherEffectEntry>();
         foreach (var reference in weather.GetReferences("effects"))
-            if (db.Find(reference.TargetStringId) is { Type: FcsRecordType.EFFECT } effect)
+            if (db.Find(reference.TargetStringId) is { Type: FcsRecordType.Effect } effect)
                 entries.Add(new WeatherEffectEntry(EffectRecord.From(effect, db), reference.Values.Value0, reference.Values.Value1, reference.Values.Value2));
         return new WeatherEffectInput { Effects = entries, Strength = 1, Wind = new Vector2(weather.GetFloat("wind speed max"), 0) };
     }

@@ -28,7 +28,7 @@ sealed class WeatherFeed(GameHost host)
         }
     }
 
-    internal HostWeather? hostWeather;
+    internal HostWeather? WeatherSource;
 
     /// <summary>
     /// Once a frame, before the simulation's ticks: hands the weather to the world and collects the affecting units of the particle groups (units whose life is over do not act;
@@ -36,11 +36,11 @@ sealed class WeatherFeed(GameHost host)
     /// </summary>
     internal void UpdateWeatherSource()
     {
-        hostWeather ??= new HostWeather(() => host.gpu.Weather);
-        host.session.World.Weather = hostWeather;
-        var zones = hostWeather.ZoneList;
+        WeatherSource ??= new HostWeather(() => host.Gpu.Weather);
+        host.Session.World.Weather = WeatherSource;
+        var zones = WeatherSource.ZoneList;
         zones.Clear();
-        if (host.gpu.Particles is not { } particles) return;
+        if (host.Gpu.Particles is not { } particles) return;
         Collect(particles.Groups);
         Collect(particles.PlacerGroups);
 

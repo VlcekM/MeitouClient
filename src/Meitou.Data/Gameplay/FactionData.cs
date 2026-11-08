@@ -29,8 +29,8 @@ public sealed record FactionData
     public required string Id { get; init; }
     public required string Name { get; init; }
     /// <summary>The name in the data files (<see cref="GameRecord.BaseName"/>): to find a faction by its English name in any language.</summary>
-    public string BaseName { get => baseName ?? Name; init => baseName = value; }
-    string? baseName;
+    public string BaseName { get => _baseName ?? Name; init => _baseName = value; }
+    string? _baseName;
     /// <summary><c>default relation</c>: the relation towards a faction without an explicit entry, capped by the other side's default (section 3.2).</summary>
     public int DefaultRelation { get; init; }
     /// <summary><c>relations</c>: explicit entries, faction id to the value (v0, an int; v1 and v2 are unused).</summary>
@@ -123,7 +123,7 @@ public sealed record FactionData
     }
 
     /// <summary>Every FACTION record of the database, in the database's order.</summary>
-    public static List<FactionData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.FACTION).Select(From)];
+    public static List<FactionData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.Faction).Select(From)];
 }
 
 /// <summary>
@@ -143,22 +143,22 @@ public sealed class FactionRelations
     /// <summary>At or above this a faction counts as an ally (section 3.3). The game's "now your allies" message fires only above it.</summary>
     public const float AllyThreshold = 50;
 
-    readonly Dictionary<string, int> index;
-    readonly float[] relation;
-    readonly bool[] coexist;
-    readonly bool[] war;
-    readonly int[] rank;
-    readonly float[] trust;
+    readonly Dictionary<string, int> _index;
+    readonly float[] _relation;
+    readonly bool[] _coexist;
+    readonly bool[] _war;
+    readonly int[] _rank;
+    readonly float[] _trust;
 
     FactionRelations(IReadOnlyList<FactionData> factions, Dictionary<string, int> index, float[] relation, bool[] coexist)
     {
         Factions = factions;
-        this.index = index;
-        this.relation = relation;
-        this.coexist = coexist;
-        war = new bool[relation.Length];
-        rank = new int[factions.Count];
-        trust = new float[factions.Count];
+        this._index = index;
+        this._relation = relation;
+        this._coexist = coexist;
+        _war = new bool[relation.Length];
+        _rank = new int[factions.Count];
+        _trust = new float[factions.Count];
     }
 
     public IReadOnlyList<FactionData> Factions { get; }
@@ -171,7 +171,7 @@ public sealed class FactionRelations
     public long Changes { get; private set; }
 
     /// <summary>The position of a faction id in <see cref="Factions"/>, or -1.</summary>
-    public int IndexOf(string id) => index.GetValueOrDefault(id, -1);
+    public int IndexOf(string id) => _index.GetValueOrDefault(id, -1);
 
     /// <summary>Whether <paramref name="f"/> is a faction of this table.</summary>
     public bool Contains(int f) => (uint)f < (uint)Count;
@@ -179,8 +179,8 @@ public sealed class FactionRelations
     /// <summary>The relation of faction <paramref name="a"/> towards <paramref name="b"/>, -100 to 100 (the player's row is asked of the other side).</summary>
     public float Get(int a, int b)
     {
-        if (a == PlayerFaction && a >= 0) return a == b ? 100 : relation[b * Count + a];
-        return relation[a * Count + b];
+        if (a == PlayerFaction && a >= 0) return a == b ? 100 : _relation[b * Count + a];
+        return _relation[a * Count + b];
     }
 
     /// <summary>
@@ -210,7 +210,7 @@ public sealed class FactionRelations
         if ((delta < 0 && before > floor) || (delta > 0 && before < ceiling)) after = Math.Clamp(before + delta, -100, 100);
         if (after != before)
         {
-            relation[a * Count + b] = after;
+            _relation[a * Count + b] = after;
             Changes++;
         }
         return (before, after);
@@ -228,7 +228,7 @@ public sealed class FactionRelations
         float after = Math.Clamp(before + delta, -100, 100);
         if (after != before)
         {
-            relation[a * Count + b] = after;
+            _relation[a * Count + b] = after;
             Changes++;
         }
         return (before, after);
@@ -245,9 +245,9 @@ public sealed class FactionRelations
         if (a == b || !Contains(a) || !Contains(b)) return (0, 0, false);
         float before = Get(a, b);
         if (before < HostileThreshold) return (before, before, false);
-        bool started = !war[a * Count + b];
-        war[a * Count + b] = true;
-        if (before >= WarRelation) relation[a * Count + b] = WarRelation;
+        bool started = !_war[a * Count + b];
+        _war[a * Count + b] = true;
+        if (before >= WarRelation) _relation[a * Count + b] = WarRelation;
         Changes++;
         return (before, Get(a, b), started);
     }
@@ -261,8 +261,8 @@ public sealed class FactionRelations
         if (a == PlayerFaction && a >= 0) (a, b) = (b, a);
         if (a == b || !Contains(a) || !Contains(b)) return (0, 0);
         float before = Get(a, b);
-        war[a * Count + b] = false;
-        if (before <= PeaceRelation) relation[a * Count + b] = PeaceRelation;
+        _war[a * Count + b] = false;
+        if (before <= PeaceRelation) _relation[a * Count + b] = PeaceRelation;
         Changes++;
         return (before, Get(a, b));
     }
@@ -274,13 +274,13 @@ public sealed class FactionRelations
     public bool AtWar(int a, int b)
     {
         if (a == PlayerFaction && a >= 0) (a, b) = (b, a);
-        return a != b && Contains(a) && Contains(b) && war[a * Count + b];
+        return a != b && Contains(a) && Contains(b) && _war[a * Count + b];
     }
 
     /// <summary>Sets the war flag of <paramref name="a"/> towards <paramref name="b"/> (a loaded save does this; no relation changes).</summary>
     public void SetWar(int a, int b, bool value)
     {
-        if (a != b && Contains(a) && Contains(b)) war[a * Count + b] = value;
+        if (a != b && Contains(a) && Contains(b)) _war[a * Count + b] = value;
     }
 
     /// <summary>
@@ -288,40 +288,40 @@ public sealed class FactionRelations
     /// <c>FUN_1406b2530</c>, <b>Observed</b>). The original saves no +0x18 (the player table's <c>global trust</c> key reads and writes +0x14, whose link to +0x18 is <b>Unknown</b>);
     /// Meitou saves it as <c>meitou global trust</c>.
     /// </summary>
-    public float GlobalTrust(int f) => Contains(f) ? trust[f] : 0;
+    public float GlobalTrust(int f) => Contains(f) ? _trust[f] : 0;
 
     /// <summary>DA_AFFECT_REPUTATION: faction <paramref name="f"/>'s global trust += <paramref name="delta"/> (no clamp, as the original's slot 9). Returns the value after.</summary>
     public float AddGlobalTrust(int f, float delta)
     {
         if (!Contains(f)) return 0;
-        trust[f] += delta;
+        _trust[f] += delta;
         if (delta != 0) Changes++;
-        return trust[f];
+        return _trust[f];
     }
 
     /// <summary>Sets a faction's global trust (a loaded save does this).</summary>
     public void SetGlobalTrust(int f, float value)
     {
-        if (Contains(f)) trust[f] = value;
+        if (Contains(f)) _trust[f] = value;
     }
 
     /// <summary>The relation a declaration of war sets, and the one the end of a war lifts a lower relation to (<c>FUN_1406b3000</c>, <c>FUN_1406b2f90</c>).</summary>
     public const float WarRelation = -35, PeaceRelation = -25;
 
     /// <summary>Sets the relation of faction <paramref name="a"/> towards <paramref name="b"/> (a loaded save does this; trust and the other state live outside this table).</summary>
-    public void Set(int a, int b, float value) => relation[a * Count + b] = value;
+    public void Set(int a, int b, float value) => _relation[a * Count + b] = value;
 
     /// <summary>
     /// The player's rank in faction <paramref name="f"/> (the int at FactionRelations +0x10, saved as GAMESTATE_FACTION <c>rank</c>; docs/game/factions-squads-towns.md
     /// "Faction rank"): 0 until a dialogue's DA_INCREASE_FACTION_RANK raises it, read by DC_FACTION_RANK.
     /// </summary>
-    public int Rank(int f) => Contains(f) ? rank[f] : 0;
+    public int Rank(int f) => Contains(f) ? _rank[f] : 0;
 
     /// <summary>DA_INCREASE_FACTION_RANK: the rank +1 while it is below <paramref name="cap"/> (0: no cap). Returns whether it rose.</summary>
     public bool RaiseRank(int f, int cap)
     {
-        if (!Contains(f) || (cap != 0 && rank[f] >= cap)) return false;
-        rank[f]++;
+        if (!Contains(f) || (cap != 0 && _rank[f] >= cap)) return false;
+        _rank[f]++;
         Changes++;
         return true;
     }
@@ -329,7 +329,7 @@ public sealed class FactionRelations
     /// <summary>Sets a faction's rank (a loaded save does this).</summary>
     public void SetRank(int f, int value)
     {
-        if (Contains(f)) rank[f] = value;
+        if (Contains(f)) _rank[f] = value;
     }
 
     /// <summary>A to B: B is another faction and the relation is at or below <see cref="HostileThreshold"/>.</summary>
@@ -342,7 +342,7 @@ public sealed class FactionRelations
     public bool Coexists(int a, int b)
     {
         if (a == b) return true;
-        return a == PlayerFaction && a >= 0 ? coexist[b * Count + a] : coexist[a * Count + b];
+        return a == PlayerFaction && a >= 0 ? _coexist[b * Count + a] : _coexist[a * Count + b];
     }
 
     public static FactionRelations Build(IReadOnlyList<FactionData> factions)
@@ -375,10 +375,10 @@ public sealed class FactionRelations
     /// <summary>Back to the FACTION records' start values: every relation, no war flag, every rank 0 (an imported game that does not take the save's relations, docs/formats/save.md "Importing a game").</summary>
     public void Reset()
     {
-        Array.Clear(coexist);
-        Defaults(Factions, index, relation, coexist);
-        Array.Clear(war);
-        Array.Clear(rank);
+        Array.Clear(_coexist);
+        Defaults(Factions, _index, _relation, _coexist);
+        Array.Clear(_war);
+        Array.Clear(_rank);
         Changes = 0;
     }
 

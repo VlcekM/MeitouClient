@@ -12,8 +12,8 @@ namespace Meitou.Game.Audio;
 public sealed partial class WwisePlayer
 {
     // Avoid-repeat history and sequence positions per playlist group, kept across plays.
-    readonly Dictionary<(uint Playlist, uint Item), List<uint>> musicHistory = [];
-    readonly Dictionary<(uint Playlist, uint Item), int> musicSteps = [];
+    readonly Dictionary<(uint Playlist, uint Item), List<uint>> _musicHistory = [];
+    readonly Dictionary<(uint Playlist, uint Item), int> _musicSteps = [];
 
     /// <summary>A music node that plays on a timeline: when its current segment ends, and whether it should stop after that one.</summary>
     abstract class MusicInstance(WwisePlayer player, WwiseObject node, Instance? parent) : Instance(player, node, parent)
@@ -26,9 +26,9 @@ public sealed partial class WwisePlayer
 
         protected Instance? Spawn(uint id, double at)
         {
-            if (!Player.objects.TryGetValue(id, out var o) || Player.Create(o, this) is not { } child) return null;
+            if (!_player._objects.TryGetValue(id, out var o) || _player.Create(o, this) is not { } child) return null;
             child.StartTime = at;
-            Children.Add(child);
+            _children.Add(child);
             child.Start();
             return child;
         }
@@ -44,17 +44,17 @@ public sealed partial class WwisePlayer
             double zero = StartTime - node.EntryCue / 1000;
             foreach (var trackId in node.Music.Children)
             {
-                if (!Player.objects.TryGetValue(trackId, out var o) || o is not WwiseMusicTrack track) continue;
+                if (!_player._objects.TryGetValue(trackId, out var o) || o is not WwiseMusicTrack track) continue;
                 foreach (var clip in track.Clips)
                 {
                     var source = track.Sources.FirstOrDefault(s => s.SourceId == clip.SourceId);
                     if (source is null) continue;
-                    var sound = new SoundInstance(Player, track, clip, source, zero + (clip.PlayAt + clip.BeginTrim) / 1000, this);
-                    Children.Add(sound);
+                    var sound = new SoundInstance(_player, track, clip, source, zero + (clip.PlayAt + clip.BeginTrim) / 1000, this);
+                    _children.Add(sound);
                     sound.Start();
                 }
             }
-            if (Children.Count == 0) End(); // a silence: the playlist keeps the time
+            if (_children.Count == 0) End(); // a silence: the playlist keeps the time
         }
     }
 
@@ -65,28 +65,28 @@ public sealed partial class WwisePlayer
     /// </summary>
     sealed class MusicPlaylistInstance(WwisePlayer player, WwiseMusicPlaylist node, Instance? parent) : MusicInstance(player, node, parent)
     {
-        IEnumerator<uint>? walker;
-        double exitTime = double.NegativeInfinity;
-        bool finished;
+        IEnumerator<uint>? _walker;
+        double _exitTime = double.NegativeInfinity;
+        bool _finished;
 
-        public override double CurrentExit => exitTime;
+        public override double CurrentExit => _exitTime;
 
         public override void Start()
         {
-            walker = Segments(node.Playlist).GetEnumerator();
-            if (!StartNext(StartTime)) finished = true;
+            _walker = Segments(node.Playlist).GetEnumerator();
+            if (!StartNext(StartTime)) _finished = true;
         }
 
         bool StartNext(double at)
         {
-            for (int tries = 0; tries < 64 && walker!.MoveNext(); tries++)
+            for (int tries = 0; tries < 64 && _walker!.MoveNext(); tries++)
             {
                 // A segment of a bank that is not loaded is skipped.
-                if (!Player.objects.TryGetValue(walker.Current, out var o) || o is not WwiseMusicSegment segment) continue;
-                var instance = new MusicSegmentInstance(Player, segment, this) { StartTime = at };
-                Children.Add(instance);
+                if (!_player._objects.TryGetValue(_walker.Current, out var o) || o is not WwiseMusicSegment segment) continue;
+                var instance = new MusicSegmentInstance(_player, segment, this) { StartTime = at };
+                _children.Add(instance);
                 instance.Start();
-                exitTime = at + Math.Max(1, segment.ExitCue - segment.EntryCue) / 1000;
+                _exitTime = at + Math.Max(1, segment.ExitCue - segment.EntryCue) / 1000;
                 return true;
             }
             return false;
@@ -96,11 +96,11 @@ public sealed partial class WwisePlayer
         {
             base.Advance(dt);
             if (Done) return;
-            double end = Player.time;
+            double end = _player._time;
             if (!Stopping && !Hold)
-                for (int guard = 0; !finished && exitTime < end && guard < 64; guard++)
-                    if (!StartNext(Math.Max(exitTime, Player.blockStart))) finished = true;
-            if ((finished || Hold) && Children.Count == 0 && exitTime <= end) End();
+                for (int guard = 0; !_finished && _exitTime < end && guard < 64; guard++)
+                    if (!StartNext(Math.Max(_exitTime, _player._blockStart))) _finished = true;
+            if ((_finished || Hold) && _children.Count == 0 && _exitTime <= end) End();
         }
 
         // Ends by its own rule above: not when a segment's clips end, which may be before the exit cue (a silence) or after it (a tail).
@@ -140,8 +140,8 @@ public sealed partial class WwisePlayer
                 case 0:
                     return [.. children];
                 case 1:
-                    int step = Player.musicSteps.GetValueOrDefault(key);
-                    Player.musicSteps[key] = step + 1;
+                    int step = _player._musicSteps.GetValueOrDefault(key);
+                    _player._musicSteps[key] = step + 1;
                     return [children[step % children.Length]];
                 case 3:
                     return [Pick(group, children)];
@@ -165,7 +165,7 @@ public sealed partial class WwisePlayer
         int WeightedIndex(WwisePlaylistItem group, IReadOnlyList<WwisePlaylistItem> candidates)
         {
             double Weight(WwisePlaylistItem c) => group.UsingWeight ? Math.Max(1, c.Weight) : 1;
-            double roll = Player.random.NextDouble() * candidates.Sum(Weight);
+            double roll = _player._random.NextDouble() * candidates.Sum(Weight);
             for (int i = 0; i < candidates.Count; i++)
             {
                 roll -= Weight(candidates[i]);
@@ -177,7 +177,7 @@ public sealed partial class WwisePlayer
         WwisePlaylistItem Pick(WwisePlaylistItem group, IReadOnlyList<WwisePlaylistItem> candidates)
         {
             var key = (node.Id, group.ItemId);
-            if (!Player.musicHistory.TryGetValue(key, out var recent)) Player.musicHistory[key] = recent = [];
+            if (!_player._musicHistory.TryGetValue(key, out var recent)) _player._musicHistory[key] = recent = [];
             var allowed = candidates.Where(c => !recent.Contains(c.ItemId)).ToList();
             if (allowed.Count == 0) allowed = [.. candidates];
             var pick = allowed[WeightedIndex(group, allowed)];
@@ -194,28 +194,28 @@ public sealed partial class WwisePlayer
     /// </summary>
     sealed class MusicSwitchInstance(WwisePlayer player, WwiseMusicSwitch node, Instance? parent) : MusicInstance(player, node, parent)
     {
-        MusicInstance? active;
-        uint activeId;
-        bool pending;
-        uint pendingId;
-        double switchAt;
+        MusicInstance? _active;
+        uint _activeId;
+        bool _pending;
+        uint _pendingId;
+        double _switchAt;
 
-        public override double CurrentExit => active is { Done: false } ? active.CurrentExit : double.NegativeInfinity;
+        public override double CurrentExit => _active is { Done: false } ? _active.CurrentExit : double.NegativeInfinity;
 
         public override bool Hold
         {
-            get => active?.Hold ?? false;
+            get => _active?.Hold ?? false;
             set
             {
-                if (active is not null) active.Hold = value;
+                if (_active is not null) _active.Hold = value;
             }
         }
 
         public override void Start()
         {
-            activeId = Select();
-            if (activeId != 0) active = Spawn(activeId, StartTime) as MusicInstance;
-            if (active is null) End();
+            _activeId = Select();
+            if (_activeId != 0) _active = Spawn(_activeId, StartTime) as MusicInstance;
+            if (_active is null) End();
         }
 
         /// <summary>The music object for the current values, 0 for none: at each depth the child with the value as key, else the one keyed 0 (any).</summary>
@@ -224,7 +224,7 @@ public sealed partial class WwisePlayer
             var current = node.Tree;
             foreach (var (group, _) in node.Arguments)
             {
-                uint value = Player.states.GetValueOrDefault(group);
+                uint value = _player._states.GetValueOrDefault(group);
                 var next = value == 0 ? null : current.Children.FirstOrDefault(c => c.Key == value);
                 next ??= current.Children.FirstOrDefault(c => c.Key == 0);
                 if (next is null) return 0;
@@ -238,42 +238,42 @@ public sealed partial class WwisePlayer
             if (Done) return;
             if (!node.Arguments.Any(a => a.GroupId == group))
             {
-                if (active is { Done: false }) active.StateChanged(group);
+                if (_active is { Done: false }) _active.StateChanged(group);
                 return;
             }
             uint target = Select();
-            if (target == activeId)
+            if (target == _activeId)
             {
-                if (pending)
+                if (_pending)
                 {
-                    pending = false;
+                    _pending = false;
                     Hold = false;
                 }
             }
-            else if (active is { Done: false } && active.CurrentExit >= Player.blockStart)
+            else if (_active is { Done: false } && _active.CurrentExit >= _player._blockStart)
             {
                 // Else only the tail of the last segment sounds and the play is over: nothing follows it.
                 Hold = true;
-                pending = true;
-                pendingId = target;
-                switchAt = active.CurrentExit;
+                _pending = true;
+                _pendingId = target;
+                _switchAt = _active.CurrentExit;
             }
         }
 
         public override void Advance(double dt)
         {
             base.Advance(dt);
-            if (Done || !pending || active is { Done: false } && Player.time <= switchAt) return;
-            pending = false;
-            activeId = pendingId;
-            active = activeId == 0 ? null : Spawn(activeId, Math.Clamp(switchAt, Player.blockStart, Player.time)) as MusicInstance;
-            if (active is null && Children.Count == 0) End();
+            if (Done || !_pending || _active is { Done: false } && _player._time <= _switchAt) return;
+            _pending = false;
+            _activeId = _pendingId;
+            _active = _activeId == 0 ? null : Spawn(_activeId, Math.Clamp(_switchAt, _player._blockStart, _player._time)) as MusicInstance;
+            if (_active is null && _children.Count == 0) End();
         }
 
         protected override void ChildEnded(Instance child)
         {
-            if (child == active) active = null;
-            if (Children.Count == 0 && !pending) End();
+            if (child == _active) _active = null;
+            if (_children.Count == 0 && !_pending) End();
         }
     }
 }

@@ -115,7 +115,7 @@ public sealed class FoliageMesh
         };
         cache[r.StringId] = m;
         foreach (var c in r.GetReferences("meshes"))
-            if (db.Find(c.TargetStringId) is { Type: FcsRecordType.FOLIAGE_MESH } child)
+            if (db.Find(c.TargetStringId) is { Type: FcsRecordType.FoliageMesh } child)
                 m.Children.Add(FromRecord(child, db, cache));
         return m;
     }
@@ -224,10 +224,10 @@ public sealed class FoliageLayer
             LodRange = r.GetInt("lod range") * 10f,
         };
         foreach (var g in r.GetReferences("grass"))
-            if (db.Find(g.TargetStringId) is { Type: FcsRecordType.GRASS } grass)
+            if (db.Find(g.TargetStringId) is { Type: FcsRecordType.Grass } grass)
                 layer.Grass.Add((FoliageGrass.FromRecord(grass), g.Values.Value0));
         foreach (var m in r.GetReferences("meshes"))
-            if (db.Find(m.TargetStringId) is { Type: FcsRecordType.FOLIAGE_MESH } mesh)
+            if (db.Find(m.TargetStringId) is { Type: FcsRecordType.FoliageMesh } mesh)
                 layer.Meshes.Add((FoliageMesh.FromRecord(mesh, db, meshCache), m.Values.Value0));
         return layer;
     }
@@ -245,14 +245,14 @@ public sealed class FoliageCatalog
     public static FoliageCatalog Load(GameDatabase db)
     {
         var c = new FoliageCatalog();
-        foreach (var b in db.OfType(FcsRecordType.BIOMES).OrderBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var b in db.OfType(FcsRecordType.Biomes).OrderBy(r => r.StringId, StringComparer.Ordinal))
         {
             uint index = (uint)b.GetInt("index") & 0xFFFFFF;
             if (c.ByBiome.ContainsKey(index)) continue; // the first record of a colour wins, as BiomeTerrain.ByIndex
             var list = new List<FoliageLayer>();
             foreach (var f in b.GetReferences("foliage"))
             {
-                if (db.Find(f.TargetStringId) is not { Type: FcsRecordType.FOLIAGE_LAYER } lr) continue;
+                if (db.Find(f.TargetStringId) is not { Type: FcsRecordType.FoliageLayer } lr) continue;
                 if (!c.Layers.TryGetValue(lr.StringId, out var layer)) c.Layers[lr.StringId] = layer = FoliageLayer.FromRecord(lr, db, c.Meshes);
                 list.Add(layer);
             }

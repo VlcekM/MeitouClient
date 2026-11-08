@@ -179,13 +179,13 @@ sealed class GameOptions
                 case "--fps-limit": g.FpsLimit = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--seed": g.Seed = ulong.Parse(Next(), CultureInfo.InvariantCulture); g.SeedGiven = true; break;
                 case "--ui":
-                    g.UiMode = Next().ToLowerInvariant() switch { "faithful" => Meitou.Data.Ui.UiMode.Faithful, "meitou" => Meitou.Data.Ui.UiMode.Meitou, _ => throw new ArgumentException("--ui must be faithful or meitou") };
+                    g.UiMode = Next().ToLowerInvariant() switch { "faithful" => Data.Ui.UiMode.Faithful, "meitou" => Data.Ui.UiMode.Meitou, _ => throw new ArgumentException("--ui must be faithful or meitou") };
                     break;
                 case "--vsync": g.VSync = true; break;
                 case "--no-vsync": g.VSync = false; break;
                 case "--ticks": g.Ticks = int.Parse(Next(), CultureInfo.InvariantCulture); break;
                 case "--no-population": g.NoPopulation = true; break;
-                case "--title-preview": g.TitlePreview = true; g.UiMode = Meitou.Data.Ui.UiMode.Meitou; break;
+                case "--title-preview": g.TitlePreview = true; g.UiMode = Data.Ui.UiMode.Meitou; break;
                 case "--new-game":
                     g.NewGame = true;
                     if (i + 1 < args.Length && !args[i + 1].StartsWith('-')) g.NewGameName = args[++i];
@@ -255,12 +255,12 @@ sealed class GameOptions
                 case "--screenshot-out": g.ShotOut = Next(); break;
                 case "--exec": case "--setup": g.Exec = Next(); break;
                 case "--renderer":
-                {
-                    string renderer = Next().ToLowerInvariant();
-                    if (renderer is not ("vulkan" or "metal")) throw new ArgumentException("--renderer must be vulkan or metal");
-                    g.Renderer = renderer;
-                    break;
-                }
+                    {
+                        string renderer = Next().ToLowerInvariant();
+                        if (renderer is not ("vulkan" or "metal")) throw new ArgumentException("--renderer must be vulkan or metal");
+                        g.Renderer = renderer;
+                        break;
+                    }
                 case "--play-bench": (g.PlayBench, g.FpsLimit, g.VSync) = (Next(), 0, false); break;
                 case "--no-precompile": g.NoPrecompile = true; break;
                 case "--scene": g.Scene = Next().ToLowerInvariant(); break;
@@ -274,7 +274,7 @@ sealed class GameOptions
                 default: rest.Add(a); break;
             }
         }
-        if (g.LowEnd) g.UiMode = Meitou.Data.Ui.UiMode.Faithful;
+        if (g.LowEnd) g.UiMode = Data.Ui.UiMode.Faithful;
         return (g, rest.ToArray());
     }
 }

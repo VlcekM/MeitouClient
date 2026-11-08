@@ -7,15 +7,15 @@ namespace Meitou.Tests.Audio;
 [Slow]
 public class WwiseVorbisInstallTests
 {
-    static readonly Lazy<WwiseCodebookLibrary?> library = new(() => InstallData.Install is { } i && File.Exists(Path.Combine(i.Root, "kenshi_x64.exe"))
+    static readonly Lazy<WwiseCodebookLibrary?> LibraryCache = new(() => InstallData.Install is { } i && File.Exists(Path.Combine(i.Root, "kenshi_x64.exe"))
         ? WwiseCodebookLibrary.FromExecutable(Path.Combine(i.Root, "kenshi_x64.exe"))
         : null);
 
     static WwiseCodebookLibrary Library()
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
-        Assert.True(library.Value is not null, "No codebook library found in kenshi_x64.exe");
-        return library.Value!;
+        Assert.True(LibraryCache.Value is not null, "No codebook library found in kenshi_x64.exe");
+        return LibraryCache.Value!;
     }
 
     [Fact]

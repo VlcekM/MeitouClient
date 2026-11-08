@@ -28,26 +28,26 @@ public sealed class UniqueEntry
 /// </summary>
 public sealed class UniqueCharacters
 {
-    readonly SortedDictionary<string, UniqueEntry> entries = new(StringComparer.Ordinal);
-    readonly Dictionary<CharacterId, string> byHandle = [];
-    bool seeded;
+    readonly SortedDictionary<string, UniqueEntry> _entries = new(StringComparer.Ordinal);
+    readonly Dictionary<CharacterId, string> _byHandle = [];
+    bool _seeded;
 
-    public int Count => entries.Count;
+    public int Count => _entries.Count;
     /// <summary>Bumped by every change to a state or player flag (an entry made, released, dead, captured, freed, loaded or seeded): world states read it.</summary>
     public long Version { get; private set; }
-    public IEnumerable<KeyValuePair<string, UniqueEntry>> All => entries;
-    public UniqueEntry? Find(string recordId) => entries.GetValueOrDefault(recordId);
+    public IEnumerable<KeyValuePair<string, UniqueEntry>> All => _entries;
+    public UniqueEntry? Find(string recordId) => _entries.GetValueOrDefault(recordId);
     /// <summary>The state a query sees: an absent entry is alive (the original's default).</summary>
-    public UniqueState StateOf(string recordId) => entries.TryGetValue(recordId, out var e) ? e.State : UniqueState.Alive;
-    public bool IsClaimed(string recordId) => entries.TryGetValue(recordId, out var e) && e.Claimed;
+    public UniqueState StateOf(string recordId) => _entries.TryGetValue(recordId, out var e) ? e.State : UniqueState.Alive;
+    public bool IsClaimed(string recordId) => _entries.TryGetValue(recordId, out var e) && e.Claimed;
     /// <summary>The unique record of a character in the world (null: not a tracked unique).</summary>
-    public string? RecordOf(CharacterId id) => byHandle.GetValueOrDefault(id);
+    public string? RecordOf(CharacterId id) => _byHandle.GetValueOrDefault(id);
 
-    public static bool IsUnique(GameRecord? record) => record is { Type: FcsRecordType.CHARACTER or FcsRecordType.ANIMAL_CHARACTER } && record.GetBool("unique");
+    public static bool IsUnique(GameRecord? record) => record is { Type: FcsRecordType.Character or FcsRecordType.AnimalCharacter } && record.GetBool("unique");
 
     UniqueEntry Entry(string recordId)
     {
-        if (!entries.TryGetValue(recordId, out var e)) entries[recordId] = e = new UniqueEntry();
+        if (!_entries.TryGetValue(recordId, out var e)) _entries[recordId] = e = new UniqueEntry();
         return e;
     }
 
@@ -71,27 +71,27 @@ public sealed class UniqueCharacters
         e.Claimed = true;
         Unbind(e);
         e.Handle = id;
-        byHandle[id] = recordId;
+        _byHandle[id] = recordId;
     }
 
     void Unbind(UniqueEntry e)
     {
-        if (!e.Handle.IsNone) byHandle.Remove(e.Handle);
+        if (!e.Handle.IsNone) _byHandle.Remove(e.Handle);
         e.Handle = CharacterId.None;
     }
 
     /// <summary>The character leaves the world (its squad stored or saved): its entry stays claimed with its state.</summary>
     public void Left(CharacterId id)
     {
-        if (byHandle.Remove(id, out var recordId)) entries[recordId].Handle = CharacterId.None;
+        if (_byHandle.Remove(id, out var recordId)) _entries[recordId].Handle = CharacterId.None;
     }
 
     /// <summary>A living unique leaves the world for good without being kept (its squad is remade from its template later): free to be made again. A dead one stays claimed.</summary>
     public void Release(string recordId)
     {
-        if (!entries.TryGetValue(recordId, out var e) || e.State == UniqueState.Dead) return;
+        if (!_entries.TryGetValue(recordId, out var e) || e.State == UniqueState.Dead) return;
         Unbind(e);
-        entries.Remove(recordId);
+        _entries.Remove(recordId);
         Version++;
     }
 
@@ -103,18 +103,18 @@ public sealed class UniqueCharacters
     {
         Version++;
         var e = Entry(recordId);
-        if (e.State != UniqueState.Dead && faction >= 0) fallen.Add(faction);
+        if (e.State != UniqueState.Dead && faction >= 0) _fallen.Add(faction);
         e.State = UniqueState.Dead;
         e.Player |= byPlayer;
     }
 
-    readonly List<int> fallen = [];
+    readonly List<int> _fallen = [];
 
     /// <summary>The factions of the uniques that died since the last call, in order (the population lowers their prosperity, <c>FUN_1407a6200</c>).</summary>
     internal List<int> TakeFallen()
     {
-        var list = new List<int>(fallen);
-        fallen.Clear();
+        var list = new List<int>(_fallen);
+        _fallen.Clear();
         return list;
     }
 
@@ -154,24 +154,24 @@ public sealed class UniqueCharacters
     /// </summary>
     public void SeedPrisoners(GameDatabase db)
     {
-        if (seeded) return;
-        seeded = true;
+        if (_seeded) return;
+        _seeded = true;
         Version++;
-        foreach (var template in db.OfType(FcsRecordType.SQUAD_TEMPLATE))
+        foreach (var template in db.OfType(FcsRecordType.SquadTemplate))
         {
             var refs = template.GetReferences("prisoners");
             if (refs.Count == 0 || db.Find(refs[0].TargetStringId) is not { } prisoners) continue;
             foreach (var list in (string[])["leader", "squad", "squad2"])
                 foreach (var r in prisoners.GetReferences(list))
-                    if (!entries.ContainsKey(r.TargetStringId) && IsUnique(db.Find(r.TargetStringId)))
-                        entries[r.TargetStringId] = new UniqueEntry { State = UniqueState.Imprisoned };
+                    if (!_entries.ContainsKey(r.TargetStringId) && IsUnique(db.Find(r.TargetStringId)))
+                        _entries[r.TargetStringId] = new UniqueEntry { State = UniqueState.Imprisoned };
         }
     }
 
     internal void Hash(ref StateHasher h)
     {
-        h.Add(entries.Count);
-        foreach (var (id, e) in entries)
+        h.Add(_entries.Count);
+        foreach (var (id, e) in _entries)
         {
             h.Add(Rng.StableHash(id));
             h.Add(e.Claimed);

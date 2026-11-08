@@ -6,8 +6,8 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Meitou.Simulation.Navigation;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Population;
 
@@ -99,7 +99,11 @@ public sealed class WorldBoot
 
         return new WorldBoot
         {
-            Walkability = walkability, Nav = nav, RagdollGeometry = ragdollGeometry, Data = data, Towns = towns,
+            Walkability = walkability,
+            Nav = nav,
+            RagdollGeometry = ragdollGeometry,
+            Data = data,
+            Towns = towns,
             Rigs = CharacterRigs.For(o.Database, o.Assets),
             // With the animals' own skeletons and the animation files.
             AnimationLengths = AnimationLengths.Load(o.Install.Root, o.Database, name => o.Assets.Find(name)),
@@ -154,7 +158,7 @@ public sealed class WorldBoot
     static Dictionary<string, List<TownBuilding>> ReadTownBuildings(WorldBootOptions o, WorldLevelData levels, BuildingLayouts layouts)
     {
         var watch = Stopwatch.StartNew();
-        var buildings = Meitou.Data.World.TownBuildings.Build(o.Database, levels, layouts, (x, z) => o.Heights.HeightAt((float)x, (float)z));
+        var buildings = TownBuildings.Build(o.Database, levels, layouts, (x, z) => o.Heights.HeightAt((float)x, (float)z));
         int beds = buildings.Values.Sum(l => l.Sum(b => b.Beds));
         int nodes = buildings.Values.Sum(l => l.Sum(b => b.Spots.Count - b.Beds));
         Console.WriteLine($"homes     {buildings.Values.Sum(l => l.Count)} town buildings, {beds} beds, {nodes} nodes in {buildings.Count} towns ({watch.ElapsedMilliseconds} ms)");

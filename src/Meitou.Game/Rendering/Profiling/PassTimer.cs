@@ -8,29 +8,29 @@ namespace Meitou.Game.Rendering.Profiling;
 /// </summary>
 sealed class PassTimer(IGpuContext gpu)
 {
-    readonly Queue<(QuerySlot Start, QuerySlot End)> pending = new();
-    QuerySlot start, stamp;
-    Action<IGpuCommandList>? write;
+    readonly Queue<(QuerySlot Start, QuerySlot End)> _pending = new();
+    QuerySlot _start, _stamp;
+    Action<IGpuCommandList>? _write;
 
     /// <summary>The start stamp, in the frame's command stream now.</summary>
-    public void Begin() => start = Write();
+    public void Begin() => _start = Write();
 
     /// <summary>The end stamp; the pair is read by <see cref="Poll"/> once its frame has completed.</summary>
     public void End()
     {
         var end = Write();
-        if (start.IsValid && end.IsValid) pending.Enqueue((start, end));
-        start = default;
+        if (_start.IsValid && end.IsValid) _pending.Enqueue((_start, end));
+        _start = default;
     }
 
     QuerySlot Write()
     {
         var arena = gpu.Frame.Timestamps;
-        stamp = arena.Allocate();
-        if (!stamp.IsValid) return default;
-        write ??= cmd => cmd.Timestamp(gpu.Frame.Timestamps, stamp);
-        gpu.Interleave(write);
-        return stamp;
+        _stamp = arena.Allocate();
+        if (!_stamp.IsValid) return default;
+        _write ??= cmd => cmd.Timestamp(gpu.Frame.Timestamps, _stamp);
+        gpu.Interleave(_write);
+        return _stamp;
     }
 
     /// <summary>Adds the milliseconds of every finished pair to <paramref name="samples"/>; the last one, or null.</summary>
@@ -38,7 +38,7 @@ sealed class PassTimer(IGpuContext gpu)
     {
         double? last = null;
         var arena = gpu.Frame.Timestamps;
-        while (pending.TryPeek(out var p))
+        while (_pending.TryPeek(out var p))
         {
             if (arena.TryRead(p.Start, out ulong a) && arena.TryRead(p.End, out ulong b))
             {
@@ -46,7 +46,7 @@ sealed class PassTimer(IGpuContext gpu)
                 samples.Add(last.Value);
             }
             else if (gpu.Frame.Number - p.Start.Frame < 16) break;   // not collected yet (a frame ring later); older ones are lost
-            pending.Dequeue();
+            _pending.Dequeue();
         }
         return last;
     }
@@ -59,24 +59,24 @@ sealed class PassTimer(IGpuContext gpu)
 /// </summary>
 sealed class FrameBlock(IGpuContext gpu, int bytes)
 {
-    readonly float[] data = new float[bytes / 4];
-    readonly ulong align = Math.Max(gpu.UniformBufferAlign, 16);
-    int version = 1, written = -1;
-    long frame = -1;
-    GpuBufferBinding binding;
+    readonly float[] _data = new float[bytes / 4];
+    readonly ulong _align = Math.Max(gpu.UniformBufferAlign, 16);
+    int _version = 1, _written = -1;
+    long _frame = -1;
+    GpuBufferBinding _binding;
 
     /// <summary>Replaces the whole block.</summary>
-    public void Set(ReadOnlySpan<float> values) { values.CopyTo(data); version++; }
+    public void Set(ReadOnlySpan<float> values) { values.CopyTo(_data); _version++; }
 
     public GpuBufferBinding Binding()
     {
         var f = gpu.Frame;
-        if (frame != f.Number || written != version)
+        if (_frame != f.Number || _written != _version)
         {
-            binding = f.WriteConstants(System.Runtime.InteropServices.MemoryMarshal.AsBytes((ReadOnlySpan<float>)data), align).Binding;
-            (frame, written) = (f.Number, version);
-            f.Stats.ConstantBytes += data.Length * 4;
+            _binding = f.WriteConstants(System.Runtime.InteropServices.MemoryMarshal.AsBytes((ReadOnlySpan<float>)_data), _align).Binding;
+            (_frame, _written) = (f.Number, _version);
+            f.Stats.ConstantBytes += _data.Length * 4;
         }
-        return binding;
+        return _binding;
     }
 }

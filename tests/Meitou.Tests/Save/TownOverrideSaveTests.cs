@@ -24,10 +24,10 @@ public class TownOverrideSaveTests
     /// <summary>The override town with a house of one door and a shed with no fixtures, both in the town's zone; B takes over when 91 and 92 hold.</summary>
     static PopulationData Data(IWorldStates states)
     {
-        var door = SyntheticTown.Rec("60-t", FcsRecordType.BUILDING, "Door");
-        var house = SyntheticTown.Rec("61-t", FcsRecordType.BUILDING, "House");
+        var door = SyntheticTown.Rec("60-t", FcsRecordType.Building, "Door");
+        var house = SyntheticTown.Rec("61-t", FcsRecordType.Building, "House");
         house.References["doors"] = [SyntheticTown.Ref("60-t")];
-        var shed = SyntheticTown.Rec("62-t", FcsRecordType.BUILDING, "Shed");
+        var shed = SyntheticTown.Rec("62-t", FcsRecordType.Building, "Shed");
         var db = PopulationTests.OverrideDb(extra: [door, house, shed]);
         List<TownBuilding> buildings =
         [
@@ -54,7 +54,7 @@ public class TownOverrideSaveTests
     /// <summary>A state as an old save holds it: the house's door locked at 77, both buildings the old faction's, the shed destroyed.</summary>
     static FcsRecord Stale(string stringId, bool house)
     {
-        var state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Name = "0", StringId = stringId };
+        var state = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Name = "0", StringId = stringId };
         state.Strings["owner faction ID"] = "20-t";
         if (house) (state.Ints["lock lvl0"], state.Bools["locked0"]) = (77, true);
         else state.Bools["destroyed"] = true;
@@ -88,7 +88,7 @@ public class TownOverrideSaveTests
         if (!builder.Game.Zones.TryGetValue(Zone, out var saveZone)) builder.Game.Zones[Zone] = saveZone = new SaveZone(Zone, new SaveFile());
         var file = saveZone.File;
         int next = Math.Max(file.Data.NextId, file.Records.Count == 0 ? 0 : file.Records.Max(r => r.Id)) + 1;
-        var list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Id = next, Name = "0", StringId = WorldLevelData.BuildingListId };
+        var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = next, Name = "0", StringId = WorldLevelData.BuildingListId };
         foreach (var (id, target, at) in new[] { ("house", "61-t", HouseAt), ("shed", "62-t", ShedAt) })
         {
             var instance = new FcsInstance { Id = id, Target = target, Position = at };
@@ -126,13 +126,13 @@ public class TownOverrideSaveTests
     /// </summary>
     static (PopulationData Data, List<TownBuilding> Houses) RuinData(IWorldStates states)
     {
-        var door = SyntheticTown.Rec("60-t", FcsRecordType.BUILDING, "Door");
-        var house = SyntheticTown.Rec("61-t", FcsRecordType.BUILDING, "House");
+        var door = SyntheticTown.Rec("60-t", FcsRecordType.Building, "Door");
+        var house = SyntheticTown.Rec("61-t", FcsRecordType.Building, "House");
         house.References["doors"] = [SyntheticTown.Ref("60-t")];
         house.Filenames["destroyed mesh"] = "ruin.mesh";
-        var ruined = SyntheticTown.Rec("70-t", FcsRecordType.SQUAD_TEMPLATE, "Ruined");
+        var ruined = SyntheticTown.Rec("70-t", FcsRecordType.SquadTemplate, "Ruined");
         ruined.Bools["building ruined"] = true;
-        var b = new FcsRecord { StringId = "51-t", Flags = 0x11, Name = "B (override)", RecordType = FcsRecordType.TOWN };
+        var b = new FcsRecord { StringId = "51-t", Flags = 0x11, Name = "B (override)", RecordType = FcsRecordType.Town };
         b.References["default resident"] = [SyntheticTown.Ref("70-t")];
         var db = PopulationTests.OverrideDb(extra: [door, house, ruined, b]);
         var next = new ZoneCoordinate(Zone.X + 1, Zone.Y);

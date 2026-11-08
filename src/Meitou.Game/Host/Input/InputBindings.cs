@@ -53,9 +53,9 @@ public enum InputAction
 public sealed class ActionState
 {
     static readonly int Count = Enum.GetValues<InputAction>().Length;
-    readonly bool[] held = new bool[Count];
-    readonly bool[] pressed = new bool[Count];
-    readonly bool[] released = new bool[Count];
+    readonly bool[] _held = new bool[Count];
+    readonly bool[] _pressed = new bool[Count];
+    readonly bool[] _released = new bool[Count];
 
     internal ActionState(TickInput input) => Input = input;
 
@@ -63,17 +63,17 @@ public sealed class ActionState
     public System.Numerics.Vector2 MouseDelta => Input.MouseDelta;
     public float Wheel => Input.Wheel;
 
-    public bool Held(InputAction a) => held[(int)a];
+    public bool Held(InputAction a) => _held[(int)a];
     /// <summary>Went down this tick: true in exactly one tick per press.</summary>
-    public bool Pressed(InputAction a) => pressed[(int)a];
+    public bool Pressed(InputAction a) => _pressed[(int)a];
     /// <summary>Went up this tick (and no other key bound to it is still down).</summary>
-    public bool Released(InputAction a) => released[(int)a];
+    public bool Released(InputAction a) => _released[(int)a];
 
     internal void Set(InputAction a, bool isHeld, bool isPressed, bool isReleased)
     {
-        held[(int)a] = isHeld;
-        pressed[(int)a] = isPressed;
-        released[(int)a] = isReleased;
+        _held[(int)a] = isHeld;
+        _pressed[(int)a] = isPressed;
+        _released[(int)a] = isReleased;
     }
 
     /// <summary>A state with nothing held, for ticks driven without a host.</summary>
@@ -88,17 +88,17 @@ public sealed class ActionState
 /// </summary>
 public sealed class InputBindings
 {
-    readonly Dictionary<InputAction, Binding[]> map = [];
+    readonly Dictionary<InputAction, Binding[]> _map = [];
 
     public InputBindings() => ResetToDefaults();
 
-    public IReadOnlyList<Binding> Get(InputAction action) => map.TryGetValue(action, out var b) ? b : [];
+    public IReadOnlyList<Binding> Get(InputAction action) => _map.TryGetValue(action, out var b) ? b : [];
 
-    public void Set(InputAction action, params Binding[] bindings) => map[action] = bindings;
+    public void Set(InputAction action, params Binding[] bindings) => _map[action] = bindings;
 
     public void ResetToDefaults()
     {
-        map.Clear();
+        _map.Clear();
         // The game's camera keys (controls.cfg): the arrows move too; Q / E rotate; , and . tilt (camera_tilt+ steeper, camera_tilt- shallower).
         Set(InputAction.MoveForward, Key.W, Key.Up);
         Set(InputAction.MoveBack, Key.S, Key.Down);
@@ -193,14 +193,14 @@ public sealed class InputBindings
                     ok = false;
                 }
             }
-            if (ok) map[action] = [.. list];
+            if (ok) _map[action] = [.. list];
         }
         return problems;
     }
 
     /// <summary>The bindings as strings in the form <see cref="Apply"/> reads (to write a config file).</summary>
     public Dictionary<string, string> ToDictionary() =>
-        map.ToDictionary(p => p.Key.ToString(), p => string.Join(",", p.Value.Select(b => b.ToString())));
+        _map.ToDictionary(p => p.Key.ToString(), p => string.Join(",", p.Value.Select(b => b.ToString())));
 
     /// <summary>Resolves one tick's input into actions.</summary>
     public ActionState Resolve(TickInput input)

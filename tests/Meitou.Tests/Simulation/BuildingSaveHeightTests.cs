@@ -79,7 +79,7 @@ public class BuildingSaveHeightTests
         BuildingSave.Write(save, original, Player);
         Saved(save, parent.Id).State.Strings["owner faction ID"] = "town-owner";
         Saved(save, child.Id).State.Strings.Remove(BuildingSave.MeitouParent);
-        var db = Db(Rec("height-fixture", FcsRecordType.BUILDING));
+        var db = Db(Rec("height-fixture", FcsRecordType.Building));
         using var loaded = new SimWorld(new WorldSettings(), new Surfaces());
         Assert.Equal(1, BuildingSave.Read(save, loaded, db, Player, 0));
         Assert.Equal(BuildingKey.Of(parent.Zone, parent.Id), Assert.Single(loaded.Buildings.All).Parent);

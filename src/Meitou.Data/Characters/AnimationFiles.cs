@@ -19,12 +19,12 @@ public static class AnimationFiles
     /// </summary>
     public static IReadOnlyList<string> All(GameDatabase db)
     {
-        var records = db.OfType(FcsRecordType.ANIMATION_FILE).OrderBy(r => r.StringId, StringComparer.Ordinal).ToList();
+        var records = db.OfType(FcsRecordType.AnimationFile).OrderBy(r => r.StringId, StringComparer.Ordinal).ToList();
         return Linked(db, records, "male animation").Concat(Linked(db, records, "female animation")).DistinctBy(BareName, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     static IEnumerable<GameRecord> Records(GameDatabase db, GameRecord owner) => owner.GetReferences("animation files")
-        .Select(r => db.Find(r.TargetStringId)).OfType<GameRecord>().Where(r => r.Type == FcsRecordType.ANIMATION_FILE);
+        .Select(r => db.Find(r.TargetStringId)).OfType<GameRecord>().Where(r => r.Type == FcsRecordType.AnimationFile);
 
     // Sorted by the load-order index of the file that created each record, highest first (the game's qsort on GameData::createdIndex); records of one file
     // keep their list order (the game's qsort leaves ties in no defined order). The game links the bare file name, so one name links once.

@@ -168,7 +168,7 @@ public sealed class Releases(HttpClient http)
     /// <summary>Orders versions oldest first: by number, a release after its own pre-releases, nightlies by date, then that day's build.</summary>
     public static int CompareVersions(string a, string b)
     {
-        static System.Version Number(string v) => System.Version.TryParse(v.Split('-')[0], out var n) ? n : new System.Version();
+        static Version Number(string v) => Version.TryParse(v.Split('-')[0], out var n) ? n : new Version();
         int c = Number(a).CompareTo(Number(b));
         if (c == 0) c = b.Contains('-').CompareTo(a.Contains('-'));
         if (c == 0) c = Nullable.Compare(ParseVersion(a).Nightly, ParseVersion(b).Nightly);

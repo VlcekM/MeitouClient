@@ -42,9 +42,9 @@ public class SavedCameraTests
         Assert.Equal(new Vector2(500, 51000), KenshiCamera.SavedPivotFallback);
 
         // Meitou saves written before the camera was kept: pos 0 and rot (0, 0, 0, 1). A new save now starts at the game's own view.
-        var legacy = new FcsRecord { Type = (int)FcsRecordType.CAMERA };
-        legacy.Vector3s["pos"] = Vector3.Zero;
-        legacy.Vector4s["rot"] = new Vector4(0, 0, 0, 1);
+        var legacy = new FcsRecord { Type = (int)FcsRecordType.Camera };
+        legacy.Vector3S["pos"] = Vector3.Zero;
+        legacy.Vector4S["rot"] = new Vector4(0, 0, 0, 1);
         Assert.False(new SaveCamera(legacy).HasView);
         var fresh = new SaveBuilder(1).Game.Camera;
         Assert.True(fresh.HasView);

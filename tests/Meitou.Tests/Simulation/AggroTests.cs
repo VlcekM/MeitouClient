@@ -151,7 +151,7 @@ public class AggroTests
         var a = Make(seed, threads, ai: true);
         var o = new Vector2(2000, 2000);
         var raiders = a.Squad(Raiders, o, o, o + new Vector2(0, 12));
-        Lists(raiders, [Goal(TaskType.ATTACK_ENEMIES)], [Goal(TaskType.ATTACK_ENEMIES)]);
+        Lists(raiders, [Goal(TaskType.AttackEnemies)], [Goal(TaskType.AttackEnemies)]);
         var villagers = a.Squad(Villagers, o + new Vector2(150, 0), o + new Vector2(150, 0), o + new Vector2(160, 10));
         var nomads = a.Squad(Nomads, o + new Vector2(-150, 0), o + new Vector2(-150, 0), o + new Vector2(-160, 10));
         var hermits = a.Squad(Hermits, o + new Vector2(0, 150), o + new Vector2(0, 150));
@@ -188,7 +188,7 @@ public class AggroTests
         var o = new Vector2(2000, 2000);
         var town = a.Squad(Townsfolk, o, o, o + new Vector2(30, 0));
         var watch = a.Squad(Townsfolk, o + new Vector2(200, 0), o + new Vector2(200, 0));
-        Lists(watch, [Goal(TaskType.ATTACK_ENEMIES)]);
+        Lists(watch, [Goal(TaskType.AttackEnemies)]);
         var me = a.PlayerCharacter(o + new Vector2(60, 60));
         a.World.RunTicks(20);
         Assert.Empty(a.Aggro.Log);   // neutral: 10
@@ -329,13 +329,13 @@ public class AggroTests
     /// <summary>Starts a job's standing task (row 87, a job's provenance) for one character at its first slow world.</summary>
     sealed class JobStarter(Func<CharacterId> who) : ITickSystem
     {
-        bool done;
+        bool _done;
 
         public void SlowWorld(SimWorld world)
         {
-            if (done || !world.Characters.TryResolveNext(who(), out int slot)) return;
-            done = true;
-            TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.OPERATE_MACHINERY, TaskSource.Job) { Job = 0 });
+            if (_done || !world.Characters.TryResolveNext(who(), out int slot)) return;
+            _done = true;
+            TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Idle, TaskType.OperateMachinery, TaskSource.Job) { Job = 0 });
         }
     }
 
@@ -362,7 +362,7 @@ public class AggroTests
         for (int k = 0; k < (int)(10 / a.World.TickSeconds) && !a.Fighting(me); k++) a.World.RunTicks(1);
         Assert.True(a.Fighting(me), "the holder attacks the walker passing within 80 of its hold point");
         Assert.Equal(walker.Slot, a.Combat.StateOf(me).TargetSlot);
-        Assert.Equal(Meitou.Data.Gameplay.Ai.TaskType.ATTACK_ENEMIES, cold.Running!.Row);
+        Assert.Equal(TaskType.AttackEnemies, cold.Running!.Row);
         Assert.Equal(TaskSource.Goal, cold.Running.Source);
     }
 
@@ -380,7 +380,7 @@ public class AggroTests
         using var a = Make(6, 1, table, ai: true);
         var o = new Vector2(2000, 2000);
         var villagers = a.SquadOf(1, o, true, (o, 0f), (o + new Vector2(40, 0), 0f));
-        Lists(villagers, [Goal(TaskType.PROTECT_OWN_SQUAD)], [Goal(TaskType.PROTECT_OWN_SQUAD)]);
+        Lists(villagers, [Goal(TaskType.ProtectOwnSquad)], [Goal(TaskType.ProtectOwnSquad)]);
         var raiders = a.SquadOf(0, o, true, (o + new Vector2(0, 20), MathF.PI), (o + new Vector2(40, 20), MathF.PI));
         CharacterId fighter = villagers.Members[0], mate = villagers.Members[1], first = raiders.Members[0], second = raiders.Members[1];
         a.World.Commands.Enqueue(new AttackOrder([fighter], first) { Tick = a.World.Tick });
@@ -513,7 +513,7 @@ public class AggroTests
         var o = new Vector2(2000, 2000);
         var shop = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
         CharacterId guard = shop.Members[0], passive = shop.Members[1];
-        Lists(shop, [Goal(TaskType.ATTACK_ENEMIES)]);
+        Lists(shop, [Goal(TaskType.AttackEnemies)]);
         Think(a);
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 100), MathF.PI)).Members[0];
         for (int k = 0; k < (int)(4 / a.World.TickSeconds); k++)
@@ -538,7 +538,7 @@ public class AggroTests
         var o = new Vector2(2000, 2000);
         var shop = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
         CharacterId keeper = shop.Members[0], guard = shop.Members[1];
-        Lists(shop, [Goal(TaskType.PROTECT_OWN_SQUAD)], [Goal(TaskType.PROTECT_OWN_SQUAD)]);
+        Lists(shop, [Goal(TaskType.ProtectOwnSquad)], [Goal(TaskType.ProtectOwnSquad)]);
         Think(a);
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 400), MathF.PI)).Members[0];
         a.World.Commands.Enqueue(new AttackOrder([guard], bandit) { Tick = a.World.Tick });
@@ -574,9 +574,9 @@ public class AggroTests
         a.Aggro.Combat = a.Combat;
         var o = new Vector2(2000, 2000);
         var shop = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(8, 0), 0f));
-        Lists(shop, [Goal(TaskType.PROTECT_OWN_SQUAD)], [Goal(TaskType.PROTECT_OWN_SQUAD), Goal(TaskType.ATTACK_TROUBLE_MAKERS)]);
+        Lists(shop, [Goal(TaskType.ProtectOwnSquad)], [Goal(TaskType.ProtectOwnSquad), Goal(TaskType.AttackTroubleMakers)]);
         var gate = a.SquadOf(Town, o, true, (o + new Vector2(-30, 0), 0f));
-        Lists(gate, [Goal(TaskType.PROTECT_ALLIES)]);
+        Lists(gate, [Goal(TaskType.ProtectAllies)]);
         Think(a);
         CharacterId guard = gate.Members[0];
         var resident = a.SquadOf(Town, o, true, (o + new Vector2(0, 40), 0f)).Members[0];
@@ -616,13 +616,13 @@ public class AggroTests
         CharacterId member = squad.Members[1];
         int hour = a.World.Hour;
         var (start, end) = inHours ? (0, 100) : ((hour + 6) % 24, (hour + 8) % 24);
-        Lists(squad, [], [Goal(TaskType.FOLLOW_SQUADLEADER, target: TaskTargetType.Leader), Goal(TaskType.ATTACK_ENEMIES, weight, start, end)]);
+        Lists(squad, [], [Goal(TaskType.FollowSquadleader, target: TaskTargetType.Leader), Goal(TaskType.AttackEnemies, weight, start, end)]);
         Think(a);
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 200), MathF.PI)).Members[0];
         a.World.RunTicks((int)(4 / a.World.TickSeconds));
         Assert.Equal(attacks, a.Fighting(member));
         if (attacks) Assert.Equal(bandit.Slot, a.Combat.StateOf(member).TargetSlot);
-        else Assert.Equal(TaskType.FOLLOW_SQUADLEADER, a.World.Characters.Cold(member.Slot)!.Ai!.Goal!.Task.Type);
+        else Assert.Equal(TaskType.FollowSquadleader, a.World.Characters.Cold(member.Slot)!.Ai!.Goal!.Task.Type);
         Assert.False(a.Fighting(squad.Members[0]), "the leader has no combat goal");
     }
 
@@ -639,8 +639,8 @@ public class AggroTests
         var o = new Vector2(2000, 2000);
         var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
         CharacterId member = squad.Members[1];
-        var follow = Goal(TaskType.FOLLOW_SQUADLEADER, 0.5f, target: TaskTargetType.Leader);
-        Lists(squad, [], [follow, Goal(TaskType.ATTACK_ENEMIES)]);
+        var follow = Goal(TaskType.FollowSquadleader, 0.5f, target: TaskTargetType.Leader);
+        Lists(squad, [], [follow, Goal(TaskType.AttackEnemies)]);
         Think(a);
         // A bandit that cannot strike back (no fighter), far enough that the run at it outlasts several thinks.
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 400), MathF.PI)).Members[0];
@@ -656,10 +656,10 @@ public class AggroTests
             Assert.Equal(from, table.Cold(member.Slot)!.Running!.Tick);
         }
         Assert.Single(a.Aggro.Log, e => e.Attacker == member);
-        Lists(squad, [], [follow, Goal(TaskType.ATTACK_ENEMIES, 0.2f)]);
+        Lists(squad, [], [follow, Goal(TaskType.AttackEnemies, 0.2f)]);
         a.World.RunTicks(2 * 15);
         Assert.False(a.Fighting(member), "the follow outscores the attack");
-        Assert.Equal(TaskType.FOLLOW_SQUADLEADER, table.Cold(member.Slot)!.Ai!.Goal!.Task.Type);
+        Assert.Equal(TaskType.FollowSquadleader, table.Cold(member.Slot)!.Ai!.Goal!.Task.Type);
     }
 
     /// <summary>
@@ -675,7 +675,7 @@ public class AggroTests
         var o = new Vector2(2000, 2000);
         var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
         CharacterId member = squad.Members[1];
-        Lists(squad, [], [Goal(TaskType.FOLLOW_SQUADLEADER, 0.5f, target: TaskTargetType.Leader)]);
+        Lists(squad, [], [Goal(TaskType.FollowSquadleader, 0.5f, target: TaskTargetType.Leader)]);
         Think(a);
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(5, 30), MathF.PI)).Members[0];
         a.World.RunTicks(2 * 15 + 5);   // its looks have sensed the bandit (an entry before the attack); its next look is 10 ticks off
@@ -687,8 +687,8 @@ public class AggroTests
         var cold = table.Cold(member.Slot)!;
         Assert.True(a.Fighting(member), "it fights back two ticks after the alert");
         Assert.Equal(bandit.Slot, a.Combat.StateOf(member).TargetSlot);
-        Assert.Equal(TaskType.SELF_PRESERVATION, cold.Ai!.Goal!.Task.Type);
-        Assert.Equal(TaskType.ATTACK_ATTACKERS_OF, cold.Ai.Step);
+        Assert.Equal(TaskType.SelfPreservation, cold.Ai!.Goal!.Task.Type);
+        Assert.Equal(TaskType.AttackAttackersOf, cold.Ai.Step);
         long from = cold.Running!.Tick;
         Assert.Equal(from, cold.Ai.FightFrom);
         for (int k = 0; k < 3 * 15 && !table.Cold(bandit.Slot)!.Medical!.Incapacitated; k++)
@@ -712,7 +712,7 @@ public class AggroTests
         var o = new Vector2(2000, 2000);
         var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
         CharacterId member = squad.Members[1];
-        Lists(squad, [], [Goal(TaskType.FOLLOW_SQUADLEADER, 0.75f, target: TaskTargetType.Leader)]);
+        Lists(squad, [], [Goal(TaskType.FollowSquadleader, 0.75f, target: TaskTargetType.Leader)]);
         Think(a);
         var bandit = a.SquadOf(Bandits, o, true, (o + new Vector2(10, 120), MathF.PI)).Members[0];
         a.World.RunTicks(15);
@@ -729,7 +729,7 @@ public class AggroTests
         Assert.True(near >= 0, "the bandit came within 40");
         Assert.True(a.Fighting(member), "it fights back within 40");
         Assert.InRange(a.World.Tick - near, 0, 15 + 3);
-        Assert.Equal(TaskType.SELF_PRESERVATION, table.Cold(member.Slot)!.Ai!.Goal!.Task.Type);
+        Assert.Equal(TaskType.SelfPreservation, table.Cold(member.Slot)!.Ai!.Goal!.Task.Type);
     }
 
     /// <summary>
@@ -745,7 +745,7 @@ public class AggroTests
         var o = new Vector2(2000, 2000);
         var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f));
         CharacterId member = squad.Members[1];
-        Lists(squad, [], protects ? [Goal(TaskType.PROTECT_OWN_SQUAD)] : []);
+        Lists(squad, [], protects ? [Goal(TaskType.ProtectOwnSquad)] : []);
         Think(a);
         var table = a.World.Characters;
         var shooter = table.Spawn(new CharacterHot { Position = new Vector3(o.X + 10, 150, o.Y + 400), Health = 100, Yaw = MathF.PI }, RangedTests.Shooter(100, 100, 30, Bandits), 0);
@@ -762,7 +762,7 @@ public class AggroTests
         else
         {
             Assert.True(shot, "it was shot at");
-            Assert.NotEqual(TaskType.SELF_PRESERVATION, table.Cold(member.Slot)!.Ai!.Goal?.Task.Type);
+            Assert.NotEqual(TaskType.SelfPreservation, table.Cold(member.Slot)!.Ai!.Goal?.Task.Type);
         }
     }
 
@@ -776,7 +776,7 @@ public class AggroTests
             a.Aggro.Combat = a.Combat;
             var o = new Vector2(2000, 2000);
             var squad = a.SquadOf(Town, o, true, (o, 0f), (o + new Vector2(10, 0), 0f), (o + new Vector2(-10, 0), 0f));
-            Lists(squad, [], [Goal(TaskType.FOLLOW_SQUADLEADER, 0.5f, target: TaskTargetType.Leader)]);
+            Lists(squad, [], [Goal(TaskType.FollowSquadleader, 0.5f, target: TaskTargetType.Leader)]);
             Think(a);
             var bandits = a.SquadOf(Bandits, o, true, (o + new Vector2(10, 60), MathF.PI), (o + new Vector2(-10, 90), MathF.PI));
             var shooter = a.World.Characters.Spawn(new CharacterHot { Position = new Vector3(o.X, 150, o.Y + 150), Health = 100, Yaw = MathF.PI }, RangedTests.Shooter(100, 100, 30, Bandits), 0);
@@ -802,19 +802,19 @@ public class AggroTests
     {
         Meitou.Data.Fcs.FcsRecord Task(string id, TaskType type)
         {
-            var r = SyntheticTown.Rec(id, Meitou.Data.Fcs.FcsRecordType.AI_TASK, type.ToString());
+            var r = SyntheticTown.Rec(id, Data.Fcs.FcsRecordType.AiTask, type.ToString());
             (r.Ints["enum"], r.Ints["classification"], r.Ints["targeting"], r.Ints["ending"]) = ((int)type, (int)TaskPriority.Urgent, 0, 0);
             return r;
         }
         Meitou.Data.Fcs.FcsRecord Package(string id, string task)
         {
-            var r = SyntheticTown.Rec(id, Meitou.Data.Fcs.FcsRecordType.AI_PACKAGE, id);
+            var r = SyntheticTown.Rec(id, Data.Fcs.FcsRecordType.AiPackage, id);
             r.References["Leader AI Goals"] = [SyntheticTown.Ref(task, 0, 100, 0)];
             r.References["Squad AI Goals"] = [SyntheticTown.Ref(task, 0, 100, 0)];
             return r;
         }
         var file = new Meitou.Data.Fcs.FcsFile();
-        file.Records.AddRange([Task("200-t", TaskType.ATTACK_ENEMIES), Task("201-t", TaskType.PROTECT_OWN_SQUAD), Package("210-t", "200-t"), Package("211-t", "201-t")]);
+        file.Records.AddRange([Task("200-t", TaskType.AttackEnemies), Task("201-t", TaskType.ProtectOwnSquad), Package("210-t", "200-t"), Package("211-t", "201-t")]);
         var db = new GameDatabase();
         db.Apply(file, "test.mod");
         return db;
@@ -881,9 +881,9 @@ public class AggroTests
         a.Aggro.Combat = a.Combat;
         var o = new Vector2(2000, 2000);
         var town = a.FacingSquad(Town, o, o + new Vector2(0, 300), o, o + new Vector2(12, 0), o + new Vector2(-12, 0));
-        Lists(town, [Goal(TaskType.ATTACK_ENEMIES), Goal(TaskType.PROTECT_OWN_SQUAD)], [Goal(TaskType.PROTECT_OWN_SQUAD), Goal(TaskType.TERRITORIAL_AGGRESSION_BUT_DONT_LEAVE_HOME)]);
+        Lists(town, [Goal(TaskType.AttackEnemies), Goal(TaskType.ProtectOwnSquad)], [Goal(TaskType.ProtectOwnSquad), Goal(TaskType.TerritorialAggressionButDontLeaveHome)]);
         var gate = a.FacingSquad(Town, o, o + new Vector2(0, 300), o + new Vector2(-60, 0), o + new Vector2(-70, 10));
-        Lists(gate, [Goal(TaskType.PROTECT_ALLIES)], [Goal(TaskType.PROTECT_ALLIES)]);
+        Lists(gate, [Goal(TaskType.ProtectAllies)], [Goal(TaskType.ProtectAllies)]);
         a.World.RunTick();
         var bandits = a.FacingSquad(Bandits, o + new Vector2(0, 250), o, o + new Vector2(0, 250), o + new Vector2(15, 260), o + new Vector2(-15, 260));
         a.FacingSquad(Drifters, o + new Vector2(300, 0), o, o + new Vector2(300, 0));

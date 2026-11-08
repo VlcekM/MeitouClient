@@ -66,38 +66,38 @@ public sealed partial class CaptiveSystem
         var worker = table.IdOf(slot);
         switch (type)
         {
-            case TaskType.GATHER_SLAVES_FROM_CAGES:
-            case TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST:
-            case TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN:
-            {
-                int site = TownAt(data, table.Next[slot].Position);
-                bool export = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN;
-                if (export ? !ExportTown(world, cold, site) : SlavesOf(world, squad).Count(s => table.Cold(s)!.InSomething == HeldState.None && table.Cold(s)!.Medical is not { Incapacitated: true }) > 3) return null;
-                var cages = export ? CagesOf(world, site) : NearbyCages(world, site, table.Next[slot].Position, cold.Faction);
-                return GatherTarget(world, slot, cold, cages, type) is { } cage
-                    ? new CaptiveJob { Kind = CaptiveJobKind.Gather, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = cage.Site }
-                    : null;
-            }
-            case TaskType.GO_TO_SOMEWHERE_FOR_DELIVERING_SLAVES:
-            {
-                if (board.MissionTown < 0 || squad.Leader != worker || DeliverDesire(world, squad) <= 0) return null;
-                return new CaptiveJob { Kind = CaptiveJobKind.Deliver, Worker = worker, Captive = CharacterId.None, Cage = "", Faction = cold.Faction, Site = board.MissionTown };
-            }
-            case TaskType.SLAVE_GET_IN_MY_MASTERS_CAGE:
-            {
-                if (cold.SlaveState != 1 || cold.SlaveOwner < 0 || cold.InSomething != HeldState.None || cold.IsPlayer) return null;
-                // FUN_1408caaf0: the owner faction's free cages in the 3x3 zone cells round the slave, whatever the town (the finder's town argument is 0).
-                var at = table.Next[slot].Position;
-                Fixture? best = null;
-                float bestD = float.MaxValue;
-                foreach (var f in NearbyCages(world, -1, at, cold.SlaveOwner))
+            case TaskType.GatherSlavesFromCages:
+            case TaskType.GatherSlavesFromCagesIfFemaleOrBeast:
+            case TaskType.GatherSlavesFromCagesIfItsAnExportTown:
                 {
-                    if (!FixtureRegistry.IsFree(table, f) || Taken(f.Id)) continue;
-                    float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
-                    if (d < bestD) (best, bestD) = (f, d);
+                    int site = TownAt(data, table.Next[slot].Position);
+                    bool export = type == TaskType.GatherSlavesFromCagesIfItsAnExportTown;
+                    if (export ? !ExportTown(world, cold, site) : SlavesOf(world, squad).Count(s => table.Cold(s)!.InSomething == HeldState.None && table.Cold(s)!.Medical is not { Incapacitated: true }) > 3) return null;
+                    var cages = export ? CagesOf(world, site) : NearbyCages(world, site, table.Next[slot].Position, cold.Faction);
+                    return GatherTarget(world, slot, cold, cages, type) is { } cage
+                        ? new CaptiveJob { Kind = CaptiveJobKind.Gather, Worker = worker, Captive = cage.Occupant, Cage = cage.Id, Faction = cold.Faction, Site = cage.Site }
+                        : null;
                 }
-                return best is null ? null : new CaptiveJob { Kind = CaptiveJobKind.CageSelf, Worker = worker, Captive = worker, Cage = best.Id, Faction = cold.Faction, Site = best.Site };
-            }
+            case TaskType.GoToSomewhereForDeliveringSlaves:
+                {
+                    if (board.MissionTown < 0 || squad.Leader != worker || DeliverDesire(world, squad) <= 0) return null;
+                    return new CaptiveJob { Kind = CaptiveJobKind.Deliver, Worker = worker, Captive = CharacterId.None, Cage = "", Faction = cold.Faction, Site = board.MissionTown };
+                }
+            case TaskType.SlaveGetInMyMastersCage:
+                {
+                    if (cold.SlaveState != 1 || cold.SlaveOwner < 0 || cold.InSomething != HeldState.None || cold.IsPlayer) return null;
+                    // FUN_1408caaf0: the owner faction's free cages in the 3x3 zone cells round the slave, whatever the town (the finder's town argument is 0).
+                    var at = table.Next[slot].Position;
+                    Fixture? best = null;
+                    float bestD = float.MaxValue;
+                    foreach (var f in NearbyCages(world, -1, at, cold.SlaveOwner))
+                    {
+                        if (!FixtureRegistry.IsFree(table, f) || Taken(f.Id)) continue;
+                        float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
+                        if (d < bestD) (best, bestD) = (f, d);
+                    }
+                    return best is null ? null : new CaptiveJob { Kind = CaptiveJobKind.CageSelf, Worker = worker, Captive = worker, Cage = best.Id, Faction = cold.Faction, Site = best.Site };
+                }
         }
         return null;
     }
@@ -134,7 +134,7 @@ public sealed partial class CaptiveSystem
         foreach (var f in cages)
         {
             if (f.Owner == world.Player.Faction && world.Player.Faction >= 0 || !GatherCage(world, slot, cold, f, type, out var c)) continue;
-            if (type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST) return f;
+            if (type == TaskType.GatherSlavesFromCagesIfFemaleOrBeast) return f;
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);
         }
@@ -146,7 +146,7 @@ public sealed partial class CaptiveSystem
     {
         var table = world.Characters;
         c = cold;
-        bool export = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_ITS_AN_EXPORT_TOWN, unholy = type == TaskType.GATHER_SLAVES_FROM_CAGES_IF_FEMALE_OR_BEAST;
+        bool export = type == TaskType.GatherSlavesFromCagesIfItsAnExportTown, unholy = type == TaskType.GatherSlavesFromCagesIfFemaleOrBeast;
         var goals = export ? SquadGoals.Of(world) : null;
         var asker = table.IdOf(slot);
         // 173 claims nothing (FUN_1408db510 with the finder limit 0x100): gatherers of any squad may head for the same cage, the first lifts.
@@ -167,7 +167,7 @@ public sealed partial class CaptiveSystem
     /// <summary>The cage and the captive of every job, in the squad's goal list the finders ask (<see cref="SquadGoals"/>).</summary>
     void IGoalSource.Publish(World world, SquadGoals goals)
     {
-        foreach (var j in jobs)
+        foreach (var j in _jobs)
         {
             if (!world.Characters.TryResolveNext(j.Worker, out int w) || world.Characters.Cold(w) is not { } c) continue;
             goals.Add(c.SquadId, j.Worker, GoalTarget.At(j.Cage));
@@ -181,34 +181,34 @@ public sealed partial class CaptiveSystem
         switch (j.Kind)
         {
             case CaptiveJobKind.Gather:
-            {
-                var cage = world.Fixtures.Find(j.Cage);
-                if (cage is null || !table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { IsImprisoned: true, Medical.Dead: false } cc || cc.InWhat != cage.Id)
-                    return End(world, j, CaptiveEventKind.GaveUp);
-                if (!Walk(world, j, w, cage, out bool arrived)) return End(world, j, CaptiveEventKind.GaveUp);
-                if (!arrived) return true;
-                TaskStart.Stand(table, w);
-                if (world.Squads.Find(wc.SquadId) is not { } squad) return End(world, j, CaptiveEventKind.GaveUp);
-                if (cage.Lock is { } l) l.Locked = false;
-                world.Fixtures.LiftOut(world, j.Captive, w);
-                cc.Escaped = false;
-                FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
-                Join(world, j.Captive, cc, squad, SquadRole.Slave);
-                Note(world, CaptiveEventKind.Gathered, j);
-                return End(world, j, null);
-            }
+                {
+                    var cage = world.Fixtures.Find(j.Cage);
+                    if (cage is null || !table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { IsImprisoned: true, Medical.Dead: false } cc || cc.InWhat != cage.Id)
+                        return End(world, j, CaptiveEventKind.GaveUp);
+                    if (!Walk(world, j, w, cage, out bool arrived)) return End(world, j, CaptiveEventKind.GaveUp);
+                    if (!arrived) return true;
+                    TaskStart.Stand(table, w);
+                    if (world.Squads.Find(wc.SquadId) is not { } squad) return End(world, j, CaptiveEventKind.GaveUp);
+                    if (cage.Lock is { } l) l.Locked = false;
+                    world.Fixtures.LiftOut(world, j.Captive, w);
+                    cc.Escaped = false;
+                    FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
+                    Join(world, j.Captive, cc, squad, SquadRole.Slave);
+                    Note(world, CaptiveEventKind.Gathered, j);
+                    return End(world, j, null);
+                }
             case CaptiveJobKind.CageSelf:
-            {
-                var cage = world.Fixtures.Find(j.Cage);
-                if (cage is null || !FixtureRegistry.IsFree(table, cage) || wc.InSomething != HeldState.None) return End(world, j, CaptiveEventKind.GaveUp);
-                if (!Walk(world, j, w, cage, out bool arrived)) return End(world, j, CaptiveEventKind.GaveUp);
-                if (!arrived) return true;
-                TaskStart.Stand(table, w);
-                wc.Engaged = false;
-                bool caged = world.Fixtures.Imprison(world, j.Worker, cage);
-                if (caged) Note(world, CaptiveEventKind.Caged, j);
-                return End(world, j, caged ? null : CaptiveEventKind.GaveUp);
-            }
+                {
+                    var cage = world.Fixtures.Find(j.Cage);
+                    if (cage is null || !FixtureRegistry.IsFree(table, cage) || wc.InSomething != HeldState.None) return End(world, j, CaptiveEventKind.GaveUp);
+                    if (!Walk(world, j, w, cage, out bool arrived)) return End(world, j, CaptiveEventKind.GaveUp);
+                    if (!arrived) return true;
+                    TaskStart.Stand(table, w);
+                    wc.Engaged = false;
+                    bool caged = world.Fixtures.Imprison(world, j.Worker, cage);
+                    if (caged) Note(world, CaptiveEventKind.Caged, j);
+                    return End(world, j, caged ? null : CaptiveEventKind.GaveUp);
+                }
             case CaptiveJobKind.Deliver:
                 return StepDeliver(world, j, w, wc);
         }
@@ -247,8 +247,8 @@ public sealed partial class CaptiveSystem
         var roles = board.Roles[(int)AiSystem.RoleOf(squad, j.Worker, wc)];
         bool hands = false;
         foreach (var g in roles)
-            if (g.InWindow(hour) && (g.Task.Type == TaskType.GIVE_ALL_MY_SLAVES_TO
-                || g.Task.Type == TaskType.GIVE_ALL_MY_SLAVES_TO_IF_ITS_AN_IMPORT_TOWN && site.Town.Type is TownType.Prison or TownType.SlaveCamp)) hands = true;
+            if (g.InWindow(hour) && (g.Task.Type == TaskType.GiveAllMySlavesTo
+                || g.Task.Type == TaskType.GiveAllMySlavesToIfItsAnImportTown && site.Town.Type is TownType.Prison or TownType.SlaveCamp)) hands = true;
         if (!hands) return End(world, j, CaptiveEventKind.GaveUp);
         int owner = j.Site < data.SiteFactions.Count && data.SiteFactions[j.Site] >= 0 ? data.SiteFactions[j.Site] : wc.Faction;
         // The receiver finder (FUN_1408ca950) finding nobody makes the goal unwanted: nothing is handed over, the next sweep retries.
@@ -270,7 +270,7 @@ public sealed partial class CaptiveSystem
                 if (d < bestD) (best, bestD) = (f, d);
             }
             if (best is not null) world.Fixtures.Imprison(world, id, best);
-            if (Settings.RecordLog) log.Add(new CaptiveEvent(world.Tick, CaptiveEventKind.Delivered, j.Kind, j.Worker, id));
+            if (Settings.RecordLog) _log.Add(new CaptiveEvent(world.Tick, CaptiveEventKind.Delivered, j.Kind, j.Worker, id));
         }
         return End(world, j, null);
     }

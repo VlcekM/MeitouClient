@@ -12,26 +12,26 @@ public sealed class GoalClaims
     /// <summary>The timer an entry is given, <c>0x40400000</c>.</summary>
     public const float Seconds = 3;
 
-    readonly Dictionary<(CharacterId Worker, GoalTarget Target), (int Squad, long Expires)> map = [];
-    readonly List<(CharacterId Worker, GoalTarget Target)> expired = [];
-    long ticks = 90;
+    readonly Dictionary<(CharacterId Worker, GoalTarget Target), (int Squad, long Expires)> _map = [];
+    readonly List<(CharacterId Worker, GoalTarget Target)> _expired = [];
+    long _ticks = 90;
 
-    internal void Configure(float tickSeconds) => ticks = (long)MathF.Ceiling(Seconds / tickSeconds);
+    internal void Configure(float tickSeconds) => _ticks = (long)MathF.Ceiling(Seconds / tickSeconds);
 
     internal long Now { get; set; }
 
     /// <summary>Gives the entry a full timer (made when absent).</summary>
-    internal void Refresh(int squad, CharacterId worker, GoalTarget target) => map[(worker, target)] = (squad, Now + ticks);
+    internal void Refresh(int squad, CharacterId worker, GoalTarget target) => _map[(worker, target)] = (squad, Now + _ticks);
 
     /// <summary>The entries whose timer has not run out at <paramref name="tick"/>; the others are dropped.</summary>
     internal IEnumerable<(int Squad, CharacterId Worker, GoalTarget Target)> Live(long tick)
     {
-        expired.Clear();
-        foreach (var (key, value) in map)
-            if (value.Expires < tick) expired.Add(key);
-        foreach (var key in expired) map.Remove(key);
-        foreach (var (key, value) in map) yield return (value.Squad, key.Worker, key.Target);
+        _expired.Clear();
+        foreach (var (key, value) in _map)
+            if (value.Expires < tick) _expired.Add(key);
+        foreach (var key in _expired) _map.Remove(key);
+        foreach (var (key, value) in _map) yield return (value.Squad, key.Worker, key.Target);
     }
 
-    public int Count => map.Count;
+    public int Count => _map.Count;
 }

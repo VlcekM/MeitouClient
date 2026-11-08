@@ -102,7 +102,7 @@ public sealed record CampaignData
         {
             foreach (var parent in rec.GetReferences("inherits from"))
             {
-                if (db.Find(parent.TargetStringId) is not { Type: FcsRecordType.FACTION_CAMPAIGN } p || !path.Add(p.StringId)) continue;
+                if (db.Find(parent.TargetStringId) is not { Type: FcsRecordType.FactionCampaign } p || !path.Add(p.StringId)) continue;
                 Ancestors(p, path);
                 Apply(p);
                 path.Remove(p.StringId);
@@ -171,16 +171,16 @@ public sealed record CampaignData
 /// <summary>Every FACTION_CAMPAIGN of a database, read once per inheritance rule (Faithful: ancestors twice; Meitou: once).</summary>
 public sealed class CampaignDatabase(GameDatabase db)
 {
-    readonly Dictionary<string, CampaignData?>[] cache = [new(StringComparer.Ordinal), new(StringComparer.Ordinal)];
+    readonly Dictionary<string, CampaignData?>[] _cache = [new(StringComparer.Ordinal), new(StringComparer.Ordinal)];
 
     /// <summary>The campaign <paramref name="id"/> (null: not a FACTION_CAMPAIGN).</summary>
     public CampaignData? Find(string id, bool ancestorsTwice)
     {
-        var map = cache[ancestorsTwice ? 1 : 0];
+        var map = _cache[ancestorsTwice ? 1 : 0];
         lock (map)
         {
             if (map.TryGetValue(id, out var c)) return c;
-            c = db.Find(id) is { Type: FcsRecordType.FACTION_CAMPAIGN } r ? CampaignData.From(db, r, ancestorsTwice) : null;
+            c = db.Find(id) is { Type: FcsRecordType.FactionCampaign } r ? CampaignData.From(db, r, ancestorsTwice) : null;
             map[id] = c;
             return c;
         }

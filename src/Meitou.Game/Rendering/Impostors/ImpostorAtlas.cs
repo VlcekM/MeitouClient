@@ -76,15 +76,22 @@ public sealed class ImpostorAtlas : IDisposable
     public ImpostorTexture? this[ImpostorMap map] => Textures.FirstOrDefault(t => t.Map == map);
 
     /// <summary>The native block a read atlas's levels are slices of; null for a baked one.</summary>
-    NativeBuffer? block;
+    NativeBuffer? _block;
 
     /// <summary>Frees the levels' native block: the levels must not be read after this.</summary>
-    public void Dispose() => ((IDisposable?)block)?.Dispose();
+    public void Dispose() => ((IDisposable?)_block)?.Dispose();
 
     /// <summary>This atlas's shape without its maps (no textures, <see cref="Levels"/> 0): what drawing reads once the maps are on the GPU.</summary>
     public ImpostorAtlas WithoutLevels() => new()
     {
-        Grid = Grid, FramePixels = FramePixels, Centre = Centre, Radius = Radius, Gloss = Gloss, Name = Name, FirstLevel = FirstLevel, Textures = [],
+        Grid = Grid,
+        FramePixels = FramePixels,
+        Centre = Centre,
+        Radius = Radius,
+        Gloss = Gloss,
+        Name = Name,
+        FirstLevel = FirstLevel,
+        Textures = [],
     };
 
     public void Write(Stream stream)
@@ -196,7 +203,7 @@ public sealed class ImpostorAtlas : IDisposable
                 }
                 if (hash != expected) return null;
                 ok = true;
-                return new ImpostorAtlas { Grid = grid, FramePixels = frame, Centre = centre, Radius = radius, Gloss = gloss, Name = name, Textures = textures, FirstLevel = firstLevel, block = block };
+                return new ImpostorAtlas { Grid = grid, FramePixels = frame, Centre = centre, Radius = radius, Gloss = gloss, Name = name, Textures = textures, FirstLevel = firstLevel, _block = block };
             }
             finally
             {

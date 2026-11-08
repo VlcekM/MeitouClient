@@ -47,9 +47,9 @@ public sealed partial class MedicalState
         else
         {
             float bite = rate * dt;
-            for (int i = parts.Length - 1; i >= 0; i--)
+            for (int i = _parts.Length - 1; i >= 0; i--)
             {
-                var p = parts[i];
+                var p = _parts[i];
                 bool limb = p.Template.LimbSlot is >= 0 and < 4;
                 if (limb && p.Limb != LimbState.Original) continue;   // only a limb in its original state is handled (FUN_1400cd450 == 0): not a stump, a prosthetic or a crushed one
                 if (p.Flesh - 1.1f * p.Stun > -p.MaxHp)

@@ -35,8 +35,8 @@ public sealed record VendorList
     public IReadOnlyList<RecordLink> Manufacturers { get; init; } = [];
 
     /// <summary>The record types a vendor list hands out as items.</summary>
-    public static bool IsItemType(FcsRecordType t) => t is FcsRecordType.ITEM or FcsRecordType.WEAPON or FcsRecordType.ARMOUR or FcsRecordType.CROSSBOW
-        or FcsRecordType.LIMB_REPLACEMENT or FcsRecordType.CONTAINER or FcsRecordType.MAP_ITEM;
+    public static bool IsItemType(FcsRecordType t) => t is FcsRecordType.Item or FcsRecordType.Weapon or FcsRecordType.Armour or FcsRecordType.Crossbow
+        or FcsRecordType.LimbReplacement or FcsRecordType.Container or FcsRecordType.MapItem;
 
     public static VendorList From(GameDatabase db, GameRecord r)
     {
@@ -49,15 +49,15 @@ public sealed record VendorList
                 if (db.Find(gear ? e.TargetStringId + ".TECH.1" : e.TargetStringId) is not { } target) continue;
                 if (gear || list == "blueprints")
                 {
-                    if (target.Type == FcsRecordType.RESEARCH) entries.Add(new VendorEntry(target.StringId, target.Type, e.Values.Value0 == 0 ? 100 : e.Values.Value0));
+                    if (target.Type == FcsRecordType.Research) entries.Add(new VendorEntry(target.StringId, target.Type, e.Values.Value0 == 0 ? 100 : e.Values.Value0));
                 }
                 else if (IsItemType(target.Type)) entries.Add(new VendorEntry(target.StringId, target.Type, e.Values.Value0 == 0 ? 100 : e.Values.Value0));
-                else if (target.Type == FcsRecordType.WEAPON_MANUFACTURER) makers.Add(RecordLink.From(e));
+                else if (target.Type == FcsRecordType.WeaponManufacturer) makers.Add(RecordLink.From(e));
             }
         // A weapon is stocked only when it is a `weapon types` entry of one of the list's manufacturers (<b>Verified</b>, `FUN_140956ba0`: "No valid manufacturer found for weapon" otherwise); no manufacturer
         // or manufacturers without weapon types skip the weapons altogether.
-        var makable = makers.Where(m => db.Find(m.Id) is { Type: FcsRecordType.WEAPON_MANUFACTURER }).SelectMany(m => db.Find(m.Id)!.GetReferences("weapon types")).Select(t => t.TargetStringId).ToHashSet();
-        entries.RemoveAll(e => e.Type == FcsRecordType.WEAPON && !makable.Contains(e.Id));
+        var makable = makers.Where(m => db.Find(m.Id) is { Type: FcsRecordType.WeaponManufacturer }).SelectMany(m => db.Find(m.Id)!.GetReferences("weapon types")).Select(t => t.TargetStringId).ToHashSet();
+        entries.RemoveAll(e => e.Type == FcsRecordType.Weapon && !makable.Contains(e.Id));
         int count = RecordReading.Int(r, "items count", 40);
         return new VendorList
         {

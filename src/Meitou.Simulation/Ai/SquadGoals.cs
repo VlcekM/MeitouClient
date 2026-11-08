@@ -23,8 +23,8 @@ public interface IGoalSource
 /// </summary>
 public sealed class SquadGoals
 {
-    readonly List<(int Squad, CharacterId Worker, GoalTarget Target)> entries = [];
-    GoalClaims? book;
+    readonly List<(int Squad, CharacterId Worker, GoalTarget Target)> _entries = [];
+    GoalClaims? _book;
 
     /// <summary>
     /// A snapshot of every source's work now plus the claims that ended within the last <see cref="GoalClaims.Seconds"/> (an entry of the original's list stays that long after its last
@@ -33,11 +33,11 @@ public sealed class SquadGoals
     public static SquadGoals Of(World world)
     {
         world.Claims.Now = world.Tick;
-        var goals = new SquadGoals { book = world.Claims };
+        var goals = new SquadGoals { _book = world.Claims };
         foreach (var system in world.Systems)
             if (system is IGoalSource source) source.Publish(world, goals);
-        goals.entries.Clear();
-        goals.entries.AddRange(world.Claims.Live(world.Tick));
+        goals._entries.Clear();
+        goals._entries.AddRange(world.Claims.Live(world.Tick));
         return goals;
     }
 
@@ -45,15 +45,15 @@ public sealed class SquadGoals
     public void Add(int squad, CharacterId worker, GoalTarget target)
     {
         if (target.Body.IsNone && target.Place is null) return;
-        entries.Add((squad, worker, target));
-        book?.Refresh(squad, worker, target);
+        _entries.Add((squad, worker, target));
+        _book?.Refresh(squad, worker, target);
     }
 
     /// <summary>How many other members of <paramref name="squad"/> work on <paramref name="target"/> (<c>FUN_1402690e0</c>): not the asker, nor the target itself.</summary>
     public int Working(int squad, CharacterId asker, GoalTarget target)
     {
         int n = 0;
-        foreach (var (s, worker, t) in entries)
+        foreach (var (s, worker, t) in _entries)
             if (s == squad && worker != asker && worker != target.Body && t == target) n++;
         return n;
     }
@@ -61,7 +61,7 @@ public sealed class SquadGoals
     /// <summary>Whether <paramref name="worker"/> itself works on <paramref name="target"/> (<c>FUN_140269190</c>).</summary>
     public bool IsMine(CharacterId worker, GoalTarget target)
     {
-        foreach (var (_, w, t) in entries)
+        foreach (var (_, w, t) in _entries)
             if (w == worker && t == target) return true;
         return false;
     }

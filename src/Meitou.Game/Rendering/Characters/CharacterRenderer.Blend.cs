@@ -39,7 +39,7 @@ internal sealed unsafe partial class CharacterRenderer
             foreach (var (name, value) in source.Weights) if (!weights.ContainsKey(name)) weights[name] = 0;
             foreach (var name in weights.Keys.ToArray())
                 weights[name] = (source.Weights.TryGetValue(name, out float was) ? was : 0) * (1 - t) + weights[name] * t;
-            if (target.Poses.Deltas(weights, target.CutHorns) is { } deltas) to.MorphBase = content.Morphs.Scratch(deltas);
+            if (target.Poses.Deltas(weights, target.CutHorns) is { } deltas) to.MorphBase = _content.Morphs.Scratch(deltas);
         }
         to.Blending = true;
     }
@@ -63,7 +63,10 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>The values <paramref name="asset"/> was built with (taken when it is first blended, before anything changes them).</summary>
     static AssetRest RestOf(CharacterAsset asset) => asset.Rest ??= new AssetRest
     {
-        Shape = asset.Shape, GroundOffset = asset.GroundOffset, Fixed = [.. asset.Fixed], MorphBase = asset.MorphBase,
+        Shape = asset.Shape,
+        GroundOffset = asset.GroundOffset,
+        Fixed = [.. asset.Fixed],
+        MorphBase = asset.MorphBase,
         Colours = [.. asset.Parts.Select(p => (p.Material.SkinTone, p.Material.HairColour))],
     };
 

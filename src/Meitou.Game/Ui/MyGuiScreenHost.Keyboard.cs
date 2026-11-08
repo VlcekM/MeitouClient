@@ -15,8 +15,8 @@ public sealed partial class MyGuiScreenHost
     static readonly Vector4 RingColour = new(0.769f, 0.627f, 0.384f, 1);   // brass-light #c4a062
     static readonly Dictionary<string, string> NoMouse = new(StringComparer.Ordinal) { ["NeedMouse"] = "false" };
     /// <summary>The button that Enter and Space press (Meitou's keyboard focus), on the top window.</summary>
-    (string Screen, string Widget)? keyButton;
-    string localClipboard = "";
+    (string Screen, string Widget)? _keyButton;
+    string _localClipboard = "";
 
     /// <summary>The system clipboard's text (null: unavailable) and where copied text goes; the host that owns a window sets them. Without them the boxes share a clipboard of their own.</summary>
     public Func<string?>? ClipboardReader { get; set; }
@@ -24,7 +24,7 @@ public sealed partial class MyGuiScreenHost
     /// <summary>Draw a ring (2 px <c>brass-light</c>, offset 2) round the button the keyboard is on; the Meitou UI mode's focus look (docs/meitou-ui.md). The Faithful mode has none.</summary>
     public bool FocusRing { get; set; }
     /// <summary>The focused box is read-only: it takes only the keys that read it.</summary>
-    public bool FocusReadOnly => edit?.ReadOnly == true;
+    public bool FocusReadOnly => _edit?.ReadOnly == true;
 
     static bool Is(UiControl c, string key) => c.Properties.GetValueOrDefault(key) == "true";
     static bool Visible(UiControl c) => c.Bounds.Width > 0 && c.Bounds.Height > 0 && (c.Clip is not { } clip || c.Bounds.Intersect(clip) is { Width: > 0, Height: > 0 });
@@ -40,30 +40,33 @@ public sealed partial class MyGuiScreenHost
         return new(text)
         {
             MaxLength = int.TryParse(c.Properties.GetValueOrDefault("MaxTextLength"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int max) && max > 0 ? max : DefaultMaxLength,
-            MultiLine = Is(c, "MultiLine") && !password, WordWrap = Is(c, "WordWrap"), Password = password, ReadOnly = Is(c, "ReadOnly"),
+            MultiLine = Is(c, "MultiLine") && !password,
+            WordWrap = Is(c, "WordWrap"),
+            Password = password,
+            ReadOnly = Is(c, "ReadOnly"),
         };
     }
 
     /// <summary>Puts the typing focus on an edit box; a read-only one (MyGUI focuses them to select and copy) keeps its text out of the screen's typed text, which would freeze it.</summary>
     void FocusEdit(string id, UiControl c)
     {
-        var s = screens[id];
+        var s = _screens[id];
         bool readOnly = Is(c, "ReadOnly");
-        keyButton = null;
-        focus = (id, c.Name);
+        _keyButton = null;
+        _focus = (id, c.Name);
         if (!readOnly) s.Text.TryAdd(c.Name, c.Caption);
-        edit = NewBuffer(c, readOnly ? c.Caption : s.Text[c.Name]);
+        _edit = NewBuffer(c, readOnly ? c.Caption : s.Text[c.Name]);
     }
 
     string? ReadClipboard()
     {
-        try { return ClipboardReader?.Invoke() ?? localClipboard; }
-        catch (Exception) { return localClipboard; }   // no system clipboard: the boxes' own
+        try { return ClipboardReader?.Invoke() ?? _localClipboard; }
+        catch (Exception) { return _localClipboard; }   // no system clipboard: the boxes' own
     }
 
     void WriteClipboard(string text)
     {
-        localClipboard = text;
+        _localClipboard = text;
         try { ClipboardWriter?.Invoke(text); }
         catch (Exception) { /* no system clipboard: the boxes' own */ }
     }
@@ -74,15 +77,15 @@ public sealed partial class MyGuiScreenHost
     /// </summary>
     bool Clipboard(UiEditKey key)
     {
-        if (edit is null) return false;
+        if (_edit is null) return false;
         if (key == UiEditKey.Paste)
         {
-            if (!edit.ReadOnly && ReadClipboard() is { Length: > 0 } text) { edit.Insert(text); PublishEdit(); }
+            if (!_edit.ReadOnly && ReadClipboard() is { Length: > 0 } text) { _edit.Insert(text); PublishEdit(); }
             return true;
         }
-        if (edit.Password || edit.SelectionLength == 0) return true;
-        WriteClipboard(edit.SelectedText);
-        if (key == UiEditKey.Cut && !edit.ReadOnly) { edit.DeleteSelection(); PublishEdit(); }
+        if (_edit.Password || _edit.SelectionLength == 0) return true;
+        WriteClipboard(_edit.SelectedText);
+        if (key == UiEditKey.Cut && !_edit.ReadOnly) { _edit.DeleteSelection(); PublishEdit(); }
         return true;
     }
 
@@ -91,8 +94,8 @@ public sealed partial class MyGuiScreenHost
     /// </summary>
     public bool EditEnter(bool ctrl)
     {
-        if (edit is null || edit.ReadOnly) return false;
-        if (edit.MultiLine && !ctrl) { edit.Insert("\n"); PublishEdit(); return true; }
+        if (_edit is null || _edit.ReadOnly) return false;
+        if (_edit.MultiLine && !ctrl) { _edit.Insert("\n"); PublishEdit(); return true; }
         Submit();
         return true;
     }
@@ -103,34 +106,34 @@ public sealed partial class MyGuiScreenHost
     /// </summary>
     bool CycleFocus(bool backwards)
     {
-        if (frame.LastOrDefault(f => !screens[f.Id].Panel) is not { } top) return false;   // Tab never moves into a HUD panel (it is change_squad there)
+        if (_frame.LastOrDefault(f => !_screens[f.Id].Panel) is not { } top) return false;   // Tab never moves into a HUD panel (it is change_squad there)
         var stops = top.Controls.Where(c => IsEditStop(c) || IsButtonStop(c)).ToList();
         if (stops.Count == 0) return false;
-        int current = stops.FindIndex(c => focus == (top.Id, c.Name) || keyButton == (top.Id, c.Name)), firstEdit = stops.FindIndex(IsEditStop);
-        if (current < 0 && firstEdit < 0 && !screens[top.Id].Modal) return false;
+        int current = stops.FindIndex(c => _focus == (top.Id, c.Name) || _keyButton == (top.Id, c.Name)), firstEdit = stops.FindIndex(IsEditStop);
+        if (current < 0 && firstEdit < 0 && !_screens[top.Id].Modal) return false;
         int next = current < 0 ? backwards ? stops.Count - 1 : Math.Max(0, firstEdit) : (current + (backwards ? stops.Count - 1 : 1)) % stops.Count;
         if (stops[next].Type == "EditBox") FocusEdit(top.Id, stops[next]);
-        else { focus = null; edit = null; keyButton = (top.Id, stops[next].Name); }
+        else { _focus = null; _edit = null; _keyButton = (top.Id, stops[next].Name); }
         return true;
     }
 
     /// <summary>Enter or Space on the button the keyboard is on: it is pressed like a click on its middle (so tabs, sounds and events run as for the pointer). False: no button has the focus.</summary>
     public bool ActivateFocused()
     {
-        if (keyButton is not { } k || frame.LastOrDefault() is not { } top || top.Id != k.Screen) return false;
-        if (top.Controls.FirstOrDefault(c => c.Name == k.Widget && IsButtonStop(c)) is not { } button) { keyButton = null; return false; }
+        if (_keyButton is not { } k || _frame.LastOrDefault() is not { } top || top.Id != k.Screen) return false;
+        if (top.Controls.FirstOrDefault(c => c.Name == k.Widget && IsButtonStop(c)) is not { } button) { _keyButton = null; return false; }
         var at = new Vector2(button.Bounds.X + button.Bounds.Width / 2, button.Bounds.Y + button.Bounds.Height / 2);
         if (Pick(at) is { } hit && hit.Id == top.Id && hit.Control.Name == button.Name) PointerDown(at);
         else Activated?.Invoke(new(top.Id, button.Name, button.Action));
-        if (open.Count > 0 && open[^1] == k.Screen) keyButton = k;   // the press may have closed the window or opened another
+        if (_open.Count > 0 && _open[^1] == k.Screen) _keyButton = k;   // the press may have closed the window or opened another
         return true;
     }
 
     /// <summary>After a screen is arranged: a read-only focused box takes the text the screen shows now, and the button the keyboard is on gets the ring when <see cref="FocusRing"/> is on.</summary>
     void ArrangeKeyboard(string id, List<UiControl> controls)
     {
-        if (focus is { } f && f.Screen == id && edit is { ReadOnly: true } && controls.FirstOrDefault(c => c.Name == f.Widget) is { } box && box.Caption != edit.Text) edit.Set(box.Caption);
-        if (!FocusRing || keyButton is not { } k || k.Screen != id || controls.FirstOrDefault(c => c.Name == k.Widget && IsButtonStop(c)) is not { } button) return;
+        if (_focus is { } f && f.Screen == id && _edit is { ReadOnly: true } && controls.FirstOrDefault(c => c.Name == f.Widget) is { } box && box.Caption != _edit.Text) _edit.Set(box.Caption);
+        if (!FocusRing || _keyButton is not { } k || k.Screen != id || controls.FirstOrDefault(c => c.Name == k.Widget && IsButtonStop(c)) is not { } button) return;
         var b = button.Bounds;
         void Bar(string part, float x, float y, float w, float h) => controls.Add(new("KeyFocusRing." + part, "Widget", new(x, y, w, h), "", "", "", true, NoMouse, RingColour, Pickable: false));
         Bar("top", b.X - 4, b.Y - 4, b.Width + 8, 2);

@@ -23,7 +23,7 @@ public static class SaveLimbs
         var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
         foreach (var r in file.Records) byId.TryAdd(r.StringId, r);
         foreach (var x in refs)
-            if ((uint)x.Value0 < Slots && byId.TryGetValue(x.TargetStringId, out var r) && r.RecordType == FcsRecordType.INVENTORY_ITEM_STATE)
+            if ((uint)x.Value0 < Slots && byId.TryGetValue(x.TargetStringId, out var r) && r.RecordType == FcsRecordType.InventoryItemState)
                 items[x.Value0] = SaveInventory.ItemOf(r);
         return items;
     }

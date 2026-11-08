@@ -91,7 +91,7 @@ public sealed class GameClock
     public string TimeText => $"{Hour:00}:{Minute:00}";
 
     /// <summary>The day label, the game's format <c>Day: {n}</c>.</summary>
-    public string DayText => Meitou.Localisation.Loc.Tr("Day: {1,num}", Day);
+    public string DayText => Loc.Tr("Day: {1,num}", Day);
 
     public bool IsDay(double hour) => hour > Sunrise && hour < Sunset;
 

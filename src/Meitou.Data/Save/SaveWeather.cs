@@ -33,7 +33,7 @@ public static class SaveWeather
             int end = biomes.Ints.GetValueOrDefault(p + "_w_wi_end", start);
             int t0 = biomes.Ints.GetValueOrDefault(p + "_w_wi_bu_t_s"), t1 = biomes.Ints.GetValueOrDefault(p + "_w_wi_bu_t_e");
             float speed = biomes.Floats.GetValueOrDefault(p + "_w_wi_speed");
-            var dir = biomes.Vector3s.GetValueOrDefault(p + "_w_wi_dir", Vector3.UnitX);
+            var dir = biomes.Vector3S.GetValueOrDefault(p + "_w_wi_dir", Vector3.UnitX);
             float heading = MathF.Atan2(dir.Z, dir.X);
             // The last wind change: from (speed, angle) at t0 to the targets at t1 (a finished one the game loaded has both times 0); without its keys, the current wind held.
             var wind = biomes.Floats.ContainsKey(p + "_w_wi_bu_a_e")
@@ -71,7 +71,7 @@ public static class SaveWeather
             biomes.Ints[p + "_w_s_end"] = r.SeasonEndDay;
             biomes.Strings[p + "_w_w_id"] = r.WeatherId;
             biomes.Floats[p + "_w_wi_speed"] = speed;
-            biomes.Vector3s[p + "_w_wi_dir"] = new Vector3(direction.X, 0, direction.Y);
+            biomes.Vector3S[p + "_w_wi_dir"] = new Vector3(direction.X, 0, direction.Y);
             biomes.Floats[p + "_w_wi_time"] = (float)(Math.Max(0, now.Minutes - r.WeatherStartMinute) * SecondsPerGameMinute);
             biomes.Ints[p + "_w_wi_start"] = Minute(r.WeatherStartMinute);
             biomes.Ints[p + "_w_wi_end"] = Minute(r.WeatherEndMinute);

@@ -13,7 +13,7 @@ static class SolidHits
     /// <summary>Length of the pieces a segment is cut into for the buildings' 32-unit collision cells (units).</summary>
     const float Chunk = 32;
 
-    [ThreadStatic] static List<Vector3>? triangles;
+    [ThreadStatic] static List<Vector3>? s_triangles;
 
     /// <summary>The fraction of <paramref name="seg"/> from <paramref name="from"/> where it first meets the terrain or a building, -1 when it meets neither.</summary>
     public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep, out bool building, bool roofs = false)
@@ -44,7 +44,7 @@ static class SolidHits
     /// <summary>The fraction of the segment where it first crosses a building's collision triangle before <paramref name="limit"/>, -1 for none.</summary>
     static float Buildings(IRagdollEnvironment env, Vector3 from, Vector3 seg, float limit, bool roofs)
     {
-        var list = triangles ??= [];
+        var list = s_triangles ??= [];
         int pieces = Math.Max(1, (int)MathF.Ceiling(seg.Length() * limit / Chunk));
         for (int k = 0; k < pieces; k++)
         {

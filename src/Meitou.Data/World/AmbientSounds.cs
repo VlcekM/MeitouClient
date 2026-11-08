@@ -20,7 +20,7 @@ public sealed record AmbientSound(string Id, string Emitter, float Chance, float
     /// <summary>The distance in world units beyond which the emitter is stopped.</summary>
     public float Range => Cutoff * UnitsPerCutoff;
 
-    public static AmbientSound? From(GameRecord record) => record.Type != FcsRecordType.AMBIENT_SOUND ? null : new(
+    public static AmbientSound? From(GameRecord record) => record.Type != FcsRecordType.AmbientSound ? null : new(
         record.StringId, record.GetString("emitter"), record.GetFloat("chance", 1), record.GetFloat("cutoff", 50), record.GetFloat("intensity"),
         record.GetFloat("efficiency multiplier"), record.GetBool("needs power"));
 

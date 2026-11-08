@@ -46,7 +46,7 @@ public sealed partial class ProductionSystem
             return;
         }
         m.Status = 2;
-        float amount = m.Yield * m.Data.Rate * WorkFactor(world, m) * dt * constants.ProductionSpeed * Settings.ProductionOption;
+        float amount = m.Yield * m.Data.Rate * WorkFactor(world, m) * dt * _constants.ProductionSpeed * Settings.ProductionOption;
         if (amount == 0) return;
         m.BurnLevel -= amount;
         output.Progress += amount;
@@ -72,15 +72,15 @@ public sealed partial class ProductionSystem
     /// </summary>
     float MetalOf(ItemInstance item)
     {
-        if (db.Find(item.Record) is not { } r) return 0;
+        if (_db.Find(item.Record) is not { } r) return 0;
         switch (item.Type)
         {
-            case FcsRecordType.ITEM:
+            case FcsRecordType.Item:
                 return r.GetReferences("ingredients").Count > 0 ? IronIn(r, 0) * item.Quantity * 0.5f : 0;
-            case FcsRecordType.ARMOUR:
+            case FcsRecordType.Armour:
                 if (r.GetInt("material type") is not (2 or 3)) return 0;
                 return TotalCoverage(r) * 0.01f * (1 - r.GetFloat("fabrics amount", 0.2f)) * 2;
-            case FcsRecordType.WEAPON:
+            case FcsRecordType.Weapon:
                 return Math.Clamp(item.UnitWeight * 0.2f, 0.5f, 5);
             default:
                 return 0;
@@ -98,7 +98,7 @@ public sealed partial class ProductionSystem
         foreach (var r in record.GetReferences("ingredients"))
         {
             if (r.TargetStringId == RawIron) iron += r.Values.Value0 * 0.01f;
-            else if (db.Find(r.TargetStringId) is { } ingredient) iron += IronIn(ingredient, depth + 1);
+            else if (_db.Find(r.TargetStringId) is { } ingredient) iron += IronIn(ingredient, depth + 1);
         }
         return iron;
     }

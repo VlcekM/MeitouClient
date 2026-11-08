@@ -26,11 +26,11 @@ internal sealed class ShadowFogCap
     /// <summary>Frames a pending radius is waited for at most (a solve is a few frames; this only guards against one that never lands).</summary>
     public const int PendingFrames = 300;
 
-    float? applied;
-    int missing, pending;
+    float? _applied;
+    int _missing, _pending;
 
     /// <summary>The cap now (null: none).</summary>
-    public float? Current => applied;
+    public float? Current => _applied;
 
     /// <summary>The grid value at or above <paramref name="distance"/> (times <see cref="Margin"/>).</summary>
     public static float Quantise(float distance)
@@ -46,15 +46,15 @@ internal sealed class ShadowFogCap
     {
         if (hide is not { } h || !(h > 0))
         {
-            if (isPending) { if (++pending > PendingFrames) applied = null; }
-            else { pending = 0; if (++missing > HoldFrames) applied = null; }
-            return applied;
+            if (isPending) { if (++_pending > PendingFrames) _applied = null; }
+            else { _pending = 0; if (++_missing > HoldFrames) _applied = null; }
+            return _applied;
         }
-        missing = pending = 0;
+        _missing = _pending = 0;
         float wanted = Quantise(h);
-        if (applied is not { } now || wanted > now || wanted * MathF.Pow(Step, LowerSteps) <= now * 1.0001f) applied = wanted;
-        return applied;
+        if (_applied is not { } now || wanted > now || wanted * MathF.Pow(Step, LowerSteps) <= now * 1.0001f) _applied = wanted;
+        return _applied;
     }
 
-    public void Reset() { applied = null; missing = pending = 0; }
+    public void Reset() { _applied = null; _missing = _pending = 0; }
 }

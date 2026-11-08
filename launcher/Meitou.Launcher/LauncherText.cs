@@ -14,10 +14,10 @@ namespace Meitou.Launcher;
 /// </summary>
 static class LauncherText
 {
-    static GettextCatalog catalog = GettextCatalog.Empty;
+    static GettextCatalog s_catalog = GettextCatalog.Empty;
     // Translated text -> its English source, over every catalog loaded so far: a control first seen with a translated text (made after a
     // language switch) can still be turned back to English.
-    static readonly Dictionary<string, string> sources = new(StringComparer.Ordinal);
+    static readonly Dictionary<string, string> Sources = new(StringComparer.Ordinal);
 
     /// <summary>The active locale code (<c>en_GB</c>, <c>pt_BR</c>, ...).</summary>
     public static string Code { get; private set; } = GameLanguage.DefaultCode;
@@ -26,21 +26,21 @@ static class LauncherText
     public static void Use(string code, GameInstall? install)
     {
         Code = code;
-        catalog = code == GameLanguage.DefaultCode ? GettextCatalog.Empty : MeitouTranslations.Load(code, LocaleFolder(install, code));
-        foreach (var (english, translated) in catalog.Messages) sources.TryAdd(translated, english);
+        s_catalog = code == GameLanguage.DefaultCode ? GettextCatalog.Empty : MeitouTranslations.Load(code, LocaleFolder(install, code));
+        foreach (var (english, translated) in s_catalog.Messages) Sources.TryAdd(translated, english);
     }
 
     /// <summary><c>locale/&lt;code&gt;</c> of the Kenshi folder, where a <c>meitou.po</c> overrides the built-in texts; null without a folder.</summary>
     public static string? LocaleFolder(GameInstall? install, string code) => install is null ? null : Path.Combine(install.Root, "locale", code);
 
     /// <summary>The English source of <paramref name="text"/> when it is a translation, else <paramref name="text"/> itself.</summary>
-    public static string Source(string text) => sources.GetValueOrDefault(text, text);
+    public static string Source(string text) => Sources.GetValueOrDefault(text, text);
 
     /// <summary><paramref name="text"/> in the active language, or its English when it has no translation.</summary>
     public static string Translate(string text)
     {
         string english = Source(text);
-        return catalog.Find(english) ?? english;
+        return s_catalog.Find(english) ?? english;
     }
 
     /// <summary>

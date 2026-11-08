@@ -13,11 +13,11 @@ public sealed class WwiseBank
     /// <summary>The bank version whose objects the reader decodes.</summary>
     public const uint DecodedVersion = 112;
 
-    readonly byte[] data;
-    readonly Dictionary<uint, WwiseObject> byId = [];
-    readonly Dictionary<uint, WwiseMedia> mediaById = [];
+    readonly byte[] _data;
+    readonly Dictionary<uint, WwiseObject> _byId = [];
+    readonly Dictionary<uint, WwiseMedia> _mediaById = [];
 
-    WwiseBank(byte[] data) => this.data = data;
+    WwiseBank(byte[] data) => this._data = data;
 
     public uint Version { get; private set; }
     public uint Id { get; private set; }
@@ -33,14 +33,14 @@ public sealed class WwiseBank
     /// <summary><c>STMG</c>: each state group's default transition time in ms, by id.</summary>
     public IReadOnlyDictionary<uint, int> StateGroupTransitions { get; private set; } = new Dictionary<uint, int>();
 
-    public WwiseObject? Find(uint id) => byId.GetValueOrDefault(id);
-    public T? Find<T>(uint id) where T : WwiseObject => byId.GetValueOrDefault(id) as T;
-    public WwiseMedia? FindMedia(uint id) => mediaById.TryGetValue(id, out var m) ? m : null;
+    public WwiseObject? Find(uint id) => _byId.GetValueOrDefault(id);
+    public T? Find<T>(uint id) where T : WwiseObject => _byId.GetValueOrDefault(id) as T;
+    public WwiseMedia? FindMedia(uint id) => _mediaById.TryGetValue(id, out var m) ? m : null;
 
     /// <summary>The bytes of an embedded WEM.</summary>
-    public ReadOnlyMemory<byte> MediaBytes(WwiseMedia media) => data.AsMemory(media.Offset, media.Length);
+    public ReadOnlyMemory<byte> MediaBytes(WwiseMedia media) => _data.AsMemory(media.Offset, media.Length);
 
-    public static WwiseBank ReadFile(string path) => Read(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static WwiseBank ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     public static WwiseBank Read(byte[] data)
     {
@@ -97,14 +97,14 @@ public sealed class WwiseBank
                 if (offset + (long)len > dataSection.Item3) throw new InvalidDataException($"Media {id:X8} runs past DATA");
                 var m = new WwiseMedia(id, dataOffset + (int)offset, (int)len, (int)offset);
                 media.Add(m);
-                bank.mediaById[id] = m;
+                bank._mediaById[id] = m;
             }
             bank.Media = media;
         }
 
         foreach (var (tag, offset, length) in sections)
             if (tag == "HIRC") bank.Objects = WwiseHierarchyReader.Read(data.AsSpan(offset, length), bank.Version == DecodedVersion);
-        foreach (var o in bank.Objects) bank.byId.TryAdd(o.Id, o);
+        foreach (var o in bank.Objects) bank._byId.TryAdd(o.Id, o);
         return bank;
     }
 

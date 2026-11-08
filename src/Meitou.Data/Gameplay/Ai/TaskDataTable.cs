@@ -303,9 +303,9 @@ public static class TaskDataTable
     /// <see cref="TaskDataFlags.NotProvider"/> ones (docs/game/ai-tasks.md "Planner": the provider maps).
     /// </summary>
     public static IReadOnlyList<TaskDataRow> Providers(int category, TaskCondition state) =>
-        providers.GetOrAdd((category, state), static k => [.. Rows.Where(r => (r.Category & k.Item1) != 0 && !r.Is(TaskDataFlags.NotProvider) && r.Done.Contains(k.Item2)).OrderBy(r => (int)r.Type)]);
+        ProviderCache.GetOrAdd((category, state), static k => [.. Rows.Where(r => (r.Category & k.Item1) != 0 && !r.Is(NotProvider) && r.Done.Contains(k.Item2)).OrderBy(r => (int)r.Type)]);
 
-    static readonly System.Collections.Concurrent.ConcurrentDictionary<(int, TaskCondition), TaskDataRow[]> providers = new();
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<(int, TaskCondition), TaskDataRow[]> ProviderCache = new();
 
     static TaskDataRow?[] BuildByType()
     {

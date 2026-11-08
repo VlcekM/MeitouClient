@@ -11,7 +11,7 @@ public sealed class TickProfile
     public static readonly string[] PhaseNames = ["inputs", "grid", "sight", "schedule", "think", "move", "act", "commit", "slow world", "publish"];
     public const int Inputs = 0, Grid = 1, Sight = 2, Schedule = 3, Think = 4, Move = 5, Act = 6, Commit = 7, SlowWorld = 8, Publish = 9;
 
-    long last;
+    long _last;
 
     /// <summary>Measure the ticks (set by the host between ticks).</summary>
     public bool Enabled { get; set; }
@@ -45,16 +45,18 @@ public sealed class TickProfile
     {
         if (SystemMs.Length != systems) (SystemMs, PhaseSystemMs) = (new double[systems], new double[systems * PhaseNames.Length]);
         Ticks++;
-        last = partLast = Stopwatch.GetTimestamp();
+        _last = _partLast = Stopwatch.GetTimestamp();
     }
 
-    long partLast;
+    long _partLast;
 
     // Per parallel phase (think, move, act): the parts it adds, "<phase> cpu" (its jobs' time summed over the threads) and "<phase> slow" (the slowest job of each system's run,
     // summed). Against the phase's wall time: wall near slow means one job holds the others up; cpu / threads near wall means the threads are all busy.
     static readonly Dictionary<int, (string Cpu, string Slow)> JobNames = new()
     {
-        [Think] = ("think cpu", "think slow"), [Move] = ("move cpu", "move slow"), [Act] = ("act cpu", "act slow"),
+        [Think] = ("think cpu", "think slow"),
+        [Move] = ("move cpu", "move slow"),
+        [Act] = ("act cpu", "act slow"),
     };
 
     internal void Jobs(int phase, long sumTicks, long maxTicks)
@@ -79,8 +81,8 @@ public sealed class TickProfile
     {
         if (!Enabled) return;
         long now = Stopwatch.GetTimestamp();
-        double ms = (now - Math.Max(partLast, last)) * 1000.0 / Stopwatch.Frequency;
-        partLast = now;
+        double ms = (now - Math.Max(_partLast, _last)) * 1000.0 / Stopwatch.Frequency;
+        _partLast = now;
         Add(name, ms);
     }
 
@@ -88,10 +90,10 @@ public sealed class TickProfile
     internal void Lap(int phase, int system = -1)
     {
         long now = Stopwatch.GetTimestamp();
-        double ms = (now - last) * 1000.0 / Stopwatch.Frequency;
+        double ms = (now - _last) * 1000.0 / Stopwatch.Frequency;
         PhaseMs[phase] += ms;
         if (system >= 0) SystemMs[system] += ms;
         if (system >= 0) PhaseSystemMs[phase * SystemMs.Length + system] += ms;
-        last = now;
+        _last = now;
     }
 }

@@ -15,7 +15,7 @@ public sealed record FarmPart(GameRecord Record, string Mesh, GameRecord? Materi
     public bool Static => ScaleStart == ScaleEnd && OffsetStart == OffsetEnd;
 
     public static FarmPart From(GameDatabase db, GameRecord part, int group, int weight) => new(part, part.Filenames.GetValueOrDefault("mesh") ?? "",
-        part.GetReferences("material") is [var m, ..] ? WorldObjectLayout.ResolveCollection(db, db.Find(m.TargetStringId) is { Type: FcsRecordType.MATERIAL_SPEC } spec ? spec : null, part.StringId) : null,
+        part.GetReferences("material") is [var m, ..] ? WorldObjectLayout.ResolveCollection(db, db.Find(m.TargetStringId) is { Type: FcsRecordType.MaterialSpec } spec ? spec : null, part.StringId) : null,
         group, weight, part.GetFloat("scale start"), part.GetFloat("scale end"), part.GetFloat("scale variance"), part.GetFloat("offset start"), part.GetFloat("offset end"), part.GetFloat("delay"));
 }
 

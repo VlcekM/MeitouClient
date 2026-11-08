@@ -106,10 +106,10 @@ public sealed partial class PopulationSystem
     Squad? SpawnStored(World world, Platoon p, StoredSquad stored)
     {
         if (stored.Members.Count == 0) return null;
-        if (p.Origin < 0 || p.Origin >= data.Sites.Count)
-            return SpawnKept(world, stored, p.TemplateId, p.Faction, -1, p.Id, p.Position, p.Position, settings.HomelessHomeRadius, p.Size);
+        if (p.Origin < 0 || p.Origin >= _data.Sites.Count)
+            return SpawnKept(world, stored, p.TemplateId, p.Faction, -1, p.Id, p.Position, p.Position, _settings.HomelessHomeRadius, p.Size);
 
-        var site = data.Sites[p.Origin];
+        var site = _data.Sites[p.Origin];
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
         bool resume = ResidentSchedule && stored.Pinned && world.GameHours - stored.StoredHours >= ScheduleAfterHours;
         var squad = SpawnKept(world, stored, p.TemplateId, p.Faction, p.Origin, p.Id, p.Position, new Vector2(site.Position.X, site.Position.Z), Math.Max(radius * 0.8f, 40), p.Size);
@@ -188,7 +188,7 @@ public sealed partial class PopulationSystem
                 TaskTime = 0.5f + Rng.Float(Rng.Hash(world.Seed, (ulong)squad.Id << 8 | (uint)squad.Members.Count, RngPurpose.Think)) * 3,
             };
             var id = table.Spawn(hot, cold, world.Tick);
-            if (UniqueCharacters.IsUnique(data.Db.Find(cold.RecordId))) world.Uniques.Bind(cold.RecordId, id);
+            if (UniqueCharacters.IsUnique(_data.Db.Find(cold.RecordId))) world.Uniques.Bind(cold.RecordId, id);
             squad.Members.Add(id);
             if (leads && squad.Leader.IsNone) squad.Leader = id;
         }

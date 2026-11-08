@@ -8,14 +8,14 @@ namespace Meitou.Data.Gameplay.Economy;
 /// </summary>
 public sealed class BoostRandom
 {
-    readonly FoliageRandom mt;
+    readonly FoliageRandom _mt;
 
-    public BoostRandom(uint seed) => mt = new FoliageRandom(seed);
+    public BoostRandom(uint seed) => _mt = new FoliageRandom(seed);
 
-    BoostRandom(FoliageRandom mt) => this.mt = mt;
+    BoostRandom(FoliageRandom mt) => this._mt = mt;
 
     /// <summary>A generator in the same state, which then draws on its own (boost's <c>variate_generator</c> holds a copy of its engine).</summary>
-    public BoostRandom Clone() => new(mt.Clone());
+    public BoostRandom Clone() => new(_mt.Clone());
 
     /// <summary>
     /// <c>uniform_int(min, max)</c>: the whole 32-bit range is cut into range + 1 buckets of floor(2^32 - 1 / (range + 1)) results (one more when that division leaves range over);
@@ -29,7 +29,7 @@ public sealed class BoostRandom
         if (uint.MaxValue % (range + 1) == range) bucket++;
         while (true)
         {
-            uint r = mt.Next() / bucket;
+            uint r = _mt.Next() / bucket;
             if (r <= range) return (int)(min + r);
         }
     }

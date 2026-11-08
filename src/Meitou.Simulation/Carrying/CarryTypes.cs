@@ -139,7 +139,7 @@ public static class CarryPose
     public static readonly CarryAttach Fallback = new(new(2, 14, 0), System.Numerics.Quaternion.Identity);
 
     /// <summary>The body's height as 0..1: (<c>Height</c> slider - 80) / 40, 0.5 without a body file (the original's <c>characterHeight_0to1</c>, a 30-bone skeleton's).</summary>
-    public static float Height01(Meitou.Data.Characters.CharacterAppearance? look) =>
+    public static float Height01(Data.Characters.CharacterAppearance? look) =>
         look?.Body?.Floats.TryGetValue("Height", out var h) == true ? (h - 80) * 0.025f : 0.5f;
 
     /// <summary>The offset from the bone for a body of <paramref name="height01"/>: a lerp short to middle below 0.5, middle to tall above.</summary>

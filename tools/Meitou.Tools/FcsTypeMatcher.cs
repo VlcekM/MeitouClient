@@ -71,8 +71,8 @@ static class FcsTypeMatcher
         r.Bools.Keys.Select(k => (k, "bool"))
             .Concat(r.Floats.Keys.Select(k => (k, "float")))
             .Concat(r.Ints.Keys.Select(k => (k, "int")))
-            .Concat(r.Vector3s.Keys.Select(k => (k, "vec3")))
-            .Concat(r.Vector4s.Keys.Select(k => (k, "vec4")))
+            .Concat(r.Vector3S.Keys.Select(k => (k, "vec3")))
+            .Concat(r.Vector4S.Keys.Select(k => (k, "vec4")))
             .Concat(r.Strings.Keys.Select(k => (k, "string")))
             .Concat(r.Filenames.Keys.Select(k => (k, "filename")))
             .Concat(r.References.Keys.Select(k => (k, "reference")));
@@ -92,7 +92,7 @@ static class FcsRecordDump
                 Console.WriteLine($"  float:  {string.Join(", ", r.Floats.Keys)}");
                 Console.WriteLine($"  int:    {string.Join(", ", r.Ints.Keys)}");
                 Console.WriteLine($"  string: {string.Join(", ", r.Strings.Keys)}  file: {string.Join(", ", r.Filenames.Keys)}");
-                Console.WriteLine($"  vec:    {string.Join(", ", r.Vector3s.Keys.Concat(r.Vector4s.Keys))}");
+                Console.WriteLine($"  vec:    {string.Join(", ", r.Vector3S.Keys.Concat(r.Vector4S.Keys))}");
                 Console.WriteLine($"  refs:   {string.Join(", ", r.References.Select(kv => $"{kv.Key}[{kv.Value.Count}]"))}  instances: {r.Instances.Count}");
             }
         return 0;

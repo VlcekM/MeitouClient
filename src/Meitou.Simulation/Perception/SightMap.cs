@@ -50,25 +50,25 @@ public sealed class SightMap
     readonly record struct Room(string Key, InteriorVolume Volume, bool EnforcesCeiling);
     readonly record struct Lamp(WorldLight Light, int Room);
 
-    readonly HashSet<string> added = new(StringComparer.Ordinal);
+    readonly HashSet<string> _added = new(StringComparer.Ordinal);
     // Each added building's room (-1: none) and lamps, and those a ruin took out of the cells (Remove).
-    readonly Dictionary<string, (int Room, List<int> Lamps)> entries = new(StringComparer.Ordinal);
-    readonly HashSet<string> hidden = new(StringComparer.Ordinal);
-    readonly List<Room> rooms = [];
-    readonly Dictionary<string, int> roomOf = new(StringComparer.Ordinal);
-    readonly Dictionary<(int, int), List<int>> roomCells = [];
-    readonly List<Lamp> lamps = [];
-    readonly Dictionary<(int, int), List<int>> lampCells = [];
+    readonly Dictionary<string, (int Room, List<int> Lamps)> _entries = new(StringComparer.Ordinal);
+    readonly HashSet<string> _hidden = new(StringComparer.Ordinal);
+    readonly List<Room> _rooms = [];
+    readonly Dictionary<string, int> _roomOf = new(StringComparer.Ordinal);
+    readonly Dictionary<(int, int), List<int>> _roomCells = [];
+    readonly List<Lamp> _lamps = [];
+    readonly Dictionary<(int, int), List<int>> _lampCells = [];
     // The completed player buildings' lamps, rebuilt when the building registry changes (outdoor lights, no room).
-    readonly List<Lamp> siteLamps = [];
-    readonly Dictionary<(int, int), List<int>> siteCells = [];
-    long sitesRevision = -1;
-    ISightSource? source;
+    readonly List<Lamp> _siteLamps = [];
+    readonly Dictionary<(int, int), List<int>> _siteCells = [];
+    long _sitesRevision = -1;
+    ISightSource? _source;
 
-    int[] place = [];
-    bool[] onTop = [];
-    float[] light = [];
-    int count;
+    int[] _place = [];
+    bool[] _onTop = [];
+    float[] _light = [];
+    int _count;
 
     /// <summary>
     /// The <c>interiorlamps</c> switch's Meitou side, as the renderer's <c>WorldLamps.InteriorAllDay</c>: interior lamps count at every daylight (the game: night-only ones at
@@ -82,35 +82,35 @@ public sealed class SightMap
     /// <summary>Adds a town building's room and lamps once (when its town registers, <see cref="Locks.FixtureRegistry.RegisterSite"/>).</summary>
     public void Add(ISightSource source, TownBuilding building)
     {
-        this.source ??= source;
-        if (building.Destroyed || !added.Add(building.Key)) return;
+        this._source ??= source;
+        if (building.Destroyed || !_added.Add(building.Key)) return;
         int room = -1;
         if (source.Room(building) is { } volume)
         {
-            room = rooms.Count;
-            rooms.Add(new Room(building.Key, volume, source.EnforcesCeiling(building)));
-            roomOf[building.Key] = room;
+            room = _rooms.Count;
+            _rooms.Add(new Room(building.Key, volume, source.EnforcesCeiling(building)));
+            _roomOf[building.Key] = room;
             RoomCells(room, add: true);
         }
         var own = new List<int>();
         foreach (var l in source.Lights(building))
         {
             if (!(l.Intensity > 0) || !(l.Radius > 0)) continue;
-            own.Add(lamps.Count);
-            lamps.Add(new Lamp(l, l.Interior ? room : -1));
-            LampCells(lamps.Count - 1, add: true);
+            own.Add(_lamps.Count);
+            _lamps.Add(new Lamp(l, l.Interior ? room : -1));
+            LampCells(_lamps.Count - 1, add: true);
         }
-        entries[building.Key] = (room, own);
+        _entries[building.Key] = (room, own);
     }
 
     /// <summary>A registered building became a ruin (a town override's residents, docs/game/buildings-production.md "Ruined by residents"): its room and lamps go.</summary>
     public void Remove(string building)
     {
-        if (!entries.TryGetValue(building, out var e) || !hidden.Add(building)) return;
+        if (!_entries.TryGetValue(building, out var e) || !_hidden.Add(building)) return;
         if (e.Room >= 0)
         {
             RoomCells(e.Room, add: false);
-            roomOf.Remove(building);
+            _roomOf.Remove(building);
         }
         foreach (int k in e.Lamps) LampCells(k, add: false);
     }
@@ -121,47 +121,47 @@ public sealed class SightMap
     /// </summary>
     public void Relay(ISightSource source, TownBuilding building)
     {
-        if (!added.Contains(building.Key)) return;
+        if (!_added.Contains(building.Key)) return;
         Remove(building.Key);
-        added.Remove(building.Key);
-        hidden.Remove(building.Key);
-        entries.Remove(building.Key);
+        _added.Remove(building.Key);
+        _hidden.Remove(building.Key);
+        _entries.Remove(building.Key);
         Add(source, building);
     }
 
     /// <summary>A ruin stands again: the room and lamps it had come back, or are added now when it was a ruin when its town registered.</summary>
     public void Restore(ISightSource source, TownBuilding building)
     {
-        if (!hidden.Remove(building.Key))
+        if (!_hidden.Remove(building.Key))
         {
             Add(source, building with { Destroyed = false, Resolved = building.Resolved is { } r ? r with { Destroyed = false } : null });
             return;
         }
-        var e = entries[building.Key];
+        var e = _entries[building.Key];
         if (e.Room >= 0)
         {
             RoomCells(e.Room, add: true);
-            roomOf[building.Key] = e.Room;
+            _roomOf[building.Key] = e.Room;
         }
         foreach (int k in e.Lamps) LampCells(k, add: true);
     }
 
     void RoomCells(int room, bool add)
     {
-        var footprint = rooms[room].Volume.Footprint;
+        var footprint = _rooms[room].Volume.Footprint;
         var min = new Vector2(footprint.Min(p => p.X), footprint.Min(p => p.Y));
         var max = new Vector2(footprint.Max(p => p.X), footprint.Max(p => p.Y));
         for (int x = CellOf(min.X); x <= CellOf(max.X); x++)
             for (int z = CellOf(min.Y); z <= CellOf(max.Y); z++)
-                Toggle(roomCells, (x, z), room, add);
+                Toggle(_roomCells, (x, z), room, add);
     }
 
     void LampCells(int lamp, bool add)
     {
-        var l = lamps[lamp].Light;
+        var l = _lamps[lamp].Light;
         for (int x = CellOf(l.Position.X - l.Radius); x <= CellOf(l.Position.X + l.Radius); x++)
             for (int z = CellOf(l.Position.Z - l.Radius); z <= CellOf(l.Position.Z + l.Radius); z++)
-                Toggle(lampCells, (x, z), lamp, add);
+                Toggle(_lampCells, (x, z), lamp, add);
     }
 
     static void Toggle(Dictionary<(int, int), List<int>> cells, (int, int) key, int item, bool add)
@@ -184,74 +184,74 @@ public sealed class SightMap
         Daylight = WorldLights.DaylightFactor((float)(world.GameHours % 24), world.Settings.Sunrise, world.Settings.Sunset);
         var table = world.Characters;
         var prev = table.Previous;
-        count = table.HighWater;
-        if (place.Length < count)
+        _count = table.HighWater;
+        if (_place.Length < _count)
         {
-            int size = Math.Max(count, place.Length * 2);
-            int was = place.Length;
-            Array.Resize(ref place, size);
-            place.AsSpan(was).Fill(-1);
-            Array.Resize(ref onTop, size);
-            Array.Resize(ref light, size);
-            Array.Resize(ref wanted, size);
-            Array.Resize(ref floorOf, size);
-            Array.Resize(ref probed, size);
-            Array.Resize(ref low, size);
-            Array.Resize(ref facing, size);
+            int size = Math.Max(_count, _place.Length * 2);
+            int was = _place.Length;
+            Array.Resize(ref _place, size);
+            _place.AsSpan(was).Fill(-1);
+            Array.Resize(ref _onTop, size);
+            Array.Resize(ref _light, size);
+            Array.Resize(ref _wanted, size);
+            Array.Resize(ref _floorOf, size);
+            Array.Resize(ref _probed, size);
+            Array.Resize(ref _low, size);
+            Array.Resize(ref _facing, size);
         }
-        for (int s = 0; s < count; s++)
+        for (int s = 0; s < _count; s++)
         {
             if (!world.Steps(s)) continue;   // the far cadence: a skipped character keeps its last place, posture and facing
-            int was = place[s];
-            place[s] = -1;
-            low[s] = prev[s].Alive && table.Cold(s)?.Medical is { Prone: true };
-            facing[s] = table.Cold(s)?.Animation is { HasDrawYaw: true } drawn ? drawn.DrawYaw : prev[s].Yaw;
-            if (!prev[s].Alive || rooms.Count == 0) { onTop[s] = false; probed[s] = default; continue; }
+            int was = _place[s];
+            _place[s] = -1;
+            _low[s] = prev[s].Alive && table.Cold(s)?.Medical is { Prone: true };
+            _facing[s] = table.Cold(s)?.Animation is { HasDrawYaw: true } drawn ? drawn.DrawYaw : prev[s].Yaw;
+            if (!prev[s].Alive || _rooms.Count == 0) { _onTop[s] = false; _probed[s] = default; continue; }
             var c = table.Cold(s);
             var at = prev[s].Position;
             if (c?.InWhat is { } held && world.Fixtures.Find(held) is { } fixture)
             {
-                place[s] = roomOf.GetValueOrDefault(fixture.Building, -1);
-                onTop[s] = false;
-                if (place[s] != was) { floorOf[s] = -1; probed[s] = default; }
+                _place[s] = _roomOf.GetValueOrDefault(fixture.Building, -1);
+                _onTop[s] = false;
+                if (_place[s] != was) { _floorOf[s] = -1; _probed[s] = default; }
             }
             else if (RoomAt(at) is var r and >= 0)
             {
-                place[s] = r;
+                _place[s] = r;
                 // The overhead and floor queries are triangle searches: kept while the character stays put in the same room.
                 var key = new Probe(at, r, prev[s].Generation);
-                if (r != was || probed[s] != key)
+                if (r != was || _probed[s] != key)
                 {
                     // A building that enforces its ceiling has nobody on top above its ground floor; elsewhere the overhead query decides.
-                    floorOf[s] = rooms[r].EnforcesCeiling ? rooms[r].Volume.FloorAt(at) : -1;
-                    onTop[s] = !(rooms[r].EnforcesCeiling && floorOf[s] != 0) && !rooms[r].Volume.Covered(at);
-                    probed[s] = key;
+                    _floorOf[s] = _rooms[r].EnforcesCeiling ? _rooms[r].Volume.FloorAt(at) : -1;
+                    _onTop[s] = !(_rooms[r].EnforcesCeiling && _floorOf[s] != 0) && !_rooms[r].Volume.Covered(at);
+                    _probed[s] = key;
                 }
             }
-            else onTop[s] = false;
+            else _onTop[s] = false;
         }
         // A carried body is where its carrier is (the original's location of a carried character is its carrier's).
-        for (int s = 0; s < count; s++)
-            if (prev[s].Alive && table.Cold(s) is { CarriedBy.IsNone: false } c && table.TryResolveNext(c.CarriedBy, out int carrier) && carrier < count)
-                (place[s], onTop[s]) = (place[carrier], onTop[carrier]);
+        for (int s = 0; s < _count; s++)
+            if (prev[s].Alive && table.Cold(s) is { CarriedBy.IsNone: false } c && table.TryResolveNext(c.CarriedBy, out int carrier) && carrier < _count)
+                (_place[s], _onTop[s]) = (_place[carrier], _onTop[carrier]);
         RefreshSites(world);
         // The lights characters carry (lanterns; docs/formats/lights.md "Carried lanterns"), at their owner, lit as their night flag allows.
-        carried.Clear();
-        for (int s = 0; s < count; s++)
+        _carried.Clear();
+        for (int s = 0; s < _count; s++)
             if (prev[s].Alive && table.Cold(s)?.Appearance is { Lights.Count: > 0 } look)
                 foreach (var cl in look.Lights)
                     if (cl.Light.Intensity > 0 && cl.Light.Radius > 0 && WorldLights.IsLit(cl.Light, Daylight))
-                        carried.Add((s, cl.Light, prev[s].Position + new Vector3(0, cl.Light.Position.Y, 0)));
-        brightest = 0;
-        for (int s = 0; s < count; s++)
+                        _carried.Add((s, cl.Light, prev[s].Position + new Vector3(0, cl.Light.Position.Y, 0)));
+        _brightest = 0;
+        for (int s = 0; s < _count; s++)
         {
-            light[s] = prev[s].Alive ? SampleLight(s, prev[s].Position, table.Cold(s) is { IsPlayer: true }) : 1;
-            if (prev[s].Alive) brightest = MathF.Max(brightest, light[s]);
+            _light[s] = prev[s].Alive ? SampleLight(s, prev[s].Position, table.Cold(s) is { IsPlayer: true }) : 1;
+            if (prev[s].Alive) _brightest = MathF.Max(_brightest, _light[s]);
         }
     }
 
     // Each character's light request (Character +0xdc): raised by a sight test on its looker and target, and by the stat multiplier; the resample clears it (set from any worker, only ever to true).
-    bool[] wanted = [];
+    bool[] _wanted = [];
 
     /// <summary>
     /// A character's light value for this tick (<c>FUN_1405ccd90</c>:53-60, <b>Verified</b>): every update first overwrites it with the bare daylight factor; only when its request was raised since
@@ -260,35 +260,35 @@ public sealed class SightMap
     /// </summary>
     float SampleLight(int slot, Vector3 at, bool player)
     {
-        if (!wanted[slot] || !player && Daylight >= NpcDaylight) return Daylight;
-        wanted[slot] = false;
+        if (!_wanted[slot] || !player && Daylight >= NpcDaylight) return Daylight;
+        _wanted[slot] = false;
         return LightOf(slot, at, player);
     }
 
     void Request(int slot)
     {
-        if ((uint)slot < (uint)wanted.Length) wanted[slot] = true;
+        if ((uint)slot < (uint)_wanted.Length) _wanted[slot] = true;
     }
 
-    float brightest = 1;
+    float _brightest = 1;
 
-    /// <summary>Where a character's overhead and floor queries were last made (<see cref="floorOf"/> -1: not asked yet there).</summary>
+    /// <summary>Where a character's overhead and floor queries were last made (<see cref="SightMap._floorOf"/> -1: not asked yet there).</summary>
     readonly record struct Probe(Vector3 At, int Room, int Generation);
-    Probe[] probed = [];
+    Probe[] _probed = [];
     // Each character crawling or staying low at the last update (the sight test's ground posture).
-    bool[] low = [];
+    bool[] _low = [];
     /// <summary>Each character's sight-cone forward: its drawn facing (<see cref="CharacterAnimation.DrawYaw"/>), else its facing.</summary>
-    float[] facing = [];
-    int[] floorOf = [];
+    float[] _facing = [];
+    int[] _floorOf = [];
     // The carried lights of this update: owner slot, light, position.
-    readonly List<(int Owner, WorldLight Light, Vector3 At)> carried = [];
+    readonly List<(int Owner, WorldLight Light, Vector3 At)> _carried = [];
 
     /// <summary>The farthest the looker can see anyone this tick (<see cref="Range"/> with the brightest target and full ambient): a query radius.</summary>
     public float MaxRange(int looker, float outdoor)
     {
-        bool top = Known(looker) && onTop[looker];
+        bool top = Known(looker) && _onTop[looker];
         float range = (Inside(looker) ? IndoorSight : outdoor) * (0.5f + 0.5f * Daylight) * (top ? 2 : 1);
-        return range * Math.Clamp(MathF.Max(brightest, 1) - PeekLight(looker) + 1, 1, 2);
+        return range * Math.Clamp(MathF.Max(_brightest, 1) - PeekLight(looker) + 1, 1, 2);
     }
 
     /// <summary>The room (<see cref="PlaceOf"/>'s numbering) a point lies in, -1 outdoors: an item's location as <c>FUN_14099b1d0</c> compares it with a character's.</summary>
@@ -296,9 +296,9 @@ public sealed class SightMap
 
     int RoomAt(Vector3 at)
     {
-        if (!roomCells.TryGetValue((CellOf(at.X), CellOf(at.Z)), out var list)) return -1;
+        if (!_roomCells.TryGetValue((CellOf(at.X), CellOf(at.Z)), out var list)) return -1;
         foreach (int r in list)
-            if (rooms[r].Volume.Contains(at)) return r;
+            if (_rooms[r].Volume.Contains(at)) return r;
         return -1;
     }
 
@@ -308,18 +308,18 @@ public sealed class SightMap
         if (Daylight > LitDaylight) return 1;
         float sum = 2 * Daylight;
         var cell = (CellOf(at.X), CellOf(at.Z));
-        bool lamped = lampCells.TryGetValue(cell, out var list), sited = siteCells.TryGetValue(cell, out var siteList);
-        if (!lamped && !sited && carried.Count == 0) return sum;
+        bool lamped = _lampCells.TryGetValue(cell, out var list), sited = _siteCells.TryGetValue(cell, out var siteList);
+        if (!lamped && !sited && _carried.Count == 0) return sum;
         bool inside = Inside(slot);
         int floor = 0;
-        if (inside && (floor = floorOf[slot]) < 0) floor = floorOf[slot] = rooms[place[slot]].Volume.FloorAt(at);
-        foreach (int k in lamped ? list! : []) sum += Gain(lamps[k], slot, at, inside, floor);
-        foreach (int k in sited ? siteList! : []) sum += Gain(siteLamps[k], slot, at, inside, floor);
-        foreach (var (owner, l, p) in carried)
+        if (inside && (floor = _floorOf[slot]) < 0) floor = _floorOf[slot] = _rooms[_place[slot]].Volume.FloorAt(at);
+        foreach (int k in lamped ? list! : []) sum += Gain(_lamps[k], slot, at, inside, floor);
+        foreach (int k in sited ? siteList! : []) sum += Gain(_siteLamps[k], slot, at, inside, floor);
+        foreach (var (owner, l, p) in _carried)
         {
             // Counted with the same indoor and floor rules as a building's light: the owner's place and floor stand in for the light's.
             if (Inside(owner) != inside) continue;
-            if (inside && (place[owner] != place[slot] || FloorOf(owner, p) != floor)) continue;
+            if (inside && (_place[owner] != _place[slot] || FloorOf(owner, p) != floor)) continue;
             float d2 = Vector3.DistanceSquared(p, at), r2 = l.Radius * l.Radius;
             if (d2 <= r2) sum += LampGain * l.Intensity * (1 - d2 / r2);
         }
@@ -332,7 +332,7 @@ public sealed class SightMap
         var (l, room) = lamp;
         if (!WorldLights.IsLit(l, l.Interior && InteriorLampsAllDay ? 0 : Daylight) || l.Interior != inside) return 0;
         // The original also matches the light's floor when both are inside; a lamp of another building's interior is taken as on another floor.
-        if (inside && (room != place[slot] || l.Floor != floor)) return 0;
+        if (inside && (room != _place[slot] || l.Floor != floor)) return 0;
         float d2 = Vector3.DistanceSquared(l.Position, at), r2 = l.Radius * l.Radius;
         if (d2 > r2) return 0;
         float f = 1 - d2 / r2;
@@ -350,32 +350,32 @@ public sealed class SightMap
     /// <summary>Rebuilds the completed player buildings' lamps when the building registry changed (a level-placed building bought is a town building, already counted).</summary>
     void RefreshSites(World world)
     {
-        if (source is null || world.Buildings.Revision == sitesRevision) return;
-        sitesRevision = world.Buildings.Revision;
-        siteLamps.Clear();
-        siteCells.Clear();
+        if (_source is null || world.Buildings.Revision == _sitesRevision) return;
+        _sitesRevision = world.Buildings.Revision;
+        _siteLamps.Clear();
+        _siteCells.Clear();
         foreach (var site in world.Buildings.All)
         {
             if (!site.Complete || site.Destroyed || site.LevelPlacement is not null) continue;
-            foreach (var l in source.SiteLights(site))
+            foreach (var l in _source.SiteLights(site))
             {
                 if (!(l.Intensity > 0) || !(l.Radius > 0)) continue;
-                int lamp = siteLamps.Count;
-                siteLamps.Add(new Lamp(l, -1));
+                int lamp = _siteLamps.Count;
+                _siteLamps.Add(new Lamp(l, -1));
                 for (int x = CellOf(l.Position.X - l.Radius); x <= CellOf(l.Position.X + l.Radius); x++)
                     for (int z = CellOf(l.Position.Z - l.Radius); z <= CellOf(l.Position.Z + l.Radius); z++)
-                        Into(siteCells, (x, z), lamp);
+                        Into(_siteCells, (x, z), lamp);
             }
         }
     }
 
-    bool Known(int slot) => (uint)slot < (uint)count;
+    bool Known(int slot) => (uint)slot < (uint)_count;
 
     /// <summary>In a building's indoor volume with something over it: the original's indoor sight and indoor lights.</summary>
-    public bool Inside(int slot) => Known(slot) && place[slot] >= 0 && !onTop[slot];
+    public bool Inside(int slot) => Known(slot) && _place[slot] >= 0 && !_onTop[slot];
 
     /// <summary>In no building at all, neither inside nor on top (the original's location type 0xb, outdoors).</summary>
-    public bool Outdoors(int slot) => !Known(slot) || place[slot] < 0;
+    public bool Outdoors(int slot) => !Known(slot) || _place[slot] < 0;
 
     /// <summary>
     /// The floor the character at <paramref name="at"/> (its last-tick position) stands on in its building (the original's <c>getFloor</c>); 0 outdoors or on top. Worked out on first
@@ -384,30 +384,30 @@ public sealed class SightMap
     public int FloorOf(int slot, Vector3 at)
     {
         if (!Inside(slot)) return 0;
-        if (floorOf[slot] < 0) floorOf[slot] = rooms[place[slot]].Volume.FloorAt(at);
-        return floorOf[slot];
+        if (_floorOf[slot] < 0) _floorOf[slot] = _rooms[_place[slot]].Volume.FloorAt(at);
+        return _floorOf[slot];
     }
 
     /// <summary>The floor of <paramref name="building"/> at <paramref name="at"/> (an object's <c>getFloor</c>); 0 for a building the map does not hold.</summary>
-    public int FloorAt(string building, Vector3 at) => roomOf.TryGetValue(building, out int r) ? rooms[r].Volume.FloorAt(at) : 0;
+    public int FloorAt(string building, Vector3 at) => _roomOf.TryGetValue(building, out int r) ? _rooms[r].Volume.FloorAt(at) : 0;
 
     /// <summary>Whether the map holds an indoor volume for <paramref name="building"/> (the key of a fixture's building): its <c>isIndoors</c> handle is then that building, else none.</summary>
-    public bool HasRoom(string building) => roomOf.ContainsKey(building);
+    public bool HasRoom(string building) => _roomOf.ContainsKey(building);
 
     /// <summary>The <see cref="TownBuilding.Key"/> of the building the character is <see cref="Inside"/>; null outdoors or on top.</summary>
-    public string? BuildingOf(int slot) => Inside(slot) ? rooms[place[slot]].Key : null;
+    public string? BuildingOf(int slot) => Inside(slot) ? _rooms[_place[slot]].Key : null;
 
     /// <summary>The key of the building a place (<see cref="PlaceOf"/>) is in.</summary>
-    public string PlaceKey(int place) => rooms[place].Key;
+    public string PlaceKey(int place) => _rooms[place].Key;
 
     /// <summary>The indoor volume (room index) the character stands in, -1 outdoors or on top of a building.</summary>
-    public int PlaceOf(int slot) => Inside(slot) ? place[slot] : -1;
+    public int PlaceOf(int slot) => Inside(slot) ? _place[slot] : -1;
 
     /// <summary>
     /// The building the character is in, on top of it too (room index, -1 outdoors): the original's location (Character slot 59), which standing on top does not change
     /// (the on-top flag is slot 60, read by the sight test only). The medic finder compares it (docs/game/ai-tasks.md "Medic jobs").
     /// </summary>
-    public int LocationOf(int slot) => Known(slot) ? place[slot] : -1;
+    public int LocationOf(int slot) => Known(slot) ? _place[slot] : -1;
 
     /// <summary>The light level of the character (1 in daylight; see the class remarks).</summary>
     public float Light(int slot)
@@ -417,7 +417,7 @@ public sealed class SightMap
     }
 
     /// <summary>The light level without raising the character's light request (the HUD and the query bound read it, no sight test or stat multiplier does).</summary>
-    public float PeekLight(int slot) => Known(slot) ? light[slot] : 1;
+    public float PeekLight(int slot) => Known(slot) ? _light[slot] : 1;
 
     /// <summary>
     /// The range a looker sees <paramref name="target"/> to before the view cone (<c>FUN_140857b10</c>, <c>FUN_140852f70</c>, <c>FUN_140851bc0</c>): 0 when they are in different places
@@ -427,8 +427,8 @@ public sealed class SightMap
     /// </summary>
     public float Range(int looker, int target, float outdoor)
     {
-        int lp = Known(looker) ? place[looker] : -1, tp = Known(target) ? place[target] : -1;
-        bool lTop = Known(looker) && onTop[looker], tTop = Known(target) && onTop[target];
+        int lp = Known(looker) ? _place[looker] : -1, tp = Known(target) ? _place[target] : -1;
+        bool lTop = Known(looker) && _onTop[looker], tTop = Known(target) && _onTop[target];
         if (lp != tp && !lTop && !tTop) return 0;
         float range = Inside(looker) ? IndoorSight : outdoor;
         range *= 0.5f + 0.5f * Daylight;
@@ -449,8 +449,8 @@ public sealed class SightMap
         float range = Range(looker, target, outdoor);
         if (!(range > 0)) return 0;
         // A target crawling or staying low is half as visible (FUN_140852f70: ground posture x0.5, before the sneaking factors).
-        float posture = (uint)target < (uint)count && low[target] ? 0.5f : 1;
-        float yaw = (uint)looker < (uint)count ? facing[looker] : 0;   // a looker made this tick has no facing captured yet: yaw 0 until the next schedule phase
+        float posture = (uint)target < (uint)_count && _low[target] ? 0.5f : 1;
+        float yaw = (uint)looker < (uint)_count ? _facing[looker] : 0;   // a looker made this tick has no facing captured yet: yaw 0 until the next schedule phase
         return stealth >= 0 ? AggroSystem.SneakVisibility(eye, yaw, at, range, stealth, posture) : AggroSystem.Visibility(eye, yaw, at, range, posture);
     }
 }

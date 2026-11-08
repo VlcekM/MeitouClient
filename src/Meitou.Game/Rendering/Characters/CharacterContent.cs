@@ -77,18 +77,18 @@ internal sealed class AssetPart
     public float Near;
     /// <summary>The draw batches of its mesh's parts by part, level and sidedness (<see cref="CharacterRenderer"/>'s gather), so the views do not look them up per instance.</summary>
     public int[]? Batches;
-    float uvScale;
+    float _uvScale;
     /// <summary>World length of a texture-coordinate unit on the part (the largest of the mesh's parts; infinity: unknown, every mip kept).</summary>
     public float UvScale
     {
         get
         {
-            if (uvScale == 0)
+            if (_uvScale == 0)
             {
-                uvScale = float.PositiveInfinity;
-                foreach (var p in Mesh.Parts) if (float.IsFinite(p.UvScale)) uvScale = float.IsFinite(uvScale) ? Math.Max(uvScale, p.UvScale) : p.UvScale;
+                _uvScale = float.PositiveInfinity;
+                foreach (var p in Mesh.Parts) if (float.IsFinite(p.UvScale)) _uvScale = float.IsFinite(_uvScale) ? Math.Max(_uvScale, p.UvScale) : p.UvScale;
             }
-            return uvScale;
+            return _uvScale;
         }
     }
 }
@@ -149,7 +149,7 @@ internal sealed class CharacterAsset
     public (WorldTexture? Normal, WorldTexture? Blend, float Weight)? PendingNormals;
     public readonly List<AssetPart> Parts = [];
     /// <summary>The carried lights (<see cref="CharacterAppearance.Lights"/>): a bone, the offset from it and an attach slot, posed like a bone-attached part.</summary>
-    public readonly List<(int Bone, Matrix4x4 Offset, int AttachIndex, Meitou.Data.World.WorldLight Light)> Lamps = [];
+    public readonly List<(int Bone, Matrix4x4 Offset, int AttachIndex, Data.World.WorldLight Light)> Lamps = [];
     /// <summary>The posture libraries (<c>postures</c>, <c>neck set</c>, <c>shoulder set</c>) held at the body file's sliders, weight 1.</summary>
     public readonly List<(LayerDef Def, float Time)> Fixed = [];
     /// <summary>The <c>mouth</c> attachment point (an animal's held limb, <see cref="CharacterInstance.Mouth"/>): its bone, offset and attach slot; null when the race has none.</summary>
@@ -197,18 +197,18 @@ internal sealed class AssetRest
 internal sealed class CharacterContent : IDisposable
 {
     const string AllocationName = "character meshes";
-    readonly IGpuContext gpu;
-    readonly AssetLocator assets;
-    readonly GameDatabase db;
-    readonly MaterialResolver resolver;
+    readonly IGpuContext _gpu;
+    readonly AssetLocator _assets;
+    readonly GameDatabase _db;
+    readonly MaterialResolver _resolver;
     public WorldTextureCache Textures { get; }
-    readonly Dictionary<(string Path, int Bones, bool Close, string? PartMap), LoadedMesh?> meshes = [];
+    readonly Dictionary<(string Path, int Bones, bool Close, string? PartMap), LoadedMesh?> _meshes = [];
     public List<string> Messages { get; } = [];
     public long MeshBytes { get; private set; }
-    public int MeshCount => meshes.Count;
+    public int MeshCount => _meshes.Count;
     /// <summary>The render's pixels per radian (<see cref="CharacterRenderer.SetView"/>) when a mesh loads: its generated levels are placed by it and keep their distances after a resize.
     /// Until the first view: 1080 rows at 50 degrees.</summary>
-    public float LodPixelsPerRadian { get; set; } = Meitou.Data.World.TerrainLod.ProjectionScale(1080, 50 * MathF.PI / 180);
+    public float LodPixelsPerRadian { get; set; } = Data.World.TerrainLod.ProjectionScale(1080, 50 * MathF.PI / 180);
 
     /// <param name="FirstMaterialName">The first submesh's material (script) name, which is all the material resolver takes of a submesh; null: no submesh.</param>
     sealed record LoadedMesh(GpuObjectMesh Gpu, string? FirstMaterialName, Vector3 Centre, float Radius, MeshMorphs? Morphs = null, float[]? ShadowDistances = null, int ShadowFirst = 0, PickBox[]? PickBoxes = null,
@@ -216,17 +216,17 @@ internal sealed class CharacterContent : IDisposable
 
     public CharacterContent(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, CharacterRigs? rigs = null)
     {
-        this.gpu = gpu;
-        this.assets = assets;
-        this.db = db;
-        resolver = new MaterialResolver(db, assets.Materials, assets);
+        this._gpu = gpu;
+        this._assets = assets;
+        this._db = db;
+        _resolver = new MaterialResolver(db, assets.Materials, assets);
         Textures = new WorldTextureCache(gpu, assets, "character textures") { Share = TextureShare.For(gpu) };
         Morphs = new MorphArena(gpu);
         Materials = new CharacterMaterialTable(gpu);
         Rigs = rigs ?? CreateRigs(db, assets);
     }
 
-    public GameDatabase Database => db;
+    public GameDatabase Database => _db;
 
     public MorphArena Morphs { get; }
 
@@ -236,15 +236,15 @@ internal sealed class CharacterContent : IDisposable
     /// <summary>Frees every mesh's buffers, the textures, the morph arena and the material table. The meshes' parts must not be drawn afterwards.</summary>
     public void Dispose()
     {
-        foreach (var mesh in meshes.Values)
+        foreach (var mesh in _meshes.Values)
             if (mesh is not null)
                 foreach (var part in mesh.Gpu.Parts)
                 {
                     part.Vertices.Dispose();
                     part.Indices.Dispose();
                 }
-        meshes.Clear();
-        prepared.Clear();
+        _meshes.Clear();
+        _prepared.Clear();
         MeshBytes = 0;
         Textures.Dispose();
         Morphs.Dispose();
@@ -252,7 +252,7 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>Meshes are loaded by bare name (Kenshi reduces the path first), so resources.cfg's last location wins.</summary>
-    string? FindMesh(string fcsPath) => assets.FindMesh(fcsPath);
+    string? FindMesh(string fcsPath) => _assets.FindMesh(fcsPath);
 
     /// <summary>Rigs that find files as the characters' content does; the host makes one to share between the simulation and the renderer.</summary>
     public static CharacterRigs CreateRigs(GameDatabase db, AssetLocator assets) => CharacterRigs.For(db, assets);
@@ -271,14 +271,14 @@ internal sealed class CharacterContent : IDisposable
     sealed record Prepared(PreparedMesh? Mesh, List<string> Messages);
     static readonly Prepared Uploaded = new(null, []);
 
-    /// <summary>The meshes prepared or being prepared, by the key of <see cref="meshes"/>; an uploaded one is left as <see cref="Uploaded"/> so no worker prepares it again.</summary>
-    readonly ConcurrentDictionary<(string Path, int Bones, bool Close, string? PartMap), Lazy<Prepared>> prepared = new();
+    /// <summary>The meshes prepared or being prepared, by the key of <see cref="_meshes"/>; an uploaded one is left as <see cref="Uploaded"/> so no worker prepares it again.</summary>
+    readonly ConcurrentDictionary<(string Path, int Bones, bool Close, string? PartMap), Lazy<Prepared>> _prepared = new();
 
     /// <summary>The preparation of a mesh, made once (any thread; the first caller's level settings stand).</summary>
     Lazy<Prepared> Prepare(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs = null, bool close = false, bool icon = false, string? partMap = null) =>
-        prepared.GetOrAdd((path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant()), _ => new Lazy<Prepared>(() => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap)));
+        _prepared.GetOrAdd((path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant()), _ => new Lazy<Prepared>(() => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap)));
 
-    /// <summary>The bone count an icon's mesh is kept under (<see cref="prepared"/>, <see cref="meshes"/>): its tangents are built the icon shader's way (<see cref="Model.Build"/>).</summary>
+    /// <summary>The bone count an icon's mesh is kept under (<see cref="_prepared"/>, <see cref="_meshes"/>): its tangents are built the icon shader's way (<see cref="Model.Build"/>).</summary>
     const int IconBones = -2;
 
     /// <summary>Reads a mesh file and makes its levels and index buffers (no GPU work, any thread): with its skinning weights for a skeleton of <paramref name="boneCount"/>
@@ -339,33 +339,41 @@ internal sealed class CharacterContent : IDisposable
     LoadedMesh? Mesh(string path, int? boneCount, float lodScale = 1, bool shadowLevels = false, LimbHide? limbs = null, bool close = false, bool icon = false, string? partMap = null)
     {
         var key = (path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant());
-        if (meshes.TryGetValue(key, out var cached)) return cached;
+        if (_meshes.TryGetValue(key, out var cached)) return cached;
         var (ready, messages) = Prepare(path, boneCount, lodScale, shadowLevels, LodPixelsPerRadian, limbs, close, icon, partMap).Value;
-        prepared[key] = new Lazy<Prepared>(Uploaded);
+        _prepared[key] = new Lazy<Prepared>(Uploaded);
         Messages.AddRange(messages);
-        return meshes[key] = ready is null ? null : Upload(ready);
+        return _meshes[key] = ready is null ? null : Upload(ready);
     }
 
     LoadedMesh Upload(PreparedMesh ready)
     {
         var gpuMesh = new GpuObjectMesh { Distances = ready.Distances, Manual = new GpuObjectMesh?[ready.Distances.Length], Centre = ready.Centre, Radius = ready.Radius };
-        gpu.EnsureFrame();
-        using var uploads = gpu.Uploads.Begin();
+        _gpu.EnsureFrame();
+        using var uploads = _gpu.Uploads.Begin();
         foreach (var made in ready.Parts)
         {
             var part = made.Part;
             var packed = GpuVertex.PackCharacter(part.Vertices);
             int vertexBytes = packed.Length, indexBytes = made.All.Length * 4;
             // One vertex of slack: each attribute is bound at its own offset, and AMD reads the last vertex of an exactly sized buffer as zeros, a spike from its bind pose (VlcekM/MeitouClient#168).
-            var vertices = DeviceBuffer.Create(gpu, (ulong)(vertexBytes + Vertex.Size), BufferUse.Vertex, AllocationName);
-            var indices = DeviceBuffer.Create(gpu, (ulong)indexBytes, BufferUse.Index, AllocationName);
+            var vertices = DeviceBuffer.Create(_gpu, (ulong)(vertexBytes + Vertex.Size), BufferUse.Vertex, AllocationName);
+            var indices = DeviceBuffer.Create(_gpu, (ulong)indexBytes, BufferUse.Index, AllocationName);
             uploads.Write(vertices, 0, packed);
             uploads.Write(indices, 0, MemoryMarshal.AsBytes(made.All.AsSpan()));
             var gp = new GpuObjectPart
             {
-                SubMeshIndex = part.SubMeshIndex, MaterialName = part.MaterialName, HasTangents = part.HasTangents, HasColours = part.HasColours,
-                Vertices = vertices, Indices = indices, Offset = made.Offset, Count = made.Count, UvScale = made.UvScale,
-                Attributes = GpuVertex.CharacterAttributes(vertices), Stride = GpuVertex.CharacterSize,
+                SubMeshIndex = part.SubMeshIndex,
+                MaterialName = part.MaterialName,
+                HasTangents = part.HasTangents,
+                HasColours = part.HasColours,
+                Vertices = vertices,
+                Indices = indices,
+                Offset = made.Offset,
+                Count = made.Count,
+                UvScale = made.UvScale,
+                Attributes = GpuVertex.CharacterAttributes(vertices),
+                Stride = GpuVertex.CharacterSize,
             };
             gpuMesh.Parts.Add(gp);
             gpuMesh.Bytes += vertexBytes + indexBytes;
@@ -382,13 +390,13 @@ internal sealed class CharacterContent : IDisposable
     public bool IconMeshReady(GameRecord item)
     {
         // Asked again every frame while it waits: the first answer's reading is kept by item.
-        if (iconReads.TryGetValue(item, out var started)) return started is null || started.IsValueCreated;
+        if (_iconReads.TryGetValue(item, out var started)) return started is null || started.IsValueCreated;
         string field = ItemIconStyle.MeshOf(item);
-        if (field.Length == 0 || FindMesh(field) is not { } path || meshes.ContainsKey((path.ToLowerInvariant(), IconBones, true, null))) { iconReads[item] = null; return true; }
+        if (field.Length == 0 || FindMesh(field) is not { } path || _meshes.ContainsKey((path.ToLowerInvariant(), IconBones, true, null))) { _iconReads[item] = null; return true; }
         var lazy = Prepare(path, null, 1, false, LodPixelsPerRadian, close: true, icon: true);
-        iconReads[item] = lazy;
+        _iconReads[item] = lazy;
         if (lazy.IsValueCreated) return true;
-        if (iconFetches.Add(path.ToLowerInvariant()))
+        if (_iconFetches.Add(path.ToLowerInvariant()))
             BackgroundWork.RunUrgent(() =>
             {
                 try { _ = lazy.Value; }
@@ -399,12 +407,12 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>Icon meshes whose reading has been started on a worker (<see cref="IconMeshReady"/>).</summary>
-    readonly HashSet<string> iconFetches = [];
+    readonly HashSet<string> _iconFetches = [];
     /// <summary>The reading <see cref="IconMeshReady"/> waits on, by item (null: nothing to wait for).</summary>
-    readonly Dictionary<GameRecord, Lazy<Prepared>?> iconReads = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<GameRecord, Lazy<Prepared>?> _iconReads = new(ReferenceEqualityComparer.Instance);
 
-    readonly Dictionary<CharacterAppearance, Task> fetching = [];
-    int fetchesRunning;
+    readonly Dictionary<CharacterAppearance, Task> _fetching = [];
+    int _fetchesRunning;
     /// <summary>How many appearances are prepared on workers at once (the workers are shared with the objects and the foliage).</summary>
     const int FetchLimit = 6;
 
@@ -415,12 +423,12 @@ internal sealed class CharacterContent : IDisposable
     /// </summary>
     public bool Fetched(CharacterAppearance c, bool urgent = false)
     {
-        if (fetching.TryGetValue(c, out var task)) return task.IsCompleted;
-        if (!urgent && Volatile.Read(ref fetchesRunning) >= FetchLimit) return false;
+        if (_fetching.TryGetValue(c, out var task)) return task.IsCompleted;
+        if (!urgent && Volatile.Read(ref _fetchesRunning) >= FetchLimit) return false;
         // Every mesh prepared already (a look that only lost a limb or its head, or changed what it carries): built at once, so the character is not left undrawn a frame.
-        if (AllPrepared(c, closeUp.Contains(c))) return true;
-        if (Start(c, urgent, closeUp.Contains(c)) is not { } started) return true;   // no body mesh: Build reports it
-        fetching[c] = started;
+        if (AllPrepared(c, _closeUp.Contains(c))) return true;
+        if (Start(c, urgent, _closeUp.Contains(c)) is not { } started) return true;   // no body mesh: Build reports it
+        _fetching[c] = started;
         return false;
     }
 
@@ -438,12 +446,12 @@ internal sealed class CharacterContent : IDisposable
         FindMesh(c.BodyMesh) is { } body && IsPrepared(body, close) && c.Parts.All(p => FindMesh(p.Mesh) is not { } path || IsPrepared(path, close));
 
     /// <summary>Looks to build as close-ups (<see cref="PrepareMesh"/>: their meshes without generated levels), from <see cref="Prefetch"/> until <see cref="Build"/>.</summary>
-    readonly HashSet<CharacterAppearance> closeUp = [];
+    readonly HashSet<CharacterAppearance> _closeUp = [];
 
     /// <summary>Starts preparing <paramref name="c"/> urgently, as a close-up when <paramref name="close"/> (the character editor's look). Render thread.</summary>
     public void Prefetch(CharacterAppearance c, bool close)
     {
-        if (close) closeUp.Add(c);
+        if (close) _closeUp.Add(c);
         Fetched(c, urgent: true);
     }
 
@@ -453,16 +461,16 @@ internal sealed class CharacterContent : IDisposable
     /// </summary>
     public void ReleaseCloseUps()
     {
-        closeUp.Clear();
-        foreach (var (key, lazy) in prepared)
-            if (key.Close && key.Bones != IconBones && !(lazy.IsValueCreated && ReferenceEquals(lazy.Value, Uploaded))) prepared.TryRemove(key, out _);
+        _closeUp.Clear();
+        foreach (var (key, lazy) in _prepared)
+            if (key.Close && key.Bones != IconBones && !(lazy.IsValueCreated && ReferenceEquals(lazy.Value, Uploaded))) _prepared.TryRemove(key, out _);
     }
 
     /// <summary>Whether a mesh file has been prepared (for any skeleton), as a close-up or with its levels.</summary>
     bool IsPrepared(string path, bool close)
     {
         string key = path.ToLowerInvariant();
-        foreach (var (k, lazy) in prepared) if (k.Path == key && k.Close == close && lazy.IsValueCreated) return true;
+        foreach (var (k, lazy) in _prepared) if (k.Path == key && k.Close == close && lazy.IsValueCreated) return true;
         return false;
     }
 
@@ -474,7 +482,7 @@ internal sealed class CharacterContent : IDisposable
         var parts = c.Parts.Select(p => (Path: FindMesh(p.Mesh), Shared: p.Mode == AttachMode.SharedSkeleton, Scale: PartLodScale(c, p))).Where(p => p.Path is not null).ToList();
         var partMap = PartMapPath(c);
         float pixels = LodPixelsPerRadian;
-        Interlocked.Increment(ref fetchesRunning);
+        Interlocked.Increment(ref _fetchesRunning);
         bool Fetch()
         {
             try
@@ -484,7 +492,7 @@ internal sealed class CharacterContent : IDisposable
                 foreach (var (path, shared, scale) in parts) _ = Prepare(path!, shared ? rig.BoneCount : null, scale, false, pixels, close: close).Value;
             }
             catch (Exception) { }   // a file that cannot be read: Build meets it again on the render thread and reports it
-            finally { Interlocked.Decrement(ref fetchesRunning); }
+            finally { Interlocked.Decrement(ref _fetchesRunning); }
             return true;
         }
         return urgent ? BackgroundWork.RunUrgent(Fetch) : BackgroundWork.Run(Fetch);
@@ -506,8 +514,8 @@ internal sealed class CharacterContent : IDisposable
         if (c.Animal is not null) return null;
         var claimed = new Dictionary<string, int>(StringComparer.Ordinal);
         var claimedPart = new Dictionary<string, int>(StringComparer.Ordinal);   // the same bones to the part's index in the health parts' order (MedicalState.Create: BodyPartTemplate.MedicalOrder, stable)
-        var anatomy = c.Race.GetReferences("combat anatomy").Select(r => db.Find(r.TargetStringId)).Where(p => p is { Type: FcsRecordType.LOCATIONAL_DAMAGE }).Select(p => p!).ToList();
-        var rank = anatomy.Select((p, i) => (p, i)).OrderBy(x => Meitou.Data.Gameplay.Bodies.BodyPartTemplate.From(x.p).MedicalOrder).Select((x, k) => (x.i, k)).ToDictionary(x => x.i, x => x.k);
+        var anatomy = c.Race.GetReferences("combat anatomy").Select(r => _db.Find(r.TargetStringId)).Where(p => p is { Type: FcsRecordType.LocationalDamage }).Select(p => p!).ToList();
+        var rank = anatomy.Select((p, i) => (p, i)).OrderBy(x => Data.Gameplay.Bodies.BodyPartTemplate.From(x.p).MedicalOrder).Select((x, k) => (x.i, k)).ToDictionary(x => x.i, x => x.k);
         for (int partIndex = 0; partIndex < anatomy.Count; partIndex++)
         {
             var part = anatomy[partIndex];
@@ -529,7 +537,7 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>The file of the race's part map (<see cref="CharacterAppearance.PartMap"/>), found as Ogre finds it (by name through the resource and mod folders); null without one.</summary>
-    string? PartMapPath(CharacterAppearance c) => c.PartMap is { } name ? assets.Find(name) : null;
+    string? PartMapPath(CharacterAppearance c) => c.PartMap is { } name ? _assets.Find(name) : null;
 
     /// <summary>
     /// The part map's pixels (<c>FUN_140075600</c>, docs/characters.md "Hidden body parts"): null when it cannot be read, and for a DXT1 to DXT5 file, which the original
@@ -592,8 +600,17 @@ internal sealed class CharacterContent : IDisposable
     /// <summary>The part-map bit of a colour (docs/characters.md "Hidden body parts"); 0 for black and for a colour not in the table (the original logs it as invalid).</summary>
     static int PartBit(int rgb) => rgb switch
     {
-        0xFFFFFF => 0x1, 0xFF0000 => 0x2, 0x00FF00 => 0x4, 0x0000FF => 0x8, 0xFFFF00 => 0x10,
-        0xFF00FF => 0x20, 0x00FFFF => 0x40, 0xFF8000 => 0x80, 0x8000FF => 0x100, 0x008080 => 0x200, _ => 0,
+        0xFFFFFF => 0x1,
+        0xFF0000 => 0x2,
+        0x00FF00 => 0x4,
+        0x0000FF => 0x8,
+        0xFFFF00 => 0x10,
+        0xFF00FF => 0x20,
+        0x00FFFF => 0x40,
+        0xFF8000 => 0x80,
+        0x8000FF => 0x100,
+        0x008080 => 0x200,
+        _ => 0,
     };
 
     /// <summary>
@@ -632,7 +649,7 @@ internal sealed class CharacterContent : IDisposable
     }
 
     /// <summary>How much farther a part's generated levels start (<see cref="HairLodScale"/> for a person's hair and beard).</summary>
-    static float PartLodScale(CharacterAppearance c, CharacterPart part) => part.Record.Type == FcsRecordType.ATTACHMENT && c.Animal is null ? HairLodScale : 1;
+    static float PartLodScale(CharacterAppearance c, CharacterPart part) => part.Record.Type == FcsRecordType.Attachment && c.Animal is null ? HairLodScale : 1;
 
     /// <summary>The steps (share of a part's triangles), floor per part, limits and guards the character levels are built with: the objects' limits, and collapses keep the
     /// texture coordinates (without that a face's eyes and mouth smeared across their UV islands from the second level on).</summary>
@@ -684,14 +701,14 @@ internal sealed class CharacterContent : IDisposable
     /// </summary>
     static FoliageLodSet? BuildLevels(string path, Model model, List<ModelPart> parts, float radius, FoliageLodBuilder.Settings settings)
     {
-        if (Meitou.Data.World.LoadCaches.Disabled) return FoliageLodBuilder.Build(model, radius, settings);
+        if (Data.World.LoadCaches.Disabled) return FoliageLodBuilder.Build(model, radius, settings);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var part in parts)
         {
             hash.AppendData(MemoryMarshal.AsBytes(part.Vertices.AsSpan()));
             hash.AppendData(MemoryMarshal.AsBytes(part.Indices.AsSpan()));
         }
-        string Number(float f) => f.ToString("R", CultureInfo.InvariantCulture);
+        static string Number(float f) => f.ToString("R", CultureInfo.InvariantCulture);
         hash.AppendData(Encoding.UTF8.GetBytes($"{Number(radius)} {string.Join(',', settings.Fractions.Select(Number))} {settings.Floor} {Number(settings.MaxRelativeError)} " +
             $"{Number(settings.MaxNormalAngle)} {Number(settings.MinGain)} {settings.UvAware} {settings.TwoSided}"));
         int version = FoliageLodBuilder.Version * 100 + LodVersion;
@@ -707,8 +724,8 @@ internal sealed class CharacterContent : IDisposable
     /// <summary>Assembles the asset for <paramref name="c"/>; null when its body mesh or skeleton cannot be found.</summary>
     public CharacterAsset? Build(CharacterAppearance c)
     {
-        fetching.Remove(c);
-        bool close = closeUp.Remove(c);
+        _fetching.Remove(c);
+        bool close = _closeUp.Remove(c);
         var bodyPath = FindMesh(c.BodyMesh);
         if (bodyPath is null) { Messages.Add($"body mesh not found: {c.BodyMesh}"); return null; }
         // The body's own skeleton link (Kenshi shares that instance with worn items); the rig's bone count decides the weights kept.
@@ -742,17 +759,32 @@ internal sealed class CharacterContent : IDisposable
         }
         asset.Parts.Add(new AssetPart
         {
-            Label = $"body {Path.GetFileName(bodyPath)}", Mesh = body.Gpu, Shared = true, Material = BodyMaterial(c),
-            BoundsCentre = body.Centre, BoundsRadius = body.Radius, PickBoxes = body.PickBoxes ?? [],
-            Morphed = asset.MorphBase != 0, ShadowDistances = body.ShadowDistances, ShadowFirst = body.ShadowFirst, IsBody = true,
-            FileDistances = body.FileDistances, FileFirst = body.FileFirst, FileRadius = body.FileRadius,
+            Label = $"body {Path.GetFileName(bodyPath)}",
+            Mesh = body.Gpu,
+            Shared = true,
+            Material = BodyMaterial(c),
+            BoundsCentre = body.Centre,
+            BoundsRadius = body.Radius,
+            PickBoxes = body.PickBoxes ?? [],
+            Morphed = asset.MorphBase != 0,
+            ShadowDistances = body.ShadowDistances,
+            ShadowFirst = body.ShadowFirst,
+            IsBody = true,
+            FileDistances = body.FileDistances,
+            FileFirst = body.FileFirst,
+            FileRadius = body.FileRadius,
         });
         // A headless body's neck, and a cut-off head's, is closed by a cap made from the body (NeckCap), in the race's wound look.
         if ((c.Headless || c.HeadOnly) && NeckCapMesh(bodyPath, body, rig.BoneCount, c.HeadOnly) is { } cap)
             asset.Parts.Add(new AssetPart
             {
-                Label = $"neck cap {Path.GetFileName(bodyPath)}", Mesh = cap.Gpu, Shared = true, Material = WoundMaterial(c),
-                BoundsCentre = cap.Centre, BoundsRadius = cap.Radius, Morphed = asset.MorphBase != 0,
+                Label = $"neck cap {Path.GetFileName(bodyPath)}",
+                Mesh = cap.Gpu,
+                Shared = true,
+                Material = WoundMaterial(c),
+                BoundsCentre = cap.Centre,
+                BoundsRadius = cap.Radius,
+                Morphed = asset.MorphBase != 0,
             });
         foreach (var part in c.Parts)
         {
@@ -764,9 +796,20 @@ internal sealed class CharacterContent : IDisposable
             if (loaded is null || loaded.Gpu.Parts.Count == 0) continue;
             var ap = new AssetPart
             {
-                Label = $"{part.Record.Type} '{part.Record.Name}' .{part.Field}", Mesh = loaded.Gpu, Shared = shared, Material = ItemMaterial(c, part, path, loaded),
-                BoundsCentre = loaded.Centre, BoundsRadius = loaded.Radius, Shown = part.Shown, ShownShots = part.ShownShots, Muzzle = part is { Field: "live ammo", ShownShots: 1, Shown: WeaponShown.RangedDrawn }, HideSide = part.HideSide, PickBoxes = loaded.PickBoxes ?? [],
-                FileDistances = loaded.FileDistances, FileFirst = loaded.FileFirst, FileRadius = loaded.FileRadius,
+                Label = $"{part.Record.Type} '{part.Record.Name}' .{part.Field}",
+                Mesh = loaded.Gpu,
+                Shared = shared,
+                Material = ItemMaterial(c, part, path, loaded),
+                BoundsCentre = loaded.Centre,
+                BoundsRadius = loaded.Radius,
+                Shown = part.Shown,
+                ShownShots = part.ShownShots,
+                Muzzle = part is { Field: "live ammo", ShownShots: 1, Shown: WeaponShown.RangedDrawn },
+                HideSide = part.HideSide,
+                PickBoxes = loaded.PickBoxes ?? [],
+                FileDistances = loaded.FileDistances,
+                FileFirst = loaded.FileFirst,
+                FileRadius = loaded.FileRadius,
             };
             if (!shared)
             {
@@ -838,7 +881,10 @@ internal sealed class CharacterContent : IDisposable
     {
         var m = new PartMaterial
         {
-            Shading = CharacterShaders.ShadeItem, Description = $"RACE '{c.Race.Name}' neck wound", Wound = true, Mechanical = c.Race.GetBool("is robot"),
+            Shading = CharacterShaders.ShadeItem,
+            Description = $"RACE '{c.Race.Name}' neck wound",
+            Wound = true,
+            Mechanical = c.Race.GetBool("is robot"),
             Colour1 = new Vector4(CharacterAppearance.Rgb(c.Race.GetInt("blood colour", 0x800000) & 0xFFFFFF), 1),
         };
         m.Tex[CharacterShaders.SlotDiffuse] = Texture("bloody.png", false);
@@ -852,8 +898,8 @@ internal sealed class CharacterContent : IDisposable
     LoadedMesh? NeckCapMesh(string bodyPath, LoadedMesh body, int bones, bool head)
     {
         var key = (bodyPath.ToLowerInvariant() + (head ? "#head cap" : "#neck cap"), bones, false, (string?)null);
-        if (meshes.TryGetValue(key, out var cached)) return cached;
-        return meshes[key] = (head ? body.HeadCap : body.NeckCap) is { } ready ? Upload(ready) : null;
+        if (_meshes.TryGetValue(key, out var cached)) return cached;
+        return _meshes[key] = (head ? body.HeadCap : body.NeckCap) is { } ready ? Upload(ready) : null;
     }
 
     /// <summary>A body's cap (<see cref="NeckCap"/>) ready for upload, from the body's model as <see cref="PrepareMesh"/> marked it (its face-morph slots and head bits); null: none.</summary>
@@ -875,13 +921,19 @@ internal sealed class CharacterContent : IDisposable
         var colour = c.BodyLayers.Take(3).Select(l => l.Colour).FirstOrDefault(x => x is not null);
         var m = new PartMaterial
         {
-            Shading = CharacterShaders.ShadeBody, Description = $"RACE '{c.Race.Name}' body",
-            SkinTone = c.SkinToneParameter, HairColour = c.HairColour,
-            HairAlpha = Channel(c.Hair?.GetInt("head alpha channel" + f, 1) ?? 1), HairMult = Channel(c.Hair?.GetInt("head channel" + f) ?? 0),
+            Shading = CharacterShaders.ShadeBody,
+            Description = $"RACE '{c.Race.Name}' body",
+            SkinTone = c.SkinToneParameter,
+            HairColour = c.HairColour,
+            HairAlpha = Channel(c.Hair?.GetInt("head alpha channel" + f, 1) ?? 1),
+            HairMult = Channel(c.Hair?.GetInt("head channel" + f) ?? 0),
             BeardAlpha = Channel(c.Beard?.GetInt("head alpha channel" + f, 1) ?? 1),
-            ShirtColour = colour is null ? Vector3.One : CharacterAppearance.Rgb(colour.GetInt("color 1")), HasShirtColour = colour is not null,
+            ShirtColour = colour is null ? Vector3.One : CharacterAppearance.Rgb(colour.GetInt("color 1")),
+            HasShirtColour = colour is not null,
             // Animals: fur and hide; a robot race (RACE `is robot`, skeletons) is off by default (docs/character-renderer.md "Skin").
-            Skin = c.Animal is null, SkinDefault = CharacterRenderer.SkinByDefault(c.Race), Race = c.Race.StringId,
+            Skin = c.Animal is null,
+            SkinDefault = CharacterRenderer.SkinByDefault(c.Race),
+            Race = c.Race.StringId,
         };
         // Animal meshes put the mirrored half of the body at u 1..2 (goat, bull, beak thing: Observed, the meshes' texture coordinates), so their textures repeat; a
         // person's body texture has the transparent border (the head sits beside it at v -1..0). That Kenshi repeats them is an engine reading (the animal material was not read).
@@ -912,7 +964,7 @@ internal sealed class CharacterContent : IDisposable
         var item = part.Record;
         string f = c.Female ? " female" : "";
         var m = new PartMaterial();
-        if (item.Type == FcsRecordType.ATTACHMENT)
+        if (item.Type == FcsRecordType.Attachment)
         {
             // Hair and beards: brightness and alpha are channels of the diffuse texture.
             m.Shading = CharacterShaders.ShadeHair;
@@ -935,10 +987,10 @@ internal sealed class CharacterContent : IDisposable
         // Clothing: MATERIAL_SPECS_CLOTHING from "material" (female: "material female" if set), likeliest first; dye the part's colour
         // (CharacterPart.Colour: the instance's, else the wearer's scheme, none for "dont colorise").
         var refs = item.GetReferences(c.Female && item.GetReferences("material female").Count > 0 ? "material female" : "material");
-        var spec = refs.OrderByDescending(r => r.Values.Value0).Select(r => db.Find(r.TargetStringId))
-            .FirstOrDefault(s => s is { Type: FcsRecordType.MATERIAL_SPECS_CLOTHING or FcsRecordType.MATERIAL_SPEC or FcsRecordType.MATERIAL_SPECS_WEAPON });
+        var spec = refs.OrderByDescending(r => r.Values.Value0).Select(r => _db.Find(r.TargetStringId))
+            .FirstOrDefault(s => s is { Type: FcsRecordType.MaterialSpecsClothing or FcsRecordType.MaterialSpec or FcsRecordType.MaterialSpecsWeapon });
         // A generated loadout chose the clothing material (from "material"; "material female" still wins for women).
-        if (part.Material is { Type: FcsRecordType.MATERIAL_SPECS_CLOTHING } chosen && !(c.Female && item.GetReferences("material female").Count > 0))
+        if (part.Material is { Type: FcsRecordType.MaterialSpecsClothing } chosen && !(c.Female && item.GetReferences("material female").Count > 0))
             spec = chosen;
         if (spec is not null)
         {
@@ -961,7 +1013,7 @@ internal sealed class CharacterContent : IDisposable
         }
         // A limb replacement without a material (the races' stumps, mesh material "default") wears the body's own material: its textures and skin tone
         // (AppearanceBase::setupItemMaterial, FUN_140536210: no material record and type 111 sets the appearance's body material). Prosthetics have one.
-        if (item.Type == FcsRecordType.LIMB_REPLACEMENT)
+        if (item.Type == FcsRecordType.LimbReplacement)
         {
             var body = BodyMaterial(c);
             body.Description = $"RACE '{c.Race.Name}' body (stump '{item.Name}')";
@@ -970,7 +1022,7 @@ internal sealed class CharacterContent : IDisposable
             return body;
         }
         // A weapon of a generated loadout: its manufacturer's model.
-        if (part.Material is { Type: FcsRecordType.MATERIAL_SPECS_WEAPON } model && Tex(model, "texture map") is { } modelTexture)
+        if (part.Material is { Type: FcsRecordType.MaterialSpecsWeapon } model && Tex(model, "texture map") is { } modelTexture)
         {
             m.Description = $"MATERIAL_SPECS_WEAPON '{model.Name}' (loadout model)";
             m.Tex[CharacterShaders.SlotDiffuse] = Texture(modelTexture, false);
@@ -978,7 +1030,7 @@ internal sealed class CharacterContent : IDisposable
             return m;
         }
         // Weapons and anything else: the resolver (weapon models of the manufacturers, own textures, script material).
-        var candidate = loaded.FirstMaterialName is null ? null : resolver.Candidates(path, new OgreSubMesh { MaterialName = loaded.FirstMaterialName }).FirstOrDefault();
+        var candidate = loaded.FirstMaterialName is null ? null : _resolver.Candidates(path, new OgreSubMesh { MaterialName = loaded.FirstMaterialName }).FirstOrDefault();
         m.Description = candidate?.Description ?? "untextured";
         m.Tex[CharacterShaders.SlotDiffuse] = Texture(candidate?.Diffuse, false);
         m.Tex[CharacterShaders.SlotNormal] = Texture(candidate?.Normal, false);
@@ -989,7 +1041,7 @@ internal sealed class CharacterContent : IDisposable
     // ---- item icons ----
 
     /// <summary>The material record an icon is drawn with (<see cref="ItemIcons.MaterialOf"/>).</summary>
-    public GameRecord? IconMaterialOf(GameRecord item, string materialId) => ItemIcons.MaterialOf(db, item, materialId);
+    public GameRecord? IconMaterialOf(GameRecord item, string materialId) => ItemIcons.MaterialOf(_db, item, materialId);
 
     /// <summary>
     /// The asset of <paramref name="item"/>'s inventory icon (docs/game/ui-screens.md "Item icons"): its mesh (a weapon's bare blade) unskinned, with the textures of <paramref name="spec"/>,
@@ -1011,7 +1063,7 @@ internal sealed class CharacterContent : IDisposable
             m.Tex[CharacterShaders.SlotNormal] = Texture(Tex(spec, "normal map"), false);
             m.ClipOnNormalAlpha = Tex(spec, "normal map") is not null;
             m.DoubleSided = spec.GetInt("material type") == 2;
-            if (dye is { Type: FcsRecordType.COLOR_DATA } && Tex(spec, "color map") is not null)
+            if (dye is { Type: FcsRecordType.ColorData } && Tex(spec, "color map") is not null)
             {
                 m.Description += $", dye '{dye.Name}'";
                 m.Tex[CharacterShaders.SlotColourMap] = Texture(Tex(spec, "color map"), false);
@@ -1023,7 +1075,7 @@ internal sealed class CharacterContent : IDisposable
         }
         else
         {
-            var candidate = loaded.FirstMaterialName is null ? null : resolver.Candidates(path, new OgreSubMesh { MaterialName = loaded.FirstMaterialName }).FirstOrDefault();
+            var candidate = loaded.FirstMaterialName is null ? null : _resolver.Candidates(path, new OgreSubMesh { MaterialName = loaded.FirstMaterialName }).FirstOrDefault();
             m.Description = candidate?.Description ?? "untextured";
             m.Tex[CharacterShaders.SlotDiffuse] = Texture(candidate?.Diffuse, false);
             m.Tex[CharacterShaders.SlotNormal] = Texture(candidate?.Normal, false);
@@ -1033,8 +1085,13 @@ internal sealed class CharacterContent : IDisposable
         var asset = new CharacterAsset { Appearance = null!, Rig = null!, IsIcon = true, AttachCount = 1 };
         asset.Parts.Add(new AssetPart
         {
-            Label = $"icon {item.Type} '{item.Name}'", Mesh = loaded.Gpu, Shared = false, Material = m, AttachIndex = 0,
-            BoundsCentre = loaded.Centre, BoundsRadius = loaded.Radius,
+            Label = $"icon {item.Type} '{item.Name}'",
+            Mesh = loaded.Gpu,
+            Shared = false,
+            Material = m,
+            AttachIndex = 0,
+            BoundsCentre = loaded.Centre,
+            BoundsRadius = loaded.Radius,
         });
         return asset;
     }

@@ -226,66 +226,70 @@ public static class TownBuildings
     /// </summary>
     public sealed class Builder
     {
-        readonly GameDatabase db;
-        readonly WorldLevelData levels;
-        readonly BuildingLayouts? layouts;
-        readonly Func<double, double, float> terrainHeight;
-        readonly bool contents;
-        readonly List<(TownPlacement Placement, Gameplay.TownData Town)> towns = [];
-        readonly Dictionary<string, bool> beds = new(StringComparer.Ordinal);
-        readonly Dictionary<string, GameRecord?> functions = new(StringComparer.Ordinal);
-        readonly Dictionary<(int C, int I), string> instances = [];
-        readonly Dictionary<(string, bool), IReadOnlySet<string>> names = [];
+        readonly GameDatabase _db;
+        readonly WorldLevelData _levels;
+        readonly BuildingLayouts? _layouts;
+        readonly Func<double, double, float> _terrainHeight;
+        readonly bool _contents;
+        readonly List<(TownPlacement Placement, Gameplay.TownData Town)> _towns = [];
+        readonly Dictionary<string, bool> _beds = new(StringComparer.Ordinal);
+        readonly Dictionary<string, GameRecord?> _functions = new(StringComparer.Ordinal);
+        readonly Dictionary<(int C, int I), string> _instances = [];
+        readonly Dictionary<(string, bool), IReadOnlySet<string>> _names = [];
 
         public Builder(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight, bool contents = true)
         {
-            (this.db, this.levels, this.layouts, this.terrainHeight, this.contents) = (db, levels, layouts, terrainHeight, contents);
+            (this._db, this._levels, this._layouts, this._terrainHeight, this._contents) = (db, levels, layouts, terrainHeight, contents);
             foreach (var t in levels.Towns())
-                if (db.Find(t.TownId) is { Type: FcsRecordType.TOWN } record) towns.Add((t, Gameplay.TownData.From(record)));
+                if (db.Find(t.TownId) is { Type: FcsRecordType.Town } record) _towns.Add((t, Gameplay.TownData.From(record)));
             // The instance of each building state's own handle, so a turret's mounted handle names the building it stands on.
             foreach (var b in levels.Buildings())
-                if (b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zone) && zone.Find(b.StateId) is { } state && state.GetInt("handleTYPE") == (int)FcsRecordType.BUILDING && state.Ints.ContainsKey("handleI"))
-                    instances[(state.GetInt("handleC"), state.GetInt("handleI"))] = b.Key;
+                if (b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zone) && zone.Find(b.StateId) is { } state && state.GetInt("handleTYPE") == (int)FcsRecordType.Building && state.Ints.ContainsKey("handleI"))
+                    _instances[(state.GetInt("handleC"), state.GetInt("handleI"))] = b.Key;
         }
 
         /// <summary>The town building of a level building and the placement id of its town; null for a node marker, a resource building or one no town takes (<see cref="MemberOf"/>).</summary>
         public (string Town, TownBuilding Building)? Build(BuildingPlacement b)
         {
-            if (BuildingPlacements.Resolve(b, db, levels, terrainHeight) is not { } resolved) return null;
+            if (BuildingPlacements.Resolve(b, _db, _levels, _terrainHeight) is not { } resolved) return null;
             var record = resolved.Record;
             if (record.GetBool("is node") || record.GetBool("is foliage")) return null;
-            var state = b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
-            if (MemberOf(towns, resolved.Position, record) is not { } town) return null;
-            var functionality = FunctionOf(db, record, functions);
+            var state = b.StateId is not null && _levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+            if (MemberOf(_towns, resolved.Position, record) is not { } town) return null;
+            var functionality = FunctionOf(_db, record, _functions);
             TurretPost? turret = functionality is { } fn && fn.GetInt("function") == ObjectRanges.TurretFunction
                 ? new TurretPost(resolved.Position, YawOf(b.Rotation), fn.GetFloat("use range", 10),
-                    record.GetReferences("gun turret").Select(r => r.TargetStringId).FirstOrDefault() ?? "", MountedOn(instances, state))
+                    record.GetReferences("gun turret").Select(r => r.TargetStringId).FirstOrDefault() ?? "", MountedOn(_instances, state))
                 : null;
-            var c = contents && layouts is not null && state is not null
-                ? LayContents(db, layouts, resolved, state, beds, functions)
+            var c = _contents && _layouts is not null && state is not null
+                ? LayContents(_db, _layouts, resolved, state, _beds, _functions)
                 : new Contents { Furnished = record.GetReferences("interior").Count > 0 };
-            if (contents) AddAlone(db, resolved, functionality, c);
+            if (_contents) AddAlone(_db, resolved, functionality, c);
             string? owner = state?.GetString("owner faction ID") is { Length: > 0 } o ? o : null;
             return (town.InstanceId, new TownBuilding(b.InstanceId, record.StringId, record.Name, resolved.Position, YawOf(b.Rotation), c.Shop, c.Bar, c.Spots)
             {
-                OwnerFactionId = owner, Fixtures = c.Fixtures, ItemSlots = c.ItemSlots, Zone = b.Zone, Resolved = resolved,
+                OwnerFactionId = owner,
+                Fixtures = c.Fixtures,
+                ItemSlots = c.ItemSlots,
+                Zone = b.Zone,
+                Resolved = resolved,
                 CanHouse = record.GetBool("is wall gate") || record.GetReferences("interior").Count > 0 && !record.GetBool("links together"),
                 Furnished = c.Furnished,
                 IsGate = record.GetBool("is wall gate"),
                 IsWall = record.GetBool("links together"),
                 HasInterior = record.GetReferences("interior").Count > 0,
                 Destroyed = resolved.Destroyed,
-                RuinedByResidents = levels.ResidentRuined.Contains(b.Key),
+                RuinedByResidents = _levels.ResidentRuined.Contains(b.Key),
                 Turret = turret,
                 ResidentsTemplate = state?.GetString("residents template") ?? "",
                 LevelState = state,
                 InteriorLayout = state?.GetString("interior layout name") ?? "",
-                LevelLayouts = levels.LevelLayoutNames.TryGetValue(b.Key, out var raw) ? raw
+                LevelLayouts = _levels.LevelLayoutNames.TryGetValue(b.Key, out var raw) ? raw
                     : (state?.GetString(ResidentRuins.InteriorKey) ?? "", state?.GetString(ResidentRuins.ExteriorKey) ?? ""),
-                LevelNaming = levels.LevelNames.TryGetValue(b.Key, out var named) ? named : BuildingNaming.Of(state),
-                InteriorLayouts = LayoutNames(layouts, record, exterior: false, names),
-                ExteriorLayouts = LayoutNames(layouts, record, exterior: true, names),
-                HandleSlot = state is not null && state.Ints.ContainsKey("handleI") && state.GetInt("handleTYPE") == (int)FcsRecordType.BUILDING ? state.GetInt("handleI") : -1,
+                LevelNaming = _levels.LevelNames.TryGetValue(b.Key, out var named) ? named : BuildingNaming.Of(state),
+                InteriorLayouts = LayoutNames(_layouts, record, exterior: false, _names),
+                ExteriorLayouts = LayoutNames(_layouts, record, exterior: true, _names),
+                HandleSlot = state is not null && state.Ints.ContainsKey("handleI") && state.GetInt("handleTYPE") == (int)FcsRecordType.Building ? state.GetInt("handleI") : -1,
                 HandleSerial = state?.GetInt("handleS") ?? 0,
                 Tables = c.Tables,
                 Furniture = c.Furniture,
@@ -309,8 +313,17 @@ public static class TownBuildings
         AddAlone(db, placed, FunctionOf(db, resolved.Record, functions), c);
         return b with
         {
-            IsShop = c.Shop, IsBar = c.Bar, Spots = c.Spots, Fixtures = c.Fixtures, ItemSlots = c.ItemSlots, Tables = c.Tables, Furniture = c.Furniture,
-            Furnished = c.Furnished, InteriorLayout = interior, Resolved = placed, Naming = naming ?? b.Naming,
+            IsShop = c.Shop,
+            IsBar = c.Bar,
+            Spots = c.Spots,
+            Fixtures = c.Fixtures,
+            ItemSlots = c.ItemSlots,
+            Tables = c.Tables,
+            Furniture = c.Furniture,
+            Furnished = c.Furnished,
+            InteriorLayout = interior,
+            Resolved = placed,
+            Naming = naming ?? b.Naming,
         };
     }
 
@@ -424,8 +437,14 @@ public static class TownBuildings
     /// </summary>
     static HomeSpot? FurnitureOf(GameDatabase db, GameRecord building, GameRecord function, Vector3 at, float yaw, bool inside = false)
     {
-        var kind = function.GetInt("function") switch { ChairFunction => HomeSpotKind.Chair, ThroneFunction => HomeSpotKind.ThroneSeat, TrainingFunction => HomeSpotKind.Training,
-            MineFunction or ResearchFunction or RefineryFunction or CraftingFunction when inside => HomeSpotKind.Workstation, _ => (HomeSpotKind?)null };
+        var kind = function.GetInt("function") switch
+        {
+            ChairFunction => HomeSpotKind.Chair,
+            ThroneFunction => HomeSpotKind.ThroneSeat,
+            TrainingFunction => HomeSpotKind.Training,
+            MineFunction or ResearchFunction or RefineryFunction or CraftingFunction when inside => HomeSpotKind.Workstation,
+            _ => (HomeSpotKind?)null
+        };
         if (kind is not { } k) return null;
         return new HomeSpot(k, at, yaw)
         {
@@ -466,7 +485,7 @@ public static class TownBuildings
 
     /// <summary>The key of the building a state's <c>mounted</c> handle names; null when the handle is null, not a building, or unknown.</summary>
     static string? MountedOn(Dictionary<(int C, int I), string> instances, GameRecord? state) =>
-        state is not null && state.GetInt("mountedTYPE") == (int)FcsRecordType.BUILDING && state.Ints.ContainsKey("mountedI") &&
+        state is not null && state.GetInt("mountedTYPE") == (int)FcsRecordType.Building && state.Ints.ContainsKey("mountedI") &&
         instances.TryGetValue((state.GetInt("mountedC"), state.GetInt("mountedI")), out string? instance) ? instance : null;
 
     /// <summary>
@@ -505,7 +524,7 @@ public static class TownBuildings
         bool bed = false;
         foreach (var list in building.ReferenceLists)
             foreach (var r in building.GetReferences(list))
-                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BUILDING_FUNCTIONALITY } f && f.GetInt("function") is BedFunction or SkeletonBedFunction)
+                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingFunctionality } f && f.GetInt("function") is BedFunction or SkeletonBedFunction)
                     bed = true;
         cache[building.StringId] = bed;
         return bed;
@@ -522,7 +541,7 @@ public static class TownBuildings
         foreach (var list in building.ReferenceLists)
         {
             foreach (var r in building.GetReferences(list))
-                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BUILDING_FUNCTIONALITY } f) { found = f; break; }
+                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingFunctionality } f) { found = f; break; }
             if (found is not null) break;
         }
         cache[building.StringId] = found;

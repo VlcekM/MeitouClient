@@ -13,25 +13,25 @@ public sealed record RuinedBuilding(TownBuilding Building, bool Destroyed);
 public sealed partial class FixtureRegistry
 {
     // The town buildings whose ruin state a town override changed from the level data's, by key (docs/game/buildings-production.md "Ruined by residents").
-    readonly Dictionary<string, RuinedBuilding> ruins = new(StringComparer.Ordinal);
+    readonly Dictionary<string, RuinedBuilding> _ruins = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The town buildings whose ruin state differs from the level data's or that were laid out afresh (the host draws, paths and lights them so);
     /// <see cref="RuinsRevision"/> counts changes.
     /// </summary>
-    public IReadOnlyCollection<RuinedBuilding> Ruins => ruins.Values;
+    public IReadOnlyCollection<RuinedBuilding> Ruins => _ruins.Values;
     public long RuinsRevision { get; private set; }
-    (long Revision, RuinedBuilding[] List) publishedRuins = (0, []);
+    (long Revision, RuinedBuilding[] List) _publishedRuins = (0, []);
 
     /// <summary><see cref="Ruins"/> as an array made again only when they changed (the snapshot's).</summary>
     public IReadOnlyList<RuinedBuilding> PublishedRuins()
     {
-        if (publishedRuins.Revision != RuinsRevision) publishedRuins = (RuinsRevision, [.. ruins.Values]);
-        return publishedRuins.List;
+        if (_publishedRuins.Revision != RuinsRevision) _publishedRuins = (RuinsRevision, [.. _ruins.Values]);
+        return _publishedRuins.List;
     }
 
     /// <summary>Whether a town building is a ruin now: as a town override left it, else as its save or the level data has it.</summary>
-    public bool IsDestroyed(TownBuilding b) => ruins.TryGetValue(b.Key, out var r) ? r.Destroyed : SavedDestroyed(b);
+    public bool IsDestroyed(TownBuilding b) => _ruins.TryGetValue(b.Key, out var r) ? r.Destroyed : SavedDestroyed(b);
 
     /// <summary>
     /// The ruins of a replaced town's residents (the original reads the town's zone back from the level file and houses the replacement's residents, whose ruined
@@ -83,27 +83,27 @@ public sealed partial class FixtureRegistry
     /// <summary>A registered building that became a ruin outside a reset zone loses its doors and its own lock (a ruin has none, docs/game/locks.md "Doors"); its interior's stay.</summary>
     void RemoveShell(string building)
     {
-        if (!byBuilding.TryGetValue(building, out var list)) return;
+        if (!_byBuilding.TryGetValue(building, out var list)) return;
         var shell = list.Where(f => f.Kind == FixtureKind.Door || f.Id == building).ToList();
         if (shell.Count == 0) return;
         foreach (var f in shell)
         {
             list.Remove(f);
-            all.Remove(f);
-            byId.Remove(f.Id);
+            _all.Remove(f);
+            _byId.Remove(f.Id);
         }
-        containerSpots = null;
-        doorPicks = null; doorsByBuilding = null; doorList = null;
-        doors?.SetDoorsBlocked(building, false);
+        _containerSpots = null;
+        _doorPicks = null; _doorsByBuilding = null; _doorList = null;
+        _doors?.SetDoorsBlocked(building, false);
     }
 
     /// <summary>
     /// Writes each ruined or stood-up building's <c>destroyed</c> into its saved record (those outside a reset zone have no other writer of it), and the layout names
     /// of each one laid out afresh; a building listed only for its layouts keeps its saved <c>destroyed</c>.
     /// </summary>
-    void WriteRuins(IReadOnlyDictionary<string, Meitou.Data.Fcs.FcsRecord> states)
+    void WriteRuins(IReadOnlyDictionary<string, Data.Fcs.FcsRecord> states)
     {
-        foreach (var (key, ruin) in ruins)
+        foreach (var (key, ruin) in _ruins)
         {
             if (!states.TryGetValue(key, out var state)) continue;
             if (ruin.Destroyed != ruin.Building.Destroyed) state.Bools["destroyed"] = ruin.Destroyed;
@@ -115,10 +115,10 @@ public sealed partial class FixtureRegistry
     {
         bool was = IsDestroyed(b);
         bool listed = destroyed != b.Destroyed || Relaid(b);
-        bool changed = !listed ? ruins.Remove(b.Key) : !ruins.TryGetValue(b.Key, out var old) || old.Destroyed != destroyed || !ReferenceEquals(old.Building, b);
-        if (listed) ruins[b.Key] = new RuinedBuilding(b, destroyed);
+        bool changed = !listed ? _ruins.Remove(b.Key) : !_ruins.TryGetValue(b.Key, out var old) || old.Destroyed != destroyed || !ReferenceEquals(old.Building, b);
+        if (listed) _ruins[b.Key] = new RuinedBuilding(b, destroyed);
         if (changed) RuinsRevision++;
-        if (was == destroyed || !sites.Contains(site) || data.Sight is not { } sight) return;
+        if (was == destroyed || !_sites.Contains(site) || data.Sight is not { } sight) return;
         if (destroyed) world.Sight.Remove(b.Key);
         else world.Sight.Restore(sight, b);
     }
@@ -126,7 +126,7 @@ public sealed partial class FixtureRegistry
     /// <summary>A building leaves the ruins list when the player takes it over: its construction site shows and keeps its state from then on.</summary>
     void DropRuin(string building)
     {
-        if (ruins.Remove(building)) RuinsRevision++;
+        if (_ruins.Remove(building)) RuinsRevision++;
     }
 
     /// <summary>
@@ -137,7 +137,7 @@ public sealed partial class FixtureRegistry
 
     /// <summary>Whether a town building is the player's: bought or owned, else (its town not registered) saved as theirs.</summary>
     bool IsPlayers(PopulationData data, int site, TownBuilding b, int player) =>
-        properties.TryGetValue(b.Key, out var p) ? p.Purchased || p.Owner == player
-        : sites.Contains(site) ? OfBuilding(b.Key).Any(f => f.Owner == player)
+        _properties.TryGetValue(b.Key, out var p) ? p.Purchased || p.Owner == player
+        : _sites.Contains(site) ? OfBuilding(b.Key).Any(f => f.Owner == player)
         : Saved?.GetValueOrDefault(b.Key)?.Strings.GetValueOrDefault("owner faction ID") is { Length: > 0 } id && data.FactionIndex(id) == player;
 }

@@ -18,7 +18,7 @@ public sealed partial class CombatSystem
         float attack = AttackRating(world, slot, c, f);
         float defence = DefenceRating(world, slot, c, f, guard: false);
         float rating = (strength + attack + defence) / 3;
-        bool armed = c.Inventory?.Items.Any(x => x.Type == FcsRecordType.WEAPON && InventoryCommands.IsEquipmentSection(x.Section)) == true;
+        bool armed = c.Inventory?.Items.Any(x => x.Type == FcsRecordType.Weapon && InventoryCommands.IsEquipmentSection(x.Section)) == true;
         return f.IsAnimal || armed ? rating : rating * 0.1f;
     }
 }

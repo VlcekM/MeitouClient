@@ -70,35 +70,35 @@ public sealed unsafe partial class PostProcess
             (Level, Coarse, Params) = (P.Sampler("uLevel"), P.Sampler("uCoarse"), P.Uniform("uParams"));
     }
 
-    BloomPrefilterPass? bloomPrefilter;   // made the first time the bloom runs
-    BloomDownPass? bloomDownPass;
-    BloomUpPass? bloomUpPass;
+    BloomPrefilterPass? _bloomPrefilter;   // made the first time the bloom runs
+    BloomDownPass? _bloomDownPass;
+    BloomUpPass? _bloomUpPass;
     // bloomDown[l - 1] is level l (L_l); bloomUp[l - 2] the sum of level l and the coarser ones (U_l), bloomUp[0] what the composite reads.
-    readonly Target2D?[] bloomDown = new Target2D?[BloomPlan.MaxLevels], bloomUp = new Target2D?[BloomPlan.MaxLevels];
-    int bloomWidth, bloomHeight;
+    readonly Target2D?[] _bloomDown = new Target2D?[BloomPlan.MaxLevels], _bloomUp = new Target2D?[BloomPlan.MaxLevels];
+    int _bloomWidth, _bloomHeight;
 
-    IEnumerable<Target2D> BloomTargets() => bloomDown.Concat(bloomUp).OfType<Target2D>();
+    IEnumerable<Target2D> BloomTargets() => _bloomDown.Concat(_bloomUp).OfType<Target2D>();
 
     void FreeBloom()
     {
         foreach (var t in BloomTargets()) t.Texture.Dispose();   // released after the frames in flight
-        Array.Clear(bloomDown);
-        Array.Clear(bloomUp);
-        bloomWidth = bloomHeight = 0;
+        Array.Clear(_bloomDown);
+        Array.Clear(_bloomUp);
+        _bloomWidth = _bloomHeight = 0;
     }
 
     /// <summary>The pyramid for a scene of this size (again when it changed): R11G11B10 floats, as linear and unsigned as the light.</summary>
     void EnsureBloom(int w, int h, int levels)
     {
-        if (bloomWidth == w && bloomHeight == h) return;
+        if (_bloomWidth == w && _bloomHeight == h) return;
         FreeBloom();
-        (bloomWidth, bloomHeight) = (w, h);
+        (_bloomWidth, _bloomHeight) = (w, h);
         using var batch = Gpu.Uploads.Begin();
         for (int level = 1; level <= levels; level++)
-            bloomDown[level - 1] = Make(batch, BloomPlan.LevelSide(w, level), BloomPlan.LevelSide(h, level), InternalFormat.R11fG11fB10f, TextureMinFilter.Linear, $"post bloom 1/{1 << level}");
+            _bloomDown[level - 1] = Make(batch, BloomPlan.LevelSide(w, level), BloomPlan.LevelSide(h, level), InternalFormat.R11FG11FB10F, TextureMinFilter.Linear, $"post bloom 1/{1 << level}");
         // The coarsest level has no sum of its own (the first up pass reads it directly), except when it is level 2, the output.
         for (int level = 2; level <= Math.Max(levels - 1, 2); level++)
-            bloomUp[level - 2] = Make(batch, BloomPlan.LevelSide(w, level), BloomPlan.LevelSide(h, level), InternalFormat.R11fG11fB10f, TextureMinFilter.Linear, $"post bloom sum 1/{1 << level}");
+            _bloomUp[level - 2] = Make(batch, BloomPlan.LevelSide(w, level), BloomPlan.LevelSide(h, level), InternalFormat.R11FG11FB10F, TextureMinFilter.Linear, $"post bloom sum 1/{1 << level}");
     }
 
     /// <summary>The bloom of <paramref name="scene"/> at a quarter of its size, or null when it is off (strength 0) or the scene too small.</summary>
@@ -109,41 +109,41 @@ public sealed unsafe partial class PostProcess
         if (levels == 0) return null;
         EnsureBloom(scene.Width, scene.Height, levels);
 
-        var pre = bloomPrefilter ??= new BloomPrefilterPass(Gpu);
-        var half = bloomDown[0]!;
+        var pre = _bloomPrefilter ??= new BloomPrefilterPass(Gpu);
+        var half = _bloomDown[0]!;
         Bind(pre.P, pre.Scene, scene);
         pre.P.Set(pre.DestSize, (float)half.Width, (float)half.Height);
         pre.P.Set(pre.Firefly, PostOptions.BloomFirefly);
         Draw(pre.P, half);
 
-        var down = bloomDownPass ??= new BloomDownPass(Gpu);
+        var down = _bloomDownPass ??= new BloomDownPass(Gpu);
         for (int level = 2; level <= levels; level++)
         {
-            var source = bloomDown[level - 2]!;
+            var source = _bloomDown[level - 2]!;
             Bind(down.P, down.Source, source);
             down.P.Set(down.Texel, 1f / source.Width, 1f / source.Height);
-            Draw(down.P, bloomDown[level - 1]!);
+            Draw(down.P, _bloomDown[level - 1]!);
         }
 
-        var up = bloomUpPass ??= new BloomUpPass(Gpu);
+        var up = _bloomUpPass ??= new BloomUpPass(Gpu);
         for (int level = levels == 2 ? 2 : levels - 1; level >= 2; level--)
         {
             // The coarser image: the coarsest level itself (scaled by its weight here), or the sum below; nothing when level 2 is the coarsest.
-            var coarse = levels == 2 ? bloomDown[level - 1]! : level + 1 == levels ? bloomDown[levels - 1]! : bloomUp[level - 1]!;
+            var coarse = levels == 2 ? _bloomDown[level - 1]! : level + 1 == levels ? _bloomDown[levels - 1]! : _bloomUp[level - 1]!;
             float coarseScale = levels == 2 ? 0 : level + 1 == levels ? BloomPlan.LevelWeight(levels, levels) : 1;
-            Bind(up.P, up.Level, bloomDown[level - 1]);
+            Bind(up.P, up.Level, _bloomDown[level - 1]);
             Bind(up.P, up.Coarse, coarse);
             up.P.Set(up.Params, BloomPlan.LevelWeight(levels, level), coarseScale, 1f / coarse.Width, 1f / coarse.Height);
-            Draw(up.P, bloomUp[level - 2]!);
+            Draw(up.P, _bloomUp[level - 2]!);
         }
         Stamp("bloom");
-        return bloomUp[0];
+        return _bloomUp[0];
     }
 
     void DisposeBloom()
     {
-        bloomPrefilter?.P.Dispose();
-        bloomDownPass?.P.Dispose();
-        bloomUpPass?.P.Dispose();
+        _bloomPrefilter?.P.Dispose();
+        _bloomDownPass?.P.Dispose();
+        _bloomUpPass?.P.Dispose();
     }
 }

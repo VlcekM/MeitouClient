@@ -6,19 +6,19 @@ namespace Meitou.Data.Fcs;
 /// </summary>
 public sealed class FcsSchema
 {
-    readonly Dictionary<string, List<FcsFieldDef>> fieldsByType = new(StringComparer.Ordinal);
+    readonly Dictionary<string, List<FcsFieldDef>> _fieldsByType = new(StringComparer.Ordinal);
 
     /// <summary>Record type names in order of first appearance.</summary>
-    public IEnumerable<string> TypeNames => fieldsByType.Keys;
+    public IEnumerable<string> TypeNames => _fieldsByType.Keys;
 
-    readonly Dictionary<string, HashSet<string>> ownedByType = new(StringComparer.Ordinal);
+    readonly Dictionary<string, HashSet<string>> _ownedByType = new(StringComparer.Ordinal);
 
     public IReadOnlyList<FcsFieldDef> FieldsOf(string typeName) =>
-        fieldsByType.TryGetValue(typeName, out var fields) ? fields : [];
+        _fieldsByType.TryGetValue(typeName, out var fields) ? fields : [];
 
     /// <summary>True if <paramref name="referenceList"/> of <paramref name="typeName"/> holds child records owned by the record.</summary>
     public bool IsOwned(string typeName, string referenceList) =>
-        ownedByType.TryGetValue(typeName, out var owned) && owned.Contains(referenceList);
+        _ownedByType.TryGetValue(typeName, out var owned) && owned.Contains(referenceList);
 
     /// <summary>
     /// Finds the field a stored key belongs to. Looped fields are declared once with a trailing number
@@ -55,7 +55,7 @@ public sealed class FcsSchema
                     throw new FormatException($"fcs.def line {lineNumber}: unterminated section header.");
                 owners = line[1..^1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
                 foreach (var owner in owners)
-                    schema.fieldsByType.TryAdd(owner, []);
+                    schema._fieldsByType.TryAdd(owner, []);
                 continue;
             }
 
@@ -76,8 +76,8 @@ public sealed class FcsSchema
             {
                 foreach (var owner in owners)
                 {
-                    if (!schema.ownedByType.TryGetValue(owner, out var owned))
-                        schema.ownedByType[owner] = owned = new(StringComparer.Ordinal);
+                    if (!schema._ownedByType.TryGetValue(owner, out var owned))
+                        schema._ownedByType[owner] = owned = new(StringComparer.Ordinal);
                     owned.Add(rest);
                 }
                 continue;
@@ -85,7 +85,7 @@ public sealed class FcsSchema
 
             var field = ParseField(name, rest, lineNumber);
             foreach (var owner in owners)
-                schema.fieldsByType[owner].Add(field);
+                schema._fieldsByType[owner].Add(field);
         }
         return schema;
     }

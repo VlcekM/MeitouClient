@@ -11,7 +11,7 @@ public class GameplayDataTests
 
     static FcsRecord Faction(string id, int defaultRelation, params (string Target, int Value)[] explicitRelations)
     {
-        var r = new FcsRecord { StringId = id, Flags = New, Name = id, RecordType = FcsRecordType.FACTION };
+        var r = new FcsRecord { StringId = id, Flags = New, Name = id, RecordType = FcsRecordType.Faction };
         r.Ints["default relation"] = defaultRelation;
         if (explicitRelations.Length > 0) r.References["relations"] = [.. explicitRelations.Select(e => new FcsReference(e.Target, e.Value, 0, 0))];
         return r;
@@ -51,7 +51,7 @@ public class GameplayDataTests
     [Fact]
     public void Constants_apply_the_loaders_rescalings_and_fall_back_to_the_editor_defaults()
     {
-        var r = new FcsRecord { StringId = "1-t", Flags = New, Name = "GLOBAL CONSTANTS", RecordType = FcsRecordType.CONSTANTS };
+        var r = new FcsRecord { StringId = "1-t", Flags = New, Name = "GLOBAL CONSTANTS", RecordType = FcsRecordType.Constants };
         r.Floats["bleed rate"] = 0.01f;
         r.Floats["exp gain multiplier"] = 3;
         r.Floats["xp rate athletics"] = 1;
@@ -68,7 +68,7 @@ public class GameplayDataTests
         Assert.Equal(0.05f, c.MinimumLockpickChance, 6);
         Assert.Equal(0.6f, c.MinDismantleMaterialsFraction, 6);
         Assert.Equal(0.2f, c.AppearanceRandomDeviation, 6);
-        Assert.Equal(20, c.WeightStrengthDiff1x);
+        Assert.Equal(20, c.WeightStrengthDiff1X);
         Assert.Equal(24, c.StarvationTime);   // the editor default: the record does not have the field
         Assert.Equal(GameConstants.Default.StarvationTime, c.StarvationTime);
         Assert.Equal(0.0005f * 0.1f, GameConstants.Default.BleedingClotRate, 9);
@@ -129,7 +129,7 @@ public class GameplayInstallTests
         var db = InstallData.BaseGame;
         Assert.SkipWhen(db is null, "Kenshi install not found");
         Meitou.Data.Gameplay.Construction.MachineData Machine(string name) =>
-            Meitou.Data.Gameplay.Construction.MachineData.From(db!, db!.Records.Values.First(r => r.Type == FcsRecordType.BUILDING && r.Name == name))!;
+            Data.Gameplay.Construction.MachineData.From(db!, db!.Records.Values.First(r => r.Type == FcsRecordType.Building && r.Name == name))!;
         Assert.Equal(8, Machine("Bed").OutputValue);
         Assert.Equal(10, (int)Machine("Training Dummy MkII").OutputValue - 1);
         Assert.True(Machine("Hydroponic Wheatstraw").Farm!.Indoor);

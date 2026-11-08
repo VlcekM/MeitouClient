@@ -17,14 +17,14 @@ sealed class SpeechBubbles(PlayerInterface player)
     /// </summary>
     internal void AddSpeech(List<UiControl> controls)
     {
-        var speech = player.session.CurrentSnapshot.Speech;
-        if (speech.Count == 0 || player.uiPainter is not { } painter) return;
+        var speech = player.Session.CurrentSnapshot.Speech;
+        if (speech.Count == 0 || player.UiPainter is not { } painter) return;
         float scale = player.Height / 1080f;
         var shown = new List<(SpeechBubble Bubble, FittedSpeech Text, float Alpha, UiRect Panel)>();
         foreach (var bubble in speech)
         {
-            if (player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == bubble.Speaker) is not { } who) continue;
-            var head = player.stealthView.TagAnchor(who, player.where(who));
+            if (player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == bubble.Speaker) is not { } who) continue;
+            var head = player.StealthView.TagAnchor(who, player.Where(who));
             float distance = Vector3.Distance(player.Eye, head) * (bubble.Large ? 0.5f : bubble.Interrupting ? 0.75f : 1);
             float alpha = Math.Clamp((2500 - distance) / 1500f, 0, 1);
             if (alpha <= 0 || player.Project(head) is not { } at) continue;
@@ -49,8 +49,11 @@ sealed class SpeechBubbles(PlayerInterface player)
         controls.Add(new($"speech-text-{n}", "TextBox", new(panel.X + w * 0.0688889f, panel.Y + h * 0.125f, w * 0.855556f, h * 0.75f), text.Lines, "", "", true,
             new Dictionary<string, string>
             {
-                ["FontName"] = SpeechFont(bubble), ["TextAlign"] = "Center", ["TextShadow"] = "true",
-                ["TextColour"] = "0.902 0.902 0.902", ["Alpha"] = a,
+                ["FontName"] = SpeechFont(bubble),
+                ["TextAlign"] = "Center",
+                ["TextShadow"] = "true",
+                ["TextColour"] = "0.902 0.902 0.902",
+                ["Alpha"] = a,
             }, Vector4.Zero, Pickable: false, TextScale: 1));
     }
 
@@ -98,8 +101,8 @@ sealed class SpeechBubbles(PlayerInterface player)
     readonly record struct FittedSpeech(string Lines, float Width, float Height);
 
     /// <summary>The shown bubbles' fitted texts, so a line is wrapped and measured once rather than every frame; cleared when the screen size, UI mode or text size changes.</summary>
-    readonly Dictionary<(string Text, bool Large), FittedSpeech> fittedSpeech = [];
-    (int Width, int Height, UiMode Mode, float MinimumPixels) fittedFor;
+    readonly Dictionary<(string Text, bool Large), FittedSpeech> _fittedSpeech = [];
+    (int Width, int Height, UiMode Mode, float MinimumPixels) _fittedFor;
 
     static string SpeechFont(SpeechBubble bubble) => bubble.Large ? "Kenshi_StandardFont_Large" : "Kenshi_StandardFont_Medium";
 
@@ -110,17 +113,17 @@ sealed class SpeechBubbles(PlayerInterface player)
     FittedSpeech SpeechText(UiPainter painter, SpeechBubble bubble)
     {
         float minimumPixels = player.TitleOpen ? 0 : player.StandardPixels;
-        if (fittedFor != (player.Width, player.Height, painter.Mode, minimumPixels) || fittedSpeech.Count > 64)
+        if (_fittedFor != (player.Width, player.Height, painter.Mode, minimumPixels) || _fittedSpeech.Count > 64)
         {
-            fittedSpeech.Clear();
-            fittedFor = (player.Width, player.Height, painter.Mode, minimumPixels);
+            _fittedSpeech.Clear();
+            _fittedFor = (player.Width, player.Height, painter.Mode, minimumPixels);
         }
-        if (fittedSpeech.TryGetValue((bubble.Text, bubble.Large), out var fitted)) return fitted;
+        if (_fittedSpeech.TryGetValue((bubble.Text, bubble.Large), out var fitted)) return fitted;
 
         float maxWidth = player.Width * 0.234375f * 0.855556f - 4;
         var (lines, size) = painter.WrapCaption(SpeechFont(bubble), bubble.Text, 1, maxWidth, minimumPixels);
         fitted = new(string.Join('\n', lines), size.Width, size.Height);
-        fittedSpeech[(bubble.Text, bubble.Large)] = fitted;
+        _fittedSpeech[(bubble.Text, bubble.Large)] = fitted;
         return fitted;
     }
 }

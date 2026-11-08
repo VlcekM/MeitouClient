@@ -24,30 +24,30 @@ sealed class SandboxScenario(GameHost host)
     /// <summary>The patrol runs along X between -200 and 200 (a 400-unit leg).</summary>
     const float PatrolHalf = 200;
 
-    internal bool IsSandbox => host.g.Sandbox > 0;
+    internal bool IsSandbox => host.GameOptions.Sandbox > 0;
 
-    internal CharacterId sandboxHero = CharacterId.None, sandboxFoe = CharacterId.None;
-    byte? sandboxMode;
-    float sandboxSpeed;
-    bool sandboxPatrol, sandboxFollow;   // follow off: the camera stays on the middle of the floor until moved (Y follows the pair)
-    float patrolTarget;
-    long patrolIssued = -1;
-    internal SandboxAnimationPicker? sandboxPicker;   // made on the first draw (the library is loaded with the scene)
-    float toggleX0, toggleY0, toggleX1, toggleY1;   // the panel's collapse button, as last drawn (pixels)
+    internal CharacterId SandboxHero = CharacterId.None, SandboxFoe = CharacterId.None;
+    byte? _sandboxMode;
+    float _sandboxSpeed;
+    bool _sandboxPatrol, _sandboxFollow;   // follow off: the camera stays on the middle of the floor until moved (Y follows the pair)
+    float _patrolTarget;
+    long _patrolIssued = -1;
+    internal SandboxAnimationPicker? SandboxPicker;   // made on the first draw (the library is loaded with the scene)
+    float _toggleX0, _toggleY0, _toggleX1, _toggleY1;   // the panel's collapse button, as last drawn (pixels)
 
     /// <summary>A click on the panel's collapse button folds the panel to the button alone (a down arrow) or opens it again (<see cref="UserConfig.SandboxPanelCollapsed"/>).</summary>
     internal bool SandboxToggleClick(Vector2 at)
     {
-        if (!IsSandbox || host.g.UiShowcase || at.X < toggleX0 || at.X > toggleX1 || at.Y < toggleY0 || at.Y > toggleY1) return false;
-        host.config.SandboxPanelCollapsed = !host.config.SandboxPanelCollapsed;
-        host.config.Save();
+        if (!IsSandbox || host.GameOptions.UiShowcase || at.X < _toggleX0 || at.X > _toggleX1 || at.Y < _toggleY0 || at.Y > _toggleY1) return false;
+        host.Config.SandboxPanelCollapsed = !host.Config.SandboxPanelCollapsed;
+        host.Config.Save();
         return true;
     }
 
     /// <summary>The CHARACTER record the sandbox spawns: the one asked for, else the first member of the default new-game start's squad.</summary>
-    internal string SandboxRecord(Meitou.Data.GameDatabase db)
+    internal string SandboxRecord(Data.GameDatabase db)
     {
-        if (host.g.SandboxCharacter is { } want)
+        if (host.GameOptions.SandboxCharacter is { } want)
             return FindCharacter(db, want)?.StringId ?? throw new ArgumentException($"--sandbox-character: no CHARACTER or ANIMAL_CHARACTER named '{want}'");
         var start = NewGameStart.Find(NewGameStart.LoadAll(db), NewGameStart.DefaultName);
         foreach (var link in start?.Squad ?? [])
@@ -61,13 +61,13 @@ sealed class SandboxScenario(GameHost host)
     }
 
     /// <summary>The record a command line names: any record by id, else the CHARACTER (before the ANIMAL_CHARACTER) of that name, ignoring case.</summary>
-    internal static Meitou.Data.GameRecord? FindCharacter(Meitou.Data.GameDatabase db, string want) =>
-        db.Find(want) ?? db.Records.Values.Where(r => r.Type is FcsRecordType.CHARACTER or FcsRecordType.ANIMAL_CHARACTER).OrderBy(r => r.Type == FcsRecordType.ANIMAL_CHARACTER)
+    internal static Data.GameRecord? FindCharacter(Data.GameDatabase db, string want) =>
+        db.Find(want) ?? db.Records.Values.Where(r => r.Type is FcsRecordType.Character or FcsRecordType.AnimalCharacter).OrderBy(r => r.Type == FcsRecordType.AnimalCharacter)
             .FirstOrDefault(r => string.Equals(r.Name, want, StringComparison.OrdinalIgnoreCase));
 
     /// <summary><c>--sandbox-races</c>: every person race with the first CHARACTER record that lists it as its only race (records with a choice of races are skipped), by race name.</summary>
-    static List<(string Race, string Record)> SandboxRaces(Meitou.Data.GameDatabase db) =>
-        db.Records.Values.Where(r => r.Type == FcsRecordType.CHARACTER)
+    static List<(string Race, string Record)> SandboxRaces(Data.GameDatabase db) =>
+        db.Records.Values.Where(r => r.Type == FcsRecordType.Character)
             .Select(r => (Id: r.StringId, Races: r.GetReferences("race").Select(x => x.TargetStringId).ToList()))
             .Where(x => x.Races.Count == 1 && db.Find(x.Races[0]) is not null)
             .GroupBy(x => x.Races[0]).Select(grp => (Race: db.Find(grp.Key)!.Name, Record: grp.First().Id))
@@ -76,17 +76,17 @@ sealed class SandboxScenario(GameHost host)
     /// <summary>Spawns the hero (and the foe), selects the hero, applies the command-line start state; returns where the camera starts.</summary>
     internal Vector3 SandboxSpawn()
     {
-        var world = host.session.World;
-        string record = SandboxRecord(host.scene.Database!);
-        float half = host.g.Sandbox >= 2 ? 15 : 0;
-        sandboxHero = host.population!.SpawnSandbox(world, record, new Vector2(-half, 0), player: true, yaw: MathF.PI / 2);
-        if (host.g.Sandbox >= 2) sandboxFoe = host.population.SpawnSandbox(world, record, new Vector2(half, 0), player: false, yaw: -MathF.PI / 2);
+        var world = host.Session.World;
+        string record = SandboxRecord(host.Scene.Database!);
+        float half = host.GameOptions.Sandbox >= 2 ? 15 : 0;
+        SandboxHero = host.Population!.SpawnSandbox(world, record, new Vector2(-half, 0), player: true, yaw: MathF.PI / 2);
+        if (host.GameOptions.Sandbox >= 2) SandboxFoe = host.Population.SpawnSandbox(world, record, new Vector2(half, 0), player: false, yaw: -MathF.PI / 2);
         // n above 2: the rest stand idle in rings round the pair (the player's faction, so they keep out of the fight), 15 units apart, a look each;
         // --sandbox-races: then one of every person race, in the rings after them.
-        var extra = Enumerable.Repeat(record, Math.Max(0, host.g.Sandbox - 2)).ToList();
-        if (host.g.SandboxRaces)
+        var extra = Enumerable.Repeat(record, Math.Max(0, host.GameOptions.Sandbox - 2)).ToList();
+        if (host.GameOptions.SandboxRaces)
         {
-            var races = SandboxRaces(host.scene.Database!);
+            var races = SandboxRaces(host.Scene.Database!);
             Console.WriteLine($"sandbox   {races.Count} races: {string.Join(", ", races.Select(x => x.Race))}");
             extra.AddRange(races.Select(x => x.Record));
         }
@@ -95,21 +95,21 @@ sealed class SandboxScenario(GameHost host)
             int perRing = (int)(2 * MathF.PI * (25 + 15 * ring) / 15);
             if (placed == perRing) { ring++; placed = 0; perRing = (int)(2 * MathF.PI * (25 + 15 * ring) / 15); }
             float r = 25 + 15 * ring, angle = 2 * MathF.PI * placed / perRing;
-            host.population.SpawnSandbox(world, extra[i], new Vector2(r * MathF.Cos(angle), r * MathF.Sin(angle)), player: true, yaw: angle + MathF.PI, variant: i + 1);
+            host.Population.SpawnSandbox(world, extra[i], new Vector2(r * MathF.Cos(angle), r * MathF.Sin(angle)), player: true, yaw: angle + MathF.PI, variant: i + 1);
         }
-        host.playerSquad = world.Squads.Find(world.Player.Squad);
-        world.Commands.Enqueue(new SelectCommand([sandboxHero]) { Tick = world.Tick });
+        host.PlayerSquad = world.Squads.Find(world.Player.Squad);
+        world.Commands.Enqueue(new SelectCommand([SandboxHero]) { Tick = world.Tick });
         bool patrol = false, fight = false;
         // --sandbox-mode: comma-separated walk, run or free, a fixed speed in units/s, patrol and fight.
-        foreach (string token in (host.g.SandboxMode ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (string token in (host.GameOptions.SandboxMode ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            if (float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out float speed)) sandboxSpeed = speed;
+            if (float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out float speed)) _sandboxSpeed = speed;
             else
                 switch (token.ToLowerInvariant())
                 {
-                    case "walk": sandboxMode = SpeedMode.Walk; break;
-                    case "run": sandboxMode = SpeedMode.Run; break;
-                    case "free": sandboxMode = SpeedMode.Free; break;
+                    case "walk": _sandboxMode = SpeedMode.Walk; break;
+                    case "run": _sandboxMode = SpeedMode.Run; break;
+                    case "free": _sandboxMode = SpeedMode.Free; break;
                     case "patrol": patrol = true; break;
                     case "fight": fight = true; break;   // the G key at the start (pictures of a fight)
                     default: throw new ArgumentException("--sandbox-mode: walk, run, free, a speed in units/s, patrol or fight (comma-separated)");
@@ -118,12 +118,12 @@ sealed class SandboxScenario(GameHost host)
         SandboxSendMovement();
         if (patrol) SandboxTogglePatrol();
         if (fight) SandboxKey(EngineKey.G);
-        host.session.Ticked += _ => SandboxTick();
-        Console.WriteLine($"sandbox   {record}{(host.g.Sandbox >= 2 ? ", two facing each other 30 units apart (G fights)" : "")}{(host.g.Sandbox > 2 ? $", {host.g.Sandbox - 2} more round them" : "")}; flat floor {2 * SandboxHalf:0} x {2 * SandboxHalf:0}, grid {SandboxMinor:0} / {SandboxMajor:0}");
-        return new Vector3(0, host.scene.FlatHeight, 0);
+        host.Session.Ticked += _ => SandboxTick();
+        Console.WriteLine($"sandbox   {record}{(host.GameOptions.Sandbox >= 2 ? ", two facing each other 30 units apart (G fights)" : "")}{(host.GameOptions.Sandbox > 2 ? $", {host.GameOptions.Sandbox - 2} more round them" : "")}; flat floor {2 * SandboxHalf:0} x {2 * SandboxHalf:0}, grid {SandboxMinor:0} / {SandboxMajor:0}");
+        return new Vector3(0, host.Scene.FlatHeight, 0);
     }
 
-    internal int crowd;
+    internal int Crowd;
 
     /// <summary>
     /// The game's <c>--crowd n</c> (a test of the character renderer and the simulation at scale): n idle characters of the sandbox's record, each with a look of its own, of the
@@ -131,8 +131,8 @@ sealed class SandboxScenario(GameHost host)
     /// </summary>
     internal void SpawnCrowd(Vector3 around, int count)
     {
-        var world = host.session.World;
-        string record = SandboxRecord(host.scene.Database!);
+        var world = host.Session.World;
+        string record = SandboxRecord(host.Scene.Database!);
         int placed = 0;
         for (int ring = 1; placed < count && ring < 200; ring++)
         {
@@ -143,7 +143,7 @@ sealed class SandboxScenario(GameHost host)
                 float angle = 2 * MathF.PI * k / perRing;
                 var at = new Vector2(around.X + r * MathF.Cos(angle), around.Z + r * MathF.Sin(angle));
                 if (!world.Walkability.IsWalkable(at.X, at.Y)) continue;
-                host.population!.SpawnSandbox(world, record, at, player: true, yaw: angle + MathF.PI, variant: ++placed);
+                host.Population!.SpawnSandbox(world, record, at, player: true, yaw: angle + MathF.PI, variant: ++placed);
             }
         }
         Console.WriteLine($"crowd     {placed} idle characters of {record} round {around.X:0}, {around.Z:0}");
@@ -151,36 +151,36 @@ sealed class SandboxScenario(GameHost host)
 
     void SandboxSendMovement()
     {
-        if (sandboxHero.IsNone) return;
-        host.session.World.Commands.Enqueue(new SandboxMovement(sandboxHero, sandboxMode, sandboxSpeed) { Tick = host.session.World.Tick });
+        if (SandboxHero.IsNone) return;
+        host.Session.World.Commands.Enqueue(new SandboxMovement(SandboxHero, _sandboxMode, _sandboxSpeed) { Tick = host.Session.World.Tick });
     }
 
     void SandboxTogglePatrol()
     {
-        sandboxPatrol = !sandboxPatrol;
-        if (!sandboxPatrol)
+        _sandboxPatrol = !_sandboxPatrol;
+        if (!_sandboxPatrol)
         {
-            host.session.World.Commands.Enqueue(new StopCommand([sandboxHero]) { Tick = host.session.World.Tick });
+            host.Session.World.Commands.Enqueue(new StopCommand([SandboxHero]) { Tick = host.Session.World.Tick });
             return;
         }
-        float x = host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == sandboxHero)?.Position.X ?? 0;
-        patrolTarget = x > 0 ? -PatrolHalf : PatrolHalf;
-        patrolIssued = -1;
+        float x = host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == SandboxHero)?.Position.X ?? 0;
+        _patrolTarget = x > 0 ? -PatrolHalf : PatrolHalf;
+        _patrolIssued = -1;
     }
 
     /// <summary>Keeps the patrol going: the next leg is ordered when the hero has arrived at the end of the last one (the hero stops at once on arrival, as in the game).</summary>
     void SandboxTick()
     {
-        if (!sandboxPatrol || sandboxHero.IsNone) return;
-        var hero = host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == sandboxHero);
+        if (!_sandboxPatrol || SandboxHero.IsNone) return;
+        var hero = host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == SandboxHero);
         if (hero is null) return;
-        long tick = host.session.World.Tick;
-        bool arrived = patrolIssued >= 0 && Math.Abs(hero.Position.X - patrolTarget) < 12;
-        if (arrived) patrolTarget = -patrolTarget;
-        if (patrolIssued < 0 || arrived || tick - patrolIssued > 30 * 30)
+        long tick = host.Session.World.Tick;
+        bool arrived = _patrolIssued >= 0 && Math.Abs(hero.Position.X - _patrolTarget) < 12;
+        if (arrived) _patrolTarget = -_patrolTarget;
+        if (_patrolIssued < 0 || arrived || tick - _patrolIssued > 30 * 30)
         {
-            host.session.World.Commands.Enqueue(new MoveOrder([sandboxHero], new Vector3(patrolTarget, 0, 0)) { Tick = tick });
-            patrolIssued = tick;
+            host.Session.World.Commands.Enqueue(new MoveOrder([SandboxHero], new Vector3(_patrolTarget, 0, 0)) { Tick = tick });
+            _patrolIssued = tick;
         }
     }
 
@@ -191,19 +191,19 @@ sealed class SandboxScenario(GameHost host)
         switch (key)
         {
             case EngineKey.Z or EngineKey.X or EngineKey.C:
-                sandboxMode = key == EngineKey.Z ? SpeedMode.Walk : key == EngineKey.X ? SpeedMode.Run : SpeedMode.Free;
-                sandboxSpeed = 0;
+                _sandboxMode = key == EngineKey.Z ? SpeedMode.Walk : key == EngineKey.X ? SpeedMode.Run : SpeedMode.Free;
+                _sandboxSpeed = 0;
                 SandboxSendMovement();
                 break;
             case EngineKey.LeftBracket or EngineKey.RightBracket:
-                sandboxSpeed = Math.Clamp(MathF.Round(sandboxSpeed / 5) * 5 + (key == EngineKey.RightBracket ? 5 : -5), 0, 150);
+                _sandboxSpeed = Math.Clamp(MathF.Round(_sandboxSpeed / 5) * 5 + (key == EngineKey.RightBracket ? 5 : -5), 0, 150);
                 SandboxSendMovement();
                 break;
             case EngineKey.P: SandboxTogglePatrol(); break;
-            case EngineKey.Y: sandboxFollow = !sandboxFollow; break;
-            case EngineKey.G when !sandboxFoe.IsNone:
-                host.session.World.Commands.Enqueue(new Meitou.Simulation.Combat.AttackOrder([sandboxHero], sandboxFoe) { Tick = host.session.World.Tick });
-                host.session.World.Commands.Enqueue(new Meitou.Simulation.Combat.AttackOrder([sandboxFoe], sandboxHero) { Tick = host.session.World.Tick });
+            case EngineKey.Y: _sandboxFollow = !_sandboxFollow; break;
+            case EngineKey.G when !SandboxFoe.IsNone:
+                host.Session.World.Commands.Enqueue(new Simulation.Combat.AttackOrder([SandboxHero], SandboxFoe) { Tick = host.Session.World.Tick });
+                host.Session.World.Commands.Enqueue(new Simulation.Combat.AttackOrder([SandboxFoe], SandboxHero) { Tick = host.Session.World.Tick });
                 break;
         }
     }
@@ -213,26 +213,26 @@ sealed class SandboxScenario(GameHost host)
     /// <summary>The strategy camera on the character the player follows (<see cref="PlayerInterface.Follow"/>), as the sandbox's follow does; a gone character is let go.</summary>
     internal void FollowCamera()
     {
-        if (host.player.Follow is not { } id || host.session.Camera.IsFree) return;
-        if (host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } followed) { host.player.Follow = null; return; }
-        host.session.Camera.MovePivot(new Vector2(followed.Position.X, followed.Position.Z));
-        host.camera.Target = host.DrawnPosition(followed);
+        if (host.Player.Follow is not { } id || host.Session.Camera.IsFree) return;
+        if (host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } followed) { host.Player.Follow = null; return; }
+        host.Session.Camera.MovePivot(new Vector2(followed.Position.X, followed.Position.Z));
+        host.Camera.Target = host.DrawnPosition(followed);
     }
 
     internal void SandboxFollowCamera()
     {
-        if (!IsSandbox || !sandboxFollow || host.session.Camera.IsFree) return;
-        var characters = host.session.CurrentSnapshot.Characters;
-        if (characters.FirstOrDefault(c => c.Id == sandboxHero) is not { } hero) return;
+        if (!IsSandbox || !_sandboxFollow || host.Session.Camera.IsFree) return;
+        var characters = host.Session.CurrentSnapshot.Characters;
+        if (characters.FirstOrDefault(c => c.Id == SandboxHero) is not { } hero) return;
         var drawn = host.DrawnPosition(hero);
         var latest = hero.Position;
-        if (!sandboxFoe.IsNone && characters.FirstOrDefault(c => c.Id == sandboxFoe) is { } foe)
+        if (!SandboxFoe.IsNone && characters.FirstOrDefault(c => c.Id == SandboxFoe) is { } foe)
         {
             drawn = (drawn + host.DrawnPosition(foe)) / 2;
             latest = (latest + foe.Position) / 2;
         }
-        host.session.Camera.MovePivot(new Vector2(latest.X, latest.Z));
-        host.camera.Target = drawn;
+        host.Session.Camera.MovePivot(new Vector2(latest.X, latest.Z));
+        host.Camera.Target = drawn;
     }
 
     /// <summary>The debug panel, over the finished picture and the HUD (the floor's grid is the terrain's: <see cref="WorldRenderOptions.Grid"/>).</summary>
@@ -241,11 +241,11 @@ sealed class SandboxScenario(GameHost host)
         float buttonW = o.CharWidth + 12, buttonH = o.LineHeight + 4;
         void Toggle(float x1, float y0, string arrow)
         {
-            (toggleX0, toggleY0, toggleX1, toggleY1) = (x1 - buttonW, y0, x1, y0 + buttonH);
-            o.Rect(toggleX0, toggleY0, toggleX1, toggleY1, new Vector4(0.2f, 0.2f, 0.22f, 1));
-            o.Text(arrow, toggleX0 + 6, y0 + 2, DebugOverlay.TextColour);
+            (_toggleX0, _toggleY0, _toggleX1, _toggleY1) = (x1 - buttonW, y0, x1, y0 + buttonH);
+            o.Rect(_toggleX0, _toggleY0, _toggleX1, _toggleY1, new Vector4(0.2f, 0.2f, 0.22f, 1));
+            o.Text(arrow, _toggleX0 + 6, y0 + 2, DebugOverlay.TextColour);
         }
-        if (host.config.SandboxPanelCollapsed)
+        if (host.Config.SandboxPanelCollapsed)
         {
             Toggle(width - 10, 10, "v");
             o.Flush(width, height);
@@ -256,32 +256,32 @@ sealed class SandboxScenario(GameHost host)
         void Add(string text, Vector4? colour = null) => lines.Add((text, colour ?? white));
         var yellow = new Vector4(1f, 0.9f, 0.4f, 1);
         var dim = new Vector4(0.7f, 0.75f, 0.8f, 1);
-        AddCharacter("Hero", sandboxHero, Add, yellow, detailed: true);
-        if (!sandboxFoe.IsNone) { Add(""); AddCharacter("Foe", sandboxFoe, Add, yellow, detailed: false); }
+        AddCharacter("Hero", SandboxHero, Add, yellow, detailed: true);
+        if (!SandboxFoe.IsNone) { Add(""); AddCharacter("Foe", SandboxFoe, Add, yellow, detailed: false); }
         Add("");
-        Add($"patrol {(sandboxPatrol ? $"ON: x {-PatrolHalf:0} <-> {PatrolHalf:0} (to {patrolTarget:0})" : "off")}   follow {(sandboxFollow ? "on" : "off")}", dim);
+        Add($"patrol {(_sandboxPatrol ? $"ON: x {-PatrolHalf:0} <-> {PatrolHalf:0} (to {_patrolTarget:0})" : "off")}   follow {(_sandboxFollow ? "on" : "off")}", dim);
         Add("Z walk  X run  C free  [ ] fixed speed +-5  P patrol  G fight  Y follow  R stop", dim);
-        sandboxPicker ??= host.animationLibrary is { } lib ? new SandboxAnimationPicker(lib, host.animationLengths) : null;
-        if (sandboxPicker is not null) { Add(""); if (sandboxPicker.Status is { Length: > 0 } status) Add(status, dim); }   // the button on the blank row
+        SandboxPicker ??= host.AnimationLibrary is { } lib ? new SandboxAnimationPicker(lib, host.AnimationLengths) : null;
+        if (SandboxPicker is not null) { Add(""); if (SandboxPicker.Status is { Length: > 0 } status) Add(status, dim); }   // the button on the blank row
         float pad = 8, textW = lines.Max(l => l.Text.Length) * o.CharWidth, w = textW + 2 * pad + buttonW, h = lines.Count * o.LineHeight + 2 * pad;
         float x0 = width - w - 10, y0 = 10;   // top right: the HUD holds the bottom and the top left, the character stands in the middle
         o.Rect(x0, y0, x0 + w, y0 + h, DebugOverlay.PanelColour);
         Toggle(x0 + w, y0, "^");
         for (int i = 0; i < lines.Count; i++) o.Text(lines[i].Text, x0 + pad, y0 + pad + i * o.LineHeight, lines[i].Colour);
-        sandboxPicker?.Draw(o, x0 + pad, y0 + pad + (lines.Count - (sandboxPicker.Status.Length > 0 ? 2 : 1)) * o.LineHeight - 2, textW);
+        SandboxPicker?.Draw(o, x0 + pad, y0 + pad + (lines.Count - (SandboxPicker.Status.Length > 0 ? 2 : 1)) * o.LineHeight - 2, textW);
         o.Flush(width, height);
     }
 
     void AddCharacter(string label, CharacterId id, Action<string, Vector4?> add, Vector4 heading, bool detailed)
     {
-        var table = host.session.World.Characters;
-        var snapshot = host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id);
+        var table = host.Session.World.Characters;
+        var snapshot = host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id);
         if (snapshot is null || !table.IsAlive(id)) { add($"{label}: gone", null); return; }
         ref readonly var hot = ref table.Previous[id.Slot];
         var cold = table.Cold(id.Slot)!;
         float v = MathF.Sqrt(hot.Velocity.X * hot.Velocity.X + hot.Velocity.Z * hot.Velocity.Z), measured = 0;
-        if (host.session.PreviousSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } before)
-            measured = Vector3.Distance(new Vector3(before.Position.X, 0, before.Position.Z), new Vector3(snapshot.Position.X, 0, snapshot.Position.Z)) / (float)host.session.Simulation.TickSeconds;
+        if (host.Session.PreviousSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } before)
+            measured = Vector3.Distance(new Vector3(before.Position.X, 0, before.Position.Z), new Vector3(snapshot.Position.X, 0, snapshot.Position.Z)) / (float)host.Session.Simulation.TickSeconds;
         byte mode = cold.ModeOverride ?? hot.Mode;
         string modeText = mode switch { SpeedMode.Walk => $"WALK (cap {hot.WalkSpeed:0.#})", SpeedMode.Run => $"RUN (cap {SpeedMode.RunCap:0})", SpeedMode.Group => "GROUP (squad's slowest)", _ => "FREE (no cap)" };
         add($"{label}: {snapshot.Name}   {(CharacterTask)hot.Task}", heading);
@@ -300,8 +300,8 @@ sealed class SandboxScenario(GameHost host)
             // Published by record name; the length is the clip's (a technique's record name differs from its clip).
             // An animal publishes its clips by clip name (its techniques by record name) and has its own skeleton's lengths.
             bool animal = cold.Fighter is { IsAnimal: true };
-            string clip = host.animationLibrary is { } lib && lib.IndexOfAny(layer.Name) is var at and >= 0 && (!animal || lib.Definitions[at].Technique) ? lib.Definitions[at].Clip : layer.Name;
-            float length = host.animationLengths?.For(animal ? cold.Race?.StringId : null).Of(clip) ?? 1;
+            string clip = host.AnimationLibrary is { } lib && lib.IndexOfAny(layer.Name) is var at and >= 0 && (!animal || lib.Definitions[at].Technique) ? lib.Definitions[at].Clip : layer.Name;
+            float length = host.AnimationLengths?.For(animal ? cold.Race?.StringId : null).Of(clip) ?? 1;
             add($"  {layer.Name,-28} t {layer.Time,5:0.00}/{length,5:0.00}  w {layer.Weight:0.00}", null);
         }
     }

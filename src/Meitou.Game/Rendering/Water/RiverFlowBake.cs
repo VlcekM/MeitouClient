@@ -137,13 +137,13 @@ public static class RiverFlowBake
                 float aniso = (float)((l1 - l2) / (l1 + l2));
                 double theta = 0.5 * Math.Atan2(2 * cxy, cxx - cyy);
                 double tx = Math.Cos(theta), ty = Math.Sin(theta);
-                double sPP = 0, sPT = 0;
-                foreach (var (ox, oy, p) in near) { double u = (ox - mx) * tx + (oy - my) * ty; sPT += u * u; sPP += u * (p - mp); }
-                if (sPT < 1e-6) continue;
+                double sPp = 0, sPt = 0;
+                foreach (var (ox, oy, p) in near) { double u = (ox - mx) * tx + (oy - my) * ty; sPt += u * u; sPp += u * (p - mp); }
+                if (sPt < 1e-6) continue;
                 if (aniso < 0.5f) continue;
                 fx[k] = (float)tx;   // the axis for now, with no sense
                 fz[k] = (float)ty;
-                slope[k] = (float)(sPP / sPT);   // units of height per texel along (tx, ty)
+                slope[k] = (float)(sPp / sPt);   // units of height per texel along (tx, ty)
                 weight[k] = (1f - Smooth(3f, OpenHalfWidth, half[k])) * Smooth(0.5f, 0.75f, aniso);
             }
 

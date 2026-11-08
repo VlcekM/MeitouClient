@@ -69,7 +69,7 @@ public class ItemIconTests
     [InlineData(2, 6, 128, 512)]
     public void An_icon_is_made_at_50_pixels_a_cell_rounded_up_to_powers_of_two(int columns, int rows, int width, int height)
     {
-        var item = Record(Meitou.Data.Fcs.FcsRecordType.ITEM, ("inventory footprint width", columns), ("inventory footprint height", rows));
+        var item = Record(Data.Fcs.FcsRecordType.Item, ("inventory footprint width", columns), ("inventory footprint height", rows));
         var style = ItemIconStyle.Of(item);
         Assert.Equal((columns * 50, rows * 50), (style.Width, style.Height));
         Assert.Equal((width, height), style.TextureSize);
@@ -78,11 +78,11 @@ public class ItemIconTests
     [Fact]
     public void A_weapon_is_turned_by_the_fixed_angles_and_a_record_without_offsets_takes_the_defaults()
     {
-        var weapon = Record(Meitou.Data.Fcs.FcsRecordType.WEAPON);
+        var weapon = Record(Data.Fcs.FcsRecordType.Weapon);
         var style = ItemIconStyle.Of(weapon);
         Assert.Equal((-90f, -90f, 90f), (style.Pitch, style.Yaw, style.Roll));
         Assert.Equal((1f, 0f, -4f), (style.Zoom, style.OffsetV, style.OffsetH));
-        var plain = ItemIconStyle.Of(Record(Meitou.Data.Fcs.FcsRecordType.ITEM));
+        var plain = ItemIconStyle.Of(Record(Data.Fcs.FcsRecordType.Item));
         Assert.Equal((0f, 90f, 0f), (plain.Pitch, plain.Yaw, plain.Roll));
         Assert.Equal((2.7f, -8f, 0f), (plain.Zoom, plain.OffsetV, plain.OffsetH));
         Assert.Equal(13.5f, plain.Distance);

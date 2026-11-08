@@ -13,39 +13,39 @@ namespace Meitou.Game.Title;
 sealed class TitleBattle : IDisposable
 {
     const float DisplayScale = 2.5f;
-    readonly World world;
-    readonly IReadOnlyList<Vector3> centres;
-    double remainder;
+    readonly World _world;
+    readonly IReadOnlyList<Vector3> _centres;
+    double _remainder;
 
     TitleBattle(PopulationData data, Func<float, float, float> ground, IReadOnlyList<Vector3> centres,
         AnimationLengths lengths, AnimationLibrary library, string paladin, string bandit, int holyNation, int bandits)
     {
-        this.centres = centres;
+        this._centres = centres;
         var combat = new CombatSystem(data.Combat.Techniques, data.Combat.Constants, data.Bodies.Constants,
             data.BodyOptions with { GlobalDamageMultiplier = 0 }, lengths, new CombatOptions { TickMedical = false });
         var animation = new AnimationSystem(library, lengths, data.Bodies.Constants.AnimationBlendRate, combat);
-        world = new(new WorldSettings { Seed = 173 }, new OpenGroundWalkability(ground), [combat, animation]);
+        _world = new(new WorldSettings { Seed = 173 }, new OpenGroundWalkability(ground), [combat, animation]);
         using var population = new PopulationSystem(data, new PopulationSettings { Background = false });
         try
         {
             for (int i = 0; i < centres.Count; i++)
             {
                 var at = new Vector2(centres[i].X, centres[i].Z);
-                var a = population.SpawnSandbox(world, paladin, at - new Vector2(0, 16), false, 0, i + 1, holyNation);
-                var b = population.SpawnSandbox(world, bandit, at + new Vector2(0, 16), false, MathF.PI, i + 1, bandits);
-                world.Commands.Enqueue(new AttackOrder([a], b) { Tick = i * 7 });
-                world.Commands.Enqueue(new AttackOrder([b], a) { Tick = i * 7 });
+                var a = population.SpawnSandbox(_world, paladin, at - new Vector2(0, 16), false, 0, i + 1, holyNation);
+                var b = population.SpawnSandbox(_world, bandit, at + new Vector2(0, 16), false, MathF.PI, i + 1, bandits);
+                _world.Commands.Enqueue(new AttackOrder([a], b) { Tick = i * 7 });
+                _world.Commands.Enqueue(new AttackOrder([b], a) { Tick = i * 7 });
             }
             // Open on a fight already in progress, rather than six people drawing their weapons together.
-            for (int i = 0; i < 90; i++) world.RunTick();
+            for (int i = 0; i < 90; i++) _world.RunTick();
         }
-        catch { world.Dispose(); throw; }
+        catch { _world.Dispose(); throw; }
     }
 
     public static TitleBattle? Create(PopulationData data, Func<float, float, float> ground, IReadOnlyList<Vector3> centres,
         AnimationLengths lengths, AnimationLibrary library)
     {
-        string? Record(string name) => data.Db.OfType(FcsRecordType.CHARACTER).FirstOrDefault(r => r.BaseName == name)?.StringId;
+        string? Record(string name) => data.Db.OfType(FcsRecordType.Character).FirstOrDefault(r => r.BaseName == name)?.StringId;
         int Faction(string name) => data.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.f.Name == name, (null!, -1)).i;
         if (Record("Paladin") is not { } paladin || Record("Dust Bandit") is not { } bandit ||
             Faction("The Holy Nation") is not (>= 0 and var holyNation) || Faction("Dust Bandits") is not (>= 0 and var bandits) || data.PlayerFaction < 0)
@@ -59,19 +59,19 @@ sealed class TitleBattle : IDisposable
     /// <summary>Real time, independent of the paused gameplay clock; bounded catch-up after a stalled frame.</summary>
     public void Advance(double seconds)
     {
-        remainder += Math.Clamp(seconds, 0, 0.25);
-        while (remainder >= world.TickSeconds)
+        _remainder += Math.Clamp(seconds, 0, 0.25);
+        while (_remainder >= _world.TickSeconds)
         {
-            world.RunTick();
-            remainder -= world.TickSeconds;
+            _world.RunTick();
+            _remainder -= _world.TickSeconds;
         }
     }
 
     public void Fill(CharacterDrawList list)
     {
-        var current = world.Snapshot.Characters;
-        var previous = world.PreviousSnapshot.Characters;
-        float alpha = (float)(remainder / world.TickSeconds);
+        var current = _world.Snapshot.Characters;
+        var previous = _world.PreviousSnapshot.Characters;
+        float alpha = (float)(_remainder / _world.TickSeconds);
         for (int i = 0; i < current.Count; i++)
         {
             var c = current[i];
@@ -82,8 +82,8 @@ sealed class TitleBattle : IDisposable
             int pair = i / 2 * 2;
             var middle = (current[pair].Position + current[pair + 1].Position) / 2;
             var oldMiddle = (previous[pair].Position + previous[pair + 1].Position) / 2;
-            position = centres[i / 2] + (position - Vector3.Lerp(oldMiddle, middle, alpha)) * DisplayScale;
-            position.Y = world.Walkability.GroundHeight(position.X, position.Z);
+            position = _centres[i / 2] + (position - Vector3.Lerp(oldMiddle, middle, alpha)) * DisplayScale;
+            position.Y = _world.Walkability.GroundHeight(position.X, position.Z);
             var poses = c.Animations.Select(layer =>
             {
                 var old = before.Animations.FirstOrDefault(p => p.Name == layer.Name);
@@ -91,10 +91,10 @@ sealed class TitleBattle : IDisposable
                     old.Weight + (layer.Weight - old.Weight) * alpha);
             }).ToArray();
             list.Add(new CharacterInstance(long.MinValue + 2 + i, c.Appearance, position,
-                Meitou.Simulation.Session.Interp.LerpAngle(before.Yaw, c.Yaw, alpha), poses)
-                { WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, Shots = c.CrossbowShots, Scale = c.Scale * DisplayScale, FullRateAnimation = true });
+                Simulation.Session.Interp.LerpAngle(before.Yaw, c.Yaw, alpha), poses)
+            { WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, Shots = c.CrossbowShots, Scale = c.Scale * DisplayScale, FullRateAnimation = true });
         }
     }
 
-    public void Dispose() => world.Dispose();
+    public void Dispose() => _world.Dispose();
 }

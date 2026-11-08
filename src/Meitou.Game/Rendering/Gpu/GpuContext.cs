@@ -41,7 +41,7 @@ public sealed record GpuFeatures(bool Bindless, bool MultiDrawIndirect, bool Dra
 /// </summary>
 public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
 {
-    readonly List<DescriptorPool> persistentPools = [];
+    readonly List<DescriptorPool> _persistentPools = [];
 
     /// <summary>Whether the device is an integrated GPU (<see cref="VulkanDevice.IsIntegrated"/>: its budgets and star layers differ).</summary>
     public bool IsIntegrated => Device.IsIntegrated;
@@ -164,12 +164,12 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     public void Clear(IGpuCommandList host, bool colour, ClearColour colourValue, bool depth, float depthValue, PixelRect rect)
     {
         if (!Frame.Parallel.Open) { host.Clear(colour, colourValue, depth, depthValue, rect); return; }
-        var job = clearJobs.Rent();
+        var job = _clearJobs.Rent();
         (job.Owner, job.Colour, job.ColourValue, job.Depth, job.DepthValue, job.Rect) = (this, colour, colourValue, depth, depthValue, rect);
         Frame.Parallel.Add(depth && !colour ? "clear depth" : "clear", job);
     }
 
-    readonly JobPool<ClearJob> clearJobs = new();
+    readonly JobPool<ClearJob> _clearJobs = new();
 
     sealed class ClearJob : RecordJob
     {
@@ -179,17 +179,17 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         public float DepthValue;
         public PixelRect Rect;
         public override void Record(IGpuCommandList cmd) => cmd.Clear(Colour, ColourValue, Depth, DepthValue, Rect);
-        public override void Release() => Owner.clearJobs.Return(this);
+        public override void Release() => Owner._clearJobs.Return(this);
     }
 
-    uint? standIn2D;
+    uint? _standIn2D;
 
     /// <summary>The stand-in's index in the bindless 2D float array (what a 2D sampler with nothing bound reads, <see cref="Dummy"/>), registered once.</summary>
-    public uint StandIn2D => standIn2D ??= Bindless.Register(BindlessKind.Texture2D,
+    public uint StandIn2D => _standIn2D ??= Bindless.Register(BindlessKind.Texture2D,
         Dummy(new SamplerInfo("", 0, 0, SamplerDimension.Dim2D, false, false, false, ScalarKind.Float, 0)));
 
-    readonly Dictionary<(int, ScalarKind, bool), SampledTexture> dummies = [];
-    readonly List<GpuTexture> dummyTextures = [];
+    readonly Dictionary<(int, ScalarKind, bool), SampledTexture> _dummies = [];
+    readonly List<GpuTexture> _dummyTextures = [];
 
     /// <summary>The generic attribute value a disabled vertex input reads (<see cref="GpuDefaults.DummyVertex"/>).</summary>
     public GpuBuffer DummyVertex => Defaults.DummyVertex.Handle;
@@ -199,14 +199,14 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     {
         int slot = GlConventions.SamplerSlot(sampler);
         var key = (slot, sampler.SampledKind, sampler.Depth);
-        if (dummies.TryGetValue(key, out var s)) return s;
+        if (_dummies.TryGetValue(key, out var s)) return s;
         var d = Defaults.Texture(slot, sampler.SampledKind, sampler.Depth);
         var desc = new TextureDesc(d.Format, 1, 1, 1, slot == 2 ? 1 : d.Layers, Kind: slot == 2 ? TextureKind.Cube : slot == 1 ? TextureKind.Texture2DArray : TextureKind.Texture2D);
         var t = BorrowTexture(desc, d.Image.Image);
         var sampled = new SampledTexture(Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.Repeat, TextureWrapMode.Repeat,
-            TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, GlConventions.IsIntegerFormat(d.Format) || d.Format == InternalFormat.R32i, 0)), t.View());
-        dummies[key] = sampled;
-        dummyTextures.Add(t);   // borrowed image, but the view cut on it is ours to destroy
+            TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, GlConventions.IsIntegerFormat(d.Format) || d.Format == InternalFormat.R32I, 0)), t.View());
+        _dummies[key] = sampled;
+        _dummyTextures.Add(t);   // borrowed image, but the view cut on it is ours to destroy
         return sampled;
     }
 
@@ -313,10 +313,18 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         int layers = desc.Kind == TextureKind.Cube ? 6 * Math.Max(desc.Layers, 1) : desc.Layers;
         return new ImageCreateInfo
         {
-            SType = StructureType.ImageCreateInfo, ImageType = ImageType.Type2D, Format = GlConventions.VkFormat(desc.Format),
-            Extent = new Extent3D((uint)desc.Width, (uint)desc.Height, 1), MipLevels = (uint)desc.Levels, ArrayLayers = (uint)layers,
-            Samples = (SampleCountFlags)desc.Samples, Tiling = ImageTiling.Optimal, Usage = usage, SharingMode = SharingMode.Exclusive,
-            InitialLayout = ImageLayout.Undefined, Flags = desc.Kind == TextureKind.Cube ? ImageCreateFlags.CreateCubeCompatibleBit : 0,
+            SType = StructureType.ImageCreateInfo,
+            ImageType = ImageType.Type2D,
+            Format = GlConventions.VkFormat(desc.Format),
+            Extent = new Extent3D((uint)desc.Width, (uint)desc.Height, 1),
+            MipLevels = (uint)desc.Levels,
+            ArrayLayers = (uint)layers,
+            Samples = (SampleCountFlags)desc.Samples,
+            Tiling = ImageTiling.Optimal,
+            Usage = usage,
+            SharingMode = SharingMode.Exclusive,
+            InitialLayout = ImageLayout.Undefined,
+            Flags = desc.Kind == TextureKind.Cube ? ImageCreateFlags.CreateCubeCompatibleBit : 0,
         };
     }
 
@@ -325,11 +333,16 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         var barrier = new ImageMemoryBarrier2
         {
             SType = StructureType.ImageMemoryBarrier2,
-            SrcStageMask = PipelineStageFlags2.None, SrcAccessMask = AccessFlags2.None,
-            DstStageMask = PipelineStageFlags2.AllCommandsBit, DstAccessMask = AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit,
-            OldLayout = ImageLayout.Undefined, NewLayout = ImageLayout.General,
-            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored, DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
-            Image = image, SubresourceRange = new ImageSubresourceRange(aspect, 0, Vk.RemainingMipLevels, 0, Vk.RemainingArrayLayers),
+            SrcStageMask = PipelineStageFlags2.None,
+            SrcAccessMask = AccessFlags2.None,
+            DstStageMask = PipelineStageFlags2.AllCommandsBit,
+            DstAccessMask = AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit,
+            OldLayout = ImageLayout.Undefined,
+            NewLayout = ImageLayout.General,
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            Image = image,
+            SubresourceRange = new ImageSubresourceRange(aspect, 0, Vk.RemainingMipLevels, 0, Vk.RemainingArrayLayers),
         };
         var info = new DependencyInfo { SType = StructureType.DependencyInfo, ImageMemoryBarrierCount = 1, PImageMemoryBarriers = &barrier };
         vk.CmdPipelineBarrier2(cb, &info);
@@ -342,15 +355,15 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         var sizes = stackalloc DescriptorPoolSize[] { new(DescriptorType.UniformBufferDynamic, 2048), new(DescriptorType.StorageBufferDynamic, 512) };
         for (int attempt = 0; attempt < 2; attempt++)
         {
-            if (persistentPools.Count > 0)
+            if (_persistentPools.Count > 0)
             {
-                var ai = new DescriptorSetAllocateInfo { SType = StructureType.DescriptorSetAllocateInfo, DescriptorPool = persistentPools[^1], DescriptorSetCount = 1, PSetLayouts = &vkLayout };
+                var ai = new DescriptorSetAllocateInfo { SType = StructureType.DescriptorSetAllocateInfo, DescriptorPool = _persistentPools[^1], DescriptorSetCount = 1, PSetLayouts = &vkLayout };
                 DescriptorSet set;
                 if (Device.Vk.AllocateDescriptorSets(Device.Device, &ai, &set) == Result.Success) return new GpuSet(Device.AddSet(set));
             }
             var pi = new DescriptorPoolCreateInfo { SType = StructureType.DescriptorPoolCreateInfo, MaxSets = 1024, PoolSizeCount = 2, PPoolSizes = sizes };
             VulkanException.Check(Device.Vk.CreateDescriptorPool(Device.Device, &pi, null, out var fresh), "vkCreateDescriptorPool");
-            persistentPools.Add(fresh);
+            _persistentPools.Add(fresh);
         }
         throw new InvalidOperationException("descriptor set allocation failed");
     }
@@ -365,8 +378,12 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         var info = new DescriptorBufferInfo(Device.BufferAt(buffer.Index), 0, size);
         var write = new WriteDescriptorSet
         {
-            SType = StructureType.WriteDescriptorSet, DstSet = Device.SetAt(set.Index), DstBinding = 0, DescriptorCount = 1,
-            DescriptorType = DescriptorType.UniformBufferDynamic, PBufferInfo = &info,
+            SType = StructureType.WriteDescriptorSet,
+            DstSet = Device.SetAt(set.Index),
+            DstBinding = 0,
+            DescriptorCount = 1,
+            DescriptorType = DescriptorType.UniformBufferDynamic,
+            PBufferInfo = &info,
         };
         Device.Vk.UpdateDescriptorSets(Device.Device, 1, &write, 0, null);
         return set;
@@ -403,10 +420,10 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         Pipelines.Dispose();
         Bindless.Dispose();
         Shaders.Dispose();
-        foreach (var p in persistentPools) Device.Vk.DestroyDescriptorPool(Device.Device, p, null);
-        persistentPools.Clear();
-        foreach (var t in dummyTextures) t.Dispose();   // the stand-ins' views, before their images (Defaults) go
-        dummyTextures.Clear();
+        foreach (var p in _persistentPools) Device.Vk.DestroyDescriptorPool(Device.Device, p, null);
+        _persistentPools.Clear();
+        foreach (var t in _dummyTextures) t.Dispose();   // the stand-ins' views, before their images (Defaults) go
+        _dummyTextures.Clear();
         Samplers.Dispose();
         Defaults.Dispose();
     }

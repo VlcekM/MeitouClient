@@ -15,13 +15,13 @@ public sealed class Fighter
     /// The weapon in hand (docs/game/combat.md "Arms"): with both arms working the <see cref="BackWeapon"/>, else the hip one; with only the right arm the hip one; without
     /// the right arm none (fists). An animal's natural weapon always.
     /// </summary>
-    public WeaponInstance? Weapon => IsAnimal ? hip : !rightArm ? null : leftArm ? BackWeapon ?? hip : hip;
+    public WeaponInstance? Weapon => IsAnimal ? _hip : !_rightArm ? null : _leftArm ? BackWeapon ?? _hip : _hip;
     /// <summary>The first weapon in the <c>back</c> section, if any (the constructor's weapon is the <c>hip</c> one).</summary>
     public WeaponInstance? BackWeapon { get; init; }
     /// <summary>Whether <see cref="Weapon"/> is the <see cref="BackWeapon"/> (the renderer shows that one drawn).</summary>
     public bool WeaponIsBack => Weapon is { } w && w == BackWeapon;
     /// <summary>The first weapon in the <c>hip</c> section, if any.</summary>
-    public WeaponInstance? HipWeapon => hip;
+    public WeaponInstance? HipWeapon => _hip;
     /// <summary>
     /// The <c>length</c> of the weapon in hand, the <see cref="Fists"/>' for fists (CharStats +0x200, set from the weapon bound, the fists item with nothing in hand).
     /// </summary>
@@ -33,13 +33,13 @@ public sealed class Fighter
     public WeaponInstance? Fists { get; init; }
     /// <summary>The item a fist blow's packet reads its multipliers from: the weapon in hand (an animal's), else the <see cref="Fists"/>.</summary>
     public WeaponInstance? FistsItem => Weapon ?? Fists;
-    readonly WeaponInstance? hip;
-    bool rightArm = true, leftArm = true;
+    readonly WeaponInstance? _hip;
+    bool _rightArm = true, _leftArm = true;
     /// <summary>The crossbow carried in a weapon section (back or hip), if any: the ranged weapon (docs/simulation.md "Combat", ranged). The melee <see cref="Weapon"/> stays what it was.</summary>
     public CrossbowInstance? Crossbow { get; init; }
     /// <summary>The worn pieces, in the order they are stacked in.</summary>
-    public ReadOnlySpan<ArmourPiece> Armour => armour;
-    readonly ArmourPiece[] armour;
+    public ReadOnlySpan<ArmourPiece> Armour => _armour;
+    readonly ArmourPiece[] _armour;
     /// <summary>A creature (an ANIMAL_CHARACTER): the target kind for the weapon multipliers, and the techniques of its own weapon category apply.</summary>
     public bool IsAnimal { get; init; }
     /// <summary>
@@ -68,15 +68,15 @@ public sealed class Fighter
     /// <summary>Product of the pieces' <c>fist injury mult</c> (CharStats <c>+0x4c</c>): scales the damage a fist blow does to the puncher's own limb.</summary>
     public float FistInjury { get; }
     /// <summary>Product of the pieces' <c>dexterity mult</c>; 1.1 with no armour and no backpack (<see cref="Naked"/>).</summary>
-    public float DexterityMult => Naked ? NakedBonus : dexterity;
+    public float DexterityMult => Naked ? NakedBonus : _dexterity;
     /// <summary>Product of the pieces' <c>dodge mult</c> (the gear's dodge value for <see cref="DefenceFormulas.DodgeSkill"/>, x 100); 1.1 when <see cref="Naked"/>.</summary>
-    public float DodgeMult => Naked ? NakedBonus : dodgeMult;
+    public float DodgeMult => Naked ? NakedBonus : _dodgeMult;
     /// <summary>
     /// The gear's stealth factor (CharStats <c>+0x3c</c>, <c>FUN_140887030</c>, <b>Verified</b>): the backpack's <c>stealth mult</c> (1 without one) times each piece's
     /// <see cref="ArmourPiece.Stealth"/>; 1.2 when <see cref="Naked"/>. The backpack's value also seeds <see cref="DodgeMult"/>.
     /// </summary>
-    public float StealthMult => Naked ? NakedStealth : stealth;
-    readonly float dexterity, dodgeMult, assassin, ranged, stealth;
+    public float StealthMult => Naked ? NakedStealth : _stealth;
+    readonly float _dexterity, _dodgeMult, _assassin, _ranged, _stealth;
     /// <summary>The dodge and dexterity factor of a <see cref="Naked"/> character (Verified literal).</summary>
     public const float NakedBonus = 1.1f;
     /// <summary>The stealth factor of a <see cref="Naked"/> character (Verified literal).</summary>
@@ -85,13 +85,13 @@ public sealed class Fighter
     /// The gear factors of the stat multiplier (<see cref="StatFactors"/>, <c>CharStats</c> +0x40 to +0x50 as <c>FUN_140887030</c> writes them, <b>Verified</b>): the products of
     /// <c>asassination mult</c>, <c>dexterity mult</c>, <c>damage output mult</c> and <c>ranged skill mult</c>. No dust storm here (its factor is 1).
     /// </summary>
-    public StatFactors Factors => new(assassin, DexterityMult, DamageOutput, ranged, 1);
+    public StatFactors Factors => new(_assassin, DexterityMult, DamageOutput, _ranged, 1);
     /// <summary>
     /// Wearing no armour and no backpack: the gear refresh then puts 1.1 for dodge and dexterity and 1.2 for stealth (<c>FUN_140887030</c>, <b>Verified</b> literals).
     /// Never for an animal (engine choice: whether the refresh runs for animals is <b>Unknown</b>).
     /// </summary>
-    public bool Naked => !IsAnimal && armour.Length == 0 && !backpack;
-    readonly bool backpack;
+    public bool Naked => !IsAnimal && _armour.Length == 0 && !_backpack;
+    readonly bool _backpack;
     /// <summary>Product of the pieces' combat speed factors (<see cref="ArmourPiece.CombatSpeed"/>) and the backpack's: scales the speed attack animations play at.</summary>
     public float CombatSpeed { get; }
 
@@ -109,14 +109,14 @@ public sealed class Fighter
     /// <param name="backpackSpeed">The worn backpack's <c>combat speed mult</c> (1 without one): it seeds the combat speed product.</param>
     public Fighter(WeaponInstance? weapon, IEnumerable<ArmourPiece>? armour = null, float? backpackStealth = null, float backpackAthletics = 1, int backpackSkill = 0, float backpackSpeed = 1)
     {
-        hip = weapon;
-        this.armour = armour is null ? [] : [.. armour];
-        backpack = backpackStealth is not null;
+        _hip = weapon;
+        this._armour = armour is null ? [] : [.. armour];
+        _backpack = backpackStealth is not null;
         float seed = backpackStealth is { } b ? b < 0 ? 1 : b : 1;
         float def = backpackSkill, atk = backpackSkill, unarmed = 0, output = 1, fist = 1, dex = 1, dodge = seed, speed = backpackSpeed, sneak = seed, runMax = 1, runMin = backpackAthletics;
         int perception = 0;
-        assassin = ranged = 1;
-        foreach (var p in this.armour)
+        _assassin = _ranged = 1;
+        foreach (var p in this._armour)
         {
             def += p.Data.CombatDefenceBonus;
             atk += p.Data.CombatAttackBonus;
@@ -129,18 +129,18 @@ public sealed class Fighter
             dex *= p.Data.DexterityMult;
             dodge *= p.Data.DodgeMult;
             speed *= p.CombatSpeed;
-            assassin *= p.Data.AssassinationMult;
-            ranged *= p.Data.RangedSkillMult;
+            _assassin *= p.Data.AssassinationMult;
+            _ranged *= p.Data.RangedSkillMult;
             sneak *= p.Stealth;
         }
-        stealth = sneak;
+        _stealth = sneak;
         DefenceBonus = def;
         AttackBonus = atk;
         UnarmedBonus = unarmed;
         DamageOutput = output;
         FistInjury = fist;
-        dexterity = dex;
-        dodgeMult = dodge;
+        _dexterity = dex;
+        _dodgeMult = dodge;
         CombatSpeed = speed;
         AthleticsFactor = runMax * runMin;
         PerceptionBonus = perception;
@@ -150,7 +150,7 @@ public sealed class Fighter
     public bool SetArms(bool right, bool left)
     {
         var before = Weapon;
-        (rightArm, leftArm) = (right, left);
+        (_rightArm, _leftArm) = (right, left);
         return Weapon != before;
     }
 
@@ -161,7 +161,7 @@ public sealed class Fighter
     public StatsEnumerated WeaponSkill => Unarmed ? StatsEnumerated.MartialArts : Weapon!.Skill;
 
     /// <summary>The weapon type techniques are matched with (the unarmed bit for fists).</summary>
-    public Meitou.Data.Gameplay.WeaponKinds Kind => Weapon?.Kind ?? Meitou.Data.Gameplay.WeaponKinds.Unarmed;
+    public Data.Gameplay.WeaponKinds Kind => Weapon?.Kind ?? Data.Gameplay.WeaponKinds.Unarmed;
 
     /// <summary>A weapon that can parry (fists cannot: those fighters dodge).</summary>
     public bool CanBlock => Weapon is { } w && !Unarmed && w.CanBlock;

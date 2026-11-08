@@ -62,7 +62,7 @@ public sealed record MachineData
     /// <summary><c>limit inventory</c>: the only ITEMs the storage takes (empty: any).</summary>
     public IReadOnlyList<string> StorageLimit { get; init; } = [];
     /// <summary><c>itemtype limit</c>: the record type the storage takes (fcs.def default ITEM).</summary>
-    public FcsRecordType ItemTypeLimit { get; init; } = FcsRecordType.ITEM;
+    public FcsRecordType ItemTypeLimit { get; init; } = FcsRecordType.Item;
     /// <summary><c>stackable bonus mult</c>: stacks inside are this many times larger (fcs.def).</summary>
     public float StackBonusMult { get; init; } = 1;
     /// <summary>A storage building (function 2 or 13 with an inventory) operators haul to and from (docs/game/buildings-production.md "Hauling").</summary>
@@ -98,7 +98,7 @@ public sealed record MachineData
     /// <summary>The BUILDING's <c>is interior furniture</c> (the exe's <c>+0xf8</c>): standing in a building it is indoors (Building slot 59 <c>isIndoors</c>).</summary>
     public bool InteriorFurniture { get; init; }
     /// <summary>A light building (BF_LIGHT 15): outdoors it works only while it is not daytime (LightBuilding slot 164).</summary>
-    public bool IsLight => Function == Meitou.Data.World.WorldLights.LightFunction;
+    public bool IsLight => Function == World.WorldLights.LightFunction;
     public bool IsBattery => PowerCapacity > 0;
     public bool IsGenerator => PowerOutput > 0 && !IsBattery;
     public bool IsConsumer => PowerOutput < 0;
@@ -139,7 +139,7 @@ public sealed record MachineData
         bool stores = building.GetBool("has inventory");
         if (function is null && !stores) return null;
         int fn = function?.GetInt("function", -1) ?? -1;
-        var farm = building.GetReferences("farm data") is [var farmLink, ..] && db.Find(farmLink.TargetStringId) is { Type: FcsRecordType.FARM_DATA } fd ? FarmData.From(db, fd) : null;
+        var farm = building.GetReferences("farm data") is [var farmLink, ..] && db.Find(farmLink.TargetStringId) is { Type: FcsRecordType.FarmData } fd ? FarmData.From(db, fd) : null;
         float rate = building.GetFloat("output rate", 1);
         if (function is not null)
         {
@@ -198,7 +198,7 @@ public sealed record MachineData
             StorageWidth = storageWidth,
             StorageHeight = storageHeight,
             StorageLimit = [.. limits.Select(r => r.TargetStringId)],
-            ItemTypeLimit = (FcsRecordType)building.GetInt("itemtype limit", (int)FcsRecordType.ITEM),
+            ItemTypeLimit = (FcsRecordType)building.GetInt("itemtype limit", (int)FcsRecordType.Item),
             StackBonusMult = building.GetFloat("stackable bonus mult", 1),
             PowerOutput = building.GetInt("power output"),
             PowerCapacity = building.GetInt("power capacity"),
@@ -262,7 +262,7 @@ public sealed record FarmData
         Aspect = r.GetFloat("aspect", 1),
         Inside = r.GetBool("inside"),
         DeathColour = unchecked((uint)r.GetInt("death colour", -1)),
-        Parts = [.. r.GetReferences("plants").Select(p => db.Find(p.TargetStringId) is { Type: FcsRecordType.FARM_PART } part ? FarmPart.From(db, part, p.Values.Value0, p.Values.Value1) : null).OfType<FarmPart>()],
+        Parts = [.. r.GetReferences("plants").Select(p => db.Find(p.TargetStringId) is { Type: FcsRecordType.FarmPart } part ? FarmPart.From(db, part, p.Values.Value0, p.Values.Value1) : null).OfType<FarmPart>()],
         GrowthTime = r.GetFloat("growth time", 1),
         HarvestTime = r.GetFloat("harvest time", 1) is > 0 and var h ? h : 1e-6f,
         DeathTime = r.GetFloat("death time", 1),
@@ -290,10 +290,10 @@ public sealed record FarmData
 /// </summary>
 public sealed class ResourceField
 {
-    readonly BiomeMap? map;
-    readonly GameDatabase db;
-    readonly IResourceNodes? nodes;
-    readonly Dictionary<int, GameRecord?> resourcesOf = [];
+    readonly BiomeMap? _map;
+    readonly GameDatabase _db;
+    readonly IResourceNodes? _nodes;
+    readonly Dictionary<int, GameRecord?> _resourcesOf = [];
 
     /// <summary>How far a mine finds a rock of its resource (<b>Observed</b>, <c>uses_resources</c>: 1500², 2.25e6).</summary>
     public const float NodeRange = 1500;
@@ -301,20 +301,26 @@ public sealed class ResourceField
 
     public ResourceField(GameDatabase db, BiomeMap? map, IResourceNodes? nodes = null)
     {
-        this.db = db;
-        this.map = map;
-        this.nodes = nodes;
+        this._db = db;
+        this._map = map;
+        this._nodes = nodes;
     }
 
     /// <summary>Whether there is an areas map (without one every value is 0).</summary>
-    public bool HasMap => map is not null;
+    public bool HasMap => _map is not null;
     /// <summary>Whether rocks are known (without them IRON, COPPER and CARBON are 0).</summary>
-    public bool HasNodes => nodes is not null;
+    public bool HasNodes => _nodes is not null;
 
     /// <summary>The field prefix of a MiningResource (<c>read_stone_n3</c>).</summary>
     static string Prefix(int resource) => resource switch
     {
-        IronResource => "iron", StoneResource => "stone", CopperResource => "copper", CarbonResource => "carbon", MachineData.WaterResource => "water", MachineData.GroundResource => "farming", _ => "",
+        IronResource => "iron",
+        StoneResource => "stone",
+        CopperResource => "copper",
+        CarbonResource => "carbon",
+        MachineData.WaterResource => "water",
+        MachineData.GroundResource => "farming",
+        _ => "",
     };
 
     /// <summary>
@@ -327,18 +333,18 @@ public sealed class ResourceField
     {
         if (resource is MachineData.WaterResource or MachineData.GroundResource or StoneResource) return FieldYield(resource, at, at);
         if (Resources(at.X, at.Z) is not { } r) return 0;
-        if (nodes is null || Prefix(resource).Length == 0) return 0;
+        if (_nodes is null || Prefix(resource).Length == 0) return 0;
         ResourceNode? best = null;
         float bestD = float.MaxValue;
-        foreach (var node in nodes.Near(resource, at.X, at.Z, NodeRange))
+        foreach (var node in _nodes.Near(resource, at.X, at.Z, NodeRange))
         {
             float d = System.Numerics.Vector3.DistanceSquared(node.Position, at);
             if (d < bestD) (best, bestD) = (node, d);
         }
-        const float Range2 = NodeRange * NodeRange;
-        if (best is not { } n || bestD > Range2) return 0;
-        float r2 = Math.Min(Range2, MathF.Max(625, n.Radius * n.Radius));
-        float falloff = Math.Clamp((bestD - r2) / (Range2 - r2), 0, 1);
+        const float range2 = NodeRange * NodeRange;
+        if (best is not { } n || bestD > range2) return 0;
+        float r2 = Math.Min(range2, MathF.Max(625, n.Radius * n.Radius));
+        float falloff = Math.Clamp((bestD - r2) / (range2 - r2), 0, 1);
         return NodeYield(resource, n.Position) * (1 - falloff);
     }
 
@@ -372,20 +378,20 @@ public sealed class ResourceField
 
     GameRecord? Group(float x, float z)
     {
-        if (map is null) return null;
+        if (_map is null) return null;
         var (cx, cz) = World.WeatherAreas.CellOf(x, z);
-        int g = map.GroupOf(cx, cz);
-        return g >= 0 ? db.Find(map.Groups[g].Id) : null;
+        int g = _map.GroupOf(cx, cz);
+        return g >= 0 ? _db.Find(_map.Groups[g].Id) : null;
     }
 
     GameRecord? Resources(float x, float z)
     {
-        if (map is null) return null;
+        if (_map is null) return null;
         var (cx, cz) = World.WeatherAreas.CellOf(x, z);
-        int g = map.GroupOf(cx, cz);
-        if (resourcesOf.TryGetValue(g, out var cached)) return cached;
-        var record = g >= 0 && db.Find(map.Groups[g].Id) is { } group && group.GetReferences("resources") is [var link, ..] ? db.Find(link.TargetStringId) : null;
-        resourcesOf[g] = record;
+        int g = _map.GroupOf(cx, cz);
+        if (_resourcesOf.TryGetValue(g, out var cached)) return cached;
+        var record = g >= 0 && _db.Find(_map.Groups[g].Id) is { } group && group.GetReferences("resources") is [var link, ..] ? _db.Find(link.TargetStringId) : null;
+        _resourcesOf[g] = record;
         return record;
     }
 

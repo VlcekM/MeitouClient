@@ -56,7 +56,7 @@ public static class StatsInfo
     public const int Count = (int)StatsEnumerated.End;
 
     // Index = stat number. Null: no field of that name (aliases and the two numbers without storage).
-    static readonly string?[] fieldNames =
+    static readonly string?[] FieldNames =
     [
         null, "strength", "attack", "labouring", "science", "engineer", "robotics", "weapon smith", "armour smith", "medic",
         "thievery", "turrets", "farming", "cooking", null, null, "stealth", "athletics", "dexterity", "defence",
@@ -65,7 +65,7 @@ public static class StatsInfo
     ];
 
     /// <summary>The STATS field / saved key of a stat (<c>strength</c>, <c>attack</c>, <c>toughness2</c>...); null for numbers that share or lack storage.</summary>
-    public static string? FieldName(StatsEnumerated stat) => (uint)stat < Count ? fieldNames[(int)stat] : null;
+    public static string? FieldName(StatsEnumerated stat) => (uint)stat < Count ? FieldNames[(int)stat] : null;
 
     /// <summary>The number whose storage a stat uses: 14 and 15 are <see cref="StatsEnumerated.Medic"/>; <see cref="StatsEnumerated.None"/> for 0, 20, 33 and out of range.</summary>
     public static StatsEnumerated StorageOf(StatsEnumerated stat) => stat switch
@@ -79,7 +79,7 @@ public static class StatsInfo
     public static StatsEnumerated FromFieldName(string name)
     {
         for (int i = 1; i < Count; i++)
-            if (fieldNames[i] == name) return (StatsEnumerated)i;
+            if (FieldNames[i] == name) return (StatsEnumerated)i;
         return StatsEnumerated.None;
     }
 

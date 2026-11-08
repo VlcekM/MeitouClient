@@ -45,7 +45,7 @@ internal sealed partial class CharacterRenderer
     /// </summary>
     public Vector3? Muzzle(long key)
     {
-        if (!states.TryGetValue(key, out var s) || !s.RangedDrawn || s.Asset is not { IsIcon: false } asset || s.Posed < 0) return null;
+        if (!_states.TryGetValue(key, out var s) || !s.RangedDrawn || s.Asset is not { IsIcon: false } asset || s.Posed < 0) return null;
         foreach (var part in asset.Parts)
             if (part.Muzzle && part.AttachIndex >= 0 && part.AttachIndex < s.Attach.Length) return (s.Attach[part.AttachIndex] * s.World).Translation;
         return null;
@@ -54,7 +54,7 @@ internal sealed partial class CharacterRenderer
     /// <summary>Where the bone <paramref name="bone"/> of the character <paramref name="key"/> is in the world, as last posed; null when it was not drawn in the world this frame or has no such bone. Render thread, after <see cref="Update"/>.</summary>
     public Vector3? BonePosition(long key, string bone)
     {
-        if (!states.TryGetValue(key, out var s) || s.Seen != updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0) return null;
+        if (!_states.TryGetValue(key, out var s) || s.Seen != _updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0) return null;
         if (asset.Rig.Handle(bone) is not int h || h >= s.Bones.Length) return null;
         // The skin matrix carries a point of the binding pose to its posed place: the bone's binding position to where the bone is now.
         return Vector3.Transform(asset.Rig.BindPosition[h], s.Bones[h] * s.World);
@@ -66,13 +66,13 @@ internal sealed partial class CharacterRenderer
     /// </summary>
     public (Matrix4x4 World, Meitou.Data.Characters.CharacterAppearance Look, Vector3 Bone)? LastDrawn(long key, string bone)
     {
-        if (!states.TryGetValue(key, out var s) || s.Seen != updateStamp || !s.InWorld || s.Asset is not { IsIcon: false, Appearance: { } look } || BonePosition(key, bone) is not { } at) return null;
+        if (!_states.TryGetValue(key, out var s) || s.Seen != _updateStamp || !s.InWorld || s.Asset is not { IsIcon: false, Appearance: { } look } || BonePosition(key, bone) is not { } at) return null;
         return (s.World, look, at);
     }
 
     public float? RayHit(long key, Vector3 origin, Vector3 direction)
     {
-        if (!states.TryGetValue(key, out var s) || s.Seen != updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0) return null;
+        if (!_states.TryGetValue(key, out var s) || s.Seen != _updateStamp || !s.InWorld || s.Asset is not { IsIcon: false } asset || s.Posed < 0) return null;
         // The bounding sphere first: most characters are nowhere near the ray.
         var toCentre = s.Centre - origin;
         float along = Vector3.Dot(toCentre, direction);

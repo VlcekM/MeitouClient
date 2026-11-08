@@ -19,7 +19,7 @@ public class WorldLightTests
 
     static FcsRecord Light(string id, float brightness, float variance, int type = 0, int diffuse = 0xFFCE5E)
     {
-        var r = new FcsRecord { StringId = id, Flags = 0x10, Name = "light", RecordType = FcsRecordType.LIGHT };
+        var r = new FcsRecord { StringId = id, Flags = 0x10, Name = "light", RecordType = FcsRecordType.Light };
         r.Floats["brightness"] = brightness;
         r.Floats["variance"] = variance;
         r.Floats["radius"] = 150;
@@ -34,7 +34,7 @@ public class WorldLightTests
 
     static FcsRecord Part(string id, Vector3 offset)
     {
-        var r = new FcsRecord { StringId = id, Flags = 0x10, Name = id, RecordType = FcsRecordType.BUILDING_PART };
+        var r = new FcsRecord { StringId = id, Flags = 0x10, Name = id, RecordType = FcsRecordType.BuildingPart };
         r.Filenames["phs or mesh"] = $".\\data\\{id}.mesh";
         r.Floats["offset X"] = offset.X;
         r.Floats["offset Y"] = offset.Y;
@@ -44,7 +44,7 @@ public class WorldLightTests
 
     static FcsRecord Building(string id, float scale, params string[] parts)
     {
-        var r = new FcsRecord { StringId = id, Flags = 0x10, Name = id, RecordType = FcsRecordType.BUILDING };
+        var r = new FcsRecord { StringId = id, Flags = 0x10, Name = id, RecordType = FcsRecordType.Building };
         r.Floats["scale"] = scale;
         r.References["parts"] = parts.Select(p => new FcsReference(p, 0, 0, 0)).ToList();
         return r;

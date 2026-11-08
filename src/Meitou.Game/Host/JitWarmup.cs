@@ -22,9 +22,9 @@ static class JitWarmup
     /// <summary>The game's renderers: compiled before the rest of the game's code, as the first frames call them.</summary>
     const string RenderingNamespace = "Meitou.Game.Rendering";
 
-    static readonly ConcurrentQueue<MethodBase> queue = new();
-    static readonly Stopwatch watch = new();
-    static int compiled, failed, running;
+    static readonly ConcurrentQueue<MethodBase> Queue = new();
+    static readonly Stopwatch Watch = new();
+    static int s_compiled, s_failed, s_running;
 
     public static void Start() => Spawn(List);
 
@@ -34,10 +34,10 @@ static class JitWarmup
     // missing on this platform, say) is counted and left to compile on its first call, if it ever has one.
     static void List()
     {
-        watch.Start();
+        Watch.Start();
         try { Enqueue(); }
         catch (Exception e) { Console.Error.WriteLine($"warning   the jit warm-up stopped listing: {e.GetType().Name}: {e.Message}"); }
-        running = Threads;
+        s_running = Threads;
         for (int t = 1; t < Threads; t++) Spawn(Work);
         Work();
     }
@@ -60,11 +60,11 @@ static class JitWarmup
                 if (type.ContainsGenericParameters) continue;
                 MethodBase[] methods;
                 try { methods = [.. type.GetMethods(all), .. type.GetConstructors(all)]; }
-                catch (Exception) { Interlocked.Increment(ref failed); continue; }
+                catch (Exception) { Interlocked.Increment(ref s_failed); continue; }
                 foreach (var method in methods)
                     if (!method.IsAbstract && !method.ContainsGenericParameters && (method.MethodImplementationFlags & (MethodImplAttributes.InternalCall | MethodImplAttributes.Runtime)) == 0
                         && (method.Attributes & MethodAttributes.PinvokeImpl) == 0)
-                        queue.Enqueue(method);
+                        Queue.Enqueue(method);
             }
         }
     }
@@ -73,20 +73,20 @@ static class JitWarmup
     {
         try
         {
-            while (queue.TryDequeue(out var method))
+            while (Queue.TryDequeue(out var method))
             {
                 try
                 {
                     RuntimeHelpers.PrepareMethod(method.MethodHandle);
-                    Interlocked.Increment(ref compiled);
+                    Interlocked.Increment(ref s_compiled);
                 }
                 catch (Exception)
                 {
-                    Interlocked.Increment(ref failed);
+                    Interlocked.Increment(ref s_failed);
                 }
             }
-            if (Interlocked.Decrement(ref running) == 0)
-                Console.WriteLine($"jit       {compiled} methods compiled ahead in {watch.Elapsed.TotalSeconds:0.0} s{(failed > 0 ? $" ({failed} could not be)" : "")}");
+            if (Interlocked.Decrement(ref s_running) == 0)
+                Console.WriteLine($"jit       {s_compiled} methods compiled ahead in {Watch.Elapsed.TotalSeconds:0.0} s{(s_failed > 0 ? $" ({s_failed} could not be)" : "")}");
         }
         catch (Exception e) { Console.Error.WriteLine($"warning   a jit warm-up thread stopped: {e.GetType().Name}: {e.Message}"); }
     }

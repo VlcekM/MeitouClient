@@ -42,29 +42,29 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public IGpuContext Gpu { get; }
     /// <summary>The meshes' allocation name (the F12 VRAM pie groups by it).</summary>
     const string MeshAllocationName = "foliage meshes";
-    readonly GameInstall install;
-    readonly GameDatabase db;
-    readonly WorldLevelData levels;
-    readonly AssetLocator assets;
-    readonly FoliageCatalog catalog;
+    readonly GameInstall _install;
+    readonly GameDatabase _db;
+    readonly WorldLevelData _levels;
+    readonly AssetLocator _assets;
+    readonly FoliageCatalog _catalog;
     // The native programs (docs/renderer-native.md 3.3, step O: the native model, the same maths), made with the renderer so a draw never compiles.
-    readonly NativeFrame nativeFrame;
-    readonly NativeProg colourMesh, colourSolidMesh, depthMesh, prepassMesh, prepassSolidMesh, grassProgram, grassMotionProgram;   // colourSolidMesh: colourMesh without the discards (EarlyDepth)
-    readonly WorldTextureCache textures;
-    readonly ConcurrentBag<FoliageWorld> worlds = [];
+    readonly NativeFrame _nativeFrame;
+    readonly NativeProg _colourMesh, _colourSolidMesh, _depthMesh, _prepassMesh, _prepassSolidMesh, _grassProgram, _grassMotionProgram;   // colourSolidMesh: colourMesh without the discards (EarlyDepth)
+    readonly WorldTextureCache _textures;
+    readonly ConcurrentBag<FoliageWorld> _worlds = [];
     /// <summary>The zone layout cache (null with <c>--no-load-cache</c>); see <see cref="FoliageLayoutCache"/>.</summary>
     public FoliageLayoutCache? LayoutCache { get; }
-    readonly List<FoliageWorld> allWorlds = [];
-    readonly Dictionary<ZoneCoordinate, ZoneState> zones = [];
-    readonly Dictionary<FoliageMesh, MeshAsset> assetsByMesh = [];
-    readonly List<MeshAsset> decoding = [];
-    readonly Queue<Action> uploads = new();
-    readonly StepCosts stepCosts = new();
-    readonly Dictionary<MeshAsset, Batch> batches = [];
-    readonly List<Batch> active = [];
-    readonly List<(MeshBindings, int, Matrix4x4)> terrainDraws = [];
-    readonly List<(MeshBindings, int, Matrix4x4)> terrainDrawsCut = [];   // those over an interior mask (InteriorCut)
-    readonly Stopwatch clock = Stopwatch.StartNew();
+    readonly List<FoliageWorld> _allWorlds = [];
+    readonly Dictionary<ZoneCoordinate, ZoneState> _zones = [];
+    readonly Dictionary<FoliageMesh, MeshAsset> _assetsByMesh = [];
+    readonly List<MeshAsset> _decoding = [];
+    readonly Queue<Action> _uploads = new();
+    readonly StepCosts _stepCosts = new();
+    readonly Dictionary<MeshAsset, Batch> _batches = [];
+    readonly List<Batch> _active = [];
+    readonly List<(MeshBindings, int, Matrix4x4)> _terrainDraws = [];
+    readonly List<(MeshBindings, int, Matrix4x4)> _terrainDrawsCut = [];   // those over an interior mask (InteriorCut)
+    readonly Stopwatch _clock = Stopwatch.StartNew();
     /// <summary>Seconds that drive the grass sway; null uses a wall clock started with the renderer. Screenshots fix it (pictures repeat exactly) and the game sets its own clock.</summary>
     public double? SwaySeconds { get; set; }
 
@@ -75,23 +75,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     public FoliageShift? Shift
     {
-        get => shift;
+        get => _shift;
         set
         {
-            var touched = new[] { shift, value };
-            shift = value;
-            dropping.Clear();
-            foreach (var state in zones.Values)
+            var touched = new[] { _shift, value };
+            _shift = value;
+            _dropping.Clear();
+            foreach (var state in _zones.Values)
                 if (state.Job is null && touched.Any(s => s is not null && BoxDistance(state.X0, state.Z0, WorldLayout.ZoneSize, s.Centre with { Y = 0 }) <= s.Radius))
-                    dropping.Add(state);
-            foreach (var state in dropping) Drop(state);
+                    _dropping.Add(state);
+            foreach (var state in _dropping) Drop(state);
         }
     }
-    FoliageShift? shift;
+    FoliageShift? _shift;
 
     void ApplyShift(FoliageMesh mesh, FoliageInstanceRecord[] instances)
     {
-        if (shift is not { } s || !s.Moves(mesh.Name)) return;
+        if (_shift is not { } s || !s.Moves(mesh.Name)) return;
         for (int i = 0; i < instances.Length; i++)
         {
             ref var r = ref instances[i];
@@ -104,15 +104,15 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             (r.Ground.X, r.Ground.Y) = (nx, nz);
         }
     }
-    readonly int workers;
+    readonly int _workers;
     /// <summary>Draw the grass / the meshes and impostors (not the TERRAIN-mode rocks) (the bench's `grass` and `foliage-meshes` switches).</summary>
     public bool DrawGrass { get; set; } = true;
     public bool DrawMeshes { get; set; } = true;
-    /// <summary>Zone layouts in flight: whole ones and far-only ones, each limited to <see cref="workers"/> at a time.</summary>
-    int runningWhole, runningFar;
+    /// <summary>Zone layouts in flight: whole ones and far-only ones, each limited to <see cref="_workers"/> at a time.</summary>
+    int _runningWhole, _runningFar;
     /// <summary>
     /// The view is under the loading screen (the host sets it each frame): its frames need not be smooth, so enough layouts are in flight to keep every streaming
-    /// thread busy between two frames (four per <see cref="BackgroundWork.Threads"/>, not <see cref="workers"/>: one from the cache takes a few milliseconds, and finished
+    /// thread busy between two frames (four per <see cref="BackgroundWork.Threads"/>, not <see cref="_workers"/>: one from the cache takes a few milliseconds, and finished
     /// ones are taken once a frame) and uploads take up to <see cref="CoveredBudgetMs"/> a frame. A town's thousands of zones out to the Meitou range, three at a
     /// time, held its loading screen up seconds with the workers idle.
     /// </summary>
@@ -122,33 +122,33 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     public FoliageRenderer(IGpuContext gpu, GameInstall install, GameDatabase db, WorldLevelData levels, AssetLocator assets)
     {
         Gpu = gpu;
-        this.install = install;
-        this.db = db;
-        this.levels = levels;
-        this.assets = assets;
+        this._install = install;
+        this._db = db;
+        this._levels = levels;
+        this._assets = assets;
         var watch = Stopwatch.StartNew();
-        catalog = FoliageCatalog.Load(db);
+        _catalog = FoliageCatalog.Load(db);
         if (!LoadCaches.Disabled)
         {
-            try { LayoutCache = new FoliageLayoutCache(install, catalog, FoliageWorld.ReadTowns(db, levels)); }
+            try { LayoutCache = new FoliageLayoutCache(install, _catalog, FoliageWorld.ReadTowns(db, levels)); }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { LayoutCache = null; }
         }
-        nativeFrame = new NativeFrame(gpu);
-        colourMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(), "foliage meshes");
-        colourSolidMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(solid: true), "foliage meshes solid");
-        depthMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshDepthNative(), "foliage mesh depth");
-        prepassMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshPrepassNative(), "foliage mesh prepass");
-        prepassSolidMesh = new NativeProg(gpu, nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshPrepassNative(solid: true), "foliage mesh prepass solid");
-        grassProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), "foliage grass");
-        grassMotionProgram = new NativeProg(gpu, nativeFrame, FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), "foliage grass motion");
-        textures = new WorldTextureCache(gpu, assets, "foliage textures") { Share = TextureShare.For(gpu) };
+        _nativeFrame = new NativeFrame(gpu);
+        _colourMesh = new NativeProg(gpu, _nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(), "foliage meshes");
+        _colourSolidMesh = new NativeProg(gpu, _nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(solid: true), "foliage meshes solid");
+        _depthMesh = new NativeProg(gpu, _nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshDepthNative(), "foliage mesh depth");
+        _prepassMesh = new NativeProg(gpu, _nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshPrepassNative(), "foliage mesh prepass");
+        _prepassSolidMesh = new NativeProg(gpu, _nativeFrame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshPrepassNative(solid: true), "foliage mesh prepass solid");
+        _grassProgram = new NativeProg(gpu, _nativeFrame, FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), "foliage grass");
+        _grassMotionProgram = new NativeProg(gpu, _nativeFrame, FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), "foliage grass motion");
+        _textures = new WorldTextureCache(gpu, assets, "foliage textures") { Share = TextureShare.For(gpu) };
         // Metal's GPU cull and its separate pre-frame command buffer are opt-in after the 2026-10-23 progress
         // timeouts; the CPU cull is the stable reference. Vulkan keeps the GPU path.
         bool metalGpuCull = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_CULL") is "1" or "true";
-        gpuCull = gpu is GpuContext || metalGpuCull ? new FoliageGpuCull(gpu) : null;
+        _gpuCull = gpu is GpuContext || metalGpuCull ? new FoliageGpuCull(gpu) : null;
         InitGrassStore(gpu);
-        workers = Math.Clamp(Environment.ProcessorCount / 4, 1, 3);
-        var used = catalog.ByBiome.Values.SelectMany(l => l).Distinct().ToList();
+        _workers = Math.Clamp(Environment.ProcessorCount / 4, 1, 3);
+        var used = _catalog.ByBiome.Values.SelectMany(l => l).Distinct().ToList();
         MeshRange = used.Where(l => !l.IsGrass).Select(l => l.Range).DefaultIfEmpty(0).Max();
         NearMeshRange = used.Where(l => !l.IsGrass && !FoliageLayout.IsFarLayer(l)).Select(l => l.Range).DefaultIfEmpty(0).Max();
         GrassMaxRange = used.Where(l => l.IsGrass).Select(l => l.Range).DefaultIfEmpty(0).Max();
@@ -167,7 +167,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// cull (<see cref="FoliageCull"/>), the reference of the tests. The TERRAIN-mode rocks go with it: the same dispatch, drawn through <see cref="TerrainRenderer.DrawMeshesIndirect"/> (5.6.1).
     /// </summary>
     public bool GpuCull { get; set; } = true;
-    readonly FoliageGpuCull? gpuCull;
+    readonly FoliageGpuCull? _gpuCull;
     /// <summary>settings.cfg <c>foliage range</c>, <c>grass range</c> and <c>grass density</c> (the game's defaults are 1; the viewer draws
     /// foliage 4x and grass 8x as far by default).</summary>
     public float RangeSetting { get; set; } = Env("MEITOU_FOLIAGE_RANGE", 4);
@@ -194,7 +194,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>The groups the last CPU cull tested (diagnostics for the parallel path).</summary>
     public int LastCullGroups { get; private set; }
     /// <summary>Views the GPU cull dispatched in all (diagnostic; 0 while the CPU path or the Metal GPU cull is off).</summary>
-    public long GpuCullDispatches => gpuCull?.Dispatched ?? 0;
+    public long GpuCullDispatches => _gpuCull?.Dispatched ?? 0;
     /// <summary>With <see cref="WorldFrame.DetailedStats"/>: the last depth draw's and the frame's main draws' CPU time by step (culling, upload, meshes, grass, TERRAIN-mode rocks).</summary>
     internal string DepthDetail = "", MainDetail = "";
     /// <summary>GPU time of the foliage draws of one frame (the main camera's draw, grass included), from timestamp queries a frame or two old.</summary>
@@ -223,25 +223,25 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): every range here (and the reaches that decide which zones are laid out) is
     /// multiplied by its scale, nothing new is started while it is under pressure, and idle meshes are evicted sooner. Null: no clamp.</summary>
     /// <summary>The foliage's texture cache (the VRAM dump lists it).</summary>
-    public WorldTextureCache Textures => textures;
+    public WorldTextureCache Textures => _textures;
     public VramGuard? Guard
     {
-        get => guard;
+        get => _guard;
         set
         {
-            guard = value;
-            textures.Guard = value;
-            if (gpuCull is not null)
+            _guard = value;
+            _textures.Guard = value;
+            if (_gpuCull is not null)
             {
-                gpuCull.MayGrow = value is null ? null : value.Allows;
-                gpuCull.Scratch.MayGrow = value is null ? null
+                _gpuCull.MayGrow = value is null ? null : value.Allows;
+                _gpuCull.Scratch.MayGrow = value is null ? null
                     : Gpu is GpuContext vk ? (Func<ulong, bool>)(bytes => vk.Device.Allocator.FitsInFreeSpace(bytes) || value.AllowsPriority(bytes))
                     : value.Allows;
             }
         }
     }
-    VramGuard? guard;
-    float Scale => guard?.RangeScale ?? 1f;
+    VramGuard? _guard;
+    float Scale => _guard?.RangeScale ?? 1f;
     /// <summary>Seconds an unused mesh stays under pressure (instead of <see cref="IdleSeconds"/>).</summary>
     public double GuardIdleSeconds { get; set; } = 2;
     float LongestClassRange => Math.Max(Math.Max(SmallRange, MediumRange), LargeRange) * Scale;
@@ -259,16 +259,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     const float MaxLookahead = 2 * WorldLayout.ZoneSize;
     /// <summary>Whole layouts reach this much beyond the near reach even at rest, so a start at full speed (or a turn) finds the next ring ready.</summary>
     const float PrefetchMargin = WorldLayout.ZoneSize / 2;
-    Vector3? lastEye;
-    double lastEyeTime;
-    Vector2 velocity;
-    readonly List<(ZoneCoordinate Zone, Tier Tier, float Urgency, bool ForKept)> wanted = [];
-    readonly List<ZoneState> dropping = [];
-    readonly HashSet<ZoneCoordinate> candidates = [];
+    Vector3? _lastEye;
+    double _lastEyeTime;
+    Vector2 _velocity;
+    readonly List<(ZoneCoordinate Zone, Tier Tier, float Urgency, bool ForKept)> _wanted = [];
+    readonly List<ZoneState> _dropping = [];
+    readonly HashSet<ZoneCoordinate> _candidates = [];
     public List<string> Messages { get; } = [];
 
     /// <summary>Requested work: layouts, grass, meshes, textures and impostors, including used textures deferred by memory pressure.</summary>
-    public int Pending => runningWhole + runningFar + zonesWaiting + grassWaiting + decoding.Count + uploads.Count + lodRunning + lodWaiting + textures.AwaitedCount + textures.UnresidentUsedCount + zones.Values.Sum(z => z.GrassRunning) + ImpostorPending;
+    public int Pending => _runningWhole + _runningFar + _zonesWaiting + _grassWaiting + _decoding.Count + _uploads.Count + _lodRunning + _lodWaiting + _textures.AwaitedCount + _textures.UnresidentUsedCount + _zones.Values.Sum(z => z.GrassRunning) + ImpostorPending;
 
     /// <summary>
     /// <see cref="Pending"/> as a loading screen waits for it: the grass only within the range the default grass distance gives (<see cref="DefaultGrassRange"/>). A longer
@@ -276,15 +276,15 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// Of the impostor atlases only the uploads of those read from the cache are waited for (<see cref="ImpostorUploadsAwaited"/>): the meshes draw until each
     /// atlas is ready, and after a mod list change hundreds are baked, 20 s and more.
     /// </summary>
-    public int LoadingPending => Pending - grassWaiting - zones.Values.Sum(z => z.GrassRunning) + grassNear - ImpostorPending + ImpostorUploadsAwaited;
+    public int LoadingPending => Pending - _grassWaiting - _zones.Values.Sum(z => z.GrassRunning) + _grassNear - ImpostorPending + ImpostorUploadsAwaited;
 
     /// <summary>What <see cref="Pending"/> is made of, for the loading log.</summary>
-    public string PendingDetail => $"layouts {runningWhole + runningFar + zonesWaiting}, grass {grassWaiting + zones.Values.Sum(z => z.GrassRunning)} ({grassNear} near), meshes {decoding.Count} decoding {uploads.Count} upload steps, lods {lodRunning + lodWaiting}, textures {textures.AwaitedCount} loading {textures.UnresidentUsedCount} deferred, impostors {ImpostorPending} ({ImpostorUploadsAwaited} cache uploads)";
+    public string PendingDetail => $"layouts {_runningWhole + _runningFar + _zonesWaiting}, grass {_grassWaiting + _zones.Values.Sum(z => z.GrassRunning)} ({_grassNear} near), meshes {_decoding.Count} decoding {_uploads.Count} upload steps, lods {_lodRunning + _lodWaiting}, textures {_textures.AwaitedCount} loading {_textures.UnresidentUsedCount} deferred, impostors {ImpostorPending} ({ImpostorUploadsAwaited} cache uploads)";
 
     /// <summary>GPU memory held by foliage meshes, textures and grass pages.</summary>
-    public long ResidentBytes => residentMeshBytes + textures.ResidentBytes + GrassBytes() + impostorBytes;
+    public long ResidentBytes => _residentMeshBytes + _textures.ResidentBytes + GrassBytes() + _impostorBytes;
     public string ResidentDescription =>
-        $"{residentMeshBytes / 1048576.0:0} MB in {assetsByMesh.Values.Count(a => a.Resident)} meshes ({meshUnloads} unloaded, {meshReloads} reloaded), {textures.Describe()}, {GrassBytes() / 1048576.0:0} MB of grass pages, {ImpostorDescription}";
+        $"{_residentMeshBytes / 1048576.0:0} MB in {_assetsByMesh.Values.Count(a => a.Resident)} meshes ({_meshUnloads} unloaded, {_meshReloads} reloaded), {_textures.Describe()}, {GrassBytes() / 1048576.0:0} MB of grass pages, {ImpostorDescription}";
     /// <summary>The GPU cull's and the grass kernels' per-view memory (<see cref="FrameScratch"/>): held now, the need per frame (mean, peak, largest demand), what was refused. For the benchmark and the statistics.</summary>
     public string ScratchDescription
     {
@@ -292,16 +292,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             static string One(string name, FrameScratch s) => string.Create(System.Globalization.CultureInfo.InvariantCulture,
                 $"{name} {s.AllocatedBytes / 1048576.0:0.0} MB held, need per frame mean {s.MeanNeed / 1048576.0:0.0} / peak {s.PeakNeed / 1048576.0:0.0} MB (demand peak {s.PeakDemand / 1048576.0:0.0}), cap {s.Cap / 1048576.0:0} MB per slot, {s.Overflows} refused in {s.OverflowFrames} frames, {s.Rebuilds} rebuilds ({s.KeptOnRefusal} kept for a refusal)");
-            return (gpuCull is { } g ? One("cull", g.Scratch) + $"; arena {g.ArenaUsed / 1048576.0:0.0} of {g.ArenaBytes / 1048576.0:0} MB at {FoliageInstanceRecord.GpuSize} B a record ({g.PackMismatches} not lossless)" : "no GPU cull") + "; " + (grassStore.Scratch is { } grassScratch ? One("grass", grassScratch) : "grass store (CPU)");
+            return (_gpuCull is { } g ? One("cull", g.Scratch) + $"; arena {g.ArenaUsed / 1048576.0:0.0} of {g.ArenaBytes / 1048576.0:0} MB at {FoliageInstanceRecord.GpuSize} B a record ({g.PackMismatches} not lossless)" : "no GPU cull") + "; " + (_grassStore.Scratch is { } grassScratch ? One("grass", grassScratch) : "grass store (CPU)");
         }
     }
 
-    public void ResetDrawTally() => gpuCull?.ResetTally();
+    public void ResetDrawTally() => _gpuCull?.ResetTally();
 
     /// <summary>The indirect draws per frame by instance count (0, 1-2, 3-15, 16+) for the colour views, the shadow cascades (all cascades summed) and the reflection, from the tally.</summary>
     public IEnumerable<(string Name, double Value)>? DrawHistogram()
     {
-        if (gpuCull is not { TallyFrames: > 0 } g) return null;
+        if (_gpuCull is not { TallyFrames: > 0 } g) return null;
         double n = g.TallyFrames;
         string[] kinds = ["colour", "shadow", "reflection"], buckets = ["0", "1-2", "3-15", "16+"];
         return Enumerable.Range(0, 3).SelectMany(k => Enumerable.Range(0, 4).Select(b => ($"hist {kinds[k]} draws {buckets[b]} inst", g.TallyHistogram[k, b] / n)));
@@ -309,11 +309,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>The main colour views' foliage triangles per frame since <see cref="ResetDrawTally"/> (meshes, TERRAIN-mode rocks, impostor quads as two),
     /// from the GPU cull's indirect arguments (<see cref="FoliageGpuCull.CountTriangles"/>); null before a tallied frame has been read back.</summary>
-    public double? ColourTrianglesPerFrame => gpuCull is { TallyFrames: > 0 } g ? (g.Tally[0, 0] + g.Tally[0, 2] + 2.0 * g.Tally[0, 4]) / g.TallyFrames : null;
+    public double? ColourTrianglesPerFrame => _gpuCull is { TallyFrames: > 0 } g ? (g.Tally[0, 0] + g.Tally[0, 2] + 2.0 * g.Tally[0, 4]) / g.TallyFrames : null;
 
     public string Describe() =>
-        $"{zones.Values.Count(z => z.Ready)} zones laid out ({zones.Values.Where(z => z.Ready).Sum(z => z.Instances):N0} meshes, " +
-        $"{zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {assetsByMesh.Count} foliage meshes ({assetsByMesh.Values.Count(a => a.Resident)} resident), catalog of {catalog.Layers.Count} layers" + (Lod && lodBuilt + lodCacheHits > 0 ? $"; generated levels: {LodSummary}" : "");
+        $"{_zones.Values.Count(z => z.Ready)} zones laid out ({_zones.Values.Where(z => z.Ready).Sum(z => z.Instances):N0} meshes, " +
+        $"{_zones.Values.Sum(z => z.Pages.Count):N0} grass pages), {_assetsByMesh.Count} foliage meshes ({_assetsByMesh.Values.Count(a => a.Resident)} resident), catalog of {_catalog.Layers.Count} layers" + (Lod && _lodBuilt + _lodCacheHits > 0 ? $"; generated levels: {LodSummary}" : "");
 
     // ------------------------------------------------------------------ streaming
 
@@ -452,8 +452,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>Places kept loaded (<see cref="WorldTextureCache.Areas"/>): the foliage textures' mark scales with it, and the grass store
     /// (<see cref="GrassStoreScale"/>) within its caps.</summary>
-    public int Areas { get => areas; set { areas = Math.Max(value, 1); textures.Areas = areas; } }
-    int areas = 1;
+    public int Areas { get => _areas; set { _areas = Math.Max(value, 1); _textures.Areas = _areas; } }
+    int _areas = 1;
 
     float NearKeptZone(ZoneCoordinate zone)
     {
@@ -481,67 +481,67 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     void Update(Vector3 eye, bool settling)
     {
-        updates++;
+        _updates++;
         var watch = Stopwatch.StartNew();
         // Uploads get 2 ms a frame (texture decodes are never waited for) except while settling for a screenshot.
         double budget = settling ? 1e9 : Covered ? CoveredBudgetMs : 2.0;
-        int layouts = Covered ? Math.Max(workers, 4 * BackgroundWork.Threads) : workers;
+        int layouts = Covered ? Math.Max(_workers, 4 * BackgroundWork.Threads) : _workers;
         // Two tiers (docs/render-foliage.md): within the near reach (the MEDIUM layers and the grass) a zone is laid out whole; beyond it, out
         // to the far reach, only its FAR layers, which skips the grass coverage, nine tenths of a zone's layout. A far zone is laid out whole once
         // it comes within the near reach (its far instances are the same either way, FoliageLayout.Place).
         // With the Meitou range switch a third tier sits between them (Tier.Meshes): beyond the whole reach (the longest of the small, medium and grass
         // ranges) and within the near reach only the large meshes can be drawn, so such a zone keeps those and nothing else.
         float nearReach = NearReach, farReach = FarReach, wholeReach = WholeReach;
-        foreach (var state in zones.Values)
+        foreach (var state in _zones.Values)
         {
             if (state.Job is not { IsCompleted: true } job) continue;
-            if (state.JobTier != Tier.Far) runningWhole--; else runningFar--;
+            if (state.JobTier != Tier.Far) _runningWhole--; else _runningFar--;
             state.Job = null;
             try { Accept(state, job.Result, state.JobTier); }
             catch (AggregateException e) { Messages.Add($"foliage zone {state.Zone}: {e.InnerException?.Message ?? e.Message}"); state.Ready = state.Complete = state.MeshLayers = true; }
-            grassVersion++;
+            _grassVersion++;
         }
-        dropping.Clear();
-        foreach (var state in zones.Values)
+        _dropping.Clear();
+        foreach (var state in _zones.Values)
             if (state.Job is null && Load(ZoneDistance(state.Zone, eye), eye) > farReach + WorldLayout.ZoneSize && !(Ahead is { } arrivalAt && ZoneDistance(state.Zone, arrivalAt) <= nearReach + WorldLayout.ZoneSize)
                 && !(!settling && Kept.Count > 0 && NearKeptZone(state.Zone) <= nearReach + WorldLayout.ZoneSize))
-                dropping.Add(state);
-        foreach (var state in dropping) Drop(state);
+                _dropping.Add(state);
+        foreach (var state in _dropping) Drop(state);
 
         // Look ahead along the motion: the work is ordered by how soon a zone becomes needed from where the eye will be in a second
         // (LookaheadSeconds), and whole layouts are started for zones that will be within the near reach by then. A jump (a camera code,
         // a teleport) is not a motion: the step is capped.
-        double now = clock.Elapsed.TotalSeconds;
-        if (lastEye is { } previous && now > lastEyeTime)
+        double now = _clock.Elapsed.TotalSeconds;
+        if (_lastEye is { } previous && now > _lastEyeTime)
         {
             var step = new Vector2(eye.X - previous.X, eye.Z - previous.Z);
-            float dt = (float)(now - lastEyeTime);
+            float dt = (float)(now - _lastEyeTime);
             var v = step.Length() > MaxLookahead ? Vector2.Zero : step / dt;
             float k = Math.Clamp(dt / 0.25f, 0, 1);   // smoothed over about a quarter second
-            velocity = Vector2.Lerp(velocity, v, k);
+            _velocity = Vector2.Lerp(_velocity, v, k);
         }
-        (lastEye, lastEyeTime) = (eye, now);
-        var ahead = velocity * LookaheadSeconds;
+        (_lastEye, _lastEyeTime) = (eye, now);
+        var ahead = _velocity * LookaheadSeconds;
         if (ahead.Length() > MaxLookahead) ahead = Vector2.Normalize(ahead) * MaxLookahead;
         var predicted = settling ? eye : eye + new Vector3(ahead.X, 0, ahead.Y);
 
-        wanted.Clear();
+        _wanted.Clear();
         var centre = WorldLayout.ZoneOf(eye.X, eye.Z);
         int reach = (int)Math.Ceiling((farReach + ahead.Length()) / WorldLayout.ZoneSize) + 1;
         NearestIncompleteZone = NearestUnlaidZone = float.PositiveInfinity;
         var arrival = settling ? null : Ahead;
         float arrivalReach = nearReach + PrefetchMargin;
-        candidates.Clear();
+        _candidates.Clear();
         for (int dz = -reach; dz <= reach; dz++)
             for (int dx = -reach; dx <= reach; dx++)
-                candidates.Add(new ZoneCoordinate(centre.X + dx, centre.Y + dz));
+                _candidates.Add(new ZoneCoordinate(centre.X + dx, centre.Y + dz));
         if (arrival is { } at)
         {
             var landing = WorldLayout.ZoneOf(at.X, at.Z);
             int around = (int)Math.Ceiling(arrivalReach / WorldLayout.ZoneSize) + 1;
             for (int dz = -around; dz <= around; dz++)
                 for (int dx = -around; dx <= around; dx++)
-                    candidates.Add(new ZoneCoordinate(landing.X + dx, landing.Y + dz));
+                    _candidates.Add(new ZoneCoordinate(landing.X + dx, landing.Y + dz));
         }
         var keptPoints = settling ? [] : Kept;
         foreach (var point in keptPoints)
@@ -550,11 +550,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             int around = (int)Math.Ceiling(arrivalReach / WorldLayout.ZoneSize) + 1;
             for (int dz = -around; dz <= around; dz++)
                 for (int dx = -around; dx <= around; dx++)
-                    candidates.Add(new ZoneCoordinate(home.X + dx, home.Y + dz));
+                    _candidates.Add(new ZoneCoordinate(home.X + dx, home.Y + dz));
         }
         bool meitou = MeitouRange;
         Tier TierAt(float soon) => soon <= wholeReach + PrefetchMargin ? Tier.Whole : meitou && soon <= nearReach + PrefetchMargin ? Tier.Meshes : Tier.Far;
-        foreach (var z in candidates)
+        foreach (var z in _candidates)
         {
             if (!z.IsInsideGrid) continue;
             float d = Load(ZoneDistance(z, eye), eye), dp = Load(ZoneDistance(z, predicted), eye), da = arrival is { } a ? ZoneDistance(z, a) : float.PositiveInfinity;
@@ -566,7 +566,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             var need = TierAt(Math.Min(soon, dk));
             // Wanted more for a kept point than for the eye or the arrival: ranked after all of theirs.
             bool forKept = atKept && (d > farReach && !landing || TierAt(soon) != need);
-            zones.TryGetValue(z, out var state);
+            _zones.TryGetValue(z, out var state);
             if (state is not null && Satisfies(state, need, meitou)) continue;   // has what it needs
             if (d <= wholeReach && !forKept) NearestIncompleteZone = Math.Min(NearestIncompleteZone, d);
             if (state is not { Ready: true } && !forKept) NearestUnlaidZone = Math.Min(NearestUnlaidZone, d);
@@ -575,46 +575,46 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             // first (from the eye or where it will be, whichever is nearer).
             // During a flight the arrival's zones go first, then the flight path's (the eye's), each in the same order.
             float tierBase = need == Tier.Whole ? 0 : need == Tier.Meshes ? nearReach : farReach;
-            wanted.Add((z, need, forKept ? (arrival is null ? 2 : 4) * farReach + tierBase + dk
+            _wanted.Add((z, need, forKept ? (arrival is null ? 2 : 4) * farReach + tierBase + dk
                 : arrival is null ? tierBase + soon : landing ? tierBase + da : 2 * farReach + tierBase + Math.Min(d, dp), forKept));
         }
-        wanted.Sort((a, b) => a.Urgency.CompareTo(b.Urgency));
+        _wanted.Sort((a, b) => a.Urgency.CompareTo(b.Urgency));
         int started = 0, keptWaiting = 0;
-        foreach (var w in wanted) if (w.ForKept) keptWaiting++;
-        foreach (var (zone, tier, _, forKept) in wanted)
+        foreach (var w in _wanted) if (w.ForKept) keptWaiting++;
+        foreach (var (zone, tier, _, forKept) in _wanted)
         {
-            if (guard is { Streaming: false }) break;   // memory pressure: no new layout is started
+            if (_guard is { Streaming: false }) break;   // memory pressure: no new layout is started
             bool whole = tier != Tier.Far;   // a Meshes layout is a whole one whose far-away groups are left out (Accept)
-            if (whole ? runningWhole >= layouts : runningFar >= layouts) continue;
-            if (!zones.TryGetValue(zone, out var state))
+            if (whole ? _runningWhole >= layouts : _runningFar >= layouts) continue;
+            if (!_zones.TryGetValue(zone, out var state))
             {
                 var (x0, z0) = WorldLayout.ZoneOrigin(zone);
-                zones[zone] = state = new ZoneState { Zone = zone, X0 = (float)x0, Z0 = (float)z0 };
+                _zones[zone] = state = new ZoneState { Zone = zone, X0 = (float)x0, Z0 = (float)z0 };
             }
-            if (whole) runningWhole++; else runningFar++;
+            if (whole) _runningWhole++; else _runningFar++;
             state.JobTier = tier;
             started++;
             if (forKept) keptWaiting--;
             bool farOnly = !whole;
             Func<GroupedFoliageZone> job = () =>
             {
-                if (!worlds.TryTake(out var world))
+                if (!_worlds.TryTake(out var world))
                 {
-                    world = new FoliageWorld(install, db, levels, catalog, cache: LayoutCache);
-                    lock (allWorlds) allWorlds.Add(world);
+                    world = new FoliageWorld(_install, _db, _levels, _catalog, cache: LayoutCache);
+                    lock (_allWorlds) _allWorlds.Add(world);
                 }
                 try
                 {
                     // Grouped on the worker (thousands of instances cost 15 to 20 ms on the render thread), straight from the cache file's records when it has the zone.
                     return world.LoadGrouped(zone, farOnly);
                 }
-                finally { worlds.Add(world); }
+                finally { _worlds.Add(world); }
             };
             // Whole layouts go ahead of the grass pages and texture decodes queued meanwhile (a dozen grass pages could hold every worker).
             state.Job = whole ? BackgroundWork.RunUrgent(job) : BackgroundWork.Run(job);
         }
         // Needed but not started yet (the workers are busy); a kept point's zones not counted, so a far squad member does not hold up the loading screen.
-        zonesWaiting = wanted.Count - started - keptWaiting;
+        _zonesWaiting = _wanted.Count - started - keptWaiting;
         NearestMissingMesh = float.PositiveInfinity;
 
         UpdateGrass(eye, keptPoints, settling);
@@ -622,27 +622,27 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         PumpLods();
         Prune();
         TrimResident(eye, force: settling);
-        textures.Pump(wait: settling, max: settling ? 64 : Covered ? 8 : 1);
+        _textures.Pump(wait: settling, max: settling ? 64 : Covered ? 8 : 1);
         // The budget counts from here: the work above can take it all on a slower machine, and the uploads would then never run.
         int ranSteps = 0;
         double uploadStart = watch.Elapsed.TotalMilliseconds;
-        while (uploads.Count > 0 && (ranSteps == 0 || watch.Elapsed.TotalMilliseconds - uploadStart < budget))
+        while (_uploads.Count > 0 && (ranSteps == 0 || watch.Elapsed.TotalMilliseconds - uploadStart < budget))
         {
             // The first step always runs; a later one waits for the next frame when steps of its kind have cost more than what is left plus StepCosts.Slack.
-            if (ranSteps > 0 && !stepCosts.Fits(uploads.Peek().Method, watch.Elapsed.TotalMilliseconds - uploadStart, budget)) break;
-            var step = uploads.Dequeue();
+            if (ranSteps > 0 && !_stepCosts.Fits(_uploads.Peek().Method, watch.Elapsed.TotalMilliseconds - uploadStart, budget)) break;
+            var step = _uploads.Dequeue();
             var one = Stopwatch.StartNew();
             step();
             double stepMs = one.Elapsed.TotalMilliseconds;
-            stepCosts.Learn(step.Method, stepMs);
+            _stepCosts.Learn(step.Method, stepMs);
             ranSteps++;
             if (stepMs > 3) SpikeLog.Note($"slow foliage step {step.Method.Name}", ms: stepMs);
         }
-        lock (textures.Messages)
+        lock (_textures.Messages)
         {
-            foreach (var m in Messages.Concat(textures.Messages).Distinct().Take(20)) Console.WriteLine($"warning   {m}");
+            foreach (var m in Messages.Concat(_textures.Messages).Distinct().Take(20)) Console.WriteLine($"warning   {m}");
             Messages.Clear();
-            textures.Messages.Clear();
+            _textures.Messages.Clear();
         }
         UpdateImpostors(eye, settling);
         PollTimers(wait: false);
@@ -664,23 +664,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             $"busy until (ms): zone layouts {busyUntil[0]:0}, grass pages {busyUntil[1]:0}, mesh decode and upload {busyUntil[2]:0}, textures {busyUntil[3]:0}, impostors and generated levels {busyUntil[4]:0}");
         while (watch.ElapsedMilliseconds < timeoutMs)
         {
-            guard?.Tick();
+            _guard?.Tick();
             Update(eye, settling: true);
             {
                 double t = watch.Elapsed.TotalMilliseconds;
-                if (runningWhole + runningFar + zonesWaiting > 0) busyUntil[0] = t;
-                if (grassWaiting > 0 || zones.Values.Sum(z => z.GrassRunning) > 0) busyUntil[1] = t;
-                if (decoding.Count + uploads.Count > 0) busyUntil[2] = t;
-                if (textures.PendingCount > 0) busyUntil[3] = t;
-                if (ImpostorPending + lodRunning + lodWaiting > 0) busyUntil[4] = t;
+                if (_runningWhole + _runningFar + _zonesWaiting > 0) busyUntil[0] = t;
+                if (_grassWaiting > 0 || _zones.Values.Sum(z => z.GrassRunning) > 0) busyUntil[1] = t;
+                if (_decoding.Count + _uploads.Count > 0) busyUntil[2] = t;
+                if (_textures.PendingCount > 0) busyUntil[3] = t;
+                if (ImpostorPending + _lodRunning + _lodWaiting > 0) busyUntil[4] = t;
             }
             if (++rounds > 2 && Pending == 0) { Timeline(); return; }
             // Under memory pressure the guard holds the loading back: what is missing will not come until it ends, so do not wait for it.
-            pressureSince = guard is { Pressure: true } ? pressureSince ?? watch.Elapsed.TotalSeconds : null;
+            pressureSince = _guard is { Pressure: true } ? pressureSince ?? watch.Elapsed.TotalSeconds : null;
             if (pressureSince is { } since && watch.Elapsed.TotalSeconds - since > 5) { Console.WriteLine("warning   foliage streaming stopped waiting: memory pressure (VramGuard)"); return; }
             // An impostor bake reads its rows back after the frame they were recorded into, and atlas uploads are spread over frames: end it.
             // A live host owns its open frame (Metal cannot end and reopen it here): leave the remaining bakes to its later frames.
-            if (impostorBake is { NeedsFrame: true } || impostorUploadsWaiting)
+            if (_impostorBake is { NeedsFrame: true } || _impostorUploadsWaiting)
             {
                 if (Gpu.Frame.Open) return;
                 Gpu.Finish();
@@ -741,7 +741,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         for (int i = 0; i < state.Patches.Count; i++)
         {
             var p = state.Patches[i];
-            state.PatchTextures[i] = (textures.Get(p.Grass.Sprite, false), textures.Get(p.Grass.ColourMap, false));   // start decoding now, not at the first draw
+            state.PatchTextures[i] = (_textures.Get(p.Grass.Sprite, false), _textures.Get(p.Grass.ColourMap, false));   // start decoding now, not at the first draw
         }
         state.Ready = true;
         state.Complete = zone.Complete && !filter;
@@ -765,7 +765,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>Drops the groups that cannot be drawn in a filtered zone once their mesh sizes are known (they were kept while the mesh was not decoded).</summary>
     void Prune()
     {
-        foreach (var state in zones.Values)
+        foreach (var state in _zones.Values)
         {
             if (!state.NeedsPrune || state.Job is not null) continue;
             bool unknown = false;
@@ -799,10 +799,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>The groups' instances leave the GPU cull's arena (after the frames in flight).</summary>
     void FreeArena(List<Group> groups)
     {
-        if (gpuCull is null) return;
+        if (_gpuCull is null) return;
         foreach (var g in groups)
         {
-            gpuCull?.Free(g.Arena, g.ArenaGeneration);
+            _gpuCull?.Free(g.Arena, g.ArenaGeneration);
             (g.Arena, g.ArenaGeneration) = (default, 0);
         }
     }
@@ -813,13 +813,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var page in state.Pages.Values) FreePage(page);
         state.Pages.Clear();
         ReleaseGrassZone(state);
-        zones.Remove(state.Zone);
-        grassVersion++;
+        _zones.Remove(state.Zone);
+        _grassVersion++;
     }
 
     void FreePage(GrassPage page)
     {
-        grassVersion++;
+        _grassVersion++;
         page.Dropped = true;   // an upload still queued for it frees what it made instead of attaching it
         page.PendingBlades = null;
         page.PendingPrefixes = null;
@@ -831,12 +831,12 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>A page's blade ranges and slots back to the grass store (after the frames in flight).</summary>
     void ReleaseBuffers(GrassBuffer[] buffers)
     {
-        if (grassDisposing) return;
+        if (_grassDisposing) return;
         foreach (var b in buffers)
         {
-            if (b.Store != grassStore) continue;
-            if (b.Slot >= 0) grassStore.FreeSlot(b.Slot);
-            if (!b.Range.IsEmpty) grassStore.FreeBlades(b.Range);
+            if (b.Store != _grassStore) continue;
+            if (b.Slot >= 0) _grassStore.FreeSlot(b.Slot);
+            if (!b.Range.IsEmpty) _grassStore.FreeBlades(b.Range);
             b.Slot = -1;
             b.Range = default;
         }
@@ -850,36 +850,36 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// frames (a page takes a millisecond or two, and finished ones are only collected once a frame).</summary>
     const int MaxGrassJobs = 12;
     static readonly int CoveredGrassJobs = Math.Max(MaxGrassJobs, 4 * BackgroundWork.Threads);
-    readonly List<(float Distance, ZoneState State, int Key)> grassWanted = [];
+    readonly List<(float Distance, ZoneState State, int Key)> _grassWanted = [];
     /// <summary>An eye page waited for room in the grass store last frame (<see cref="UpdateGrass"/>): kept pages are not queued meanwhile.</summary>
-    bool grassEyeWaited;
-    readonly (float Distance, ZoneState State, int Key)[] grassPicks = new (float, ZoneState, int)[CoveredGrassJobs];
-    int zonesWaiting, grassWaiting, grassNear;
+    bool _grassEyeWaited;
+    readonly (float Distance, ZoneState State, int Key)[] _grassPicks = new (float, ZoneState, int)[CoveredGrassJobs];
+    int _zonesWaiting, _grassWaiting, _grassNear;
 
     /// <summary>
     /// Bumped by every change the page walk (<see cref="UpdateGrass"/>) reads besides the eye and the kept points: a zone laid out or dropped, a page
     /// freed or attached, the store replaced.
     /// </summary>
-    int grassVersion;
+    int _grassVersion;
     /// <summary>
     /// The last page walk left nothing in progress (no job, no blades waiting for room, no page without its buffers, none wanted), and what it was made
     /// from: while those stay within <see cref="GrassWalkSlack"/> the walk would decide the same, so it is skipped.
     /// </summary>
-    bool grassSettled;
-    (Vector3 Eye, float Ground, float Range, bool Streaming, int Version) grassWalk;
-    Vector3[] grassWalkKept = [];
+    bool _grassSettled;
+    (Vector3 Eye, float Ground, float Range, bool Streaming, int Version) _grassWalk;
+    Vector3[] _grassWalkKept = [];
     /// <summary>How far the eye or a kept point may move before the page walk runs again: a quarter page, well inside the half page by which a page is wanted
     /// before its grass range and the two by which it is freed after.</summary>
     const float GrassWalkSlack = PageSize / 4;
 
     bool GrassWalkCurrent(Vector3 eye, IReadOnlyList<Vector3> kept)
     {
-        var w = grassWalk;
-        if (w.Version != grassVersion || w.Range != GrassRangeSetting * Scale || w.Streaming != guard is not { Streaming: false }) return false;
+        var w = _grassWalk;
+        if (w.Version != _grassVersion || w.Range != GrassRangeSetting * Scale || w.Streaming != _guard is not { Streaming: false }) return false;
         if (Vector3.DistanceSquared(eye, w.Eye) > GrassWalkSlack * GrassWalkSlack) return false;
         if (GroundUnderEye != w.Ground && !(MathF.Abs(GroundUnderEye - w.Ground) <= GrassWalkSlack)) return false;
-        if (kept.Count != grassWalkKept.Length) return false;
-        for (int i = 0; i < kept.Count; i++) if (Vector3.DistanceSquared(kept[i], grassWalkKept[i]) > GrassWalkSlack * GrassWalkSlack) return false;
+        if (kept.Count != _grassWalkKept.Length) return false;
+        for (int i = 0; i < kept.Count; i++) if (Vector3.DistanceSquared(kept[i], _grassWalkKept[i]) > GrassWalkSlack * GrassWalkSlack) return false;
         return true;
     }
 
@@ -891,21 +891,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         GrowGrassStore();
         // Nothing moving and nothing in progress since the last walk: it would decide the same (its results, NearestMissingGrass and the counts, stand).
-        if (!settling && grassSettled && GrassWalkCurrent(eye, kept)) return;
+        if (!settling && _grassSettled && GrassWalkCurrent(eye, kept)) return;
         bool unsettled = false;
-        grassWanted.Clear();
-        grassNear = 0;
-        grassTriedFull = false;
+        _grassWanted.Clear();
+        _grassNear = 0;
+        _grassTriedFull = false;
         NearestMissingGrass = float.PositiveInfinity;
         int inFlight = 0;
-        foreach (var state in zones.Values) inFlight += state.GrassRunning;
+        foreach (var state in _zones.Values) inFlight += state.GrassRunning;
         // The kept page to free for a waiting eye page (farthest from its point) and whether an eye page waits.
         bool eyeWaiting = false;
         GrassPage? victim = null;
         ZoneState? victimState = null;
         int victimKey = 0;
         float victimDistance = float.NegativeInfinity;
-        foreach (var state in zones.Values)
+        foreach (var state in _zones.Values)
         {
             if (!state.Ready || state.Ground is null || state.Patches.Count == 0) continue;
             float range = state.Patches.Max(GrassRange), near = range * Math.Min(1, DefaultGrassRange / GrassRangeSetting);
@@ -926,10 +926,10 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     {
                         if (eyeWants)
                         {
-                            grassWanted.Add((d, state, key));
-                            if (d < near) grassNear++;
+                            _grassWanted.Add((d, state, key));
+                            if (d < near) _grassNear++;
                         }
-                        else if (dk < range + PageSize * 0.5f) grassWanted.Add((2 * range + PageSize + dk, state, key));   // after all of the eye's
+                        else if (dk < range + PageSize * 0.5f) _grassWanted.Add((2 * range + PageSize + dk, state, key));   // after all of the eye's
                         continue;
                     }
                     if (eyeWants && page.PendingBlades is not null) eyeWaiting = true;
@@ -940,7 +940,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         FreePage(page);
                         state.Pages.Remove(key);
                     }
-                    else if (page.Job is { IsCompleted: false } && d < near) grassNear++;
+                    else if (page.Job is { IsCompleted: false } && d < near) _grassNear++;
                     else if (page.Job is { IsCompleted: true } job)
                     {
                         state.GrassRunning--;
@@ -948,48 +948,48 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         page.Job = null;
                         var result = job.Result;
                         // While an eye page waits for room, a kept page's blades wait too: the room a freed kept page leaves goes to the eye's.
-                        if (!eyeWants && grassEyeWaited) (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (result.Blades, result.Floats, result.Prefixes);
+                        if (!eyeWants && _grassEyeWaited) (page.PendingBlades, page.PendingFloats, page.PendingPrefixes) = (result.Blades, result.Floats, result.Prefixes);
                         else TryQueuePage(state, key, page, result.Blades, result.Floats, result.Prefixes);
                     }
-                    else if (page.PendingBlades is not null && (eyeWants || !grassEyeWaited)) TryQueuePage(state, key, page, page.PendingBlades, page.PendingFloats!, page.PendingPrefixes!);   // no room last time
+                    else if (page.PendingBlades is not null && (eyeWants || !_grassEyeWaited)) TryQueuePage(state, key, page, page.PendingBlades, page.PendingFloats!, page.PendingPrefixes!);   // no room last time
                 }
         }
-        grassEyeWaited = eyeWaiting;
-        grassSettled = !unsettled && !eyeWaiting && grassWanted.Count == 0 && inFlight == 0;
-        if (grassSettled)
+        _grassEyeWaited = eyeWaiting;
+        _grassSettled = !unsettled && !eyeWaiting && _grassWanted.Count == 0 && inFlight == 0;
+        if (_grassSettled)
         {
-            grassWalk = (eye, GroundUnderEye, GrassRangeSetting * Scale, guard is not { Streaming: false }, grassVersion);
-            if (grassWalkKept.Length != kept.Count) grassWalkKept = new Vector3[kept.Count];
-            for (int i = 0; i < kept.Count; i++) grassWalkKept[i] = kept[i];
+            _grassWalk = (eye, GroundUnderEye, GrassRangeSetting * Scale, _guard is not { Streaming: false }, _grassVersion);
+            if (_grassWalkKept.Length != kept.Count) _grassWalkKept = new Vector3[kept.Count];
+            for (int i = 0; i < kept.Count; i++) _grassWalkKept[i] = kept[i];
         }
-        if (eyeWaiting && grassFull && victim is not null)
+        if (eyeWaiting && _grassFull && victim is not null)
         {
             FreePage(victim);
             victimState!.Pages.Remove(victimKey);
-            grassFull = false;   // the waiting page tries the room next frame
+            _grassFull = false;   // the waiting page tries the room next frame
         }
         // Missing pages nearest first, a bounded number at a time. Pages hold the blades of the highest density setting,
         // so changing the setting never regenerates them (Draw shows a prefix). Only the nearest free jobs' worth is picked: sorting every
         // missing page (tens of thousands at a long grass range) took milliseconds a frame.
-        grassWaiting = grassWanted.Count;
-        int free = guard is { Streaming: false } ? 0 : Math.Max(0, (Covered ? CoveredGrassJobs : MaxGrassJobs) - inFlight), picked = 0;
-        foreach (var wanted in grassWanted)
+        _grassWaiting = _grassWanted.Count;
+        int free = _guard is { Streaming: false } ? 0 : Math.Max(0, (Covered ? CoveredGrassJobs : MaxGrassJobs) - inFlight), picked = 0;
+        foreach (var wanted in _grassWanted)
         {
-            if (picked == free && (free == 0 || wanted.Distance >= grassPicks[picked - 1].Distance)) continue;
+            if (picked == free && (free == 0 || wanted.Distance >= _grassPicks[picked - 1].Distance)) continue;
             int at = picked < free ? picked++ : picked - 1;
-            for (; at > 0 && grassPicks[at - 1].Distance > wanted.Distance; at--) grassPicks[at] = grassPicks[at - 1];
-            grassPicks[at] = wanted;
+            for (; at > 0 && _grassPicks[at - 1].Distance > wanted.Distance; at--) _grassPicks[at] = _grassPicks[at - 1];
+            _grassPicks[at] = wanted;
         }
         for (int i = 0; i < picked; i++)
         {
-            var (_, state, key) = grassPicks[i];
-            grassPicks[i] = default;
+            var (_, state, key) = _grassPicks[i];
+            _grassPicks[i] = default;
             float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
             var page = state.Pages[key] = new GrassPage();
             var patches = state.Patches;
             var ground = state.Ground!;
             state.GrassRunning++;
-            grassWaiting--;
+            _grassWaiting--;
             page.Job = BackgroundWork.Run(() =>
             {
                 var blades = new float[patches.Count][];
@@ -1005,7 +1005,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     const int SlabBytes = 512 << 10;
 
     /// <summary>GPU bytes of the grass pages (blades and the instance data).</summary>
-    long GrassBytes() => zones.Values.Sum(z => z.Pages.Values.Sum(p => p.Buffers?.Sum(b => (long)b.Count * FoliageGrassField.Stride * 4) ?? 0));
+    long GrassBytes() => _zones.Values.Sum(z => z.Pages.Values.Sum(p => p.Buffers?.Sum(b => (long)b.Count * FoliageGrassField.Stride * 4) ?? 0));
 
     // ------------------------------------------------------------------ meshes and materials
 
@@ -1092,30 +1092,30 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     MeshAsset AssetFor(FoliageMesh mesh)
     {
-        if (assetsByMesh.TryGetValue(mesh, out var a)) return a;
-        a = assetsByMesh[mesh] = new MeshAsset { Mesh = mesh };
+        if (_assetsByMesh.TryGetValue(mesh, out var a)) return a;
+        a = _assetsByMesh[mesh] = new MeshAsset { Mesh = mesh };
         // MapFeatureMode: UV_MAPPED, TRIPLANAR, TERRAIN, DUAL_TEXTURE, FOLIAGE, DUAL_TRIPLANAR, EMISSIVE (the map-feature builder's rules,
         // docs/formats/runtime-materials.md); FOLIAGE cuts out on the normal map's alpha at "alpha threshold" / 255, double-sided.
         int mode = mesh.MaterialType;
         bool dual = mode is 3 or 5;
-        a.MainMaterial = new FoliageMaterial(textures.Get(mesh.Texture, false, deferred: true), textures.Get(mesh.Normal, false, deferred: true),
-            dual ? textures.Get(mesh.Texture2, false, deferred: true) : null, dual ? textures.Get(mesh.Normal2, false, deferred: true) : null,
+        a.MainMaterial = new FoliageMaterial(_textures.Get(mesh.Texture, false, deferred: true), _textures.Get(mesh.Normal, false, deferred: true),
+            dual ? _textures.Get(mesh.Texture2, false, deferred: true) : null, dual ? _textures.Get(mesh.Normal2, false, deferred: true) : null,
             mode == 4 ? mesh.AlphaThreshold / 255f : 0, mode == 4, mode is 1 or 5, new Vector2(mesh.TileX, mesh.TileY), mode == 6, mesh.SpecularMult,
             (mode is 1 or 5 ? MeshSurface.TriplanarDust : 0u) | (mode == 4 ? MeshSurface.Foliage : 0u));
         // The leaves: their own texture pair, transparent and double-sided, cut out at "leaves alpha threshold" / 255.
         if (mesh.LeavesMesh is not null)
-            a.LeavesMaterial = new FoliageMaterial(textures.Get(mesh.LeavesTexture, false, deferred: true), textures.Get(mesh.LeavesNormal, false, deferred: true), null, null,
+            a.LeavesMaterial = new FoliageMaterial(_textures.Get(mesh.LeavesTexture, false, deferred: true), _textures.Get(mesh.LeavesNormal, false, deferred: true), null, null,
                 mesh.LeavesAlphaThreshold / 255f, true, false, Vector2.One, false, 0, MeshSurface.Foliage);
         string main = mesh.MeshPath, leaves = mesh.LeavesMesh ?? "";
         bool weld = a.Weld = MeshWeld.Enabled;
         a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, mesh, false, weld), leaves.Length > 0 ? DecodeTrimmed(leaves, mesh, true, weld) : null));
-        decoding.Add(a);
+        _decoding.Add(a);
         return a;
     }
 
     Model? Decode(string name, bool weld)
     {
-        var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
+        var path = _assets.Find(name) ?? _assets.Find(Path.GetFileName(name.Replace('\\', '/')));
         if (path is null) { lock (Messages) Messages.Add($"foliage mesh not found: {name}"); return null; }
         try
         {
@@ -1132,11 +1132,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     void PumpMeshes()
     {
-        for (int i = 0; i < decoding.Count; i++)
+        for (int i = 0; i < _decoding.Count; i++)
         {
-            var a = decoding[i];
+            var a = _decoding[i];
             if (!a.Job!.IsCompleted) continue;
-            decoding.RemoveAt(i--);
+            _decoding.RemoveAt(i--);
             (Model? main, Model? leaves) = (null, null);
             try { (main, leaves) = a.Job.Result; }
             catch (AggregateException e) { Messages.Add($"foliage mesh {a.Mesh.MeshPath}: {e.InnerException?.Message ?? e.Message}"); }
@@ -1196,7 +1196,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         var bytesTotal = new long[1];
         QueueModel(gpuMain, main, bytesTotal);
         if (leaves is not null) QueueModel(gpuLeaves!, leaves, bytesTotal);
-        uploads.Enqueue(() =>
+        _uploads.Enqueue(() =>
         {
             a.Main = gpuMain;
             a.Leaves = gpuLeaves;
@@ -1204,8 +1204,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             a.LastUsed = Environment.TickCount64;
             a.Resident = true;
             a.Uploading = false;
-            residentStamp++;
-            residentMeshBytes += a.Bytes;
+            _residentStamp++;
+            _residentMeshBytes += a.Bytes;
         });
     }
 
@@ -1221,13 +1221,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             var packed = GpuVertex.PackObject(p.Vertices);
             int vertexBytes = packed.Length, indexBytes = allIndices.Length * sizeof(uint);
             tally[0] += vertexBytes + indexBytes;
-            uploads.Enqueue(() =>
+            _uploads.Enqueue(() =>
             {
                 gp = new GpuPart
                 {
                     Vertices = DeviceBuffer.Create(Gpu, (ulong)vertexBytes, BufferUse.Vertex | RayInput, MeshAllocationName),
                     Indices = DeviceBuffer.Create(Gpu, (ulong)indexBytes, BufferUse.Index | RayInput, MeshAllocationName),
-                    Count = p.Indices.Length, TrimCount = p.TrimmedIndices?.Length ?? 0, HasTangents = p.HasTangents, HasColours = p.HasColours,
+                    Count = p.Indices.Length,
+                    TrimCount = p.TrimmedIndices?.Length ?? 0,
+                    HasTangents = p.HasTangents,
+                    HasColours = p.HasColours,
                 };
                 gp.Attributes = VertexAttributes(gp.Vertices);
                 mesh.Parts.Add(gp);
@@ -1235,34 +1238,34 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             for (int at = 0; at < vertexBytes; at += SlabBytes)
             {
                 int start = at, length = Math.Min(SlabBytes, vertexBytes - at);
-                uploads.Enqueue(() =>
+                _uploads.Enqueue(() =>
                 {
                     Gpu.EnsureFrame();
-                {
-                    using var batch = Gpu.Uploads.Begin();
-                    batch.Write(gp!.Vertices, (ulong)start, packed.AsSpan(start, length));
-                }
+                    {
+                        using var batch = Gpu.Uploads.Begin();
+                        batch.Write(gp!.Vertices, (ulong)start, packed.AsSpan(start, length));
+                    }
                 });
             }
             for (int at = 0; at < indexBytes; at += SlabBytes)
             {
                 int start = at, length = Math.Min(SlabBytes, indexBytes - at);
-                uploads.Enqueue(() =>
+                _uploads.Enqueue(() =>
                 {
                     Gpu.EnsureFrame();
-                {
-                    using var batch = Gpu.Uploads.Begin();
-                    batch.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(allIndices.AsSpan()).Slice(start, length));
-                }
+                    {
+                        using var batch = Gpu.Uploads.Begin();
+                        batch.Write(gp!.Indices, (ulong)start, MemoryMarshal.AsBytes(allIndices.AsSpan()).Slice(start, length));
+                    }
                 });
             }
         }
     }
 
-    long residentMeshBytes, lastTrim;
+    long _residentMeshBytes, _lastTrim;
     /// <summary>Counts meshes becoming resident (the zones' cull margins are recomputed after it changes).</summary>
-    int residentStamp;
-    int meshUnloads, meshReloads;
+    int _residentStamp;
+    int _meshUnloads, _meshReloads;
 
     /// <summary>Meshes not needed (no loaded zone has a group of them within its range) for this long are unloaded.</summary>
     public double IdleSeconds { get; set; } = 60;
@@ -1276,9 +1279,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     void TrimResident(Vector3 eye, bool force)
     {
         long now = Environment.TickCount64;
-        if (!force && now - lastTrim < 1000) return;
-        lastTrim = now;
-        foreach (var state in zones.Values)
+        if (!force && now - _lastTrim < 1000) return;
+        _lastTrim = now;
+        foreach (var state in _zones.Values)
         {
             if (!state.Ready) continue;
             // In range of the eye or of a kept point; a kept point's texture needs count from at least the camera's distance (KeptViewDistance).
@@ -1304,19 +1307,19 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     if (m is not null) _ = (m.Diffuse?.Key, m.Normal?.Key, m.Diffuse2?.Key, m.Normal2?.Key);   // reading a key counts as use (WorldTexture.Key)
             }
         }
-        textures.CommitNeeds();
-        textures.Rebalance();
-        foreach (var a in assetsByMesh.Values)
+        _textures.CommitNeeds();
+        _textures.Rebalance();
+        foreach (var a in _assetsByMesh.Values)
         {
-            if (!a.Resident || (now - a.LastUsed) / 1000.0 <= (guard is { Pressure: true } ? Math.Min(IdleSeconds, GuardIdleSeconds) : IdleSeconds)) continue;
+            if (!a.Resident || (now - a.LastUsed) / 1000.0 <= (_guard is { Pressure: true } ? Math.Min(IdleSeconds, GuardIdleSeconds) : IdleSeconds)) continue;
             foreach (var m in new[] { a.Main, a.Leaves })
                 if (m is not null) DeleteMesh(m);
             a.Main = a.Leaves = null;
             DropLods(a);
             a.Resident = false;
-            residentMeshBytes -= a.Bytes;
+            _residentMeshBytes -= a.Bytes;
             a.Bytes = 0;
-            meshUnloads++;
+            _meshUnloads++;
         }
     }
 
@@ -1334,7 +1337,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     static float BoxDistance(Vector3 min, Vector3 max, Vector3 eye) => Vector3.Distance(eye, Vector3.Clamp(eye, min, max));
 
     /// <summary>Tells the foliage textures' mip streaming the camera: the render size in pixels and the vertical field of view (the upscaler's LOD bias is the context's).</summary>
-    public void SetView(int width, int height, float fieldOfView) => textures.Mips.SetView(width, height, fieldOfView, Gpu.LodBias);
+    public void SetView(int width, int height, float fieldOfView) => _textures.Mips.SetView(width, height, fieldOfView, Gpu.LodBias);
 
     void DeleteMesh(GpuMesh m)
     {
@@ -1349,13 +1352,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>Decodes an unloaded mesh again (from <see cref="Draw"/>, when something in range needs it).</summary>
     void Reload(MeshAsset a)
     {
-        if (a.Resident || a.Failed || a.Job is not null || a.Uploading || guard is { Streaming: false }) return;
+        if (a.Resident || a.Failed || a.Job is not null || a.Uploading || _guard is { Streaming: false }) return;
         string main = a.Mesh.MeshPath, leaves = a.Mesh.LeavesMesh ?? "";
         a.LastUsed = Environment.TickCount64;
         bool weld = a.Weld = MeshWeld.Enabled;
         a.Job = BackgroundWork.Run(() => (DecodeTrimmed(main, a.Mesh, false, weld), leaves.Length > 0 ? DecodeTrimmed(leaves, a.Mesh, true, weld) : null));
-        decoding.Add(a);
-        meshReloads++;
+        _decoding.Add(a);
+        _meshReloads++;
     }
 
     /// <summary>The attributes at locations 0 to 4 (position, normal, texture coordinates, tangent, colour) of the object layout (<see cref="GpuVertex"/>).</summary>
@@ -1385,15 +1388,15 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>An instance in range of the shadow cascades' eye (its group's records and index), kept for the frame's further cascades (see <see cref="Draw"/>).</summary>
     readonly record struct ShadowCandidate(MeshAsset Asset, FoliageInstanceRecord[] Instances, int Index, float Mesh, float Impostor);
-    readonly List<ShadowCandidate> shadowCandidates = [];
+    readonly List<ShadowCandidate> _shadowCandidates = [];
     /// <summary>The meshes of the recording pass's work list, in order: the further cascades' batch order (<see cref="CullCandidates"/>).</summary>
-    readonly List<(MeshAsset Asset, int Parts)> shadowCandidateOrder = [];
+    readonly List<(MeshAsset Asset, int Parts)> _shadowCandidateOrder = [];
     /// <summary>Counts <see cref="Draw"/> calls (<see cref="Batch.Stamp"/>).</summary>
-    long drawStamp;
-    readonly FoliageCullView cullView = new();
-    long shadowCandidatesFrame = -1, updates;
-    Vector3 shadowCandidatesEye;
-    float shadowCandidatesRange;
+    long _drawStamp;
+    readonly FoliageCullView _cullView = new();
+    long _shadowCandidatesFrame = -1, _updates;
+    Vector3 _shadowCandidatesEye;
+    float _shadowCandidatesRange;
 
     /// <summary>One visible instance: into its mesh's batch, or the terrain's mesh path for TERRAIN-mode rocks.</summary>
     void Emit(MeshAsset a, in Matrix4x4 t, float w, WorldRenderOptions options)
@@ -1403,11 +1406,11 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             if (w < 0.5f) return;   // the terrain shader has no dither: the instance goes at the middle of the fade
             // Over an interior mask: drawn with the cut (docs/render-interior-cut.md); the sphere is the mesh's bounds placed.
-            var into = terrainDraws;
-            if (!depthPass && InteriorCut is { Active: true } mask)
+            var into = _terrainDraws;
+            if (!_depthPass && InteriorCut is { Active: true } mask)
             {
                 float scale = MathF.Sqrt(MathF.Max(new Vector3(t.M11, t.M12, t.M13).LengthSquared(), MathF.Max(new Vector3(t.M21, t.M22, t.M23).LengthSquared(), new Vector3(t.M31, t.M32, t.M33).LengthSquared())));
-                if (mask.Overlaps(Vector3.Transform(a.Centre, t), a.Radius * scale)) into = terrainDrawsCut;
+                if (mask.Overlaps(Vector3.Transform(a.Centre, t), a.Radius * scale)) into = _terrainDrawsCut;
             }
             foreach (var gp in a.Main!.Parts) into.Add((PlainMesh(gp), gp.Count, t));
             return;
@@ -1430,16 +1433,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         DrawnInstances = 0;
         DrawnBlades = 0;
         DrawCalls = 0;
-        if (!depthPass) MainDetail = "";
+        if (!_depthPass) MainDetail = "";
         if (!Enabled) return;
-        (rockTerrain, drawTextures, drawMaterialDistance) = (terrain, options.Textures, options.MaterialDistance);
+        (_rockTerrain, _drawTextures, _drawMaterialDistance) = (terrain, options.Textures, options.MaterialDistance);
         int timer = grass ? BeginTimer() : -1;
         var cpu = Stopwatch.StartNew();
-        drawStamp++;
-        active.Clear();
-        impostorActive.Clear();
-        terrainDraws.Clear();
-        terrainDrawsCut.Clear();
+        _drawStamp++;
+        _active.Clear();
+        _impostorActive.Clear();
+        _terrainDraws.Clear();
+        _terrainDrawsCut.Clear();
 
         // 1. Cull: each instance by its distance along the ground (the game's pages) and its bounding sphere, the groups (a mesh in a zone)
         // in parallel, each into its own list, merged into the batches in order (the same instance order as one pass would give). The shadow
@@ -1449,46 +1452,46 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // With the GPU cull (step A2) the CPU walks the same zones and groups into the same work list, and the instances are tested by
         // compute kernels recorded ahead of the frame (FoliageGpuCull); every candidate batch is drawn, in the same order, with the visible
         // count the GPU wrote (0 draws nothing). The shadow cascades of a frame share one work list as they share the candidates above.
-        bool gpu = GpuCull && gpuCull is not null;
-        bool cachedDepth = depthPass && shadowCandidatesFrame == updates && shadowCandidatesEye == eye && shadowCandidatesRange == maxRange;
-        cullView.Set(frustum);
+        bool gpu = GpuCull && _gpuCull is not null;
+        bool cachedDepth = _depthPass && _shadowCandidatesFrame == _updates && _shadowCandidatesEye == eye && _shadowCandidatesRange == maxRange;
+        _cullView.Set(frustum);
         // With the zone box test in the cascades (ShadowZoneBox) a list is this cascade's alone: the planes are part of the key (each cascade passes its own array).
-        bool zoneBox = gpu && depthPass && ShadowZoneBox.Enabled;
-        bool reuseWork = gpu && depthPass && gpuWorkFrame == Gpu.Frame.Number && gpuWorkEye == eye && gpuWorkRange == maxRange && gpuWorkTexel == (lodCoarse ? lodTexel : 0)
-                         && (zoneBox ? ReferenceEquals(gpuWorkPlanes, frustum) : gpuWorkPlanes is null);
+        bool zoneBox = gpu && _depthPass && ShadowZoneBox.Enabled;
+        bool reuseWork = gpu && _depthPass && _gpuWorkFrame == Gpu.Frame.Number && _gpuWorkEye == eye && _gpuWorkRange == maxRange && _gpuWorkTexel == (_lodCoarse ? _lodTexel : 0)
+                         && (zoneBox ? ReferenceEquals(_gpuWorkPlanes, frustum) : _gpuWorkPlanes is null);
         if (gpu)
         {
             if (!reuseWork)
             {
-                CollectWork(eye, maxRange, boxTest: !depthPass || zoneBox);
+                CollectWork(eye, maxRange, boxTest: !_depthPass || zoneBox);
                 BuildGpuWork(options, terrain);
             }
-            foreach (var a in gpuOrder) BatchOf(a);
+            foreach (var a in _gpuOrder) BatchOf(a);
         }
         else
         {
             if (cachedDepth) CullCandidates(options);
-            else CullZones(eye, options, maxRange, record: depthPass);
-            active.RemoveAll(static b => b.Count == 0);
+            else CullZones(eye, options, maxRange, record: _depthPass);
+            _active.RemoveAll(static b => b.Count == 0);
         }
-        if (gpu && !reuseWork) (gpuWorkFrame, gpuWorkEye, gpuWorkRange, gpuWorkTexel, gpuWorkPlanes) = depthPass ? (Gpu.Frame.Number, eye, maxRange, lodCoarse ? lodTexel : 0, zoneBox ? frustum : null) : (-1, default, 0, 0, null);
-        lodView = gpu ? CurrentLodView(eye.Y) : default;
+        if (gpu && !reuseWork) (_gpuWorkFrame, _gpuWorkEye, _gpuWorkRange, _gpuWorkTexel, _gpuWorkPlanes) = _depthPass ? (Gpu.Frame.Number, eye, maxRange, _lodCoarse ? _lodTexel : 0, zoneBox ? frustum : null) : (-1, default, 0, 0, null);
+        _lodView = gpu ? CurrentLodView(eye.Y) : default;
         if (gpu) ShowBatches(eye);
         double tCull = cpu.Elapsed.TotalMilliseconds;
         StageClock.Sub("fol cull");
 
         // 2. The instances: each batch's matrices contiguous, in this frame's constants (one copy; the draws reach a batch by firstInstance).
         int total = 0;
-        foreach (var b in active) { b.Offset = total; total += b.Count; }
-        if (!gpu) foreach (var b in impostorActive) { b.Offset = total; total += b.Count; }
+        foreach (var b in _active) { b.Offset = total; total += b.Count; }
+        if (!gpu) foreach (var b in _impostorActive) { b.Offset = total; total += b.Count; }
         if (total > 0 && !gpu)
         {
-            instances = Gpu.Frame.AllocateConstants((ulong)(total * InstanceStride), 16);
-            var target = instances.Bytes;
-            foreach (var b in active)
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
-            foreach (var b in impostorActive)
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
+            _instances = Gpu.Frame.AllocateConstants((ulong)(total * InstanceStride), 16);
+            var target = _instances.Bytes;
+            foreach (var b in _active)
+                MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
+            foreach (var b in _impostorActive)
+                MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
         }
 
         double tUpload = cpu.Elapsed.TotalMilliseconds;
@@ -1497,32 +1500,32 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         bool coverage = Gpu.CurrentTargets().Formats.Samples > 1;
 
         // 3. Meshes: Prepare reads the textures (WorldTexture.Key) and makes the draw list, Record puts it into a native segment of VkGl's pass.
-        if (active.Count > 0 && DrawMeshes) PrepareMeshes(options, gpu);
-        else meshDraws.Clear();
+        if (_active.Count > 0 && DrawMeshes) PrepareMeshes(options, gpu);
+        else _meshDraws.Clear();
         // The GPU path's TERRAIN-mode rocks: one draw per part of each rock batch in view, culled by the same dispatch (after the meshes' draws).
         if (gpu) PrepareRocks();
-        else rockDraws.Clear();
+        else _rockDraws.Clear();
         if (DrawMeshes) PrepareImpostors(gpu);
-        else impostorDraws.Clear();
-        if (impostorDraws.Count == 0) WarmImpostorPipeline(depthPass, coverage);
-        gpuResult = default;
-        if (meshDraws.Count > 0 || rockDraws.Count > 0 || impostorDraws.Count > 0)
+        else _impostorDraws.Clear();
+        if (_impostorDraws.Count == 0) WarmImpostorPipeline(_depthPass, coverage);
+        _gpuResult = default;
+        if (_meshDraws.Count > 0 || _rockDraws.Count > 0 || _impostorDraws.Count > 0)
         {
             if (gpu)
             {
-                gpuResult = DispatchGpuCull(new Vector2(eye.X, eye.Z), terrain, coverage);
-                if (gpuResult.IsEmpty) { meshDraws.Clear(); rockDraws.Clear(); }   // the scratch memory is over its cap: this view has no foliage this frame
+                _gpuResult = DispatchGpuCull(new Vector2(eye.X, eye.Z), terrain, coverage);
+                if (_gpuResult.IsEmpty) { _meshDraws.Clear(); _rockDraws.Clear(); }   // the scratch memory is over its cap: this view has no foliage this frame
             }
-            if (meshDraws.Count > 0 || impostorDraws.Count > 0)
+            if (_meshDraws.Count > 0 || _impostorDraws.Count > 0)
             {
                 // The depth prepass (FoliagePrepass): the main colour view with the GPU cull only (the reflection and the multisampled targets keep the single colour pass).
-                bool prepass = FoliagePrepass.Enabled && PrepassView && !depthPass && !coverage && !gpuResult.IsEmpty && (meshDraws.Count > 0 || ImpostorPrepass.Enabled && impostorDraws.Count > 0);
+                bool prepass = FoliagePrepass.Enabled && PrepassView && !_depthPass && !coverage && !_gpuResult.IsEmpty && (_meshDraws.Count > 0 || ImpostorPrepass.Enabled && _impostorDraws.Count > 0);
                 if (prepass)
                 {
-                    RecordMeshes(prepassMesh, MeshPass.Prepass, viewProjection, eye, light, fogColour, fogDistance, coverage);
-                    RecordMeshes(colourSolidMesh, MeshPass.Equal, viewProjection, eye, light, fogColour, fogDistance, coverage);
+                    RecordMeshes(_prepassMesh, MeshPass.Prepass, viewProjection, eye, light, fogColour, fogDistance, coverage);
+                    RecordMeshes(_colourSolidMesh, MeshPass.Equal, viewProjection, eye, light, fogColour, fogDistance, coverage);
                 }
-                else RecordMeshes(depthPass ? depthMesh : colourMesh, depthPass ? MeshPass.Depth : MeshPass.Colour, viewProjection, eye, light, fogColour, fogDistance, coverage);
+                else RecordMeshes(_depthPass ? _depthMesh : _colourMesh, _depthPass ? MeshPass.Depth : MeshPass.Colour, viewProjection, eye, light, fogColour, fogDistance, coverage);
             }
         }
 
@@ -1536,7 +1539,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             else
             {
                 PrepareGrass(eye, frustum, options, coverage);
-                if (grassDraws.Count > 0)
+                if (_grassDraws.Count > 0)
                     RecordGrass(viewProjection, eye, light, fogColour, fogDistance, coverage);
             }
         }
@@ -1546,34 +1549,34 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // 5. TERRAIN-mode rocks through the terrain's own mesh path: the GPU's placements and arguments, or the CPU's placements.
         if (gpu)
         {
-            if (rockDraws.Count > 0 && gpuResult.Split && !depthPass)
+            if (_rockDraws.Count > 0 && _gpuResult.Split && !_depthPass)
             {
                 // The split: the rocks that are not mid-transition with their impostor use the program without the dither's discard; a rock fades only into its impostor.
-                var rocksNow = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(rockDraws);
-                DrawCalls += terrain.DrawMeshesIndirect(rocksNow, gpuResult.Rows, gpuResult.RowsOffset, gpuResult.Args,
-                    gpuResult.ArgsOffset + (ulong)(gpuResult.DrawCount + meshDraws.Count) * 20, false, solid: true);
+                var rocksNow = CollectionsMarshal.AsSpan(_rockDraws);
+                DrawCalls += terrain.DrawMeshesIndirect(rocksNow, _gpuResult.Rows, _gpuResult.RowsOffset, _gpuResult.Args,
+                    _gpuResult.ArgsOffset + (ulong)(_gpuResult.DrawCount + _meshDraws.Count) * 20, false, solid: true);
                 // The rest: mid-transition rocks and, with an interior mask drawn, those over it (the cull lays them out with the fading ones), with the cut on.
                 if (RockImpostorsActive || InteriorCut is { Active: true })
-                    DrawCalls += terrain.DrawMeshesIndirect(rocksNow, gpuResult.Rows, gpuResult.RowsOffset, gpuResult.Args,
-                        gpuResult.ArgsOffset + (ulong)(2 * gpuResult.DrawCount + meshDraws.Count) * 20, false, solid: false, cut: InteriorCut);
+                    DrawCalls += terrain.DrawMeshesIndirect(rocksNow, _gpuResult.Rows, _gpuResult.RowsOffset, _gpuResult.Args,
+                        _gpuResult.ArgsOffset + (ulong)(2 * _gpuResult.DrawCount + _meshDraws.Count) * 20, false, solid: false, cut: InteriorCut);
             }
-            else if (rockDraws.Count > 0)
-                DrawCalls += terrain.DrawMeshesIndirect(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(rockDraws), gpuResult.Rows, gpuResult.RowsOffset,
-                    gpuResult.Args, gpuResult.ArgsOffset + (ulong)meshDraws.Count * 20, depthPass, cut: depthPass ? null : InteriorCut);
+            else if (_rockDraws.Count > 0)
+                DrawCalls += terrain.DrawMeshesIndirect(CollectionsMarshal.AsSpan(_rockDraws), _gpuResult.Rows, _gpuResult.RowsOffset,
+                    _gpuResult.Args, _gpuResult.ArgsOffset + (ulong)_meshDraws.Count * 20, _depthPass, cut: _depthPass ? null : InteriorCut);
         }
-        else if (terrainDraws.Count > 0)
+        else if (_terrainDraws.Count > 0)
         {
-            DrawCalls += terrain.DrawMeshes(terrainDraws, depthPass);
+            DrawCalls += terrain.DrawMeshes(_terrainDraws, _depthPass);
         }
-        if (!gpu && terrainDrawsCut.Count > 0) DrawCalls += terrain.DrawMeshes(terrainDrawsCut, cut: InteriorCut);
+        if (!gpu && _terrainDrawsCut.Count > 0) DrawCalls += terrain.DrawMeshes(_terrainDrawsCut, cut: InteriorCut);
         StageClock.Sub("fol rocks");
-        int rocks = gpu ? rockDraws.Count : terrainDraws.Count + terrainDrawsCut.Count;
+        int rocks = gpu ? _rockDraws.Count : _terrainDraws.Count + _terrainDrawsCut.Count;
         if (WorldFrame.DetailedStats)
         {
             double tEnd = cpu.Elapsed.TotalMilliseconds;
-            string steps = $"cull{(cachedDepth ? " (cached)" : "")} {tCull:0.00}, upload {tUpload - tCull:0.00}, meshes {tMeshes - tUpload:0.00} in {active.Count} batches, " +
+            string steps = $"cull{(cachedDepth ? " (cached)" : "")} {tCull:0.00}, upload {tUpload - tCull:0.00}, meshes {tMeshes - tUpload:0.00} in {_active.Count} batches, " +
                 $"grass {tGrass - tMeshes:0.00}, TERRAIN-mode rocks {rocks}{(gpu ? " draws" : "")} {tEnd - tGrass:0.00}";
-            if (depthPass) DepthDetail = steps;
+            if (_depthPass) DepthDetail = steps;
             else MainDetail += $" [{steps}]";
         }
         EndTimer(timer);
@@ -1592,8 +1595,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     /// <summary>The groups a culling pass tests, in order (the batch order follows it), with their range for this view.</summary>
-    readonly List<(Group Group, FoliageGroupRange Range, int Parts)> cullWork = [];
-    readonly List<FoliageCullOutput> cullOutputs = [];
+    readonly List<(Group Group, FoliageGroupRange Range, int Parts)> _cullWork = [];
+    readonly List<FoliageCullOutput> _cullOutputs = [];
 
     /// <summary>
     /// How far beyond its instances' positions a zone's meshes can reach: the largest (bounds radius + bounds centre offset) x the largest scale
@@ -1601,30 +1604,30 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     float ZoneMargin(ZoneState state)
     {
-        if (state.MarginStamp == residentStamp && ReferenceEquals(state.MarginGroups, state.Groups)) return state.Margin;
+        if (state.MarginStamp == _residentStamp && ReferenceEquals(state.MarginGroups, state.Groups)) return state.Margin;
         float margin = 10;
         foreach (var g in state.Groups)
             if (g.Asset.Resident) margin = Math.Max(margin, (g.Asset.Radius + g.Asset.Centre.Length()) * g.MaxScale);
-        (state.Margin, state.MarginStamp, state.MarginGroups) = (margin, residentStamp, state.Groups);
+        (state.Margin, state.MarginStamp, state.MarginGroups) = (margin, _residentStamp, state.Groups);
         return margin;
     }
 
     void CullZones(Vector3 eye, WorldRenderOptions options, float maxRange, bool record)
     {
-        if (record) { shadowCandidates.Clear(); shadowCandidateOrder.Clear(); (shadowCandidatesFrame, shadowCandidatesEye, shadowCandidatesRange) = (updates, eye, maxRange); }
+        if (record) { _shadowCandidates.Clear(); _shadowCandidateOrder.Clear(); (_shadowCandidatesFrame, _shadowCandidatesEye, _shadowCandidatesRange) = (_updates, eye, maxRange); }
         CollectWork(eye, maxRange, boxTest: !record);
         CullWork(eye, options, record);
     }
 
-    /// <summary>The zones and groups in range into <see cref="cullWork"/>, on this thread (reloads start here). <paramref name="boxTest"/>:
+    /// <summary>The zones and groups in range into <see cref="_cullWork"/>, on this thread (reloads start here). <paramref name="boxTest"/>:
     /// each zone's box against the frustum first (not while recording for the cascades: each has its own frustum).</summary>
     void CollectWork(Vector3 eye, float maxRange, bool boxTest)
     {
-        var frustum = cullView.Planes;
+        var frustum = _cullView.Planes;
         // Impostors in colour views, and as casters in the cascades (docs/impostors.md "Shadows").
         bool impostorView = Impostors;
-        cullWork.Clear();
-        foreach (var state in zones.Values)
+        _cullWork.Clear();
+        foreach (var state in _zones.Values)
         {
             if (!state.Ready) continue;
             float zoneDistance = ZoneDistance(state.Zone, eye);
@@ -1651,50 +1654,50 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     continue;
                 }
                 var (withImpostor, parts) = WithImpostor(FoliageGroupRange.Of(range, band), g, range, band, state, eye, impostorView);
-                cullWork.Add((g, withImpostor, parts));
+                _cullWork.Add((g, withImpostor, parts));
             }
         }
     }
 
-    /// <summary>The CPU cull of <see cref="cullWork"/> (step A1): every instance tested, the visible ones emitted in order.</summary>
+    /// <summary>The CPU cull of <see cref="_cullWork"/> (step A1): every instance tested, the visible ones emitted in order.</summary>
     void CullWork(Vector3 eye, WorldRenderOptions options, bool record)
     {
         // The batch order: each mesh's first group in the work list (TERRAIN-mode rocks have no batch).
-        foreach (var (g, _, parts) in cullWork)
+        foreach (var (g, _, parts) in _cullWork)
         {
-            if (record) shadowCandidateOrder.Add((g.Asset, parts));
+            if (record) _shadowCandidateOrder.Add((g.Asset, parts));
             if ((parts & FoliageCull.MeshPart) != 0 && !(g.Asset.Terrain && options.Textures)) BatchOf(g.Asset);
             if ((parts & FoliageCull.ImpostorPart) != 0) ImpostorBatchOf(g.Asset);
         }
-        while (cullOutputs.Count < cullWork.Count) cullOutputs.Add(new FoliageCullOutput());
-        LastCullGroups = cullWork.Count;
+        while (_cullOutputs.Count < _cullWork.Count) _cullOutputs.Add(new FoliageCullOutput());
+        LastCullGroups = _cullWork.Count;
         var eyeXz = new Vector2(eye.X, eye.Z);
-        var view = cullView;
+        var view = _cullView;
         // The Hub has well over a thousand groups; one work item per group spends more time in the job queue than in the
         // short cull. Each chunk writes its groups' own outputs, so the order and results are unchanged.
-        const int CullChunk = 16;
-        int chunks = (cullWork.Count + CullChunk - 1) / CullChunk;
+        const int cullChunk = 16;
+        int chunks = (_cullWork.Count + cullChunk - 1) / cullChunk;
         RenderJobs.For(chunks, chunk =>
         {
-            int start = chunk * CullChunk, end = Math.Min(start + CullChunk, cullWork.Count);
+            int start = chunk * cullChunk, end = Math.Min(start + cullChunk, _cullWork.Count);
             for (int k = start; k < end; k++)
             {
-                var (g, range, parts) = cullWork[k];
+                var (g, range, parts) = _cullWork[k];
                 if (!g.SpheresReady)
                 {
                     FoliageCull.FillSpheres(g.Instances, g.Asset.Centre, g.Asset.Radius);   // the mesh's bounds are known once it is resident, and never change
                     g.SpheresReady = true;
                 }
-                FoliageCull.CullGroup(g.Instances, range, eyeXz, view, record, cullOutputs[k], parts, record ? null : FogCull);
+                FoliageCull.CullGroup(g.Instances, range, eyeXz, view, record, _cullOutputs[k], parts, record ? null : FogCull);
             }
         });
-        for (int k = 0; k < cullWork.Count; k++)
+        for (int k = 0; k < _cullWork.Count; k++)
         {
-            var output = cullOutputs[k];
-            var g = cullWork[k].Group;
+            var output = _cullOutputs[k];
+            var g = _cullWork[k].Group;
             if (record)
                 for (int i = 0; i < output.InRangeCount; i++)
-                    shadowCandidates.Add(new ShadowCandidate(g.Asset, g.Instances, output.InRange[i], output.InRangeMesh[i], output.InRangeImpostor[i]));
+                    _shadowCandidates.Add(new ShadowCandidate(g.Asset, g.Instances, output.InRange[i], output.InRangeMesh[i], output.InRangeImpostor[i]));
             EmitAll(g.Asset, output.Visible.AsSpan(0, output.Count), options);
             EmitImpostors(g.Asset, output.ImpostorVisible.AsSpan(0, output.ImpostorCount));
             if (output.FogCulled > 0) FogCull?.AddCulled(FogVolumes.CullKind.FoliageInstances, output.FogCulled);
@@ -1704,20 +1707,20 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>A further shadow cascade: the frame's recorded candidates against this cascade's frustum (tested in parallel, emitted in order).</summary>
     void CullCandidates(WorldRenderOptions options)
     {
-        foreach (var (a, parts) in shadowCandidateOrder)
+        foreach (var (a, parts) in _shadowCandidateOrder)
         {
             if ((parts & FoliageCull.MeshPart) != 0 && !(a.Terrain && options.Textures)) BatchOf(a);
             if ((parts & FoliageCull.ImpostorPart) != 0) ImpostorBatchOf(a);
         }
-        int count = shadowCandidates.Count, chunks = (count + CandidateChunk - 1) / CandidateChunk;
-        while (candidateOutputs.Count < chunks) candidateOutputs.Add(new CandidateOutput());
-        var list = shadowCandidates;
-        var view = cullView;
+        int count = _shadowCandidates.Count, chunks = (count + CandidateChunk - 1) / CandidateChunk;
+        while (_candidateOutputs.Count < chunks) _candidateOutputs.Add(new CandidateOutput());
+        var list = _shadowCandidates;
+        var view = _cullView;
         // Each chunk keeps its visible candidates as batch matrices, in runs of one mesh (the candidates were recorded group by group).
         RenderJobs.For(chunks, k =>
         {
-            var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(list);
-            var output = candidateOutputs[k];
+            var span = CollectionsMarshal.AsSpan(list);
+            var output = _candidateOutputs[k];
             output.Count = 0;
             output.Runs.Clear();
             for (int i = k * CandidateChunk, end = Math.Min(i + CandidateChunk, count); i < end; i++)
@@ -1741,7 +1744,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         });
         for (int k = 0; k < chunks; k++)
         {
-            var output = candidateOutputs[k];
+            var output = _candidateOutputs[k];
             foreach (var (asset, impostor, start, n) in output.Runs)
                 if (impostor) EmitImpostors(asset, output.Visible.AsSpan(start, n));
                 else EmitAll(asset, output.Visible.AsSpan(start, n), options);
@@ -1749,46 +1752,46 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     const int CandidateChunk = 2048;
-    readonly List<CandidateOutput> candidateOutputs = [];
+    readonly List<CandidateOutput> _candidateOutputs = [];
 
     // ---- the GPU cull (docs/renderer-native.md 5.3 to 5.6, step A2; the TERRAIN-mode rocks, 5.6.1) ----
 
-    /// <summary>The GPU work list: its meshes in batch order (each mesh's first group in <see cref="cullWork"/>, as the CPU's batches), then
-    /// its TERRAIN-mode rock batches (<see cref="gpuRockOrder"/>), its chunks grouped by batch (each batch's groups in work-list order, each
+    /// <summary>The GPU work list: its meshes in batch order (each mesh's first group in <see cref="_cullWork"/>, as the CPU's batches), then
+    /// its TERRAIN-mode rock batches (<see cref="_gpuRockOrder"/>), its chunks grouped by batch (each batch's groups in work-list order, each
     /// group's instances in order: the CPU's emission order), and each batch's chunk range [<c>gpuBatchStart[b]</c>, <c>gpuBatchStart[b + 1]</c>);
     /// rock batch r is batch <c>gpuOrder.Count + r</c>.</summary>
-    readonly List<MeshAsset> gpuOrder = [];
+    readonly List<MeshAsset> _gpuOrder = [];
     /// <summary>
     /// The rock batches: a TERRAIN-mode mesh's placements that keep the winding, and those that turn it round (two batches, as
     /// <see cref="TerrainRenderer.DrawMeshes"/> groups them by (mesh part, mirroring)), numbered by their first candidate in the work list.
     /// The CPU's terrain path orders its groups by their first visible placement instead; the order only matters between two different
     /// rocks at exactly the same depth in colour (depth passes keep the nearest whatever the order), as for A1's foliage batches.
     /// </summary>
-    readonly List<(MeshAsset Asset, bool Mirrored, int Level)> gpuRockOrder = [];
-    FoliageCullChunk[] gpuChunks = new FoliageCullChunk[1024];
-    int gpuChunkCount, gpuInstances;
-    int[] gpuBatchStart = new int[65], gpuCursor = new int[64];
-    /// <summary>The chunks in the frame's constants, written once a frame per work list (<see cref="gpuChunkFrame"/>).</summary>
-    Transient gpuChunkData;
-    long gpuChunkFrame = -1;
+    readonly List<(MeshAsset Asset, bool Mirrored, int Level)> _gpuRockOrder = [];
+    FoliageCullChunk[] _gpuChunks = new FoliageCullChunk[1024];
+    int _gpuChunkCount, _gpuInstances;
+    int[] _gpuBatchStart = new int[65], _gpuCursor = new int[64];
+    /// <summary>The chunks in the frame's constants, written once a frame per work list (<see cref="_gpuChunkFrame"/>).</summary>
+    Transient _gpuChunkData;
+    long _gpuChunkFrame = -1;
     /// <summary>The shadow cascades' shared work list: the frame, eye and range it was built for (as the CPU's candidates).</summary>
-    long gpuWorkFrame = -1;
-    Vector3 gpuWorkEye;
-    float gpuWorkRange;
+    long _gpuWorkFrame = -1;
+    Vector3 _gpuWorkEye;
+    float _gpuWorkRange;
     /// <summary>The coarsened cascade's texel the work list was built for (0: not coarsened): its impostor transitions depend on it (<see cref="ShadowLod.ImpostorTransition"/>).</summary>
-    float gpuWorkTexel;
+    float _gpuWorkTexel;
     /// <summary>The cascade's planes the depth work list was box-tested against (<see cref="ShadowZoneBox"/>); null: the list holds every zone in range.</summary>
-    Vector4[]? gpuWorkPlanes;
-    int gpuWorkStamp;
-    FoliageCullDraw[] gpuDraws = new FoliageCullDraw[64];
+    Vector4[]? _gpuWorkPlanes;
+    int _gpuWorkStamp;
+    FoliageCullDraw[] _gpuDraws = new FoliageCullDraw[64];
     /// <summary>The current view's cull (rows and indirect arguments), read by <see cref="RecordMeshes"/> and the rocks' draws.</summary>
-    FoliageCullResult gpuResult;
+    FoliageCullResult _gpuResult;
     /// <summary>The current view's rock draws (one per part of each rock batch it shows), their batches, in order: their arguments follow
     /// the mesh draws' (<see cref="DispatchGpuCull"/>).</summary>
-    readonly List<TerrainRenderer.IndirectMesh> rockDraws = [];
-    readonly List<int> rockDrawBatch = [];
+    readonly List<TerrainRenderer.IndirectMesh> _rockDraws = [];
+    readonly List<int> _rockDrawBatch = [];
     /// <summary>Each rock draw's first index (a generated level's place in its part's level buffer; 0 for the original).</summary>
-    readonly List<int> rockDrawFirst = [];
+    readonly List<int> _rockDrawFirst = [];
 
     static bool IsRock(MeshAsset a, WorldRenderOptions options) => a.Terrain && options.Textures;
 
@@ -1837,21 +1840,21 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         g.RockSorted = sorted;
         g.RockFirstMirrored = g.Instances.Length > 0 && FoliageCull.Mirrors(g.Instances[0].Transform);
         (g.RockPlain, g.RockMirrored, g.RockBiomes, g.RockReady) = (plain, mirrored, source, true);
-        gpuCull!.Free(g.Arena, g.ArenaGeneration);
+        _gpuCull!.Free(g.Arena, g.ArenaGeneration);
         (g.Arena, g.ArenaGeneration) = (default, 0);
     }
 
-    /// <summary>The work list of <see cref="cullWork"/> for the GPU: each group's records in the arena, the batch order, the chunks.</summary>
+    /// <summary>The work list of <see cref="_cullWork"/> for the GPU: each group's records in the arena, the batch order, the chunks.</summary>
     void BuildGpuWork(WorldRenderOptions options, TerrainRenderer terrain)
     {
-        var cull = gpuCull!;
+        var cull = _gpuCull!;
         bool placed;
         do
         {
             placed = true;
-            for (int k = 0; k < cullWork.Count; k++)
+            for (int k = 0; k < _cullWork.Count; k++)
             {
-                var g = cullWork[k].Group;
+                var g = _cullWork[k].Group;
                 if (!g.SpheresReady)
                 {
                     FoliageCull.FillSpheres(g.Instances, g.Asset.Centre, g.Asset.Radius);   // as CullWork does: the mesh is resident, its bounds known
@@ -1861,16 +1864,16 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (IsRock(g.Asset, options)) PrepareRock(g, terrain);
                 // A grown arena (full) moved every group: place them all again before a chunk names one.
                 if (!cull.Place(ref g.Arena, ref g.ArenaGeneration, g.Instances)) { placed = false; break; }
-                if (g.Arena.IsEmpty && g.Instances.Length > 0) cullWork.RemoveAt(k--);   // the arena is full and the memory is short (VramGuard): left out of this frame
+                if (g.Arena.IsEmpty && g.Instances.Length > 0) _cullWork.RemoveAt(k--);   // the arena is full and the memory is short (VramGuard): left out of this frame
             }
         } while (!placed);
 
         bool wantLods = LodWanted;
-        int stamp = ++gpuWorkStamp;
-        gpuOrder.Clear();
-        gpuRockOrder.Clear();
-        gpuImpostorOrder.Clear();
-        foreach (var (g, _, parts) in cullWork)
+        int stamp = ++_gpuWorkStamp;
+        _gpuOrder.Clear();
+        _gpuRockOrder.Clear();
+        _gpuImpostorOrder.Clear();
+        foreach (var (g, _, parts) in _cullWork)
         {
             var a = g.Asset;
             bool rockSegments = IsRock(a, options) && g.RockSorted;
@@ -1880,9 +1883,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 {
                     // A rock's impostor batches are those of the biome rows its segments have an atlas for.
                     foreach (var (row, _, _) in g.RockSegments)
-                        if (ReadyRock(a, row) is { } v && v.Impostor!.Stamp != stamp) { (v.Impostor.Stamp, v.Impostor.Index) = (stamp, gpuImpostorOrder.Count); gpuImpostorOrder.Add(v); }
+                        if (ReadyRock(a, row) is { } v && v.Impostor!.Stamp != stamp) { (v.Impostor.Stamp, v.Impostor.Index) = (stamp, _gpuImpostorOrder.Count); _gpuImpostorOrder.Add(v); }
                 }
-                else if (a.Impostor is { } imp && imp.Stamp != stamp) { (imp.Stamp, imp.Index) = (stamp, gpuImpostorOrder.Count); gpuImpostorOrder.Add(a); }
+                else if (a.Impostor is { } imp && imp.Stamp != stamp) { (imp.Stamp, imp.Index) = (stamp, _gpuImpostorOrder.Count); _gpuImpostorOrder.Add(a); }
             }
             // A rock's segment without an atlas is a mesh whatever the parts say (its group's other rows may be impostors).
             if ((parts & FoliageCull.MeshPart) == 0 && !(rockSegments && RockMeshWanted(g, parts))) continue;
@@ -1903,17 +1906,17 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     ref int index = ref m ? ref a.RockMirroredIndex : ref a.RockPlainIndex;
                     if (index < 0)
                     {
-                        index = gpuRockOrder.Count;
-                        for (int level = 0; level < (a.WorkLod?.Levels ?? 1); level++) gpuRockOrder.Add((a, m, level));
+                        index = _gpuRockOrder.Count;
+                        for (int level = 0; level < (a.WorkLod?.Levels ?? 1); level++) _gpuRockOrder.Add((a, m, level));
                     }
                 }
                 continue;
             }
-            if (a.WorkStamp != stamp) { (a.WorkStamp, a.WorkIndex) = (stamp, gpuOrder.Count); gpuOrder.Add(a); }
+            if (a.WorkStamp != stamp) { (a.WorkStamp, a.WorkIndex) = (stamp, _gpuOrder.Count); _gpuOrder.Add(a); }
         }
-        int meshBatches = gpuOrder.Count, impostorFirst = meshBatches + gpuRockOrder.Count, batches = impostorFirst + gpuImpostorOrder.Count;
-        gpuEntries.Clear();
-        foreach (var (g, _, parts) in cullWork)
+        int meshBatches = _gpuOrder.Count, impostorFirst = meshBatches + _gpuRockOrder.Count, batches = impostorFirst + _gpuImpostorOrder.Count;
+        _gpuEntries.Clear();
+        foreach (var (g, _, parts) in _cullWork)
         {
             var a = g.Asset;
             if (IsRock(a, options) && g.RockSorted && (parts & FoliageCull.ImpostorPart) != 0)
@@ -1927,44 +1930,44 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                         if (g.RockPlain) AddRockEntries(meshBatches + a.RockPlainIndex, a, g, start, length, v is not null);
                         if (g.RockMirrored) AddRockEntries(meshBatches + a.RockMirroredIndex, a, g, start, length, v is not null);
                     }
-                    if (v is not null) gpuEntries.Add(new GpuEntry(impostorFirst + v.Impostor!.Index, g, start, length, false));
+                    if (v is not null) _gpuEntries.Add(new GpuEntry(impostorFirst + v.Impostor!.Index, g, start, length, false));
                 }
                 continue;
             }
             if ((parts & FoliageCull.ImpostorPart) != 0)
             {
-                if ((parts & FoliageCull.MeshPart) != 0) gpuEntries.Add(new GpuEntry(a.WorkIndex, g, 0, g.Instances.Length, false));
-                gpuEntries.Add(new GpuEntry(impostorFirst + a.Impostor!.Index, g, 0, g.Instances.Length, false));
+                if ((parts & FoliageCull.MeshPart) != 0) _gpuEntries.Add(new GpuEntry(a.WorkIndex, g, 0, g.Instances.Length, false));
+                _gpuEntries.Add(new GpuEntry(impostorFirst + a.Impostor!.Index, g, 0, g.Instances.Length, false));
                 continue;
             }
-            if (!IsRock(a, options)) { gpuEntries.Add(new GpuEntry(a.WorkIndex, g, 0, g.Instances.Length, false)); continue; }
+            if (!IsRock(a, options)) { _gpuEntries.Add(new GpuEntry(a.WorkIndex, g, 0, g.Instances.Length, false)); continue; }
             if (g.RockPlain) AddRockEntries(meshBatches + a.RockPlainIndex, a, g, 0, g.Instances.Length, false);
             if (g.RockMirrored) AddRockEntries(meshBatches + a.RockMirroredIndex, a, g, 0, g.Instances.Length, false);
         }
-        if (gpuBatchStart.Length < batches + 1) { gpuBatchStart = new int[batches * 2 + 1]; gpuCursor = new int[batches * 2]; }
-        Array.Clear(gpuBatchStart, 0, batches + 1);
-        const int Chunk = FoliageShaders.CullChunk;
+        if (_gpuBatchStart.Length < batches + 1) { _gpuBatchStart = new int[batches * 2 + 1]; _gpuCursor = new int[batches * 2]; }
+        Array.Clear(_gpuBatchStart, 0, batches + 1);
+        const int chunk = FoliageShaders.CullChunk;
         // Chunks per batch: a mesh group's instances once; a rock group's once per batch it has (a group with both kinds of placement is
         // tested twice, each run keeping only its own kind).
-        foreach (var e in gpuEntries)
-            gpuBatchStart[e.Batch + 1] += (e.Length + Chunk - 1) / Chunk;
-        for (int b = 0; b < batches; b++) gpuBatchStart[b + 1] += gpuBatchStart[b];
-        int n = gpuBatchStart[batches];
-        if (gpuChunks.Length < n) gpuChunks = new FoliageCullChunk[Math.Max(n, gpuChunks.Length * 2)];
-        Array.Copy(gpuBatchStart, gpuCursor, batches);
+        foreach (var e in _gpuEntries)
+            _gpuBatchStart[e.Batch + 1] += (e.Length + chunk - 1) / chunk;
+        for (int b = 0; b < batches; b++) _gpuBatchStart[b + 1] += _gpuBatchStart[b];
+        int n = _gpuBatchStart[batches];
+        if (_gpuChunks.Length < n) _gpuChunks = new FoliageCullChunk[Math.Max(n, _gpuChunks.Length * 2)];
+        Array.Copy(_gpuBatchStart, _gpuCursor, batches);
         int entry = 0;
-        foreach (var (g, range, _) in cullWork)
+        foreach (var (g, range, _) in _cullWork)
         {
             // gpuEntries lists cullWork's groups in order, a rock group once per batch it has, a group with an impostor once per part.
-            for (; entry < gpuEntries.Count && ReferenceEquals(gpuEntries[entry].Group, g); entry++)
+            for (; entry < _gpuEntries.Count && ReferenceEquals(_gpuEntries[entry].Group, g); entry++)
             {
-                var e = gpuEntries[entry];
+                var e = _gpuEntries[entry];
                 int b = e.Batch, length = e.Length;
                 uint flags = b < meshBatches ? (range.HasImpostor ? FoliageCullChunk.ImpostorMesh : 0)
                     : b >= impostorFirst ? FoliageCullChunk.Impostor
-                    : FoliageCullChunk.Rock | (gpuRockOrder[b - meshBatches].Mirrored ? FoliageCullChunk.Mirrored : 0) | (e.ImpostorMesh ? FoliageCullChunk.ImpostorMesh : 0);
+                    : FoliageCullChunk.Rock | (_gpuRockOrder[b - meshBatches].Mirrored ? FoliageCullChunk.Mirrored : 0) | (e.ImpostorMesh ? FoliageCullChunk.ImpostorMesh : 0);
                 float lodError = 0, lodNext = float.PositiveInfinity;
-                if (b >= meshBatches && b < impostorFirst && gpuRockOrder[b - meshBatches].Asset.WorkLod is { } workLod)
+                if (b >= meshBatches && b < impostorFirst && _gpuRockOrder[b - meshBatches].Asset.WorkLod is { } workLod)
                 {
                     flags |= FoliageCullChunk.Lod;
                     var levelErrors = LevelErrors(workLod);
@@ -1972,28 +1975,34 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     lodNext = e.Level + 1 < workLod.Levels ? levelErrors[e.Level + 1] : float.PositiveInfinity;
                 }
                 uint first = FoliageGpuCull.FirstOf(g.Arena) + (uint)e.Start;
-                for (int at = 0; at < length; at += Chunk)
-                    gpuChunks[gpuCursor[b]++] = new FoliageCullChunk
+                for (int at = 0; at < length; at += chunk)
+                    _gpuChunks[_gpuCursor[b]++] = new FoliageCullChunk
                     {
-                        First = first + (uint)at, Count = (uint)Math.Min(Chunk, length - at),
-                        Range = range.Range, RangeSquared = range.RangeSquared, InverseBand = range.InverseBand, Flags = flags,
-                        Transition = range.HasImpostor ? range.Transition : 0, InverseTransitionBand = range.InverseTransitionBand,
-                        LodError = lodError, LodNextError = lodNext,
+                        First = first + (uint)at,
+                        Count = (uint)Math.Min(chunk, length - at),
+                        Range = range.Range,
+                        RangeSquared = range.RangeSquared,
+                        InverseBand = range.InverseBand,
+                        Flags = flags,
+                        Transition = range.HasImpostor ? range.Transition : 0,
+                        InverseTransitionBand = range.InverseTransitionBand,
+                        LodError = lodError,
+                        LodNextError = lodNext,
                     };
             }
         }
         for (int b = 0; b < batches; b++)
-            for (int c = gpuBatchStart[b]; c < gpuBatchStart[b + 1]; c++) (gpuChunks[c].BatchStart, gpuChunks[c].BatchEnd) = ((uint)gpuBatchStart[b], (uint)gpuBatchStart[b + 1]);   // the split lays a batch out whole
-        gpuChunkCount = n;
-        gpuInstances = 0;
-        foreach (var e in gpuEntries) if (e.Level == 0) gpuInstances += e.Length;   // a generated level's entry repeats the instances; each is drawn at one level
-        gpuChunkFrame = -1;
+            for (int c = _gpuBatchStart[b]; c < _gpuBatchStart[b + 1]; c++) (_gpuChunks[c].BatchStart, _gpuChunks[c].BatchEnd) = ((uint)_gpuBatchStart[b], (uint)_gpuBatchStart[b + 1]);   // the split lays a batch out whole
+        _gpuChunkCount = n;
+        _gpuInstances = 0;
+        foreach (var e in _gpuEntries) if (e.Level == 0) _gpuInstances += e.Length;   // a generated level's entry repeats the instances; each is drawn at one level
+        _gpuChunkFrame = -1;
     }
 
     /// <summary>The work list's groups as (batch, group), in work-list order (a rock group once per batch it has), and per batch whether this
     /// view draws it (<see cref="ShowBatches"/>).</summary>
-    readonly List<GpuEntry> gpuEntries = [];
-    bool[] gpuBatchShown = new bool[64];
+    readonly List<GpuEntry> _gpuEntries = [];
+    bool[] _gpuBatchShown = new bool[64];
 
     /// <summary>One group's records (<c>Start</c> and <c>Length</c> in <c>Group.Instances</c>: all of them, or a rock's run of one biome row) in a batch; <c>ImpostorMesh</c>:
     /// a rock's mesh run whose row has an atlas (its chunks carry the transition).</summary>
@@ -2002,7 +2011,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>A rock run's entries: one per generated level in use (<see cref="MeshAsset.WorkLod"/>), the batches of the levels consecutive from <paramref name="batch"/>.</summary>
     void AddRockEntries(int batch, MeshAsset a, Group g, int start, int length, bool impostorMesh)
     {
-        for (int level = 0; level < (a.WorkLod?.Levels ?? 1); level++) gpuEntries.Add(new GpuEntry(batch + level, g, start, length, impostorMesh, level));
+        for (int level = 0; level < (a.WorkLod?.Levels ?? 1); level++) _gpuEntries.Add(new GpuEntry(batch + level, g, start, length, impostorMesh, level));
     }
 
     /// <summary>A rock group whose work list has impostors needs its mesh chunks too when some of its rows have no atlas (those stay meshes whatever the zone's distance).</summary>
@@ -2022,37 +2031,37 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     void ShowBatches(Vector3 eye)
     {
-        int n = gpuOrder.Count + gpuRockOrder.Count + gpuImpostorOrder.Count;
-        if (gpuBatchShown.Length < n) gpuBatchShown = new bool[n * 2];
-        Array.Clear(gpuBatchShown, 0, n);
-        var planes = cullView.Planes;
-        foreach (var e in gpuEntries)
-            if (!gpuBatchShown[e.Batch] && WorldCamera.Intersects(planes, e.Group.BoundMin, e.Group.BoundMax) && LevelNeeded(e, eye)) gpuBatchShown[e.Batch] = true;
+        int n = _gpuOrder.Count + _gpuRockOrder.Count + _gpuImpostorOrder.Count;
+        if (_gpuBatchShown.Length < n) _gpuBatchShown = new bool[n * 2];
+        Array.Clear(_gpuBatchShown, 0, n);
+        var planes = _cullView.Planes;
+        foreach (var e in _gpuEntries)
+            if (!_gpuBatchShown[e.Batch] && WorldCamera.Intersects(planes, e.Group.BoundMin, e.Group.BoundMax) && LevelNeeded(e, eye)) _gpuBatchShown[e.Batch] = true;
     }
 
     /// <summary>The rock draws of this view: per rock batch shown, one draw per part of its mesh (<see cref="Emit"/>'s placements, one per part).</summary>
     void PrepareRocks()
     {
-        rockDraws.Clear();
-        rockDrawBatch.Clear();
-        rockDrawFirst.Clear();
-        int meshBatches = gpuOrder.Count;
-        for (int r = 0; r < gpuRockOrder.Count; r++)
+        _rockDraws.Clear();
+        _rockDrawBatch.Clear();
+        _rockDrawFirst.Clear();
+        int meshBatches = _gpuOrder.Count;
+        for (int r = 0; r < _gpuRockOrder.Count; r++)
         {
-            if (!gpuBatchShown[meshBatches + r]) continue;
-            var (a, mirrored, level) = gpuRockOrder[r];
-            if (level > 0 && !lodActive) continue;   // this view picks no generated level (a shadow cascade of unknown texel): the batch would draw nothing
+            if (!_gpuBatchShown[meshBatches + r]) continue;
+            var (a, mirrored, level) = _gpuRockOrder[r];
+            if (level > 0 && !_lodActive) continue;   // this view picks no generated level (a shadow cascade of unknown texel): the batch would draw nothing
             for (int p = 0; p < a.Main!.Parts.Count; p++)
             {
                 var gp = a.Main.Parts[p];
-                if (level == 0) { rockDraws.Add(new TerrainRenderer.IndirectMesh(PlainMesh(gp), gp.Count, mirrored)); rockDrawFirst.Add(0); }
+                if (level == 0) { _rockDraws.Add(new TerrainRenderer.IndirectMesh(PlainMesh(gp), gp.Count, mirrored)); _rockDrawFirst.Add(0); }
                 else
                 {
                     var pl = a.WorkLod!.Parts[p];
-                    rockDraws.Add(new TerrainRenderer.IndirectMesh(pl.Bindings, pl.Count[level], mirrored));
-                    rockDrawFirst.Add(pl.First[level]);
+                    _rockDraws.Add(new TerrainRenderer.IndirectMesh(pl.Bindings, pl.Count[level], mirrored));
+                    _rockDrawFirst.Add(pl.First[level]);
                 }
-                rockDrawBatch.Add(meshBatches + r);
+                _rockDrawBatch.Add(meshBatches + r);
             }
         }
     }
@@ -2061,45 +2070,45 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// chunks), then one per rock draw.</summary>
     FoliageCullResult DispatchGpuCull(Vector2 eye, TerrainRenderer terrain, bool coverage)
     {
-        var cull = gpuCull!;
+        var cull = _gpuCull!;
         var frame = Gpu.Frame;
-        if (gpuChunkFrame != frame.Number)
+        if (_gpuChunkFrame != frame.Number)
         {
-            gpuChunkData = frame.WriteConstants(MemoryMarshal.AsBytes(gpuChunks.AsSpan(0, gpuChunkCount)), 256);
-            gpuChunkFrame = frame.Number;
+            _gpuChunkData = frame.WriteConstants(MemoryMarshal.AsBytes(_gpuChunks.AsSpan(0, _gpuChunkCount)), 256);
+            _gpuChunkFrame = frame.Number;
         }
-        int meshes = meshDraws.Count, rocks = meshes + rockDraws.Count, count = rocks + impostorDraws.Count;
-        if (gpuDraws.Length < count) gpuDraws = new FoliageCullDraw[count * 2];
+        int meshes = _meshDraws.Count, rocks = meshes + _rockDraws.Count, count = rocks + _impostorDraws.Count;
+        if (_gpuDraws.Length < count) _gpuDraws = new FoliageCullDraw[count * 2];
         for (int i = 0; i < meshes; i++)
         {
-            var d = meshDraws[i];
-            gpuDraws[i] = new FoliageCullDraw { FirstIndex = DrawFirst(d.Part), IndexCount = DrawCount(d.Part), ChunkStart = (uint)gpuBatchStart[d.Batch], ChunkEnd = (uint)gpuBatchStart[d.Batch + 1] };
+            var d = _meshDraws[i];
+            _gpuDraws[i] = new FoliageCullDraw { FirstIndex = DrawFirst(d.Part), IndexCount = DrawCount(d.Part), ChunkStart = (uint)_gpuBatchStart[d.Batch], ChunkEnd = (uint)_gpuBatchStart[d.Batch + 1] };
         }
-        for (int k = 0; k < rockDraws.Count; k++)
+        for (int k = 0; k < _rockDraws.Count; k++)
         {
-            int b = rockDrawBatch[k];
-            gpuDraws[meshes + k] = new FoliageCullDraw { IndexCount = (uint)rockDraws[k].IndexCount, FirstIndex = (uint)rockDrawFirst[k], ChunkStart = (uint)gpuBatchStart[b], ChunkEnd = (uint)gpuBatchStart[b + 1] };
+            int b = _rockDrawBatch[k];
+            _gpuDraws[meshes + k] = new FoliageCullDraw { IndexCount = (uint)_rockDraws[k].IndexCount, FirstIndex = (uint)_rockDrawFirst[k], ChunkStart = (uint)_gpuBatchStart[b], ChunkEnd = (uint)_gpuBatchStart[b + 1] };
         }
-        for (int k = 0; k < impostorDraws.Count; k++)
+        for (int k = 0; k < _impostorDraws.Count; k++)
         {
-            int b = impostorDraws[k].Batch;
-            gpuDraws[rocks + k] = new FoliageCullDraw { IndexCount = 6, ChunkStart = (uint)gpuBatchStart[b], ChunkEnd = (uint)gpuBatchStart[b + 1] };
+            int b = _impostorDraws[k].Batch;
+            _gpuDraws[rocks + k] = new FoliageCullDraw { IndexCount = 6, ChunkStart = (uint)_gpuBatchStart[b], ChunkEnd = (uint)_gpuBatchStart[b + 1] };
         }
-        var draws = frame.WriteConstants(MemoryMarshal.AsBytes(gpuDraws.AsSpan(0, count)), 256);
+        var draws = frame.WriteConstants(MemoryMarshal.AsBytes(_gpuDraws.AsSpan(0, count)), 256);
         // What the rocks' row 0 w carries, as the terrain's mesh path writes it: the biome row in colour (resident ones, now), 0 in depth.
-        var rock = new FoliageRockView { BiomeRows = !depthPass };
-        if (!depthPass && gpuRockOrder.Count > 0) terrain.FeatureResidentBiomes(rock.Resident);
-        if (FoliageGpuCull.CountTriangles) cull.TallyView = (depthPass ? 1 : coverage ? 2 : 0, meshes, rocks);
+        var rock = new FoliageRockView { BiomeRows = !_depthPass };
+        if (!_depthPass && _gpuRockOrder.Count > 0) terrain.FeatureResidentBiomes(rock.Resident);
+        if (FoliageGpuCull.CountTriangles) cull.TallyView = (_depthPass ? 1 : coverage ? 2 : 0, meshes, rocks);
         // The fog cull rides in the main colour view's dispatch only (FogCull is set around that draw alone): per instance, in the cull kernel.
         Span<Vector4> fog = stackalloc Vector4[FogVolumes.CullVectors];
-        bool fogOn = !depthPass && FogCull is { } fogCull && fogCull.WriteCull(fog);
-        bool occlusionOn = !depthPass && !Occlusion.IsEmpty;
-        cull.TimingClass = depthPass || coverage ? 0 : occlusionOn ? 2 : 1;
+        bool fogOn = !_depthPass && FogCull is { } fogCull && fogCull.WriteCull(fog);
+        bool occlusionOn = !_depthPass && !Occlusion.IsEmpty;
+        cull.TimingClass = _depthPass || coverage ? 0 : occlusionOn ? 2 : 1;
         // The split (EarlyDepth): in the colour views each batch's dithered instances come after its fully visible ones, drawn with the other program.
-        bool split = !depthPass && EarlyDepth.Enabled;
+        bool split = !_depthPass && EarlyDepth.Enabled;
         // The interior cut (main colour view): with the split, the fully visible instances over a mask go with the fading ones, to the program with the cut.
         var interior = split && InteriorCut is { Active: true } mask ? mask.Boxes : null;
-        var result = cull.Dispatch(new FoliageCullWork(gpuChunkData, gpuChunkCount, draws, count) { Instances = gpuInstances }, cullView, eye, in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default, lodView, split, interior);
+        var result = cull.Dispatch(new FoliageCullWork(_gpuChunkData, _gpuChunkCount, draws, count) { Instances = _gpuInstances }, _cullView, eye, in rock, 0.999f, fogOn ? fog : default, occlusionOn ? Occlusion : default, _lodView, split, interior);
         if (occlusionOn && cull.OccludedIsFresh) OccludedInstances = cull.LateOccluded;
         DrawnInstances += cull.LateVisible;
         if (fogOn && cull.LateFogCulled > 0) FogCull!.AddCulled(FogVolumes.CullKind.FoliageInstances, cull.LateFogCulled);
@@ -2109,13 +2118,13 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>The mesh's batch, put into <c>active</c> (emptied) by the first call of this <see cref="Draw"/>.</summary>
     Batch BatchOf(MeshAsset a)
     {
-        if (!batches.TryGetValue(a, out var batch)) batches[a] = batch = new Batch { Asset = a };
-        if (batch.Stamp != drawStamp)
+        if (!_batches.TryGetValue(a, out var batch)) _batches[a] = batch = new Batch { Asset = a };
+        if (batch.Stamp != _drawStamp)
         {
-            batch.Stamp = drawStamp;
+            batch.Stamp = _drawStamp;
             batch.Count = 0;
-            batch.Index = active.Count;
-            active.Add(batch);
+            batch.Index = _active.Count;
+            _active.Add(batch);
         }
         return batch;
     }
@@ -2143,9 +2152,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
-    bool depthPass;
+    bool _depthPass;
     /// <summary>The cascade being drawn skips meshes smaller than this (world units, <see cref="MeshAsset.Size"/>): their shadow would cover a few texels.</summary>
-    float depthMinSize;
+    float _depthMinSize;
 
     /// <summary>
     /// Draws the foliage meshes' depth for a shadow cascade: <see cref="Draw"/>'s culling and ranges (measured from the camera's
@@ -2154,9 +2163,9 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float maxRange = float.PositiveInfinity, float minSize = 0, float texel = 0, bool coarse = false)
     {
-        (depthPass, depthMinSize, lodTexel, lodCoarse) = (true, minSize, texel, coarse);
+        (_depthPass, _depthMinSize, _lodTexel, _lodCoarse) = (true, minSize, texel, coarse);
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain, grass: false, maxRange: maxRange); }
-        finally { (depthPass, depthMinSize, lodTexel, lodCoarse) = (false, 0, 0, false); }
+        finally { (_depthPass, _depthMinSize, _lodTexel, _lodCoarse) = (false, 0, 0, false); }
     }
 
     // ------------------------------------------------------------------ native recording
@@ -2170,7 +2179,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     const int RowLocation = FoliageShaders.InstanceLocation;
 
     /// <summary>This call's batch matrices in the frame's constants (a batch at its <see cref="Batch.Offset"/>; the draws reach it by firstInstance).</summary>
-    Transient instances;
+    Transient _instances;
 
     /// <summary>A mesh's native state for one program: its vertex layout and own vertex buffers, its indices, and the pipelines for the last
     /// two segment states (the reflection's multisampled target alternates with the scene's).</summary>
@@ -2187,19 +2196,19 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     readonly record struct SegmentPipeline(GpuProgram Program, AttachmentFormats Formats, BlendState Blend, ColorMask Mask,
         PolygonKind Polygon, bool AlphaToCoverage, bool DepthClamp);
 
-    readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
-    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[8];
-    readonly int[] segmentIds = new int[8];
-    int segmentCount;
+    readonly Dictionary<(int Kind, SegmentPipeline State), int> _segmentByState = [];
+    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[8];
+    readonly int[] _segmentIds = new int[8];
+    int _segmentCount;
 
     /// <summary>A stable number for a segment's pipeline state, so a mesh compares one int per draw.</summary>
     int SegmentId(int kind, GpuProgram p, PassTargets t, DrawState s)
     {
         var segment = new SegmentPipeline(p, t.Formats, s.Blend, s.ColourMask, s.Polygon, s.AlphaToCoverage, s.DepthClamp);
-        if (segmentIds[kind] != 0 && segment == lastSegment[kind]) return segmentIds[kind];
-        if (!segmentByState.TryGetValue((kind, segment), out int id)) segmentByState[(kind, segment)] = id = ++segmentCount;
-        lastSegment[kind] = segment;
-        return segmentIds[kind] = id;
+        if (_segmentIds[kind] != 0 && segment == _lastSegment[kind]) return _segmentIds[kind];
+        if (!_segmentByState.TryGetValue((kind, segment), out int id)) _segmentByState[(kind, segment)] = id = ++_segmentCount;
+        _lastSegment[kind] = segment;
+        return _segmentIds[kind] = id;
     }
 
     /// <summary>A mesh part's native state for <paramref name="p"/>, made on first use from its native buffers (they never change while the
@@ -2210,7 +2219,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
         part.Attributes.AsSpan().CopyTo(attributes);
         for (int a = 0; a < 4; a++)
-            attributes[RowLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32f, InstanceStride, true);
+            attributes[RowLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32F, InstanceStride, true);
         n.Layout = p.Layout(attributes);
         n.Vertices = p.Buffers(attributes, p.Own);
         n.Elements = new GpuBufferBinding(part.Indices.Handle, 0, part.Indices.Size);
@@ -2232,18 +2241,18 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// again (the old index freed after the frames in flight) only when the texture or its sampler changed.</summary>
     uint NearDepthIndex(in SampledTexture nearDepth)
     {
-        if (nearDepthIndex is { } known && known.Texture == nearDepth) return known.Index;
-        if (nearDepthIndex is { } old) Gpu.Bindless.Free(BindlessKind.Texture2D, old.Index);
-        nearDepthIndex = (nearDepth, Gpu.Bindless.Register(BindlessKind.Texture2D, nearDepth));
-        return nearDepthIndex.Value.Index;
+        if (_nearDepthIndex is { } known && known.Texture == nearDepth) return known.Index;
+        if (_nearDepthIndex is { } old) Gpu.Bindless.Free(BindlessKind.Texture2D, old.Index);
+        _nearDepthIndex = (nearDepth, Gpu.Bindless.Register(BindlessKind.Texture2D, nearDepth));
+        return _nearDepthIndex.Value.Index;
     }
 
-    (SampledTexture Texture, uint Index)? nearDepthIndex;
+    (SampledTexture Texture, uint Index)? _nearDepthIndex;
 
     /// <summary>Pushes <paramref name="value"/> when its bytes differ from what the segment pushed last (<paramref name="last"/>).</summary>
     static void Push<T>(IGpuCommandList cmd, GpuProgram p, in T value, ref T last, ref bool pushed) where T : unmanaged
     {
-        if (pushed && System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in value)).SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in last)))) return;
+        if (pushed && MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in value)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in last)))) return;
         cmd.PushConstants(p, GpuStage.Vertex | GpuStage.Fragment, in value);
         last = value;
         pushed = true;
@@ -2269,32 +2278,32 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     /// <summary>The segment's LOD bias (the upscaler's, <see cref="GpuContext.LodBias"/>, as VkGl applied it where the GL code bound the
     /// textures) and GL's stand-in for a texture not resident.</summary>
-    float textureBias;
-    uint textureStandIn;
+    float _textureBias;
+    uint _textureStandIn;
 
     /// <summary>A new segment: the bias in effect now and the stand-in's bindless index (the 2D float array the shaders index).</summary>
     void NewTextureSegment()
     {
-        textureBias = Gpu.LodBias;
-        textureStandIn = Gpu.StandIn2D;
+        _textureBias = Gpu.LodBias;
+        _textureStandIn = Gpu.StandIn2D;
     }
 
     /// <summary>The bindless index of a texture by its <see cref="WorldTexture.Key"/> (0: the stand-in), sampled as the GL texture was.</summary>
-    uint Texture(uint key) => key == 0 ? textureStandIn : textures.Index(key, textureBias, textureStandIn);
+    uint Texture(uint key) => key == 0 ? _textureStandIn : _textures.Index(key, _textureBias, _textureStandIn);
 
-    readonly List<MeshDraw> meshDraws = [];
+    readonly List<MeshDraw> _meshDraws = [];
 
     static uint IdOf(WorldTexture? t) => t?.Key ?? 0;
 
     /// <summary>The batches' mesh parts as draws, in order, with the texture keys (reading a key counts as use: here, not in Record).</summary>
     void PrepareMeshes(WorldRenderOptions options, bool gpu)
     {
-        meshDraws.Clear();
-        foreach (var b in active)
+        _meshDraws.Clear();
+        foreach (var b in _active)
         {
-            if (gpu && !gpuBatchShown[b.Index]) continue;   // the GPU cull: no group of the batch can be in view (ShowBatches)
+            if (gpu && !_gpuBatchShown[b.Index]) continue;   // the GPU cull: no group of the batch can be in view (ShowBatches)
             var a = b.Asset;
-            if (depthPass && a.HasBounds && a.Size < depthMinSize) continue;   // too small for this cascade's texels
+            if (_depthPass && a.HasBounds && a.Size < _depthMinSize) continue;   // too small for this cascade's texels
             AddMesh(a.Main!, a.MainMaterial!, b, options);
             if (a.Leaves is not null) AddMesh(a.Leaves, a.LeavesMaterial!, b, options);
         }
@@ -2316,10 +2325,19 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         foreach (var gp in mesh.Parts)
         {
             int bits = (normal && options.NormalMaps || cut ? 1 : 0) | (dual && gp.HasColours ? 2 : 0) | (gp.HasColours ? 4 : 0);
-            meshDraws.Add(new MeshDraw
+            _meshDraws.Add(new MeshDraw
             {
-                Part = gp, FirstInstance = (uint)b.Offset, Instances = (uint)b.Count, Batch = b.Index, Diffuse = diffuse, Normal = normalId, Diffuse2 = diffuse2, Normal2 = normal2,
-                Material = key, PartBits = bits, DoubleSided = m.DoubleSided,
+                Part = gp,
+                FirstInstance = (uint)b.Offset,
+                Instances = (uint)b.Count,
+                Batch = b.Index,
+                Diffuse = diffuse,
+                Normal = normalId,
+                Diffuse2 = diffuse2,
+                Normal2 = normal2,
+                Material = key,
+                PartBits = bits,
+                DoubleSided = m.DoubleSided,
             });
             DrawCalls++;
         }
@@ -2343,32 +2361,37 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         // The prepass writes depth only; the colour after it draws exactly the fragments that left their depth there (the prepass has the discards, this has none).
         var state = prepass ? sceneState with { ColourMask = 0 } : equal ? sceneState with { Compare = DepthFunction.Equal, DepthWrite = false } : sceneState;
         int segment = SegmentId(depth ? DepthKind : prepass ? PrepassKind : equal ? EqualKind : ColourKind, p, targets, state);
-        var job = meshJobs.Rent();
+        var job = _meshJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, p, 0);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance };
         if (!depth) InteriorMaskRenderer.Apply(ref view, InteriorCut);
-        job.Frame = nativeFrame.Prepare(in view);
+        job.Frame = _nativeFrame.Prepare(in view);
         // The GPU cull's compacted rows and one indirect draw per mesh draw (its batch's count and first instance), else this call's constants.
-        bool indirect = !gpuResult.IsEmpty;
+        bool indirect = !_gpuResult.IsEmpty;
         for (int a = 0; a < 4; a++)
-            job.Rows[a] = indirect ? new GpuBufferBinding(gpuResult.Rows, gpuResult.RowsOffset + (ulong)(16 * a)) : new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
+            job.Rows[a] = indirect ? new GpuBufferBinding(_gpuResult.Rows, _gpuResult.RowsOffset + (ulong)(16 * a)) : new GpuBufferBinding(_instances.Handle, _instances.Offset + (ulong)(16 * a));
         int drawIndex = 0;
         NewTextureSegment();
         // The constants the GL code set on every draw (Shaders.MeshFragment's uniforms the foliage does not vary).
-        uint standIn = textureStandIn;
+        uint standIn = _textureStandIn;
         var pc = new MeshPush
         {
-            Tint = Vector3.One, TriplanarScale = 1f / 5000, AlphaChannel = 3, GreyChannel = -1, HeadDiffuse = standIn, HeadNormal = standIn,
+            Tint = Vector3.One,
+            TriplanarScale = 1f / 5000,
+            AlphaChannel = 3,
+            GreyChannel = -1,
+            HeadDiffuse = standIn,
+            HeadNormal = standIn,
             Coverage = coverage ? 1u : 0u,
         };
         var sided = CullMode.None;
         CullMode? side = null;
         // The split (EarlyDepth; GPU cull, colour views): the program without the discards draws the fully visible instances of the parts without a cut-out.
-        bool splitView = indirect && gpuResult.Split && !depth && !equal;
+        bool splitView = indirect && _gpuResult.Split && !depth && !equal;
         // The prepass splits the same way: the empty program for the fully visible instances of a part without a cut-out, the dither (and the cut-out) program for the rest.
-        var solidMesh = prepass ? prepassSolidMesh : colourSolidMesh;
+        var solidMesh = prepass ? _prepassSolidMesh : _colourSolidMesh;
         int solidSegment = splitView ? SegmentId(prepass ? PrepassSolidKind : SolidKind, solidMesh.P, targets, state) : 0;
-        foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(meshDraws))
+        foreach (ref readonly var d in CollectionsMarshal.AsSpan(_meshDraws))
         {
             var k = d.Material;
             pc.NormalSwizzled = k.Swizzled ? 1u : 0u;
@@ -2402,40 +2425,56 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 Current(ref sn, part, solidMesh);
                 job.Add(new MeshJob.Draw
                 {
-                    SetRaster = raster, Cull = want, Pipeline = sn.SegA == solidSegment ? sn.PipeA!.Value : PipelineFor(ref sn, solidMesh, solidSegment, state, targets.Formats, prepass ? "foliage mesh prepass solid" : "foliage meshes solid"),
-                    Vertices = sn.Vertices, Elements = sn.Elements, Push = pc,
-                    Args = gpuResult.Args, ArgsOffset = gpuResult.ArgsOffset + (ulong)(gpuResult.DrawCount + drawIndex) * 20,
-                    FirstIndex = DrawFirst(part), IndexCount = DrawCount(part), Instances = d.Instances, FirstInstance = d.FirstInstance,
+                    SetRaster = raster,
+                    Cull = want,
+                    Pipeline = sn.SegA == solidSegment ? sn.PipeA!.Value : PipelineFor(ref sn, solidMesh, solidSegment, state, targets.Formats, prepass ? "foliage mesh prepass solid" : "foliage meshes solid"),
+                    Vertices = sn.Vertices,
+                    Elements = sn.Elements,
+                    Push = pc,
+                    Args = _gpuResult.Args,
+                    ArgsOffset = _gpuResult.ArgsOffset + (ulong)(_gpuResult.DrawCount + drawIndex) * 20,
+                    FirstIndex = DrawFirst(part),
+                    IndexCount = DrawCount(part),
+                    Instances = d.Instances,
+                    FirstInstance = d.FirstInstance,
                 });
                 raster = false;
             }
             job.Add(new MeshJob.Draw
             {
-                SetRaster = raster, Cull = want, Pipeline = n.SegA == segment ? n.PipeA!.Value : PipelineFor(ref n, mp, segment, state, targets.Formats, label),
-                Vertices = n.Vertices, Elements = n.Elements, Push = pc,
-                Args = indirect ? gpuResult.Args : default, ArgsOffset = gpuResult.ArgsOffset + (ulong)((split ? 2 * gpuResult.DrawCount : 0) + drawIndex) * 20,
-                FirstIndex = DrawFirst(part), IndexCount = DrawCount(part), Instances = d.Instances, FirstInstance = d.FirstInstance,
+                SetRaster = raster,
+                Cull = want,
+                Pipeline = n.SegA == segment ? n.PipeA!.Value : PipelineFor(ref n, mp, segment, state, targets.Formats, label),
+                Vertices = n.Vertices,
+                Elements = n.Elements,
+                Push = pc,
+                Args = indirect ? _gpuResult.Args : default,
+                ArgsOffset = _gpuResult.ArgsOffset + (ulong)((split ? 2 * _gpuResult.DrawCount : 0) + drawIndex) * 20,
+                FirstIndex = DrawFirst(part),
+                IndexCount = DrawCount(part),
+                Instances = d.Instances,
+                FirstInstance = d.FirstInstance,
             });
             drawIndex++;
         }
         // The billboards: in the colour segment as before, or (ImpostorPrepass) in the prepass and in the colour after it, the rocks' alone after that.
         bool billboardPrepass = (prepass || equal) && ImpostorPrepass.Enabled;
-        if (impostorDraws.Count > 0 && !prepass && !equal) AddImpostorDraws(job, depth, viewProjection, targets, state, coverage, indirect, meshDraws.Count + rockDraws.Count);
-        else if (impostorDraws.Count > 0 && billboardPrepass) AddImpostorDraws(job, false, viewProjection, targets, state, coverage, indirect, meshDraws.Count + rockDraws.Count, prepass ? ImpostorPass.Prepass : ImpostorPass.AfterPrepass);
+        if (_impostorDraws.Count > 0 && !prepass && !equal) AddImpostorDraws(job, depth, viewProjection, targets, state, coverage, indirect, _meshDraws.Count + _rockDraws.Count);
+        else if (_impostorDraws.Count > 0 && billboardPrepass) AddImpostorDraws(job, false, viewProjection, targets, state, coverage, indirect, _meshDraws.Count + _rockDraws.Count, prepass ? ImpostorPass.Prepass : ImpostorPass.AfterPrepass);
         Gpu.Record(label, job);
-        if (equal && impostorDraws.Count > 0 && (!billboardPrepass || impostorDraws.Exists(static d => d.Asset.RockOf is not null)))
+        if (equal && _impostorDraws.Count > 0 && (!billboardPrepass || _impostorDraws.Exists(static d => d.Asset.RockOf is not null)))
         {
             // The billboards are not in the prepass (their fragment stage has its own discard), or only the rocks' are not: their own segment, with the scene's depth test and write.
-            var billboards = meshJobs.Rent();
+            var billboards = _meshJobs.Rent();
             (billboards.Owner, billboards.Targets, billboards.State, billboards.Program, billboards.Count) = (this, targets, sceneState, p, 0);
             billboards.Frame = job.Frame;
             for (int a = 0; a < 4; a++) billboards.Rows[a] = job.Rows[a];
-            AddImpostorDraws(billboards, false, viewProjection, targets, sceneState, coverage, indirect, meshDraws.Count + rockDraws.Count, billboardPrepass ? ImpostorPass.RocksOnly : ImpostorPass.Scene);
+            AddImpostorDraws(billboards, false, viewProjection, targets, sceneState, coverage, indirect, _meshDraws.Count + _rockDraws.Count, billboardPrepass ? ImpostorPass.RocksOnly : ImpostorPass.Scene);
             Gpu.Record("foliage billboards", billboards);
         }
     }
 
-    readonly JobPool<MeshJob> meshJobs = new();
+    readonly JobPool<MeshJob> _meshJobs = new();
 
     /// <summary>One foliage mesh segment as prepared (<see cref="RecordMeshes"/>): recorded on any thread, the same commands as before wave 4.</summary>
     sealed class MeshJob : RecordJob
@@ -2507,14 +2546,14 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             Array.Clear(Draws, 0, Count);
             Count = 0;
-            Owner.meshJobs.Return(this);
+            Owner._meshJobs.Return(this);
         }
     }
 
     /// <summary><see cref="Push{T}"/> by layout (a job keeps the layout, not the program).</summary>
     static void PushTo<T>(IGpuCommandList cmd, GpuProgram program, in T value, ref T last, ref bool pushed) where T : unmanaged
     {
-        if (pushed && System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in value)).SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in last)))) return;
+        if (pushed && MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in value)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in last)))) return;
         cmd.PushConstants(program, GpuStage.Vertex | GpuStage.Fragment, in value);
         last = value;
         pushed = true;
@@ -2537,8 +2576,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         public GrassPush Push;
     }
 
-    readonly List<GrassDraw> grassDraws = [];
-    readonly List<(float Distance, ZoneState State, int Key, GrassPage Page)> grassOrder = [];
+    readonly List<GrassDraw> _grassDraws = [];
+    readonly List<(float Distance, ZoneState State, int Key, GrassPage Page)> _grassOrder = [];
 
     /// <summary>The blade buffer's patch textures (looked up by name once per patch, not per draw) and the blades the density setting shows.</summary>
     GrassBuffer Patch(GrassBuffer b, FoliageGrassPatch patch)
@@ -2546,8 +2585,8 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (!ReferenceEquals(b.Patch, patch))
         {
             b.Patch = patch;
-            b.Sprite = textures.Get(patch.Grass.Sprite, false);
-            b.ColourMap = textures.Get(patch.Grass.ColourMap, false);
+            b.Sprite = _textures.Get(patch.Grass.Sprite, false);
+            b.ColourMap = _textures.Get(patch.Grass.ColourMap, false);
             b.ShownDensity = float.NaN;
         }
         else
@@ -2568,18 +2607,18 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>The blade draws of the pages in view, nearest page first (so the depth test rejects most of the hidden blades before they are shaded).</summary>
     void PrepareGrass(Vector3 eye, Vector4[] frustum, WorldRenderOptions options, bool coverage)
     {
-        grassDraws.Clear();
-        grassOrder.Clear();
-        foreach (var st in zones.Values)
+        _grassDraws.Clear();
+        _grassOrder.Clear();
+        foreach (var st in _zones.Values)
         {
             if (st.Pages.Count == 0 || st.Patches.Count == 0) continue;
             float reach = st.Patches.Max(GrassRange);   // pages kept round a far character (Kept) are not sorted and tested each frame
             foreach (var (k, pg) in st.Pages)
                 if (pg.Buffers is not null && BoxDistance(st.X0 + k % PagesPerZone * PageSize, st.Z0 + k / PagesPerZone * PageSize, PageSize, eye) is var d && d < reach)
-                    grassOrder.Add((d, st, k, pg));
+                    _grassOrder.Add((d, st, k, pg));
         }
-        grassOrder.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-        foreach (var (d, state, key, page) in grassOrder)
+        _grassOrder.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+        foreach (var (d, state, key, page) in _grassOrder)
         {
             float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
             float y = eye.Y;
@@ -2595,15 +2634,24 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                 if (b.Sprite is not { Key: not 0 } sprite) continue;
                 var g = patch.Grass;
                 bool hasColour = options.Textures && b.ColourMap is { Key: not 0 };
-                grassDraws.Add(new GrassDraw
+                _grassDraws.Add(new GrassDraw
                 {
-                    Buffer = b, Distance = d, Vertices = g.CrossQuads ? 12u : 6u, Sprite = options.Textures ? sprite.Key : 0, Colour = hasColour ? b.ColourMap!.Key : 0,
+                    Buffer = b,
+                    Distance = d,
+                    Vertices = g.CrossQuads ? 12u : 6u,
+                    Sprite = options.Textures ? sprite.Key : 0,
+                    Colour = hasColour ? b.ColourMap!.Key : 0,
                     Push = new GrassPush
                     {
                         Size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight),
                         ColourBounds = new Vector4(patch.X0, patch.Z0, patch.X1, patch.Z1),
-                        Sway = patch.Layer.Wind ? g.SwayLength : 0f, Range = range, Frequency = 2f, Cross = g.CrossQuads ? 1u : 0u,
-                        HasColourMap = hasColour ? 1u : 0u, Coverage = coverage ? 1u : 0u, Wireframe = options.Wireframe == 2 ? 1u : 0u,
+                        Sway = patch.Layer.Wind ? g.SwayLength : 0f,
+                        Range = range,
+                        Frequency = 2f,
+                        Cross = g.CrossQuads ? 1u : 0u,
+                        HasColourMap = hasColour ? 1u : 0u,
+                        Coverage = coverage ? 1u : 0u,
+                        Wireframe = options.Wireframe == 2 ? 1u : 0u,
                     },
                 });
                 DrawCalls++;
@@ -2615,23 +2663,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>The blade draw list in one native segment: no culling, instanced quads from the blade buffers.</summary>
     void RecordGrass(Matrix4x4 viewProjection, Vector3 eye, Vector3 light, Vector3 fogColour, float fogDistance, bool coverage)
     {
-        var gp = grassProgram;
+        var gp = _grassProgram;
         var p = gp.P;
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw the push block with its bindless indices.
         var targets = Gpu.CurrentTargets();
         var state = GrassState(Gpu, coverage);
         int segment = SegmentId(GrassKind, p, targets, state);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance, Time = SwayPhase() };
-        if (!depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
-        var job = grassJobs.Rent();
+        if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
+        var job = _grassJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, p, 0);
-        job.Frame = nativeFrame.Prepare(in view);
+        job.Frame = _nativeFrame.Prepare(in view);
         NewTextureSegment();
         // The blades of every page are one buffer (the grass arena): one pipeline and one vertex binding for the segment, the draw's first instance finds its page.
-        job.Pipeline = PipelineFor(ref grassMeshCpu, gp, segment, state, targets.Formats, "foliage grass");
-        job.Vertices = grassMeshCpu.Vertices;
-        if (job.Draws.Length < grassDraws.Count) job.Draws = new GrassJob.Draw[Math.Max(grassDraws.Count, job.Draws.Length * 2)];
-        foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(grassDraws))
+        job.Pipeline = PipelineFor(ref _grassMeshCpu, gp, segment, state, targets.Formats, "foliage grass");
+        job.Vertices = _grassMeshCpu.Vertices;
+        if (job.Draws.Length < _grassDraws.Count) job.Draws = new GrassJob.Draw[Math.Max(_grassDraws.Count, job.Draws.Length * 2)];
+        foreach (ref readonly var d in CollectionsMarshal.AsSpan(_grassDraws))
         {
             var pc = d.Push;
             pc.Sprite = Texture(d.Sprite);
@@ -2650,7 +2698,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// <summary>The motion pass's state (the host's: colour mask red and green, no depth test, no blending) without culling (GL's cull face off).</summary>
     static DrawState MotionState(IGpuContext gpu) => gpu.CurrentState() with { Cull = CullMode.None };
 
-    readonly JobPool<GrassJob> grassJobs = new();
+    readonly JobPool<GrassJob> _grassJobs = new();
 
     /// <summary>The CPU-culled grass of one view as prepared (<see cref="RecordGrass"/>): recorded on any thread, the same commands as before wave 4.</summary>
     sealed class GrassJob : RecordJob
@@ -2697,28 +2745,28 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         {
             Pipeline = default;
             Count = 0;
-            Owner.grassJobs.Return(this);
+            Owner._grassJobs.Return(this);
         }
     }
 
-    float SwayPhase() => (float)((SwaySeconds ?? clock.Elapsed.TotalSeconds) * 0.3 * Math.PI % (2 * Math.PI));
+    float SwayPhase() => (float)((SwaySeconds ?? _clock.Elapsed.TotalSeconds) * 0.3 * Math.PI % (2 * Math.PI));
 
     // ---- grass motion (upscalers) ----
 
-    Matrix4x4 motionViewProjection, motionUnjittered, previousUnjittered;
-    Vector3 motionEye;
-    Vector4[] motionFrustum = [];
-    float? previousSwayPhase;
+    Matrix4x4 _motionViewProjection, _motionUnjittered, _previousUnjittered;
+    Vector3 _motionEye;
+    Vector4[] _motionFrustum = [];
+    float? _previousSwayPhase;
     /// <summary>This frame's <see cref="GrassMotionReach.Scale"/> for the motion pass (0: every blade in range).</summary>
-    float motionScale;
-    bool motionCamera, havePrevious;
-    readonly List<MotionDraw> motionDraws = [];
+    float _motionScale;
+    bool _motionCamera, _havePrevious;
+    readonly List<MotionDraw> _motionDraws = [];
 
     /// <summary>The scene camera for <see cref="DrawGrassMotion"/>: this frame's view-projection as drawn (jittered) and unjittered.</summary>
     public void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum)
     {
-        (motionViewProjection, motionUnjittered, motionEye, motionFrustum) = (viewProjection, unjittered, eye, frustum);
-        motionCamera = true;
+        (_motionViewProjection, _motionUnjittered, _motionEye, _motionFrustum) = (viewProjection, unjittered, eye, frustum);
+        _motionCamera = true;
     }
 
     /// <summary>
@@ -2728,20 +2776,20 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     /// </summary>
     public void DrawGrassMotion(MotionTargets targets)
     {
-        if (!motionCamera) return;
-        motionCamera = false;
-        if (!Enabled || !DrawGrass) { havePrevious = false; return; }
-        float time = SwayPhase(), previousTime = previousSwayPhase ?? time;
-        var previous = havePrevious ? previousUnjittered : motionUnjittered;
-        (previousSwayPhase, previousUnjittered, havePrevious) = (time, motionUnjittered, true);
-        var eye = motionEye;
+        if (!_motionCamera) return;
+        _motionCamera = false;
+        if (!Enabled || !DrawGrass) { _havePrevious = false; return; }
+        float time = SwayPhase(), previousTime = _previousSwayPhase ?? time;
+        var previous = _havePrevious ? _previousUnjittered : _motionUnjittered;
+        (_previousSwayPhase, _previousUnjittered, _havePrevious) = (time, _motionUnjittered, true);
+        var eye = _motionEye;
         // grass-velocity: blades whose own motion stays under the threshold are left to the camera reprojection; with no phase step nothing moves at all.
-        motionScale = 0;
+        _motionScale = 0;
         if (GrassVelocityCull && targets.FocalPixels > 0)
         {
             float step = GrassMotionReach.PhaseStep(time, previousTime);
             if (step == 0) return;
-            motionScale = GrassMotionReach.Scale(step, targets.FocalPixels, GrassVelocityPixels);
+            _motionScale = GrassMotionReach.Scale(step, targets.FocalPixels, GrassVelocityPixels);
         }
         if (GpuGrassActive)
         {
@@ -2749,22 +2797,22 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
             return;
         }
         PrepareMotion(eye);
-        if (motionDraws.Count == 0) return;
+        if (_motionDraws.Count == 0) return;
         RecordMotion(targets, eye, time, previousTime, previous);
     }
 
     /// <summary>The motion draws of the pages in the scene camera's view, in the zones' and pages' dictionary order (the CPU reference; the GPU path orders by distance, 5.6.2).</summary>
     void PrepareMotion(Vector3 eye)
     {
-        motionDraws.Clear();
-        foreach (var state in zones.Values)
+        _motionDraws.Clear();
+        foreach (var state in _zones.Values)
             foreach (var (key, page) in state.Pages)
             {
                 if (page.Buffers is null) continue;
                 float x0 = state.X0 + key % PagesPerZone * PageSize, z0 = state.Z0 + key / PagesPerZone * PageSize;
                 float d = BoxDistance(x0, z0, PageSize, eye);
                 float y = state.Ground is { } ground ? ground.Height(x0 + PageSize / 2, z0 + PageSize / 2) : eye.Y;
-                if (!WorldCamera.Intersects(motionFrustum, new Vector3(x0, y - 2000, z0), new Vector3(x0 + PageSize, y + 2000, z0 + PageSize))) continue;
+                if (!WorldCamera.Intersects(_motionFrustum, new Vector3(x0, y - 2000, z0), new Vector3(x0 + PageSize, y + 2000, z0 + PageSize))) continue;
                 for (int i = 0; i < page.Buffers.Length && i < state.Patches.Count; i++)
                 {
                     var patch = state.Patches[i];
@@ -2772,14 +2820,19 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
                     if (!patch.Layer.Wind || g.SwayLength == 0) continue;
                     var b = Patch(page.Buffers[i], patch);
                     float range = GrassRange(patch);
-                    if (b.Shown == 0 || d >= GrassMotionReach.Reach(range, g.SwayLength, motionScale)) continue;
+                    if (b.Shown == 0 || d >= GrassMotionReach.Reach(range, g.SwayLength, _motionScale)) continue;
                     if (b.Sprite is not { Key: not 0 } sprite) continue;
-                    motionDraws.Add(new MotionDraw
+                    _motionDraws.Add(new MotionDraw
                     {
-                        Buffer = b, Vertices = g.CrossQuads ? 12u : 6u, Sprite = sprite.Key,
+                        Buffer = b,
+                        Vertices = g.CrossQuads ? 12u : 6u,
+                        Sprite = sprite.Key,
                         Push = new GrassPush
                         {
-                            Size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight), Sway = g.SwayLength, Range = range, Frequency = 2f,
+                            Size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight),
+                            Sway = g.SwayLength,
+                            Range = range,
+                            Frequency = 2f,
                         },
                     });
                 }
@@ -2788,7 +2841,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
 
     void RecordMotion(MotionTargets targets, Vector3 eye, float time, float previousTime, Matrix4x4 previous)
     {
-        var gp = grassMotionProgram;
+        var gp = _grassMotionProgram;
         var p = gp.P;
         var cmd = Gpu.BeginGuest("foliage grass motion");
         var pass = Gpu.CurrentTargets();
@@ -2801,17 +2854,22 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         cmd.SetDepthBias(drawState.BiasEnable, drawState.BiasConstant, drawState.BiasSlope);
         var view = new ViewConstants
         {
-            ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = eye, Time = time, PreviousTime = previousTime,
-            NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc,
+            ViewProjection = _motionViewProjection,
+            PreviousViewProjection = previous,
+            Eye = eye,
+            Time = time,
+            PreviousTime = previousTime,
+            NearPlanes = targets.Planes,
+            JitterNdc = targets.JitterNdc,
         };
-        nativeFrame.Bind(cmd, p, in view);
+        _nativeFrame.Bind(cmd, p, in view);
         NewTextureSegment();
         uint nearDepth = NearDepthIndex(targets.Depth);
         GrassPush last = default;
         bool pushed = false;
-        cmd.BindPipeline(PipelineFor(ref grassMeshMotionCpu, gp, segment, drawState, pass.Formats, "foliage grass motion"));
-        cmd.BindVertexBuffers(0, grassMeshMotionCpu.Vertices);
-        foreach (ref readonly var d in System.Runtime.InteropServices.CollectionsMarshal.AsSpan(motionDraws))
+        cmd.BindPipeline(PipelineFor(ref _grassMeshMotionCpu, gp, segment, drawState, pass.Formats, "foliage grass motion"));
+        cmd.BindVertexBuffers(0, _grassMeshMotionCpu.Vertices);
+        foreach (ref readonly var d in CollectionsMarshal.AsSpan(_motionDraws))
         {
             var pc = d.Push;
             pc.Sprite = Texture(d.Sprite);
@@ -2827,23 +2885,23 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     // Interleave: into the frame, or a host's inline secondary), read once the frame's slot has been collected (a frame ring later).
     readonly record struct Timer(QuerySlot Start, QuerySlot End);
 
-    readonly List<Timer> timers = [];
-    QuerySlot timerStart, pendingStamp;
-    Action<IGpuCommandList>? recordStamp;
-    double gpuSum;
-    int gpuCount;
+    readonly List<Timer> _timers = [];
+    QuerySlot _timerStart, _pendingStamp;
+    Action<IGpuCommandList>? _recordStamp;
+    double _gpuSum;
+    int _gpuCount;
 
     void Stamp(QuerySlot slot)
     {
-        pendingStamp = slot;
-        Gpu.Interleave(recordStamp ??= cmd => cmd.Timestamp(Gpu.Frame.Timestamps, pendingStamp));
+        _pendingStamp = slot;
+        Gpu.Interleave(_recordStamp ??= cmd => cmd.Timestamp(Gpu.Frame.Timestamps, _pendingStamp));
     }
 
     int BeginTimer()
     {
-        if (timers.Count >= 64) return -1;
-        Stamp(timerStart = Gpu.Frame.Timestamps.Allocate());
-        return timerStart.IsValid ? 0 : -1;
+        if (_timers.Count >= 64) return -1;
+        Stamp(_timerStart = Gpu.Frame.Timestamps.Allocate());
+        return _timerStart.IsValid ? 0 : -1;
     }
 
     void EndTimer(int index)
@@ -2851,7 +2909,7 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
         if (index < 0) return;
         var end = Gpu.Frame.Timestamps.Allocate();
         Stamp(end);
-        if (end.IsValid) timers.Add(new Timer(timerStart, end));
+        if (end.IsValid) _timers.Add(new Timer(_timerStart, end));
     }
 
     /// <summary>Collects finished timings into <see cref="GpuMs"/> (per <see cref="Update"/>, i.e. per frame). The timestamps are read once their
@@ -2860,46 +2918,46 @@ public sealed unsafe partial class FoliageRenderer : IDisposable
     {
         _ = wait;
         var arena = Gpu.Frame.Timestamps;
-        for (int i = 0; i < timers.Count; i++)
+        for (int i = 0; i < _timers.Count; i++)
         {
-            var t = timers[i];
+            var t = _timers[i];
             if (arena.TryRead(t.Start, out ulong start) && arena.TryRead(t.End, out ulong end))
             {
-                gpuSum += (end - start) / 1e6;
-                gpuCount++;
+                _gpuSum += (end - start) / 1e6;
+                _gpuCount++;
             }
             else if (Gpu.Frame.Number - t.Start.Frame <= 2 * Gpu.FramesInFlight) continue;   // not collected yet
-            timers.RemoveAt(i--);
+            _timers.RemoveAt(i--);
         }
-        if (gpuCount > 0) { GpuMs = gpuSum / gpuCount; gpuSum = 0; gpuCount = 0; }
+        if (_gpuCount > 0) { GpuMs = _gpuSum / _gpuCount; _gpuSum = 0; _gpuCount = 0; }
     }
 
 
     public void Dispose()
     {
-        grassDisposing = true;   // the pages are freed with the store
-        foreach (var z in zones.Values) { try { z.Job?.Wait(); } catch (AggregateException) { } foreach (var p in z.Pages.Values) { try { p.Job?.Wait(); } catch (AggregateException) { } FreePage(p); } }
-        foreach (var t in lodTasks.Values) { try { t.Wait(); } catch (AggregateException) { } }
-        foreach (var a in assetsByMesh.Values)
+        _grassDisposing = true;   // the pages are freed with the store
+        foreach (var z in _zones.Values) { try { z.Job?.Wait(); } catch (AggregateException) { } foreach (var p in z.Pages.Values) { try { p.Job?.Wait(); } catch (AggregateException) { } FreePage(p); } }
+        foreach (var t in _lodTasks.Values) { try { t.Wait(); } catch (AggregateException) { } }
+        foreach (var a in _assetsByMesh.Values)
         {
             try { a.Job?.Wait(); } catch (AggregateException) { }
             a.Lod?.Dispose();
             foreach (var m in new[] { a.Main, a.Leaves })
                 if (m is not null) DeleteMesh(m);
         }
-        lock (allWorlds) foreach (var w in allWorlds) w.Dispose();
-        textures.Dispose();
-        colourMesh.Dispose();
-        colourSolidMesh.Dispose();
-        depthMesh.Dispose();
-        prepassMesh.Dispose();
-        prepassSolidMesh.Dispose();
-        grassProgram.Dispose();
-        grassMotionProgram.Dispose();
+        lock (_allWorlds) foreach (var w in _allWorlds) w.Dispose();
+        _textures.Dispose();
+        _colourMesh.Dispose();
+        _colourSolidMesh.Dispose();
+        _depthMesh.Dispose();
+        _prepassMesh.Dispose();
+        _prepassSolidMesh.Dispose();
+        _grassProgram.Dispose();
+        _grassMotionProgram.Dispose();
         DisposeGrassStore();
-        gpuCull?.Dispose();
+        _gpuCull?.Dispose();
         DisposeImpostors();
-        nativeFrame.Dispose();
+        _nativeFrame.Dispose();
     }
 }
 

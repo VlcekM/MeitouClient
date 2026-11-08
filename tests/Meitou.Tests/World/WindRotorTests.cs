@@ -12,15 +12,15 @@ public class WindRotorTests
     public void Wind_rotor_follows_the_parts_the_position_chooses()
     {
         var db = EconomyTests.Db(
-            EconomyTests.Rec("building", FcsRecordType.BUILDING, r => r.References["parts"] = [new("rotor", 1, 50, 0), new("plain", 1, 50, 0)]),
-            EconomyTests.Rec("rotor", FcsRecordType.BUILDING_PART, r =>
+            EconomyTests.Rec("building", FcsRecordType.Building, r => r.References["parts"] = [new("rotor", 1, 50, 0), new("plain", 1, 50, 0)]),
+            EconomyTests.Rec("rotor", FcsRecordType.BuildingPart, r =>
             {
                 r.Filenames["phs or mesh"] = "rotor.mesh";
                 r.Ints["rotation function"] = RotorSpec.WindSpeed;
                 r.Floats["wind speed rotation min"] = 3;
                 r.Floats["wind speed rotation max"] = 2;
             }),
-            EconomyTests.Rec("plain", FcsRecordType.BUILDING_PART, r => r.Filenames["phs or mesh"] = "plain.mesh"));
+            EconomyTests.Rec("plain", FcsRecordType.BuildingPart, r => r.Filenames["phs or mesh"] = "plain.mesh"));
         var building = db.Find("building")!;
         int withRotor = 0;
         for (int i = 0; i < 40; i++)

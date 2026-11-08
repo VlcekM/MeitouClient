@@ -1,9 +1,9 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Gi;
 
@@ -43,24 +43,28 @@ public unsafe struct InstanceRecord
 /// </summary>
 public sealed unsafe class AccelerationStructure : IDisposable
 {
-    readonly VulkanDevice device;
-    readonly BufferAllocation storage;
-    BufferAllocation? scratch;
+    readonly VulkanDevice _device;
+    readonly BufferAllocation _storage;
+    BufferAllocation? _scratch;
 
     public AccelerationStructureKHR Handle { get; }
     public ulong Address { get; }
-    public ulong Bytes => storage.Size + (scratch?.Size ?? 0);
+    public ulong Bytes => _storage.Size + (_scratch?.Size ?? 0);
     public AccelerationStructureTypeKHR Type { get; }
 
     AccelerationStructure(VulkanDevice device, AccelerationStructureTypeKHR type, ulong size, string name)
     {
-        this.device = device;
+        this._device = device;
         Type = type;
         var ext = device.AccelerationStructures ?? throw new InvalidOperationException("the device has no ray queries");
-        storage = device.Allocator.CreateBuffer(size, BufferUsageFlags.AccelerationStructureStorageBitKhr | BufferUsageFlags.ShaderDeviceAddressBit, MemoryKind.DeviceLocal, name);
+        _storage = device.Allocator.CreateBuffer(size, BufferUsageFlags.AccelerationStructureStorageBitKhr | BufferUsageFlags.ShaderDeviceAddressBit, MemoryKind.DeviceLocal, name);
         var info = new AccelerationStructureCreateInfoKHR
         {
-            SType = StructureType.AccelerationStructureCreateInfoKhr, Buffer = storage.Buffer, Offset = 0, Size = size, Type = type,
+            SType = StructureType.AccelerationStructureCreateInfoKhr,
+            Buffer = _storage.Buffer,
+            Offset = 0,
+            Size = size,
+            Type = type,
         };
         AccelerationStructureKHR handle;
         VulkanException.Check(ext.CreateAccelerationStructure(device.Device, &info, null, &handle), "vkCreateAccelerationStructureKHR");
@@ -80,11 +84,11 @@ public sealed unsafe class AccelerationStructure : IDisposable
         FillBottom(geometries, geos, ranges, counts);
         var flags = BuildAccelerationStructureFlagsKHR.PreferFastTraceBitKhr | (updatable ? BuildAccelerationStructureFlagsKHR.AllowUpdateBitKhr : 0);
         var made = Build(device, cmd, AccelerationStructureTypeKHR.BottomLevelKhr, geos, (uint)n, ranges, counts, flags, name, updatable);
-        made.updateFlags = flags;
+        made._updateFlags = flags;
         return made;
     }
 
-    BuildAccelerationStructureFlagsKHR updateFlags;
+    BuildAccelerationStructureFlagsKHR _updateFlags;
 
     /// <summary>
     /// Refits a structure made by <see cref="BuildBottom"/> with <c>updatable</c>, in place, over <paramref name="geometries"/>: the same triangles with other vertex positions
@@ -100,12 +104,18 @@ public sealed unsafe class AccelerationStructure : IDisposable
         FillBottom(geometries, geos, ranges, counts);
         var build = new AccelerationStructureBuildGeometryInfoKHR
         {
-            SType = StructureType.AccelerationStructureBuildGeometryInfoKhr, Type = AccelerationStructureTypeKHR.BottomLevelKhr, Flags = updateFlags,
-            Mode = BuildAccelerationStructureModeKHR.UpdateKhr, GeometryCount = (uint)n, PGeometries = geos,
-            SrcAccelerationStructure = Handle, DstAccelerationStructure = Handle, ScratchData = new DeviceOrHostAddressKHR { DeviceAddress = ScratchAddress() },
+            SType = StructureType.AccelerationStructureBuildGeometryInfoKhr,
+            Type = AccelerationStructureTypeKHR.BottomLevelKhr,
+            Flags = _updateFlags,
+            Mode = BuildAccelerationStructureModeKHR.UpdateKhr,
+            GeometryCount = (uint)n,
+            PGeometries = geos,
+            SrcAccelerationStructure = Handle,
+            DstAccelerationStructure = Handle,
+            ScratchData = new DeviceOrHostAddressKHR { DeviceAddress = ScratchAddress() },
         };
         var rangePointer = ranges;
-        device.AccelerationStructures!.CmdBuildAccelerationStructures(cmd.Handle, 1, &build, &rangePointer);
+        _device.AccelerationStructures!.CmdBuildAccelerationStructures(cmd.Handle, 1, &build, &rangePointer);
     }
 
     static void FillBottom(ReadOnlySpan<TriangleGeometry> geometries, AccelerationStructureGeometryKHR* geos, AccelerationStructureBuildRangeInfoKHR* ranges, uint* counts)
@@ -123,11 +133,11 @@ public sealed unsafe class AccelerationStructure : IDisposable
                     Triangles = new AccelerationStructureGeometryTrianglesDataKHR
                     {
                         SType = StructureType.AccelerationStructureGeometryTrianglesDataKhr,
-                        VertexFormat = GlConventions.VkFormat(InternalFormat.Rgb32f),
+                        VertexFormat = GlConventions.VkFormat(InternalFormat.Rgb32F),
                         VertexData = new DeviceOrHostAddressConstKHR { DeviceAddress = g.VertexAddress },
                         VertexStride = g.VertexStride,
                         MaxVertex = Math.Max(g.VertexCount, 1) - 1,
-                        IndexType = Silk.NET.Vulkan.IndexType.Uint32,
+                        IndexType = IndexType.Uint32,
                         IndexData = new DeviceOrHostAddressConstKHR { DeviceAddress = g.IndexAddress },
                     },
                 },
@@ -150,7 +160,7 @@ public sealed unsafe class AccelerationStructure : IDisposable
         sizes.AccelerationStructureSize = Math.Max(sizes.AccelerationStructureSize, traceSizes.AccelerationStructureSize);
         sizes.BuildScratchSize = Math.Max(sizes.BuildScratchSize, traceSizes.BuildScratchSize);
         var top = new AccelerationStructure(device, AccelerationStructureTypeKHR.TopLevelKhr, Math.Max(sizes.AccelerationStructureSize, 256), name) { MaxInstances = maxInstances };
-        top.scratch = device.Allocator.CreateBuffer(sizes.BuildScratchSize + device.ScratchAlignment, BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit,
+        top._scratch = device.Allocator.CreateBuffer(sizes.BuildScratchSize + device.ScratchAlignment, BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit,
             MemoryKind.DeviceLocal, name + " scratch");
         return top;
     }
@@ -160,8 +170,12 @@ public sealed unsafe class AccelerationStructure : IDisposable
         var geo = TopGeometry(0);
         var build = new AccelerationStructureBuildGeometryInfoKHR
         {
-            SType = StructureType.AccelerationStructureBuildGeometryInfoKhr, Type = AccelerationStructureTypeKHR.TopLevelKhr,
-            Flags = flags, Mode = BuildAccelerationStructureModeKHR.BuildKhr, GeometryCount = 1, PGeometries = &geo,
+            SType = StructureType.AccelerationStructureBuildGeometryInfoKhr,
+            Type = AccelerationStructureTypeKHR.TopLevelKhr,
+            Flags = flags,
+            Mode = BuildAccelerationStructureModeKHR.BuildKhr,
+            GeometryCount = 1,
+            PGeometries = &geo,
         };
         var sizes = new AccelerationStructureBuildSizesInfoKHR { SType = StructureType.AccelerationStructureBuildSizesInfoKhr };
         uint max = maxInstances;
@@ -177,19 +191,24 @@ public sealed unsafe class AccelerationStructure : IDisposable
         var geo = TopGeometry(instancesAddress);
         var build = new AccelerationStructureBuildGeometryInfoKHR
         {
-            SType = StructureType.AccelerationStructureBuildGeometryInfoKhr, Type = AccelerationStructureTypeKHR.TopLevelKhr,
-            Flags = fastTrace ? BuildAccelerationStructureFlagsKHR.PreferFastTraceBitKhr : BuildAccelerationStructureFlagsKHR.PreferFastBuildBitKhr, Mode = BuildAccelerationStructureModeKHR.BuildKhr, GeometryCount = 1, PGeometries = &geo,
-            DstAccelerationStructure = Handle, ScratchData = new DeviceOrHostAddressKHR { DeviceAddress = ScratchAddress() },
+            SType = StructureType.AccelerationStructureBuildGeometryInfoKhr,
+            Type = AccelerationStructureTypeKHR.TopLevelKhr,
+            Flags = fastTrace ? BuildAccelerationStructureFlagsKHR.PreferFastTraceBitKhr : BuildAccelerationStructureFlagsKHR.PreferFastBuildBitKhr,
+            Mode = BuildAccelerationStructureModeKHR.BuildKhr,
+            GeometryCount = 1,
+            PGeometries = &geo,
+            DstAccelerationStructure = Handle,
+            ScratchData = new DeviceOrHostAddressKHR { DeviceAddress = ScratchAddress() },
         };
         var range = new AccelerationStructureBuildRangeInfoKHR { PrimitiveCount = count };
         var rangePointer = &range;
-        device.AccelerationStructures!.CmdBuildAccelerationStructures(cmd.Handle, 1, &build, &rangePointer);
+        _device.AccelerationStructures!.CmdBuildAccelerationStructures(cmd.Handle, 1, &build, &rangePointer);
     }
 
     ulong ScratchAddress()
     {
-        var info = new BufferDeviceAddressInfo { SType = StructureType.BufferDeviceAddressInfo, Buffer = scratch!.Buffer };
-        ulong address = device.Vk.GetBufferDeviceAddress(device.Device, in info), align = device.ScratchAlignment;
+        var info = new BufferDeviceAddressInfo { SType = StructureType.BufferDeviceAddressInfo, Buffer = _scratch!.Buffer };
+        ulong address = _device.Vk.GetBufferDeviceAddress(_device.Device, in info), align = _device.ScratchAlignment;
         return (address + align - 1) / align * align;
     }
 
@@ -215,13 +234,16 @@ public sealed unsafe class AccelerationStructure : IDisposable
         var build = new AccelerationStructureBuildGeometryInfoKHR
         {
             SType = StructureType.AccelerationStructureBuildGeometryInfoKhr,
-            Type = type, Flags = flags, Mode = BuildAccelerationStructureModeKHR.BuildKhr,
-            GeometryCount = geometryCount, PGeometries = geos,
+            Type = type,
+            Flags = flags,
+            Mode = BuildAccelerationStructureModeKHR.BuildKhr,
+            GeometryCount = geometryCount,
+            PGeometries = geos,
         };
         var sizes = new AccelerationStructureBuildSizesInfoKHR { SType = StructureType.AccelerationStructureBuildSizesInfoKhr };
         ext.GetAccelerationStructureBuildSizes(device.Device, AccelerationStructureBuildTypeKHR.DeviceKhr, &build, maxPrimitives, &sizes);
         var structure = new AccelerationStructure(device, type, Math.Max(sizes.AccelerationStructureSize, 256), name);
-        structure.scratch = device.Allocator.CreateBuffer((keepScratch ? Math.Max(sizes.BuildScratchSize, sizes.UpdateScratchSize) : sizes.BuildScratchSize) + device.ScratchAlignment, BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit,
+        structure._scratch = device.Allocator.CreateBuffer((keepScratch ? Math.Max(sizes.BuildScratchSize, sizes.UpdateScratchSize) : sizes.BuildScratchSize) + device.ScratchAlignment, BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit,
             MemoryKind.DeviceLocal, name + " scratch");
         build.DstAccelerationStructure = structure.Handle;
         build.ScratchData = new DeviceOrHostAddressKHR { DeviceAddress = structure.ScratchAddress() };
@@ -233,19 +255,19 @@ public sealed unsafe class AccelerationStructure : IDisposable
     /// <summary>The scratch buffer is only needed by the build: freed once the frame that built it has finished.</summary>
     public void ReleaseScratch()
     {
-        if (scratch is null) return;
-        device.DeferFree(scratch);
-        scratch = null;
+        if (_scratch is null) return;
+        _device.DeferFree(_scratch);
+        _scratch = null;
     }
 
     public void Dispose()
     {
         ReleaseScratch();
-        var ext = device.AccelerationStructures!;
+        var ext = _device.AccelerationStructures!;
         var handle = Handle;
-        var d = device;
-        var buffer = storage;
-        device.Frames.DeferDelete(() =>
+        var d = _device;
+        var buffer = _storage;
+        _device.Frames.DeferDelete(() =>
         {
             ext.DestroyAccelerationStructure(d.Device, handle, null);
             d.Allocator.Free(buffer);

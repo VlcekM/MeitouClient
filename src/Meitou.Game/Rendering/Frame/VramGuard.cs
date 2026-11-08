@@ -33,24 +33,24 @@ public sealed class VramGuard
     const double FreshSeconds = 0.02;
     public const float StepDown = 0.88f, StepUp = 1.04f, MinScale = 0.15f;
 
-    readonly Func<(ulong Used, ulong Budget)> sample;
-    readonly Func<double> clock;
-    readonly Action<string>? log;
-    double lastSample = double.NegativeInfinity, lastStep, calmSince;
-    volatile bool pressure;
-    float scale = 1f;
-    long used, budget, reserved;
-    bool logged;
+    readonly Func<(ulong Used, ulong Budget)> _sample;
+    readonly Func<double> _clock;
+    readonly Action<string>? _log;
+    double _lastSample = double.NegativeInfinity, _lastStep, _calmSince;
+    volatile bool _pressure;
+    float _scale = 1f;
+    long _used, _budget, _reserved;
+    bool _logged;
 
     /// <param name="sample">The device-local memory in use and the budget (<c>VulkanDevice.VideoMemory</c>).</param>
     /// <param name="clock">Seconds, monotonic (a stopwatch by default; tests drive it).</param>
     /// <param name="log">Where the one log line goes (the console by default).</param>
     public VramGuard(Func<(ulong Used, ulong Budget)> sample, Func<double>? clock = null, Action<string>? log = null)
     {
-        this.sample = sample;
+        this._sample = sample;
         var watch = Stopwatch.StartNew();
-        this.clock = clock ?? (() => watch.Elapsed.TotalSeconds);
-        this.log = log ?? Console.WriteLine;
+        this._clock = clock ?? (() => watch.Elapsed.TotalSeconds);
+        this._log = log ?? Console.WriteLine;
     }
 
     /// <summary>
@@ -60,11 +60,11 @@ public sealed class VramGuard
     public Gpu.Core.GpuAllocator? Allocator { get; init; }
 
     /// <summary>The factor every draw and streaming range is multiplied by (1: no clamp).</summary>
-    public float RangeScale => scale;
+    public float RangeScale => _scale;
     /// <summary>The memory use is high: the caches evict what they can, and nothing new is started.</summary>
-    public bool Pressure => pressure;
+    public bool Pressure => _pressure;
     /// <summary>New zones, pages, textures and uploads may be started (false under <see cref="Pressure"/>).</summary>
-    public bool Streaming => !pressure;
+    public bool Streaming => !_pressure;
 
     /// <summary>
     /// How far round the camera zones are still laid out and object meshes still decoded under <see cref="Pressure"/> (world units): a card that never gets back
@@ -74,13 +74,13 @@ public sealed class VramGuard
     public const float NearReach = 3000;
 
     /// <summary>Whether what lies within <see cref="NearReach"/> may start loading: always, but under pressure only while the use is under <see cref="PriorityCeiling"/>.</summary>
-    public bool StreamsNear => !pressure || Fraction < PriorityCeiling;
+    public bool StreamsNear => !_pressure || Fraction < PriorityCeiling;
     /// <summary>The last sample, as a fraction of the budget.</summary>
-    public double Fraction => budget == 0 ? 0 : (double)used / budget;
+    public double Fraction => _budget == 0 ? 0 : (double)_used / _budget;
     /// <summary>The driver's device-local budget at the last sample (0 until one is taken, or when unknown).</summary>
-    public long BudgetBytes => budget;
+    public long BudgetBytes => _budget;
     /// <summary>Bytes in use above <see cref="Low"/> of the budget while under pressure (what is to be shed), else 0.</summary>
-    public long ExcessBytes => pressure ? Math.Max(used - (long)(Low * budget), 0) : 0;
+    public long ExcessBytes => _pressure ? Math.Max(_used - (long)(Low * _budget), 0) : 0;
     /// <summary>Times the guard entered pressure, the lowest <see cref="RangeScale"/> it reached, and allocations <see cref="Allows"/> refused.</summary>
     public int Activations { get; private set; }
     public float LowestScale { get; private set; } = 1f;
@@ -91,26 +91,26 @@ public sealed class VramGuard
     public long HighestBudget { get; private set; }
 
     /// <summary>Whether the guard is doing anything (pressure, or ranges not back at 1).</summary>
-    public bool Active => pressure || scale < 1f;
+    public bool Active => _pressure || _scale < 1f;
 
     /// <summary>The statistics line (F11): idle, or the clamp and what is paused.</summary>
     public string Status =>
-        Active ? $"guard: ranges x{scale:0.00}{(pressure ? ", streaming paused" : ", recovering")}, {Fraction * 100:0}% of the {budget / 1048576} MB budget{(Refusals > 0 ? $", {Refusals} allocations refused" : "")}{(PriorityGrants > 0 ? $", {PriorityGrants} scratch grants over the ceiling" : "")}"
-               : $"guard: ok, {Fraction * 100:0}% of the {budget / 1048576} MB budget{(LowestBudget < HighestBudget ? $" (sampled {LowestBudget / 1048576} to {HighestBudget / 1048576} MB)" : "")}";
+        Active ? $"guard: ranges x{_scale:0.00}{(_pressure ? ", streaming paused" : ", recovering")}, {Fraction * 100:0}% of the {_budget / 1048576} MB budget{(Refusals > 0 ? $", {Refusals} allocations refused" : "")}{(PriorityGrants > 0 ? $", {PriorityGrants} scratch grants over the ceiling" : "")}"
+               : $"guard: ok, {Fraction * 100:0}% of the {_budget / 1048576} MB budget{(LowestBudget < HighestBudget ? $" (sampled {LowestBudget / 1048576} to {HighestBudget / 1048576} MB)" : "")}";
 
     /// <summary>Once a frame: takes a sample when one is due and moves the state.</summary>
     public void Tick()
     {
-        double now = clock();
-        if (now - lastSample >= SampleSeconds) Sample(now);
+        double now = _clock();
+        if (now - _lastSample >= SampleSeconds) Sample(now);
     }
 
     void Sample(double now)
     {
-        lastSample = now;
-        var (u, b) = sample();
-        (used, budget, reserved) = ((long)u, (long)b, 0);
-        if (budget > 0) (LowestBudget, HighestBudget) = (LowestBudget == 0 ? budget : Math.Min(LowestBudget, budget), Math.Max(HighestBudget, budget));
+        _lastSample = now;
+        var (u, b) = _sample();
+        (_used, _budget, _reserved) = ((long)u, (long)b, 0);
+        if (_budget > 0) (LowestBudget, HighestBudget) = (LowestBudget == 0 ? _budget : Math.Min(LowestBudget, _budget), Math.Max(HighestBudget, _budget));
         Step(now);
     }
 
@@ -124,17 +124,17 @@ public sealed class VramGuard
     /// in use yet (they count against the room without being reserved again).</summary>
     public bool Allows(ulong bytes, ulong pending)
     {
-        double now = clock();
-        if (now - lastSample >= FreshSeconds) Sample(now);
-        if (budget <= 0) return true;
-        long wanted = used + reserved + (long)pending + (long)bytes;
-        if (wanted <= Ceiling * budget)
+        double now = _clock();
+        if (now - _lastSample >= FreshSeconds) Sample(now);
+        if (_budget <= 0) return true;
+        long wanted = _used + _reserved + (long)pending + (long)bytes;
+        if (wanted <= Ceiling * _budget)
         {
-            reserved += (long)bytes;
+            _reserved += (long)bytes;
             return true;
         }
         Refusals++;
-        if (!pressure) Enter(now, (double)wanted / budget);
+        if (!_pressure) Enter(now, (double)wanted / _budget);
         return false;
     }
 
@@ -144,11 +144,11 @@ public sealed class VramGuard
     /// </summary>
     public bool AllowsLean(ulong bytes, ulong pending)
     {
-        double now = clock();
-        if (now - lastSample >= FreshSeconds) Sample(now);
-        if (budget <= 0) return true;
-        if (used + reserved + (long)pending + (long)bytes > PriorityCeiling * budget) return false;
-        reserved += (long)bytes;
+        double now = _clock();
+        if (now - _lastSample >= FreshSeconds) Sample(now);
+        if (_budget <= 0) return true;
+        if (_used + _reserved + (long)pending + (long)bytes > PriorityCeiling * _budget) return false;
+        _reserved += (long)bytes;
         LeanGrants++;
         return true;
     }
@@ -169,22 +169,22 @@ public sealed class VramGuard
     /// </summary>
     public bool AllowsPriority(ulong bytes)
     {
-        double now = clock();
-        if (now - lastSample >= FreshSeconds) Sample(now);
-        if (budget <= 0) return true;
-        long wanted = used + reserved + (long)bytes;
-        if (wanted > PriorityCeiling * budget)
+        double now = _clock();
+        if (now - _lastSample >= FreshSeconds) Sample(now);
+        if (_budget <= 0) return true;
+        long wanted = _used + _reserved + (long)bytes;
+        if (wanted > PriorityCeiling * _budget)
         {
             Refusals++;
-            if (!pressure) Enter(now, (double)wanted / budget);
+            if (!_pressure) Enter(now, (double)wanted / _budget);
             Squeeze(now);
             return false;
         }
-        reserved += (long)bytes;
-        if (wanted > Ceiling * budget)
+        _reserved += (long)bytes;
+        if (wanted > Ceiling * _budget)
         {
             PriorityGrants++;
-            if (!pressure) Enter(now, (double)wanted / budget);
+            if (!_pressure) Enter(now, (double)wanted / _budget);
         }
         return true;
     }
@@ -198,62 +198,62 @@ public sealed class VramGuard
     /// </summary>
     void Squeeze(double now)
     {
-        if (!pressure || now - lastSqueeze < SqueezeSeconds) return;
-        lastSqueeze = lastStep = now;
-        scale = Math.Max(MinScale, scale * StepDown);
-        LowestScale = Math.Min(LowestScale, scale);
+        if (!_pressure || now - _lastSqueeze < SqueezeSeconds) return;
+        _lastSqueeze = _lastStep = now;
+        _scale = Math.Max(MinScale, _scale * StepDown);
+        LowestScale = Math.Min(LowestScale, _scale);
         Squeezes++;
     }
-    double lastSqueeze = double.NegativeInfinity;
-    int seenFailures;
+    double _lastSqueeze = double.NegativeInfinity;
+    int _seenFailures;
     /// <summary>Range steps taken early because a scratch was refused.</summary>
     public int Squeezes { get; private set; }
 
     void Enter(double now, double fraction)
     {
-        pressure = true;
+        _pressure = true;
         Activations++;
         if (Allocator is { } a) a.Lean = true;
-        lastStep = now - StepDownSeconds;   // the first step at once
-        if (logged) return;
-        logged = true;
-        log?.Invoke(string.Create(CultureInfo.InvariantCulture,
-            $"vram      guard: device-local memory at {fraction * 100:0}% of the {budget / 1048576} MB budget: new streaming paused (what is drawn loads small), idle textures and meshes evicted, " +
-            $"draw and streaming ranges clamped (x{scale * StepDown:0.00} and falling while over {Low * 100:0}%); the statistics show it, this line is not repeated"));
+        _lastStep = now - StepDownSeconds;   // the first step at once
+        if (_logged) return;
+        _logged = true;
+        _log?.Invoke(string.Create(CultureInfo.InvariantCulture,
+            $"vram      guard: device-local memory at {fraction * 100:0}% of the {_budget / 1048576} MB budget: new streaming paused (what is drawn loads small), idle textures and meshes evicted, " +
+            $"draw and streaming ranges clamped (x{_scale * StepDown:0.00} and falling while over {Low * 100:0}%); the statistics show it, this line is not repeated"));
     }
 
     void Step(double now)
     {
-        if (budget <= 0) return;
+        if (_budget <= 0) return;
         double f = Fraction;
         // An allocation the driver refused since the last sample: pressure, whatever the use reads.
         int failures = Allocator?.Failures ?? 0;
-        bool failed = failures != seenFailures;
-        seenFailures = failures;
-        if (!pressure && (f >= High || failed)) Enter(now, f);
-        else if (pressure && f < Low)
+        bool failed = failures != _seenFailures;
+        _seenFailures = failures;
+        if (!_pressure && (f >= High || failed)) Enter(now, f);
+        else if (_pressure && f < Low)
         {
-            pressure = false;
+            _pressure = false;
             if (Allocator is { } a) a.Lean = false;
-            calmSince = now;
-            lastStep = now;
+            _calmSince = now;
+            _lastStep = now;
         }
-        if (pressure)
+        if (_pressure)
         {
-            if (now - lastStep >= StepDownSeconds)
+            if (now - _lastStep >= StepDownSeconds)
             {
-                scale = Math.Max(MinScale, scale * StepDown);
-                LowestScale = Math.Min(LowestScale, scale);
-                lastStep = now;
+                _scale = Math.Max(MinScale, _scale * StepDown);
+                LowestScale = Math.Min(LowestScale, _scale);
+                _lastStep = now;
             }
         }
-        else if (scale < 1f)
+        else if (_scale < 1f)
         {
-            if (f >= Recover) calmSince = now;
-            else if (now - calmSince >= CalmSeconds && now - lastStep >= StepUpSeconds)
+            if (f >= Recover) _calmSince = now;
+            else if (now - _calmSince >= CalmSeconds && now - _lastStep >= StepUpSeconds)
             {
-                scale = Math.Min(1f, scale * StepUp);
-                lastStep = now;
+                _scale = Math.Min(1f, _scale * StepUp);
+                _lastStep = now;
             }
         }
     }

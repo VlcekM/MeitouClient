@@ -16,52 +16,54 @@ public sealed unsafe class TriangleCounter : IDisposable
 {
     static readonly ulong Bytes = (ulong)(TriangleBins.Categories.Length * TriangleBins.Fine * sizeof(uint));
 
-    readonly GpuContext ctx;
-    readonly Vk vk;
-    readonly VulkanDevice device;
-    readonly Silk.NET.Vulkan.Buffer buffer;
-    readonly GpuBuffer handle;
-    readonly DeviceMemory memory;
-    readonly ulong address;
-    readonly ReadbackBuffer readback;
-    readonly Dictionary<GpuProgram, ShaderModule> modules = [];
-    readonly List<string> skipped = [];
-    readonly List<string> counted = [];
+    readonly GpuContext _ctx;
+    readonly Vk _vk;
+    readonly VulkanDevice _device;
+    readonly Silk.NET.Vulkan.Buffer _buffer;
+    readonly GpuBuffer _handle;
+    readonly DeviceMemory _memory;
+    readonly ulong _address;
+    readonly ReadbackBuffer _readback;
+    readonly Dictionary<GpuProgram, ShaderModule> _modules = [];
+    readonly List<string> _skipped = [];
+    readonly List<string> _counted = [];
 
     /// <summary>Programs that were given a counting fragment shader.</summary>
-    public IReadOnlyList<string> Counted => counted;
+    public IReadOnlyList<string> Counted => _counted;
 
     public static bool Supported(GpuContext ctx) => ctx.Device.HasFragmentBarycentric && ctx.Device.HasBufferDeviceAddress;
 
     /// <summary>Programs of a counted category whose text could not be instrumented (their triangles are missing from the histogram).</summary>
-    public IReadOnlyList<string> Skipped => skipped;
+    public IReadOnlyList<string> Skipped => _skipped;
 
     public TriangleCounter(GpuContext ctx)
     {
         if (!Supported(ctx)) throw new NotSupportedException("the device has no fragment shader barycentrics or buffer device address");
-        this.ctx = ctx;
-        device = ctx.Device;
-        vk = device.Vk;
+        this._ctx = ctx;
+        _device = ctx.Device;
+        _vk = _device.Vk;
         var info = new BufferCreateInfo
         {
-            SType = StructureType.BufferCreateInfo, Size = Bytes, SharingMode = SharingMode.Exclusive,
+            SType = StructureType.BufferCreateInfo,
+            Size = Bytes,
+            SharingMode = SharingMode.Exclusive,
             Usage = BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit | BufferUsageFlags.TransferSrcBit | BufferUsageFlags.TransferDstBit,
         };
-        VulkanException.Check(vk.CreateBuffer(device.Device, in info, null, out buffer), "vkCreateBuffer(triangle counters)");
-        vk.GetBufferMemoryRequirements(device.Device, buffer, out var req);
-        vk.GetPhysicalDeviceMemoryProperties(device.PhysicalDevice, out var props);
+        VulkanException.Check(_vk.CreateBuffer(_device.Device, in info, null, out _buffer), "vkCreateBuffer(triangle counters)");
+        _vk.GetBufferMemoryRequirements(_device.Device, _buffer, out var req);
+        _vk.GetPhysicalDeviceMemoryProperties(_device.PhysicalDevice, out var props);
         uint type = uint.MaxValue;
         for (uint i = 0; i < props.MemoryTypeCount; i++)
             if ((req.MemoryTypeBits & (1u << (int)i)) != 0 && (props.MemoryTypes[(int)i].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) != 0) { type = i; break; }
         if (type == uint.MaxValue) throw new VulkanException("no device-local memory type for the triangle counters");
         var flags = new MemoryAllocateFlagsInfo { SType = StructureType.MemoryAllocateFlagsInfo, Flags = MemoryAllocateFlags.DeviceAddressBit };
         var alloc = new MemoryAllocateInfo { SType = StructureType.MemoryAllocateInfo, AllocationSize = req.Size, MemoryTypeIndex = type, PNext = &flags };
-        VulkanException.Check(vk.AllocateMemory(device.Device, in alloc, null, out memory), "vkAllocateMemory(triangle counters)");
-        VulkanException.Check(vk.BindBufferMemory(device.Device, buffer, memory, 0), "vkBindBufferMemory(triangle counters)");
-        handle = new GpuBuffer(device.AddBuffer(new BufferEntry(buffer, null)), Bytes);
-        var addressInfo = new BufferDeviceAddressInfo { SType = StructureType.BufferDeviceAddressInfo, Buffer = buffer };
-        address = vk.GetBufferDeviceAddress(device.Device, in addressInfo);
-        readback = ReadbackBuffer.Create(ctx, Bytes, "triangle counters readback");
+        VulkanException.Check(_vk.AllocateMemory(_device.Device, in alloc, null, out _memory), "vkAllocateMemory(triangle counters)");
+        VulkanException.Check(_vk.BindBufferMemory(_device.Device, _buffer, _memory, 0), "vkBindBufferMemory(triangle counters)");
+        _handle = new GpuBuffer(_device.AddBuffer(new BufferEntry(_buffer, null)), Bytes);
+        var addressInfo = new BufferDeviceAddressInfo { SType = StructureType.BufferDeviceAddressInfo, Buffer = _buffer };
+        _address = _vk.GetBufferDeviceAddress(_device.Device, in addressInfo);
+        _readback = ReadbackBuffer.Create(ctx, Bytes, "triangle counters readback");
     }
 
     /// <summary>Zeroes the counters (in the frame being recorded, before its draws) and makes the pipelines created from now on count.</summary>
@@ -77,49 +79,49 @@ public sealed unsafe class TriangleCounter : IDisposable
     /// <summary>Zeroes the counters in the frame being recorded.</summary>
     public void Clear()
     {
-        ctx.EnsureFrame();
-        var list = ctx.BeginNative("triangle counters clear");
-        list.FillBuffer(handle, 0, Bytes, 0);
-        ctx.EndNative(list);
+        _ctx.EnsureFrame();
+        var list = _ctx.BeginNative("triangle counters clear");
+        list.FillBuffer(_handle, 0, Bytes, 0);
+        _ctx.EndNative(list);
     }
 
     GpuPipeline Substitute(GpuPipeline pipeline)
     {
         var module = ModuleFor(pipeline.Desc.Program);
-        return module.Handle == 0 ? pipeline : ctx.Pipelines.GetWithFragment(pipeline.Desc, module);
+        return module.Handle == 0 ? pipeline : _ctx.Pipelines.GetWithFragment(pipeline.Desc, module);
     }
 
     // Called from the recording threads: the modules are made under a lock (once per program).
     ShaderModule ModuleFor(GpuProgram program)
     {
-        lock (modules) return ModuleForLocked(program);
+        lock (_modules) return ModuleForLocked(program);
     }
 
     ShaderModule ModuleForLocked(GpuProgram program)
     {
-        if (modules.TryGetValue(program, out var module)) return module;
+        if (_modules.TryGetValue(program, out var module)) return module;
         int category = TriangleBins.CategoryOf(program.Name);
-        if (category >= 0 && ctx.Shaders.Backend(program).FragmentSource is { } source)
+        if (category >= 0 && _ctx.Shaders.Backend(program).FragmentSource is { } source)
         {
-            if (TriangleBins.Instrument(source, category, address) is { } text)
+            if (TriangleBins.Instrument(source, category, _address) is { } text)
             {
-                module = ctx.Shaders.Backend(program).CreateModule(ctx.Shaders.Compiler.CompileNative(text, fragment: true));
-                counted.Add(TriangleBins.EarlyTests(source, category) ? program.Name : program.Name + " (late depth test)");
+                module = _ctx.Shaders.Backend(program).CreateModule(_ctx.Shaders.Compiler.CompileNative(text, fragment: true));
+                _counted.Add(TriangleBins.EarlyTests(source, category) ? program.Name : program.Name + " (late depth test)");
             }
-            else skipped.Add(program.Name);
+            else _skipped.Add(program.Name);
         }
-        return modules[program] = module;
+        return _modules[program] = module;
     }
 
     /// <summary>The samples counted since <see cref="Clear"/>, per category, as the histogram of their triangles (the frame in progress is submitted and waited for).</summary>
     public Dictionary<string, SizeHistogram> Read()
     {
-        ctx.EnsureFrame();
-        var list = ctx.BeginNative("triangle counters read");
-        list.CopyBuffer(handle, readback.Handle, new GpuBufferCopy(0, 0, Bytes));
-        ctx.EndNative(list);
-        ctx.Finish();
-        var bytes = readback.Read(0, Bytes);
+        _ctx.EnsureFrame();
+        var list = _ctx.BeginNative("triangle counters read");
+        list.CopyBuffer(_handle, _readback.Handle, new GpuBufferCopy(0, 0, Bytes));
+        _ctx.EndNative(list);
+        _ctx.Finish();
+        var bytes = _readback.Read(0, Bytes);
         var counts = new uint[TriangleBins.Categories.Length * TriangleBins.Fine];
         System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(bytes).CopyTo(counts);
         var result = new Dictionary<string, SizeHistogram>();
@@ -134,10 +136,10 @@ public sealed unsafe class TriangleCounter : IDisposable
     public void Dispose()
     {
         End();
-        ctx.Finish();
-        foreach (var m in modules.Values) if (m.Handle != 0) vk.DestroyShaderModule(device.Device, m, null);
-        readback.Dispose();
-        vk.DestroyBuffer(device.Device, buffer, null);
-        vk.FreeMemory(device.Device, memory, null);
+        _ctx.Finish();
+        foreach (var m in _modules.Values) if (m.Handle != 0) _vk.DestroyShaderModule(_device.Device, m, null);
+        _readback.Dispose();
+        _vk.DestroyBuffer(_device.Device, _buffer, null);
+        _vk.FreeMemory(_device.Device, _memory, null);
     }
 }

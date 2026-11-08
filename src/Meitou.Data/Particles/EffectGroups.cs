@@ -30,10 +30,10 @@ public sealed class DiscArea(float centreX, float centreZ, float radius) : IEffe
 /// </summary>
 public sealed class RegionArea : IEffectArea
 {
-    readonly (float X0, float Z0, float X1, float Z1)[] rects;
+    readonly (float X0, float Z0, float X1, float Z1)[] _rects;
 
-    public RegionArea(IEnumerable<(float X0, float Z0, float X1, float Z1)> rects) => this.rects = [.. rects];
-    public int Count => rects.Length;
+    public RegionArea(IEnumerable<(float X0, float Z0, float X1, float Z1)> rects) => this._rects = [.. rects];
+    public int Count => _rects.Length;
 
     /// <summary>The cells that have the colour of the cell at (<paramref name="x"/>, <paramref name="z"/>) (the game's region cells), or null off the map.</summary>
     public static RegionArea? At(WeatherAreas areas, float x, float z)
@@ -51,8 +51,8 @@ public sealed class RegionArea : IEffectArea
     public bool TryPick(Random random, out float x, out float z)
     {
         x = z = 0;
-        if (rects.Length == 0) return false;
-        var r = rects[random.Next(rects.Length)];
+        if (_rects.Length == 0) return false;
+        var r = _rects[random.Next(_rects.Length)];
         float mx = (r.X1 - r.X0) * 0.1f, mz = (r.Z1 - r.Z0) * 0.1f;
         x = r.X0 + mx + random.NextSingle() * (r.X1 - r.X0 - 2 * mx);
         z = r.Z0 + mz + random.NextSingle() * (r.Z1 - r.Z0 - 2 * mz);
@@ -75,7 +75,12 @@ public sealed class EffectWorld
     /// <summary>A copy for a worker thread (a group being warmed in the background, <see cref="EffectSet"/>): the ground height frozen as it is now (<see cref="FreezeGroundHeight"/>), the rest as it is (<see cref="GroundColour"/> too, so it must be callable from any thread when set; the viewer leaves it unset). Call it on the render thread.</summary>
     public EffectWorld Frozen() => new()
     {
-        GroundHeight = FreezeGroundHeight?.Invoke() ?? GroundHeight, Area = Area, ActiveRadius = ActiveRadius, FallbackRadius = FallbackRadius, GroundColour = GroundColour, Density = Density,
+        GroundHeight = FreezeGroundHeight?.Invoke() ?? GroundHeight,
+        Area = Area,
+        ActiveRadius = ActiveRadius,
+        FallbackRadius = FallbackRadius,
+        GroundColour = GroundColour,
+        Density = Density,
     };
     /// <summary>Null: a disc round the camera of <see cref="FallbackRadius"/>.</summary>
     public IEffectArea? Area { get; set; }
@@ -179,7 +184,7 @@ public sealed class EffectUnit
     public Vector3 WrapAhead { get; set; }
     /// <summary>Seconds of simulation to run on the next <see cref="Advance"/>.</summary>
     public float Pending { get; set; }
-    int wrapSalt;
+    int _wrapSalt;
 
     public bool Active => Simulation is not null;
     public bool Done => Stopped && (Simulation is null || Simulation.ParticleCount == 0);
@@ -253,7 +258,7 @@ public sealed class EffectUnit
         switch (Wrap)
         {
             case UnitWrap.Cube: sim.Wrap(WrapCentre - Anchor, WrapSize / 2); break;
-            case UnitWrap.Sphere: sim.WrapSphere(WrapCentre - Anchor, WrapSize, WrapMaxHeight - Anchor.Y, WrapAhead, wrapSalt++); break;
+            case UnitWrap.Sphere: sim.WrapSphere(WrapCentre - Anchor, WrapSize, WrapMaxHeight - Anchor.Y, WrapAhead, _wrapSalt++); break;
         }
     }
 }
@@ -265,33 +270,33 @@ public sealed class EffectUnit
 /// </summary>
 public abstract class EffectGroup
 {
-    protected readonly List<EffectUnit> units = [];
-    protected readonly Random random;
-    protected EffectWorld world;
-    readonly int seed;
-    int made;
+    protected readonly List<EffectUnit> _units = [];
+    protected readonly Random _random;
+    protected EffectWorld _world;
+    readonly int _seed;
+    int _made;
 
     protected EffectGroup(EffectRecord effect, WeatherEffectEntry? entry, PuSystemDef system, int seed, EffectWorld world)
     {
         Effect = effect;
         Entry = entry;
         System = system;
-        this.seed = seed;
-        this.world = world;
-        random = new Random(seed * 7919 + 17);
+        this._seed = seed;
+        this._world = world;
+        _random = new Random(seed * 7919 + 17);
         Tint = TintOf(effect);
     }
 
     /// <summary>Hands the group to another world (the live one, after a worker warmed it with a <see cref="EffectWorld.Frozen"/> copy); while nobody else touches the group.</summary>
-    internal void Rebind(EffectWorld to) => world = to;
+    internal void Rebind(EffectWorld to) => _world = to;
 
     public EffectRecord Effect { get; }
     public WeatherEffectEntry? Entry { get; }
     public PuSystemDef System { get; }
-    public IReadOnlyList<EffectUnit> Units => units;
+    public IReadOnlyList<EffectUnit> Units => _units;
     /// <summary>The EFFECT's <c>colour multiplier</c> applied to the particles' rgb (Observed: "for weather effects only"; a black multiplier, which would blank the particles, is ignored: <c>Sand-Stream any altitude</c> has one next to <c>ground colour</c>).</summary>
     public Vector3 Tint { get; }
-    public int ParticleCount => units.Sum(u => u.Simulation?.ParticleCount ?? 0);
+    public int ParticleCount => _units.Sum(u => u.Simulation?.ParticleCount ?? 0);
 
     static Vector3 TintOf(EffectRecord e) => e.ColourMultiplier.LengthSquared() < 1e-4f ? Vector3.One : e.ColourMultiplier;
 
@@ -321,7 +326,7 @@ public abstract class EffectGroup
     {
         while (true)
         {
-            var active = units.Where(u => u.Active && u.Pending > 0).ToArray();
+            var active = _units.Where(u => u.Active && u.Pending > 0).ToArray();
             if (active.Length == 0) return;
             if (active.Length > 1) Parallel.ForEach(active, u => u.Advance());
             else foreach (var u in active) u.Advance();   // a backlog is run in full here (start-up), unlike the per-frame path
@@ -334,7 +339,7 @@ public abstract class EffectGroup
     /// </summary>
     public bool SimulateSerial(CancellationToken cancel)
     {
-        foreach (var u in units)
+        foreach (var u in _units)
             while (u.Active && u.Pending > 0)
             {
                 if (cancel.IsCancellationRequested) return false;
@@ -354,20 +359,20 @@ public abstract class EffectGroup
     protected ParticleEnvironment Environment(WeatherEffectInput weather)
     {
         var e = Effect;
-        return new ParticleEnvironment(weather.Wind, e.WindSpeedMultiplier, WindSpanScale(e, weather.Wind.Length()) * world.Density, e.WindAffected, e.WindDirectionEmission);
+        return new ParticleEnvironment(weather.Wind, e.WindSpeedMultiplier, WindSpanScale(e, weather.Wind.Length()) * _world.Density, e.WindAffected, e.WindDirectionEmission);
     }
 
     protected EffectUnit NewUnit(Vector3 position)
     {
-        var u = new EffectUnit(Effect, System, seed * 31 + made++) { Position = position, Anchor = position, Tint = Tint, Radius = System.BoundingRadius };
-        if (Effect.GroundColour && world.GroundColour is { } ground) u.Tint = Tint * ground(position.X, position.Z);
+        var u = new EffectUnit(Effect, System, _seed * 31 + _made++) { Position = position, Anchor = position, Tint = Tint, Radius = System.BoundingRadius };
+        if (Effect.GroundColour && _world.GroundColour is { } ground) u.Tint = Tint * ground(position.X, position.Z);
         // The life: random between min and max time to live, none when the maximum is 0 (Verified (decompiled), FUN_1401034f0).
-        if (!Effect.Immortal) u.Life = Effect.MinTimeToLive + (Effect.MaxTimeToLive - Effect.MinTimeToLive) * random.NextSingle();
-        units.Add(u);
+        if (!Effect.Immortal) u.Life = Effect.MinTimeToLive + (Effect.MaxTimeToLive - Effect.MinTimeToLive) * _random.NextSingle();
+        _units.Add(u);
         return u;
     }
 
-    protected float Range(float a, float b) => a + (b - a) * random.NextSingle();
+    protected float Range(float a, float b) => a + (b - a) * _random.NextSingle();
 
     /// <summary>
     /// What every unit gets each frame: age and life, then whether the camera is near enough for it to be simulated (activated with the particles it
@@ -384,7 +389,7 @@ public abstract class EffectGroup
         if (u.Stopped) u.StoppedFor += dt;
         u.Environment = environment;
         u.DistanceToCamera = Vector3.Distance(u.Position, camera.Eye);
-        float range = world.ActiveRadius + Effect.MaximumViewDistance;
+        float range = _world.ActiveRadius + Effect.MaximumViewDistance;
         float reach = float.IsPositiveInfinity(u.Radius) ? 0 : u.Radius;
         bool near = alwaysActive || u.DistanceToCamera - reach <= range;
         bool far = !alwaysActive && u.DistanceToCamera - reach > range * 1.15f;
@@ -400,8 +405,8 @@ public abstract class EffectGroup
 
     protected void RemoveDone()
     {
-        for (int i = units.Count - 1; i >= 0; i--)
-            if (units[i].Done) units.RemoveAt(i);
+        for (int i = _units.Count - 1; i >= 0; i--)
+            if (_units[i].Done) _units.RemoveAt(i);
     }
 }
 
@@ -415,60 +420,60 @@ public abstract class EffectGroup
 /// </summary>
 public sealed class CameraEffectGroup : EffectGroup
 {
-    readonly EffectUnit unit;
-    readonly float distance;
-    bool started;
+    readonly EffectUnit _unit;
+    readonly float _distance;
+    bool _started;
 
     public CameraEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld? world = null) : base(entry.Effect, entry, system, seed, world ?? new EffectWorld())
     {
         float size = system.LargestEmitterExtent * 0.75f;
-        distance = size > 0 ? size : 100;
-        unit = NewUnit(Vector3.Zero);
-        unit.Radius = float.PositiveInfinity;
-        unit.Wrap = UnitWrap.Cube;
-        unit.WrapSize = Edge;
+        _distance = size > 0 ? size : 100;
+        _unit = NewUnit(Vector3.Zero);
+        _unit.Radius = float.PositiveInfinity;
+        _unit.Wrap = UnitWrap.Cube;
+        _unit.WrapSize = Edge;
     }
 
     /// <summary>The cube's centre's distance ahead of the camera, <c>d</c>.</summary>
-    public float Distance => distance;
+    public float Distance => _distance;
     /// <summary>The cube's edge, <c>2d / 1.5</c>.</summary>
-    public float Edge => distance * 2 / 1.5f;
-    public ParticleSimulation Simulation => unit.Simulation!;
+    public float Edge => _distance * 2 / 1.5f;
+    public ParticleSimulation Simulation => _unit.Simulation!;
     /// <summary>Where the simulation's own coordinate origin is in the world: add it to <see cref="ParticleSimulation.Collect"/>'s positions.</summary>
-    public Vector3 Anchor => unit.Anchor;
+    public Vector3 Anchor => _unit.Anchor;
 
     static Vector3 Forward(in EffectCamera camera) => camera.Forward.LengthSquared() > 1e-6f ? Vector3.Normalize(camera.Forward) : -Vector3.UnitZ;
 
     /// <summary>The cube's centre in the world.</summary>
-    public Vector3 Centre(in EffectCamera camera) => camera.Eye + Forward(camera) * distance;
+    public Vector3 Centre(in EffectCamera camera) => camera.Eye + Forward(camera) * _distance;
 
     void Follow(in EffectCamera camera)
     {
-        unit.Position = camera.Eye;
-        unit.WrapCentre = Centre(camera);
-        if (!started)
+        _unit.Position = camera.Eye;
+        _unit.WrapCentre = Centre(camera);
+        if (!_started)
         {
-            started = true;
-            unit.Activate();
-            unit.Anchor = camera.Eye;
+            _started = true;
+            _unit.Activate();
+            _unit.Anchor = camera.Eye;
         }
     }
 
     public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
     {
         Follow(camera);
-        unit.Environment = Environment(weather);
-        unit.Pending += seconds;
+        _unit.Environment = Environment(weather);
+        _unit.Pending += seconds;
     }
 
     public override void Update(float dt, in EffectCamera camera, WeatherEffectInput weather)
     {
-        bool first = !started;
+        bool first = !_started;
         Follow(camera);
-        unit.Environment = Environment(weather);
-        if (first && Simulation.Definition.FastForward is { } ff && ff.Time > 0) unit.Pending += ff.Time;
-        unit.Pending += dt;
-        unit.Age += dt;
+        _unit.Environment = Environment(weather);
+        if (first && Simulation.Definition.FastForward is { } ff && ff.Time > 0) _unit.Pending += ff.Time;
+        _unit.Pending += dt;
+        _unit.Age += dt;
     }
 }
 
@@ -481,14 +486,14 @@ public sealed class CameraEffectGroup : EffectGroup
 public sealed class RespawningEffectGroup : EffectGroup
 {
     const int MaxUnits = 256;
-    readonly bool wandering, lightning;
-    float timer;
+    readonly bool _wandering, _lightning;
+    float _timer;
 
     public RespawningEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world) : base(entry.Effect, entry, system, seed, world)
     {
-        wandering = entry.Effect.Type is EffectType.Wandering or EffectType.WanderingStorm or EffectType.WanderingGas;
-        lightning = entry.Effect.Type == EffectType.PointLighting;
-        timer = entry.RespawnMin;
+        _wandering = entry.Effect.Type is EffectType.Wandering or EffectType.WanderingStorm or EffectType.WanderingGas;
+        _lightning = entry.Effect.Type == EffectType.PointLighting;
+        _timer = entry.RespawnMin;
     }
 
     int Count => Entry!.Count;
@@ -496,17 +501,17 @@ public sealed class RespawningEffectGroup : EffectGroup
     void Spawn(in EffectCamera camera)
     {
         Vector3 p;
-        if (lightning)
+        if (_lightning)
         {
             // Observed: the game snaps a random point to a metal object found near it (±2000 in x and z, 10 above the ground); the viewer has no
             // such lookup and strikes at a random place round the camera, 3000 units out at most (so a bolt is within sight).
-            float a = random.NextSingle() * MathF.Tau, r = MathF.Sqrt(random.NextSingle()) * 3000;
+            float a = _random.NextSingle() * MathF.Tau, r = MathF.Sqrt(_random.NextSingle()) * 3000;
             float x = camera.Eye.X + MathF.Cos(a) * r, z = camera.Eye.Z + MathF.Sin(a) * r;
-            p = new Vector3(x, world.GroundHeight(x, z) + 10, z);
+            p = new Vector3(x, _world.GroundHeight(x, z) + 10, z);
         }
-        else p = world.Place(Effect, random, camera);
+        else p = _world.Place(Effect, _random, camera);
         var u = NewUnit(p);
-        if (wandering)
+        if (_wandering)
         {
             // A random direction in the ground plane (x and z in [-1, 1], normalised at the first turn), turned by up to ±90° every random(time to live) / 10 seconds.
             u.Heading = new Vector2(Range(-1, 1), Range(-1, 1));
@@ -518,12 +523,12 @@ public sealed class RespawningEffectGroup : EffectGroup
 
     void Schedule(float dt, in EffectCamera camera)
     {
-        timer -= dt;
+        _timer -= dt;
         int guard = 0;
-        while (timer <= 0 && (Count == 0 || units.Count < Count) && units.Count < MaxUnits && guard++ < MaxUnits)
+        while (_timer <= 0 && (Count == 0 || _units.Count < Count) && _units.Count < MaxUnits && guard++ < MaxUnits)
         {
             Spawn(camera);
-            timer += Range(Entry!.RespawnMin, Math.Max(Entry.RespawnMax, Entry.RespawnMin));
+            _timer += Range(Entry!.RespawnMin, Math.Max(Entry.RespawnMax, Entry.RespawnMin));
             // Count 0 with no respawn time would spawn for ever (the game's loop does not end): one per frame here.
             if (Count == 0 && Entry.RespawnMax <= 0) break;
         }
@@ -531,7 +536,7 @@ public sealed class RespawningEffectGroup : EffectGroup
 
     void Move(EffectUnit u, float dt, WeatherEffectInput weather)
     {
-        if (!wandering) return;
+        if (!_wandering) return;
         // Observed: the node walks along its heading at `wandering speed` (the decompile's arithmetic is not resolved), is carried by the wind when
         // wind affected, turns on its timer, and its height follows the ground.
         u.TurnTimer -= dt;
@@ -551,7 +556,7 @@ public sealed class RespawningEffectGroup : EffectGroup
         if (u.GroundTimer <= 0)
         {
             u.GroundTimer = 0.5f;
-            if (u.DistanceToCamera < world.ActiveRadius + 3 * u.Radius) p.Y = world.GroundHeight(p.X, p.Z);
+            if (u.DistanceToCamera < _world.ActiveRadius + 3 * u.Radius) p.Y = _world.GroundHeight(p.X, p.Z);
         }
         u.Position = p;
     }
@@ -560,7 +565,7 @@ public sealed class RespawningEffectGroup : EffectGroup
     {
         Schedule(dt, camera);
         var env = Environment(weather);
-        foreach (var u in units)
+        foreach (var u in _units)
         {
             Move(u, dt, weather);
             Tick(u, dt, camera, env);
@@ -570,7 +575,7 @@ public sealed class RespawningEffectGroup : EffectGroup
 
     public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
     {
-        timer = seconds > 0 ? 0 : Entry!.RespawnMin;
+        _timer = seconds > 0 ? 0 : Entry!.RespawnMin;
         const float step = 0.5f;
         for (float t = 0; t < seconds; t += step) Update(Math.Min(step, seconds - t), camera, weather);
     }
@@ -584,18 +589,18 @@ public sealed class RespawningEffectGroup : EffectGroup
 /// </summary>
 public sealed class GlobalEffectGroup : EffectGroup
 {
-    readonly float size;
-    Vector3? lastEye;
+    readonly float _size;
+    Vector3? _lastEye;
 
     public GlobalEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world) : base(entry.Effect, entry, system, seed, world)
     {
         float s = system.LargestEmitterExtent * 0.75f;
-        size = s > 0 ? s : 100;
+        _size = s > 0 ? s : 100;
     }
 
     Vector3 Node(in EffectCamera camera)
     {
-        float y = world.GroundHeight(camera.Eye.X, camera.Eye.Z) + 100;
+        float y = _world.GroundHeight(camera.Eye.X, camera.Eye.Z) + 100;
         if (Effect.MinAltitude != 0 || Effect.MaxAltitude != 0)
         {
             if (y >= Effect.MaxAltitude) y = Effect.MaxAltitude;
@@ -607,20 +612,20 @@ public sealed class GlobalEffectGroup : EffectGroup
     public override void Update(float dt, in EffectCamera camera, WeatherEffectInput weather)
     {
         var node = Node(camera);
-        while (units.Count < Entry!.Count)
+        while (_units.Count < Entry!.Count)
         {
             var u = NewUnit(node);
             u.Life = float.PositiveInfinity;   // Verified (decompiled), FUN_140103f50: the global handler is made immortal whatever its time to live
             u.Wrap = UnitWrap.Sphere;
-            u.WrapSize = size;
-            u.Radius = size;
+            u.WrapSize = _size;
+            u.Radius = _size;
         }
         // The camera's direction of movement since the last frame (the game's FUN_1401014f0), for the wrap.
-        var moved = lastEye is { } last ? camera.Eye - last : Vector3.Zero;
-        lastEye = camera.Eye;
+        var moved = _lastEye is { } last ? camera.Eye - last : Vector3.Zero;
+        _lastEye = camera.Eye;
         var ahead = moved.LengthSquared() > 1e-8f ? Vector3.Normalize(moved) : Vector3.Zero;
         var env = Environment(weather);
-        foreach (var u in units)
+        foreach (var u in _units)
         {
             u.Position = node;
             u.WrapCentre = node;
@@ -634,7 +639,7 @@ public sealed class GlobalEffectGroup : EffectGroup
     public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
     {
         Update(0, camera, weather);
-        foreach (var u in units) u.Pending += seconds;
+        foreach (var u in _units) u.Pending += seconds;
     }
 }
 
@@ -646,11 +651,11 @@ public sealed class GlobalEffectGroup : EffectGroup
 /// </summary>
 public sealed class GlobalPointEffectGroup : EffectGroup
 {
-    readonly float radius;
+    readonly float _radius;
 
     public GlobalPointEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world) : base(entry.Effect, entry, system, seed, world)
     {
-        radius = entry.Effect.MaximumViewDistance > 0 ? entry.Effect.MaximumViewDistance : 1000;
+        _radius = entry.Effect.MaximumViewDistance > 0 ? entry.Effect.MaximumViewDistance : 1000;
     }
 
     void Spawn(in EffectCamera camera, float inner, float outer)
@@ -659,10 +664,10 @@ public sealed class GlobalPointEffectGroup : EffectGroup
         var e = Effect;
         for (int tries = 10; tries > 0; tries--)
         {
-            float a = random.NextSingle() * MathF.Tau, r = MathF.Sqrt(random.NextSingle()) * (outer - inner) + inner;
+            float a = _random.NextSingle() * MathF.Tau, r = MathF.Sqrt(_random.NextSingle()) * (outer - inner) + inner;
             p = new Vector3(camera.Eye.X + MathF.Cos(a) * r, 0, camera.Eye.Z + MathF.Sin(a) * r);
-            p.Y = world.GroundHeight(p.X, p.Z);
-            float ny = world.NormalY(p.X, p.Z);
+            p.Y = _world.GroundHeight(p.X, p.Z);
+            float ny = _world.NormalY(p.X, p.Z);
             if ((e.MaxAltitude == 0 || (p.Y >= e.MinAltitude && p.Y <= e.MaxAltitude)) && ny >= e.MinSlope && ny <= e.MaxSlope) break;
         }
         NewUnit(p);
@@ -672,8 +677,8 @@ public sealed class GlobalPointEffectGroup : EffectGroup
     {
         var env = Environment(weather);
         int count = Entry!.Count, inner = 0, middle = 0;
-        float r2 = radius * radius, far2 = 16 * r2;
-        foreach (var u in units)
+        float r2 = _radius * _radius, far2 = 16 * r2;
+        foreach (var u in _units)
         {
             Tick(u, dt, camera, env, alwaysActive: true);
             // Horizontal distance (Observed choice): the unit sits on the ground and the eye may be hundreds of units up, which a 50-unit ring would never reach.
@@ -682,14 +687,14 @@ public sealed class GlobalPointEffectGroup : EffectGroup
             else if (d2 <= r2) inner++;
             else if (d2 <= 4 * r2) middle++;
         }
-        int need = count * 3 - units.Count;
+        int need = count * 3 - _units.Count;
         if (need > 0)
         {
             int a = Math.Max(Math.Min(need, count - inner), 0);
             int b = Math.Max(Math.Min(need - a, count - middle), 0);
-            for (int i = 0; i < a; i++) Spawn(camera, 0, radius);
-            for (int i = 0; i < b; i++) Spawn(camera, radius, 2 * radius);
-            foreach (var u in units.Where(u => u.Age == 0)) Tick(u, 0, camera, env, alwaysActive: true);
+            for (int i = 0; i < a; i++) Spawn(camera, 0, _radius);
+            for (int i = 0; i < b; i++) Spawn(camera, _radius, 2 * _radius);
+            foreach (var u in _units.Where(u => u.Age == 0)) Tick(u, 0, camera, env, alwaysActive: true);
         }
         RemoveDone();
     }
@@ -727,13 +732,13 @@ public sealed class PlacerEffectGroup : EffectGroup
     public override void Update(float dt, in EffectCamera camera, WeatherEffectInput weather)
     {
         var env = Environment(weather);
-        foreach (var u in units) Tick(u, dt, camera, env);
+        foreach (var u in _units) Tick(u, dt, camera, env);
     }
 
     public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather)
     {
         Update(0, camera, weather);
-        foreach (var u in units.Where(u => u.Active)) u.Pending += seconds;
+        foreach (var u in _units.Where(u => u.Active)) u.Pending += seconds;
     }
 }
 
@@ -761,7 +766,7 @@ public sealed class BurstEffectGroup(PuSystemDef system, int seed, EffectWorld w
 
     public override void Update(float dt, in EffectCamera camera, WeatherEffectInput weather)
     {
-        foreach (var u in units) Tick(u, dt, camera, ParticleEnvironment.None);
+        foreach (var u in _units) Tick(u, dt, camera, ParticleEnvironment.None);
         RemoveDone();
     }
 

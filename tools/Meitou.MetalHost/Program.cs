@@ -148,8 +148,8 @@ if (tri)
         bindlessTable.Register(blue.Texture, sampler);                                       // index 1
         bindlessTable.Register(BindlessKind.Texture2DArray, new SampledTexture(sampler, array.View()));
         bindlessTable.Register(BindlessKind.Cube, new SampledTexture(sampler, cube.View()));
-        bindlessTable.Register(BindlessKind.UTexture2D, new SampledTexture(sampler, uint2D.View()));
-        bindlessTable.Register(BindlessKind.ITexture2D, new SampledTexture(sampler, int2D.View()));
+        bindlessTable.Register(BindlessKind.UintTexture2D, new SampledTexture(sampler, uint2D.View()));
+        bindlessTable.Register(BindlessKind.IntTexture2D, new SampledTexture(sampler, int2D.View()));
     }
     else
     {

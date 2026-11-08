@@ -20,7 +20,7 @@ static class TownEdits
 
     public static void Clear(World world, PopulationData data, string key)
     {
-        if (data.TakeBuilding(key) is not (>= 0 and var site, { } taken)) return;
+        if (data.TakeBuilding(key) is not ( >= 0 and var site, { } taken)) return;
         if (!world.Fixtures.IsRegistered(site)) return;
         world.Fixtures.RemoveBuilding(world, key);
         world.ItemSlots.RemoveBuilding(taken);

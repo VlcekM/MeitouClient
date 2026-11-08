@@ -164,7 +164,7 @@ public static class StarField
     }
 
     /// <summary>pcg3d (Jarzynski and Olano, 2020): three well mixed words from three. The shader has the same function.</summary>
-    public static (uint X, uint Y, uint Z) Pcg3d(uint x, uint y, uint z)
+    public static (uint X, uint Y, uint Z) Pcg3D(uint x, uint y, uint z)
     {
         unchecked
         {
@@ -176,7 +176,7 @@ public static class StarField
         return (x, y, z);
     }
 
-    /// <summary>The one-word PCG hash (O'Neill) of a cell id: whether a cell has a star is drawn from it, so the full <see cref="Pcg3d"/> is only worked out for stars. The shader has the same function.</summary>
+    /// <summary>The one-word PCG hash (O'Neill) of a cell id: whether a cell has a star is drawn from it, so the full <see cref="Pcg3D"/> is only worked out for stars. The shader has the same function.</summary>
     public static uint Pcg1(uint v)
     {
         unchecked
@@ -211,7 +211,7 @@ public static class StarField
         var centre = new Vector2(2f * (ix + 0.5f) / n - 1, 2f * (iy + 0.5f) / n - 1);
         float chance = CellChance(l, centre);
         if ((Pcg1(CellId(layer, face, ix, iy)) >> 16) * (1f / 65536) >= chance) return default;
-        var (hx, hy, hz) = Pcg3d((uint)ix, (uint)iy, (uint)(face + 8 * layer));
+        var (hx, hy, hz) = Pcg3D((uint)ix, (uint)iy, (uint)(face + 8 * layer));
         var j = new Vector2((hy & 0xFFFFu) * (1f / 65536), (hy >> 16) * (1f / 65536));
         var lo = new Vector2(ix == 0 ? FaceEdgeMargin : CellMargin, iy == 0 ? FaceEdgeMargin : CellMargin);
         var hi = new Vector2(ix == n - 1 ? 1 - FaceEdgeMargin : 1 - CellMargin, iy == n - 1 ? 1 - FaceEdgeMargin : 1 - CellMargin);
@@ -277,4 +277,3 @@ public static class StarColours
         return t;
     }
 }
-

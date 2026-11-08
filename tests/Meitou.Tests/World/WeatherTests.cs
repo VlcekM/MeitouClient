@@ -163,7 +163,7 @@ public class WeatherTests
             foreach (float wind in new float[] { 0, 10, 20, 30, 40, 55, 100, 700 })
                 Assert.Equal(expected[w.Name], w.FogDistanceAt(wind));
         // The loader's rule against the raw record, and "update time 0 means never".
-        foreach (var raw in db.OfType(FcsRecordType.WEATHER))
+        foreach (var raw in db.OfType(FcsRecordType.Weather))
         {
             var w = data.Weathers.First(x => x.StringId == raw.StringId);
             if (raw.GetFloat("fog wind min") == raw.GetFloat("fog wind max"))
@@ -183,7 +183,7 @@ public class WeatherTests
         Assert.Equal(66, data.Regions.Count(r => !r.HasNoSeasons));
 
         // A season with no weather gets Default with limits 0..1; a season with a time-limited weather gets Default appended with weight 0.
-        var empty = db.OfType(FcsRecordType.SEASON).Where(s => s.GetReferences("weathers").Count == 0).ToList();
+        var empty = db.OfType(FcsRecordType.Season).Where(s => s.GetReferences("weathers").Count == 0).ToList();
         Assert.NotEmpty(empty);
         foreach (var raw in empty)
         {

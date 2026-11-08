@@ -12,7 +12,7 @@ namespace Meitou.ModelViewer;
 /// </summary>
 sealed class CameraMotion(WorldCamera camera, Gpu gpu, Vector3 centre, bool circle, float radius, float unitsPerFrame, float turnRadians, float orbitPixels)
 {
-    readonly float angleStep = unitsPerFrame / Math.Max(radius, 1);
+    readonly float _angleStep = unitsPerFrame / Math.Max(radius, 1);
 
     /// <summary>The motion <c>--bench-motion</c> names.</summary>
     public static CameraMotion For(string name, WorldOptions o, WorldCamera camera, Gpu gpu) => new(camera, gpu, camera.Target, name == "fly", Math.Max(o.FlyRadius, 1), o.FlySpeed,
@@ -27,9 +27,9 @@ sealed class CameraMotion(WorldCamera camera, Gpu gpu, Vector3 centre, bool circ
     /// <summary>Moves the camera to its place at frame <paramref name="i"/> (1-based; the circle starts at its east point).</summary>
     public void Step(int i)
     {
-        if (circle && angleStep != 0)   // a speed of 0 leaves the camera exactly where it was placed (else its target drops to the ground, a pose of its own)
+        if (circle && _angleStep != 0)   // a speed of 0 leaves the camera exactly where it was placed (else its target drops to the ground, a pose of its own)
         {
-            float a = i * angleStep;
+            float a = i * _angleStep;
             float x = centre.X + radius * (MathF.Cos(a) - 1), z = centre.Z + radius * MathF.Sin(a);
             camera.Target = new Vector3(x, gpu.Terrain.HeightAt(x, z), z);
         }

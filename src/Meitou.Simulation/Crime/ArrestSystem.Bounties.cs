@@ -45,11 +45,11 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// <summary>The least bail for a prisoner not of the player's faction (economy.md 11.5, <b>Observed</b>).</summary>
     public const int MinNpcBail = 2000;
 
-    readonly List<Caging> cagings = [];
-    readonly List<Hunt> hunts = [];
+    readonly List<Caging> _cagings = [];
+    readonly List<Hunt> _hunts = [];
 
-    public IReadOnlyList<Caging> Cagings => cagings;
-    public IReadOnlyList<Hunt> Hunts => hunts;
+    public IReadOnlyList<Caging> Cagings => _cagings;
+    public IReadOnlyList<Hunt> Hunts => _hunts;
 
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
@@ -149,7 +149,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         }
         world.Post(Loc.Tr("{1} paid a bail of c.{2} for {3}", table.Cold(payer)!.Name, price, pc.Name));
         world.Fixtures.Release(world, prisoner);
-        Locks.FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)
+        FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)
         pc.Freed = true;
         pc.Recognition = 0;
         // Its squad remembers the payer as the one who freed it, and it says event 51 at the payer (FUN_1406ae170: FUN_140673930 tag 3, FUN_140684990 event 0x33; Verified).
@@ -168,7 +168,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     void SendOut(World world, int p, CharacterCold pc, int payer, bool spoke)
     {
         if (!spoke && world.Squads.Find(pc.SquadId) is { } squad)
-            TaskStart.Walk(world, p, squad.HomeCentre, SpeedMode.Walk, TaskType.RETREAT_HOMETOWN, TaskSource.Npc);
+            TaskStart.Walk(world, p, squad.HomeCentre, SpeedMode.Walk, TaskType.RetreatHometown, TaskSource.Npc);
         else
             Dialogue.DialogueSystem.WalkOutOfCage(world, p, payer);
     }
@@ -179,16 +179,16 @@ public sealed partial class ArrestSystem : IOrderOwner
     {
         var table = world.Characters;
         if (Carry is null || !table.TryResolveNext(carrier, out int s) || table.Cold(s) is not { IsPlayer: true, Carrying.IsNone: false }) return;
-        PlayerOrders.Give(world, s, new OrderEntry(TaskType.PUT_IN_CAGE, this) { Site = chosen }, queued);
+        PlayerOrders.Give(world, s, new OrderEntry(TaskType.PutInCage, this) { Site = chosen }, queued);
     }
 
     /// <summary>The cage a put-in-cage order takes its body to: the one it named while free and nobody else's goal, else the nearest such one in reach; the carrier's own caging is no rival.</summary>
     Fixture? CageFor(World world, int s, CharacterCold c, string? chosen)
     {
         var carrier = world.Characters.IdOf(s);
-        var own = cagings.Find(k => k.Carrier == carrier);
+        var own = _cagings.Find(k => k.Carrier == carrier);
         return chosen is not null
-            ? world.Fixtures.Find(chosen) is { Kind: FixtureKind.Cage } picked && FixtureRegistry.IsFree(world.Characters, picked) && !Reserved(picked, null) && !cagings.Exists(k => k.Carrier != carrier && k.Cage == picked.Id) ? picked : null
+            ? world.Fixtures.Find(chosen) is { Kind: FixtureKind.Cage } picked && FixtureRegistry.IsFree(world.Characters, picked) && !Reserved(picked, null) && !_cagings.Exists(k => k.Carrier != carrier && k.Cage == picked.Id) ? picked : null
             : FindCageFor(world, s, c, own);
     }
 
@@ -205,11 +205,11 @@ public sealed partial class ArrestSystem : IOrderOwner
         var c = world.Characters.Cold(slot)!;
         var cage = CageFor(world, slot, c, order.Site)!;
         var carrier = world.Characters.IdOf(slot);
-        cagings.RemoveAll(k => k.Carrier == carrier);
-        TaskStart.Start(world, slot, new TaskRequest(CharacterTask.GoTo, TaskType.PUT_IN_CAGE, TaskSource.Order) { Site = cage.Id, Target = c.Carrying });
+        _cagings.RemoveAll(k => k.Carrier == carrier);
+        TaskStart.Start(world, slot, new TaskRequest(CharacterTask.GoTo, TaskType.PutInCage, TaskSource.Order) { Site = cage.Id, Target = c.Carrying });
     }
 
-    public void RegisterTasks(TaskHandlers tasks) => tasks.Register(TaskType.PUT_IN_CAGE, this);
+    public void RegisterTasks(TaskHandlers tasks) => tasks.Register(TaskType.PutInCage, this);
 
     /// <summary>The put-in-cage order's walk (row 108): the carrier takes its body to the cage <see cref="TaskRequest.Site"/>.</summary>
     void ITaskHandler.Start(World world, int slot, in TaskRequest request)
@@ -217,8 +217,8 @@ public sealed partial class ArrestSystem : IOrderOwner
         var table = world.Characters;
         var carrier = table.IdOf(slot);
         var cage = world.Fixtures.Find(request.Site!)!;
-        cagings.RemoveAll(k => k.Carrier == carrier);
-        cagings.Add(new Caging { Carrier = carrier, Captive = request.Target, Cage = cage.Id });
+        _cagings.RemoveAll(k => k.Carrier == carrier);
+        _cagings.Add(new Caging { Carrier = carrier, Captive = request.Target, Cage = cage.Id });
         MovementSystem.GoTo(table, slot, new Vector2(cage.Position.X, cage.Position.Z), table.Cold(slot)!.RunSpeed);
     }
 
@@ -226,14 +226,14 @@ public sealed partial class ArrestSystem : IOrderOwner
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
         var carrier = world.Characters.IdOf(slot);
-        cagings.RemoveAll(k => k.Carrier == carrier);
+        _cagings.RemoveAll(k => k.Carrier == carrier);
     }
 
     /// <summary>The cage finder from the carrier (other cagings' and arrests' cages reserved), within <see cref="ArrestSettings.CageSearchRange"/>; null when none.</summary>
     Fixture? FindCageFor(World world, int s, CharacterCold c, Caging? self)
     {
         var at = world.Characters.Next[s].Position;
-        var cage = world.Fixtures.FindCage(world, c, at, FixtureRegistry.HomeOf(world, c), f => Reserved(f, null) || cagings.Exists(k => !ReferenceEquals(k, self) && k.Cage == f.Id));
+        var cage = world.Fixtures.FindCage(world, c, at, FixtureRegistry.HomeOf(world, c), f => Reserved(f, null) || _cagings.Exists(k => !ReferenceEquals(k, self) && k.Cage == f.Id));
         float r = Settings.CageSearchRange;
         return cage is not null && Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(cage.Position.X, cage.Position.Z)) <= r * r ? cage : null;
     }
@@ -354,9 +354,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         var target = cc.Carrying;
         Carry.LetGo(world, c);
         var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction, Phase = ArrestPhase.Fight, Enslave = enslave, Takeover = true };
-        arrests.Add(arrest);
+        _arrests.Add(arrest);
         gc.Engaged = true;
-        if (tc.Medical is { Incapacitated: true } && Carry.BeginPickUp(world, g, target, source: TaskSource.Npc, row: TaskType.ARREST_TARGETS_CARRIED_PERSON)) arrest.Phase = ArrestPhase.Lift;
+        if (tc.Medical is { Incapacitated: true } && Carry.BeginPickUp(world, g, target, source: TaskSource.Npc, row: TaskType.ArrestTargetsCarriedPerson)) arrest.Phase = ArrestPhase.Lift;
         Note(world, ArrestEventKind.Arrest, guard, target, gc.Faction, tc.Bounties?.BookedAmount(Crimes.Factions.Relations, gc.Faction) ?? 0);
         return true;
     }
@@ -378,7 +378,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (table.Cold(slot) is not { IsPlayer: false, InCombat: false, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, Carrying.IsNone: true, CarriedBy.IsNone: true, Fighter.CanAttack: true }) return false;
         var id = table.IdOf(slot);
         if (Busy(id)) return false;
-        foreach (var h in hunts) if (h.Hunter == id && (h.Rest <= 0 || h.Target == target)) return false;
+        foreach (var h in _hunts) if (h.Hunter == id && (h.Rest <= 0 || h.Target == target)) return false;
         return true;
     }
 
@@ -388,7 +388,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         var table = world.Characters;
         var hc = table.Cold(hunter)!;
         hc.Engaged = true;
-        hunts.Add(new Hunt { Hunter = table.IdOf(hunter), Target = table.IdOf(target) });
+        _hunts.Add(new Hunt { Hunter = table.IdOf(hunter), Target = table.IdOf(target) });
         Attack(world, hunter, target);
         world.Post(Loc.Tr("{1} is after the bounty on {2}!", hc.Name, table.Cold(target)!.Name));
         Note(world, ArrestEventKind.Hunt, table.IdOf(hunter), table.IdOf(target), hc.Faction, HuntBounty(table.Cold(target)!, hc.Faction));
@@ -422,17 +422,17 @@ public sealed partial class ArrestSystem : IOrderOwner
 
     void HashBounties(ref StateHasher hasher)
     {
-        if (cagings.Count > 0)
+        if (_cagings.Count > 0)
         {
             hasher.Add(0x43616765);
-            hasher.Add(cagings.Count);
-            foreach (var k in cagings) k.Hash(ref hasher);
+            hasher.Add(_cagings.Count);
+            foreach (var k in _cagings) k.Hash(ref hasher);
         }
-        if (hunts.Count > 0)
+        if (_hunts.Count > 0)
         {
             hasher.Add(0x48756E74);
-            hasher.Add(hunts.Count);
-            foreach (var h in hunts) h.Hash(ref hasher);
+            hasher.Add(_hunts.Count);
+            foreach (var h in _hunts) h.Hash(ref hasher);
         }
     }
 }

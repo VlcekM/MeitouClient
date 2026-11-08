@@ -52,39 +52,39 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         public Vector3 Min, Max;
     }
 
-    readonly IGpuContext gpu;
-    readonly WorldObjectRenderer objects;
-    readonly LegacyProgram program;
-    readonly NativeSegment segment;
-    readonly UniformHandle mvp, inside;
-    readonly VertexArrayBindings vertexSource;
-    readonly Dictionary<string, MaskMesh> meshes = new(StringComparer.OrdinalIgnoreCase);
-    readonly List<InteriorVolume> near = [];
-    readonly List<(Vector2 Min, Vector2 Max)> boxes = [];
-    readonly List<string> boxOwners = [];   // the building of each box (its PlacementId)
-    readonly HashSet<string> drawnOwners = new(StringComparer.Ordinal);
-    GpuTexture? target;
-    (GpuTexture Texture, uint Index)? bindless;
+    readonly IGpuContext _gpu;
+    readonly WorldObjectRenderer _objects;
+    readonly LegacyProgram _program;
+    readonly NativeSegment _segment;
+    readonly UniformHandle _mvp, _inside;
+    readonly VertexArrayBindings _vertexSource;
+    readonly Dictionary<string, MaskMesh> _meshes = new(StringComparer.OrdinalIgnoreCase);
+    readonly List<InteriorVolume> _near = [];
+    readonly List<(Vector2 Min, Vector2 Max)> _boxes = [];
+    readonly List<string> _boxOwners = [];   // the building of each box (its PlacementId)
+    readonly HashSet<string> _drawnOwners = new(StringComparer.Ordinal);
+    GpuTexture? _target;
+    (GpuTexture Texture, uint Index)? _bindless;
 
     internal InteriorMaskRenderer(IGpuContext gpu, WorldObjectRenderer objects)
     {
-        this.gpu = gpu;
-        this.objects = objects;
-        program = LegacyProgram.Create(gpu, Vertex, Fragment, "interior mask");
-        segment = new NativeSegment(gpu, program, PrimitiveType.Triangles, "interior mask");
-        mvp = program.Uniform("uMvp");
-        inside = program.Uniform("uInside");
-        vertexSource = new VertexArrayBindings([new LegacyProgram.Attribute(default, InternalFormat.Rgb32f, 12, false)], default);
+        this._gpu = gpu;
+        this._objects = objects;
+        _program = LegacyProgram.Create(gpu, Vertex, Fragment, "interior mask");
+        _segment = new NativeSegment(gpu, _program, PrimitiveType.Triangles, "interior mask");
+        _mvp = _program.Uniform("uMvp");
+        _inside = _program.Uniform("uInside");
+        _vertexSource = new VertexArrayBindings([new LegacyProgram.Attribute(default, InternalFormat.Rgb32F, 12, false)], default);
     }
 
     /// <summary>Whether the last <see cref="Record"/> drew a mask: only then do <see cref="Index"/> and <see cref="Boxes"/> apply.</summary>
     public bool Active { get; private set; }
 
     /// <summary>The depth range's bindless 2D index (valid while <see cref="Active"/>).</summary>
-    public uint Index => bindless?.Index ?? 0;
+    public uint Index => _bindless?.Index ?? 0;
 
     /// <summary>The drawn buildings' mask meshes' X/Z bounds: terrain patches outside all of them need no cut.</summary>
-    public IReadOnlyList<(Vector2 Min, Vector2 Max)> Boxes => boxes;
+    public IReadOnlyList<(Vector2 Min, Vector2 Max)> Boxes => _boxes;
 
     /// <summary>The meshes drawn by the last <see cref="Record"/>.</summary>
     public int Drawn { get; private set; }
@@ -93,7 +93,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     public bool Overlaps(Vector2 min, Vector2 max)
     {
         if (!Active) return false;
-        foreach (var (lo, hi) in boxes)
+        foreach (var (lo, hi) in _boxes)
             if (min.X <= hi.X && max.X >= lo.X && min.Y <= hi.Y && max.Y >= lo.Y) return true;
         return false;
     }
@@ -106,16 +106,16 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     public bool Overlaps(Vector3 centre, float radius, IReadOnlyDictionary<string, int> buildings)
     {
         if (!Active) return false;
-        for (int i = 0; i < boxes.Count; i++)
+        for (int i = 0; i < _boxes.Count; i++)
         {
-            var (lo, hi) = boxes[i];
-            if (centre.X - radius <= hi.X && centre.X + radius >= lo.X && centre.Z - radius <= hi.Y && centre.Z + radius >= lo.Y && buildings.ContainsKey(boxOwners[i])) return true;
+            var (lo, hi) = _boxes[i];
+            if (centre.X - radius <= hi.X && centre.X + radius >= lo.X && centre.Z - radius <= hi.Y && centre.Z + radius >= lo.Y && buildings.ContainsKey(_boxOwners[i])) return true;
         }
         return false;
     }
 
     /// <summary>Whether the last <see cref="Record"/> drew a mask of the building <paramref name="placementId"/>.</summary>
-    public bool Drew(string placementId) => drawnOwners.Contains(placementId);
+    public bool Drew(string placementId) => _drawnOwners.Contains(placementId);
 
     /// <summary>Turns the cut on in <paramref name="view"/> (programs made with <see cref="WithCut"/> on <see cref="ViewConstants"/>) when <paramref name="cut"/> drew a mask.</summary>
     internal static void Apply(ref ViewConstants view, InteriorMaskRenderer? cut)
@@ -152,31 +152,31 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     {
         Active = false;
         Drawn = 0;
-        boxes.Clear();
-        boxOwners.Clear();
-        drawnOwners.Clear();
+        _boxes.Clear();
+        _boxOwners.Clear();
+        _drawnOwners.Clear();
         if (width <= 0 || height <= 0) return;
-        objects.InteriorMasks(eye, Range, near);
-        if (near.Count == 0) return;
-        if (target is null || target.Desc.Width != width || target.Desc.Height != height)
+        _objects.InteriorMasks(eye, Range, _near);
+        if (_near.Count == 0) return;
+        if (_target is null || _target.Desc.Width != width || _target.Desc.Height != height)
         {
-            if (bindless is { } old) gpu.Bindless.Free(BindlessKind.Texture2D, old.Index);
-            bindless = null;
-            target?.Dispose();
-            target = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "interior mask"));
+            if (_bindless is { } old) _gpu.Bindless.Free(BindlessKind.Texture2D, old.Index);
+            _bindless = null;
+            _target?.Dispose();
+            _target = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "interior mask"));
         }
-        var cmd = gpu.BeginNative("interior mask");
+        var cmd = _gpu.BeginNative("interior mask");
         var viewport = new PixelViewport(0, 0, width, height, 0, 1);
-        var t = PassTargets.Of(target, null).At(viewport);
+        var t = PassTargets.Of(_target, null).At(viewport);
         t = t with { Colour = t.Colour with { Load = LoadOp.Clear, Clear = new ClearColour(NoFront, 0f, 0f, 0f) } };
         cmd.BeginRendering(t.Rendering);
         // Min on the colour (the nearest face), max on the alpha (the farthest); every face drawn, no depth test (the game's target has no depth).
         var blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One, BlendOperation.Min, BlendOperation.Max);
-        var state = DrawState.For(t.Formats, gpu.DepthClamp, blend: blend, mask: ColorMask.R | ColorMask.A);
+        var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: blend, mask: ColorMask.R | ColorMask.A);
         state.Record(cmd, t);
-        cmd.BindPipeline(segment.Get(state, t.Formats, vertexSource));
+        cmd.BindPipeline(_segment.Get(state, t.Formats, _vertexSource));
         var relative = Matrix4x4.CreateTranslation(eye) * viewProjection;   // camera-relative placement keeps the precision far from the origin
-        foreach (var v in near)
+        foreach (var v in _near)
         {
             var node = v.Node;
             node.Translation -= eye;
@@ -187,9 +187,9 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
             foreach (var path in v.MaskMeshes)
             {
                 if (Mesh(path) is not { Vertices: { } buffer } mesh) continue;
-                program.Set(mvp, in m);
-                program.Set(inside, eyeInside ? 1 : 0);
-                program.Flush(cmd);
+                _program.Set(_mvp, in m);
+                _program.Set(_inside, eyeInside ? 1 : 0);
+                _program.Flush(cmd);
                 cmd.BindVertexBuffers(0, [new GpuBufferBinding(buffer.Handle, 0)]);
                 cmd.Draw((uint)mesh.Count);
                 Drawn++;
@@ -203,28 +203,28 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
                 }
             }
             if (!any) continue;
-            boxes.Add((min, max));
-            boxOwners.Add(v.PlacementId);
-            drawnOwners.Add(v.PlacementId);
+            _boxes.Add((min, max));
+            _boxOwners.Add(v.PlacementId);
+            _drawnOwners.Add(v.PlacementId);
         }
         cmd.EndRendering();
         cmd.Order();
-        gpu.EndNative(cmd);
+        _gpu.EndNative(cmd);
         if (Drawn == 0) return;
-        if (bindless is not { } known || known.Texture != target)
-            bindless = (target, gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(Nearest(), target.View())));
+        if (_bindless is not { } known || known.Texture != _target)
+            _bindless = (_target, _gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(Nearest(), _target.View())));
         Active = true;
     }
 
     /// <summary>A mask mesh's triangles (positions, unindexed) on the GPU, read the first time it is asked for; null when it cannot be read.</summary>
     MaskMesh? Mesh(string recordPath)
     {
-        if (meshes.TryGetValue(recordPath, out var known)) return known;
+        if (_meshes.TryGetValue(recordPath, out var known)) return known;
         var mesh = new MaskMesh();
-        meshes[recordPath] = mesh;
+        _meshes[recordPath] = mesh;
         try
         {
-            if (objects.FindRecordFile(recordPath) is not { } path) return mesh;
+            if (_objects.FindRecordFile(recordPath) is not { } path) return mesh;
             var ogre = OgreMeshReader.ReadFile(path);
             var data = new List<float>();
             foreach (var sub in ogre.SubMeshes)
@@ -240,8 +240,8 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
                     }
             }
             if (data.Count == 0) return mesh;
-            mesh.Vertices = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)data.Count, BufferUse.Vertex, "interior mask mesh");
-            using (var batch = gpu.Uploads.Begin()) batch.Write(mesh.Vertices, 0, MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(data)));
+            mesh.Vertices = DeviceBuffer.Create(_gpu, sizeof(float) * (ulong)data.Count, BufferUse.Vertex, "interior mask mesh");
+            using (var batch = _gpu.Uploads.Begin()) batch.Write(mesh.Vertices, 0, MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(data)));
             mesh.Count = data.Count / 3;
         }
         catch (Exception e) when (e is IOException or InvalidDataException)
@@ -251,13 +251,13 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         return mesh;
     }
 
-    GpuSampler Nearest() => gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+    GpuSampler Nearest() => _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
     public void Dispose()
     {
-        if (bindless is { } b) gpu.Bindless.Free(BindlessKind.Texture2D, b.Index);
-        target?.Dispose();
-        foreach (var m in meshes.Values) m.Vertices?.Dispose();
+        if (_bindless is { } b) _gpu.Bindless.Free(BindlessKind.Texture2D, b.Index);
+        _target?.Dispose();
+        foreach (var m in _meshes.Values) m.Vertices?.Dispose();
     }
 }

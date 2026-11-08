@@ -141,7 +141,7 @@ public static class WorldObjectLayout
     {
         if (db.Find(EditorPlatform) is not { } part || part.GetPath("phs or mesh") is not { } mesh || !mesh.Contains(".mesh", StringComparison.Ordinal)) return null;
         var refs = part.GetReferences("material");
-        var material = refs.Count > 0 && db.Find(refs[0].TargetStringId) is { Type: FcsRecordType.MATERIAL_SPEC } own ? ResolveCollection(db, own, EditorPlatform) : null;
+        var material = refs.Count > 0 && db.Find(refs[0].TargetStringId) is { Type: FcsRecordType.MaterialSpec } own ? ResolveCollection(db, own, EditorPlatform) : null;
         return new PlacedMesh(mesh, transform, part, part, "meitou:editor-platform", PlacedKind.BuildingPart) { Material = material };
     }
 
@@ -187,7 +187,7 @@ public static class WorldObjectLayout
         {
             var doors = building.GetReferences("doors");
             for (int i = 0; i < doors.Count; i++)
-                if (db.Find(doors[i].TargetStringId) is { Type: FcsRecordType.BUILDING } door)
+                if (db.Find(doors[i].TargetStringId) is { Type: FcsRecordType.Building } door)
                     AddBuilding(db, door, placementId, worldPosition, rotation, state, result, lights, effects, i, building.GetFloat("scale", 1));
         }
         return result;
@@ -246,7 +246,7 @@ public static class WorldObjectLayout
             Scale = scale > 0 ? scale : 1,
             // Base material: the building's first "material" (a collection resolved), else its town's (fcs.def: "the local town material").
             BaseMaterial = building.GetReferences("material") is { Count: > 0 } m
-                ? ResolveCollection(db, db.Find(m[0].TargetStringId) is { Type: FcsRecordType.MATERIAL_SPEC } spec ? spec : null, placementId + building.StringId)
+                ? ResolveCollection(db, db.Find(m[0].TargetStringId) is { Type: FcsRecordType.MaterialSpec } spec ? spec : null, placementId + building.StringId)
                 : state.TownMaterial,
             Random = new BuildingRandom(BuildingRandom.Seed(position.X, position.Z)),
             DoorIndex = doorIndex,
@@ -270,7 +270,7 @@ public static class WorldObjectLayout
         if (depth > 8) return;
         foreach (var r in ChooseParts(holder.GetReferences(list), id => a.Db.Find(id) is not null, a.Random))
         {
-            if (a.Db.Find(r.TargetStringId) is not { Type: FcsRecordType.BUILDING_PART } part) continue;
+            if (a.Db.Find(r.TargetStringId) is not { Type: FcsRecordType.BuildingPart } part) continue;
             // Children hang under the part's node, or under the building's when the part has no entity (they then keep the joints above the part).
             var node = AddPart(a, holder, part, parentNode, joints, out var below);
             AddParts(a, part, node ?? a.Node, depth + 1, "parts", below);
@@ -326,7 +326,7 @@ public static class WorldObjectLayout
         {
             // A part of an upper floor with no destroyed mesh keeps its mesh as collision only (FUN_14055f6e0 mode 2: render skipped, collision made); children hang from the building.
             a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
-                { Material = PartMaterial(a, part), Floor = Math.Clamp(part.GetInt("building floor"), 0, 3), Interior = a.Interior, DoorIndex = a.DoorIndex, RenderHidden = true });
+            { Material = PartMaterial(a, part), Floor = Math.Clamp(part.GetInt("building floor"), 0, 3), Interior = a.Interior, DoorIndex = a.DoorIndex, RenderHidden = true });
             return null;
         }
         // A part that turns by itself is a joint too: it and everything hanging from it turn about its node's axis.
@@ -390,21 +390,21 @@ public static class WorldObjectLayout
         foreach (var instance in holder.Instances.Values.Where(i => !i.IsCleared).OrderBy(i => i.Id, StringComparer.Ordinal))
         {
             if (a.Db.Find(instance.Target) is not { } target) continue;
-            if (target.Type == FcsRecordType.LIGHT)
+            if (target.Type == FcsRecordType.Light)
             {
                 float halfVariance = target.GetFloat("variance") * 0.5f;
                 float power = target.GetFloat("brightness", 1) + a.Random.NextFloat(-halfVariance, halfVariance);
                 a.Random.Next();
                 a.Lights?.Add(PlaceLight(a, holder, holderNode, instance, target, power));
             }
-            else if (target.Type == FcsRecordType.EFFECT && a.Effects is { } effects)
+            else if (target.Type == FcsRecordType.Effect && a.Effects is { } effects)
             {
                 // Unlike a light's, the effect node's offset is not multiplied by the building scale.
                 Matrix4x4.Decompose(holderNode, out _, out var turn, out _);
                 effects.Add(new PlacedEffect(target, holder, a.Building, a.Identity, Vector3.Transform(instance.Position, holderNode),
                     Normalized(Normalized(turn) * Normalized(instance.Rotation))));
             }
-            else if (target.Type == FcsRecordType.BUILDING && target.GetBool("is node"))
+            else if (target.Type == FcsRecordType.Building && target.GetBool("is node"))
                 a.Random.Next();
         }
     }
@@ -427,7 +427,7 @@ public static class WorldObjectLayout
     static GameRecord? PartMaterial(Assembly a, GameRecord part)
     {
         var refs = part.GetReferences("material");
-        if (refs.Count > 0 && a.Db.Find(refs[0].TargetStringId) is { Type: FcsRecordType.MATERIAL_SPEC } own)
+        if (refs.Count > 0 && a.Db.Find(refs[0].TargetStringId) is { Type: FcsRecordType.MaterialSpec } own)
             return ResolveCollection(a.Db, own, a.PlacementId + part.StringId);
         if (a.BaseMaterial is not null) return a.BaseMaterial;
         return ResolveCollection(a.Db, a.Db.Find(FallbackPartMaterial), a.PlacementId + part.StringId);
@@ -441,7 +441,7 @@ public static class WorldObjectLayout
     {
         var refs = town.GetReferences("material");
         var spec = refs.Count > 0 ? db.Find(refs[0].TargetStringId) : null;
-        if (spec is not { Type: FcsRecordType.MATERIAL_SPEC }) spec = db.Find(DefaultTownMaterial);
+        if (spec is not { Type: FcsRecordType.MaterialSpec }) spec = db.Find(DefaultTownMaterial);
         return ResolveCollection(db, spec, seedKey);
     }
 
@@ -521,7 +521,7 @@ public static class WorldObjectLayout
     /// <summary>The mesh of a <c>features.dat</c> entry, or null when its record is missing, hidden or meshless.</summary>
     public static PlacedMesh? Feature(GameDatabase db, MapFeature feature, string placementId)
     {
-        if (db.Find(feature.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record) return null;
+        if (db.Find(feature.StringId) is not { Type: FcsRecordType.MapFeatures } record) return null;
         if (record.GetBool("hidden")) return null;
         var mesh = record.GetPath("mesh");
         if (!mesh.EndsWith(".mesh", StringComparison.OrdinalIgnoreCase)) return null;

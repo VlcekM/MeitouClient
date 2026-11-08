@@ -38,7 +38,7 @@ sealed class CharacterAssembly(PopulationData data)
     public static RaceData? RaceDataOf(GameDatabase db, string raceId, Dictionary<string, RaceData?> cache)
     {
         if (cache.TryGetValue(raceId, out var cached)) return cached;
-        var race = db.Find(raceId) is { Type: FcsRecordType.RACE } rec ? RaceData.From(rec, db) : null;
+        var race = db.Find(raceId) is { Type: FcsRecordType.Race } rec ? RaceData.From(rec, db) : null;
         cache[raceId] = race;
         return race;
     }
@@ -64,19 +64,19 @@ sealed class CharacterAssembly(PopulationData data)
         var combat = data.Combat;
         WeaponInstance? First(string section)
         {
-            foreach (var item in inventory.Items.Where(i => i.Section == section && i.Type == FcsRecordType.WEAPON))
+            foreach (var item in inventory.Items.Where(i => i.Section == section && i.Type == FcsRecordType.Weapon))
                 if (combat.Weapon(item.Record) is { } w)
                     return WeaponInstance.Create(item.Level * 0.01f, w, combat.Manufacturer(item.CompanyId), combat.WeaponMaterial(item.MaterialId), combat.Constants);
             return null;
         }
-        var armour = inventory.Items.Where(i => i.Type == FcsRecordType.ARMOUR && Items.InventoryCommands.IsEquipmentSection(i.Section) && combat.Armour(i.Record) is not null)
+        var armour = inventory.Items.Where(i => i.Type == FcsRecordType.Armour && InventoryCommands.IsEquipmentSection(i.Section) && combat.Armour(i.Record) is not null)
             // Its stats follow the level (the grade's quality), not `quality`, which is 100 on saved armour; level 0 is full strength without the slot rules (docs/game/combat.md "Armour and medical hit").
             .Select(i => (Data: combat.Armour(i.Record)!, i.Level))
             .Select(x => ArmourPiece.Create(x.Data, ArmourPiece.QualityOf(x.Data, x.Level), ArmourPiece.Graded(x.Data, x.Level)));
         // The crossbow: the first CROSSBOW in the weapon sections (back, then hip), its quality the level x 0.01 like a weapon's.
         CrossbowInstance? crossbow = null;
         foreach (var section in new[] { "back", "hip" })
-            foreach (var item in inventory.Items.Where(i => i.Section == section && i.Type == FcsRecordType.CROSSBOW))
+            foreach (var item in inventory.Items.Where(i => i.Section == section && i.Type == FcsRecordType.Crossbow))
                 if (crossbow is null && combat.Crossbow(item.Record) is { } x)
                     crossbow = CrossbowInstance.Create(item.Level * 0.01f, x, combat.Constants, data.BodyOptions.GlobalDamageMultiplier, item.UnitWeight, section == "back");
         var packRecord = inventory.Backpack is { } pack ? data.Db.Find(pack.Record) : null;
@@ -142,7 +142,7 @@ sealed class CharacterAssembly(PopulationData data)
             worn.Section = "main";
             if (!inv.Add(worn)) { (worn.Section, worn.X, worn.Y) = (section, x, y); inv.Items.Add(worn); }
         }
-        if (!Items.InventoryCommands.TryEquip(inv, shackles)) return;
+        if (!InventoryCommands.TryEquip(inv, shackles)) return;
         RefreshEquipment(c);
     }
 
@@ -189,7 +189,7 @@ sealed class CharacterAssembly(PopulationData data)
         for (int k = 0; k < 4 && cold.Inventory is { } carried; k++)
             if (medical.LimbPart(k)?.ReplacementItem is { } fitted && !carried.Items.Contains(fitted))
             {
-                (fitted.Section, fitted.X, fitted.Y) = (Meitou.Data.Gameplay.Bodies.LimbReplacement.SlotOf(k), 0, 0);
+                (fitted.Section, fitted.X, fitted.Y) = (LimbReplacement.SlotOf(k), 0, 0);
                 carried.Items.Add(fitted);
             }
         cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId);
@@ -210,10 +210,10 @@ sealed class CharacterAssembly(PopulationData data)
     /// lookup of a missing key), so an animal's faction does not mind.
     /// </summary>
     public static float FactionImportanceOf(GameRecord? record) =>
-        record is { Type: Meitou.Data.Fcs.FcsRecordType.CHARACTER } ? record.GetFloat("faction importance", 0) : 0;
+        record is { Type: FcsRecordType.Character } ? record.GetFloat("faction importance", 0) : 0;
 
     public static FundamentalType NpcClassOf(GameRecord? record) =>
-        record is { Type: Meitou.Data.Fcs.FcsRecordType.CHARACTER } ? (FundamentalType)record.GetInt("NPC class", (int)FundamentalType.Military) : FundamentalType.None;
+        record is { Type: FcsRecordType.Character } ? (FundamentalType)record.GetInt("NPC class", (int)FundamentalType.Military) : FundamentalType.None;
 
     /// <summary>
     /// Gives a character with a race its stats and medical state, its inventory and fighter, and the top speed of the speed chain (stage 7). An animal (ANIMAL_CHARACTER, whose
@@ -234,11 +234,11 @@ sealed class CharacterAssembly(PopulationData data)
         cold.Inventory = data.Items.Build(record, cold.Appearance?.Loadout, seed, Rng.Key(id), deathItems: npc);
         if (npc) data.Items.AddSpawnMoney(cold.Inventory, record, seed, Rng.Key(id));
         // CHARACTER `wears uniform` (CharacterHuman::setupInventorySections, Verified read; Observed use): the armour it is made wearing is its faction's uniform.
-        if (record is { Type: Meitou.Data.Fcs.FcsRecordType.CHARACTER } && record.GetBool("wears uniform") && (uint)cold.Faction < (uint)data.Factions.Count)
+        if (record is { Type: FcsRecordType.Character } && record.GetBool("wears uniform") && (uint)cold.Faction < (uint)data.Factions.Count)
             foreach (var piece in cold.Inventory.Items)
-                if (piece.Type == Meitou.Data.Fcs.FcsRecordType.ARMOUR && piece.Section != "main") piece.Uniform = data.Factions[cold.Faction].Id;
+                if (piece.Type == FcsRecordType.Armour && piece.Section != "main") piece.Uniform = data.Factions[cold.Faction].Id;
         // CHARACTER `shaved`: a character made shaven-headed (Character vslot 124 isHeadShaven); a loaded one takes its saved state instead (Saving.SlaveSave).
-        if (record is { Type: Meitou.Data.Fcs.FcsRecordType.CHARACTER }) cold.Shaved = record.GetBool("shaved");
+        if (record is { Type: FcsRecordType.Character }) cold.Shaved = record.GetBool("shaved");
         FitRolledLimbs(cold.Appearance?.Loadout, cold.Inventory, medical);
         Dye(cold, cold.Inventory);
         cold.Fighter = FighterOf(record, cold.Inventory, cold.Medical, cold.Race?.StringId);

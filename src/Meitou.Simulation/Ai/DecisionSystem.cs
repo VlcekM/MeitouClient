@@ -99,10 +99,10 @@ public sealed record DecisionTrace(long Tick, string Winner, IReadOnlyList<strin
 /// </summary>
 public sealed class DecisionSystem
 {
-    readonly List<IDecisionSource> sources = [];
-    readonly Dictionary<TaskType, IJobSource> jobs = [];
-    long[] claimed = [];
-    readonly List<string> lines = [];
+    readonly List<IDecisionSource> _sources = [];
+    readonly Dictionary<TaskType, IJobSource> _jobs = [];
+    long[] _claimed = [];
+    readonly List<string> _lines = [];
 
     public DecisionSystem()
     {
@@ -116,13 +116,13 @@ public sealed class DecisionSystem
     public static bool Decides(CharacterCold cold) => cold.IsPlayer;
 
     /// <summary>Registers (or replaces) the contributor of the jobs of <paramref name="type"/> (an open list: a job type without one is kept in the list but never run).</summary>
-    public void RegisterJob(TaskType type, IJobSource source) => jobs[type] = source ?? throw new ArgumentNullException(nameof(source));
+    public void RegisterJob(TaskType type, IJobSource source) => _jobs[type] = source ?? throw new ArgumentNullException(nameof(source));
 
     /// <summary>The contributor of the jobs of <paramref name="type"/>; null when none is registered.</summary>
-    public IJobSource? JobSourceOf(TaskType type) => jobs.GetValueOrDefault(type);
+    public IJobSource? JobSourceOf(TaskType type) => _jobs.GetValueOrDefault(type);
 
     /// <summary>The sources in the order they are asked.</summary>
-    public IReadOnlyList<IDecisionSource> Sources => sources;
+    public IReadOnlyList<IDecisionSource> Sources => _sources;
 
     /// <summary>Record each decision in <see cref="CharacterCold.Decision"/> (a debug toggle; off by default, never hashed).</summary>
     public bool Tracing { get; set; }
@@ -131,8 +131,8 @@ public sealed class DecisionSystem
     public void Register(IDecisionSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
-        int at = sources.FindLastIndex(s => s.Step < source.Step || s.Step == source.Step && s.Key <= source.Key);
-        sources.Insert(at + 1, source);
+        int at = _sources.FindLastIndex(s => s.Step < source.Step || s.Step == source.Step && s.Key <= source.Key);
+        _sources.Insert(at + 1, source);
     }
 
     /// <summary>Asks for the character to be decided again (a replan trigger): any phase, its own slot or a serial one. Only the player's characters keep the bit.</summary>
@@ -152,11 +152,11 @@ public sealed class DecisionSystem
     /// </summary>
     public void Claim(World world, int slot)
     {
-        if (claimed.Length <= slot) Array.Resize(ref claimed, Math.Max(slot + 1, claimed.Length * 2));
-        claimed[slot] = world.Tick + 1;
+        if (_claimed.Length <= slot) Array.Resize(ref _claimed, Math.Max(slot + 1, _claimed.Length * 2));
+        _claimed[slot] = world.Tick + 1;
     }
 
-    bool Claimed(World world, int slot) => slot < claimed.Length && claimed[slot] == world.Tick + 1;
+    bool Claimed(World world, int slot) => slot < _claimed.Length && _claimed[slot] == world.Tick + 1;
 
     /// <summary>
     /// The <b>engine</b> re-ask (design D4: no periodic replan was found in the original, but Meitou's idleness and job tasks do not end where the original's plans do): a character not fighting
@@ -177,7 +177,7 @@ public sealed class DecisionSystem
         var task = (CharacterTask)table.Next[slot].Task;
         if (task == CharacterTask.Attack || cold.InCombat) return false;
         if (cold.Running is not { } run || !run.Runs(task)) return true;
-        return run.Source == TaskSource.Job || run.Row == TaskType.IDLE;
+        return run.Source == TaskSource.Job || run.Row == TaskType.Idle;
     }
 
     /// <summary>Decides every player character that is due, in slot order (serial). <paramref name="paused"/>: between ticks, orders only; the bit stays for the next tick's full step.</summary>
@@ -204,20 +204,20 @@ public sealed class DecisionSystem
     public void Decide(World world, int slot, bool paused = false)
     {
         var cold = world.Characters.Cold(slot)!;
-        lines.Clear();
+        _lines.Clear();
         PlayerOrders.Prepare(world, slot);
         string winner = paused ? "(paused: orders only)" : "(none)";
-        for (int k = 0; k < sources.Count;)
+        for (int k = 0; k < _sources.Count;)
         {
-            var step = sources[k].Step;
+            var step = _sources[k].Step;
             int end = k;
-            while (end < sources.Count && sources[end].Step == step) end++;
+            while (end < _sources.Count && _sources[end].Step == step) end++;
             if (paused && step != DecisionStep.Orders) break;
             if (step == DecisionStep.Goals ? PickGoal(world, slot, k, end, ref winner) : PickFirst(world, slot, k, end, ref winner)) break;
             k = end;
         }
         if (!paused) cold.Replan = false;   // what its own start ended asks nothing more
-        if (Tracing) cold.Decision = new DecisionTrace(world.Tick, winner, lines.ToArray());
+        if (Tracing) cold.Decision = new DecisionTrace(world.Tick, winner, _lines.ToArray());
         else if (cold.Decision is not null) cold.Decision = null;
     }
 
@@ -225,7 +225,7 @@ public sealed class DecisionSystem
     {
         for (int k = from; k < end; k++)
         {
-            var source = sources[k];
+            var source = _sources[k];
             var check = source.CanRun(world, slot);
             if (check.Can)
             {
@@ -248,7 +248,7 @@ public sealed class DecisionSystem
         bool bestRuns = false;
         for (int k = from; k < end; k++)
         {
-            var source = sources[k];
+            var source = _sources[k];
             var check = source.CanRun(world, slot);
             if (!check.Can)
             {
@@ -261,14 +261,14 @@ public sealed class DecisionSystem
             if (score > 0 && score >= bestScore) (best, bestScore, bestRuns) = (k, score, check.Running);
         }
         if (best < 0) return false;
-        winner = sources[best].Name;
-        if (!bestRuns) sources[best].Start(world, slot);
+        winner = _sources[best].Name;
+        if (!bestRuns) _sources[best].Start(world, slot);
         return true;
     }
 
     void Note(IDecisionSource source, string what)
     {
-        if (Tracing) lines.Add($"{(int)source.Step} {source.Name}: {what}");
+        if (Tracing) _lines.Add($"{(int)source.Step} {source.Name}: {what}");
     }
 
     /// <summary>
@@ -279,7 +279,7 @@ public sealed class DecisionSystem
     /// </summary>
     sealed class JobSource(DecisionSystem owner, bool urgent) : IDecisionSource
     {
-        int picked = -1;
+        int _picked = -1;
 
         public string Name => urgent ? "Urgent jobs" : "Jobs";
         public DecisionStep Step => urgent ? DecisionStep.UrgentJobs : DecisionStep.Jobs;
@@ -287,20 +287,20 @@ public sealed class DecisionSystem
 
         public DecisionCheck CanRun(World world, int slot)
         {
-            picked = -1;
+            _picked = -1;
             var cold = world.Characters.Cold(slot)!;
             bool on = (cold.Orders & CharacterOrders.Jobs) != 0;
             for (int k = 0; k < cold.Jobs.Count; k++)
             {
                 var type = cold.Jobs[k].Type;
-                if (owner.jobs.GetValueOrDefault(type) is not { } source || urgent && !source.Urgent(world, slot, k)) continue;
+                if (owner._jobs.GetValueOrDefault(type) is not { } source || urgent && !source.Urgent(world, slot, k)) continue;
                 DecisionCheck check;
                 if (!on && !Production.PermaJobs.IgnoresSwitch(type)) check = DecisionCheck.No("jobs switch off");
                 else if (!TaskStart.Eligible(world, cold, type)) check = DecisionCheck.No("not in its repertoire");
                 else check = source.CanRun(world, slot, k);
-                if (owner.Tracing) owner.lines.Add($"{(int)Step} {Name} [{k}] {(int)type}: {(check.Can ? check.Running ? "runs" : "starts" : check.Why ?? "cannot run")}");
+                if (owner.Tracing) owner._lines.Add($"{(int)Step} {Name} [{k}] {(int)type}: {(check.Can ? check.Running ? "runs" : "starts" : check.Why ?? "cannot run")}");
                 if (!check.Can) continue;
-                picked = k;
+                _picked = k;
                 return check;
             }
             return DecisionCheck.No(urgent ? "no urgent job" : "no job can run");
@@ -309,7 +309,7 @@ public sealed class DecisionSystem
         public void Start(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
-            if ((uint)picked < (uint)cold.Jobs.Count && owner.jobs.GetValueOrDefault(cold.Jobs[picked].Type) is { } source) source.Start(world, slot, picked);
+            if ((uint)_picked < (uint)cold.Jobs.Count && owner._jobs.GetValueOrDefault(cold.Jobs[_picked].Type) is { } source) source.Start(world, slot, _picked);
         }
 
         /// <summary>Step 5 found nothing: the list job the character's task runs, which could not run on, ends (<see cref="IJobSource.Stop"/>; not a fight, which is its row's step).</summary>
@@ -320,7 +320,7 @@ public sealed class DecisionSystem
             var cold = table.Cold(slot)!;
             var task = (CharacterTask)table.Next[slot].Task;
             if (task == CharacterTask.Attack || cold.InCombat || cold.Running is not { Source: TaskSource.Job, Implicit: false, Job: >= 0 } run || !run.Runs(task) || run.Job >= cold.Jobs.Count) return;
-            owner.jobs.GetValueOrDefault(cold.Jobs[run.Job].Type)?.Stop(world, slot, run.Job);
+            owner._jobs.GetValueOrDefault(cold.Jobs[run.Job].Type)?.Stop(world, slot, run.Job);
         }
     }
 
@@ -355,7 +355,7 @@ public sealed class DecisionSystem
         public string Name => "14 Idleness";
         public DecisionStep Step => DecisionStep.Fallback;
         /// <summary>The priority-1 goals come after the priority-2 ones (keys 1000 + type).</summary>
-        public int Key => 2000 + (int)TaskType.IDLE;
+        public int Key => 2000 + (int)TaskType.Idle;
 
         public DecisionCheck CanRun(World world, int slot)
         {
@@ -365,6 +365,6 @@ public sealed class DecisionSystem
             return task is CharacterTask.Wander or CharacterTask.Follow && !planned && !cold.InCombat ? DecisionCheck.Run : DecisionCheck.Runs;
         }
 
-        public void Start(World world, int slot) => TaskStart.Become(world, slot, CharacterTask.Idle, TaskType.IDLE, TaskSource.Goal);
+        public void Start(World world, int slot) => TaskStart.Become(world, slot, CharacterTask.Idle, TaskType.Idle, TaskSource.Goal);
     }
 }

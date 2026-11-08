@@ -133,18 +133,18 @@ public interface ITaskOwner
 /// </summary>
 public sealed class TaskHandlers
 {
-    readonly ITaskHandler?[] handlers = new ITaskHandler?[256];
-    readonly Dictionary<TaskType, ITaskHandler> rows = [];
+    readonly ITaskHandler?[] _handlers = new ITaskHandler?[256];
+    readonly Dictionary<TaskType, ITaskHandler> _rows = [];
 
-    public void Register(CharacterTask task, ITaskHandler handler) => handlers[(byte)task] = handler ?? throw new ArgumentNullException(nameof(handler));
+    public void Register(CharacterTask task, ITaskHandler handler) => _handlers[(byte)task] = handler ?? throw new ArgumentNullException(nameof(handler));
 
     /// <summary>Registers the handler of the starts of <paramref name="row"/>, whatever their act-out.</summary>
-    public void Register(TaskType row, ITaskHandler handler) => rows[row] = handler ?? throw new ArgumentNullException(nameof(handler));
+    public void Register(TaskType row, ITaskHandler handler) => _rows[row] = handler ?? throw new ArgumentNullException(nameof(handler));
 
-    public ITaskHandler? Of(CharacterTask task) => handlers[(byte)task];
+    public ITaskHandler? Of(CharacterTask task) => _handlers[(byte)task];
 
     /// <summary>The handler of a start of <paramref name="row"/> acting out <paramref name="task"/>: the row's own, else the task's.</summary>
-    public ITaskHandler? Of(CharacterTask task, TaskType row) => rows.TryGetValue(row, out var own) ? own : handlers[(byte)task];
+    public ITaskHandler? Of(CharacterTask task, TaskType row) => _rows.TryGetValue(row, out var own) ? own : _handlers[(byte)task];
 
     /// <summary>The handler of the character's task <paramref name="task"/>: the one of its running row when its provenance runs it (<see cref="RunningTask.Runs"/>), else the task's.</summary>
     public ITaskHandler? Of(CharacterCold cold, CharacterTask task) => cold.Running is { } run && run.Runs(task) ? Of(task, run.Row) : Of(task);
@@ -210,7 +210,7 @@ public static class TaskStart
     /// </summary>
     public static StartResult Become(World world, int slot, CharacterTask task, TaskType row, TaskSource source) =>
         Start(world, slot, new TaskRequest(task, row, source)) is var started && started == StartResult.NotEligible && task != CharacterTask.Idle
-            ? Start(world, slot, new TaskRequest(CharacterTask.Idle, TaskType.IDLE, source)) : started;
+            ? Start(world, slot, new TaskRequest(CharacterTask.Idle, TaskType.Idle, source)) : started;
 
     /// <summary>
     /// A start in a parallel phase, on the caller's own slot (the AI's think): it records the provenance and starts the walk to <see cref="TaskRequest.Goal"/>, or stops the character on

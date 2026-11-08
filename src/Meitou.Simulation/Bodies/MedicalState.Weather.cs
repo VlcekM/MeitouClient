@@ -55,7 +55,7 @@ public sealed partial class MedicalState
     {
         if (!(dose > 0)) return false;
         float d = dose * 0.25f;
-        foreach (var p in parts) if (Burns(p)) Blunt(p, d, c);
+        foreach (var p in _parts) if (Burns(p)) Blunt(p, d, c);
         return true;
     }
 
@@ -67,7 +67,7 @@ public sealed partial class MedicalState
     {
         if (!(dose > 0) || race.IsRobot) return false;
         bool any = false;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             if (p.Template.Type != BodyPartType.Leg || p.Flesh <= 50 || p.Limb != LimbState.Original) continue;
             Blunt(p, dose * 0.2f, c);
@@ -82,7 +82,7 @@ public sealed partial class MedicalState
         float d = dt * 0.08f - protection * dt * 0.08f;
         if (!(dt > 0) || !(d > 0)) return false;
         bool any = false;
-        foreach (var p in parts) if (Burns(p)) { Blunt(p, d, c); any = true; }
+        foreach (var p in _parts) if (Burns(p)) { Blunt(p, d, c); any = true; }
         return any;
     }
 
@@ -92,7 +92,7 @@ public sealed partial class MedicalState
         if (!(dose > 0)) return false;
         float d = dose * 10 - dose * 10 * protection;
         if (!(d > 0)) return false;
-        foreach (var p in parts) if (Burns(p)) p.Flesh -= d;
+        foreach (var p in _parts) if (Burns(p)) p.Flesh -= d;
         return true;
     }
 
@@ -107,7 +107,7 @@ public sealed partial class MedicalState
         if (Unconscious) d *= 0.5f;
         d -= protection * d;
         if (!(d > 0)) return false;
-        foreach (var p in parts)
+        foreach (var p in _parts)
             if (p.Template.Type == BodyPartType.Torso && p.Template.Side == BodySide.None) { Blunt(p, d, c); break; }
         return true;
     }

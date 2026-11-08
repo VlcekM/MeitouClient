@@ -91,7 +91,7 @@ public class WorldObjectLayoutTests
                 continue;
             }
             Assert.All(meshes, m => Assert.Contains(".mesh", m.MeshPath, StringComparison.Ordinal));
-            noMaterial += meshes.Count(m => m.Material is not { Type: FcsRecordType.MATERIAL_SPEC });
+            noMaterial += meshes.Count(m => m.Material is not { Type: FcsRecordType.MaterialSpec });
         }
         // Resource buildings are foliage companions (1,335 placements); one Ramp has no parts at all (Observed 2026-10-04).
         Assert.InRange(foliage, 1300, 1400);

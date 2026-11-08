@@ -89,10 +89,10 @@ public sealed class SimulationExtensions
     public bool IsEmpty => Systems.Count == 0 && DialogueConditions.Count == 0 && DialogueEffects.Count == 0;
 
     // Each extra system's factory, for log lines that name the mod and the system; weak, so a dropped world's systems go with it.
-    static readonly ConditionalWeakTable<ITickSystem, SystemFactory> madeBy = new();
+    static readonly ConditionalWeakTable<ITickSystem, SystemFactory> MadeBy = new();
 
     /// <summary>The factory an extra system was made by (<see cref="SystemFactory.Owner"/>, <see cref="SystemFactory.Name"/>); null for a standard system.</summary>
-    public static SystemFactory? FactoryOf(ITickSystem system) => madeBy.TryGetValue(system, out var factory) ? factory : null;
+    public static SystemFactory? FactoryOf(ITickSystem system) => MadeBy.TryGetValue(system, out var factory) ? factory : null;
 
-    internal static void Made(ITickSystem system, SystemFactory factory) => madeBy.AddOrUpdate(system, factory);
+    internal static void Made(ITickSystem system, SystemFactory factory) => MadeBy.AddOrUpdate(system, factory);
 }

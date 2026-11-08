@@ -35,18 +35,23 @@ public sealed partial class ProductionSystem
                 && Vector3.DistanceSquared(table.Next[i].Position, site.Position) < 1) return true;
         return false;
     }
-    readonly Dictionary<string, (SeatSpot Source, BuildSite Site)> seatSites = new(StringComparer.Ordinal);
+    readonly Dictionary<string, (SeatSpot Source, BuildSite Site)> _seatSites = new(StringComparer.Ordinal);
     BuildSite? Seat(World world, string id)
     {
         if (world.Fixtures.FindSeat(id) is not { } seat) return null;
-        if (seatSites.TryGetValue(id, out var cached) && ReferenceEquals(cached.Source, seat)) return cached.Site;
+        if (_seatSites.TryGetValue(id, out var cached) && ReferenceEquals(cached.Source, seat)) return cached.Site;
         var site = new BuildSite
         {
-            Id = id, Record = seat.Record, Name = db.Find(seat.Record)?.Name ?? seat.Record,
-            Position = seat.Position, Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, seat.Yaw),
-            Owner = seat.Owner, Complete = true, Materials = [],
+            Id = id,
+            Record = seat.Record,
+            Name = _db.Find(seat.Record)?.Name ?? seat.Record,
+            Position = seat.Position,
+            Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, seat.Yaw),
+            Owner = seat.Owner,
+            Complete = true,
+            Materials = [],
         };
-        seatSites[id] = (seat, site);
+        _seatSites[id] = (seat, site);
         return site;
     }
 }

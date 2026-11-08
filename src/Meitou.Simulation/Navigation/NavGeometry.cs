@@ -135,7 +135,7 @@ internal static class NavGeometry
     }
 
     /// <summary>Distance on the XZ plane from a point to a segment.</summary>
-    public static float SegmentDistanceXZ(float px, float pz, float ax, float az, float bx, float bz)
+    public static float SegmentDistanceXz(float px, float pz, float ax, float az, float bx, float bz)
     {
         float dx = bx - ax, dz = bz - az;
         float len2 = dx * dx + dz * dz;

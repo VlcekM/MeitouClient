@@ -1,5 +1,5 @@
-using System.Runtime.InteropServices;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Meitou.Simulation.Navigation;
 
@@ -79,9 +79,18 @@ internal static class NavInteriors
             for (int p = 0; p < m.PolygonCount; p++) heights.Add(m.Heights?[p]);
         return new ZoneNavMesh
         {
-            ZoneX = exterior.ZoneX, ZoneZ = exterior.ZoneZ, Vertices = [.. vertices], Polygons = [.. polygons], Neighbours = [.. neighbours], Areas = [.. areas],
-            Links = links.Select(l => l is { Count: > 0 } ? l.ToArray() : null).ToArray(), Kept = [.. kept], BoundsMin = lo, BoundsMax = hi,
-            DoorIds = doorIds.Count > 0 ? [.. doorIds] : null, DoorOf = doorIds.Count > 0 ? [.. doorOf] : null,
+            ZoneX = exterior.ZoneX,
+            ZoneZ = exterior.ZoneZ,
+            Vertices = [.. vertices],
+            Polygons = [.. polygons],
+            Neighbours = [.. neighbours],
+            Areas = [.. areas],
+            Links = links.Select(l => l is { Count: > 0 } ? l.ToArray() : null).ToArray(),
+            Kept = [.. kept],
+            BoundsMin = lo,
+            BoundsMax = hi,
+            DoorIds = doorIds.Count > 0 ? [.. doorIds] : null,
+            DoorOf = doorIds.Count > 0 ? [.. doorOf] : null,
             Surfaces = new NavSurfaces([.. (exterior.Surfaces?.Corners ?? []).Concat(interiors.SelectMany(i => i.Mesh.Surfaces?.Corners ?? []))]),
             Terrain = exterior.Terrain,
             Heights = ZoneNavMesh.HeightsOf(heights),

@@ -13,39 +13,39 @@ namespace Meitou.Game.Host.WorldSync;
 /// </summary>
 sealed class GroundItemSync(GameHost host)
 {
-    long groundRevision = -1;
-    readonly HashSet<int> shownGround = [];
+    long _groundRevision = -1;
+    readonly HashSet<int> _shownGround = [];
 
-    static string GroundId(int id) => Meitou.Game.Rendering.Objects.WorldObjectRenderer.GroundKeyPrefix + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    static string GroundId(int id) => Rendering.Objects.WorldObjectRenderer.GroundKeyPrefix + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>Once a frame with <see cref="BuildingSync.UpdateBuildings"/>, after a new world's runtime placements were cleared.</summary>
     internal void UpdateGroundItems(WorldSnapshot snapshot)
     {
-        host.session.World.GroundItems.Limit = host.config.GroundItemLimit;   // the setting, applied at the next drop
-        if (snapshot.GroundItemsRevision == groundRevision) return;
-        groundRevision = snapshot.GroundItemsRevision;
+        host.Session.World.GroundItems.Limit = host.Config.GroundItemLimit;   // the setting, applied at the next drop
+        if (snapshot.GroundItemsRevision == _groundRevision) return;
+        _groundRevision = snapshot.GroundItemsRevision;
         var current = snapshot.GroundItems.Select(g => g.Id).ToHashSet();
-        foreach (int id in shownGround.Where(id => !current.Contains(id)).ToArray())
+        foreach (int id in _shownGround.Where(id => !current.Contains(id)).ToArray())
         {
             host.ActiveObjects?.RemoveRuntime(GroundId(id));
-            shownGround.Remove(id);
-            host.debris.falls.RemoveAll(f => f.Ground.Id == id);
-            host.debris.restLimbs.Remove(id);
-            groundPoses.Remove(id);
-            hiddenGround.Remove(id);
-            hiddenGroundKeys.Remove(GroundId(id));
-            groundFloors.Remove(id);
+            _shownGround.Remove(id);
+            host.Debris.Falls.RemoveAll(f => f.Ground.Id == id);
+            host.Debris.RestLimbs.Remove(id);
+            _groundPoses.Remove(id);
+            HiddenGround.Remove(id);
+            HiddenGroundKeys.Remove(GroundId(id));
+            _groundFloors.Remove(id);
         }
         foreach (var g in snapshot.GroundItems)
         {
-            if (!shownGround.Add(g.Id)) continue;
+            if (!_shownGround.Add(g.Id)) continue;
             var (rotation, y) = g.Dropped ? LaidFlat(g) : (g.Rotation, g.Position.Y);
-            groundPoses[g.Id] = (new Vector3(g.Position.X, y, g.Position.Z), rotation, GroundId(g.Id));
-            if (host.debris.LimbLookOf(g.Record) is not null)
+            _groundPoses[g.Id] = (new Vector3(g.Position.X, y, g.Position.Z), rotation, GroundId(g.Id));
+            if (host.Debris.LimbLookOf(g.Record) is not null)
             {
                 // A severed limb is drawn by the debris renderer (its SeveredLimb look: skin tone and blood), falling and at rest.
                 if (g.Fall is { } cut && StartFall(g, cut, rotation, y)) continue;
-                host.debris.RestLimb(g, rotation, y);
+                host.Debris.RestLimb(g, rotation, y);
                 continue;
             }
             if (g.Fall is { } stump && StartFall(g, stump, rotation, y)) continue;   // shown once it has landed (UpdateFalls)
@@ -59,15 +59,15 @@ sealed class GroundItemSync(GameHost host)
 
     /// <summary>
     /// The ground items above the shown floor of a building in the interior view (game: <c>FUN_1409fb540</c>, as a character there): not picked and without a label; the renderer leaves
-    /// their placements out by <see cref="hiddenGroundKeys"/>, a limb's debris is left out here.
+    /// their placements out by <see cref="HiddenGroundKeys"/>, a limb's debris is left out here.
     /// </summary>
-    internal readonly HashSet<int> hiddenGround = [];
+    internal readonly HashSet<int> HiddenGround = [];
 
-    /// <summary>The placement keys of <see cref="hiddenGround"/>, the renderer's <c>WorldObjectRenderer.HiddenItems</c>: drawing and picking share one answer.</summary>
-    internal readonly HashSet<string> hiddenGroundKeys = [];
+    /// <summary>The placement keys of <see cref="HiddenGround"/>, the renderer's <c>WorldObjectRenderer.HiddenItems</c>: drawing and picking share one answer.</summary>
+    internal readonly HashSet<string> HiddenGroundKeys = [];
 
     /// <summary>By ground item, the building in the view it was last found in, where it was drawn then and the floor it lies on there (<see cref="UpdateGroundVisibility"/>).</summary>
-    readonly Dictionary<int, (InteriorVolume Building, Vector3 At, int Floor)> groundFloors = [];
+    readonly Dictionary<int, (InteriorVolume Building, Vector3 At, int Floor)> _groundFloors = [];
 
     /// <summary>
     /// After the interior view each frame: which ground items are above their building's shown floor (as <see cref="InteriorView.AboveViewedFloor"/>). An item's floor is worked out again only
@@ -75,22 +75,22 @@ sealed class GroundItemSync(GameHost host)
     /// </summary>
     internal void UpdateGroundVisibility()
     {
-        hiddenGround.Clear();
-        hiddenGroundKeys.Clear();
-        foreach (var (id, pose) in groundPoses)
+        HiddenGround.Clear();
+        HiddenGroundKeys.Clear();
+        foreach (var (id, pose) in _groundPoses)
         {
-            if (host.interiors.ViewedAt(pose.At) is not { } inView) continue;
-            int shown = host.interiors.interiorView[inView.PlacementId];
+            if (host.Interiors.ViewedAt(pose.At) is not { } inView) continue;
+            int shown = host.Interiors.InteriorFloors[inView.PlacementId];
             if (shown >= 3) continue;
-            if (!groundFloors.TryGetValue(id, out var known) || !ReferenceEquals(known.Building, inView) || known.At != pose.At)
-                groundFloors[id] = known = (inView, pose.At, inView.FloorAt(pose.At));
-            if (known.Floor > shown && hiddenGround.Add(id)) hiddenGroundKeys.Add(pose.Key);
+            if (!_groundFloors.TryGetValue(id, out var known) || !ReferenceEquals(known.Building, inView) || known.At != pose.At)
+                _groundFloors[id] = known = (inView, pose.At, inView.FloorAt(pose.At));
+            if (known.Floor > shown && HiddenGround.Add(id)) HiddenGroundKeys.Add(pose.Key);
         }
     }
 
     /// <summary>Where each shown ground item is drawn (a falling limb: where it comes to rest), for <see cref="GroundShape"/>.</summary>
-    readonly Dictionary<int, (Vector3 At, Quaternion Rotation, string Key)> groundPoses = [];
-    readonly Dictionary<(string Record, bool File), IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> groundShapes = [];
+    readonly Dictionary<int, (Vector3 At, Quaternion Rotation, string Key)> _groundPoses = [];
+    readonly Dictionary<(string Record, bool File), IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _groundShapes = [];
 
     /// <summary>
     /// What the pointer's ray meets of a ground item, where it is drawn (docs/game/ui-input.md "Building picking and selection"): its record's collision as the original makes it
@@ -99,26 +99,26 @@ sealed class GroundItemSync(GameHost host)
     /// </summary>
     internal (IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh, Vector3 At, Quaternion Rotation)? GroundShape(GroundItemSnapshot g)
     {
-        if (!groundPoses.TryGetValue(g.Id, out var pose) || GroundCollisionOf(g.Record) is not { } collision) return null;
+        if (!_groundPoses.TryGetValue(g.Id, out var pose) || GroundCollisionOf(g.Record) is not { } collision) return null;
         bool file = collision.Xml is not null && (collision.Weapon || g.Fall is not null);
-        if (!groundShapes.TryGetValue((g.Record, file), out var mesh))
+        if (!_groundShapes.TryGetValue((g.Record, file), out var mesh))
         {
-            mesh = file ? host.player.build.BuildHost?.Placement.CollisionFile(collision.Xml!) ?? [] : [];
+            mesh = file ? host.Player.Build.BuildHost?.Placement.CollisionFile(collision.Xml!) ?? [] : [];
             if (mesh.Count == 0 && BoundsOf(g.Record) is { } box) mesh = Box(box.Min, box.Max);   // engine choice: a collision file missing from the install falls back to the box
-            groundShapes[(g.Record, file)] = mesh;
+            _groundShapes[(g.Record, file)] = mesh;
         }
         return mesh.Count == 0 ? null : (mesh, pose.At, pose.Rotation);
     }
 
-    readonly Dictionary<string, (bool Weapon, string? Xml)?> groundCollision = [];
+    readonly Dictionary<string, (bool Weapon, string? Xml)?> _groundCollision = [];
 
     /// <summary>What <see cref="GroundShape"/> reads of a record, once: whether it is a WEAPON and its <c>physics file</c> when that names an <c>.xml</c>; null without <c>has collision</c>.</summary>
     (bool Weapon, string? Xml)? GroundCollisionOf(string record)
     {
-        if (groundCollision.TryGetValue(record, out var known)) return known;
-        if (host.scene.Database?.Find(record) is not { } item) return null;   // not kept: the database may not be loaded yet
+        if (_groundCollision.TryGetValue(record, out var known)) return known;
+        if (host.Scene.Database?.Find(record) is not { } item) return null;   // not kept: the database may not be loaded yet
         string physics = item.GetPath("physics file");
-        return groundCollision[record] = item.GetBool("has collision") ? (item.Type == Meitou.Data.Fcs.FcsRecordType.WEAPON, physics.Contains(".xml") ? physics : null) : null;
+        return _groundCollision[record] = item.GetBool("has collision") ? (item.Type == Data.Fcs.FcsRecordType.Weapon, physics.Contains(".xml") ? physics : null) : null;
     }
 
     /// <summary>The twelve triangles of a box.</summary>
@@ -129,19 +129,19 @@ sealed class GroundItemSync(GameHost host)
         return [(v, [0, 1, 3, 0, 3, 2, 4, 6, 7, 4, 7, 5, 0, 4, 5, 0, 5, 1, 2, 3, 7, 2, 7, 6, 0, 2, 6, 0, 6, 4, 1, 5, 7, 1, 7, 3])];
     }
 
-    readonly Dictionary<string, OgreBounds?> groundBounds = [];
+    readonly Dictionary<string, OgreBounds?> _groundBounds = [];
 
     /// <summary>The bounds of a record's item mesh (its ground mesh, else its mesh), read once; null when it has none.</summary>
     OgreBounds? BoundsOf(string record)
     {
-        if (groundBounds.TryGetValue(record, out var bounds)) return bounds;
+        if (_groundBounds.TryGetValue(record, out var bounds)) return bounds;
         bounds = null;
-        if (host.scene.Database?.Find(record) is { } item && host.assets.Find(WorldObjectLayout.ItemMesh(item)) is { } file)
+        if (host.Scene.Database?.Find(record) is { } item && host.Assets.Find(WorldObjectLayout.ItemMesh(item)) is { } file)
         {
             try { bounds = OgreMeshReader.TryReadBounds(file, out var b) ? b : OgreMeshReader.ReadFile(file).Bounds; }
             catch (Exception e) when (e is IOException or OgreFormatException) { }
         }
-        return groundBounds[record] = bounds;
+        return _groundBounds[record] = bounds;
     }
 
     /// <summary>
@@ -187,15 +187,21 @@ sealed class GroundItemSync(GameHost host)
     /// </summary>
     internal bool StartFall(GroundItemSnapshot g, FallSource stump, Quaternion lying, float y)
     {
-        if (host.scene.Database?.Find(g.Record) is not { } record || WorldObjectLayout.ItemMesh(record) is not { Length: > 0 } mesh) return false;
-        if (host.gpu.Debris?.Extent(mesh, null, host.debris.LimbLookOf(g.Record)) is null) return false;   // the debris renderer draws only meshes it has loaded
+        if (host.Scene.Database?.Find(g.Record) is not { } record || WorldObjectLayout.ItemMesh(record) is not { Length: > 0 } mesh) return false;
+        if (host.Gpu.Debris?.Extent(mesh, null, host.Debris.LimbLookOf(g.Record)) is null) return false;   // the debris renderer draws only meshes it has loaded
         // Hanging: the mesh's long axis down, turned by the item's yaw (the same yaw the rest pose keeps).
         var yaw = new Quaternion(0, g.Rotation.Y, 0, g.Rotation.W);
         var hang = BoundsOf(g.Record) is { } box ? Debris.Turn(LongAxis(box.Max - box.Min), -Vector3.UnitY) : Quaternion.Identity;
-        host.debris.falls.Add(new Debris.FallingLimb
+        host.Debris.Falls.Add(new Debris.FallingLimb
         {
-            Ground = g, Mesh = mesh, Look = Debris.ToneOf(host.debris.LimbLookOf(g.Record), g), Stump = stump, Rest = new Vector3(g.Position.X, y, g.Position.Z), RestY = y,
-            Hanging = Quaternion.Normalize(Quaternion.Concatenate(hang, yaw)), Lying = lying,
+            Ground = g,
+            Mesh = mesh,
+            Look = Debris.ToneOf(host.Debris.LimbLookOf(g.Record), g),
+            Stump = stump,
+            Rest = new Vector3(g.Position.X, y, g.Position.Z),
+            RestY = y,
+            Hanging = Quaternion.Normalize(Quaternion.Concatenate(hang, yaw)),
+            Lying = lying,
         });
         return true;
     }
@@ -205,13 +211,13 @@ sealed class GroundItemSync(GameHost host)
 
     internal void ForgetGroundItems()
     {
-        shownGround.Clear();
-        host.debris.falls.Clear();
-        host.debris.restLimbs.Clear();
-        groundPoses.Clear();
-        hiddenGround.Clear();
-        hiddenGroundKeys.Clear();
-        groundFloors.Clear();
-        groundRevision = -1;
+        _shownGround.Clear();
+        host.Debris.Falls.Clear();
+        host.Debris.RestLimbs.Clear();
+        _groundPoses.Clear();
+        HiddenGround.Clear();
+        HiddenGroundKeys.Clear();
+        _groundFloors.Clear();
+        _groundRevision = -1;
     }
 }

@@ -57,7 +57,7 @@ public static class BuildingSave
             foreach (var instance in list.Instances)
             {
                 if (instance.IsRemoved || !states.TryGetValue(BuildingKey.Of(zone.Coordinate, instance.Id), out var state) || !IsPlayerBuilt(instance.Id, state, playerFactionId)) continue;
-                if (db.Find(instance.Target) is not { Type: FcsRecordType.BUILDING } record) continue;
+                if (db.Find(instance.Target) is not { Type: FcsRecordType.Building } record) continue;
                 var data = BuildingBuildData.From(record);
                 var materials = new MaterialSlot[data.Materials.Count];
                 for (int k = 0; k < materials.Length; k++)
@@ -77,7 +77,7 @@ public static class BuildingSave
                     Rotation = instance.Rotation,
                     Floor = state.Ints.GetValueOrDefault("floornum"),
                     Parent = parent,
-                    Town = townHand.IsNull ? 0 : townOf.GetValueOrDefault((townHand.C, townHand.CS)),
+                    Town = townHand.IsNull ? 0 : townOf.GetValueOrDefault((townHand.C, CS: townHand.Cs)),
                     Owner = playerIndex,
                     Materials = materials,
                     Target = target,
@@ -94,7 +94,7 @@ public static class BuildingSave
         // Wall subsection links are not saved; zone load rebuilds them (docs/game/buildings-production.md "Walls").
         var wallData = new Dictionary<string, BuildingBuildData?>(StringComparer.Ordinal);
         BuildingBuildData? DataOf(string id) =>
-            wallData.TryGetValue(id, out var d) ? d : wallData[id] = db.Find(id) is { Type: FcsRecordType.BUILDING } r ? BuildingBuildData.From(r) : null;
+            wallData.TryGetValue(id, out var d) ? d : wallData[id] = db.Find(id) is { Type: FcsRecordType.Building } r ? BuildingBuildData.From(r) : null;
         ConstructionSystem.AttachWalls(reg, DataOf, reg.All.ToList());
         // Engine choice: towns are reassessed on load (a save may hold a centre that was never moved, as Meitou's before it reassessed).
         ConstructionSystem.ReassessTowns(world);
@@ -114,7 +114,7 @@ public static class BuildingSave
         foreach (var instance in list.Instances)
         {
             if (instance.IsRemoved || instance.States.Count == 0 || !byId.TryGetValue(instance.States[0], out var state)) continue;
-            if (state.RecordType != FcsRecordType.GAMESTATE_TOWN || state.Bools.GetValueOrDefault("is nest") || state.Strings.GetValueOrDefault("faction") != playerFactionId) continue;
+            if (state.RecordType != FcsRecordType.GamestateTown || state.Bools.GetValueOrDefault("is nest") || state.Strings.GetValueOrDefault("faction") != playerFactionId) continue;
             string name = state.Name.StartsWith(TownStatePrefix, StringComparison.Ordinal) && state.Name.Length > TownStatePrefix.Length ? state.Name[TownStatePrefix.Length..] : PlayerTown.DefaultName;
             var town = world.Buildings.AddTown(instance.Position, playerIndex, name);
             town.SaveInstance = instance.Id;
@@ -123,7 +123,7 @@ public static class BuildingSave
             if (!hand.IsNull)
             {
                 town.SaveHandle = hand;
-                map.TryAdd((hand.C, hand.CS), town.Number);
+                map.TryAdd((hand.C, hand.Cs), town.Number);
             }
         }
         return map;
@@ -200,14 +200,14 @@ public static class BuildingSave
         var list = zone.BuildingList;
         if (list is null)
         {
-            list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Id = NextNumber(file), Name = "0", StringId = Meitou.Data.World.WorldLevelData.BuildingListId };
+            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextNumber(file), Name = "0", StringId = WorldLevelData.BuildingListId };
             file.Records.Add(list);
         }
         string stateId = site.Id + StateSuffix;
-        var state = file.Records.FirstOrDefault(r => r.StringId == stateId && r.RecordType == FcsRecordType.GAMESTATE_BUILDING);
+        var state = file.Records.FirstOrDefault(r => r.StringId == stateId && r.RecordType == FcsRecordType.GamestateBuilding);
         if (state is null)
         {
-            state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Id = NextNumber(file), Name = "0", StringId = stateId };
+            state = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Id = NextNumber(file), Name = "0", StringId = stateId };
             file.Records.Add(state);
         }
         var at = site.Position;
@@ -229,9 +229,9 @@ public static class BuildingSave
         var hand = Hand.Read(state, "handle");
         if (hand.IsNull || hand.C != zone.ContainerId)
         {
-            int slot = Math.Max(file.SlotLists[0].DefaultIfEmpty(0).Max(), file.Records.Where(r => r.RecordType == FcsRecordType.GAMESTATE_BUILDING)
+            int slot = Math.Max(file.SlotLists[0].DefaultIfEmpty(0).Max(), file.Records.Where(r => r.RecordType == FcsRecordType.GamestateBuilding)
                 .Select(r => Hand.Read(r, "handle")).Where(h => !h.IsNull && h.C == zone.ContainerId).Select(h => h.I).DefaultIfEmpty(0).Max()) + 1;
-            hand = new Hand((int)FcsRecordType.BUILDING, zone.ContainerId, ContainerSerial, slot, (int)Rng.Mix(Rng.StableHash(site.Id) ^ seed));
+            hand = new Hand((int)FcsRecordType.Building, zone.ContainerId, ContainerSerial, slot, (int)Rng.Mix(Rng.StableHash(site.Id) ^ seed));
         }
         if (!file.SlotLists[0].Contains(hand.I)) file.SlotLists[0] = [.. file.SlotLists[0].Append(hand.I).Order()];
 
@@ -277,7 +277,7 @@ public static class BuildingSave
         if (list is null)
         {
             int n = NextQuick(quick);
-            list = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_TOWN_INSTANCE_LIST, Id = n, Name = "0", StringId = QuickId(n) };
+            list = new FcsRecord { Type = (int)FcsRecordType.GamestateTownInstanceList, Id = n, Name = "0", StringId = QuickId(n) };
             quick.Records.Add(list);
             game.TownInstanceList = list;
         }
@@ -286,7 +286,7 @@ public static class BuildingSave
         {
             var instance = town.SaveInstance is { } known ? list.Instances.FirstOrDefault(i => i.Id == known) : null;
             var state = instance is { States.Count: > 0 } ? byId.GetValueOrDefault(instance.States[0]) : null;
-            if (state is { RecordType: not FcsRecordType.GAMESTATE_TOWN }) state = null;
+            if (state is { RecordType: not FcsRecordType.GamestateTown }) state = null;
             if (instance is null)
             {
                 instance = new FcsInstance { Id = QuickId(NextQuick(quick)) };
@@ -296,7 +296,7 @@ public static class BuildingSave
             if (state is null)
             {
                 int n = NextQuick(quick);
-                state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_TOWN, Id = n, StringId = instance.Id + TownStateSuffix };
+                state = new FcsRecord { Type = (int)FcsRecordType.GamestateTown, Id = n, StringId = instance.Id + TownStateSuffix };
                 // With the other town states, before the list (the original's order).
                 int at = quick.Records.IndexOf(list);
                 quick.Records.Insert(at < 0 ? quick.Records.Count : at, state);
@@ -310,7 +310,7 @@ public static class BuildingSave
             instance.States.Add(state.StringId);
 
             var hand = town.SaveHandle ?? (Hand.Read(state, "hand") is { IsNull: false } h ? h
-                : new Hand((int)FcsRecordType.TOWN, ++container, (int)Rng.Mix(Rng.StableHash(instance.Id) ^ seed), 0, 0));
+                : new Hand((int)FcsRecordType.Town, ++container, (int)Rng.Mix(Rng.StableHash(instance.Id) ^ seed), 0, 0));
             hands[town.Number] = hand;
 
             state.Name = TownStatePrefix + town.Name;
@@ -331,7 +331,7 @@ public static class BuildingSave
             hand.Write(state, "hand");
             state.Strings["faction"] = playerFactionId;
             state.Strings["instance"] = instance.Id;
-            var zone = Meitou.Data.World.WorldLayout.ZoneOf(town.Position.X, town.Position.Z);
+            var zone = WorldLayout.ZoneOf(town.Position.X, town.Position.Z);
             state.Ints["zzX0"] = zone.X;
             state.Ints["zzY0"] = zone.Y;
         }

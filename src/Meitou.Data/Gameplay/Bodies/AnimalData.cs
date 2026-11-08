@@ -48,7 +48,7 @@ public sealed record AnimalData
     /// <summary>The animal fields of a record; null when it is not an ANIMAL_CHARACTER.</summary>
     public static AnimalData? From(GameRecord? r)
     {
-        if (r is not { Type: FcsRecordType.ANIMAL_CHARACTER }) return null;
+        if (r is not { Type: FcsRecordType.AnimalCharacter }) return null;
         static string? First(GameRecord r, string list) => r.GetReferences(list) is { Count: > 0 } refs ? refs[0].TargetStringId : null;
         float hp = r.GetFloat("HP mult", 1);
         return new AnimalData

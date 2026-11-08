@@ -59,7 +59,7 @@ public static class SaveImport
             .OrderBy(p => p.Record.Ints.GetValueOrDefault("squad index")).ToList();
         // Engine choice: the original salvages a squad from a "Nameless_0.platoon" file and pays 10000 cats; here a save without a player squad is refused.
         if (keep.Count == 0) throw new InvalidOperationException("The save has no squad of the player's to import.");
-        records.RemoveAll(r => r.RecordType == FcsRecordType.PLATOON &&!keep.Any(p => ReferenceEquals(p.Record, r)));
+        records.RemoveAll(r => r.RecordType == FcsRecordType.Platoon && !keep.Any(p => ReferenceEquals(p.Record, r)));
         for (int i = 0; i < keep.Count; i++)
         {
             var platoon = keep[i];
@@ -78,12 +78,12 @@ public static class SaveImport
         FilterZones(game, playerId, options);
 
         // The weather and the terrain decals are the new world's; the research is the start's unless it is imported.
-        records.RemoveAll(r => r.RecordType is FcsRecordType.BIOMES or FcsRecordType.TERRAIN_DECALS or FcsRecordType.WAR_SAVESTATE);
-        if ((options & ImportOptions.Research) == 0 && records.FirstOrDefault(r => r.RecordType == FcsRecordType.RESEARCH) is { } research)
+        records.RemoveAll(r => r.RecordType is FcsRecordType.Biomes or FcsRecordType.TerrainDecals or FcsRecordType.WarSavestate);
+        if ((options & ImportOptions.Research) == 0 && records.FirstOrDefault(r => r.RecordType == FcsRecordType.Research) is { } research)
         {
             foreach (var key in research.Strings.Keys.Where(k => k.StartsWith("finished", StringComparison.Ordinal) || k.StartsWith("current", StringComparison.Ordinal) || k.StartsWith("paid", StringComparison.Ordinal)).ToList()) research.Strings.Remove(key);
             foreach (var key in research.Floats.Keys.Where(k => k.StartsWith("current prog", StringComparison.Ordinal)).ToList()) research.Floats.Remove(key);
-            research.Strings["finished0"] = Meitou.Data.Gameplay.Construction.ResearchGate.DefaultStartId;
+            research.Strings["finished0"] = Data.Gameplay.Construction.ResearchGate.DefaultStartId;
             research.Floats["num finished"] = 1;
             research.Floats["num currents"] = 0;
         }
@@ -209,8 +209,8 @@ public static class SaveImport
             foreach (var key in r.Ints.Keys.Where(k => !k.StartsWith("hand", StringComparison.Ordinal) && !k.StartsWith("zz", StringComparison.Ordinal)).ToList()) r.Ints.Remove(key);
             foreach (var key in r.Strings.Keys.Where(k => k is not ("instance" or "faction") && !(k == "replacementTown" && (options & ImportOptions.DeadNpcs) != 0)).ToList()) r.Strings.Remove(key);
             foreach (var key in r.References.Keys.ToList()) r.References.Remove(key);
-            foreach (var key in r.Vector3s.Keys.ToList()) r.Vector3s.Remove(key);
-            foreach (var key in r.Vector4s.Keys.ToList()) r.Vector4s.Remove(key);
+            foreach (var key in r.Vector3S.Keys.ToList()) r.Vector3S.Remove(key);
+            foreach (var key in r.Vector4S.Keys.ToList()) r.Vector4S.Remove(key);
             r.Filenames.Clear();
             r.Instances.Clear();
         }
@@ -270,7 +270,7 @@ public static class SaveImport
             var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
             foreach (var r in zone.File.Records) byId[r.StringId] = r;
             if (zone.BuildingList is not { } list) { game.Zones.Remove(coordinate); continue; }
-            list.Instances.RemoveAll(i => !i.IsRemoved && !(i.States.Select(s => byId.GetValueOrDefault(s)).FirstOrDefault(s => s?.RecordType == FcsRecordType.GAMESTATE_BUILDING) is { } state
+            list.Instances.RemoveAll(i => !i.IsRemoved && !(i.States.Select(s => byId.GetValueOrDefault(s)).FirstOrDefault(s => s?.RecordType == FcsRecordType.GamestateBuilding) is { } state
                 && state.Strings.GetValueOrDefault("owner faction ID") == playerId));
             if (list.Instances.Count == 0) { game.Zones.Remove(coordinate); continue; }
             var used = list.Instances.SelectMany(i => i.States).ToHashSet(StringComparer.Ordinal);

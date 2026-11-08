@@ -56,7 +56,7 @@ public sealed class ZoneNavMesh
     /// <summary>Whether the edge of a polygon is one of its <see cref="Links"/>.</summary>
     internal bool HasLink(int polygon, int edge) => NavGeometry.HasLink(LinksOf(polygon), edge);
 
-    bool[]? wallVertices;
+    bool[]? _wallVertices;
 
     /// <summary>
     /// Whether a vertex lies on the edge of the walkable surface (an obstacle, a drop, the end of the mesh): the places a footprint has to keep clear of.
@@ -64,7 +64,7 @@ public sealed class ZoneNavMesh
     /// </summary>
     public bool IsWallVertex(int vertex)
     {
-        var w = wallVertices;
+        var w = _wallVertices;
         if (w is null)
         {
             w = new bool[Vertices.Length];
@@ -83,7 +83,7 @@ public sealed class ZoneNavMesh
                     w[poly[(k + 1) % poly.Length]] = true;
                 }
             }
-            wallVertices = w;
+            _wallVertices = w;
         }
         return w[vertex];
     }
@@ -94,8 +94,21 @@ public sealed class ZoneNavMesh
     /// <summary>This mesh with another kept set over the same polygons (the arrays are shared).</summary>
     internal ZoneNavMesh WithKept(bool[] kept) => new()
     {
-        ZoneX = ZoneX, ZoneZ = ZoneZ, Vertices = Vertices, Polygons = Polygons, Neighbours = Neighbours, Areas = Areas, Links = Links, Kept = kept,
-        BoundsMin = BoundsMin, BoundsMax = BoundsMax, DoorIds = DoorIds, DoorOf = DoorOf, Surfaces = Surfaces, Terrain = Terrain, Heights = Heights,
+        ZoneX = ZoneX,
+        ZoneZ = ZoneZ,
+        Vertices = Vertices,
+        Polygons = Polygons,
+        Neighbours = Neighbours,
+        Areas = Areas,
+        Links = Links,
+        Kept = kept,
+        BoundsMin = BoundsMin,
+        BoundsMax = BoundsMax,
+        DoorIds = DoorIds,
+        DoorOf = DoorOf,
+        Surfaces = Surfaces,
+        Terrain = Terrain,
+        Heights = Heights,
         InteriorStart = InteriorStart,
     };
 
@@ -134,9 +147,22 @@ public sealed class ZoneNavMesh
         Array.Fill(kept, true);
         return new ZoneNavMesh
         {
-            ZoneX = ZoneX, ZoneZ = ZoneZ, Vertices = [.. vertices], Polygons = polygons, Neighbours = neighbours, Areas = areas, Links = links,
-            Kept = kept, BoundsMin = BoundsMin, BoundsMax = BoundsMax, DoorIds = DoorIds, DoorOf = doorOf, Surfaces = Surfaces, Terrain = Terrain,
-            Heights = HeightsOf(heights), InteriorStart = KeptInteriorStart(map),
+            ZoneX = ZoneX,
+            ZoneZ = ZoneZ,
+            Vertices = [.. vertices],
+            Polygons = polygons,
+            Neighbours = neighbours,
+            Areas = areas,
+            Links = links,
+            Kept = kept,
+            BoundsMin = BoundsMin,
+            BoundsMax = BoundsMax,
+            DoorIds = DoorIds,
+            DoorOf = doorOf,
+            Surfaces = Surfaces,
+            Terrain = Terrain,
+            Heights = HeightsOf(heights),
+            InteriorStart = KeptInteriorStart(map),
         };
     }
 
@@ -192,12 +218,12 @@ public sealed class ZoneNavMesh
 
     // ---- point queries ----
 
-    readonly Lazy<PointIndex> index;
+    readonly Lazy<PointIndex> _index;
 
     /// <summary>The grid over the polygons' XZ boxes (64 units a cell, ascending polygon order in a cell); built on first use, independent of <see cref="Kept"/>.</summary>
-    internal PointIndex Index => index.Value;
+    internal PointIndex Index => _index.Value;
 
-    public ZoneNavMesh() => index = new Lazy<PointIndex>(() => new PointIndex(this), LazyThreadSafetyMode.ExecutionAndPublication);
+    public ZoneNavMesh() => _index = new Lazy<PointIndex>(() => new PointIndex(this), LazyThreadSafetyMode.ExecutionAndPublication);
 
     internal sealed class PointIndex
     {
@@ -279,7 +305,7 @@ public sealed class ZoneNavMesh
 
     bool TryCell(float x, float z, out PointIndex ix, out int[] cell)
     {
-        ix = index.Value;
+        ix = _index.Value;
         cell = [];
         if (x < BoundsMin.X - 1 || x > BoundsMax.X + 1 || z < BoundsMin.Y - 1 || z > BoundsMax.Y + 1) return false;
         cell = ix.Cells[ix.Row(z - BoundsMin.Y) * ix.Columns + ix.Col(x - BoundsMin.X)];
@@ -292,7 +318,7 @@ public sealed class ZoneNavMesh
     /// <summary>The kept polygon nearest to (x, y, z) in XZ distance (ties and containing polygons by height), within <paramref name="maxDistance"/>, not one <paramref name="skip"/> rules out; −1 when none.</summary>
     public int Nearest(float x, float y, float z, float maxDistance, out float distance, Func<int, bool>? skip = null)
     {
-        var ix = index.Value;
+        var ix = _index.Value;
         int best = -1;
         float bestScore = float.MaxValue;
         distance = float.MaxValue;
@@ -304,7 +330,7 @@ public sealed class ZoneNavMesh
                 {
                     if (!Kept[p] || skip?.Invoke(p) == true) continue;
                     if (x < ix.Min[p].X - maxDistance || x > ix.Max[p].X + maxDistance || z < ix.Min[p].Y - maxDistance || z > ix.Max[p].Y + maxDistance) continue;
-                    float d = DistanceXZ(p, x, z);
+                    float d = DistanceXz(p, x, z);
                     if (d > maxDistance) continue;
                     float py = HeightAt(p, Math.Clamp(x, ix.Min[p].X, ix.Max[p].X), Math.Clamp(z, ix.Min[p].Y, ix.Max[p].Y));
                     // XZ distance first, then how far the surface is from the wanted height.
@@ -341,7 +367,7 @@ public sealed class ZoneNavMesh
         {
             if (grid == HeightGrid.OnTerrain)
             {
-                if (Terrain is { } terrain && terrain.TryHeightAt(x, z, out float ground)) return MathF.Max(ground, Meitou.Data.World.WorldWater.Height);
+                if (Terrain is { } terrain && terrain.TryHeightAt(x, z, out float ground)) return MathF.Max(ground, Data.World.WorldWater.Height);
             }
             else if (grid.TryHeightAt(x, z, out float sampled)) return sampled;
         }
@@ -379,7 +405,7 @@ public sealed class ZoneNavMesh
     }
 
     /// <summary>Distance on the XZ plane from the point to the polygon (0 inside).</summary>
-    internal float DistanceXZ(int polygon, float x, float z)
+    internal float DistanceXz(int polygon, float x, float z)
     {
         if (Contains(polygon, x, z)) return 0;
         var poly = Polygons[polygon];
@@ -388,7 +414,7 @@ public sealed class ZoneNavMesh
         {
             var a = Vertices[poly[k]];
             var b = Vertices[poly[(k + 1) % poly.Length]];
-            best = Math.Min(best, NavGeometry.SegmentDistanceXZ(x, z, a.X, a.Z, b.X, b.Z));
+            best = Math.Min(best, NavGeometry.SegmentDistanceXz(x, z, a.X, a.Z, b.X, b.Z));
         }
         return best;
     }

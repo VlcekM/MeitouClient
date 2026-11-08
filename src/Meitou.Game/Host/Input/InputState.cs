@@ -49,36 +49,36 @@ public sealed class TickInput
 /// </summary>
 public sealed class InputState
 {
-    TickInput pending = new();
-    readonly bool[] keyHeld = new bool[Enum.GetValues<Key>().Length];
-    readonly bool[] buttonHeld = new bool[Enum.GetValues<MouseButton>().Length];
-    Vector2 mousePosition;
+    TickInput _pending = new();
+    readonly bool[] _keyHeld = new bool[Enum.GetValues<Key>().Length];
+    readonly bool[] _buttonHeld = new bool[Enum.GetValues<MouseButton>().Length];
+    Vector2 _mousePosition;
 
     public void SetKey(Key key, bool down)
     {
         int i = (int)key;
-        if (keyHeld[i] == down) return;
-        keyHeld[i] = down;
-        (down ? pending.KeyPressed : pending.KeyReleased)[i] = true;
+        if (_keyHeld[i] == down) return;
+        _keyHeld[i] = down;
+        (down ? _pending.KeyPressed : _pending.KeyReleased)[i] = true;
     }
 
     public void SetMouseButton(MouseButton button, bool down)
     {
         int i = (int)button;
-        if (buttonHeld[i] == down) return;
-        buttonHeld[i] = down;
-        (down ? pending.ButtonPressed : pending.ButtonReleased)[i] = true;
+        if (_buttonHeld[i] == down) return;
+        _buttonHeld[i] = down;
+        (down ? _pending.ButtonPressed : _pending.ButtonReleased)[i] = true;
     }
 
     /// <summary>The binding's key or button is down as the host has reported so far (not as the last tick saw it).</summary>
-    public bool IsHeld(Binding b) => b.IsMouse ? buttonHeld[(int)b.Button] : keyHeld[(int)b.Key];
+    public bool IsHeld(Binding b) => b.IsMouse ? _buttonHeld[(int)b.Button] : _keyHeld[(int)b.Key];
 
     /// <summary>Adds mouse movement since the last report.</summary>
-    public void AddMouseDelta(float dx, float dy) => pending.MouseDelta += new Vector2(dx, dy);
+    public void AddMouseDelta(float dx, float dy) => _pending.MouseDelta += new Vector2(dx, dy);
 
-    public void AddWheel(float notches) => pending.Wheel += notches;
+    public void AddWheel(float notches) => _pending.Wheel += notches;
 
-    public void SetMousePosition(float x, float y) => mousePosition = new Vector2(x, y);
+    public void SetMousePosition(float x, float y) => _mousePosition = new Vector2(x, y);
 
     /// <summary>Releases everything held (the window lost focus): the tick sees the releases.</summary>
     public void ReleaseAll()
@@ -90,11 +90,11 @@ public sealed class InputState
     /// <summary>The snapshot for the next tick; the edges and sums start over.</summary>
     public TickInput Consume()
     {
-        var snapshot = pending;
-        Array.Copy(keyHeld, snapshot.KeyDown, keyHeld.Length);
-        Array.Copy(buttonHeld, snapshot.ButtonDown, buttonHeld.Length);
-        snapshot.MousePosition = mousePosition;
-        pending = new TickInput();
+        var snapshot = _pending;
+        Array.Copy(_keyHeld, snapshot.KeyDown, _keyHeld.Length);
+        Array.Copy(_buttonHeld, snapshot.ButtonDown, _buttonHeld.Length);
+        snapshot.MousePosition = _mousePosition;
+        _pending = new TickInput();
         return snapshot;
     }
 }

@@ -7,8 +7,8 @@ namespace Meitou.Game.Host;
 sealed unsafe class SteamSession : IDisposable
 {
     const uint KenshiAppId = 233860;
-    nint library;
-    delegate* unmanaged[Cdecl]<void> shutdown;
+    nint _library;
+    delegate* unmanaged[Cdecl]<void> _shutdown;
 
     SteamSession() { }
 
@@ -64,7 +64,7 @@ sealed unsafe class SteamSession : IDisposable
                     return null;
                 }
             }
-            var session = new SteamSession { library = library, shutdown = stop };
+            var session = new SteamSession { _library = library, _shutdown = stop };
             Console.WriteLine("Steamworks: initialized for Kenshi (233860).");
             return session;
         }
@@ -78,9 +78,9 @@ sealed unsafe class SteamSession : IDisposable
 
     public void Dispose()
     {
-        if (library == 0) return;
-        shutdown();
-        NativeLibrary.Free(library);
-        library = 0;
+        if (_library == 0) return;
+        _shutdown();
+        NativeLibrary.Free(_library);
+        _library = 0;
     }
 }

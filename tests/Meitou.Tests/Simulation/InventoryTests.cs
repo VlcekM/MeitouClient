@@ -17,7 +17,7 @@ public class InventoryTests
     static IEnumerable<int> Humans(SimWorld world) =>
         Enumerable.Range(0, world.Characters.HighWater).Where(s => world.Characters.Previous[s].Alive && world.Characters.Cold(s)!.Inventory is not null);
 
-    static ItemInstance Unit(string id, int quantity, int limit, Meitou.Data.Fcs.FcsRecordType type = Meitou.Data.Fcs.FcsRecordType.ITEM) =>
+    static ItemInstance Unit(string id, int quantity, int limit, Meitou.Data.Fcs.FcsRecordType type = Data.Fcs.FcsRecordType.Item) =>
         new() { Record = id, Name = id, Type = type, Quantity = quantity, StackLimit = limit };
 
     [Fact]
@@ -78,15 +78,15 @@ public class StackLimitInstallTests
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
         var db = InstallData.BaseGame!;
         // An int on every ITEM (never a bool). MAP_ITEMs hold 1.
-        var items = db.OfType(Meitou.Data.Fcs.FcsRecordType.ITEM).ToList();
+        var items = db.OfType(Data.Fcs.FcsRecordType.Item).ToList();
         Assert.All(items, r => Assert.False(r.Bools.ContainsKey("stackable")));
         Assert.Equal(100, ItemInfo.From(items.First(r => r.Name == "Cats")).StackLimit);
         // Crossbow bolts do not stack: each item is a quiver whose charges are the shots.
-        Assert.All(db.OfType(Meitou.Data.Fcs.FcsRecordType.CROSSBOW).SelectMany(c => c.GetReferences("ammo")).Select(r => db.Find(r.TargetStringId)!),
+        Assert.All(db.OfType(Data.Fcs.FcsRecordType.Crossbow).SelectMany(c => c.GetReferences("ammo")).Select(r => db.Find(r.TargetStringId)!),
             b => Assert.Equal(1, ItemInfo.From(b).StackLimit));
         // Gear never stacks, whatever its record says; backpacks carry the bonus.
-        Assert.All(db.OfType(Meitou.Data.Fcs.FcsRecordType.WEAPON).Take(20), w => Assert.Equal(1, ItemInfo.From(w).StackLimit));
-        var bull = ItemInfo.From(db.OfType(Meitou.Data.Fcs.FcsRecordType.CONTAINER).First(r => r.Name == "Bull Backpack"));
+        Assert.All(db.OfType(Data.Fcs.FcsRecordType.Weapon).Take(20), w => Assert.Equal(1, ItemInfo.From(w).StackLimit));
+        var bull = ItemInfo.From(db.OfType(Data.Fcs.FcsRecordType.Container).First(r => r.Name == "Bull Backpack"));
         Assert.Equal((1, 5f), (bull.StackBonusMinimum, bull.StackBonusMult));
     }
 }

@@ -23,7 +23,7 @@ static partial class WindowPointer
     [LibraryImport("user32.dll")] private static partial nint GetForegroundWindow();
 
     // Glfw.GetApi() creates a native context on every call; the edge-scroll check runs every frame.
-    static Glfw? glfwApi;
+    static Glfw? s_glfwApi;
 
     /// <summary>The pointer as a fraction of the window's client area (0 to 1 on both axes), or null when the window is not in front or the pointer is outside it.</summary>
     public static unsafe Vector2? InWindow(IWindow window)
@@ -40,7 +40,7 @@ static partial class WindowPointer
         // the window, or an unfocused window, reads as nothing. GLFW's screen coordinates match the window's logical size.
         if (!OperatingSystem.IsMacOS() || window.Native?.Glfw is not { } glfwWindow) return null;
         var handle = (WindowHandle*)glfwWindow;
-        var api = glfwApi ??= Glfw.GetApi();
+        var api = s_glfwApi ??= Glfw.GetApi();
         if (!api.GetWindowAttrib(handle, WindowAttributeGetter.Focused)) return null;
         api.GetCursorPos(handle, out double x, out double y);
         var size = window.Size;

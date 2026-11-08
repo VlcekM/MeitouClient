@@ -249,60 +249,60 @@ public sealed class Machine
 /// <summary>The machines of the player's buildings, by site id, in the order they were made. Hashed only while it holds one.</summary>
 public sealed class MachineRegistry
 {
-    readonly List<Machine> all = [];
-    readonly Dictionary<string, Machine> bySite = new(StringComparer.Ordinal);
-    IReadOnlyList<MachineSnapshot>? published;
+    readonly List<Machine> _all = [];
+    readonly Dictionary<string, Machine> _bySite = new(StringComparer.Ordinal);
+    IReadOnlyList<MachineSnapshot>? _published;
 
-    public int Count => all.Count;
-    public IReadOnlyList<Machine> All => all;
-    public Machine? Find(string site) => bySite.GetValueOrDefault(site);
+    public int Count => _all.Count;
+    public IReadOnlyList<Machine> All => _all;
+    public Machine? Find(string site) => _bySite.GetValueOrDefault(site);
     /// <summary>Bumped on every change the host shows (items, progress, status).</summary>
     public long Version { get; private set; }
 
     public void Touch()
     {
         Version++;
-        published = null;
+        _published = null;
     }
 
     internal void Add(Machine machine)
     {
-        all.Add(machine);
-        bySite[machine.Site] = machine;
+        _all.Add(machine);
+        _bySite[machine.Site] = machine;
         Touch();
     }
 
     /// <summary>Puts <paramref name="machine"/> in place of its site's machine, keeping its place in the order (an upgraded building's machine for its new record).</summary>
     internal void Replace(Machine machine)
     {
-        int at = all.FindIndex(m => m.Site == machine.Site);
-        if (at < 0) all.Add(machine);
-        else all[at] = machine;
-        bySite[machine.Site] = machine;
+        int at = _all.FindIndex(m => m.Site == machine.Site);
+        if (at < 0) _all.Add(machine);
+        else _all[at] = machine;
+        _bySite[machine.Site] = machine;
         Touch();
     }
 
     internal bool Remove(string site)
     {
-        if (!bySite.Remove(site, out var m)) return false;
-        all.Remove(m);
+        if (!_bySite.Remove(site, out var m)) return false;
+        _all.Remove(m);
         Touch();
         return true;
     }
 
     internal void Clear()
     {
-        all.Clear();
-        bySite.Clear();
+        _all.Clear();
+        _bySite.Clear();
         Touch();
     }
 
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x4D616368);
-        h.Add(all.Count);
-        foreach (var m in all) m.Hash(ref h);
+        h.Add(_all.Count);
+        foreach (var m in _all) m.Hash(ref h);
     }
 
-    internal IReadOnlyList<MachineSnapshot> Published(ItemFactory items) => published ??= [.. all.Select(m => MachineSnapshot.Of(m, items))];
+    internal IReadOnlyList<MachineSnapshot> Published(ItemFactory items) => _published ??= [.. _all.Select(m => MachineSnapshot.Of(m, items))];
 }

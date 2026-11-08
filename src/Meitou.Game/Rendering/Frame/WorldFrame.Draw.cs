@@ -60,8 +60,16 @@ static partial class WorldFrame
     {
         var f = new FrameState
         {
-            Gpu = gpu, Scene = scene, Camera = camera, Render = render, Width = width, Height = height,
-            Hour = hour, Time = time, FogDistance = fogDistance, WeatherHour = weatherHour,
+            Gpu = gpu,
+            Scene = scene,
+            Camera = camera,
+            Render = render,
+            Width = width,
+            Height = height,
+            Hour = hour,
+            Time = time,
+            FogDistance = fogDistance,
+            WeatherHour = weatherHour,
         };
         if (!BeginFrame(ref f)) return;
 

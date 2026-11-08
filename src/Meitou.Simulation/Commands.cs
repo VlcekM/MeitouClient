@@ -37,37 +37,37 @@ public sealed record SandboxMovement(CharacterId Character, byte? Mode, float? S
 /// </summary>
 public sealed class CommandQueue
 {
-    readonly Lock gate = new();
-    readonly List<(SimCommand Command, long Sequence)> pending = [];
-    long sequence;
+    readonly Lock _gate = new();
+    readonly List<(SimCommand Command, long Sequence)> _pending = [];
+    long _sequence;
 
     public int Count
     {
-        get { lock (gate) return pending.Count; }
+        get { lock (_gate) return _pending.Count; }
     }
 
     public void Enqueue(SimCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        lock (gate) pending.Add((command, sequence++));
+        lock (_gate) _pending.Add((command, _sequence++));
     }
 
     /// <summary>Removes and returns the commands whose tick is at or before <paramref name="tick"/>, oldest tick first, then queue order.</summary>
     public IReadOnlyList<SimCommand> TakeDue(long tick, Func<SimCommand, bool>? include = null)
     {
         List<(SimCommand Command, long Sequence)>? due = null;
-        lock (gate)
+        lock (_gate)
         {
-            if (pending.Count == 0) return [];
+            if (_pending.Count == 0) return [];
             int kept = 0;
-            for (int k = 0; k < pending.Count; k++)
+            for (int k = 0; k < _pending.Count; k++)
             {
-                var p = pending[k];
+                var p = _pending[k];
                 if (p.Command.Tick <= tick && (include is null || include(p.Command))) (due ??= []).Add(p);
-                else pending[kept++] = p;
+                else _pending[kept++] = p;
             }
             if (due is null) return [];
-            pending.RemoveRange(kept, pending.Count - kept);
+            _pending.RemoveRange(kept, _pending.Count - kept);
         }
         due.Sort(static (a, b) => a.Command.Tick != b.Command.Tick ? a.Command.Tick.CompareTo(b.Command.Tick) : a.Sequence.CompareTo(b.Sequence));
         var commands = new SimCommand[due.Count];

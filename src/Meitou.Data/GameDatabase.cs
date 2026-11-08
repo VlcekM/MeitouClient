@@ -8,9 +8,9 @@ namespace Meitou.Data;
 /// </summary>
 public sealed class GameDatabase
 {
-    readonly Dictionary<string, GameRecord> records = new(StringComparer.Ordinal);
+    readonly Dictionary<string, GameRecord> _records = new(StringComparer.Ordinal);
 
-    public IReadOnlyDictionary<string, GameRecord> Records => records;
+    public IReadOnlyDictionary<string, GameRecord> Records => _records;
 
     /// <summary>Changes whenever a file, a translation or a post-pass adds, removes or changes records: what an index built over them checks.</summary>
     public int Version { get; private set; }
@@ -24,15 +24,15 @@ public sealed class GameDatabase
     /// <summary>Problems found while applying files. None of them stop loading.</summary>
     public List<GameDataIssue> Issues { get; } = [];
 
-    public GameRecord? Find(string stringId) => records.GetValueOrDefault(stringId);
+    public GameRecord? Find(string stringId) => _records.GetValueOrDefault(stringId);
 
-    public IEnumerable<GameRecord> OfType(FcsRecordType type) => records.Values.Where(r => r.Type == type);
+    public IEnumerable<GameRecord> OfType(FcsRecordType type) => _records.Values.Where(r => r.Type == type);
 
     /// <summary>Translation files applied, by file name, in order (not in <see cref="Files"/>: they are not data files a save depends on).</summary>
     public List<string> Translations { get; } = [];
 
     // Ids of records a translation file created because no data file defined them (its entries for mods that are not loaded).
-    readonly HashSet<string> translationOnly = new(StringComparer.Ordinal);
+    readonly HashSet<string> _translationOnly = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Reads and applies every file of <paramref name="loadOrder"/>: the core files, the language's core translation, the mods, then the
@@ -90,9 +90,9 @@ public sealed class GameDatabase
         {
             foreach (var key in source.Strings.Keys.Where(k => k.StartsWith("_original_", StringComparison.Ordinal)).ToList())
                 source.Strings.Remove(key);
-            bool known = records.ContainsKey(source.StringId);
+            bool known = _records.ContainsKey(source.StringId);
             Apply(source, fileName, translation: true);
-            if (!known && records.ContainsKey(source.StringId)) translationOnly.Add(source.StringId);
+            if (!known && _records.ContainsKey(source.StringId)) _translationOnly.Add(source.StringId);
         }
     }
 
@@ -101,8 +101,8 @@ public sealed class GameDatabase
     void DropTranslationOnlyRecords()
     {
         Version++;
-        foreach (var id in translationOnly) records.Remove(id);
-        translationOnly.Clear();
+        foreach (var id in _translationOnly) _records.Remove(id);
+        _translationOnly.Clear();
     }
 
     /// <summary>
@@ -112,11 +112,11 @@ public sealed class GameDatabase
     public void AddWallMasters()
     {
         Version++;
-        foreach (var master in records.Values)
+        foreach (var master in _records.Values)
         {
-            if (master.Type != FcsRecordType.BUILDING || master.GetInt("link type") == 3) continue;
+            if (master.Type != FcsRecordType.Building || master.GetInt("link type") == 3) continue;
             foreach (var sub in master.GetReferences("wall subsections"))
-                if (records.TryGetValue(sub.TargetStringId, out var section))
+                if (_records.TryGetValue(sub.TargetStringId, out var section))
                     section.ReferenceList("wall master")[master.StringId] = new ReferenceValues(0, 0, 0);
         }
     }
@@ -130,21 +130,21 @@ public sealed class GameDatabase
     public void AddGearBlueprints()
     {
         Version++;
-        var template = Find("RESEARCH_TEMPLATE") is { Type: FcsRecordType.RESEARCH } t ? t : null;
+        var template = Find("RESEARCH_TEMPLATE") is { Type: FcsRecordType.Research } t ? t : null;
         var prices = Gameplay.Economy.PriceConstants.FromDatabase(this);
-        foreach (var item in records.Values.Where(r => r.Type is FcsRecordType.ARMOUR or FcsRecordType.CONTAINER or FcsRecordType.CROSSBOW).ToList())
+        foreach (var item in _records.Values.Where(r => r.Type is FcsRecordType.Armour or FcsRecordType.Container or FcsRecordType.Crossbow).ToList())
         {
             string id = item.StringId + ".TECH.1";
-            if (records.ContainsKey(id)) continue;
-            var research = new GameRecord(id, FcsRecordType.RESEARCH, item.BaseName, item.DefinedBy);
+            if (_records.ContainsKey(id)) continue;
+            var research = new GameRecord(id, FcsRecordType.Research, item.BaseName, item.DefinedBy);
             if (item.Name != item.BaseName) research.Translate(item.Name);
             if (template is not null) CopyFields(template, research);
             research.BoolTable["blueprint only"] = true;
             research.IntTable["money"] = (int)(Gameplay.Economy.ItemValue.Of(this, item, 40, false, prices) * prices.BlueprintPriceMult);
-            string enable = item.Type switch { FcsRecordType.ARMOUR => "enable armour", FcsRecordType.CONTAINER => "enable backpack", _ => "enable crossbow" };
+            string enable = item.Type switch { FcsRecordType.Armour => "enable armour", FcsRecordType.Container => "enable backpack", _ => "enable crossbow" };
             research.ReferenceList(enable)[item.StringId] = new ReferenceValues(0, 0, 0);
-            research.ReferenceList("blueprint item")[item.Type == FcsRecordType.ARMOUR ? "BLUEPRINT_ITEM_ARMOUR" : "BLUEPRINT_ITEM_GEAR"] = new ReferenceValues(0, 0, 0);
-            records.Add(id, research);
+            research.ReferenceList("blueprint item")[item.Type == FcsRecordType.Armour ? "BLUEPRINT_ITEM_ARMOUR" : "BLUEPRINT_ITEM_GEAR"] = new ReferenceValues(0, 0, 0);
+            _records.Add(id, research);
         }
     }
 
@@ -173,15 +173,15 @@ public sealed class GameDatabase
 
     void Apply(FcsRecord source, string fileName, bool translation = false)
     {
-        var record = records.GetValueOrDefault(source.StringId);
-        if (!translation) translationOnly.Remove(source.StringId);
+        var record = _records.GetValueOrDefault(source.StringId);
+        if (!translation) _translationOnly.Remove(source.StringId);
         if (record is null)
         {
             // The game creates the record anyway (FUN_1406c0b50); the editor would skip it. A translation lists records of mods that need not be loaded: no issue for those.
             if (source.IsModified && !translation)
                 Issue(GameDataIssueKind.ModifiedRecordNotFound, fileName, source.StringId, $"changes record '{source.Name}', which no earlier file defines; created from the change");
             record = new GameRecord(source.StringId, source.RecordType, source.Name, fileName);
-            records.Add(source.StringId, record);
+            _records.Add(source.StringId, record);
         }
         else
         {
@@ -200,8 +200,8 @@ public sealed class GameDatabase
         Merge(record.BoolTable, source.Bools);
         Merge(record.FloatTable, source.Floats);
         Merge(record.IntTable, source.Ints);
-        Merge(record.Vector3Table, source.Vector3s);
-        Merge(record.Vector4Table, source.Vector4s);
+        Merge(record.Vector3Table, source.Vector3S);
+        Merge(record.Vector4Table, source.Vector4S);
         Merge(record.StringTable, source.Strings);
         Merge(record.FilenameTable, source.Filenames);
 
@@ -239,7 +239,7 @@ public sealed class GameDatabase
         // Checked on the merged record after each change: true takes the record out, so a later file that
         // lists the id starts a fresh record.
         if (record.GetBool(FcsRecord.RemovedKey))
-            records.Remove(record.StringId);
+            _records.Remove(record.StringId);
     }
 
     static void Merge<T>(Dictionary<string, T> into, OrderedDictionary<string, T> from)

@@ -19,8 +19,8 @@ static class IconExport
     /// <summary>The record types an inventory holds.</summary>
     static readonly FcsRecordType[] ItemTypes =
     [
-        FcsRecordType.WEAPON, FcsRecordType.ARMOUR, FcsRecordType.ITEM, FcsRecordType.CONTAINER, FcsRecordType.NEST_ITEM, FcsRecordType.MAP_ITEM, FcsRecordType.CROSSBOW,
-        FcsRecordType.LIMB_REPLACEMENT,
+        FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Item, FcsRecordType.Container, FcsRecordType.NestItem, FcsRecordType.MapItem, FcsRecordType.Crossbow,
+        FcsRecordType.LimbReplacement,
     ];
 
     /// <summary>Frames without a new icon after which the run stops waiting (the renderer gives up on missing textures after 300).</summary>
@@ -69,7 +69,7 @@ static class IconExport
     /// </summary>
     static List<Wanted> WantedOf(GameDatabase db, GameRecord item)
     {
-        if (item.Type == FcsRecordType.WEAPON)
+        if (item.Type == FcsRecordType.Weapon)
         {
             var models = WeaponModels(db, item);
             if (models.Count > 0) return models;
@@ -85,11 +85,11 @@ static class IconExport
     {
         var wanted = new List<Wanted>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var maker in db.OfType(FcsRecordType.WEAPON_MANUFACTURER).OrderBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var maker in db.OfType(FcsRecordType.WeaponManufacturer).OrderBy(r => r.StringId, StringComparer.Ordinal))
         {
             if (!maker.GetReferences("weapon types").Any(r => r.TargetStringId == weapon.StringId)) continue;
             foreach (var model in maker.GetReferences("weapon models"))
-                if (db.Find(model.TargetStringId) is { Type: FcsRecordType.MATERIAL_SPECS_WEAPON } && seen.Add(model.TargetStringId))
+                if (db.Find(model.TargetStringId) is { Type: FcsRecordType.MaterialSpecsWeapon } && seen.Add(model.TargetStringId))
                     wanted.Add(new(new IconKey(weapon.StringId, model.TargetStringId), maker.Name));
         }
         return wanted;
@@ -100,7 +100,7 @@ static class IconExport
     {
         var files = wanted.Where(w => File.Exists(Path.Combine(output, FileName(w.Key)))).ToList();
         var first = files.FirstOrDefault();
-        var variants = item.Type == FcsRecordType.WEAPON && files.Count > 0
+        var variants = item.Type == FcsRecordType.Weapon && files.Count > 0
             ? files.Select(w => new Variant(w.Manufacturer, w.Key.Material, db.Find(w.Key.Material)?.Name ?? "", FileName(w.Key), complete.Contains(w.Key))).ToList()
             : null;
         return new(item.StringId, item.Name, item.Type.ToString(), first is null ? null : FileName(first.Key), first is not null && complete.Contains(first.Key), variants);

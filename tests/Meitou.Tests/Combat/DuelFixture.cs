@@ -64,7 +64,7 @@ static class DuelFixture
     public static SimWorld NewWorld(ulong seed, int threads, out CombatSystem combat, CombatOptions? options = null, IEnumerable<CombatTechnique>? techniques = null, int minPartition = 1)
     {
         combat = new CombatSystem(techniques ?? KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, Lengths, options ?? new CombatOptions { RecordLog = true });
-        return new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, new OpenGroundWalkability((_, _) => 150), [combat, CombatFixtures.Senses(combat)]);
+        return new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, new OpenGroundWalkability((_, _) => 150), [combat, Senses(combat)]);
     }
 
     public static CharacterId Spawn(SimWorld world, Combatant c, Vector3 position)

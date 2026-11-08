@@ -13,49 +13,49 @@ namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// The dev console (Meitou only; docs/game/ui-input.md "Dev console"): Insert or Ctrl+` opens a panel over the top of the screen with an input line; while open it takes every key, as the debug
-/// menu does. Commands that change the world enqueue <see cref="DebugCommand"/>s like the menu's cheats, so they apply between ticks; the text side is <see cref="DevConsole"/>.
+/// menu does. Commands that change the world enqueue <see cref="DebugCommand"/>s like the menu's cheats, so they apply between ticks; the text side is <see cref="DevTools.DevConsole"/>.
 /// </summary>
 sealed class DevConsoleHost(GameHost host)
 {
-    internal readonly DevConsole devConsole = new();
+    internal readonly DevConsole DevConsole = new();
 
     /// <summary>The <c>version --say</c> bubble waiting for its moment: the speaker picked when the command was typed, the text, and the <see cref="Stopwatch"/> timestamp it is due at.</summary>
-    (long DueTimestamp, CharacterId Speaker, string Text)? pendingVersionSay;
+    (long DueTimestamp, CharacterId Speaker, string Text)? _pendingVersionSay;
 
     /// <summary>Once per frame (also while the console is open): enqueues the pending <c>version --say</c> bubble when it is due; dropped when no game is loaded, silently skipped when the speaker is gone or dead.</summary>
     internal void PumpPendingSay()
     {
-        if (pendingVersionSay is not { } pending) return;
-        if (host.Covered || host.player.TitleOpen) { pendingVersionSay = null; return; }
+        if (_pendingVersionSay is not { } pending) return;
+        if (host.Covered || host.Player.TitleOpen) { _pendingVersionSay = null; return; }
         if (Stopwatch.GetTimestamp() < pending.DueTimestamp) return;
-        pendingVersionSay = null;
-        if (host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == pending.Speaker) is not { } speaker || speaker.Body is { Dead: true }) return;
-        host.session.World.Commands.Enqueue(new DebugSay(pending.Speaker, pending.Text) { Tick = host.session.World.Tick });
+        _pendingVersionSay = null;
+        if (host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == pending.Speaker) is not { } speaker || speaker.Body is { Dead: true }) return;
+        host.Session.World.Commands.Enqueue(new DebugSay(pending.Speaker, pending.Text) { Tick = host.Session.World.Tick });
     }
 
     /// <summary>The console that ran <c>explode</c> and waits for its result line (see <see cref="GameHost.WorldNews"/>).</summary>
-    internal DevConsole? explodeAsker;
-    readonly Dictionary<bool, List<string>> consoleNames = [];
-    internal bool consoleRegistered;
+    internal DevConsole? ExplodeAsker;
+    readonly Dictionary<bool, List<string>> _consoleNames = [];
+    internal bool ConsoleRegistered;
     /// <summary>The pointer in framebuffer pixels as of the last frame, for the commands that mean the point under the cursor.</summary>
-    internal Vector2 consolePointer;
+    internal Vector2 ConsolePointer;
     /// <summary>--headless: the pointer the control channel's <c>mouse</c> command gave, in screen pixels (null until it does); a window's pointer is read from the window instead.</summary>
-    internal Vector2? headlessMouse;
+    internal Vector2? HeadlessMouse;
     /// <summary>The control channel's <c>click</c>: steps the interactive loop plays one per frame ('m' move, 'i' idle, 'd' press, 'u' release; right button; pixel).</summary>
-    internal readonly Queue<(char Kind, bool Right, Vector2 At)> pointerSteps = new();
+    internal readonly Queue<(char Kind, bool Right, Vector2 At)> PointerSteps = new();
     /// <summary>The control channel's <c>quit</c>: the interactive loop ends at its next pass (saves the settings, disposes as on any exit).</summary>
-    internal bool controlQuit;
+    internal bool ControlQuit;
 
-    internal bool ConsoleOpen => devConsole.Open;
+    internal bool ConsoleOpen => DevConsole.Open;
 
     /// <summary>Insert, or Ctrl plus the backquote key (which the game binds to select all, so it stays free only with Ctrl).</summary>
     internal static bool IsConsoleToggle(SilkKey key, bool ctrl) => key == SilkKey.Insert || (ctrl && key == SilkKey.GraveAccent);
 
     internal void ToggleConsole()
     {
-        if (!consoleRegistered) RegisterConsoleCommands();
-        devConsole.Open = !devConsole.Open;
-        if (devConsole.Open) host.debugMenu.debugMenuOpen = false;
+        if (!ConsoleRegistered) RegisterConsoleCommands();
+        DevConsole.Open = !DevConsole.Open;
+        if (DevConsole.Open) host.DebugMenu.DebugMenuOpen = false;
     }
 
     /// <summary>A key pressed while the console is open (the toggle key is handled by the caller).</summary>
@@ -64,20 +64,20 @@ sealed class DevConsoleHost(GameHost host)
         bool ctrl = keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight);
         switch (key)
         {
-            case SilkKey.Escape: devConsole.Open = false; break;
-            case SilkKey.Enter or SilkKey.KeypadEnter: devConsole.Submit(); break;
-            case SilkKey.Backspace: devConsole.Backspace(); break;
-            case SilkKey.Delete: devConsole.Delete(); break;
-            case SilkKey.Left: devConsole.MoveCaret(devConsole.Caret - 1); break;
-            case SilkKey.Right: devConsole.MoveCaret(devConsole.Caret + 1); break;
-            case SilkKey.Home: devConsole.MoveCaret(0); break;
-            case SilkKey.End: devConsole.MoveCaret(devConsole.Input.Length); break;
-            case SilkKey.Up: devConsole.HistoryStep(-1); break;
-            case SilkKey.Down: devConsole.HistoryStep(1); break;
-            case SilkKey.Tab: devConsole.Complete(); break;
-            case SilkKey.PageUp: devConsole.Scroll += 8; break;
-            case SilkKey.PageDown: devConsole.Scroll = Math.Max(0, devConsole.Scroll - 8); break;
-            case SilkKey.V when ctrl && keyboard.ClipboardText is { } pasted: devConsole.Paste(pasted); break;
+            case SilkKey.Escape: DevConsole.Open = false; break;
+            case SilkKey.Enter or SilkKey.KeypadEnter: DevConsole.Submit(); break;
+            case SilkKey.Backspace: DevConsole.Backspace(); break;
+            case SilkKey.Delete: DevConsole.Delete(); break;
+            case SilkKey.Left: DevConsole.MoveCaret(DevConsole.Caret - 1); break;
+            case SilkKey.Right: DevConsole.MoveCaret(DevConsole.Caret + 1); break;
+            case SilkKey.Home: DevConsole.MoveCaret(0); break;
+            case SilkKey.End: DevConsole.MoveCaret(DevConsole.Input.Length); break;
+            case SilkKey.Up: DevConsole.HistoryStep(-1); break;
+            case SilkKey.Down: DevConsole.HistoryStep(1); break;
+            case SilkKey.Tab: DevConsole.Complete(); break;
+            case SilkKey.PageUp: DevConsole.Scroll += 8; break;
+            case SilkKey.PageDown: DevConsole.Scroll = Math.Max(0, DevConsole.Scroll - 8); break;
+            case SilkKey.V when ctrl && keyboard.ClipboardText is { } pasted: DevConsole.Paste(pasted); break;
         }
     }
 
@@ -90,15 +90,15 @@ sealed class DevConsoleHost(GameHost host)
         o.Rect(0, panelH, width, panelH + 2, new Vector4(0.25f, 0.4f, 0.65f, 1));
         // Visual lines, newest last: each entry wrapped to the panel's width, the continuation indented.
         var visual = new List<(string Text, DevConsole.Kind Kind)>();
-        foreach (var line in devConsole.Lines)
+        foreach (var line in DevConsole.Lines)
         {
             string prefix = line.Kind == DevConsole.Kind.Input ? "> " : "";
             var wrapped = o.WrapText(prefix + line.Text, width - 2 * pad);
             for (int i = 0; i < wrapped.Count; i++) visual.Add((i == 0 ? wrapped[i] : "  " + wrapped[i], line.Kind));
         }
         int maxScroll = Math.Max(0, visual.Count - rows);
-        devConsole.Scroll = Math.Min(devConsole.Scroll, maxScroll);
-        int last = visual.Count - devConsole.Scroll;
+        DevConsole.Scroll = Math.Min(DevConsole.Scroll, maxScroll);
+        int last = visual.Count - DevConsole.Scroll;
         float y = pad;
         for (int i = Math.Max(0, last - rows); i < last; i++, y += lineH)
         {
@@ -110,14 +110,14 @@ sealed class DevConsoleHost(GameHost host)
             };
             o.Text(visual[i].Text, pad, y, colour);
         }
-        if (devConsole.Scroll > 0) o.Text($"[{devConsole.Scroll} more below: PageDown]", width - pad - o.CharWidth * 28, pad, new Vector4(0.7f, 0.75f, 0.8f, 1));
+        if (DevConsole.Scroll > 0) o.Text($"[{DevConsole.Scroll} more below: PageDown]", width - pad - o.CharWidth * 28, pad, new Vector4(0.7f, 0.75f, 0.8f, 1));
         float inputY = pad * 2 + rows * lineH;
         o.Rect(pad / 2, inputY - 2, width - pad / 2, inputY + lineH + 2, new Vector4(0.12f, 0.16f, 0.24f, 0.9f));
         string prompt = "> ";
-        o.Text(prompt + devConsole.Input, pad, inputY, DebugOverlay.TextColour);
+        o.Text(prompt + DevConsole.Input, pad, inputY, DebugOverlay.TextColour);
         if (Stopwatch.GetTimestamp() / (Stopwatch.Frequency / 2) % 2 == 0)
         {
-            float caretX = pad + (prompt.Length + devConsole.Caret) * o.CharWidth;
+            float caretX = pad + (prompt.Length + DevConsole.Caret) * o.CharWidth;
             o.Rect(caretX, inputY, caretX + 2, inputY + lineH, DebugOverlay.TextColour);
         }
         o.Flush(width, height);
@@ -126,16 +126,16 @@ sealed class DevConsoleHost(GameHost host)
     // ---- commands
 
     /// <summary>The world point under the cursor (terrain, a floor or a wall top, as a move order picks it), else null.</summary>
-    Vector3? ConsoleCursorPoint() => host.player.Ray(consolePointer) is { } ray ? host.player.picking.MoveHit(ray.Origin, ray.Direction) : null;
+    Vector3? ConsoleCursorPoint() => host.Player.Ray(ConsolePointer) is { } ray ? host.Player.Picking.MoveHit(ray.Origin, ray.Direction) : null;
 
     /// <summary>Names of the character or item records, sorted, for Tab completion.</summary>
     List<string> ConsoleRecordNames(bool character)
     {
-        if (consoleNames.TryGetValue(character, out var cached)) return cached;
-        bool Fits(FcsRecordType t) => character ? t is FcsRecordType.CHARACTER or FcsRecordType.ANIMAL_CHARACTER : DebugGiveItem.ItemTypes.Contains(t);
-        var names = host.scene.Database is { } db
+        if (_consoleNames.TryGetValue(character, out var cached)) return cached;
+        bool Fits(FcsRecordType t) => character ? t is FcsRecordType.Character or FcsRecordType.AnimalCharacter : DebugGiveItem.ItemTypes.Contains(t);
+        var names = host.Scene.Database is { } db
             ? db.Records.Values.Where(r => Fits(r.Type) && r.Name.Length > 0).Select(r => r.Name).Distinct().Order(StringComparer.OrdinalIgnoreCase).ToList() : [];
-        return consoleNames[character] = names;
+        return _consoleNames[character] = names;
     }
 
     static IEnumerable<string> ConsoleMatch(IEnumerable<string> names, string typed)
@@ -149,7 +149,7 @@ sealed class DevConsoleHost(GameHost host)
     TownSite? ConsoleTown(string typed, out List<string> others)
     {
         others = [];
-        if (host.popData is not { } data || typed.Length == 0) return null;
+        if (host.PopData is not { } data || typed.Length == 0) return null;
         var named = data.Sites.Where(s => s.Town.Type is not (TownType.NestMarker or TownType.Null) && s.Town.Name.Length > 0).ToList();
         var exact = named.Where(s => string.Equals(s.Town.Name, typed, StringComparison.OrdinalIgnoreCase)).ToList();
         var hits = exact.Count > 0 ? exact : [.. named.Where(s => s.Town.Name.StartsWith(typed, StringComparison.OrdinalIgnoreCase)).OrderBy(s => s.Town.Name.Length).ThenBy(s => s.Town.Name, StringComparer.Ordinal)];
@@ -164,9 +164,9 @@ sealed class DevConsoleHost(GameHost host)
     /// <summary>Argument completion for the commands the control-side registration helpers add (they take no completer): character ids from the live world, carried items, flag values. Any word starting with a dash completes the command's own flags (DevConsole.Complete).</summary>
     void RegisterConsoleCompletions()
     {
-        var c = devConsole;
+        var c = DevConsole;
         IEnumerable<string> Starting(IEnumerable<string> names, string typed) => names.Where(n => n.StartsWith(typed, StringComparison.OrdinalIgnoreCase));
-        IEnumerable<string> Characters(string typed) => Starting(host.player.agentOrders.ControlCharacterKeys(), typed);
+        IEnumerable<string> Characters(string typed) => Starting(host.Player.AgentOrders.ControlCharacterKeys(), typed);
         c.FlagValues = (flag, typed) => flag.ToLowerInvariant() switch
         {
             "--id" => Characters(typed),
@@ -178,8 +178,8 @@ sealed class DevConsoleHost(GameHost host)
         c.SetComplete("version", (i, typed) => i == 0 ? Starting(["--say"], typed) : []);
         c.SetComplete("order", (i, typed) => i == 0 ? Starting(["move", "attack"], typed) : i == 1 && c.CompletionArgs is ["attack"] ? Characters(typed) : []);
         c.SetComplete("spawn-at", (i, typed) => i == 2 ? ConsoleMatch(ConsoleRecordNames(character: true), typed) : []);
-        c.SetComplete("equip", (i, typed) => i == 0 ? ConsoleMatch(host.player.agentOrders.ControlCarriedItemNames(), typed) : []);
-        c.SetComplete("pickup", (i, typed) => i == 0 ? Starting(host.player.agentOrders.ControlGroundItemKeys(), typed) : []);
+        c.SetComplete("equip", (i, typed) => i == 0 ? ConsoleMatch(host.Player.AgentOrders.ControlCarriedItemNames(), typed) : []);
+        c.SetComplete("pickup", (i, typed) => i == 0 ? Starting(host.Player.AgentOrders.ControlGroundItemKeys(), typed) : []);
         c.SetComplete("door", (i, typed) => i == 0 ? Starting(["nearest"], typed) : []);
         foreach (var name in new[] { "godmode", "guard", "tpmap" }) c.SetComplete(name, (i, typed) => i == 0 ? Starting(["on", "off"], typed) : []);
         IEnumerable<string> Levels(string typed) => Starting(["1", "2", "3", "4", "5", "underkill", "light", "normal", "overkill", "ridiculous"], typed);
@@ -189,11 +189,11 @@ sealed class DevConsoleHost(GameHost host)
 
     internal void RegisterConsoleCommands()
     {
-        consoleRegistered = true;
-        var c = devConsole;
+        ConsoleRegistered = true;
+        var c = DevConsole;
         void Add(string name, string usage, string help, Action<IReadOnlyList<string>, DevConsole> run, Func<int, string, IEnumerable<string>>? complete = null) =>
             c.Register(new ConsoleCommand(name, usage, help, run) { Complete = complete });
-        void Send(Func<long, SimCommand> command) => host.session.World.Commands.Enqueue(command(host.session.World.Tick));
+        void Send(Func<long, SimCommand> command) => host.Session.World.Commands.Enqueue(command(host.Session.World.Tick));
         bool Need(IReadOnlyList<string> args, int min, int max, ConsoleCommand self)
         {
             if (args.Count >= min && args.Count <= max) return true;
@@ -210,7 +210,7 @@ sealed class DevConsoleHost(GameHost host)
             {
                 if (!channel) { foreach (var cmd in con.Commands) con.Print($"{cmd.Usage}  -  {cmd.Help}"); return; }
                 var all = con.Commands.ToList();
-                host.agentChannel.controlData = System.Text.Json.JsonSerializer.Serialize(new { commands = all.Select(x => new { name = x.Name, usage = x.Usage }) });
+                host.AgentChannel.ControlData = System.Text.Json.JsonSerializer.Serialize(new { commands = all.Select(x => new { name = x.Name, usage = x.Usage }) });
                 foreach (var cmd in all) con.Print(cmd.Usage);
                 con.Print("help <command> shows the description");
                 return;
@@ -218,7 +218,7 @@ sealed class DevConsoleHost(GameHost host)
             string name = args[0].ToLowerInvariant();
             if (con.Find(name) is { } one)
             {
-                if (channel) host.agentChannel.controlData = System.Text.Json.JsonSerializer.Serialize(new { name = one.Name, usage = one.Usage, help = one.Help, flags = one.Flags });
+                if (channel) host.AgentChannel.ControlData = System.Text.Json.JsonSerializer.Serialize(new { name = one.Name, usage = one.Usage, help = one.Help, flags = one.Flags });
                 con.Print($"{one.Usage}\n{one.Help}" + (one.Flags.Count > 0 ? "\nflags: " + string.Join(" ", one.Flags) : ""));
                 return;
             }
@@ -227,7 +227,7 @@ sealed class DevConsoleHost(GameHost host)
                 .OrderBy(x => x.Name.Contains(name, StringComparison.OrdinalIgnoreCase) ? 0 : 1).ToList();
             if (found.Count > 0)
             {
-                if (channel) host.agentChannel.controlData = System.Text.Json.JsonSerializer.Serialize(new { commands = found.Select(x => new { name = x.Name, usage = x.Usage }) });
+                if (channel) host.AgentChannel.ControlData = System.Text.Json.JsonSerializer.Serialize(new { commands = found.Select(x => new { name = x.Name, usage = x.Usage }) });
                 foreach (var cmd in found) con.Print($"{cmd.Usage}  -  {cmd.Help}");
                 return;
             }
@@ -245,10 +245,10 @@ sealed class DevConsoleHost(GameHost host)
             string text = $"Meitou {BuildVersion.Tag} ({BuildVersion.Commit})";
             if (say)
             {
-                if (host.Covered || host.player.TitleOpen) { con.Error("version: load a game first (no world is loaded yet)"); return; }
-                var lead = host.session.CurrentSnapshot.Characters.FirstOrDefault(ch => ch.IsPlayer && ch.Selected && ch.Body is not { Dead: true }) ?? host.session.CurrentSnapshot.Characters.FirstOrDefault(ch => ch.IsPlayer && ch.Body is not { Dead: true });
+                if (host.Covered || host.Player.TitleOpen) { con.Error("version: load a game first (no world is loaded yet)"); return; }
+                var lead = host.Session.CurrentSnapshot.Characters.FirstOrDefault(ch => ch.IsPlayer && ch.Selected && ch.Body is not { Dead: true }) ?? host.Session.CurrentSnapshot.Characters.FirstOrDefault(ch => ch.IsPlayer && ch.Body is not { Dead: true });
                 if (lead is null) { con.Error("version: no living squad member to speak"); return; }
-                pendingVersionSay = (Stopwatch.GetTimestamp() + Stopwatch.Frequency, lead.Id, text);
+                _pendingVersionSay = (Stopwatch.GetTimestamp() + Stopwatch.Frequency, lead.Id, text);
             }
             con.Print(text);
         });
@@ -256,32 +256,32 @@ sealed class DevConsoleHost(GameHost host)
         // Every command that the F10 menu also has runs the menu's own DebugApply / DebugGive (DebugMenu), so there is one implementation; only kill is the console's.
         void Report(DevConsole con, string text, string? suffix = null)
         {
-            if (host.debugMenu.debugFailed) con.Error(text);
+            if (host.DebugMenu.DebugFailed) con.Error(text);
             else con.Print(text + suffix);
         }
 
         Add("money", "money <delta>", "add (or with a minus take away) cats; never below 0", (args, con) =>
         {
             if (!Need(args, 1, 1, Self("money"))) return;
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.Money, args[0]));
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Money, args[0]));
         });
 
         Add("heal", "heal", "heal the selected characters fully (else the inspected one)", (args, con) =>
         {
             if (!Need(args, 0, 0, Self("heal"))) return;
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.Heal, ""));
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Heal, ""));
         });
 
         Add("godmode", "godmode [on|off]", "god mode for every player character (also later recruits): all stats 1000 (10 x the game's maximum), healed 5 times a second (parts, limbs, blood, bleeding, hunger); off restores each character's own stats; no argument toggles; reports the state", (args, con) =>
         {
             if (!Need(args, 0, 1, Self("godmode"))) return;
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.Godmode, args.Count > 0 ? args[0] : ""));
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Godmode, args.Count > 0 ? args[0] : ""));
         });
 
         Add("tpmap", "tpmap [on|off]", "the F10 switch Teleport on map: while on, every left click on the open map tab teleports the selected characters (else the lead) there and puts the camera on the spot; no argument toggles; reports the state", (args, con) =>
         {
             if (!Need(args, 0, 1, Self("tpmap"))) return;
-            bool on = !host.player.worldMap.MapPickSticky;
+            bool on = !host.Player.WorldMap.MapPickSticky;
             if (args.Count > 0)
             {
                 switch (args[0].ToLowerInvariant())
@@ -291,30 +291,30 @@ sealed class DevConsoleHost(GameHost host)
                     default: con.Error("tpmap: on or off"); return;
                 }
             }
-            host.debugMenu.SetMapTeleport(on);
+            host.DebugMenu.SetMapTeleport(on);
             con.Print(on ? "map teleport on: open the map and click a spot" : "map teleport off");
         });
 
         Add("guard", "guard [on|off] [--radius <m>] [--animals]", "god-mode style safety: 4 times a second kills the hostile characters within the radius (default 30 m) of the selected (else first) squad member, as kill --radius does (never the squad or its faction; animals only with --animals or while one attacks a player character), and heals the player's characters as godmode does; stays on until turned off, switches itself off when a game loads; no argument toggles. Not for combat, survival or loot-source tests", (args, con) =>
         {
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.Guard, string.Join(' ', args)));
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Guard, string.Join(' ', args)));
         });
 
         Add("explode", "explode [<x> <z> | <level 1-5>] [--level <1-5|name>] [--id <c:slot.gen>] [--radius <m>=40] [--force <n>=100] [--damage <n>=40] [--squad]", "debug blast (default centre: the character the info panel shows if it is not your squad, else the selected, else first, squad member; --id centres on a given character): every living character within the radius, except your squad unless --squad, takes cut damage falling off linearly with distance (full at the centre, 35% at the radius edge), is knocked out for 30 s if it survives, and is thrown away from the centre (force = speed in world units/s at the centre, falling off the same way). The result line (hit by distance band / knocked out / killed, or nobody in range) goes to the message log and a blood ring marks the centre (Blood setting on). Runs in the simulation, so not while the game is paused", (args, con) =>
         {
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.Explode, string.Join(' ', args)));
-            if (!host.debugMenu.debugFailed) explodeAsker = con;   // the result line (made in the next tick) is printed here too
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Explode, string.Join(' ', args)));
+            if (!host.DebugMenu.DebugFailed) ExplodeAsker = con;   // the result line (made in the next tick) is printed here too
         });
 
         Add("explode-click", "explode-click [on|off] [<level 1-5>] [--level <1-5|name>] [--radius <m>=80] [--force <n>=160] [--damage <n>=100] [--squad]", "the F10 switch Explode on click: while on, a left click on the ground in the world (not on the interface, the F10 menu, the console or the map) explodes the point under the cursor like explode does (flags set the blast used for each click), and the click selects and orders nothing; no on/off argument toggles (flags alone turn it on); stays on until switched off or another game loads. Runs in the simulation, so not while the game is paused", (args, con) =>
         {
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.ExplodeClick, string.Join(' ', args)));
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.ExplodeClick, string.Join(' ', args)));
         });
 
         Add("maxstats", "maxstats", "every stat to 100 for the selected characters (else the inspected one)", (args, con) =>
         {
             if (!Need(args, 0, 0, Self("maxstats"))) return;
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.MaxSkills, ""));
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.MaxSkills, ""));
         });
 
         Add("give", "give \"<item record>\" [qty] [quality] [--equip]", "put items on the first selected character; quality 0-100 (armour, weapons, crossbows, limbs); one unit is worn when its slot is free; --equip also wears it when the slot is taken (the worn item goes to the inventory, else the ground)", (args, con) =>
@@ -325,22 +325,22 @@ sealed class DevConsoleHost(GameHost host)
             int quantity = 1, quality = 0;
             if (args.Count > 1 && !int.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out quantity)) { con.Error($"give: quantity '{args[1]}' is not a whole number"); return; }
             if (args.Count > 2 && !int.TryParse(args[2], NumberStyles.None, CultureInfo.InvariantCulture, out quality)) { con.Error($"give: quality '{args[2]}' is not a whole number"); return; }
-            Report(con, host.debugMenu.DebugGive(args[0], quantity, quality, equipFlag));
+            Report(con, host.DebugMenu.DebugGive(args[0], quantity, quality, equipFlag));
             // A paused game takes no tick: apply the give now so the reply (and a build right after) already sees the item.
-            if (!host.debugMenu.debugFailed) host.session.ApplyPausedCommandsNow();
+            if (!host.DebugMenu.DebugFailed) host.Session.ApplyPausedCommandsNow();
         }, (i, typed) => i == 0 ? ConsoleMatch(ConsoleRecordNames(character: false), typed) : []);
 
         Add("spawn", "spawn \"<character record>\"", "spawn a hostile character at the cursor", (args, con) =>
         {
             if (!Need(args, 1, 1, Self("spawn"))) return;
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.SpawnNpc, args[0], at: ConsoleCursorPoint()));
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.SpawnNpc, args[0], at: ConsoleCursorPoint()));
         }, (i, typed) => i == 0 ? ConsoleMatch(ConsoleRecordNames(character: true), typed) : []);
 
         Add("tpcursor", "tpcursor", "teleport the selected characters to the point under the cursor", (args, con) =>
         {
             if (!Need(args, 0, 0, Self("tpcursor"))) return;
             if (ConsoleCursorPoint() is not { } at) { con.Error("no point under the cursor"); return; }
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.Teleport, "", at: at));
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Teleport, "", at: at));
         });
 
         Add("tp", "tp <x> <z> | tp <town name>", "teleport the selected characters to world X Z, or to a town (name or its start, ignoring case; the town's centre)", (args, con) =>
@@ -349,21 +349,21 @@ sealed class DevConsoleHost(GameHost host)
             if (args.Count == 2 && float.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
                 && float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
             {
-                Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.Teleport, "", at: new Vector3(x, 0, z)));
-                if (!host.debugMenu.debugFailed) host.debugMenu.CentreCameraOn(x, z);
+                Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Teleport, "", at: new Vector3(x, 0, z)));
+                if (!host.DebugMenu.DebugFailed) host.DebugMenu.CentreCameraOn(x, z);
                 return;
             }
             string typed = string.Join(' ', args);
             if (ConsoleTown(typed, out var others) is not { } town) { con.Error($"no town matches '{typed}'"); return; }
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.Teleport, "", at: town.Position), $" ({town.Town.Name}){(others.Count > 0 ? $"; also matches {string.Join(", ", others)}" : "")}");
-            if (!host.debugMenu.debugFailed) host.debugMenu.CentreCameraOn(town.Position.X, town.Position.Z);
-        }, (i, typed) => host.popData is { } d
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.Teleport, "", at: town.Position), $" ({town.Town.Name}){(others.Count > 0 ? $"; also matches {string.Join(", ", others)}" : "")}");
+            if (!host.DebugMenu.DebugFailed) host.DebugMenu.CentreCameraOn(town.Position.X, town.Position.Z);
+        }, (i, typed) => host.PopData is { } d
             ? ConsoleMatch(d.Sites.Where(s => s.Town.Type is not (TownType.NestMarker or TownType.Null)).Select(s => s.Town.Name).Where(n => n.Length > 0).Distinct().Order(StringComparer.OrdinalIgnoreCase), typed) : []);
 
         Add("kill", "kill [--id <c:slot.gen>] | kill --radius <m> [<x> <z>] [--animals]", "kill the selected characters, or the one given by --id; --radius kills every living character within <m> metres (max 2000) of X Z, or of the selected (else first) squad member, in one command; never the player's squad or faction, animals only with --animals", (args, con) =>
         {
-            if (args.Any(a => a.Equals("--radius", StringComparison.OrdinalIgnoreCase))) { host.agentPlay.ControlKillArea(args, con); return; }
-            if (!host.agentPlay.ControlTargets(args, con, "kill", out var selected, out var rest)) return;
+            if (args.Any(a => a.Equals("--radius", StringComparison.OrdinalIgnoreCase))) { host.AgentPlay.ControlKillArea(args, con); return; }
+            if (!host.AgentPlay.ControlTargets(args, con, "kill", out var selected, out var rest)) return;
             if (rest.Count > 0) { con.Error("usage: kill [--id <c:slot.gen>] | kill --radius <m> [<x> <z>] [--animals]"); return; }
             Send(t => new DebugKill(selected) { Tick = t });
             con.Print($"killed {selected.Length}");
@@ -371,12 +371,12 @@ sealed class DevConsoleHost(GameHost host)
 
         Add("research", "research [list | queue <tech>]", "finish every research; research list shows the research state, research queue <tech> queues one the way the research window does", (args, con) =>
         {
-            if (args.Count > 0) { host.agentPlay.ControlResearch(args, con); return; }
+            if (args.Count > 0) { host.AgentPlay.ControlResearch(args, con); return; }
             if (!Need(args, 0, 0, Self("research"))) return;
-            Report(con, host.debugMenu.DebugApply(DebugMenu.DebugRow.UnlockResearch, ""));
+            Report(con, host.DebugMenu.DebugApply(DebugMenu.DebugRow.UnlockResearch, ""));
         });
 
-        host.agentChannel.RegisterControlCommands();
+        host.AgentChannel.RegisterControlCommands();
         RegisterConsoleCompletions();
 
         c.Print("Dev console (Meitou only). help lists the commands, Tab completes, Up/Down is the history, Esc closes.");

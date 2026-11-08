@@ -71,18 +71,18 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     /// <summary>Lets a carrier put its body down (null: no carrying, so no laying in).</summary>
     public Carrying.CarrySystem? Carry { get; set; }
 
-    readonly List<BedTrip> trips = [];
+    readonly List<BedTrip> _trips = [];
     // Bed id -> the game hour the player's faction last paid its rent (the original's global map is keyed by a name string of the argument and is never saved, Verified by references;
     // Meitou saves it as `meitou rent` keys on the CAMERA, engine choice).
-    readonly SortedDictionary<string, double> paid = new(StringComparer.Ordinal);
+    readonly SortedDictionary<string, double> _paid = new(StringComparer.Ordinal);
 
-    public IReadOnlyList<BedTrip> Trips => trips;
+    public IReadOnlyList<BedTrip> Trips => _trips;
 
     /// <summary>The beds whose rent was paid, with the game hour of the payment, in id order (a save keeps them: <see cref="Saving.BedSave"/>).</summary>
-    public IReadOnlyCollection<KeyValuePair<string, double>> RentPaid => paid;
+    public IReadOnlyCollection<KeyValuePair<string, double>> RentPaid => _paid;
 
     /// <summary>Sets the game hour a bed's rent was last paid (a loaded save does this).</summary>
-    public void SetRentPaid(string bed, double hours) => paid[bed] = hours;
+    public void SetRentPaid(string bed, double hours) => _paid[bed] = hours;
 
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
 
@@ -97,12 +97,12 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
                     // Order 258 goes to every selected character (FUN_1407f9e20 has no gate for it, Verified); the bed takes one, the later arrivals are refused there.
                     if (world.Fixtures.Find(use.Bed) is not { Kind: FixtureKind.Bed } bed) break;
                     foreach (var id in Who(world, use.Characters))
-                        if (table.TryResolveNext(id, out int s)) PlayerOrders.Give(world, s, new OrderEntry(TaskType.USE_BED, this) { Site = bed.Id }, use.Queued);
+                        if (table.TryResolveNext(id, out int s)) PlayerOrders.Give(world, s, new OrderEntry(TaskType.UseBed, this) { Site = bed.Id }, use.Queued);
                     break;
                 case PutInBedOrder put:
                     foreach (var id in Who(world, put.Carriers))
                         if (table.TryResolveNext(id, out int s) && table.Cold(s) is { Carrying.IsNone: false })
-                            PlayerOrders.Give(world, s, new OrderEntry(TaskType.PUT_SOMEONE_IN_BED, this) { Site = put.Bed, Detail = put.Bed is not null ? Named : null }, put.Queued);
+                            PlayerOrders.Give(world, s, new OrderEntry(TaskType.PutSomeoneInBed, this) { Site = put.Bed, Detail = put.Bed is not null ? Named : null }, put.Queued);
                     break;
             }
         }
@@ -119,7 +119,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var c = world.Characters.Cold(slot)!;
-        if (order.Row == TaskType.USE_BED)
+        if (order.Row == TaskType.UseBed)
         {
             if (world.Fixtures.Find(order.Site!) is not { Kind: FixtureKind.Bed }) return OrderCheck.Gone;
             if (c.InSomething == HeldState.Bed && c.InWhat == order.Site) return OrderCheck.Run;   // lies in it already
@@ -133,13 +133,13 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
         var c = world.Characters.Cold(slot)!;
-        if (order.Row == TaskType.USE_BED)
+        if (order.Row == TaskType.UseBed)
         {
-            if (c.InSomething != HeldState.Bed || c.InWhat != order.Site) TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Sleep, TaskType.USE_BED, TaskSource.Order) { Site = order.Site });
+            if (c.InSomething != HeldState.Bed || c.InWhat != order.Site) TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Sleep, TaskType.UseBed, TaskSource.Order) { Site = order.Site });
             return;
         }
         var bed = BedFor(world, slot, order)!;
-        TaskStart.Start(world, slot, new TaskRequest(CharacterTask.GoTo, TaskType.PUT_SOMEONE_IN_BED, TaskSource.Order) { Site = bed.Id, Detail = order.Detail });
+        TaskStart.Start(world, slot, new TaskRequest(CharacterTask.GoTo, TaskType.PutSomeoneInBed, TaskSource.Order) { Site = bed.Id, Detail = order.Detail });
     }
 
     /// <summary>The <see cref="TaskRequest.Detail"/> of a put-in order that named its bed (no other is looked for when it is taken).</summary>
@@ -152,8 +152,8 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     public void RegisterTasks(TaskHandlers tasks)
     {
         tasks.Register(CharacterTask.Sleep, this);
-        tasks.Register(TaskType.PUT_SOMEONE_IN_BED, this);
-        tasks.Register(TaskType.FIND_BED_AND_PUT_IN, this);
+        tasks.Register(TaskType.PutSomeoneInBed, this);
+        tasks.Register(TaskType.FindBedAndPutIn, this);
     }
 
     /// <summary>
@@ -163,7 +163,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     void ITaskHandler.Start(World world, int slot, in TaskRequest request)
     {
         var bed = world.Fixtures.Find(request.Site!)!;
-        if (request.Task == CharacterTask.Sleep) StartSleep(world, slot, bed, fixedBed: request.Row == TaskType.USE_BED);
+        if (request.Task == CharacterTask.Sleep) StartSleep(world, slot, bed, fixedBed: request.Row == TaskType.UseBed);
         else StartPutIn(world, slot, bed, fixedBed: request.Detail == Named);
     }
 
@@ -175,7 +175,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     {
         if (reason == TaskEnd.Done) return;
         var id = world.Characters.IdOf(slot);
-        trips.RemoveAll(t => t.Character == id);
+        _trips.RemoveAll(t => t.Character == id);
     }
 
     /// <summary>
@@ -194,7 +194,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     /// <summary>Whether another character than <paramref name="except"/> is on its way to <paramref name="bed"/>.</summary>
     public bool Reserved(Fixture bed, CharacterId except)
     {
-        foreach (var t in trips) if (t.Bed == bed.Id && t.Character != except) return true;
+        foreach (var t in _trips) if (t.Bed == bed.Id && t.Character != except) return true;
         return false;
     }
 
@@ -207,14 +207,14 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         var table = world.Characters;
         var id = table.IdOf(slot);
         var c = table.Cold(slot)!;
-        trips.RemoveAll(t => t.Character == id);
+        _trips.RemoveAll(t => t.Character == id);
         if (c.InSomething == HeldState.Bed && c.InWhat != bed.Id) world.Fixtures.LeaveBed(world, id);
         if (c.InSomething == HeldState.Bed) { TaskStart.Step(table, slot, CharacterTask.Sleep); return; }
         var trip = new BedTrip { Character = id, Bed = bed.Id, Fixed = fixedBed };
-        trips.Add(trip);
+        _trips.Add(trip);
         WalkTo(world, slot, bed);
         TaskStart.Step(table, slot, CharacterTask.Sleep);
-        if (!Step(world, trip)) trips.Remove(trip);
+        if (!Step(world, trip)) _trips.Remove(trip);
     }
 
     /// <summary>Sends a carrier to lay its body in <paramref name="bed"/>.</summary>
@@ -223,11 +223,11 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         var table = world.Characters;
         var id = table.IdOf(slot);
         var c = table.Cold(slot)!;
-        trips.RemoveAll(t => t.Character == id);
+        _trips.RemoveAll(t => t.Character == id);
         var trip = new BedTrip { Character = id, Bed = bed.Id, Body = c.Carrying, Fixed = fixedBed };
-        trips.Add(trip);
+        _trips.Add(trip);
         WalkTo(world, slot, bed);
-        if (!Step(world, trip)) trips.Remove(trip);
+        if (!Step(world, trip)) _trips.Remove(trip);
     }
 
     /// <summary>A walk onto the bed's own floor (furniture cuts a hole in the floor's navmesh; a goal without a height resolves to the storey above or the ground below).</summary>
@@ -244,10 +244,10 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     public void SlowWorld(World world)
     {
         GetUp(world);
-        for (int k = 0; k < trips.Count;)
+        for (int k = 0; k < _trips.Count;)
         {
-            if (Step(world, trips[k])) k++;
-            else trips.RemoveAt(k);
+            if (Step(world, _trips[k])) k++;
+            else _trips.RemoveAt(k);
         }
     }
 
@@ -377,7 +377,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
                 if ((squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key == bed.Building) { templateId = squad.TemplateId; break; }
         if (templateId is null || data.Db.Find(templateId) is not { } template || !template.GetBool("public beds") && (record?.Designation ?? template.GetInt("building designation")) != BarDesignation) return -1;
         int cost = template.GetInt("bed usage cost");
-        if (bed.Bed.Function == Meitou.Data.World.TownBuildings.SkeletonBedFunction) cost *= 4;
+        if (bed.Bed.Function == Data.World.TownBuildings.SkeletonBedFunction) cost *= 4;
         return Math.Max(cost, 0);
     }
 
@@ -399,7 +399,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         // Town beds only: a bed the player built is a machine site (Site -1) and keeps the machine's panel.
         if (instance is null || world.Fixtures.Find(instance) is not { Kind: FixtureKind.Bed, Site: >= 0 } bed || data.Db.Find(bed.RecordId) is not { } record) return null;
         string? town = bed.Site >= 0 && bed.Site < data.Sites.Count ? data.Sites[bed.Site].Town.Name : null;
-        float healing = Meitou.Data.Gameplay.Construction.MachineData.From(data.Db, record)?.OutputValue ?? 1;
+        float healing = Data.Gameplay.Construction.MachineData.From(data.Db, record)?.OutputValue ?? 1;
         return new BuildingDetail(instance, [], bed.Owner == world.Player.Faction)
         {
             Bed = new(record.Name, town, Cost(world, bed, world.Player.Faction), healing),
@@ -420,14 +420,14 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             world.Bark(table.IdOf(slot), Loc.Tr("This isn't mine"));
             return false;
         }
-        if (paid.TryGetValue(bed.Id, out double when) && world.GameHours - when < Settings.RentHours) return true;
+        if (_paid.TryGetValue(bed.Id, out double when) && world.GameHours - when < Settings.RentHours) return true;
         if (world.Player.Money < cost)
         {
             world.Post(Loc.Tr("Can't afford c.{1} for bed rental.", cost));
             return false;
         }
         world.Player.Money -= cost;
-        paid[bed.Id] = world.GameHours;
+        _paid[bed.Id] = world.GameHours;
         world.Post(Loc.Tr("Paid c.{1} for bed rental.", cost));
         return true;
     }
@@ -436,7 +436,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     /// The job 106 "Find and put in bed" (<c>FUN_1405a0d50</c>, docs/game/carry-loot.md 3.2) as the decision step's contributor (step 5): a player character carrying a body whose faction is not
     /// hostile to its own and that is no animal lays it in the bed the bed search finds (row 106 registers the bed search <c>FUN_1408cfe00</c> as its finder, <b>Verified</b>). It runs while its walk does.
     /// </summary>
-    public void RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(TaskType.FIND_BED_AND_PUT_IN, new PutInJob(this));
+    public void RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(TaskType.FindBedAndPutIn, new PutInJob(this));
 
     sealed class PutInJob(BedSystem owner) : IJobSource
     {
@@ -444,14 +444,14 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         {
             var table = world.Characters;
             var c = table.Cold(slot)!;
-            if (c.Running is { Source: TaskSource.Job, Row: TaskType.FIND_BED_AND_PUT_IN } run && run.Job == k && run.Runs((CharacterTask)table.Next[slot].Task)) return DecisionCheck.Runs;
+            if (c.Running is { Source: TaskSource.Job, Row: TaskType.FindBedAndPutIn } run && run.Job == k && run.Runs((CharacterTask)table.Next[slot].Task)) return DecisionCheck.Runs;
             return owner.BedFor(world, slot) is null ? DecisionCheck.No("no body to put in a bed, or no bed") : DecisionCheck.Run;
         }
 
         public void Start(World world, int slot, int k)
         {
             if (owner.BedFor(world, slot) is { } bed)
-                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.GoTo, TaskType.FIND_BED_AND_PUT_IN, TaskSource.Job) { Job = k, Site = bed.Id });
+                TaskStart.Start(world, slot, new TaskRequest(CharacterTask.GoTo, TaskType.FindBedAndPutIn, TaskSource.Job) { Job = k, Site = bed.Id });
         }
     }
 
@@ -459,7 +459,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     Fixture? BedFor(World world, int slot)
     {
         var table = world.Characters;
-        if (Carry is null || table.Cold(slot) is not { Carrying.IsNone: false } c || !CanWalk(c) || trips.Exists(t => t.Character == table.IdOf(slot))) return null;
+        if (Carry is null || table.Cold(slot) is not { Carrying.IsNone: false } c || !CanWalk(c) || _trips.Exists(t => t.Character == table.IdOf(slot))) return null;
         if (!table.TryResolveNext(c.Carrying, out int b) || table.Cold(b) is not { } bc || bc.Fighter is { IsAnimal: true }) return null;
         if (data.Relations.Contains(bc.Faction) && data.Relations.Contains(c.Faction) && data.Relations.IsHostile(bc.Faction, c.Faction)) return null;
         if (!WantsToPutIn(world, slot, c, b, bc)) return null;
@@ -483,11 +483,11 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
 
     public void Hash(ref StateHasher hasher)
     {
-        if (trips.Count == 0 && paid.Count == 0) return;
+        if (_trips.Count == 0 && _paid.Count == 0) return;
         hasher.Add(0x42656473);
-        hasher.Add(trips.Count);
-        foreach (var t in trips) t.Hash(ref hasher);
-        hasher.Add(paid.Count);
-        foreach (var (bed, when) in paid) { hasher.Add(Rng.StableHash(bed)); hasher.Add(when); }
+        hasher.Add(_trips.Count);
+        foreach (var t in _trips) t.Hash(ref hasher);
+        hasher.Add(_paid.Count);
+        foreach (var (bed, when) in _paid) { hasher.Add(Rng.StableHash(bed)); hasher.Add(when); }
     }
 }

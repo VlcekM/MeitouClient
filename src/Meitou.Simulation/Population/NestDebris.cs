@@ -79,7 +79,7 @@ public static partial class NestFurniture
         string mesh = item.GetPath("ground mesh") is { Length: > 0 } ground ? ground : item.GetPath("mesh") ?? "";
         int variants = item.GetInt("number of meshes");
         if (variants < 2 || mesh.Length == 0) return mesh;
-        return Meitou.Data.World.WorldObjectLayout.MeshVariant(mesh, IntIn(ref rolls, 1, variants));
+        return Data.World.WorldObjectLayout.MeshVariant(mesh, IntIn(ref rolls, 1, variants));
     }
 
     static void Loot(TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, List<NestDrop> drops)

@@ -41,9 +41,9 @@ public sealed partial class WorldObjectRenderer
         var joints = inst.Placed.Joints!;
         bool rotor = false;
         foreach (var j in joints) rotor |= j.Rotor is not null;
-        if (version == inst.TurretStamp && (!rotor || inst.RotorFrame == rotorFrame)) return;
+        if (version == inst.TurretStamp && (!rotor || inst.RotorFrame == _rotorFrame)) return;
         inst.TurretStamp = version;
-        inst.RotorFrame = rotorFrame;
+        inst.RotorFrame = _rotorFrame;
         var m = inst.Placed.Transform;
         if (pose is not null || rotor)
         {

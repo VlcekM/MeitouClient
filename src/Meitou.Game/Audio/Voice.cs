@@ -6,29 +6,29 @@ namespace Meitou.Game.Audio;
 /// </summary>
 sealed class Voice : IDisposable
 {
-    readonly MediaClip clip;
+    readonly MediaClip _clip;
 
-    public MediaClip Clip => clip;
+    public MediaClip Clip => _clip;
     // The source: the shared decoded samples (pcm, read from pcmRead, interleaved), else the stream.
-    NVorbis.VorbisReader? reader;
-    readonly float[]? pcm;
-    long pcmRead;
-    readonly float[] decoded;
-    int decodedFrames;
-    double position;
-    int playsLeft;
-    readonly int plays;
+    NVorbis.VorbisReader? _reader;
+    readonly float[]? _pcm;
+    long _pcmRead;
+    readonly float[] _decoded;
+    int _decodedFrames;
+    double _position;
+    int _playsLeft;
+    readonly int _plays;
     // Source frames played since the start, across the loops (what a silent voice keeps counting); owed: those skipped while silent, sought on the next mix.
-    double cursor, owed;
-    long toSkip, limit;
-    bool ended, final;
-    float lastLeft, lastRight;
-    readonly float[] lastSend = new float[2 * MaxSends];
-    bool started;
+    double _cursor, _owed;
+    long _toSkip, _limit;
+    bool _ended, _final;
+    float _lastLeft, _lastRight;
+    readonly float[] _lastSend = new float[2 * MaxSends];
+    bool _started;
 
     /// <summary>The most auxiliary buses a voice can feed (a node lists four user-defined sends).</summary>
     public const int MaxSends = 4;
-    readonly float[] lowPass = new float[2];
+    readonly float[] _lowPass = new float[2];
 
     /// <summary>
     /// <paramref name="plays"/>: how many times to play the clip; 0 = forever. <paramref name="skipFrames"/> source frames are dropped from the
@@ -37,50 +37,50 @@ sealed class Voice : IDisposable
     /// </summary>
     public Voice(MediaClip clip, int plays, long skipFrames = 0, long limitFrames = -1, double startPhase = 0, float[]? pcm = null)
     {
-        this.clip = clip;
-        playsLeft = this.plays = plays;
-        toSkip = skipFrames;
-        limit = limitFrames;
-        position = startPhase;
-        this.pcm = pcm;
-        if (pcm is not null) framesPerPlay = pcm.Length / clip.Channels;
+        this._clip = clip;
+        _playsLeft = this._plays = plays;
+        _toSkip = skipFrames;
+        _limit = limitFrames;
+        _position = startPhase;
+        this._pcm = pcm;
+        if (pcm is not null) _framesPerPlay = pcm.Length / clip.Channels;
         else
         {
-            reader = Open();
-            try { framesPerPlay = reader.TotalSamples; } catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException) { framesPerPlay = 0; }
-            if (framesPerPlay <= 0) framesPerPlay = clip.Frames;
+            _reader = Open();
+            try { _framesPerPlay = _reader.TotalSamples; } catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException) { _framesPerPlay = 0; }
+            if (_framesPerPlay <= 0) _framesPerPlay = clip.Frames;
         }
-        decoded = new float[4096 * clip.Channels];
+        _decoded = new float[4096 * clip.Channels];
     }
 
-    NVorbis.VorbisReader Open() => new(new MemoryStream(clip.Ogg, writable: false), closeOnDispose: true);
+    NVorbis.VorbisReader Open() => new(new MemoryStream(_clip.Ogg, writable: false), closeOnDispose: true);
 
     /// <summary>Up to <paramref name="count"/> samples (interleaved) from the source into <paramref name="buffer"/>; 0 at the end of a play.</summary>
     int ReadSamples(float[] buffer, int offset, int count)
     {
-        if (pcm is null) return reader!.ReadSamples(buffer, offset, count);
-        int n = (int)Math.Min(count, pcm.Length - pcmRead);
-        Array.Copy(pcm, pcmRead, buffer, offset, n);
-        pcmRead += n;
+        if (_pcm is null) return _reader!.ReadSamples(buffer, offset, count);
+        int n = (int)Math.Min(count, _pcm.Length - _pcmRead);
+        Array.Copy(_pcm, _pcmRead, buffer, offset, n);
+        _pcmRead += n;
         return n;
     }
 
     /// <summary>The source back at <paramref name="frame"/> of the clip (0: the start of the next play).</summary>
     void Rewind(long frame = 0)
     {
-        if (pcm is not null) { pcmRead = frame * clip.Channels; return; }
-        reader!.Dispose();
-        reader = Open();
-        if (frame > 0) reader.SeekTo(frame);
+        if (_pcm is not null) { _pcmRead = frame * _clip.Channels; return; }
+        _reader!.Dispose();
+        _reader = Open();
+        if (frame > 0) _reader.SeekTo(frame);
     }
 
-    public bool Ended => ended;
+    public bool Ended => _ended;
 
     /// <summary>Whether <see cref="Skip"/> can keep this voice's place: a plain clip, not a trimmed music clip.</summary>
-    public bool CanSkip => toSkip == 0 && limit < 0 && framesPerPlay > 0;
+    public bool CanSkip => _toSkip == 0 && _limit < 0 && _framesPerPlay > 0;
 
     // The source frames one play decodes to (the decoder's count, the WEM header's when it has none): what the silent clock counts plays in.
-    readonly long framesPerPlay;
+    readonly long _framesPerPlay;
 
     /// <summary>
     /// The voice is silent for <paramref name="frames"/> output frames (the first <paramref name="first"/> not yet started): its clock runs on without decoding,
@@ -88,42 +88,42 @@ sealed class Voice : IDisposable
     /// </summary>
     public void Skip(int frames, double rate, int first = 0)
     {
-        if (ended) return;
-        owed += (frames - first) * rate;
-        if (plays > 0 && cursor + owed >= (double)plays * framesPerPlay) ended = true;
+        if (_ended) return;
+        _owed += (frames - first) * rate;
+        if (_plays > 0 && _cursor + _owed >= (double)_plays * _framesPerPlay) _ended = true;
     }
 
     /// <summary>Seeks past the frames skipped while silent: the play and the place in the clip from the voice's clock.</summary>
     void CatchUp()
     {
         // From silence (it faded out, or was never heard): the first block ramps up to its gains.
-        started = true;
-        lastLeft = lastRight = 0;
-        Array.Clear(lastSend);
+        _started = true;
+        _lastLeft = _lastRight = 0;
+        Array.Clear(_lastSend);
         // A short silence still inside the decoded frames (a sound at the cap's edge): only the place moves.
-        if (position + owed + 1 < decodedFrames)
+        if (_position + _owed + 1 < _decodedFrames)
         {
-            position += owed;
-            cursor += owed;
-            owed = 0;
+            _position += _owed;
+            _cursor += _owed;
+            _owed = 0;
             return;
         }
-        cursor += owed;
-        owed = 0;
-        long done = (long)(cursor / framesPerPlay);
-        if (plays > 0 && done >= plays) { ended = true; return; }
-        long within = Math.Clamp((long)(cursor - (double)done * framesPerPlay), 0, framesPerPlay - 1);
+        _cursor += _owed;
+        _owed = 0;
+        long done = (long)(_cursor / _framesPerPlay);
+        if (_plays > 0 && done >= _plays) { _ended = true; return; }
+        long within = Math.Clamp((long)(_cursor - (double)done * _framesPerPlay), 0, _framesPerPlay - 1);
         try { Rewind(within); }
         catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or IOException)
         {
             // A seek the stream does not allow ends the voice, never the mix.
-            ended = true;
+            _ended = true;
             return;
         }
-        playsLeft = plays == 0 ? 0 : plays - (int)done;
-        decodedFrames = 0;
-        position = cursor - Math.Floor(cursor);
-        lowPass[0] = lowPass[1] = 0;
+        _playsLeft = _plays == 0 ? 0 : _plays - (int)done;
+        _decodedFrames = 0;
+        _position = _cursor - Math.Floor(_cursor);
+        _lowPass[0] = _lowPass[1] = 0;
     }
 
     /// <summary>
@@ -133,109 +133,109 @@ sealed class Voice : IDisposable
     /// </summary>
     public void Mix(float[] mix, int frames, double rate, float left, float right, float lowPass, int first = 0, ReadOnlySpan<VoiceSend> sends = default)
     {
-        if (ended) return;
-        if (owed > 0) CatchUp();
-        if (ended) return;
-        if (!started)
+        if (_ended) return;
+        if (_owed > 0) CatchUp();
+        if (_ended) return;
+        if (!_started)
         {
-            lastLeft = left;
-            lastRight = right;
+            _lastLeft = left;
+            _lastRight = right;
             for (int s = 0; s < sends.Length; s++)
             {
-                lastSend[2 * s] = sends[s].Left;
-                lastSend[2 * s + 1] = sends[s].Right;
+                _lastSend[2 * s] = sends[s].Left;
+                _lastSend[2 * s + 1] = sends[s].Right;
             }
-            started = true;
+            _started = true;
         }
-        int channels = clip.Channels;
+        int channels = _clip.Channels;
         for (int f = first; f < frames; f++)
         {
-            int i = (int)position;
-            if (i + 1 >= decodedFrames && !Refill())
+            int i = (int)_position;
+            if (i + 1 >= _decodedFrames && !Refill())
             {
-                ended = true;
+                _ended = true;
                 break;
             }
-            i = (int)position;
-            float t = (float)(position - i);
-            bool atEnd = i + 1 >= decodedFrames;
-            float l = decoded[i * channels] + ((atEnd ? 0 : decoded[(i + 1) * channels]) - decoded[i * channels]) * t;
-            float r = channels > 1 ? decoded[i * channels + 1] + ((atEnd ? 0 : decoded[(i + 1) * channels + 1]) - decoded[i * channels + 1]) * t : l;
+            i = (int)_position;
+            float t = (float)(_position - i);
+            bool atEnd = i + 1 >= _decodedFrames;
+            float l = _decoded[i * channels] + ((atEnd ? 0 : _decoded[(i + 1) * channels]) - _decoded[i * channels]) * t;
+            float r = channels > 1 ? _decoded[i * channels + 1] + ((atEnd ? 0 : _decoded[(i + 1) * channels + 1]) - _decoded[i * channels + 1]) * t : l;
             if (lowPass < 1)
             {
-                this.lowPass[0] += lowPass * (l - this.lowPass[0]);
-                this.lowPass[1] += lowPass * (r - this.lowPass[1]);
-                l = this.lowPass[0];
-                r = this.lowPass[1];
+                this._lowPass[0] += lowPass * (l - this._lowPass[0]);
+                this._lowPass[1] += lowPass * (r - this._lowPass[1]);
+                l = this._lowPass[0];
+                r = this._lowPass[1];
             }
             float k = (f - first + 1f) / (frames - first);
-            mix[2 * f] += l * (lastLeft + (left - lastLeft) * k);
-            mix[2 * f + 1] += r * (lastRight + (right - lastRight) * k);
+            mix[2 * f] += l * (_lastLeft + (left - _lastLeft) * k);
+            mix[2 * f + 1] += r * (_lastRight + (right - _lastRight) * k);
             for (int s = 0; s < sends.Length; s++)
             {
-                sends[s].Buffer[2 * f] += l * (lastSend[2 * s] + (sends[s].Left - lastSend[2 * s]) * k);
-                sends[s].Buffer[2 * f + 1] += r * (lastSend[2 * s + 1] + (sends[s].Right - lastSend[2 * s + 1]) * k);
+                sends[s].Buffer[2 * f] += l * (_lastSend[2 * s] + (sends[s].Left - _lastSend[2 * s]) * k);
+                sends[s].Buffer[2 * f + 1] += r * (_lastSend[2 * s + 1] + (sends[s].Right - _lastSend[2 * s + 1]) * k);
             }
-            position += rate;
-            cursor += rate;
+            _position += rate;
+            _cursor += rate;
         }
-        lastLeft = left;
-        lastRight = right;
+        _lastLeft = left;
+        _lastRight = right;
         for (int s = 0; s < sends.Length; s++)
         {
-            lastSend[2 * s] = sends[s].Left;
-            lastSend[2 * s + 1] = sends[s].Right;
+            _lastSend[2 * s] = sends[s].Left;
+            _lastSend[2 * s + 1] = sends[s].Right;
         }
     }
 
     /// <summary>Keeps the last decoded frame (for interpolation) and decodes more after it, looping at the end. False when the clip is done.</summary>
     bool Refill()
     {
-        int channels = clip.Channels;
-        int keep = Math.Min(decodedFrames, 1);
-        int from = decodedFrames - keep;
-        if (keep > 0) Array.Copy(decoded, from * channels, decoded, 0, keep * channels);
-        position -= from;
-        decodedFrames = keep;
-        while (decodedFrames < decoded.Length / channels)
+        int channels = _clip.Channels;
+        int keep = Math.Min(_decodedFrames, 1);
+        int from = _decodedFrames - keep;
+        if (keep > 0) Array.Copy(_decoded, from * channels, _decoded, 0, keep * channels);
+        _position -= from;
+        _decodedFrames = keep;
+        while (_decodedFrames < _decoded.Length / channels)
         {
-            int n = ReadSamples(decoded, decodedFrames * channels, decoded.Length - decodedFrames * channels);
+            int n = ReadSamples(_decoded, _decodedFrames * channels, _decoded.Length - _decodedFrames * channels);
             if (n > 0)
             {
                 int got = n / channels;
-                if (toSkip > 0)
+                if (_toSkip > 0)
                 {
-                    int skip = (int)Math.Min(toSkip, got);
-                    toSkip -= skip;
-                    Array.Copy(decoded, (decodedFrames + skip) * channels, decoded, decodedFrames * channels, (got - skip) * channels);
+                    int skip = (int)Math.Min(_toSkip, got);
+                    _toSkip -= skip;
+                    Array.Copy(_decoded, (_decodedFrames + skip) * channels, _decoded, _decodedFrames * channels, (got - skip) * channels);
                     got -= skip;
                 }
-                if (limit >= 0)
+                if (_limit >= 0)
                 {
-                    got = (int)Math.Min(got, limit);
-                    limit -= got;
+                    got = (int)Math.Min(got, _limit);
+                    _limit -= got;
                 }
-                decodedFrames += got;
-                if (limit == 0)
+                _decodedFrames += got;
+                if (_limit == 0)
                 {
-                    final = true;
+                    _final = true;
                     break;
                 }
                 continue;
             }
-            if (playsLeft == 1)
+            if (_playsLeft == 1)
             {
-                final = true;
+                _final = true;
                 break;
             }
-            if (playsLeft > 1) playsLeft--;
+            if (_playsLeft > 1) _playsLeft--;
             Rewind();
         }
         // At the end the clip fades into silence over its last frame, so a clip that follows it sample for sample leaves no gap.
-        return position + 1 < decodedFrames || (final && position < decodedFrames);
+        return _position + 1 < _decodedFrames || (_final && _position < _decodedFrames);
     }
 
-    public void Dispose() => reader?.Dispose();
+    public void Dispose() => _reader?.Dispose();
 }
 
 /// <summary>One auxiliary send of a voice: the bus's stereo input buffer and the gains the voice adds to it.</summary>
@@ -253,18 +253,18 @@ sealed class PcmCache
 {
     public const double MaxSeconds = 20;
     public const long BudgetBytes = 256L << 20;
-    readonly Dictionary<uint, float[]?> clips = [];
-    long bytes;
+    readonly Dictionary<uint, float[]?> _clips = [];
+    long _bytes;
 
     /// <summary>The clip's samples (interleaved), decoded the first time; null when it streams.</summary>
     public float[]? Get(MediaClip clip)
     {
-        if (clips.TryGetValue(clip.Id, out var known)) return known;
+        if (_clips.TryGetValue(clip.Id, out var known)) return known;
         float[]? pcm = null;
         long estimate = (long)clip.Frames * clip.Channels * sizeof(float);
-        if (clip.Frames > 0 && clip.Frames <= MaxSeconds * clip.SampleRate && bytes + estimate <= BudgetBytes) pcm = Decode(clip);
-        if (pcm is not null) bytes += (long)pcm.Length * sizeof(float);
-        clips[clip.Id] = pcm;
+        if (clip.Frames > 0 && clip.Frames <= MaxSeconds * clip.SampleRate && _bytes + estimate <= BudgetBytes) pcm = Decode(clip);
+        if (pcm is not null) _bytes += (long)pcm.Length * sizeof(float);
+        _clips[clip.Id] = pcm;
         return pcm;
     }
 

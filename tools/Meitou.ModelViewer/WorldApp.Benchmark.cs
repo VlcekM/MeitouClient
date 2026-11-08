@@ -18,7 +18,7 @@ static partial class WorldApp
     /// loaded point at 60 frames per second of wall time, as the interactive viewer would, and prints frame-time percentiles, the worst frames with the
     /// time each streaming stage took on the render thread, and the resident memory.
     /// </summary>
-    static int FlyBenchmark(Meitou.Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static int FlyBenchmark(Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         var context = display.Context;
         var centre = camera.Target;
@@ -47,7 +47,7 @@ static partial class WorldApp
         var interval = Stopwatch.StartNew();
         var meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown (docs/engine.md)
         // MEITOU_BENCH_ORBIT=<pixels per frame>: the camera also turns round its target by this much a frame (0.005 rad per pixel), as a user dragging the view.
-        float benchOrbit = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_ORBIT"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float orbit) ? orbit : 0;
+        float benchOrbit = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_ORBIT"), NumberStyles.Float, CultureInfo.InvariantCulture, out float orbit) ? orbit : 0;
         var motion = CameraMotion.Fly(o, camera, gpu, FlyTurn, benchOrbit);
         var spikeProfiler = SpikeLog.Enabled ? new FrameProfiler(context, () => context.GpuFrameMs) : null;   // --log-spikes: the stage times the spike lines print
         // Draw counts over the flight (docs/render-distance-benchmark.md): the objects' totals per kind, the main view's grass blades, foliage
@@ -113,13 +113,13 @@ static partial class WorldApp
         double P(double q) => sorted[Math.Min((int)(sorted.Count * q), sorted.Count - 1)];
         double C(double q) => cpuSorted[Math.Min((int)(cpuSorted.Count * q), cpuSorted.Count - 1)];
         Console.WriteLine($"flight    p50 {P(0.5):0.0} ms, p95 {P(0.95):0.0} ms, p99 {P(0.99):0.0} ms, max {sorted[^1]:0.0} ms; {sorted.Count(t => t > 20)} frames over 20 ms, {sorted.Count(t => t > 33)} over 33 ms; gen2 GCs {GC.CollectionCount(2) - gc2}");
-        Console.WriteLine($"gc        gen0 {GC.CollectionCount(0) - gc0}, gen1 {GC.CollectionCount(1) - gc1}, pauses {(GC.GetTotalPauseDuration() - pause0).TotalMilliseconds:0} ms; allocated {(GC.GetTotalAllocatedBytes() - allocated) / 1048576} MB (render thread {(GC.GetAllocatedBytesForCurrentThread() - renderAllocated) / 1048576} MB); heap {GC.GetGCMemoryInfo().HeapSizeBytes / 1048576} MB, native buffers {Meitou.Data.NativeBuffer.LiveBytes / 1048576} MB held");
+        Console.WriteLine($"gc        gen0 {GC.CollectionCount(0) - gc0}, gen1 {GC.CollectionCount(1) - gc1}, pauses {(GC.GetTotalPauseDuration() - pause0).TotalMilliseconds:0} ms; allocated {(GC.GetTotalAllocatedBytes() - allocated) / 1048576} MB (render thread {(GC.GetAllocatedBytesForCurrentThread() - renderAllocated) / 1048576} MB); heap {GC.GetGCMemoryInfo().HeapSizeBytes / 1048576} MB, native buffers {Data.NativeBuffer.LiveBytes / 1048576} MB held");
         Console.WriteLine($"stages    mean ms: {string.Join(", ", StageClock.Names.Select((n, k) => $"{n} {stageSums[k] / o.FlyBenchmark:0.00}"))}");
         Console.WriteLine($"stages    shadow casters mean ms: terrain {shadowSums[0] / o.FlyBenchmark:0.00}, objects {shadowSums[1] / o.FlyBenchmark:0.00}, foliage {shadowSums[2] / o.FlyBenchmark:0.00}");
         if (gpu.Shadow is { Meitou: true } meitouShadow) Console.WriteLine($"shadows   meitou schedule (cascade redraws over the {meitouShadow.MeitouFrames} frames): {meitouShadow.DescribeMeitou()}");
         // Wave 4 (docs/renderer-native.md 9.3): the recording jobs' own CPU time per stage, summed over the threads that ran them; the stage
         // times above are the render thread's wall time (including any wait for the jobs), so the two do not add up.
-        Console.WriteLine($"jobs      record mode {Meitou.Game.Rendering.Gpu.Recording.Mode} ({RenderJobs.Threads} threads); summed cpu mean ms: " +
+        Console.WriteLine($"jobs      record mode {Recording.Mode} ({RenderJobs.Threads} threads); summed cpu mean ms: " +
             string.Join(", ", StageClock.Names.Select((n, k) => (n, k)).Where(x => jobSums[x.k] > 0).Select(x => $"{x.n} {jobSums[x.k] / o.FlyBenchmark:0.00}")));
         if (gpu.Particles is { } fx)
             Console.WriteLine($"particles per frame over the flight: simulation {fx.MeanMilliseconds.Simulation:0.00} ms (background threads), main thread waited {fx.MeanMilliseconds.Wait:0.00} ms; update {fx.MeanMainThreadMilliseconds.Update:0.00} ms, draw {fx.MeanMainThreadMilliseconds.Draw:0.00} ms (waiting included, of which filling instance buffers {fx.CollectMilliseconds:0.00} ms); {fx.ActiveUnits} units simulated, {fx.DrawnUnits} drawn");
@@ -184,11 +184,11 @@ static partial class WorldApp
     /// MEITOU_PASS_STATS=1: the pass meter's table and CSV lines, then one more frame with <see cref="WorldFrame.DetailedStats"/> on for what each
     /// pass drew (instances, calls, per cascade and per foliage step: the same lines the screenshot path prints).
     /// </summary>
-    static void ReportPasses(PassMeter meter, Meitou.Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
+    static void ReportPasses(PassMeter meter, Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         meter.Report(Console.Out);
         meter.Dispose();
-        WorldFrame.DetailedStats = true;
+        DetailedStats = true;
         { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance); EndFrame(display.Context); }
         display.Context.Finish();
         Console.WriteLine($"detail    {gpu.Terrain.DrawnChunks} terrain chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
@@ -196,11 +196,11 @@ static partial class WorldApp
         if (gpu.Foliage is { } fol) { fol.PollTimers(wait: true); Console.WriteLine($"detail    foliage draw cpu {fol.LastDrawCpuMs:0.00} ms, gpu {fol.GpuMs:0.00} ms, {fol.DrawCalls} draw calls, {fol.DrawnInstances} meshes, {fol.DrawnBlades:N0} grass blades;{fol.MainDetail}"); }
         if (gpu.Reflection is { Valid: true } refl) { refl.Poll(wait: true); Console.WriteLine($"detail    reflect cpu {refl.CpuMs:0.00} ms, gpu {refl.GpuMs:0.00} ms; {refl.SceneStats}"); }
         if (gpu.Shadow is { } shadow) { shadow.Poll(wait: true); Console.WriteLine($"detail    shadows cpu {shadow.CpuMs:0.00} ms, gpu {shadow.GpuMs:0.00} ms; {shadow.CasterStats}"); }
-        WorldFrame.DetailedStats = false;
+        DetailedStats = false;
     }
 
     /// <summary><c>MEITOU_FLY_TURN=&lt;radians&gt;</c>: the fly benchmark turns the camera by that much each frame about its eye instead of flying (the occlusion cull's turn test).</summary>
-    static readonly float FlyTurn = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_FLY_TURN"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float turn) ? turn : 0;
+    static readonly float FlyTurn = float.TryParse(Environment.GetEnvironmentVariable("MEITOU_FLY_TURN"), NumberStyles.Float, CultureInfo.InvariantCulture, out float turn) ? turn : 0;
 
     /// <summary>One line on the GPU memory the streamed meshes and textures hold.</summary>
     static string Resident(Gpu gpu) =>

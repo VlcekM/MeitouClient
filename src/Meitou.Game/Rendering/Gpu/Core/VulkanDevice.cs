@@ -27,23 +27,23 @@ public sealed unsafe class VulkanDevice : IDisposable
 {
     const string ValidationLayer = "VK_LAYER_KHRONOS_validation";
 
-    readonly VulkanDeviceOptions options;
-    readonly ConcurrentDictionary<ulong, CommandPool> immediatePools = new();
-    readonly object logGate = new();
-    readonly List<string> validationLog = new();
-    GCHandle selfHandle;
-    DebugUtilsMessengerCallbackFunctionEXT? callbackDelegate;
-    ExtDebugUtils? debugUtils;
-    DebugUtilsMessengerEXT messenger;
-    KhrSurface? khrSurface;
-    string? pipelineCachePath;
-    int validationErrors;
-    int validationWarnings;
-    bool disposed;
+    readonly VulkanDeviceOptions _options;
+    readonly ConcurrentDictionary<ulong, CommandPool> _immediatePools = new();
+    readonly object _logGate = new();
+    readonly List<string> _validationLog = new();
+    GCHandle _selfHandle;
+    DebugUtilsMessengerCallbackFunctionEXT? _callbackDelegate;
+    ExtDebugUtils? _debugUtils;
+    DebugUtilsMessengerEXT _messenger;
+    KhrSurface? _khrSurface;
+    string? _pipelineCachePath;
+    int _validationErrors;
+    int _validationWarnings;
+    bool _disposed;
 
     VulkanDevice(VulkanDeviceOptions options)
     {
-        this.options = options;
+        this._options = options;
         Vk = Vk.GetApi();
     }
 
@@ -63,11 +63,11 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// <summary>Puts <paramref name="surface"/> (the same window's, made another way) in place of the surface, which is destroyed. Before any swapchain exists.</summary>
     public void ReplaceSurface(SurfaceKHR surface)
     {
-        if (Surface.Handle != 0 && khrSurface != null) khrSurface.DestroySurface(Instance, Surface, null);
+        if (Surface.Handle != 0 && _khrSurface != null) _khrSurface.DestroySurface(Instance, Surface, null);
         Surface = surface;
     }
     /// <summary>The KHR_surface instance extension functions (null when headless).</summary>
-    public KhrSurface? SurfaceExtension => khrSurface;
+    public KhrSurface? SurfaceExtension => _khrSurface;
 
     public Queue GraphicsQueue { get; private set; }
     public uint GraphicsFamily { get; private set; }
@@ -87,30 +87,30 @@ public sealed unsafe class VulkanDevice : IDisposable
     // The handle tables below: added to from any thread (the allocator's callers, the recording jobs' views) under this lock; read without it
     // (an index never moves). Slots are not reused: the renderers' caches compare views and buffers by index, so a reused slot would pass for
     // the old resource. A released one is cleared once no frame in flight can read it, so what it held goes to the GC.
-    readonly object tableGate = new();
+    readonly object _tableGate = new();
 
     /// <summary>The samplers the renderers hold by index (index 0 is the null sampler).</summary>
-    readonly List<Silk.NET.Vulkan.Sampler> samplerTable = [default];
-    public Silk.NET.Vulkan.Sampler SamplerAt(int index) => samplerTable[index];
-    public int AddSampler(Silk.NET.Vulkan.Sampler sampler) { lock (tableGate) { samplerTable.Add(sampler); return samplerTable.Count - 1; } }
+    readonly List<Sampler> _samplerTable = [default];
+    public Sampler SamplerAt(int index) => _samplerTable[index];
+    public int AddSampler(Sampler sampler) { lock (_tableGate) { _samplerTable.Add(sampler); return _samplerTable.Count - 1; } }
 
     /// <summary>The views the renderers hold by index (index 0 is the null view).</summary>
-    readonly List<Silk.NET.Vulkan.ImageView> viewTable = [default];
-    public Silk.NET.Vulkan.ImageView ViewAt(int index) => viewTable[index];
-    public int AddView(Silk.NET.Vulkan.ImageView view) { lock (tableGate) { viewTable.Add(view); return viewTable.Count - 1; } }
+    readonly List<ImageView> _viewTable = [default];
+    public ImageView ViewAt(int index) => _viewTable[index];
+    public int AddView(ImageView view) { lock (_tableGate) { _viewTable.Add(view); return _viewTable.Count - 1; } }
 
     /// <summary>The sets the renderers bind by index (index 0 is the null set): the persistent ones (per-draw sets are bound by their own handle).</summary>
-    readonly List<Silk.NET.Vulkan.DescriptorSet> setTable = [default];
-    public Silk.NET.Vulkan.DescriptorSet SetAt(int index) => setTable[index];
-    public int AddSet(Silk.NET.Vulkan.DescriptorSet set) { lock (tableGate) { setTable.Add(set); return setTable.Count - 1; } }
+    readonly List<DescriptorSet> _setTable = [default];
+    public DescriptorSet SetAt(int index) => _setTable[index];
+    public int AddSet(DescriptorSet set) { lock (_tableGate) { _setTable.Add(set); return _setTable.Count - 1; } }
 
     /// <summary>The textures the renderers hold by index (index 0 is the null texture).</summary>
-    readonly List<TextureEntry> textureTable = [default];
-    readonly HashSet<int> releasedTextures = [];
-    public TextureEntry TextureAt(int index) => textureTable[index];
+    readonly List<TextureEntry> _textureTable = [default];
+    readonly HashSet<int> _releasedTextures = [];
+    public TextureEntry TextureAt(int index) => _textureTable[index];
     public int AddTexture(Image image, ImageAllocation? allocation, bool owned, TextureDesc desc)
     {
-        lock (tableGate) { textureTable.Add(new TextureEntry(image, allocation, owned, desc)); return textureTable.Count - 1; }
+        lock (_tableGate) { _textureTable.Add(new TextureEntry(image, allocation, owned, desc)); return _textureTable.Count - 1; }
     }
 
     /// <summary>Releases a texture: the views cut on it, then the image, and clears their slots (once every frame that could use them has finished).
@@ -118,27 +118,27 @@ public sealed unsafe class VulkanDevice : IDisposable
     public void ReleaseTexture(int index)
     {
         TextureEntry entry;
-        lock (tableGate)
+        lock (_tableGate)
         {
-            entry = textureTable[index];
+            entry = _textureTable[index];
             // The entry and its views stay until the frames in flight are done (a pass recorded later this frame may still name them).
-            if (entry.Image.Handle == 0 || !releasedTextures.Add(index)) return;
+            if (entry.Image.Handle == 0 || !_releasedTextures.Add(index)) return;
         }
         var alloc = entry.Allocation;
         Frames.DeferDelete(() =>
         {
-            lock (tableGate)
+            lock (_tableGate)
             {
-                if (textureViews.Remove(index, out var cut))
+                if (_textureViews.Remove(index, out var cut))
                     foreach (var v in cut)
                     {
-                        Vk.DestroyImageView(Device, viewTable[v], null);
-                        viewCache.TryRemove(viewKeys[v], out _);
-                        viewKeys.Remove(v);
-                        viewTable[v] = default;
+                        Vk.DestroyImageView(Device, _viewTable[v], null);
+                        _viewCache.TryRemove(_viewKeys[v], out _);
+                        _viewKeys.Remove(v);
+                        _viewTable[v] = default;
                     }
-                textureTable[index] = default;
-                releasedTextures.Remove(index);
+                _textureTable[index] = default;
+                _releasedTextures.Remove(index);
             }
             if (alloc is not null) Allocator.Free(alloc);
         });
@@ -147,48 +147,52 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// <summary>The views cut on a texture, by the range they cover (the backend's own cache), and per texture the views cut on it (its release
     /// takes those, not a walk over every view). The cache is read without the lock: every draw asks for its views, and a lock there was contended by the
     /// streaming threads' table adds (6% of the render thread's samples on the hub view).</summary>
-    readonly System.Collections.Concurrent.ConcurrentDictionary<(int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle), int> viewCache = [];
-    readonly Dictionary<int, (int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle)> viewKeys = [];
-    readonly Dictionary<int, List<int>> textureViews = [];
+    readonly ConcurrentDictionary<(int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle), int> _viewCache = [];
+    readonly Dictionary<int, (int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle)> _viewKeys = [];
+    readonly Dictionary<int, List<int>> _textureViews = [];
 
     /// <summary>A view of a texture's level and layer range: cut on the first ask and kept until the texture is released. Any thread.</summary>
     public unsafe GpuView View(GpuTexture texture, int baseLevel, int levels, int baseLayer, int layers, GpuViewType type, GpuSwizzle swizzle)
     {
         var key = (texture.Index, baseLevel, levels, baseLayer, layers, type, (int)swizzle.R | (int)swizzle.G << 4 | (int)swizzle.B << 8 | (int)swizzle.A << 12);
-        if (viewCache.TryGetValue(key, out var index)) return new GpuView(index);
-        lock (tableGate)
+        if (_viewCache.TryGetValue(key, out var index)) return new GpuView(index);
+        lock (_tableGate)
         {
-            if (viewCache.TryGetValue(key, out index)) return new GpuView(index);
+            if (_viewCache.TryGetValue(key, out index)) return new GpuView(index);
             var info = new ImageViewCreateInfo
             {
-                SType = StructureType.ImageViewCreateInfo, Image = textureTable[texture.Index].Image, ViewType = VkViewType(type), Format = GlConventions.VkFormat(texture.Desc.Format), Components = VkSwizzle(swizzle),
+                SType = StructureType.ImageViewCreateInfo,
+                Image = _textureTable[texture.Index].Image,
+                ViewType = VkViewType(type),
+                Format = GlConventions.VkFormat(texture.Desc.Format),
+                Components = VkSwizzle(swizzle),
                 SubresourceRange = new ImageSubresourceRange(GlConventions.VkAspect(texture.Desc), (uint)baseLevel, (uint)levels, (uint)baseLayer, (uint)layers),
             };
             VulkanException.Check(Vk.CreateImageView(Device, &info, null, out var view), "vkCreateImageView");
-            viewTable.Add(view);
-            index = viewTable.Count - 1;
-            viewCache[key] = index;
-            viewKeys[index] = key;
-            if (!textureViews.TryGetValue(texture.Index, out var list)) textureViews[texture.Index] = list = [];
+            _viewTable.Add(view);
+            index = _viewTable.Count - 1;
+            _viewCache[key] = index;
+            _viewKeys[index] = key;
+            if (!_textureViews.TryGetValue(texture.Index, out var list)) _textureViews[texture.Index] = list = [];
             list.Add(index);
             return new GpuView(index);
         }
     }
 
     /// <summary>The buffers the renderers hold by index (index 0 is the null buffer; a freed one is cleared, <see cref="RemoveBuffer"/>).</summary>
-    readonly List<BufferEntry> bufferTable = [default];
-    public Silk.NET.Vulkan.Buffer BufferAt(int index) => bufferTable[index].Buffer;
-    public BufferEntry BufferEntryAt(int index) => bufferTable[index];
-    public int AddBuffer(BufferEntry buffer) { lock (tableGate) { bufferTable.Add(buffer); return bufferTable.Count - 1; } }
+    readonly List<BufferEntry> _bufferTable = [default];
+    public Silk.NET.Vulkan.Buffer BufferAt(int index) => _bufferTable[index].Buffer;
+    public BufferEntry BufferEntryAt(int index) => _bufferTable[index];
+    public int AddBuffer(BufferEntry buffer) { lock (_tableGate) { _bufferTable.Add(buffer); return _bufferTable.Count - 1; } }
 
     /// <summary>Clears a destroyed buffer's slot (the allocator's free, which runs once no frame in flight can use it).</summary>
     internal void RemoveBuffer(int index)
     {
         if (index <= 0) return;
-        lock (tableGate)
+        lock (_tableGate)
         {
-            if (bufferTable[index].Buffer.Handle == 0) return;
-            bufferTable[index] = default;
+            if (_bufferTable[index].Buffer.Handle == 0) return;
+            _bufferTable[index] = default;
         }
     }
 
@@ -208,7 +212,10 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     static ComponentMapping VkSwizzle(GpuSwizzle s) => new()
     {
-        R = VkSwizzleComponent(s.R), G = VkSwizzleComponent(s.G), B = VkSwizzleComponent(s.B), A = VkSwizzleComponent(s.A),
+        R = VkSwizzleComponent(s.R),
+        G = VkSwizzleComponent(s.G),
+        B = VkSwizzleComponent(s.B),
+        A = VkSwizzleComponent(s.A),
     };
 
     static ComponentSwizzle VkSwizzleComponent(GpuSwizzleComponent c) => c switch
@@ -230,23 +237,23 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     /// <summary>The native view (Vulkan's): the DLSS paths (Streamline, NGX) need the handle itself, and those paths are NVIDIA's.</summary>
     public ImageView NativeView(GpuTexture texture, int level = 0, int layer = 0) => ViewAt(View(texture, level, 1, layer, 1, GpuViewType.Texture2D, default).Index);
-    public int FramesInFlight => options.FramesInFlight;
+    public int FramesInFlight => _options.FramesInFlight;
 
     public bool ValidationEnabled { get; private set; }
     /// <summary>Synchronisation validation was asked for and the layer took the setting.</summary>
     public bool SyncValidationEnabled { get; private set; }
     /// <summary>VK_EXT_debug_utils (labels and names), null when the instance does not have it.</summary>
-    public ExtDebugUtils? DebugUtils => debugUtils;
-    public int ValidationErrors => Volatile.Read(ref validationErrors);
-    public int ValidationWarnings => Volatile.Read(ref validationWarnings);
+    public ExtDebugUtils? DebugUtils => _debugUtils;
+    public int ValidationErrors => Volatile.Read(ref _validationErrors);
+    public int ValidationWarnings => Volatile.Read(ref _validationWarnings);
     /// <summary>The last ~50 validation messages (errors and warnings), oldest first.</summary>
     public string[] ValidationLog
     {
         get
         {
-            lock (logGate)
+            lock (_logGate)
             {
-                return validationLog.ToArray();
+                return _validationLog.ToArray();
             }
         }
     }
@@ -290,7 +297,7 @@ public sealed unsafe class VulkanDevice : IDisposable
     public int MaxShadingRate { get; private set; } = 1;
     /// <summary>Draws whose shader writes the fragment depth stay at one invocation per pixel on this device (the property is false).</summary>
     public bool ShadingRateForcedByDepthWrite { get; private set; }
-    public bool TextureCompressionBC { get; private set; }
+    public bool TextureCompressionBc { get; private set; }
     public bool IndependentBlend { get; private set; }
     public bool ImageCubeArray { get; private set; }
     public bool HasPushDescriptor { get; private set; }
@@ -380,11 +387,11 @@ public sealed unsafe class VulkanDevice : IDisposable
     {
         var sb = new StringBuilder();
         var v = Properties.ApiVersion;
-        sb.AppendLine($"Device: {DeviceName}, Vulkan {v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}, type {Properties.DeviceType}, validation {(ValidationEnabled ? SyncValidationEnabled ? "on (sync)" : options.GpuValidation ? "on (gpu)" : "on" : "off")}");
+        sb.AppendLine($"Device: {DeviceName}, Vulkan {v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}, type {Properties.DeviceType}, validation {(ValidationEnabled ? SyncValidationEnabled ? "on (sync)" : _options.GpuValidation ? "on (gpu)" : "on" : "off")}");
         sb.AppendLine($"Queues: graphics family {GraphicsFamily}, transfer family {TransferFamily}{(HasDedicatedTransfer ? " (dedicated)" : " (shared with graphics)")}");
         sb.AppendLine($"dynamicRendering={HasDynamicRendering} synchronization2={HasSynchronization2} timelineSemaphore={HasTimelineSemaphore} extendedDynamicState={HasExtendedDynamicState}");
         sb.AppendLine($"extendedDynamicState2={HasExtendedDynamicState2} (logicOp={HasExtendedDynamicState2LogicOp}, patchControlPoints={HasExtendedDynamicState2PatchControlPoints})");
-        sb.AppendLine($"fillModeNonSolid={FillModeNonSolid} depthClamp={DepthClamp} samplerAnisotropy={SamplerAnisotropy} tessellationShader={HasTessellation} textureCompressionBC={TextureCompressionBC} independentBlend={IndependentBlend} imageCubeArray={ImageCubeArray}");
+        sb.AppendLine($"fillModeNonSolid={FillModeNonSolid} depthClamp={DepthClamp} samplerAnisotropy={SamplerAnisotropy} tessellationShader={HasTessellation} textureCompressionBC={TextureCompressionBc} independentBlend={IndependentBlend} imageCubeArray={ImageCubeArray}");
         sb.AppendLine($"bindless={HasBindless} multiDrawIndirect={MultiDrawIndirect} drawIndirectFirstInstance={DrawIndirectFirstInstance} drawIndirectCount={DrawIndirectCount} shaderDrawParameters={ShaderDrawParameters}");
         sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) vertexInputDynamicState={HasVertexInputDynamicState} swapchain={HasSwapchain}");
         sb.AppendLine($"rayQuery={HasRayQuery} bufferDeviceAddress={HasBufferDeviceAddress}");
@@ -429,15 +436,15 @@ public sealed unsafe class VulkanDevice : IDisposable
     void Initialize()
     {
         CreateInstance();
-        if (options.CreateSurface != null)
+        if (_options.CreateSurface != null)
         {
-            Surface = options.CreateSurface(Instance);
-            Vk.TryGetInstanceExtension(Instance, out khrSurface);
+            Surface = _options.CreateSurface(Instance);
+            Vk.TryGetInstanceExtension(Instance, out _khrSurface);
         }
         PickAndCreateDevice();
         Allocator = new GpuAllocator(this);
         CreatePipelineCache();
-        Frames = new FrameRing(this, options.FramesInFlight);
+        Frames = new FrameRing(this, _options.FramesInFlight);
         int renderThread = Environment.CurrentManagedThreadId;
         Allocator.Reclaim = () =>
         {
@@ -445,7 +452,7 @@ public sealed unsafe class VulkanDevice : IDisposable
             bool retired = Frames.RetireSubmitted();
             return Allocator.Trim() > 0 || retired;
         };
-        options.DeviceCreated?.Invoke(this);
+        _options.DeviceCreated?.Invoke(this);
     }
 
     bool LayerAvailable()
@@ -500,9 +507,9 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     void CreateInstance()
     {
-        bool wantValidation = options.Validation ?? true;
+        bool wantValidation = _options.Validation ?? true;
         bool layer = wantValidation && LayerAvailable();
-        if (options.Validation == true && !layer)
+        if (_options.Validation == true && !layer)
         {
             throw new VulkanException($"{ValidationLayer} is not installed");
         }
@@ -510,7 +517,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         // without validation.
         bool debugExt = InstanceExtensionAvailable("VK_EXT_debug_utils");
         ValidationEnabled = layer && debugExt;
-        bool layerSettings = ValidationEnabled && (options.SyncValidation || options.GpuValidation) && InstanceExtensionAvailable("VK_EXT_layer_settings", ValidationLayer);
+        bool layerSettings = ValidationEnabled && (_options.SyncValidation || _options.GpuValidation) && InstanceExtensionAvailable("VK_EXT_layer_settings", ValidationLayer);
 
         var extNames = new List<string>();
         if (debugExt)
@@ -521,9 +528,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         {
             extNames.Add("VK_EXT_layer_settings");
         }
-        if (options.InstanceExtensions != null)
+        if (_options.InstanceExtensions != null)
         {
-            foreach (var e in options.InstanceExtensions)
+            foreach (var e in _options.InstanceExtensions)
             {
                 if (!extNames.Contains(e))
                 {
@@ -531,7 +538,7 @@ public sealed unsafe class VulkanDevice : IDisposable
                 }
             }
         }
-        if (options.CreateSurface != null && !extNames.Contains("VK_KHR_surface"))
+        if (_options.CreateSurface != null && !extNames.Contains("VK_KHR_surface"))
         {
             extNames.Add("VK_KHR_surface");
         }
@@ -565,9 +572,9 @@ public sealed unsafe class VulkanDevice : IDisposable
             uint settingCount = 0;
             if (layerSettings)
             {
-                if (options.SyncValidation)
+                if (_options.SyncValidation)
                     settings[settingCount++] = new LayerSettingEXT { PLayerName = layerName, PSettingName = syncName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
-                if (options.GpuValidation)
+                if (_options.GpuValidation)
                     settings[settingCount++] = new LayerSettingEXT { PLayerName = layerName, PSettingName = gpuName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
             }
             var layerInfo = new LayerSettingsCreateInfoEXT { SType = StructureType.LayerSettingsCreateInfoExt, SettingCount = settingCount, PSettings = settings };
@@ -584,7 +591,7 @@ public sealed unsafe class VulkanDevice : IDisposable
             };
             VulkanException.Check(Vk.CreateInstance(in ci, null, out var instance), "vkCreateInstance");
             Instance = instance;
-            SyncValidationEnabled = settingCount > 0 && options.SyncValidation;
+            SyncValidationEnabled = settingCount > 0 && _options.SyncValidation;
         }
         finally
         {
@@ -601,21 +608,21 @@ public sealed unsafe class VulkanDevice : IDisposable
 
         if (debugExt)
         {
-            Vk.TryGetInstanceExtension(Instance, out debugUtils);
+            Vk.TryGetInstanceExtension(Instance, out _debugUtils);
         }
         if (ValidationEnabled)
         {
-            selfHandle = GCHandle.Alloc(this);
-            callbackDelegate = DebugCallback;
+            _selfHandle = GCHandle.Alloc(this);
+            _callbackDelegate = DebugCallback;
             var mi = new DebugUtilsMessengerCreateInfoEXT
             {
                 SType = StructureType.DebugUtilsMessengerCreateInfoExt,
                 MessageSeverity = DebugUtilsMessageSeverityFlagsEXT.WarningBitExt | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt,
                 MessageType = DebugUtilsMessageTypeFlagsEXT.GeneralBitExt | DebugUtilsMessageTypeFlagsEXT.ValidationBitExt | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt,
-                PfnUserCallback = new PfnDebugUtilsMessengerCallbackEXT(callbackDelegate),
-                PUserData = (void*)GCHandle.ToIntPtr(selfHandle),
+                PfnUserCallback = new PfnDebugUtilsMessengerCallbackEXT(_callbackDelegate),
+                PUserData = (void*)GCHandle.ToIntPtr(_selfHandle),
             };
-            VulkanException.Check(debugUtils!.CreateDebugUtilsMessenger(Instance, in mi, null, out messenger), "vkCreateDebugUtilsMessengerEXT");
+            VulkanException.Check(_debugUtils!.CreateDebugUtilsMessenger(Instance, in mi, null, out _messenger), "vkCreateDebugUtilsMessengerEXT");
         }
     }
 
@@ -632,19 +639,19 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool perfOnly = type == DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt;
         if (isError)
         {
-            Interlocked.Increment(ref self.validationErrors);
+            Interlocked.Increment(ref self._validationErrors);
             Console.Error.WriteLine("[vulkan error] " + text);
         }
         else if (!perfOnly)
         {
-            Interlocked.Increment(ref self.validationWarnings);
+            Interlocked.Increment(ref self._validationWarnings);
         }
-        lock (self.logGate)
+        lock (self._logGate)
         {
-            self.validationLog.Add((isError ? "ERROR " : perfOnly ? "PERF " : "WARN ") + text);
-            if (self.validationLog.Count > 50)
+            self._validationLog.Add((isError ? "ERROR " : perfOnly ? "PERF " : "WARN ") + text);
+            if (self._validationLog.Count > 50)
             {
-                self.validationLog.RemoveAt(0);
+                self._validationLog.RemoveAt(0);
             }
         }
         return 0;
@@ -732,11 +739,11 @@ public sealed unsafe class VulkanDevice : IDisposable
         long score = 1;
         if (props.DeviceType == PhysicalDeviceType.DiscreteGpu)
         {
-            score += options.PreferDiscrete ? 1_000_000 : 1_000;
+            score += _options.PreferDiscrete ? 1_000_000 : 1_000;
         }
         else if (props.DeviceType == PhysicalDeviceType.IntegratedGpu)
         {
-            score += options.PreferDiscrete ? 1_000 : 1_000_000;
+            score += _options.PreferDiscrete ? 1_000 : 1_000_000;
         }
         Vk.GetPhysicalDeviceMemoryProperties(d, out var mp);
         for (int i = 0; i < mp.MemoryHeapCount; i++)
@@ -773,7 +780,7 @@ public sealed unsafe class VulkanDevice : IDisposable
             }
             if (Surface.Handle != 0)
             {
-                khrSurface!.GetPhysicalDeviceSurfaceSupport(d, (uint)i, Surface, out var ok);
+                _khrSurface!.GetPhysicalDeviceSurfaceSupport(d, (uint)i, Surface, out var ok);
                 if (!ok)
                 {
                     continue;
@@ -784,7 +791,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         return -1;
     }
 
-    bool Wants12(string feature) => options.Features12?.Contains(feature) == true;
+    bool Wants12(string feature) => _options.Features12?.Contains(feature) == true;
 
     void CreateLogicalDevice()
     {
@@ -808,11 +815,11 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool extEds3 = have.Contains("VK_EXT_extended_dynamic_state3");
         bool extVid = have.Contains("VK_EXT_vertex_input_dynamic_state");
         bool extPush = have.Contains("VK_KHR_push_descriptor");
-        bool extBary = options.TriangleMeasurements && have.Contains("VK_KHR_fragment_shader_barycentric");
-        bool extRay = options.RayTracing && have.Contains("VK_KHR_acceleration_structure") && have.Contains("VK_KHR_ray_query") && have.Contains("VK_KHR_deferred_host_operations");
+        bool extBary = _options.TriangleMeasurements && have.Contains("VK_KHR_fragment_shader_barycentric");
+        bool extRay = _options.RayTracing && have.Contains("VK_KHR_acceleration_structure") && have.Contains("VK_KHR_ray_query") && have.Contains("VK_KHR_deferred_host_operations");
         bool extVrs = have.Contains("VK_KHR_fragment_shading_rate");
         // VK_NV_low_latency2 (Reflex, which DLSS frame generation asks for) requires present ids, which Streamline's list leaves out (validation, 2026-11-08).
-        bool extPresentId = options.CreateSurface != null && options.DeviceExtensions?.Contains("VK_NV_low_latency2") == true && have.Contains("VK_KHR_present_id");
+        bool extPresentId = _options.CreateSurface != null && _options.DeviceExtensions?.Contains("VK_NV_low_latency2") == true && have.Contains("VK_KHR_present_id");
 
         void* chain = null;
         void Link<T>(ref T s, bool use) where T : unmanaged
@@ -856,14 +863,14 @@ public sealed unsafe class VulkanDevice : IDisposable
         DepthClamp = core.DepthClamp;
         SamplerAnisotropy = core.SamplerAnisotropy;
         HasTessellation = core.TessellationShader;
-        TextureCompressionBC = core.TextureCompressionBC;
+        TextureCompressionBc = core.TextureCompressionBC;
         IndependentBlend = core.IndependentBlend;
         ImageCubeArray = core.ImageCubeArray;
         HasPushDescriptor = extPush;
-        HasPipelineStatistics = options.TriangleMeasurements && core.PipelineStatisticsQuery;
+        HasPipelineStatistics = _options.TriangleMeasurements && core.PipelineStatisticsQuery;
         HasFragmentBarycentric = extBary && bary.FragmentShaderBarycentric;
         HasRayQuery = extRay && accel.AccelerationStructure && rayQuery.RayQuery && v12.BufferDeviceAddress;
-        HasBufferDeviceAddress = (options.TriangleMeasurements || HasRayQuery) && v12.BufferDeviceAddress;
+        HasBufferDeviceAddress = (_options.TriangleMeasurements || HasRayQuery) && v12.BufferDeviceAddress;
         Eds3ColorBlendEnable = extEds3 && eds3.ExtendedDynamicState3ColorBlendEnable;
         Eds3ColorWriteMask = extEds3 && eds3.ExtendedDynamicState3ColorWriteMask;
         Eds3AlphaToCoverageEnable = extEds3 && eds3.ExtendedDynamicState3AlphaToCoverageEnable;
@@ -977,7 +984,7 @@ public sealed unsafe class VulkanDevice : IDisposable
             DepthClamp = DepthClamp,
             SamplerAnisotropy = SamplerAnisotropy,
             TessellationShader = HasTessellation,
-            TextureCompressionBC = TextureCompressionBC,
+            TextureCompressionBC = TextureCompressionBc,
             IndependentBlend = IndependentBlend,
             ImageCubeArray = ImageCubeArray,
             ShaderStorageImageReadWithoutFormat = core.ShaderStorageImageReadWithoutFormat,
@@ -1005,7 +1012,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         // null unless the extensions are enabled (DECISIONS 16).
         foreach (var e in (string[])["VK_KHR_get_memory_requirements2", "VK_KHR_dedicated_allocation"])
             if (have.Contains(e)) names.Add(e);
-        foreach (var e in options.DeviceExtensions ?? [])
+        foreach (var e in _options.DeviceExtensions ?? [])
             // Buffer device address is core in 1.2 (enabled as a feature): its extensions may not be enabled with it.
             if (have.Contains(e) && !names.Contains(e) && e is not ("VK_EXT_buffer_device_address" or "VK_KHR_buffer_device_address")) names.Add(e);
 
@@ -1025,7 +1032,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
         float prio = 1f;
         // 1 + the extra queues the family offers (priorities all 1).
-        uint graphicsQueues = 1 + (uint)Math.Min(Math.Max(options.ExtraGraphicsQueues, 0), (int)fams[GraphicsFamily].QueueCount - 1);
+        uint graphicsQueues = 1 + (uint)Math.Min(Math.Max(_options.ExtraGraphicsQueues, 0), (int)fams[GraphicsFamily].QueueCount - 1);
         var prios = stackalloc float[(int)graphicsQueues];
         for (int i = 0; i < graphicsQueues; i++) prios[i] = 1f;
         var qcis = stackalloc DeviceQueueCreateInfo[2];
@@ -1163,15 +1170,15 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     void CreatePipelineCache()
     {
-        pipelineCachePath = options.PipelineCachePath;
+        _pipelineCachePath = _options.PipelineCachePath;
         byte[]? data = null;
-        if (pipelineCachePath != null)
+        if (_pipelineCachePath != null)
         {
             try
             {
-                if (File.Exists(pipelineCachePath))
+                if (File.Exists(_pipelineCachePath))
                 {
-                    data = File.ReadAllBytes(pipelineCachePath);
+                    data = File.ReadAllBytes(_pipelineCachePath);
                 }
             }
             catch (IOException)
@@ -1214,7 +1221,7 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     void SavePipelineCache()
     {
-        if (pipelineCachePath == null || PipelineCache.Handle == 0)
+        if (_pipelineCachePath == null || PipelineCache.Handle == 0)
         {
             return;
         }
@@ -1231,14 +1238,14 @@ public sealed unsafe class VulkanDevice : IDisposable
             {
                 Vk.GetPipelineCacheData(Device, PipelineCache, &size, p);
             }
-            var dir = Path.GetDirectoryName(Path.GetFullPath(pipelineCachePath));
+            var dir = Path.GetDirectoryName(Path.GetFullPath(_pipelineCachePath));
             if (!string.IsNullOrEmpty(dir))
             {
                 Directory.CreateDirectory(dir);
             }
-            var tmp = $"{pipelineCachePath}.{Environment.ProcessId}.tmp";   // processes saving at once each write their own, the last move wins
+            var tmp = $"{_pipelineCachePath}.{Environment.ProcessId}.tmp";   // processes saving at once each write their own, the last move wins
             File.WriteAllBytes(tmp, bytes.AsSpan(0, (int)size).ToArray());
-            File.Move(tmp, pipelineCachePath, true);
+            File.Move(tmp, _pipelineCachePath, true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -1251,7 +1258,7 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// <summary>Names an object for validation messages and capture tools (no-op without validation).</summary>
     public void SetName(ObjectType type, ulong handle, string name)
     {
-        if (debugUtils == null || Device.Handle == 0)
+        if (_debugUtils == null || Device.Handle == 0)
         {
             return;
         }
@@ -1265,7 +1272,7 @@ public sealed unsafe class VulkanDevice : IDisposable
                 ObjectHandle = handle,
                 PObjectName = p,
             };
-            debugUtils.SetDebugUtilsObjectName(Device, in info);
+            _debugUtils.SetDebugUtilsObjectName(Device, in info);
         }
         finally
         {
@@ -1312,14 +1319,14 @@ public sealed unsafe class VulkanDevice : IDisposable
         VulkanException.Check(Vk.AllocateCommandBuffers(Device, in ai, out var cb), "vkAllocateCommandBuffers");
         var bi = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
         VulkanException.Check(Vk.BeginCommandBuffer(cb, in bi), "vkBeginCommandBuffer");
-        immediatePools[(ulong)cb.Handle] = pool;
+        _immediatePools[(ulong)cb.Handle] = pool;
         return cb;
     }
 
     /// <summary>Ends, submits on the graphics queue and waits for completion.</summary>
     public void EndImmediate(CommandBuffer cb)
     {
-        if (!immediatePools.TryRemove((ulong)cb.Handle, out var pool))
+        if (!_immediatePools.TryRemove((ulong)cb.Handle, out var pool))
         {
             throw new InvalidOperationException("Not a command buffer from BeginImmediate");
         }
@@ -1352,19 +1359,19 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     public void Dispose()
     {
-        if (disposed)
+        if (_disposed)
         {
             return;
         }
-        disposed = true;
+        _disposed = true;
         if (Device.Handle != 0)
         {
             Vk.DeviceWaitIdle(Device);
-            foreach (var pool in immediatePools.Values)
+            foreach (var pool in _immediatePools.Values)
             {
                 Vk.DestroyCommandPool(Device, pool, null);
             }
-            immediatePools.Clear();
+            _immediatePools.Clear();
             Frames?.Dispose();
             SavePipelineCache();
             if (PipelineCache.Handle != 0)
@@ -1376,24 +1383,24 @@ public sealed unsafe class VulkanDevice : IDisposable
             Vk.DestroyDevice(Device, null);
             Device = default;
         }
-        if (Surface.Handle != 0 && khrSurface != null)
+        if (Surface.Handle != 0 && _khrSurface != null)
         {
-            khrSurface.DestroySurface(Instance, Surface, null);
+            _khrSurface.DestroySurface(Instance, Surface, null);
             Surface = default;
         }
-        if (messenger.Handle != 0)
+        if (_messenger.Handle != 0)
         {
-            debugUtils!.DestroyDebugUtilsMessenger(Instance, messenger, null);
-            messenger = default;
+            _debugUtils!.DestroyDebugUtilsMessenger(Instance, _messenger, null);
+            _messenger = default;
         }
         if (Instance.Handle != 0)
         {
             Vk.DestroyInstance(Instance, null);
             Instance = default;
         }
-        if (selfHandle.IsAllocated)
+        if (_selfHandle.IsAllocated)
         {
-            selfHandle.Free();
+            _selfHandle.Free();
         }
         Vk.Dispose();
     }

@@ -88,7 +88,7 @@ public sealed class WorldLevelData
     /// The height the original stands each outdoor level building at, by <see cref="BuildingKey"/> (docs/formats/zones.md "Placement height"); filled by
     /// <see cref="PlaceOnGround"/>. A building without one keeps its state's <c>world Y pos</c>.
     /// </summary>
-    readonly Dictionary<string, float> groundHeights = new(StringComparer.Ordinal);
+    readonly Dictionary<string, float> _groundHeights = new(StringComparer.Ordinal);
 
     /// <summary>The original deletes a building whose instance Y is below this when it makes it ("under the ground", docs/formats/zones.md "Placement height").</summary>
     public const float UnderGround = -1000;
@@ -117,10 +117,10 @@ public sealed class WorldLevelData
     /// </summary>
     public void PlaceOnGround(Func<double, double, float> ground)
     {
-        groundHeights.Clear();
+        _groundHeights.Clear();
         foreach (var (zone, db) in Zones)
             if (db.Find(BuildingListId) is { } list)
-                new PlacementHeights(zone, db, list, ground, groundHeights).Resolve();
+                new PlacementHeights(zone, db, list, ground, _groundHeights).Resolve();
     }
 
     /// <summary>A mod's own world layer, under its folder (docs/formats/zones.md "Mods").</summary>
@@ -210,7 +210,7 @@ public sealed class WorldLevelData
                 if (instance.IsCleared) continue; // emptied by a later layer
                 if (instance.Position.Y < UnderGround) continue;   // the original deletes it on load
                 string? stateId = instance.States.Count > 0 ? instance.States[0] : null;
-                float? worldY = groundHeights.TryGetValue(BuildingKey.Of(zone, instance.Id), out float onGround) ? onGround
+                float? worldY = _groundHeights.TryGetValue(BuildingKey.Of(zone, instance.Id), out float onGround) ? onGround
                     : stateId is not null && db.Find(stateId) is { } state && state.Floats.TryGetValue("world Y pos", out var y) ? y : null;
                 yield return new BuildingPlacement(zone, instance.Id, instance.Target, instance.Position, instance.Rotation, stateId, worldY)
                 {
@@ -220,22 +220,22 @@ public sealed class WorldLevelData
         }
     }
 
-    /// <summary>Every town placed by a <see cref="FcsRecordType.GAMESTATE_TOWN_INSTANCE_LIST"/> record of the level files.</summary>
+    /// <summary>Every town placed by a <see cref="FcsRecordType.GamestateTownInstanceList"/> record of the level files.</summary>
     public IEnumerable<TownPlacement> Towns()
     {
-        foreach (var list in Level.OfType(FcsRecordType.GAMESTATE_TOWN_INSTANCE_LIST))
+        foreach (var list in Level.OfType(FcsRecordType.GamestateTownInstanceList))
             foreach (var instance in list.Instances.Values.Where(i => !i.IsCleared))
                 yield return new TownPlacement(instance.Id, instance.Target, instance.Position, instance.States.Count > 0 ? instance.States[0] : null);
     }
 
     /// <summary>
-    /// Zones listed by <see cref="FcsRecordType.GAMESTATE_TOWN"/> records (<c>zones_count</c>, <c>zone_x_i</c>,
+    /// Zones listed by <see cref="FcsRecordType.GamestateTown"/> records (<c>zones_count</c>, <c>zone_x_i</c>,
     /// <c>zone_y_i</c>), keyed by their <c>instance</c> field: the id of the town's placement.
     /// </summary>
     public Dictionary<string, List<ZoneCoordinate>> TownZones()
     {
         var result = new Dictionary<string, List<ZoneCoordinate>>(StringComparer.Ordinal);
-        foreach (var town in Level.OfType(FcsRecordType.GAMESTATE_TOWN))
+        foreach (var town in Level.OfType(FcsRecordType.GamestateTown))
         {
             var instance = town.GetString("instance");
             if (instance.Length == 0) continue;
@@ -248,9 +248,9 @@ public sealed class WorldLevelData
         return result;
     }
 
-    /// <summary>Road segments: <see cref="FcsRecordType.ROAD"/> records whose instances are the path's points.</summary>
+    /// <summary>Road segments: <see cref="FcsRecordType.Road"/> records whose instances are the path's points.</summary>
     public IEnumerable<RoadPath> Roads() =>
-        Level.OfType(FcsRecordType.ROAD).Select(r => new RoadPath(r.StringId, r.GetFloat("width"), r.GetInt("start"), r.GetInt("end"), r.GetFloat("length"),
+        Level.OfType(FcsRecordType.Road).Select(r => new RoadPath(r.StringId, r.GetFloat("width"), r.GetInt("start"), r.GetInt("end"), r.GetFloat("length"),
             r.Instances.Values.Where(i => !i.IsCleared).Select(i => i.Position).ToList()));
 }
 
@@ -276,8 +276,8 @@ public sealed class WorldLevelLayer(string name, string directory)
 /// <param name="InstanceId">The id in its zone file's building list; ids repeat between zones (Observed: 8,754 of 11,714 base placements share one), so at run time a
 /// building is named by <see cref="Key"/>.</param>
 /// <param name="Position">X and Z are world coordinates; Y is the height above the terrain (Observed).</param>
-/// <param name="BuildingId">String id of the placed <see cref="FcsRecordType.BUILDING"/> record.</param>
-/// <param name="StateId">String id of its <see cref="FcsRecordType.GAMESTATE_BUILDING"/> record in the same zone file.</param>
+/// <param name="BuildingId">String id of the placed <see cref="FcsRecordType.Building"/> record.</param>
+/// <param name="StateId">String id of its <see cref="FcsRecordType.GamestateBuilding"/> record in the same zone file.</param>
 /// <param name="WorldY">Absolute height: for an outdoor level building the original's building ground + <c>Position.Y</c> (<see cref="WorldLevelData.PlaceOnGround"/>),
 /// else its state's <c>world Y pos</c>.</param>
 public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, string BuildingId, Vector3 Position, Quaternion Rotation, string? StateId, float? WorldY)
@@ -299,10 +299,10 @@ public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, s
     /// <summary>A loose item's mesh and scale when not its record's own (a nest's numbered debris piece, docs/game/factions-squads-towns.md "Nest furniture").</summary>
     public string? ItemMesh { get; init; }
     public float ItemScale { get; init; } = 1;
-    readonly string? key;
+    readonly string? _key;
 
     /// <summary>The run-time name of the building (<see cref="BuildingKey.Of"/>); a player-placed building, whose id is unique already, is given its own.</summary>
-    public string Key { get => key ?? BuildingKey.Of(Zone, InstanceId); init => key = value; }
+    public string Key { get => _key ?? BuildingKey.Of(Zone, InstanceId); init => _key = value; }
     /// <summary>True when <see cref="BuildingId"/> names a record of the zone file itself rather than a building.</summary>
     public bool TargetsZoneRecord { get; init; }
     /// <summary>Placed inside another building and not outside (<see cref="PlacedMesh.Contained"/>); a zone's own buildings take it from their state instead.</summary>
@@ -313,7 +313,7 @@ public sealed record BuildingPlacement(ZoneCoordinate Zone, string InstanceId, s
     public ZoneCoordinate? StateZone { get; init; }
 }
 
-/// <param name="TownId">String id of the placed <see cref="FcsRecordType.TOWN"/> record.</param>
+/// <param name="TownId">String id of the placed <see cref="FcsRecordType.Town"/> record.</param>
 /// <param name="Position">World position; Y is an absolute height.</param>
 public sealed record TownPlacement(string InstanceId, string TownId, Vector3 Position, string? StateId);
 

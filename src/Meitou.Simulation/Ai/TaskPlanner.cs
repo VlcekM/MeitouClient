@@ -42,10 +42,10 @@ public sealed class TaskPlanner
     /// <summary>Ancestors looked through for a repeat (the original's 50).</summary>
     const int MaxDepth = 50;
 
-    [ThreadStatic] static TaskPlanner? local;
+    [ThreadStatic] static TaskPlanner? s_local;
 
     /// <summary>This thread's planner.</summary>
-    public static TaskPlanner Local => local ??= new TaskPlanner();
+    public static TaskPlanner Local => s_local ??= new TaskPlanner();
 
     struct Node
     {
@@ -56,9 +56,9 @@ public sealed class TaskPlanner
         public bool Closed;
     }
 
-    readonly Node[] nodes = new Node[MaxNodes];
-    readonly List<int> open = new(MaxNodes);
-    int count;
+    readonly Node[] _nodes = new Node[MaxNodes];
+    readonly List<int> _open = new(MaxNodes);
+    int _count;
 
     /// <summary>
     /// Plans a goal row of a desire for a target; fills <paramref name="plan"/> leaf first and returns its value (the least desire on it, above 0), or 0
@@ -67,40 +67,40 @@ public sealed class TaskPlanner
     public float Plan(TaskDataRow goal, float desire, PlanTarget target, IPlanWorld world, IReadOnlyList<PlanStep> queued, List<PlanStep> plan)
     {
         plan.Clear();
-        count = 0;
-        open.Clear();
+        _count = 0;
+        _open.Clear();
         int root = Make(goal, target, desire, -1);
         if (root < 0) return 0;
         // A goal without a finder that can run is the plan by itself.
         if (!goal.Is(TaskDataFlags.Finder) && CanRun(root, world, out _)) return Accept(root, plan);
-        open.Add(root);
-        while (open.Count > 0)
+        _open.Add(root);
+        while (_open.Count > 0)
         {
             int best = 0;
-            for (int k = 1; k < open.Count; k++)
-                if (Value(open[k]) > Value(open[best])) best = k;
-            int at = open[best];
-            open.RemoveAt(best);
-            ref var n = ref nodes[at];
+            for (int k = 1; k < _open.Count; k++)
+                if (Value(_open[k]) > Value(_open[best])) best = k;
+            int at = _open[best];
+            _open.RemoveAt(best);
+            ref var n = ref _nodes[at];
             n.Closed = true;
             if (Queued(at, queued, world) || Repeats(at)) return Accept(at, plan);
             if (!n.Row.Is(TaskDataFlags.Finder) && n.Row.Is(TaskDataFlags.Acts) && CanRun(at, world, out _)) return Accept(at, plan);
             Expand(at, world);
-            if (count >= MaxNodes) break;
+            if (_count >= MaxNodes) break;
         }
         return 0;
     }
 
-    float Value(int i) => nodes[i].G + nodes[i].H;
+    float Value(int i) => _nodes[i].G + _nodes[i].H;
 
     int Make(TaskDataRow row, PlanTarget target, float desire, int parent)
     {
-        if (count >= MaxNodes) return -1;
+        if (_count >= MaxNodes) return -1;
         if (desire <= 0) return -1;   // a dead end: never expanded
         // A row without a finder wants its effect for its own target (engine reading: the original reads the task's effect hand).
-        nodes[count] = new Node { Row = row, Target = target, EffectTarget = row.Is(TaskDataFlags.Finder) ? default : target, G = desire, H = desire, Parent = parent };
-        if (parent >= 0) nodes[count].G = MathF.Min(desire, nodes[parent].G);
-        return count++;
+        _nodes[_count] = new Node { Row = row, Target = target, EffectTarget = row.Is(TaskDataFlags.Finder) ? default : target, G = desire, H = desire, Parent = parent };
+        if (parent >= 0) _nodes[_count].G = MathF.Min(desire, _nodes[parent].G);
+        return _count++;
     }
 
     /// <summary>
@@ -109,7 +109,7 @@ public sealed class TaskPlanner
     /// </summary>
     bool CanRun(int i, IPlanWorld world, out TaskCondition? unmet)
     {
-        ref var n = ref nodes[i];
+        ref var n = ref _nodes[i];
         foreach (var c in n.Row.Needs)
             if (!world.Holds(c, n.Target)) { unmet = c; return false; }
         unmet = null;
@@ -126,7 +126,7 @@ public sealed class TaskPlanner
     /// </summary>
     void Expand(int i, IPlanWorld world)
     {
-        ref var n = ref nodes[i];
+        ref var n = ref _nodes[i];
         if (n.Row.Effect is not null && n.Row.Is(TaskDataFlags.Finder)) n.EffectTarget = world.Find(n.Row, n.Target);
         TaskCondition? follow = null;
         var target = n.Target;
@@ -144,15 +144,15 @@ public sealed class TaskPlanner
             if (row.Is(TaskDataFlags.NeedsTarget) && target.IsNone) continue;
             if (Seen(row.Type, target)) continue;
             int child = Make(row, target, world.Desire(row, target), i);
-            if (child < 0) { if (count >= MaxNodes) return; continue; }
-            open.Add(child);
+            if (child < 0) { if (_count >= MaxNodes) return; continue; }
+            _open.Add(child);
         }
     }
 
     bool Seen(TaskType type, PlanTarget target)
     {
-        for (int k = 0; k < count; k++)
-            if (nodes[k].Row.Type == type && nodes[k].Target == target) return true;
+        for (int k = 0; k < _count; k++)
+            if (_nodes[k].Row.Type == type && _nodes[k].Target == target) return true;
         return false;
     }
 
@@ -162,18 +162,18 @@ public sealed class TaskPlanner
     /// </summary>
     bool Queued(int i, IReadOnlyList<PlanStep> queued, IPlanWorld world)
     {
-        ref var n = ref nodes[i];
+        ref var n = ref _nodes[i];
         return queued.Count > 0 && queued[0].Type == n.Row.Type && queued[0].Target == n.Target && CanRun(i, world, out _);
     }
 
     /// <summary>Whether an ancestor is the same row on the same target (moving and running never count).</summary>
     bool Repeats(int i)
     {
-        ref var n = ref nodes[i];
-        if (n.Row.Type is TaskType.MOVE_ON_FREE_WILL or TaskType.MOVE_ON_FREE_WILL_FAST) return false;
+        ref var n = ref _nodes[i];
+        if (n.Row.Type is TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast) return false;
         int depth = 0;
-        for (int p = n.Parent; p >= 0 && depth < MaxDepth; p = nodes[p].Parent, depth++)
-            if (nodes[p].Row.Type == n.Row.Type && nodes[p].Target == n.Target) return true;
+        for (int p = n.Parent; p >= 0 && depth < MaxDepth; p = _nodes[p].Parent, depth++)
+            if (_nodes[p].Row.Type == n.Row.Type && _nodes[p].Target == n.Target) return true;
         return false;
     }
 
@@ -181,10 +181,10 @@ public sealed class TaskPlanner
     float Accept(int i, List<PlanStep> plan)
     {
         float value = 10;
-        for (int p = i; p >= 0; p = nodes[p].Parent)
+        for (int p = i; p >= 0; p = _nodes[p].Parent)
         {
-            plan.Add(new PlanStep(nodes[p].Row.Type, nodes[p].Target));
-            value = MathF.Min(value, nodes[p].H);
+            plan.Add(new PlanStep(_nodes[p].Row.Type, _nodes[p].Target));
+            value = MathF.Min(value, _nodes[p].H);
         }
         return value;
     }

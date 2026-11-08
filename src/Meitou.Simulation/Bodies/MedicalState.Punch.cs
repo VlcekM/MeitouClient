@@ -11,7 +11,7 @@ public sealed partial class MedicalState
     /// </summary>
     public bool PunchDamage(int limbSlot, float cut, float blunt, GameConstants c)
     {
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             if (p.Template.LimbSlot != limbSlot) continue;
             if (p.Replacement is not null) return false;

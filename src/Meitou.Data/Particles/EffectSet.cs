@@ -17,40 +17,40 @@ public sealed class EffectSet
     /// <summary>The longest warm-up a group gets of its own accord (seconds).</summary>
     public const float MaxAutoPrewarm = 40;
 
-    readonly List<EffectGroup> groups = [];
-    readonly List<WeatherEffectEntry> skipped = [];
-    readonly CancellationTokenSource cancel = new();
-    EffectWorld? live;
-    float? prewarmSeconds;
-    EffectCamera camera;
-    volatile bool ready;
-    volatile Exception? failure;
+    readonly List<EffectGroup> _groups = [];
+    readonly List<WeatherEffectEntry> _skipped = [];
+    readonly CancellationTokenSource _cancel = new();
+    EffectWorld? _live;
+    float? _prewarmSeconds;
+    EffectCamera _camera;
+    volatile bool _ready;
+    volatile Exception? _failure;
 
     EffectSet(WeatherEffectInput source) => Source = source;
 
     /// <summary>The weather this set was made for.</summary>
     public WeatherEffectInput Source { get; }
-    public IReadOnlyList<EffectGroup> Groups => groups;
+    public IReadOnlyList<EffectGroup> Groups => _groups;
     /// <summary>The entries that have no group (a type that is not a weather effect, or an unknown particle system).</summary>
-    public IReadOnlyList<WeatherEffectEntry> Skipped => skipped;
+    public IReadOnlyList<WeatherEffectEntry> Skipped => _skipped;
     /// <summary>The simulation finished (or was cancelled): the set may be used (<see cref="Failure"/> null and not cancelled) or dropped.</summary>
-    public bool Ready => ready;
-    public bool Cancelled => cancel.IsCancellationRequested;
+    public bool Ready => _ready;
+    public bool Cancelled => _cancel.IsCancellationRequested;
     /// <summary>What went wrong on the background thread, if anything; the set is then not to be used.</summary>
-    public Exception? Failure => failure;
+    public Exception? Failure => _failure;
 
     EffectSet Make(ParticleLibrary library, int seed, EffectWorld world)
     {
         int i = 0;
         foreach (var entry in Source.Effects)
         {
-            if (EffectGroups.Create(entry, library, seed + i++, world) is { } group) groups.Add(group);
-            else skipped.Add(entry);
+            if (EffectGroups.Create(entry, library, seed + i++, world) is { } group) _groups.Add(group);
+            else _skipped.Add(entry);
         }
         return this;
     }
 
-    float WarmSeconds(EffectGroup group) => prewarmSeconds ?? Math.Min(ParticleSimulation.LongestLife(group.System), MaxAutoPrewarm);
+    float WarmSeconds(EffectGroup group) => _prewarmSeconds ?? Math.Min(ParticleSimulation.LongestLife(group.System), MaxAutoPrewarm);
 
     /// <summary>
     /// Makes the groups of <paramref name="weather"/> and runs their schedules for the warm-up on the calling thread: <paramref name="prewarmSeconds"/>, or by default
@@ -59,9 +59,9 @@ public sealed class EffectSet
     /// </summary>
     public static EffectSet Begin(WeatherEffectInput weather, ParticleLibrary library, int seed, EffectWorld world, float? prewarmSeconds, in EffectCamera camera)
     {
-        var set = new EffectSet(weather) { prewarmSeconds = prewarmSeconds }.Make(library, seed, world);
-        foreach (var group in set.groups) group.BeginWarm(set.WarmSeconds(group), camera, weather);
-        if (set.groups.Count == 0) set.ready = true;   // nothing to simulate
+        var set = new EffectSet(weather) { _prewarmSeconds = prewarmSeconds }.Make(library, seed, world);
+        foreach (var group in set._groups) group.BeginWarm(set.WarmSeconds(group), camera, weather);
+        if (set._groups.Count == 0) set._ready = true;   // nothing to simulate
         return set;
     }
 
@@ -76,9 +76,9 @@ public sealed class EffectSet
         long t0 = Stopwatch.GetTimestamp();
         var frozen = world.Frozen();
         long t1 = Stopwatch.GetTimestamp();
-        var set = new EffectSet(weather) { prewarmSeconds = prewarmSeconds, live = world, camera = camera }.Make(library, seed, frozen);
+        var set = new EffectSet(weather) { _prewarmSeconds = prewarmSeconds, _live = world, _camera = camera }.Make(library, seed, frozen);
         long t2 = Stopwatch.GetTimestamp();
-        if (set.groups.Count == 0) set.ready = true;
+        if (set._groups.Count == 0) set._ready = true;
         else warmer.Queue(set);
         set.StartTicks = (t1 - t0, t2 - t1, Stopwatch.GetTimestamp() - t2);
         return set;
@@ -91,27 +91,27 @@ public sealed class EffectSet
     {
         try
         {
-            foreach (var group in groups)
+            foreach (var group in _groups)
             {
-                if (cancel.IsCancellationRequested) break;
-                group.BeginWarm(WarmSeconds(group), camera, Source);
-                if (!group.SimulateSerial(cancel.Token)) break;
+                if (_cancel.IsCancellationRequested) break;
+                group.BeginWarm(WarmSeconds(group), _camera, Source);
+                if (!group.SimulateSerial(_cancel.Token)) break;
             }
-            foreach (var group in groups) group.Rebind(live!);
+            foreach (var group in _groups) group.Rebind(_live!);
         }
-        catch (Exception e) { failure = e; }
-        ready = true;
+        catch (Exception e) { _failure = e; }
+        _ready = true;
     }
 
     /// <summary>Simulates the queued time on the calling thread, the units of a group in parallel (the start-up, where the first picture waits for it).</summary>
     public void SimulateNow()
     {
-        foreach (var group in groups) group.Simulate();
-        ready = true;
+        foreach (var group in _groups) group.Simulate();
+        _ready = true;
     }
 
     /// <summary>The set is not wanted any more: the background simulation stops at its next step.</summary>
-    public void Cancel() => cancel.Cancel();
+    public void Cancel() => _cancel.Cancel();
 }
 
 /// <summary>
@@ -122,18 +122,18 @@ public sealed class EffectSet
 /// </summary>
 public sealed class EffectWarmer : IDisposable
 {
-    readonly BlockingCollection<EffectSet> queue = [];
+    readonly BlockingCollection<EffectSet> _queue = [];
 
     public EffectWarmer()
     {
         new Thread(() =>
         {
-            foreach (var set in queue.GetConsumingEnumerable()) set.Warm();
+            foreach (var set in _queue.GetConsumingEnumerable()) set.Warm();
         })
         { IsBackground = true, Name = "meitou-particle-warmup", Priority = ThreadPriority.BelowNormal }.Start();
     }
 
-    internal void Queue(EffectSet set) => queue.Add(set);
+    internal void Queue(EffectSet set) => _queue.Add(set);
 
-    public void Dispose() => queue.CompleteAdding();
+    public void Dispose() => _queue.CompleteAdding();
 }

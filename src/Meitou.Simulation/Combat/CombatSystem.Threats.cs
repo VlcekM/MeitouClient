@@ -29,7 +29,7 @@ public sealed partial class CombatSystem
         foreach (var id in senses.Threats)
         {
             int a = id.Slot;
-            if ((uint)a >= (uint)prev.Length || !prev[a].Alive || prev[a].Generation != id.Generation || read[a].Down || table.Cold(a) is not { } c) continue;
+            if ((uint)a >= (uint)prev.Length || !prev[a].Alive || prev[a].Generation != id.Generation || _read[a].Down || table.Cold(a) is not { } c) continue;
             var at = prev[a].Position;
             var d = at - here;
             float d2 = d.X * d.X + d.Z * d.Z;
@@ -53,7 +53,7 @@ public sealed partial class CombatSystem
         var prev = world.Characters.Previous;
         if (CharacterFacts.Senses(world, self) is not { } senses) return false;
         foreach (var id in senses.Threats)
-            if ((uint)id.Slot < (uint)prev.Length && prev[id.Slot].Alive && prev[id.Slot].Generation == id.Generation && !read[id.Slot].Down) return true;
+            if ((uint)id.Slot < (uint)prev.Length && prev[id.Slot].Alive && prev[id.Slot].Generation == id.Generation && !_read[id.Slot].Down) return true;
         return false;
     }
 }

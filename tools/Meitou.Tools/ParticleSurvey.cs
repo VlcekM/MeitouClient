@@ -49,14 +49,14 @@ static class ParticleSurvey
     static int Effects(GameInstall install, ParticleLibrary library)
     {
         var db = GameDatabase.Load(LoadOrder.BaseGame(install));
-        foreach (var e in db.OfType(FcsRecordType.EFFECT).OrderBy(e => e.GetInt("type")).ThenBy(e => e.Name))
+        foreach (var e in db.OfType(FcsRecordType.Effect).OrderBy(e => e.GetInt("type")).ThenBy(e => e.Name))
         {
             var system = e.GetString("particle system");
             var def = library.FindSystem(system);
             Console.WriteLine($"{e.Name,-40} type {e.GetInt("type"),2} system {system,-34} {(def is null ? "MISSING" : $"extent {def.LargestEmitterExtent:0.#} radius {def.BoundingRadius:0} quota {def.Techniques.Where(t => t.Enabled && t.Emitters.Count > 0).Sum(t => t.VisualQuota)} scale {def.Scale}")}  colour {e.GetInt("colour multiplier"):X6} wind {e.GetBool("wind affected")} x{e.GetFloat("wind speed mult"):0.##} span {e.GetFloat("min wind span rate"):0.#}-{e.GetFloat("max wind span rate"):0.#} view {e.GetFloat("maximum view distance"):0} life {e.GetFloat("min time to live"):0}-{e.GetFloat("max time to live"):0} alt {e.GetFloat("min altitude"):0}-{e.GetFloat("max altitude"):0} slope {e.GetFloat("min slope"):0.##}-{e.GetFloat("max slope"):0.##} fade-out {e.GetFloat("particle fade out delay"):0.#} dir {e.GetBool("wind direction emission")} ground {e.GetBool("ground colour")} sky {e.GetFloat("sky colour multiplier"):0.##}");
         }
-        foreach (var r in db.OfType(FcsRecordType.BUILDING).Concat(db.OfType(FcsRecordType.BUILDING_PART)).OrderBy(r => r.Name))
-            foreach (var g in r.Instances.Values.Where(i => !i.IsCleared &&db.Find(i.Target) is { Type: FcsRecordType.EFFECT }).GroupBy(i => i.Target))
+        foreach (var r in db.OfType(FcsRecordType.Building).Concat(db.OfType(FcsRecordType.BuildingPart)).OrderBy(r => r.Name))
+            foreach (var g in r.Instances.Values.Where(i => !i.IsCleared &&db.Find(i.Target) is { Type: FcsRecordType.Effect }).GroupBy(i => i.Target))
                 Console.WriteLine($"building effect: {r.Type} {r.Name} -> {db.Find(g.Key)!.Name} x{g.Count()} sounds {db.Find(g.Key)!.GetReferences("sound").Count}");
         return 0;
     }
@@ -65,16 +65,16 @@ static class ParticleSurvey
     static int Weathers(GameInstall install, ParticleLibrary library)
     {
         var db = GameDatabase.Load(LoadOrder.BaseGame(install));
-        foreach (var f in db.OfType(FcsRecordType.EFFECT_FOG_VOLUME))
+        foreach (var f in db.OfType(FcsRecordType.EffectFogVolume))
             Console.WriteLine($"fog volume {f.Name}: type {f.Ints.GetValueOrDefault("type", -1)} radius {f.GetFloat("radius")} distance {f.GetFloat("distance")} alpha {f.GetFloat("alpha")} colour {f.GetInt("colour"):X6} additive {f.GetBool("additive colour")} ground {f.GetBool("ground movement")} pos ({f.GetFloat("position x")}, {f.GetFloat("position y")}, {f.GetFloat("position z")}) pos2 ({f.GetFloat("position 2 x")}, {f.GetFloat("position 2 y")}, {f.GetFloat("position 2 z")})");
-        foreach (var w in db.OfType(FcsRecordType.WEATHER).OrderBy(w => w.Name))
+        foreach (var w in db.OfType(FcsRecordType.Weather).OrderBy(w => w.Name))
         {
             var refs = w.GetReferences("effects");
             if (refs.Count == 0) continue;
             Console.WriteLine($"{w.Name}  (wind {w.GetFloat("wind speed min"):0.#}-{w.GetFloat("wind speed max"):0.#})");
             foreach (var r in refs)
             {
-                if (db.Find(r.TargetStringId) is not { Type: FcsRecordType.EFFECT } e) continue;
+                if (db.Find(r.TargetStringId) is not { Type: FcsRecordType.Effect } e) continue;
                 var fogs = e.GetReferences("fog volumes").Select(f => db.Find(f.TargetStringId)).Where(f => f is not null).Select(f => $"{f!.Name} type{f.GetInt("type")} r{f.GetFloat("radius"):0} d{f.GetFloat("distance"):0} a{f.GetFloat("alpha"):0.##}");
                 var lights = e.GetReferences("lights").Select(l => db.Find(l.TargetStringId)?.Name ?? "?");
                 Console.WriteLine($"    {e.Name,-34} type {e.GetInt("type"),2} count {r.Values.Value0} respawn {r.Values.Value1}-{r.Values.Value2}  fogs [{string.Join("; ", fogs)}] lights [{string.Join("; ", lights)}]");

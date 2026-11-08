@@ -72,7 +72,7 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
     /// <summary>Its check ran at the front once (its failure text was shown); a front not tried yet is tried at once.</summary>
     public bool Tried { get; internal set; }
 
-    public bool IsMove => Row == TaskType.MOVE_CUS_ORDERED;
+    public bool IsMove => Row == TaskType.MoveCusOrdered;
 }
 
 /// <summary>
@@ -81,15 +81,15 @@ public sealed class OrderEntry(TaskType row, IOrderOwner owner)
 /// </summary>
 public sealed class OrderQueue : IReadOnlyList<OrderEntry>
 {
-    readonly List<OrderEntry> entries = [];
+    readonly List<OrderEntry> _entries = [];
 
-    public int Count => entries.Count;
-    public OrderEntry this[int index] => entries[index];
-    public OrderEntry? Front => entries.Count > 0 ? entries[0] : null;
-    public void Clear() => entries.Clear();
-    internal void Add(OrderEntry entry) => entries.Add(entry);
-    internal void PopFront() => entries.RemoveAt(0);
-    public IEnumerator<OrderEntry> GetEnumerator() => entries.GetEnumerator();
+    public int Count => _entries.Count;
+    public OrderEntry this[int index] => _entries[index];
+    public OrderEntry? Front => _entries.Count > 0 ? _entries[0] : null;
+    public void Clear() => _entries.Clear();
+    internal void Add(OrderEntry entry) => _entries.Add(entry);
+    internal void PopFront() => _entries.RemoveAt(0);
+    public IEnumerator<OrderEntry> GetEnumerator() => _entries.GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     /// <summary>
@@ -98,12 +98,12 @@ public sealed class OrderQueue : IReadOnlyList<OrderEntry>
     /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
-        bool legacy = entries.Count == 0 || entries[0].Started && (entries.Count == 1 || entries.TrueForAll(e => e.IsMove));
-        hasher.Add(Math.Max(entries.Count - 1, 0));
-        for (int k = 1; k < entries.Count; k++) if (entries[k].IsMove) hasher.Add(new Vector2(entries[k].Point.X, entries[k].Point.Z));
+        bool legacy = _entries.Count == 0 || _entries[0].Started && (_entries.Count == 1 || _entries.TrueForAll(e => e.IsMove));
+        hasher.Add(Math.Max(_entries.Count - 1, 0));
+        for (int k = 1; k < _entries.Count; k++) if (_entries[k].IsMove) hasher.Add(new Vector2(_entries[k].Point.X, _entries[k].Point.Z));
         if (legacy) return;
         hasher.Add(0x4F717565);
-        foreach (var e in entries)
+        foreach (var e in _entries)
         {
             hasher.Add((int)e.Row);
             hasher.Add(e.Started);
@@ -161,7 +161,7 @@ public static class PlayerOrders
     /// "Precedence"): of the player's orders only 146 Turret gunner.
     /// </summary>
     public static bool NeedsNoThreat(TaskType row) =>
-        TaskDataTable.Of(row) is { } data && Array.Exists(data.Needs, c => c is { State: StateType.iAmBeingMeleeAttacked_immediate, Holds: false });
+        TaskDataTable.Of(row) is { } data && Array.Exists(data.Needs, c => c is { State: StateType.IAmBeingMeleeAttackedImmediate, Holds: false });
 
     /// <summary>Whether the row needs no melee threat and the character has one within 40 (state 158, <see cref="CharacterFacts.ImmediateThreat"/>).</summary>
     static bool Threatened(World world, int slot, TaskType row) =>

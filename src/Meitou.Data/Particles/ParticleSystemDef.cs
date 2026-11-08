@@ -226,7 +226,9 @@ public sealed class PuSystemDef
         (float, float)? ff = system.Find("fast_forward") is { Values.Length: >= 2 } f && PuProperty.TryFloat(f.Values[0], out float ft) && PuProperty.TryFloat(f.Values[1], out float fi) ? (ft, fi) : null;
         return new PuSystemDef
         {
-            Name = system.Name, File = file, Source = system,
+            Name = system.Name,
+            File = file,
+            Source = system,
             Category = system.Word("category") ?? "",
             Scale = scale,
             ScaleVelocity = system.Float("scale_velocity", 1),
@@ -242,7 +244,8 @@ public sealed class PuSystemDef
         var rendererNode = t.Blocks("renderer").LastOrDefault();
         return new PuTechniqueDef
         {
-            Name = t.Name, Source = t,
+            Name = t.Name,
+            Source = t,
             Enabled = t.Bool("enabled", true),
             VisualQuota = (int)t.Float("visual_particle_quota", 500),
             EmittedEmitterQuota = (int)t.Float("emitted_emitter_quota", 50),
@@ -276,14 +279,21 @@ public sealed class PuSystemDef
     {
         var type = e.Type switch
         {
-            "Box" => PuEmitterType.Box, "Circle" => PuEmitterType.Circle, "Point" => PuEmitterType.Point,
-            "SphereSurface" => PuEmitterType.SphereSurface, "Line" => PuEmitterType.Line, "Slave" => PuEmitterType.Slave,
+            "Box" => PuEmitterType.Box,
+            "Circle" => PuEmitterType.Circle,
+            "Point" => PuEmitterType.Point,
+            "SphereSurface" => PuEmitterType.SphereSurface,
+            "Line" => PuEmitterType.Line,
+            "Slave" => PuEmitterType.Slave,
             _ => PuEmitterType.Unknown,
         };
         var emits = e.Find("emits");
         return new PuEmitterDef
         {
-            Type = type, TypeName = e.Type, Name = e.Name, Source = e,
+            Type = type,
+            TypeName = e.Type,
+            Name = e.Name,
+            Source = e,
             Enabled = e.Bool("enabled", true),
             Rate = e.Dynamic("emission_rate") ?? PuDynamic.Fixed(10),
             Life = e.Dynamic("time_to_live") ?? PuDynamic.Fixed(3),
@@ -292,7 +302,9 @@ public sealed class PuSystemDef
             Mass = e.Dynamic("mass") ?? PuDynamic.Fixed(1),
             Duration = e.Dynamic("duration"),
             RepeatDelay = e.Dynamic("repeat_delay"),
-            Width = e.Dynamic("particle_width"), Height = e.Dynamic("particle_height"), Depth = e.Dynamic("particle_depth"),
+            Width = e.Dynamic("particle_width"),
+            Height = e.Dynamic("particle_height"),
+            Depth = e.Dynamic("particle_depth"),
             AllDimensions = e.Dynamic("all_particle_dimensions"),
             Position = e.Vec3("position") ?? Vector3.Zero,
             Direction = e.Vec3("direction") ?? Vector3.UnitY,
@@ -316,11 +328,20 @@ public sealed class PuSystemDef
     {
         var type = a.Type switch
         {
-            "Colour" => PuAffectorType.Colour, "Scale" => PuAffectorType.Scale, "TextureRotator" => PuAffectorType.TextureRotator,
-            "LinearForce" => PuAffectorType.LinearForce, "Vortex" => PuAffectorType.Vortex, "Gravity" => PuAffectorType.Gravity,
-            "Randomiser" => PuAffectorType.Randomiser, "SineForce" => PuAffectorType.SineForce, "ForceField" => PuAffectorType.ForceField,
-            "Jet" => PuAffectorType.Jet, "Align" => PuAffectorType.Align, "FlockCentering" => PuAffectorType.FlockCentering,
-            "GeometryRotator" => PuAffectorType.GeometryRotator, "ScaleVelocity" => PuAffectorType.ScaleVelocity,
+            "Colour" => PuAffectorType.Colour,
+            "Scale" => PuAffectorType.Scale,
+            "TextureRotator" => PuAffectorType.TextureRotator,
+            "LinearForce" => PuAffectorType.LinearForce,
+            "Vortex" => PuAffectorType.Vortex,
+            "Gravity" => PuAffectorType.Gravity,
+            "Randomiser" => PuAffectorType.Randomiser,
+            "SineForce" => PuAffectorType.SineForce,
+            "ForceField" => PuAffectorType.ForceField,
+            "Jet" => PuAffectorType.Jet,
+            "Align" => PuAffectorType.Align,
+            "FlockCentering" => PuAffectorType.FlockCentering,
+            "GeometryRotator" => PuAffectorType.GeometryRotator,
+            "ScaleVelocity" => PuAffectorType.ScaleVelocity,
             _ => PuAffectorType.Unknown,
         };
         var colours = new List<(float, Vector4)>();
@@ -331,20 +352,29 @@ public sealed class PuSystemDef
         colours.Sort((x, y) => x.Item1.CompareTo(y.Item1));
         return new PuAffectorDef
         {
-            Type = type, TypeName = a.Type, Name = a.Name, Source = a,
+            Type = type,
+            TypeName = a.Type,
+            Name = a.Name,
+            Source = a,
             Enabled = a.Bool("enabled", true),
             Position = a.Vec3("position") ?? Vector3.Zero,
             ExcludedEmitters = [.. a.All("exclude_emitter").Where(p => p.Values.Length > 0).Select(p => p.Values[0])],
             MassAffector = a.Float("mass_affector"),
             TimeColours = colours,
             MultiplyColour = a.Word("colour_operation") == "multiply",
-            ScaleX = a.Dynamic("x_scale"), ScaleY = a.Dynamic("y_scale"), ScaleZ = a.Dynamic("z_scale"), ScaleXyz = a.Dynamic("xyz_scale"),
+            ScaleX = a.Dynamic("x_scale"),
+            ScaleY = a.Dynamic("y_scale"),
+            ScaleZ = a.Dynamic("z_scale"),
+            ScaleXyz = a.Dynamic("xyz_scale"),
             SinceStartSystem = a.Bool("since_start_system"),
-            Rotation = a.Dynamic("rotation"), RotationSpeed = a.Dynamic("rotation_speed"), UseOwnRotation = a.Bool("use_own_rotation"),
+            Rotation = a.Dynamic("rotation"),
+            RotationSpeed = a.Dynamic("rotation_speed"),
+            UseOwnRotation = a.Bool("use_own_rotation"),
             Force = a.Vec3("force_vector") ?? (a.Vec3("acceleration") ?? Vector3.Zero),
             AverageForce = a.Word("force_application") == "average",
             Strength = a.Dynamic("gravity") ?? a.Dynamic("acceleration"),
-            MinFrequency = a.Float("min_frequency"), MaxFrequency = a.Float("max_frequency"),
+            MinFrequency = a.Float("min_frequency"),
+            MaxFrequency = a.Float("max_frequency"),
             Axis = a.Vec3("rotation_axis") ?? Vector3.UnitY,
             MaxDeviation = new Vector3(a.Float("max_deviation_x"), a.Float("max_deviation_y"), a.Float("max_deviation_z")),
             TimeStep = a.Float("time_step"),
@@ -355,8 +385,11 @@ public sealed class PuSystemDef
     {
         var type = o.Type switch
         {
-            "OnPosition" => PuObserverType.OnPosition, "OnTime" => PuObserverType.OnTime, "OnClear" => PuObserverType.OnClear,
-            "OnEmission" => PuObserverType.OnEmission, _ => PuObserverType.Unknown,
+            "OnPosition" => PuObserverType.OnPosition,
+            "OnTime" => PuObserverType.OnTime,
+            "OnClear" => PuObserverType.OnClear,
+            "OnEmission" => PuObserverType.OnEmission,
+            _ => PuObserverType.Unknown,
         };
         int axis = -1;
         PuCompare compare = PuCompare.LessThan;
@@ -372,10 +405,14 @@ public sealed class PuSystemDef
         }
         return new PuObserverDef
         {
-            Type = type, TypeName = o.Type, Source = o,
+            Type = type,
+            TypeName = o.Type,
+            Source = o,
             Enabled = o.Bool("enabled", true),
             Interval = o.Float("observe_interval"),
-            Axis = axis, Compare = compare, Value = value,
+            Axis = axis,
+            Compare = compare,
+            Value = value,
             SinceStartSystem = o.Bool("since_start_system"),
             Handlers = [.. o.Blocks("handler").Select(h => h.Type)],
         };

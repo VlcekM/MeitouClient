@@ -31,23 +31,23 @@ static class InteriorSurvey
     }
 
     /// <summary>Where <c>--section x,z</c> puts the vertical sections; the hull's middle when null.</summary>
-    static Vector2? section;
+    static Vector2? s_section;
 
     /// <summary>Whether hulls over the zone's border are surveyed too (<c>--border</c>).</summary>
-    static bool border;
+    static bool s_border;
 
     /// <summary>The level placements by building key, for their interior hashes.</summary>
-    static Dictionary<string, BuildingPlacement> placements = [];
+    static Dictionary<string, BuildingPlacement> s_placements = [];
 
     /// <summary>The standing placements skipped because the tile has them ruined (<see cref="RebuiltAtLoad"/>).</summary>
-    static readonly List<string> rebuilt = [];
+    static readonly List<string> Rebuilt = [];
 
     public static int Run(GameInstall install, GameDatabase db, WorldLevelData levels, List<ZoneCoordinate> zones, NavBuildSettings settings, string? name, string? png,
         Vector2? sectionAt = null, bool overBorder = false)
     {
-        section = sectionAt;
-        border = overBorder;
-        placements = levels.Buildings().GroupBy(b => b.Key).ToDictionary(g => g.Key, g => g.First());
+        s_section = sectionAt;
+        s_border = overBorder;
+        s_placements = levels.Buildings().GroupBy(b => b.Key).ToDictionary(g => g.Key, g => g.First());
         using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
         var tallies = new Dictionary<string, Tally>();
         foreach (var zone in zones) SurveyZone(gatherer, install, zone, settings, tallies, name, png);
@@ -58,7 +58,7 @@ static class InteriorSurvey
             Console.WriteLine($"{type,-40} {t.Placements,4} {t.Both * Step * Step,8:0} {t.Ours * Step * Step,8:0} {t.OursUpper * Step * Step,8:0} {t.Original * Step * Step,8:0} "
                 + $"{100 * t.Ours / total,6:0.0} {100 * t.Original / total,6:0.0}  {t.Worst}");
         }
-        if (rebuilt.Count > 0) Console.WriteLine($"skipped {rebuilt.Count} standing placements the tile has as ruins (rebuilt at load): {string.Join(" ", rebuilt)}");
+        if (Rebuilt.Count > 0) Console.WriteLine($"skipped {Rebuilt.Count} standing placements the tile has as ruins (rebuilt at load): {string.Join(" ", Rebuilt)}");
         return 0;
     }
 
@@ -80,10 +80,10 @@ static class InteriorSurvey
             var mesh = interior.Mesh.WithKept(keep[offset..(offset + interior.Mesh.PolygonCount)]);
             offset += interior.Mesh.PolygonCount;
             var site = sites.FirstOrDefault(s => s.Key == interior.Key);
-            if (site is null || site.Destroyed || !border && CrossesBorder(site, zone)) continue;
+            if (site is null || site.Destroyed || !s_border && CrossesBorder(site, zone)) continue;
             if (RebuiltAtLoad(site, groups))
             {
-                rebuilt.Add(site.Key);
+                Rebuilt.Add(site.Key);
                 continue;
             }
             var faces = owners.Where(o => o.Site == site).SelectMany(o => o.Group.Polygons.Where(p => p.Length >= 3).Select(p => p.Select(i => o.Group.Vertices[i]).ToArray())).ToList();
@@ -140,7 +140,7 @@ static class InteriorSurvey
     /// </summary>
     static bool RebuiltAtLoad(InteriorJoinSweep.Site site, List<OriginalInterior> groups)
     {
-        if (!placements.TryGetValue(site.Key, out var placement)) return false;
+        if (!s_placements.TryGetValue(site.Key, out var placement)) return false;
         uint ruin = OriginalNavTiles.InteriorHash(placement, destroyed: true);
         return groups.Any(g => g.Hash == ruin);
     }
@@ -285,7 +285,7 @@ static class InteriorSurvey
     static void Sections(InteriorJoinSweep.Site site, ZoneGeometry g, ZoneNavMesh mesh, List<Vector3[]> faces, string path)
     {
         var hull = site.Hull.Polygon;
-        float cx = section?.X ?? (hull.Min(p => p.X) + hull.Max(p => p.X)) / 2, cz = section?.Y ?? (hull.Min(p => p.Y) + hull.Max(p => p.Y)) / 2;
+        float cx = s_section?.X ?? (hull.Min(p => p.X) + hull.Max(p => p.X)) / 2, cz = s_section?.Y ?? (hull.Min(p => p.Y) + hull.Max(p => p.Y)) / 2;
         foreach (bool alongX in new[] { true, false })
         {
             float lo = alongX ? hull.Min(p => p.X) : hull.Min(p => p.Y), hi = alongX ? hull.Max(p => p.X) : hull.Max(p => p.Y);

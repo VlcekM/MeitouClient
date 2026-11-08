@@ -96,8 +96,8 @@ public static class FcsWriter
         WriteMap(w, record.Bools, (w, v) => w.Write((byte)(v ? 1 : 0)));
         WriteMap(w, record.Floats, (w, v) => w.Write(v));
         WriteMap(w, record.Ints, (w, v) => w.Write(v));
-        WriteMap(w, record.Vector3s, WriteVector3);
-        WriteMap(w, record.Vector4s, WriteVector4);
+        WriteMap(w, record.Vector3S, WriteVector3);
+        WriteMap(w, record.Vector4S, WriteVector4);
         WriteMap(w, record.Strings, WriteString);
         WriteMap(w, record.Filenames, WriteString);
 

@@ -30,25 +30,25 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 {
     /// <summary>The native GPU API (docs/renderer-native.md 7.1 step 8; since phase 8 stage 1 the only one this renderer uses).</summary>
     public IGpuContext Gpu { get; }
-    readonly NativeFrame nativeFrame;
-    readonly ObjProg colourProg, solidProg, depthProg;   // the colour, the colour without a discard (EarlyDepth) and the depth (shadow caster) programs, native
-    readonly WorldTextureCache textureCache;
-    readonly MaterialResolver resolver;
+    readonly NativeFrame _nativeFrame;
+    readonly ObjProg _colourProg, _solidProg, _depthProg;   // the colour, the colour without a discard (EarlyDepth) and the depth (shadow caster) programs, native
+    readonly WorldTextureCache _textureCache;
+    readonly MaterialResolver _resolver;
     /// <summary>Finds the textures of a mesh's parts (the <see cref="DebrisRenderer"/> shares it).</summary>
-    public MaterialResolver Resolver => resolver;
-    readonly UploadQueue uploads = new();
-    readonly ObjectMeshCache meshes;
-    readonly ObjectStreamer streamer;
-    readonly WorldObjects objects;
-    readonly Dictionary<(string, string, string), ObjectMaterialSet> materialSets = [];
-    readonly List<TownDraw> towns = [];
-    readonly ObjectMaterialSet distantMaterial;
-    readonly Dictionary<(GpuObjectMesh, ObjectMaterialSet, int, int), Batch> batchMap = [];
-    readonly List<Batch> active = [];
-    readonly List<(MeshBindings, int, Matrix4x4)> terrainMeshes = [];   // the TERRAIN-mode instances of a draw (TerrainRenderer.DrawMeshes)
-    readonly List<(MeshBindings, int, Matrix4x4)> terrainMeshesCut = [];   // those over an interior mask (InteriorCut)
+    public MaterialResolver Resolver => _resolver;
+    readonly UploadQueue _uploads = new();
+    readonly ObjectMeshCache _meshes;
+    readonly ObjectStreamer _streamer;
+    readonly WorldObjects _objects;
+    readonly Dictionary<(string, string, string), ObjectMaterialSet> _materialSets = [];
+    readonly List<TownDraw> _towns = [];
+    readonly ObjectMaterialSet _distantMaterial;
+    readonly Dictionary<(GpuObjectMesh, ObjectMaterialSet, int, int), Batch> _batchMap = [];
+    readonly List<Batch> _active = [];
+    readonly List<(MeshBindings, int, Matrix4x4)> _terrainMeshes = [];   // the TERRAIN-mode instances of a draw (TerrainRenderer.DrawMeshes)
+    readonly List<(MeshBindings, int, Matrix4x4)> _terrainMeshesCut = [];   // those over an interior mask (InteriorCut)
     /// <summary>MEITOU_LOD_DEBUG: 1 colours solid surfaces by LOD level, 2 draws wireframe only coloured by level (green 0, yellow 1, orange 2, red 3, magenta manual, blue distant stand-ins).</summary>
-    readonly int debugLevels = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_LOD_DEBUG"), out int dl) ? dl : 0;
+    readonly int _debugLevels = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_LOD_DEBUG"), out int dl) ? dl : 0;
 
     /// <summary>One batch of instances: the same (mesh, materials, LOD level), drawn with one call per part.</summary>
     sealed class Batch
@@ -89,43 +89,43 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>The landmarks being collected (all zones laid out once on a worker, about a second), the class that tells them, and what they cost.</summary>
-    Task<List<(PlacedMesh Placed, float Radius)>>? landmarkTask;
-    readonly LandmarkClass? landmarkClass;
-    double landmarkMs;
+    Task<List<(PlacedMesh Placed, float Radius)>>? _landmarkTask;
+    readonly LandmarkClass? _landmarkClass;
+    double _landmarkMs;
 
     /// <param name="landmarks">Collect the world's landmarks (<see cref="LandmarkClass"/>) and keep them apart from the zones, to be drawn to <see cref="LandmarkDistance"/>.
     /// Without it (Faithful) every placement stays in its zone and the object distance rules all.</param>
     internal WorldObjectRenderer(IGpuContext gpu, AssetLocator assets, WorldObjects objects, bool landmarks = false)
     {
         Gpu = gpu;
-        this.assets = assets;
-        this.objects = objects;
+        this._assets = assets;
+        this._objects = objects;
         // Both native programs are made here with every handle resolved, never inside a draw (the GL programs they replace are not made).
-        nativeFrame = new NativeFrame(gpu);
-        colourProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), "objects");
-        solidProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(solid: true), "objects solid");
-        depthProg = new ObjProg(gpu, nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), "objects depth");
-        textureCache = new WorldTextureCache(gpu, assets, "object textures") { Share = TextureShare.For(gpu) };
+        _nativeFrame = new NativeFrame(gpu);
+        _colourProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), "objects");
+        _solidProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(solid: true), "objects solid");
+        _depthProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), "objects depth");
+        _textureCache = new WorldTextureCache(gpu, assets, "object textures") { Share = TextureShare.For(gpu) };
         var library = assets.Materials;
-        resolver = new MaterialResolver(objects.Database, library, assets);
-        meshes = new ObjectMeshCache(gpu, assets, uploads);
-        meshes.Unloaded = gpu => { unloadedMeshes.Add(gpu); RemoveBatches(gpu); };
-        streamer = new ObjectStreamer(objects, meshes);
+        _resolver = new MaterialResolver(objects.Database, library, assets);
+        _meshes = new ObjectMeshCache(gpu, assets, _uploads);
+        _meshes.Unloaded = gpu => { _unloadedMeshes.Add(gpu); RemoveBatches(gpu); };
+        _streamer = new ObjectStreamer(objects, _meshes);
         if (landmarks)
         {
-            landmarkClass = new LandmarkClass(assets);
-            streamer.WaitForLandmarks = true;
+            _landmarkClass = new LandmarkClass(assets);
+            _streamer.WaitForLandmarks = true;
             var collectWatch = Stopwatch.StartNew();
-            landmarkTask = Task.Run(() => { var found = landmarkClass.Collect(objects); landmarkMs = collectWatch.Elapsed.TotalMilliseconds; return found; });
+            _landmarkTask = Task.Run(() => { var found = _landmarkClass.Collect(objects); _landmarkMs = collectWatch.Elapsed.TotalMilliseconds; return found; });
         }
         var distant = new SurfaceMaterial { Description = "DistantTown (vertex colour x texture x 1.5)", Diffuse = DistantTowns.DiffuseTexture, VertexColours = true, SpecularMult = 0 };
-        var distantDiffuse = textureCache.Get(distant.Diffuse, false);
+        var distantDiffuse = _textureCache.Get(distant.Diffuse, false);
         if (distantDiffuse is not null) distantDiffuse.KeepAllMips = true;   // its coordinates are the towns' own, not the mesh's: mip streaming leaves it
-        distantMaterial = new ObjectMaterialSet([new ObjectPartMaterial(distant, distantDiffuse, null, null, null)]);
-        scaffoldGrid = textureCache.Get(ScaffoldTexture, false);
-        if (scaffoldGrid is not null) scaffoldGrid.KeepAllMips = true;   // drawn at every site, at its own tiling
+        _distantMaterial = new ObjectMaterialSet([new ObjectPartMaterial(distant, distantDiffuse, null, null, null)]);
+        _scaffoldGrid = _textureCache.Get(ScaffoldTexture, false);
+        if (_scaffoldGrid is not null) _scaffoldGrid.KeepAllMips = true;   // drawn at every site, at its own tiling
         foreach (var t in objects.DistantTowns)
-            towns.Add(new TownDraw { Town = t, Mesh = meshes.Get(t.MeshPath, distant: true), Centre = t.Position });
+            _towns.Add(new TownDraw { Town = t, Mesh = _meshes.Get(t.MeshPath, distant: true), Centre = t.Position });
     }
 
     /// <summary>Interactive use (non-zero): bounded upload work per frame. 0 (screenshots): no limit.</summary>
@@ -152,9 +152,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// part distance of <see cref="ObjectRanges.ObjectsViewRange"/> (small building parts) rather than none.</summary>
     public string SizeSurvey()
     {
-        var radii = streamer.AllZones.SelectMany(z => z.Real).Where(i => i.Gpu is not null).Select(i => i.Radius).Order().ToArray();
+        var radii = _streamer.AllZones.SelectMany(z => z.Real).Where(i => i.Gpu is not null).Select(i => i.Radius).Order().ToArray();
         if (radii.Length == 0) return "no resolved instances";
-        int limited = streamer.AllZones.SelectMany(z => z.Real).Count(i => i.Gpu is not null && i.Limit < float.MaxValue / 2);
+        int limited = _streamer.AllZones.SelectMany(z => z.Real).Count(i => i.Gpu is not null && i.Limit < float.MaxValue / 2);
         float P(double q) => radii[Math.Min((int)(radii.Length * q), radii.Length - 1)];
         return string.Create(System.Globalization.CultureInfo.InvariantCulture,
             $"{radii.Length} resolved real instances, radius p10 {P(0.1):0} / p25 {P(0.25):0} / p50 {P(0.5):0} / p75 {P(0.75):0} / p90 {P(0.9):0} / max {radii[^1]:0}; {limited} with a part distance (<= {ObjectRanges.ObjectsViewRange:0} units)");
@@ -189,20 +189,20 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// while the video memory is nearly used up, and the caches stop loading and evict. Null: no clamp.</summary>
     public VramGuard? Guard
     {
-        get => guard;
-        set { guard = value; textureCache.Guard = value; meshes.Guard = value; }
+        get => _guard;
+        set { _guard = value; _textureCache.Guard = value; _meshes.Guard = value; }
     }
-    VramGuard? guard;
+    VramGuard? _guard;
     /// <summary>The ranges as drawn and streamed: the settings times the guard's scale (exactly the settings while it is 1).</summary>
-    float RealRange => ObjectDistance * (guard?.RangeScale ?? 1f);
+    float RealRange => ObjectDistance * (_guard?.RangeScale ?? 1f);
     /// <summary>How far a landmark is drawn and streamed: <see cref="LandmarkDistance"/> times the guard's scale, never less than <see cref="RealRange"/> (0: the object distance).</summary>
-    float LandmarkReach => Math.Max(RealRange, LandmarkDistance * (guard?.RangeScale ?? 1f));
+    float LandmarkReach => Math.Max(RealRange, LandmarkDistance * (_guard?.RangeScale ?? 1f));
     /// <summary>Whether the landmarks are kept apart from the zones (the renderer was made with them).</summary>
-    public bool HasLandmarks => landmarkClass is not null;
+    public bool HasLandmarks => _landmarkClass is not null;
 
     /// <summary>Presentation-only placements (<see cref="ObjectStreamer.Staged"/>): the Meitou title's staging; null in play.</summary>
-    public IReadOnlyList<PlacedMesh>? Staged { get => streamer.Staged; set => streamer.Staged = value; }
-    float DistantReach => DistantRange * (guard?.RangeScale ?? 1f);
+    public IReadOnlyList<PlacedMesh>? Staged { get => _streamer.Staged; set => _streamer.Staged = value; }
+    float DistantReach => DistantRange * (_guard?.RangeScale ?? 1f);
 
     // ---- runtime buildings, construction sites and the placement ghost (docs/render-objects.md "Construction sites") ----
 
@@ -212,36 +212,36 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// <summary>A building the player placed: part of its zone from now on (laid out apart from the rest of an already loaded zone).</summary>
     public void AddRuntime(BuildingPlacement placement)
     {
-        objects.AddRuntime(placement);
-        streamer.AddRuntime(placement);
+        _objects.AddRuntime(placement);
+        _streamer.AddRuntime(placement);
     }
 
     /// <summary>A placed building is gone: its parts leave the zone. A town house's override is gone: its zone is laid out again, from the level data.</summary>
     public void RemoveRuntime(string instanceId)
     {
-        if (objects.RemoveRuntime(instanceId) is not { } removed) return;
-        if (removed.DestroyedOverride is not null) streamer.Reload([removed.Zone]);
-        else streamer.RemoveRuntime(instanceId, removed.InstanceId, removed.Zone);
+        if (_objects.RemoveRuntime(instanceId) is not { } removed) return;
+        if (removed.DestroyedOverride is not null) _streamer.Reload([removed.Zone]);
+        else _streamer.RemoveRuntime(instanceId, removed.InstanceId, removed.Zone);
     }
 
     /// <summary>The level editor cleared a level-data building (<paramref name="on"/> false: put it back): its zone is laid out again.</summary>
     public void SetCleared(BuildingPlacement placement, bool on)
     {
-        if (objects.SetCleared(placement.Key, on)) streamer.Reload([placement.Zone]);
+        if (_objects.SetCleared(placement.Key, on)) _streamer.Reload([placement.Zone]);
     }
 
     /// <summary>Forgets every runtime building (a loaded save replaces the world) and lays out the zones that had one again.</summary>
-    public void ClearRuntime() => streamer.Reload(objects.ClearRuntime());
+    public void ClearRuntime() => _streamer.Reload(_objects.ClearRuntime());
 
     /// <summary>
     /// The sites under construction: placement id to the look's <c>f</c> (docs/game/buildings-production.md "Construction look"). A listed building draws only the part below
     /// 1.2 f of each mesh's height, and a scaffold grid above. Read on the render thread; the host replaces it as it likes.
     /// </summary>
-    public IReadOnlyDictionary<string, float>? Construction { get => construction; set => construction = value; }
-    IReadOnlyDictionary<string, float>? construction;
+    public IReadOnlyDictionary<string, float>? Construction { get => _construction; set => _construction = value; }
+    IReadOnlyDictionary<string, float>? _construction;
     /// <summary>The scaffold grid of the sites (the CONSTRUCTION unit <c>scaffold</c>, docs/formats/runtime-materials.md).</summary>
     const string ScaffoldTexture = "construction.dds";
-    readonly WorldTexture? scaffoldGrid;
+    readonly WorldTexture? _scaffoldGrid;
 
     /// <summary>One placement ghost: a building's parts laid out at the origin, drawn at <paramref name="World"/> (rotation, then position) in the tint of <paramref name="State"/>.</summary>
     public readonly record struct GhostDraw(IReadOnlyList<PlacedMesh> Parts, Matrix4x4 World, GhostState State);
@@ -258,8 +258,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         public GhostState State;
     }
 
-    readonly List<GhostSlot> ghostSlots = [];
-    bool ghostsDrawn;
+    readonly List<GhostSlot> _ghostSlots = [];
+    bool _ghostsDrawn;
 
     /// <summary>
     /// The placement ghosts of Build mode (docs/render-objects.md "Placement ghost"): each list of parts is laid out once (the same list keeps its instances), the
@@ -267,22 +267,22 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public void SetGhosts(IReadOnlyList<GhostDraw> ghosts)
     {
-        while (ghostSlots.Count > ghosts.Count)
+        while (_ghostSlots.Count > ghosts.Count)
         {
-            DropGhost(ghostSlots[^1]);
-            ghostSlots.RemoveAt(ghostSlots.Count - 1);
+            DropGhost(_ghostSlots[^1]);
+            _ghostSlots.RemoveAt(_ghostSlots.Count - 1);
         }
-        while (ghostSlots.Count < ghosts.Count) ghostSlots.Add(new());
+        while (_ghostSlots.Count < ghosts.Count) _ghostSlots.Add(new());
         for (int s = 0; s < ghosts.Count; s++)
         {
             var (parts, world, state) = ghosts[s];
-            var slot = ghostSlots[s];
+            var slot = _ghostSlots[s];
             if (!ReferenceEquals(parts, slot.Parts))
             {
                 DropGhost(slot);
                 slot.Parts = parts;
                 slot.Base = [.. parts.Where(p => !p.Interior)];
-                foreach (var p in slot.Base) slot.Instances.Add(streamer.MakeLoose(p));
+                foreach (var p in slot.Base) slot.Instances.Add(_streamer.MakeLoose(p));
             }
             slot.State = state;
             for (int i = 0; i < slot.Instances.Count; i++)
@@ -294,12 +294,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 inst.Centre = inst.Gpu is { } gpu ? Vector3.Transform(gpu.Centre, transform) : transform.Translation;
             }
         }
-        ghostsDrawn = ghostSlots.Count > 0;
+        _ghostsDrawn = _ghostSlots.Count > 0;
     }
 
     void DropGhost(GhostSlot slot)
     {
-        foreach (var inst in slot.Instances) streamer.DropLoose(inst);
+        foreach (var inst in slot.Instances) _streamer.DropLoose(inst);
         slot.Instances.Clear();
         slot.Parts = null;
         slot.Base = [];
@@ -307,13 +307,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     void DrawGhosts(Vector3 eye, Vector4[] frustum, long now)
     {
-        foreach (var slot in ghostSlots)
+        foreach (var slot in _ghostSlots)
         {
             int tint = slot.State switch { GhostState.Valid => BatchKind.Ghost, GhostState.Invalid => BatchKind.GhostBad, _ => BatchKind.GhostQueued };
             foreach (var inst in slot.Instances)
             {
                 if (inst.Gpu is not { } gpu) continue;
-                if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(streamer.Loose, inst); continue; }
+                if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(_streamer.Loose, inst); continue; }
                 float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
                 if (!SphereVisible(frustum, inst.Centre, inst.Radius)) continue;
                 inst.Mesh.LastUsed = now;
@@ -335,7 +335,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         if (materials.Parts.Length == 0) return 0;
         uint key = materials.Parts[Math.Min(part, materials.Parts.Length - 1)].Diffuse;
-        return key == 0 ? 0 : textureCache.Index(key, Gpu.LodBias, 0);
+        return key == 0 ? 0 : _textureCache.Index(key, Gpu.LodBias, 0);
     }
 
     /// <summary>
@@ -344,38 +344,38 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     internal IEnumerable<ObjectStreamer.Instance> RayInstances(Vector3 eye, float range)
     {
-        foreach (var zone in streamer.AllZones)
+        foreach (var zone in _streamer.AllZones)
         {
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) > range) continue;
             foreach (var inst in zone.Real)
                 if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !InteriorHidden(inst.Placed) && !ClosedAround(inst) && !UnderConstruction(inst))
                     yield return inst;
         }
-        if (streamer.LandmarkZone is { } landmarks)
+        if (_streamer.LandmarkZone is { } landmarks)
             foreach (var inst in landmarks.Real)
                 if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !InteriorHidden(inst.Placed) && !ClosedAround(inst)) yield return inst;
     }
 
     bool UnderConstruction(ObjectStreamer.Instance inst) =>
-        construction is { Count: > 0 } sites && !inst.Stand && sites.ContainsKey(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId);
+        _construction is { Count: > 0 } sites && !inst.Stand && sites.ContainsKey(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId);
 
     /// <summary>Requested work: zone layouts, meshes and textures, including used textures deferred by memory pressure.</summary>
-    public int Pending => streamer.Pending + meshes.Pending + uploads.Count + textureCache.AwaitedCount + textureCache.UnresidentUsedCount + unresolvedInRange + (landmarkTask is not null ? 1 : 0);
+    public int Pending => _streamer.Pending + _meshes.Pending + _uploads.Count + _textureCache.AwaitedCount + _textureCache.UnresidentUsedCount + _unresolvedInRange + (_landmarkTask is not null ? 1 : 0);
 
-    int unresolvedInRange;
+    int _unresolvedInRange;
     /// <summary>What <see cref="Pending"/> is made of, for the loading log.</summary>
-    public string PendingDetail => $"zones {streamer.Pending}, meshes {meshes.Pending}, uploads {uploads.Count}, textures {textureCache.AwaitedCount} loading {textureCache.UnresidentUsedCount} deferred, unresolved {unresolvedInRange}, landmarks {(landmarkTask is not null ? 1 : 0)}";
+    public string PendingDetail => $"zones {_streamer.Pending}, meshes {_meshes.Pending}, uploads {_uploads.Count}, textures {_textureCache.AwaitedCount} loading {_textureCache.UnresidentUsedCount} deferred, unresolved {_unresolvedInRange}, landmarks {(_landmarkTask is not null ? 1 : 0)}";
     public List<string> Messages { get; } = [];
 
     /// <summary>A line about what is loaded, for the log.</summary>
     /// <summary>GPU memory held by streamed meshes and textures, for the stats line and the window title.</summary>
-    public long ResidentBytes => meshes.Bytes + textureCache.ResidentBytes;
+    public long ResidentBytes => _meshes.Bytes + _textureCache.ResidentBytes;
     /// <summary>The objects' texture cache (the VRAM dump lists it).</summary>
-    public WorldTextureCache Textures => textureCache;
-    public string ResidentDescription => $"{meshes.Bytes / 1048576.0:0} MB in {meshes.Resident} meshes ({meshes.Unloads} unloaded, {meshes.Reloads} reloaded, {meshes.Refined} remade finer, {meshes.Coarsened} coarser), {textureCache.Describe()}";
+    public WorldTextureCache Textures => _textureCache;
+    public string ResidentDescription => $"{_meshes.Bytes / 1048576.0:0} MB in {_meshes.Resident} meshes ({_meshes.Unloads} unloaded, {_meshes.Reloads} reloaded, {_meshes.Refined} remade finer, {_meshes.Coarsened} coarser), {_textureCache.Describe()}";
     public string Describe() =>
-        $"{streamer.Loaded} zones, {streamer.Instances:N0} instances ({streamer.Resolved:N0} resolved{(streamer.LandmarkZone is { } lz ? $", of them {lz.Real.Count(i => i.Gpu is not null)} of {lz.Real.Count} landmarks" : "")}), {meshes.Resident}/{meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
-        $"{towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{towns.Count} distant towns; {objects.Describe()}";
+        $"{_streamer.Loaded} zones, {_streamer.Instances:N0} instances ({_streamer.Resolved:N0} resolved{(_streamer.LandmarkZone is { } lz ? $", of them {lz.Real.Count(i => i.Gpu is not null)} of {lz.Real.Count} landmarks" : "")}), {_meshes.Resident}/{_meshes.Total} meshes requested or resident, resident: {ResidentDescription}, " +
+        $"{_towns.Count(t => t.Mesh.Status == ObjectMesh.State.Resident)}/{_towns.Count} distant towns; {_objects.Describe()}";
 
     // ------------------------------------------------------------------ streaming
 
@@ -391,26 +391,26 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// as seen from there. A new point re-marks at the next update instead of within the second.</summary>
     public Vector3? Ahead
     {
-        get => streamer.Ahead;
-        set { if (value is not null && streamer.Ahead is null) lastMark = 0; streamer.Ahead = value; }
+        get => _streamer.Ahead;
+        set { if (value is not null && _streamer.Ahead is null) _lastMark = 0; _streamer.Ahead = value; }
     }
 
     /// <summary>Points kept loaded besides the eye's (<see cref="ObjectStreamer.Kept"/>).</summary>
-    public IReadOnlyList<Vector3> Kept { get => streamer.Kept; set => streamer.Kept = value; }
+    public IReadOnlyList<Vector3> Kept { get => _streamer.Kept; set => _streamer.Kept = value; }
     /// <summary>The ground's height under the eye, for the zones' loading (<see cref="ObjectStreamer.GroundUnderEye"/>).</summary>
-    public float GroundUnderEye { get => streamer.GroundUnderEye; set => streamer.GroundUnderEye = value; }
+    public float GroundUnderEye { get => _streamer.GroundUnderEye; set => _streamer.GroundUnderEye = value; }
     /// <summary>The camera's distance to its target (<see cref="ObjectStreamer.KeptViewDistance"/>).</summary>
-    public float KeptViewDistance { get => streamer.KeptViewDistance; set => streamer.KeptViewDistance = value; }
+    public float KeptViewDistance { get => _streamer.KeptViewDistance; set => _streamer.KeptViewDistance = value; }
 
     /// <summary>Places kept loaded (<see cref="WorldTextureCache.Areas"/>): the texture and mesh marks scale with it.</summary>
-    public int Areas { set { textureCache.Areas = value; meshes.Areas = value; } }
+    public int Areas { set { _textureCache.Areas = value; _meshes.Areas = value; } }
 
     /// <summary>Where the last need pass measured from, for the VRAM dump: the eye, the margin for its speed, the arrival point and the kept points.</summary>
     public void WriteViewReport(TextWriter w)
     {
         static string P(Vector3 v) => $"{v.X:0}, {v.Y:0}, {v.Z:0}";
-        w.WriteLine($"object needs measured from: eye {P(lastMarkEye)}, speed margin {needMargin:0}{(streamer.Ahead is { } a ? $", arrival {P(a)}" : "")}");
-        w.WriteLine($"  kept points ({streamer.Kept.Count}, merged, detail from at least {streamer.KeptViewDistance:0}): {string.Join("; ", streamer.Kept.Select(P))}");
+        w.WriteLine($"object needs measured from: eye {P(_lastMarkEye)}, speed margin {_needMargin:0}{(_streamer.Ahead is { } a ? $", arrival {P(a)}" : "")}");
+        w.WriteLine($"  kept points ({_streamer.Kept.Count}, merged, detail from at least {_streamer.KeptViewDistance:0}): {string.Join("; ", _streamer.Kept.Select(P))}");
         w.WriteLine();
     }
 
@@ -418,98 +418,98 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>Colour draws of parts whose diffuse map was not resident (drawn grey) and, at the same moment, textures waiting for a finer image,
     /// the largest of each since <see cref="TakePopStats"/> (the benchmark's pop-in lines).</summary>
-    int untexturedDraws, untexturedMax, heldNear, coarseDraws, coarseMax;
+    int _untexturedDraws, _untexturedMax, _heldNear, _coarseDraws, _coarseMax;
     /// <summary>Meshes drawn in a reduced form while the full one loads (<see cref="ObjectMeshCache"/>).</summary>
-    public int MeshesAwaitingDetail => meshes.Upgrading;
+    public int MeshesAwaitingDetail => _meshes.Upgrading;
     public (int Untextured, int Refining, int Held, int Coarse) TakePopStats()
     {
-        var result = (Math.Max(untexturedMax, untexturedDraws), textureCache.Refining, heldNear, Math.Max(coarseMax, coarseDraws));
-        untexturedDraws = untexturedMax = heldNear = coarseDraws = coarseMax = 0;
+        var result = (Math.Max(_untexturedMax, _untexturedDraws), _textureCache.Refining, heldNear: _heldNear, Math.Max(_coarseMax, _coarseDraws));
+        _untexturedDraws = _untexturedMax = _heldNear = _coarseDraws = _coarseMax = 0;
         return result;
     }
 
     /// <summary>Tells the object textures' mip streaming (<see cref="MipStreaming"/>) the camera: the render size in pixels and the vertical field of view.</summary>
     public void SetView(int width, int height, float fieldOfView) => SetView(width, height, fieldOfView, Gpu.LodBias);
-    public void SetView(int width, int height, float fieldOfView, float lodBias) => textureCache.Mips.SetView(width, height, fieldOfView, lodBias);
+    public void SetView(int width, int height, float fieldOfView, float lodBias) => _textureCache.Mips.SetView(width, height, fieldOfView, lodBias);
 
     /// <summary>The eye of the last <see cref="Update"/>, and how far ahead of it (distance) the textures are kept ready for (the camera's speed over half a second).</summary>
-    Vector3 eyeNow;
-    float needMargin;
-    /// <summary>How far ahead a mesh is kept ready for: three times <see cref="needMargin"/> (the camera's speed over 1.5 s).</summary>
-    float MeshMargin => needMargin * 3;
+    Vector3 _eyeNow;
+    float _needMargin;
+    /// <summary>How far ahead a mesh is kept ready for: three times <see cref="_needMargin"/> (the camera's speed over 1.5 s).</summary>
+    float MeshMargin => _needMargin * 3;
     /// <summary>A camera move farther than this between two mark passes (a second apart) is a cut or a flight, not travel (the host's flight distance).</summary>
     const float CutDistance = 10000;
 
     void Update(Vector3 eye, double budgetMs)
     {
         var watch = Stopwatch.StartNew();
-        selectionDraws.Clear();   // kept for one frame's outline at most: the meshes they name may go now
-        eyeNow = eye;
-        meshes.LodBias = LodBias;
-        if (LodPixelsPerRadian > 0) meshes.PixelsPerRadian = LodPixelsPerRadian;
-        meshes.LookAhead = MeshMargin;
+        _selectionDraws.Clear();   // kept for one frame's outline at most: the meshes they name may go now
+        _eyeNow = eye;
+        _meshes.LodBias = LodBias;
+        if (LodPixelsPerRadian > 0) _meshes.PixelsPerRadian = LodPixelsPerRadian;
+        _meshes.LookAhead = MeshMargin;
         bool unlimited = budgetMs > 1e8;
         float streamRange = (NoDistant ? RealRange : Math.Max(RealRange, DistantReach)) + WorldLayout.ZoneSize * 0.5f;
-        streamer.Paused = guard is { Streaming: false };
-        streamer.PausedReach = guard is { StreamsNear: true } ? VramGuard.NearReach : 0;
-        if (landmarkTask is { IsCompleted: true } collected)
+        _streamer.Paused = _guard is { Streaming: false };
+        _streamer.PausedReach = _guard is { StreamsNear: true } ? VramGuard.NearReach : 0;
+        if (_landmarkTask is { IsCompleted: true } collected)
         {
-            landmarkTask = null;
+            _landmarkTask = null;
             if (collected.IsCompletedSuccessfully)
             {
-                streamer.Landmarks = landmarkClass;
-                streamer.SetLandmarks(collected.Result);
-                Console.WriteLine($"landmarks {collected.Result.Count} placements of radius {LandmarkClass.MinRadius:0}+ kept apart from the zones ({landmarkMs:0} ms on the workers)");
+                _streamer.Landmarks = _landmarkClass;
+                _streamer.SetLandmarks(collected.Result);
+                Console.WriteLine($"landmarks {collected.Result.Count} placements of radius {LandmarkClass.MinRadius:0}+ kept apart from the zones ({_landmarkMs:0} ms on the workers)");
             }
             else
             {
-                streamer.WaitForLandmarks = false;   // the zones keep them: drawn to the object distance
+                _streamer.WaitForLandmarks = false;   // the zones keep them: drawn to the object distance
                 Console.WriteLine($"warning   landmarks: {collected.Exception?.GetBaseException().Message}");
             }
         }
         // Under the loading screen (Covered) eight times the zones and resolves a frame.
         int scale = Covered ? 8 : 1;
-        streamer.Update(eye, streamRange, unlimited ? 64 : scale, Covered);
+        _streamer.Update(eye, streamRange, unlimited ? 64 : scale, Covered);
         ResolveTowns(eye);
-        unresolvedInRange = streamer.Scan(eye, RealRange, DistantReach, NoDistant, Resolve, unlimited ? int.MaxValue : 40 * scale);
-        unresolvedInRange += streamer.ScanLandmarks(eye, LandmarkReach, Resolve, unlimited ? int.MaxValue : 10 * scale);
-        unresolvedInRange += streamer.ScanLoose(streamer.Loose, eye, RealRange, Resolve, unlimited ? int.MaxValue : 10 * scale);
-        meshes.Pump();
+        _unresolvedInRange = _streamer.Scan(eye, RealRange, DistantReach, NoDistant, Resolve, unlimited ? int.MaxValue : 40 * scale);
+        _unresolvedInRange += _streamer.ScanLandmarks(eye, LandmarkReach, Resolve, unlimited ? int.MaxValue : 10 * scale);
+        _unresolvedInRange += _streamer.ScanLoose(_streamer.Loose, eye, RealRange, Resolve, unlimited ? int.MaxValue : 10 * scale);
+        _meshes.Pump();
         MarkInRange(eye, force: unlimited);
-        meshes.Trim();
-        if (unloadedMeshes.Count > 0)
+        _meshes.Trim();
+        if (_unloadedMeshes.Count > 0)
         {
             // Instances that resolved to a mesh just unloaded wait for it again (Scan asks for it once they are in range).
-            foreach (var zone in streamer.AllZones)
+            foreach (var zone in _streamer.AllZones)
                 foreach (var inst in zone.Real.Concat(zone.Stand))
-                    if (inst.Gpu is { } resolved && unloadedMeshes.Contains(resolved)) Unresolve(zone, inst);
-            if (streamer.LandmarkZone is { } landmarkZone)
+                    if (inst.Gpu is { } resolved && _unloadedMeshes.Contains(resolved)) Unresolve(zone, inst);
+            if (_streamer.LandmarkZone is { } landmarkZone)
                 foreach (var inst in landmarkZone.Real)
-                    if (inst.Gpu is { } resolved && unloadedMeshes.Contains(resolved)) Unresolve(landmarkZone, inst);
-            foreach (var inst in streamer.Loose.Real)
-                if (inst.Gpu is { } resolved && unloadedMeshes.Contains(resolved)) Unresolve(streamer.Loose, inst);
-            unloadedMeshes.Clear();
+                    if (inst.Gpu is { } resolved && _unloadedMeshes.Contains(resolved)) Unresolve(landmarkZone, inst);
+            foreach (var inst in _streamer.Loose.Real)
+                if (inst.Gpu is { } resolved && _unloadedMeshes.Contains(resolved)) Unresolve(_streamer.Loose, inst);
+            _unloadedMeshes.Clear();
         }
-        textureCache.Pump(wait: unlimited, max: unlimited ? 16 : 8, budgetMs: Math.Max(budgetMs * 0.5, 0.5));
-        lock (textureCache.Messages)
+        _textureCache.Pump(wait: unlimited, max: unlimited ? 16 : 8, budgetMs: Math.Max(budgetMs * 0.5, 0.5));
+        lock (_textureCache.Messages)
         {
-            foreach (var m in Messages.Concat(meshes.Messages).Concat(textureCache.Messages).Take(30)) Console.WriteLine($"warning   {m}");
+            foreach (var m in Messages.Concat(_meshes.Messages).Concat(_textureCache.Messages).Take(30)) Console.WriteLine($"warning   {m}");
             Messages.Clear();
-            meshes.Messages.Clear();
-            textureCache.Messages.Clear();
+            _meshes.Messages.Clear();
+            _textureCache.Messages.Clear();
         }
-        uploads.Run(budgetMs);
+        _uploads.Run(budgetMs);
         LastUpdateMs = watch.Elapsed.TotalMilliseconds;
-        if (!unlimited && LastUpdateMs > 6) SpikeLog.Note($"slow objects update [{uploads.LastRun}]", ms: LastUpdateMs);
+        if (!unlimited && LastUpdateMs > 6) SpikeLog.Note($"slow objects update [{_uploads.LastRun}]", ms: LastUpdateMs);
     }
 
-    readonly HashSet<GpuObjectMesh> unloadedMeshes = [];
-    readonly List<ObjectMaterialSet> markedSets = [];
-    readonly List<ObjectMesh> markedMeshes = [];
-    Vector3 lastMarkEye;
-    long lastMarkTime;
-    long lastMark;
-    int markStamp;
+    readonly HashSet<GpuObjectMesh> _unloadedMeshes = [];
+    readonly List<ObjectMaterialSet> _markedSets = [];
+    readonly List<ObjectMesh> _markedMeshes = [];
+    Vector3 _lastMarkEye;
+    long _lastMarkTime;
+    long _lastMark;
+    int _markStamp;
 
     /// <summary>
     /// Once a second, before <see cref="ObjectMeshCache.Trim"/>: everything within its draw range counts as in use, whether or not the camera looks at
@@ -518,21 +518,21 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     void MarkInRange(Vector3 eye, bool force)
     {
         long now = Environment.TickCount64;
-        if (!force && now - lastMark < 1000) return;
+        if (!force && now - _lastMark < 1000) return;
         // How far the camera goes in the half second a finer texture takes to arrive: nearer than that counts as nearer.
         // A flight or a cut is no camera speed: its arrival is known (Ahead), and a margin from it would ask the whole path, or all around the landing, for full detail.
-        bool cut = streamer.Ahead is not null || lastMarkTime != 0 && Vector3.Distance(eye, lastMarkEye) > CutDistance;
-        if (force || cut) needMargin = 0;
-        else if (lastMarkTime != 0) needMargin = Math.Min(Vector3.Distance(eye, lastMarkEye) / Math.Max((now - lastMarkTime) / 1000f, 0.05f) * 0.5f, 30000f);
-        (lastMarkEye, lastMarkTime) = (eye, now);
-        lastMark = now;
-        markStamp++;
-        markedSets.Clear();
-        markedMeshes.Clear();
+        bool cut = _streamer.Ahead is not null || _lastMarkTime != 0 && Vector3.Distance(eye, _lastMarkEye) > CutDistance;
+        if (force || cut) _needMargin = 0;
+        else if (_lastMarkTime != 0) _needMargin = Math.Min(Vector3.Distance(eye, _lastMarkEye) / Math.Max((now - _lastMarkTime) / 1000f, 0.05f) * 0.5f, 30000f);
+        (_lastMarkEye, _lastMarkTime) = (eye, now);
+        _lastMark = now;
+        _markStamp++;
+        _markedSets.Clear();
+        _markedMeshes.Clear();
         void Mark(ObjectStreamer.Instance inst, float range)
         {
             if (inst.Gpu is null) return;
-            float distance = streamer.Near(eye, inst.Centre), value = distance - inst.Radius, limit = Math.Min(range, inst.Limit);   // or from the arrival point (Ahead)
+            float distance = _streamer.Near(eye, inst.Centre), value = distance - inst.Radius, limit = Math.Min(range, inst.Limit);   // or from the arrival point (Ahead)
             if (value >= limit)
             {
                 // Not drawn, but still within what Scan asks meshes for: kept, or it would be unloaded and asked for again.
@@ -541,58 +541,58 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             }
             inst.Mesh.LastUsed = now;
             if (inst.Materials is not { } set) return;
-            if (set.Stamp != markStamp) { set.Stamp = markStamp; set.Touch(); }
+            if (set.Stamp != _markStamp) { set.Stamp = _markStamp; set.Touch(); }
             if (inst.Stand) return;
             // During a flight the path asks for nothing finer: needs and mesh levels count only the arrival and the kept points (it keeps what it has).
-            if (streamer.Ahead is not null && (value = streamer.LoadNear(eye, inst.Centre) - inst.Radius) >= limit) return;
-            if (set.NeedStamp != markStamp) { set.NeedStamp = markStamp; set.Near = set.NearScaled = float.PositiveInfinity; markedSets.Add(set); }
-            value = streamer.DetailNear(eye, inst.Centre) - inst.Radius;
-            float near = Math.Max(value - needMargin, 0);
+            if (_streamer.Ahead is not null && (value = _streamer.LoadNear(eye, inst.Centre) - inst.Radius) >= limit) return;
+            if (set.NeedStamp != _markStamp) { set.NeedStamp = _markStamp; set.Near = set.NearScaled = float.PositiveInfinity; _markedSets.Add(set); }
+            value = _streamer.DetailNear(eye, inst.Centre) - inst.Radius;
+            float near = Math.Max(value - _needMargin, 0);
             if (near < set.Near) set.Near = near;
             // A mesh is kept ready for where the camera will be by the next pass and the remake (1.5 s of its speed), a texture for half a second (its two levels of margin do the rest).
             float meshNear = Math.Max(value - MeshMargin, 0);
             var mesh = inst.Mesh;
-            if (mesh.NearStamp != markStamp) { mesh.NearStamp = markStamp; mesh.NearPass = meshNear; markedMeshes.Add(mesh); }
+            if (mesh.NearStamp != _markStamp) { mesh.NearStamp = _markStamp; mesh.NearPass = meshNear; _markedMeshes.Add(mesh); }
             else if (meshNear < mesh.NearPass) mesh.NearPass = meshNear;
             float scaled = near / Math.Max(inst.Radius / Math.Max(inst.Gpu.Radius, 1e-6f), 1e-6f);
             if (scaled < set.NearScaled) set.NearScaled = scaled;
         }
-        if (streamer.Ahead is { } arrival)
+        if (_streamer.Ahead is { } arrival)
         {
             // A flight: what the arrival view draws is marked first, its textures loaded ahead of the other streaming work (the flight path's after).
-            textureCache.Urgent = true;
+            _textureCache.Urgent = true;
             try
             {
-                foreach (var zone in streamer.AllZones)
+                foreach (var zone in _streamer.AllZones)
                 {
                     foreach (var inst in zone.Real) if (Vector3.Distance(arrival, inst.Centre) - inst.Radius < Math.Min(RealRange, inst.Limit)) Mark(inst, RealRange);
                     if (!NoDistant) foreach (var inst in zone.Stand) if (Vector3.Distance(arrival, inst.Centre) - inst.Radius < DistantReach) Mark(inst, DistantReach);
                 }
             }
-            finally { textureCache.Urgent = false; }
+            finally { _textureCache.Urgent = false; }
         }
-        foreach (var zone in streamer.AllZones)
+        foreach (var zone in _streamer.AllZones)
         {
             foreach (var inst in zone.Real) Mark(inst, RealRange);
             if (!NoDistant) foreach (var inst in zone.Stand) Mark(inst, DistantReach);
         }
-        if (streamer.LandmarkZone is { } landmarkZone)
+        if (_streamer.LandmarkZone is { } landmarkZone)
         {
             float reach = LandmarkReach;
             foreach (var inst in landmarkZone.Real) Mark(inst, reach);
         }
         // Mip streaming: each texture's nearest user, over how large a texel is there.
-        foreach (var set in markedSets)
+        foreach (var set in _markedSets)
             foreach (var part in set.Parts)
                 part.Offer(part.Triplanar ? set.Near : set.NearScaled);
-        textureCache.CommitNeeds();
-        textureCache.Rebalance();
+        _textureCache.CommitNeeds();
+        _textureCache.Rebalance();
         // Distance-based streaming of the finest LOD level: each mesh in range, remade when its nearest user needs finer levels (or, after a while, no longer needs them).
-        foreach (var mesh in markedMeshes) meshes.Rebalance(mesh, mesh.NearPass);
+        foreach (var mesh in _markedMeshes) _meshes.Rebalance(mesh, mesh.NearPass);
         if (NoDistant) return;
-        foreach (var t in towns)
+        foreach (var t in _towns)
             if (Vector3.Distance(eye, t.Centre) - t.Radius < DistantReach) t.Mesh.LastUsed = now;
-        _ = distantMaterial.Parts[0].Diffuse;
+        _ = _distantMaterial.Parts[0].Diffuse;
     }
 
     /// <summary>A mesh was unloaded under an instance that had resolved to it: the instance waits for it again (<see cref="ObjectStreamer.Scan"/> asks for it once in range).</summary>
@@ -606,15 +606,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     void RemoveBatches(GpuObjectMesh gpu)
     {
         List<(GpuObjectMesh, ObjectMaterialSet, int, int)>? keys = null;
-        foreach (var key in batchMap.Keys)
+        foreach (var key in _batchMap.Keys)
             if (ReferenceEquals(key.Item1, gpu)) (keys ??= []).Add(key);
-        if (keys is not null) foreach (var key in keys) batchMap.Remove(key);
+        if (keys is not null) foreach (var key in keys) _batchMap.Remove(key);
     }
 
     void ResolveTowns(Vector3 eye)
     {
         if (NoDistant) return;
-        foreach (var t in towns)
+        foreach (var t in _towns)
         {
             if (!t.Resolved && t.Mesh.Status == ObjectMesh.State.Resident)
             {
@@ -624,7 +624,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 t.Resolved = true;
             }
             float d = Vector3.Distance(eye, t.Centre);
-            if (t.Mesh.Status == ObjectMesh.State.None && d - t.Radius < DistantReach) meshes.Request(t.Mesh, d);
+            if (t.Mesh.Status == ObjectMesh.State.None && d - t.Radius < DistantReach) _meshes.Request(t.Mesh, d);
         }
     }
 
@@ -636,11 +636,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         double? pressureSince = null;
         while (watch.ElapsedMilliseconds < timeoutMs)
         {
-            guard?.Tick();
+            _guard?.Tick();
             Update(eye, 1e9);
             if (++rounds > 2 && Pending == 0) return;
             // Under memory pressure the guard holds the loading back: what is missing will not come until it ends, so do not wait for it.
-            pressureSince = guard is { Pressure: true } ? pressureSince ?? watch.Elapsed.TotalSeconds : null;
+            pressureSince = _guard is { Pressure: true } ? pressureSince ?? watch.Elapsed.TotalSeconds : null;
             if (pressureSince is { } since && watch.Elapsed.TotalSeconds - since > 5) { Console.WriteLine("warning   object streaming stopped waiting: memory pressure (VramGuard)"); return; }
             Thread.Sleep(1);
         }
@@ -660,16 +660,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         float radius = gpu.Radius * scale;
         if (!inst.Stand && gpu.MinLevel > 0 && inst.TerrainMode)
         {
-            meshes.Retarget(inst.Mesh, 0);   // the terrain shader wants every level
+            _meshes.Retarget(inst.Mesh, 0);   // the terrain shader wants every level
             return false;
         }
         if (!inst.Stand && gpu.MinLevel > 0)
         {
-            float value = Math.Max(streamer.LoadNear(eyeNow, centre) - radius - MeshMargin, 0);
+            float value = Math.Max(_streamer.LoadNear(_eyeNow, centre) - radius - MeshMargin, 0);
             if (gpu.Curve.LevelFor(value * LodBias) < gpu.MinLevel)
             {
-                if (value < 3000) heldNear++;   // an instance that close waiting for its mesh to be remade would be seen (the benchmark counts it)
-                meshes.Retarget(inst.Mesh, value * 0.7f);
+                if (value < 3000) _heldNear++;   // an instance that close waiting for its mesh to be remade would be seen (the benchmark counts it)
+                _meshes.Retarget(inst.Mesh, value * 0.7f);
                 return false;
             }
         }
@@ -681,19 +681,19 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart
             ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"), ObjectRanges.ObjectsViewRange)
             : float.MaxValue;
-        if (inst.Stand) { inst.Materials = distantMaterial; return true; }
+        if (inst.Stand) { inst.Materials = _distantMaterial; return true; }
         // A part's look comes from the material the layout chose (which differs per town), else from the resolver's candidates.
         var key = inst.Placed.MeshPath;
         var mkey = inst.Placed.Material is { } spec
             ? (key.ToLowerInvariant(), "spec", spec.StringId)
             : (key.ToLowerInvariant(), inst.Placed.Source.StringId, inst.Placed.Owner.StringId);
-        bool made = !materialSets.TryGetValue(mkey, out var set);
-        if (made) materialSets[mkey] = set = MakeMaterials(inst.Placed, gpu);
+        bool made = !_materialSets.TryGetValue(mkey, out var set);
+        if (made) _materialSets[mkey] = set = MakeMaterials(inst.Placed, gpu);
         inst.Materials = set!;
         // Mip streaming: this instance's distance is a use of the textures from now on (before the pass that would find it), and a new set's
         // textures are loaded now, knowing it (they were made without loading: deferred). Measured as the mark pass does (from the nearest kept point too),
         // or a kept point's textures load coarse for the far eye and wait in the refine queue.
-        float near = Math.Max(streamer.DetailNear(eyeNow, inst.Centre) - inst.Radius - needMargin, 0);
+        float near = Math.Max(_streamer.DetailNear(_eyeNow, inst.Centre) - inst.Radius - _needMargin, 0);
         foreach (var part in set!.Parts) part.OfferNow(part.Triplanar ? near : near / Math.Max(scale, 1e-6f));
         if (made) set.Touch();
         return true;
@@ -707,7 +707,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         var chosen = placed.Material is { } spec ? BuildingMaterial.FromSpec(spec) : null;
         for (int i = 0; i < gpu.Parts.Count; i++)
         {
-            var m = chosen ?? resolver.Candidates(placed.MeshPath, new OgreSubMesh { MaterialName = gpu.Parts[i].MaterialName })
+            var m = chosen ?? _resolver.Candidates(placed.MeshPath, new OgreSubMesh { MaterialName = gpu.Parts[i].MaterialName })
                 .OrderByDescending(c => (c.Description.Contains(owner, StringComparison.Ordinal) ? 2 : 0) + (c.Description.Contains(source, StringComparison.Ordinal) ? 1 : 0))
                 .FirstOrDefault();
             bool border = m?.BorderAddressing ?? false;
@@ -721,9 +721,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             float minTile = Math.Min(tile.X, tile.Y);
             bool triplanar = m?.Triplanar ?? false;
             float texel = minTile > 0 && !triplanar ? part.UvScale / minTile : float.PositiveInfinity;   // triplanar: a surface edge-on to a projection axis has a footprint smaller than a pixel on that axis, so no bound
-            result[i] = new ObjectPartMaterial(m, textureCache.Get(m?.Diffuse, border, deferred: true), wantNormal ? textureCache.Get(m?.Normal, border, deferred: true) : null,
-                wantSecond ? textureCache.Get(m?.Diffuse2, border, deferred: true) : null, wantSecond && part.HasTangents ? textureCache.Get(m?.Normal2, border, deferred: true) : null,
-                texel, triplanar) { Dust = placed.Kind == PlacedKind.BuildingPart };
+            result[i] = new ObjectPartMaterial(m, _textureCache.Get(m?.Diffuse, border, deferred: true), wantNormal ? _textureCache.Get(m?.Normal, border, deferred: true) : null,
+                wantSecond ? _textureCache.Get(m?.Diffuse2, border, deferred: true) : null, wantSecond && part.HasTangents ? _textureCache.Get(m?.Normal2, border, deferred: true) : null,
+                texel, triplanar)
+            { Dust = placed.Kind == PlacedKind.BuildingPart };
         }
         return new ObjectMaterialSet(result);
     }
@@ -763,7 +764,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public (Vector3 Position, InteriorVolume Room)? FloorHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
         (Vector3, InteriorVolume)? best = null;
-        foreach (var zone in streamer.AllZones)
+        foreach (var zone in _streamer.AllZones)
             foreach (var room in zone.Interiors)
                 if (room.MoveHit(origin, direction, floor, maxDistance) is { } hit)
                 {
@@ -780,7 +781,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public float? ClosedBuildingHit(Vector3 origin, Vector3 direction, float maxDistance)
     {
         float? best = null;
-        foreach (var zone in streamer.AllZones)
+        foreach (var zone in _streamer.AllZones)
             foreach (var room in zone.Interiors)
                 if (!InteriorView.ContainsKey(room.PlacementId) && room.MaskHit(origin, direction, best ?? maxDistance) is { } t) best = t;
         return best;
@@ -793,7 +794,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public float? ShownInteriorHit(Vector3 origin, Vector3 direction, float maxDistance)
     {
         float? best = null;
-        foreach (var zone in streamer.AllZones)
+        foreach (var zone in _streamer.AllZones)
             foreach (var room in zone.Interiors)
                 if (InteriorView.TryGetValue(room.PlacementId, out int floor) && room.MoveHit(origin, direction, floor, best ?? maxDistance) is { } hit) best = hit.Distance;
         return best;
@@ -820,12 +821,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     ObjectStreamer.InteriorAnswer InteriorOf(ObjectStreamer.Instance inst)
     {
         var at = inst.Transform.Translation;
-        if (inst.Interior is { } known && known.Version == streamer.InteriorVersion && known.At == at) return known;
+        if (inst.Interior is { } known && known.Version == _streamer.InteriorVersion && known.At == at) return known;
         bool inside = InteriorAt(at) is not null;
         // Engine choice: the 2-unit margin the host gives characters, so an object standing on the hull's top floor counts as on it. A building placed inside
         // another takes that one's hull where it reaches it (a neighbour's within the margin is not its holder).
         var holder = InteriorAt(at, 2, inst.Placed.ContainerId);
-        return inst.Interior = new(streamer.InteriorVersion, at, inside, holder?.PlacementId, holder?.FloorAt(at) ?? 0);
+        return inst.Interior = new(_streamer.InteriorVersion, at, inside, holder?.PlacementId, holder?.FloorAt(at) ?? 0);
     }
 
     /// <summary>
@@ -849,7 +850,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     bool ClosedAround(ObjectStreamer.Instance inst)
     {
         if (!inst.Placed.Contained) return false;
-        return InteriorOf(inst).Building is { } holder && holder != inst.Placed.PlacementId && !InteriorView.ContainsKey(holder) && construction?.ContainsKey(holder) != true;
+        return InteriorOf(inst).Building is { } holder && holder != inst.Placed.PlacementId && !InteriorView.ContainsKey(holder) && _construction?.ContainsKey(holder) != true;
     }
 
     /// <summary>The indoor volume of a loaded building that contains <paramref name="p"/> (widened by <paramref name="margin"/>), or null.</summary>
@@ -867,7 +868,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         for (int x = lo.X; x <= hi.X; x++)
             for (int y = lo.Y; y <= hi.Y; y++)
             {
-                if (streamer.ZoneAt(new ZoneCoordinate(x, y)) is not { Interiors.Length: > 0 } zone || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, p) > InteriorOver) continue;
+                if (_streamer.ZoneAt(new ZoneCoordinate(x, y)) is not { Interiors.Length: > 0 } zone || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, p) > InteriorOver) continue;
                 foreach (var v in zone.Interiors)
                     if (v.Contains(p, margin))
                     {
@@ -890,7 +891,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         var (lo, hi) = (WorldLayout.ZoneOf(at.X - InteriorOver, at.Y - InteriorOver), WorldLayout.ZoneOf(at.X + InteriorOver, at.Y + InteriorOver));
         for (int x = lo.X; x <= hi.X; x++)
             for (int y = lo.Y; y <= hi.Y; y++)
-                if (streamer.ZoneAt(new ZoneCoordinate(x, y)) is { Interiors.Length: > 0 } zone)
+                if (_streamer.ZoneAt(new ZoneCoordinate(x, y)) is { Interiors.Length: > 0 } zone)
                     foreach (var v in zone.Interiors)
                         if (ReferenceEquals(v, volume) || v.PlacementId == volume.PlacementId) return v;
         return null;
@@ -915,14 +916,14 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public InteriorVolume? InteriorAt(Vector3 p, ref InteriorMemo memo)
     {
         // Strictly nearer: a point on a box's edge can be inside.
-        if (memo.Set && memo.Version == streamer.InteriorVersion && Vector3.DistanceSquared(p, memo.At) is var moved && (moved == 0 || moved < memo.Clear * memo.Clear)) return memo.Volume;
+        if (memo.Set && memo.Version == _streamer.InteriorVersion && Vector3.DistanceSquared(p, memo.At) is var moved && (moved == 0 || moved < memo.Clear * memo.Clear)) return memo.Volume;
         float clear = InteriorKeep, reach = InteriorOver + InteriorKeep;
         InteriorVolume? found = null;
         var (lo, hi) = (WorldLayout.ZoneOf(p.X - reach, p.Z - reach), WorldLayout.ZoneOf(p.X + reach, p.Z + reach));
         for (int x = lo.X; x <= hi.X && found is null; x++)
             for (int y = lo.Y; y <= hi.Y && found is null; y++)
             {
-                if (streamer.ZoneAt(new ZoneCoordinate(x, y)) is not { Interiors.Length: > 0 } zone) continue;
+                if (_streamer.ZoneAt(new ZoneCoordinate(x, y)) is not { Interiors.Length: > 0 } zone) continue;
                 float zoneDistance = ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, p);
                 if (zoneDistance > reach) continue;
                 foreach (var v in zone.Interiors)
@@ -931,7 +932,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                     if (zoneDistance <= InteriorOver && v.Contains(p)) { found = v; break; }
                 }
             }
-        memo = new InteriorMemo { Set = true, Version = streamer.InteriorVersion, At = p, Clear = found is null ? clear : 0, Volume = found };
+        memo = new InteriorMemo { Set = true, Version = _streamer.InteriorVersion, At = p, Clear = found is null ? clear : 0, Volume = found };
         return found;
     }
 
@@ -942,7 +943,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public InteriorVolume? InteriorUnder(float x, float z)
     {
         InteriorVolume? best = null;
-        foreach (var zone in streamer.AllZones)
+        foreach (var zone in _streamer.AllZones)
         {
             if (zone.Interiors.Length + zone.GateHulls.Length == 0 || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, new Vector3(x, 0, z)) > 200) continue;
             foreach (var v in zone.Interiors)
@@ -957,17 +958,17 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// The GroundType a character at <paramref name="feet"/> stands on when the floor under it is a building's: its <c>interior material</c> when <paramref name="inside"/> (the
     /// character is in a building), else its <c>exterior material</c>; -1 when the ground is not a building's or its floors are still being made (docs/audio.md "Surface").
     /// </summary>
-    public int FloorMaterialUnder(Vector3 feet, bool inside) => objects.Floors.MaterialUnder(feet, inside);
+    public int FloorMaterialUnder(Vector3 feet, bool inside) => _objects.Floors.MaterialUnder(feet, inside);
 
     /// <summary>The highest ordinary floor part of any building at a point, on floors up to <paramref name="floorOf"/> of its placement key; null for none or still being made (docs/formats/camera.md "Height").</summary>
-    public float? FloorHeightAt(float x, float z, Func<string, int> floorOf) => objects.Floors.HighestFloorAt(x, z, floorOf);
+    public float? FloorHeightAt(float x, float z, Func<string, int> floorOf) => _objects.Floors.HighestFloorAt(x, z, floorOf);
 
     /// <summary>The loaded mask of a building or one of its layout objects (building id / item id).</summary>
     internal InteriorVolume? InteriorFor(string placementId)
     {
         int slash = placementId.IndexOf('/');
         var owner = slash < 0 ? placementId.AsSpan() : placementId.AsSpan(0, slash);
-        foreach (var zone in streamer.AllZones)
+        foreach (var zone in _streamer.AllZones)
             foreach (var room in zone.Interiors)
                 if (owner.SequenceEqual(room.PlacementId)) return room;
         return null;
@@ -978,7 +979,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         into.Clear();
         var q = new Vector2(eye.X, eye.Z);
-        foreach (var zone in streamer.AllZones)
+        foreach (var zone in _streamer.AllZones)
         {
             if (zone.Interiors.Length == 0 || ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) > range + 200) continue;
             foreach (var v in zone.Interiors)
@@ -993,7 +994,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     /// <summary>Finds a file a record names (an install-relative path, or a bare name the asset locator knows), or null.</summary>
     internal string? FindRecordFile(string recordPath) =>
-        Meitou.Data.Physics.CollisionPaths.Resolve(objects.Install, recordPath) ?? assets.Find(Path.GetFileName(recordPath.Replace('\\', '/')));
+        Data.Physics.CollisionPaths.Resolve(_objects.Install, recordPath) ?? _assets.Find(Path.GetFileName(recordPath.Replace('\\', '/')));
 
     /// <summary>
     /// Use room-scale probes only while the camera target is in or beside a viewed building and under its cover (<see cref="InteriorVolume.Covered"/>): on a walkable
@@ -1003,10 +1004,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     internal Vector3? GiInteriorFocus(Vector3 target)
     {
         if (InteriorView.Count == 0) return null;
-        foreach (var zone in streamer.AllZones)
+        foreach (var zone in _streamer.AllZones)
             foreach (var room in zone.Interiors)
             {
-                if (!InteriorView.ContainsKey(room.PlacementId) || construction is { } sites && sites.ContainsKey(room.PlacementId)) continue;
+                if (!InteriorView.ContainsKey(room.PlacementId) || _construction is { } sites && sites.ContainsKey(room.PlacementId)) continue;
                 var p = new Vector3(target.X, Math.Clamp(target.Y, room.YMin, room.YMax), target.Z);
                 if (room.Contains(p, 64) && room.Covered(p)) return p;
             }
@@ -1044,23 +1045,23 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         float real = RealRange;
         DrawnInstances = 0;
         PartLimited = 0;
-        untexturedMax = Math.Max(untexturedMax, untexturedDraws);
-        untexturedDraws = 0;
-        coarseMax = Math.Max(coarseMax, coarseDraws);
-        coarseDraws = 0;
+        _untexturedMax = Math.Max(_untexturedMax, _untexturedDraws);
+        _untexturedDraws = 0;
+        _coarseMax = Math.Max(_coarseMax, _coarseDraws);
+        _coarseDraws = 0;
         DrawnTriangles = 0;
         DrawCalls = 0;
-        foreach (var b in batchMap.Values) b.Count = 0;
-        active.Clear();
-        terrainMeshes.Clear();
-        terrainMeshesCut.Clear();
-        if (depthPass) ShadowCut(ref cutConstants);
+        foreach (var b in _batchMap.Values) b.Count = 0;
+        _active.Clear();
+        _terrainMeshes.Clear();
+        _terrainMeshesCut.Clear();
+        if (_depthPass) ShadowCut(ref _cutConstants);
         BeginSelection();
 
         // 1. Cull and choose levels: every instance into the batch of its (mesh, materials, level) with its dither range.
         float realBand = Math.Clamp(real * 0.1f, 50, 1500);
         float distantBand = Math.Clamp(DistantReach * 0.15f, 500, 4000);
-        foreach (var zone in landmarksOnly ? [] : streamer.ZonesNear(eye, Math.Max(real, NoDistant ? 0 : DistantReach), frustum))
+        foreach (var zone in _landmarksOnly ? [] : _streamer.ZonesNear(eye, Math.Max(real, NoDistant ? 0 : DistantReach), frustum))
         {
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) <= real)
                 foreach (var inst in zone.Real) DrawReal(zone, inst, real, eye, frustum, options, now);
@@ -1079,41 +1080,41 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             }
         }
         // The landmarks (a few hundred, kept apart from the zones): the same test with their own reach, the part distance still applying.
-        if (streamer.LandmarkZone is { } landmarkZone)
+        if (_streamer.LandmarkZone is { } landmarkZone)
         {
             float reach = LandmarkReach;
             foreach (var inst in landmarkZone.Real) DrawReal(landmarkZone, inst, reach, eye, frustum, options, now);
         }
         // The crops of the player's farms: drawn as real objects, in the shadow passes too.
-        if (farmSlots.Count > 0 && !landmarksOnly) DrawFarms(real, eye, frustum, options, now);
+        if (_farmSlots.Count > 0 && !_landmarksOnly) DrawFarms(real, eye, frustum, options, now);
         // The placement ghost (Build mode): its parts at the cursor, dithered and tinted green or red; not in a shadow or the landmarks-only pass.
-        if (ghostsDrawn && !depthPass && !landmarksOnly) DrawGhosts(eye, frustum, now);
-        if (!NoDistant && !landmarksOnly)
-            foreach (var t in towns)
+        if (_ghostsDrawn && !_depthPass && !_landmarksOnly) DrawGhosts(eye, frustum, now);
+        if (!NoDistant && !_landmarksOnly)
+            foreach (var t in _towns)
             {
                 if (t.Mesh.Gpu is not { } gpu) continue;
                 float value = Vector3.Distance(t.Centre, eye) - t.Radius;
                 if (value >= DistantReach || !SphereVisible(frustum, t.Centre, t.Radius) || MirrorCull?.Invoke(t.Centre, t.Radius) == false || FogCull?.Hidden(t.Centre, t.Radius, FogVolumes.CullKind.Objects) == true) continue;
                 t.Mesh.LastUsed = now;
-                var batch = BatchFor(gpu, distantMaterial, 0, BatchKind.Town);
-                if (batch.Count == 0) { active.Add(batch); batch.Near = 0; }
+                var batch = BatchFor(gpu, _distantMaterial, 0, BatchKind.Town);
+                if (batch.Count == 0) { _active.Add(batch); batch.Near = 0; }
                 batch.Add(Matrix4x4.CreateTranslation(t.Town.Position));
                 DrawnInstances++;
             }
 
         // Nearest first: what a nearer batch covers fails the early depth test of the farther ones (the colour pass only; the depth passes have no shading to save).
-        if (SortNearestFirst && !depthPass) active.Sort(static (a, b) => a.Near.CompareTo(b.Near));
+        if (SortNearestFirst && !_depthPass) _active.Sort(static (a, b) => a.Near.CompareTo(b.Near));
         // 2. The instances.
         UploadInstances();
 
         // 3. Draw: Prepare reads the textures (WorldTexture.Key) and makes the draw list, Record puts it into a native segment of VkGl's pass.
-        var prog = depthPass ? depthProg : colourProg;
-        int wireMode = debugLevels == 2 ? 2 : options.Wireframe;
-        if (active.Count > 0)
+        var prog = _depthPass ? _depthProg : _colourProg;
+        int wireMode = _debugLevels == 2 ? 2 : options.Wireframe;
+        if (_active.Count > 0)
         {
             var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance };
-            if (!depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
-            else (view.CutVolumes, view.CutRanges, view.CutPlanes) = (cutConstants.CutVolumes, cutConstants.CutRanges, cutConstants.CutPlanes);
+            if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
+            else (view.CutVolumes, view.CutRanges, view.CutPlanes) = (_cutConstants.CutVolumes, _cutConstants.CutRanges, _cutConstants.CutPlanes);
             var fadeRange = new Vector4(real - realBand, real, DistantReach - distantBand, DistantReach);
             if (wireMode != 2)
             {
@@ -1126,25 +1127,25 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 RecordDraws(prog, wire: true, in view, fadeRange);
             }
         }
-        if (terrainMeshes.Count > 0) DrawCalls += terrain.DrawMeshes(terrainMeshes, depthPass);
-        if (terrainMeshesCut.Count > 0) DrawCalls += terrain.DrawMeshes(terrainMeshesCut, cut: InteriorCut);
+        if (_terrainMeshes.Count > 0) DrawCalls += terrain.DrawMeshes(_terrainMeshes, _depthPass);
+        if (_terrainMeshesCut.Count > 0) DrawCalls += terrain.DrawMeshes(_terrainMeshesCut, cut: InteriorCut);
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
-        int kind = depthPass ? 1 : 0;
+        int kind = _depthPass ? 1 : 0;
         (Totals[kind, 0], Totals[kind, 1], Totals[kind, 2], Totals[kind, 3], Totals[kind, 4]) =
             (Totals[kind, 0] + DrawnInstances, Totals[kind, 1] + DrawnTriangles, Totals[kind, 2] + DrawCalls, Totals[kind, 3] + PartLimited, Totals[kind, 4] + 1);
-        selecting.Clear();
+        _selecting.Clear();
     }
 
     /// <summary>The active batches' matrices, each batch's contiguous, into this frame's constants (one copy; the draws reach a batch by firstInstance).</summary>
     void UploadInstances()
     {
         int total = 0;
-        foreach (var b in active) { b.Offset = total; total += b.Count; }
+        foreach (var b in _active) { b.Offset = total; total += b.Count; }
         if (total == 0) return;
 
-        instances = Gpu.Frame.AllocateConstants((ulong)(total * InstanceStride), 16);
-        var target = instances.Bytes;
-        foreach (var b in active)
+        _instances = Gpu.Frame.AllocateConstants((ulong)(total * InstanceStride), 16);
+        var target = _instances.Bytes;
+        foreach (var b in _active)
             System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
     }
 
@@ -1158,7 +1159,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
         // A shadow pass keeps what the floor view hides above the viewed floor, so a lower floor stays shaded under its ceiling (docs/render-objects.md
         // "Closed interiors"): only a closed building's interior parts stay out.
-        if ((depthPass ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
+        if ((_depthPass ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
         if (inst.Placed.DoorIndex >= 0) PoseDoor(inst, gpu);
         if (inst.Placed.Joints is not null) PoseJoints(inst, gpu);
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
@@ -1170,7 +1171,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         }
         float w = ObjectRanges.EdgeWeight(value, limit, Math.Clamp(limit * 0.1f, 50, 1500));
         if (w <= 0) return;
-        float lodValue = shadowLodFloor > 0 ? Math.Max(value, shadowLodFloor) : value;   // a far shadow cascade: no finer a level than ShadowLod.ObjectLodFloor
+        float lodValue = _shadowLodFloor > 0 ? Math.Max(value, _shadowLodFloor) : value;   // a far shadow cascade: no finer a level than ShadowLod.ObjectLodFloor
         inst.Mesh.LastUsed = now;
         DrawnInstances++;
         if (inst.TerrainMode && options.Textures)
@@ -1180,11 +1181,11 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             var g = gpu.Manual[level] ?? gpu;
             int lv = gpu.Manual[level] is null ? level : 0;
             // A TERRAIN-mode feature over an interior mask: drawn with the cut (Feature_Terrain_DX11 clips against the mask, docs/render-interior-cut.md).
-            var into = !depthPass && inst.Placed.Kind == PlacedKind.MapFeature && InteriorCut is { Active: true } mask && mask.Overlaps(inst.Centre, inst.Radius) ? terrainMeshesCut : terrainMeshes;
+            var into = !_depthPass && inst.Placed.Kind == PlacedKind.MapFeature && InteriorCut is { Active: true } mask && mask.Overlaps(inst.Centre, inst.Radius) ? _terrainMeshesCut : _terrainMeshes;
             foreach (var gp in g.Parts)
                 if (gp.Count[lv] > 0)
                 {
-                    into.Add((meshes.PlainMesh(gp, lv), gp.Count[lv], inst.Transform));
+                    into.Add((_meshes.PlainMesh(gp, lv), gp.Count[lv], inst.Transform));
                     DrawnTriangles += gp.Count[lv] / 3;
                 }
             return;
@@ -1200,17 +1201,17 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     {
         var blend = gpu.Curve.Blend(lodValue * LodBias);
         // A mesh held without its finest levels (made for farther users, see ObjectMeshCache.Retarget) draws its finest instead, until it is remade.
-        if (gpu.MinLevel > 0 && blend.Lower < gpu.MinLevel) coarseDraws++;
+        if (gpu.MinLevel > 0 && blend.Lower < gpu.MinLevel) _coarseDraws++;
         if (gpu.MinLevel > 0) blend = new LodBlend(Math.Max(blend.Lower, gpu.MinLevel), Math.Max(blend.Upper, gpu.MinLevel), blend.T);
         var m = inst.Transform;
         // Spare instance-matrix component: room GI gain without splitting shared furniture batches (1), plus 2 when its building's lights are off, which darkens
         // its EMISSIVE materials (BuildingLodShaders).
-        m.M34 = (IndoorFurniture(inst) ? 1 : 0) + (!depthPass && EmissiveDark is { } dark && dark(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId) ? 2 : 0);
+        m.M34 = (IndoorFurniture(inst) ? 1 : 0) + (!_depthPass && EmissiveDark is { } dark && dark(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId) ? 2 : 0);
         // Another spare component, M44: 1, or for a construction site BuildingLodShaders.ScaffoldBase + its look's f, or a negative packed tint (PackTint).
         // A site's M34 also carries its part's mesh top and the scaffold tiling (BuildingLodShaders.PackSite).
         bool site = false;
-        bool highlight = HighlightSigns && !depthPass && !inst.Stand && inst.Placed.Owner.GetBool("is sign");
-        if (construction is { Count: > 0 } && !inst.Stand && construction.TryGetValue(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId, out float built))
+        bool highlight = HighlightSigns && !_depthPass && !inst.Stand && inst.Placed.Owner.GetBool("is sign");
+        if (_construction is { Count: > 0 } && !inst.Stand && _construction.TryGetValue(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId, out float built))
         {
             m.M44 = BuildingLodShaders.ScaffoldBase + Math.Clamp(built, 0f, 1f);
             m.M34 += BuildingLodShaders.PackSite(gpu.Top, inst.Placed.Owner.GetFloat("scaffolding tex scale"));
@@ -1220,10 +1221,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // A map feature (CLIP_INTERIOR, docs/render-interior-cut.md) over a building's interior mask takes the cut, and so does another building's part over
         // the mask of a building in the interior view (CutsIntoViewed); the rest keep the programs without it.
         // In a shadow pass such a part casts nothing inside the viewed buildings' hulls (ShadowCut).
-        bool cut = depthPass ? shadowCuts.Count > 0 && CutsShadow(inst)
+        bool cut = _depthPass ? _shadowCuts.Count > 0 && CutsShadow(inst)
             : InteriorCut is { Active: true } mask && (inst.Placed.Kind == PlacedKind.MapFeature ? mask.Overlaps(inst.Centre, inst.Radius) : CutsIntoViewed(inst, mask));
-        if (selecting.Count > 0 && SelectingKey(inst.Placed) is { } selectedKey)
-            selectionDraws.Add(new(selectedKey, gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, inst.Centre, inst.Radius));
+        if (_selecting.Count > 0 && SelectingKey(inst.Placed) is { } selectedKey)
+            _selectionDraws.Add(new(selectedKey, gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, inst.Centre, inst.Radius));
         AddLevels(gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, highlight, cut);
     }
 
@@ -1257,13 +1258,13 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     internal InteriorMaskRenderer? Masks { get; set; }
 
     /// <summary>The viewed buildings' hulls a shadow pass cuts (<see cref="ShadowCut"/>).</summary>
-    readonly List<InteriorVolume> shadowCuts = [];
-    ViewConstants cutConstants;
+    readonly List<InteriorVolume> _shadowCuts = [];
+    ViewConstants _cutConstants;
 
     bool CutsShadow(ObjectStreamer.Instance inst)
     {
         if (!Cuttable(inst) || InteriorView.ContainsKey(inst.Placed.PlacementId) || Masks?.Drew(inst.Placed.PlacementId) == true) return false;
-        foreach (var v in shadowCuts)
+        foreach (var v in _shadowCuts)
             if (v.Distance(inst.Centre) <= inst.Radius) return true;
         return false;
     }
@@ -1274,24 +1275,24 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     void ShadowCut(ref ViewConstants view)
     {
-        shadowCuts.Clear();
+        _shadowCuts.Clear();
         view.CutVolumes = 0;
         if (!CutIntoViewed || InteriorView.Count == 0) return;
         int planes = 0;
         foreach (var id in InteriorView.Keys)
         {
-            if (shadowCuts.Count == 4) break;
+            if (_shadowCuts.Count == 4) break;
             if (InteriorFor(id) is not { Footprint: { Length: >= 3 } f } v || planes + f.Length > 32) continue;
-            view.CutRanges[shadowCuts.Count] = new Vector4(planes, f.Length, v.YMin, v.YMax);
+            view.CutRanges[_shadowCuts.Count] = new Vector4(planes, f.Length, v.YMin, v.YMax);
             for (int i = 0; i < f.Length; i++)
             {
                 var e = f[(i + 1) % f.Length] - f[i];
                 var n = e.LengthSquared() > 1e-8f ? Vector2.Normalize(new Vector2(-e.Y, e.X)) : Vector2.Zero;   // counter-clockwise: inside on the left
                 view.CutPlanes[planes++] = new Vector4(n, Vector2.Dot(n, f[i]), 0);
             }
-            shadowCuts.Add(v);
+            _shadowCuts.Add(v);
         }
-        view.CutVolumes = (uint)shadowCuts.Count;
+        view.CutVolumes = (uint)_shadowCuts.Count;
     }
 
     void Add(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, Matrix4x4 m, float lo, float hi, float near, bool backCull = false, bool site = false, int ghost = 0, bool highlight = false, bool cut = false)
@@ -1302,7 +1303,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         bool fading = !EarlyDepth.Enabled || lo > 0 || hi < 1 || site;
         var batch = BatchFor(manual ?? gpu, materials, manual is null ? level : 0, (fading ? BatchKind.Fading : BatchKind.Solid) | (backCull ? BatchKind.BackCull : 0) | ghost | (highlight ? BatchKind.Highlight : 0) | (cut ? BatchKind.Cut : 0));
         batch.Manual = manual is not null;
-        if (batch.Count == 0) { active.Add(batch); batch.Near = near; } else if (near < batch.Near) batch.Near = near;
+        if (batch.Count == 0) { _active.Add(batch); batch.Near = near; } else if (near < batch.Near) batch.Near = near;
         m.M14 = lo;
         m.M24 = hi;
         batch.Add(m);
@@ -1325,11 +1326,19 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     Batch BatchFor(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, int kind)
     {
         var key = (gpu, materials, level, kind);
-        if (!batchMap.TryGetValue(key, out var batch))
-            batchMap[key] = batch = new Batch { Mesh = gpu, Materials = materials, Level = level, Town = kind == BatchKind.Town,
-                Fading = (kind & ~(BatchKind.BackCull | BatchKind.Ghost | BatchKind.GhostBad | BatchKind.GhostQueued | BatchKind.Highlight | BatchKind.Cut)) != BatchKind.Solid, BackCull = (kind & BatchKind.BackCull) != 0,
-                Highlight = (kind & BatchKind.Highlight) != 0, Cut = (kind & BatchKind.Cut) != 0,
-                Ghost = (kind & BatchKind.GhostQueued) != 0 ? 3 : (kind & BatchKind.GhostBad) != 0 ? 2 : (kind & BatchKind.Ghost) != 0 ? 1 : 0 };
+        if (!_batchMap.TryGetValue(key, out var batch))
+            _batchMap[key] = batch = new Batch
+            {
+                Mesh = gpu,
+                Materials = materials,
+                Level = level,
+                Town = kind == BatchKind.Town,
+                Fading = (kind & ~(BatchKind.BackCull | BatchKind.Ghost | BatchKind.GhostBad | BatchKind.GhostQueued | BatchKind.Highlight | BatchKind.Cut)) != BatchKind.Solid,
+                BackCull = (kind & BatchKind.BackCull) != 0,
+                Highlight = (kind & BatchKind.Highlight) != 0,
+                Cut = (kind & BatchKind.Cut) != 0,
+                Ghost = (kind & BatchKind.GhostQueued) != 0 ? 3 : (kind & BatchKind.GhostBad) != 0 ? 2 : (kind & BatchKind.Ghost) != 0 ? 1 : 0
+            };
         return batch;
     }
 
@@ -1354,7 +1363,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     const int RowLocation = BuildingLodShaders.InstanceLocation;
 
     /// <summary>This call's batch matrices in the frame's constants (a batch at its <see cref="Batch.Offset"/>; the draws reach it by firstInstance).</summary>
-    Transient instances;
+    Transient _instances;
 
     /// <summary>One part draw, in the renderer-owned list: the part, its level and instance range, the texture keys (their bindless indices
     /// are patched into <see cref="Push"/> per segment) and the push constants it needs.</summary>
@@ -1371,43 +1380,43 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         public bool BackCull;
     }
 
-    ObjDraw[] draws = new ObjDraw[256];
-    int drawCount;
+    ObjDraw[] _draws = new ObjDraw[256];
+    int _drawCount;
 
     /// <summary>A native program of the objects with its vertex inputs from the reflection: the layout and buffers a GL vertex array feeds
     /// it, as VkGl feeds a GL program (<see cref="LegacyProgram.VertexLayout"/>: a disabled attribute reads GL's constant through a stride-0 binding).</summary>
     sealed class ObjProg : IDisposable
     {
-        readonly IGpuContext ctx;
+        readonly IGpuContext _ctx;
         public readonly GpuProgram P;
-        readonly int[] locations;
-        readonly Meitou.Game.Rendering.Gpu.Shaders.ScalarKind[] kinds;
+        readonly int[] _locations;
+        readonly Meitou.Game.Rendering.Gpu.Shaders.ScalarKind[] _kinds;
         /// <summary>The program's own input locations (below the instance rows): 0 .. Own − 1.</summary>
         public readonly int Own;
-        VertexLayout? last;
+        VertexLayout? _last;
 
         public ObjProg(IGpuContext ctx, NativeFrame frame, string vertex, string fragment, string name)
         {
-            this.ctx = ctx;
+            this._ctx = ctx;
             P = frame.Program(vertex, fragment, name);
             var inputs = P.Info.VertexReflection!.Inputs;
-            locations = [.. inputs.SelectMany(i => Enumerable.Range(i.Location, i.Slots))];
-            kinds = [.. inputs.SelectMany(i => Enumerable.Repeat(i.Kind, i.Slots))];
-            Own = locations.Where(l => l < RowLocation).DefaultIfEmpty(-1).Max() + 1;
+            _locations = [.. inputs.SelectMany(i => Enumerable.Range(i.Location, i.Slots))];
+            _kinds = [.. inputs.SelectMany(i => Enumerable.Repeat(i.Kind, i.Slots))];
+            Own = _locations.Where(l => l < RowLocation).DefaultIfEmpty(-1).Max() + 1;
         }
 
         public VertexLayout Layout(ReadOnlySpan<LegacyProgram.Attribute?> byLocation)
         {
-            Span<VertexInput> inputs = stackalloc VertexInput[locations.Length];
+            Span<VertexInput> inputs = stackalloc VertexInput[_locations.Length];
             for (int i = 0; i < inputs.Length; i++)
             {
-                int loc = locations[i];
+                int loc = _locations[i];
                 inputs[i] = loc < byLocation.Length && byLocation[loc] is { } a
                     ? new VertexInput((uint)loc, a.Format, a.Stride, a.PerInstance)
-                    : new VertexInput((uint)loc, GlConventions.DummyVertexFormat(kinds[i]), ctx.ConstantVertexAttributes ? 0u : 16u, false);
+                    : new VertexInput((uint)loc, GlConventions.DummyVertexFormat(_kinds[i]), _ctx.ConstantVertexAttributes ? 0u : 16u, false);
             }
-            if (last is { } l && inputs.SequenceEqual(l.Inputs)) return l;
-            return last = new VertexLayout(inputs.ToArray());
+            if (_last is { } l && inputs.SequenceEqual(l.Inputs)) return l;
+            return _last = new VertexLayout(inputs.ToArray());
         }
 
         /// <summary>Locations 0 .. <paramref name="count"/> − 1 as one array for one bind: each attribute's buffer, GL's constant where none.</summary>
@@ -1416,20 +1425,20 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             var result = new GpuBufferBinding[count];
             for (int loc = 0; loc < count; loc++)
             {
-                int input = Array.IndexOf(locations, loc);
+                int input = Array.IndexOf(_locations, loc);
                 result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
                     ? a.Buffer
-                    : ctx.ConstantVertexAttributes
-                    ? new GpuBufferBinding(ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float))
-                    : new GpuBufferBinding(ctx.DummyVertexArray(input >= 0 ? kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float), 0);
+                    : _ctx.ConstantVertexAttributes
+                    ? new GpuBufferBinding(_ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? _kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float))
+                    : new GpuBufferBinding(_ctx.DummyVertexArray(input >= 0 ? _kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float), 0);
             }
             return result;
         }
 
         public void Dispose()
         {
-            ctx.Pipelines.Forget(P);
-            ctx.Shaders.Dispose(P);
+            _ctx.Pipelines.Forget(P);
+            _ctx.Shaders.Dispose(P);
         }
     }
 
@@ -1437,19 +1446,19 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     readonly record struct SegmentPipeline(GpuProgram Program, AttachmentFormats Formats, BlendState Blend, ColorMask Mask,
         PolygonKind Polygon, bool AlphaToCoverage, bool DepthClamp);
 
-    readonly Dictionary<(int Kind, SegmentPipeline State), int> segmentByState = [];
-    readonly SegmentPipeline[] lastSegment = new SegmentPipeline[5];
-    readonly int[] segmentIds = new int[5];
-    int segmentCount;
+    readonly Dictionary<(int Kind, SegmentPipeline State), int> _segmentByState = [];
+    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[5];
+    readonly int[] _segmentIds = new int[5];
+    int _segmentCount;
 
     /// <summary>A stable number for a segment's pipeline state, so a part compares one int per draw.</summary>
     int SegmentId(int kind, GpuProgram p, PassTargets t, DrawState s)
     {
         var segment = new SegmentPipeline(p, t.Formats, s.Blend, s.ColourMask, s.Polygon, s.AlphaToCoverage, s.DepthClamp);
-        if (segmentIds[kind] != 0 && segment == lastSegment[kind]) return segmentIds[kind];
-        if (!segmentByState.TryGetValue((kind, segment), out int id)) segmentByState[(kind, segment)] = id = ++segmentCount;
-        lastSegment[kind] = segment;
-        return segmentIds[kind] = id;
+        if (_segmentIds[kind] != 0 && segment == _lastSegment[kind]) return _segmentIds[kind];
+        if (!_segmentByState.TryGetValue((kind, segment), out int id)) _segmentByState[(kind, segment)] = id = ++_segmentCount;
+        _lastSegment[kind] = segment;
+        return _segmentIds[kind] = id;
     }
 
     /// <summary>A part's native state for <paramref name="p"/>, made on first use from its native buffers (they never change while the part
@@ -1460,7 +1469,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
         part.Attributes.AsSpan().CopyTo(attributes);
         for (int a = 0; a < 4; a++)
-            attributes[RowLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32f, InstanceStride, true);
+            attributes[RowLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32F, InstanceStride, true);
         n.Layout = p.Layout(attributes);
         n.Vertices = p.Buffers(attributes, p.Own);
         n.Elements = new GpuBufferBinding(part.Indices.Handle, 0, part.Indices.Size);
@@ -1478,40 +1487,40 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>The segment's LOD bias (the upscaler's, <see cref="IGpuContext.LodBias"/>) and GL's stand-in for a texture not resident.</summary>
-    float textureBias;
-    uint textureStandIn;
+    float _textureBias;
+    uint _textureStandIn;
 
     /// <summary>A new segment: the bias in effect now and the stand-in's bindless index (the 2D float array the shaders index).</summary>
     void NewTextureSegment()
     {
-        textureBias = Gpu.LodBias;
-        textureStandIn = Gpu.StandIn2D;
+        _textureBias = Gpu.LodBias;
+        _textureStandIn = Gpu.StandIn2D;
     }
 
     /// <summary>The bindless index of a texture by its <see cref="WorldTexture.Key"/> (0: the stand-in), as the GL texture was sampled.</summary>
-    uint Texture(uint key) => key == 0 ? textureStandIn : textureCache.Index(key, textureBias, textureStandIn);
+    uint Texture(uint key) => key == 0 ? _textureStandIn : _textureCache.Index(key, _textureBias, _textureStandIn);
 
     /// <summary>The batches' parts as draws, in order, with the texture keys (reading a key counts as use: here, not in Record).</summary>
     void PrepareDraws(WorldRenderOptions options, bool wire)
     {
-        drawCount = 0;
-        foreach (var b in active)
+        _drawCount = 0;
+        foreach (var b in _active)
         {
             int fade = b.Town ? 1 : 0;
             for (int i = 0; i < b.Mesh.Parts.Count; i++)
             {
                 var gp = b.Mesh.Parts[i];
                 if (gp.Count[b.Level] == 0) continue;
-                if (drawCount == draws.Length) Array.Resize(ref draws, drawCount * 2);
-                ref var d = ref draws[drawCount++];
+                if (_drawCount == _draws.Length) Array.Resize(ref _draws, _drawCount * 2);
+                ref var d = ref _draws[_drawCount++];
                 d = default;
                 d.Part = gp; d.Level = b.Level; d.FirstInstance = (uint)b.Offset; d.Instances = (uint)b.Count;
                 d.Push.TriplanarScale = 1f / 5000;
                 d.Push.FadeMode = fade | (b.Cut ? 2 : 0);
-                if (wire || debugLevels == 1)
+                if (wire || _debugLevels == 1)
                 {
                     d.Push.Wireframe = 1;
-                    d.Push.FlatColour = LevelColour(b.Level, b.Manual, ReferenceEquals(b.Materials, distantMaterial));
+                    d.Push.FlatColour = LevelColour(b.Level, b.Manual, ReferenceEquals(b.Materials, _distantMaterial));
                 }
                 else
                 {
@@ -1521,31 +1530,31 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                     if (b.Ghost != 0) d.Push.FlatColour = b.Ghost == 1 ? new Vector3(0.35f, 1f, 0.45f) : b.Ghost == 2 ? new Vector3(1f, 0.3f, 0.25f) : new Vector3(0.5f, 0.7f, 1f);
                     if (b.Highlight) d.Push.FlatColour = new Vector3(1f, 1f, 0f);
                     // A part whose diffuse map is not resident yet is drawn plain grey (pop-in the benchmark counts).
-                    if (!depthPass && options.Textures && d.Diffuse == 0 && pm.WantsDiffuse) untexturedDraws++;
-                    d.Solid = !depthPass && !b.Fading && !b.Cut && d.Push.AlphaThreshold == 0f;
+                    if (!_depthPass && options.Textures && d.Diffuse == 0 && pm.WantsDiffuse) _untexturedDraws++;
+                    d.Solid = !_depthPass && !b.Fading && !b.Cut && d.Push.AlphaThreshold == 0f;
                     d.BackCull = b.BackCull && pm.Material is not { DoubleSided: true };
                 }
                 DrawCalls++;
                 DrawnTriangles += (long)gp.Count[b.Level] / 3 * b.Count;
             }
         }
-        if (SolidFirst && !depthPass && !wire) SolidDrawsFirst();
+        if (SolidFirst && !_depthPass && !wire) SolidDrawsFirst();
     }
 
     /// <summary>The solid draws (early depth test) ahead of the dithered and cut-out ones, each group still nearest first: what they write to the depth
     /// buffer is there for the coarse depth test of the others, whose fragments are shaded before the exact test.</summary>
     void SolidDrawsFirst()
     {
-        if (drawScratch.Length < drawCount) drawScratch = new ObjDraw[draws.Length];
+        if (_drawScratch.Length < _drawCount) _drawScratch = new ObjDraw[_draws.Length];
         int solid = 0;
-        for (int i = 0; i < drawCount; i++) if (draws[i].Solid) solid++;
-        if (solid == 0 || solid == drawCount) return;
+        for (int i = 0; i < _drawCount; i++) if (_draws[i].Solid) solid++;
+        if (solid == 0 || solid == _drawCount) return;
         int s = 0, o = solid;
-        for (int i = 0; i < drawCount; i++) drawScratch[draws[i].Solid ? s++ : o++] = draws[i];
-        Array.Copy(drawScratch, draws, drawCount);
+        for (int i = 0; i < _drawCount; i++) _drawScratch[_draws[i].Solid ? s++ : o++] = _draws[i];
+        Array.Copy(_drawScratch, _draws, _drawCount);
     }
 
-    ObjDraw[] drawScratch = [];
+    ObjDraw[] _drawScratch = [];
     /// <summary>On by default (the <c>solid-first</c> A/B turns it off): see <see cref="SolidDrawsFirst"/>.</summary>
     public static bool SolidFirst { get; set; } = true;
 
@@ -1586,9 +1595,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// <summary>The draw list in one native segment of VkGl's open pass (colour or depth, solid or wireframe).</summary>
     void RecordDraws(ObjProg prog, bool wire, in ViewConstants view, Vector4 fadeRange)
     {
-        if (drawCount == 0) return;
-        string label = depthPass ? "objects depth" : wire ? "objects wire" : "objects";
-        int kind = (depthPass ? 1 : 0) + (wire ? 2 : 0);
+        if (_drawCount == 0) return;
+        string label = _depthPass ? "objects depth" : wire ? "objects wire" : "objects";
+        int kind = (_depthPass ? 1 : 0) + (wire ? 2 : 0);
         // Prepare (wave 4, docs/renderer-native.md 6.2): the pass state, the sets, and per draw everything resolved (pipeline, buffers, the push
         // block with its bindless indices), into a job that only records.
         var targets = Gpu.CurrentTargets();
@@ -1602,15 +1611,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         }
         int segment = SegmentId(kind, prog.P, targets, state);
         // The fully visible draws of a colour pass use the program without a discard (own segment, own pipelines per part).
-        int solidSegment = !depthPass && !wire ? SegmentId(4, solidProg.P, targets, state) : 0;
-        var job = drawJobs.Rent();
+        int solidSegment = !_depthPass && !wire ? SegmentId(4, _solidProg.P, targets, state) : 0;
+        var job = _drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, prog.P, 0);
-        job.Frame = nativeFrame.Prepare(in view);
-        for (int a = 0; a < 4; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
+        job.Frame = _nativeFrame.Prepare(in view);
+        for (int a = 0; a < 4; a++) job.Rows[a] = new GpuBufferBinding(_instances.Handle, _instances.Offset + (ulong)(16 * a));
         NewTextureSegment();
-        if (job.Draws.Length < drawCount) job.Draws = new DrawJob.Draw[Math.Max(drawCount, job.Draws.Length * 2)];
-        var list = draws;
-        for (int i = 0; i < drawCount; i++)
+        if (job.Draws.Length < _drawCount) job.Draws = new DrawJob.Draw[Math.Max(_drawCount, job.Draws.Length * 2)];
+        var list = _draws;
+        for (int i = 0; i < _drawCount; i++)
         {
             ref var d = ref list[i];
             ref var pc = ref d.Push;
@@ -1619,26 +1628,30 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             pc.Normal = Texture(d.Normal);
             pc.Diffuse2 = Texture(d.Diffuse2);
             pc.Normal2 = Texture(d.Normal2);
-            pc.Spare = (pc.Spare & 0xFFu) | (scaffoldGrid is { Key: not 0 } grid ? (Texture(grid.Key) + 1) << 8 : 0);
+            pc.Spare = (pc.Spare & 0xFFu) | (_scaffoldGrid is { Key: not 0 } grid ? (Texture(grid.Key) + 1) << 8 : 0);
             var part = d.Part;
             bool solid = d.Solid && solidSegment != 0;
-            ref var n = ref (depthPass ? ref part.DepthNative : ref (solid ? ref part.ColourSolidNative : ref part.ColourNative));
-            var drawProg = solid ? solidProg : prog;
+            ref var n = ref (_depthPass ? ref part.DepthNative : ref (solid ? ref part.ColourSolidNative : ref part.ColourNative));
+            var drawProg = solid ? _solidProg : prog;
             int drawSegment = solid ? solidSegment : segment;
             Current(ref n, part, drawProg);
             job.Draws[i] = new DrawJob.Draw
             {
                 Pipeline = n.SegA == drawSegment ? n.PipeA!.Value : PipelineFor(ref n, drawProg, drawSegment, state, targets.Formats, label),
-                Vertices = n.Vertices, Elements = new GpuBufferBinding(n.Elements.Buffer, n.Elements.Offset + (ulong)part.Offset[d.Level] * 4),
-                Push = pc, IndexCount = (uint)part.Count[d.Level], Instances = d.Instances, FirstInstance = d.FirstInstance,
+                Vertices = n.Vertices,
+                Elements = new GpuBufferBinding(n.Elements.Buffer, n.Elements.Offset + (ulong)part.Offset[d.Level] * 4),
+                Push = pc,
+                IndexCount = (uint)part.Count[d.Level],
+                Instances = d.Instances,
+                FirstInstance = d.FirstInstance,
                 Cull = d.BackCull ? CullMode.Back : state.Cull,
             };
         }
-        job.Count = drawCount;
+        job.Count = _drawCount;
         Gpu.Record(label, job);
     }
 
-    readonly JobPool<DrawJob> drawJobs = new();
+    readonly JobPool<DrawJob> _drawJobs = new();
 
     /// <summary>One objects segment as prepared (<see cref="RecordDraws"/>): recorded on any thread, the same commands as before wave 4.</summary>
     sealed class DrawJob : RecordJob
@@ -1697,15 +1710,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         {
             Array.Clear(Draws, 0, Count);
             Count = 0;
-            Owner.drawJobs.Return(this);
+            Owner._drawJobs.Return(this);
         }
     }
 
     // ---- depth only (the sun's shadow map, ShadowPass) ----
-    bool depthPass;
+    bool _depthPass;
 
     /// <summary>The least LOD value a depth draw takes (<see cref="ShadowLod.ObjectLodFloor"/>): in a far cascade an object is drawn at the level the game picks that far away, never a finer one. 0: the distance rule alone.</summary>
-    float shadowLodFloor;
+    float _shadowLodFloor;
 
     /// <summary>
     /// Draws the objects' depth for a shadow cascade: <see cref="Draw"/>'s culling, levels and batches (chosen by the camera's
@@ -1715,20 +1728,20 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain, float coarseTexel = 0)
     {
-        depthPass = true;
-        shadowLodFloor = ShadowLod.ObjectLodFloor(coarseTexel, options.TerrainPixelScale);
+        _depthPass = true;
+        _shadowLodFloor = ShadowLod.ObjectLodFloor(coarseTexel, options.TerrainPixelScale);
         try { Draw(viewProjection, eye, frustum, options, Vector3.UnitY, Vector3.Zero, 0, terrain); }
-        finally { depthPass = false; shadowLodFloor = 0; }
+        finally { _depthPass = false; _shadowLodFloor = 0; }
     }
 
-    bool landmarksOnly;
+    bool _landmarksOnly;
 
     /// <summary><see cref="DrawDepth"/> for the landmarks alone (the landmark shadow map, ShadowPass.Meitou): the same reach, levels and batches.</summary>
     public void DrawLandmarksDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain)
     {
-        landmarksOnly = true;
+        _landmarksOnly = true;
         try { DrawDepth(viewProjection, eye, frustum, options, terrain); }
-        finally { landmarksOnly = false; }
+        finally { _landmarksOnly = false; }
     }
 
     /// <summary>
@@ -1738,7 +1751,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public long LandmarkCasters(Vector3 eye, List<Vector4> spheres)
     {
         spheres.Clear();
-        if (streamer.LandmarkZone is not { } zone) return 0;
+        if (_streamer.LandmarkZone is not { } zone) return 0;
         float reach = LandmarkReach;
         long key = 17;
         for (int i = 0; i < zone.Real.Count; i++)
@@ -1754,16 +1767,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
 
     public void Dispose()
     {
-        if (ObjectLodGen.Built + ObjectLodGen.Cached > 0) Console.WriteLine($"object lods  {ObjectLodGen.Built} meshes generated ({System.Diagnostics.Stopwatch.GetElapsedTime(0, ObjectLodGen.BuildTicks).TotalSeconds:0.0} s of worker time), {ObjectLodGen.Cached} read from the cache, {ObjectLodGen.Skipped} too small or not eligible");
+        if (ObjectLodGen.Built + ObjectLodGen.Cached > 0) Console.WriteLine($"object lods  {ObjectLodGen.Built} meshes generated ({Stopwatch.GetElapsedTime(0, ObjectLodGen.BuildTicks).TotalSeconds:0.0} s of worker time), {ObjectLodGen.Cached} read from the cache, {ObjectLodGen.Skipped} too small or not eligible");
         DisposeBuildingIcons();
         DisposeSelection();
-        colourProg.Dispose();
-        solidProg.Dispose();
-        depthProg.Dispose();
-        nativeFrame.Dispose();
-        streamer.Dispose();
-        meshes.Dispose();
-        textureCache.Dispose();
-        objects.Dispose();
+        _colourProg.Dispose();
+        _solidProg.Dispose();
+        _depthProg.Dispose();
+        _nativeFrame.Dispose();
+        _streamer.Dispose();
+        _meshes.Dispose();
+        _textureCache.Dispose();
+        _objects.Dispose();
     }
 }

@@ -22,7 +22,7 @@ public sealed partial class AiSystem
     {
         mind.GuardVisitorAt = null;
         var table = world.Characters;
-        if (board.Home is not { } home || !board.HomePublic || aggro?.SensesOf(self.Slot) is not { } senses || table.Cold(self.Slot) is not { } me) return 0.5f;
+        if (board.Home is not { } home || !board.HomePublic || _aggro?.SensesOf(self.Slot) is not { } senses || table.Cold(self.Slot) is not { } me) return 0.5f;
         int designation = TemplateOf(mind.Squad.TemplateId).Template?.BuildingDesignation ?? 0;
         if (designation is not (DesignationShop or DesignationHq or DesignationBar) || me.Faction < 0 || Relations.Factions[me.Faction].NotReal) return 0.5f;
         const SenseTag excluded = SenseTag.Ally | SenseTag.Ko | SenseTag.Imprisoned;

@@ -79,7 +79,12 @@ static class WwiseHierarchyReader
                 or WwiseActionKind.SetBusVolume or WwiseActionKind.ResetBusVolume or WwiseActionKind.SetLowPass or WwiseActionKind.ResetLowPass:
                 return action with
                 {
-                    FadeCurve = r.U8(), ValueMeaning = r.U8(), Value = r.F32(), ValueMin = r.F32(), ValueMax = r.F32(), Exceptions = Exceptions(ref r),
+                    FadeCurve = r.U8(),
+                    ValueMeaning = r.U8(),
+                    Value = r.F32(),
+                    ValueMin = r.F32(),
+                    ValueMax = r.F32(),
+                    Exceptions = Exceptions(ref r),
                 };
             case WwiseActionKind.SetState:
                 return action with { GroupId = r.U32(), StateId = r.U32() };
@@ -459,16 +464,16 @@ static class WwiseHierarchyReader
 
     ref struct Reader(ReadOnlySpan<byte> span)
     {
-        readonly ReadOnlySpan<byte> span = span;
-        int p;
+        readonly ReadOnlySpan<byte> _span = span;
+        int _p;
 
-        public readonly int Remaining => span.Length - p;
+        public readonly int Remaining => _span.Length - _p;
 
         ReadOnlySpan<byte> Take(int n)
         {
-            if (n > span.Length - p) throw new InvalidDataException($"Read of {n} bytes at {p} runs past the object ({span.Length} bytes)");
-            var s = span.Slice(p, n);
-            p += n;
+            if (n > _span.Length - _p) throw new InvalidDataException($"Read of {n} bytes at {_p} runs past the object ({_span.Length} bytes)");
+            var s = _span.Slice(_p, n);
+            _p += n;
             return s;
         }
 
@@ -483,7 +488,7 @@ static class WwiseHierarchyReader
         /// <summary>A count, checked against what is left (each element at least <paramref name="minSize"/> bytes).</summary>
         public readonly int Count(uint n, int minSize)
         {
-            if (n > (uint)(Remaining / minSize)) throw new InvalidDataException($"Count {n} at {p} is more than the object holds");
+            if (n > (uint)(Remaining / minSize)) throw new InvalidDataException($"Count {n} at {_p} is more than the object holds");
             return (int)n;
         }
 

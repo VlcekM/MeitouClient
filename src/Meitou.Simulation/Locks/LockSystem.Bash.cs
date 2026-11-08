@@ -71,7 +71,7 @@ public sealed partial class LockSystem
         var next = table.Next;
         if (world.Tick % BashCheckTicks == 0)
         {
-            gateGraph = null;
+            _gateGraph = null;
             FindBashers(world);
         }
         for (int s = 0; s < table.HighWater; s++)
@@ -203,7 +203,7 @@ public sealed partial class LockSystem
             foreach (var (building, origin, radius, door, spot) in shut)
             {
                 if (Vector2.Distance(target, origin) > radius || Vector2.Distance(me, origin) <= radius) continue;
-                if (doorPlan.PlansBash(world, Combat, s, t, building, door, spot, this))
+                if (_doorPlan.PlansBash(world, Combat, s, t, building, door, spot, this))
                 {
                     c.Bashing = door.Id;
                     c.BashTime = 0;
@@ -213,7 +213,7 @@ public sealed partial class LockSystem
         }
     }
 
-    readonly DoorPlan doorPlan = new();
+    readonly DoorPlan _doorPlan = new();
 
     /// <summary>Sends <paramref name="c"/>, a ransacker whose entry plan bashes the door <paramref name="doorId"/> (row 81), to bash it: it walks there and swings as an attacker would, and the door breaking ends it.</summary>
     internal void BashForErrand(CharacterCold c, string doorId)

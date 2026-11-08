@@ -14,14 +14,14 @@ public sealed partial class MedicalState
     public void Heal(in MedicalContext ctx)
     {
         if (Dead) return;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             p.Wear = p.Stun = p.Bandage = p.Rig = 0;
             p.Flesh = p.MaxHp;
             p.HitMult = 1;
             p.WasDown = false;
         }
-        wounds.Clear();
+        _wounds.Clear();
         Blood = Capacity(ctx);
         BloodKo = false;
         KoTimer = 0;
@@ -35,7 +35,7 @@ public sealed partial class MedicalState
     {
         if (Dead) return false;
         bool changed = false;
-        foreach (var p in parts)
+        foreach (var p in _parts)
             if (p.Limb is LimbState.Stump or LimbState.Crushed)
             {
                 p.Limb = LimbState.Original;
@@ -44,7 +44,7 @@ public sealed partial class MedicalState
         return changed;
     }
 
-    float NextRoll(in MedicalContext ctx) => BodyRolls.Float(ctx.Seed, ctx.CharacterKey, BodyRolls.MedicalDomain, rollCounter++);
+    float NextRoll(in MedicalContext ctx) => BodyRolls.Float(ctx.Seed, ctx.CharacterKey, BodyRolls.MedicalDomain, _rollCounter++);
 
     /// <summary>
     /// Chooses the part a blow lands on (<c>FUN_1406508d0</c>, <b>Verified</b>): among the parts whose flesh is above -M (not stunned or rigged away) and that are not the stump of a limb,
@@ -138,7 +138,7 @@ public sealed partial class MedicalState
             p.Wear += (hit.Cut + hit.Pierce + hit.Blunt) * 0.04f * c.RobotWearRate;
         // The wound (FUN_1406508d0): strength max(cut, pierce) x bleed rate x scale, losing `bleeding clot rate` a second (TickBlood).
         // Opened whatever the race's bleed rate; a bloodless race's wounds drain nothing but still need first aid.
-        if (MathF.Max(hit.Cut, hit.Pierce) > 0) wounds.Add(MathF.Max(hit.Cut, hit.Pierce) * c.BleedRate * hit.Scale);
+        if (MathF.Max(hit.Cut, hit.Pierce) > 0) _wounds.Add(MathF.Max(hit.Cut, hit.Pierce) * c.BleedRate * hit.Scale);
 
         CheckPart(part, ctx, events, inHitPath: true);
         CheckBlood(ctx, events);
@@ -193,7 +193,7 @@ public sealed partial class MedicalState
         p.Limb = LimbState.Stump;
         p.Replacement = null;
         Blood -= 5 + 25 * NextRoll(ctx);
-        wounds.Add(ctx.Constants.BleedRate * 200);
+        _wounds.Add(ctx.Constants.BleedRate * 200);
         events?.Add(new MedicalEvent(MedicalEventKind.PartSevered, part));
     }
 
@@ -211,9 +211,9 @@ public sealed partial class MedicalState
     /// The posture the character update last set (the original's <c>getProneState</c>, refreshed once a tick from <see cref="Standing"/>): a knock-out turns it from 0 only on the
     /// next update, so a leg going down between (another blow of the same tick) still finds it at 0. Not saved: unknown after a load, when the live <see cref="Standing"/> stands in.
     /// </summary>
-    PostureState posture;
+    PostureState _posture;
 
-    bool PostureNormal => posture == PostureState.Unknown ? Standing : posture == PostureState.Normal;
+    bool PostureNormal => _posture == PostureState.Unknown ? Standing : _posture == PostureState.Normal;
 
     /// <summary>
     /// The posture setter's 0 -> 2 change (<c>FUN_140649320</c> then <c>FUN_1405c7e20</c>, <b>Verified</b> decompile): a leg down (stump, crushed or under the KO point,
@@ -223,7 +223,7 @@ public sealed partial class MedicalState
     void LegCollapse(List<MedicalEvent>? events)
     {
         if (Dead || !PostureNormal || !LegsDown) return;
-        posture = PostureState.Other;
+        _posture = PostureState.Other;
         RestartKo(LegLossKoSeconds, events);
     }
 

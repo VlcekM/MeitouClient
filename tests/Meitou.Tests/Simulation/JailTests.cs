@@ -41,21 +41,21 @@ public class JailTests
         public Fixture CageB { get; }
         public int City { get; }
         public int Hunters { get; }
-        readonly Squad playerSquad;
-        readonly FactionRelations relations;
+        readonly Squad _playerSquad;
+        readonly FactionRelations _relations;
 
         public Jail(bool locks = false)
         {
-            var hunters = SyntheticTown.Rec("56-a", FcsRecordType.FACTION, "hunters");
+            var hunters = SyntheticTown.Rec("56-a", FcsRecordType.Faction, "hunters");
             hunters.Ints["fundamental type"] = (int)FundamentalType.Adventurer;
             hunters.References["legal system"] = [SyntheticTown.Ref("50-a")];
             var data = ArrestTests.Town([hunters]);
-            relations = data.Relations;
+            _relations = data.Relations;
             City = data.FactionIndex("50-a");
             Hunters = data.FactionIndex("56-a");
-            var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths, new CombatOptions { SelfApproach = false, TickMedical = false }) { Relations = relations };
-            var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = relations };
-            var crime = new CrimeSystem(relations);
+            var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths, new CombatOptions { SelfApproach = false, TickMedical = false }) { Relations = _relations };
+            var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = _relations };
+            var crime = new CrimeSystem(_relations);
             combat.Crimes = crime;
             carry.Crimes = crime;
             Arrest = new ArrestSystem(crime, BaseGame, new ArrestSettings { RecordLog = true }) { Carry = carry };
@@ -63,13 +63,13 @@ public class JailTests
             var systems = new List<ITickSystem>
             {
                 new PlayerSystem(), new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, combat,
-                new RetaliationSystem(combat), new AggroSystem(relations), crime, Arrest,
+                new RetaliationSystem(combat), new AggroSystem(_relations), crime, Arrest,
             };
             if (locks) systems.Add(Locks = new LockSystem(BaseGame, BodyOptions.Default) { Crimes = crime });
             World = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, walk, systems);
             World.Fixtures.RegisterSite(World, data, 0);
-            playerSquad = new Squad { Id = 1000, TemplateId = "p", Faction = relations.PlayerFaction };
-            World.Squads.Add(playerSquad);
+            _playerSquad = new Squad { Id = 1000, TemplateId = "p", Faction = _relations.PlayerFaction };
+            World.Squads.Add(_playerSquad);
             CageA = World.Fixtures.Find("0.0:cageA")!;
             CageB = World.Fixtures.Find("0.0:cageB")!;
         }
@@ -104,13 +104,13 @@ public class JailTests
         {
             var cold = stats.MakeCold(name);
             cold.Race = Person;
-            cold.Faction = relations.PlayerFaction;
+            cold.Faction = _relations.PlayerFaction;
             cold.IsPlayer = true;
             cold.NpcClass = FundamentalType.Adventurer;
-            cold.SquadId = playerSquad.Id;
+            cold.SquadId = _playerSquad.Id;
             if (bounty > 0) (cold.Bounties = new BountyLedger()).Get(City, "city").Amount = bounty;
             var id = World.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Yaw = MathF.PI }, cold, 0);
-            playerSquad.Members.Add(id);
+            _playerSquad.Members.Add(id);
             return id;
         }
 
@@ -139,7 +139,7 @@ public class JailTests
         using var j = new Jail(locks: true);
         var police = j.Npc(new Vector2(-100, 0), j.City, FundamentalType.LawEnforcement, Strong, mind: true);
         // Only a holder of goal 211 frees prisoners (FUN_1408cf3c0): in every role list, always in its hours.
-        var free = new AiGoal(new AiTask("t", "free", TaskType.POLICE_FREE_PRISONERS_WHEN_DONE, TaskPriority.Urgent, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1);
+        var free = new AiGoal(new AiTask("t", "free", TaskType.PoliceFreePrisonersWhenDone, TaskPriority.Urgent, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1);
         var board = new Blackboard([new(0, new AiPackage { Id = "police", Name = "police", Roles = [[free], [free], [free], [], []] })]);
         board.Update();
         j.World.Squads.Find(j.Cold(police).SquadId)!.Ai = board;

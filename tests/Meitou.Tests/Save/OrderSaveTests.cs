@@ -45,7 +45,7 @@ public class OrderSaveTests
 
     static IEnumerable<string> OrderKeys(FcsRecord ai) =>
         ai.Ints.Where(k => k.Key.StartsWith("tjob", StringComparison.Ordinal) || k.Key.StartsWith("meitou tjob", StringComparison.Ordinal)).Select(k => $"{k.Key}={k.Value}")
-            .Concat(ai.Vector3s.Where(k => k.Key.StartsWith("tjob", StringComparison.Ordinal)).Select(k => $"{k.Key}={k.Value}"))
+            .Concat(ai.Vector3S.Where(k => k.Key.StartsWith("tjob", StringComparison.Ordinal)).Select(k => $"{k.Key}={k.Value}"))
             .Concat(ai.Strings.Where(k => k.Key.StartsWith("meitou tjob", StringComparison.Ordinal)).Select(k => $"{k.Key}={k.Value}")).Order(StringComparer.Ordinal);
 
     /// <summary>
@@ -64,7 +64,7 @@ public class OrderSaveTests
         a.World.Commands.Enqueue(new RestOrder([medic]) { Tick = t, Queued = true });
         a.World.Commands.Enqueue(new TreatOrder([medic], patient) { Tick = t, Queued = true });
         a.World.RunTicks(3);
-        Assert.Equal([TaskType.MOVE_CUS_ORDERED, TaskType.MOVE_CUS_ORDERED, TaskType.REST, TaskType.FIRST_AID_ORDER], Rows(a.World, medic));
+        Assert.Equal([TaskType.MoveCusOrdered, TaskType.MoveCusOrdered, TaskType.Rest, TaskType.FirstAidOrder], Rows(a.World, medic));
 
         var first = SaveCapture.Capture(a.World, a.Data, new SaveClock(1, 12, 0));
         string folder = Path.Combine(Temp("orders"), QuickSave.Name);
@@ -73,10 +73,10 @@ public class OrderSaveTests
             first.Write(folder);
             var save = SaveGame.Load(folder);
             var ai = AiOf(save, 0);
-            Assert.Equal([(int)TaskType.MOVE_CUS_ORDERED, (int)TaskType.MOVE_CUS_ORDERED, (int)TaskType.REST, (int)TaskType.FIRST_AID_ORDER], Enumerable.Range(0, 4).Select(k => ai.Ints[$"tjob{k}"]));
+            Assert.Equal([(int)TaskType.MoveCusOrdered, (int)TaskType.MoveCusOrdered, (int)TaskType.Rest, (int)TaskType.FirstAidOrder], Enumerable.Range(0, 4).Select(k => ai.Ints[$"tjob{k}"]));
             Assert.False(ai.Ints.ContainsKey("tjob4"));
-            Assert.Equal(First, ai.Vector3s["tjobP0"]);
-            Assert.Equal(Second, ai.Vector3s["tjobP1"]);
+            Assert.Equal(First, ai.Vector3S["tjobP0"]);
+            Assert.Equal(Second, ai.Vector3S["tjobP1"]);
             var patientHand = save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Characters[1].Handle;
             Assert.Equal(patientHand, Hand.Read(ai, "tjobT3"));
             Assert.True(Hand.Read(ai, "tjobT0").IsNull);
@@ -92,7 +92,7 @@ public class OrderSaveTests
             Assert.Empty(cold.OrderQueue);
             b.World.RunTicks(2);
             Assert.Null(cold.SavedOrders);
-            Assert.Equal([TaskType.MOVE_CUS_ORDERED, TaskType.MOVE_CUS_ORDERED, TaskType.REST, TaskType.FIRST_AID_ORDER], Rows(b.World, medicB));
+            Assert.Equal([TaskType.MoveCusOrdered, TaskType.MoveCusOrdered, TaskType.Rest, TaskType.FirstAidOrder], Rows(b.World, medicB));
             Assert.Equal([true, false, false, false], cold.OrderQueue.Select(e => e.Started));
             Assert.Equal([First, Second], cold.OrderQueue.Take(2).Select(e => e.Point));
             Assert.Equal(squad.Members[1], cold.OrderQueue[3].Target);
@@ -113,11 +113,11 @@ public class OrderSaveTests
             var other = SaveGame.Load(folder);
             Hand.Null.Write(AiOf(other, 0), "tjobT3");
             AiOf(other, 0).Ints["tjobT3I"] = 999;
-            AiOf(other, 0).Ints["tjobT3TYPE"] = (int)FcsRecordType.CHARACTER;
+            AiOf(other, 0).Ints["tjobT3TYPE"] = (int)FcsRecordType.Character;
             using var d = NewGame(start: false);
             SaveLoader.Load(d.World, other, d.Data);
             d.World.RunTicks(2);
-            Assert.Equal([TaskType.MOVE_CUS_ORDERED, TaskType.MOVE_CUS_ORDERED, TaskType.REST], Rows(d.World, d.World.Squads.Find(d.World.Player.Squad)!.Members[0]));
+            Assert.Equal([TaskType.MoveCusOrdered, TaskType.MoveCusOrdered, TaskType.Rest], Rows(d.World, d.World.Squads.Find(d.World.Player.Squad)!.Members[0]));
         }
         finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
     }
@@ -149,7 +149,7 @@ public class OrderSaveTests
             for (int i = 0; i < orders.Count; i++)
             {
                 Assert.Equal((TaskType)ai.Ints[$"tjob{i}"], orders[i].Row);
-                Assert.Equal(ai.Vector3s[$"tjobP{i}"], orders[i].Point);
+                Assert.Equal(ai.Vector3S[$"tjobP{i}"], orders[i].Point);
                 Assert.Equal(Hand.Read(ai, $"tjobT{i}"), orders[i].Hand);
             }
             read++;

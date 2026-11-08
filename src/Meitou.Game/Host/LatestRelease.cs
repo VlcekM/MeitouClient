@@ -12,20 +12,20 @@ static class LatestRelease
 {
     static readonly TimeSpan Reuse = TimeSpan.FromMinutes(15);
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
-    static Task<(string? Release, string? Any)?>? fetched;
-    static DateTime fetchedAt;
+    static Task<(string? Release, string? Any)?>? s_fetched;
+    static DateTime s_fetchedAt;
 
     /// <summary>The tag of the newest game release newer than <paramref name="runningTag"/> (<c>v0.16.1-nightly.20261107</c>), or null.</summary>
     public static async Task<string?> NewerThan(string runningTag)
     {
         if (!runningTag.StartsWith('v') || !CodeModVersion.TryParse(runningTag[1..], out var running)) return null;
-        if (fetched is null || DateTime.UtcNow - fetchedAt > Reuse)
+        if (s_fetched is null || DateTime.UtcNow - s_fetchedAt > Reuse)
         {
-            fetchedAt = DateTime.UtcNow;
-            fetched = Fetch();
+            s_fetchedAt = DateTime.UtcNow;
+            s_fetched = Fetch();
         }
 
-        if (await fetched is not { } latest) return null;
+        if (await s_fetched is not { } latest) return null;
         string? newest = running.IsPrerelease ? latest.Any : latest.Release;
         return newest is not null && CodeModVersion.TryParse(newest, out var version) && version.CompareTo(running) > 0 ? "v" + newest : null;
     }

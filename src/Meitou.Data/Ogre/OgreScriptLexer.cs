@@ -38,7 +38,7 @@ public static class OgreScriptLexer
     /// Script files are read byte for byte (Latin-1), as Ogre does: no encoding or BOM handling. A few
     /// base-game files contain non-ASCII bytes in comments.
     /// </summary>
-    public static string ReadText(string path) => System.Text.Encoding.Latin1.GetString(System.IO.File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static string ReadText(string path) => System.Text.Encoding.Latin1.GetString(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     public static List<OgreScriptToken> Tokenize(string text, string file)
     {

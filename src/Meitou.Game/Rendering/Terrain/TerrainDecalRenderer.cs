@@ -60,41 +60,41 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     }
 
     static readonly VertexLayout Rows = new(
-        new VertexInput(0, InternalFormat.Rgba32f, DecalInstance.Size, true),
-        new VertexInput(1, InternalFormat.Rgba32f, DecalInstance.Size, true),
-        new VertexInput(2, InternalFormat.RG32f, DecalInstance.Size, true),
-        new VertexInput(3, InternalFormat.R32ui, DecalInstance.Size, true));
+        new VertexInput(0, InternalFormat.Rgba32F, DecalInstance.Size, true),
+        new VertexInput(1, InternalFormat.Rgba32F, DecalInstance.Size, true),
+        new VertexInput(2, InternalFormat.Rg32F, DecalInstance.Size, true),
+        new VertexInput(3, InternalFormat.R32Ui, DecalInstance.Size, true));
 
     // The colour alpha blended (red, green, blue), the alpha added: the game's separate blend in one pass.
     static readonly BlendState Blend = new(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha,
         AlphaSrc: BlendingFactor.One, AlphaDst: BlendingFactor.One);
 
-    readonly IGpuContext gpu;
-    readonly NativeFrame frame;
-    readonly GpuProgram program;
-    GpuPipeline? pipeline;
-    readonly SampledImage?[][] sprites;
+    readonly IGpuContext _gpu;
+    readonly NativeFrame _frame;
+    readonly GpuProgram _program;
+    GpuPipeline? _pipeline;
+    readonly SampledImage?[][] _sprites;
     // Each sprite's bindless index (uint.MaxValue: none), registered with the samplers of spriteBias (the upscaler's LOD bias, as the images give them).
-    readonly uint[][] spriteIndex;
-    float spriteBias = float.NaN;
-    DecalInstance[] instances = new DecalInstance[256];
+    readonly uint[][] _spriteIndex;
+    float _spriteBias = float.NaN;
+    DecalInstance[] _instances = new DecalInstance[256];
     // Each layer's cell, the cell version it shows, the rewrite it was cleared at and how many of the cell's appended decals it holds since (TerrainDecalStore.CellRewrite).
-    readonly (uint Key, int Version, int Rewrite, int Appended)[] slots = new (uint, int, int, int)[MaxSlots];
-    readonly List<(float Distance, uint Key)> near = [];
-    readonly HashSet<uint> drawn = [];
-    readonly Vector4[] cells = new Vector4[MaxSlots];
-    GpuTexture? target;
-    int layers;
-    (GpuTexture Texture, uint Index)? bindless;
-    int count;
+    readonly (uint Key, int Version, int Rewrite, int Appended)[] _slots = new (uint, int, int, int)[MaxSlots];
+    readonly List<(float Distance, uint Key)> _near = [];
+    readonly HashSet<uint> _drawn = [];
+    readonly Vector4[] _cells = new Vector4[MaxSlots];
+    GpuTexture? _target;
+    int _layers;
+    (GpuTexture Texture, uint Index)? _bindless;
+    int _count;
 
     TerrainDecalRenderer(IGpuContext gpu, SampledImage?[][] sprites)
     {
-        this.gpu = gpu;
-        this.sprites = sprites;
-        frame = new NativeFrame(gpu);
-        program = frame.Program(Vertex, Fragment, "terrain decals");
-        spriteIndex = [.. sprites.Select(list => Enumerable.Repeat(uint.MaxValue, list.Length).ToArray())];
+        this._gpu = gpu;
+        this._sprites = sprites;
+        _frame = new NativeFrame(gpu);
+        _program = _frame.Program(Vertex, Fragment, "terrain decals");
+        _spriteIndex = [.. sprites.Select(list => Enumerable.Repeat(uint.MaxValue, list.Length).ToArray())];
     }
 
     /// <summary>The renderer for the decal textures <paramref name="files"/> (per <see cref="TerrainDecalType"/>, its variants in order); a file that cannot be read draws nothing.</summary>
@@ -127,13 +127,13 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     public bool Meitou { get; set; } = true;
 
     /// <summary>Whether <paramref name="key"/>'s cell is on a layer now (its decals then do not expire: <see cref="TerrainDecalStore.Age"/>).</summary>
-    public bool Drawn(uint key) => drawn.Contains(key);
+    public bool Drawn(uint key) => _drawn.Contains(key);
 
     /// <summary>Picks the cells near <paramref name="eye"/> and draws the layers whose cell changed. Before the scene (outside a pass).</summary>
     public void Record(TerrainDecalStore store, Vector3 eye)
     {
         RegisterSprites();
-        near.Clear();
+        _near.Clear();
         float range = MathF.Max(Range, 0);
         foreach (uint key in store.Cells)
         {
@@ -141,70 +141,70 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
             float dx = MathF.Max(MathF.Max(x0 - eye.X, eye.X - (x0 + TerrainDecalCells.Size)), 0);
             float dz = MathF.Max(MathF.Max(z0 - eye.Z, eye.Z - (z0 + TerrainDecalCells.Size)), 0);
             float d = MathF.Sqrt(dx * dx + dz * dz);
-            if (d <= range) near.Add((d, key));
+            if (d <= range) _near.Add((d, key));
         }
-        near.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+        _near.Sort((a, b) => a.Distance.CompareTo(b.Distance));
         int resolution = Math.Clamp(Resolution, 64, 4096);
         int limit = Meitou ? (int)Math.Clamp(LayerBudget / ((long)resolution * resolution * 4) / 8 * 8, FaithfulSlots, MaxSlots) : FaithfulSlots;
-        if (near.Count > limit) near.RemoveRange(limit, near.Count - limit);
+        if (_near.Count > limit) _near.RemoveRange(limit, _near.Count - limit);
 
         // Meitou: the array grows by 8 layers when more cells are near than it holds (every layer drawn again); it does not shrink.
-        int need = Math.Max(FaithfulSlots, (near.Count + 7) / 8 * 8);
-        if (near.Count > 0 && (target is null || target.Desc.Width != resolution || layers < need))
+        int need = Math.Max(FaithfulSlots, (_near.Count + 7) / 8 * 8);
+        if (_near.Count > 0 && (_target is null || _target.Desc.Width != resolution || _layers < need))
         {
-            if (bindless is { } old) gpu.Bindless.Free(BindlessKind.Texture2DArray, old.Index);
-            bindless = null;
-            target?.Dispose();
-            layers = target is null || target.Desc.Width != resolution ? need : Math.Max(layers, need);
-            target = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, resolution, resolution, Layers: layers, Kind: TextureKind.Texture2DArray,
+            if (_bindless is { } old) _gpu.Bindless.Free(BindlessKind.Texture2DArray, old.Index);
+            _bindless = null;
+            _target?.Dispose();
+            _layers = _target is null || _target.Desc.Width != resolution ? need : Math.Max(_layers, need);
+            _target = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, resolution, resolution, Layers: _layers, Kind: TextureKind.Texture2DArray,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "terrain decals"));
-            Array.Clear(slots);
+            Array.Clear(_slots);
         }
 
         // A cell keeps its layer while it stays near; the others go to the layers left free.
-        drawn.Clear();
+        _drawn.Clear();
         Span<bool> taken = stackalloc bool[MaxSlots];
         Span<int> layerOf = stackalloc int[MaxSlots];
-        for (int i = 0; i < near.Count; i++)
+        for (int i = 0; i < _near.Count; i++)
         {
             layerOf[i] = -1;
-            for (int s = 0; s < layers; s++)
-                if (!taken[s] && slots[s].Version != 0 && slots[s].Key == near[i].Key) { layerOf[i] = s; taken[s] = true; break; }
+            for (int s = 0; s < _layers; s++)
+                if (!taken[s] && _slots[s].Version != 0 && _slots[s].Key == _near[i].Key) { layerOf[i] = s; taken[s] = true; break; }
         }
-        for (int i = 0; i < near.Count; i++)
+        for (int i = 0; i < _near.Count; i++)
         {
             if (layerOf[i] >= 0) continue;
-            for (int s = 0; s < layers; s++)
-                if (!taken[s]) { layerOf[i] = s; taken[s] = true; slots[s] = (near[i].Key, 0, 0, 0); break; }
+            for (int s = 0; s < _layers; s++)
+                if (!taken[s]) { layerOf[i] = s; taken[s] = true; _slots[s] = (_near[i].Key, 0, 0, 0); break; }
         }
 
         IGpuCommandList? cmd = null;
-        count = 0;
-        for (int i = 0; i < near.Count; i++)
+        _count = 0;
+        for (int i = 0; i < _near.Count; i++)
         {
-            uint key = near[i].Key;
+            uint key = _near[i].Key;
             int layer = layerOf[i];
-            drawn.Add(key);
+            _drawn.Add(key);
             var (column, row) = TerrainDecalCells.Cell(key);
-            cells[count++] = new Vector4(column, row, layer, 0);
+            _cells[_count++] = new Vector4(column, row, layer, 0);
             int version = store.CellVersion(key);
-            if (slots[layer].Version == version) continue;
-            cmd ??= gpu.BeginNative("terrain decals");
+            if (_slots[layer].Version == version) continue;
+            cmd ??= _gpu.BeginNative("terrain decals");
             // Only decals added since the layer was drawn: those drawn over it (a battle's cells change every few ticks); any gone: the layer cleared and drawn again.
             int rewrite = store.CellRewrite(key);
             var appended = store.Appended(key);
-            var slot = slots[layer];
+            var slot = _slots[layer];
             if (slot.Version != 0 && slot.Rewrite == rewrite && slot.Appended <= appended.Length) DrawLayer(cmd, layer, store, appended[slot.Appended..], clear: false);
             else DrawLayer(cmd, layer, store, store.In(key), clear: true);
-            slots[layer] = (key, version, rewrite, appended.Length);
+            _slots[layer] = (key, version, rewrite, appended.Length);
         }
         if (cmd is not null)
         {
             cmd.Order();
-            gpu.EndNative(cmd);
+            _gpu.EndNative(cmd);
         }
-        if (count > 0 && target is not null && (bindless is not { } known || known.Texture != target))
-            bindless = (target, gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(Linear(), target.View())));
+        if (_count > 0 && _target is not null && (_bindless is not { } known || known.Texture != _target))
+            _bindless = (_target, _gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(Linear(), _target.View())));
     }
 
     /// <summary>
@@ -215,15 +215,15 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     void DrawLayer(IGpuCommandList cmd, int layer, TerrainDecalStore store, ReadOnlySpan<TerrainDecal> decals, bool clear)
     {
         if (!clear && decals.IsEmpty) return;
-        if (instances.Length < decals.Length) instances = new DecalInstance[Math.Max(decals.Length, instances.Length * 2)];
+        if (_instances.Length < decals.Length) _instances = new DecalInstance[Math.Max(decals.Length, _instances.Length * 2)];
         int n = 0;
         foreach (var d in decals)
         {
-            var indices = spriteIndex[(int)d.Type];
+            var indices = _spriteIndex[(int)d.Type];
             if (d.Variant >= indices.Length || indices[d.Variant] == uint.MaxValue) continue;
             float angle = d.Rotation / 1000f, s = MathF.Sin(angle), c = MathF.Cos(angle);
             uint abgr = d.Colour;
-            instances[n++] = new DecalInstance
+            _instances[n++] = new DecalInstance
             {
                 Quad = new Vector4(d.LocalX * 2 / 1000f - 1, d.LocalZ * 2 / 1000f - 1, d.HalfWidth / 10240f * s, d.HalfWidth / 10240f * c),
                 AxisH = new Vector2(d.HalfHeight / 10240f * c, -d.HalfHeight / 10240f * s),
@@ -231,19 +231,19 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
                 Sprite = indices[d.Variant],
             };
         }
-        var t = PassTargets.Of(target, null);
-        var colourTarget = new RenderTarget(target!.Attachment(0, layer), clear ? LoadOp.Clear : LoadOp.Load,
+        var t = PassTargets.Of(_target, null);
+        var colourTarget = new RenderTarget(_target!.Attachment(0, layer), clear ? LoadOp.Clear : LoadOp.Load,
             clear ? new ClearColour(0f, 0f, 0f, 0f) : default);
         t = t with { Colour = colourTarget };
         cmd.BeginRendering(t.Rendering);
         if (n > 0)
         {
-            var rows = gpu.Frame.AllocateConstants((ulong)(n * DecalInstance.Size), 16);
-            MemoryMarshal.AsBytes(instances.AsSpan(0, n)).CopyTo(new Span<byte>(rows.Pointer, n * DecalInstance.Size));
-            var state = DrawState.For(t.Formats, gpu.DepthClamp, blend: Blend);
+            var rows = _gpu.Frame.AllocateConstants((ulong)(n * DecalInstance.Size), 16);
+            MemoryMarshal.AsBytes(_instances.AsSpan(0, n)).CopyTo(new Span<byte>(rows.Pointer, n * DecalInstance.Size));
+            var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: Blend);
             state.Record(cmd, t);
-            cmd.BindPipeline(pipeline ??= gpu.Pipelines.Get(state.Pipeline(program, Rows, PrimitiveType.TriangleStrip, t.Formats, "terrain decals")));
-            frame.Bind(cmd, program, default);
+            cmd.BindPipeline(_pipeline ??= _gpu.Pipelines.Get(state.Pipeline(_program, Rows, PrimitiveType.TriangleStrip, t.Formats, "terrain decals")));
+            _frame.Bind(cmd, _program, default);
             Span<GpuBufferBinding> buffers = [new(rows.Handle, rows.Offset), new(rows.Handle, rows.Offset + 16), new(rows.Handle, rows.Offset + 32), new(rows.Handle, rows.Offset + 40)];
             cmd.BindVertexBuffers(0, buffers);
             cmd.Draw(4, (uint)n);
@@ -254,42 +254,42 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     /// <summary>The sprites into the bindless table, again with new samplers when the LOD bias they are sampled with changed.</summary>
     void RegisterSprites()
     {
-        if (gpu.LodBias == spriteBias) return;
-        spriteBias = gpu.LodBias;
-        for (int t = 0; t < sprites.Length; t++)
-            for (int v = 0; v < sprites[t].Length; v++)
+        if (_gpu.LodBias == _spriteBias) return;
+        _spriteBias = _gpu.LodBias;
+        for (int t = 0; t < _sprites.Length; t++)
+            for (int v = 0; v < _sprites[t].Length; v++)
             {
-                if (sprites[t][v] is not { } image) continue;
-                if (spriteIndex[t][v] == uint.MaxValue) spriteIndex[t][v] = gpu.Bindless.Register(BindlessKind.Texture2D, image.Sampled());
-                else gpu.Bindless.Update(BindlessKind.Texture2D, spriteIndex[t][v], image.Sampled());
+                if (_sprites[t][v] is not { } image) continue;
+                if (_spriteIndex[t][v] == uint.MaxValue) _spriteIndex[t][v] = _gpu.Bindless.Register(BindlessKind.Texture2D, image.Sampled());
+                else _gpu.Bindless.Update(BindlessKind.Texture2D, _spriteIndex[t][v], image.Sampled());
             }
     }
 
     /// <summary>The cells for the terrain's colour shader (<c>uBlood</c>, <c>uBloodCount</c>, <c>uBloodCellSize</c>, <c>uBloodCells</c>): none until a cell is drawn.</summary>
     internal void Apply(ref TerrainConstants c)
     {
-        if (count == 0 || bindless is not { } b) return;
+        if (_count == 0 || _bindless is not { } b) return;
         c.Blood = b.Index;
-        c.BloodCount = count;
+        c.BloodCount = _count;
         c.BloodCellSize = TerrainDecalCells.Size;
-        for (int i = 0; i < count; i++) c.BloodCells[i] = cells[i];
+        for (int i = 0; i < _count; i++) c.BloodCells[i] = _cells[i];
     }
 
-    GpuSampler Linear() => gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
+    GpuSampler Linear() => _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
     public void Dispose()
     {
         DisposeSurfaces();
-        if (bindless is { } b) gpu.Bindless.Free(BindlessKind.Texture2DArray, b.Index);
-        target?.Dispose();
-        foreach (var list in spriteIndex)
+        if (_bindless is { } b) _gpu.Bindless.Free(BindlessKind.Texture2DArray, b.Index);
+        _target?.Dispose();
+        foreach (var list in _spriteIndex)
             foreach (uint index in list)
-                if (index != uint.MaxValue) gpu.Bindless.Free(BindlessKind.Texture2D, index);
-        foreach (var list in sprites)
+                if (index != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, index);
+        foreach (var list in _sprites)
             foreach (var image in list) image?.Dispose();
-        gpu.Pipelines.Forget(program);
-        gpu.Shaders.Dispose(program);
-        frame.Dispose();
+        _gpu.Pipelines.Forget(_program);
+        _gpu.Shaders.Dispose(_program);
+        _frame.Dispose();
     }
 }

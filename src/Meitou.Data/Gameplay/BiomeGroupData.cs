@@ -42,7 +42,7 @@ public sealed record BiomeGroupData
     }
 
     /// <summary>Every BIOME_GROUP record, in the database's order.</summary>
-    public static List<BiomeGroupData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.BIOME_GROUP).Select(From)];
+    public static List<BiomeGroupData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.BiomeGroup).Select(From)];
 }
 
 /// <summary>
@@ -53,19 +53,19 @@ public sealed record BiomeGroupData
 /// </summary>
 public sealed class BiomeMap
 {
-    readonly int[] cells;
+    readonly int[] _cells;
 
     public BiomeMap(IReadOnlyList<BiomeGroupData> groups, int[] cellGroups)
     {
         if (cellGroups.Length != WeatherAreas.Cells * WeatherAreas.Cells) throw new ArgumentException("Expected 64 x 64 cells.", nameof(cellGroups));
         Groups = groups;
-        cells = cellGroups;
+        _cells = cellGroups;
     }
 
     public IReadOnlyList<BiomeGroupData> Groups { get; }
 
     /// <summary>The group of a cell, a position in <see cref="Groups"/>; -1 outside the map or when no group applies.</summary>
-    public int GroupOf(int cx, int cz) => WeatherAreas.InMap(cx, cz) ? cells[cz * WeatherAreas.Cells + cx] : -1;
+    public int GroupOf(int cx, int cz) => WeatherAreas.InMap(cx, cz) ? _cells[cz * WeatherAreas.Cells + cx] : -1;
 
     /// <summary>Paints the cells from the areas map's colours (null: every cell is NONE).</summary>
     public static BiomeMap Create(IReadOnlyList<BiomeGroupData> groups, WeatherAreas? areas)

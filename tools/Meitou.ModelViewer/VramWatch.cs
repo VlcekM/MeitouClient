@@ -12,19 +12,19 @@ namespace Meitou.ModelViewer;
 /// </summary>
 sealed class VramWatch : IDisposable
 {
-    static readonly Lock gate = new();
-    static ulong peakUsed, budget;
-    readonly CancellationTokenSource stop = new();
-    readonly Thread thread;
+    static readonly Lock Gate = new();
+    static ulong s_peakUsed, s_budget;
+    readonly CancellationTokenSource _stop = new();
+    readonly Thread _thread;
 
     VramWatch(VulkanDevice device, double limit)
     {
-        thread = new Thread(() =>
+        _thread = new Thread(() =>
         {
-            while (!stop.IsCancellationRequested)
+            while (!_stop.IsCancellationRequested)
             {
                 var (used, total) = device.VideoMemory();
-                lock (gate) { peakUsed = Math.Max(peakUsed, used); budget = total; }
+                lock (Gate) { s_peakUsed = Math.Max(s_peakUsed, used); s_budget = total; }
                 if (limit > 0 && total > 0 && used > limit * total)
                 {
                     Console.WriteLine($"vram      ABORT: {used / 1048576.0:0} MB in use of a {total / 1048576.0:0} MB budget ({100.0 * used / total:0.0}%, limit {limit * 100:0}%)");
@@ -32,10 +32,10 @@ sealed class VramWatch : IDisposable
                     Console.Error.Flush();
                     Terminate(9);
                 }
-                stop.Token.WaitHandle.WaitOne(100);
+                _stop.Token.WaitHandle.WaitOne(100);
             }
         }) { IsBackground = true, Name = "vram watch", Priority = ThreadPriority.AboveNormal };
-        thread.Start();
+        _thread.Start();
     }
 
     /// <summary>Ends the process at once. <c>Environment.Exit</c> unloads the driver's DLLs, and with the render thread inside the driver near the
@@ -62,13 +62,13 @@ sealed class VramWatch : IDisposable
     /// <summary>The peak device-local use seen so far and the budget.</summary>
     public static string Describe()
     {
-        lock (gate) return $"peak {peakUsed / 1048576.0:0} MB in use of a {budget / 1048576.0:0} MB budget ({(budget > 0 ? 100.0 * peakUsed / budget : 0):0.0}%)";
+        lock (Gate) return $"peak {s_peakUsed / 1048576.0:0} MB in use of a {s_budget / 1048576.0:0} MB budget ({(s_budget > 0 ? 100.0 * s_peakUsed / s_budget : 0):0.0}%)";
     }
 
     public void Dispose()
     {
-        stop.Cancel();
-        thread.Join();
-        stop.Dispose();
+        _stop.Cancel();
+        _thread.Join();
+        _stop.Dispose();
     }
 }

@@ -53,9 +53,18 @@ static class FeedbackSender
             status("Sending...");
             var form = new JsonObject
             {
-                ["title"] = p.Form.Title, ["body"] = p.Form.Body, ["version"] = p.Version, ["commit"] = p.Commit, ["platform"] = p.Platform, ["discord"] = p.Form.Discord,
+                ["title"] = p.Form.Title,
+                ["body"] = p.Form.Body,
+                ["version"] = p.Version,
+                ["commit"] = p.Commit,
+                ["platform"] = p.Platform,
+                ["discord"] = p.Form.Discord,
                 ["mods"] = new JsonArray([.. p.Mods.Select(m => (JsonNode)m)]),
-                ["screenshot"] = png is not null, ["navmesh"] = navPng is not null, ["location"] = p.Location, ["save"] = zip is not null, ["log"] = log is not null,
+                ["screenshot"] = png is not null,
+                ["navmesh"] = navPng is not null,
+                ["location"] = p.Location,
+                ["save"] = zip is not null,
+                ["log"] = log is not null,
             };
             var created = await Answer(await Http.PostAsync($"{ServiceUrl}/feedback", new StringContent(form.ToJsonString(), Encoding.UTF8, "application/json")));
             string token = (string)created["token"]!;

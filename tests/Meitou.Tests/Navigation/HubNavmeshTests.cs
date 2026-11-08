@@ -12,24 +12,24 @@ namespace Meitou.Tests.Navigation;
 public class HubNavmeshTests
 {
     static readonly object Gate = new();
-    static readonly Dictionary<ZoneCoordinate, (ZoneGeometry Geometry, ZoneNavMesh Full)> built = [];
+    static readonly Dictionary<ZoneCoordinate, (ZoneGeometry Geometry, ZoneNavMesh Full)> Built = [];
 
     // With the zones' interior files, as the game and `meitou-tools navmesh --fingerprint` load them (the pins come from the latter).
-    static readonly Lazy<WorldLevelData?> levels = new(() => InstallData.Install is { } i ? WorldLevelData.LoadBaseGame(i, includeInteriors: true) : null);
+    static readonly Lazy<WorldLevelData?> Levels = new(() => InstallData.Install is { } i ? WorldLevelData.LoadBaseGame(i, includeInteriors: true) : null);
 
     static (GameInstall Install, GameDatabase Db, WorldLevelData Levels)? Load() =>
-        InstallData.Install is { } install ? (install, InstallData.FullLoadOrder!, levels.Value!) : null;
+        InstallData.Install is { } install ? (install, InstallData.FullLoadOrder!, Levels.Value!) : null;
 
     static (ZoneGeometry Geometry, ZoneNavMesh Full) Zone(ZoneCoordinate zone)
     {
         var (install, db, levels) = Load()!.Value;
         lock (Gate)
         {
-            if (built.TryGetValue(zone, out var b)) return b;
+            if (Built.TryGetValue(zone, out var b)) return b;
             using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
             var g = gatherer.Gather(zone);
             var mesh = NavMeshPipeline.BuildZone(gatherer, g, new NavBuildSettings(), out _);
-            return built[zone] = (g, mesh);
+            return Built[zone] = (g, mesh);
         }
     }
 

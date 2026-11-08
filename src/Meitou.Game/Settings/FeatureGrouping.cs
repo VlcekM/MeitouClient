@@ -64,7 +64,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
     }
 
     /// <summary>The groups the player opened (this session).</summary>
-    internal readonly HashSet<string> openGroups = [];
+    internal readonly HashSet<string> OpenGroups = [];
 
     /// <summary>
     /// Where a Graphics row stands on its tab, in both menus: its feature's place in <see cref="FeatureGroups"/>, the rows of no feature after every feature
@@ -92,12 +92,15 @@ sealed class FeatureGrouping(SettingsMenu menu)
             var members = rows.Where(r => r.Raw is { } m && InGroup(group, m))
                 .OrderBy(r => Array.IndexOf(group.Members, r.Raw) is var i and >= 0 ? i : int.MaxValue).ToList();
             var header = rows.FirstOrDefault(r => r.Raw == group.Header) ?? new SettingsMenu.Entry(group.Title ?? group.Id, group.Hint);
-            bool open = openGroups.Contains(group.Id);
+            bool open = OpenGroups.Contains(group.Id);
             var resets = new[] { header }.Concat(members).Where(m => m.Changed).Select(m => m.Reset).OfType<Action>().ToList();
             output.Add(header with
             {
-                Open = members.Count > 0 ? open : null, GroupId = group.Id, Changed = header.Changed || members.Any(m => m.Changed),
-                Reset = resets.Count > 0 ? () => { foreach (var reset in resets) reset(); } : null,
+                Open = members.Count > 0 ? open : null,
+                GroupId = group.Id,
+                Changed = header.Changed || members.Any(m => m.Changed),
+                Reset = resets.Count > 0 ? () => { foreach (var reset in resets) reset(); }
+                : null,
             });
             string name = header.Label;
             if (open) output.AddRange(members.Select(m => m with { Depth = 1, Label = WithinGroup(m.Label, name) }));
@@ -109,7 +112,7 @@ sealed class FeatureGrouping(SettingsMenu menu)
         label.Length > group.Length + 1 && label.StartsWith(group + " ", StringComparison.OrdinalIgnoreCase)
             ? char.ToUpperInvariant(label[group.Length + 1]) + label[(group.Length + 2)..] : label;
 
-    internal void ToggleGroup(string id) { if (!openGroups.Remove(id)) openGroups.Add(id); menu.focus = -1; }
+    internal void ToggleGroup(string id) { if (!OpenGroups.Remove(id)) OpenGroups.Add(id); menu.Focus = -1; }
 
-    internal void ShowcaseOpen(params string[] ids) { foreach (var id in ids) openGroups.Add(id); }
+    internal void ShowcaseOpen(params string[] ids) { foreach (var id in ids) OpenGroups.Add(id); }
 }

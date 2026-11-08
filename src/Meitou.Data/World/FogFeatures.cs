@@ -164,34 +164,34 @@ public static class FogFeatures
             switch (type)
             {
                 case FogFeatureType.Sphere:
-                {
-                    var p = V3(data, ref at);
-                    float radius = F(data, ref at);
-                    list.Add(new FogFeature(name, type, colour, alpha, distance, 0, p, p, radius, []));
-                    break;
-                }
-                case FogFeatureType.Beam:
-                {
-                    var p = V3(data, ref at);
-                    var end = V3(data, ref at);
-                    float radius = F(data, ref at), edge = F(data, ref at);
-                    list.Add(new FogFeature(name, type, colour, alpha, distance, edge, p, end, radius, []));
-                    break;
-                }
-                case FogFeatureType.Block:
-                {
-                    float edge = F(data, ref at);
-                    var planes = new Vector4[7];
-                    // Stored as (normal, d) and made Ogre::Plane(normal, -d), whose constant is d; the shader's w is minus the constant
-                    // (FUN_14010b6a0), so inside is dot(normal, p) < -d.
-                    for (int k = 0; k < 7; k++)
                     {
-                        var n = V3(data, ref at);
-                        planes[k] = new Vector4(n, -F(data, ref at));
+                        var p = V3(data, ref at);
+                        float radius = F(data, ref at);
+                        list.Add(new FogFeature(name, type, colour, alpha, distance, 0, p, p, radius, []));
+                        break;
                     }
-                    list.Add(new FogFeature(name, type, colour, alpha, distance, edge, Vector3.Zero, Vector3.Zero, 0, planes));
-                    break;
-                }
+                case FogFeatureType.Beam:
+                    {
+                        var p = V3(data, ref at);
+                        var end = V3(data, ref at);
+                        float radius = F(data, ref at), edge = F(data, ref at);
+                        list.Add(new FogFeature(name, type, colour, alpha, distance, edge, p, end, radius, []));
+                        break;
+                    }
+                case FogFeatureType.Block:
+                    {
+                        float edge = F(data, ref at);
+                        var planes = new Vector4[7];
+                        // Stored as (normal, d) and made Ogre::Plane(normal, -d), whose constant is d; the shader's w is minus the constant
+                        // (FUN_14010b6a0), so inside is dot(normal, p) < -d.
+                        for (int k = 0; k < 7; k++)
+                        {
+                            var n = V3(data, ref at);
+                            planes[k] = new Vector4(n, -F(data, ref at));
+                        }
+                        list.Add(new FogFeature(name, type, colour, alpha, distance, edge, Vector3.Zero, Vector3.Zero, 0, planes));
+                        break;
+                    }
                 default:
                     throw new FormatException($"fogfeatures: volume {i} ('{name}') has unknown type {(byte)type}");
             }

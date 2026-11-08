@@ -45,14 +45,14 @@ public sealed class TurretSounds(WwisePlayer player)
         public ulong Object;
     }
 
-    readonly Dictionary<string, Turret> turrets = new(StringComparer.Ordinal);
-    ulong next = FirstObject;
+    readonly Dictionary<string, Turret> _turrets = new(StringComparer.Ordinal);
+    ulong _next = FirstObject;
 
     /// <summary>Events posted since the world was set (statistics).</summary>
     public int Posted { get; private set; }
 
     /// <summary>Turrets with a state (ever manned in this world).</summary>
-    public int Count => turrets.Count;
+    public int Count => _turrets.Count;
 
     /// <summary>
     /// One frame. <paramref name="manned"/> are the turrets with a gunner now (a target assigns the aim point, which stays when the gunner goes); every turret that has a state turns toward its aim point
@@ -62,11 +62,11 @@ public sealed class TurretSounds(WwisePlayer player)
     {
         foreach (var m in manned)
         {
-            if (!turrets.TryGetValue(m.Key, out var t)) turrets[m.Key] = t = new Turret(m.Mount);
+            if (!_turrets.TryGetValue(m.Key, out var t)) _turrets[m.Key] = t = new Turret(m.Mount);
             else if (!ReferenceEquals(t.Mount, m.Mount)) (t.Mount, t.Angles) = (m.Mount, new float[m.Mount.Parts.Count]);
             if (m.Target is { } target) t.Target = target;
         }
-        foreach (var t in turrets.Values)
+        foreach (var t in _turrets.Values)
         {
             float worst = t.Target is { } aim ? Turn(t, aim, t.Mount.AimSpeed * seconds) : -99;
             if (t.Counter == 0 && worst > MovingDegrees)
@@ -86,7 +86,7 @@ public sealed class TurretSounds(WwisePlayer player)
         if (player.HeardDistanceSquared(t.Mount.Position, eye) > Range * Range) return;
         if (t.Object == 0)
         {
-            t.Object = next++;
+            t.Object = _next++;
             player.RegisterObject(t.Object);
             player.SetPosition(t.Object, t.Mount.Position);
         }
@@ -104,9 +104,9 @@ public sealed class TurretSounds(WwisePlayer player)
     /// <summary>A new world or the main menu: every object is let go.</summary>
     public void Clear()
     {
-        foreach (var t in turrets.Values)
+        foreach (var t in _turrets.Values)
             if (t.Object != 0) player.UnregisterObject(t.Object);
-        turrets.Clear();
+        _turrets.Clear();
         Posted = 0;
     }
 }

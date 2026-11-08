@@ -128,11 +128,11 @@ public sealed class FoliageCardMask
 
     const uint Magic = 0x4D52544D;   // "MTRM"
     static readonly ConcurrentDictionary<(string Path, byte Cutoff), Lazy<FoliageCardMask?>> Memo = new();
-    static long built, hits, bytesWritten;
-    static double buildMs, loadMs;
+    static long s_built, s_hits, s_bytesWritten;
+    static double s_buildMs, s_loadMs;
 
     /// <summary>Masks built, read from the cache, and the cache bytes written (for the log).</summary>
-    public static string Summary => $"{Interlocked.Read(ref built)} built ({buildMs:0} ms), {Interlocked.Read(ref hits)} from the cache ({loadMs:0} ms), {Interlocked.Read(ref bytesWritten) / 1024} KB written";
+    public static string Summary => $"{Interlocked.Read(ref s_built)} built ({s_buildMs:0} ms), {Interlocked.Read(ref s_hits)} from the cache ({s_loadMs:0} ms), {Interlocked.Read(ref s_bytesWritten) / 1024} KB written";
 
     /// <summary>The mask of the texture file at <paramref name="path"/> for a cut-out at <paramref name="threshold"/> (0-1), from the cache or built and cached; null when the file cannot be decoded. Thread-safe.</summary>
     public static FoliageCardMask? Obtain(string path, float threshold)
@@ -150,13 +150,13 @@ public sealed class FoliageCardMask
             string cache = PathFor(Path.GetFileNameWithoutExtension(path), file, cutoff);
             if (TryRead(cache) is { } cached)
             {
-                lock (Memo) { hits++; loadMs += watch.Elapsed.TotalMilliseconds; }
+                lock (Memo) { s_hits++; s_loadMs += watch.Elapsed.TotalMilliseconds; }
                 return cached;
             }
             var (alpha, w, h) = DecodeAlpha(file);
             var mask = FromAlpha(alpha, w, h, cutoff, CoarsestSize);
             long bytes = Write(cache, mask);
-            lock (Memo) { built++; buildMs += watch.Elapsed.TotalMilliseconds; bytesWritten += bytes; }
+            lock (Memo) { s_built++; s_buildMs += watch.Elapsed.TotalMilliseconds; s_bytesWritten += bytes; }
             return mask;
         }
         catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException or UnauthorizedAccessException or OutOfMemoryException)

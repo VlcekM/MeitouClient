@@ -141,7 +141,7 @@ public sealed partial class CrimeSystem
         if (watches)
         {
             p = 1.1f * Thievery(c) * 0.01f;
-            if (item is not null && Items.InventoryCommands.IsEquipmentSection(item.Section)) p *= item.Type == Meitou.Data.Fcs.FcsRecordType.ARMOUR ? 0.75f * 0.75f : 0.75f;
+            if (item is not null && Items.InventoryCommands.IsEquipmentSection(item.Section)) p *= item.Type == Data.Fcs.FcsRecordType.Armour ? 0.75f * 0.75f : 0.75f;
         }
         return Roll(world, thief, watches ? owner : -1, p, o.Faction, ownerId, Rng.Key(ownerId));
     }
@@ -163,7 +163,7 @@ public sealed partial class CrimeSystem
             else
             {
                 if (watcher.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, watcherId);
-                else if (table.Next[w].Task == (byte)CharacterTask.Rest) TaskStart.Become(world, w, CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.IDLE, TaskSource.Npc);
+                else if (table.Next[w].Task == (byte)CharacterTask.Rest) TaskStart.Become(world, w, CharacterTask.Idle, Data.Gameplay.Ai.TaskType.Idle, TaskSource.Npc);
                 // One staying low or playing dead stands (posture 0, docs/game/ragdolls.md "Staying low").
                 if (watcher.Medical is { } low) low.StandUp();
                 world.Defer(new Dialogue.DialogueEvent(watcherId, thiefId, CaughtEvent) { Tick = world.Tick + 1 });

@@ -54,7 +54,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         var st = combat.StateOf(new CharacterId(i, n.Generation));
         int t = st.TargetSlot;
         if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration) return;
-        const ushort Path = (ushort)MoveFlags.AnyPath;
+        const ushort path = (ushort)MoveFlags.AnyPath;
         var d = next[t].Position - n.Position;
         var cold = table.Cold(i)!;
         var tc = table.Cold(t);
@@ -105,9 +105,9 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         if (st.Down || st.AttackTech >= 0 || st.ReactTech >= 0 || world.Tick < st.StunUntil || shooting || inReach || holding)
         {
             // In reach, mid-swing or staggered (the hit reaction carries it), or holding position: stand and fight.
-            if ((n.Flags & Path) != 0)
+            if ((n.Flags & path) != 0)
             {
-                n.Flags = (ushort)(n.Flags & ~Path);
+                n.Flags = (ushort)(n.Flags & ~path);
                 n.PathCursor = 0;
                 table.Cold(i)!.PathRequest = 0;
             }
@@ -119,7 +119,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         {
             cold.PathFailed = true;
             NotePathFailure(world, i, cold, new CharacterId(t, next[t].Generation), endReach);
-            n.Flags = (ushort)(n.Flags & ~Path);
+            n.Flags = (ushort)(n.Flags & ~path);
             n.PathCursor = 0;
             cold.PathRequest = 0;
             n.TaskTime = RepathSeconds;
@@ -321,11 +321,11 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     bool SlaveHelpAllowed(World world, CharacterCold helper, Vector3 at) => SlaveHelpAllowed(world, Towns, combat.Relations, helper, at);
 
     /// <inheritdoc cref="SlaveHelpAllowed(World, CharacterCold, Vector3)"/>
-    internal static bool SlaveHelpAllowed(World world, PopulationData? towns, Meitou.Data.Gameplay.FactionRelations? factions, CharacterCold helper, Vector3 at)
+    internal static bool SlaveHelpAllowed(World world, PopulationData? towns, Data.Gameplay.FactionRelations? factions, CharacterCold helper, Vector3 at)
     {
         if (towns is not { } data || factions is not { } relations) return true;
-        if (relations.Contains(helper.Faction) && relations.Factions[helper.Faction].FundamentalType == Meitou.Data.Gameplay.FundamentalType.Bandit) return true;
-        var town = Ai.AiSystem.TownAt(data, world, at);
+        if (relations.Contains(helper.Faction) && relations.Factions[helper.Faction].FundamentalType == Data.Gameplay.FundamentalType.Bandit) return true;
+        var town = AiSystem.TownAt(data, world, at);
         if (town.Site < 0) return true;
         int owner = town.Site < data.SiteFactions.Count ? data.SiteFactions[town.Site] : -1;
         return !(relations.Contains(owner) && relations.Factions[owner].BooksBounties);
@@ -333,19 +333,19 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
 
     public const int CheckEveryTicks = 15;
 
-    readonly List<int> guards = [];
+    readonly List<int> _guards = [];
     /// <summary>
     /// Per attacker slot: the target (slot, generation) it last took, the tick it was taken, and whether that target has been alerted (<see cref="CombatSystem.Alerts"/>,
     /// or a shot for a shooter).
     /// </summary>
-    int[] alertSlot = [], alertGeneration = [];
-    long[] alertTick = [];
-    bool[] alerted = [], justAlerted = [];
+    int[] _alertSlot = [], _alertGeneration = [];
+    long[] _alertTick = [];
+    bool[] _alerted = [], _justAlerted = [];
 
-    readonly List<(int Foe, List<CharacterId> Joiners)> byFoe = [];
+    readonly List<(int Foe, List<CharacterId> Joiners)> _byFoe = [];
     /// <summary>This tick's attacker per attacked player character (target slot, attacker slot; <see cref="OfferSelf"/>), for the decision step's Self preservation.</summary>
-    readonly Dictionary<int, int> selfFoes = [];
-    long selfFoesTick = -1;
+    readonly Dictionary<int, int> _selfFoes = [];
+    long _selfFoesTick = -1;
 
     public void RegisterSources(DecisionSystem decisions)
     {
@@ -377,7 +377,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             var cold = table.Cold(slot)!;
             var task = (CharacterTask)table.Next[slot].Task;
             if (task == CharacterTask.Attack)
-                return cold.Running is { Row: Meitou.Data.Gameplay.Ai.TaskType.ATTACK_ATTACKERS_OF } run && run.Runs(task) ? DecisionCheck.Runs : DecisionCheck.No("fighting on another plan");
+                return cold.Running is { Row: Data.Gameplay.Ai.TaskType.AttackAttackersOf } run && run.Runs(task) ? DecisionCheck.Runs : DecisionCheck.No("fighting on another plan");
             // Desire 0: Passive, or sneaking outside a fight (FUN_1405c9750), or an obedient slave (FUN_140597380 job 187).
             if (!Helps(table, slot, [])) return DecisionCheck.No("cannot fight, or desire 0 (Passive, or sneaking outside a fight)");
             if (cold.SlaveState == 1 && Kidnap.ObedientSlave.HasJob(cold)) return DecisionCheck.No("an obedient slave (desire 0)");
@@ -475,19 +475,19 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// a melee attacker) and, on Hold, passing its post test (<see cref="Orders.HoldPost"/>).
     /// </summary>
     public int SelfFoe(World world, int slot) =>
-        selfFoesTick == world.Tick && selfFoes.TryGetValue(slot, out int a) && world.Characters.Next[a].Alive && world.Characters.Cold(a) is { Medical.Incapacitated: false } ? a : -1;
+        _selfFoesTick == world.Tick && _selfFoes.TryGetValue(slot, out int a) && world.Characters.Next[a].Alive && world.Characters.Cold(a) is { Medical.Incapacitated: false } ? a : -1;
 
     void OfferSelf(CharacterTable table, int a, int t)
     {
         var next = table.Next;
-        if (table.Cold(t) is not { IsPlayer: true } tc || selfFoes.ContainsKey(t)) return;
+        if (table.Cold(t) is not { IsPlayer: true } tc || _selfFoes.ContainsKey(t)) return;
         var st = combat.StateOf(new CharacterId(a, next[a].Generation));
         if (!next[t].Alive || next[t].Generation != st.TargetGeneration || table.Cold(a) is not { Medical.Incapacitated: false } ac) return;
         if (st.Ranged && tc.Gunning is not null) return;
         var d = next[a].Position - next[t].Position;
         if (d.X * d.X + d.Z * d.Z > SelfDefenceReach * SelfDefenceReach) return;
         if (Orders.Holding(tc) && !Orders.HoldPost(next[t].Position, Orders.HoldPointOf(tc, next[t].Position), next[a].Position, next[a].Velocity, next[a].Yaw, ac.Medical?.Crawling == true || st.AttackTech >= 0, true)) return;
-        selfFoes.Add(t, a);
+        _selfFoes.Add(t, a);
     }
 
     /// <summary>
@@ -505,7 +505,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             var table = world.Characters;
             var cold = table.Cold(slot)!;
             var task = (CharacterTask)table.Next[slot].Task;
-            if (task == CharacterTask.Attack && cold.Running is { Row: Meitou.Data.Gameplay.Ai.TaskType.ATTACK_ATTACKERS_OF } run && run.Runs(task)) return DecisionCheck.Runs;
+            if (task == CharacterTask.Attack && cold.Running is { Row: Data.Gameplay.Ai.TaskType.AttackAttackersOf } run && run.Runs(task)) return DecisionCheck.Runs;
             if (cold is not { Fighter.CanAttack: true, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true }) return DecisionCheck.No("cannot fight");
             return owner.SelfFoe(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("no attacker in range");
         }
@@ -534,7 +534,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     bool AlertsNow(World world, int a, int t, in CombatSlot st)
     {
         if (!st.Ranged) return combat.Alerts(world, a, t);
-        return st.Shots > 0 && st.ShotTick >= alertTick[a] - 1;
+        return st.Shots > 0 && st.ShotTick >= _alertTick[a] - 1;
     }
 
     /// <summary>
@@ -573,39 +573,39 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     {
         var table = world.Characters;
         var next = table.Next;
-        if (alertSlot.Length < table.HighWater)
+        if (_alertSlot.Length < table.HighWater)
         {
-            int size = Math.Max(table.HighWater, alertSlot.Length * 2);
-            Array.Resize(ref alertSlot, size);
-            Array.Resize(ref alertGeneration, size);
-            Array.Resize(ref alertTick, size);
-            Array.Resize(ref alerted, size);
-            Array.Resize(ref justAlerted, size);
+            int size = Math.Max(table.HighWater, _alertSlot.Length * 2);
+            Array.Resize(ref _alertSlot, size);
+            Array.Resize(ref _alertGeneration, size);
+            Array.Resize(ref _alertTick, size);
+            Array.Resize(ref _alerted, size);
+            Array.Resize(ref _justAlerted, size);
         }
         // A target taken (or a blow landed) alerts at once and is answered in the same pass; the rest is looked at every CheckEveryTicks.
         bool fresh = false;
-        if (selfFoesTick != world.Tick) { selfFoes.Clear(); selfFoesTick = world.Tick; }
+        if (_selfFoesTick != world.Tick) { _selfFoes.Clear(); _selfFoesTick = world.Tick; }
         for (int a = 0; a < table.HighWater; a++)
         {
-            justAlerted[a] = false;
+            _justAlerted[a] = false;
             int t = next[a].Alive && next[a].Task == (byte)CharacterTask.Attack ? combat.StateOf(new CharacterId(a, next[a].Generation)).TargetSlot : -1;
             if (t < 0 || t >= table.HighWater)
             {
-                alertSlot[a] = -1;
+                _alertSlot[a] = -1;
                 continue;
             }
-            if (alertSlot[a] != t || alertGeneration[a] != next[t].Generation)
+            if (_alertSlot[a] != t || _alertGeneration[a] != next[t].Generation)
             {
-                alertSlot[a] = t;
-                alertGeneration[a] = next[t].Generation;
-                alertTick[a] = world.Tick;
-                alerted[a] = false;
+                _alertSlot[a] = t;
+                _alertGeneration[a] = next[t].Generation;
+                _alertTick[a] = world.Tick;
+                _alerted[a] = false;
             }
-            if (!alerted[a])
+            if (!_alerted[a])
             {
                 var st = combat.StateOf(new CharacterId(a, next[a].Generation));
                 if (!AlertsNow(world, a, t, st)) continue;
-                alerted[a] = justAlerted[a] = fresh = true;
+                _alerted[a] = _justAlerted[a] = fresh = true;
                 Alert(world, a, t, !st.Ranged);
             }
             OfferSelf(table, a, t);
@@ -613,13 +613,13 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         bool periodic = world.Tick % CheckEveryTicks == 0;
         if (!periodic && !fresh) return;
         // The bodyguards, in slot order, for Guards (each looked through the whole table per attacker before).
-        guards.Clear();
+        _guards.Clear();
         for (int s = 0; s < table.HighWater; s++)
-            if (next[s].Alive && table.Cold(s) is { FollowOrder.IsNone: false }) guards.Add(s);
+            if (next[s].Alive && table.Cold(s) is { FollowOrder.IsNone: false }) _guards.Add(s);
         var taken = new HashSet<int>();
         if (fresh)
             for (int a = 0; a < table.HighWater; a++)
-                if (justAlerted[a]) AskProtectors(world, table, a, alertSlot[a]);
+                if (_justAlerted[a]) AskProtectors(world, table, a, _alertSlot[a]);
         for (int a = 0; a < table.HighWater; a++)
         {
             if (!next[a].Alive || next[a].Task != (byte)CharacterTask.Attack) continue;
@@ -628,7 +628,7 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             int t = st.TargetSlot;
             if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration || table.Cold(a) is not { Medical.Incapacitated: false }) continue;
             // An attacker its target was not alerted to (the wall and floor filter) is left alone until a blow lands.
-            if (alertSlot[a] != t || !alerted[a] || !periodic && !justAlerted[a]) continue;
+            if (_alertSlot[a] != t || !_alerted[a] || !periodic && !_justAlerted[a]) continue;
             // A gunner leaves its turret only for a melee attacker (task 146's "!iAmBeingMeleeAttacked"); bolts do not bring it down.
             if (st.Ranged && table.Cold(t)?.Gunning is not null) continue;
             var defenders = new List<CharacterId>();
@@ -638,10 +638,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
                 defenders.Add(new(t, next[t].Generation));
                 taken.Add(t);
             }
-            else if (selfFoes.TryGetValue(t, out int own) && own == a) taken.Add(t);
+            else if (_selfFoes.TryGetValue(t, out int own) && own == a) taken.Add(t);
             // Squad mates and allies come only by their own goals (143, 15, 288 in the AI's chooser, AiSystem.Fights.cs; a player character's 15, JoinFight). Bodyguards of the attacked
             // character come too (Bodyguard, order 45).
-            Guards(world, table, t, a, defenders, taken, guards);
+            Guards(world, table, t, a, defenders, taken, _guards);
             // The Hold order takes on only an attacker its post test accepts (Orders.HoldPost).
             var from = next[a].Position;
             for (int k = defenders.Count - 1; k >= 0; k--)
@@ -655,16 +655,16 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             foreach (var d in defenders) if (table.Cold(d.Slot) is { IsPlayer: true }) world.Decisions.Claim(world, d.Slot);
             // Each one joining the attacked character's fight takes the attacker AI::findAttackerOf scores best for it (FUN_14099c3b0, Verified): grouped by that
             // attacker, in the order first chosen. The attacked character itself answers this attacker.
-            byFoe.Clear();
+            _byFoe.Clear();
             foreach (var d in defenders)
             {
                 int foe = d.Slot == t ? a : combat.BestAttackerOf(world, t, d.Slot);
                 if (foe < 0) foe = a;
-                int at = byFoe.FindIndex(g => g.Foe == foe);
-                if (at < 0) byFoe.Add((foe, [d]));
-                else byFoe[at].Joiners.Add(d);
+                int at = _byFoe.FindIndex(g => g.Foe == foe);
+                if (at < 0) _byFoe.Add((foe, [d]));
+                else _byFoe[at].Joiners.Add(d);
             }
-            foreach (var (foe, joiners) in byFoe)
+            foreach (var (foe, joiners) in _byFoe)
                 world.Defer(new AttackOrder(joiners, new CharacterId(foe, next[foe].Generation)) { Tick = world.Tick + 1, Defensive = true });
         }
     }

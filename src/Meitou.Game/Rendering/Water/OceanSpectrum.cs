@@ -118,12 +118,12 @@ public static class OceanSpectrum
     /// <summary>The fetch-limited JONSWAP spectrum (Hasselmann et al. 1973, the fetch relations as in Horvath 2015) for a wind of U m/s.</summary>
     readonly struct Jonswap
     {
-        readonly float alpha, peak;
+        readonly float _alpha, _peak;
 
         public Jonswap(float u)
         {
-            alpha = 0.076f * MathF.Pow(u * u / (Fetch * G), 0.22f);
-            peak = 22 * MathF.Pow(G * G / (u * Fetch), 1f / 3f);
+            _alpha = 0.076f * MathF.Pow(u * u / (Fetch * G), 0.22f);
+            _peak = 22 * MathF.Pow(G * G / (u * Fetch), 1f / 3f);
             Wind = u;
         }
 
@@ -132,17 +132,17 @@ public static class OceanSpectrum
         /// <summary>S(ω) in m²·s.</summary>
         public float S(float omega)
         {
-            float sigma = omega <= peak ? 0.07f : 0.09f;
-            float r = MathF.Exp(-(omega - peak) * (omega - peak) / (2 * sigma * sigma * peak * peak));
-            return alpha * G * G / MathF.Pow(omega, 5) * MathF.Exp(-1.25f * MathF.Pow(peak / omega, 4)) * MathF.Pow(3.3f, r);
+            float sigma = omega <= _peak ? 0.07f : 0.09f;
+            float r = MathF.Exp(-(omega - _peak) * (omega - _peak) / (2 * sigma * sigma * _peak * _peak));
+            return _alpha * G * G / MathF.Pow(omega, 5) * MathF.Exp(-1.25f * MathF.Pow(_peak / omega, 4)) * MathF.Pow(3.3f, r);
         }
 
         /// <summary>The share of a frequency's energy going at <paramref name="theta"/> off the wind: Q(s) |cos(θ/2)|^2s, s narrowest at the
         /// peak (Mitsuyasu's form), integrating to 1 over the circle.</summary>
         public float Spreading(float omega, float theta)
         {
-            float sp = 11.5f * MathF.Pow(peak * Wind / G, -2.5f);
-            float s = omega <= peak ? sp * MathF.Pow(omega / peak, 5) : sp * MathF.Pow(omega / peak, -2.5f);
+            float sp = 11.5f * MathF.Pow(_peak * Wind / G, -2.5f);
+            float s = omega <= _peak ? sp * MathF.Pow(omega / _peak, 5) : sp * MathF.Pow(omega / _peak, -2.5f);
             s = Math.Clamp(s, 1, 40);
             return Normalisation(s) * MathF.Pow(MathF.Abs(MathF.Cos(theta / 2)), 2 * s);
         }

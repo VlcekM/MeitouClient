@@ -105,7 +105,7 @@ public class DoorTests(ITestOutputHelper output)
         var systems = StandardSystems.Build(data, walk, new StandardSystemOptions
         {
             Parts = StandardParts.Movement | StandardParts.Pursuit | StandardParts.Body | StandardParts.Combat | StandardParts.Crime, SynchronousPaths = true,
-            Combat = new Meitou.Simulation.Combat.CombatOptions { SelfApproach = false, TickMedical = false },
+            Combat = new CombatOptions { SelfApproach = false, TickMedical = false },
         });
         using var world = new SimWorld(new WorldSettings { Seed = 3, MinPartitionSize = 1, PublishSnapshots = false }, walk, systems.Systems);
         world.Fixtures.RegisterSite(world, data, site);
@@ -120,7 +120,7 @@ public class DoorTests(ITestOutputHelper output)
         Assert.True(hardness > 0);
 
         var population = new PopulationSystem(data, new PopulationSettings());
-        string human = db.OfType(Meitou.Data.Fcs.FcsRecordType.CHARACTER)
+        string human = db.OfType(Data.Fcs.FcsRecordType.Character)
             .First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0 && db.Find(x.TargetStringId)?.Name == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
         var me = population.SpawnSandbox(world, human, new Vector2(b.Position.X, b.Position.Z), player: true, faction: data.PlayerFaction);
         var spot = world.Fixtures.DoorSpotOf(door)!.Value;
@@ -165,13 +165,13 @@ public class DoorTests(ITestOutputHelper output)
     public void A_bandit_outside_a_locked_gate_plans_to_bash_it_and_none_once_it_is_broken()
     {
         static Meitou.Data.Fcs.FcsRecord Rec(string id, Meitou.Data.Fcs.FcsRecordType type, string name) => SyntheticTown.Rec(id, type, name);
-        var owners = Rec("60-g", Meitou.Data.Fcs.FcsRecordType.FACTION, "owners");
-        var raiders = Rec("61-g", Meitou.Data.Fcs.FcsRecordType.FACTION, "raiders");
-        var leaf = Rec("62-g", Meitou.Data.Fcs.FcsRecordType.BUILDING, "Gate door");
-        var gateRecord = Rec("63-g", Meitou.Data.Fcs.FcsRecordType.BUILDING, "Gate");
+        var owners = Rec("60-g", Data.Fcs.FcsRecordType.Faction, "owners");
+        var raiders = Rec("61-g", Data.Fcs.FcsRecordType.Faction, "raiders");
+        var leaf = Rec("62-g", Data.Fcs.FcsRecordType.Building, "Gate door");
+        var gateRecord = Rec("63-g", Data.Fcs.FcsRecordType.Building, "Gate");
         gateRecord.Bools["is wall gate"] = true;
         gateRecord.References["doors"] = [SyntheticTown.Ref("62-g")];
-        var town = Rec("64-g", Meitou.Data.Fcs.FcsRecordType.TOWN, "Walled");
+        var town = Rec("64-g", Data.Fcs.FcsRecordType.Town, "Walled");
         town.References["faction"] = [SyntheticTown.Ref("60-g")];
         var file = new Meitou.Data.Fcs.FcsFile();
         file.Records.AddRange([owners, raiders, leaf, gateRecord, town]);
@@ -193,9 +193,9 @@ public class DoorTests(ITestOutputHelper output)
 
         CharacterId Spawn(float dz, int faction)
         {
-            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
+            var cold = new Combat.Combatant { Name = "raider" }.MakeCold();
             cold.Faction = faction;
-            cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
+            cold.NpcClass = Data.Gameplay.FundamentalType.Bandit;
             return world.Characters.Spawn(new CharacterHot { Position = SyntheticTown.Centre + new Vector3(0, 0, dz), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Attack }, cold, 0);
         }
         var raider = Spawn(-300, data.FactionIndex("61-g"));
@@ -219,12 +219,12 @@ public class DoorTests(ITestOutputHelper output)
     [Fact]
     public void A_character_behind_a_locked_gate_of_town_walls_is_shut_in()
     {
-        var owners = SyntheticTown.Rec("60-g", Meitou.Data.Fcs.FcsRecordType.FACTION, "owners");
-        var leaf = SyntheticTown.Rec("62-g", Meitou.Data.Fcs.FcsRecordType.BUILDING, "Gate door");
-        var gateRecord = SyntheticTown.Rec("63-g", Meitou.Data.Fcs.FcsRecordType.BUILDING, "Gate");
+        var owners = SyntheticTown.Rec("60-g", Data.Fcs.FcsRecordType.Faction, "owners");
+        var leaf = SyntheticTown.Rec("62-g", Data.Fcs.FcsRecordType.Building, "Gate door");
+        var gateRecord = SyntheticTown.Rec("63-g", Data.Fcs.FcsRecordType.Building, "Gate");
         gateRecord.Bools["is wall gate"] = true;
         gateRecord.References["doors"] = [SyntheticTown.Ref("62-g")];
-        var town = SyntheticTown.Rec("64-g", Meitou.Data.Fcs.FcsRecordType.TOWN, "Walled");
+        var town = SyntheticTown.Rec("64-g", Data.Fcs.FcsRecordType.Town, "Walled");
         town.References["faction"] = [SyntheticTown.Ref("60-g")];
         var file = new Meitou.Data.Fcs.FcsFile();
         file.Records.AddRange([owners, leaf, gateRecord, town]);
@@ -269,9 +269,9 @@ public class DoorTests(ITestOutputHelper output)
         int owner = world.Fixtures.DoorOwner(door.Building);
         CharacterId Spawn(bool bandit, int faction)
         {
-            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
+            var cold = new Combat.Combatant { Name = "raider" }.MakeCold();
             cold.Faction = faction;
-            if (bandit) cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
+            if (bandit) cold.NpcClass = Data.Gameplay.FundamentalType.Bandit;
             return world.Characters.Spawn(new CharacterHot { Position = spot.Centre + new Vector3(0, 0, 10), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Attack }, cold, 0);
         }
         var bandit = Spawn(true, owner + 1);
@@ -300,9 +300,9 @@ public class DoorTests(ITestOutputHelper output)
         locks.Inputs(world, [new GateRegionsCommand(new SplitRegions()) { Tick = 0 }]);
         CharacterId Spawn(float dz, int faction)
         {
-            var cold = new Meitou.Tests.Combat.Combatant { Name = "raider" }.MakeCold();
+            var cold = new Combat.Combatant { Name = "raider" }.MakeCold();
             cold.Faction = faction;
-            cold.NpcClass = Meitou.Data.Gameplay.FundamentalType.Bandit;
+            cold.NpcClass = Data.Gameplay.FundamentalType.Bandit;
             return world.Characters.Spawn(new CharacterHot { Position = SyntheticTown.Centre + new Vector3(0, 0, dz), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Attack }, cold, 0);
         }
         var raider = Spawn(-300, 1);

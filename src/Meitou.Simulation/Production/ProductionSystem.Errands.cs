@@ -46,23 +46,23 @@ public sealed partial class ProductionSystem
     }
 
     // Derived state, not saved or hashed: a lift under way is looked at again from the characters' own state when it is lost.
-    readonly Dictionary<CharacterId, Errand> errands = [];
+    readonly Dictionary<CharacterId, Errand> _errands = [];
 
     /// <summary>The finders' kinds a job type runs, with the companion type that must be in the list for the carrying out.</summary>
     static ErrandKind? KindOf(TaskType type) => type switch
     {
-        TaskType.FIND_A_DEAD_GUY => ErrandKind.Corpse,
-        TaskType.PICKUP_INTRUDERS => ErrandKind.OutOfBuilding,
-        TaskType.PICKUP_INTRUDERS_TOWN => ErrandKind.OutOfTown,
+        TaskType.FindADeadGuy => ErrandKind.Corpse,
+        TaskType.PickupIntruders => ErrandKind.OutOfBuilding,
+        TaskType.PickupIntrudersTown => ErrandKind.OutOfTown,
         _ => null,
     };
 
     /// <summary>The delivery job that must be in the list for the carrying out.</summary>
     static TaskType CompanionOf(ErrandKind kind) => kind switch
     {
-        ErrandKind.Corpse => TaskType.DEAD_GUYS_GO_IN_THE_POT,
-        ErrandKind.OutOfBuilding => TaskType.TAKE_INTRUDER_OUTSIDE,
-        _ => TaskType.TAKE_INTRUDER_OUTSIDE_TOWN,
+        ErrandKind.Corpse => TaskType.DeadGuysGoInThePot,
+        ErrandKind.OutOfBuilding => TaskType.TakeIntruderOutside,
+        _ => TaskType.TakeIntruderOutsideTown,
     };
 
     /// <summary>
@@ -75,11 +75,11 @@ public sealed partial class ProductionSystem
     /// <summary>The carrying errands under way (serial, slot order, every <see cref="ErrandEveryTicks"/> ticks): each is stepped. Their starts are the decision step's (<see cref="ErrandJobs"/>).</summary>
     void Errands(World world)
     {
-        if (Carry is null || world.Tick % ErrandEveryTicks != 0 || errands.Count == 0) return;
+        if (Carry is null || world.Tick % ErrandEveryTicks != 0 || _errands.Count == 0) return;
         var table = world.Characters;
-        foreach (var gone in errands.Keys.Where(k => !table.IsAlive(k)).ToList()) errands.Remove(gone);
+        foreach (var gone in _errands.Keys.Where(k => !table.IsAlive(k)).ToList()) _errands.Remove(gone);
         for (int i = 0; i < table.HighWater; i++)
-            if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true } cold && errands.TryGetValue(table.IdOf(i), out var errand)) StepErrand(world, i, cold, errand);
+            if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true } cold && _errands.TryGetValue(table.IdOf(i), out var errand)) StepErrand(world, i, cold, errand);
     }
 
     /// <summary>
@@ -88,24 +88,24 @@ public sealed partial class ProductionSystem
     /// </summary>
     sealed class ErrandJobs(ProductionSystem owner) : IJobSource
     {
-        (long Tick, int Slot, int K, CharacterId Body, Vector2 Goal) found = (-1, -1, -1, CharacterId.None, default);
+        (long Tick, int Slot, int K, CharacterId Body, Vector2 Goal) _found = (-1, -1, -1, CharacterId.None, default);
 
         public DecisionCheck CanRun(World world, int slot, int k)
         {
             var table = world.Characters;
             var cold = table.Cold(slot)!;
             if (owner.Carry is null || KindOf(cold.Jobs[k].Type) is not { } kind) return DecisionCheck.No(null);
-            if (owner.errands.TryGetValue(table.IdOf(slot), out var e))
+            if (owner._errands.TryGetValue(table.IdOf(slot), out var e))
             {
                 bool mine = e.Kind == kind && (cold.Carrying == e.Body || table.Next[slot].Task == (byte)CharacterTask.PickUp && cold.CarryTarget == e.Body);
                 if (!mine) return DecisionCheck.No("another errand");
                 return cold.Carrying.IsNone || owner.DeliveryReady(world, table.IdOf(slot), cold, kind, table.Next[slot].Position, e.Ordered) ? DecisionCheck.Runs : DecisionCheck.No("nothing to deliver to");
             }
-            if (!cold.Carrying.IsNone || !CarrySystem.CanCarry(world, cold, TaskType.DEAD_GUYS_GO_IN_THE_POT) || cold.Fleeing) return DecisionCheck.No("cannot carry");
+            if (!cold.Carrying.IsNone || !CarrySystem.CanCarry(world, cold, TaskType.DeadGuysGoInThePot) || cold.Fleeing) return DecisionCheck.No("cannot carry");
             var lifted = Lifted(world, cold.SquadId, table.IdOf(slot));
             var body = kind == ErrandKind.Corpse ? owner.FindCorpse(world, slot, cold, lifted) : owner.FindIntruder(world, slot, cold, lifted, kind);
             if (body is not { } b) return DecisionCheck.No("nothing found");
-            found = (world.Tick, slot, k, b.Id, b.Goal);
+            _found = (world.Tick, slot, k, b.Id, b.Goal);
             return DecisionCheck.Run;
         }
 
@@ -113,9 +113,9 @@ public sealed partial class ProductionSystem
         {
             var table = world.Characters;
             var cold = table.Cold(slot)!;
-            if (found.Tick != world.Tick || found.Slot != slot || found.K != k || KindOf(cold.Jobs[k].Type) is not { } kind) return;
-            if (!owner.Carry!.BeginPickUp(world, slot, found.Body, source: TaskSource.Job, job: k, row: cold.Jobs[k].Type)) return;
-            owner.errands[table.IdOf(slot)] = new Errand { Kind = kind, Goal = found.Goal, Body = found.Body };
+            if (_found.Tick != world.Tick || _found.Slot != slot || _found.K != k || KindOf(cold.Jobs[k].Type) is not { } kind) return;
+            if (!owner.Carry!.BeginPickUp(world, slot, _found.Body, source: TaskSource.Job, job: k, row: cold.Jobs[k].Type)) return;
+            owner._errands[table.IdOf(slot)] = new Errand { Kind = kind, Goal = _found.Goal, Body = _found.Body };
         }
     }
 
@@ -127,7 +127,7 @@ public sealed partial class ProductionSystem
         {
             if (!table.TryResolveNext(id, out int i) || table.Cold(i) is not { IsPlayer: true } cold || cold.Carrying.IsNone) continue;
             if (!table.TryResolveNext(cold.Carrying, out int b) || table.Cold(b)?.Medical is not { Dead: true }) continue;
-            errands[id] = new Errand { Kind = ErrandKind.Corpse, Body = cold.Carrying, Ordered = true };
+            _errands[id] = new Errand { Kind = ErrandKind.Corpse, Body = cold.Carrying, Ordered = true };
         }
     }
 
@@ -153,7 +153,7 @@ public sealed partial class ProductionSystem
     /// <summary>The corpse machines the carriers of the squad are taking a body to, in the squad's goal list.</summary>
     void IGoalSource.Publish(World world, SquadGoals goals)
     {
-        foreach (var (id, e) in errands)
+        foreach (var (id, e) in _errands)
             if (e.Site is not null && world.Characters.TryResolveNext(id, out int i) && world.Characters.Cold(i) is { } c) goals.Add(c.SquadId, id, GoalTarget.At(e.Site));
     }
 
@@ -169,12 +169,12 @@ public sealed partial class ProductionSystem
         if (cold.Carrying.IsNone)
         {
             // Not lifted (the lift broke off) or put down: over.
-            errands.Remove(id);
+            _errands.Remove(id);
             return;
         }
         // An order of the player took the carrier elsewhere: the job is over, the body stays with it.
-        if (task == CharacterTask.GoTo && !e.Walking) { errands.Remove(id); return; }
-        if (task is not (CharacterTask.GoTo or CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow)) { errands.Remove(id); return; }
+        if (task == CharacterTask.GoTo && !e.Walking) { _errands.Remove(id); return; }
+        if (task is not (CharacterTask.GoTo or CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow)) { _errands.Remove(id); return; }
         bool wasWalking = e.Walking;
         if (task != CharacterTask.GoTo) e.Walking = false;
         if (e.Kind == ErrandKind.Corpse && wasWalking && task != CharacterTask.GoTo) NoteWalkEnd(world, cold, n, e);
@@ -194,7 +194,7 @@ public sealed partial class ProductionSystem
         {
             if (e.Kind == ErrandKind.Corpse) Incinerate(world, i, cold, site!, machine!);
             else Carry!.BeginPutDown(world, i, TaskSource.Job);
-            errands.Remove(id);
+            _errands.Remove(id);
             return;
         }
         if (task == CharacterTask.GoTo)
@@ -205,7 +205,7 @@ public sealed partial class ProductionSystem
         if (e.Kind != ErrandKind.Corpse && CarryOutOver(world, e, wasWalking))
         {
             Carry!.BeginPutDown(world, i, TaskSource.Job);
-            errands.Remove(id);
+            _errands.Remove(id);
             return;
         }
         e.Goal = goal;
@@ -442,13 +442,13 @@ public sealed partial class ProductionSystem
     {
         var town = world.Buildings.FindTown(site.Town);
         if (kind == ErrandKind.OutOfTown && town is not null) return OutsideTownGoal(world, town, from);
-        Locks.Fixture? door = null;
+        Fixture? door = null;
         foreach (var f in world.Fixtures.OfBuilding(site.Id))
             if (f.Kind == FixtureKind.Door && world.Fixtures.DoorSpotOf(f) is not null && (door is null || f.DoorIndex < door.DoorIndex)) door = f;
         if (door is null || world.Fixtures.DoorSpotOf(door) is not { } leaf)
             return town is not null ? OutsideTownGoal(world, town, from) : new Vector2(site.Position.X, site.Position.Z);
         var centre = new Vector2(leaf.Centre.X, leaf.Centre.Z);
-        var exit = Ai.AiSystem.DoorExit(centre, new Vector2(leaf.Normal.X, leaf.Normal.Z), new Vector2(site.Position.X, site.Position.Z));
+        var exit = AiSystem.DoorExit(centre, new Vector2(leaf.Normal.X, leaf.Normal.Z), new Vector2(site.Position.X, site.Position.Z));
         return world.Walkability.IsWalkable(exit.X, exit.Y) ? exit : Outward(world, centre, exit - centre, Vector2.Distance(exit, centre));
     }
 

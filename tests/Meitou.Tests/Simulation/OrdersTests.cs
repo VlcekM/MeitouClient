@@ -61,7 +61,7 @@ public class OrdersTests
     public void A_hit_walker_stands_through_its_stumble_and_walks_on()
     {
         var (world, combat, player, _) = Attacked(CharacterOrders.None, distance: 15);
-        using var _w = world;
+        using var w = world;
         combat.StumbleChooser = (_, _, _, _, _) => (0, 0.5f);
         world.Characters.Cold(player.Slot)!.RunSpeed = SpeedMode.Walk;   // the raider catches it
         var goal = new Vector3(1000, 150, 3000);
@@ -90,7 +90,7 @@ public class OrdersTests
     public void Orders_go_to_the_originals_state_keys_and_back()
     {
         var cold = new CharacterCold { Orders = CharacterOrders.Block | CharacterOrders.Sneak | CharacterOrders.Hold, RunSpeed = SpeedMode.Run };
-        var record = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_CHARACTER };
+        var record = new FcsRecord { Type = (int)FcsRecordType.GamestateCharacter };
         Orders.Write(record, cold);
         Assert.True(record.Bools["defensive mode"]);
         Assert.True(record.Bools["stealth"]);

@@ -380,13 +380,13 @@ sealed class WorldOptions
     /// <summary>The command line as <see cref="Parse"/> walks it: the option at hand and the values after it.</summary>
     sealed class OptionReader(string[] args)
     {
-        int at = -1;
+        int _at = -1;
 
-        public string Current => args[at];
+        public string Current => args[_at];
 
-        public bool MoveNext() => ++at < args.Length;
+        public bool MoveNext() => ++_at < args.Length;
 
-        public string Next() => at + 1 < args.Length ? args[++at] : throw new ArgumentException($"{Current} needs a value");
+        public string Next() => _at + 1 < args.Length ? args[++_at] : throw new ArgumentException($"{Current} needs a value");
 
         public float Float() => float.Parse(Next(), CultureInfo.InvariantCulture);
 
@@ -409,31 +409,31 @@ sealed class WorldOptions
             case "--world": break;
             case "--at": (o.X, o.Z) = r.Pair(); break;
             case "--zone":
-            {
-                var (zi, zj) = r.Pair();
-                o.Zone = new ZoneCoordinate((int)zi, (int)zj);
-                break;
-            }
+                {
+                    var (zi, zj) = r.Pair();
+                    o.Zone = new ZoneCoordinate((int)zi, (int)zj);
+                    break;
+                }
             case "--town": o.Town = r.Next(); break;
             case "--radius": o.Radius = r.Float(); break;
             case "--yaw": o.Yaw = r.Float(); break;
             case "--pitch": o.Pitch = r.Float(); break;
             case "--distance": o.Distance = r.Float(); break;
             case "--camera-code":
-            {
-                string code = r.Next();
-                o.CameraPose = WorldCameraCode.Decode(code) ?? throw new ArgumentException($"--camera-code: '{code}' is not a camera code (the viewer's Ctrl+C)");
-                (o.X, o.Z) = (o.CameraPose.Value.Target.X, o.CameraPose.Value.Target.Z);   // loaded round it
-                break;
-            }
+                {
+                    string code = r.Next();
+                    o.CameraPose = WorldCameraCode.Decode(code) ?? throw new ArgumentException($"--camera-code: '{code}' is not a camera code (the viewer's Ctrl+C)");
+                    (o.X, o.Z) = (o.CameraPose.Value.Target.X, o.CameraPose.Value.Target.Z);   // loaded round it
+                    break;
+                }
             case "--screenshot": o.Screenshot = r.Next(); break;
             case "--size":
-            {
-                var parts = r.Next().Split('x');
-                o.Width = int.Parse(parts[0], CultureInfo.InvariantCulture);
-                o.Height = int.Parse(parts[1], CultureInfo.InvariantCulture);
-                break;
-            }
+                {
+                    var parts = r.Next().Split('x');
+                    o.Width = int.Parse(parts[0], CultureInfo.InvariantCulture);
+                    o.Height = int.Parse(parts[1], CultureInfo.InvariantCulture);
+                    break;
+                }
             case "--fly-to": (o.FlyToX, o.FlyToZ) = r.Pair(); break;
             case "--fly-benchmark": o.FlyBenchmark = r.Int(); break;
             case "--fly-radius": o.FlyRadius = r.Float(); break;
@@ -456,7 +456,7 @@ sealed class WorldOptions
         {
             case "--no-objects": o.NoObjects = true; break;
             case "--no-foliage": o.NoFoliage = true; break;
-            case "--no-load-cache": Meitou.Data.World.LoadCaches.Disabled = true; break;
+            case "--no-load-cache": LoadCaches.Disabled = true; break;
             case "--range-large": o.LargeRange = r.Float(); break;
             case "--impostor-budget": o.ImpostorBudgetMb = r.Float(); break;
             case "--object-distance": o.ObjectDistance = r.Float(); break;
@@ -467,11 +467,11 @@ sealed class WorldOptions
             case "--water-ocean": o.WaterOcean = r.Int() switch { <= 64 => 64, <= 128 => 128, _ => 256 }; break;
             case "--water-reflection": o.WaterReflection = Math.Clamp(r.Int(), 0, 4); break;
             case "--reflection-samples":
-            {
-                int samples = r.Int();
-                o.ReflectionSamples = samples <= 1 ? 1 : samples;
-                break;
-            }
+                {
+                    int samples = r.Int();
+                    o.ReflectionSamples = samples <= 1 ? 1 : samples;
+                    break;
+                }
             case "--no-particles": o.NoParticles = true; break;
             case "--particle-prewarm": o.ParticlePrewarm = Math.Max(r.Float(), 0); break;
             case "--particle-density": o.ParticleDensity = Math.Clamp(r.Float(), 0.1f, 1); break;
@@ -486,16 +486,16 @@ sealed class WorldOptions
     {
         switch (r.Current)
         {
-            case "--texture-quality": o.TextureQuality = Math.Clamp(r.Int(), 0, Meitou.Data.Textures.TextureQuality.Maximum); break;
+            case "--texture-quality": o.TextureQuality = Math.Clamp(r.Int(), 0, Data.Textures.TextureQuality.Maximum); break;
             case "--shadow-quality": o.ShadowQuality = r.Int(); break;
             case "--shadow-filter": o.ShadowFilter = Math.Clamp(r.Int(), 0, 2); break;
             case "--shadow-range":
-            {
-                float range = r.Float();
-                o.ShadowsOff = range <= 0;
-                if (!o.ShadowsOff) o.ShadowRange = Math.Clamp(range, KenshiShadows.MinRange, CommandLineMaxShadowRange);
-                break;
-            }
+                {
+                    float range = r.Float();
+                    o.ShadowsOff = range <= 0;
+                    if (!o.ShadowsOff) o.ShadowRange = Math.Clamp(range, KenshiShadows.MinRange, CommandLineMaxShadowRange);
+                    break;
+                }
             case "--debug-shadows": o.DebugShadows = r.Int(); break;
             case "--gi-debug": o.GiDebug = Math.Clamp(r.Int(), 0, 3); break;
             case "--no-gi": o.Gi = false; break;
@@ -560,9 +560,9 @@ sealed class WorldOptions
 /// </summary>
 sealed class SceneHost(IGpuContext ctx)
 {
-    IGpuCommandList? cmd;
+    IGpuCommandList? _cmd;
 
-    public bool IsOpen => cmd is not null;
+    public bool IsOpen => _cmd is not null;
 
     /// <summary>Opens the host on <paramref name="targets"/> (nothing when it is open already); its jobs count towards <paramref name="stage"/>.
     /// <paramref name="clearColour"/> / <paramref name="clearDepth"/>: the attachments are cleared by the rendering's load ops (to the colour, to
@@ -570,7 +570,7 @@ sealed class SceneHost(IGpuContext ctx)
     /// Without secondaries (<see cref="IGpuContext.RecordsSecondaries"/>) the guests record straight into its rendering.</summary>
     public void Open(int stage, PassTargets targets, ClearColour? clearColour = null, bool clearDepth = false)
     {
-        if (cmd is not null) { Stage(stage); return; }
+        if (_cmd is not null) { Stage(stage); return; }
         var list = ctx.BeginNative("scene");
         bool secondaries = ctx.RecordsSecondaries;
         var colour = clearColour is { } c ? targets.Colour with { Load = LoadOp.Clear, Clear = c } : targets.Colour;
@@ -579,24 +579,24 @@ sealed class SceneHost(IGpuContext ctx)
         var extra = clearColour is not null && !targets.Extra.IsNull ? targets.Extra with { Load = LoadOp.Clear, Clear = default } : targets.Extra;
         list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height, 0, 0, targets.ShadingRate, targets.ShadingRateTexel, extra), secondaries);
         ctx.BeginHostPassParallel(list, targets, DrawState.SceneDepth(targets.Formats, DrawState.Rgb), stage);   // alpha: the characters only (the SSAO character mask)
-        cmd = list;
+        _cmd = list;
     }
 
     /// <summary>The <see cref="StageClock"/> stage the guests' jobs count towards from now on.</summary>
     public void Stage(int stage)
     {
-        if (cmd is not null) ctx.SetPassStage(stage);
+        if (_cmd is not null) ctx.SetPassStage(stage);
     }
 
     public void Close()
     {
-        if (cmd is not { } list) return;
+        if (_cmd is not { } list) return;
         // Vulkan's queued guests execute into the rendering's secondaries; they must finish before EndRendering.
         ctx.EndHostPassParallel(list);
         list.EndRendering();
         ctx.EndHostPass(list);
         ctx.EndNative(list);
-        cmd = null;
+        _cmd = null;
     }
 }
 
@@ -669,8 +669,16 @@ static partial class WorldFrame
 
         var scene = new WorldScene
         {
-            Heightmap = map, Window = window, Coarse = coarse, CoarseSize = coarseSize, Focus = focus,
-            X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Database = db,
+            Heightmap = map,
+            Window = window,
+            Coarse = coarse,
+            CoarseSize = coarseSize,
+            Focus = focus,
+            X0 = x0,
+            Z0 = z0,
+            X1 = x1,
+            Z1 = z1,
+            Database = db,
         };
         if (db is not null) scene.Clock = SkyClock.FromDatabase(db);
         if (!o.NoObjects && db is not null) scene.Objects = WorldObjects.Load(install, db, map, x0, z0, x1, z1);
@@ -770,8 +778,16 @@ static partial class WorldFrame
         };
         if (o.CameraPose is { } pose) WorldCameraCode.Apply(pose, camera);
         float terrainError = o.TerrainErrorFor(o.MeitouReach);
-        var render = new WorldRenderOptions { Textures = !o.NoTextures, Objects = !o.NoObjects, Water = !o.NoWater, Wireframe = o.Wireframe ? 1 : 0, Debug = o.Debug, MaterialDistance = o.MaterialDistance,
-            TerrainPixelError = terrainError };
+        var render = new WorldRenderOptions
+        {
+            Textures = !o.NoTextures,
+            Objects = !o.NoObjects,
+            Water = !o.NoWater,
+            Wireframe = o.Wireframe ? 1 : 0,
+            Debug = o.Debug,
+            MaterialDistance = o.MaterialDistance,
+            TerrainPixelError = terrainError
+        };
         return (camera, render);
     }
 
@@ -847,8 +863,8 @@ static partial class WorldFrame
         /// <summary>The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.</summary>
         public PostProcess? Post;
         /// <summary>The chain <see cref="WorldFrame.Draw"/> runs: <see cref="Post"/> on Vulkan (also when a host sets only that), the host's seam chain on Metal.</summary>
-        public IWorldPostChain? PostChain { get => postChain ?? Post; set => postChain = value; }
-        IWorldPostChain? postChain;
+        public IWorldPostChain? PostChain { get => _postChain ?? Post; set => _postChain = value; }
+        IWorldPostChain? _postChain;
         public WorldObjectRenderer? Objects;
         public FoliageRenderer? Foliage;
         /// <summary>The characters (null without <c>--crowd</c> or a host that feeds them).</summary>
@@ -932,7 +948,7 @@ static partial class WorldFrame
     {
         if (gpu.Weather is not { } weather || gpu.MakeParticles is null) return;
         // In flight (KenshiCamera.FlightHeight, the platoons' gate) the weather's effects stop, as its fog does (SkyRenderer.WeatherFogScale).
-        var input = gpu.Sky.WeatherFogScale == 0 ? Meitou.Data.Particles.WeatherEffectInput.None : weather.EffectInput();
+        var input = gpu.Sky.WeatherFogScale == 0 ? WeatherEffectInput.None : weather.EffectInput();
         if (input.Effects.Count == 0 && gpu.Particles is null) return;
         var particles = gpu.Particles ??= gpu.MakeParticles();
         // The effects are placed in the camera's weather region: the area follows the cell the camera is in.
@@ -1021,11 +1037,11 @@ static partial class WorldFrame
     /// </summary>
     static int TerrainLayerSize(WorldOptions o)
     {
-        Meitou.Data.Textures.TextureQuality.Level = o.TextureQuality;
-        int layerSize = Math.Max(2048 >> Meitou.Data.Textures.TextureQuality.LevelsToDrop("terrain.dds", "Landscape"), 16);
+        Data.Textures.TextureQuality.Level = o.TextureQuality;
+        int layerSize = Math.Max(2048 >> Data.Textures.TextureQuality.LevelsToDrop("terrain.dds", "Landscape"), 16);
         if (layerSize != 2048)
         {
-            string label = Meitou.Data.Textures.TextureQuality.Labels[o.TextureQuality];
+            string label = Data.Textures.TextureQuality.Labels[o.TextureQuality];
             Console.WriteLine($"textures  quality {o.TextureQuality} ({label}): terrain layers {layerSize}² instead of 2048²");
         }
         return layerSize;
@@ -1721,12 +1737,12 @@ static partial class WorldFrame
     /// </summary>
     static List<Slider> TextureSliders()
     {
-        int terrainLevel = Meitou.Data.Textures.TextureQuality.Level;
-        var labels = Meitou.Data.Textures.TextureQuality.Labels;
+        int terrainLevel = Data.Textures.TextureQuality.Level;
+        var labels = Data.Textures.TextureQuality.Labels;
         return
         [
-            new(TextureQualitySlider, 0, Meitou.Data.Textures.TextureQuality.Maximum, () => Meitou.Data.Textures.TextureQuality.Level,
-                v => Meitou.Data.Textures.TextureQuality.Level = (int)MathF.Round(v), "0",
+            new(TextureQualitySlider, 0, Data.Textures.TextureQuality.Maximum, () => Data.Textures.TextureQuality.Level,
+                v => Data.Textures.TextureQuality.Level = (int)MathF.Round(v), "0",
                 Text: v => (int)MathF.Round(v) is var level && level != terrainLevel ? $"{labels[level]} (terrain at start)" : labels[level]),
         ];
     }
@@ -1796,7 +1812,7 @@ static partial class WorldFrame
 
     /// <summary>The air layer's density by the time of day (docs/render-shafts.md "Air layer"): <c>ShaftAirDawn</c> at sunrise and at sunset, easing (smoothstep) to
     /// <c>ShaftAirDay</c> over <c>ShaftAirRamp</c> hours after sunrise and before sunset; at night the dawn value (the shafts need the sun anyway).</summary>
-    internal static float ShaftAirByTime(PostOptions o, Meitou.Data.World.SkyClock clock, float hour)
+    internal static float ShaftAirByTime(PostOptions o, SkyClock clock, float hour)
     {
         hour = ((hour % 24) + 24) % 24;
         float fromEvent = hour < clock.Sunrise || hour > clock.Sunset ? 0 : Math.Min(hour - clock.Sunrise, clock.Sunset - hour);
@@ -1851,7 +1867,7 @@ static partial class WorldFrame
         else post.HeatHazeAmount = first || post.InstantAdaptation ? gpu.HeatHazeTarget : HeatHaze.Step(post.HeatHazeAmount, gpu.HeatHazeTarget, weather?.Times.Settling ?? dt);
         if (!post.InstantAdaptation) gpu.HeatHazeHours += dt * HeatHaze.HoursPerSecond;
         post.HeatHazeHours = gpu.GameHours ?? gpu.HeatHazeHours;
-        post.HeatHazeFarClip = KenshiHaze.FarDistance(Meitou.Data.World.HeatHaze.ViewDistanceSetting);   // the heat haze's D follows the install's `view distance`, not the sky haze's constant
+        post.HeatHazeFarClip = KenshiHaze.FarDistance(HeatHaze.ViewDistanceSetting);   // the heat haze's D follows the install's `view distance`, not the sky haze's constant
     }
 
     // DrawShadows's cascades for the characters (render thread).
@@ -1887,8 +1903,8 @@ static partial class WorldFrame
     /// <summary>One <see cref="DrawShadows"/>'s casters: each cascade's terrain, objects, characters and foliage by the renderers' depth-only paths, timed per kind.</summary>
     sealed class ShadowCasters(Gpu gpu, ShadowPass shadow, WorldRenderOptions render)
     {
-        int objects, foliage;
-        readonly System.Text.StringBuilder? cascades = DetailedStats ? new() : null;
+        int _objects, _foliage;
+        readonly System.Text.StringBuilder? _cascades = DetailedStats ? new() : null;
 
         /// <summary>The characters of every cascade drawn this frame, gathered in one walk before the first (CharacterRenderer.PrepareDepth).</summary>
         public void Prepare(ReadOnlySpan<ShadowPass.CasterView> views)
@@ -1920,7 +1936,7 @@ static partial class WorldFrame
             if (render.Objects && gpu.Objects is { } o)
             {
                 o.DrawDepth(worldToClip, lodEye, planes, render, terrain, coarse);
-                objects += o.DrawnInstances;
+                _objects += o.DrawnInstances;
                 (objectInstances, objectCalls) = (o.DrawnInstances, o.DrawCalls);
             }
             StageClock.Sub("objects");
@@ -1933,7 +1949,7 @@ static partial class WorldFrame
             {
                 f.DrawDepth(worldToClip, lodEye, planes, render, terrain, maxRange: shadow.EffectiveRange * 1.2f, minSize: shadow.MinFoliageCaster(cascade),
                     texel: (float)cascade.Texel, coarse: coarse > 0);
-                foliage += f.DrawnInstances;
+                _foliage += f.DrawnInstances;
                 (foliageInstances, foliageCalls) = (f.DrawnInstances, f.DrawCalls);
             }
             StageClock.Phase(CascadeLabels[cascade.Index]);
@@ -1943,7 +1959,7 @@ static partial class WorldFrame
             shadow.PhaseMs[0] += (t1 - t0) * ms;
             shadow.PhaseMs[1] += (t2 - t1) * ms;
             shadow.PhaseMs[2] += (t3 - t2) * ms;
-            cascades?.Append($" [c{cascade.Index}: texel {cascade.Texel:0.0}, terrain {(terrain.DepthTriangles - triangles) / 1000}k tri {(t1 - t0) * ms:0.00} ms, "
+            _cascades?.Append($" [c{cascade.Index}: texel {cascade.Texel:0.0}, terrain {(terrain.DepthTriangles - triangles) / 1000}k tri {(t1 - t0) * ms:0.00} ms, "
                 + $"objects {objectInstances} in {objectCalls} calls {(t2 - t1) * ms:0.00} ms, "
                 + $"foliage {foliageInstances} in {foliageCalls} calls {(t3 - t2) * ms:0.00} ms ({gpu.Foliage?.DepthDetail})]");
         }
@@ -1952,8 +1968,8 @@ static partial class WorldFrame
         public string Stats()
         {
             var phase = shadow.PhaseMs;
-            return $"{gpu.Terrain.DepthTriangles:N0} terrain triangles, {objects} objects, {foliage} foliage meshes (over the cascades); "
-                + $"cpu terrain {phase[0]:0.00}, objects {phase[1]:0.00}, foliage {phase[2]:0.00} ms;{cascades}"
+            return $"{gpu.Terrain.DepthTriangles:N0} terrain triangles, {_objects} objects, {_foliage} foliage meshes (over the cascades); "
+                + $"cpu terrain {phase[0]:0.00}, objects {phase[1]:0.00}, foliage {phase[2]:0.00} ms;{_cascades}"
                 + (shadow.Meitou ? $"; meitou: {shadow.DescribeMeitou()}" : "");
         }
 

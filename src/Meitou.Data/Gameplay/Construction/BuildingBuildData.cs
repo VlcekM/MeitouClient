@@ -121,5 +121,5 @@ public sealed record BuildingBuildData
     }
 
     /// <summary>Every BUILDING of the database, in its order.</summary>
-    public static List<BuildingBuildData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.BUILDING).Select(From)];
+    public static List<BuildingBuildData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.Building).Select(From)];
 }

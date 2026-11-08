@@ -21,7 +21,7 @@ public static class Artifacts
     public static int ValueOf(GameDatabase db, ArtifactStack stack, PriceConstants prices)
     {
         if (db.Find(stack.Item) is not { } record) return 0;
-        var maker = record.Type == FcsRecordType.WEAPON ? db.Find(stack.Part2) : null;
+        var maker = record.Type == FcsRecordType.Weapon ? db.Find(stack.Part2) : null;
         return ItemValue.Of(db, record, stack.Level, false, prices, maker);
     }
 
@@ -64,7 +64,7 @@ public static class Artifacts
     public static Dictionary<int, List<ArtifactStack>> Plan(GameDatabase db, IEnumerable<ArtifactTown> towns)
     {
         var result = new Dictionary<int, List<ArtifactStack>>();
-        if (db.OfType(FcsRecordType.ARTIFACTS).FirstOrDefault() is not { } record) return result;
+        if (db.OfType(FcsRecordType.Artifacts).FirstOrDefault() is not { } record) return result;
         var prices = PriceConstants.FromDatabase(db);
         var items = new List<Entry>();
         var gear = new List<Entry>();
@@ -171,7 +171,7 @@ public static class Artifacts
         var makerOf = new Dictionary<string, string>(StringComparer.Ordinal);
         var levelOf = new Dictionary<(string Maker, string Model), int>();
         var typesOf = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var maker in db.OfType(FcsRecordType.WEAPON_MANUFACTURER))
+        foreach (var maker in db.OfType(FcsRecordType.WeaponManufacturer))
         {
             if (maker.StringId == "PLAYER_WEAPONS") continue;
             var modelRefs = maker.GetReferences("weapon models");

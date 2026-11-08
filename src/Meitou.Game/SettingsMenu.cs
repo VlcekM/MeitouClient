@@ -1,5 +1,5 @@
-using System.Numerics;
 using System.Globalization;
+using System.Numerics;
 using System.Text.RegularExpressions;
 using Meitou.Data.Ui;
 using Meitou.Game.Effects;
@@ -18,29 +18,29 @@ namespace Meitou.Game;
 /// <summary>Shared settings layout and interaction; the current UI mode selects only its presentation.</summary>
 sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBindings bindings, Action save, Slider frameLimit, UserConfig config)
 {
-    internal readonly PlayerInterface player = player;
-    internal readonly SettingsPanel values = values;
-    internal readonly InputBindings bindings = bindings;
-    internal readonly UserConfig config = config;
-    internal FeatureGrouping grouping => field ??= new(this);
-    internal SettingModes modes => field ??= new();
-    internal MenuMotion motion => field ??= new(this);
-    internal GamePages gamePages => field ??= new(this);
-    internal QualityTiers tiers => field ??= new(this);
-    internal LookPresets lookPresets => field ??= new(this);
-    internal LookBar lookBar => field ??= new(this);
-    internal ModsPage modsPage => field ??= new(this);
-    internal SettingsCanvas canvas => field ??= new(this);
+    internal readonly PlayerInterface Player = player;
+    internal readonly SettingsPanel Values = values;
+    internal readonly InputBindings Bindings = bindings;
+    internal readonly UserConfig Config = config;
+    internal FeatureGrouping Grouping => field ??= new(this);
+    internal SettingModes Modes => field ??= new();
+    internal MenuMotion Motion => field ??= new(this);
+    internal GamePages GamePages => field ??= new(this);
+    internal QualityTiers Tiers => field ??= new(this);
+    internal LookPresets LookPresets => field ??= new(this);
+    internal LookBar LookBar => field ??= new(this);
+    internal ModsPage ModsPage => field ??= new(this);
+    internal SettingsCanvas Canvas => field ??= new(this);
 
     static readonly string[] Pages =
         ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes", "Mods"];
-    /// <summary>The MODS page (<see cref="ModsPage"/>): the loaded mods, each with the settings its code registered.</summary>
+    /// <summary>The MODS page (<see cref="Settings.ModsPage"/>): the loaded mods, each with the settings its code registered.</summary>
     internal const int ModsPageIndex = 8;
     /// <summary>The names <c>ui-open settings:&lt;name&gt;</c> takes: a page, or <c>graphics:&lt;sub-page&gt;</c>; compared ignoring case (spaces and "&amp;" count).</summary>
     internal static IEnumerable<string> PageNames => Pages.Select(p => p.ToLowerInvariant()).Concat(GraphicsPages.Select(p => "graphics:" + p.ToLowerInvariant()));
 
     /// <summary>The page shown now, as <see cref="PageNames"/> spells it.</summary>
-    internal string PageName => page == 1 ? "graphics:" + GraphicsPages[graphicsPage].ToLowerInvariant() : Pages[page].ToLowerInvariant();
+    internal string PageName => Page == 1 ? "graphics:" + GraphicsPages[GraphicsPage].ToLowerInvariant() : Pages[Page].ToLowerInvariant();
 
     /// <summary>Switches to a page by name (see <see cref="PageNames"/>); false when there is none.</summary>
     internal bool TryOpenPage(string name)
@@ -48,10 +48,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         string[] parts = name.Split(':', 2);
         int index = Array.FindIndex(Pages, p => p.Equals(parts[0], StringComparison.OrdinalIgnoreCase));
         if (index < 0) return false;
-        int sub = parts.Length == 2 ? Array.FindIndex(GraphicsPages, p => p.Equals(parts[1], StringComparison.OrdinalIgnoreCase)) : graphicsPage;
+        int sub = parts.Length == 2 ? Array.FindIndex(GraphicsPages, p => p.Equals(parts[1], StringComparison.OrdinalIgnoreCase)) : GraphicsPage;
         if (parts.Length == 2 && (index != 1 || sub < 0)) return false;
         Navigate(index);
-        graphicsPage = sub;
+        GraphicsPage = sub;
         return true;
     }
 
@@ -59,26 +59,26 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal static readonly string[] GraphicsPages = ["Lighting", "Sky & weather", "Colour", "World", "Characters"];
     /// <summary>The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.</summary>
     internal const string MetalPresetSlider = "Metal upscaling";
-    internal readonly float[] defaults = values.Sliders.Select(s => s.Get()).ToArray();
-    internal readonly bool[] toggleDefaults = values.Toggles.Select(t => t.Get()).ToArray();
-    internal readonly List<Hit> hits = [];
-    internal readonly List<UiControl> controls = [];
-    internal readonly SettingsMenuArt art = new();
-    internal bool visible, resetPending;
-    internal int page, graphicsPage, focus = -1;
-    internal float scroll, scrollTarget, maxScroll, scale = 1;
-    internal bool pointerDown;
-    internal Vector2 pointer;
-    internal UiRect viewport, bounds;
-    Hit? dragging;
-    internal InputAction? rebinding;
-    internal Choice? openChoice;
-    internal int choiceSelection, choiceScroll;
-    internal string notice = "";
-    internal Slider? editingNumber;
-    internal string numberText = "";
-    internal int numberCaret, numberAnchor;
-    internal UiRect numberBounds;
+    internal readonly float[] Defaults = values.Sliders.Select(s => s.Get()).ToArray();
+    internal readonly bool[] ToggleDefaults = values.Toggles.Select(t => t.Get()).ToArray();
+    internal readonly List<Hit> Hits = [];
+    internal readonly List<UiControl> Controls = [];
+    internal readonly SettingsMenuArt Art = new();
+    internal bool MenuOpen, ResetPending;
+    internal int Page, GraphicsPage, Focus = -1;
+    internal float ScrollOffset, ScrollTarget, MaxScroll, Scale = 1;
+    internal bool PointerDown;
+    internal Vector2 Pointer;
+    internal UiRect Viewport, Bounds;
+    Hit? _dragging;
+    internal InputAction? Rebinding;
+    internal Choice? ActiveChoice;
+    internal int ChoiceSelection, ChoiceScroll;
+    internal string Notice = "";
+    internal Slider? EditingNumber;
+    internal string NumberText = "";
+    internal int NumberCaret, NumberAnchor;
+    internal UiRect NumberBounds;
 
     internal sealed record Choice(Func<IReadOnlyList<string>> Options, Func<int> Current, Action<int> Choose);
     internal sealed record Entry(string Label, string Hint = "", Slider? Slider = null, Toggle? Toggle = null, Choice? Choice = null,
@@ -88,16 +88,16 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     /// <summary>The labelled clickable widgets as the last frame drew them (agent control channel: ui-tree, ui-click); sliders are left out.</summary>
     internal IReadOnlyList<(string Label, UiRect Bounds, Action Activate)> Clickables =>
-        [.. hits.Where(h => h.Label.Length > 0 && h.Slider is null).Select(h => (h.Label, h.Bounds, h.Activate))];
+        [.. Hits.Where(h => h.Label.Length > 0 && h.Slider is null).Select(h => (h.Label, h.Bounds, h.Activate))];
 
     /// <summary>Whether <paramref name="p"/> is over a widget a click acts on in the last frame (the enhanced Hardware mouse's hand).</summary>
-    public bool OverClickable(Vector2 p) => Visible && hits.Any(h => h.Bounds.Contains(p.X, p.Y));
+    public bool OverClickable(Vector2 p) => Visible && Hits.Any(h => h.Bounds.Contains(p.X, p.Y));
 
     /// <summary>The sliders as the last frame drew them, with the track they sit on (agent control channel: ui-tree, ui-set).</summary>
-    internal IReadOnlyList<(Slider Slider, UiRect Bounds)> SliderHits => [.. hits.Where(h => h.Slider is not null).Select(h => (h.Slider!, h.Bounds))];
+    internal IReadOnlyList<(Slider Slider, UiRect Bounds)> SliderHits => [.. Hits.Where(h => h.Slider is not null).Select(h => (h.Slider!, h.Bounds))];
 
-    public IReadOnlyList<Slider> Sliders => values.Sliders;
-    public IReadOnlyList<Toggle> Toggles => values.Toggles;
+    public IReadOnlyList<Slider> Sliders => Values.Sliders;
+    public IReadOnlyList<Toggle> Toggles => Values.Toggles;
     public Func<string>? UpscalerStatus { get; init; }
     /// <summary>What the Frame generation row reports as its state ("active", "off", ...); null on a host without that setting.</summary>
     public Func<string>? FrameGenerationStatus { get; init; }
@@ -136,14 +136,14 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     public Func<IReadOnlyList<ModSettingsGroup>> ModSettings { get; init; } = () => [];
     public bool Visible
     {
-        get => visible || motion.menuProgress > 0;
+        get => MenuOpen || Motion.MenuProgress > 0;
         set
         {
-            if (visible == value) return;
-            visible = value;
-            dragging = null; rebinding = null; openChoice = null; resetPending = false; lookBar.naming = false; focus = -1; notice = "";
-            editingNumber = null;
-            if (value) { motion.lastFrameAt = 0; player.SetSettingsOpen(true); }
+            if (MenuOpen == value) return;
+            MenuOpen = value;
+            _dragging = null; Rebinding = null; ActiveChoice = null; ResetPending = false; LookBar.Naming = false; Focus = -1; Notice = "";
+            EditingNumber = null;
+            if (value) { Motion.LastFrameAt = 0; Player.SetSettingsOpen(true); }
             if (!value) save();
         }
     }
@@ -197,7 +197,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// The displacement counts only where its switch is offered (tessellation; not on Metal).</summary>
     bool ReliefSliderShown(string label)
     {
-        bool displace = GroundRelief.DisplaceActive && values.Toggles.Any(t => t.Label == "Ground displacement (tessellation)");
+        bool displace = GroundRelief.DisplaceActive && Values.Toggles.Any(t => t.Label == "Ground displacement (tessellation)");
         return label switch
         {
             WorldFrame.GroundReliefQualitySlider or WorldFrame.GroundReliefDepthSlider => GroundRelief.ParallaxActive || displace,
@@ -251,19 +251,19 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     internal List<Entry> Entries()
     {
-        if (page == 1) return GraphicsRows(GraphicsPages[graphicsPage]);
+        if (Page == 1) return GraphicsRows(GraphicsPages[GraphicsPage]);
         // In the catalogue's order, the launcher's (LauncherSchema.Order).
-        var result = values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == Pages[page] && ReliefSliderShown(s.Label))
+        var result = Values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == Pages[Page] && ReliefSliderShown(s.Label))
             .OrderBy(s => LauncherSchema.Order(CatalogueKey(s.Label))).Select(SliderEntry).ToList();
-        switch (page)
+        switch (Page)
         {
             case 0: return DisplayRows(result);
-            case 2: gamePages.InterfaceRows(result); break;
-            case 3: gamePages.ControlsRows(result); break;
-            case 4: gamePages.AdvancedRows(result); break;
-            case 5: gamePages.AudioRows(result); break;
-            case 6: gamePages.GameplayRows(result); break;
-            case 7: gamePages.FixesRows(result); break;
+            case 2: GamePages.InterfaceRows(result); break;
+            case 3: GamePages.ControlsRows(result); break;
+            case 4: GamePages.AdvancedRows(result); break;
+            case 5: GamePages.AudioRows(result); break;
+            case 6: GamePages.GameplayRows(result); break;
+            case 7: GamePages.FixesRows(result); break;
         }
         return result;
     }
@@ -271,22 +271,22 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// <summary>A Graphics tab's rows: its switches, then its sliders (look rows marked against the look), grouped by feature.</summary>
     List<Entry> GraphicsRows(string section)
     {
-        var changes = lookPresets.LookChanges();
-        var result = values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section).OrderBy(toggle => LauncherSchema.Order(SwitchKey(toggle.Label)))
-            .Select(toggle => lookPresets.LookRow(new Entry(Label(toggle.Label), SettingHints.ToggleHint(toggle.Label), Toggle: toggle), SwitchKey(toggle.Label), toggle.Label, true, changes))
-            .Concat(values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
-                .OrderBy(s => LauncherSchema.Order(s.Label)).Select(s => lookPresets.LookRow(SliderEntry(s), s.Label, s.Label, false, changes)))
+        var changes = LookPresets.LookChanges();
+        var result = Values.Toggles.Where(toggle => ToggleSection(toggle.Label) == section).OrderBy(toggle => LauncherSchema.Order(SwitchKey(toggle.Label)))
+            .Select(toggle => LookPresets.LookRow(new Entry(Label(toggle.Label), SettingHints.ToggleHint(toggle.Label), Toggle: toggle), SwitchKey(toggle.Label), toggle.Label, true, changes))
+            .Concat(Values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
+                .OrderBy(s => LauncherSchema.Order(s.Label)).Select(s => LookPresets.LookRow(SliderEntry(s), s.Label, s.Label, false, changes)))
             .ToList();
         // Graphics > Characters, in the Skin feature: after the switch, one row per person race of the loaded data (mods too), on or off against its default.
         if (section == "Characters")
             foreach (var (id, name, byDefault) in SkinRaceList)
                 result.Add(new(name, byDefault ? "Skin scatters light on this race (the default)." : "A robot race: no skin scattering unless turned on.",
-                    Toggle: new(name, () => config.SkinRaces.TryGetValue(id, out bool on) ? on : byDefault, v =>
+                    Toggle: new(name, () => Config.SkinRaces.TryGetValue(id, out bool on) ? on : byDefault, v =>
                     {
-                        if (v == byDefault) config.SkinRaces.Remove(id); else config.SkinRaces[id] = v;
+                        if (v == byDefault) Config.SkinRaces.Remove(id); else Config.SkinRaces[id] = v;
                         SkinRacesChanged?.Invoke();
                     }, OnOff: true), Raw: "race:" + id));
-        return grouping.Grouped([.. result.OrderBy(e => e.Raw is { } raw ? FeatureGrouping.GroupRank(raw) : FeatureGrouping.FeatureGroups.Length)]);
+        return Grouping.Grouped([.. result.OrderBy(e => e.Raw is { } raw ? FeatureGrouping.GroupRank(raw) : FeatureGrouping.FeatureGroups.Length)]);
     }
 
     /// <summary>The Display page: its sliders, the frame limit, world tick and frame generation, in the catalogue's order; modes replace their sliders.</summary>
@@ -296,108 +296,108 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         var fps = LauncherSchema.Find("fpsLimit");
         result.Add(new(fps?.Name ?? "Frame limit", fps?.Description ?? "", Slider: fps is null ? frameLimit
             : frameLimit with { Min = fps.Min, Max = fps.Max, Text = fps.Text }, Raw: "fpsLimit"));
-        result.Add(new("World tick alongside drawing", TickAheadHint, Choice: new(() => TickAheadChoices, () => (int)config.TickAhead, i => config.TickAhead = (TickAheadMode)i),
+        result.Add(new("World tick alongside drawing", TickAheadHint, Choice: new(() => TickAheadChoices, () => (int)Config.TickAhead, i => Config.TickAhead = (TickAheadMode)i),
             Raw: "tickAhead"));
         if (!OperatingSystem.IsMacOS())
-            result.Add(new("Frame generation", FrameGenerationHint(), Choice: new(() => FrameGenerationChoices, () => (int)config.FrameGenerationMethod,
-                i => config.FrameGenerationMethod = (FrameGenerationMethod)i), Raw: "frameGeneration"));
+            result.Add(new("Frame generation", FrameGenerationHint(), Choice: new(() => FrameGenerationChoices, () => (int)Config.FrameGenerationMethod,
+                i => Config.FrameGenerationMethod = (FrameGenerationMethod)i), Raw: "frameGeneration"));
         result.RemoveAll(e => !ShownNow(e));
         result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
-        result = [.. result.SelectMany(modes.ModeEntries)];
+        result = [.. result.SelectMany(Modes.ModeEntries)];
         return result;
     }
 
     /// <summary>False for a row the catalogue shows only while another setting is at a value (<c>ShownWhen</c>: the DLSS preset) and that one is not.</summary>
     bool ShownNow(Entry entry) => entry.Raw is not { } key || LauncherSchema.Find(key)?.ShownWhen is not { } when
-        || values.Sliders.FirstOrDefault(s => s.Label == when.Key) is not { } other || when.Matches(other.Get());
+        || Values.Sliders.FirstOrDefault(s => s.Label == when.Key) is not { } other || when.Matches(other.Get());
 
     internal static string ActionLabel(InputAction action) => Regex.Replace(action.ToString(), "(?<=[a-z0-9])(?=[A-Z])|(?<=[a-z])(?=[0-9])", " ");
-    internal Func<string>? pendingAction;
-    internal string confirmation = "", confirmTitle = "";
+    internal Func<string>? PendingAction;
+    internal string Confirmation = "", ConfirmTitle = "";
 
     public bool Contains(Vector2 _) => Visible;
 
     public bool MouseDown(Vector2 at, MouseButton button = MouseButton.Left)
     {
         if (!Visible) return false;
-        pointer = at;
-        pointerDown = button == MouseButton.Left;
-        scrollTarget = scroll;
-        if (rebinding is { } action)
+        Pointer = at;
+        PointerDown = button == MouseButton.Left;
+        ScrollTarget = ScrollOffset;
+        if (Rebinding is { } action)
         {
-            if (button == MouseButton.Left && hits.LastOrDefault(h => h.Bounds.Contains(at.X, at.Y)) is { } cancel)
+            if (button == MouseButton.Left && Hits.LastOrDefault(h => h.Bounds.Contains(at.X, at.Y)) is { } cancel)
             { cancel.Activate(); return true; }
             SetBinding(action, button);
             return true;
         }
         if (button != MouseButton.Left) return true;
-        if (editingNumber is not null)
+        if (EditingNumber is not null)
         {
-            if (numberBounds.Contains(at.X, at.Y)) return true;
+            if (NumberBounds.Contains(at.X, at.Y)) return true;
             if (!CommitNumber()) return true;
         }
-        var hit = hits.LastOrDefault(h => h.Bounds.Contains(at.X, at.Y));
-        if (hit is null) { openChoice = null; return true; }
-        focus = hits.IndexOf(hit);
-        if (hit.Slider is not null) { dragging = hit; MouseMove(at); }
+        var hit = Hits.LastOrDefault(h => h.Bounds.Contains(at.X, at.Y));
+        if (hit is null) { ActiveChoice = null; return true; }
+        Focus = Hits.IndexOf(hit);
+        if (hit.Slider is not null) { _dragging = hit; MouseMove(at); }
         else hit.Activate();
         return true;
     }
 
     public bool MouseMove(Vector2 at)
     {
-        pointer = at;
+        Pointer = at;
         if (!Visible) return false;
-        if (dragging is { Slider: { } slider, Track: { } track }) slider.SetFraction((at.X - track.X) / track.Width);
+        if (_dragging is { Slider: { } slider, Track: { } track }) slider.SetFraction((at.X - track.X) / track.Width);
         return true;
     }
 
-    public bool MouseUp() { bool had = dragging is not null; dragging = null; pointerDown = false; return had; }
+    public bool MouseUp() { bool had = _dragging is not null; _dragging = null; PointerDown = false; return had; }
 
     public bool Scroll(float steps)
     {
         if (!Visible) return false;
-        if (editingNumber is not null || rebinding is not null || resetPending || pendingAction is not null) return true;
-        if (openChoice is { } choice) choiceScroll = Math.Clamp(choiceScroll - (int)steps, 0, Math.Max(0, choice.Options().Count - 6));
-        else if (page == ModsPageIndex && modsPage.ModsDetail.Contains(pointer.X, pointer.Y)) modsPage.modsDetailScroll -= steps * 40;
-        else scrollTarget = Math.Clamp(scrollTarget - steps * 60 * scale, 0, maxScroll);
+        if (EditingNumber is not null || Rebinding is not null || ResetPending || PendingAction is not null) return true;
+        if (ActiveChoice is { } choice) ChoiceScroll = Math.Clamp(ChoiceScroll - (int)steps, 0, Math.Max(0, choice.Options().Count - 6));
+        else if (Page == ModsPageIndex && ModsPage.ModsDetail.Contains(Pointer.X, Pointer.Y)) ModsPage.ModsDetailScroll -= steps * 40;
+        else ScrollTarget = Math.Clamp(ScrollTarget - steps * 60 * Scale, 0, MaxScroll);
         return true;
     }
 
     public bool KeyDown(Key key, bool shift)
     {
         if (!Visible) return false;
-        if (rebinding is { } action)
+        if (Rebinding is { } action)
         {
-            if (key == Key.Escape) rebinding = null;
-            else if (key == Key.Delete || key == Key.Backspace) { bindings.Set(action); rebinding = null; notice = "Binding cleared."; }
+            if (key == Key.Escape) Rebinding = null;
+            else if (key == Key.Delete || key == Key.Backspace) { Bindings.Set(action); Rebinding = null; Notice = "Binding cleared."; }
             else SetBinding(action, key);
             return true;
         }
         if (key == Key.Escape)
         {
-            if (pendingAction is not null || resetPending) { pendingAction = null; resetPending = false; }
-            else if (openChoice is not null) openChoice = null;
+            if (PendingAction is not null || ResetPending) { PendingAction = null; ResetPending = false; }
+            else if (ActiveChoice is not null) ActiveChoice = null;
             else Visible = false;
             return true;
         }
-        if (openChoice is { } choice)
+        if (ActiveChoice is { } choice)
         {
             if (key is Key.Up or Key.Down)
             {
-                choiceSelection = Math.Clamp(choiceSelection + (key == Key.Up ? -1 : 1), 0, choice.Options().Count - 1);
-                choiceScroll = Math.Clamp(choiceSelection - 3, 0, Math.Max(0, choice.Options().Count - 6));
+                ChoiceSelection = Math.Clamp(ChoiceSelection + (key == Key.Up ? -1 : 1), 0, choice.Options().Count - 1);
+                ChoiceScroll = Math.Clamp(ChoiceSelection - 3, 0, Math.Max(0, choice.Options().Count - 6));
             }
-            if (key == Key.Enter) { choice.Choose(choiceSelection); openChoice = null; }
+            if (key == Key.Enter) { choice.Choose(ChoiceSelection); ActiveChoice = null; }
             return true;
         }
         if (key is Key.PageDown or Key.PageUp) Scroll(key == Key.PageUp ? 5 : -5);
-        if (hits.Count == 0) return true;
+        if (Hits.Count == 0) return true;
         if (key is Key.Tab or Key.Up or Key.Down)
-            focus = (focus + (key == Key.Up || key == Key.Tab && shift ? -1 : 1) + hits.Count) % hits.Count;
-        else if (focus >= 0 && focus < hits.Count)
+            Focus = (Focus + (key == Key.Up || key == Key.Tab && shift ? -1 : 1) + Hits.Count) % Hits.Count;
+        else if (Focus >= 0 && Focus < Hits.Count)
         {
-            var hit = hits[focus];
+            var hit = Hits[Focus];
             if (hit.Slider is { } slider && key is Key.Left or Key.Right)
                 slider.SetFraction(slider.Fraction + (key == Key.Left ? -1 : 1) * slider.KeyStep);
             else if (key is Key.Enter or Key.Space) hit.Activate();
@@ -407,32 +407,32 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     public bool KeyDown(Key key, bool shift, bool ctrl)
     {
-        if (lookBar.naming && Visible) return lookBar.NameKey(key);
-        if (editingNumber is null) return KeyDown(key, shift);
+        if (LookBar.Naming && Visible) return LookBar.NameKey(key);
+        if (EditingNumber is null) return KeyDown(key, shift);
         switch (key)
         {
-            case Key.Escape: editingNumber = null; notice = ""; break;
+            case Key.Escape: EditingNumber = null; Notice = ""; break;
             case Key.Enter: CommitNumber(); break;
             case Key.Tab:
                 if (CommitNumber()) KeyDown(key, shift);
                 break;
-            case Key.A when ctrl: numberAnchor = 0; numberCaret = numberText.Length; break;
-            case Key.Home: numberCaret = 0; if (!shift) numberAnchor = numberCaret; break;
-            case Key.End: numberCaret = numberText.Length; if (!shift) numberAnchor = numberCaret; break;
+            case Key.A when ctrl: NumberAnchor = 0; NumberCaret = NumberText.Length; break;
+            case Key.Home: NumberCaret = 0; if (!shift) NumberAnchor = NumberCaret; break;
+            case Key.End: NumberCaret = NumberText.Length; if (!shift) NumberAnchor = NumberCaret; break;
             case Key.Left:
-                numberCaret = !shift && numberCaret != numberAnchor ? Math.Min(numberCaret, numberAnchor) : Math.Max(0, numberCaret - 1);
-                if (!shift) numberAnchor = numberCaret;
+                NumberCaret = !shift && NumberCaret != NumberAnchor ? Math.Min(NumberCaret, NumberAnchor) : Math.Max(0, NumberCaret - 1);
+                if (!shift) NumberAnchor = NumberCaret;
                 break;
             case Key.Right:
-                numberCaret = !shift && numberCaret != numberAnchor ? Math.Max(numberCaret, numberAnchor) : Math.Min(numberText.Length, numberCaret + 1);
-                if (!shift) numberAnchor = numberCaret;
+                NumberCaret = !shift && NumberCaret != NumberAnchor ? Math.Max(NumberCaret, NumberAnchor) : Math.Min(NumberText.Length, NumberCaret + 1);
+                if (!shift) NumberAnchor = NumberCaret;
                 break;
             case Key.Backspace:
             case Key.Delete:
-                if (numberCaret == numberAnchor)
+                if (NumberCaret == NumberAnchor)
                 {
-                    if (key == Key.Backspace && numberCaret > 0) numberAnchor--;
-                    if (key == Key.Delete && numberCaret < numberText.Length) numberAnchor++;
+                    if (key == Key.Backspace && NumberCaret > 0) NumberAnchor--;
+                    if (key == Key.Delete && NumberCaret < NumberText.Length) NumberAnchor++;
                 }
                 ReplaceNumberSelection("");
                 break;
@@ -442,44 +442,44 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     public void TextInput(char value)
     {
-        if (lookBar.naming && Visible) { lookBar.NameText(value); return; }
-        if (editingNumber is null || !Visible) return;
+        if (LookBar.Naming && Visible) { LookBar.NameText(value); return; }
+        if (EditingNumber is null || !Visible) return;
         if (value is >= '0' and <= '9' or '.' or ',' or '-' or '+' or 'e' or 'E')
             ReplaceNumberSelection(value == ',' ? "." : value.ToString());
     }
 
     internal void BeginNumber(Slider slider, UiRect at)
     {
-        editingNumber = slider;
-        numberText = MathF.Round(slider.Get() * slider.Scale, 4).ToString("G", CultureInfo.InvariantCulture);
-        numberAnchor = 0;
-        numberCaret = numberText.Length;
-        numberBounds = at;
-        scrollTarget = scroll;
-        dragging = null;
-        notice = "";
+        EditingNumber = slider;
+        NumberText = MathF.Round(slider.Get() * slider.Scale, 4).ToString("G", CultureInfo.InvariantCulture);
+        NumberAnchor = 0;
+        NumberCaret = NumberText.Length;
+        NumberBounds = at;
+        ScrollTarget = ScrollOffset;
+        _dragging = null;
+        Notice = "";
     }
 
     void ReplaceNumberSelection(string replacement)
     {
-        int start = Math.Min(numberCaret, numberAnchor), end = Math.Max(numberCaret, numberAnchor);
-        if (numberText.Length - (end - start) + replacement.Length > 24) return;
-        numberText = numberText[..start] + replacement + numberText[end..];
-        numberCaret = numberAnchor = start + replacement.Length;
-        notice = "";
+        int start = Math.Min(NumberCaret, NumberAnchor), end = Math.Max(NumberCaret, NumberAnchor);
+        if (NumberText.Length - (end - start) + replacement.Length > 24) return;
+        NumberText = NumberText[..start] + replacement + NumberText[end..];
+        NumberCaret = NumberAnchor = start + replacement.Length;
+        Notice = "";
     }
 
     bool CommitNumber()
     {
-        if (editingNumber is not { } slider) return true;
-        if (!float.TryParse(numberText, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) || !float.IsFinite(value))
+        if (EditingNumber is not { } slider) return true;
+        if (!float.TryParse(NumberText, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) || !float.IsFinite(value))
         {
-            notice = "Enter a valid number, or press Esc to cancel.";
+            Notice = "Enter a valid number, or press Esc to cancel.";
             return false;
         }
         slider.Set(Math.Clamp(value / slider.Scale, slider.Min, slider.Max));
-        editingNumber = null;
-        notice = "";
+        EditingNumber = null;
+        Notice = "";
         return true;
     }
 
@@ -487,104 +487,104 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     {
         if (!binding.IsMouse && binding.Key is Key.Escape or Key.F6 or Key.LeftAlt or Key.RightAlt or Key.LeftControl or Key.RightControl or Key.LeftShift or Key.RightShift)
         {
-            notice = "That key is reserved. Choose another key, or Esc to cancel.";
+            Notice = "That key is reserved. Choose another key, or Esc to cancel.";
             return;
         }
-        var conflicts = Enum.GetValues<InputAction>().Where(a => a != action && bindings.Get(a).Contains(binding)).ToArray();
+        var conflicts = Enum.GetValues<InputAction>().Where(a => a != action && Bindings.Get(a).Contains(binding)).ToArray();
         // A mouse button taken from another action is swapped: that action gets this one's old button, so the three buttons can be shuffled (the buttons form a cycle otherwise).
-        if (binding.IsMouse && conflicts.Length == 1 && bindings.Get(action).Where(b => b.IsMouse).Cast<Binding?>().FirstOrDefault() is { } previous)
+        if (binding.IsMouse && conflicts.Length == 1 && Bindings.Get(action).Where(b => b.IsMouse).Cast<Binding?>().FirstOrDefault() is { } previous)
         {
             var other = conflicts[0];
-            bindings.Set(other, [.. bindings.Get(other).Where(b => b != binding), previous]);
-            bindings.Set(action, binding);
-            rebinding = null;
-            notice = $"{ActionLabel(action)} bound to {binding}; {ActionLabel(other)} moved to {previous}.";
+            Bindings.Set(other, [.. Bindings.Get(other).Where(b => b != binding), previous]);
+            Bindings.Set(action, binding);
+            Rebinding = null;
+            Notice = $"{ActionLabel(action)} bound to {binding}; {ActionLabel(other)} moved to {previous}.";
             return;
         }
         if (conflicts.Length > 0)
         {
-            notice = $"{binding} is assigned to {ActionLabel(conflicts[0])}. Choose another key, or Esc to cancel.";
+            Notice = $"{binding} is assigned to {ActionLabel(conflicts[0])}. Choose another key, or Esc to cancel.";
             return;
         }
-        bindings.Set(action, binding);
-        rebinding = null;
-        notice = $"{ActionLabel(action)} bound to {binding}.";
+        Bindings.Set(action, binding);
+        Rebinding = null;
+        Notice = $"{ActionLabel(action)} bound to {binding}.";
     }
 
     void Reset()
     {
-        for (int i = 0; i < values.Sliders.Count; i++)
-            if (values.Sliders[i].Label is not ("Time of day" or "Time speed")) values.Sliders[i].Set(defaults[i]);
-        for (int i = 0; i < values.Toggles.Count; i++)
-            if (values.Toggles[i].Get() != toggleDefaults[i]) values.Toggles[i].Set(toggleDefaults[i]);
+        for (int i = 0; i < Values.Sliders.Count; i++)
+            if (Values.Sliders[i].Label is not ("Time of day" or "Time speed")) Values.Sliders[i].Set(Defaults[i]);
+        for (int i = 0; i < Values.Toggles.Count; i++)
+            if (Values.Toggles[i].Get() != ToggleDefaults[i]) Values.Toggles[i].Set(ToggleDefaults[i]);
         frameLimit.Set(240);
-        modsPage.ResetModSettings();
-        config.SplashScreens = false;
-        config.MainMenuTransitions = true;
-        config.InGameTransitions = true;
-        config.MainMenuTransitionSpeed = 1.5f;
-        config.InGameTransitionSpeed = 1.5f;
-        config.CharacterFlights = false;
-        config.KeepTexturesAtCharacters = true;
-        config.KeepTexturesAtAllSquads = false;
-        config.CharacterFlightSeconds = UserConfig.DefaultFlightSeconds;
-        gamePages.AttackSlotsSlider.Set(UserConfig.FaithfulAttackSlots);
-        config.LateDefences = false;
+        ModsPage.ResetModSettings();
+        Config.SplashScreens = false;
+        Config.MainMenuTransitions = true;
+        Config.InGameTransitions = true;
+        Config.MainMenuTransitionSpeed = 1.5f;
+        Config.InGameTransitionSpeed = 1.5f;
+        Config.CharacterFlights = false;
+        Config.KeepTexturesAtCharacters = true;
+        Config.KeepTexturesAtAllSquads = false;
+        Config.CharacterFlightSeconds = UserConfig.DefaultFlightSeconds;
+        GamePages.AttackSlotsSlider.Set(UserConfig.FaithfulAttackSlots);
+        Config.LateDefences = false;
         LateDefencesChanged?.Invoke(false);
-        config.KeepRoamers = config.OffscreenFights = config.OffscreenHealing = config.CampaignAncestorsOnce = config.KeepWild = config.ResidentSchedule = config.UnloadedProduction = true;
-        config.DoorsCloseBehind = true;
-        config.Decapitation = true;
-        config.AdvancedRagdolls = true;
+        Config.KeepRoamers = Config.OffscreenFights = Config.OffscreenHealing = Config.CampaignAncestorsOnce = Config.KeepWild = Config.ResidentSchedule = Config.UnloadedProduction = true;
+        Config.DoorsCloseBehind = true;
+        Config.Decapitation = true;
+        Config.AdvancedRagdolls = true;
         DoorsCloseChanged?.Invoke(true);
-        config.PauseOnLoad = false;
-        config.AnimalsPickUp = false;
+        Config.PauseOnLoad = false;
+        Config.AnimalsPickUp = false;
         AnimalsPickUpChanged?.Invoke(false);
-        config.FixDoorBreak = config.FixAmbienceSuffix = config.FixWindStop = true;
-        player.frontend.FixLoadButton = config.FixLoadButton = true;
-        config.FixGunnerFacing = true;
+        Config.FixDoorBreak = Config.FixAmbienceSuffix = Config.FixWindStop = true;
+        Player.Frontend.FixLoadButton = Config.FixLoadButton = true;
+        Config.FixGunnerFacing = true;
         GunnerFacingChanged?.Invoke(true);
-        config.FixPunchReach = true;
+        Config.FixPunchReach = true;
         PunchReachChanged?.Invoke(true);
-        config.FixBenchFacing = true;
+        Config.FixBenchFacing = true;
         BenchFacingChanged?.Invoke(true);
         OffscreenChanged?.Invoke();
-        config.Audio = new();
+        Config.Audio = new();
         AudioChanged?.Invoke();
-        gamePages.SetGameplay(new());
-        config.HardwareMouse = false;
-        config.EnhancedHardwareMouse = true;
-        gamePages.CameraRotateSpeed.Set(global::Meitou.Data.World.KenshiCamera.DefaultRotateSpeed);
-        config.EdgeScroll = true;
-        config.InvertX = false;
-        config.InvertY = true;
-        config.CameraMoveSpeed = global::Meitou.Data.World.KenshiCamera.DefaultMoveSpeed;
-        config.CameraZoomSpeed = global::Meitou.Data.World.KenshiCamera.DefaultZoomSpeed;
+        GamePages.SetGameplay(new());
+        Config.HardwareMouse = false;
+        Config.EnhancedHardwareMouse = true;
+        GamePages.CameraRotateSpeed.Set(Data.World.KenshiCamera.DefaultRotateSpeed);
+        Config.EdgeScroll = true;
+        Config.InvertX = false;
+        Config.InvertY = true;
+        Config.CameraMoveSpeed = Data.World.KenshiCamera.DefaultMoveSpeed;
+        Config.CameraZoomSpeed = Data.World.KenshiCamera.DefaultZoomSpeed;
         CameraChanged?.Invoke();
-        config.Tutorials = true;
-        player.MovementMarker = player.RotationMarker = true;
-        config.MovementMarker = config.RotationMarker = true;
+        Config.Tutorials = true;
+        Player.MovementMarker = Player.RotationMarker = true;
+        Config.MovementMarker = Config.RotationMarker = true;
         TutorialsChanged?.Invoke(true);
-        config.HoverOutline = true;
-        config.BuildingOutline = true;
-        player.buildingSelection.DeselectBuildings = config.DeselectBuildings = true;
-        config.LuckyrenMode = false;
-        config.GroundItemLimit = global::Meitou.Simulation.Items.GroundItems.DefaultLimit;
-        (config.FastSpeed, config.FastestSpeed) = (SimulationClock.DefaultSpeeds[1], SimulationClock.DefaultSpeeds[2]);
+        Config.HoverOutline = true;
+        Config.BuildingOutline = true;
+        Player.BuildingSelection.DeselectBuildings = Config.DeselectBuildings = true;
+        Config.LuckyrenMode = false;
+        Config.GroundItemLimit = Simulation.Items.GroundItems.DefaultLimit;
+        (Config.FastSpeed, Config.FastestSpeed) = (SimulationClock.DefaultSpeeds[1], SimulationClock.DefaultSpeeds[2]);
         TimeSpeedsChanged?.Invoke();
-        player.SetUiMode(UiMode.Meitou);
-        player.SpeedUnit = config.SpeedUnit = SpeedUnit.Mph;
-        player.Floaters = config.Floaters = FloaterMode.Simple;
-        player.ShowNames = config.ShowNames = true;
-        player.FeedbackButtonInPlay = config.FeedbackButton = true;
-        config.TickAhead = TickAheadMode.Dynamic;
-        bindings.ResetToDefaults();
-        config.LookPreset = null;
-        config.FaithfulLook = false;
-        config.KeepAtLow.Clear();
-        lookPresets.activeLook = null;
-        modes.customModes.Clear();
-        resetPending = false;
-        notice = "Default settings restored.";
+        Player.SetUiMode(UiMode.Meitou);
+        Player.SpeedUnit = Config.SpeedUnit = SpeedUnit.Mph;
+        Player.Floaters = Config.Floaters = FloaterMode.Simple;
+        Player.ShowNames = Config.ShowNames = true;
+        Player.FeedbackButtonInPlay = Config.FeedbackButton = true;
+        Config.TickAhead = TickAheadMode.Dynamic;
+        Bindings.ResetToDefaults();
+        Config.LookPreset = null;
+        Config.FaithfulLook = false;
+        Config.KeepAtLow.Clear();
+        LookPresets.ChosenLook = null;
+        Modes.CustomModes.Clear();
+        ResetPending = false;
+        Notice = "Default settings restored.";
     }
 
     /// <summary>Set by the showcase: presets are neither read from nor written to disk.</summary>
@@ -592,101 +592,101 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal void ShowGraphicsTab(int tab)
     {
         Visible = true;
-        page = 1;
-        graphicsPage = tab;
-        openChoice = null;
-        lookBar.naming = false;
-        scroll = scrollTarget = 0;
+        Page = 1;
+        GraphicsPage = tab;
+        ActiveChoice = null;
+        LookBar.Naming = false;
+        ScrollOffset = ScrollTarget = 0;
     }
 
     internal void OpenChoice(Choice choice, UiRect at)
     {
-        openChoice = choice; choiceSelection = Math.Clamp(choice.Current(), 0, Math.Max(0, choice.Options().Count - 1));
-        choiceScroll = Math.Max(0, choiceSelection - 3); canvas.choiceAnchor = at; focus = -1;
+        ActiveChoice = choice; ChoiceSelection = Math.Clamp(choice.Current(), 0, Math.Max(0, choice.Options().Count - 1));
+        ChoiceScroll = Math.Max(0, ChoiceSelection - 3); Canvas.ChoiceAnchor = at; Focus = -1;
     }
 
     public void Draw(int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
-        if (!Visible || player.SettingsPainter is not { } painter) return;
-        motion.AdvanceMotion();
-        art.Ensure(painter, canvas.Meitou, player.UiAtlas);
-        scale = Math.Max(0.35f, Math.Min(1.25f, Math.Min(height / 900f, width / 1280f)));
-        canvas.textViewportHeight = height;
-        bounds = new(MathF.Round((width - 1120 * scale) / 2), MathF.Round((height - 720 * scale) / 2), MathF.Round(1120 * scale), MathF.Round(720 * scale));
-        bounds = bounds with { Y = bounds.Y + (1 - MenuMotion.Ease(motion.menuProgress)) * 8 * scale };
-        controls.Clear(); hits.Clear();
-        motion.animationScope = "chrome";
-        canvas.Rect(new(0, 0, width, height), new(8 / 255f, 6 / 255f, 5 / 255f, 0.64f));
-        canvas.Surface(bounds, "window");
-        if (!canvas.Meitou)
-            controls.Add(new("settings-header", "Panel", canvas.R(6, 4, 1108, 36), "", "", "Kenshi_GenericWindowHeaderSkin", true, new Dictionary<string, string>(), Vector4.Zero, Pickable: false));
-        canvas.Text("Settings", canvas.R(20, 4, 650, 32), 22, SettingsCanvas.LightInk);
-        var close = canvas.R(1069, 6, 31, 32);
-        controls.Add(new("settings-close", "Button", close, "", "settings:close", "Kenshi_CloseButtonSkin", true,
+        if (!Visible || Player.SettingsPainter is not { } painter) return;
+        Motion.AdvanceMotion();
+        Art.Ensure(painter, Canvas.Meitou, Player.UiAtlas);
+        Scale = Math.Max(0.35f, Math.Min(1.25f, Math.Min(height / 900f, width / 1280f)));
+        Canvas.TextViewportHeight = height;
+        Bounds = new(MathF.Round((width - 1120 * Scale) / 2), MathF.Round((height - 720 * Scale) / 2), MathF.Round(1120 * Scale), MathF.Round(720 * Scale));
+        Bounds = Bounds with { Y = Bounds.Y + (1 - MenuMotion.Ease(Motion.MenuProgress)) * 8 * Scale };
+        Controls.Clear(); Hits.Clear();
+        Motion.AnimationScope = "chrome";
+        Canvas.Rect(new(0, 0, width, height), new(8 / 255f, 6 / 255f, 5 / 255f, 0.64f));
+        Canvas.Surface(Bounds, "window");
+        if (!Canvas.Meitou)
+            Controls.Add(new("settings-header", "Panel", Canvas.R(6, 4, 1108, 36), "", "", "Kenshi_GenericWindowHeaderSkin", true, new Dictionary<string, string>(), Vector4.Zero, Pickable: false));
+        Canvas.Text("Settings", Canvas.R(20, 4, 650, 32), 22, SettingsCanvas.LightInk);
+        var close = Canvas.R(1069, 6, 31, 32);
+        Controls.Add(new("settings-close", "Button", close, "", "settings:close", "Kenshi_CloseButtonSkin", true,
             new Dictionary<string, string>(), Vector4.Zero));
-        hits.Add(new(close, () => Visible = false, Label: "Close"));
-        canvas.Rect(canvas.R(20, 44, 1080, 1), SettingsCanvas.MainInk with { W = 0.12f });
-        canvas.Rect(canvas.R(192, 56, 1, 610), SettingsCanvas.MainInk with { W = 0.12f });
+        Hits.Add(new(close, () => Visible = false, Label: "Close"));
+        Canvas.Rect(Canvas.R(20, 44, 1080, 1), SettingsCanvas.MainInk with { W = 0.12f });
+        Canvas.Rect(Canvas.R(192, 56, 1, 610), SettingsCanvas.MainInk with { W = 0.12f });
 
         for (int i = 0; i < Pages.Length; i++)
         {
             int index = i;
-            canvas.Button(Pages[i], canvas.R(20, 58 + i * 38, 156, 32), () => Navigate(index), page == i);
+            Canvas.Button(Pages[i], Canvas.R(20, 58 + i * 38, 156, 32), () => Navigate(index), Page == i);
         }
-        canvas.Text(canvas.Meitou ? "MEITOU" : "FAITHFUL", canvas.R(28, 592, 148, 18), 11, SettingsCanvas.MutedInk);
-        canvas.Text(BuildVersion.Tag, canvas.R(28, 612, 148, 16), 11, SettingsCanvas.MutedInk);
-        canvas.Text(BuildVersion.Commit, canvas.R(28, 628, 148, 16), 11, SettingsCanvas.MutedInk);
-        modsPage.DrawModsSummary();
-        int contentStart = controls.Count;
-        canvas.Surface(canvas.R(212, 56, 888, 34), "paper");
-        canvas.Text(Pages[page], canvas.R(224, 56, 864, 34), 18, new(20 / 255f, 8 / 255f, 6 / 255f, 1));
+        Canvas.Text(Canvas.Meitou ? "MEITOU" : "FAITHFUL", Canvas.R(28, 592, 148, 18), 11, SettingsCanvas.MutedInk);
+        Canvas.Text(BuildVersion.Tag, Canvas.R(28, 612, 148, 16), 11, SettingsCanvas.MutedInk);
+        Canvas.Text(BuildVersion.Commit, Canvas.R(28, 628, 148, 16), 11, SettingsCanvas.MutedInk);
+        ModsPage.DrawModsSummary();
+        int contentStart = Controls.Count;
+        Canvas.Surface(Canvas.R(212, 56, 888, 34), "paper");
+        Canvas.Text(Pages[Page], Canvas.R(224, 56, 864, 34), 18, new(20 / 255f, 8 / 255f, 6 / 255f, 1));
         float top = 98;
-        if (page == 1)
+        if (Page == 1)
         {
             // The Look and Quality rows (LookBar), then the tabs, one per subject, across the page.
-            lookBar.DrawLookBar();
+            LookBar.DrawLookBar();
             const float tabGap = 6;
             float tabWidth = (888 - tabGap * (GraphicsPages.Length - 1)) / GraphicsPages.Length;
             for (int i = 0; i < GraphicsPages.Length; i++)
             {
                 int index = i;
-                canvas.Button(GraphicsPages[i], canvas.R(212 + i * (tabWidth + tabGap), 174, tabWidth, 30), () => { graphicsPage = index; scroll = scrollTarget = 0; motion.contentProgress = 0; focus = -1; }, graphicsPage == i);
+                Canvas.Button(GraphicsPages[i], Canvas.R(212 + i * (tabWidth + tabGap), 174, tabWidth, 30), () => { GraphicsPage = index; ScrollOffset = ScrollTarget = 0; Motion.ContentProgress = 0; Focus = -1; }, GraphicsPage == i);
             }
             top = 212;
         }
-        viewport = canvas.R(212, top, 888, 666 - top);
-        if (page == ModsPageIndex) modsPage.DrawMods();
-        else canvas.DrawEntries(top);
-        motion.animationScope = "chrome";
-        if (maxScroll > 0)
+        Viewport = Canvas.R(212, top, 888, 666 - top);
+        if (Page == ModsPageIndex) ModsPage.DrawMods();
+        else Canvas.DrawEntries(top);
+        Motion.AnimationScope = "chrome";
+        if (MaxScroll > 0)
         {
-            float track = viewport.Height, thumb = Math.Max(24 * scale, track * track / (track + maxScroll));
-            canvas.Rect(new(viewport.X + viewport.Width + 12 * scale, viewport.Y, 3 * scale, track), SettingsCanvas.MainInk with { W = 0.1f });
-            canvas.Rect(new(viewport.X + viewport.Width + 12 * scale, viewport.Y + (track - thumb) * scroll / maxScroll, 3 * scale, thumb), SettingsCanvas.Brass with { W = 0.75f });
+            float track = Viewport.Height, thumb = Math.Max(24 * Scale, track * track / (track + MaxScroll));
+            Canvas.Rect(new(Viewport.X + Viewport.Width + 12 * Scale, Viewport.Y, 3 * Scale, track), SettingsCanvas.MainInk with { W = 0.1f });
+            Canvas.Rect(new(Viewport.X + Viewport.Width + 12 * Scale, Viewport.Y + (track - thumb) * ScrollOffset / MaxScroll, 3 * Scale, thumb), SettingsCanvas.Brass with { W = 0.75f });
         }
-        motion.Opacity(contentStart, MenuMotion.Ease(motion.contentProgress));
-        canvas.Rect(canvas.R(20, 676, 1080, 1), SettingsCanvas.MainInk with { W = 0.12f });
-        canvas.Button("Restore defaults", canvas.R(20, 686, 150, 28), () => { resetPending = true; openChoice = null; focus = -1; });
-        if (notice.Length > 0) canvas.Text(notice, canvas.R(188, 686, 744, 28), 11, SettingsCanvas.Brass);
-        canvas.Button("Save", canvas.R(960, 684, 140, 32), () => Visible = false, primary: true);
-        if (openChoice is { } choice) canvas.DrawChoice(choice);
-        else canvas.animatedChoice = null;
-        if (lookBar.naming) lookBar.DrawNameDialog();
-        if (rebinding is { } binding) canvas.DrawMessage("Assign a control", notice.Length > 0 ? notice : $"{ActionLabel(binding)}: press a key or mouse button.\nDelete clears the binding. Esc cancels.", () => rebinding = null);
-        if (resetPending || pendingAction is not null)
-            canvas.DrawMessage(resetPending ? "Restore defaults?" : confirmTitle, resetPending ? "Restore all preferences, controls and the look to their defaults?" : confirmation,
-                () => { resetPending = false; pendingAction = null; }, () =>
+        Motion.Opacity(contentStart, MenuMotion.Ease(Motion.ContentProgress));
+        Canvas.Rect(Canvas.R(20, 676, 1080, 1), SettingsCanvas.MainInk with { W = 0.12f });
+        Canvas.Button("Restore defaults", Canvas.R(20, 686, 150, 28), () => { ResetPending = true; ActiveChoice = null; Focus = -1; });
+        if (Notice.Length > 0) Canvas.Text(Notice, Canvas.R(188, 686, 744, 28), 11, SettingsCanvas.Brass);
+        Canvas.Button("Save", Canvas.R(960, 684, 140, 32), () => Visible = false, primary: true);
+        if (ActiveChoice is { } choice) Canvas.DrawChoice(choice);
+        else Canvas.AnimatedChoice = null;
+        if (LookBar.Naming) LookBar.DrawNameDialog();
+        if (Rebinding is { } binding) Canvas.DrawMessage("Assign a control", Notice.Length > 0 ? Notice : $"{ActionLabel(binding)}: press a key or mouse button.\nDelete clears the binding. Esc cancels.", () => Rebinding = null);
+        if (ResetPending || PendingAction is not null)
+            Canvas.DrawMessage(ResetPending ? "Restore defaults?" : ConfirmTitle, ResetPending ? "Restore all preferences, controls and the look to their defaults?" : Confirmation,
+                () => { ResetPending = false; PendingAction = null; }, () =>
                 {
-                    if (resetPending) Reset();
-                    else if (pendingAction is { } action) { notice = action(); pendingAction = null; }
+                    if (ResetPending) Reset();
+                    else if (PendingAction is { } action) { Notice = action(); PendingAction = null; }
                 });
-        motion.Opacity(0, MenuMotion.Ease(motion.menuProgress));
-        painter.Draw(controls, width, height, pointer, null, pass: pass);
+        Motion.Opacity(0, MenuMotion.Ease(Motion.MenuProgress));
+        painter.Draw(Controls, width, height, Pointer, null, pass: pass);
     }
 
     internal void Navigate(int next)
     {
-        page = next; scroll = scrollTarget = 0; motion.contentProgress = 0; focus = -1; openChoice = null; rebinding = null; notice = "";
+        Page = next; ScrollOffset = ScrollTarget = 0; Motion.ContentProgress = 0; Focus = -1; ActiveChoice = null; Rebinding = null; Notice = "";
     }
 
     /// <summary>
@@ -696,7 +696,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     Entry SidesEntry(string label, string hint, string what, IReadOnlyList<Toggle> toggles, IReadOnlyList<Slider> sliders) => new(label, hint, Segmented: true,
         Choice: new(() => ["Faithful", "Meitou"], () =>
         {
-            var live = toggles.Where(t => !lookPresets.stuckSwitches.Contains(t.Label)).ToList();
+            var live = toggles.Where(t => !LookPresets.StuckSwitches.Contains(t.Label)).ToList();
             static bool AtMark(Slider s, float? mark) => mark is { } m && MathF.Abs(s.Get() - m) <= 0.002f * (s.Max - s.Min);
             return live.All(t => t.Get()) && sliders.All(s => AtMark(s, s.Meitou)) ? 1 : live.All(t => !t.Get()) && sliders.All(s => AtMark(s, s.Faithful)) ? 0 : -1;
         }, side =>
@@ -705,10 +705,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             foreach (var toggle in toggles.Where(t => t.Get() != meitou))
             {
                 toggle.Set(meitou);
-                if (toggle.Get() != meitou) lookPresets.stuckSwitches.Add(toggle.Label);
+                if (toggle.Get() != meitou) LookPresets.StuckSwitches.Add(toggle.Label);
             }
             foreach (var slider in sliders) slider.Set((meitou ? slider.Meitou : slider.Faithful)!.Value);
-            notice = meitou ? $"Every {what} is Meitou." : $"Every {what} is as the game ships it.";
+            Notice = meitou ? $"Every {what} is Meitou." : $"Every {what} is as the game ships it.";
         }));
 
     /// <summary>The Advanced or Fixes page's all switch, over that page's Faithful / Meitou switches (not the plain on/off ones such as luckyren Mode) and sliders with both marks.</summary>
@@ -716,6 +716,6 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         entries.Select(e => e.Toggle).OfType<Toggle>().Where(t => t.Remaster).ToList(),
         entries.Select(e => e.Slider).OfType<Slider>().Where(s => s.Faithful is not null && s.Meitou is not null).ToList());
 
-    internal void ShowcaseSwitch(string label, bool on) { if (values.Toggles.FirstOrDefault(t => t.Label == label) is { } t) t.Set(on); }
-    internal void ShowcaseSet(string label, float value) { if (values.Sliders.FirstOrDefault(s => s.Label == label) is { } s) s.Set(value); }
+    internal void ShowcaseSwitch(string label, bool on) { if (Values.Toggles.FirstOrDefault(t => t.Label == label) is { } t) t.Set(on); }
+    internal void ShowcaseSet(string label, float value) { if (Values.Sliders.FirstOrDefault(s => s.Label == label) is { } s) s.Set(value); }
 }

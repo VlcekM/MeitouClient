@@ -26,7 +26,7 @@ public sealed class AppearanceFile
     public string? IdleStance => NonEmpty("idle stance");
 
     /// <summary>The <c>Skin Tone</c> colour (RGB 0–1), or null if the file has none.</summary>
-    public Vector3? SkinTone => Record.Vector3s.TryGetValue("Skin Tone", out var v) ? v : null;
+    public Vector3? SkinTone => Record.Vector3S.TryGetValue("Skin Tone", out var v) ? v : null;
 
     public IReadOnlyDictionary<string, float> Floats => Record.Floats;
 
@@ -37,7 +37,7 @@ public sealed class AppearanceFile
     public static AppearanceFile Read(string path)
     {
         var file = FcsReader.ReadFile(path);
-        var record = file.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.CHARACTER_APPEARANCE)
+        var record = file.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.CharacterAppearance)
             ?? throw new FcsFormatException("Body file has no CHARACTER_APPEARANCE record.", 0);
         return new AppearanceFile { Record = record };
     }

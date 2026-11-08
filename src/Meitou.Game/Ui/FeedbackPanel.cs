@@ -35,12 +35,12 @@ sealed class FeedbackPanel(PlayerInterface player)
     /// <summary>The screens a feedback screenshot leaves out: the game menu and what it opens, and the form itself.</summary>
     internal static readonly HashSet<string> FeedbackShotHides = ["menu", "message", "save", "load", "import", "new-game", "file", FeedbackScreen];
 
-    internal MyGuiLayout? feedbackButtonLayout;
+    internal MyGuiLayout? ButtonLayout;
     /// <summary>Where the last arranged frame put the button (empty: not shown).</summary>
-    UiRect feedbackButtonBounds;
-    bool feedbackHasShot, feedbackHasNav, feedbackStatusError;
-    string? feedbackSaveMissing;
-    string feedbackStatus = "";
+    UiRect _feedbackButtonBounds;
+    bool _feedbackHasShot, _feedbackHasNav, _feedbackStatusError;
+    string? _feedbackSaveMissing;
+    string _feedbackStatus = "";
 
     /// <summary>This frame is the feedback screenshot: drawn without the menus, the form and the button.</summary>
     public bool ShotWithoutMenus { get; set; }
@@ -51,7 +51,7 @@ sealed class FeedbackPanel(PlayerInterface player)
     /// <summary>The tag of a newer Meitou than the running one (<see cref="LatestRelease"/>), or null: the form says so and Send asks first.</summary>
     public string? FeedbackNewer { get; set; }
     /// <summary>The player chose to send from this older version anyway (until the form is opened again).</summary>
-    bool feedbackOldConfirmed;
+    bool _feedbackOldConfirmed;
 
     internal static MyGuiLayout FeedbackButtonLayout() => MyGuiReader.ParseLayout(
         $"""<MyGUI type="Layout"><Widget type="Button" skin="Kenshi_Button1" position_real="0.9 0 0.1 0.03" layer="Info" name="{FeedbackButton}"/></MyGUI>""");
@@ -62,8 +62,8 @@ sealed class FeedbackPanel(PlayerInterface player)
     /// </summary>
     internal static MyGuiLayout FeedbackLayout()
     {
-        const double OldHeight = 0.62, Height = 0.66, Row = 0.055;
-        static string F(double old) => (old * OldHeight / Height).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+        const double oldHeight = 0.62, height = 0.66, row = 0.055;
+        static string F(double old) => (old * oldHeight / height).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
         static string Tick(string tick, double y) =>
             $"""
             <Widget type="Button" skin="Kenshi_TickBoxSkin" position_real="0.03 {F(y)} 0.05 {F(0.054)}" name="{tick}"/>
@@ -71,7 +71,7 @@ sealed class FeedbackPanel(PlayerInterface player)
             """;
         return MyGuiReader.ParseLayout($"""
             <MyGUI type="Layout">
-              <Widget type="Window" skin="Kenshi_WindowCX" position_real="0 0 0.36 {Height.ToString(System.Globalization.CultureInfo.InvariantCulture)}" layer="Window" name="Root">
+              <Widget type="Window" skin="Kenshi_WindowCX" position_real="0 0 0.36 {height.ToString(System.Globalization.CultureInfo.InvariantCulture)}" layer="Window" name="Root">
                 <Property key="Caption" value="SEND FEEDBACK"/>
                 <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.03 {F(0.02)} 0.94 {F(0.1)}" name="lbIntro"><Property key="WordWrap" value="true"/><Property key="TextAlign" value="Left Top"/></Widget>
                 <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.03 {F(0.13)} 0.94 {F(0.045)}" name="lbTitleBox"><Property key="TextAlign" value="Left VCenter"/></Widget>
@@ -81,15 +81,15 @@ sealed class FeedbackPanel(PlayerInterface player)
                   <Property key="Static" value="false"/><Property key="MaxTextLength" value="5000"/><Property key="MultiLine" value="true"/><Property key="WordWrap" value="true"/><Property key="TextAlign" value="Left Top"/>
                 </Widget>
                 {Tick(FeedbackShotTick, 0.57)}
-                {Tick(FeedbackNavTick, 0.57 + Row)}
-                {Tick(FeedbackSaveTick, 0.57 + 2 * Row)}
-                {Tick(FeedbackLogTick, 0.57 + 3 * Row)}
-                <Widget type="Button" skin="Kenshi_TickBoxSkin" position_real="0.03 {F(0.57 + 4 * Row)} 0.05 {F(0.054)}" name="{FeedbackDiscordTick}"/>
-                <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.09 {F(0.57 + 4 * Row)} 0.4 {F(0.054)}" name="lb{FeedbackDiscordTick}"><Property key="TextAlign" value="Left VCenter"/></Widget>
-                <Widget type="EditBox" skin="Kenshi_EditBox" position_real="0.5 {F(0.565 + 4 * Row)} 0.47 {F(0.065)}" name="{FeedbackDiscordBox}"><Property key="MaxTextLength" value="64"/></Widget>
-                <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.03 {F(0.8 + Row)} 0.94 {F(0.085)}" name="StatusText"><Property key="WordWrap" value="true"/><Property key="TextAlign" value="Left Top"/></Widget>
-                <Widget type="Button" skin="Kenshi_Button1" position_real="0.53 {F(0.895 + Row)} 0.215 {F(0.08)}" name="SendButton"><Property key="DefaultAction" value="true"/></Widget>
-                <Widget type="Button" skin="Kenshi_Button1" position_real="0.765 {F(0.895 + Row)} 0.215 {F(0.08)}" name="CancelButton"/>
+                {Tick(FeedbackNavTick, 0.57 + row)}
+                {Tick(FeedbackSaveTick, 0.57 + 2 * row)}
+                {Tick(FeedbackLogTick, 0.57 + 3 * row)}
+                <Widget type="Button" skin="Kenshi_TickBoxSkin" position_real="0.03 {F(0.57 + 4 * row)} 0.05 {F(0.054)}" name="{FeedbackDiscordTick}"/>
+                <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.09 {F(0.57 + 4 * row)} 0.4 {F(0.054)}" name="lb{FeedbackDiscordTick}"><Property key="TextAlign" value="Left VCenter"/></Widget>
+                <Widget type="EditBox" skin="Kenshi_EditBox" position_real="0.5 {F(0.565 + 4 * row)} 0.47 {F(0.065)}" name="{FeedbackDiscordBox}"><Property key="MaxTextLength" value="64"/></Widget>
+                <Widget type="TextBox" skin="Kenshi_TextboxStandardText" position_real="0.03 {F(0.8 + row)} 0.94 {F(0.085)}" name="StatusText"><Property key="WordWrap" value="true"/><Property key="TextAlign" value="Left Top"/></Widget>
+                <Widget type="Button" skin="Kenshi_Button1" position_real="0.53 {F(0.895 + row)} 0.215 {F(0.08)}" name="SendButton"><Property key="DefaultAction" value="true"/></Widget>
+                <Widget type="Button" skin="Kenshi_Button1" position_real="0.765 {F(0.895 + row)} 0.215 {F(0.08)}" name="CancelButton"/>
               </Widget>
             </MyGUI>
             """);
@@ -99,22 +99,22 @@ sealed class FeedbackPanel(PlayerInterface player)
     /// <see cref="PlayerInterface.FeedbackButtonInPlay"/> is off unless the title or the game menu is open.</summary>
     internal void AddFeedbackButton(List<UiControl> controls)
     {
-        feedbackButtonBounds = default;
-        if (feedbackButtonLayout is null || ShotWithoutMenus || player.faithfulScreens.IsOpen(FeedbackScreen)) return;
-        if (!player.FeedbackButtonInPlay && !player.TitleOpen && !player.faithfulScreens.IsOpen("menu")) return;
+        _feedbackButtonBounds = default;
+        if (ButtonLayout is null || ShotWithoutMenus || player.FaithfulScreens.IsOpen(FeedbackScreen)) return;
+        if (!player.FeedbackButtonInPlay && !player.TitleOpen && !player.FaithfulScreens.IsOpen("menu")) return;
         float scale = player.Height / 1080f, w = 150 * scale, h = 36 * scale;
         var b = new UiBindings();
-        b.Positions[FeedbackButton] = feedbackButtonBounds = new(player.Width - w - 8 * scale, 8 * scale, w, h);
+        b.Positions[FeedbackButton] = _feedbackButtonBounds = new(player.Width - w - 8 * scale, 8 * scale, w, h);
         b.Text[FeedbackButton] = FrontendScreens.UpperCaption("Feedback");
         b.Actions[FeedbackButton] = "feedback-open";
-        controls.AddRange(MyGuiPresentation.Arrange(feedbackButtonLayout, player.Width, player.Height, b, player.uiResources.Layers));
+        controls.AddRange(MyGuiPresentation.Arrange(ButtonLayout, player.Width, player.Height, b, player.UiResources.Layers));
     }
 
     /// <summary>A press on the feedback button, before anything else (it is over every screen): the host takes the screenshot on the next frame and then opens the form.</summary>
     internal bool FeedbackButtonDown(System.Numerics.Vector2 p)
     {
-        if (!player.UiVisible || !feedbackButtonBounds.Contains(p.X, p.Y)) return false;
-        player.interfaceSounds.Sound("General_Click");
+        if (!player.UiVisible || !_feedbackButtonBounds.Contains(p.X, p.Y)) return false;
+        player.InterfaceSounds.Sound("General_Click");
         player.RaiseScreenAction(new(FeedbackScreen, FeedbackButton, "feedback-open"));
         return true;
     }
@@ -122,34 +122,34 @@ sealed class FeedbackPanel(PlayerInterface player)
     /// <summary>Opens the form; <paramref name="screenshot"/>: a picture was taken; <paramref name="navmesh"/>: a navmesh picture can be made; <paramref name="saveMissing"/>: why no save can be made, or null.</summary>
     public void OpenFeedback(bool screenshot, bool navmesh, string? saveMissing)
     {
-        feedbackHasShot = screenshot;
-        feedbackHasNav = navmesh;
-        feedbackSaveMissing = saveMissing;
-        if (!FeedbackSending) { feedbackStatus = ""; feedbackStatusError = false; }
-        feedbackOldConfirmed = false;
-        player.faithfulScreens.SetText(FeedbackScreen, FeedbackDiscordBox, FeedbackPrefs.DiscordName);
-        player.faithfulScreens.Open(FeedbackScreen);
+        _feedbackHasShot = screenshot;
+        _feedbackHasNav = navmesh;
+        _feedbackSaveMissing = saveMissing;
+        if (!FeedbackSending) { _feedbackStatus = ""; _feedbackStatusError = false; }
+        _feedbackOldConfirmed = false;
+        player.FaithfulScreens.SetText(FeedbackScreen, FeedbackDiscordBox, FeedbackPrefs.DiscordName);
+        player.FaithfulScreens.Open(FeedbackScreen);
         player.UpdateMenuPause();
     }
 
-    public FeedbackForm FeedbackValues() => new(player.faithfulScreens.GetText(FeedbackScreen, FeedbackTitleBox).Trim(), player.faithfulScreens.GetText(FeedbackScreen, FeedbackBodyBox).Trim(),
-        FeedbackPrefs.Screenshot && feedbackHasShot, FeedbackPrefs.Navmesh && feedbackHasNav, FeedbackPrefs.Save && feedbackSaveMissing is null, FeedbackPrefs.Log,
+    public FeedbackForm FeedbackValues() => new(player.FaithfulScreens.GetText(FeedbackScreen, FeedbackTitleBox).Trim(), player.FaithfulScreens.GetText(FeedbackScreen, FeedbackBodyBox).Trim(),
+        FeedbackPrefs.Screenshot && _feedbackHasShot, FeedbackPrefs.Navmesh && _feedbackHasNav, FeedbackPrefs.Save && _feedbackSaveMissing is null, FeedbackPrefs.Log,
         FeedbackPrefs.Discord && FeedbackPrefs.DiscordName.Trim() is { Length: > 0 } discord ? discord : null);
 
     /// <summary>The send's progress or why it failed, under the ticks (a failure also as a notice once the form is closed).</summary>
     public void FeedbackProgress(string text, bool error = false)
     {
-        (feedbackStatus, feedbackStatusError) = (text, error);
-        if (error && !player.faithfulScreens.IsOpen(FeedbackScreen)) player.Notice($"Feedback not sent: {text}", true);   // the form was closed while it sent
+        (_feedbackStatus, _feedbackStatusError) = (text, error);
+        if (error && !player.FaithfulScreens.IsOpen(FeedbackScreen)) player.Notice($"Feedback not sent: {text}", true);   // the form was closed while it sent
     }
 
     /// <summary>The issue is open: the form closes, emptied, and a message thanks the player (its first button copies the link).</summary>
     public void FeedbackSent(int number, string url)
     {
-        player.faithfulScreens.SetText(FeedbackScreen, FeedbackTitleBox, "");
-        player.faithfulScreens.SetText(FeedbackScreen, FeedbackBodyBox, "");
-        (feedbackStatus, feedbackStatusError) = ("", false);
-        player.faithfulScreens.Close(FeedbackScreen);
+        player.FaithfulScreens.SetText(FeedbackScreen, FeedbackTitleBox, "");
+        player.FaithfulScreens.SetText(FeedbackScreen, FeedbackBodyBox, "");
+        (_feedbackStatus, _feedbackStatusError) = ("", false);
+        player.FaithfulScreens.Close(FeedbackScreen);
         player.Confirm("THANK YOU", $"Thanks for the feedback! It is now issue #{number} on GitHub.", () => player.ClipboardWrite?.Invoke(url), "COPY LINK", cancel: "OK");
         player.UpdateMenuPause();
     }
@@ -162,24 +162,24 @@ sealed class FeedbackPanel(PlayerInterface player)
         b.Text["lbIntro"] = "Tell us what went wrong or what you think. It becomes a public issue on GitHub, with your Meitou version and load order.";
         b.Text["lbTitleBox"] = "Title";
         b.Text["lbBodyBox"] = "What happened";
-        b.Text["lb" + FeedbackShotTick] = feedbackHasShot ? "Attach a screenshot of the game" : "Attach a screenshot (none was taken)";
-        b.Text["lb" + FeedbackNavTick] = feedbackHasNav ? "Attach a screenshot with the navmesh drawn over it" : "Attach a navmesh screenshot (only in a game)";
-        b.Text["lb" + FeedbackSaveTick] = feedbackSaveMissing is null ? "Save the game now and attach the save" : $"Attach a save ({feedbackSaveMissing})";
+        b.Text["lb" + FeedbackShotTick] = _feedbackHasShot ? "Attach a screenshot of the game" : "Attach a screenshot (none was taken)";
+        b.Text["lb" + FeedbackNavTick] = _feedbackHasNav ? "Attach a screenshot with the navmesh drawn over it" : "Attach a navmesh screenshot (only in a game)";
+        b.Text["lb" + FeedbackSaveTick] = _feedbackSaveMissing is null ? "Save the game now and attach the save" : $"Attach a save ({_feedbackSaveMissing})";
         b.Text["lb" + FeedbackLogTick] = "Attach log.txt (it can show folder names, such as your user name)";
         b.Text["lb" + FeedbackDiscordTick] = "Include my Discord name";
-        bool old = feedbackStatus.Length == 0 && FeedbackNewer is not null;
-        b.Text["StatusText"] = old ? $"You are on {BuildVersion.Tag}; {FeedbackNewer} is out. Please check whether this still happens there first." : feedbackStatus;
-        if (feedbackStatusError || old) b.Properties["StatusText"] = new Dictionary<string, string> { ["TextColour"] = PlayerInterface.BadColour };
+        bool old = _feedbackStatus.Length == 0 && FeedbackNewer is not null;
+        b.Text["StatusText"] = old ? $"You are on {BuildVersion.Tag}; {FeedbackNewer} is out. Please check whether this still happens there first." : _feedbackStatus;
+        if (_feedbackStatusError || old) b.Properties["StatusText"] = new Dictionary<string, string> { ["TextColour"] = PlayerInterface.BadColour };
         b.Text["SendButton"] = FrontendScreens.UpperCaption(FeedbackSending ? "Sending" : "Send");
         b.Text["CancelButton"] = FrontendScreens.UpperCaption("Close");
         Enable("CancelButton", FeedbackLogTick, FeedbackDiscordTick);
-        if (!FeedbackSending && player.faithfulScreens.GetText(FeedbackScreen, FeedbackTitleBox).Trim().Length > 0) Enable("SendButton");
-        if (feedbackHasShot) Enable(FeedbackShotTick);
-        if (feedbackHasNav) Enable(FeedbackNavTick);
-        if (feedbackSaveMissing is null) Enable(FeedbackSaveTick);
-        Tick(FeedbackShotTick, FeedbackPrefs.Screenshot && feedbackHasShot);
-        Tick(FeedbackNavTick, FeedbackPrefs.Navmesh && feedbackHasNav);
-        Tick(FeedbackSaveTick, FeedbackPrefs.Save && feedbackSaveMissing is null);
+        if (!FeedbackSending && player.FaithfulScreens.GetText(FeedbackScreen, FeedbackTitleBox).Trim().Length > 0) Enable("SendButton");
+        if (_feedbackHasShot) Enable(FeedbackShotTick);
+        if (_feedbackHasNav) Enable(FeedbackNavTick);
+        if (_feedbackSaveMissing is null) Enable(FeedbackSaveTick);
+        Tick(FeedbackShotTick, FeedbackPrefs.Screenshot && _feedbackHasShot);
+        Tick(FeedbackNavTick, FeedbackPrefs.Navmesh && _feedbackHasNav);
+        Tick(FeedbackSaveTick, FeedbackPrefs.Save && _feedbackSaveMissing is null);
         Tick(FeedbackLogTick, FeedbackPrefs.Log);
         Tick(FeedbackDiscordTick, FeedbackPrefs.Discord);
         if (!FeedbackPrefs.Discord) b.Disabled.Add(FeedbackDiscordBox);
@@ -187,8 +187,8 @@ sealed class FeedbackPanel(PlayerInterface player)
 
     internal void FeedbackFormAction(MyGuiEvent e)
     {
-        if (e.Action != "text") player.interfaceSounds.Sound("General_Click");
-        if (e.Widget == "CancelButton") player.faithfulScreens.Close(FeedbackScreen);
+        if (e.Action != "text") player.InterfaceSounds.Sound("General_Click");
+        if (e.Widget == "CancelButton") player.FaithfulScreens.Close(FeedbackScreen);
         else if (e.Widget == FeedbackShotTick) FeedbackPrefs.Screenshot = !FeedbackPrefs.Screenshot;
         else if (e.Widget == FeedbackNavTick) FeedbackPrefs.Navmesh = !FeedbackPrefs.Navmesh;
         else if (e.Widget == FeedbackSaveTick) FeedbackPrefs.Save = !FeedbackPrefs.Save;
@@ -203,13 +203,13 @@ sealed class FeedbackPanel(PlayerInterface player)
     void SendFeedbackOrAsk()
     {
         void Send() => player.RaiseScreenAction(new(FeedbackScreen, "SendButton", "feedback-send"));
-        if (FeedbackNewer is not { } newer || feedbackOldConfirmed)
+        if (FeedbackNewer is not { } newer || _feedbackOldConfirmed)
         {
             Send();
             return;
         }
 
         player.Confirm("Newer version out", $"You are playing {BuildVersion.Tag}, and {newer} is out. It may already be fixed there: please update and check "
-            + "whether it still happens before sending.", () => { feedbackOldConfirmed = true; Send(); }, "Send anyway", cancel: "Cancel");
+            + "whether it still happens before sending.", () => { _feedbackOldConfirmed = true; Send(); }, "Send anyway", cancel: "Cancel");
     }
 }

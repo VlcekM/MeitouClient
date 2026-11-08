@@ -238,16 +238,16 @@ public class HizPyramidGpuTests
             }
             var levels = HizPyramid.Levels(w, h);
             int total = levels.Sum(l => l.W * l.H);
-            using (var ctx = new Meitou.Game.Rendering.Gpu.GpuContext(d!))
+            using (var ctx = new GpuContext(d!))
             {
                 ctx.EnsureFrame();
-                var desc = new Meitou.Game.Rendering.Gpu.TextureDesc(InternalFormat.R32f, w, h, Use: Meitou.Game.Rendering.Gpu.TextureUse.Sampled | Meitou.Game.Rendering.Gpu.TextureUse.TransferDst, Name: "hiz test depth");
+                var desc = new TextureDesc(InternalFormat.R32F, w, h, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "hiz test depth");
                 using var depthTexture = ctx.Frame.PreFrame.CreateTexture(desc);
                 var region = new PixelRect(0, 0, (uint)w, (uint)h);
                 ctx.Uploads.Write(depthTexture, 0, 0, region, System.Runtime.InteropServices.MemoryMarshal.AsBytes(depth.AsSpan()));
                 using var hiz = new HizPyramid(ctx);
                 hiz.Build(ctx.Frame.PreFrame, depthTexture, planes, w, h, Vector3.Zero, Matrix4x4.Identity, 0.8f, 16f / 9);
-                using var readback = Meitou.Game.Rendering.Gpu.ReadbackBuffer.Create(ctx, (ulong)total * 8, "hiz readback");
+                using var readback = ReadbackBuffer.Create(ctx, (ulong)total * 8, "hiz readback");
                 ctx.Frame.PreFrame.CopyBuffer(hiz.Storage!.Handle, readback.Handle, new GpuBufferCopy(0, 0, (ulong)total * 8));
                 ctx.EndFrame();
                 d!.Frames.WaitAll();

@@ -612,7 +612,7 @@ internal static partial class ZoneNavMeshBuilder
     /// buried in the ground, which has headroom under the terrain's surface (Observed: zone 24.27 by Bad Teeth's gate, a face at 120 under ground at 159;
     /// docs/game/pathfinding.md, "Solids"). Only columns with more than one span can hold one; the exterior mesh only.
     /// </summary>
-    static void RemoveUnderground(Meitou.Data.World.HeightWindow terrain, float depth, RcCompactHeightfield chf)
+    static void RemoveUnderground(HeightWindow terrain, float depth, RcCompactHeightfield chf)
     {
         for (int z = 0; z < chf.height; z++)
             for (int x = 0; x < chf.width; x++)

@@ -3,7 +3,7 @@ using Silk.NET.OpenAL;
 namespace Meitou.Game.Audio;
 
 /// <summary>
-/// The sound card, through OpenAL Soft: one streaming stereo source fed by a thread that asks <see cref="fill"/> for the next block of
+/// The sound card, through OpenAL Soft: one streaming stereo source fed by a thread that asks <see cref="_fill"/> for the next block of
 /// samples whenever OpenAL has played one. All mixing happens before (in <see cref="WwisePlayer"/>); OpenAL only plays the result.
 /// </summary>
 public sealed unsafe class AudioOutput : IDisposable
@@ -12,33 +12,33 @@ public sealed unsafe class AudioOutput : IDisposable
     public const int BlockFrames = 1024;
     const int Blocks = 4;
 
-    readonly ALContext alc;
-    readonly AL al;
-    readonly Device* device;
-    readonly Context* context;
-    readonly uint source;
-    readonly uint[] buffers;
-    readonly Action<float[], int> fill;
-    readonly Thread thread;
-    volatile bool running = true;
-    bool failed;
+    readonly ALContext _alc;
+    readonly AL _al;
+    readonly Device* _device;
+    readonly Context* _context;
+    readonly uint _source;
+    readonly uint[] _buffers;
+    readonly Action<float[], int> _fill;
+    readonly Thread _thread;
+    volatile bool _running = true;
+    bool _failed;
 
     public int SampleRate { get; }
     public string DeviceName { get; }
 
     AudioOutput(ALContext alc, AL al, Device* device, Context* context, int sampleRate, Action<float[], int> fill)
     {
-        this.alc = alc;
-        this.al = al;
-        this.device = device;
-        this.context = context;
-        this.fill = fill;
+        this._alc = alc;
+        this._al = al;
+        this._device = device;
+        this._context = context;
+        this._fill = fill;
         SampleRate = sampleRate;
         DeviceName = alc.GetContextProperty(device, GetContextString.DeviceSpecifier) ?? "default";
-        source = al.GenSource();
-        buffers = al.GenBuffers(Blocks);
-        thread = new Thread(Run) { Name = "Meitou audio", IsBackground = true, Priority = ThreadPriority.AboveNormal };
-        thread.Start();
+        _source = al.GenSource();
+        _buffers = al.GenBuffers(Blocks);
+        _thread = new Thread(Run) { Name = "Meitou audio", IsBackground = true, Priority = ThreadPriority.AboveNormal };
+        _thread.Start();
     }
 
     /// <summary>Opens the default output device; null (with the reason) when there is none or OpenAL cannot start.</summary>
@@ -73,7 +73,7 @@ public sealed unsafe class AudioOutput : IDisposable
 
     /// <summary>The limiter's ceiling (about −1 dB) and its release time (seconds).</summary>
     const float LimitCeiling = 0.89f, LimitRelease = 0.15f;
-    float limitEnvelope;
+    float _limitEnvelope;
 
     /// <summary>
     /// A peak limiter on the finished block (Meitou's, in both modes; docs/audio.md "Voice cap"): the louder of the two sides is
@@ -82,7 +82,7 @@ public sealed unsafe class AudioOutput : IDisposable
     /// </summary>
     void Limit(float[] mix)
     {
-        float release = MathF.Exp(-1f / (LimitRelease * SampleRate)), envelope = limitEnvelope;
+        float release = MathF.Exp(-1f / (LimitRelease * SampleRate)), envelope = _limitEnvelope;
         for (int i = 0; i + 1 < mix.Length; i += 2)
         {
             float peak = MathF.Max(MathF.Abs(mix[i]), MathF.Abs(mix[i + 1]));
@@ -92,7 +92,7 @@ public sealed unsafe class AudioOutput : IDisposable
             mix[i] *= gain;
             mix[i + 1] *= gain;
         }
-        limitEnvelope = float.IsFinite(envelope) ? envelope : 0;
+        _limitEnvelope = float.IsFinite(envelope) ? envelope : 0;
     }
 
     void Run()
@@ -102,36 +102,36 @@ public sealed unsafe class AudioOutput : IDisposable
         void Queue(uint buffer)
         {
             Array.Clear(mix);
-            if (!failed)
+            if (!_failed)
             {
                 // A fault in the mixer stops the sound, never the host: report it once and play silence from then on.
-                try { fill(mix, BlockFrames); }
+                try { _fill(mix, BlockFrames); }
                 catch (Exception e)
                 {
-                    failed = true;
+                    _failed = true;
                     Array.Clear(mix);
                     Console.Error.WriteLine($"audio     stopped: {e.GetType().Name}: {e.Message}");
                 }
             }
             Limit(mix);
             for (int i = 0; i < mix.Length; i++) pcm[i] = (short)Math.Clamp(mix[i] * 32767f, -32768f, 32767f);
-            fixed (short* p = pcm) al.BufferData(buffer, BufferFormat.Stereo16, p, pcm.Length * sizeof(short), SampleRate);
-            al.SourceQueueBuffers(source, 1, &buffer);
+            fixed (short* p = pcm) _al.BufferData(buffer, BufferFormat.Stereo16, p, pcm.Length * sizeof(short), SampleRate);
+            _al.SourceQueueBuffers(_source, 1, &buffer);
         }
-        foreach (var b in buffers) Queue(b);
-        al.SourcePlay(source);
-        while (running)
+        foreach (var b in _buffers) Queue(b);
+        _al.SourcePlay(_source);
+        while (_running)
         {
-            al.GetSourceProperty(source, GetSourceInteger.BuffersProcessed, out int processed);
+            _al.GetSourceProperty(_source, GetSourceInteger.BuffersProcessed, out int processed);
             while (processed-- > 0)
             {
                 uint buffer;
-                al.SourceUnqueueBuffers(source, 1, &buffer);
+                _al.SourceUnqueueBuffers(_source, 1, &buffer);
                 Queue(buffer);
             }
             // Starved (the machine stalled for longer than the queue): start again.
-            al.GetSourceProperty(source, GetSourceInteger.SourceState, out int state);
-            if (state != (int)SourceState.Playing) al.SourcePlay(source);
+            _al.GetSourceProperty(_source, GetSourceInteger.SourceState, out int state);
+            if (state != (int)SourceState.Playing) _al.SourcePlay(_source);
             KeepConnected();
             Thread.Sleep(5);
         }
@@ -140,8 +140,8 @@ public sealed unsafe class AudioOutput : IDisposable
     /// <summary>ALC_CONNECTED (ALC_EXT_disconnect): 0 once the device is gone (unplugged headset, switched or disabled output).</summary>
     const int AlcConnected = 0x313;
     const int ReconnectCheckMs = 500;
-    long nextReconnectCheck;
-    bool reportedDisconnect;
+    long _nextReconnectCheck;
+    bool _reportedDisconnect;
 
     /// <summary>
     /// A lost device stays silent forever in OpenAL, so every <see cref="ReconnectCheckMs"/> the device is checked and, when it is gone,
@@ -150,39 +150,39 @@ public sealed unsafe class AudioOutput : IDisposable
     void KeepConnected()
     {
         long now = Environment.TickCount64;
-        if (now < nextReconnectCheck) return;
-        nextReconnectCheck = now + ReconnectCheckMs;
+        if (now < _nextReconnectCheck) return;
+        _nextReconnectCheck = now + ReconnectCheckMs;
 
         int connected = 1;
-        alc.GetContextProperty(device, (GetContextInteger)AlcConnected, 1, &connected);
+        _alc.GetContextProperty(_device, (GetContextInteger)AlcConnected, 1, &connected);
         if (connected != 0) return;
 
         bool reopened = Reopen();
-        if (reopened || !reportedDisconnect)
+        if (reopened || !_reportedDisconnect)
         {
             Console.Error.WriteLine(reopened ? "audio     output device lost; reopened on the default device" : "audio     output device lost");
         }
-        reportedDisconnect = !reopened;
+        _reportedDisconnect = !reopened;
     }
 
     bool Reopen()
     {
-        var reopen = (delegate* unmanaged[Cdecl]<Device*, byte*, int*, byte>)alc.GetProcAddress(device, "alcReopenDeviceSOFT");
-        return reopen != null && reopen(device, null, null) != 0;
+        var reopen = (delegate* unmanaged[Cdecl]<Device*, byte*, int*, byte>)_alc.GetProcAddress(_device, "alcReopenDeviceSOFT");
+        return reopen != null && reopen(_device, null, null) != 0;
     }
 
     public void Dispose()
     {
-        if (!running) return;
-        running = false;
-        thread.Join();
-        al.SourceStop(source);
-        al.DeleteSource(source);
-        al.DeleteBuffers(buffers);
-        alc.MakeContextCurrent(null);
-        alc.DestroyContext(context);
-        alc.CloseDevice(device);
-        al.Dispose();
-        alc.Dispose();
+        if (!_running) return;
+        _running = false;
+        _thread.Join();
+        _al.SourceStop(_source);
+        _al.DeleteSource(_source);
+        _al.DeleteBuffers(_buffers);
+        _alc.MakeContextCurrent(null);
+        _alc.DestroyContext(_context);
+        _alc.CloseDevice(_device);
+        _al.Dispose();
+        _alc.Dispose();
     }
 }

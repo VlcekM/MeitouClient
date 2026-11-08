@@ -55,21 +55,21 @@ sealed class UserConfig
 
     /// <summary>The frame generation to start with: off, or <see cref="FrameGenerationVendor"/>'s.</summary>
     [JsonIgnore]
-    public Meitou.Game.Rendering.Post.FrameGenerationMethod FrameGenerationMethod
+    public Rendering.Post.FrameGenerationMethod FrameGenerationMethod
     {
-        get => !FrameGeneration ? Meitou.Game.Rendering.Post.FrameGenerationMethod.Off
-            : FrameGenerationVendor == FrameGenerationVendor.Dlss ? Meitou.Game.Rendering.Post.FrameGenerationMethod.Dlss : Meitou.Game.Rendering.Post.FrameGenerationMethod.Fsr;
+        get => !FrameGeneration ? Rendering.Post.FrameGenerationMethod.Off
+            : FrameGenerationVendor == FrameGenerationVendor.Dlss ? Rendering.Post.FrameGenerationMethod.Dlss : Rendering.Post.FrameGenerationMethod.Fsr;
         set
         {
-            FrameGeneration = value != Meitou.Game.Rendering.Post.FrameGenerationMethod.Off;
-            if (FrameGeneration) FrameGenerationVendor = value == Meitou.Game.Rendering.Post.FrameGenerationMethod.Dlss ? FrameGenerationVendor.Dlss : FrameGenerationVendor.Fsr;
+            FrameGeneration = value != Rendering.Post.FrameGenerationMethod.Off;
+            if (FrameGeneration) FrameGenerationVendor = value == Rendering.Post.FrameGenerationMethod.Dlss ? FrameGenerationVendor.Dlss : FrameGenerationVendor.Fsr;
         }
     }
     /// <summary>The Metal display default: MetalFX balanced (temporal at 0.50); Native is used when MetalFX is unavailable.</summary>
     public MetalUpscalerMode MetalUpscaler { get; set; } = MetalUpscalerMode.Temporal;
     /// <summary>The Metal render scale; the default 0.50 is the balanced profile. The Metal settings panel edits it live.</summary>
     public float MetalRenderScale { get; set; } = 0.5f;
-    public Meitou.Data.Ui.UiMode UiMode { get; set; } = Meitou.Data.Ui.UiMode.Meitou;
+    public Meitou.Data.Ui.UiMode UiMode { get; set; } = Data.Ui.UiMode.Meitou;
     /// <summary>The unit of the run speed in the information panel (Interface settings): mph as the game, or km/h.</summary>
     public SpeedUnit SpeedUnit { get; set; } = SpeedUnit.Mph;
     /// <summary>The damage floaters (Interface settings): the original's <c>floaters</c> option, Simple by default; Meitou also floats a green "+N" over a player character that heals.</summary>
@@ -149,8 +149,8 @@ sealed class UserConfig
     public bool FixBenchFacing { get; set; } = true;
     /// <summary>Other buildings' parts (the Hub's wall in the Shinobi Thieves tower) are cut inside a building in the interior view (Fixes settings; off: drawn, as the game does; docs/render-interior-cut.md).</summary>
     public bool FixPartsInBuildings { get; set; } = true;    /// <summary>The strategy camera's turn and tilt rate in degrees per second per unit of input (Controls settings): the original's
-    /// <c>mouse speed pan</c> / <c>mouse speed tilt</c> (slider 2 … 50, default 6), one value for both here.</summary>
-    public float CameraRotateSpeed { get; set; } = Meitou.Data.World.KenshiCamera.DefaultRotateSpeed;
+                                                             /// <c>mouse speed pan</c> / <c>mouse speed tilt</c> (slider 2 … 50, default 6), one value for both here.</summary>
+    public float CameraRotateSpeed { get; set; } = Data.World.KenshiCamera.DefaultRotateSpeed;
     public const float MinCameraRotateSpeed = 2, MaxCameraRotateSpeed = 50;
     /// <summary>The pointer at the screen's edge pans the strategy camera (the original's <c>Edge scrolling</c>, default on; Controls settings);
     /// null until first used, then taken from the install's settings.cfg.</summary>
@@ -171,18 +171,18 @@ sealed class UserConfig
     public const float MinCameraMoveSpeed = 150, MaxCameraMoveSpeed = 1000, MinCameraZoomSpeed = 10, MaxCameraZoomSpeed = 200;
 
     /// <summary>Fills the camera options still unset from the install's settings.cfg (the original's missing-key defaults).</summary>
-    public void SeedCamera(Meitou.Content.GameInstall install)
+    public void SeedCamera(Content.GameInstall install)
     {
         InvertX ??= Meitou.Game.Audio.AudioSystem.Setting(install, "invert X", 0) != 0;
         InvertY ??= Meitou.Game.Audio.AudioSystem.Setting(install, "invert Y", 1) != 0;
         SwapMouseButtons ??= Meitou.Game.Audio.AudioSystem.Setting(install, "swap mouse buttons", 0) != 0;
-        FontSize ??= Meitou.Game.Audio.AudioSystem.Setting(install, "font size2", Meitou.Data.Ui.KenshiFontSize.DefaultSetting, MinFontSize, MaxFontSize);
-        CameraMoveSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera speed", Meitou.Data.World.KenshiCamera.DefaultMoveSpeed, MinCameraMoveSpeed, MaxCameraMoveSpeed);
-        CameraZoomSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera zoom", Meitou.Data.World.KenshiCamera.DefaultZoomSpeed, MinCameraZoomSpeed, MaxCameraZoomSpeed);
+        FontSize ??= Meitou.Game.Audio.AudioSystem.Setting(install, "font size2", Data.Ui.KenshiFontSize.DefaultSetting, MinFontSize, MaxFontSize);
+        CameraMoveSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera speed", Data.World.KenshiCamera.DefaultMoveSpeed, MinCameraMoveSpeed, MaxCameraMoveSpeed);
+        CameraZoomSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera zoom", Data.World.KenshiCamera.DefaultZoomSpeed, MinCameraZoomSpeed, MaxCameraZoomSpeed);
     }
 
     /// <summary>Hands the camera options to the strategy camera's settings (unset ones keep the camera's own defaults, which are the original's).</summary>
-    public void ApplyCamera(Meitou.Game.Host.Cameras.CameraSettings camera)
+    public void ApplyCamera(Cameras.CameraSettings camera)
     {
         camera.InvertX = InvertX ?? camera.InvertX;
         camera.InvertY = InvertY ?? camera.InvertY;
@@ -208,14 +208,14 @@ sealed class UserConfig
     /// <summary>A character that takes a fatal hit explodes, covers everything around in blood and sends bones flying (Advanced settings; an easter egg, off by default, not part of the all Faithful / all Meitou switches; docs/game/luckyren.md).</summary>
     public bool LuckyrenMode { get; set; }
     /// <summary>The second and third speed buttons' (and keys') game speeds (Advanced settings; the game's 2 and 5 by default; <see cref="Meitou.Simulation.Session.SimulationClock.SetFastSpeeds"/>).</summary>
-    public double FastSpeed { get; set; } = Meitou.Simulation.Session.SimulationClock.DefaultSpeeds[1];
-    public double FastestSpeed { get; set; } = Meitou.Simulation.Session.SimulationClock.DefaultSpeeds[2];
+    public double FastSpeed { get; set; } = Simulation.Session.SimulationClock.DefaultSpeeds[1];
+    public double FastestSpeed { get; set; } = Simulation.Session.SimulationClock.DefaultSpeeds[2];
     /// <summary>How many items dropped in play stay on the ground before the oldest goes (Advanced settings; <see cref="Meitou.Simulation.Items.GroundItems.Limit"/>).</summary>
-    public int GroundItemLimit { get; set; } = Meitou.Simulation.Items.GroundItems.DefaultLimit;
+    public int GroundItemLimit { get; set; } = Simulation.Items.GroundItems.DefaultLimit;
     /// <summary>The <c>--sandbox</c> debug panel at the top right is folded to its button (a down arrow); a click on the button toggles it.</summary>
     public bool SandboxPanelCollapsed { get; set; }
     /// <summary>The audio sliders (Audio settings): the original's six volumes and the music frequency; null until first used, then taken from the install's settings.cfg.</summary>
-    public Meitou.Game.Audio.AudioSettings? Audio { get; set; }
+    public Audio.AudioSettings? Audio { get; set; }
     /// <summary>The original's Gameplay options (Gameplay settings); null until first used, then taken from the install's settings.cfg.</summary>
     public GameplaySettings? Gameplay { get; set; }
     /// <summary>Worker threads of the simulation; null = half the cores.</summary>

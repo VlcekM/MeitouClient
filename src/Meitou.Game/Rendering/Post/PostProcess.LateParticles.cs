@@ -1,6 +1,5 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
-
 using Meitou.Game.Rendering.Gpu;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Post;
 
@@ -33,10 +32,10 @@ public sealed partial class PostProcess
         public LateParticlesApplyPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleLateApply, "post late particles apply") => Layer = P.Sampler("uLayer");
     }
 
-    LateParticlesPass? lateParticles;
-    LateParticlesApplyPass? lateParticlesApply;
-    Target2D? lateParticlesNow, lateParticlesLast;
-    bool lateParticlesValid;
+    LateParticlesPass? _lateParticles;
+    LateParticlesApplyPass? _lateParticlesApply;
+    Target2D? _lateParticlesNow, _lateParticlesLast;
+    bool _lateParticlesValid;
     /// <summary>The share of this frame's particles in the filter (about ten frames, so the jitter's phases at an outline average out).</summary>
     const float LateParticlesBlend = 0.1f;
 
@@ -44,22 +43,22 @@ public sealed partial class PostProcess
     /// (<paramref name="reset"/>: no history).</summary>
     void CompositeLateParticlesFiltered(Target2D target, int targetWidth, int targetHeight, bool reset)
     {
-        var (half, quarter) = (lowTargets[0], lowTargets[1]);
+        var (half, quarter) = (_lowTargets[0], _lowTargets[1]);
         bool h = half.Late, q = quarter.Late;
         half.Late = quarter.Late = false;
-        if (!h && !q) { lateParticlesValid = false; return; }
-        if (lateParticlesNow is null || lateParticlesNow.Width != targetWidth || lateParticlesNow.Height != targetHeight)
+        if (!h && !q) { _lateParticlesValid = false; return; }
+        if (_lateParticlesNow is null || _lateParticlesNow.Width != targetWidth || _lateParticlesNow.Height != targetHeight)
         {
-            lateParticlesNow?.Texture.Dispose();   // released after the frames in flight
-            lateParticlesLast?.Texture.Dispose();
+            _lateParticlesNow?.Texture.Dispose();   // released after the frames in flight
+            _lateParticlesLast?.Texture.Dispose();
             using var batch = Gpu.Uploads.Begin();
-            lateParticlesNow = Make(batch, targetWidth, targetHeight, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post late particles a");
-            lateParticlesLast = Make(batch, targetWidth, targetHeight, InternalFormat.Rgba16f, TextureMinFilter.Linear, "post late particles b");
-            lateParticlesValid = false;
+            _lateParticlesNow = Make(batch, targetWidth, targetHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post late particles a");
+            _lateParticlesLast = Make(batch, targetWidth, targetHeight, InternalFormat.Rgba16F, TextureMinFilter.Linear, "post late particles b");
+            _lateParticlesValid = false;
         }
-        (lateParticlesNow, lateParticlesLast) = (lateParticlesLast!, lateParticlesNow);
-        bool history = lateParticlesValid && !reset;
-        var p = lateParticles ??= new LateParticlesPass(Gpu);
+        (_lateParticlesNow, _lateParticlesLast) = (_lateParticlesLast!, _lateParticlesNow);
+        bool history = _lateParticlesValid && !reset;
+        var p = _lateParticles ??= new LateParticlesPass(Gpu);
         Bind(p.P, p.AccumH, h ? half.Accum : null);
         Bind(p.P, p.LowDepthH, h ? half.Depth : null);
         Bind(p.P, p.AccumFarH, h ? half.AccumFar : null);
@@ -68,30 +67,30 @@ public sealed partial class PostProcess
         Bind(p.P, p.LowDepthQ, q ? quarter.Depth : null);
         Bind(p.P, p.AccumFarQ, q ? quarter.AccumFar : null);
         Bind(p.P, p.LowDepthFarQ, q ? quarter.DepthFar : null);
-        Bind(p.P, p.Depth, sceneDepth);
-        Bind(p.P, p.Scene, sceneColour);
+        Bind(p.P, p.Depth, _sceneDepth);
+        Bind(p.P, p.Scene, _sceneColour);
         Bind(p.P, p.Output, target);
-        Bind(p.P, p.History, history ? lateParticlesLast : null);
-        Bind(p.P, p.Motion, motion);
+        Bind(p.P, p.History, history ? _lateParticlesLast : null);
+        Bind(p.P, p.Motion, _motion);
         p.P.Set(p.LowSizeH, (float)(half.Accum?.Width ?? 1), (float)(half.Accum?.Height ?? 1));
         p.P.Set(p.LowSizeQ, (float)(quarter.Accum?.Width ?? 1), (float)(quarter.Accum?.Height ?? 1));
         p.P.Set(p.Has, h ? half.Divisor : 0, q ? quarter.Divisor : 0, 0, 0);
-        p.P.Set(p.NearPlanes, planes.X, planes.Y);
-        p.P.Set(p.Late, (float)width / targetWidth, (float)height / targetHeight, JitterPixels.X, JitterPixels.Y);
+        p.P.Set(p.NearPlanes, _planes.X, _planes.Y);
+        p.P.Set(p.Late, (float)_width / targetWidth, (float)_height / targetHeight, JitterPixels.X, JitterPixels.Y);
         p.P.Set(p.Target, targetWidth, targetHeight, history ? 1 : 0, LateParticlesBlend);
-        Draw(p.P, lateParticlesNow.Attachment, lateParticlesNow.Format, targetWidth, targetHeight, targetWidth, targetHeight, PassState);
-        var a = lateParticlesApply ??= new LateParticlesApplyPass(Gpu);
-        Bind(a.P, a.Layer, lateParticlesNow);
+        Draw(p.P, _lateParticlesNow.Attachment, _lateParticlesNow.Format, targetWidth, targetHeight, targetWidth, targetHeight, PassState);
+        var a = _lateParticlesApply ??= new LateParticlesApplyPass(Gpu);
+        Bind(a.P, a.Layer, _lateParticlesNow);
         Draw(a.P, target.Attachment, target.Format, targetWidth, targetHeight, targetWidth, targetHeight, ParticleLowState);
         CloseSegment();
-        lateParticlesValid = true;
+        _lateParticlesValid = true;
     }
 
     void DisposeLateParticles()
     {
-        lateParticles?.P.Dispose();
-        lateParticlesApply?.P.Dispose();
-        lateParticlesNow?.Texture.Dispose();
-        lateParticlesLast?.Texture.Dispose();
+        _lateParticles?.P.Dispose();
+        _lateParticlesApply?.P.Dispose();
+        _lateParticlesNow?.Texture.Dispose();
+        _lateParticlesLast?.Texture.Dispose();
     }
 }

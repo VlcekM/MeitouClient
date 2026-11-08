@@ -31,8 +31,8 @@ public sealed class DoorSounds(WwisePlayer player)
     }
 
     /// <summary>The doors by building id and door index (the snapshot's key; a string made of the two per door a frame was garbage).</summary>
-    readonly Dictionary<(string Building, int Door), Door> doors = [];
-    ulong next = FirstObject;
+    readonly Dictionary<(string Building, int Door), Door> _doors = [];
+    ulong _next = FirstObject;
 
     /// <summary>Fix (default): set the <c>Break</c> switch before <c>Break</c>, so doors and gates sound when they break. Off: as the exe, which never sets it, so <c>Break</c> plays nothing.</summary>
     public bool FixBreak { get; set; } = true;
@@ -43,15 +43,15 @@ public sealed class DoorSounds(WwisePlayer player)
     /// <summary>Starts a frame's steps: every door is taken as gone until <see cref="Update"/> hands it.</summary>
     public void Begin()
     {
-        foreach (var d in doors.Values) d.Seen = false;
+        foreach (var d in _doors.Values) d.Seen = false;
     }
 
     /// <summary>Steps door <paramref name="key"/> to its state now. <paramref name="eye"/> is the camera eye (the range's origin).</summary>
     public void Update((string Building, int Door) key, DoorSoundState state, Vector3 eye)
     {
-        if (!doors.TryGetValue(key, out var door))
+        if (!_doors.TryGetValue(key, out var door))
         {
-            doors[key] = door = new Door(next++);
+            _doors[key] = door = new Door(_next++);
             door.Motion = state.Motion switch { 2 => 0, 3 => 1, var m => m };
             door.Broken = state.Broken;
         }
@@ -63,7 +63,7 @@ public sealed class DoorSounds(WwisePlayer player)
     /// <summary>Ends a frame's steps: a door not handed since <see cref="Begin"/> is closed and unlocked again, where it was last seen.</summary>
     public void End(Vector3 eye)
     {
-        foreach (var door in doors.Values)
+        foreach (var door in _doors.Values)
             if (!door.Seen) Step(door, 0, door.Broken, eye);
     }
 
@@ -99,8 +99,8 @@ public sealed class DoorSounds(WwisePlayer player)
     /// <summary>A new world: every door's object is let go.</summary>
     public void Clear()
     {
-        foreach (var d in doors.Values) player.UnregisterObject(d.Object);
-        doors.Clear();
+        foreach (var d in _doors.Values) player.UnregisterObject(d.Object);
+        _doors.Clear();
         Posted = 0;
     }
 }

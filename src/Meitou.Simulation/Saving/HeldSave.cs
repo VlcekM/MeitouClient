@@ -25,7 +25,7 @@ public static class HeldSave
             foreach (var r in zone.BuildingStates) states[r.StringId] = r;
             foreach (var i in list.Instances)
                 foreach (var id in i.States)   // the building state; an inventory state can come first (docs/formats/save.md "Zone files")
-                    if (states.TryGetValue(id, out var state)) { map[Meitou.Data.World.BuildingKey.Of(zone.Coordinate, i.Id)] = state; break; }
+                    if (states.TryGetValue(id, out var state)) { map[Data.World.BuildingKey.Of(zone.Coordinate, i.Id)] = state; break; }
         }
         return map;
     }
@@ -41,7 +41,7 @@ public static class HeldSave
         {
             if (zone.BuildingList is not { } list) continue;
             foreach (var i in list.Instances)
-                if (i.Target.Length > 0) map[Meitou.Data.World.BuildingKey.Of(zone.Coordinate, i.Id)] = new SavedSpot(i.Target, i.Position);
+                if (i.Target.Length > 0) map[Data.World.BuildingKey.Of(zone.Coordinate, i.Id)] = new SavedSpot(i.Target, i.Position);
         }
         return map;
     }

@@ -70,9 +70,9 @@ public static class SaveInventory
         if (depth > 4) return items;
         foreach (var instance in inventory.Instances)
         {
-            if (!byId.TryGetValue(instance.Target, out var r) || r.RecordType != FcsRecordType.INVENTORY_ITEM_STATE) continue;
+            if (!byId.TryGetValue(instance.Target, out var r) || r.RecordType != FcsRecordType.InventoryItemState) continue;
             List<SaveItem>? contents = null;
-            if (r.Instances.Count > 0 && byId.TryGetValue(r.Instances[0].Target, out var inner) && inner.RecordType == FcsRecordType.INVENTORY_STATE)
+            if (r.Instances.Count > 0 && byId.TryGetValue(r.Instances[0].Target, out var inner) && inner.RecordType == FcsRecordType.InventoryState)
                 contents = Read(byId, inner, depth + 1);
             items.Add(ItemOf(r, contents));
         }
@@ -127,14 +127,14 @@ public static class SaveInventory
     /// </summary>
     internal static FcsRecord ItemRecord(SaveItem item)
     {
-        var r = new FcsRecord { Type = (int)FcsRecordType.INVENTORY_ITEM_STATE, Name = "0" };
+        var r = new FcsRecord { Type = (int)FcsRecordType.InventoryItemState, Name = "0" };
         if (item.Source is { } s)
         {
             foreach (var (k, v) in s.Strings) r.Strings[k] = v;
             foreach (var (k, v) in s.Ints) r.Ints[k] = v;
             foreach (var (k, v) in s.Floats) r.Floats[k] = v;
             foreach (var (k, v) in s.Bools) r.Bools[k] = v;
-            foreach (var (k, v) in s.Vector3s) r.Vector3s[k] = v;
+            foreach (var (k, v) in s.Vector3S) r.Vector3S[k] = v;
         }
         else
         {
@@ -220,7 +220,7 @@ public static class SaveInventory
                 if (item.Contents is { } contents && depth < 4)
                 {
                     string? oldInner = item.Source is { Instances.Count: > 0 } s ? s.Instances[0].Target : null;
-                    var inner = Take(new FcsRecord { Type = (int)FcsRecordType.INVENTORY_STATE, Name = "0" }, oldInner);
+                    var inner = Take(new FcsRecord { Type = (int)FcsRecordType.InventoryState, Name = "0" }, oldInner);
                     r.Instances.Add(Link(1, inner.StringId));
                     Fill(inner, contents, depth + 1);
                 }

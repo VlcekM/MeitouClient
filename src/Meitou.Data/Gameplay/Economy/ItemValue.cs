@@ -33,34 +33,34 @@ public static class ItemValue
         float s = quality * 0.01f;
         switch (r.Type)
         {
-            case FcsRecordType.WEAPON:
-            {
-                int v = RecordReading.Int(r, "value", 0);
-                if (manufacturer is not null) v = (int)(v * RecordReading.Float(manufacturer, "price mod", 1));
-                int raw = (int)(Lerp(Logistic(s), 15, 160) * v);
-                return apply ? (int)(raw * k.SwordPriceMult) : raw;
-            }
-            case FcsRecordType.ARMOUR:
-            {
-                bool covers = r.GetReferences("part coverage").Count > 0;
-                int v;
-                if (quality > 0 && covers)
+            case FcsRecordType.Weapon:
                 {
-                    int c = Math.Clamp(RecordReading.Int(r, "class", 0), 0, 3), m = Math.Clamp(RecordReading.Int(r, "material type", 0), 0, 3);
-                    v = (int)Lerp(s * s, ClassLo[c] * MaterialLo[m], ClassHi[c] * MaterialHi[m]);
+                    int v = RecordReading.Int(r, "value", 0);
+                    if (manufacturer is not null) v = (int)(v * RecordReading.Float(manufacturer, "price mod", 1));
+                    int raw = (int)(Lerp(Logistic(s), 15, 160) * v);
+                    return apply ? (int)(raw * k.SwordPriceMult) : raw;
                 }
-                else v = RecordReading.Int(r, "value", 0);
-                if (apply) v = (int)(v * (covers ? k.ArmourPriceMult : k.ClothingPriceMult));
-                v = (int)(v * RecordReading.Float(r, "relative price mult", 1));
-                return (int)(v * SlotFactor(RecordReading.Int(r, "slot", 0)));
-            }
-            case FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT:
-            {
-                int raw = (int)Lerp(s * s, RecordReading.Int(r, "value", 0), RecordReading.Int(r, "value 1", 0));
-                if (!apply) return raw;
-                return (int)(raw * (r.Type == FcsRecordType.CROSSBOW ? k.CrossbowRecordMult : k.LimbRecordMult));
-            }
-            case FcsRecordType.CONTAINER:
+            case FcsRecordType.Armour:
+                {
+                    bool covers = r.GetReferences("part coverage").Count > 0;
+                    int v;
+                    if (quality > 0 && covers)
+                    {
+                        int c = Math.Clamp(RecordReading.Int(r, "class", 0), 0, 3), m = Math.Clamp(RecordReading.Int(r, "material type", 0), 0, 3);
+                        v = (int)Lerp(s * s, ClassLo[c] * MaterialLo[m], ClassHi[c] * MaterialHi[m]);
+                    }
+                    else v = RecordReading.Int(r, "value", 0);
+                    if (apply) v = (int)(v * (covers ? k.ArmourPriceMult : k.ClothingPriceMult));
+                    v = (int)(v * RecordReading.Float(r, "relative price mult", 1));
+                    return (int)(v * SlotFactor(RecordReading.Int(r, "slot", 0)));
+                }
+            case FcsRecordType.Crossbow or FcsRecordType.LimbReplacement:
+                {
+                    int raw = (int)Lerp(s * s, RecordReading.Int(r, "value", 0), RecordReading.Int(r, "value 1", 0));
+                    if (!apply) return raw;
+                    return (int)(raw * (r.Type == FcsRecordType.Crossbow ? k.CrossbowRecordMult : k.LimbRecordMult));
+                }
+            case FcsRecordType.Container:
                 return RecordReading.Int(r, "value", 0);
         }
         var ingredients = r.GetReferences("ingredients");

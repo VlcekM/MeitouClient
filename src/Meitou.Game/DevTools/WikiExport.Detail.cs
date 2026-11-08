@@ -47,7 +47,7 @@ static partial class WikiExport
                 rows.Add(new SortedDictionary<string, object?>
                 {
                     ["item"] = item.Name,
-                    ["type"] = e.Type == FcsRecordType.RESEARCH ? "blueprint" : e.Type.ToString().ToLowerInvariant(),
+                    ["type"] = e.Type == FcsRecordType.Research ? "blueprint" : e.Type.ToString().ToLowerInvariant(),
                     ["pct"] = total > 0 ? (float)Math.Round(e.Weight / total * 100, 1) : 0f,
                 });
             }
@@ -72,7 +72,7 @@ static partial class WikiExport
         // --- Town detail: buildings, houses for sale, shops.
         foreach (var (placement, town, row) in placed)
         {
-            var faction = town.Faction is { } fid && db.Find(fid) is { Type: FcsRecordType.FACTION } fr ? FactionData.From(fr) : null;
+            var faction = town.Faction is { } fid && db.Find(fid) is { Type: FcsRecordType.Faction } fr ? FactionData.From(fr) : null;
             var list = buildings.GetValueOrDefault(placement.InstanceId) ?? [];
             var housed = ResidentHomes.Assign(db, town, faction, list, playerId);
             var homeOf = new Dictionary<string, SquadTemplate>(StringComparer.Ordinal);
@@ -136,10 +136,10 @@ static partial class WikiExport
             {
                 var vendors = new List<object?>();
                 var listNames = new List<string>();
-                long weightSum = tpl.Vendors.Where(v => db.Find(v.Id) is { Type: FcsRecordType.VENDOR_LIST }).Sum(v => (long)(v.V0 == 0 ? 100 : v.V0));
+                long weightSum = tpl.Vendors.Where(v => db.Find(v.Id) is { Type: FcsRecordType.VendorList }).Sum(v => (long)(v.V0 == 0 ? 100 : v.V0));
                 foreach (var v in tpl.Vendors)
                 {
-                    if (db.Find(v.Id) is not { Type: FcsRecordType.VENDOR_LIST } vr) continue;
+                    if (db.Find(v.Id) is not { Type: FcsRecordType.VendorList } vr) continue;
                     var vrow = VendorRow(v.Id);
                     listNames.Add(vr.Name);
                     vendors.Add(new SortedDictionary<string, object?> { ["id"] = vrow.Id, ["list"] = vr.Name, ["weight"] = v.V0 == 0 ? 100 : v.V0, ["approxItems"] = (int)Math.Round((double)(v.V0 == 0 ? 100 : v.V0) / Math.Max(1, weightSum) * tpl.VendorsFillTotalAmount) });
@@ -220,10 +220,10 @@ static partial class WikiExport
             var summary = new List<string>();
             foreach (var link in town.OverrideTown)
             {
-                if (db.Find(link.Id) is not { Type: FcsRecordType.TOWN } cr) continue;
+                if (db.Find(link.Id) is not { Type: FcsRecordType.Town } cr) continue;
                 var cand = TownData.From(cr);
                 var conds = new List<object?>();
-                var used = cand.WorldState.Where(w => db.Find(w.Id) is { Type: FcsRecordType.WORLD_EVENT_STATE }).DistinctBy(w => w.Id).ToList();
+                var used = cand.WorldState.Where(w => db.Find(w.Id) is { Type: FcsRecordType.WorldEventState }).DistinctBy(w => w.Id).ToList();
                 var chars = new SortedSet<string>(StringComparer.Ordinal); var facs = new SortedSet<string>(StringComparer.Ordinal);
                 var texts = new List<string>();
                 foreach (var w in used)
@@ -346,7 +346,7 @@ static partial class WikiExport
         {
             foreach (var l in pt.Town.Residents.Concat(pt.Town.BarSquads)) Home(l.Id, pt, "");
             foreach (var o in pt.Town.OverrideTown)
-                if (db.Find(o.Id) is { Type: FcsRecordType.TOWN } ovr)
+                if (db.Find(o.Id) is { Type: FcsRecordType.Town } ovr)
                 {
                     var ot = TownData.From(ovr);
                     foreach (var l in ot.Residents.Concat(ot.BarSquads)) Home(l.Id, pt, $"as {ot.Name}");
@@ -354,7 +354,7 @@ static partial class WikiExport
         }
         // Campaigns that name a character as special leader.
         var campaignsOf = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var c in db.OfType(FcsRecordType.FACTION_CAMPAIGN))
+        foreach (var c in db.OfType(FcsRecordType.FactionCampaign))
             foreach (var r in c.GetReferences("special leader"))
             {
                 if (!campaignsOf.TryGetValue(r.TargetStringId, out var l)) campaignsOf[r.TargetStringId] = l = [];
@@ -376,7 +376,7 @@ static partial class WikiExport
                     foreach (var r in node.GetReferences(list))
                         if (db.Find(r.TargetStringId) is { } next) Walk(next, depth + 1);
             }
-            if (db.Find(dialogueId) is { Type: FcsRecordType.DIALOGUE } d) Walk(d, 0);
+            if (db.Find(dialogueId) is { Type: FcsRecordType.Dialogue } d) Walk(d, 0);
             return joinByDialogue[dialogueId] = found;
         }
         bool CanJoin(GameRecord character, IEnumerable<SquadTemplate> asLeader)
@@ -395,7 +395,7 @@ static partial class WikiExport
         var townFaction = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var pt in placed) if (pt.Row.Faction is { Length: > 0 } pf) townFaction.TryAdd(pt.Town.Name, pf);
         var rows = new List<Row>();
-        foreach (var record in db.OfType(FcsRecordType.CHARACTER).Concat(db.OfType(FcsRecordType.ANIMAL_CHARACTER)).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.Character).Concat(db.OfType(FcsRecordType.AnimalCharacter)).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
             if (record.Name.Length == 0) continue;
             bool unique = record.GetBool("unique");
@@ -441,7 +441,7 @@ static partial class WikiExport
                 bountyData["factions"] = facs;
                 bountyNote = $" Bounty {(fuzz > 0 ? $"{amount} to {amount + fuzz}" : amount.ToString(CultureInfo.InvariantCulture))} with {string.Join(", ", facs)} ({(chance >= 100 ? "always" : chance + " % of spawns")}).";
             }
-            bool join = record.Type == FcsRecordType.CHARACTER && CanJoin(record, uses.Where(u => u.Role == "leader").Select(u => u.Template));
+            bool join = record.Type == FcsRecordType.Character && CanJoin(record, uses.Where(u => u.Role == "leader").Select(u => u.Template));
             var camps = campaignsOf.GetValueOrDefault(record.StringId) ?? [];
             var data = new SortedDictionary<string, object?>
             {
@@ -455,7 +455,7 @@ static partial class WikiExport
                 ["record"] = record.StringId,
             };
             if (bounty) data["bounty"] = bountyData;
-            bool animal = record.Type == FcsRecordType.ANIMAL_CHARACTER;
+            bool animal = record.Type == FcsRecordType.AnimalCharacter;
             string where = first is null ? " No town lists their squad in the data (roaming, campaign, or placed another way)." : homes.Count == 1 ? $" Home: {firstTown} (position is the town's, not live)." : $" Homes: {string.Join(", ", homes.OfType<SortedDictionary<string, object?>>().Select(h => (string)h["town"]!).Distinct().Take(6))} (position is the first town's, not live).";
             rows.Add(new Row(id(record.Name, record.StringId), record.Name, animal ? "animal-character" : "character", faction.Length == 0 ? null : faction, first is { } f0 ? $"zone-{WorldLayout.ZoneOf(f0.X, f0.Z).X}-{WorldLayout.ZoneOf(f0.X, f0.Z).Y}" : null,
                 first?.X, first?.Z, first is null ? "Observed" : "Inferred",

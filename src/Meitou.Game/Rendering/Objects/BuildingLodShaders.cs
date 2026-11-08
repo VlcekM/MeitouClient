@@ -248,15 +248,21 @@ static class BuildingLodShaders
     /// <summary>What these programs map beyond <see cref="NativeShaders.Map"/>: the fade (the eye is the view's), and the constants.</summary>
     static readonly Dictionary<string, string> Own = new()
     {
-        ["uFadeMode"] = "pc.fadeMode", ["uFadeEye"] = "view.eye", ["uFadeRange"] = "pc.fadeRange",
+        ["uFadeMode"] = "pc.fadeMode",
+        ["uFadeEye"] = "view.eye",
+        ["uFadeRange"] = "pc.fadeRange",
         // The interior cut: the view's mask, for the draws of map features over it (fadeMode bit 2, WorldObjectRenderer.Batch.Cut).
         ["uInteriorCut"] = "(view.interiorCut != 0u && (pc.fadeMode & 2) != 0)",
-        ["uCutVolumes"] = "view.cutVolumes", ["uCutRanges"] = "view.cutRanges", ["uCutPlanes"] = "view.cutPlanes",
-        ["uSkinned"] = "false", ["uHasHead"] = "false",
+        ["uCutVolumes"] = "view.cutVolumes",
+        ["uCutRanges"] = "view.cutRanges",
+        ["uCutPlanes"] = "view.cutPlanes",
+        ["uSkinned"] = "false",
+        ["uHasHead"] = "false",
         // The scaffold grid (construction.dds): the push spare's upper bits hold its bindless index + 1 (WorldObjectRenderer.RecordDraws); read only when not 0.
         ["uScaffold"] = "textures2D[max(pc.spare >> 8u, 1u) - 1u]",
         // Read only under uHasHead (never): any valid bindless entry.
-        ["uHeadDiffuse"] = "textures2D[pc.diffuse]", ["uHeadNormal"] = "textures2D[pc.normal]",
+        ["uHeadDiffuse"] = "textures2D[pc.diffuse]",
+        ["uHeadNormal"] = "textures2D[pc.normal]",
     };
 
     public static string VertexNative() => NativeShaders.Port(Vertex(), NativeShaders.Map(Own), PushMembers);

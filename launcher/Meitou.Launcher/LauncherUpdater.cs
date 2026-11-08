@@ -10,25 +10,25 @@ namespace Meitou.Launcher;
 /// </summary>
 public sealed class LauncherUpdater(Releases releases, bool prereleases)
 {
-    readonly UpdateManager manager = new(new LauncherReleaseSource(releases, prereleases), new UpdateOptions { ExplicitChannel = Releases.Rid });
-    UpdateInfo? pending;
+    readonly UpdateManager _manager = new(new LauncherReleaseSource(releases, prereleases), new UpdateOptions { ExplicitChannel = Releases.Rid });
+    UpdateInfo? _pending;
 
-    public bool IsInstalled => manager.IsInstalled;
+    public bool IsInstalled => _manager.IsInstalled;
 
     /// <summary>The newer launcher version on GitHub, or null (none, or not installed).</summary>
     public async Task<string?> CheckAsync()
     {
-        if (!manager.IsInstalled) return null;
-        pending = await manager.CheckForUpdatesAsync();
-        return pending?.TargetFullRelease.Version.ToString();
+        if (!_manager.IsInstalled) return null;
+        _pending = await _manager.CheckForUpdatesAsync();
+        return _pending?.TargetFullRelease.Version.ToString();
     }
 
     /// <summary>Downloads the update <see cref="CheckAsync"/> found, then restarts into it.</summary>
     public async Task UpdateAndRestartAsync(Action<int> progress, CancellationToken ct)
     {
-        if (pending is null) return;
-        await manager.DownloadUpdatesAsync(pending, progress, ct);
-        manager.ApplyUpdatesAndRestart(pending.TargetFullRelease);
+        if (_pending is null) return;
+        await _manager.DownloadUpdatesAsync(_pending, progress, ct);
+        _manager.ApplyUpdatesAndRestart(_pending.TargetFullRelease);
     }
 
     /// <summary>

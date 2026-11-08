@@ -111,20 +111,20 @@ public sealed partial class AiSystem
                 board.MissionTown = package.Signal == 1 && board.Town >= 0 ? board.Town : NearestTownOf(at, squad.Faction);
                 break;
             case PackageClass.SlaverShipping:
-            {
-                int best = -1;
-                float bestD = float.MaxValue;
-                foreach (var site in data.Sites)
                 {
-                    if (site.Town.Type != TownType.SlaveCamp || site.Index >= data.SiteFactions.Count) continue;
-                    int f = data.SiteFactions[site.Index];
-                    if (f >= 0 && squad.Faction >= 0 && data.Relations.Contains(f) && data.Relations.Contains(squad.Faction) && data.Relations.IsHostile(f, squad.Faction)) continue;
-                    float d = Vector2.DistanceSquared(Flat(at), Flat(site.Position));
-                    if (d < bestD) (best, bestD) = (site.Index, d);
+                    int best = -1;
+                    float bestD = float.MaxValue;
+                    foreach (var site in data.Sites)
+                    {
+                        if (site.Town.Type != TownType.SlaveCamp || site.Index >= data.SiteFactions.Count) continue;
+                        int f = data.SiteFactions[site.Index];
+                        if (f >= 0 && squad.Faction >= 0 && data.Relations.Contains(f) && data.Relations.Contains(squad.Faction) && data.Relations.IsHostile(f, squad.Faction)) continue;
+                        float d = Vector2.DistanceSquared(Flat(at), Flat(site.Position));
+                        if (d < bestD) (best, bestD) = (site.Index, d);
+                    }
+                    board.MissionTown = best;
+                    break;
                 }
-                board.MissionTown = best;
-                break;
-            }
         }
         // The travel goals (TRAVEL_TO_TARGET_TOWN_FAST) walk to the running package's destination.
         if (board.MissionTown >= 0) board.Destination = CampaignTown.OfSite(board.MissionTown);

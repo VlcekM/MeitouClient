@@ -1,8 +1,8 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using Silk.NET.Vulkan;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Characters;
 
@@ -23,15 +23,15 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>The character to draw into <see cref="StageTexture"/> this frame (the host sets it before <see cref="Update"/>, which also poses the character out of range); null: none.</summary>
     public EditorStageRequest? StageRequest { get; set; }
 
-    GpuTexture? stageColour, stageDepth;
-    SampledTexture? stageSampled;
+    GpuTexture? _stageColour, _stageDepth;
+    SampledTexture? _stageSampled;
     // The enhanced stage (Look): the half-float picture the character and the platform are drawn into, resolved into stageColour.
-    GpuTexture? stageHdr, stageHdrDepth;
-    SampledTexture stageHdrSampled;
-    int stageHdrScale;
+    GpuTexture? _stageHdr, _stageHdrDepth;
+    SampledTexture _stageHdrSampled;
+    int _stageHdrScale;
 
-    PreviewLook look;
-    PreviewResolve? preview;
+    PreviewLook _look;
+    PreviewResolve? _preview;
 
     /// <summary>
     /// How the stage and the portraits are finished (<see cref="PreviewLook"/>); the host sets it every frame from the world's options. A change redraws every portrait
@@ -39,24 +39,24 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     public PreviewLook Look
     {
-        get => look;
+        get => _look;
         set
         {
-            if (look == value) return;
-            look = value;
-            portraitShown.Clear();
+            if (_look == value) return;
+            _look = value;
+            _portraitShown.Clear();
         }
     }
 
     /// <summary>The stage picture (8-bit UNORM holding the lit values as they are, as the original's; transparent where nothing is drawn; upside down as the renderer's targets are), made by <see cref="DrawStage"/>; null before the first.</summary>
-    public (GpuTexture Texture, SampledTexture Sampled)? StageTexture => stageColour is null ? null : (stageColour, stageSampled!.Value);
+    public (GpuTexture Texture, SampledTexture Sampled)? StageTexture => _stageColour is null ? null : (_stageColour, _stageSampled!.Value);
 
     /// <summary>
     /// Where the platform is drawn after the character (<c>WorldObjectRenderer.DrawStageProp</c>), before <see cref="ResolveStage"/>: the stage picture and its depth, or the
     /// enhanced half-float ones, and the fog distance that selects the stage light (-2 the original's, -3 unclamped); null before the first.
     /// </summary>
     public (GpuTexture Colour, GpuTexture Depth, float FogDistance)? StageDrawTarget =>
-        stageColour is null ? null : look.Enhanced && stageHdr is not null ? (stageHdr, stageHdrDepth!, -3f) : (stageColour, stageDepth!, -2f);
+        _stageColour is null ? null : _look.Enhanced && _stageHdr is not null ? (_stageHdr, _stageHdrDepth!, -3f) : (_stageColour, _stageDepth!, -2f);
 
     /// <summary>
     /// The last stage drawn: its camera, the light (towards it, in the world) and where the character stands (its position and facing, no scale), which the platform's
@@ -72,20 +72,20 @@ internal sealed unsafe partial class CharacterRenderer
     {
         if (StageRequest is not { } r || r.Width <= 0 || r.Height <= 0) return;
         StageView = null;
-        if (stageColour is null || stageColour.Desc.Width != r.Width || stageColour.Desc.Height != r.Height) MakeStage(r.Width, r.Height);
-        bool hdr = look.Enhanced;
+        if (_stageColour is null || _stageColour.Desc.Width != r.Width || _stageColour.Desc.Height != r.Height) MakeStage(r.Width, r.Height);
+        bool hdr = _look.Enhanced;
         int scale = hdr ? StageScale(r.Width, r.Height) : 1;
-        if (hdr && (stageHdr is null || stageHdr.Desc.Width != r.Width * scale || stageHdr.Desc.Height != r.Height * scale))
+        if (hdr && (_stageHdr is null || _stageHdr.Desc.Width != r.Width * scale || _stageHdr.Desc.Height != r.Height * scale))
         {
             DisposeStageHdr();
-            (stageHdr, stageHdrDepth, stageHdrSampled) = PreviewResolve.Targets(Gpu, r.Width, r.Height, look with { Supersample = scale }, "character stage hdr");
-            stageHdrScale = scale;
+            (_stageHdr, _stageHdrDepth, _stageHdrSampled) = PreviewResolve.Targets(Gpu, r.Width, r.Height, _look with { Supersample = scale }, "character stage hdr");
+            _stageHdrScale = scale;
         }
         int index = -1;
-        for (int i = 0; i < liveCount; i++)
-            if (live[i].Key == r.Key) { index = i; break; }
+        for (int i = 0; i < _liveCount; i++)
+            if (_live[i].Key == r.Key) { index = i; break; }
         var cmd = Gpu.BeginNative("character stage");
-        var target = hdr ? PassTargets.Of(stageHdr, stageHdrDepth) : PassTargets.Of(stageColour, stageDepth);
+        var target = hdr ? PassTargets.Of(_stageHdr, _stageHdrDepth) : PassTargets.Of(_stageColour, _stageDepth);
         cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
         Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
         var rect = new PixelRect(0, 0, (uint)target.Width, (uint)target.Height);
@@ -93,16 +93,16 @@ internal sealed unsafe partial class CharacterRenderer
         Gpu.SetPassViewport(new PixelViewport(0, 0, target.Width, target.Height, 0, 1), rect);
         if (index >= 0)
         {
-            ref var l = ref live[index];
+            ref var l = ref _live[index];
             var (eye, pivot) = StageCamera(in l, in r);
             var view = Matrix4x4.CreateLookAt(eye, pivot, Vector3.UnitY);
             var projection = Matrix4x4.CreatePerspectiveFieldOfView(r.FieldOfView, r.Width / (float)r.Height, 0.5f, 400) * Matrix4x4.CreateTranslation(r.ShiftX, 0, 0);
             var light = Vector3.Normalize(Vector3.TransformNormal(StageLight, l.World));
             Matrix4x4.Decompose(l.World, out _, out var facing, out _);
             StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
-            portraitLive = index;
+            _portraitLive = index;
             try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light, FogDistance = hdr ? -3 : -2 }, eye, []); }
-            finally { portraitLive = -1; }
+            finally { _portraitLive = -1; }
         }
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
@@ -112,15 +112,15 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>The enhanced stage's picture into the stage picture (after the platform is drawn into <see cref="StageDrawTarget"/>); nothing for the original's.</summary>
     public void ResolveStage()
     {
-        if (!look.Enhanced || stageHdr is null || stageColour is null || StageRequest is null) return;
-        preview ??= new PreviewResolve(Gpu);
-        preview.Run(stageHdrSampled, stageColour, look with { Supersample = stageHdrScale }, [new PixelRect(0, 0, (uint)stageColour.Desc.Width, (uint)stageColour.Desc.Height)]);
+        if (!_look.Enhanced || _stageHdr is null || _stageColour is null || StageRequest is null) return;
+        _preview ??= new PreviewResolve(Gpu);
+        _preview.Run(_stageHdrSampled, _stageColour, _look with { Supersample = _stageHdrScale }, [new PixelRect(0, 0, (uint)_stageColour.Desc.Width, (uint)_stageColour.Desc.Height)]);
     }
 
     /// <summary>The enhanced stage's supersampling: the look's, down to 1 where the picture would pass 16.6 million pixels (twice 4K's; a window over 2880 x 1440 or so).</summary>
     int StageScale(int width, int height)
     {
-        int s = Math.Max(look.Supersample, 1);
+        int s = Math.Max(_look.Supersample, 1);
         while (s > 1 && (long)width * height * s * s > 16_600_000) s--;
         return s;
     }
@@ -130,9 +130,9 @@ internal sealed unsafe partial class CharacterRenderer
 
     void DisposeStageHdr()
     {
-        stageHdr?.Dispose();
-        stageHdrDepth?.Dispose();
-        (stageHdr, stageHdrDepth, stageHdrScale) = (null, null, 0);
+        _stageHdr?.Dispose();
+        _stageHdrDepth?.Dispose();
+        (_stageHdr, _stageHdrDepth, _stageHdrScale) = (null, null, 0);
     }
 
     /// <summary>The stage's light direction (towards the light) in the character's frame: the original's (-3, 2, -3) on the stage, where the character faces the stage's -z.</summary>
@@ -164,8 +164,8 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     public (Vector3 Eye, Vector3 Pivot)? EditorCamera(long key, in EditorStageRequest request)
     {
-        for (int i = 0; i < liveCount; i++)
-            if (live[i].Key == key) return StageCamera(in live[i], in request);
+        for (int i = 0; i < _liveCount; i++)
+            if (_live[i].Key == key) return StageCamera(in _live[i], in request);
         return null;
     }
 
@@ -175,20 +175,20 @@ internal sealed unsafe partial class CharacterRenderer
     void MakeStage(int width, int height)
     {
         DisposeStage();
-        stageColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "character stage"));
-        stageDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Use: TextureUse.DepthTarget, Name: "character stage depth"));
-        stageSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), stageColour.View());
+        _stageColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "character stage"));
+        _stageDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Use: TextureUse.DepthTarget, Name: "character stage depth"));
+        _stageSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
+            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), _stageColour.View());
     }
 
     void DisposeStage()
     {
-        stageColour?.Dispose();
-        stageDepth?.Dispose();
-        (stageColour, stageDepth, stageSampled) = (null, null, null);
+        _stageColour?.Dispose();
+        _stageDepth?.Dispose();
+        (_stageColour, _stageDepth, _stageSampled) = (null, null, null);
         DisposeStageHdr();
         DisposePortraitHdr();
-        preview?.Dispose();
-        preview = null;
+        _preview?.Dispose();
+        _preview = null;
     }
 }

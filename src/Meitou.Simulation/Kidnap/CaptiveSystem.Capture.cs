@@ -35,7 +35,7 @@ namespace Meitou.Simulation.Kidnap;
 public sealed partial class CaptiveSystem
 {
     /// <summary>The downed and cuffed or carried: the AI's give-up list entries (hashed while any exist).</summary>
-    readonly List<(CharacterId Who, double Until)> givenUp = [];
+    readonly List<(CharacterId Who, double Until)> _givenUp = [];
 
     /// <summary>The kidnapping system that carries a captive to a cage once it is cuffed (null: captives are cuffed and left).</summary>
     public KidnapSystem? Kidnap { get; set; }
@@ -65,7 +65,7 @@ public sealed partial class CaptiveSystem
 
     void ExpireWaits(double now)
     {
-        givenUp.RemoveAll(e => e.Until <= now);
+        _givenUp.RemoveAll(e => e.Until <= now);
     }
 
     /// <summary>
@@ -75,12 +75,12 @@ public sealed partial class CaptiveSystem
     static bool Down(CharacterCold c) => c.Medical is { Dead: false } m && (m.Unconscious || (m.Crawling || m.StayingLow) && !c.InCombat);
 
     /// <summary>Maimed (<c>FUN_140644170</c>, <b>Verified</b>): a leg is a stump, or both arms are. The capture finder leaves such a character.</summary>
-    static bool Maimed(Bodies.MedicalState m)
+    static bool Maimed(MedicalState m)
     {
         int arms = 0;
         foreach (var p in m.Parts)
         {
-            if (p.Limb != Bodies.LimbState.Stump) continue;
+            if (p.Limb != LimbState.Stump) continue;
             if (p.Template.LimbSlot is 2 or 3) return true;
             if (p.Template.LimbSlot is 0 or 1) arms++;
         }
@@ -153,7 +153,7 @@ public sealed partial class CaptiveSystem
         if (v == self || !table.Next[v].Alive || table.Cold(v) is not { } c || !Down(c)) return false;
         if (!c.CarriedBy.IsNone || c.InSomething != HeldState.None || c.IsImprisoned || c.Fighter is { IsAnimal: true } || c.Appearance?.Animal is not null || c.Race is null) return false;
         var id = table.IdOf(v);
-        if (Busy(id) || Waiting(givenUp, id, world.GameHours) || Kidnap is { } k && k.Abductions.Any(a => a.Victim == id)) return false;
+        if (Busy(id) || Waiting(_givenUp, id, world.GameHours) || Kidnap is { } k && k.Abductions.Any(a => a.Victim == id)) return false;
         if (!capture) return c.SlaveState != 0 && c.SlaveOwner == me.Faction && c.Medical is not { Unconscious: false, Crawling: false, StayingLow: true };
         if (c.SlaveState == 1 || c.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat || Maimed(c.Medical!) || LockSystem.WornShackles(c) is not null) return false;
         return c.Faction != me.Faction && !Allied(me.Faction, c.Faction);
@@ -179,39 +179,43 @@ public sealed partial class CaptiveSystem
         double now = world.GameHours;
         switch (type)
         {
-            case TaskType.WORK_THE_SLAVES:
-            {
-                var slaves = new List<int>();
-                foreach (int s in SlavesOf(world, squad))
-                    if (table.Cold(s) is { CarriedBy.IsNone: true, InSomething: HeldState.None } && !Waiting(givenUp, table.IdOf(s), now) && !Busy(table.IdOf(s))) slaves.Add(s);
-                if (slaves.Count == 0) return null;
-                ulong roll = Rng.Hash(world.Seed, Rng.Key(worker), RngPurpose.Slow, ShoutSalt + (ulong)world.Tick);
-                int pick = slaves[Rng.Int(roll, slaves.Count)];
-                return new CaptiveJob { Kind = CaptiveJobKind.Shout, Worker = worker, Captive = table.IdOf(pick), Cage = "", Faction = cold.Faction };
-            }
-            case TaskType.CAPTURE_NEW_SLAVES or TaskType.CARRY_WOUNDED_SLAVES:
-            {
-                bool capture = type == TaskType.CAPTURE_NEW_SLAVES;
-                if (Kidnap is null || !(capture ? CanCapture(cold) : CarrySystem.CanCarry(world, cold, type))) return null;
-                // 168's desire is the rescue one (FUN_140599480): 0 on the raw Hold bit (also while sneaking) or while carrying. 167 has no Hold test.
-                if (!capture && (cold.Orders & CharacterOrders.Hold) != 0) return null;
-                int v = NearestDown(world, slot, cold, capture);
-                // Row 170 (the lift 168 plans through) wants !22: a victim that needs first aid is treated first (row 25, with a kit and an arm), else the plan fails and nothing is lifted.
-                if (!capture && v >= 0 && table.Cold(v) is { } hurt && FirstAid.FirstAidSystem.NeedsFirstAid(world, hurt))
+            case TaskType.WorkTheSlaves:
                 {
-                    // A probe counts the goal as started: its plan treats first, which the start does.
-                    if (probe)
-                        return new CaptiveJob { Kind = CaptiveJobKind.Carry, Worker = worker, Captive = table.IdOf(v), Cage = "", Faction = cold.Faction };
-                    FirstAid.FirstAidSystem.TreatBeforeLift(world, slot, v);
-                    return null;
+                    var slaves = new List<int>();
+                    foreach (int s in SlavesOf(world, squad))
+                        if (table.Cold(s) is { CarriedBy.IsNone: true, InSomething: HeldState.None } && !Waiting(_givenUp, table.IdOf(s), now) && !Busy(table.IdOf(s))) slaves.Add(s);
+                    if (slaves.Count == 0) return null;
+                    ulong roll = Rng.Hash(world.Seed, Rng.Key(worker), RngPurpose.Slow, ShoutSalt + (ulong)world.Tick);
+                    int pick = slaves[Rng.Int(roll, slaves.Count)];
+                    return new CaptiveJob { Kind = CaptiveJobKind.Shout, Worker = worker, Captive = table.IdOf(pick), Cage = "", Faction = cold.Faction };
                 }
-                // Neither finder (FUN_1408cdd00, FUN_1408cdf50) tests for a cage: the cuffed captive is enslaved (Hand), and a lifted slave is carried until goal 112 finds one.
-                if (v < 0) return null;
-                return new CaptiveJob
+            case TaskType.CaptureNewSlaves or TaskType.CarryWoundedSlaves:
                 {
-                    Kind = capture ? CaptiveJobKind.Capture : CaptiveJobKind.Carry, Worker = worker, Captive = table.IdOf(v), Cage = "", Faction = cold.Faction,
-                };
-            }
+                    bool capture = type == TaskType.CaptureNewSlaves;
+                    if (Kidnap is null || !(capture ? CanCapture(cold) : CarrySystem.CanCarry(world, cold, type))) return null;
+                    // 168's desire is the rescue one (FUN_140599480): 0 on the raw Hold bit (also while sneaking) or while carrying. 167 has no Hold test.
+                    if (!capture && (cold.Orders & CharacterOrders.Hold) != 0) return null;
+                    int v = NearestDown(world, slot, cold, capture);
+                    // Row 170 (the lift 168 plans through) wants !22: a victim that needs first aid is treated first (row 25, with a kit and an arm), else the plan fails and nothing is lifted.
+                    if (!capture && v >= 0 && table.Cold(v) is { } hurt && FirstAid.FirstAidSystem.NeedsFirstAid(world, hurt))
+                    {
+                        // A probe counts the goal as started: its plan treats first, which the start does.
+                        if (probe)
+                            return new CaptiveJob { Kind = CaptiveJobKind.Carry, Worker = worker, Captive = table.IdOf(v), Cage = "", Faction = cold.Faction };
+                        FirstAid.FirstAidSystem.TreatBeforeLift(world, slot, v);
+                        return null;
+                    }
+                    // Neither finder (FUN_1408cdd00, FUN_1408cdf50) tests for a cage: the cuffed captive is enslaved (Hand), and a lifted slave is carried until goal 112 finds one.
+                    if (v < 0) return null;
+                    return new CaptiveJob
+                    {
+                        Kind = capture ? CaptiveJobKind.Capture : CaptiveJobKind.Carry,
+                        Worker = worker,
+                        Captive = table.IdOf(v),
+                        Cage = "",
+                        Faction = cold.Faction,
+                    };
+                }
         }
         return null;
     }
@@ -229,7 +233,7 @@ public sealed partial class CaptiveSystem
     /// </summary>
     bool StepShout(World world, CaptiveJob j, int w, int c, Vector2 to)
     {
-        bool speaking = (talk ??= world.SystemOf<Dialogue.DialogueSystem>())?.Engages(j.Worker) == true;
+        bool speaking = (_talk ??= world.SystemOf<Dialogue.DialogueSystem>())?.Engages(j.Worker) == true;
         if (j.Blows > 0 && speaking) return End(world, j, CaptiveEventKind.Shouted);
 
         if (!speaking && (j.Blows == 0 || j.Time >= Settings.ShoutSeconds))
@@ -268,7 +272,7 @@ public sealed partial class CaptiveSystem
     }
 
     // The dialogue a Shout job asks whether its worker said a line (null until first asked, or without one).
-    Dialogue.DialogueSystem? talk;
+    Dialogue.DialogueSystem? _talk;
 
     bool StepSlaveWork(World world, CaptiveJob j, int w, CharacterCold wc)
     {
@@ -279,7 +283,7 @@ public sealed partial class CaptiveSystem
         if (!cc.CarriedBy.IsNone || cc.IsImprisoned)
         {
             // A capture whose target someone else took (a guard carrying it to jail): left alone for a while, so the next sweep does not send the worker after it again at once (engine choice).
-            if (j.Kind == CaptiveJobKind.Capture) SetWait(givenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
+            if (j.Kind == CaptiveJobKind.Capture) SetWait(_givenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
             return End(world, j, CaptiveEventKind.GaveUp);
         }
         var to = new Vector2(table.Next[c].Position.X, table.Next[c].Position.Z);
@@ -297,7 +301,7 @@ public sealed partial class CaptiveSystem
                 if (walking && Vector2.Distance(table.Next[w].Goal, to) <= 5) return true;
                 if (!walking && ++j.Walks > Settings.Walks)
                 {
-                    SetWait(givenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
+                    SetWait(_givenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
                     return End(world, j, CaptiveEventKind.GaveUp);
                 }
                 TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
@@ -349,7 +353,7 @@ public sealed partial class CaptiveSystem
         var kind = j.Kind;
         End(world, j, null);
         if (kind == CaptiveJobKind.Capture) Chain(world, w, captive);
-        else if (Kidnap is null || !Kidnap.Carry(world, w, captive, hauls: true)) SetWait(givenUp, captive, world.GameHours + Settings.GiveUpHours);
+        else if (Kidnap is null || !Kidnap.Carry(world, w, captive, hauls: true)) SetWait(_givenUp, captive, world.GameHours + Settings.GiveUpHours);
         return false;
     }
 
@@ -359,7 +363,7 @@ public sealed partial class CaptiveSystem
         var table = world.Characters;
         if (table.Cold(w) is not { } wc || !table.TryResolveNext(captive, out int c) || table.Cold(c) is not { Medical.Dead: false } cc) return;
         FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
-        if (Settings.RecordLog) log.Add(new CaptiveEvent(world.Tick, CaptiveEventKind.Enslaved, CaptiveJobKind.Capture, table.IdOf(w), captive));
+        if (Settings.RecordLog) _log.Add(new CaptiveEvent(world.Tick, CaptiveEventKind.Enslaved, CaptiveJobKind.Capture, table.IdOf(w), captive));
     }
 
     /// <summary>
@@ -381,7 +385,7 @@ public sealed partial class CaptiveSystem
         }
         if (moved && wc.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Flag(world, wc.SquadId, world.Characters.IdOf(c), Dialogue.MemoryTag.Looted);
         cc.DrawnWeapon = WeaponKinds.None;
-        assembly.RefreshEquipment(cc);
+        _assembly.RefreshEquipment(cc);
     }
 
     /// <summary>
@@ -410,12 +414,12 @@ public sealed partial class CaptiveSystem
             if (!inv.Add(worn)) { (worn.Section, worn.X, worn.Y) = (section, x, y); inv.Items.Add(worn); }
         }
         Items.InventoryCommands.TryEquip(inv, shackles);
-        assembly.RefreshEquipment(cc);
+        _assembly.RefreshEquipment(cc);
     }
 
     void HashWaits(ref StateHasher hasher)
     {
-        hasher.Add(givenUp.Count);
-        foreach (var (who, until) in givenUp) { hasher.Add(who); hasher.Add(until); }
+        hasher.Add(_givenUp.Count);
+        foreach (var (who, until) in _givenUp) { hasher.Add(who); hasher.Add(until); }
     }
 }

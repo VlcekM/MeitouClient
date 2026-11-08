@@ -11,8 +11,8 @@ public sealed partial class NavmeshWalkability
     /// </summary>
     const float WallHeightWindow = SnapRange;
 
-    [ThreadStatic] static List<Wall>? wallScratch;
-    [ThreadStatic] static HashSet<int>? seenScratch;
+    [ThreadStatic] static List<Wall>? s_wallScratch;
+    [ThreadStatic] static HashSet<int>? s_seenScratch;
 
     /// <summary>One edge of the walkable surface that leads nowhere, on the XZ plane, with its unit normal into the walkable side.</summary>
     readonly record struct Wall(Vector2 A, Vector2 B, Vector2 Inward);
@@ -25,9 +25,9 @@ public sealed partial class NavmeshWalkability
     /// </summary>
     public Vector2 Slide(Vector3 from, Vector2 step, float radius)
     {
-        var w = world;
+        var w = _world;
         if (step == Vector2.Zero || radius <= 0 || !w.Contains(WorldLayout.ZoneOf(from.X, from.Z))) return step;
-        var walls = wallScratch ??= [];
+        var walls = s_wallScratch ??= [];
         walls.Clear();
         GatherWalls(w, from, radius + step.Length() + 1, walls);
         if (walls.Count == 0) return step;
@@ -48,7 +48,7 @@ public sealed partial class NavmeshWalkability
     /// </summary>
     static float Sweep(List<Wall> walls, Vector2 from, Vector2 step, float radius, out Vector2 normal)
     {
-        const float Approach = 1e-4f;
+        const float approach = 1e-4f;
         float best = 1, length = step.Length();
         normal = Vector2.Zero;
         float r2 = radius * radius;
@@ -63,12 +63,12 @@ public sealed partial class NavmeshWalkability
             if (d2 < r2)
             {
                 var n = d2 > 1e-8f ? off / MathF.Sqrt(d2) : wall.Inward;
-                if (Vector2.Dot(step, n) < -Approach * length && best > 0) (best, normal) = (0, n);
+                if (Vector2.Dot(step, n) < -approach * length && best > 0) (best, normal) = (0, n);
                 continue;
             }
             // The face: where the circle's edge reaches the wall's line, when that point lies on the wall.
             float closing = -Vector2.Dot(step, wall.Inward);
-            if (closing > Approach * length)
+            if (closing > approach * length)
             {
                 float side = Vector2.Dot(from - wall.A, wall.Inward);
                 if (side >= radius)
@@ -110,7 +110,7 @@ public sealed partial class NavmeshWalkability
     /// <summary>The walls within <paramref name="reach"/> of <paramref name="from"/> (XZ) at about its height, over the loaded zones round it.</summary>
     void GatherWalls(NavWorld w, Vector3 from, float reach, List<Wall> walls)
     {
-        var seen = seenScratch ??= [];
+        var seen = s_seenScratch ??= [];
         var doors = Doors;
         var lo = WorldLayout.ZoneOf(from.X - reach, from.Z - reach);
         var hi = WorldLayout.ZoneOf(from.X + reach, from.Z + reach);

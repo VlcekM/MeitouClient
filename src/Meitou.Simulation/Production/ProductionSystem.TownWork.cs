@@ -15,7 +15,7 @@ public sealed partial class ProductionSystem
     /// <summary>The prefix of a town building's machine site id (followed by the building's run-time key).</summary>
     public const string TownWorkPrefix = "townwork:";
 
-    readonly Dictionary<string, BuildSite> townWorkSites = new(StringComparer.Ordinal);
+    readonly Dictionary<string, BuildSite> _townWorkSites = new(StringComparer.Ordinal);
 
     /// <summary>The site id of a town building's machine.</summary>
     public static string TownWorkId(TownBuilding building) => TownWorkPrefix + building.Key;
@@ -24,7 +24,7 @@ public sealed partial class ProductionSystem
     public static bool IsTownWork(string id) => id.StartsWith(TownWorkPrefix, StringComparison.Ordinal);
 
     /// <summary>The virtual site of a town building made by <see cref="TownWork"/>, else null.</summary>
-    BuildSite? TownWorkSite(string id) => townWorkSites.GetValueOrDefault(id);
+    BuildSite? TownWorkSite(string id) => _townWorkSites.GetValueOrDefault(id);
 
     /// <summary>
     /// The machine of a town building (made on the first call: empty, owned by the town's faction <paramref name="owner"/>), null for a building that neither works nor stores. Serial
@@ -34,10 +34,16 @@ public sealed partial class ProductionSystem
     {
         string id = TownWorkId(building);
         if (world.Machines.Find(id) is { } known) return known;
-        if (!townWorkSites.TryGetValue(id, out var site))
-            townWorkSites[id] = site = new BuildSite
+        if (!_townWorkSites.TryGetValue(id, out var site))
+            _townWorkSites[id] = site = new BuildSite
             {
-                Id = id, Record = building.BuildingId, Name = building.Name, Position = building.Position, Owner = owner, Materials = [], Complete = true,
+                Id = id,
+                Record = building.BuildingId,
+                Name = building.Name,
+                Position = building.Position,
+                Owner = owner,
+                Materials = [],
+                Complete = true,
                 Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, building.Yaw),
             };
         return Ensure(world, site);
@@ -150,7 +156,7 @@ public sealed partial class ProductionSystem
     {
         if (cold.Inventory is not { } inv || m.Output is not { Count: > 0 } output) return;
         bool moved = false;
-        while (output.Count > 0 && items.Create(output.Recipe.Item, 1) is { } unit && inv.HasRoomFor(unit) && inv.Add(unit))
+        while (output.Count > 0 && _items.Create(output.Recipe.Item, 1) is { } unit && inv.HasRoomFor(unit) && inv.Add(unit))
         {
             output.Count--;
             moved = true;

@@ -73,14 +73,14 @@ public static class SavedKit
     internal static ItemInstance? ItemOf(SaveItem s, ItemFactory factory)
     {
         // A blueprint is saved as its look record with the RESEARCH as company and material (Verified, the owner's saves); the factory makes it from the research.
-        var research = factory.Db.Find(s.CompanyId) is { Type: FcsRecordType.RESEARCH } c ? c : factory.Db.Find(s.MaterialId) is { Type: FcsRecordType.RESEARCH } m ? m : null;
+        var research = factory.Db.Find(s.CompanyId) is { Type: FcsRecordType.Research } c ? c : factory.Db.Find(s.MaterialId) is { Type: FcsRecordType.Research } m ? m : null;
         if ((research is not null ? factory.Blueprint(research, s.Quantity, s.Quality) : factory.Create(s.BaseId, s.Quantity, s.Quality)) is not { } item) return null;
         item.Section = s.Section;
         item.X = s.X;
         item.Y = s.Y;
         // Meitou saves from before armour took its level from its quality have level 0 and a grade quality below 100: that quality. The original saves some armour
         // at level 0 and quality 100 (Observed, docs/game/ui-screens.md "Item tooltip"), which stays level 0.
-        item.Level = s.Level == 0 && item.Type == FcsRecordType.ARMOUR && s.Quality is > 0 and < 100 ? (int)s.Quality : s.Level;
+        item.Level = s.Level == 0 && item.Type == FcsRecordType.Armour && s.Quality is > 0 and < 100 ? (int)s.Quality : s.Level;
         item.MaterialId = s.MaterialId;
         item.CompanyId = s.CompanyId;
         item.Crafter = s.Crafter;
@@ -121,9 +121,26 @@ public static class SavedKit
     {
         var saved = new SaveItem
         {
-            BaseId = i.Record, MaterialId = i.MaterialId, CompanyId = i.CompanyId, Crafter = i.Crafter, Uniform = i.Uniform, ColourId = i.ColourId, Section = section, X = i.X, Y = i.Y, Quantity = i.Quantity, Level = i.Level,
-            ItemFunction = i.ItemFunction, Quality = i.Quality, Charges = i.Charges, Source = i.Saved,
-            Damage = i.LimbDamage, Wear = i.LimbWear, Stun = i.LimbStun, Death = i.Death, Unique = i.Unique,
+            BaseId = i.Record,
+            MaterialId = i.MaterialId,
+            CompanyId = i.CompanyId,
+            Crafter = i.Crafter,
+            Uniform = i.Uniform,
+            ColourId = i.ColourId,
+            Section = section,
+            X = i.X,
+            Y = i.Y,
+            Quantity = i.Quantity,
+            Level = i.Level,
+            ItemFunction = i.ItemFunction,
+            Quality = i.Quality,
+            Charges = i.Charges,
+            Source = i.Saved,
+            Damage = i.LimbDamage,
+            Wear = i.LimbWear,
+            Stun = i.LimbStun,
+            Death = i.Death,
+            Unique = i.Unique,
             Lock = i.Lock is { } l ? new SaveItemLock(l.Level, l.EffectivelyLocked, l.Broken, l.Hardness) : null,
             Contents = i.Contents is { } bag ? FromInventory(bag) : null,
             OwnedBy = !i.Owner.IsNone || i.OwnerFromSave ? Hand.Null : null,
@@ -154,7 +171,7 @@ public static class SavedKit
         for (int k = 0; k < loadout.Limbs.Length; k++)
         {
             int state = SaveLimbs.StateOf(bits, k);
-            var prosthetic = state == 2 && fitted[k] is { } item && db.Find(item.BaseId) is { Type: FcsRecordType.LIMB_REPLACEMENT } record ? record : null;
+            var prosthetic = state == 2 && fitted[k] is { } item && db.Find(item.BaseId) is { Type: FcsRecordType.LimbReplacement } record ? record : null;
             loadout.Limbs[k] = state switch
             {
                 0 => null,
@@ -167,15 +184,23 @@ public static class SavedKit
 
     /// <summary>The COLOR_DATA a saved or live item's <c>color sid</c> names (null: none or not in the data).</summary>
     static GameRecord? ColourOf(GameDatabase db, string? colourId) =>
-        colourId is { Length: > 0 } && db.Find(colourId) is { Type: FcsRecordType.COLOR_DATA } colour ? colour : null;
+        colourId is { Length: > 0 } && db.Find(colourId) is { Type: FcsRecordType.ColorData } colour ? colour : null;
 
     /// <summary>A copy of <paramref name="loadout"/> (to give it limbs without touching a look another character may share).</summary>
     public static Loadout Copy(Loadout loadout)
     {
         var copy = new Loadout
         {
-            Seed = loadout.Seed, Character = loadout.Character, Faction = loadout.Faction, Race = loadout.Race, Female = loadout.Female, Appearance = loadout.Appearance, Generated = loadout.Generated,
-            MorphIndex = loadout.MorphIndex, Backpack = loadout.Backpack, Crossbow = loadout.Crossbow,
+            Seed = loadout.Seed,
+            Character = loadout.Character,
+            Faction = loadout.Faction,
+            Race = loadout.Race,
+            Female = loadout.Female,
+            Appearance = loadout.Appearance,
+            Generated = loadout.Generated,
+            MorphIndex = loadout.MorphIndex,
+            Backpack = loadout.Backpack,
+            Crossbow = loadout.Crossbow,
         };
         copy.Clothing.AddRange(loadout.Clothing);
         copy.Weapons.AddRange(loadout.Weapons);
@@ -202,8 +227,16 @@ public static class SavedKit
         if (file.RaceId is not { } raceId || db.Find(raceId) is not { } race) return null;
         var loadout = new Loadout
         {
-            Seed = rolled.Seed, Character = rolled.Character, Faction = rolled.Faction, Race = race, Female = file.Female, Appearance = file, Generated = true,
-            MorphIndex = appearance!.Ints.GetValueOrDefault("morph index", -1), Backpack = rolled.Backpack, Crossbow = rolled.Crossbow,
+            Seed = rolled.Seed,
+            Character = rolled.Character,
+            Faction = rolled.Faction,
+            Race = race,
+            Female = file.Female,
+            Appearance = file,
+            Generated = true,
+            MorphIndex = appearance!.Ints.GetValueOrDefault("morph index", -1),
+            Backpack = rolled.Backpack,
+            Crossbow = rolled.Crossbow,
         };
         loadout.Clothing.AddRange(rolled.Clothing);
         loadout.Weapons.AddRange(rolled.Weapons);
@@ -223,23 +256,28 @@ public static class SavedKit
         if (file.RaceId is not { } raceId || db.Find(raceId) is not { } race) return null;
         var loadout = new Loadout
         {
-            Seed = seed, Faction = faction, Race = race, Female = file.Female, Appearance = file, Generated = true,
+            Seed = seed,
+            Faction = faction,
+            Race = race,
+            Female = file.Female,
+            Appearance = file,
+            Generated = true,
             MorphIndex = appearance.Ints.GetValueOrDefault("morph index", -1),
         };
         foreach (var s in items)
         {
             if (db.Find(s.BaseId) is not { } record) continue;
             GameRecord? Find(string id) => id.Length > 0 ? db.Find(id) : null;
-            if (record.Type == FcsRecordType.ARMOUR && Worn.Contains(s.Section))
+            if (record.Type == FcsRecordType.Armour && Worn.Contains(s.Section))
                 loadout.Clothing.Add(new LoadoutItem(record) { Quality = (int)s.Quality, Material = Find(s.MaterialId), Colour = Find(s.ColourId) });
             else if (s.Section == "backpack_attach")
                 loadout.Backpack = new LoadoutItem(record) { Quality = (int)s.Quality, Colour = Find(s.ColourId) };
-            else if (s.Section == "belt" && record.Type == FcsRecordType.ITEM)
+            else if (s.Section == "belt" && record.Type == FcsRecordType.Item)
                 loadout.Carried.Add(new LoadoutItem(record) { Colour = Find(s.ColourId) });
-            else if (s.Section is "hip" or "back" && record.Type is FcsRecordType.WEAPON or FcsRecordType.CROSSBOW)
+            else if (s.Section is "hip" or "back" && record.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow)
             {
                 var weapon = new LoadoutWeapon(record) { Section = s.Section, Row = s.Y, Level = s.Level, Manufacturer = Find(s.CompanyId), Model = Find(s.MaterialId) };
-                if (record.Type == FcsRecordType.CROSSBOW) loadout.Crossbow ??= weapon;
+                if (record.Type == FcsRecordType.Crossbow) loadout.Crossbow ??= weapon;
                 else loadout.Weapons.Add(weapon);
             }
         }

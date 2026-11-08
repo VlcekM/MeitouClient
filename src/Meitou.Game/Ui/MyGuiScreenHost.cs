@@ -22,98 +22,100 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         public Dictionary<string, int> Selected { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, float> Scroll { get; } = new(StringComparer.Ordinal);
     }
-    readonly Dictionary<string, Screen> screens = new(StringComparer.Ordinal);
+    readonly Dictionary<string, Screen> _screens = new(StringComparer.Ordinal);
     /// <summary>The last list line clicked and when, for the double click that accepts it; the window a double click has (the system's default, 500 ms).</summary>
-    (string Screen, string List, int Line, long At)? lastListClick;
+    (string Screen, string List, int Line, long At)? _lastListClick;
     const double DoubleClickSeconds = 0.5;
-    readonly List<string> open = [];
-    IReadOnlyList<MyGuiScreenFrame> frame = [];
-    (string Screen, string Widget)? focus;
-    UiTextBuffer? edit;
-    (string Screen, Vector2 At, Vector2 Offset)? drag;
+    readonly List<string> _open = [];
+    IReadOnlyList<MyGuiScreenFrame> _frame = [];
+    (string Screen, string Widget)? _focus;
+    UiTextBuffer? _edit;
+    (string Screen, Vector2 At, Vector2 Offset)? _drag;
     public event Action<MyGuiEvent>? Activated;
-    public bool HasWindows => open.Count > 0;
-    public bool HasModal => open.Any(id => screens[id].Modal);
-    public bool IsModal(string id) => screens[id].Modal;
+    public bool HasWindows => _open.Count > 0;
+    public bool HasModal => _open.Any(id => _screens[id].Modal);
+    public bool IsModal(string id) => _screens[id].Modal;
     /// <summary>Modal screens whose empty surroundings let a click through to the screens under them (the title's windows: another title button replaces them).</summary>
     public Func<string, bool>? PassThrough { get; set; }
-    public bool CapturesPointer => drag is not null || CapturesWidget;
-    public bool HasKeyboardFocus => focus is not null;
-    public IReadOnlyList<string> Registered => screens.Keys.ToArray();
-    public IReadOnlyList<string> OpenScreens => open.ToArray();
-    public void Register(string id, MyGuiLayout layout, bool modal = false, bool centreRoot = false) => screens.Add(id, new(MyGuiTemplates.Expand(layout, resources), modal, centreRoot));
+    public bool CapturesPointer => _drag is not null || CapturesWidget;
+    public bool HasKeyboardFocus => _focus is not null;
+    public IReadOnlyList<string> Registered => _screens.Keys.ToArray();
+    public IReadOnlyList<string> OpenScreens => _open.ToArray();
+    public void Register(string id, MyGuiLayout layout, bool modal = false, bool centreRoot = false) => _screens.Add(id, new(MyGuiTemplates.Expand(layout, resources), modal, centreRoot));
     /// <summary>Registers a HUD panel taken out of the HUD layout so that its edit boxes take typing (the town panel): drawn under every window, never raised, never closed by Escape.</summary>
-    public void RegisterPanel(string id, MyGuiLayout layout) => screens.Add(id, new(MyGuiTemplates.Expand(layout, resources), false, false, panel: true));
+    public void RegisterPanel(string id, MyGuiLayout layout) => _screens.Add(id, new(MyGuiTemplates.Expand(layout, resources), false, false, panel: true));
     /// <summary>Swaps a screen's layout for one composed at run time (rows the code makes from templates, as the original's <c>createWidgetT</c>); the screen's state stays.</summary>
-    public void Replace(string id, MyGuiLayout layout) => screens[id].Layout = MyGuiTemplates.Expand(layout, resources);
-    public MyGuiLayout Layout(string id) => screens[id].Layout;
-    public bool IsOpen(string id) => open.Contains(id);
+    public void Replace(string id, MyGuiLayout layout) => _screens[id].Layout = MyGuiTemplates.Expand(layout, resources);
+    public MyGuiLayout Layout(string id) => _screens[id].Layout;
+    public bool IsOpen(string id) => _open.Contains(id);
     /// <summary>Whether the open window's pin button is down (closing the window lets it go).</summary>
-    public bool IsPinned(string id) => open.Contains(id) && screens[id].Pinned;
-    public void SetPinned(string id, bool pinned) => screens[id].Pinned = pinned;
-    public bool IsRegistered(string id) => screens.ContainsKey(id);
+    public bool IsPinned(string id) => _open.Contains(id) && _screens[id].Pinned;
+    public void SetPinned(string id, bool pinned) => _screens[id].Pinned = pinned;
+    public bool IsRegistered(string id) => _screens.ContainsKey(id);
     public void Open(string id)
     {
-        if (!screens.TryGetValue(id, out var s)) throw new KeyNotFoundException(id);
-        if (s.Panel) { if (!open.Contains(id)) open.Insert(0, id); return; }
-        open.Remove(id);
-        open.Add(id);
-        focus = null; edit = null; keyButton = null;
+        if (!_screens.TryGetValue(id, out var s)) throw new KeyNotFoundException(id);
+        if (s.Panel) { if (!_open.Contains(id)) _open.Insert(0, id); return; }
+        _open.Remove(id);
+        _open.Add(id);
+        _focus = null; _edit = null; _keyButton = null;
     }
     /// <summary>
     /// Marries <paramref name="id"/> to <paramref name="leader"/> (the original's bag window beside the inventory): a drag on either moves both, closing the leader closes it
     /// and Escape on it closes the leader.
     /// </summary>
-    public void Follow(string id, string leader) => leaders[id] = leader;
-    readonly Dictionary<string, string> leaders = new(StringComparer.Ordinal);
+    public void Follow(string id, string leader) => _leaders[id] = leader;
+    readonly Dictionary<string, string> _leaders = new(StringComparer.Ordinal);
 
     public void Close(string id)
     {
-        foreach (var (follower, leader) in leaders.ToArray()) if (leader == id && open.Contains(follower)) Close(follower);
-        open.Remove(id);
-        screens[id].Pinned = false;
-        if (focus?.Screen == id) { focus = null; edit = null; }
-        if (keyButton?.Screen == id) keyButton = null;
-        if (drag?.Screen == id) drag = null;
+        foreach (var (follower, leader) in _leaders.ToArray()) if (leader == id && _open.Contains(follower)) Close(follower);
+        _open.Remove(id);
+        _screens[id].Pinned = false;
+        if (_focus?.Screen == id) { _focus = null; _edit = null; }
+        if (_keyButton?.Screen == id) _keyButton = null;
+        if (_drag?.Screen == id) _drag = null;
         ForgetWidgets(id);
-        frame = frame.Where(f => f.Id != id).ToArray();
+        _frame = _frame.Where(f => f.Id != id).ToArray();
     }
-    public void CloseAll() { foreach (string id in open.ToArray()) Close(id); }
-    public void ClearSelection(string id, string list) => screens[id].Selected.Remove(list);
-    public void SetTab(string id, string widget, int index) => screens[id].Tabs[widget] = Math.Max(0, index);
+    public void CloseAll() { foreach (string id in _open.ToArray()) Close(id); }
+    public void ClearSelection(string id, string list) => _screens[id].Selected.Remove(list);
+    public void SetTab(string id, string widget, int index) => _screens[id].Tabs[widget] = Math.Max(0, index);
     /// <summary>Where a screen has been moved from its layout position (a dragged window keeps its offset; the host may place a window beside another).</summary>
-    public Vector2 GetOffset(string id) => screens[id].Offset;
-    public void SetOffset(string id, Vector2 offset) => screens[id].Offset = offset;
-    public void SetText(string id, string widget, string text) { screens[id].Text[widget] = text; if (focus == (id, widget)) edit?.Set(text); }
-    public string GetText(string id, string widget) => screens[id].Text.GetValueOrDefault(widget) ?? "";
-    public int GetTab(string id, string widget) => screens[id].Tabs.GetValueOrDefault(widget);
+    public Vector2 GetOffset(string id) => _screens[id].Offset;
+    public void SetOffset(string id, Vector2 offset) => _screens[id].Offset = offset;
+    public void SetText(string id, string widget, string text) { _screens[id].Text[widget] = text; if (_focus == (id, widget)) _edit?.Set(text); }
+    public string GetText(string id, string widget) => _screens[id].Text.GetValueOrDefault(widget) ?? "";
+    public int GetTab(string id, string widget) => _screens[id].Tabs.GetValueOrDefault(widget);
     /// <summary>Ends typing in the focused edit box (a press the screen's decoration took).</summary>
-    public void Blur() { focus = null; edit = null; keyButton = null; }
+    public void Blur() { _focus = null; _edit = null; _keyButton = null; }
     /// <summary>The edit box being typed in (also one a screen's decoration added): its screen, name, caret and selection; null: none.</summary>
     public (string Screen, string Widget, int Caret, int SelectionStart, int SelectionLength)? Focus =>
-        focus is { } f && edit is not null ? (f.Screen, f.Widget, edit.Caret, edit.SelectionStart, edit.SelectionLength) : null;
+        _focus is { } f && _edit is not null ? (f.Screen, f.Widget, _edit.Caret, _edit.SelectionStart, _edit.SelectionLength) : null;
 
     public IReadOnlyList<MyGuiScreenFrame> Arrange(int width, int height, Func<string, UiBindings> bind, Action<string, List<UiControl>>? decorate = null)
     {
         var result = new List<MyGuiScreenFrame>();
         RepeatTick();
-        foreach (string id in open.OrderBy(i => screens[i].Modal ? 1 : 0).ToArray())
+        foreach (string id in _open.OrderBy(i => _screens[i].Modal ? 1 : 0).ToArray())
         {
-            var s = screens[id];
+            var s = _screens[id];
             var b = bind(id);
             foreach (var t in s.Tabs) b.SelectedTabs[t.Key] = t.Value;
             foreach (var t in s.Text) b.Text[t.Key] = t.Value;
             foreach (var t in s.Selected) b.SelectedItems[t.Key] = t.Value;
             foreach (var t in s.Scroll) b.ScrollOffsets[t.Key] = t.Value;
             PushWidgetState(id, s, b);
-            if (focus is { } f && f.Screen == id && edit is not null)
+            if (_focus is { } f && f.Screen == id && _edit is not null)
             {
                 foreach (var widget in s.Layout.Widgets.Where(w => w.Name == f.Widget || w.Properties.GetValueOrDefault("CaptionOwner") == f.Widget))
                 {
                     var properties = new Dictionary<string, string>(b.Properties.GetValueOrDefault(widget.Name) ?? new Dictionary<string, string>(), StringComparer.Ordinal)
                     {
-                        ["Focused"] = "true", ["CaretIndex"] = edit.Caret.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        ["SelectionStart"] = edit.SelectionStart.ToString(System.Globalization.CultureInfo.InvariantCulture), ["SelectionLength"] = edit.SelectionLength.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ["Focused"] = "true",
+                        ["CaretIndex"] = _edit.Caret.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ["SelectionStart"] = _edit.SelectionStart.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        ["SelectionLength"] = _edit.SelectionLength.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     };
                     if (widget.Properties.GetValueOrDefault("SkipCaption") != "true") b.Properties[widget.Name] = properties;
                 }
@@ -129,30 +131,30 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
             ArrangeKeyboard(id, controls);
             result.Add(new(id, controls));
         }
-        frame = result;
-        return frame;
+        _frame = result;
+        return _frame;
     }
 
     (string Id, UiControl Control)? Pick(Vector2 p)
     {
-        foreach (var screen in frame.Reverse())
+        foreach (var screen in _frame.Reverse())
         {
             if (MyGuiPresentation.HitTest(screen.Controls, p.X, p.Y) is { } hit) return (screen.Id, hit);
-            if (screens[screen.Id].Modal && PassThrough?.Invoke(screen.Id) != true) return (screen.Id, new("modal", "Widget", default, "", "", "", false, new Dictionary<string, string>(), default));
+            if (_screens[screen.Id].Modal && PassThrough?.Invoke(screen.Id) != true) return (screen.Id, new("modal", "Widget", default, "", "", "", false, new Dictionary<string, string>(), default));
         }
         return null;
     }
     public bool Contains(Vector2 p) => Pick(p) is not null;
     /// <summary>The screens as the last <see cref="Arrange"/> laid them out (what <see cref="HitTest"/> picks from).</summary>
-    public IReadOnlyList<MyGuiScreenFrame> LastFrame => frame;
+    public IReadOnlyList<MyGuiScreenFrame> LastFrame => _frame;
     public (string Screen, UiControl Control)? HitTest(Vector2 p) => Pick(p);
     public bool PointerDown(Vector2 p)
     {
-        keyButton = null;
-        if (Pick(p) is not { } picked) { focus = null; edit = null; PressOutside(null); return false; }
+        _keyButton = null;
+        if (Pick(p) is not { } picked) { _focus = null; _edit = null; PressOutside(null); return false; }
         var (id, c) = picked;
-        var s = screens[id];
-        if (!s.Panel) { open.Remove(id); open.Add(id); }
+        var s = _screens[id];
+        if (!s.Panel) { _open.Remove(id); _open.Add(id); }
         if (!c.Enabled) return true;
         if (PressWidget(id, c, p)) return true;
         if (c.Action.StartsWith("mygui:", StringComparison.Ordinal))
@@ -168,42 +170,42 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
                 Activated?.Invoke(new(id, parts[2], "select", c.Argument, selected));
                 // A second click on the same line soon after accepts it (MyGUI ListBox: eventListSelectAccept on a double click).
                 long now = System.Diagnostics.Stopwatch.GetTimestamp();
-                if (lastListClick is { } last && last.Screen == id && last.List == parts[2] && last.Line == selected
+                if (_lastListClick is { } last && last.Screen == id && last.List == parts[2] && last.Line == selected
                     && System.Diagnostics.Stopwatch.GetElapsedTime(last.At, now).TotalSeconds < DoubleClickSeconds)
                 {
-                    lastListClick = null;
+                    _lastListClick = null;
                     Activated?.Invoke(new(id, parts[2], "accept", c.Argument, selected));
                 }
-                else lastListClick = (id, parts[2], selected, now);
+                else _lastListClick = (id, parts[2], selected, now);
             }
             return true;
         }
         if (c.Type == "EditBox" && c.Properties.GetValueOrDefault("Static") != "true")
         {
             FocusEdit(id, c);
-            if (CaretAt?.Invoke(p) is { } at) { edit!.Place(at); selecting = true; }
+            if (CaretAt?.Invoke(p) is { } at) { _edit!.Place(at); _selecting = true; }
             return true;
         }
-        focus = null; edit = null;
+        _focus = null; _edit = null;
         if (c.Type == "Button") { Activated?.Invoke(new(id, c.Name, c.Action)); return true; }
-        var root = frame.First(f => f.Id == id).Controls.FirstOrDefault(n => n.Type == "Window");
+        var root = _frame.First(f => f.Id == id).Controls.FirstOrDefault(n => n.Type == "Window");
         if (root is not null && p.Y < root.Bounds.Y + 38 && root.Properties.GetValueOrDefault("Movable") != "false")
-            drag = leaders.TryGetValue(id, out var leader) && open.Contains(leader) ? (leader, p, screens[leader].Offset) : (id, p, s.Offset);
+            _drag = _leaders.TryGetValue(id, out var leader) && _open.Contains(leader) ? (leader, p, _screens[leader].Offset) : (id, p, s.Offset);
         return true;
     }
     public bool PointerMove(Vector2 p)
     {
-        if (selecting && edit is not null && CaretAt?.Invoke(p) is { } at) { edit.Place(at, extend: true); return true; }
+        if (_selecting && _edit is not null && CaretAt?.Invoke(p) is { } at) { _edit.Place(at, extend: true); return true; }
         if (MoveWidget(p)) return true;
-        if (drag is not { } d) return false;
+        if (_drag is not { } d) return false;
         DragWindow(d, p);
         return true;
     }
-    public void PointerUp() { drag = null; selecting = false; ReleaseWidget(); }
+    public void PointerUp() { _drag = null; _selecting = false; ReleaseWidget(); }
 
     /// <summary>The text index under the pointer in the one-line edit box the renderer last drew there (null: none); a press places the caret, a drag selects (Meitou: MyGUI does both).</summary>
     public Func<Vector2, int?>? CaretAt { get; set; }
-    bool selecting;
+    bool _selecting;
 
     public bool Wheel(Vector2 p, float steps)
     {
@@ -213,29 +215,29 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     }
     public bool Escape()
     {
-        if (open.Count == 0) return false;
+        if (_open.Count == 0) return false;
         if (CloseCombo()) return true;
-        if ((frame.LastOrDefault(f => !screens[f.Id].Panel)?.Id ?? open.LastOrDefault(i => !screens[i].Panel)) is not { } id) return false;
-        Close(leaders.TryGetValue(id, out var leader) && open.Contains(leader) ? leader : id);
+        if ((_frame.LastOrDefault(f => !_screens[f.Id].Panel)?.Id ?? _open.LastOrDefault(i => !_screens[i].Panel)) is not { } id) return false;
+        Close(_leaders.TryGetValue(id, out var leader) && _open.Contains(leader) ? leader : id);
         return true;
     }
     public bool TextInput(char value)
     {
-        if (focus is null || edit is null || char.IsControl(value)) return false;
-        edit.Insert(value.ToString()); PublishEdit();
+        if (_focus is null || _edit is null || char.IsControl(value)) return false;
+        _edit.Insert(value.ToString()); PublishEdit();
         return true;
     }
     void PublishEdit()
     {
-        if (focus is not { } f || edit is null || edit.ReadOnly) return;
-        screens[f.Screen].Text[f.Widget] = edit.Text;
-        Activated?.Invoke(new(f.Screen, f.Widget, "text", edit.Text));
+        if (_focus is not { } f || _edit is null || _edit.ReadOnly) return;
+        _screens[f.Screen].Text[f.Widget] = _edit.Text;
+        Activated?.Invoke(new(f.Screen, f.Widget, "text", _edit.Text));
     }
     public bool EditKey(UiEditKey key, bool extend = false)
     {
-        if (focus is null || edit is null) return false;
+        if (_focus is null || _edit is null) return false;
         if (key >= UiEditKey.Copy) return Clipboard(key);
-        edit.Key(key, extend); PublishEdit();
+        _edit.Key(key, extend); PublishEdit();
         return true;
     }
     public bool Backspace() => EditKey(UiEditKey.Backspace);
@@ -244,7 +246,7 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     public bool Submit()
     {
         if (ActivateFocused()) return true;
-        if (frame.LastOrDefault() is not { } top) return false;
+        if (_frame.LastOrDefault() is not { } top) return false;
         var button = top.Controls.FirstOrDefault(c => c.Type == "Button" && c.Enabled && c.Properties.GetValueOrDefault("DefaultAction") == "true");
         if (button is null) return false;
         Activated?.Invoke(new(top.Id, button.Name, button.Action)); return true;

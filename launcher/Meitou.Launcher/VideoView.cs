@@ -23,44 +23,44 @@ sealed class VideoView : Border
     static readonly TimeSpan Skip = TimeSpan.FromSeconds(10);
     static readonly Geometry PlayIcon = Geometry.Parse("M 0,0 L 0,14 L 12,7 Z"), PauseIcon = Geometry.Parse("M 0,0 H 4 V 14 H 0 Z M 8,0 H 12 V 14 H 8 Z");
 
-    static VideoView? playing;
+    static VideoView? s_playing;
     /// <summary>The last playback session of any video: the next waits for it, so two never hold OpenAL's current context at once.</summary>
-    static Task lastSession = Task.CompletedTask;
+    static Task s_lastSession = Task.CompletedTask;
 
     enum State { Poster, Loading, Playing, Paused }
 
-    readonly string url;
-    readonly NewsFeed feed;
-    WebmFile? file; // the whole video, downloaded on the first Play
-    readonly Image image = new() { Stretch = Stretch.Uniform };
-    readonly Control button;
-    readonly Border bar;
-    readonly Path playPause;
-    readonly Border track, fill;
-    readonly TextBlock time;
-    readonly WriteableBitmap poster;
-    WriteableBitmap? frame;
-    CancellationTokenSource? run;
-    State state = State.Poster;
-    TimeSpan position;
-    bool hovered;
-    double? dragging; // the seek bar's fraction while it is held
+    readonly string _url;
+    readonly NewsFeed _feed;
+    WebmFile? _file; // the whole video, downloaded on the first Play
+    readonly Image _image = new() { Stretch = Stretch.Uniform };
+    readonly Control _button;
+    readonly Border _bar;
+    readonly Path _playPause;
+    readonly Border _track, _fill;
+    readonly TextBlock _time;
+    readonly WriteableBitmap _poster;
+    WriteableBitmap? _frame;
+    CancellationTokenSource? _run;
+    State _state = State.Poster;
+    TimeSpan _position;
+    bool _hovered;
+    double? _dragging; // the seek bar's fraction while it is held
 
     /// <summary>Fills the post's width, its height following the picture's shape.</summary>
     VideoView(string url, NewsFeed feed, WebmFile? file, byte[] firstPicture, int width, int height, (string Url, Action<string> Open)? fullVideo)
     {
-        (this.url, this.feed, this.file) = (url, feed, file);
+        (this._url, this._feed, this._file) = (url, feed, file);
         CornerRadius = new CornerRadius(6);
         ClipToBounds = true;
         Focusable = true;
         Cursor = new Cursor(StandardCursorType.Hand);
-        RenderOptions.SetBitmapInterpolationMode(image, BitmapInterpolationMode.HighQuality);
-        poster = Bitmap(width, height);
-        Copy(firstPicture, poster);
-        image.Source = poster;
+        RenderOptions.SetBitmapInterpolationMode(_image, BitmapInterpolationMode.HighQuality);
+        _poster = Bitmap(width, height);
+        Copy(firstPicture, _poster);
+        _image.Source = _poster;
         var shade = new SolidColorBrush(Color.FromArgb(0xB0, 0x11, 0x0F, 0x0D));
         var ink = MarkdownView.Brush("PaperLight");
-        button = new Border
+        _button = new Border
         {
             Width = 56, Height = 56, CornerRadius = new CornerRadius(28), Background = shade,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
@@ -71,42 +71,42 @@ sealed class VideoView : Border
             },
         };
 
-        playPause = new Path { Data = PauseIcon, Fill = ink, VerticalAlignment = VerticalAlignment.Center };
-        fill = new Border { Background = MarkdownView.Brush("BrassLight"), HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3) };
-        track = new Border
+        _playPause = new Path { Data = PauseIcon, Fill = ink, VerticalAlignment = VerticalAlignment.Center };
+        _fill = new Border { Background = MarkdownView.Brush("BrassLight"), HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3) };
+        _track = new Border
         {
             Height = 6, CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(Color.FromArgb(0x60, 0xD9, 0xCE, 0xB8)),
-            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0), Child = fill,
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0), Child = _fill,
         };
         // A taller transparent strip around the thin track, so it is easy to hit.
-        var seek = new Border { Background = Brushes.Transparent, Height = 22, Child = track };
-        seek.PointerPressed += (_, e) => { e.Handled = true; e.Pointer.Capture(seek); dragging = Fraction(e); UpdateBar(); };
-        seek.PointerMoved += (_, e) => { if (dragging is not null) { dragging = Fraction(e); UpdateBar(); } };
+        var seek = new Border { Background = Brushes.Transparent, Height = 22, Child = _track };
+        seek.PointerPressed += (_, e) => { e.Handled = true; e.Pointer.Capture(seek); _dragging = Fraction(e); UpdateBar(); };
+        seek.PointerMoved += (_, e) => { if (_dragging is not null) { _dragging = Fraction(e); UpdateBar(); } };
         seek.PointerReleased += (_, e) =>
         {
-            if (dragging is not { } f) return;
+            if (_dragging is not { } f) return;
             e.Handled = true;
-            dragging = null;
+            _dragging = null;
             e.Pointer.Capture(null);
             SeekTo(Duration * f);
         };
-        track.SizeChanged += (_, _) => UpdateBar();
-        time = new TextBlock { Foreground = ink, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
+        _track.SizeChanged += (_, _) => UpdateBar();
+        _time = new TextBlock { Foreground = ink, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) };
         var row = new DockPanel();
         foreach (var control in new[]
                  {
-                     BarButton("M 9,0 L 9,14 L 0,7 Z M 18,0 L 18,14 L 9,7 Z", () => SeekTo(position - Skip)),
-                     BarButton(null, TogglePause, playPause),
-                     BarButton("M 0,0 L 0,14 L 9,7 Z M 9,0 L 9,14 L 18,7 Z", () => SeekTo(position + Skip)),
+                     BarButton("M 9,0 L 9,14 L 0,7 Z M 18,0 L 18,14 L 9,7 Z", () => SeekTo(_position - Skip)),
+                     BarButton(null, TogglePause, _playPause),
+                     BarButton("M 0,0 L 0,14 L 9,7 Z M 9,0 L 9,14 L 18,7 Z", () => SeekTo(_position + Skip)),
                  })
         {
             DockPanel.SetDock(control, Dock.Left);
             row.Children.Add(control);
         }
-        DockPanel.SetDock(time, Dock.Right);
-        row.Children.Add(time);
+        DockPanel.SetDock(_time, Dock.Right);
+        row.Children.Add(_time);
         row.Children.Add(seek);
-        bar = new Border
+        _bar = new Border
         {
             VerticalAlignment = VerticalAlignment.Bottom, Padding = new Thickness(8, 4), IsVisible = false, Child = row,
             Background = new LinearGradientBrush
@@ -115,9 +115,9 @@ sealed class VideoView : Border
                 GradientStops = { new GradientStop(Color.FromArgb(0, 0x11, 0x0F, 0x0D), 0), new GradientStop(Color.FromArgb(0xD0, 0x11, 0x0F, 0x0D), 1) },
             },
         };
-        bar.PointerPressed += (_, e) => e.Handled = true; // the bar's gaps are not clicks on the picture
+        _bar.PointerPressed += (_, e) => e.Handled = true; // the bar's gaps are not clicks on the picture
 
-        var layers = new Panel { Children = { image, button, bar } };
+        var layers = new Panel { Children = { _image, _button, _bar } };
         if (fullVideo is var (page, open))
         {
             // "Full video" in the top right corner: the post's full-quality video on the web (front matter `video`).
@@ -149,20 +149,20 @@ sealed class VideoView : Border
         {
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
             Focus();
-            if (state == State.Poster) Play(); else TogglePause();
+            if (_state == State.Poster) Play(); else TogglePause();
             e.Handled = true;
         };
         KeyDown += (_, e) =>
         {
-            if (state is State.Poster or State.Loading) return;
+            if (_state is State.Poster or State.Loading) return;
             if (e.Key == Key.Space) TogglePause();
-            else if (e.Key == Key.Left) SeekTo(position - Skip);
-            else if (e.Key == Key.Right) SeekTo(position + Skip);
+            else if (e.Key == Key.Left) SeekTo(_position - Skip);
+            else if (e.Key == Key.Right) SeekTo(_position + Skip);
             else return;
             e.Handled = true;
         };
-        PointerEntered += (_, _) => { hovered = true; UpdateBar(); };
-        PointerExited += (_, _) => { hovered = false; UpdateBar(); };
+        PointerEntered += (_, _) => { _hovered = true; UpdateBar(); };
+        PointerExited += (_, _) => { _hovered = false; UpdateBar(); };
         DetachedFromVisualTree += (_, _) => ToPoster();
     }
 
@@ -223,32 +223,32 @@ sealed class VideoView : Border
     }
 
     /// <summary>The last picture's time: what the seek bar spans.</summary>
-    TimeSpan Duration => file is { VideoFrames.Count: > 0 } f ? f.VideoFrames[^1].Time : TimeSpan.Zero;
+    TimeSpan Duration => _file is { VideoFrames.Count: > 0 } f ? f.VideoFrames[^1].Time : TimeSpan.Zero;
 
     /// <summary>From the poster: the whole file is downloaded the first time (the play button dimmed meanwhile), then it plays from the start.</summary>
     void Play()
     {
-        playing?.Pause();
-        playing = this;
-        if (file is not null)
+        s_playing?.Pause();
+        s_playing = this;
+        if (_file is not null)
         {
             Start(TimeSpan.Zero, play: true);
             return;
         }
-        state = State.Loading;
-        button.Opacity = 0.5;
+        _state = State.Loading;
+        _button.Opacity = 0.5;
         _ = Task.Run(async () =>
         {
-            var bytes = await feed.ImageAsync(url);
+            var bytes = await _feed.ImageAsync(_url);
             WebmFile? loaded = null;
             try { if (bytes is not null) loaded = WebmFile.Read(bytes); }
             catch (InvalidDataException) { }
             Dispatcher.UIThread.Post(() =>
             {
-                button.Opacity = 1;
-                file ??= loaded;
-                if (state != State.Loading) return; // stopped meanwhile
-                if (file is null) ToPoster(); // could not be downloaded
+                _button.Opacity = 1;
+                _file ??= loaded;
+                if (_state != State.Loading) return; // stopped meanwhile
+                if (_file is null) ToPoster(); // could not be downloaded
                 else Start(TimeSpan.Zero, play: true);
             });
         });
@@ -256,61 +256,61 @@ sealed class VideoView : Border
 
     void TogglePause()
     {
-        if (state == State.Playing) Pause();
-        else if (state == State.Paused)
+        if (_state == State.Playing) Pause();
+        else if (_state == State.Paused)
         {
-            playing?.Pause();
-            playing = this;
-            Start(position, play: true);
+            s_playing?.Pause();
+            s_playing = this;
+            Start(_position, play: true);
         }
     }
 
     void Pause()
     {
-        if (state != State.Playing) return;
+        if (_state != State.Playing) return;
         Cancel();
-        state = State.Paused;
+        _state = State.Paused;
         UpdateBar();
     }
 
     /// <summary>Jumps to a time: playing on from there, or showing its picture when paused.</summary>
     void SeekTo(TimeSpan target)
     {
-        if (file is null || state is State.Poster or State.Loading) return;
+        if (_file is null || _state is State.Poster or State.Loading) return;
         target = target < TimeSpan.Zero ? TimeSpan.Zero : target > Duration ? Duration : target;
-        position = target;
-        Start(target, play: state == State.Playing);
+        _position = target;
+        Start(target, play: _state == State.Playing);
     }
 
     void ToPoster()
     {
         Cancel();
-        if (playing == this) playing = null;
-        state = State.Poster;
-        position = TimeSpan.Zero;
-        image.Source = poster;
-        button.IsVisible = true;
+        if (s_playing == this) s_playing = null;
+        _state = State.Poster;
+        _position = TimeSpan.Zero;
+        _image.Source = _poster;
+        _button.IsVisible = true;
         UpdateBar();
     }
 
     void Cancel()
     {
-        run?.Cancel();
-        run = null;
+        _run?.Cancel();
+        _run = null;
     }
 
     /// <summary>A new session from <paramref name="from"/> (the previous one cancelled): it shows that moment's picture, then plays on if asked.</summary>
     void Start(TimeSpan from, bool play)
     {
         Cancel();
-        run = new CancellationTokenSource();
-        var token = run.Token;
-        state = play ? State.Playing : State.Paused;
-        button.IsVisible = false;
+        _run = new CancellationTokenSource();
+        var token = _run.Token;
+        _state = play ? State.Playing : State.Paused;
+        _button.IsVisible = false;
         UpdateBar();
-        var video = file!;
-        var previous = lastSession;
-        lastSession = Task.Run(async () =>
+        var video = _file!;
+        var previous = s_lastSession;
+        s_lastSession = Task.Run(async () =>
         {
             await previous.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing); // a failed session must not block the next
             if (!token.IsCancellationRequested) Session(video, from, play, token);
@@ -368,29 +368,29 @@ sealed class VideoView : Border
         {
             if (token.IsCancellationRequested) return;
             if (!IsEffectivelyVisible) { Pause(); return; } // the Home page was left
-            if (frame is null || frame.PixelSize.Width != width || frame.PixelSize.Height != height) frame = Bitmap(width, height);
-            Copy(pixels, frame);
+            if (_frame is null || _frame.PixelSize.Width != width || _frame.PixelSize.Height != height) _frame = Bitmap(width, height);
+            Copy(pixels, _frame);
             // A new bitmap object each time is not needed; the Image only has to redraw.
-            if (image.Source != frame) image.Source = frame;
-            image.InvalidateVisual();
-            position = at;
+            if (_image.Source != _frame) _image.Source = _frame;
+            _image.InvalidateVisual();
+            _position = at;
             UpdateBar();
         });
 
     /// <summary>The bar shows while paused, or while playing with the pointer over the video.</summary>
     void UpdateBar()
     {
-        bar.IsVisible = state == State.Paused || state == State.Playing && (hovered || dragging is not null);
-        playPause.Data = state == State.Playing ? PauseIcon : PlayIcon;
+        _bar.IsVisible = _state == State.Paused || _state == State.Playing && (_hovered || _dragging is not null);
+        _playPause.Data = _state == State.Playing ? PauseIcon : PlayIcon;
         var duration = Duration;
-        double f = dragging ?? (duration > TimeSpan.Zero ? position / duration : 0);
-        fill.Width = Math.Clamp(f, 0, 1) * track.Bounds.Width;
-        time.Text = $"{Format(duration * f)} / {Format(duration)}";
+        double f = _dragging ?? (duration > TimeSpan.Zero ? _position / duration : 0);
+        _fill.Width = Math.Clamp(f, 0, 1) * _track.Bounds.Width;
+        _time.Text = $"{Format(duration * f)} / {Format(duration)}";
     }
 
     static string Format(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
 
-    double Fraction(PointerEventArgs e) => track.Bounds.Width > 0 ? Math.Clamp(e.GetPosition(track).X / track.Bounds.Width, 0, 1) : 0;
+    double Fraction(PointerEventArgs e) => _track.Bounds.Width > 0 ? Math.Clamp(e.GetPosition(_track).X / _track.Bounds.Width, 0, 1) : 0;
 
     static WriteableBitmap Bitmap(int width, int height) =>
         new(new PixelSize(width, height), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);

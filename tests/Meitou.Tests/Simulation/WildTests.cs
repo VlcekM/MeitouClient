@@ -26,12 +26,12 @@ public class WildTests(ITestOutputHelper output)
     static PopulationData WildData(Action<FcsRecord>? changePatrol = null, Action<FcsRecord>? changeDen = null, params FcsRecord[] extra)
     {
         var db = SyntheticTown.Database(residentSquads: 1, changePatrol: changePatrol);
-        var dogs = Rec("52-t", FcsRecordType.SQUAD_TEMPLATE, "Dog pack");
+        var dogs = Rec("52-t", FcsRecordType.SquadTemplate, "Dog pack");
         dogs.References["animals"] = [new FcsReference("4-t", 3, 0, 50)];
         dogs.References["faction"] = [new FcsReference("53-t", 0, 0, 0)];
-        var beasts = Rec("53-t", FcsRecordType.FACTION, "Beasts");
+        var beasts = Rec("53-t", FcsRecordType.Faction, "Beasts");
         beasts.Ints["default relation"] = -50;
-        var nest = Rec("51-t", FcsRecordType.TOWN, "Dog Den");
+        var nest = Rec("51-t", FcsRecordType.Town, "Dog Den");
         nest.Ints["type"] = 0;
         nest.Ints["nest resident population"] = 10;
         nest.Floats["size radius"] = 200;
@@ -39,7 +39,7 @@ public class WildTests(ITestOutputHelper output)
         nest.References["faction"] = [new FcsReference("53-t", 0, 0, 0)];
         nest.References["roaming squads"] = [new FcsReference("52-t", 100, 0, 0)];
         changeDen?.Invoke(nest);
-        var group = Rec("50-t", FcsRecordType.BIOME_GROUP, "Wilds");
+        var group = Rec("50-t", FcsRecordType.BiomeGroup, "Wilds");
         group.Ints["index"] = 0x123456;
         group.Ints["num nests"] = 2;
         group.Floats["homeless spawn amount"] = 1.5f;
@@ -187,8 +187,8 @@ public class WildTests(ITestOutputHelper output)
     public void An_occupier_is_kept_while_its_sector_is_unloaded_and_occupies_again_in_faithful_mode()
     {
         // The original makes an occupier's platoon persistent (docs/game/ai.md "Package classes"): Faithful drops the other wild squads as their area unloads, not it.
-        var roam = Rec("60-t", FcsRecordType.AI_PACKAGE, "Roam");
-        var occupy = Rec("61-t", FcsRecordType.AI_PACKAGE, "Occupy");
+        var roam = Rec("60-t", FcsRecordType.AiPackage, "Roam");
+        var occupy = Rec("61-t", FcsRecordType.AiPackage, "Occupy");
         occupy.Ints["signal func"] = 30;
         var data = WildData(p => p.References["AI packages"] = [new FcsReference("60-t", 0, 0, 0), new FcsReference("61-t", 1, 0, 0)], extra: [roam, occupy]);
         var (world, pop) = WildWorld(data, 1, StandardParts.Population | StandardParts.Movement | StandardParts.Ai);
@@ -277,7 +277,7 @@ public class WildTests(ITestOutputHelper output)
             foreach (var m in squad.Members)
             {
                 var cold = world.Characters.Cold(m.Slot)!;
-                Assert.Equal(FcsRecordType.ANIMAL_CHARACTER, data.Db.Find(cold.RecordId)!.Type);
+                Assert.Equal(FcsRecordType.AnimalCharacter, data.Db.Find(cold.RecordId)!.Type);
                 Assert.NotNull(cold.Fighter);
                 members++;
             }

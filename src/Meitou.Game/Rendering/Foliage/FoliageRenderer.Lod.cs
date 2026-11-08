@@ -59,7 +59,7 @@ public sealed unsafe partial class FoliageRenderer
     float ScreenLodPixelsPerRadian => LodPixelsPerRadian > 0 ? LodPixelsPerRadian : Meitou.Game.Rendering.Impostors.ImpostorClass.ReferenceHeight / (2 * MathF.Tan(25 * MathF.PI / 180));
 
     /// <summary>The deviations the cull and <see cref="LevelNeeded"/> use for a level set in the view being drawn: with <see cref="ScreenLod"/> in a colour view the ones that count the size of the triangles.</summary>
-    float[] LevelErrors(RockLod lod) => ScreenLod && lodActive && !lodView.Ortho ? lod.Effective(LodTolerance, ScreenLodTriPixels, ScreenLodMultiple) : lod.Relative;
+    float[] LevelErrors(RockLod lod) => ScreenLod && _lodActive && !_lodView.Ortho ? lod.Effective(LodTolerance, ScreenLodTriPixels, ScreenLodMultiple) : lod.Relative;
 
     float[] RelativeErrors(FoliageLodSet set, float radius)
     {
@@ -72,14 +72,14 @@ public sealed unsafe partial class FoliageRenderer
     public float LodShadowTolerance { get; set; } = 2f;
 
     /// <summary>The shadow cascade being drawn: its texel in world units (0: unknown, no levels in it).</summary>
-    float lodTexel;
+    float _lodTexel;
     /// <summary>The cascade being drawn is a far one with coarser casters (<see cref="ShadowLod.RockTolerance"/>).</summary>
-    bool lodCoarse;
+    bool _lodCoarse;
 
     /// <summary>The view being drawn uses generated levels (set by <see cref="Draw"/> before the work list is built).</summary>
-    bool lodActive;
+    bool _lodActive;
     /// <summary>What the current view tells the cull about the levels.</summary>
-    FoliageLodView lodView;
+    FoliageLodView _lodView;
 
     /// <summary>A mesh's generated levels on the GPU: one index buffer per part holding its levels 1 and up, bound with the part's own vertex buffer.</summary>
     sealed class RockLod
@@ -96,21 +96,21 @@ public sealed unsafe partial class FoliageRenderer
         public required FoliageLodSet Set;
         /// <summary>Per level (counting 0) the mean triangle edge over the mesh's radius (<see cref="FoliageScreenLod.SubPixelDistance"/>'s input); 0 for a mesh of unknown area.</summary>
         public float[] TriangleExtent = [];
-        float[]? effective;
-        (float Tolerance, float Pixels, float Multiple, int Levels) effectiveKey;
+        float[]? _effective;
+        (float Tolerance, float Pixels, float Multiple, int Levels) _effectiveKey;
 
         /// <summary>The deviations with the size of the triangles counted (<see cref="FoliageScreenLod.EffectiveErrors"/>), kept until a setting changes.</summary>
         public float[] Effective(float tolerance, float triPixels, float multiple)
         {
             var key = (tolerance, triPixels, multiple, Levels);
-            if (effective is null || effectiveKey != key)
+            if (_effective is null || _effectiveKey != key)
             {
                 var subPixel = new float[Levels];
                 for (int k = 0; k < Levels; k++) subPixel[k] = FoliageScreenLod.SubPixelDistance(TriangleExtent[k], triPixels);
-                effective = FoliageScreenLod.EffectiveErrors(Relative.AsSpan(0, Levels).ToArray(), subPixel, tolerance, multiple);
-                effectiveKey = key;
+                _effective = FoliageScreenLod.EffectiveErrors(Relative.AsSpan(0, Levels).ToArray(), subPixel, tolerance, multiple);
+                _effectiveKey = key;
             }
-            return effective;
+            return _effective;
         }
         public long Bytes;
 
@@ -130,14 +130,14 @@ public sealed unsafe partial class FoliageRenderer
 
     sealed record LodResult(FoliageLodSet? Set, bool Cached, double Ms, long FileBytes);
 
-    int lodRunning, lodWaiting;
+    int _lodRunning, _lodWaiting;
     /// <summary>The level jobs by mesh file (kept when done).</summary>
-    readonly Dictionary<string, Task<LodResult>> lodTasks = [];
-    long lodBuilt, lodCacheHits, lodNone, lodFileBytes;
-    double lodBuildMs, lodLoadMs;
+    readonly Dictionary<string, Task<LodResult>> _lodTasks = [];
+    long _lodBuilt, _lodCacheHits, _lodNone, _lodFileBytes;
+    double _lodBuildMs, _lodLoadMs;
 
     /// <summary>Generated levels: the meshes built, read from the cache, found to need none; the cache bytes written; CPU time on the workers (building, reading).</summary>
-    public string LodSummary => $"{lodBuilt} built ({lodBuildMs:0} ms), {lodCacheHits} from the cache ({lodLoadMs:0} ms), {lodNone} without a level; {lodFileBytes / 1024} KB written";
+    public string LodSummary => $"{_lodBuilt} built ({_lodBuildMs:0} ms), {_lodCacheHits} from the cache ({_lodLoadMs:0} ms), {_lodNone} without a level; {_lodFileBytes / 1024} KB written";
 
     /// <summary>
     /// Starts, collects and uploads the level jobs of the resident TERRAIN-mode meshes (once a frame, from <see cref="Update"/>). One job per mesh file, however many mesh records
@@ -145,18 +145,18 @@ public sealed unsafe partial class FoliageRenderer
     /// </summary>
     void PumpLods()
     {
-        lodWaiting = lodRunning = 0;
-        foreach (var t in lodTasks.Values) if (!t.IsCompleted) lodRunning++;
+        _lodWaiting = _lodRunning = 0;
+        foreach (var t in _lodTasks.Values) if (!t.IsCompleted) _lodRunning++;
         if (!Lod || !GpuCull || Gpu is not GpuContext) return;   // the upload path needs a frame the host owns; Metal's generated levels are not wired yet
-        foreach (var a in assetsByMesh.Values)
+        foreach (var a in _assetsByMesh.Values)
         {
             if (!a.Terrain || a.LodDone || !a.Resident || a.Main is null || a.Triangles < FoliageLodBuilder.MinTriangles) continue;
             string name = a.Mesh.MeshPath, key = name + MeshWeld.CacheVariant(a.Weld);
-            if (!lodTasks.TryGetValue(key, out var task))
+            if (!_lodTasks.TryGetValue(key, out var task))
             {
-                if (lodRunning >= 3) { lodWaiting++; continue; }
-                lodRunning++;
-                lodTasks[key] = task = StartLods(name, a.Radius, a.Weld);
+                if (_lodRunning >= 3) { _lodWaiting++; continue; }
+                _lodRunning++;
+                _lodTasks[key] = task = StartLods(name, a.Radius, a.Weld);
             }
             if (!task.IsCompleted) continue;
             a.LodDone = true;   // an unloaded mesh makes them again with its next residency
@@ -173,7 +173,7 @@ public sealed unsafe partial class FoliageRenderer
     LodResult MakeLods(string name, float radius, bool weld)
     {
         var watch = Stopwatch.StartNew();
-        var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
+        var path = _assets.Find(name) ?? _assets.Find(Path.GetFileName(name.Replace('\\', '/')));
         if (path is null) return new LodResult(null, false, 0, 0);
         var model = Decode(name, weld);
         if (model is null) return new LodResult(null, false, 0, 0);
@@ -189,9 +189,9 @@ public sealed unsafe partial class FoliageRenderer
         double ms = watch.Elapsed.TotalMilliseconds;
         lock (this)
         {
-            if (hit) { lodCacheHits++; lodLoadMs += ms; }
-            else { lodBuilt++; lodBuildMs += ms; lodFileBytes += bytes; }
-            if (set is null) lodNone++;
+            if (hit) { _lodCacheHits++; _lodLoadMs += ms; }
+            else { _lodBuilt++; _lodBuildMs += ms; _lodFileBytes += bytes; }
+            if (set is null) _lodNone++;
         }
         return new LodResult(set, hit, ms, bytes);
     }
@@ -199,7 +199,7 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary>Uploads a mesh's levels (render thread, as a step of the frame's upload queue); dropped when the mesh was unloaded meanwhile.</summary>
     void QueueLodUpload(MeshAsset a, GpuMesh main, FoliageLodSet set)
     {
-        uploads.Enqueue(() =>
+        _uploads.Enqueue(() =>
         {
             if (!a.Resident || !ReferenceEquals(a.Main, main) || a.Lod is not null) return;
             Gpu.EnsureFrame();
@@ -227,9 +227,9 @@ public sealed unsafe partial class FoliageRenderer
                 bytes += (long)total * sizeof(uint);
                 parts[p] = new PartLod { Indices = indices, Bindings = MeshBindings.Of(VertexAttributes(main.Parts[p].Vertices), indices), First = first, Count = count };
             }
-            a.Lod = new RockLod { AllLevels = set.Levels, LegacyLevels = 1 + set.NormalAngles.Skip(1).TakeWhile(x => x <= FoliageLodBuilder.LegacyMaxNormalAngle).Count(),Relative = RelativeErrors(set, a.Radius), TriangleExtent = [.. set.Triangles.Select(t => FoliageScreenLod.LevelExtent(a.TriExtent, a.Triangles, t) / a.Radius)], Parts = parts, Set = set, Bytes = bytes };
+            a.Lod = new RockLod { AllLevels = set.Levels, LegacyLevels = 1 + set.NormalAngles.Skip(1).TakeWhile(x => x <= FoliageLodBuilder.LegacyMaxNormalAngle).Count(), Relative = RelativeErrors(set, a.Radius), TriangleExtent = [.. set.Triangles.Select(t => FoliageScreenLod.LevelExtent(a.TriExtent, a.Triangles, t) / a.Radius)], Parts = parts, Set = set, Bytes = bytes };
             a.Bytes += bytes;
-            residentMeshBytes += bytes;
+            _residentMeshBytes += bytes;
         });
     }
 
@@ -240,7 +240,7 @@ public sealed unsafe partial class FoliageRenderer
         {
             lod.Dispose();
             a.Bytes -= lod.Bytes;
-            residentMeshBytes -= lod.Bytes;
+            _residentMeshBytes -= lod.Bytes;
             a.Lod = null;
         }
         a.LodDone = false;
@@ -254,13 +254,13 @@ public sealed unsafe partial class FoliageRenderer
     bool LevelNeeded(in GpuEntry e, Vector3 eye)
     {
         if (e.Group.Asset.WorkLod is not { } lod || !e.Group.Asset.Terrain || !IsRockBatch(e.Batch)) return true;
-        if (!lodActive) return e.Level == 0;
+        if (!_lodActive) return e.Level == 0;
         var g = e.Group;
         var relative = LevelErrors(lod);
-        float tolerance = lodView.Tolerance, scale = lodView.Scale, growFrom = lodView.FarDistance;
+        float tolerance = _lodView.Tolerance, scale = _lodView.Scale, growFrom = _lodView.FarDistance;
         // The size at which level k stops being allowed: the largest (radius over distance, or over texel) it takes.
         float far = float.MaxValue, near = 0;
-        if (!lodView.Ortho)
+        if (!_lodView.Ortho)
         {
             near = Vector3.Distance(eye, Vector3.Clamp(eye, g.BoundMin, g.BoundMax));
             var farthest = Vector3.Max(Vector3.Abs(eye - g.BoundMin), Vector3.Abs(eye - g.BoundMax));
@@ -270,7 +270,7 @@ public sealed unsafe partial class FoliageRenderer
         {
             if (level == 0) return true;
             float need = relative[level] * scale / tolerance;   // radii per radius of the mesh: allowed when distance >= r (1 + need), or in a cascade when r <= tolerance texel / error
-            if (lodView.Ortho) return g.MinRadius * relative[level] * scale <= tolerance * 1.01f;
+            if (_lodView.Ortho) return g.MinRadius * relative[level] * scale <= tolerance * 1.01f;
             if (growFrom > 0)
             {
                 // The tolerance grows with the distance past growFrom (the cull kernel): allowed when r * error <= tolerance * max(1, gap / growFrom) * gap at the farthest gap.
@@ -283,17 +283,17 @@ public sealed unsafe partial class FoliageRenderer
         {
             if (level + 1 >= lod.Levels) return false;
             float need = relative[level + 1] * scale / tolerance;
-            if (!lodView.Ortho && growFrom > 0)
+            if (!_lodView.Ortho && growFrom > 0)
             {
                 float gap = near * 0.99f - g.MaxRadius;   // the nearest an instance can be: the nearest is the hardest to satisfy, so a smaller gap is the safe side
                 return gap > 0 && g.MaxRadius * relative[level + 1] * scale <= tolerance * Math.Max(1, gap / growFrom) * gap;
             }
-            return lodView.Ortho ? g.MaxRadius * relative[level + 1] * scale <= tolerance * 0.99f : near >= g.MaxRadius * (1 + need) * 1.01f;
+            return _lodView.Ortho ? g.MaxRadius * relative[level + 1] * scale <= tolerance * 0.99f : near >= g.MaxRadius * (1 + need) * 1.01f;
         }
         return Allowed(e.Level) && !Surpassed(e.Level);
     }
 
-    bool IsRockBatch(int batch) => batch >= gpuOrder.Count && batch < gpuOrder.Count + gpuRockOrder.Count;
+    bool IsRockBatch(int batch) => batch >= _gpuOrder.Count && batch < _gpuOrder.Count + _gpuRockOrder.Count;
 
     /// <summary>The work lists of this frame have generated levels (the switch and the GPU cull).</summary>
     bool LodWanted => Lod && GpuCull && Gpu is GpuContext;
@@ -301,16 +301,16 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary>Whether this view picks generated levels, and how it measures them.</summary>
     FoliageLodView CurrentLodView(float eyeY)
     {
-        lodActive = false;
+        _lodActive = false;
         if (!LodWanted) return default;
-        if (depthPass)
+        if (_depthPass)
         {
-            if (!(lodTexel > 0) || !(LodShadowTolerance > 0)) return default;
-            lodActive = true;
-            return new FoliageLodView(0, 1 / lodTexel, ShadowLod.RockTolerance(LodShadowTolerance, lodCoarse), true);
+            if (!(_lodTexel > 0) || !(LodShadowTolerance > 0)) return default;
+            _lodActive = true;
+            return new FoliageLodView(0, 1 / _lodTexel, ShadowLod.RockTolerance(LodShadowTolerance, _lodCoarse), true);
         }
         if (!(LodPixelsPerRadian > 0) || !(LodTolerance > 0)) return default;
-        lodActive = true;
+        _lodActive = true;
         return new FoliageLodView(eyeY, LodPixelsPerRadian, LodTolerance, false, LodFar && LodFarDistance > 0 ? LodFarDistance : 0);
     }
 }

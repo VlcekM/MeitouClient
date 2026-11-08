@@ -41,13 +41,13 @@ public sealed class RockShape(Vector3[] corners, Vector3 min, Vector3 max)
         return best;
     }
 
-    Vector2[]? outline;
+    Vector2[]? _outline;
 
     /// <summary>The mesh's footprint: the convex hull of its corners' X/Z, counter-clockwise (made on first use).</summary>
-    public Vector2[] Outline => outline ??= Hull([.. corners.Select(c => new Vector2(c.X, c.Z))]);
+    public Vector2[] Outline => _outline ??= Hull([.. corners.Select(c => new Vector2(c.X, c.Z))]);
 
     /// <summary>Whether the mesh-space point lies inside the footprint.</summary>
-    public bool InsideXZ(Vector2 p)
+    public bool InsideXz(Vector2 p)
     {
         var hull = Outline;
         if (hull.Length < 3) return false;
@@ -57,10 +57,10 @@ public sealed class RockShape(Vector3[] corners, Vector3 min, Vector3 max)
     }
 
     /// <summary>The footprint's point nearest the mesh-space point: itself when inside.</summary>
-    public Vector2 NearestXZ(Vector2 p)
+    public Vector2 NearestXz(Vector2 p)
     {
         var hull = Outline;
-        if (hull.Length == 0 || InsideXZ(p)) return p;
+        if (hull.Length == 0 || InsideXz(p)) return p;
         Vector2 best = hull[0];
         float bestDistance = float.MaxValue;
         for (int i = 0; i < hull.Length; i++)
@@ -131,7 +131,7 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
     /// <summary>The smallest radius of a rock: the original takes the rock mesh's bounds and at least 25 (<c>uses_resources</c>); without the mesh file a rock is this.</summary>
     public const float NodeRadius = 25;
 
-    readonly Dictionary<string, (Vector3 Centre, float Radius, RockShape Shape)?> meshBounds = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, (Vector3 Centre, float Radius, RockShape Shape)?> _meshBounds = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// A rock mesh's shape and its bounds sphere (the triangles' box middle, and its longest half-extent as the radius, before scaling); null without <c>findMesh</c>, the file or
@@ -140,25 +140,25 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
     (Vector3 Centre, float Radius, RockShape Shape)? Bounds(string meshPath)
     {
         if (findMesh is null) return null;
-        if (meshBounds.TryGetValue(meshPath, out var known)) return known;
+        if (_meshBounds.TryGetValue(meshPath, out var known)) return known;
         RockShape? shape = null;
         if ((findMesh(meshPath) ?? findMesh(Path.GetFileName(meshPath.Replace('\\', '/')))) is { } path)
             try { shape = RockShape.Of(OgreMeshReader.ReadFile(path)); }
             catch (Exception e) when (e is IOException or OgreFormatException or NotSupportedException) { }
-        if (shape is null) return meshBounds[meshPath] = null;
+        if (shape is null) return _meshBounds[meshPath] = null;
         // The longest half-extent of the bounds box, not its half-diagonal (a rock of 71 x 72 x 66 is 36 across, not 60: the diagonal made the radius nearly twice the rock).
         var size = shape.Max - shape.Min;
-        return meshBounds[meshPath] = ((shape.Min + shape.Max) / 2, Math.Max(size.X, Math.Max(size.Y, size.Z)) / 2, shape);
+        return _meshBounds[meshPath] = ((shape.Min + shape.Max) / 2, Math.Max(size.X, Math.Max(size.Y, size.Z)) / 2, shape);
     }
 
-    readonly Dictionary<ZoneCoordinate, List<ResourceNode>> zones = [];
-    readonly Dictionary<string, int> resourceOf = new(StringComparer.Ordinal);
-    readonly Lock gate = new();
+    readonly Dictionary<ZoneCoordinate, List<ResourceNode>> _zones = [];
+    readonly Dictionary<string, int> _resourceOf = new(StringComparer.Ordinal);
+    readonly Lock _gate = new();
 
     public IReadOnlyList<ResourceNode> Near(int resource, float x, float z, float range)
     {
         var found = new List<ResourceNode>();
-        lock (gate)
+        lock (_gate)
         {
             var first = WorldLayout.ZoneOf(x - range, z - range);
             var last = WorldLayout.ZoneOf(x + range, z + range);
@@ -172,7 +172,7 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
 
     List<ResourceNode> Zone(ZoneCoordinate zone)
     {
-        if (zones.TryGetValue(zone, out var list)) return list;
+        if (_zones.TryGetValue(zone, out var list)) return list;
         list = [];
         if (zone.IsInsideGrid)
             foreach (var instance in world.Zone(zone).Instances)
@@ -186,15 +186,15 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
                         ? new ResourceNode(instance.Position, resource, radius, building.StringId, Vector3.Transform(c.Centre, instance.Transform), c.Shape, instance.Transform)
                         : new ResourceNode(instance.Position, resource, radius, building.StringId));
                 }
-        zones[zone] = list;
+        _zones[zone] = list;
         return list;
     }
 
     int ResourceOf(GameRecord building)
     {
-        if (resourceOf.TryGetValue(building.StringId, out int r)) return r;
+        if (_resourceOf.TryGetValue(building.StringId, out int r)) return r;
         r = building.GetReferences("functionality") is [var link, ..] && db.Find(link.TargetStringId) is { } function ? function.GetInt("world resource mining") : 0;
-        return resourceOf[building.StringId] = r;
+        return _resourceOf[building.StringId] = r;
     }
 
     public void Dispose() => world.Dispose();

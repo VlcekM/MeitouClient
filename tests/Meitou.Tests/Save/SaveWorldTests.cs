@@ -92,10 +92,10 @@ public class SaveWorldTests
     {
         // A mod lists Testfolk in the player faction's relations (known from the setup) and adds the Outsiders, met in play.
         var db = SyntheticTown.Database();
-        var nameless = new FcsRecord { StringId = "204-gamedata.base", Flags = 0x11, Name = "Nameless", RecordType = FcsRecordType.FACTION };
+        var nameless = new FcsRecord { StringId = "204-gamedata.base", Flags = 0x11, Name = "Nameless", RecordType = FcsRecordType.Faction };
         nameless.References["relations"] = [new("20-t", 0, 0, 0)];
         var mod = new FcsFile();
-        mod.Records.AddRange([nameless, SyntheticTown.Rec("21-t", FcsRecordType.FACTION, "Outsiders")]);
+        mod.Records.AddRange([nameless, SyntheticTown.Rec("21-t", FcsRecordType.Faction, "Outsiders")]);
         db.Apply(mod, "known.mod");
         using var g = NewGame(db: db);
         int folk = g.Data.FactionIndex("20-t"), outsiders = g.Data.FactionIndex("21-t");
@@ -128,22 +128,22 @@ public class SaveWorldTests
     {
         // A mod lists Testfolk in the player faction's relations (the setup's) and the Neighbours in the start-off's faction relations.
         var db = SyntheticTown.Database();
-        var nameless = new FcsRecord { StringId = "204-gamedata.base", Flags = 0x11, Name = "Nameless", RecordType = FcsRecordType.FACTION };
+        var nameless = new FcsRecord { StringId = "204-gamedata.base", Flags = 0x11, Name = "Nameless", RecordType = FcsRecordType.Faction };
         nameless.References["relations"] = [new("20-t", 0, 0, 0)];
-        var start = new FcsRecord { StringId = "40-t", Flags = 0x11, Name = "Test start", RecordType = FcsRecordType.NEW_GAME_STARTOFF };
+        var start = new FcsRecord { StringId = "40-t", Flags = 0x11, Name = "Test start", RecordType = FcsRecordType.NewGameStartoff };
         start.References["faction relations"] = [new("22-t", 50, 0, 0)];
         var mod = new FcsFile();
-        mod.Records.AddRange([nameless, start, SyntheticTown.Rec("21-t", FcsRecordType.FACTION, "Outsiders"), SyntheticTown.Rec("22-t", FcsRecordType.FACTION, "Neighbours")]);
+        mod.Records.AddRange([nameless, start, SyntheticTown.Rec("21-t", FcsRecordType.Faction, "Outsiders"), SyntheticTown.Rec("22-t", FcsRecordType.Faction, "Neighbours")]);
         db.Apply(mod, "known.mod");
         using var plain = NewGame(db: db);
         int folk = plain.Data.FactionIndex("20-t"), outsiders = plain.Data.FactionIndex("21-t"), neighbours = plain.Data.FactionIndex("22-t");
         Assert.Equal(new[] { folk, neighbours }.Order(), plain.World.Player.KnownFactions.Order());
 
         // Its level data holds the player faction's state, which knows the Outsiders, and Testfolk's.
-        var player = SyntheticTown.Rec("1-level", FcsRecordType.GAMESTATE_FACTION, "Nameless");
+        var player = SyntheticTown.Rec("1-level", FcsRecordType.GamestateFaction, "Nameless");
         player.Strings["gamedata stringID"] = "204-gamedata.base";
         player.References["known"] = [new("21-t", 0, 0, 0)];
-        var other = SyntheticTown.Rec("2-level", FcsRecordType.GAMESTATE_FACTION, "Testfolk");
+        var other = SyntheticTown.Rec("2-level", FcsRecordType.GamestateFaction, "Testfolk");
         other.Strings["gamedata stringID"] = "20-t";
         other.References["known"] = [new("20-t", 0, 0, 0)];
         var levelFile = new FcsFile();
@@ -160,7 +160,7 @@ public class SaveWorldTests
         // A mod adds the Outsiders and the Neighbours, neither known at the start.
         var db = SyntheticTown.Database();
         var mod = new FcsFile();
-        mod.Records.AddRange([SyntheticTown.Rec("21-t", FcsRecordType.FACTION, "Outsiders"), SyntheticTown.Rec("22-t", FcsRecordType.FACTION, "Neighbours")]);
+        mod.Records.AddRange([SyntheticTown.Rec("21-t", FcsRecordType.Faction, "Outsiders"), SyntheticTown.Rec("22-t", FcsRecordType.Faction, "Neighbours")]);
         db.Apply(mod, "known.mod");
         using var g = NewGame(db: db);
         int outsiders = g.Data.FactionIndex("21-t"), neighbours = g.Data.FactionIndex("22-t");

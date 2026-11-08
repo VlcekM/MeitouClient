@@ -109,13 +109,13 @@ public sealed class Blackboard
 {
     static readonly IReadOnlyList<AiGoal>[] NoRoles = [[], [], [], [], []];
 
-    readonly SortedDictionary<int, List<AiPackage>> slots = [];
+    readonly SortedDictionary<int, List<AiPackage>> _slots = [];
 
     public Blackboard(IEnumerable<SlottedPackage> packages)
     {
         foreach (var (slot, package) in packages)
         {
-            if (!slots.TryGetValue(slot, out var list)) slots[slot] = list = [];
+            if (!_slots.TryGetValue(slot, out var list)) _slots[slot] = list = [];
             list.Add(package);
         }
     }
@@ -147,7 +147,7 @@ public sealed class Blackboard
         return n;
     }
     /// <summary>All packages in slot order (highest first), as listed.</summary>
-    public IEnumerable<SlottedPackage> Packages => slots.Reverse().SelectMany(s => s.Value.Select(p => new SlottedPackage(s.Key, p)));
+    public IEnumerable<SlottedPackage> Packages => _slots.Reverse().SelectMany(s => s.Value.Select(p => new SlottedPackage(s.Key, p)));
 
     /// <summary>A contract package (the original's <c>contractjob</c>, set by dialogue's <c>AI contract</c>): while it runs it takes precedence over every slot.</summary>
     public AiPackage? Contract { get; private set; }
@@ -230,12 +230,12 @@ public sealed class Blackboard
         if (Contract is { } contract)
         {
             if (hours < ContractEnd) return;
-            ended = (contract, MissionTarget);
+            _ended = (contract, MissionTarget);
             Contract = null;
             MissionTarget = CharacterId.None;
             Current = null;   // the slots choose again
         }
-        foreach (var (slot, list) in slots.Reverse())
+        foreach (var (slot, list) in _slots.Reverse())
             if (TrySlot(slot, list, rules)) return;
     }
 
@@ -289,7 +289,7 @@ public sealed class Blackboard
 
     SlottedPackage? Find(string id)
     {
-        foreach (var (slot, list) in slots)
+        foreach (var (slot, list) in _slots)
             foreach (var p in list)
                 if (p.Id == id) return new SlottedPackage(slot, p);
         return null;
@@ -300,7 +300,7 @@ public sealed class Blackboard
         if (Current is { } old && old != package) rules?.Ended(this, old, PackageClasses.Of(old.Signal));
         Current = package;
         CurrentSlot = slot;
-        CurrentIndex = slot >= 0 && slots.TryGetValue(slot, out var list) ? list.IndexOf(package) : -1;
+        CurrentIndex = slot >= 0 && _slots.TryGetValue(slot, out var list) ? list.IndexOf(package) : -1;
         Roles = package.Roles;
         Version++;
         Route = [];
@@ -328,7 +328,7 @@ public sealed class Blackboard
         if (Contract is { } running)
         {
             if (running.Id == package.Id) return;
-            ended = (running, MissionTarget);
+            _ended = (running, MissionTarget);
         }
         Contract = package;
         ContractEnd = now + (hours < 1 ? 10.0 / 60 : hours);
@@ -343,7 +343,7 @@ public sealed class Blackboard
     /// </summary>
     public bool Resume(AiPackage package)
     {
-        foreach (var (slot, list) in slots)
+        foreach (var (slot, list) in _slots)
             if (list.Contains(package))
             {
                 Start(package, slot, null);
@@ -367,13 +367,13 @@ public sealed class Blackboard
     public CharacterId MissionTarget { get; private set; } = CharacterId.None;
 
     /// <summary>The contract that ended on the last <see cref="Update"/> and whom it was aimed at, until <see cref="TakeEnded"/> takes it.</summary>
-    (AiPackage Package, CharacterId Target)? ended;
+    (AiPackage Package, CharacterId Target)? _ended;
 
     /// <summary>The contract that ended since the last call (the AI fires the leader's <c>contract end talk passive</c>, event 30), or null.</summary>
     public (AiPackage Package, CharacterId Target)? TakeEnded()
     {
-        var e = ended;
-        ended = null;
+        var e = _ended;
+        _ended = null;
         return e;
     }
 
@@ -384,8 +384,8 @@ public sealed class Blackboard
     public void Replace(AiPackage package, IPackageRules? rules = null)
     {
         Replacement = package;
-        slots.Clear();
-        slots[0] = [package];
+        _slots.Clear();
+        _slots[0] = [package];
         if (Contract is null) Start(package, 0, rules);
         else Version++;
     }
@@ -506,15 +506,15 @@ public sealed class AiMind
     public int NodeEpoch { get; set; }
     public bool WorkActive { get; set; }
     /// <summary>The town building it operates this tick (Task_OperateMachine, row 87, at the building) or empties the output of (row 92), and the faction owning its machine; set by the think, applied by <see cref="Production.ProductionSystem"/> (derived, not hashed).</summary>
-    public Meitou.Data.World.TownBuilding? WorkOperate { get; set; }
-    public Meitou.Data.World.TownBuilding? CollectFrom { get; set; }
+    public TownBuilding? WorkOperate { get; set; }
+    public TownBuilding? CollectFrom { get; set; }
     /// <summary>The town building it fills (Task_FillMachine, row 93, at the building) with the inputs it carries this tick; set by the think, applied by <see cref="Production.ProductionSystem"/> (derived, not hashed).</summary>
-    public Meitou.Data.World.TownBuilding? FillTo { get; set; }
+    public TownBuilding? FillTo { get; set; }
     /// <summary>The plan's step 93 Filling machine into the ditch target (rows 113, 114, 242) is due: the think sets it, <see cref="Kidnap.TownDutySystem"/> starts the errand and clears it (derived, not hashed).</summary>
     public bool DitchRequest { get; set; }
     public int WorkOwner { get; set; }
     /// <summary>The building its work goals picked (set with <see cref="WorkClip"/>).</summary>
-    public Meitou.Data.World.TownBuilding? WorkBuilding { get; set; }
+    public TownBuilding? WorkBuilding { get; set; }
     /// <summary>
     /// The workplace it holds an operator slot of while on 189 / 190 (<see cref="AiSystem"/>'s serial step claims it on the package cadence); null on another goal or
     /// when no workplace had a free slot. Not saved: a load claims again (derived, not hashed).
@@ -569,7 +569,7 @@ public sealed class AiMind
     /// </summary>
     public CharacterId ForcedAssault { get; set; } = CharacterId.None;
     /// <summary>Where the stranger a static guard stands beside is (<see cref="AiSystem"/>'s <c>GuardFactor</c>, FUN_14099edd0); null: the plain guard post. Derived by the think; hashed while set.</summary>
-    public System.Numerics.Vector3? GuardVisitorAt { get; set; }
+    public Vector3? GuardVisitorAt { get; set; }
     /// <summary>
     /// What the think asks of the <see cref="FleeSystem"/> this tick: to run the character from its threats (Self preservation's provider 35) or from the enemies it senses (a goal 35 of its
     /// lists). Set by the think on the mind's own character, taken and cleared by the serial flee step of the same tick, so it is never set between ticks (not hashed).

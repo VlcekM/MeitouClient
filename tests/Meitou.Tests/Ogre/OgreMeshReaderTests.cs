@@ -10,40 +10,40 @@ public class OgreMeshReaderTests
     /// <summary>Writes Ogre serializer chunks: id, total length (including the 6-byte header), body.</summary>
     sealed class Builder
     {
-        readonly MemoryStream ms = new();
-        readonly BinaryWriter w;
-        readonly Stack<long> open = new();
+        readonly MemoryStream _ms = new();
+        readonly BinaryWriter _w;
+        readonly Stack<long> _open = new();
 
         public Builder(string version)
         {
-            w = new BinaryWriter(ms);
-            w.Write((ushort)0x1000);
+            _w = new BinaryWriter(_ms);
+            _w.Write((ushort)0x1000);
             String(version);
         }
 
         public Builder Begin(OgreMeshChunk id)
         {
-            w.Write((ushort)id);
-            open.Push(ms.Position);
-            w.Write(0u);
+            _w.Write((ushort)id);
+            _open.Push(_ms.Position);
+            _w.Write(0u);
             return this;
         }
 
         public Builder End()
         {
-            long at = open.Pop(), end = ms.Position;
-            ms.Position = at;
-            w.Write((uint)(end - at + 2));
-            ms.Position = end;
+            long at = _open.Pop(), end = _ms.Position;
+            _ms.Position = at;
+            _w.Write((uint)(end - at + 2));
+            _ms.Position = end;
             return this;
         }
 
-        public Builder Bool(bool v) { w.Write(v); return this; }
-        public Builder U16(ushort v) { w.Write(v); return this; }
-        public Builder U32(uint v) { w.Write(v); return this; }
-        public Builder F32(params float[] v) { foreach (var f in v) w.Write(f); return this; }
-        public Builder String(string s) { w.Write(Encoding.UTF8.GetBytes(s + "\n")); return this; }
-        public byte[] ToArray() => ms.ToArray();
+        public Builder Bool(bool v) { _w.Write(v); return this; }
+        public Builder U16(ushort v) { _w.Write(v); return this; }
+        public Builder U32(uint v) { _w.Write(v); return this; }
+        public Builder F32(params float[] v) { foreach (var f in v) _w.Write(f); return this; }
+        public Builder String(string s) { _w.Write(Encoding.UTF8.GetBytes(s + "\n")); return this; }
+        public byte[] ToArray() => _ms.ToArray();
     }
 
     static Builder Triangle(string version) =>
@@ -71,7 +71,7 @@ public class OgreMeshReaderTests
     [Fact]
     public void Reads_geometry_submesh_skeleton_bounds_and_names()
     {
-        var mesh = OgreMeshReader.Read(Triangle(OgreMeshReader.Version1_100).End().ToArray());
+        var mesh = OgreMeshReader.Read(Triangle(OgreMeshReader.Version1100).End().ToArray());
 
         Assert.True(mesh.SkeletallyAnimated);
         Assert.Equal("rock.skeleton", mesh.SkeletonName);
@@ -89,7 +89,7 @@ public class OgreMeshReaderTests
     [Fact]
     public void Reads_generated_lod_in_both_layouts()
     {
-        var v1100 = OgreMeshReader.Read(Triangle(OgreMeshReader.Version1_100)
+        var v1100 = OgreMeshReader.Read(Triangle(OgreMeshReader.Version1100)
             .Begin(OgreMeshChunk.MeshLodLevel).String("distance").U16(2)
                 .Begin(OgreMeshChunk.MeshLodGenerated).F32(100).U32(3).U32(0).U32(uint.MaxValue).Bool(false).U32(3).U16(2).U16(1).U16(0).End()
             .End().End().ToArray());
@@ -97,7 +97,7 @@ public class OgreMeshReaderTests
         Assert.Equal(100f, level.UserValue);
         Assert.Equal([2u, 1, 0], Assert.Single(level.Faces).Buffer!.Indices);
 
-        var v18 = OgreMeshReader.Read(Triangle(OgreMeshReader.Version1_8)
+        var v18 = OgreMeshReader.Read(Triangle(OgreMeshReader.Version18)
             .Begin(OgreMeshChunk.MeshLodLevel).String("distance").U16(2).Bool(false)
                 .Begin(OgreMeshChunk.MeshLodUsage).F32(50)
                     .Begin(OgreMeshChunk.MeshLodGenerated).U32(3).Bool(false).U16(0).U16(2).U16(1).End()

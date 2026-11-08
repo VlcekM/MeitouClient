@@ -51,45 +51,45 @@ public sealed class FrameProfiler : IDisposable
         new(0.50f, 0.50f, 0.50f, 1), new(1.00f, 1.00f, 1.00f, 1),
     ];
 
-    readonly Func<double>? gpuFrameMs;
-    readonly int[,] stampStage = new int[Slots, MaxStamps];
-    readonly int[] stampCount = new int[Slots];
-    readonly bool[] pending = new bool[Slots];
-    readonly bool[] submitted = new bool[Slots];
-    int slot;
+    readonly Func<double>? _gpuFrameMs;
+    readonly int[,] _stampStage = new int[Slots, MaxStamps];
+    readonly int[] _stampCount = new int[Slots];
+    readonly bool[] _pending = new bool[Slots];
+    readonly bool[] _submitted = new bool[Slots];
+    int _slot;
 
     // The pre-frame command buffer's own chain of stamps (uploads, culls, bakes; PreStamp): per slot the stamp and the stage that owns the time since the one before.
-    readonly QuerySlot[,] preSlots = new QuerySlot[Slots, MaxPre];
-    readonly int[,] preStage = new int[Slots, MaxPre];
-    readonly int[] preCount = new int[Slots];
-    readonly QuerySlot[] slotPreEnd = new QuerySlot[Slots];
+    readonly QuerySlot[,] _preSlots = new QuerySlot[Slots, MaxPre];
+    readonly int[,] _preStage = new int[Slots, MaxPre];
+    readonly int[] _preCount = new int[Slots];
+    readonly QuerySlot[] _slotPreEnd = new QuerySlot[Slots];
 
-    readonly float[][] cpu = NewHistory(), gpu = NewHistory();
+    readonly float[][] _cpu = NewHistory(), _gpu = NewHistory();
     // The render thread's ms per part of upd-chars (StageClock.PartNames), listed under it in the legend, not plotted.
-    readonly float[][] parts = StageClock.PartNames.Select(_ => new float[History]).ToArray();
+    readonly float[][] _parts = StageClock.PartNames.Select(_ => new float[History]).ToArray();
 
     // The legend's open groups and upd-chars's parts; each row drawn last (its top and what a click on it opens: a group, PartsRow or nothing, -1),
     // the legend's box, a closed group's summed series on the side shown, and the series plotted.
     const int PartsRow = -2, SimRow = -3;
-    readonly bool[] groupOpen = new bool[Groups.Length];
-    bool partsOpen, simOpen;
-    readonly List<(float Top, int Opens)> rows = [];
-    (float X0, float Y0, float X1, float Y1, float LineHeight) legendBox;
-    readonly float[][] groupSeries = Groups.Select(_ => new float[History]).ToArray();
-    readonly List<(float[] Series, Vector4 Colour, float Thickness, int Head, int Count)> plotted = [];
+    readonly bool[] _groupOpen = new bool[Groups.Length];
+    bool _partsOpen, _simOpen;
+    readonly List<(float Top, int Opens)> _rows = [];
+    (float X0, float Y0, float X1, float Y1, float LineHeight) _legendBox;
+    readonly float[][] _groupSeries = Groups.Select(_ => new float[History]).ToArray();
+    readonly List<(float[] Series, Vector4 Colour, float Thickness, int Head, int Count)> _plotted = [];
     static readonly Vector4 FrameColour = new(1.00f, 0.55f, 0.10f, 1);
-    int cpuHead, cpuCount, gpuHead, gpuCount;
-    readonly double[] gpuFrame = new double[Series];
+    int _cpuHead, _cpuCount, _gpuHead, _gpuCount;
+    readonly double[] _gpuFrame = new double[Series];
 
     // --log-spikes (SpikeLog): per slot the frame number, its notes and its render-thread stages, kept until the GPU times arrive.
-    readonly long[] slotFrame = new long[Slots];
-    readonly string?[] slotNotes = new string?[Slots], slotCpu = new string?[Slots];
-    readonly double[] slotCpuTotal = new double[Slots], slotCpuMedian = new double[Slots];
-    readonly (QuerySlot Begin, QuerySlot PreEnd)[] slotStamps = new (QuerySlot, QuerySlot)[Slots];
-    readonly (QuerySlot Begin, QuerySlot End)[] slotWhole = new (QuerySlot, QuerySlot)[Slots];   // each profiled frame's own first and last stamps (its GPU total)
-    long frameCounter;
-    readonly long[] slotTag = new long[Slots];
-    readonly List<double> medianScratch = new(History);
+    readonly long[] _slotFrame = new long[Slots];
+    readonly string?[] _slotNotes = new string?[Slots], _slotCpu = new string?[Slots];
+    readonly double[] _slotCpuTotal = new double[Slots], _slotCpuMedian = new double[Slots];
+    readonly (QuerySlot Begin, QuerySlot PreEnd)[] _slotStamps = new (QuerySlot, QuerySlot)[Slots];
+    readonly (QuerySlot Begin, QuerySlot End)[] _slotWhole = new (QuerySlot, QuerySlot)[Slots];   // each profiled frame's own first and last stamps (its GPU total)
+    long _frameCounter;
+    readonly long[] _slotTag = new long[Slots];
+    readonly List<double> _medianScratch = new(History);
 
     /// <summary>What the chart shows; F12 cycles it.</summary>
     public Mode Showing { get; set; }
@@ -107,18 +107,18 @@ public sealed class FrameProfiler : IDisposable
     public void Flush() { for (int s = 0; s < Slots; s++) Collect(s); }
 
     /// <summary>Frames whose GPU stage times have been read (at most <see cref="History"/>).</summary>
-    public int GpuFrames => gpuCount;
+    public int GpuFrames => _gpuCount;
 
     /// <summary>The newest frame's GPU time over its stamped stages, in ms (0 before the first frame is read).</summary>
-    public double LastGpuMs => gpuCount == 0 ? 0 : gpu[Total][(gpuHead - 1 + History) % History];
+    public double LastGpuMs => _gpuCount == 0 ? 0 : _gpu[Total][(_gpuHead - 1 + History) % History];
 
     /// <param name="gpuFrameMs">The whole frame's GPU time, when the backend measures it (it includes the uploads before the first stage).</param>
     public FrameProfiler(GpuContext gpu, Func<double>? gpuFrameMs = null)
     {
-        this.gpuFrameMs = gpuFrameMs;
-        native = gpu;
+        this._gpuFrameMs = gpuFrameMs;
+        _native = gpu;
         GpuContext.ProfilePreFrame = true;
-        recordStamp = cmd => cmd.Timestamp(native.Frame.Timestamps, pendingStamp);
+        _recordStamp = cmd => cmd.Timestamp(_native.Frame.Timestamps, _pendingStamp);
     }
 
     static float[][] NewHistory()
@@ -134,42 +134,42 @@ public sealed class FrameProfiler : IDisposable
     public void BeginFrame()
     {
         for (int s = 0; s < Slots; s++) Collect(s);
-        slot = (slot + 1) % Slots;
-        slotWhole[slot] = default;
-        pending[slot] = false;   // still not ready after a full round: dropped
-        stampCount[slot] = 0;
-        preCount[slot] = 0;
-        slotTag[slot] = Tag;
+        _slot = (_slot + 1) % Slots;
+        _slotWhole[_slot] = default;
+        _pending[_slot] = false;   // still not ready after a full round: dropped
+        _stampCount[_slot] = 0;
+        _preCount[_slot] = 0;
+        _slotTag[_slot] = Tag;
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        frameMs = lastBegin == 0 ? 0 : (now - lastBegin) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-        lastBegin = now;
+        _frameMs = _lastBegin == 0 ? 0 : (now - _lastBegin) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        _lastBegin = now;
         StageClock.Start();
-        StageClock.Ms[StageClock.Sim] = outsideSim;
-        outsideSim = 0;
+        StageClock.Ms[StageClock.Sim] = _outsideSim;
+        _outsideSim = 0;
         StageClock.Profiler = this;
         Stamp(-1);
     }
 
-    double outsideSim;
-    long lastBegin;
-    double frameMs;
+    double _outsideSim;
+    long _lastBegin;
+    double _frameMs;
     // The whole frame's wall time, from one BeginFrame to the next (the simulation, the host, the waits for a free frame and for the GPU included): kept with the render
     // thread's history, a frame late, and drawn on both charts.
-    readonly float[] frameTime = new float[History];
+    readonly float[] _frameTime = new float[History];
 
     /// <summary>Render-thread work before <see cref="BeginFrame"/> that belongs to the next frame: the game's simulation ticks (<see cref="StageClock.Sim"/>), the last call's ms.</summary>
-    public void Outside(double simMs) => outsideSim = simMs;
+    public void Outside(double simMs) => _outsideSim = simMs;
 
     // The simulation's parts (Outside with parts): the names, how many lead as phases (the last of them the time outside the world's ticks), how many systems follow (listed by
     // cost; the rest are parts of systems, listed in order), each one's ms and the world ticks per frame, listed under sim in the legend, not plotted. simNow is the newest
     // call's, kept with the frame at EndFrame.
-    string[] simNames = [];
-    int simPhases, simSystems, simPaths;
-    float[][] simParts = [];
-    readonly float[] simTicks = new float[History];
-    double[] simNow = [];
-    int simNowTicks;
-    readonly List<(string Name, double Ms)> simRows = [];
+    string[] _simNames = [];
+    int _simPhases, _simSystems, _simPaths;
+    float[][] _simParts = [];
+    readonly float[] _simTicks = new float[History];
+    double[] _simNow = [];
+    int _simNowTicks;
+    readonly List<(string Name, double Ms)> _simRows = [];
 
     /// <summary>
     /// <see cref="Outside(double)"/> with the ticks' breakdown: <paramref name="names"/> (the same array while the parts stay the same) with their <paramref name="ms"/>, the first
@@ -178,18 +178,18 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     public void Outside(double simMs, int ticks, string[] names, ReadOnlySpan<double> ms, int phases, int systems, int pathsWaiting = 0)
     {
-        simSystems = systems;
-        simPaths = pathsWaiting;
-        outsideSim = simMs;
-        if (!ReferenceEquals(names, simNames))
+        _simSystems = systems;
+        _simPaths = pathsWaiting;
+        _outsideSim = simMs;
+        if (!ReferenceEquals(names, _simNames))
         {
-            simNames = names;
-            simParts = names.Select(_ => new float[History]).ToArray();
-            simNow = new double[names.Length];
+            _simNames = names;
+            _simParts = names.Select(_ => new float[History]).ToArray();
+            _simNow = new double[names.Length];
         }
-        simPhases = phases;
-        ms[..Math.Min(ms.Length, simNow.Length)].CopyTo(simNow);
-        simNowTicks = ticks;
+        _simPhases = phases;
+        ms[..Math.Min(ms.Length, _simNow.Length)].CopyTo(_simNow);
+        _simNowTicks = ticks;
     }
 
     /// <summary>After the frame is presented: the last stage (overlay, submit, present) ends and the frame's laps are kept.</summary>
@@ -198,37 +198,37 @@ public sealed class FrameProfiler : IDisposable
         // Its GPU stamp would land in the next frame's commands: the CPU lap only.
         StageClock.Profiler = null;
         StageClock.EndFrame();
-        submitted[slot] = StageClock.SubmissionStarted;
-        pending[slot] = stampCount[slot] > 1;
-        StampsLastFrame = stampCount[slot] + preCount[slot];
-        slotWhole[slot] = native.CurrentFrameStamps;   // complete when the context has ended the frame already (else the total falls back to gpuFrameMs)
-        slotPreEnd[slot] = native.LastFrameStamps.PreEnd;
+        _submitted[_slot] = StageClock.SubmissionStarted;
+        _pending[_slot] = _stampCount[_slot] > 1;
+        StampsLastFrame = _stampCount[_slot] + _preCount[_slot];
+        _slotWhole[_slot] = _native.CurrentFrameStamps;   // complete when the context has ended the frame already (else the total falls back to gpuFrameMs)
+        _slotPreEnd[_slot] = _native.LastFrameStamps.PreEnd;
         double sum = 0;
         for (int s = 0; s < Stages; s++)
         {
-            cpu[s][cpuHead] = (float)StageClock.Ms[s];
+            _cpu[s][_cpuHead] = (float)StageClock.Ms[s];
             sum += StageClock.Ms[s];
         }
-        for (int p = 0; p < parts.Length; p++) parts[p][cpuHead] = (float)StageClock.PartMs[p];
-        for (int p = 0; p < simParts.Length; p++) simParts[p][cpuHead] = (float)simNow[p];
-        simTicks[cpuHead] = simNowTicks;
-        Array.Clear(simNow);
-        simNowTicks = 0;
-        cpu[Other][cpuHead] = 0;
-        cpu[Total][cpuHead] = (float)sum;
-        frameTime[cpuHead] = (float)frameMs;
+        for (int p = 0; p < _parts.Length; p++) _parts[p][_cpuHead] = (float)StageClock.PartMs[p];
+        for (int p = 0; p < _simParts.Length; p++) _simParts[p][_cpuHead] = (float)_simNow[p];
+        _simTicks[_cpuHead] = _simNowTicks;
+        Array.Clear(_simNow);
+        _simNowTicks = 0;
+        _cpu[Other][_cpuHead] = 0;
+        _cpu[Total][_cpuHead] = (float)sum;
+        _frameTime[_cpuHead] = (float)_frameMs;
         if (SpikeLog.Enabled)
         {
-            slotFrame[slot] = ++frameCounter;
-            slotStamps[slot] = native.LastFrameStamps;
-            slotCpuTotal[slot] = sum;
-            slotCpuMedian[slot] = CpuMedian();
-            slotCpu[slot] = StageList(StageClock.Ms, 0.5) + PartList("ui", StageClock.UiPartNames, StageClock.UiPartMs) + PartList("upd-chars", StageClock.PartNames, StageClock.PartMs);
-            long uploaded = native.Frame.Stats.UploadBytes;
-            slotNotes[slot] = (uploaded > 0 ? $"uploads total {uploaded / 1048576.0:0.00} MB; " : "") + SpikeLog.TakeFrame();
+            _slotFrame[_slot] = ++_frameCounter;
+            _slotStamps[_slot] = _native.LastFrameStamps;
+            _slotCpuTotal[_slot] = sum;
+            _slotCpuMedian[_slot] = CpuMedian();
+            _slotCpu[_slot] = StageList(StageClock.Ms, 0.5) + PartList("ui", StageClock.UiPartNames, StageClock.UiPartMs) + PartList("upd-chars", StageClock.PartNames, StageClock.PartMs);
+            long uploaded = _native.Frame.Stats.UploadBytes;
+            _slotNotes[_slot] = (uploaded > 0 ? $"uploads total {uploaded / 1048576.0:0.00} MB; " : "") + SpikeLog.TakeFrame();
         }
-        cpuHead = (cpuHead + 1) % History;
-        cpuCount = Math.Min(cpuCount + 1, History);
+        _cpuHead = (_cpuHead + 1) % History;
+        _cpuCount = Math.Min(_cpuCount + 1, History);
     }
 
     /// <summary>
@@ -240,36 +240,36 @@ public sealed class FrameProfiler : IDisposable
 
     void RecordPre(IGpuCommandList cmd, int stage)
     {
-        int n = preCount[slot];
+        int n = _preCount[_slot];
         if (n >= MaxPre) return;
-        var q = native.Frame.Timestamps.Allocate();
+        var q = _native.Frame.Timestamps.Allocate();
         if (!q.IsValid) return;
-        cmd.Timestamp(native.Frame.Timestamps, q);
-        preSlots[slot, n] = q;
-        preStage[slot, n] = stage;
-        preCount[slot] = n + 1;
+        cmd.Timestamp(_native.Frame.Timestamps, q);
+        _preSlots[_slot, n] = q;
+        _preStage[_slot, n] = stage;
+        _preCount[_slot] = n + 1;
     }
 
     internal void Stamp(int stage)
     {
-        int n = stampCount[slot];
+        int n = _stampCount[_slot];
         if (n >= MaxStamps) return;
         // The native timestamps (QueryArena), recorded through the seam without ending VkGl's pass: they keep working while the
         // stages move to native code (docs/renderer-native.md 7.1 step 9).
-        var q = native.Frame.Timestamps.Allocate();
+        var q = _native.Frame.Timestamps.Allocate();
         if (!q.IsValid) return;
-        pendingStamp = q;
-        native.Interleave(recordStamp);
-        nativeStamps[slot, n] = q;
-        stampStage[slot, n] = stage;
-        stampCount[slot] = n + 1;
+        _pendingStamp = q;
+        _native.Interleave(_recordStamp);
+        _nativeStamps[_slot, n] = q;
+        _stampStage[_slot, n] = stage;
+        _stampCount[_slot] = n + 1;
     }
 
     // Native timestamps: the context (VkGl provides the seam), the slots per stamp, and the record callback (no allocation per stamp).
-    readonly GpuContext native;
-    (ulong Used, ulong Budget) vram;
-    int vramAge;
-    List<(string Name, ulong Bytes)> vramSlices = [];
+    readonly GpuContext _native;
+    (ulong Used, ulong Budget) _vram;
+    int _vramAge;
+    List<(string Name, ulong Bytes)> _vramSlices = [];
 
     static readonly Vector4[] PieColours =
     [
@@ -284,7 +284,7 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     List<(string Name, ulong Bytes)> VramSlices()
     {
-        var alloc = native.Device.Allocator;
+        var alloc = _native.Device.Allocator;
         var owners = alloc.Breakdown().Where(o => o.DeviceLocal > 0).OrderByDescending(o => o.DeviceLocal).ToList();
         var slices = owners.Take(8).Select(o => (o.Name, o.DeviceLocal)).ToList();
         ulong ours = (ulong)owners.Sum(o => (double)o.DeviceLocal), shown = (ulong)slices.Sum(s => (double)s.DeviceLocal);
@@ -293,7 +293,7 @@ public sealed class FrameProfiler : IDisposable
         var (empty, spare, scattered, _) = alloc.Slack();
         ulong free = empty + spare + scattered, blocks = ours + free;
         if (free > 0) slices.Add(("free in our blocks", free));
-        if (vram.Used > blocks) slices.Add(("driver and others", vram.Used - blocks));
+        if (_vram.Used > blocks) slices.Add(("driver and others", _vram.Used - blocks));
         return slices;
     }
 
@@ -304,14 +304,14 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     public void DumpVram(string path, Action<TextWriter>? more = null)
     {
-        var alloc = native.Device.Allocator;
-        var (used, budget) = native.Device.VideoMemory();
+        var alloc = _native.Device.Allocator;
+        var (used, budget) = _native.Device.VideoMemory();
         var (empty, spare, scattered, partBlocks) = alloc.Slack();
         ulong blocks = alloc.TotalAllocatedBytes;
         using var w = new StreamWriter(path);
         w.WriteLine($"VRAM dump {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        w.WriteLine($"driver: used {used / 1048576.0:0.0} MB of budget {budget / 1048576.0:0.0} MB (memory budget extension: {native.Device.HasMemoryBudget})");
-        var heaps = native.Device.Heaps();
+        w.WriteLine($"driver: used {used / 1048576.0:0.0} MB of budget {budget / 1048576.0:0.0} MB (memory budget extension: {_native.Device.HasMemoryBudget})");
+        var heaps = _native.Device.Heaps();
         for (int i = 0; i < heaps.Count; i++)
             w.WriteLine($"  heap {i}: {heaps[i].Size / 1048576.0:0} MB, ours {heaps[i].Usage / 1048576.0:0.0} MB of budget {heaps[i].Budget / 1048576.0:0.0} MB ({heaps[i].Flags})");
         ulong local = (ulong)alloc.Breakdown().Sum(o => (double)o.DeviceLocal) + empty + spare + scattered;
@@ -332,16 +332,16 @@ public sealed class FrameProfiler : IDisposable
     // VRAM (a driver call) and RAM are read every 30 frames, for the chart's header and the pie; only while either is shown.
     void RefreshVram()
     {
-        if (vramAge-- <= 0)
+        if (_vramAge-- <= 0)
         {
-            vram = native.Device.VideoMemory();
-            vramSlices = VramSlices();
-            ram = (Environment.WorkingSet, GC.GetTotalMemory(false));
-            vramAge = 30;
+            _vram = _native.Device.VideoMemory();
+            _vramSlices = VramSlices();
+            _ram = (Environment.WorkingSet, GC.GetTotalMemory(false));
+            _vramAge = 30;
         }
     }
 
-    (long WorkingSet, long Managed) ram;
+    (long WorkingSet, long Managed) _ram;
 
     /// <summary>The VRAM pie at the top right, while <see cref="ShowVram"/>.</summary>
     public void DrawVram(DebugOverlay overlay, int width, int height)
@@ -354,22 +354,22 @@ public sealed class FrameProfiler : IDisposable
 
     void DrawVramPie(DebugOverlay overlay, int width)
     {
-        if (vramSlices.Count == 0) return;
-        double total = vramSlices.Sum(s => (double)s.Bytes);
+        if (_vramSlices.Count == 0) return;
+        double total = _vramSlices.Sum(s => (double)s.Bytes);
         if (total <= 0) return;
         const float margin = 16, pad = 12, radius = 70;
         float lh = overlay.LineHeight, cw = overlay.CharWidth;
         float legendW = 2 * cw + 30 * cw;
-        float panelW = pad * 3 + 2 * radius + legendW, panelH = Math.Max(2 * radius, (vramSlices.Count + 1.5f) * lh) + 2 * pad;
+        float panelW = pad * 3 + 2 * radius + legendW, panelH = Math.Max(2 * radius, (_vramSlices.Count + 1.5f) * lh) + 2 * pad;
         float x1 = width - margin, x0 = x1 - panelW, y0 = margin;
         overlay.Rect(x0, y0, x1, y0 + panelH, DebugOverlay.PanelColour);
         var centre = new Vector2(x0 + pad + radius, y0 + pad + Math.Max(radius, (panelH - 2 * pad) / 2));
         double angle = -Math.PI / 2;
         float lx = x0 + pad * 2 + 2 * radius, ly = y0 + pad;
-        overlay.Text($"VRAM {vram.Used / 1073741824.0:0.00} of {vram.Budget / 1073741824.0:0.0} GB", lx, ly, DebugOverlay.TextColour);
-        for (int i = 0; i < vramSlices.Count; i++)
+        overlay.Text($"VRAM {_vram.Used / 1073741824.0:0.00} of {_vram.Budget / 1073741824.0:0.0} GB", lx, ly, DebugOverlay.TextColour);
+        for (int i = 0; i < _vramSlices.Count; i++)
         {
-            var (name, bytes) = vramSlices[i];
+            var (name, bytes) = _vramSlices[i];
             var colour = PieColours[Math.Min(i, PieColours.Length - 1)];
             double sweep = bytes / total * Math.Tau;
             int steps = Math.Max(1, (int)Math.Ceiling(sweep / (Math.Tau / 96)));
@@ -386,35 +386,35 @@ public sealed class FrameProfiler : IDisposable
             overlay.Text($"{label,-20}{bytes / 1048576.0,7:0} MB", lx + 2 * cw, top, DebugOverlay.TextColour);
         }
     }
-    readonly QuerySlot[,] nativeStamps = new QuerySlot[Slots, MaxStamps];
-    QuerySlot pendingStamp;
-    readonly Action<IGpuCommandList> recordStamp;
+    readonly QuerySlot[,] _nativeStamps = new QuerySlot[Slots, MaxStamps];
+    QuerySlot _pendingStamp;
+    readonly Action<IGpuCommandList> _recordStamp;
 
-    bool TryStamp(int s, int i, out ulong ns) => native.Frame.Timestamps.TryRead(nativeStamps[s, i], out ns);
+    bool TryStamp(int s, int i, out ulong ns) => _native.Frame.Timestamps.TryRead(_nativeStamps[s, i], out ns);
 
     void Collect(int s)
     {
-        if (!pending[s]) return;
-        int n = stampCount[s];
+        if (!_pending[s]) return;
+        int n = _stampCount[s];
         if (!TryStamp(s, n - 1, out _)) return;
-        Array.Clear(gpuFrame);
-        var arena = native.Frame.Timestamps;
-        var whole = slotWhole[s];
+        Array.Clear(_gpuFrame);
+        var arena = _native.Frame.Timestamps;
+        var whole = _slotWhole[s];
         double sum = 0;
         // The pre-frame command buffer, from the frame's first stamp: its spans (cull, bakes, the ocean) and what is left up to its end (uploads).
         if (arena.TryRead(whole.Begin, out ulong cursor))
         {
-            for (int i = 0; i < preCount[s]; i++)
+            for (int i = 0; i < _preCount[s]; i++)
             {
-                if (!arena.TryRead(preSlots[s, i], out ulong at)) continue;
+                if (!arena.TryRead(_preSlots[s, i], out ulong at)) continue;
                 double span = at >= cursor ? (at - cursor) / 1e6 : 0;
-                gpuFrame[preStage[s, i]] += span;
+                _gpuFrame[_preStage[s, i]] += span;
                 sum += span;
                 cursor = Math.Max(cursor, at);
             }
-            if (arena.TryRead(slotPreEnd[s], out ulong preEnd) && preEnd >= cursor)
+            if (arena.TryRead(_slotPreEnd[s], out ulong preEnd) && preEnd >= cursor)
             {
-                gpuFrame[StageClock.Uploads] += (preEnd - cursor) / 1e6;
+                _gpuFrame[StageClock.Uploads] += (preEnd - cursor) / 1e6;
                 sum += (preEnd - cursor) / 1e6;
             }
         }
@@ -424,63 +424,63 @@ public sealed class FrameProfiler : IDisposable
         {
             TryStamp(s, i, out ulong now);
             double ms = now >= previous ? (now - previous) / 1e6 : 0;
-            gpuFrame[stampStage[s, i]] += ms;
+            _gpuFrame[_stampStage[s, i]] += ms;
             sum += ms;
             previous = now;
         }
         // UI ends before the window copy. Without a submission boundary the tail still belongs to UI.
         if (arena.TryRead(whole.End, out ulong tailEnd) && tailEnd >= previous)
         {
-            gpuFrame[submitted[s] ? StageClock.Submit : StageClock.Ui] += (tailEnd - previous) / 1e6;
+            _gpuFrame[_submitted[s] ? StageClock.Submit : StageClock.Ui] += (tailEnd - previous) / 1e6;
             sum += (tailEnd - previous) / 1e6;
         }
         // The frame's own total (first to last stamp); the context's latest completed frame is only a stand-in and, with frames in flight, another frame.
         double own = arena.TryRead(whole.Begin, out ulong wb) && arena.TryRead(whole.End, out ulong we) && we >= wb ? (we - wb) / 1e6 : 0;
-        double total = own > 0 ? Math.Max(own, sum) : gpuFrameMs?.Invoke() is > 0 and var t ? Math.Max(t, sum) : sum;
-        for (int k = 0; k < Stages; k++) gpu[k][gpuHead] = (float)gpuFrame[k];
-        gpu[Other][gpuHead] = (float)(total - sum);
-        gpu[Total][gpuHead] = (float)total;
-        OnGpuFrame?.Invoke(slotTag[s], gpuFrame, total);
-        if (SpikeLog.Enabled && slotFrame[s] > SpikeLog.SkipFrames)
+        double total = own > 0 ? Math.Max(own, sum) : _gpuFrameMs?.Invoke() is > 0 and var t ? Math.Max(t, sum) : sum;
+        for (int k = 0; k < Stages; k++) _gpu[k][_gpuHead] = (float)_gpuFrame[k];
+        _gpu[Other][_gpuHead] = (float)(total - sum);
+        _gpu[Total][_gpuHead] = (float)total;
+        OnGpuFrame?.Invoke(_slotTag[s], _gpuFrame, total);
+        if (SpikeLog.Enabled && _slotFrame[s] > SpikeLog.SkipFrames)
         {
-            for (int k = 0; k < Stages; k++) runGpu[k].Add((float)gpuFrame[k]);
-            runGpu[Stages].Add((float)(total - sum));
-            runGpu[Stages + 1].Add((float)total);
+            for (int k = 0; k < Stages; k++) _runGpu[k].Add((float)_gpuFrame[k]);
+            _runGpu[Stages].Add((float)(total - sum));
+            _runGpu[Stages + 1].Add((float)total);
             SpikeLog.OnSummary ??= PrintRunSummary;
         }
-        if (SpikeLog.Enabled && slotNotes[s] is { } notes)
+        if (SpikeLog.Enabled && _slotNotes[s] is { } notes)
         {
-            medianScratch.Clear();
-            int have = Math.Min(gpuCount + 1, History);
-            for (int i = 0; i < have; i++) medianScratch.Add(gpu[Total][i]);
-            medianScratch.Sort();
-            double median = have >= 30 ? medianScratch[have / 2] : 0;
-            double pre = native.Frame.Timestamps.TryRead(slotStamps[s].Begin, out ulong pb) && native.Frame.Timestamps.TryRead(slotStamps[s].PreEnd, out ulong pe) && pe >= pb ? (pe - pb) / 1e6 : -1;
-            SpikeLog.Report(slotFrame[s], total, median, (pre >= 0 ? $"pre-frame {pre:0.0}, " : "") + StageList(gpuFrame, 0.3) + (total - sum >= 0.3 ? $", other {total - sum:0.0}" : ""), slotCpu[s] ?? "", notes, slotCpuTotal[s], slotCpuMedian[s]);
-            slotNotes[s] = null;
+            _medianScratch.Clear();
+            int have = Math.Min(_gpuCount + 1, History);
+            for (int i = 0; i < have; i++) _medianScratch.Add(_gpu[Total][i]);
+            _medianScratch.Sort();
+            double median = have >= 30 ? _medianScratch[have / 2] : 0;
+            double pre = _native.Frame.Timestamps.TryRead(_slotStamps[s].Begin, out ulong pb) && _native.Frame.Timestamps.TryRead(_slotStamps[s].PreEnd, out ulong pe) && pe >= pb ? (pe - pb) / 1e6 : -1;
+            SpikeLog.Report(_slotFrame[s], total, median, (pre >= 0 ? $"pre-frame {pre:0.0}, " : "") + StageList(_gpuFrame, 0.3) + (total - sum >= 0.3 ? $", other {total - sum:0.0}" : ""), _slotCpu[s] ?? "", notes, _slotCpuTotal[s], _slotCpuMedian[s]);
+            _slotNotes[s] = null;
         }
-        gpuHead = (gpuHead + 1) % History;
-        gpuCount = Math.Min(gpuCount + 1, History);
-        pending[s] = false;
+        _gpuHead = (_gpuHead + 1) % History;
+        _gpuCount = Math.Min(_gpuCount + 1, History);
+        _pending[s] = false;
     }
 
     /// <summary>The render thread's median frame total over the history (0 before 30 frames), the frame just kept included.</summary>
     double CpuMedian()
     {
-        int have = Math.Min(cpuCount + 1, History);
+        int have = Math.Min(_cpuCount + 1, History);
         if (have < 30) return 0;
-        medianScratch.Clear();
-        for (int i = 0; i < have; i++) medianScratch.Add(cpu[Total][i]);
-        medianScratch.Sort();
-        return medianScratch[have / 2];
+        _medianScratch.Clear();
+        for (int i = 0; i < have; i++) _medianScratch.Add(_cpu[Total][i]);
+        _medianScratch.Sort();
+        return _medianScratch[have / 2];
     }
 
-    readonly List<float>[] runGpu = Enumerable.Range(0, Series).Select(_ => new List<float>()).ToArray();
+    readonly List<float>[] _runGpu = Enumerable.Range(0, Series).Select(_ => new List<float>()).ToArray();
 
     /// <summary>--log-spikes: per stage over the run (after the skipped frames), the GPU time's mean without the frames over 2.5 x the median (the shared card's outliers), the median, p95 and max.</summary>
     void PrintRunSummary()
     {
-        var total = runGpu[Total];
+        var total = _runGpu[Total];
         if (total.Count < 10) return;
         var sortedTotal = total.OrderBy(v => v).ToArray();
         float median = sortedTotal[sortedTotal.Length / 2];
@@ -488,7 +488,7 @@ public sealed class FrameProfiler : IDisposable
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"gpu-run   {total.Count} frames, {total.Count - keep.Length} over 2.5 x the median {median:0.00} ms left out of the trimmed mean; per stage ms: trimmed mean / p50 / p95 / max"));
         foreach (int s in Order)
         {
-            var v = runGpu[s];
+            var v = _runGpu[s];
             if (v.Count == 0) continue;
             var sorted = v.OrderBy(x => x).ToArray();
             double mean = keep.Length == 0 ? 0 : keep.Average(i => v[i]);
@@ -543,32 +543,32 @@ public sealed class FrameProfiler : IDisposable
     {
         if (Showing == Mode.Off || width <= 0 || height <= 0) return;
         bool showGpu = Showing == Mode.Gpu;
-        var hist = showGpu ? gpu : cpu;
-        int head = showGpu ? gpuHead : cpuHead, count = showGpu ? gpuCount : cpuCount;
+        var hist = showGpu ? _gpu : _cpu;
+        int head = showGpu ? _gpuHead : _cpuHead, count = showGpu ? _gpuCount : _cpuCount;
         const float margin = 16, pad = 12, swatch = 10;
         const int meanFrames = 30;
         float lh = overlay.LineHeight, cw = overlay.CharWidth;
 
-        if (simOpen) SimRows(meanFrames);
+        if (_simOpen) SimRows(meanFrames);
         int rowCount = 0;
         for (int gi = 0; gi < Groups.Length; gi++)
         {
             var stages = Groups[gi].Stages;
             if (stages.Length > 1) rowCount++;
-            if (stages.Length == 1 || groupOpen[gi])
-                foreach (int s in stages) rowCount += 1 + (s == StageClock.UpdChars && partsOpen ? parts.Length : 0) + (s == StageClock.Sim && simOpen ? simRows.Count + 2 : 0);
+            if (stages.Length == 1 || _groupOpen[gi])
+                foreach (int s in stages) rowCount += 1 + (s == StageClock.UpdChars && _partsOpen ? _parts.Length : 0) + (s == StageClock.Sim && _simOpen ? _simRows.Count + 2 : 0);
         }
         float panelH = (rowCount + 2.5f) * lh + 2 * pad;
         float x0 = margin, x1 = width - margin, y1 = height - margin, y0 = Math.Max(y1 - panelH, margin);
         overlay.Rect(x0, y0, x1, y1, DebugOverlay.PanelColour);
         RefreshVram();
         // The process's RAM: its working set (all it holds in physical memory) and the managed heap within it.
-        string header = string.Create(CultureInfo.InvariantCulture, $"{(showGpu ? "gpu" : "cpu")}   vram {vram.Used / 1073741824.0:0.00} of {vram.Budget / 1073741824.0:0.0} GB   " +
-            $"ram {ram.WorkingSet / 1073741824.0:0.00} GB (managed {ram.Managed / 1073741824.0:0.00})   ");
+        string header = string.Create(CultureInfo.InvariantCulture, $"{(showGpu ? "gpu" : "cpu")}   vram {_vram.Used / 1073741824.0:0.00} of {_vram.Budget / 1073741824.0:0.0} GB   " +
+            $"ram {_ram.WorkingSet / 1073741824.0:0.00} GB (managed {_ram.Managed / 1073741824.0:0.00})   ");
         overlay.Text(header, x0 + pad, y0 + pad, DebugOverlay.TextColour);
         // The whole frame (FrameColour line): mean of the last frames, frames a second and the longest kept.
-        double frameMean = Mean(frameTime, cpuHead, cpuCount, meanFrames);
-        overlay.Text(string.Create(CultureInfo.InvariantCulture, $"frame {frameMean:0.00} ms ({(frameMean > 0 ? 1000 / frameMean : 0):0} fps), max {Max(frameTime, cpuHead, cpuCount):0.00}"),
+        double frameMean = Mean(_frameTime, _cpuHead, _cpuCount, meanFrames);
+        overlay.Text(string.Create(CultureInfo.InvariantCulture, $"frame {frameMean:0.00} ms ({(frameMean > 0 ? 1000 / frameMean : 0):0} fps), max {Max(_frameTime, _cpuHead, _cpuCount):0.00}"),
             x0 + pad + header.Length * cw, y0 + pad, FrameColour);
 
         // Legend at the right: swatch, row, mean of the last frames on the CPU and the GPU. A row marked + opens (a click), - closes; a closed group shows its
@@ -577,35 +577,35 @@ public sealed class FrameProfiler : IDisposable
         float lx = x1 - pad - legendW, ly = y0 + pad + 1.5f * lh;
         var dim = new Vector4(0.7f, 0.7f, 0.68f, 1);
         overlay.Text($"{"",-16}{"cpu",10}{"gpu",10}", lx + swatch + 6, ly, dim);
-        rows.Clear();
-        plotted.Clear();
+        _rows.Clear();
+        _plotted.Clear();
         string Ms(bool shown, double ms) => shown ? ms.ToString("0.00", CultureInfo.InvariantCulture) : "-";
         float NextRow(int opens)
         {
-            float top = ly + (rows.Count + 1) * lh;
-            rows.Add((top, opens));
+            float top = ly + (_rows.Count + 1) * lh;
+            _rows.Add((top, opens));
             return top;
         }
         bool Plots(int s) => showGpu ? OnGpu(s) : OnCpu(s);
         void StageRow(int s, string indent)
         {
-            bool expands = s == StageClock.UpdChars || s == StageClock.Sim && simNames.Length > 0;
-            bool open = s == StageClock.Sim ? simOpen : partsOpen;
+            bool expands = s == StageClock.UpdChars || s == StageClock.Sim && _simNames.Length > 0;
+            bool open = s == StageClock.Sim ? _simOpen : _partsOpen;
             float top = NextRow(!expands ? -1 : s == StageClock.Sim ? SimRow : PartsRow);
             overlay.Rect(lx, top + 4, lx + swatch, top + 4 + swatch, Colours[s]);
-            if (Plots(s)) plotted.Add((hist[s], Colours[s], s == Total ? 2f : 1.5f, head, count));
+            if (Plots(s)) _plotted.Add((hist[s], Colours[s], s == Total ? 2f : 1.5f, head, count));
             string label = indent + (expands ? open ? "- " : "+ " : "  ") + Label(s);
-            overlay.Text($"{label,-16}{Ms(OnCpu(s), Mean(cpu[s], cpuHead, cpuCount, meanFrames)),10}{Ms(gpuCount > 0 && OnGpu(s), Mean(gpu[s], gpuHead, gpuCount, meanFrames)),10}",
+            overlay.Text($"{label,-16}{Ms(OnCpu(s), Mean(_cpu[s], _cpuHead, _cpuCount, meanFrames)),10}{Ms(_gpuCount > 0 && OnGpu(s), Mean(_gpu[s], _gpuHead, _gpuCount, meanFrames)),10}",
                 lx + swatch + 6, top, DebugOverlay.TextColour);
             if (!expands || !open) return;
             if (s == StageClock.Sim)
             {
                 // The world ticks a frame ran and the mean tick, then the phases, the time outside the ticks and the costliest systems.
-                double ticks = Mean(simTicks, cpuHead, cpuCount, meanFrames), inTicks = 0;
-                for (int p = 0; p < simPhases - 1; p++) inTicks += simRows[p].Ms;
+                double ticks = Mean(_simTicks, _cpuHead, _cpuCount, meanFrames), inTicks = 0;
+                for (int p = 0; p < _simPhases - 1; p++) inTicks += _simRows[p].Ms;
                 overlay.Text(string.Create(CultureInfo.InvariantCulture, $"{indent}    {ticks:0.0} ticks, {(ticks > 0 ? inTicks / ticks : 0):0.00} ms each"), lx + swatch + 6, NextRow(-1), dim);
-                overlay.Text($"{indent}    {simPaths} paths waiting", lx + swatch + 6, NextRow(-1), dim);
-                foreach (var (name, ms) in simRows)
+                overlay.Text($"{indent}    {_simPaths} paths waiting", lx + swatch + 6, NextRow(-1), dim);
+                foreach (var (name, ms) in _simRows)
                 {
                     string row = indent + "    " + name;
                     overlay.Text($"{(row.Length > 16 ? row[..16] : row),-16}{Ms(true, ms),10}{"",10}", lx + swatch + 6, NextRow(-1), dim);
@@ -613,8 +613,8 @@ public sealed class FrameProfiler : IDisposable
                 return;
             }
             // Its parts, render thread only (the GPU work they record is in the passes that run it); not plotted.
-            for (int p = 0; p < parts.Length; p++)
-                overlay.Text($"{indent + "    " + StageClock.PartNames[p],-16}{Ms(true, Mean(parts[p], cpuHead, cpuCount, meanFrames)),10}{"",10}", lx + swatch + 6, NextRow(-1), dim);
+            for (int p = 0; p < _parts.Length; p++)
+                overlay.Text($"{indent + "    " + StageClock.PartNames[p],-16}{Ms(true, Mean(_parts[p], _cpuHead, _cpuCount, meanFrames)),10}{"",10}", lx + swatch + 6, NextRow(-1), dim);
         }
         for (int gi = 0; gi < Groups.Length; gi++)
         {
@@ -624,33 +624,33 @@ public sealed class FrameProfiler : IDisposable
             bool anyCpu = false, anyGpu = false;
             foreach (int s in stages)
             {
-                if (OnCpu(s)) { c += Mean(cpu[s], cpuHead, cpuCount, meanFrames); anyCpu = true; }
-                if (OnGpu(s)) { g += Mean(gpu[s], gpuHead, gpuCount, meanFrames); anyGpu = true; }
+                if (OnCpu(s)) { c += Mean(_cpu[s], _cpuHead, _cpuCount, meanFrames); anyCpu = true; }
+                if (OnGpu(s)) { g += Mean(_gpu[s], _gpuHead, _gpuCount, meanFrames); anyGpu = true; }
             }
             float top = NextRow(gi);
-            bool open = groupOpen[gi], shown = showGpu ? anyGpu : anyCpu;
-            var sum = groupSeries[gi];
+            bool open = _groupOpen[gi], shown = showGpu ? anyGpu : anyCpu;
+            var sum = _groupSeries[gi];
             Array.Clear(sum);
             foreach (int s in stages)
                 if (Plots(s)) for (int i = 0; i < History; i++) sum[i] += hist[s][i];
             if (!open)
             {
                 overlay.Rect(lx, top + 4, lx + swatch, top + 4 + swatch, Colours[stages[0]]);
-                if (shown) plotted.Add((sum, Colours[stages[0]], 1.5f, head, count));
+                if (shown) _plotted.Add((sum, Colours[stages[0]], 1.5f, head, count));
             }
-            overlay.Text($"{(open ? "- " : "+ ") + name,-16}{Ms(anyCpu, c),10}{Ms(gpuCount > 0 && anyGpu, g),10}",
+            overlay.Text($"{(open ? "- " : "+ ") + name,-16}{Ms(anyCpu, c),10}{Ms(_gpuCount > 0 && anyGpu, g),10}",
                 lx + swatch + 6, top, DebugOverlay.TextColour);
             if (open) foreach (int s in stages) StageRow(s, "  ");
         }
-        legendBox = (lx, ly, x1 - pad, ly + (rows.Count + 1) * lh, lh);
+        _legendBox = (lx, ly, x1 - pad, ly + (_rows.Count + 1) * lh, lh);
         // The whole frame, on both charts (the render thread's history: a GPU chart's newest frames are a few behind it).
-        plotted.Add((frameTime, FrameColour, 2f, cpuHead, cpuCount));
+        _plotted.Add((_frameTime, FrameColour, 2f, _cpuHead, _cpuCount));
 
         // The plot: y from 0 to a round number above the largest value shown, with labelled grid lines.
         float px0 = x0 + pad + 7 * cw, px1 = lx - 3 * cw, py0 = y0 + pad + 1.5f * lh + lh * 0.5f, py1 = y1 - pad - lh * 0.5f;
         if (px1 - px0 < 50 || py1 - py0 < 30) { overlay.Flush(width, height); return; }
         float max = 0;
-        foreach (var (series, _, _, _, n) in plotted)
+        foreach (var (series, _, _, _, n) in _plotted)
             for (int i = 0; i < n; i++) max = Math.Max(max, series[i]);
         float scale = NiceCeiling(max * 1.05f);
         var grid = new Vector4(1, 1, 1, 0.12f);
@@ -666,7 +666,7 @@ public sealed class FrameProfiler : IDisposable
         {
             float dx = (px1 - px0) / (History - 1);
             // Oldest at the left; the newest frame at the right edge.
-            foreach (var (series, colour, thickness, h, n) in plotted)
+            foreach (var (series, colour, thickness, h, n) in _plotted)
             {
                 if (n < 2) continue;
                 // A run of points within a quarter pixel of the height it started at is one segment: most stages lie flat near 0, and the
@@ -694,14 +694,14 @@ public sealed class FrameProfiler : IDisposable
     /// <summary>A left click at <paramref name="at"/> (framebuffer pixels): on a legend row marked + or - it opens or closes that row. True when it was on the legend (the caller drops it).</summary>
     public bool Click(Vector2 at)
     {
-        var (bx0, by0, bx1, by1, lh) = legendBox;
+        var (bx0, by0, bx1, by1, lh) = _legendBox;
         if (Showing == Mode.Off || at.X < bx0 || at.X > bx1 || at.Y < by0 || at.Y > by1) return false;
-        foreach (var (top, opens) in rows)
+        foreach (var (top, opens) in _rows)
         {
             if (at.Y < top || at.Y >= top + lh) continue;
-            if (opens >= 0) groupOpen[opens] = !groupOpen[opens];
-            else if (opens == PartsRow) partsOpen = !partsOpen;
-            else if (opens == SimRow) simOpen = !simOpen;
+            if (opens >= 0) _groupOpen[opens] = !_groupOpen[opens];
+            else if (opens == PartsRow) _partsOpen = !_partsOpen;
+            else if (opens == SimRow) _simOpen = !_simOpen;
             break;
         }
         return true;
@@ -713,15 +713,15 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     void SimRows(int frames)
     {
-        const int Shown = 10;
-        simRows.Clear();
-        int systemsEnd = Math.Min(simParts.Length, simPhases + simSystems);
-        for (int p = 0; p < simPhases && p < simParts.Length; p++) simRows.Add((simNames[p], Mean(simParts[p], cpuHead, cpuCount, frames)));
-        var systems = Enumerable.Range(simPhases, Math.Max(0, systemsEnd - simPhases))
-            .Select(p => (Name: "  " + simNames[p], Ms: Mean(simParts[p], cpuHead, cpuCount, frames))).OrderByDescending(r => r.Ms).ToList();
-        simRows.AddRange(systems.Take(Shown));
-        if (systems.Count > Shown) simRows.Add(("  other systems", systems.Skip(Shown).Sum(r => r.Ms)));
-        for (int p = systemsEnd; p < simParts.Length; p++) simRows.Add(("  " + simNames[p], Mean(simParts[p], cpuHead, cpuCount, frames)));
+        const int shown = 10;
+        _simRows.Clear();
+        int systemsEnd = Math.Min(_simParts.Length, _simPhases + _simSystems);
+        for (int p = 0; p < _simPhases && p < _simParts.Length; p++) _simRows.Add((_simNames[p], Mean(_simParts[p], _cpuHead, _cpuCount, frames)));
+        var systems = Enumerable.Range(_simPhases, Math.Max(0, systemsEnd - _simPhases))
+            .Select(p => (Name: "  " + _simNames[p], Ms: Mean(_simParts[p], _cpuHead, _cpuCount, frames))).OrderByDescending(r => r.Ms).ToList();
+        _simRows.AddRange(systems.Take(shown));
+        if (systems.Count > shown) _simRows.Add(("  other systems", systems.Skip(shown).Sum(r => r.Ms)));
+        for (int p = systemsEnd; p < _simParts.Length; p++) _simRows.Add(("  " + _simNames[p], Mean(_simParts[p], _cpuHead, _cpuCount, frames)));
     }
 
     public void Dispose()

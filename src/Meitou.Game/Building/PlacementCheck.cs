@@ -1,9 +1,9 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
-using Meitou.Simulation.Navigation;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Game.Building;
 
@@ -44,7 +44,7 @@ public sealed class PlacementServices
     /// <summary>The level data's buildings round a point (X, Z) within a radius, with their footprints in the world (those read so far).</summary>
     public required Func<Vector2, float, IEnumerable<PlacedFootprint>> StaticAround { get; init; }
     /// <summary>The level data's building placements within a radius of a point (X, Z), no footprint needed (the agent control channel's building list).</summary>
-    public Func<Vector2, float, IEnumerable<Meitou.Data.World.BuildingPlacement>> StaticPlacementsAround { get; init; } = (_, _) => [];
+    public Func<Vector2, float, IEnumerable<BuildingPlacement>> StaticPlacementsAround { get; init; } = (_, _) => [];
     /// <summary>The level data's pickable buildings along a ray (origin, direction, length) with their record footprints; empty without level data.</summary>
     public Func<Vector3, Vector3, float, IEnumerable<PlacedBuilding>> StaticAlong { get; init; } = (_, _, _) => [];
     /// <summary>The collision triangles of a building record in its own space (a click on a building is tested against them); empty without level data.</summary>

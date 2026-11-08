@@ -13,7 +13,7 @@ namespace Meitou.Tests.Navigation;
 public class DoorJoinTests
 {
     static readonly object Gate = new();
-    static readonly Dictionary<ZoneCoordinate, Built> built = [];
+    static readonly Dictionary<ZoneCoordinate, Built> BuiltCache = [];
 
     /// <summary>A zone's build: the combined mesh before its kept set is resolved, its interiors in the order they were appended, and each interior site's gathered painters and kind.</summary>
     sealed record Built(ZoneNavMesh Full, IReadOnlyList<InteriorMesh> Inner, Dictionary<string, (int Painters, bool Doorless, bool Destroyed)> Sites);
@@ -24,7 +24,7 @@ public class DoorJoinTests
         var install = InstallData.Install!;
         lock (Gate)
         {
-            if (built.TryGetValue(zone, out var b)) return b;
+            if (BuiltCache.TryGetValue(zone, out var b)) return b;
             using var gatherer = new ZoneGeometryGatherer(install, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!, new CollisionCache(install));
             var settings = new NavBuildSettings();
             var full = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(zone), settings, out _, out var inner, interiors: true);
@@ -32,7 +32,7 @@ public class DoorJoinTests
             foreach (var site in gatherer.InteriorSites(zone))
                 if (gatherer.GatherInterior(site, NavMeshPipeline.InteriorTileStep * settings.CellSize, agentHeight: settings.AgentHeight) is { InteriorOf: { } key } g)
                     sites[key] = (g.Painters.Count, g.InteriorDoorless, g.InteriorDestroyed);
-            return built[zone] = new Built(full, inner, sites);
+            return BuiltCache[zone] = new Built(full, inner, sites);
         }
     }
 

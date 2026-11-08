@@ -36,47 +36,47 @@ public sealed record VertexArrayBindings(LegacyProgram.Attribute?[] Attributes, 
 /// </summary>
 public sealed unsafe class LegacyProgram : IDisposable
 {
-    readonly IGpuContext ctx;
-    readonly ulong uniformAlign;              // the default blocks' slice alignment (the device limit, at least 16)
-    readonly List<(string Name, UniformLookup? Vertex, UniformLookup? Fragment)> uniforms = [];
-    readonly Dictionary<string, int> uniformIndex = [];
+    readonly IGpuContext _ctx;
+    readonly ulong _uniformAlign;              // the default blocks' slice alignment (the device limit, at least 16)
+    readonly List<(string Name, UniformLookup? Vertex, UniformLookup? Fragment)> _uniforms = [];
+    readonly Dictionary<string, int> _uniformIndex = [];
     // Set 0, in VkGl's order: every non-default uniform block of the vertex stage, then of the fragment stage; then every sampler of both.
-    readonly (uint Binding, int Size, string Name)[] blocks;
-    readonly (uint Binding, SamplerInfo Info, string Name)[] samplers;
-    readonly string[] blockNames, samplerNames;
-    readonly GpuBufferBinding[] blockValues;     // per block name
-    readonly SampledTexture[] samplerValues;  // per sampler name
-    readonly int[] blockIndex, samplerIndex;  // each set-0 entry's name index
-    readonly ulong[] lastPush;
-    long lastPushEpoch = -1;
-    bool bindingsDirty = true;                // a Bind since the last Flush
-    int pushedGlobals = -1;                   // the globals version set 0 was last evaluated with
-    bool vertexDirty = true, fragmentDirty = true;
-    long sliceFrame = -1;
-    Transient vertexSlice, fragmentSlice;
-    readonly Dictionary<(ulong, ulong), GpuSet> dynamicSets = [];
+    readonly (uint Binding, int Size, string Name)[] _blocks;
+    readonly (uint Binding, SamplerInfo Info, string Name)[] _samplers;
+    readonly string[] _blockNames, _samplerNames;
+    readonly GpuBufferBinding[] _blockValues;     // per block name
+    readonly SampledTexture[] _samplerValues;  // per sampler name
+    readonly int[] _blockIndex, _samplerIndex;  // each set-0 entry's name index
+    readonly ulong[] _lastPush;
+    long _lastPushEpoch = -1;
+    bool _bindingsDirty = true;                // a Bind since the last Flush
+    int _pushedGlobals = -1;                   // the globals version set 0 was last evaluated with
+    bool _vertexDirty = true, _fragmentDirty = true;
+    long _sliceFrame = -1;
+    Transient _vertexSlice, _fragmentSlice;
+    readonly Dictionary<(ulong, ulong), GpuSet> _dynamicSets = [];
 
     LegacyProgram(IGpuContext ctx, GpuProgram program)
     {
-        this.ctx = ctx;
-        uniformAlign = Math.Max(ctx.UniformBufferAlign, 16);
+        this._ctx = ctx;
+        _uniformAlign = Math.Max(ctx.UniformBufferAlign, 16);
         Program = program;
         var c = Program.Compiled!;
         VertexBlock = c.Vertex.DefaultBlock;
         FragmentBlock = c.Fragment.DefaultBlock;
         VertexDefault = new byte[VertexBlock?.Size ?? 0];
         FragmentDefault = new byte[FragmentBlock?.Size ?? 0];
-        blocks = [
+        _blocks = [
             .. c.Vertex.Blocks.Where(b => b.Kind == BlockKind.Uniform && !b.IsDefault).Select(b => ((uint)b.Binding, b.Size, b.Name)),
             .. c.Fragment.Blocks.Where(b => b.Kind == BlockKind.Uniform && !b.IsDefault).Select(b => ((uint)b.Binding, b.Size, b.Name))];
-        samplers = [.. c.Vertex.Samplers.Concat(c.Fragment.Samplers).Select(s => ((uint)s.Binding, s, s.Name))];
-        blockNames = [.. blocks.Select(b => b.Name).Distinct()];
-        samplerNames = [.. samplers.Select(s => s.Name).Distinct()];
-        blockValues = new GpuBufferBinding[blockNames.Length];
-        samplerValues = new SampledTexture[samplerNames.Length];
-        lastPush = new ulong[(blocks.Length + samplers.Length) * 3];
-        blockIndex = [.. blocks.Select(b => Array.IndexOf(blockNames, b.Name))];
-        samplerIndex = [.. samplers.Select(s => Array.IndexOf(samplerNames, s.Name))];
+        _samplers = [.. c.Vertex.Samplers.Concat(c.Fragment.Samplers).Select(s => ((uint)s.Binding, s, s.Name))];
+        _blockNames = [.. _blocks.Select(b => b.Name).Distinct()];
+        _samplerNames = [.. _samplers.Select(s => s.Name).Distinct()];
+        _blockValues = new GpuBufferBinding[_blockNames.Length];
+        _samplerValues = new SampledTexture[_samplerNames.Length];
+        _lastPush = new ulong[(_blocks.Length + _samplers.Length) * 3];
+        _blockIndex = [.. _blocks.Select(b => Array.IndexOf(_blockNames, b.Name))];
+        _samplerIndex = [.. _samplers.Select(s => Array.IndexOf(_samplerNames, s.Name))];
         InputLocations = [.. c.Vertex.Inputs.SelectMany(i => Enumerable.Range(i.Location, i.Slots))];
         InputKinds = [.. c.Vertex.Inputs.SelectMany(i => Enumerable.Repeat(i.Kind, i.Slots))];
     }
@@ -95,32 +95,32 @@ public sealed unsafe class LegacyProgram : IDisposable
     /// <summary>The vertex input locations the program reads (a matrix input takes several), and their scalar kinds.</summary>
     public int[] InputLocations { get; }
     public ScalarKind[] InputKinds { get; }
-    public IReadOnlyList<string> SamplerNames => samplerNames;
-    public IReadOnlyList<string> BlockNames => blockNames;
+    public IReadOnlyList<string> SamplerNames => _samplerNames;
+    public IReadOnlyList<string> BlockNames => _blockNames;
 
     // ---- resolved at load ----
 
     /// <summary>A loose uniform by GL name (<c>uName</c>, <c>uName[3]</c>); <see cref="UniformHandle.None"/> when inactive (GL's −1).</summary>
     public UniformHandle Uniform(string glName)
     {
-        if (uniformIndex.TryGetValue(glName, out int i)) return new UniformHandle(i);
+        if (_uniformIndex.TryGetValue(glName, out int i)) return new UniformHandle(i);
         var c = Program.Compiled!;
         var v = Loose(c.Vertex.FindUniform(glName));
         var f = Loose(c.Fragment.FindUniform(glName));
         if (v is null && f is null) i = -1;
         else
         {
-            i = uniforms.Count;
-            uniforms.Add((glName, v, f));
+            i = _uniforms.Count;
+            _uniforms.Add((glName, v, f));
         }
-        uniformIndex[glName] = i;
+        _uniformIndex[glName] = i;
         return new UniformHandle(i);
     }
 
     static UniformLookup? Loose(UniformLookup? l) => l is { } u && u.Block.IsDefault ? u : null;
 
-    public SamplerSlot Sampler(string glName) => new(Array.IndexOf(samplerNames, glName));
-    public BlockSlot Block(string glName) => new(Array.IndexOf(blockNames, glName));
+    public SamplerSlot Sampler(string glName) => new(Array.IndexOf(_samplerNames, glName));
+    public BlockSlot Block(string glName) => new(Array.IndexOf(_blockNames, glName));
 
     // ---- per draw ----
 
@@ -143,40 +143,40 @@ public sealed unsafe class LegacyProgram : IDisposable
     void Write(UniformHandle u, byte* src, int rows, int columns, int count, bool isInt)
     {
         if (!u.IsValid) return;
-        var (_, v, f) = uniforms[u.Index];
-        if (v is { } vl) { GlUniforms.Scatter(VertexDefault, vl, src, rows, columns, count, isInt); vertexDirty = true; }
-        if (f is { } fl) { GlUniforms.Scatter(FragmentDefault, fl, src, rows, columns, count, isInt); fragmentDirty = true; }
+        var (_, v, f) = _uniforms[u.Index];
+        if (v is { } vl) { GlUniforms.Scatter(VertexDefault, vl, src, rows, columns, count, isInt); _vertexDirty = true; }
+        if (f is { } fl) { GlUniforms.Scatter(FragmentDefault, fl, src, rows, columns, count, isInt); _fragmentDirty = true; }
     }
 
     /// <summary>The texture a sampler reads (default: nothing, the GL stand-in).</summary>
     public void Bind(SamplerSlot s, in SampledTexture texture)
     {
-        if (s.IsValid) { samplerValues[s.Index] = texture; bindingsDirty = true; }
+        if (s.IsValid) { _samplerValues[s.Index] = texture; _bindingsDirty = true; }
     }
 
     public void Bind(BlockSlot b, in GpuBufferBinding buffer)
     {
-        if (b.IsValid) { blockValues[b.Index] = buffer; bindingsDirty = true; }
+        if (b.IsValid) { _blockValues[b.Index] = buffer; _bindingsDirty = true; }
     }
 
     /// <summary>The reflected sampler behind a slot (its kind decides the stand-in and whether it compares).</summary>
-    public SamplerInfo SamplerInfo(SamplerSlot s) => samplers[Array.IndexOf(samplerIndex, s.Index)].Info;
+    public SamplerInfo SamplerInfo(SamplerSlot s) => _samplers[Array.IndexOf(_samplerIndex, s.Index)].Info;
 
     // ---- frame globals (docs/renderer-native.md 4.3) ----
 
-    int globalsVersion = -1;
-    Func<SampledTexture>?[] globalTextures = [];
-    Func<GpuBufferBinding>?[] globalBlocks = [];
-    (UniformHandle Handle, FrameGlobals.Uniform Value)[] globalUniforms = [];
+    int _globalsVersion = -1;
+    Func<SampledTexture>?[] _globalTextures = [];
+    Func<GpuBufferBinding>?[] _globalBlocks = [];
+    (UniformHandle Handle, FrameGlobals.Uniform Value)[] _globalUniforms = [];
 
     /// <summary>Re-reads the published names (call only when <see cref="FrameGlobals.Version"/> moved: its closure allocates).</summary>
     void ResolveGlobals()
     {
-        var g = ctx.Globals;
-        globalsVersion = g.Version;
-        globalTextures = [.. samplerNames.Select(g.Texture)];
-        globalBlocks = [.. blockNames.Select(g.Block)];
-        globalUniforms = [.. g.UniformNames.Select(n => (Uniform(n), g.UniformValue(n)!)).Where(x => x.Item1.IsValid)];
+        var g = _ctx.Globals;
+        _globalsVersion = g.Version;
+        _globalTextures = [.. _samplerNames.Select(g.Texture)];
+        _globalBlocks = [.. _blockNames.Select(g.Block)];
+        _globalUniforms = [.. g.UniformNames.Select(n => (Uniform(n), g.UniformValue(n)!)).Where(x => x.Item1.IsValid)];
     }
 
     /// <summary>
@@ -185,9 +185,9 @@ public sealed unsafe class LegacyProgram : IDisposable
     /// </summary>
     public void ApplyGlobals()
     {
-        if (ctx.Globals.Version != globalsVersion) ResolveGlobals();
-        ctx.Globals.ApplyCount++;
-        foreach (var (h, v) in globalUniforms) v.Write(this, h);
+        if (_ctx.Globals.Version != _globalsVersion) ResolveGlobals();
+        _ctx.Globals.ApplyCount++;
+        foreach (var (h, v) in _globalUniforms) v.Write(this, h);
     }
 
     /// <summary>
@@ -196,94 +196,94 @@ public sealed unsafe class LegacyProgram : IDisposable
     /// </summary>
     public void Flush(IGpuCommandList cmd)
     {
-        var frame = ctx.Frame;
-        if (ctx.Globals.Version != globalsVersion) ResolveGlobals();
-        bool programChanged = !ReferenceEquals(cmd.BoundProgram, this) || cmd.Epoch != lastPushEpoch;
+        var frame = _ctx.Frame;
+        if (_ctx.Globals.Version != _globalsVersion) ResolveGlobals();
+        bool programChanged = !ReferenceEquals(cmd.BoundProgram, this) || cmd.Epoch != _lastPushEpoch;
         if (VertexBlock is not null || FragmentBlock is not null)
         {
-            if (sliceFrame != frame.Number) { vertexDirty = fragmentDirty = true; sliceFrame = frame.Number; }
+            if (_sliceFrame != frame.Number) { _vertexDirty = _fragmentDirty = true; _sliceFrame = frame.Number; }
             bool moved = false;
-            ulong align = uniformAlign;
-            if (vertexDirty && VertexDefault.Length > 0) { vertexSlice = frame.WriteConstants(VertexDefault, align); vertexDirty = false; moved = true; frame.Stats.ConstantBytes += VertexDefault.Length; }
-            if (fragmentDirty && FragmentDefault.Length > 0) { fragmentSlice = frame.WriteConstants(FragmentDefault, align); fragmentDirty = false; moved = true; frame.Stats.ConstantBytes += FragmentDefault.Length; }
+            ulong align = _uniformAlign;
+            if (_vertexDirty && VertexDefault.Length > 0) { _vertexSlice = frame.WriteConstants(VertexDefault, align); _vertexDirty = false; moved = true; frame.Stats.ConstantBytes += VertexDefault.Length; }
+            if (_fragmentDirty && FragmentDefault.Length > 0) { _fragmentSlice = frame.WriteConstants(FragmentDefault, align); _fragmentDirty = false; moved = true; frame.Stats.ConstantBytes += FragmentDefault.Length; }
             if (moved || programChanged)
             {
                 var set = DynamicSet();
                 Span<uint> offsets = stackalloc uint[2];
                 int n = 0;
-                if (VertexBlock is not null) offsets[n++] = (uint)vertexSlice.Offset;
-                if (FragmentBlock is not null) offsets[n++] = (uint)fragmentSlice.Offset;
+                if (VertexBlock is not null) offsets[n++] = (uint)_vertexSlice.Offset;
+                if (FragmentBlock is not null) offsets[n++] = (uint)_fragmentSlice.Offset;
                 cmd.BindSets(Program, 1, new ReadOnlySpan<GpuSet>(in set), offsets[..n]);
             }
         }
 
-        int count = blocks.Length + samplers.Length;
+        int count = _blocks.Length + _samplers.Length;
         // Set 0 as last pushed in this epoch, nothing bound since and the same globals: nothing to compare (the per-draw cost of a
         // batch of draws with one program). Globals are read at the program's first Flush of a native segment and after a Bind.
-        bool unchanged = !programChanged && !bindingsDirty && pushedGlobals == globalsVersion;
+        bool unchanged = !programChanged && !_bindingsDirty && _pushedGlobals == _globalsVersion;
         if (count > 0 && !unchanged)
         {
             var bindings = stackalloc GpuBinding[count];
             bool same = !programChanged;
             int w = 0;
-            for (int i = 0; i < blocks.Length; i++)
+            for (int i = 0; i < _blocks.Length; i++)
             {
-                var b = blocks[i];
-                int bi = blockIndex[i];
-                var value = blockValues[bi];
-                if (value.IsNull && globalBlocks[bi] is { } gb) value = gb();
+                var b = _blocks[i];
+                int bi = _blockIndex[i];
+                var value = _blockValues[bi];
+                if (value.IsNull && _globalBlocks[bi] is { } gb) value = gb();
                 if (value.IsNull) throw new InvalidOperationException($"{Name}: no buffer bound for uniform block {b.Name}");
                 ulong range = value.Size == GpuBufferBinding.WholeSize ? (ulong)b.Size : Math.Min((ulong)b.Size, value.Size);
-                same &= lastPush[w * 3] == (ulong)value.Buffer.Index && lastPush[w * 3 + 1] == value.Offset && lastPush[w * 3 + 2] == range;
-                (lastPush[w * 3], lastPush[w * 3 + 1], lastPush[w * 3 + 2]) = ((ulong)value.Buffer.Index, value.Offset, range);
+                same &= _lastPush[w * 3] == (ulong)value.Buffer.Index && _lastPush[w * 3 + 1] == value.Offset && _lastPush[w * 3 + 2] == range;
+                (_lastPush[w * 3], _lastPush[w * 3 + 1], _lastPush[w * 3 + 2]) = ((ulong)value.Buffer.Index, value.Offset, range);
                 bindings[w++] = GpuBinding.Uniform((uint)b.Binding, new GpuBufferBinding(value.Buffer, value.Offset, range));
             }
-            for (int i = 0; i < samplers.Length; i++)
+            for (int i = 0; i < _samplers.Length; i++)
             {
-                var s = samplers[i];
-                int si = samplerIndex[i];
-                var t = samplerValues[si];
-                if (t.IsNull && globalTextures[si] is { } gt) t = gt();
-                if (t.IsNull) t = ctx.Dummy(s.Info);
-                same &= lastPush[w * 3] == (ulong)t.Sampler.Index && lastPush[w * 3 + 1] == (ulong)t.View.Index;
-                (lastPush[w * 3], lastPush[w * 3 + 1]) = ((ulong)t.Sampler.Index, (ulong)t.View.Index);
+                var s = _samplers[i];
+                int si = _samplerIndex[i];
+                var t = _samplerValues[si];
+                if (t.IsNull && _globalTextures[si] is { } gt) t = gt();
+                if (t.IsNull) t = _ctx.Dummy(s.Info);
+                same &= _lastPush[w * 3] == (ulong)t.Sampler.Index && _lastPush[w * 3 + 1] == (ulong)t.View.Index;
+                (_lastPush[w * 3], _lastPush[w * 3 + 1]) = ((ulong)t.Sampler.Index, (ulong)t.View.Index);
                 bindings[w++] = GpuBinding.Sampled((uint)s.Binding, new SampledTexture(t.Sampler, t.View));
             }
             if (!same)
             {
-                lastPushEpoch = cmd.Epoch;
+                _lastPushEpoch = cmd.Epoch;
                 cmd.BindProgramResources(Program, 0, new ReadOnlySpan<GpuBinding>(bindings, w));
             }
         }
-        lastPushEpoch = cmd.Epoch;
-        bindingsDirty = false;
-        pushedGlobals = globalsVersion;
+        _lastPushEpoch = cmd.Epoch;
+        _bindingsDirty = false;
+        _pushedGlobals = _globalsVersion;
         cmd.BoundProgram = this;
     }
 
     GpuSet DynamicSet()
     {
-        var key = (VertexBlock is null ? 0 : (ulong)vertexSlice.Handle.Index, FragmentBlock is null ? 0 : (ulong)fragmentSlice.Handle.Index);
+        var key = (VertexBlock is null ? 0 : (ulong)_vertexSlice.Handle.Index, FragmentBlock is null ? 0 : (ulong)_fragmentSlice.Handle.Index);
         // The chunks of the last two frames (one 8 MB chunk per frame slot, the usual case): no dictionary.
-        if (key == recentKeys[0] && !recentSets[0].IsNull) return recentSets[0];
-        if (key == recentKeys[1] && !recentSets[1].IsNull) return recentSets[1];
-        if (!dynamicSets.TryGetValue(key, out var set)) set = CreateDynamicSet(key);
-        (recentKeys[1], recentSets[1]) = (recentKeys[0], recentSets[0]);
-        (recentKeys[0], recentSets[0]) = (key, set);
+        if (key == _recentKeys[0] && !_recentSets[0].IsNull) return _recentSets[0];
+        if (key == _recentKeys[1] && !_recentSets[1].IsNull) return _recentSets[1];
+        if (!_dynamicSets.TryGetValue(key, out var set)) set = CreateDynamicSet(key);
+        (_recentKeys[1], _recentSets[1]) = (_recentKeys[0], _recentSets[0]);
+        (_recentKeys[0], _recentSets[0]) = (key, set);
         return set;
     }
 
-    readonly (ulong, ulong)[] recentKeys = new (ulong, ulong)[2];
-    readonly GpuSet[] recentSets = new GpuSet[2];
+    readonly (ulong, ulong)[] _recentKeys = new (ulong, ulong)[2];
+    readonly GpuSet[] _recentSets = new GpuSet[2];
 
     GpuSet CreateDynamicSet((ulong, ulong) key)
     {
         Span<GpuBinding> bindings = stackalloc GpuBinding[2];
         int n = 0;
-        if (VertexBlock is { } vb) bindings[n++] = GpuBinding.Uniform(0, new GpuBufferBinding(vertexSlice.Handle, 0, (ulong)vb.Size));
-        if (FragmentBlock is { } fb) bindings[n++] = GpuBinding.Uniform(1, new GpuBufferBinding(fragmentSlice.Handle, 0, (ulong)fb.Size));
-        var set = ctx.CreateSet(Program.NeutralSets[1], bindings[..n]);
-        dynamicSets[key] = set;
+        if (VertexBlock is { } vb) bindings[n++] = GpuBinding.Uniform(0, new GpuBufferBinding(_vertexSlice.Handle, 0, (ulong)vb.Size));
+        if (FragmentBlock is { } fb) bindings[n++] = GpuBinding.Uniform(1, new GpuBufferBinding(_fragmentSlice.Handle, 0, (ulong)fb.Size));
+        var set = _ctx.CreateSet(Program.NeutralSets[1], bindings[..n]);
+        _dynamicSets[key] = set;
         return set;
     }
 
@@ -307,11 +307,11 @@ public sealed unsafe class LegacyProgram : IDisposable
                 : new VertexInput((uint)loc, GlConventions.DummyVertexFormat(InputKinds[i]), 0, false);
         }
         // Draws in a row mostly share one layout: the same object again (no allocation, and the pipeline lookup compares by reference).
-        if (lastLayout is { } last && inputs.SequenceEqual(last.Inputs)) return last;
-        return lastLayout = new VertexLayout(inputs.ToArray());
+        if (_lastLayout is { } last && inputs.SequenceEqual(last.Inputs)) return last;
+        return _lastLayout = new VertexLayout(inputs.ToArray());
     }
 
-    VertexLayout? lastLayout;
+    VertexLayout? _lastLayout;
 
     /// <summary>
     /// What <see cref="BindVertices"/> binds for the locations <paramref name="first"/> .. <paramref name="first"/> + <paramref name="count"/> − 1, as
@@ -328,7 +328,7 @@ public sealed unsafe class LegacyProgram : IDisposable
             int input = Array.IndexOf(InputLocations, loc);
             result[i] = loc < byLocation.Length && byLocation[loc] is { } a
                 ? a.Buffer
-                : new GpuBufferBinding(ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? InputKinds[input] : ScalarKind.Float));
+                : new GpuBufferBinding(_ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? InputKinds[input] : ScalarKind.Float));
         }
         return result;
     }
@@ -346,14 +346,14 @@ public sealed unsafe class LegacyProgram : IDisposable
             if (n == 0) first = (uint)loc;
             run[n++] = loc < byLocation.Length && byLocation[loc] is { } a
                 ? a.Buffer
-                : new GpuBufferBinding(ctx.DummyVertex, GlConventions.DummyVertexOffset(InputKinds[i]));
+                : new GpuBufferBinding(_ctx.DummyVertex, GlConventions.DummyVertexOffset(InputKinds[i]));
         }
         if (n > 0) cmd.BindVertexBuffers(first, run[..n]);
     }
 
     public void Dispose()
     {
-        ctx.Pipelines.Forget(Program);
-        ctx.Shaders.Dispose(Program);
+        _ctx.Pipelines.Forget(Program);
+        _ctx.Shaders.Dispose(Program);
     }
 }

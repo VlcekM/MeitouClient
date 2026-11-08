@@ -57,8 +57,8 @@ internal struct ContactRules : INarrowPhaseCallbacks
 /// <summary>Gravity and the damping of a simulated ragdoll body (docs/game/ragdolls.md: linear 0.05, angular 0.01 per second, gravity 98.1 units/s² down).</summary>
 internal struct Integration : IPoseIntegratorCallbacks
 {
-    Vector3Wide gravityDt;
-    Vector<float> linear, angular, maxSpeedSquared, maxSpinSquared;
+    Vector3Wide _gravityDt;
+    Vector<float> _linear, _angular, _maxSpeedSquared, _maxSpinSquared;
 
     public readonly AngularIntegrationMode AngularIntegrationMode => AngularIntegrationMode.Nonconserving;
     public readonly bool AllowSubstepsForUnconstrainedBodies => false;
@@ -68,24 +68,24 @@ internal struct Integration : IPoseIntegratorCallbacks
 
     public void PrepareForIntegration(float dt)
     {
-        gravityDt = Vector3Wide.Broadcast(new Vector3(0, -RagdollPhysics.Gravity * dt, 0));
-        linear = new Vector<float>(1 / (1 + RagdollPhysics.LinearDamping * dt));
-        angular = new Vector<float>(1 / (1 + RagdollPhysics.AngularDamping * dt));
-        maxSpeedSquared = new Vector<float>(RagdollPhysics.MaxSpeed * RagdollPhysics.MaxSpeed);
-        maxSpinSquared = new Vector<float>(RagdollPhysics.MaxSpin * RagdollPhysics.MaxSpin);
+        _gravityDt = Vector3Wide.Broadcast(new Vector3(0, -RagdollPhysics.Gravity * dt, 0));
+        _linear = new Vector<float>(1 / (1 + RagdollPhysics.LinearDamping * dt));
+        _angular = new Vector<float>(1 / (1 + RagdollPhysics.AngularDamping * dt));
+        _maxSpeedSquared = new Vector<float>(RagdollPhysics.MaxSpeed * RagdollPhysics.MaxSpeed);
+        _maxSpinSquared = new Vector<float>(RagdollPhysics.MaxSpin * RagdollPhysics.MaxSpin);
     }
 
     public void IntegrateVelocity(Vector<int> bodyIndices, Vector3Wide position, QuaternionWide orientation, BodyInertiaWide localInertia, Vector<int> integrationMask,
         int workerIndex, Vector<float> dt, ref BodyVelocityWide velocity)
     {
-        velocity.Linear = (velocity.Linear + gravityDt) * linear;
-        velocity.Angular *= angular;
+        velocity.Linear = (velocity.Linear + _gravityDt) * _linear;
+        velocity.Angular *= _angular;
         // A body is never faster than the ground can catch (see RagdollPhysics.MaxSpeed): a joint pushed past its limits would otherwise fling a limb through the terrain.
         var speedSquared = Vector3Wide.Dot(velocity.Linear, velocity.Linear);
-        var keep = Vector.ConditionalSelect(Vector.GreaterThan(speedSquared, maxSpeedSquared), Vector.SquareRoot(maxSpeedSquared / speedSquared), Vector<float>.One);
+        var keep = Vector.ConditionalSelect(Vector.GreaterThan(speedSquared, _maxSpeedSquared), Vector.SquareRoot(_maxSpeedSquared / speedSquared), Vector<float>.One);
         velocity.Linear *= keep;
         var spinSquared = Vector3Wide.Dot(velocity.Angular, velocity.Angular);
-        velocity.Angular *= Vector.ConditionalSelect(Vector.GreaterThan(spinSquared, maxSpinSquared), Vector.SquareRoot(maxSpinSquared / spinSquared), Vector<float>.One);
+        velocity.Angular *= Vector.ConditionalSelect(Vector.GreaterThan(spinSquared, _maxSpinSquared), Vector.SquareRoot(_maxSpinSquared / spinSquared), Vector<float>.One);
     }
 }
 
@@ -121,12 +121,12 @@ internal sealed class RagdollPhysics : IDisposable
 
     public readonly BufferPool Pool = new();
     public readonly BepuPhysics.Simulation Simulation;
-    readonly CollidableProperty<BodyTag> tags;
+    readonly CollidableProperty<BodyTag> _tags;
 
     public RagdollPhysics()
     {
-        tags = new CollidableProperty<BodyTag>(Pool);
-        Simulation = BepuPhysics.Simulation.Create(Pool, new ContactRules { Tags = tags }, new Integration(), new SolveDescription(Iterations, Substeps, FallbackBatches));
+        _tags = new CollidableProperty<BodyTag>(Pool);
+        Simulation = BepuPhysics.Simulation.Create(Pool, new ContactRules { Tags = _tags }, new Integration(), new SolveDescription(Iterations, Substeps, FallbackBatches));
         Simulation.Deterministic = true;
     }
 
@@ -149,10 +149,10 @@ internal sealed class RagdollPhysics : IDisposable
     /// </summary>
     public static void WarmUpOnce()
     {
-        if (Interlocked.Exchange(ref warmed, 1) == 0) Task.Run(WarmUp);
+        if (Interlocked.Exchange(ref s_warmed, 1) == 0) Task.Run(WarmUp);
     }
 
-    static int warmed;
+    static int s_warmed;
 
     static void WarmUp()
     {
@@ -160,7 +160,7 @@ internal sealed class RagdollPhysics : IDisposable
         {
             // Declared first so it outlives the physics: the pair cache keeps worker caches in the dispatcher's thread pools, read by every later
             // step (single-threaded too) and freed when the simulation is disposed (disposed first, it was a use after free: a rare crash).
-            using var threads = new BepuUtilities.ThreadDispatcher(Math.Clamp(Environment.ProcessorCount / 2, 2, 4));
+            using var threads = new ThreadDispatcher(Math.Clamp(Environment.ProcessorCount / 2, 2, 4));
             using var physics = new RagdollPhysics();
             var simulation = physics.Simulation;
             physics.Cover(new Vector3(16, 0, 16), 20, new WarmUpEnvironment(), 0);
@@ -223,19 +223,19 @@ internal sealed class RagdollPhysics : IDisposable
 
         public bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles)
         {
-            Vector3 P(int i) => new(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+            static Vector3 P(int i) => new(i & 1, (i >> 1) & 1, (i >> 2) & 1);
             int[] faces = [0, 1, 3, 0, 3, 2, 4, 6, 7, 4, 7, 5, 0, 4, 5, 0, 5, 1, 2, 3, 7, 2, 7, 6, 0, 2, 6, 0, 6, 4, 1, 5, 7, 1, 7, 3];
             foreach (int i in faces) triangles.Add(new Vector3(14, 0, 14) + P(i) * new Vector3(6, 4, 6));
             return true;
         }
     }
 
-    public ref BodyTag Tag(BodyHandle body) => ref tags[body];
+    public ref BodyTag Tag(BodyHandle body) => ref _tags[body];
 
     public BodyHandle AddBody(in BodyDescription description, BodyTag tag)
     {
         var handle = Simulation.Bodies.Add(description);
-        tags.Allocate(handle) = tag;
+        _tags.Allocate(handle) = tag;
         return handle;
     }
 
@@ -261,11 +261,11 @@ internal sealed class RagdollPhysics : IDisposable
         public long Used;
     }
 
-    readonly Dictionary<(int X, int Z), Tile> tiles = [];
-    readonly List<(int X, int Z)> stale = [];
-    readonly List<Vector3> gathered = [];
+    readonly Dictionary<(int X, int Z), Tile> _tiles = [];
+    readonly List<(int X, int Z)> _stale = [];
+    readonly List<Vector3> _gathered = [];
 
-    public int TileCount => tiles.Count;
+    public int TileCount => _tiles.Count;
 
     /// <summary>A tile's building mesh counts this many tile units of the budget: a town tile's is 2 ms against a ground mesh's 0.12 (**Observed**, headless flight probe).</summary>
     public const int BuildingUnits = 4;
@@ -281,11 +281,11 @@ internal sealed class RagdollPhysics : IDisposable
         for (int x = x0; x <= x1; x++)
             for (int z = z0; z <= z1; z++)
             {
-                if (!tiles.TryGetValue((x, z), out var tile))
+                if (!_tiles.TryGetValue((x, z), out var tile))
                 {
                     if (budget <= 0) continue;
                     budget--;
-                    tiles[(x, z)] = tile = MakeTile(x, z, centre.Y, environment, ref budget);
+                    _tiles[(x, z)] = tile = MakeTile(x, z, centre.Y, environment, ref budget);
                 }
                 else
                 {
@@ -313,7 +313,7 @@ internal sealed class RagdollPhysics : IDisposable
         var (x0, x1, z0, z1) = Span(centre, reach);
         for (int x = x0; x <= x1; x++)
             for (int z = z0; z <= z1; z++)
-                if (!tiles.TryGetValue((x, z), out var tile) || tile.BuildingsPending) return false;
+                if (!_tiles.TryGetValue((x, z), out var tile) || tile.BuildingsPending) return false;
         return true;
     }
 
@@ -323,13 +323,13 @@ internal sealed class RagdollPhysics : IDisposable
     /// <summary>Removes the tiles not used for a while.</summary>
     public void Sweep(long tick)
     {
-        stale.Clear();
-        foreach (var (key, tile) in tiles) if (tick - tile.Used > TileLife) stale.Add(key);
-        stale.Sort();
-        foreach (var key in stale)
+        _stale.Clear();
+        foreach (var (key, tile) in _tiles) if (tick - tile.Used > TileLife) _stale.Add(key);
+        _stale.Sort();
+        foreach (var key in _stale)
         {
-            RemoveTile(tiles[key]);
-            tiles.Remove(key);
+            RemoveTile(_tiles[key]);
+            _tiles.Remove(key);
         }
     }
 
@@ -363,21 +363,21 @@ internal sealed class RagdollPhysics : IDisposable
     /// <summary>The buildings' triangles of a tile, once they are all known (until then the tile has ground only and asks again); true when a mesh was built (the budget's charge).</summary>
     bool AddBuildings(Tile tile, Vector3 origin, IRagdollEnvironment environment)
     {
-        gathered.Clear();
-        tile.BuildingsPending = !environment.Buildings(origin, origin + new Vector3(TileSize, 0, TileSize), gathered);
+        _gathered.Clear();
+        tile.BuildingsPending = !environment.Buildings(origin, origin + new Vector3(TileSize, 0, TileSize), _gathered);
         if (tile.BuildingsPending) return false;
-        if (gathered.Count < 3)
+        if (_gathered.Count < 3)
         {
             if (!tile.HasBuildings) return false;
             RemoveBuildings(tile);
             return true;
         }
         // Both faces of every triangle: the files' windings are not trusted, and a body may meet a wall or floor from either side.
-        int count = gathered.Count / 3;
+        int count = _gathered.Count / 3;
         Pool.Take<Triangle>(count * 2, out var building);
         for (int i = 0; i < count; i++)
         {
-            Vector3 a = gathered[3 * i] - origin, b = gathered[3 * i + 1] - origin, c = gathered[3 * i + 2] - origin;
+            Vector3 a = _gathered[3 * i] - origin, b = _gathered[3 * i + 1] - origin, c = _gathered[3 * i + 2] - origin;
             building[2 * i] = new Triangle(a, b, c);
             building[2 * i + 1] = new Triangle(a, c, b);
         }

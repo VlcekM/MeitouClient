@@ -57,7 +57,7 @@ public sealed record CraftBench
         {
             var levels = maker.GetReferences("weapon models").Where(m => models.Contains(m.TargetStringId)).OrderBy(m => m.Values.Value0).ToList();
             foreach (var type in maker.GetReferences("weapon types"))
-                if (db.Find(type.TargetStringId) is { Type: FcsRecordType.WEAPON })
+                if (db.Find(type.TargetStringId) is { Type: FcsRecordType.Weapon })
                     foreach (var m in levels) options.Add(new CraftOption(CraftKind.Weapon, type.TargetStringId, m.TargetStringId, m.Values.Value0, 1));
         }
         int tech = function.GetInt("tech level");

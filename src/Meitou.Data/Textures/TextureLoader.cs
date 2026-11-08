@@ -18,7 +18,7 @@ public static class TextureLoader
 {
     public static LoadedTexture LoadFile(string path, bool allMips = true)
     {
-        var bytes = File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path));
+        var bytes = File.ReadAllBytes(Content.GameFiles.Resolve(path));
         if (bytes.Length >= 4 && BitConverter.ToUInt32(bytes, 0) == DdsReader.Magic)
             return FromDds(DdsReader.Read(bytes), allMips);
         return new LoadedTexture([LoadImage(bytes)], null);

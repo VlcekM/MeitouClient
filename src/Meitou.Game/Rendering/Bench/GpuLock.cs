@@ -9,7 +9,7 @@ namespace Meitou.Game.Rendering.Bench;
 /// </summary>
 public sealed class GpuLock : IDisposable
 {
-    FileStream? stream;
+    FileStream? _stream;
 
     /// <summary>Tests point the lock at a file of their own so they never touch a real run's.</summary>
     internal static string? PathOverride;
@@ -40,7 +40,7 @@ public sealed class GpuLock : IDisposable
                 fs.Position = 0;
                 using (var w = new StreamWriter(fs, leaveOpen: true)) w.Write(Environment.ProcessId.ToString());
                 fs.Flush();
-                return new GpuLock { stream = fs, Waited = watch.Elapsed, StaleHolder = stale };
+                return new GpuLock { _stream = fs, Waited = watch.Elapsed, StaleHolder = stale };
             }
             catch (IOException)
             {
@@ -75,9 +75,9 @@ public sealed class GpuLock : IDisposable
 
     public void Dispose()
     {
-        if (stream is null) return;
-        stream.Dispose();
-        stream = null;
+        if (_stream is null) return;
+        _stream.Dispose();
+        _stream = null;
         try { File.Delete(FilePath); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 }

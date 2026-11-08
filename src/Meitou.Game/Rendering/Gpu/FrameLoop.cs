@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using Meitou.Game.Rendering.Gpu.Core;
-using Silk.NET.Vulkan;
 using Meitou.Game.Rendering.Profiling;
+using Silk.NET.Vulkan;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Meitou.Game.Rendering.Gpu;
@@ -14,12 +14,12 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public sealed unsafe partial class GpuContext
 {
-    CommandPool[]? uploadPools;
-    CommandBuffer[]? uploadBuffers;
+    CommandPool[]? _uploadPools;
+    CommandBuffer[]? _uploadBuffers;
     /// <summary>Per slot: the upload buffers a <see cref="SubmitAndWait"/> went on in, and how many this frame used.</summary>
-    List<CommandBuffer>[]? uploadExtras;
-    int[]? uploadExtrasUsed;
-    (QuerySlot Begin, QuerySlot End)[]? frameStamps;
+    List<CommandBuffer>[]? _uploadExtras;
+    int[]? _uploadExtrasUsed;
+    (QuerySlot Begin, QuerySlot End)[]? _frameStamps;
 
     /// <summary>The last completed frame's GPU time: from the start of its uploads to the end of its last command (a frame ring late).</summary>
     public double GpuFrameMs { get; private set; }
@@ -44,30 +44,30 @@ public sealed unsafe partial class GpuContext
 
     /// <summary>The first and the pre-frame-end timestamps of the frame submitted last (--log-spikes or MEITOU_PASS_STATS=1 only; the profiler keeps them to read the pre-frame GPU time when the frame has completed).</summary>
     internal (QuerySlot Begin, QuerySlot PreEnd) LastFrameStamps { get; private set; }
-    QuerySlot[]? preFrameEnd;
+    QuerySlot[]? _preFrameEnd;
     /// <summary>The current (or last submitted) frame's first and last timestamps: its own GPU time, readable once its slot has come round; End is set by <see cref="EndFrame"/>.</summary>
-    internal (QuerySlot Begin, QuerySlot End) CurrentFrameStamps => frameStamps is null ? default : frameStamps[Device.Frames.Slot];
+    internal (QuerySlot Begin, QuerySlot End) CurrentFrameStamps => _frameStamps is null ? default : _frameStamps[Device.Frames.Slot];
     /// <summary>Stopwatch ticks spent waiting for a free frame slot and submitting, since the context was made.</summary>
     public long FenceWaitTicks { get; private set; }
     public long SubmitTicks { get; private set; }
 
     void EnsureUploadBuffers()
     {
-        if (uploadPools is not null) return;
+        if (_uploadPools is not null) return;
         int n = Device.Frames.Count;
-        uploadPools = new CommandPool[n];
-        uploadBuffers = new CommandBuffer[n];
-        uploadExtras = [.. Enumerable.Range(0, n).Select(_ => new List<CommandBuffer>())];
-        uploadExtrasUsed = new int[n];
-        frameStamps = new (QuerySlot, QuerySlot)[n];
+        _uploadPools = new CommandPool[n];
+        _uploadBuffers = new CommandBuffer[n];
+        _uploadExtras = [.. Enumerable.Range(0, n).Select(_ => new List<CommandBuffer>())];
+        _uploadExtrasUsed = new int[n];
+        _frameStamps = new (QuerySlot, QuerySlot)[n];
         for (int i = 0; i < n; i++)
         {
             var pi = new CommandPoolCreateInfo { SType = StructureType.CommandPoolCreateInfo, QueueFamilyIndex = Device.GraphicsFamily, Flags = CommandPoolCreateFlags.TransientBit };
-            VulkanException.Check(Device.Vk.CreateCommandPool(Device.Device, &pi, null, out uploadPools[i]), "vkCreateCommandPool");
-            var ai = new CommandBufferAllocateInfo { SType = StructureType.CommandBufferAllocateInfo, CommandPool = uploadPools[i], Level = CommandBufferLevel.Primary, CommandBufferCount = 1 };
+            VulkanException.Check(Device.Vk.CreateCommandPool(Device.Device, &pi, null, out _uploadPools[i]), "vkCreateCommandPool");
+            var ai = new CommandBufferAllocateInfo { SType = StructureType.CommandBufferAllocateInfo, CommandPool = _uploadPools[i], Level = CommandBufferLevel.Primary, CommandBufferCount = 1 };
             CommandBuffer cb;
             VulkanException.Check(Device.Vk.AllocateCommandBuffers(Device.Device, &ai, &cb), "vkAllocateCommandBuffers");
-            uploadBuffers[i] = cb;
+            _uploadBuffers[i] = cb;
         }
     }
 
@@ -83,15 +83,15 @@ public sealed unsafe partial class GpuContext
         FenceWaitTicks += Stopwatch.GetTimestamp() - t0;
         UploadProfile.End(UploadProfile.Part.FrameWait, t0);
         int slot = Device.Frames.Slot;
-        VulkanException.Check(Device.Vk.ResetCommandPool(Device.Device, uploadPools![slot], 0), "vkResetCommandPool");
-        uploadExtrasUsed![slot] = 0;
-        var upload = uploadBuffers![slot];
+        VulkanException.Check(Device.Vk.ResetCommandPool(Device.Device, _uploadPools![slot], 0), "vkResetCommandPool");
+        _uploadExtrasUsed![slot] = 0;
+        var upload = _uploadBuffers![slot];
         BeginUploads(upload);
         Frame.Begin(cmd, upload);
         // The slot's previous frame has completed and its timestamps were collected (Frame.Begin): its GPU time.
-        ref var stamps = ref frameStamps![slot];
+        ref var stamps = ref _frameStamps![slot];
         if (Frame.Timestamps.TryRead(stamps.Begin, out ulong b) && Frame.Timestamps.TryRead(stamps.End, out ulong e) && e >= b) GpuFrameMs = (e - b) / 1e6;
-        if (PreFrameStamps && preFrameEnd is not null && Frame.Timestamps.TryRead(stamps.Begin, out ulong pb) && Frame.Timestamps.TryRead(preFrameEnd[slot], out ulong pe) && pe >= pb) PreFrameGpuMs = (pe - pb) / 1e6;
+        if (PreFrameStamps && _preFrameEnd is not null && Frame.Timestamps.TryRead(stamps.Begin, out ulong pb) && Frame.Timestamps.TryRead(_preFrameEnd[slot], out ulong pe) && pe >= pb) PreFrameGpuMs = (pe - pb) / 1e6;
         stamps = (Frame.Timestamps.Allocate(), default);
         if (stamps.Begin.IsValid) Frame.PreFrame.Timestamp(Frame.Timestamps, stamps.Begin, PipelineStageFlags2.TopOfPipeBit);
         UploadProfile.End(UploadProfile.Part.FrameBegin, profileBegin);
@@ -114,16 +114,16 @@ public sealed unsafe partial class GpuContext
         if (end.IsValid)
         {
             Frame.Commands.Timestamp(Frame.Timestamps, end, PipelineStageFlags2.BottomOfPipeBit);
-            frameStamps![slot].End = end;
+            _frameStamps![slot].End = end;
         }
         if (PreFrameStamps)
         {
             // MEITOU_PASS_STATS=1: the pre-frame's own GPU time (uploads, the culls' and grass kernels, impostor bakes), read a frame ring later.
-            preFrameEnd ??= new QuerySlot[Device.Frames.Count];
-            preFrameEnd[slot] = Frame.Timestamps.Allocate();
-            if (preFrameEnd[slot].IsValid) Frame.PreFrame.Timestamp(Frame.Timestamps, preFrameEnd[slot], PipelineStageFlags2.BottomOfPipeBit);
+            _preFrameEnd ??= new QuerySlot[Device.Frames.Count];
+            _preFrameEnd[slot] = Frame.Timestamps.Allocate();
+            if (_preFrameEnd[slot].IsValid) Frame.PreFrame.Timestamp(Frame.Timestamps, _preFrameEnd[slot], PipelineStageFlags2.BottomOfPipeBit);
         }
-        if (PreFrameStamps) LastFrameStamps = (frameStamps![slot].Begin, preFrameEnd![slot]);
+        if (PreFrameStamps) LastFrameStamps = (_frameStamps![slot].Begin, _preFrameEnd![slot]);
         Frame.End();
         var upload = Frame.UploadCommands;
         FullBarrier(upload);
@@ -155,9 +155,9 @@ public sealed unsafe partial class GpuContext
         VulkanException.Check(Device.Vk.EndCommandBuffer(upload), "vkEndCommandBuffer");
         Bindless?.EndFrame();   // what the frame registered so far, into its set before the submit
         var commands = Device.Frames.SubmitAndWait(before: upload);
-        var extras = uploadExtras![slot];
-        if (uploadExtrasUsed![slot] == extras.Count) extras.Add(AllocateUploadBuffer(uploadPools![slot]));
-        var next = extras[uploadExtrasUsed[slot]++];
+        var extras = _uploadExtras![slot];
+        if (_uploadExtrasUsed![slot] == extras.Count) extras.Add(AllocateUploadBuffer(_uploadPools![slot]));
+        var next = extras[_uploadExtrasUsed[slot]++];
         BeginUploads(next);
         Frame.Continue(commands, next);
     }
@@ -196,8 +196,8 @@ public sealed unsafe partial class GpuContext
 
     void DisposeFrameLoop()
     {
-        if (uploadPools is null) return;
-        foreach (var p in uploadPools) Device.Vk.DestroyCommandPool(Device.Device, p, null);
-        uploadPools = null;
+        if (_uploadPools is null) return;
+        foreach (var p in _uploadPools) Device.Vk.DestroyCommandPool(Device.Device, p, null);
+        _uploadPools = null;
     }
 }

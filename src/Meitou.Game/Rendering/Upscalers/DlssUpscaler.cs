@@ -1,5 +1,5 @@
-using Meitou.Game.Rendering.Gpu;
 using System.Runtime.InteropServices;
+using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Post;
 using static Meitou.Game.Rendering.Upscalers.SlTypes;
 
@@ -14,22 +14,22 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// </summary>
 public sealed unsafe class DlssUpscaler : IUpscaler
 {
-    readonly Streamline sl;
-    readonly GpuContext ctx;
-    readonly ViewportHandle* viewport;
-    (uint Mode, int Width, int Height, uint Preset, bool AutoExposure) options = (uint.MaxValue, 0, 0, 0, false);
-    (int Width, int Height) named;
-    bool failed;
+    readonly Streamline _sl;
+    readonly GpuContext _ctx;
+    readonly ViewportHandle* _viewport;
+    (uint Mode, int Width, int Height, uint Preset, bool AutoExposure) _options = (uint.MaxValue, 0, 0, 0, false);
+    (int Width, int Height) _named;
+    bool _failed;
 
     public UpscalerKind Kind => UpscalerKind.Dlss;
     public string Name { get; private set; } = "dlss";
 
     DlssUpscaler(Streamline sl, GpuContext ctx)
     {
-        this.sl = sl;
-        this.ctx = ctx;
-        viewport = (ViewportHandle*)NativeMemory.AllocZeroed((nuint)sizeof(ViewportHandle));
-        *viewport = new ViewportHandle { StructType = ViewportType, StructVersion = 1, Value = Streamline.UpscaleViewport };
+        this._sl = sl;
+        this._ctx = ctx;
+        _viewport = (ViewportHandle*)NativeMemory.AllocZeroed((nuint)sizeof(ViewportHandle));
+        *_viewport = new ViewportHandle { StructType = ViewportType, StructVersion = 1, Value = Streamline.UpscaleViewport };
     }
 
     public static DlssUpscaler? TryCreate(Streamline? sl, GpuContext ctx, out string? reason)
@@ -53,12 +53,12 @@ public sealed unsafe class DlssUpscaler : IUpscaler
 
     public bool Dispatch(UpscaleInputs i)
     {
-        if (failed || !SetOptions(i)) return false;
+        if (_failed || !SetOptions(i)) return false;
 
         // The render size moves within a mode (0.89 and 0.83 are both Quality), so the name follows it, not the options.
-        if (named != (i.RenderWidth, i.RenderHeight))
+        if (_named != (i.RenderWidth, i.RenderHeight))
         {
-            named = (i.RenderWidth, i.RenderHeight);
+            _named = (i.RenderWidth, i.RenderHeight);
             Name = $"dlss {i.RenderWidth}x{i.RenderHeight}";
         }
 
@@ -72,44 +72,54 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         // Streamline's preset number for every mode (0 default, 1..15 = A..O). Our exposure when given (DLSS's own measure is its fallback).
         uint mode = Mode(i.RenderWidth / (float)i.DisplayWidth), preset = VendorUpscalers.DlssPreset(i.Preset);
         bool autoExposure = i.Exposure is null;
-        if (options == (mode, i.DisplayWidth, i.DisplayHeight, preset, autoExposure)) return true;
+        if (_options == (mode, i.DisplayWidth, i.DisplayHeight, preset, autoExposure)) return true;
 
         var o = new DlssOptions
         {
-            StructType = DlssOptionsType, StructVersion = 3,
-            Mode = mode, OutputWidth = (uint)i.DisplayWidth, OutputHeight = (uint)i.DisplayHeight,
-            PreExposure = 1, ExposureScale = 1, ColorBuffersHdr = 1, UseAutoExposure = (byte)(autoExposure ? 1 : 0),
-            DlaaPreset = preset, QualityPreset = preset, BalancedPreset = preset, PerformancePreset = preset, UltraPerformancePreset = preset,
+            StructType = DlssOptionsType,
+            StructVersion = 3,
+            Mode = mode,
+            OutputWidth = (uint)i.DisplayWidth,
+            OutputHeight = (uint)i.DisplayHeight,
+            PreExposure = 1,
+            ExposureScale = 1,
+            ColorBuffersHdr = 1,
+            UseAutoExposure = (byte)(autoExposure ? 1 : 0),
+            DlaaPreset = preset,
+            QualityPreset = preset,
+            BalancedPreset = preset,
+            PerformancePreset = preset,
+            UltraPerformancePreset = preset,
             UltraQualityPreset = preset,
         };
-        int rc = sl.DlssSetOptions(viewport, &o);
+        int rc = _sl.DlssSetOptions(_viewport, &o);
         if (rc != 0) return Fail($"slDLSSSetOptions failed ({rc})");
-        options = (mode, i.DisplayWidth, i.DisplayHeight, preset, autoExposure);
+        _options = (mode, i.DisplayWidth, i.DisplayHeight, preset, autoExposure);
         return true;
     }
 
     bool Evaluate(UpscaleInputs i)
     {
         // Our images are bottom-up: the constants describe them as stored.
-        nint token = sl.FrameToken();
+        nint token = _sl.FrameToken();
         if (token == 0) return Fail("slGetNewFrameToken failed");
         var constants = CameraConstants(i.ViewToClip, i.ClipToPreviousClip, i.JitterPixels, i.Eye, i.Up, i.Right, i.Forward,
             i.Near, i.Far, i.FieldOfView, i.Aspect, i.Reset, bottomUp: true);
-        int r = sl.SetConstants(&constants, token, viewport);
+        int r = _sl.SetConstants(&constants, token, _viewport);
         if (r != 0) return Fail($"slSetConstants failed ({r})");
 
-        var list = (CommandList)ctx.BeginNative("dlss upscale");
+        var list = (CommandList)_ctx.BeginNative("dlss upscale");
         try
         {
             r = Tag(i, token, list.Handle.Handle);
             if (r != 0) return Fail($"slSetTagForFrame failed ({r})");
-            void* input = viewport;
-            r = sl.EvaluateFeature(FeatureDlss, token, &input, 1, list.Handle.Handle);
+            void* input = _viewport;
+            r = _sl.EvaluateFeature(FeatureDlss, token, &input, 1, list.Handle.Handle);
             if (r != 0) return Fail($"slEvaluateFeature failed ({r})");
         }
         finally
         {
-            ctx.EndNative(list);
+            _ctx.EndNative(list);
         }
         return true;
     }
@@ -117,12 +127,12 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     /// <summary>Tags this frame's images, valid until the evaluation; every native image stays in GENERAL.</summary>
     int Tag(UpscaleInputs i, nint token, nint cb)
     {
-        var depth = Resource(ctx, i.Depth);
-        var motion = Resource(ctx, i.Motion);
-        var colour = Resource(ctx, i.Colour);
-        var output = Resource(ctx, i.Output);
-        var reactive = i.Reactive is null ? default : Resource(ctx, i.Reactive);
-        var exposure = i.Exposure is null ? default : Resource(ctx, i.Exposure);
+        var depth = Resource(_ctx, i.Depth);
+        var motion = Resource(_ctx, i.Motion);
+        var colour = Resource(_ctx, i.Colour);
+        var output = Resource(_ctx, i.Output);
+        var reactive = i.Reactive is null ? default : Resource(_ctx, i.Reactive);
+        var exposure = i.Exposure is null ? default : Resource(_ctx, i.Exposure);
         var tags = stackalloc ResourceTag[6];
         uint count = 0;
         tags[count++] = SlTypes.Tag(&depth, BufferDepth, ValidUntilEvaluate);
@@ -133,20 +143,20 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         // reactive mask. Observed: the CNN presets (e.g. E) use it, DLSS 310's default transformer preset ignores it.
         if (i.Reactive is not null) tags[count++] = SlTypes.Tag(&reactive, BufferBiasCurrentColorHint, ValidUntilEvaluate);
         if (i.Exposure is not null) tags[count++] = SlTypes.Tag(&exposure, BufferExposure, ValidUntilEvaluate);
-        return sl.SetTagForFrame(token, viewport, tags, count, cb);
+        return _sl.SetTagForFrame(token, _viewport, tags, count, cb);
     }
 
     bool Fail(string message)
     {
         Console.WriteLine($"upscaler  {message}");
-        failed = true;
+        _failed = true;
         return false;
     }
 
     public void Dispose()
     {
-        ctx.Device.WaitIdle();
-        sl.FreeResources(FeatureDlss, viewport);
-        NativeMemory.Free(viewport);
+        _ctx.Device.WaitIdle();
+        _sl.FreeResources(FeatureDlss, _viewport);
+        NativeMemory.Free(_viewport);
     }
 }

@@ -72,25 +72,25 @@ public sealed class HoverOutlineRenderer
         }
         """;
 
-    readonly IGpuContext gpu;
-    readonly LegacyProgram program;
-    readonly NativeSegment segment;
-    readonly UniformHandle depthScale, maskPlanes, scenePlanes, colour, radius;
-    readonly SamplerSlot mask, maskDepth, sceneDepth;
+    readonly IGpuContext _gpu;
+    readonly LegacyProgram _program;
+    readonly NativeSegment _segment;
+    readonly UniformHandle _depthScale, _maskPlanes, _scenePlanes, _colour, _radius;
+    readonly SamplerSlot _mask, _maskDepth, _sceneDepth;
 
     public HoverOutlineRenderer(IGpuContext gpu)
     {
-        this.gpu = gpu;
-        program = LegacyProgram.Create(gpu, Vertex, Fragment, "hover outline");
-        segment = new NativeSegment(gpu, program, PrimitiveType.Triangles, "hover outline");
-        depthScale = program.Uniform("uDepthScale");
-        maskPlanes = program.Uniform("uMaskPlanes");
-        scenePlanes = program.Uniform("uScenePlanes");
-        colour = program.Uniform("uColour");
-        radius = program.Uniform("uRadius");
-        mask = program.Sampler("uMask");
-        maskDepth = program.Sampler("uMaskDepth");
-        sceneDepth = program.Sampler("uSceneDepth");
+        this._gpu = gpu;
+        _program = LegacyProgram.Create(gpu, Vertex, Fragment, "hover outline");
+        _segment = new NativeSegment(gpu, _program, PrimitiveType.Triangles, "hover outline");
+        _depthScale = _program.Uniform("uDepthScale");
+        _maskPlanes = _program.Uniform("uMaskPlanes");
+        _scenePlanes = _program.Uniform("uScenePlanes");
+        _colour = _program.Uniform("uColour");
+        _radius = _program.Uniform("uRadius");
+        _mask = _program.Sampler("uMask");
+        _maskDepth = _program.Sampler("uMaskDepth");
+        _sceneDepth = _program.Sampler("uSceneDepth");
     }
 
     /// <summary>
@@ -103,7 +103,7 @@ public sealed class HoverOutlineRenderer
         GpuTexture sceneDepthTexture, int renderWidth, int renderHeight, float sceneNear, float sceneFar, Matrix4x4 viewProjection)
     {
         int outline = Math.Clamp((int)MathF.Round(2.5f * height / 1080f), 1, 6);
-        var nearest = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+        var nearest = _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
         var viewport = new PixelViewport(0, 0, width, height, 0, 1);
         foreach (var hover in masks)
@@ -114,24 +114,24 @@ public sealed class HoverOutlineRenderer
             Join(rects, height);
             foreach (var scissor in rects)
             {
-                var cmd = gpu.BeginNative("hover outline");
+                var cmd = _gpu.BeginNative("hover outline");
                 var over = PassTargets.Of(picture, null).At(viewport, scissor);
                 cmd.BeginRendering(over.Rendering);
-                program.Bind(mask, new SampledTexture(nearest, hover.Colour.View()));
-                program.Bind(maskDepth, new SampledTexture(nearest, hover.Depth.View()));
-                program.Bind(sceneDepth, new SampledTexture(nearest, sceneDepthTexture.View()));
-                program.Set(depthScale, renderWidth / (float)width, renderHeight / (float)height);
-                program.Set(maskPlanes, hover.Near, hover.Far);
-                program.Set(scenePlanes, sceneNear, sceneFar);
-                program.Set(colour, hover.Tint.X, hover.Tint.Y, hover.Tint.Z, hover.Tint.W);
-                program.Set(radius, outline);
-                var state = DrawState.For(over.Formats, gpu.DepthClamp, blend: new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha));
+                _program.Bind(_mask, new SampledTexture(nearest, hover.Colour.View()));
+                _program.Bind(_maskDepth, new SampledTexture(nearest, hover.Depth.View()));
+                _program.Bind(_sceneDepth, new SampledTexture(nearest, sceneDepthTexture.View()));
+                _program.Set(_depthScale, renderWidth / (float)width, renderHeight / (float)height);
+                _program.Set(_maskPlanes, hover.Near, hover.Far);
+                _program.Set(_scenePlanes, sceneNear, sceneFar);
+                _program.Set(_colour, hover.Tint.X, hover.Tint.Y, hover.Tint.Z, hover.Tint.W);
+                _program.Set(_radius, outline);
+                var state = DrawState.For(over.Formats, _gpu.DepthClamp, blend: new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha));
                 state.Record(cmd, over);
-                cmd.BindPipeline(segment.Get(state, over.Formats, null));
-                program.Flush(cmd);
+                cmd.BindPipeline(_segment.Get(state, over.Formats, null));
+                _program.Flush(cmd);
                 cmd.Draw(3);
                 cmd.EndRendering();
-                gpu.EndNative(cmd);
+                _gpu.EndNative(cmd);
             }
         }
     }

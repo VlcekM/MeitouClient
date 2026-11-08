@@ -10,10 +10,10 @@ public sealed partial class MainWindow
 {
     async void ModsFromSave_Click(object? sender, RoutedEventArgs e)
     {
-        if (install is null) { Status("Set the Kenshi folder first (Settings)."); return; }
+        if (_install is null) { Status("Set the Kenshi folder first (Settings)."); return; }
         if (!ModsReady()) return;
 
-        var roots = SaveModList.Roots(install);
+        var roots = SaveModList.Roots(_install);
         var slots = await Task.Run(() => SaveModList.Scan(roots));
         if (slots.Count == 0) { Status("No saves found."); return; }
         if (await PickSave(slots) is not { } slot) return;

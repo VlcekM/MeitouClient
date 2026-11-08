@@ -24,18 +24,18 @@ sealed unsafe class TerrainShadowMap : IDisposable
 {
     /// <summary>The native GPU API the map is made and drawn with.</summary>
     public IGpuContext Gpu { get; }
-    readonly int size;
-    readonly float spacing;
-    readonly GpuTexture heights;
-    readonly SampledTexture heightsSampled;
-    readonly LegacyProgram sweep;
-    readonly SamplerSlot sourceSlot;
-    readonly UniformHandle uSize, uFirst, uStep, uDrop, uDistance;
-    readonly GpuTexture[] targets = new GpuTexture[2];
-    readonly SampledTexture[] targetsSampled = new SampledTexture[2];
+    readonly int _size;
+    readonly float _spacing;
+    readonly GpuTexture _heights;
+    readonly SampledTexture _heightsSampled;
+    readonly LegacyProgram _sweep;
+    readonly SamplerSlot _sourceSlot;
+    readonly UniformHandle _uSize, _uFirst, _uStep, _uDrop, _uDistance;
+    readonly GpuTexture[] _targets = new GpuTexture[2];
+    readonly SampledTexture[] _targetsSampled = new SampledTexture[2];
 
-    Vector3 builtFor;
-    int result = -1;
+    Vector3 _builtFor;
+    int _result = -1;
 
     /// <summary>Rebuilt when the sun's direction has turned by more than this (radians; about 0.1°).</summary>
     public const float RebuildAngle = 0.0017f;
@@ -44,42 +44,42 @@ sealed unsafe class TerrainShadowMap : IDisposable
     public TerrainShadowMap(IGpuContext gpu, ushort[] coarse, int size)
     {
         Gpu = gpu;
-        this.size = size;
-        spacing = WorldLayout.WorldSize / (float)(size - 1);
+        this._size = size;
+        _spacing = WorldLayout.WorldSize / (float)(size - 1);
         // GL's R16 and RG32F, one level each (VkGl sampled only level 0 of them: linear without mips), linear and clamped.
         var linear = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
             TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
         using (var batch = gpu.Uploads.Begin())
         {
-            heights = batch.Create(new TextureDesc(InternalFormat.R16, size, size, Name: "terrain shadow map heights"));
-            batch.Write(heights, 0, 0, new PixelRect(0, 0, (uint)size, (uint)size),
+            _heights = batch.Create(new TextureDesc(InternalFormat.R16, size, size, Name: "terrain shadow map heights"));
+            batch.Write(_heights, 0, 0, new PixelRect(0, 0, (uint)size, (uint)size),
                 System.Runtime.InteropServices.MemoryMarshal.AsBytes(coarse.AsSpan(0, size * size)));
             for (int i = 0; i < 2; i++)
-                targets[i] = batch.Create(new TextureDesc(InternalFormat.RG32f, size, size,
+                _targets[i] = batch.Create(new TextureDesc(InternalFormat.Rg32F, size, size,
                     Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "terrain shadow map"));
         }
-        heightsSampled = new SampledTexture(linear, heights.View());
-        for (int i = 0; i < 2; i++) targetsSampled[i] = new SampledTexture(linear, targets[i].View());
+        _heightsSampled = new SampledTexture(linear, _heights.View());
+        for (int i = 0; i < 2; i++) _targetsSampled[i] = new SampledTexture(linear, _targets[i].View());
         // Native (docs/renderer-native.md 7.1, wave 3 agent B, step P): VkGl's SPIR-V and layout, made once, never inside a draw.
-        sweep = LegacyProgram.Create(gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.SweepFragment, "terrain shadow sweep");
-        (sourceSlot, uSize, uFirst, uStep, uDrop, uDistance) = (sweep.Sampler("uSource"), sweep.Uniform("uSize"), sweep.Uniform("uFirst"),
-            sweep.Uniform("uStep"), sweep.Uniform("uDrop"), sweep.Uniform("uDistance"));
-        format = new AttachmentFormats(targets[0].Desc.Format, InternalFormat.None);
+        _sweep = LegacyProgram.Create(gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.SweepFragment, "terrain shadow sweep");
+        (_sourceSlot, _uSize, _uFirst, _uStep, _uDrop, _uDistance) = (_sweep.Sampler("uSource"), _sweep.Uniform("uSize"), _sweep.Uniform("uFirst"),
+            _sweep.Uniform("uStep"), _sweep.Uniform("uDrop"), _sweep.Uniform("uDistance"));
+        _format = new AttachmentFormats(_targets[0].Desc.Format, InternalFormat.None);
         // What VkGl made of the GL state the sweep set (no culling, depth or blending; all channels; filled).
-        state = new DrawState(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal,
+        _state = new DrawState(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal,
             false, 0, 0, BlendState.Off, ColorMask.R | ColorMask.G | ColorMask.B |
             ColorMask.A, PolygonKind.Fill, false, false);
     }
 
-    readonly AttachmentFormats format;
-    readonly DrawState state;
-    GpuPipeline? pipeline;
+    readonly AttachmentFormats _format;
+    readonly DrawState _state;
+    GpuPipeline? _pipeline;
 
     /// <summary>The finished map with its sampler (linear, clamped); null before the first build or when the sun is too high for any terrain
     /// shadow.</summary>
-    public SampledTexture? Sampled => result < 0 ? null : targetsSampled[result];
-    public int Size => size;
-    public float Spacing => spacing;
+    public SampledTexture? Sampled => _result < 0 ? null : _targetsSampled[_result];
+    public int Size => _size;
+    public float Spacing => _spacing;
     /// <summary>GPU work of the last rebuild is not timed separately; this counts rebuilds (for the log).</summary>
     public int Builds { get; private set; }
     public double LastBuildCpuMs { get; private set; }
@@ -94,46 +94,46 @@ sealed unsafe class TerrainShadowMap : IDisposable
     public bool Update(Vector3 toSun)
     {
         toSun = Vector3.Normalize(toSun);
-        if (!Applies(toSun)) { result = -1; return false; }
-        if (result >= 0 && Vector3.Dot(toSun, builtFor) > MathF.Cos(RebuildAngle)) return false;
+        if (!Applies(toSun)) { _result = -1; return false; }
+        if (_result >= 0 && Vector3.Dot(toSun, _builtFor) > MathF.Cos(RebuildAngle)) return false;
         var watch = Stopwatch.StartNew();
         float horizontal = MathF.Sqrt(toSun.X * toSun.X + toSun.Z * toSun.Z);
         var direction = new Vector2(toSun.X, toSun.Z) / horizontal;   // samples (x, z) towards the sun
         float tangent = toSun.Y / horizontal;
 
         int passes = 1;
-        while ((1 << (passes - 1)) < size) passes++;
+        while ((1 << (passes - 1)) < _size) passes++;
         int write = 0;
-        pipeline ??= Gpu.Pipelines.Get(state.Pipeline(sweep.Program, sweep.VertexLayout([]), PrimitiveType.Triangles, format, "terrain shadow sweep"));
-        var viewport = new PixelViewport(0, 0, size, size, 0, 1);
-        var scissor = new PixelRect(0, 0, (uint)size, (uint)size);
-        sweep.Set(uSize, (float)size);
+        _pipeline ??= Gpu.Pipelines.Get(_state.Pipeline(_sweep.Program, _sweep.VertexLayout([]), PrimitiveType.Triangles, _format, "terrain shadow sweep"));
+        var viewport = new PixelViewport(0, 0, _size, _size, 0, 1);
+        var scissor = new PixelRect(0, 0, (uint)_size, (uint)_size);
+        _sweep.Set(_uSize, (float)_size);
         var cmd = Gpu.BeginNative("terrain shadow sweep");
         for (int pass = 0; pass < passes; pass++)
         {
             float step = pass == 0 ? 1 : 1 << (pass - 1);   // the first pass reaches one sample, the k-th 2^(k-1) more
-            sweep.Set(uFirst, pass == 0 ? 1 : 0);
-            sweep.Set(uStep, direction.X * step, direction.Y * step);
-            sweep.Set(uDrop, step * spacing * tangent);
-            sweep.Set(uDistance, step * spacing);
-            sweep.Bind(sourceSlot, pass == 0 ? heightsSampled : targetsSampled[1 - write]);
-            var target = targets[write];
-            cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), LoadOp.Load, default), default, size, size));
+            _sweep.Set(_uFirst, pass == 0 ? 1 : 0);
+            _sweep.Set(_uStep, direction.X * step, direction.Y * step);
+            _sweep.Set(_uDrop, step * _spacing * tangent);
+            _sweep.Set(_uDistance, step * _spacing);
+            _sweep.Bind(_sourceSlot, pass == 0 ? _heightsSampled : _targetsSampled[1 - write]);
+            var target = _targets[write];
+            cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), LoadOp.Load, default), default, _size, _size));
             cmd.SetViewport(viewport);
             cmd.SetScissor(scissor);
-            cmd.SetRaster(state.Cull, state.Front);
-            cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
-            cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
-            cmd.BindPipeline(pipeline!.Value);
-            sweep.Flush(cmd);
+            cmd.SetRaster(_state.Cull, _state.Front);
+            cmd.SetDepth(_state.DepthTest, _state.DepthWrite, _state.Compare);
+            cmd.SetDepthBias(_state.BiasEnable, _state.BiasConstant, _state.BiasSlope);
+            cmd.BindPipeline(_pipeline!.Value);
+            _sweep.Flush(cmd);
             cmd.Draw(3);
             cmd.EndRendering();
             cmd.Order();   // the next pass reads what this one wrote (VkGl: a full barrier before each pass)
             write = 1 - write;
         }
         Gpu.EndNative(cmd);
-        result = 1 - write;
-        builtFor = toSun;
+        _result = 1 - write;
+        _builtFor = toSun;
         Builds++;
         LastBuildCpuMs = watch.Elapsed.TotalMilliseconds;
         return true;
@@ -141,8 +141,8 @@ sealed unsafe class TerrainShadowMap : IDisposable
 
     public void Dispose()
     {
-        for (int i = 0; i < 2; i++) targets[i].Dispose();
-        heights.Dispose();
-        sweep.Dispose();
+        for (int i = 0; i < 2; i++) _targets[i].Dispose();
+        _heights.Dispose();
+        _sweep.Dispose();
     }
 }

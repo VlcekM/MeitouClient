@@ -23,9 +23,9 @@ public class TextureQualityTests
         Assert.Equal(expected, TextureQuality.LevelsToDrop(name, group, level));
 
     /// <summary>A DXT file of <paramref name="width"/>×<paramref name="height"/> with <paramref name="mips"/> levels; every block byte is its level's number plus 1.</summary>
-    static DdsFile Dxt(int width, int height, int mips, string fourCC = "DXT1", uint caps2 = 0)
+    static DdsFile Dxt(int width, int height, int mips, string fourCc = "DXT1", uint caps2 = 0)
     {
-        int blockBytes = fourCC == "DXT1" ? 8 : 16;
+        int blockBytes = fourCc == "DXT1" ? 8 : 16;
         var ms = new MemoryStream();
         var w = new BinaryWriter(ms);
         w.Write(Encoding.ASCII.GetBytes("DDS "));
@@ -39,7 +39,7 @@ public class TextureQualityTests
         for (int i = 0; i < 11; i++) w.Write(0);
         w.Write(32);
         w.Write(0x4u);
-        w.Write(Encoding.ASCII.GetBytes(fourCC));
+        w.Write(Encoding.ASCII.GetBytes(fourCc));
         for (int i = 0; i < 5; i++) w.Write(0);
         w.Write(0x1000u);
         w.Write(caps2);
@@ -55,9 +55,9 @@ public class TextureQualityTests
     }
 
     /// <summary>A DXT file's bytes (as <see cref="Dxt"/> makes them) on disk.</summary>
-    static string DxtFile(int width, int height, int mips, string fourCC = "DXT1")
+    static string DxtFile(int width, int height, int mips, string fourCc = "DXT1")
     {
-        var dds = Dxt(width, height, mips, fourCC);
+        var dds = Dxt(width, height, mips, fourCc);
         var path = Path.Combine(Path.GetTempPath(), "meitou-dds-" + Guid.NewGuid().ToString("N") + ".dds");
         File.WriteAllBytes(path, dds.Data);
         return path;

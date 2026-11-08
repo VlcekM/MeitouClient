@@ -10,16 +10,16 @@ namespace Meitou.Data.World;
 public sealed class FoliageRandom
 {
     const int N = 624, M = 397;
-    readonly uint[] state = new uint[N];
-    int index;
+    readonly uint[] _state = new uint[N];
+    int _index;
 
     public FoliageRandom(uint seed) => Seed(seed);
 
     /// <summary>A generator in the same state, which then draws on its own.</summary>
     public FoliageRandom Clone()
     {
-        var copy = new FoliageRandom(0) { index = index, Count = Count };
-        state.CopyTo(copy.state, 0);
+        var copy = new FoliageRandom(0) { _index = _index, Count = Count };
+        _state.CopyTo(copy._state, 0);
         return copy;
     }
 
@@ -28,9 +28,9 @@ public sealed class FoliageRandom
 
     public void Seed(uint seed)
     {
-        state[0] = seed;
+        _state[0] = seed;
         for (int i = 1; i < N; i++)
-            state[i] = unchecked(1812433253u * (state[i - 1] ^ (state[i - 1] >> 30)) + (uint)i);
+            _state[i] = unchecked(1812433253u * (_state[i - 1] ^ (_state[i - 1] >> 30)) + (uint)i);
         // The game regenerates the block right after seeding (the first draw then reads index 0).
         Twist();
         Count = 0;
@@ -39,12 +39,12 @@ public sealed class FoliageRandom
     // The block in three runs, so no index wraps (a modulo per word was 40% of a grass page's time; grass reseeds per page and patch).
     void Twist()
     {
-        var s = state.AsSpan();
+        var s = _state.AsSpan();
         int i = 0;
         for (; i < N - M; i++) s[i] = Mix(s[i], s[i + 1], s[i + M]);
         for (; i < N - 1; i++) s[i] = Mix(s[i], s[i + 1], s[i + M - N]);
         s[N - 1] = Mix(s[N - 1], s[0], s[M - 1]);
-        index = 0;
+        _index = 0;
     }
 
     static uint Mix(uint current, uint next, uint far)
@@ -56,8 +56,8 @@ public sealed class FoliageRandom
     /// <summary>The next tempered 32-bit result.</summary>
     public uint Next()
     {
-        if (index >= N) Twist();
-        uint y = state[index++];
+        if (_index >= N) Twist();
+        uint y = _state[_index++];
         y ^= y >> 11;
         y ^= (y << 7) & 0x9D2C5680u;
         y ^= (y << 15) & 0xEFC60000u;

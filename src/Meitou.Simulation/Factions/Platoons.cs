@@ -151,26 +151,26 @@ public sealed record StoredMember(CharacterCold Cold, Vector3 Position, float Ya
 /// <summary>The roaming squads of a world, by id. Ids are never reused. Part of the state hash.</summary>
 public sealed class PlatoonRegistry
 {
-    readonly SortedDictionary<int, Platoon> platoons = [];
-    int nextId;
+    readonly SortedDictionary<int, Platoon> _platoons = [];
+    int _nextId;
     // The ids of a save's never-made town squads (Platoon.Unmade), counted down from the top so that they leave every other
     // platoon's id (and what is rolled from it) as it would be without them, and come last in id order.
-    int nextReserved = int.MaxValue;
+    int _nextReserved = int.MaxValue;
 
-    public int Count => platoons.Count;
-    public IEnumerable<Platoon> All => platoons.Values;
-    public Platoon? Find(int id) => platoons.GetValueOrDefault(id);
-    public int NextId() => nextId++;
-    public int NextReservedId() => nextReserved--;
-    public void Add(Platoon p) => platoons[p.Id] = p;
-    public bool Remove(int id) => platoons.Remove(id);
+    public int Count => _platoons.Count;
+    public IEnumerable<Platoon> All => _platoons.Values;
+    public Platoon? Find(int id) => _platoons.GetValueOrDefault(id);
+    public int NextId() => _nextId++;
+    public int NextReservedId() => _nextReserved--;
+    public void Add(Platoon p) => _platoons[p.Id] = p;
+    public bool Remove(int id) => _platoons.Remove(id);
 
     internal void Hash(ref StateHasher h)
     {
-        h.Add(platoons.Count);
-        h.Add(nextId);
-        if (nextReserved != int.MaxValue) h.Add(nextReserved);   // only once used: a world without unmade squads hashes as before
-        foreach (var p in platoons.Values)
+        h.Add(_platoons.Count);
+        h.Add(_nextId);
+        if (_nextReserved != int.MaxValue) h.Add(_nextReserved);   // only once used: a world without unmade squads hashes as before
+        foreach (var p in _platoons.Values)
         {
             h.Add(p.Id);
             h.Add(p.Origin);

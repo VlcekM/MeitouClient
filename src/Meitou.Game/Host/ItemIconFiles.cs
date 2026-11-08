@@ -15,7 +15,7 @@ sealed class ItemIconFiles(GameHost host)
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "icons", enhanced ? "supersampled" : "");
 
     /// <summary>The look the item icons were last connected with (<see cref="SyncIconLook"/>).</summary>
-    bool? iconsEnhanced;
+    bool? _iconsEnhanced;
 
     /// <summary>
     /// The version of the icon drawing: it goes up when the drawing changes, and the saved icons of another version are deleted (<see cref="ClearOldIcons"/>), so pictures drawn the old
@@ -44,19 +44,19 @@ sealed class ItemIconFiles(GameHost host)
     /// </summary>
     ItemIcons? ItemIconsOfInstall(bool enhanced)
     {
-        if (host.scene.Database is not { } db) return null;
+        if (host.Scene.Database is not { } db) return null;
         string own = IconSaveDirectory(enhanced);
         ClearOldIcons(own);
-        return new(db, name => host.assets.FindInGroup(name, "Icons"), enhanced ? new ItemIconCache(own) : new ItemIconCache(Path.Combine(host.install.DataDirectory, "icons"), own));
+        return new(db, name => host.Assets.FindInGroup(name, "Icons"), enhanced ? new ItemIconCache(own) : new ItemIconCache(Path.Combine(host.Install.DataDirectory, "icons"), own));
     }
 
     /// <summary>Once a frame: when the <c>icons</c> switch has changed, the interface's icons and the renderer's save folder follow it.</summary>
     internal void SyncIconLook()
     {
-        if (host.ActiveCharacters is not { } drawer || iconsEnhanced == drawer.EnhancedIcons) return;
-        iconsEnhanced = drawer.EnhancedIcons;
+        if (host.ActiveCharacters is not { } drawer || _iconsEnhanced == drawer.EnhancedIcons) return;
+        _iconsEnhanced = drawer.EnhancedIcons;
         drawer.IconSaveDirectory = IconSaveDirectory(drawer.EnhancedIcons);
-        host.player.itemCells.SetItemIcons(ItemIconsOfInstall(drawer.EnhancedIcons));
+        host.Player.ItemCells.SetItemIcons(ItemIconsOfInstall(drawer.EnhancedIcons));
     }
 
     /// <summary>
@@ -65,14 +65,14 @@ sealed class ItemIconFiles(GameHost host)
     /// </summary>
     internal void ConnectItemIcons()
     {
-        iconsEnhanced = null;
+        _iconsEnhanced = null;
         SyncIconLook();
-        if (host.ActiveCharacters is null) host.player.itemCells.SetItemIcons(ItemIconsOfInstall(false));
-        host.player.itemCells.SetRenderedIcons(name =>
+        if (host.ActiveCharacters is null) host.Player.ItemCells.SetItemIcons(ItemIconsOfInstall(false));
+        host.Player.ItemCells.SetRenderedIcons(name =>
         {
             if (UiPainter.TryParseRenderedIcon(name, out string record, out string material, out string colour))
                 return host.ActiveCharacters is { } characters && characters.TryGetIcon(new IconKey(record, material, colour), out var icon) ? icon : null;
-            if (UiPainter.TryParseRenderedBuildingIcon(name, out string building) && host.ActiveObjects is { } objects && host.player.build.BuildHost is { } buildHost)
+            if (UiPainter.TryParseRenderedBuildingIcon(name, out string building) && host.ActiveObjects is { } objects && host.Player.Build.BuildHost is { } buildHost)
                 return objects.TryGetBuildingIcon(building, buildHost.Parts(building), out var picture) ? picture : null;
             return null;
         });

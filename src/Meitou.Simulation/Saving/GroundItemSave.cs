@@ -37,7 +37,7 @@ public static class GroundItemSave
     /// The faction an item's <c>ownedby</c> handle names (docs/game/ui-input.md "Ground item labels"): the owning character's platoon's; a set handle whose character the save no
     /// longer holds falls back to the <c>insideBuilding</c> building's <c>owner faction ID</c> (the label's fallback, used for the pick-up too: engine choice). -1: none.
     /// </summary>
-    static int OwnerOf(Meitou.Data.Fcs.FcsRecord item, SaveHandles handles, Func<string, int> factionOf)
+    static int OwnerOf(FcsRecord item, SaveHandles handles, Func<string, int> factionOf)
     {
         var owner = Hand.Read(item, "ownedby");
         if (owner.IsNull) return -1;

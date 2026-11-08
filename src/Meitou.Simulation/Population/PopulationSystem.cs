@@ -1,7 +1,3 @@
-using Meitou.Simulation.Aggro;
-using Meitou.Simulation.Factions;
-using Meitou.Simulation.Items;
-using Meitou.Simulation.Bodies;
 using System.Collections.Concurrent;
 using System.Numerics;
 using Meitou.Data;
@@ -9,6 +5,10 @@ using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Movement;
 using Meitou.Simulation.Perception;
 using Meitou.Simulation.Player;
@@ -32,24 +32,24 @@ namespace Meitou.Simulation.Population;
 /// </summary>
 public sealed partial class PopulationSystem : ITickSystem, IDisposable
 {
-    readonly PopulationData data;
-    readonly PopulationSettings settings;
-    readonly CharacterAssembly assembly;
-    readonly SiteState[] states;
+    readonly PopulationData _data;
+    readonly PopulationSettings _settings;
+    readonly CharacterAssembly _assembly;
+    readonly SiteState[] _states;
     // The zones the towns are centred in (a town is made when its zone is active).
-    readonly HashSet<ZoneCoordinate> centres;
-    readonly ConcurrentQueue<BuiltTown> built = new();
-    readonly BlockingCollection<Action>? work;
-    readonly Thread? worker;
-    Vector3? focus;
+    readonly HashSet<ZoneCoordinate> _centres;
+    readonly ConcurrentQueue<BuiltTown> _built = new();
+    readonly BlockingCollection<Action>? _work;
+    readonly Thread? _worker;
+    Vector3? _focus;
     // The zones active as of the last look (the loaded ones), and the set the next look fills (swapped, so a look allocates nothing; the host reads ActiveZones within a frame only).
-    HashSet<ZoneCoordinate> active = [], spareActive = [];
+    HashSet<ZoneCoordinate> _active = [], _spareActive = [];
     // The player's characters, whose box is asked for at each look, and the zones of that box (a scratch set).
-    readonly List<Vector3> players = [];
-    readonly HashSet<ZoneCoordinate> boxZones = [];
+    readonly List<Vector3> _players = [];
+    readonly HashSet<ZoneCoordinate> _boxZones = [];
     // The original's loaded zones (ZoneLoad): each zone with the tick until which its latest request keeps it loaded (RefreshLoaded).
-    readonly Dictionary<ZoneCoordinate, long> loadedUntil = [];
-    ZoneCoordinate? loadCentre;
+    readonly Dictionary<ZoneCoordinate, long> _loadedUntil = [];
+    ZoneCoordinate? _loadCentre;
 
     sealed class SiteState
     {
@@ -67,23 +67,23 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     public PopulationSystem(PopulationData data, PopulationSettings? settings = null)
     {
-        this.data = data;
-        this.settings = settings ?? new PopulationSettings();
-        assembly = new CharacterAssembly(data);
-        states = new SiteState[data.Sites.Count];
-        for (int i = 0; i < states.Length; i++) states[i] = new SiteState();
-        centres = [.. data.Sites.Select(s => s.Zone)];
-        KeepRoamers = this.settings.KeepRoamers;
-        OffscreenFights = this.settings.OffscreenFights;
-        OffscreenHealing = this.settings.OffscreenHealing;
-        CampaignAncestorsOnce = this.settings.CampaignAncestorsOnce;
-        KeepWild = this.settings.KeepWild;
-        ResidentSchedule = this.settings.ResidentSchedule;
-        live = new WorldStates(data.Db, data.Relations);
-        if (!this.settings.Background) return;
-        work = [];
-        worker = new Thread(() => { foreach (var job in work.GetConsumingEnumerable()) job(); }) { IsBackground = true, Name = "Meitou.Sim population" };
-        worker.Start();
+        this._data = data;
+        this._settings = settings ?? new PopulationSettings();
+        _assembly = new CharacterAssembly(data);
+        _states = new SiteState[data.Sites.Count];
+        for (int i = 0; i < _states.Length; i++) _states[i] = new SiteState();
+        _centres = [.. data.Sites.Select(s => s.Zone)];
+        KeepRoamers = this._settings.KeepRoamers;
+        OffscreenFights = this._settings.OffscreenFights;
+        OffscreenHealing = this._settings.OffscreenHealing;
+        CampaignAncestorsOnce = this._settings.CampaignAncestorsOnce;
+        KeepWild = this._settings.KeepWild;
+        ResidentSchedule = this._settings.ResidentSchedule;
+        _live = new WorldStates(data.Db, data.Relations);
+        if (!this._settings.Background) return;
+        _work = [];
+        _worker = new Thread(() => { foreach (var job in _work.GetConsumingEnumerable()) job(); }) { IsBackground = true, Name = "Meitou.Sim population" };
+        _worker.Start();
     }
 
     /// <summary>The off-screen switches (<see cref="PopulationSettings.KeepRoamers"/> and the next two), changed live by the host.</summary>
@@ -100,52 +100,52 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// <summary>Game hours a town must have been unloaded for its residents to come back where their schedule puts them (engine choice: a quick reload changes nothing).</summary>
     public const double ScheduleAfterHours = 1;
 
-    readonly WorldStates live;
+    readonly WorldStates _live;
     /// <summary>The world states the population's spawns and campaigns read: the data's fixed ones when it has any, else the live ones of this world (<see cref="WorldStates"/>).</summary>
-    public IWorldStates States => ReferenceEquals(data.States, IWorldStates.None) ? live : data.States;
+    public IWorldStates States => ReferenceEquals(_data.States, IWorldStates.None) ? _live : _data.States;
 
     /// <summary>The live world states take the unique table and the player's faction (serial; every tick, again after a look's unique refresh, and before the loading screen's builds).</summary>
-    void RefreshStates(World world) => live.Refresh(world.Uniques, world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction);
+    void RefreshStates(World world) => _live.Refresh(world.Uniques, world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction);
 
-    bool drainAll;
+    bool _drainAll;
 
-    public PopulationData Data => data;
-    public PopulationSettings Settings => settings;
-    public SiteStatus StatusOf(int site) => states[site].Status;
+    public PopulationData Data => _data;
+    public PopulationSettings Settings => _settings;
+    public SiteStatus StatusOf(int site) => _states[site].Status;
     /// <summary>The zones active as of the last look: the loaded zones (<see cref="RefreshLoaded"/>), where the squads, the items and the navmesh are kept.</summary>
-    public IReadOnlyCollection<ZoneCoordinate> ActiveZones => active;
-    public Vector3? Focus => focus;
+    public IReadOnlyCollection<ZoneCoordinate> ActiveZones => _active;
+    public Vector3? Focus => _focus;
 
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         EnsureArtifacts(world);
-        world.FactionFormations ??= [.. data.Factions.Select(f => f.SquadFormation)];
-        world.ForcedSpeeds ??= data.Db.OfType(FcsRecordType.SQUAD_TEMPLATE).Concat(data.Db.OfType(FcsRecordType.UNIQUE_SQUAD_TEMPLATE))
+        world.FactionFormations ??= [.. _data.Factions.Select(f => f.SquadFormation)];
+        world.ForcedSpeeds ??= _data.Db.OfType(FcsRecordType.SquadTemplate).Concat(_data.Db.OfType(FcsRecordType.UniqueSquadTemplate))
             .Where(r => SquadTemplate.ForceSpeedOf(r) is >= 0 and < Squad.NoForceSpeed).ToDictionary(r => r.StringId, r => (byte)SquadTemplate.ForceSpeedOf(r));
         foreach (var c in commands)
         {
-            if (c is FocusCommand f) focus = f.Position;
-            else if (c is DebugSpawn spawn) SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: ++debugSpawns);
+            if (c is FocusCommand f) _focus = f.Position;
+            else if (c is DebugSpawn spawn) SpawnSandbox(world, spawn.Record, spawn.At, player: false, variant: ++_debugSpawns);
         }
 
         var ready = new List<BuiltTown>();
-        while (built.TryDequeue(out var b)) ready.Add(b);
+        while (_built.TryDequeue(out var b)) ready.Add(b);
         ready.Sort(static (a, b) => a.Site.CompareTo(b.Site));
         foreach (var b in ready)
         {
-            var state = states[b.Site];
+            var state = _states[b.Site];
             if (state.Status != SiteStatus.Loading || state.LoadId != b.LoadId) continue;   // no longer wanted
             Spawn(world, b);
             state.Status = SiteStatus.Loaded;
             state.UnloadAtTick = -1;
         }
-        if (drainAll) { while (DrainRoamers(world)) { } while (DrainWild(world)) { } }
+        if (_drainAll) { while (DrainRoamers(world)) { } while (DrainWild(world)) { } }
         else if (!DrainRoamers(world)) DrainWild(world);
         while (world.Characters.LimbsChanged.TryDequeue(out var cut))
         {
             if (world.Characters.Cold(cut.Character) is not { } cold) continue;
             if (cut.Limb is 2 or 3) InventoryCommands.ValidateSections(world, cut.Character, cold);   // a severed leg may close the boots (FUN_14064edc0 -> validateInventorySections)
-            assembly.RefreshEquipment(cold);
+            _assembly.RefreshEquipment(cold);
             DropSeveredLimb(world, cut.Character, cold, cut.Limb);
         }
     }
@@ -160,7 +160,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         // The first entry of the slot whose record exists (FUN_14064edc0: one whose target did not resolve is skipped, and with none nothing drops; the stump and wound stay).
         ItemInstance? item = null;
         foreach (var severed in cold.Race?.SeveredLimbs ?? [])
-            if (severed.Slot == limb && (item = data.Items.Create(severed.TargetStringId)) is not null) break;
+            if (severed.Slot == limb && (item = _data.Items.Create(severed.TargetStringId)) is not null) break;
         if (item is null) return;
         ref readonly var hot = ref world.Characters.Next[slot];
         float side = limb is 0 or 2 ? -1 : 1, forward = limb < 2 ? 0.5f : -1.5f;
@@ -182,15 +182,15 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         // The original answers a world state from the live unique table (FUN_1409a7e00), so the copy is taken every tick (cheap while nothing changed), not at the look.
         RefreshStates(world);
         TickDiscover(world);
-        if (world.Tick % settings.CheckEveryTicks != 0) { if (wars is not null) StepWarManager(world); return; }
-        world.Uniques.SeedPrisoners(data.Db);
+        if (world.Tick % _settings.CheckEveryTicks != 0) { if (_wars is not null) StepWarManager(world); return; }
+        world.Uniques.SeedPrisoners(_data.Db);
         RefreshUniques(world);
         RefreshStates(world);
         RefreshZones(world);
         StepRoaming(world);
         StepCampaigns(world);
         StepWarManager(world);
-        world.ItemSlots.Step(world, data);
+        world.ItemSlots.Step(world, _data);
     }
 
     /// <summary>The XZ distance at which a player character explores a town (and discovers it).</summary>
@@ -200,22 +200,22 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     static float DiscoverRangeOf(TownType type) => DiscoverRange * (type == TownType.Town ? 2 : type is TownType.Nest or TownType.Ruins ? 0.5f : 1);
 
     /// <summary>Where each wild nest stood when it last loaded (null before), for the map.</summary>
-    Vector2?[] wildCentres = [];
+    Vector2?[] _wildCentres = [];
     /// <summary>The player characters of a <see cref="Discover"/> check, with their zones.</summary>
-    readonly List<(Vector2 At, ZoneCoordinate Zone)> viewers = [];
+    readonly List<(Vector2 At, ZoneCoordinate Zone)> _viewers = [];
 
     void TickDiscover(World world)
     {
         // Real time, not simulated (FUN_14092f6b0, Verified): the unscaled frame time adds up while the game runs (a pause adds nothing: no tick) and a check runs once it reaches a second.
-        discoverClock += world.TickSeconds / MathF.Max(world.PhysicsSpeed, 0.01f);
-        if (discoverClock < DiscoverEverySeconds) return;
-        discoverClock = 0;
+        _discoverClock += world.TickSeconds / MathF.Max(world.PhysicsSpeed, 0.01f);
+        if (_discoverClock < DiscoverEverySeconds) return;
+        _discoverClock = 0;
         Discover(world);
     }
 
     /// <summary>Real seconds between two town discovery checks (<c>DAT_14167c308</c>).</summary>
     public const float DiscoverEverySeconds = 1;
-    float discoverClock;
+    float _discoverClock;
 
     /// <summary>
     /// Towns and camps a player character comes within <see cref="ExploreRange"/> of become discovered and explored, and their faction known; ones not yet discovered within
@@ -228,36 +228,36 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (!world.Player.Exists || world.Player.InCreation) return;
         var prev = world.Characters.Previous;
         var player = world.Player;
-        viewers.Clear();
+        _viewers.Clear();
         for (int i = 0; i < prev.Length; i++)
-            if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }) viewers.Add(Viewer(prev[i].Position));
+            if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }) _viewers.Add(Viewer(prev[i].Position));
         AddFocusViewer(world);
-        foreach (var site in data.Sites)
+        foreach (var site in _data.Sites)
         {
             if (site.Town.Type is TownType.NestMarker) continue;   // the original skips only type 8
             if (site.Index < player.Towns.Length && (player.Towns[site.Index] & TownKnowledge.Explored) != 0) continue;   // an explored town is skipped (vfunc 0x340, FUN_14092f6b0:317-319)
             float d2 = NearestViewer(new(site.Position.X, site.Position.Z), site.Zone, site.Coverage), far = DiscoverRangeOf(site.Town.Type);
             if (d2 < ExploreRange * ExploreRange)
             {
-                if (player.Know(site.Index, TownKnowledge.Discovered | TownKnowledge.Explored) && site.Index < data.SiteFactions.Count) player.Meet(data.SiteFactions[site.Index]);
+                if (player.Know(site.Index, TownKnowledge.Discovered | TownKnowledge.Explored) && site.Index < _data.SiteFactions.Count) player.Meet(_data.SiteFactions[site.Index]);
             }
             else if (d2 < far * far && player.Know(site.Index, TownKnowledge.Discovered) && site.Town.Type != TownType.Nest)
                 world.Post(Loc.Tr("Discovered {1}", site.Town.UnexploredName is { Length: > 0 } unexplored ? unexplored : site.Town.Name));
         }
         var wild = WildSites;
-        for (int w = 0; w < wild.Count && w < wildCentres.Length; w++)
+        for (int w = 0; w < wild.Count && w < _wildCentres.Length; w++)
         {
-            if (wild[w] is not { Kind: WildKind.Nest, Nest: { } nest } site || wildCentres[w] is not { } centre) continue;
+            if (wild[w] is not { Kind: WildKind.Nest, Nest: { } nest } site || _wildCentres[w] is not { } centre) continue;
             float d2 = NearestViewer(centre, WorldLayout.ZoneOf(centre.X, centre.Y), []), far = DiscoverRangeOf(TownType.Nest);
             var flags = d2 < ExploreRange * ExploreRange ? TownKnowledge.Discovered | TownKnowledge.Explored : d2 < far * far ? TownKnowledge.Discovered : TownKnowledge.None;
             if (flags == TownKnowledge.None) continue;
-            var faction = site.Faction >= 0 && site.Faction < data.Factions.Count ? data.Factions[site.Faction] : null;
+            var faction = site.Faction >= 0 && site.Faction < _data.Factions.Count ? _data.Factions[site.Faction] : null;
             if ((flags & TownKnowledge.Explored) != 0 && !player.Camps.Any(c => c.Site == w && (c.Known & TownKnowledge.Explored) != 0)) player.Meet(faction is null ? -1 : site.Faction);
             player.KnowCamp(new CampView(w, nest.Id, nest.Name, faction?.Id ?? nest.Faction ?? "", faction?.NotReal ?? false, new Vector3(centre.X, 0, centre.Y), flags), flags);
         }
         // A camp known from a save gets its place once its nest has loaded (never when the wild layout gives that site another nest).
         foreach (var camp in player.Camps)
-            if (camp.Position is null && camp.Site >= 0 && camp.Site < wildCentres.Length && WildSites[camp.Site].Nest?.Id == camp.TownId && wildCentres[camp.Site] is { } c)
+            if (camp.Position is null && camp.Site >= 0 && camp.Site < _wildCentres.Length && WildSites[camp.Site].Nest?.Id == camp.TownId && _wildCentres[camp.Site] is { } c)
                 player.KnowCamp(camp with { Position = new Vector3(c.X, 0, c.Y) }, TownKnowledge.None);
     }
 
@@ -270,21 +270,21 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     void AddFocusViewer(World world)
     {
-        if (focus is not { } f || viewers.Count == 0) return;
+        if (_focus is not { } f || _viewers.Count == 0) return;
         var at = new Vector2(f.X, f.Z);
-        var nearest = viewers.Select(v => v.At).MinBy(p => Vector2.DistanceSquared(p, at));
+        var nearest = _viewers.Select(v => v.At).MinBy(p => Vector2.DistanceSquared(p, at));
         float away = Vector2.Distance(nearest, at);
         if (away > CameraReach) at = nearest + (at - nearest) * (CameraReach / away);
         var zone = WorldLayout.ZoneOf(at.X, at.Y);
-        if (zone.X is >= 0 and < WorldLayout.ZoneCount && zone.Y is >= 0 and < WorldLayout.ZoneCount) viewers.Add((at, zone));
+        if (zone.X is >= 0 and < WorldLayout.ZoneCount && zone.Y is >= 0 and < WorldLayout.ZoneCount) _viewers.Add((at, zone));
     }
 
     /// <summary>A sense update that finds this many characters in sight range also takes everyone within <see cref="CrowdReach"/> (<c>FUN_1407866d0</c>).</summary>
     const int CrowdCount = 40;
     const float CrowdReach = 250;
 
-    Combat.CombatSystem? fights;
-    Locks.LockSystem? locks;
+    Combat.CombatSystem? _fights;
+    Locks.LockSystem? _locks;
 
     /// <summary>One of the player's characters whose sense update runs, so it meets factions: not unconscious, dead or carried (<c>FUN_140598c20</c>).</summary>
     internal static bool MeetsFactions(CharacterCold c) => c is { IsPlayer: true, DiedTick: < 0, CarriedBy.IsNone: true } && c.Medical?.Incapacitated != true;
@@ -300,14 +300,14 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (!world.Player.Exists || world.Player.InCreation) return;
         var table = world.Characters;
         var prev = table.Previous;
-        fights ??= world.Systems.OfType<Combat.CombatSystem>().FirstOrDefault();
-        locks ??= world.Systems.OfType<Locks.LockSystem>().FirstOrDefault();
-        int every = Math.Max(1, settings.CheckEveryTicks);
+        _fights ??= world.Systems.OfType<Combat.CombatSystem>().FirstOrDefault();
+        _locks ??= world.Systems.OfType<Locks.LockSystem>().FirstOrDefault();
+        int every = Math.Max(1, _settings.CheckEveryTicks);
         for (int i = (int)(world.Tick % every); i < prev.Length; i += every)
         {
             if (!prev[i].Alive || table.Cold(i) is not { } cold || !MeetsFactions(cold)) continue;
             var at = new Vector2(prev[i].Position.X, prev[i].Position.Z);
-            float range = (locks?.Regions?.CodeAt(prev[i].Position) > 0 ? SightMap.IndoorSight * WeatherSystem.SightFactor(cold) : AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight))
+            float range = (_locks?.Regions?.CodeAt(prev[i].Position) > 0 ? SightMap.IndoorSight * WeatherSystem.SightFactor(cold) : AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight))
                 * (0.5f + 0.5f * world.Sight.Daylight);
             int found = 0;
             // The count includes the character itself, as the grid lookup's does.
@@ -317,7 +317,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             for (int j = 0; j < prev.Length; j++)
                 if (j != i && prev[j].Alive && Vector2.DistanceSquared(at, new(prev[j].Position.X, prev[j].Position.Z)) < range * range && table.Cold(j) is { } other)
                     world.Player.Meet(other.Faction);
-            if (fights?.StateOf(new CharacterId(i, prev[i].Generation)) is { TargetSlot: >= 0 and var t } fight && t < prev.Length && prev[t].Alive
+            if (_fights?.StateOf(new CharacterId(i, prev[i].Generation)) is { TargetSlot: >= 0 and var t } fight && t < prev.Length && prev[t].Alive
                 && prev[t].Generation == fight.TargetGeneration && table.Cold(t) is { } target)
                 world.Player.Meet(target.Faction);
         }
@@ -332,7 +332,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     float NearestViewer(Vector2 place, ZoneCoordinate zone, IReadOnlyList<ZoneCoordinate> coverage)
     {
         float best = float.PositiveInfinity;
-        foreach (var (at, z) in viewers)
+        foreach (var (at, z) in _viewers)
         {
             bool near = Near(z, zone);
             for (int i = 0; i < coverage.Count && !near; i++) near = Near(z, coverage[i]);
@@ -352,29 +352,29 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     void RefreshLoaded(World world, Vector3 camera)
     {
-        bool move = loadCentre is not { } c
+        bool move = _loadCentre is not { } c
             || MathF.Abs(camera.X - ZoneActivation.CentreOf(c).X) > ZoneActivation.RecentreDistance || MathF.Abs(camera.Z - ZoneActivation.CentreOf(c).Y) > ZoneActivation.RecentreDistance;
-        if (move) loadCentre = WorldLayout.ZoneOf(camera.X, camera.Z);
+        if (move) _loadCentre = WorldLayout.ZoneOf(camera.X, camera.Z);
         long now = world.Tick;
         long until = now + (long)Math.Ceiling(ZoneActivation.LoadedLingerSeconds * LingerSpeed(world) / world.TickSeconds);
-        var centre = loadCentre!.Value;
+        var centre = _loadCentre!.Value;
         for (int x = centre.X - 1; x <= centre.X + 1; x++)
             for (int y = centre.Y - 1; y <= centre.Y + 1; y++)
                 Ask(new ZoneCoordinate(x, y), until);
         long boxUntil = now + (long)Math.Ceiling(ZoneActivation.BoxLingerSeconds * LingerSpeed(world) / world.TickSeconds);
-        int ring = settings.FastZoneHopping ? 1 : 0;
-        boxZones.Clear();
-        foreach (var p in players) ZoneActivation.AddZonesAround(p, ring, boxZones);
+        int ring = _settings.FastZoneHopping ? 1 : 0;
+        _boxZones.Clear();
+        foreach (var p in _players) ZoneActivation.AddZonesAround(p, ring, _boxZones);
         // A platoon of the player's faction asks for the box round its place as a player character does, unloaded (FUN_1407ebf30) or loaded (FUN_1404ffad0, both call FUN_140a0f640), so it is made and stays active.
         if (world.Platoons.Count > 0 && PlayerFactionOf(world) is >= 0 and var player)
             foreach (var p in world.Platoons.All)
-                if (p.Faction == player) ZoneActivation.AddZonesAround(new Vector3(p.Position.X, 0, p.Position.Y), ring, boxZones);
-        foreach (var zone in boxZones) Ask(zone, boxUntil);
+                if (p.Faction == player) ZoneActivation.AddZonesAround(new Vector3(p.Position.X, 0, p.Position.Y), ring, _boxZones);
+        foreach (var zone in _boxZones) Ask(zone, boxUntil);
         AskTownZones();
         List<ZoneCoordinate>? gone = null;
-        foreach (var (zone, t) in loadedUntil) if (t < now) (gone ??= []).Add(zone);
-        if (gone is not null) foreach (var zone in gone) loadedUntil.Remove(zone);
-        world.LoadedZones = Ready(loadedUntil.Keys);
+        foreach (var (zone, t) in _loadedUntil) if (t < now) (gone ??= []).Add(zone);
+        if (gone is not null) foreach (var zone in gone) _loadedUntil.Remove(zone);
+        world.LoadedZones = Ready(_loadedUntil.Keys);
     }
 
     /// <summary>
@@ -390,11 +390,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     void AskTownZones()
     {
-        foreach (var site in data.Sites)
+        foreach (var site in _data.Sites)
         {
-            if (site.Coverage.Count == 0 || states[site.Index].Status is not (SiteStatus.Loaded or SiteStatus.Loading)) continue;
-            long latest = loadedUntil.GetValueOrDefault(site.Zone, -1);
-            foreach (var zone in site.Coverage) latest = Math.Max(latest, loadedUntil.GetValueOrDefault(zone, -1));
+            if (site.Coverage.Count == 0 || _states[site.Index].Status is not (SiteStatus.Loaded or SiteStatus.Loading)) continue;
+            long latest = _loadedUntil.GetValueOrDefault(site.Zone, -1);
+            foreach (var zone in site.Coverage) latest = Math.Max(latest, _loadedUntil.GetValueOrDefault(zone, -1));
             if (latest < 0) continue;
             Ask(site.Zone, latest);
             foreach (var zone in site.Coverage) Ask(zone, latest);
@@ -403,7 +403,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     bool CoverageActive(TownSite site)
     {
-        foreach (var zone in site.Coverage) if (active.Contains(zone)) return true;
+        foreach (var zone in site.Coverage) if (_active.Contains(zone)) return true;
         return false;
     }
 
@@ -417,32 +417,32 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     void Ask(ZoneCoordinate zone, long until)
     {
         if (!zone.IsInsideGrid) return;
-        if (!loadedUntil.TryGetValue(zone, out long was) || was < until) loadedUntil[zone] = until;
+        if (!_loadedUntil.TryGetValue(zone, out long was) || was < until) _loadedUntil[zone] = until;
     }
 
     void RefreshZones(World world)
     {
         // The player's characters ask for the box round them (the player's faction, docs/game/character-stats.md "Corpses"); the camera focus centres the block, and alone it does without a player.
-        players.Clear();
+        _players.Clear();
         if (world.Player.Exists)
         {
             var prev = world.Characters.Previous;
             for (int i = 0; i < prev.Length; i++)
-                if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }) players.Add(prev[i].Position);
+                if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }) _players.Add(prev[i].Position);
         }
-        if (players.Count == 0 && focus is null) return;
-        RefreshLoaded(world, focus ?? players[0]);
-        (active, spareActive) = (spareActive, active);
-        active.Clear();
-        foreach (var zone in loadedUntil.Keys) active.Add(zone);
+        if (_players.Count == 0 && _focus is null) return;
+        RefreshLoaded(world, _focus ?? _players[0]);
+        (_active, _spareActive) = (_spareActive, _active);
+        _active.Clear();
+        foreach (var zone in _loadedUntil.Keys) _active.Add(zone);
         world.ActiveZones = world.LoadedZones;   // the ready ones (RefreshLoaded)
         world.VisitedZones.UnionWith(world.ActiveZones!);
-        long grace = (long)Math.Ceiling(settings.UnloadGraceSeconds / world.TickSeconds);
-        long townGrace = (long)Math.Ceiling(settings.TownUnloadGraceSeconds / world.TickSeconds);
-        foreach (var site in data.Sites)
+        long grace = (long)Math.Ceiling(_settings.UnloadGraceSeconds / world.TickSeconds);
+        long townGrace = (long)Math.Ceiling(_settings.TownUnloadGraceSeconds / world.TickSeconds);
+        foreach (var site in _data.Sites)
         {
-            var state = states[site.Index];
-            bool wanted = active.Contains(site.Zone);
+            var state = _states[site.Index];
+            bool wanted = _active.Contains(site.Zone);
             switch (state.Status)
             {
                 case SiteStatus.Unloaded when wanted:
@@ -475,7 +475,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             if (world.Squads.Find(id) is not { } squad) continue;
             foreach (var m in squad.Members)
                 if (table.TryResolveNext(m, out int slot) && table.IsAlive(m)
-                    && active.Contains(WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z))) return true;
+                    && _active.Contains(WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z))) return true;
         }
         return false;
     }
@@ -499,19 +499,19 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (held) CheckRegeneration(world, site.Index);
         else if (!replaced) DropUnmade(world, site.Index);
         // Taken here, not on the build thread: the buildings the player owns house no residents (docs/game/factions-squads-towns.md "Town residents").
-        var owned = world.Fixtures.PlayerOwnedIn(data, site.Index, world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction);
-        if (work is null)
+        var owned = world.Fixtures.PlayerOwnedIn(_data, site.Index, world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction);
+        if (_work is null)
         {
             Spawn(world, BuildTown(site, loadId, seed, walk, held, owned));
             state.Status = SiteStatus.Loaded;
         }
         else
         {
-            work.Add(() => built.Enqueue(BuildTown(site, loadId, seed, walk, held, owned)));
+            _work.Add(() => _built.Enqueue(BuildTown(site, loadId, seed, walk, held, owned)));
         }
     }
 
-    bool loadingScreen;
+    bool _loadingScreen;
 
     /// <summary>
     /// The original's <c>ZoneManager::checkForRepopulateTown</c> at a town's load (docs/game/factions-squads-towns.md "Town overrides"): not behind the loading screen, nor for a town of the player's faction;
@@ -521,8 +521,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     bool Replace(World world, TownSite site)
     {
-        if (loadingScreen || site.Index < data.SiteFactions.Count && data.SiteFactions[site.Index] is >= 0 and var f && f == PlayerFactionOf(world)) return false;
-        var state = states[site.Index];
+        if (_loadingScreen || site.Index < _data.SiteFactions.Count && _data.SiteFactions[site.Index] is >= 0 and var f && f == PlayerFactionOf(world)) return false;
+        var state = _states[site.Index];
         if (state.Repopulate)
         {
             ResetZone(world, site);
@@ -533,17 +533,17 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         int weight = 0;
         foreach (var link in site.Town.OverrideTown)
         {
-            if (data.Db.Find(link.Id) is not { Type: FcsRecordType.TOWN } record || record.StringId == site.Replacement?.Id) continue;
+            if (_data.Db.Find(link.Id) is not { Type: FcsRecordType.Town } record || record.StringId == site.Replacement?.Id) continue;
             var candidate = TownData.From(record);
-            var states = candidate.WorldState.Where(w => data.Db.Find(w.Id) is { Type: FcsRecordType.WORLD_EVENT_STATE }).DistinctBy(w => w.Id).ToList();
-            if (states.Count > weight && states.All(w => IWorldStates.Passes(States, data.Db, w.Id, w.V0))) (best, weight) = (candidate, states.Count);
+            var states = candidate.WorldState.Where(w => _data.Db.Find(w.Id) is { Type: FcsRecordType.WorldEventState }).DistinctBy(w => w.Id).ToList();
+            if (states.Count > weight && states.All(w => IWorldStates.Passes(States, _data.Db, w.Id, w.V0))) (best, weight) = (candidate, states.Count);
         }
         if (best is null) return false;
-        data.SetReplacement(site.Index, best);
+        _data.SetReplacement(site.Index, best);
         state.Repopulate = true;
         ResetZone(world, site);
-        if (townLog.Count >= 256) townLog.RemoveAt(0);
-        townLog.Add($"{site.Town.Name}: now {best.Name}");
+        if (_townLog.Count >= 256) _townLog.RemoveAt(0);
+        _townLog.Add($"{site.Town.Name}: now {best.Name}");
         return true;
     }
 
@@ -554,7 +554,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     void ResetZone(World world, TownSite site)
     {
-        world.Fixtures.TownReplaced(world, data, site.Index);
+        world.Fixtures.TownReplaced(world, _data, site.Index);
         foreach (int id in world.GroundItems.All.Where(g => WorldLayout.ZoneOf(g.Position.X, g.Position.Z) == site.Zone).Select(g => g.Id).ToList())
             world.GroundItems.Take(id);
         world.ItemSlots.ResetZone(site.Zone);
@@ -582,9 +582,18 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             }
             world.Platoons.Add(new Platoon
             {
-                Id = world.Platoons.NextId(), Origin = site, TemplateId = squad.TemplateId, Faction = squad.Faction, Key = 0, Size = Math.Max(squad.SpawnSize, stored.Members.Count),
-                Position = at, Money = squad.Money, Package = stored.Package, Stored = stored,
-                Regenerate = refresh, IntactFlag = squad.Ai?.Intact ?? true,
+                Id = world.Platoons.NextId(),
+                Origin = site,
+                TemplateId = squad.TemplateId,
+                Faction = squad.Faction,
+                Key = 0,
+                Size = Math.Max(squad.SpawnSize, stored.Members.Count),
+                Position = at,
+                Money = squad.Money,
+                Package = stored.Package,
+                Stored = stored,
+                Regenerate = refresh,
+                IntactFlag = squad.Ai?.Intact ?? true,
             });
         }
         Reset(state);
@@ -598,12 +607,23 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     bool KeepLoaded(World world, int site, Squad squad)
     {
         var at = PlatoonPosition(world, squad, new Vector2(squad.Position.X, squad.Position.Z));
-        if (!ZoneActivation.InLoadedBox(at.X, at.Y, active) && !SquadCarriesPlayer(world, squad)) return false;
+        if (!ZoneActivation.InLoadedBox(at.X, at.Y, _active) && !SquadCarriesPlayer(world, squad)) return false;
         var stored = new StoredSquad { Name = squad.Name, HomeBuilding = squad.HomeBuilding, Shop = squad.Shop, NextHomeFillTick = squad.NextHomeFillTick, Package = squad.Ai?.Current?.Id, Ai = Saving.AiSave.Of(squad.Ai) ?? squad.SavedAi };
         var platoon = new Platoon
         {
-            Id = world.Platoons.NextId(), Origin = site, TemplateId = squad.TemplateId, Faction = squad.Faction, Key = 0, Size = Math.Max(squad.SpawnSize, squad.Members.Count),
-            Position = at, Money = squad.Money, Package = stored.Package, Stored = stored, IntactFlag = squad.Ai?.Intact ?? true, State = PlatoonState.Loaded, SquadId = squad.Id,
+            Id = world.Platoons.NextId(),
+            Origin = site,
+            TemplateId = squad.TemplateId,
+            Faction = squad.Faction,
+            Key = 0,
+            Size = Math.Max(squad.SpawnSize, squad.Members.Count),
+            Position = at,
+            Money = squad.Money,
+            Package = stored.Package,
+            Stored = stored,
+            IntactFlag = squad.Ai?.Intact ?? true,
+            State = PlatoonState.Loaded,
+            SquadId = squad.Id,
         };
         squad.PlatoonId = platoon.Id;
         squad.Pinned = true;
@@ -663,18 +683,18 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     void Spawn(World world, BuiltTown town)
     {
-        var site = data.Sites[town.Site];
-        var state = states[town.Site];
+        var site = _data.Sites[town.Site];
+        var state = _states[town.Site];
         state.Repopulate = false;
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
         // The town's doors, cages, containers and beds, once (they stay registered when the town unloads).
-        world.Fixtures.RegisterSite(world, data, town.Site);
-        world.ItemSlots.RegisterSite(world, data, town.Site);
+        world.Fixtures.RegisterSite(world, _data, town.Site);
+        world.ItemSlots.RegisterSite(world, _data, town.Site);
         StandTownCamp(world, site);
         // Each home is set up for its template before its residents are made (FUN_14057f1f0).
         // The platoon is made for every home, members or not (FUN_14057f4c0 stamps its template's designation on the building, FUN_140583a10 then stocks a home whose template made nothing).
         var trade = world.SystemOf<Trading.TradeSystem>();
-        int townFaction = site.Town.Faction is { } townFactionId ? data.FactionIndex(townFactionId) : -1;
+        int townFaction = site.Town.Faction is { } townFactionId ? _data.FactionIndex(townFactionId) : -1;
         var stocked = town.Squads.Where(s => s.Home is not null).Select(s => s.Home!.Key).ToHashSet(StringComparer.Ordinal);
         foreach (var (home, template) in town.Homes)
         {
@@ -685,7 +705,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         // A town made counts as visited in every zone of its buildings (engine choice: its residents and its buildings' locks are saved whole, docs/formats/save.md "Zone files"),
         // but for the centre zone of another town: a file there would tell the original that town was made, with no residents saved for it.
         foreach (var b in site.Buildings)
-            if (b.Zone == site.Zone || !centres.Contains(b.Zone)) world.VisitedZones.Add(b.Zone);
+            if (b.Zone == site.Zone || !_centres.Contains(b.Zone)) world.VisitedZones.Add(b.Zone);
         var centre = new Vector2(site.Position.X, site.Position.Z);
         foreach (var made in town.Squads)
         {
@@ -700,8 +720,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         if (town.Squads.Count > 0) MadeTown(world, town.Site, town.Squads.Where(s => s.Home is not null).Select(s => s.Members.Count));
         GiveArtifacts(world, town);
         int housed = town.Squads.Count(s => s.Home is not null);
-        if (townLog.Count >= 256) townLog.RemoveAt(0);   // nobody reads it in a headless world
-        townLog.Add($"{site.Town.Name}: {town.Squads.Count} squad(s), {town.Squads.Sum(s => s.Members.Count)} characters; {housed} at home in " +
+        if (_townLog.Count >= 256) _townLog.RemoveAt(0);   // nobody reads it in a headless world
+        _townLog.Add($"{site.Town.Name}: {town.Squads.Count} squad(s), {town.Squads.Sum(s => s.Members.Count)} characters; {housed} at home in " +
             $"{town.Squads.Where(s => s.Home is not null).Select(s => s.Home).Distinct().Count()} of {site.Buildings.Count(b => b.CanHouse)} houses, {town.Squads.Count - housed} elsewhere" +
             (housed < town.Squads.Count ? $" ({string.Join(", ", town.Squads.Where(s => s.Home is null).Select(s => s.Plan.Template.Name))})" : ""));
     }
@@ -722,8 +742,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         int picks = 0;
         for (int e = 0; e < links.Count && cages.Count > 0; e++)
         {
-            if (data.Db.Find(links[e].Id) is not { } record || !SquadFactory.IsTemplate(record)) continue;
-            var faction = (uint)squad.Faction < (uint)data.Factions.Count ? data.Factions[squad.Faction] : null;
+            if (_data.Db.Find(links[e].Id) is not { } record || !SquadFactory.IsTemplate(record)) continue;
+            var faction = (uint)squad.Faction < (uint)_data.Factions.Count ? _data.Factions[squad.Faction] : null;
             ulong key = Rng.Mix(SeedSalts.PrisonerSquad ^ homeKey ^ (ulong)e << 48);
             var at = new Vector2(cages[0].Position.X, cages[0].Position.Z);
             if (BuildOne(SquadTemplate.From(record), squad.Faction, faction, key, world.Seed, at) is not { } built) continue;
@@ -753,16 +773,16 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         var cages = owner.Home is { } home
             ? world.Fixtures.OfBuilding(home.Key).Where(f => f.Kind == Locks.FixtureKind.Cage && Locks.FixtureRegistry.IsFree(table, f)).ToList() : [];
         ulong ownerKey = Rng.StableHash(owner.Home?.Key ?? squad.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        var ownerFaction = (uint)squad.Faction < (uint)data.Factions.Count ? data.Factions[squad.Faction] : null;
+        var ownerFaction = (uint)squad.Faction < (uint)_data.Factions.Count ? _data.Factions[squad.Faction] : null;
         int n = 0, picks = 0;
         foreach (var plan in owner.Plan.Slaves)
         {
             if (plan.Members.Count == 0) continue;
-            int faction = plan.Template.Faction is { } tf && data.FactionIndex(tf) is var fi and >= 0 ? fi : squad.Faction;
+            int faction = plan.Template.Faction is { } tf && _data.FactionIndex(tf) is var fi and >= 0 ? fi : squad.Faction;
             var members = new List<BuiltMember>();
             foreach (var m in plan.Members)
             {
-                var look = data.Appearances?.Create(m.RecordId, ownerFaction?.Id, (int)(Rng.Hash(world.Seed, ownerKey, RngPurpose.Spawn, SeedSalts.SlaveLook + (ulong)n++) & 0x7FFFFFFF));
+                var look = _data.Appearances?.Create(m.RecordId, ownerFaction?.Id, (int)(Rng.Hash(world.Seed, ownerKey, RngPurpose.Spawn, SeedSalts.SlaveLook + (ulong)n++) & 0x7FFFFFFF));
                 members.Add(new BuiltMember(m, look));
             }
             var slaves = SpawnSquad(world, new BuiltSquad(plan with { Slaves = [] }, owner.Position, faction, members, owner.NearY), site, radius);
@@ -774,7 +794,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 (c.SlaveState, c.SlaveOwner, c.SlaveMaster, c.Role) = (1, squad.Faction, squad.Id, (int)SquadRole.Slave);
                 // Then shaven and chained (FUN_140583a10: shaveHead, setChainedMode), so the owner's watchers see a processed slave and leave it be (#356).
                 if (c.Fighter is not { IsAnimal: true }) c.Shaved = true;
-                assembly.Chain(c);
+                _assembly.Chain(c);
                 if (cages.Count == 0) continue;
                 int pick = Rng.Int(Rng.Hash(world.Seed, ownerKey, RngPurpose.Spawn, SeedSalts.SlaveCage + (ulong)picks++), cages.Count);
                 world.Fixtures.Imprison(world, id, cages[pick]);
@@ -783,12 +803,12 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         }
     }
 
-    readonly List<string> townLog = [];
+    readonly List<string> _townLog = [];
     /// <summary>A line for each town whose squads were made since the last call (for the host's log; not part of the state).</summary>
     public List<string> TakeTownLog()
     {
-        var list = new List<string>(townLog);
-        townLog.Clear();
+        var list = new List<string>(_townLog);
+        _townLog.Clear();
         return list;
     }
 
@@ -837,8 +857,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 else if (built.Home is { } home && HomeFloor(walk, home, x, z, floorY - SpotLift) is { } inside) (x, z, standY) = (inside.X, inside.Z, inside.Y + SpotLift);
                 else if (atOrigin && walk.FloorNear(x, z, floorY - SpotLift, SpotLift) is { } onGround) (x, z) = (onGround.X, onGround.Z);
             }
-            var race = assembly.RaceOf(plan.RecordId, member.Appearance);
-            var record = data.Db.Find(plan.RecordId);
+            var race = _assembly.RaceOf(plan.RecordId, member.Appearance);
+            var record = _data.Db.Find(plan.RecordId);
             var hot = new CharacterHot
             {
                 Position = new Vector3(x, Ground(walk, x, z, standY), z),
@@ -862,10 +882,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
                 Orders = player ? Orders.PlayerDefaults : CharacterOrders.None,
                 FootprintRadius = race?.GetFloat("pathfind footprint radius") ?? 0,
             };
-            assembly.Attach(table.PeekNextId(), cold, ref hot, record, race, world.Seed, plan.IsAnimal ? plan.Age : 1);
+            _assembly.Attach(table.PeekNextId(), cold, ref hot, record, race, world.Seed, plan.IsAnimal ? plan.Age : 1);
             ApplyRecordSlave(cold, record, site);
             // A new NPC's bounties (economy.md 11.2; engine: not the player's characters, nor the sandbox's idle spawns).
-            if (!player && !idle) cold.Bounties = Crime.SpawnBounties.Roll(data, record, world.Seed, table.PeekNextId(), world.Tick);
+            if (!player && !idle) cold.Bounties = Crime.SpawnBounties.Roll(_data, record, world.Seed, table.PeekNextId(), world.Tick);
             var id = table.Spawn(hot, cold, world.Tick);
             // The name's text tokens, once the character exists (FUN_14062b210 end): a mod's "Trader /GENNAME/".
             if (cold.Name.Contains('/') && world.SystemOf<Dialogue.DialogueSystem>() is { } talk) cold.Name = talk.ExpandName(world, id, cold.Name);
@@ -889,13 +909,13 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         int state = record?.GetInt("slave") ?? 0;
         if (state is not (>= 1 and <= 3)) return;
         cold.SlaveState = (byte)state;
-        cold.SlaveOwner = site is not null && site.Index < data.SiteFactions.Count ? data.SiteFactions[site.Index] : -1;
+        cold.SlaveOwner = site is not null && site.Index < _data.SiteFactions.Count ? _data.SiteFactions[site.Index] : -1;
         if (state == 2) cold.RecentlyWanted = Crime.CrimeSystem.RecentlyWantedSeconds;
     }
 
     /// <summary>A <c>named</c> CHARACTER's random name from its look's sex's list (docs/characters.md "Names"); null: the record's name.</summary>
     string? SpawnName(World world, GameRecord? record, CharacterAppearance? look, int squadId, int index) =>
-        record is not null && record.GetBool("named") && data.Appearances is { } source
+        record is not null && record.GetBool("named") && _data.Appearances is { } source
             ? source.RandomName(look?.Female ?? false, Rng.Hash(world.Seed, (ulong)squadId << 8 | (uint)index, RngPurpose.Name))
             : null;
 
@@ -912,7 +932,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         for (int i = 0; i < built.Members.Count; i++)
         {
             var member = built.Members[i];
-            if (only is not null && !only.Contains(member.Plan.Index) || data.Db.Find(member.Plan.RecordId) is not { } record || !UniqueCharacters.IsUnique(record)
+            if (only is not null && !only.Contains(member.Plan.Index) || _data.Db.Find(member.Plan.RecordId) is not { } record || !UniqueCharacters.IsUnique(record)
                 || world.Uniques.TryClaim(member.Plan.RecordId))
             {
                 gated?.Add(member);
@@ -920,10 +940,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             }
             gated ??= [.. built.Members.Take(i)];
             var replacements = record.GetReferences("unique replacement spawn");
-            if (replacements.Count == 0 || data.Db.Find(replacements[0].TargetStringId) is null) continue;
+            if (replacements.Count == 0 || _data.Db.Find(replacements[0].TargetStringId) is null) continue;
             string replacement = replacements[0].TargetStringId;
-            string? faction = built.Faction >= 0 && built.Faction < data.Factions.Count ? data.Factions[built.Faction].Id : null;
-            var look = member.Plan.IsAnimal ? member.Appearance : data.Appearances?.Create(replacement, faction, (int)(Rng.Hash(world.Seed, Rng.StableHash(replacement) ^ (ulong)squadId << 32, RngPurpose.Spawn, SeedSalts.MemberLook + (ulong)i) & 0x7FFFFFFF));
+            string? faction = built.Faction >= 0 && built.Faction < _data.Factions.Count ? _data.Factions[built.Faction].Id : null;
+            var look = member.Plan.IsAnimal ? member.Appearance : _data.Appearances?.Create(replacement, faction, (int)(Rng.Hash(world.Seed, Rng.StableHash(replacement) ^ (ulong)squadId << 32, RngPurpose.Spawn, SeedSalts.MemberLook + (ulong)i) & 0x7FFFFFFF));
             gated.Add(new BuiltMember(member.Plan with { RecordId = replacement }, look));
         }
         if (gated is null) return built.Members;
@@ -960,7 +980,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// </summary>
     void ReleaseUnique(World world, string recordId, CharacterId holder, bool dead, int faction = -1)
     {
-        if (world.Uniques.Find(recordId) is not { } entry || !UniqueCharacters.IsUnique(data.Db.Find(recordId))) return;
+        if (world.Uniques.Find(recordId) is not { } entry || !UniqueCharacters.IsUnique(_data.Db.Find(recordId))) return;
         if (!holder.IsNone && !entry.Handle.IsNone && entry.Handle != holder) return;
         world.Uniques.Left(holder);
         if (dead) world.Uniques.Died(recordId, false, faction);
@@ -978,7 +998,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         var uniques = world.Uniques;
         if (uniques.Count == 0) return;
         var table = world.Characters;
-        var relations = data.Relations;
+        var relations = _data.Relations;
         int playerFaction = world.Player.Faction;
         List<CharacterId>? gone = null;
         foreach (var (recordId, e) in uniques.All)
@@ -1016,10 +1036,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     internal bool FreeAgain(World world, CharacterCold cold, Vector3 at, int playerFaction)
     {
         if (playerFaction >= 0 && cold.Faction == playerFaction) return true;
-        var town = Ai.AiSystem.TownAt(data, world, at);
+        var town = Ai.AiSystem.TownAt(_data, world, at);
         if (town.IsNone) return false;
         int owner = FactionOfTown(world, town);
-        var relations = data.Relations;
+        var relations = _data.Relations;
         if (owner == cold.Faction || owner >= 0 && relations.Contains(owner) && relations.Contains(cold.Faction) && relations.IsAlly(owner, cold.Faction)) return true;
         return town.Site >= 0 && world.Squads.Find(cold.SquadId)?.Town == town.Site;
     }
@@ -1027,15 +1047,15 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// <summary>The floor at X/Z: the one under <paramref name="nearY"/> inside a building, else the ground.</summary>
     static float Ground(IWalkability walk, float x, float z, float? nearY) => nearY is { } y ? walk.GroundHeight(x, z, y) : walk.GroundHeight(x, z);
 
-    bool disposed;
+    bool _disposed;
 
     /// <summary>Stops the build thread; safe to call twice.</summary>
     public void Dispose()
     {
-        if (disposed) return;
-        disposed = true;
-        work?.CompleteAdding();
-        worker?.Join();
-        work?.Dispose();
+        if (_disposed) return;
+        _disposed = true;
+        _work?.CompleteAdding();
+        _worker?.Join();
+        _work?.Dispose();
     }
 }

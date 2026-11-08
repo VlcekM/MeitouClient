@@ -1,6 +1,7 @@
 using System.Numerics;
 using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
@@ -115,8 +116,8 @@ public sealed class WarManager
 /// </summary>
 public sealed partial class PopulationSystem : IStateHashed
 {
-    WarManager[]? wars;
-    CampaignDatabase? campaignDb;
+    WarManager[]? _wars;
+    CampaignDatabase? _campaignDb;
 
     /// <summary>Hours between rolls (<b>Verified</b>: +6 in the loader and the update).</summary>
     public const double RollEveryHours = 6;
@@ -128,28 +129,28 @@ public sealed partial class PopulationSystem : IStateHashed
     public const float CampaignPaceDistance = 70, CampaignPaceFactor = 0.9f;
 
     /// <summary>The war managers, one per faction in faction order (empty before the first look).</summary>
-    public IReadOnlyList<WarManager> Wars => wars ?? [];
+    public IReadOnlyList<WarManager> Wars => _wars ?? [];
 
     /// <summary>A FACTION_CAMPAIGN with its ancestors applied by the live inheritance switch (null: not one).</summary>
-    public CampaignData? CampaignOf(string id) => (campaignDb ??= new CampaignDatabase(data.Db)).Find(id, !CampaignAncestorsOnce);
+    public CampaignData? CampaignOf(string id) => (_campaignDb ??= new CampaignDatabase(_data.Db)).Find(id, !CampaignAncestorsOnce);
 
-    int PlayerFactionOf(World world) => world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
+    int PlayerFactionOf(World world) => world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction;
 
     /// <summary>The managers, made once: each faction's <c>campaigns</c> list known, the first roll 6 h on; then a loaded save's war states over them.</summary>
     internal void EnsureWars(World world)
     {
-        if (wars is not null) return;
-        wars = new WarManager[data.Factions.Count];
-        for (int f = 0; f < wars.Length; f++)
+        if (_wars is not null) return;
+        _wars = new WarManager[_data.Factions.Count];
+        for (int f = 0; f < _wars.Length; f++)
         {
-            var m = wars[f] = new WarManager { Faction = f, UpdateTime = world.GameHours + RollEveryHours };
-            foreach (var link in data.Factions[f].Campaigns)
+            var m = _wars[f] = new WarManager { Faction = f, UpdateTime = world.GameHours + RollEveryHours };
+            foreach (var link in _data.Factions[f].Campaigns)
                 if (CampaignOf(link.Id) is not null) m.Know(link.Id);
         }
         if (world.Saved is { Wars.Count: > 0 } saved) Saving.WarSave.Read(world, this, saved);
     }
 
-    internal WarManager? WarOf(int faction) => wars is not null && faction >= 0 && faction < wars.Length ? wars[faction] : null;
+    internal WarManager? WarOf(int faction) => _wars is not null && faction >= 0 && faction < _wars.Length ? _wars[faction] : null;
 
     // ---- prosperity ----
 
@@ -158,8 +159,8 @@ public sealed partial class PopulationSystem : IStateHashed
     /// <summary>What a unique's death and a damaged platoon's destroy take off its faction's prosperity (<b>Verified</b>, <c>FUN_1407a6200</c>, <c>FUN_1406bab60</c>: 100 and 10).</summary>
     const double UniqueDeathProsperity = 100, DamagedDespawnProsperity = 10;
     /// <summary>Each faction's prosperity (the FactionUniqueSquadManager's +8, saved as the faction's <c>prosperity</c>), by faction; null before the first need.</summary>
-    double[]? prosperity;
-    long prosperityTick;
+    double[]? _prosperity;
+    long _prosperityTick;
 
     /// <summary>
     /// The factions' prosperity, made on first use: the loaded save's value for a faction it names, else the faction's <c>max prosperity</c> (<b>Verified</b>, <c>FUN_1402ddc90</c> /
@@ -167,23 +168,23 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     double[] EnsureProsperity(World world)
     {
-        if (prosperity is not null) return prosperity;
-        prosperityTick = world.Tick;
-        var values = new double[data.Factions.Count];
+        if (_prosperity is not null) return _prosperity;
+        _prosperityTick = world.Tick;
+        var values = new double[_data.Factions.Count];
         for (int f = 0; f < values.Length; f++)
-            values[f] = world.Saved?.Prosperity.TryGetValue(data.Factions[f].Id, out float saved) == true ? saved : data.Factions[f].MaxProsperity;
-        return prosperity = values;
+            values[f] = world.Saved?.Prosperity.TryGetValue(_data.Factions[f].Id, out float saved) == true ? saved : _data.Factions[f].MaxProsperity;
+        return _prosperity = values;
     }
 
     /// <summary>A faction's prosperity (0 for no faction).</summary>
-    internal double ProsperityOf(World world, int faction) => faction >= 0 && faction < data.Factions.Count ? EnsureProsperity(world)[faction] : 0;
+    internal double ProsperityOf(World world, int faction) => faction >= 0 && faction < _data.Factions.Count ? EnsureProsperity(world)[faction] : 0;
 
     /// <summary>
     /// Lowers a faction's prosperity, floored at 0 (<c>FUN_1407a6200</c>, <c>FUN_1406bab60</c>); the one place the drops are made.
     /// </summary>
     void LowerProsperity(World world, int faction, double by)
     {
-        if (faction < 0 || faction >= data.Factions.Count) return;
+        if (faction < 0 || faction >= _data.Factions.Count) return;
         var values = EnsureProsperity(world);
         values[faction] = Math.Max(0, values[faction] - by);
     }
@@ -196,21 +197,21 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         var values = EnsureProsperity(world);
         foreach (int faction in world.Uniques.TakeFallen()) LowerProsperity(world, faction, UniqueDeathProsperity);
-        double seconds = (world.Tick - prosperityTick) * (double)world.TickSeconds;
-        prosperityTick = world.Tick;
+        double seconds = (world.Tick - _prosperityTick) * (double)world.TickSeconds;
+        _prosperityTick = world.Tick;
         for (int f = 0; f < values.Length; f++)
-            if (values[f] < data.Factions[f].MaxProsperity) values[f] += seconds * ProsperityPerSecond;
+            if (values[f] < _data.Factions[f].MaxProsperity) values[f] += seconds * ProsperityPerSecond;
     }
 
     void StepCampaigns(World world)
     {
         StepProsperity(world);
         EnsureWars(world);
-        MoveCampaigns(world, settings.CheckEveryTicks * world.TickSeconds);
+        MoveCampaigns(world, _settings.CheckEveryTicks * world.TickSeconds);
     }
 
     /// <summary>The faction whose war manager runs next (the original's global cursor <c>DAT_14212e314</c>); not saved, hashed.</summary>
-    int warCursor;
+    int _warCursor;
 
     /// <summary>
     /// One war manager per tick, at a cursor that wraps over the factions (<c>FUN_1402e74f0</c>, <b>Verified</b>: every call adds its time to all factions, then runs the faction clock and the war
@@ -219,10 +220,10 @@ public sealed partial class PopulationSystem : IStateHashed
     void StepWarManager(World world)
     {
         EnsureWars(world);
-        if (wars!.Length == 0) return;
-        if (warCursor >= wars.Length) warCursor = 0;
-        var m = wars[warCursor];
-        warCursor = (warCursor + 1) % wars.Length;
+        if (_wars!.Length == 0) return;
+        if (_warCursor >= _wars.Length) _warCursor = 0;
+        var m = _wars[_warCursor];
+        _warCursor = (_warCursor + 1) % _wars.Length;
         double now = world.GameHours;
         for (int i = 0; i < m.Actives.Count; i++)
             if (UpdateCampaign(world, m, m.Actives[i], now)) m.Actives.RemoveAt(i--);
@@ -247,26 +248,26 @@ public sealed partial class PopulationSystem : IStateHashed
     /// <summary>A town's radius (<c>Town::getRadius</c>, <b>Verified</b> <c>FUN_140926eb0</c>): a placed town's <see cref="TownData.Radius"/> (<c>town radius mult</c> × its type base); a player town's own (<see cref="Construction.PlayerTown.Radius"/>, 2500 when it is gone).</summary>
     float RadiusOf(World world, CampaignTown t)
     {
-        if (t.Site >= 0) return data.Sites[t.Site].Town.Radius;
+        if (t.Site >= 0) return _data.Sites[t.Site].Town.Radius;
         return world.Buildings.FindTown(t.PlayerTown)?.Radius ?? 2500;
     }
 
     int FactionOfTown(World world, CampaignTown t) =>
-        t.Site >= 0 ? data.SiteFactions[t.Site] : world.Buildings.FindTown(t.PlayerTown)?.Owner ?? -1;
+        t.Site >= 0 ? _data.SiteFactions[t.Site] : world.Buildings.FindTown(t.PlayerTown)?.Owner ?? -1;
 
     string NameOf(World world, CampaignTown t) =>
-        t.Site >= 0 ? data.Sites[t.Site].Town.Name : world.Buildings.FindTown(t.PlayerTown)?.Name ?? (PlayerFactionOf(world) is >= 0 and var pf ? data.Factions[pf].Name : "");
+        t.Site >= 0 ? _data.Sites[t.Site].Town.Name : world.Buildings.FindTown(t.PlayerTown)?.Name ?? (PlayerFactionOf(world) is >= 0 and var pf ? _data.Factions[pf].Name : "");
 
-    bool Exists(World world, CampaignTown t) => t.Site >= 0 ? t.Site < data.Sites.Count : world.Buildings.FindTown(t.PlayerTown) is not null;
+    bool Exists(World world, CampaignTown t) => t.Site >= 0 ? t.Site < _data.Sites.Count : world.Buildings.FindTown(t.PlayerTown) is not null;
 
     /// <summary>The town a position is in (within its radius, XZ): placed towns in site order, then the player's; <see cref="CampaignTown.None"/> outside every town.</summary>
     CampaignTown TownAt(World world, Vector2 at)
     {
-        foreach (var site in data.Sites)
+        foreach (var site in _data.Sites)
         {
             if (site.Town.Type is TownType.NestMarker or TownType.Null) continue;
             float r = site.Town.Radius;
-            if (r > 0 &&Vector2.DistanceSquared(at, SiteCentre(site.Index)) <= r * r) return CampaignTown.OfSite(site.Index);
+            if (r > 0 && Vector2.DistanceSquared(at, SiteCentre(site.Index)) <= r * r) return CampaignTown.OfSite(site.Index);
         }
         foreach (var town in world.Buildings.Towns)
         {
@@ -281,9 +282,9 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         int best = -1;
         float bestD = float.MaxValue;
-        foreach (var site in data.Sites)
+        foreach (var site in _data.Sites)
         {
-            if (data.SiteFactions[site.Index] != faction) continue;
+            if (_data.SiteFactions[site.Index] != faction) continue;
             float d = Vector2.DistanceSquared(at, SiteCentre(site.Index));
             if (d < bestD) (best, bestD) = (site.Index, d);
         }
@@ -291,7 +292,7 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>The BIOME_GROUP id at a point (null without a biome map).</summary>
-    string? BiomeAt(Vector2 at) => data.BiomeGroupAt(at);
+    string? BiomeAt(Vector2 at) => _data.BiomeGroupAt(at);
 
     // ---- the roll ----
 
@@ -350,14 +351,14 @@ public sealed partial class PopulationSystem : IStateHashed
         var at = CentreOf(world, target);
         var nearest = NearestOwnTown(m.Faction, at);
         if (nearest.IsNone) return 0;
-        return c.RollChance(Vector2.Distance(at, CentreOf(world, nearest)), settings.RaidFrequencyMult);
+        return c.RollChance(Vector2.Distance(at, CentreOf(world, nearest)), _settings.RaidFrequencyMult);
     }
 
     /// <summary>The world-state gate (<c>vfunc_2</c>): every <c>world state</c> has its value, and there is no <c>special leader</c> or one of them is alive (an untracked one counts as alive).</summary>
     bool WorldStatesPass(World world, CampaignData c)
     {
         foreach (var (state, value) in c.WorldStates)
-            if (!IWorldStates.Passes(States, data.Db, state, value ? 1 : 0)) return false;
+            if (!IWorldStates.Passes(States, _data.Db, state, value ? 1 : 0)) return false;
         if (c.SpecialLeaders.Count == 0) return true;
         foreach (var leader in c.SpecialLeaders)
             if (world.Uniques.StateOf(leader) == UniqueState.Alive) return true;
@@ -373,7 +374,7 @@ public sealed partial class PopulationSystem : IStateHashed
     bool FindTarget(World world, int faction, CampaignData c, int enemy, out CampaignTown target, out CampaignTown home)
     {
         target = home = CampaignTown.None;
-        var fd = data.Factions[faction];
+        var fd = _data.Factions[faction];
         var all = new List<CampaignTown>();
         if (enemy == PlayerFactionOf(world))
         {
@@ -381,19 +382,19 @@ public sealed partial class PopulationSystem : IStateHashed
                 if (town.Owner == enemy) all.Add(CampaignTown.OfPlayer(town.Number));
         }
         else
-            foreach (var site in data.Sites)
-                if (data.SiteFactions[site.Index] == enemy && site.Town.Type is not (TownType.NestMarker or TownType.Null)) all.Add(CampaignTown.OfSite(site.Index));
+            foreach (var site in _data.Sites)
+                if (_data.SiteFactions[site.Index] == enemy && site.Town.Type is not (TownType.NestMarker or TownType.Null)) all.Add(CampaignTown.OfSite(site.Index));
         if (all.Count == 0) return false;
         var candidates = all.Where(t => BiomeAt(CentreOf(world, t)) is { } b && fd.Biomes.Any(x => x.Id == b)).ToList();
         if (candidates.Count == 0) candidates = all;
-        candidates.RemoveAll(t => !TownActive(world, t) || !c.IsHostile && Ai.AiSystem.Occupied(world, t));
+        candidates.RemoveAll(t => !TownActive(world, t) || !c.IsHostile && AiSystem.Occupied(world, t));
         if (!c.IgnoresNogoZones && fd.NoGoZones.Count > 0)
             candidates.RemoveAll(t => BiomeAt(CentreOf(world, t)) is { } b && fd.NoGoZones.Any(x => x.Id == b));
         if (candidates.Count == 0) return false;
         bool strict = fd.BooksBounties;
-        foreach (var site in data.Sites)
+        foreach (var site in _data.Sites)
         {
-            if (data.SiteFactions[site.Index] != faction || site.Town.Type is TownType.NestMarker or TownType.Null) continue;
+            if (_data.SiteFactions[site.Index] != faction || site.Town.Type is TownType.NestMarker or TownType.Null) continue;
             if (strict && site.Town.Type is TownType.Village or TownType.PointOfInterest or TownType.Prison or TownType.SlaveCamp) continue;
             var from = SiteCentre(site.Index);
             foreach (var t in candidates.OrderBy(t => Vector2.DistanceSquared(from, CentreOf(world, t))).Take(5))
@@ -417,23 +418,23 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         if (t.Site >= 0)
         {
-            if (!active.Contains(data.Sites[t.Site].Zone)) return false;
-            if (PlayerFactionOf(world) is not (>= 0 and var player) || data.SiteFactions[t.Site] != player) return true;
+            if (!_active.Contains(_data.Sites[t.Site].Zone)) return false;
+            if (PlayerFactionOf(world) is not (>= 0 and var player) || _data.SiteFactions[t.Site] != player) return true;
         }
-        if (presentTick != world.Tick)
+        if (_presentTick != world.Tick)
         {
             // The towns the player's characters are in, worked out once a tick (serial).
-            presentTick = world.Tick;
-            presentTowns.Clear();
+            _presentTick = world.Tick;
+            _presentTowns.Clear();
             var prev = world.Characters.Previous;
             for (int i = 0; i < prev.Length; i++)
-                if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true } && Ai.AiSystem.TownAt(data, world, prev[i].Position) is { IsNone: false } here) presentTowns.Add(here);
+                if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true } && AiSystem.TownAt(_data, world, prev[i].Position) is { IsNone: false } here) _presentTowns.Add(here);
         }
-        return presentTowns.Contains(t);
+        return _presentTowns.Contains(t);
     }
 
-    long presentTick = -1;
-    readonly HashSet<CampaignTown> presentTowns = [];
+    long _presentTick = -1;
+    readonly HashSet<CampaignTown> _presentTowns = [];
 
     /// <summary>
     /// A player town's level (Town +0x388, the save's <c>plevel</c>; <c>FUN_14048c200</c>, Verified by code, recomputed by the original when towns merge and at other
@@ -446,8 +447,8 @@ public sealed partial class PopulationSystem : IStateHashed
         int houses = 0, turrets = 0, gates = 0, research = 0;
         foreach (var b in world.Buildings.All)
         {
-            if (b.Town != number || !b.Complete || b.Destroyed || b.Ruined || data.Db.Find(b.Record) is not { } r) continue;
-            var f = r.GetReferences("functionality") is [var link, ..] ? data.Db.Find(link.TargetStringId) : null;
+            if (b.Town != number || !b.Complete || b.Destroyed || b.Ruined || _data.Db.Find(b.Record) is not { } r) continue;
+            var f = r.GetReferences("functionality") is [var link, ..] ? _data.Db.Find(link.TargetStringId) : null;
             int function = f?.GetInt("function") ?? 0;
             if (function == 12) turrets++;
             else if (function == 21) gates++;
@@ -474,8 +475,14 @@ public sealed partial class PopulationSystem : IStateHashed
         if (home.IsNone || !Exists(world, target)) return StartResult.NoHome;
         var inst = new CampaignInstance
         {
-            Faction = m.Faction, Id = m.NextId++, CampaignId = c.Id, Target = target, Home = home, Enemy = FactionOfTown(world, target), PhaseStart = now,
-            Required = (int)(c.NumForces * settings.RaidSizeMult),
+            Faction = m.Faction,
+            Id = m.NextId++,
+            CampaignId = c.Id,
+            Target = target,
+            Home = home,
+            Enemy = FactionOfTown(world, target),
+            PhaseStart = now,
+            Required = (int)(c.NumForces * _settings.RaidSizeMult),
         };
         int player = PlayerFactionOf(world);
         var made = new List<Platoon>();
@@ -484,26 +491,26 @@ public sealed partial class PopulationSystem : IStateHashed
         {
             if (inst.Enemy == player && player >= 0) world.Post(Loc.Tr("Assault to {1} canceled due to faction weakness", c.DisplayName));
             Disband(world, inst, made);
-            Log($"{data.Factions[m.Faction].Name}: {c.Name} against {NameOf(world, target)} canceled ({inst.Men} of {inst.Required} men)");
+            Log($"{_data.Factions[m.Faction].Name}: {c.Name} against {NameOf(world, target)} canceled ({inst.Men} of {inst.Required} men)");
             return StartResult.Weak;
         }
         m.Actives.Add(inst);
         if (inst.Enemy == player && player >= 0)
             world.Post(c.IsHostile ? Loc.Tr("Warning: {1} moving towards {2}", c.DisplayName, NameOf(world, target)) : Loc.Tr("{1} on the way to {2}", c.DisplayName, NameOf(world, target)));
         m.Know(c.Id).LastStart = now;
-        Log($"{data.Factions[m.Faction].Name}: {c.Name} against {NameOf(world, target)} from {NameOf(world, home)}, {inst.Platoons.Count} squad(s), {inst.Men} men");
+        Log($"{_data.Factions[m.Faction].Name}: {c.Name} against {NameOf(world, target)} from {NameOf(world, home)}, {inst.Platoons.Count} squad(s), {inst.Men} men");
         foreach (var allyId in c.TriggerPlayerAlly)
         {
-            if (CampaignOf(allyId) is not { FactionOverride: { } fo } ally || data.FactionIndex(fo) is not (>= 0 and var af) || player < 0) continue;
-            if (data.Relations.IsAlly(af, player)) Queue(world, m, ally, target, CampaignTown.None, inst.Enemy, 0, 0, now, callerFlag: false);
+            if (CampaignOf(allyId) is not { FactionOverride: { } fo } ally || _data.FactionIndex(fo) is not (>= 0 and var af) || player < 0) continue;
+            if (_data.Relations.IsAlly(af, player)) Queue(world, m, ally, target, CampaignTown.None, inst.Enemy, 0, 0, now, callerFlag: false);
         }
         return StartResult.Started;
     }
 
     void Log(string line)
     {
-        if (townLog.Count >= 256) townLog.RemoveAt(0);
-        townLog.Add(line);
+        if (_townLog.Count >= 256) _townLog.RemoveAt(0);
+        _townLog.Add(line);
     }
 
     /// <summary>
@@ -530,11 +537,11 @@ public sealed partial class PopulationSystem : IStateHashed
             break;
         }
         if (Full()) return;
-        var towns = data.Sites.Where(s => data.SiteFactions[s.Index] == m.Faction)
+        var towns = _data.Sites.Where(s => _data.SiteFactions[s.Index] == m.Faction)
             .OrderBy(s => Vector2.DistanceSquared(targetAt, SiteCentre(s.Index))).ThenBy(s => s.Index).Take(4).ToList();
         var weights = new List<(string Id, float Weight)>();
         foreach (var e in c.SquadsToUse)
-            if (e.V0 > 0 && SquadFactory.IsTemplate(data.Db.Find(e.Id))) weights.Add((e.Id, e.V0));
+            if (e.V0 > 0 && SquadFactory.IsTemplate(_data.Db.Find(e.Id))) weights.Add((e.Id, e.V0));
         float total = weights.Sum(w => w.Weight);
         foreach (var town in towns)
         {
@@ -553,7 +560,7 @@ public sealed partial class PopulationSystem : IStateHashed
                 foreach (var (id, w) in weights)
                     if ((pick -= w) < 0) { chosen = id; break; }
                 var around = inst.Leader >= 0 && world.Platoons.Find(inst.Leader) is { } lead ? lead.Position : SiteCentre(town.Index);
-                if (NewSquad(world, inst, SquadTemplate.From(data.Db.Find(chosen)!), town.Index, around, made, next) is { } p) Join(world, inst, p, leads: false);
+                if (NewSquad(world, inst, SquadTemplate.From(_data.Db.Find(chosen)!), town.Index, around, made, next) is { } p) Join(world, inst, p, leads: false);
             }
             if (Full()) return;
         }
@@ -581,7 +588,7 @@ public sealed partial class PopulationSystem : IStateHashed
     /// <summary>The squad template whose <c>leader</c> is the character (the first in the data's order; null: none).</summary>
     SquadTemplate? LeaderTemplate(string recordId)
     {
-        foreach (var r in data.Db.OfType(FcsRecordType.SQUAD_TEMPLATE).Concat(data.Db.OfType(FcsRecordType.UNIQUE_SQUAD_TEMPLATE)))
+        foreach (var r in _data.Db.OfType(FcsRecordType.SquadTemplate).Concat(_data.Db.OfType(FcsRecordType.UniqueSquadTemplate)))
             if (r.GetReferences("leader") is { Count: > 0 } l && l[0].TargetStringId == recordId) return SquadTemplate.From(r);
         return null;
     }
@@ -591,7 +598,7 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         if (id < 0) id = world.Platoons.NextId();
         ulong key = Rng.Mix(SeedSalts.CampaignSquad ^ (ulong)id << 8 ^ (ulong)inst.Faction << 40);
-        var plan = SquadFactory.Plan(data.Db, template, settings.SquadSizeMultiplier, world.Seed, key, States);
+        var plan = SquadFactory.Plan(_data.Db, template, _settings.SquadSizeMultiplier, world.Seed, key, States);
         if (plan.TotalMembers == 0) return null;
         var at = around;
         for (int k = 0; k < 8; k++)
@@ -599,10 +606,19 @@ public sealed partial class PopulationSystem : IStateHashed
             var spot = Rng.PointInDisc(Rng.Hash(world.Seed, key, RngPurpose.Campaign, SeedSalts.CampaignPlace + (ulong)k), around, CampaignSpawnRadius);
             if (world.Walkability.IsWalkable(spot.X, spot.Y)) { at = spot; break; }
         }
-        var (package, job) = Ai.PlatoonJobs.For(data.Ai, template);
+        var (package, job) = PlatoonJobs.For(_data.Ai, template);
         var p = new Platoon
         {
-            Id = id, Origin = town, TemplateId = template.Id, Faction = inst.Faction, Key = key, Size = plan.TotalMembers, Position = at, Package = package?.Id, Job = job, Target = town,
+            Id = id,
+            Origin = town,
+            TemplateId = template.Id,
+            Faction = inst.Faction,
+            Key = key,
+            Size = plan.TotalMembers,
+            Position = at,
+            Package = package?.Id,
+            Job = job,
+            Target = town,
         };
         world.Platoons.Add(p);
         made.Add(p);
@@ -653,7 +669,7 @@ public sealed partial class PopulationSystem : IStateHashed
         p.GoingHome = true;
         p.WaitLeft = 0;
         // No campaign holds it, so its job is its package's again (FUN_1407ee790).
-        if (p.Package is { } package) p.Job = Ai.PlatoonJobs.JobOf(data.Ai.Package(package)?.Unloaded ?? 0);
+        if (p.Package is { } package) p.Job = PlatoonJobs.JobOf(_data.Ai.Package(package)?.Unloaded ?? 0);
         if (p.State == PlatoonState.Loaded && world.Squads.Find(p.SquadId) is { } squad) OrderLeader(world, p, squad);
     }
 
@@ -667,7 +683,7 @@ public sealed partial class PopulationSystem : IStateHashed
     bool Queue(World world, WarManager from, CampaignData c, CampaignTown target, CampaignTown home, int enemy, float minHours, float maxHours, double now, bool callerFlag)
     {
         var to = from;
-        if (c.FactionOverride is { } fo && data.FactionIndex(fo) is >= 0 and var fi && fi != from.Faction && WarOf(fi) is { } other)
+        if (c.FactionOverride is { } fo && _data.FactionIndex(fo) is >= 0 and var fi && fi != from.Faction && WarOf(fi) is { } other)
         {
             to = other;
             home = CampaignTown.None;
@@ -770,7 +786,7 @@ public sealed partial class PopulationSystem : IStateHashed
                 continue;
             }
             // Gone: no such town, or a player town that is occupied (for a non-hostile campaign) or not active. A redirected request starts at the next run.
-            if (!Exists(world, r.Target) || r.Target.PlayerTown > 0 && (!c.IsHostile && Ai.AiSystem.Occupied(world, r.Target) || !TownActive(world, r.Target)))
+            if (!Exists(world, r.Target) || r.Target.PlayerTown > 0 && (!c.IsHostile && AiSystem.Occupied(world, r.Target) || !TownActive(world, r.Target)))
             {
                 if (FindTarget(world, m.Faction, c, r.Enemy, out var retarget, out _))
                 {
@@ -888,7 +904,7 @@ public sealed partial class PopulationSystem : IStateHashed
                     return false;
                 }
                 // The cannibals' own rule (package class 32, Observed): the retreat starts when three of them carry someone or 15 game minutes after the first did.
-                if (c.LeaderPackages[1] is { } pt2 && data.Ai.Package(pt2) is { Signal: 32 } && CannibalsLoaded(world, inst, now))
+                if (c.LeaderPackages[1] is { } pt2 && _data.Ai.Package(pt2) is { Signal: 32 } && CannibalsLoaded(world, inst, now))
                 {
                     inst.Phase = 2;
                     inst.PhaseStart = now;
@@ -928,7 +944,7 @@ public sealed partial class PopulationSystem : IStateHashed
     bool OccupiedNear(World world, CampaignTown target, Vector2 at)
     {
         float r = 1.8f * RadiusOf(world, target);
-        return Vector2.DistanceSquared(at, CentreOf(world, target)) <= r * r && Ai.AiSystem.Occupied(world, target);
+        return Vector2.DistanceSquared(at, CentreOf(world, target)) <= r * r && AiSystem.Occupied(world, target);
     }
 
     /// <summary>
@@ -967,11 +983,11 @@ public sealed partial class PopulationSystem : IStateHashed
     public const double CannibalCarryHours = 0.25;
 
     /// <summary>
-    /// Whether the members of a squad run the "find, kidnap and put in a cage" goal now (task 254, <see cref="Meitou.Data.Gameplay.Ai.TaskType.FINAL_KIDNAPPER_CAGE_JOB"/>): the goals of
+    /// Whether the members of a squad run the "find, kidnap and put in a cage" goal now (task 254, <see cref="TaskType.FinalKidnapperCageJob"/>): the goals of
     /// <paramref name="role"/> in the package their campaign is in the phase of (a loaded campaign squad is driven by the campaign, not the AI), or in the squad's running AI package, in the hour's window.
     /// </summary>
     public bool KidnapDuty(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role) =>
-        GoalDuty(world, squad, role, Meitou.Data.Gameplay.Ai.TaskType.FINAL_KIDNAPPER_CAGE_JOB);
+        GoalDuty(world, squad, role, Meitou.Data.Gameplay.Ai.TaskType.FinalKidnapperCageJob);
 
     /// <summary>As <see cref="KidnapDuty"/> for any goal type: whether <paramref name="role"/>'s goals in the package the squad runs now hold <paramref name="type"/> in the hour's window.</summary>
     public bool GoalDuty(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role, Meitou.Data.Gameplay.Ai.TaskType type)
@@ -980,7 +996,7 @@ public sealed partial class PopulationSystem : IStateHashed
         if (squad.PlatoonId >= 0 && world.Platoons.Find(squad.PlatoonId) is { Campaign: { } inst } p)
         {
             if (inst.Phase > 2 || CampaignOf(inst.CampaignId)?.PackageOf(inst.Phase, inst.Leader == p.Id) is not { } id) return false;
-            goals = data.Ai.Package(id)?.Goals(role);
+            goals = _data.Ai.Package(id)?.Goals(role);
         }
         else if (squad.Ai is { Roles: { } roles }) goals = roles[(int)role];
         if (goals is null) return false;
@@ -996,7 +1012,7 @@ public sealed partial class PopulationSystem : IStateHashed
         inst.PhaseStart = now;
         inst.FightStart = -1;
         if (c.IsHostile) world.Post(Loc.Tr("{1} against {2} has ended", c.DisplayName, NameOf(world, inst.Target)));
-        Log($"{data.Factions[m.Faction].Name}: {c.Name} against {NameOf(world, inst.Target)} won");
+        Log($"{_data.Factions[m.Faction].Name}: {c.Name} against {NameOf(world, inst.Target)} won");
         FollowUp(world, m, c.VictoryTriggers, inst, now, 1);
     }
 
@@ -1007,7 +1023,7 @@ public sealed partial class PopulationSystem : IStateHashed
         inst.FightStart = -1;
         string target = NameOf(world, inst.Target);
         world.Post(!c.IsHostile ? Loc.Tr("{1} was defeated on their way to {2}", c.DisplayName, target) : inst.FoughtPlayer ? Loc.Tr("{1} against {2} has been defeated", c.DisplayName, target) : Loc.Tr("{1} to {2} has failed", c.DisplayName, target));
-        Log($"{data.Factions[m.Faction].Name}: {c.Name} against {target} lost");
+        Log($"{_data.Factions[m.Faction].Name}: {c.Name} against {target} lost");
         if (c.IsHostile && inst.Reached || inst.FoughtPlayer) FollowUp(world, m, c.LossTriggers, inst, now, 2);
         else if (c.IsHostile)
         {
@@ -1087,7 +1103,7 @@ public sealed partial class PopulationSystem : IStateHashed
     bool SquadIntact(World world, Squad squad)
     {
         var table = world.Characters;
-        if (Ai.SquadIntact.Held(table, squad, data.Relations)) return true;
+        if (Ai.SquadIntact.Held(table, squad, _data.Relations)) return true;
         int up = 0;
         foreach (var m in squad.Members)
             if (table.TryResolveNext(m, out int s) && table.Next[s].Alive && table.Cold(s) is { } c && Ai.SquadIntact.Able(world, c, false)) up++;
@@ -1152,7 +1168,7 @@ public sealed partial class PopulationSystem : IStateHashed
     bool HostileAgainstPlayer(World world)
     {
         int player = PlayerFactionOf(world);
-        foreach (var m in wars!)
+        foreach (var m in _wars!)
             foreach (var a in m.Actives)
                 if (a.Phase != 2 && a.Enemy == player && CampaignOf(a.CampaignId) is { IsHostile: true }) return true;
         return false;
@@ -1167,7 +1183,7 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     void MoveCampaigns(World world, float dt)
     {
-        foreach (var m in wars!)
+        foreach (var m in _wars!)
             foreach (var inst in m.Actives)
             {
                 if (CampaignOf(inst.CampaignId) is not { } c || world.Platoons.Find(inst.Leader) is not { } leader) continue;
@@ -1200,7 +1216,7 @@ public sealed partial class PopulationSystem : IStateHashed
     WarTargets AssaultTargets(World world, CampaignInstance inst, bool leads)
     {
         if (inst.Phase != 1 || CampaignOf(inst.CampaignId) is not { } c) return WarTargets.None;
-        if (c.PackageOf(1, leads) is { } id && data.Ai.Package(id) is { Signal: 20 or 32 })
+        if (c.PackageOf(1, leads) is { } id && _data.Ai.Package(id) is { Signal: 20 or 32 })
             return new WarTargets(-1, true, inst.Target);
         return c.IsHostile && inst.Enemy >= 0 ? new WarTargets(inst.Enemy, false, CampaignTown.None) : WarTargets.None;
     }
@@ -1234,7 +1250,7 @@ public sealed partial class PopulationSystem : IStateHashed
     /// <summary>The announcement's conditions (task 129, <c>FUN_140354990</c>): the leader within 2500 of the camera and a member of the target faction within 2500 of the leader.</summary>
     bool AnnouncementHeard(World world, CampaignInstance inst, Vector2 at)
     {
-        if (inst.Enemy < 0 || focus is not { } camera || Vector2.DistanceSquared(at, new Vector2(camera.X, camera.Z)) > AnnounceRange * AnnounceRange) return false;
+        if (inst.Enemy < 0 || _focus is not { } camera || Vector2.DistanceSquared(at, new Vector2(camera.X, camera.Z)) > AnnounceRange * AnnounceRange) return false;
         var table = world.Characters;
         for (int i = 0; i < table.Previous.Length; i++)
             if (table.Previous[i].Alive && table.Cold(i) is { } c && c.Faction == inst.Enemy && Vector2.DistanceSquared(new Vector2(table.Previous[i].Position.X, table.Previous[i].Position.Z), at) <= AnnounceRange * AnnounceRange) return true;
@@ -1310,14 +1326,14 @@ public sealed partial class PopulationSystem : IStateHashed
         if (p.Campaign!.Leader == p.Id) TryAnnounce(world, p.Campaign, squad.Leader, table.Next[slot].Position);
         // Retreating, members the column does not move (a carrier, whom the AI leaves alone) mill round their own town again, not round the raid target the squad last
         // milled at, so a kidnapper takes its captive home (engine choice; the arrival below still mills them round the goal).
-        if (p.Campaign.Phase == 2 && squad.Town >= 0 && Vector2.Distance(p.Position, goal) > (p.Campaign.Leader == p.Id ? settings.RoamArrivalRadius : CampaignFollowDistance))
+        if (p.Campaign.Phase == 2 && squad.Town >= 0 && Vector2.Distance(p.Position, goal) > (p.Campaign.Leader == p.Id ? _settings.RoamArrivalRadius : CampaignFollowDistance))
         {
             squad.HomeCentre = SiteCentre(squad.Town);
             squad.HomeRadius = 60;
         }
         if (table.Next[slot].Task is (byte)CharacterTask.Attack or (byte)CharacterTask.PickUp or (byte)CharacterTask.PutDown or (byte)CharacterTask.Loot) return;   // a fight, a lift (a kidnapper) or a loot is left to itself
         bool leads = p.Campaign!.Leader == p.Id;
-        float arrive = leads ? settings.RoamArrivalRadius : CampaignFollowDistance;
+        float arrive = leads ? _settings.RoamArrivalRadius : CampaignFollowDistance;
         ref var n = ref table.Next[slot];
         float d = Vector2.Distance(p.Position, goal);
         // A travelling follower (task 215) never mills: inside 100 of its trail point it keeps walking straight at it at the leader's pace (FUN_140349e70); only the
@@ -1326,13 +1342,13 @@ public sealed partial class PopulationSystem : IStateHashed
         {
             if (n.Task == (byte)CharacterTask.GoTo)
             {
-                TaskStart.Become(world, slot, CharacterTask.Wander, Meitou.Data.Gameplay.Ai.TaskType.WANDERER, TaskSource.Goal);
+                TaskStart.Become(world, slot, CharacterTask.Wander, Meitou.Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Goal);
                 n.Mode = SpeedMode.Walk;
                 n.TaskTime = 0.5f;
             }
             squad.HomeCentre = goal;
             // The mill at the target is an engine choice, sized as a roaming squad's at a town (PopulationRoaming.cs): the size radius of a placed town, a player town's own.
-            float mill = p.Campaign.Target.Site >= 0 ? data.Sites[p.Campaign.Target.Site].Town.SizeRadius * data.Sites[p.Campaign.Target.Site].Town.TownRadiusMult : RadiusOf(world, p.Campaign.Target);
+            float mill = p.Campaign.Target.Site >= 0 ? _data.Sites[p.Campaign.Target.Site].Town.SizeRadius * _data.Sites[p.Campaign.Target.Site].Town.TownRadiusMult : RadiusOf(world, p.Campaign.Target);
             squad.HomeRadius = leads && p.Campaign.Phase == 1 ? Math.Max(mill * 0.5f, 40) : 60;
             return;
         }
@@ -1364,7 +1380,7 @@ public sealed partial class PopulationSystem : IStateHashed
         bool busy = n.Task == (byte)CharacterTask.GoTo && (n.Flags & (ushort)MoveFlags.AnyPath) != 0 && n.Mode == mode;
         p.OrderCooldown -= dt;
         if (busy || p.OrderCooldown > 0) return;
-        TaskStart.Walk(world, slot, goal, mode, Meitou.Data.Gameplay.Ai.TaskType.TRAVEL_TO_TARGET_PACKAGE, TaskSource.Goal);
+        TaskStart.Walk(world, slot, goal, mode, Meitou.Data.Gameplay.Ai.TaskType.TravelToTargetPackage, TaskSource.Goal);
         p.OrderCooldown = 4;
     }
 
@@ -1375,14 +1391,14 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         HashWars(ref h);
         HashArtifacts(ref h);
-        if (prosperity is not null)
-            for (int f = 0; f < prosperity.Length; f++)
-                if (prosperity[f] < data.Factions[f].MaxProsperity)
+        if (_prosperity is not null)
+            for (int f = 0; f < _prosperity.Length; f++)
+                if (_prosperity[f] < _data.Factions[f].MaxProsperity)
                 {
                     h.Add(f);
-                    h.Add(prosperity[f]);
+                    h.Add(_prosperity[f]);
                 }
-        foreach (var (site, kept) in keptWild)
+        foreach (var (site, kept) in _keptWild)
         {
             h.Add(site);
             foreach (var k in kept)
@@ -1396,9 +1412,9 @@ public sealed partial class PopulationSystem : IStateHashed
 
     void HashWars(ref StateHasher h)
     {
-        if (wars is null || !wars.Any(m => m.NextId > 0 || m.Requests.Count > 0)) return;
-        h.Add(warCursor);
-        foreach (var m in wars)
+        if (_wars is null || !_wars.Any(m => m.NextId > 0 || m.Requests.Count > 0)) return;
+        h.Add(_warCursor);
+        foreach (var m in _wars)
         {
             h.Add(m.NextId);
             h.Add(m.UpdateTime);

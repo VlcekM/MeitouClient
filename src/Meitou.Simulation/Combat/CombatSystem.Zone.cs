@@ -42,15 +42,15 @@ public sealed partial class CombatSystem
     /// The characters each fighter's attack zone held when it last looked (the original's list +0x1e0, <c>calculateTargetsInAttackZone</c> FUN_1406087a0: built at the attack start
     /// and at each blow's impact), <see cref="ZoneCapacity"/> slots per fighter and a count; double-buffered like the slots, so a defender reads the attacker's list of the last tick.
     /// </summary>
-    int[] zoneRead = [], zoneWrite = [];
-    byte[] zoneCountRead = [], zoneCountWrite = [];
+    int[] _zoneRead = [], _zoneWrite = [];
+    byte[] _zoneCountRead = [], _zoneCountWrite = [];
 
     /// <summary>Whether <paramref name="defender"/> is in <paramref name="attacker"/>'s attack zone list (<c>FUN_140608460</c>), as of the last tick.</summary>
     bool InZone(int attacker, int defender)
     {
         int at = attacker * ZoneCapacity;
-        for (int n = 0; n < zoneCountRead[attacker]; n++)
-            if (zoneRead[at + n] == defender) return true;
+        for (int n = 0; n < _zoneCountRead[attacker]; n++)
+            if (_zoneRead[at + n] == defender) return true;
         return false;
     }
 
@@ -60,34 +60,34 @@ public sealed partial class CombatSystem
     void Keep(int i, in ZoneScan scan)
     {
         int at = i * ZoneCapacity;
-        for (int n = 0; n < scan.Count; n++) zoneWrite[at + n] = scan.Slots[n];
-        zoneCountWrite[i] = (byte)scan.Count;
+        for (int n = 0; n < scan.Count; n++) _zoneWrite[at + n] = scan.Slots[n];
+        _zoneCountWrite[i] = (byte)scan.Count;
     }
 
     void ResizeZones(int size)
     {
-        Array.Resize(ref zoneRead, size * ZoneCapacity);
-        Array.Resize(ref zoneWrite, size * ZoneCapacity);
-        Array.Resize(ref zoneCountRead, size);
-        Array.Resize(ref zoneCountWrite, size);
+        Array.Resize(ref _zoneRead, size * ZoneCapacity);
+        Array.Resize(ref _zoneWrite, size * ZoneCapacity);
+        Array.Resize(ref _zoneCountRead, size);
+        Array.Resize(ref _zoneCountWrite, size);
     }
 
     void CopyZones(int highWater)
     {
-        Array.Copy(zoneRead, zoneWrite, highWater * ZoneCapacity);
-        Array.Copy(zoneCountRead, zoneCountWrite, highWater);
+        Array.Copy(_zoneRead, _zoneWrite, highWater * ZoneCapacity);
+        Array.Copy(_zoneCountRead, _zoneCountWrite, highWater);
     }
 
     void SwapZones()
     {
-        (zoneRead, zoneWrite) = (zoneWrite, zoneRead);
-        (zoneCountRead, zoneCountWrite) = (zoneCountWrite, zoneCountRead);
+        (_zoneRead, _zoneWrite) = (_zoneWrite, _zoneRead);
+        (_zoneCountRead, _zoneCountWrite) = (_zoneCountWrite, _zoneCountRead);
     }
 
     void HashZone(ref StateHasher hasher, int i)
     {
-        hasher.Add(zoneCountRead[i]);
-        for (int n = 0; n < zoneCountRead[i]; n++) hasher.Add(zoneRead[i * ZoneCapacity + n]);
+        hasher.Add(_zoneCountRead[i]);
+        for (int n = 0; n < _zoneCountRead[i]; n++) hasher.Add(_zoneRead[i * ZoneCapacity + n]);
     }
 
     /// <summary>
@@ -116,8 +116,20 @@ public sealed partial class CombatSystem
         var zone = ZoneOf(world, i, s, cold, tech, blow);
         var scan = new ZoneScan
         {
-            Table = world.Characters, Read = read, Relations = Relations, Self = i, Target = s.TargetSlot, Faction = cold.Faction, Squad = cold.SquadId,
-            From = zone.From, Centre = zone.Centre, Forward = zone.Forward, Y = zone.Y, Half = zone.Half, High = zone.High, Deep = zone.Deep,
+            Table = world.Characters,
+            Read = _read,
+            Relations = Relations,
+            Self = i,
+            Target = s.TargetSlot,
+            Faction = cold.Faction,
+            Squad = cold.SquadId,
+            From = zone.From,
+            Centre = zone.Centre,
+            Forward = zone.Forward,
+            Y = zone.Y,
+            Half = zone.Half,
+            High = zone.High,
+            Deep = zone.Deep,
             HitsSlaves = Relations is { } rel && rel.Contains(cold.Faction) && cold.Faction != rel.PlayerFaction && !rel.Factions[cold.Faction].AntiSlavery,
         };
         world.Grid.Query(scan.Centre.X, scan.Centre.Y, zone.Deep + scan.Half + RangedTuning.MaxBodyRadius, ref scan, static (int c, ref ZoneScan z) =>
@@ -194,17 +206,17 @@ public sealed partial class CombatSystem
     void ApplyZoneBuildings(World world, in Effect e)
     {
         int a = e.Target, blow = e.Arg & 0xff, left = (int)e.Position.X;
-        ref var A = ref write[a];
+        ref var A = ref _write[a];
         if (A.CancelTick == (int)world.Tick || world.Characters.Cold(a) is not { Fighter: { } fighter, Stats: { } stats, Medical: { } medical } cold) return;
-        var tech = techniques[(int)e.Position.Y];
+        var tech = _techniques[(int)e.Position.Y];
         var zone = ZoneOf(world, a, A, cold, tech, blow);
         float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * medical.StatMultiplier(stat);
         float str = Eff(StatsEnumerated.Strength);
         var packet = Powered(fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, cold, fighter), Eff(StatsEnumerated.Toughness), str, fighter.FistsItem, TargetKind.None, null, fighter.DamageOutput, combat)
-            : DamageFormulas.Packet(Eff(fighter.WeaponSkill), Eff(StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, TargetKind.None, null, fighter.DamageOutput, combat), tech, blow);
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, cold, fighter), Eff(StatsEnumerated.Toughness), str, fighter.FistsItem, TargetKind.None, null, fighter.DamageOutput, _combat)
+            : DamageFormulas.Packet(Eff(fighter.WeaponSkill), Eff(StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, TargetKind.None, null, fighter.DamageOutput, _combat), tech, blow);
         float f = 2 * packet.Blunt + 0.5f * packet.Cut;
-        var found = buildingScratch;
+        var found = _buildingScratch;
         found.Clear();
         if (Locks is not null)
             foreach (var pick in world.Fixtures.DoorPicks)
@@ -244,7 +256,7 @@ public sealed partial class CombatSystem
         if ((e.Arg & 0x100) == 0 && A.AttackSeq == (int)e.Amount && A.AttackTech >= 0) A.LastOutcome = BlowOutcome.Hit;
     }
 
-    readonly List<(float Key, string? Door, Construction.BuildSite? Wall)> buildingScratch = [];
+    readonly List<(float Key, string? Door, Construction.BuildSite? Wall)> _buildingScratch = [];
 
     /// <summary>
     /// A blow on a wall building (<c>WallBuilding</c> damage, docs/game/buildings-production.md): <paramref name="f"/> = 2 blunt + 0.5 cut of the attacker's packet; clamp(f / 2, 10, 60) x 0.003 off the

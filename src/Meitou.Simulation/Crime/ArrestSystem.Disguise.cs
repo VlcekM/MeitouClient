@@ -23,7 +23,7 @@ public sealed partial class ArrestSystem
     /// <summary>The towns the location tests read (null: no town tests, every factor that needs one is left out).</summary>
     public PopulationData? Towns { get; set; }
 
-    readonly Dictionary<(CharacterId Looker, CharacterId Target), float> disguiseMeters = [];
+    readonly Dictionary<(CharacterId Looker, CharacterId Target), float> _disguiseMeters = [];
 
     /// <summary>The faction a looker takes <paramref name="c"/> for: its uniform's while the disguise works (<see cref="DisguiseWorks"/>, not blown), else its own.</summary>
     public static int SeenFaction(CharacterCold c) => c.DisguiseFaction >= 0 && c.DisguiseLevel > DisguiseWorks && c.RecentlyWanted <= 0 ? c.DisguiseFaction : c.Faction;
@@ -89,22 +89,22 @@ public sealed partial class ArrestSystem
                 if (v <= 0) continue;
                 var key = (table.IdOf(w), target);
                 seen.Add(key);
-                float meter = disguiseMeters.GetValueOrDefault(key);
+                float meter = _disguiseMeters.GetValueOrDefault(key);
                 if (meter > 1)
                 {
                     SeeThrough(world, w, s, c, wc);
-                    disguiseMeters.Remove(key);
+                    _disguiseMeters.Remove(key);
                     break;
                 }
-                disguiseMeters[key] = meter + seconds / DisguiseSeconds(world, w, wc, target, c, v, secure);
+                _disguiseMeters[key] = meter + seconds / DisguiseSeconds(world, w, wc, target, c, v, secure);
             }
         }
-        foreach (var key in disguiseMeters.Keys.ToList())
+        foreach (var key in _disguiseMeters.Keys.ToList())
         {
             if (seen.Contains(key)) continue;
-            float left = disguiseMeters[key] - seconds / Orders.SpotForgetSeconds;
-            if (left <= 0 || !table.IsAlive(key.Looker) || !table.IsAlive(key.Target)) disguiseMeters.Remove(key);
-            else disguiseMeters[key] = left;
+            float left = _disguiseMeters[key] - seconds / Orders.SpotForgetSeconds;
+            if (left <= 0 || !table.IsAlive(key.Looker) || !table.IsAlive(key.Target)) _disguiseMeters.Remove(key);
+            else _disguiseMeters[key] = left;
         }
     }
 
@@ -175,9 +175,9 @@ public sealed partial class ArrestSystem
 
     void HashDisguise(ref StateHasher hasher)
     {
-        if (disguiseMeters.Count == 0) return;   // only while a looker watches a disguise, so worlds without them hash as before
+        if (_disguiseMeters.Count == 0) return;   // only while a looker watches a disguise, so worlds without them hash as before
         hasher.Add(0x4D747273);
-        hasher.Add(disguiseMeters.Count);
-        foreach (var ((looker, target), meter) in disguiseMeters.OrderBy(k => k.Key.Looker.Slot).ThenBy(k => k.Key.Target.Slot)) { hasher.Add(looker); hasher.Add(target); hasher.Add(meter); }
+        hasher.Add(_disguiseMeters.Count);
+        foreach (var ((looker, target), meter) in _disguiseMeters.OrderBy(k => k.Key.Looker.Slot).ThenBy(k => k.Key.Target.Slot)) { hasher.Add(looker); hasher.Add(target); hasher.Add(meter); }
     }
 }

@@ -23,7 +23,7 @@ static class TerrainColourCache
 
     const string Version = "terrain colour bc3 v1";
     const int Magic = 0x3343544D;   // "MTC3"
-    static readonly ConcurrentDictionary<string, object> gates = new();
+    static readonly ConcurrentDictionary<string, object> Gates = new();
 
     /// <summary>A tile's side and its levels' BC3 blocks, rows of blocks top first.</summary>
     public sealed record Tile(int Size, byte[][] Levels);
@@ -56,7 +56,7 @@ static class TerrainColourCache
     {
         if (!File.Exists(path)) return null;
         string? cache = LoadCaches.Disabled ? null : CachePath(path);
-        lock (gates.GetOrAdd(path, _ => new object()))
+        lock (Gates.GetOrAdd(path, _ => new object()))
         {
             if (cache is not null && Read(cache) is { } hit) return hit;
             var tile = Encode(path);
@@ -76,7 +76,7 @@ static class TerrainColourCache
     {
         if (LoadCaches.Disabled || !File.Exists(path)) return null;
         string cache = CachePath(path);
-        lock (gates.GetOrAdd(path, _ => new object()))
+        lock (Gates.GetOrAdd(path, _ => new object()))
         {
             if (Header(cache) is { } size) return new Stored(cache, size);
             var tile = Encode(path);

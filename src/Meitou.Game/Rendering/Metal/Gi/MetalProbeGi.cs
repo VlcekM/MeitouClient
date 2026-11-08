@@ -59,11 +59,11 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         this.ctx = ctx;
         var irrRows = Cascades * Columns * Layers * (IrradianceTexels + 2);
         var distRows = Cascades * Columns * Layers * (DistanceTexels + 2);
-        irradiance = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, Columns * (IrradianceTexels + 2), irrRows,
+        irradiance = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, Columns * (IrradianceTexels + 2), irrRows,
             Use: TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferDst, Name: "metal gi irradiance"));
-        distance = ctx.CreateTexture(new TextureDesc(InternalFormat.RG16f, Columns * (DistanceTexels + 2), distRows,
+        distance = ctx.CreateTexture(new TextureDesc(InternalFormat.Rg16F, Columns * (DistanceTexels + 2), distRows,
             Use: TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferDst, Name: "metal gi distance"));
-        bases = ctx.CreateTexture(new TextureDesc(InternalFormat.R32f, Columns, Cascades * Columns,
+        bases = ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, Columns, Cascades * Columns,
             Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "metal gi bases"));
         irradianceImage = ctx.TextureAt(irradiance);
         distanceImage = ctx.TextureAt(distance);

@@ -61,9 +61,9 @@ public sealed class ProgramInfo
     public byte[]? ComputeCode { get; init; }
     /// <summary>The legacy compile result (reflection of both stages, default blocks), null for other models.</summary>
     public CompiledProgram? Compiled { get; init; }
-    public Shaders.ShaderReflection? VertexReflection { get; init; }
-    public Shaders.ShaderReflection? FragmentReflection { get; init; }
-    public Shaders.ShaderReflection? ComputeReflection { get; init; }
+    public ShaderReflection? VertexReflection { get; init; }
+    public ShaderReflection? FragmentReflection { get; init; }
+    public ShaderReflection? ComputeReflection { get; init; }
     /// <summary>The program's sets in the engine's words (the layout the backend made).</summary>
     public GpuSetLayout[] NeutralSets { get; init; } = [];
     public uint PushConstantBytes { get; init; }
@@ -95,9 +95,9 @@ public readonly record struct GpuProgram(int Index, ProgramInfo Info)
     /// <summary>The program has a tessellation evaluation stage (its pipelines draw patch lists).</summary>
     public bool Tessellated => Info.TessEvaluationCode is not null;
     public CompiledProgram? Compiled => Info.Compiled;
-    public Shaders.ShaderReflection? VertexReflection => Info.VertexReflection;
-    public Shaders.ShaderReflection? FragmentReflection => Info.FragmentReflection;
-    public Shaders.ShaderReflection? ComputeReflection => Info.ComputeReflection;
+    public ShaderReflection? VertexReflection => Info.VertexReflection;
+    public ShaderReflection? FragmentReflection => Info.FragmentReflection;
+    public ShaderReflection? ComputeReflection => Info.ComputeReflection;
     public GpuSetLayout[] NeutralSets => Info.NeutralSets;
     public uint PushConstantBytes => Info.PushConstantBytes;
     public string? FragmentSource => Info.FragmentSource;

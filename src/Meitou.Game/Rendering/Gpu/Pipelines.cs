@@ -11,22 +11,22 @@ public readonly record struct VertexInput(uint Location, InternalFormat Format, 
 /// <summary>The vertex inputs of a pipeline, by location. Compared by value; hashed once.</summary>
 public sealed class VertexLayout : IEquatable<VertexLayout>
 {
-    readonly int hash;
+    readonly int _hash;
 
     public VertexLayout(params VertexInput[] inputs)
     {
         Inputs = inputs;
         var h = new HashCode();
         foreach (var i in inputs) h.Add(i);
-        hash = h.ToHashCode();
+        _hash = h.ToHashCode();
     }
 
     public VertexInput[] Inputs { get; }
     public static readonly VertexLayout Empty = new();
 
-    public bool Equals(VertexLayout? other) => other is not null && (ReferenceEquals(this, other) || hash == other.hash && Inputs.AsSpan().SequenceEqual(other.Inputs));
+    public bool Equals(VertexLayout? other) => other is not null && (ReferenceEquals(this, other) || _hash == other._hash && Inputs.AsSpan().SequenceEqual(other.Inputs));
     public override bool Equals(object? obj) => obj is VertexLayout v && Equals(v);
-    public override int GetHashCode() => hash;
+    public override int GetHashCode() => _hash;
     public override string ToString() => string.Join(" ", Inputs.Select(i => $"{i.Location}:{i.Format}/{i.Stride}{(i.PerInstance ? "i" : "")}"));
 }
 
@@ -92,19 +92,23 @@ public static unsafe class PipelineFactory
         var vertexInput = new PipelineVertexInputStateCreateInfo
         {
             SType = StructureType.PipelineVertexInputStateCreateInfo,
-            VertexBindingDescriptionCount = (uint)n, PVertexBindingDescriptions = vbind,
-            VertexAttributeDescriptionCount = (uint)n, PVertexAttributeDescriptions = vattr,
+            VertexBindingDescriptionCount = (uint)n,
+            PVertexBindingDescriptions = vbind,
+            VertexAttributeDescriptionCount = (uint)n,
+            PVertexAttributeDescriptions = vattr,
         };
         var assembly = new PipelineInputAssemblyStateCreateInfo { SType = StructureType.PipelineInputAssemblyStateCreateInfo, Topology = GlConventions.Topology(topology) };
         var viewportState = new PipelineViewportStateCreateInfo
         {
-            SType = StructureType.PipelineViewportStateCreateInfo, ViewportCount = 1, ScissorCount = 1,
+            SType = StructureType.PipelineViewportStateCreateInfo,
+            ViewportCount = 1,
+            ScissorCount = 1,
         };
         var raster = new PipelineRasterizationStateCreateInfo
         {
             SType = StructureType.PipelineRasterizationStateCreateInfo,
             DepthClampEnable = depthClamp,
-            PolygonMode = polygon == PolygonKind.Line && device.FillModeNonSolid ? Silk.NET.Vulkan.PolygonMode.Line : GlConventions.VkPolygon(polygon),
+            PolygonMode = polygon == PolygonKind.Line && device.FillModeNonSolid ? PolygonMode.Line : GlConventions.VkPolygon(polygon),
             LineWidth = 1,
         };
         var multisample = new PipelineMultisampleStateCreateInfo
@@ -118,8 +122,12 @@ public static unsafe class PipelineFactory
         attachments[0] = new PipelineColorBlendAttachmentState
         {
             BlendEnable = blendState.Enable,
-            SrcColorBlendFactor = GlConventions.BlendFactor(blendState.Src), DstColorBlendFactor = GlConventions.BlendFactor(blendState.Dst), ColorBlendOp = GlConventions.VkBlendOp(blendState.ColourOp),
-            SrcAlphaBlendFactor = GlConventions.BlendFactor(blendState.AlphaSrc ?? blendState.Src), DstAlphaBlendFactor = GlConventions.BlendFactor(blendState.AlphaDst ?? blendState.Dst), AlphaBlendOp = GlConventions.VkBlendOp(blendState.AlphaOp),
+            SrcColorBlendFactor = GlConventions.BlendFactor(blendState.Src),
+            DstColorBlendFactor = GlConventions.BlendFactor(blendState.Dst),
+            ColorBlendOp = GlConventions.VkBlendOp(blendState.ColourOp),
+            SrcAlphaBlendFactor = GlConventions.BlendFactor(blendState.AlphaSrc ?? blendState.Src),
+            DstAlphaBlendFactor = GlConventions.BlendFactor(blendState.AlphaDst ?? blendState.Dst),
+            AlphaBlendOp = GlConventions.VkBlendOp(blendState.AlphaOp),
             ColorWriteMask = GlConventions.VkColorMask(colourMask),
         };
         // The extra attachment (location 1) is never blended: written by the programs that declare it (extraMask), else left as it is.
@@ -129,18 +137,21 @@ public static unsafe class PipelineFactory
         var blend = new PipelineColorBlendStateCreateInfo
         {
             SType = StructureType.PipelineColorBlendStateCreateInfo,
-            AttachmentCount = colourCount, PAttachments = attachments,
+            AttachmentCount = colourCount,
+            PAttachments = attachments,
         };
         fixed (DynamicState* dynamics = Dynamic)
         {
             var dynamic = new PipelineDynamicStateCreateInfo { SType = StructureType.PipelineDynamicStateCreateInfo, DynamicStateCount = (uint)Dynamic.Length, PDynamicStates = dynamics };
             var colourFormats = stackalloc Format[2] { GlConventions.VkFormatOrUndefined(targets.Colour), GlConventions.VkFormatOrUndefined(targets.Extra) };
-            bool stencil = targets.Depth is InternalFormat.Depth24Stencil8 or InternalFormat.Depth32fStencil8;
+            bool stencil = targets.Depth is InternalFormat.Depth24Stencil8 or InternalFormat.Depth32FStencil8;
             var rendering = new PipelineRenderingCreateInfo
             {
                 SType = StructureType.PipelineRenderingCreateInfo,
-                ColorAttachmentCount = colourCount, PColorAttachmentFormats = colourFormats,
-                DepthAttachmentFormat = GlConventions.VkFormatOrUndefined(targets.Depth), StencilAttachmentFormat = stencil ? GlConventions.VkFormat(targets.Depth) : Format.Undefined,
+                ColorAttachmentCount = colourCount,
+                PColorAttachmentFormats = colourFormats,
+                DepthAttachmentFormat = GlConventions.VkFormatOrUndefined(targets.Depth),
+                StencilAttachmentFormat = stencil ? GlConventions.VkFormat(targets.Depth) : Format.Undefined,
             };
             // A rendering with a shading rate attachment (Formats.ShadingRate): the pipeline keeps its own rate (1x1) and takes the attachment's.
             var rate = new PipelineFragmentShadingRateStateCreateInfoKHR { SType = StructureType.PipelineFragmentShadingRateStateCreateInfoKhr, FragmentSize = new Extent2D(1, 1) };
@@ -167,10 +178,18 @@ public static unsafe class PipelineFactory
                     SType = StructureType.GraphicsPipelineCreateInfo,
                     PNext = &rendering,
                     Flags = targets.ShadingRate ? PipelineCreateFlags.CreateRenderingFragmentShadingRateAttachmentBitKhr : 0,
-                    StageCount = tessellated ? 4u : 2u, PStages = stages, PTessellationState = tessellated ? &tessellation : null,
-                    PVertexInputState = &vertexInput, PInputAssemblyState = &assembly, PViewportState = &viewportState,
-                    PRasterizationState = &raster, PMultisampleState = &multisample, PDepthStencilState = &depthStencil,
-                    PColorBlendState = &blend, PDynamicState = &dynamic, Layout = layout,
+                    StageCount = tessellated ? 4u : 2u,
+                    PStages = stages,
+                    PTessellationState = tessellated ? &tessellation : null,
+                    PVertexInputState = &vertexInput,
+                    PInputAssemblyState = &assembly,
+                    PViewportState = &viewportState,
+                    PRasterizationState = &raster,
+                    PMultisampleState = &multisample,
+                    PDepthStencilState = &depthStencil,
+                    PColorBlendState = &blend,
+                    PDynamicState = &dynamic,
+                    Layout = layout,
                 };
                 VulkanException.Check(device.Vk.CreateGraphicsPipelines(device.Device, device.PipelineCache, 1, &info, null, out var pipeline), "vkCreateGraphicsPipelines");
                 return pipeline;
@@ -201,34 +220,34 @@ public static unsafe class PipelineFactory
 /// </summary>
 public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
 {
-    readonly VulkanDevice device;
-    readonly ShaderLibrary shaders;
-    readonly Dictionary<GraphicsPipelineDesc, Pipeline> graphics = [];
-    readonly Dictionary<ComputePipelineDesc, Pipeline> compute = [];
-    readonly object gate = new();
+    readonly VulkanDevice _device;
+    readonly ShaderLibrary _shaders;
+    readonly Dictionary<GraphicsPipelineDesc, Pipeline> _graphics = [];
+    readonly Dictionary<ComputePipelineDesc, Pipeline> _compute = [];
+    readonly object _gate = new();
 
     public PipelineLibrary(VulkanDevice device, ShaderLibrary shaders)
     {
-        this.device = device;
-        this.shaders = shaders;
+        this._device = device;
+        this._shaders = shaders;
     }
 
     /// <summary>Pipelines created by <see cref="Get"/> because nothing prepared them.</summary>
     public int LatePipelines { get; private set; }
-    public int Count { get { lock (gate) return graphics.Count + compute.Count; } }
+    public int Count { get { lock (_gate) return _graphics.Count + _compute.Count; } }
 
     public Task Prepare(IEnumerable<GraphicsPipelineDesc> descs)
     {
-        var todo = descs.Distinct().Where(d => { lock (gate) return !graphics.ContainsKey(d); }).ToArray();
+        var todo = descs.Distinct().Where(d => { lock (_gate) return !_graphics.ContainsKey(d); }).ToArray();
         return Task.Run(() => Parallel.ForEach(todo, d =>
         {
             var p = Create(d);
-            lock (gate)
-                if (!graphics.TryAdd(d, p)) device.Vk.DestroyPipeline(device.Device, p, null);
+            lock (_gate)
+                if (!_graphics.TryAdd(d, p)) _device.Vk.DestroyPipeline(_device.Device, p, null);
         }));
     }
 
-    readonly Dictionary<GraphicsPipelineDesc, Pipeline> variants = [];
+    readonly Dictionary<GraphicsPipelineDesc, Pipeline> _variants = [];
 
     /// <summary>
     /// The pipeline of <paramref name="desc"/> with <paramref name="fragment"/> in place of its program's fragment module (the bench's counting
@@ -236,39 +255,39 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
     /// </summary>
     public GpuPipeline GetWithFragment(in GraphicsPipelineDesc desc, ShaderModule fragment)
     {
-        lock (gate)
-            if (variants.TryGetValue(desc, out var v)) return new GpuPipeline(desc, v.Handle);
+        lock (_gate)
+            if (_variants.TryGetValue(desc, out var v)) return new GpuPipeline(desc, v.Handle);
         var made = Create(desc, fragment);
-        lock (gate)
+        lock (_gate)
         {
-            if (variants.TryGetValue(desc, out var raced)) { device.Vk.DestroyPipeline(device.Device, made, null); return new GpuPipeline(desc, raced.Handle); }
-            variants[desc] = made;
+            if (_variants.TryGetValue(desc, out var raced)) { _device.Vk.DestroyPipeline(_device.Device, made, null); return new GpuPipeline(desc, raced.Handle); }
+            _variants[desc] = made;
         }
         return new GpuPipeline(desc, made.Handle);
     }
 
     public GpuPipeline Get(in GraphicsPipelineDesc desc)
     {
-        lock (gate)
-            if (graphics.TryGetValue(desc, out var p)) return new GpuPipeline(desc, p.Handle);
+        lock (_gate)
+            if (_graphics.TryGetValue(desc, out var p)) return new GpuPipeline(desc, p.Handle);
         var created = Create(desc);
-        lock (gate)
+        lock (_gate)
         {
             // Another thread may have made the same one meanwhile: keep the first, so every holder binds the same pipeline.
-            if (graphics.TryGetValue(desc, out var raced)) { device.Vk.DestroyPipeline(device.Device, created, null); return new GpuPipeline(desc, raced.Handle); }
+            if (_graphics.TryGetValue(desc, out var raced)) { _device.Vk.DestroyPipeline(_device.Device, created, null); return new GpuPipeline(desc, raced.Handle); }
             LatePipelines++;
-            graphics[desc] = created;
+            _graphics[desc] = created;
         }
         return new GpuPipeline(desc, created.Handle);
     }
 
     public GpuComputePipeline Get(in ComputePipelineDesc desc)
     {
-        lock (gate)
+        lock (_gate)
         {
-            if (compute.TryGetValue(desc, out var p)) return new GpuComputePipeline(desc, p.Handle);
-            { var vp = shaders.Backend(desc.Program); p = PipelineFactory.CreateCompute(device, vp.ComputeModule, vp.Layout); }
-            compute[desc] = p;
+            if (_compute.TryGetValue(desc, out var p)) return new GpuComputePipeline(desc, p.Handle);
+            { var vp = _shaders.Backend(desc.Program); p = PipelineFactory.CreateCompute(_device, vp.ComputeModule, vp.Layout); }
+            _compute[desc] = p;
             return new GpuComputePipeline(desc, p.Handle);
         }
     }
@@ -278,24 +297,24 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
     internal Pipeline Handle(in GpuPipeline pipeline)
     {
         if (pipeline.Native != 0) return new Pipeline(pipeline.Native);
-        lock (gate) return graphics.TryGetValue(pipeline.Desc, out var p) ? p : variants.TryGetValue(pipeline.Desc, out var v) ? v : default;
+        lock (_gate) return _graphics.TryGetValue(pipeline.Desc, out var p) ? p : _variants.TryGetValue(pipeline.Desc, out var v) ? v : default;
     }
 
     /// <summary>The backend's identity of a compute handle.</summary>
     internal Pipeline Handle(in GpuComputePipeline pipeline)
     {
         if (pipeline.Native != 0) return new Pipeline(pipeline.Native);
-        lock (gate) return compute.TryGetValue(pipeline.Desc, out var p) ? p : default;
+        lock (_gate) return _compute.TryGetValue(pipeline.Desc, out var p) ? p : default;
     }
 
     Pipeline Create(in GraphicsPipelineDesc d, ShaderModule fragment = default)
     {
-        var p = shaders.Backend(d.Program);
+        var p = _shaders.Backend(d.Program);
         if (p.VertexModule.Handle == 0 || p.FragmentModule.Handle == 0) throw new ArgumentException($"{p.Name}: not a graphics program");
-        var handle = PipelineFactory.CreateGraphics(device, p.VertexModule, fragment.Handle != 0 ? fragment : p.FragmentModule, p.Layout, d.Vertex.Inputs, d.Topology, d.Targets, d.Blend,
+        var handle = PipelineFactory.CreateGraphics(_device, p.VertexModule, fragment.Handle != 0 ? fragment : p.FragmentModule, p.Layout, d.Vertex.Inputs, d.Topology, d.Targets, d.Blend,
             d.ColourMask, d.Polygon, d.AlphaToCoverage, d.DepthClamp,
             p.FragmentReflection?.Outputs.Any(o => o.Location == 1) == true ? DrawState.Rgba : ColorMask.None, p.TessControlModule, p.TessEvaluationModule);
-        if (d.Name.Length > 0) device.SetName(ObjectType.Pipeline, handle.Handle, d.Name);
+        if (d.Name.Length > 0) _device.SetName(ObjectType.Pipeline, handle.Handle, d.Name);
         return handle;
     }
 
@@ -303,24 +322,23 @@ public sealed unsafe class PipelineLibrary : IGpuPipelines, IDisposable
     public void Forget(GpuProgram program)
     {
         List<Pipeline> doomed = [];
-        lock (gate)
+        lock (_gate)
         {
-            foreach (var k in graphics.Keys.Where(k => k.Program == program).ToList()) { doomed.Add(graphics[k]); graphics.Remove(k); }
-            foreach (var k in compute.Keys.Where(k => k.Program == program).ToList()) { doomed.Add(compute[k]); compute.Remove(k); }
-            foreach (var k in variants.Keys.Where(k => k.Program == program).ToList()) { doomed.Add(variants[k]); variants.Remove(k); }
+            foreach (var k in _graphics.Keys.Where(k => k.Program == program).ToList()) { doomed.Add(_graphics[k]); _graphics.Remove(k); }
+            foreach (var k in _compute.Keys.Where(k => k.Program == program).ToList()) { doomed.Add(_compute[k]); _compute.Remove(k); }
+            foreach (var k in _variants.Keys.Where(k => k.Program == program).ToList()) { doomed.Add(_variants[k]); _variants.Remove(k); }
         }
-        var (vk, dev) = (device.Vk, device.Device);
-        device.Frames.DeferDelete(() => { foreach (var p in doomed) vk.DestroyPipeline(dev, p, null); });
+        var (vk, dev) = (_device.Vk, _device.Device);
+        _device.Frames.DeferDelete(() => { foreach (var p in doomed) vk.DestroyPipeline(dev, p, null); });
     }
 
     public void Dispose()
     {
-        foreach (var p in graphics.Values) device.Vk.DestroyPipeline(device.Device, p, null);
-        foreach (var p in compute.Values) device.Vk.DestroyPipeline(device.Device, p, null);
-        foreach (var p in variants.Values) device.Vk.DestroyPipeline(device.Device, p, null);
-        variants.Clear();
-        graphics.Clear();
-        compute.Clear();
+        foreach (var p in _graphics.Values) _device.Vk.DestroyPipeline(_device.Device, p, null);
+        foreach (var p in _compute.Values) _device.Vk.DestroyPipeline(_device.Device, p, null);
+        foreach (var p in _variants.Values) _device.Vk.DestroyPipeline(_device.Device, p, null);
+        _variants.Clear();
+        _graphics.Clear();
+        _compute.Clear();
     }
 }
-

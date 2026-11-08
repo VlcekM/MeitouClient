@@ -7,7 +7,7 @@ namespace Meitou.Game.Settings;
 sealed class SettingModes
 {
     /// <summary>The sliders whose Custom was picked: the slider stays shown even when its value matches a mode.</summary>
-    internal readonly HashSet<string> customModes = [];
+    internal readonly HashSet<string> CustomModes = [];
 
     /// <summary>The rows replacing a slider row with modes: the mode choice, then the slider (locked but under Custom); any other row as it is.</summary>
     internal IEnumerable<SettingsMenu.Entry> ModeEntries(SettingsMenu.Entry row)
@@ -24,7 +24,7 @@ sealed class SettingModes
 
     int ModeIndex(string key, Slider slider, List<SettingMode> modes, float step)
     {
-        if (customModes.Contains(key)) return modes.Count;
+        if (CustomModes.Contains(key)) return modes.Count;
         float value = slider.Get();
         int mode = modes.FindIndex(m => m.Matches(value, step));
         return mode < 0 ? modes.Count : mode;
@@ -34,10 +34,10 @@ sealed class SettingModes
     {
         if (index >= modes.Count)
         {
-            customModes.Add(key);
+            CustomModes.Add(key);
             return;
         }
-        customModes.Remove(key);
+        CustomModes.Remove(key);
         slider.Set(modes[index].Value);
     }
 }

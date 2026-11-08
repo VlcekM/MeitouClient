@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using Meitou.Game.Rendering.Gpu.Core;
-using Silk.NET.Vulkan;
-using Silk.NET.Vulkan.Extensions.KHR;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Upscalers;
+using Silk.NET.Vulkan;
+using Silk.NET.Vulkan.Extensions.KHR;
 using VkSemaphore = Silk.NET.Vulkan.Semaphore;
 
 namespace Meitou.Game.Rendering.Gpu;
@@ -16,26 +16,26 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public sealed unsafe class VulkanPresenter : IDisposable
 {
-    readonly VulkanDevice device;
-    readonly GpuContext ctx;
-    readonly Vk vk;
-    readonly KhrSwapchain khr;
-    SwapchainKHR swapchain;
-    Image[] images = [];
-    Format format;
-    Extent2D extent;
-    readonly VkSemaphore[] acquired;   // per frame slot
-    VkSemaphore[] rendered = [];       // per swapchain image
-    uint imageIndex;
-    bool acquiredImage;
-    int wantWidth, wantHeight;
+    readonly VulkanDevice _device;
+    readonly GpuContext _ctx;
+    readonly Vk _vk;
+    readonly KhrSwapchain _khr;
+    SwapchainKHR _swapchain;
+    Image[] _images = [];
+    Format _format;
+    Extent2D _extent;
+    readonly VkSemaphore[] _acquired;   // per frame slot
+    VkSemaphore[] _rendered = [];       // per swapchain image
+    uint _imageIndex;
+    bool _acquiredImage;
+    int _wantWidth, _wantHeight;
 
     /// <summary>Vsync (FIFO); changing it recreates the swapchain at the next frame.</summary>
-    public bool VSync { get => vsync; set { if (vsync != value) { vsync = value; stale = true; } } }
+    public bool VSync { get => _vsync; set { if (_vsync != value) { _vsync = value; _stale = true; } } }
 
     /// <summary>Presents through this function instead of the driver's <c>vkQueuePresentKHR</c> (Streamline's proxy, which it must see every frame).</summary>
     public delegate* unmanaged<Queue, PresentInfoKHR*, Result> PresentFunction { get; set; }
-    bool vsync, stale = true;
+    bool _vsync, _stale = true;
 
     /// <summary>AMD's frame-interpolation swapchain, when the Frame generation setting is on and it works: the swapchain is created, acquired from and presented through it
     /// (frames are generated on top of it by <see cref="Upscalers.FrameGeneration"/>). Null for the plain swapchain; set to null again, with a log line, when it fails.</summary>
@@ -53,20 +53,20 @@ public sealed unsafe class VulkanPresenter : IDisposable
 
     public VulkanPresenter(GpuContext ctx, bool vsync)
     {
-        device = ctx.Device;
-        if (!device.HasSurface) throw new InvalidOperationException("the device has no surface");
-        this.ctx = ctx;
-        this.vsync = vsync;
-        vk = device.Vk;
-        if (!vk.TryGetDeviceExtension(device.Instance, device.Device, out khr)) throw new InvalidOperationException("VK_KHR_swapchain missing");
-        acquired = new VkSemaphore[device.Frames.Count];
-        for (int i = 0; i < acquired.Length; i++) acquired[i] = NewSemaphore();
+        _device = ctx.Device;
+        if (!_device.HasSurface) throw new InvalidOperationException("the device has no surface");
+        this._ctx = ctx;
+        this._vsync = vsync;
+        _vk = _device.Vk;
+        if (!_vk.TryGetDeviceExtension(_device.Instance, _device.Device, out _khr)) throw new InvalidOperationException("VK_KHR_swapchain missing");
+        _acquired = new VkSemaphore[_device.Frames.Count];
+        for (int i = 0; i < _acquired.Length; i++) _acquired[i] = NewSemaphore();
     }
 
     VkSemaphore NewSemaphore()
     {
         var info = new SemaphoreCreateInfo { SType = StructureType.SemaphoreCreateInfo };
-        VulkanException.Check(vk.CreateSemaphore(device.Device, &info, null, out var s), "vkCreateSemaphore");
+        VulkanException.Check(_vk.CreateSemaphore(_device.Device, &info, null, out var s), "vkCreateSemaphore");
         return s;
     }
 
@@ -75,26 +75,26 @@ public sealed unsafe class VulkanPresenter : IDisposable
     public bool BeginFrame(int width, int height)
     {
         if (width <= 0 || height <= 0) return false;
-        if (stale || width != wantWidth || height != wantHeight) Recreate(width, height);
+        if (_stale || width != _wantWidth || height != _wantHeight) Recreate(width, height);
         if (Backbuffer is not { } b || b.Desc.Width != width || b.Desc.Height != height)
         {
             Backbuffer?.Dispose();   // released after the frames in flight
-            Backbuffer = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
+            Backbuffer = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
                 Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.TransferDst | TextureUse.Sampled, Name: "backbuffer"));
         }
-        ctx.BeginFrame();
+        _ctx.BeginFrame();
         // The semaphore of this frame slot: its previous use was waited on by the slot's previous submission, whose fence BeginFrame waited for.
-        var semaphore = acquired[device.Frames.Slot];
+        var semaphore = _acquired[_device.Frames.Slot];
         long acquireStart = Stopwatch.GetTimestamp();
         Result r;
-        if (FrameGeneration is { } fg) fixed (uint* pi = &imageIndex) r = fg.Acquire(device.Device, swapchain, ulong.MaxValue, semaphore, default, pi);
-        else if (StreamlineHooks is { } sl) fixed (uint* pi = &imageIndex) r = sl.Acquire(device.Device, swapchain, ulong.MaxValue, semaphore, default, pi);
-        else r = khr.AcquireNextImage(device.Device, swapchain, ulong.MaxValue, semaphore, default, ref imageIndex);
+        if (FrameGeneration is { } fg) fixed (uint* pi = &_imageIndex) r = fg.Acquire(_device.Device, _swapchain, ulong.MaxValue, semaphore, default, pi);
+        else if (StreamlineHooks is { } sl) fixed (uint* pi = &_imageIndex) r = sl.Acquire(_device.Device, _swapchain, ulong.MaxValue, semaphore, default, pi);
+        else r = _khr.AcquireNextImage(_device.Device, _swapchain, ulong.MaxValue, semaphore, default, ref _imageIndex);
         AcquireTicks += Stopwatch.GetTimestamp() - acquireStart;
-        if (r is Result.ErrorOutOfDateKhr) { stale = true; acquiredImage = false; return true; }   // draw anyway; nothing is shown
+        if (r is Result.ErrorOutOfDateKhr) { _stale = true; _acquiredImage = false; return true; }   // draw anyway; nothing is shown
         if (r is not (Result.Success or Result.SuboptimalKhr)) VulkanException.Check(r, "vkAcquireNextImageKHR");
-        if (r == Result.SuboptimalKhr) stale = true;
-        acquiredImage = true;
+        if (r == Result.SuboptimalKhr) _stale = true;
+        _acquiredImage = true;
         return true;
     }
 
@@ -103,10 +103,10 @@ public sealed unsafe class VulkanPresenter : IDisposable
     public void Present(GpuTexture? topDown = null)
     {
         StageClock.BeginSubmission();
-        if (!acquiredImage || (topDown ?? Backbuffer) is not { } src) { ctx.EndFrame(); return; }
-        var dst = images[imageIndex];
+        if (!_acquiredImage || (topDown ?? Backbuffer) is not { } src) { _ctx.EndFrame(); return; }
+        var dst = _images[_imageIndex];
         int w = src.Desc.Width, h = src.Desc.Height;
-        var list = (CommandList)ctx.BeginNative("present");
+        var list = (CommandList)_ctx.BeginNative("present");
         var cb = list.Handle;
         // The source stage is the one the acquire semaphore is waited at (below): the layout change then waits for the image to be released.
         Barrier(cb, dst, ImageLayout.Undefined, ImageLayout.TransferDstOptimal, PipelineStageFlags2.TransferBit, AccessFlags2.None,
@@ -120,9 +120,9 @@ public sealed unsafe class VulkanPresenter : IDisposable
         blit.SrcOffsets[1] = new Offset3D(w, h, 1);
         // The backbuffer is bottom-up: flipped, its row 0 (the bottom) goes to the swapchain's last row. A top-down picture keeps its order.
         bool flip = topDown is null;
-        blit.DstOffsets[0] = new Offset3D(0, flip ? (int)extent.Height : 0, 0);
-        blit.DstOffsets[1] = new Offset3D((int)extent.Width, flip ? 0 : (int)extent.Height, 1);
-        vk.CmdBlitImage(cb, ctx.Device.NativeImage(src), ImageLayout.General, dst, ImageLayout.TransferDstOptimal, 1, &blit, Filter.Nearest);
+        blit.DstOffsets[0] = new Offset3D(0, flip ? (int)_extent.Height : 0, 0);
+        blit.DstOffsets[1] = new Offset3D((int)_extent.Width, flip ? 0 : (int)_extent.Height, 1);
+        _vk.CmdBlitImage(cb, _ctx.Device.NativeImage(src), ImageLayout.General, dst, ImageLayout.TransferDstOptimal, 1, &blit, Filter.Nearest);
         // Through AMD's swapchain the image is a replacement back buffer that its UI composition samples (it expects shader-read layout) and it moves the
         // real swapchain image to present itself; the next frame's Undefined -> TransferDst barrier discards the contents either way.
         if (FrameGeneration is not null)
@@ -131,30 +131,33 @@ public sealed unsafe class VulkanPresenter : IDisposable
         else
             Barrier(cb, dst, ImageLayout.TransferDstOptimal, ImageLayout.PresentSrcKhr, PipelineStageFlags2.BlitBit, AccessFlags2.TransferWriteBit,
                 PipelineStageFlags2.BottomOfPipeBit, AccessFlags2.None);
-        ctx.EndNative(list);
-        var wait = acquired[device.Frames.Slot];
-        var signal = rendered[imageIndex];
+        _ctx.EndNative(list);
+        var wait = _acquired[_device.Frames.Slot];
+        var signal = _rendered[_imageIndex];
         var stage = PipelineStageFlags.TransferBit;
-        ctx.EndFrame([wait], [stage], [signal]);
-        var sc = swapchain;
-        uint index = imageIndex;
+        _ctx.EndFrame([wait], [stage], [signal]);
+        var sc = _swapchain;
+        uint index = _imageIndex;
         var info = new PresentInfoKHR
         {
             SType = StructureType.PresentInfoKhr,
-            WaitSemaphoreCount = 1, PWaitSemaphores = &signal,
-            SwapchainCount = 1, PSwapchains = &sc, PImageIndices = &index,
+            WaitSemaphoreCount = 1,
+            PWaitSemaphores = &signal,
+            SwapchainCount = 1,
+            PSwapchains = &sc,
+            PImageIndices = &index,
         };
         Result r;
         long presentStart = Stopwatch.GetTimestamp();
         // The frame-interpolation layer takes the device's queue lock itself where it submits on the game queue (its submit function); holding it here
         // while the layer waits for its presenter thread could deadlock against that.
-        if (FrameGeneration is { } fg) r = fg.Present(device.GraphicsQueue, &info);
-        else lock (device.QueueLock) r = PresentFunction != null ? PresentFunction(device.GraphicsQueue, &info) : khr.QueuePresent(device.GraphicsQueue, &info);
+        if (FrameGeneration is { } fg) r = fg.Present(_device.GraphicsQueue, &info);
+        else lock (_device.QueueLock) r = PresentFunction != null ? PresentFunction(_device.GraphicsQueue, &info) : _khr.QueuePresent(_device.GraphicsQueue, &info);
         PresentTicks += Stopwatch.GetTimestamp() - presentStart;
         StageClock.Lap(StageClock.DriverWait, gpuTimestamp: false);
-        if (r is Result.ErrorOutOfDateKhr or Result.SuboptimalKhr) stale = true;
+        if (r is Result.ErrorOutOfDateKhr or Result.SuboptimalKhr) _stale = true;
         else VulkanException.Check(r, "vkQueuePresentKHR");
-        acquiredImage = false;
+        _acquiredImage = false;
     }
 
     void Barrier(CommandBuffer cb, Image image, ImageLayout from, ImageLayout to, PipelineStageFlags2 srcStage, AccessFlags2 srcAccess, PipelineStageFlags2 dstStage, AccessFlags2 dstAccess)
@@ -162,21 +165,27 @@ public sealed unsafe class VulkanPresenter : IDisposable
         var b = new ImageMemoryBarrier2
         {
             SType = StructureType.ImageMemoryBarrier2,
-            SrcStageMask = srcStage, SrcAccessMask = srcAccess, DstStageMask = dstStage, DstAccessMask = dstAccess,
-            OldLayout = from, NewLayout = to, Image = image,
-            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored, DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            SrcStageMask = srcStage,
+            SrcAccessMask = srcAccess,
+            DstStageMask = dstStage,
+            DstAccessMask = dstAccess,
+            OldLayout = from,
+            NewLayout = to,
+            Image = image,
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
             SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1),
         };
         var dep = new DependencyInfo { SType = StructureType.DependencyInfo, ImageMemoryBarrierCount = 1, PImageMemoryBarriers = &b };
-        vk.CmdPipelineBarrier2(cb, &dep);
+        _vk.CmdPipelineBarrier2(cb, &dep);
     }
 
     void Recreate(int width, int height)
     {
-        device.WaitIdle();
-        var surfaceExt = device.SurfaceExtension!;
-        var surface = device.Surface;
-        var pd = device.PhysicalDevice;
+        _device.WaitIdle();
+        var surfaceExt = _device.SurfaceExtension!;
+        var surface = _device.Surface;
+        var pd = _device.PhysicalDevice;
         VulkanException.Check(surfaceExt.GetPhysicalDeviceSurfaceCapabilities(pd, surface, out var caps), "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
         uint n = 0;
         surfaceExt.GetPhysicalDeviceSurfaceFormats(pd, surface, ref n, null);
@@ -187,30 +196,39 @@ public sealed unsafe class VulkanPresenter : IDisposable
         surfaceExt.GetPhysicalDeviceSurfacePresentModes(pd, surface, ref n, null);
         var modes = new PresentModeKHR[n];
         fixed (PresentModeKHR* pm = modes) surfaceExt.GetPhysicalDeviceSurfacePresentModes(pd, surface, ref n, pm);
-        var mode = vsync ? PresentModeKHR.FifoKhr
+        var mode = _vsync ? PresentModeKHR.FifoKhr
             : modes.Contains(PresentModeKHR.MailboxKhr) ? PresentModeKHR.MailboxKhr
             : modes.Contains(PresentModeKHR.ImmediateKhr) ? PresentModeKHR.ImmediateKhr : PresentModeKHR.FifoKhr;
-        extent = caps.CurrentExtent.Width != uint.MaxValue ? caps.CurrentExtent
+        _extent = caps.CurrentExtent.Width != uint.MaxValue ? caps.CurrentExtent
             : new Extent2D(Math.Clamp((uint)width, caps.MinImageExtent.Width, caps.MaxImageExtent.Width), Math.Clamp((uint)height, caps.MinImageExtent.Height, caps.MaxImageExtent.Height));
         uint count = Math.Max(caps.MinImageCount + 1, 3);
         if (caps.MaxImageCount > 0) count = Math.Min(count, caps.MaxImageCount);
-        var old = swapchain;
+        var old = _swapchain;
         bool layer = FrameGeneration is not null || StreamlineHooks is not null;
         var info = new SwapchainCreateInfoKHR
         {
             SType = StructureType.SwapchainCreateInfoKhr,
-            Surface = surface, MinImageCount = count, ImageFormat = chosen.Format, ImageColorSpace = chosen.ColorSpace,
-            ImageExtent = extent, ImageArrayLayers = 1, ImageUsage = ImageUsageFlags.TransferDstBit | ImageUsageFlags.ColorAttachmentBit
+            Surface = surface,
+            MinImageCount = count,
+            ImageFormat = chosen.Format,
+            ImageColorSpace = chosen.ColorSpace,
+            ImageExtent = _extent,
+            ImageArrayLayers = 1,
+            ImageUsage = ImageUsageFlags.TransferDstBit | ImageUsageFlags.ColorAttachmentBit
                 | (layer ? ImageUsageFlags.TransferSrcBit : 0),
-            ImageSharingMode = SharingMode.Exclusive, PreTransform = caps.CurrentTransform, CompositeAlpha = CompositeAlphaFlagsKHR.OpaqueBitKhr,
-            PresentMode = mode, Clipped = true, OldSwapchain = old,
+            ImageSharingMode = SharingMode.Exclusive,
+            PreTransform = caps.CurrentTransform,
+            CompositeAlpha = CompositeAlphaFlagsKHR.OpaqueBitKhr,
+            PresentMode = mode,
+            Clipped = true,
+            OldSwapchain = old,
         };
         if (FrameGeneration is { } fg)
         {
             bool ok;
             string? why;
-            try { ok = fg.Create(info, old, out swapchain, out why); }
-            catch (Exception e) { (ok, why, swapchain) = (false, e.Message, default); }
+            try { ok = fg.Create(info, old, out _swapchain, out why); }
+            catch (Exception e) { (ok, why, _swapchain) = (false, e.Message, default); }
             if (ok) Console.WriteLine($"frame generation  swapchain made through the FFX layer ({fg.QueueLayout})");
             else
             {
@@ -226,52 +244,52 @@ public sealed unsafe class VulkanPresenter : IDisposable
         if (FrameGeneration is null && StreamlineHooks is { } slc)
         {
             SwapchainKHR made;
-            VulkanException.Check(slc.Create(device.Device, &info, null, &made), "vkCreateSwapchainKHR (Streamline)");
-            swapchain = made;
-            if (old.Handle != 0) slc.Destroy(device.Device, old, null);
+            VulkanException.Check(slc.Create(_device.Device, &info, null, &made), "vkCreateSwapchainKHR (Streamline)");
+            _swapchain = made;
+            if (old.Handle != 0) slc.Destroy(_device.Device, old, null);
         }
         else if (FrameGeneration is null)
         {
-            VulkanException.Check(khr.CreateSwapchain(device.Device, &info, null, out swapchain), "vkCreateSwapchainKHR");
-            if (old.Handle != 0) khr.DestroySwapchain(device.Device, old, null);
+            VulkanException.Check(_khr.CreateSwapchain(_device.Device, &info, null, out _swapchain), "vkCreateSwapchainKHR");
+            if (old.Handle != 0) _khr.DestroySwapchain(_device.Device, old, null);
         }
         uint imageCount = 0;
         if (FrameGeneration is null && StreamlineHooks is { } sli)
         {
-            VulkanException.Check(sli.GetImages(device.Device, swapchain, &imageCount, null), "vkGetSwapchainImagesKHR (Streamline)");
-            images = new Image[imageCount];
-            fixed (Image* pi = images) VulkanException.Check(sli.GetImages(device.Device, swapchain, &imageCount, pi), "vkGetSwapchainImagesKHR (Streamline)");
+            VulkanException.Check(sli.GetImages(_device.Device, _swapchain, &imageCount, null), "vkGetSwapchainImagesKHR (Streamline)");
+            _images = new Image[imageCount];
+            fixed (Image* pi = _images) VulkanException.Check(sli.GetImages(_device.Device, _swapchain, &imageCount, pi), "vkGetSwapchainImagesKHR (Streamline)");
         }
         else if (FrameGeneration is { } fgi)
         {
-            VulkanException.Check(fgi.GetImages(device.Device, swapchain, &imageCount, null), "vkGetSwapchainImagesKHR (FFX)");
-            images = new Image[imageCount];
-            fixed (Image* pi = images) VulkanException.Check(fgi.GetImages(device.Device, swapchain, &imageCount, pi), "vkGetSwapchainImagesKHR (FFX)");
+            VulkanException.Check(fgi.GetImages(_device.Device, _swapchain, &imageCount, null), "vkGetSwapchainImagesKHR (FFX)");
+            _images = new Image[imageCount];
+            fixed (Image* pi = _images) VulkanException.Check(fgi.GetImages(_device.Device, _swapchain, &imageCount, pi), "vkGetSwapchainImagesKHR (FFX)");
         }
         else
         {
-            khr.GetSwapchainImages(device.Device, swapchain, ref imageCount, null);
-            images = new Image[imageCount];
-            fixed (Image* pi = images) khr.GetSwapchainImages(device.Device, swapchain, ref imageCount, pi);
+            _khr.GetSwapchainImages(_device.Device, _swapchain, ref imageCount, null);
+            _images = new Image[imageCount];
+            fixed (Image* pi = _images) _khr.GetSwapchainImages(_device.Device, _swapchain, ref imageCount, pi);
         }
-        foreach (var s in rendered) vk.DestroySemaphore(device.Device, s, null);
-        rendered = new VkSemaphore[imageCount];
-        for (int i = 0; i < rendered.Length; i++) rendered[i] = NewSemaphore();
-        format = chosen.Format;
-        (wantWidth, wantHeight) = (width, height);
-        stale = false;
-        Console.WriteLine($"swapchain {extent.Width}x{extent.Height} {format}, {imageCount} images, {mode}");
+        foreach (var s in _rendered) _vk.DestroySemaphore(_device.Device, s, null);
+        _rendered = new VkSemaphore[imageCount];
+        for (int i = 0; i < _rendered.Length; i++) _rendered[i] = NewSemaphore();
+        _format = chosen.Format;
+        (_wantWidth, _wantHeight) = (width, height);
+        _stale = false;
+        Console.WriteLine($"swapchain {_extent.Width}x{_extent.Height} {_format}, {imageCount} images, {mode}");
     }
 
     public void Dispose()
     {
-        device.WaitIdle();
+        _device.WaitIdle();
         Backbuffer?.Dispose();
         Backbuffer = null;
-        foreach (var s in rendered) vk.DestroySemaphore(device.Device, s, null);
-        foreach (var s in acquired) vk.DestroySemaphore(device.Device, s, null);
+        foreach (var s in _rendered) _vk.DestroySemaphore(_device.Device, s, null);
+        foreach (var s in _acquired) _vk.DestroySemaphore(_device.Device, s, null);
         if (FrameGeneration is { } fg) { fg.Dispose(); FrameGeneration = null; }   // destroys the swapchain it made
-        else if (swapchain.Handle != 0 && StreamlineHooks is { } sl) sl.Destroy(device.Device, swapchain, null);
-        else if (swapchain.Handle != 0) khr.DestroySwapchain(device.Device, swapchain, null);
+        else if (_swapchain.Handle != 0 && StreamlineHooks is { } sl) sl.Destroy(_device.Device, _swapchain, null);
+        else if (_swapchain.Handle != 0) _khr.DestroySwapchain(_device.Device, _swapchain, null);
     }
 }

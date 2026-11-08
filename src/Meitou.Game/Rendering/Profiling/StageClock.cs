@@ -27,7 +27,7 @@ static class StageClock
     public static readonly double[] Ms = new double[Names.Length];
     public static bool Active;
     public static FrameProfiler? Profiler;
-    static long last, partLast;
+    static long s_last, s_partLast;
 
     /// <summary>
     /// The parts of the characters' update (<see cref="UpdChars"/>) the profiler lists under it (render thread only): the draw list from the host, the texture
@@ -43,8 +43,8 @@ static class StageClock
     {
         if (!Active) return;
         long now = Stopwatch.GetTimestamp();
-        PartMs[part] += (now - partLast) * 1000.0 / Stopwatch.Frequency;
-        partLast = now;
+        PartMs[part] += (now - s_partLast) * 1000.0 / Stopwatch.Frequency;
+        s_partLast = now;
         OnClose?.Invoke(PartNames[part], true);
     }
 
@@ -63,8 +63,8 @@ static class StageClock
     {
         if (!Active) return;
         long now = Stopwatch.GetTimestamp();
-        UiPartMs[part] += (now - partLast) * 1000.0 / Stopwatch.Frequency;
-        partLast = now;
+        UiPartMs[part] += (now - s_partLast) * 1000.0 / Stopwatch.Frequency;
+        s_partLast = now;
     }
 
     /// <summary>
@@ -87,7 +87,7 @@ static class StageClock
         if (Active && (uint)stage < (uint)JobMs.Length) JobMs[stage] += ticks * 1000.0 / Stopwatch.Frequency;
     }
 
-    public static void Start() { Active = true; SubmissionStarted = false; LastStage = -1; Array.Clear(Ms); Array.Clear(JobMs); Array.Clear(PartMs); Array.Clear(UiPartMs); last = partLast = Stopwatch.GetTimestamp(); OnStart?.Invoke(); }
+    public static void Start() { Active = true; SubmissionStarted = false; LastStage = -1; Array.Clear(Ms); Array.Clear(JobMs); Array.Clear(PartMs); Array.Clear(UiPartMs); s_last = s_partLast = Stopwatch.GetTimestamp(); OnStart?.Invoke(); }
 
     // Called before the window copy, or before submission for an offscreen frame.
     public static void BeginSubmission()
@@ -109,8 +109,8 @@ static class StageClock
     {
         if (!Active) return;
         long now = Stopwatch.GetTimestamp();
-        Ms[stage] += (now - last) * 1000.0 / Stopwatch.Frequency;
-        last = partLast = now;
+        Ms[stage] += (now - s_last) * 1000.0 / Stopwatch.Frequency;
+        s_last = s_partLast = now;
         LastStage = stage;
         if (gpuTimestamp) Profiler?.Stamp(stage);
         OnClose?.Invoke(label ?? Names[stage], false);

@@ -8,16 +8,16 @@ namespace Meitou.Game.Ui;
 /// <summary>The item cells of the inventory, trader and machine grids: an item's icon (its name until that loads), quantity and charge.</summary>
 sealed class ItemCells(PlayerInterface player)
 {
-    internal ItemIcons? itemIcons;
+    internal ItemIcons? ItemIcons;
 
     /// <summary>The source of the item icons the inventory and trader grids draw (null: only names).</summary>
-    public void SetItemIcons(ItemIcons? icons) => itemIcons = icons;
+    public void SetItemIcons(ItemIcons? icons) => ItemIcons = icons;
 
     /// <summary>Item icon files the interface asked for that are not on the GPU yet (for pictures that wait for them).</summary>
-    public int PendingIconFiles => player.uiPainter?.PendingIconFiles ?? 0;
+    public int PendingIconFiles => player.UiPainter?.PendingIconFiles ?? 0;
 
     /// <summary>The records' names with the item icons the renderer is drawing (<see cref="UiPainter.RenderedIcons"/>): the host connects it to the character renderer.</summary>
-    public void SetRenderedIcons(Func<string, (Meitou.Game.Rendering.Gpu.GpuTexture Texture, Meitou.Game.Rendering.Gpu.SampledTexture Sampled)?>? lookup) { if (player.uiPainter is not null) player.uiPainter.RenderedIcons = lookup; }
+    public void SetRenderedIcons(Func<string, (Rendering.Gpu.GpuTexture Texture, Rendering.Gpu.SampledTexture Sampled)?>? lookup) { if (player.UiPainter is not null) player.UiPainter.RenderedIcons = lookup; }
 
     /// <summary>
     /// An item icon filling <paramref name="area"/> with its quantity in the corner, or a name while the icon loads. <paramref name="tip"/> is what its hover tooltip lists (the name only when null).
@@ -25,10 +25,10 @@ sealed class ItemCells(PlayerInterface player)
     /// </summary>
     internal void AddItemCell(List<UiControl> controls, string name, UiRect area, string record, string material, string itemName, int quantity, TooltipRuntime.ItemTip? tip, string property, int index, UiRect? clip, bool pickable = true, float? charge = null, string colour = "")
     {
-        player.tooltipRuntime.itemTips[name] = tip ?? TooltipRuntime.ItemTip.NameOnly(record, material, itemName, quantity);
+        player.TooltipRuntime.ItemTips[name] = tip ?? TooltipRuntime.ItemTip.NameOnly(record, material, itemName, quantity);
         string count = quantity > 1 ? quantity.ToString(CultureInfo.InvariantCulture) : "";
         Dictionary<string, string>? image = null;
-        if (itemIcons?.Choose(record, material, colour) is { } choice && player.uiPainter is { } painter)
+        if (ItemIcons?.Choose(record, material, colour) is { } choice && player.UiPainter is { } painter)
         {
             if (choice is { Source: ItemIconSource.File, File: { } file } && painter.IconReady(file))
                 image = new() { ["ImageTexture"] = UiPainter.IconTexture(file) };

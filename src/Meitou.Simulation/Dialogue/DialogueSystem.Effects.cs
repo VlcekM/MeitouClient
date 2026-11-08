@@ -26,19 +26,19 @@ public sealed partial class DialogueSystem
             foreach (string d in line.UnlockButKeepMe) Lock(mc, d, false);
             foreach (string d in line.Locks) Lock(mc, d, true);
         }
-        if (line.Interrupt is { } interrupt) interrupts[me] = interrupt;
+        if (line.Interrupt is { } interrupt) _interrupts[me] = interrupt;
         foreach (var (factionId, amount) in line.ChangeRelations)
         {
-            int f = data.Relations.IndexOf(factionId);
+            int f = _data.Relations.IndexOf(factionId);
             if (f < 0 || amount == 0 || world.Player.Faction < 0) continue;
             ChangeRelation(world, f, world.Player.Faction, amount);
-            world.Post(amount > 0 ? Loc.Tr("Relations with {1} improved by {2}", data.Factions[f].Name, amount) : Loc.Tr("Relations with {1} decreased by {2}", data.Factions[f].Name, -amount));
+            world.Post(amount > 0 ? Loc.Tr("Relations with {1} improved by {2}", _data.Factions[f].Name, amount) : Loc.Tr("Relations with {1} decreased by {2}", _data.Factions[f].Name, -amount));
         }
         CrowdTrigger(world, c, line, me);
         var target = c.Player;
         var tc = Cold(world, target);
         if (tc is not null) GiveItems(world, line, target, tc);
-        if (line.TriggerCampaigns.Count > 0) population?.TriggerFromDialogue(world, me, c.Player, line.TriggerCampaigns);
+        if (line.TriggerCampaigns.Count > 0) _population?.TriggerFromDialogue(world, me, c.Player, line.TriggerCampaigns);
         bool takeOver = false, enslave = false;
         foreach (var effect in line.Effects)
         {
@@ -53,14 +53,14 @@ public sealed partial class DialogueSystem
                     ChangeRelation(world, mc.Faction, tc.Faction, effect.Value);
                     break;
                 case DialogueActions.AffectReputation when mc is not null:
-                    data.Relations.AddGlobalTrust(mc.Faction, effect.Value);   // the speaker's faction's global trust (slot 9), whoever the target is
+                    _data.Relations.AddGlobalTrust(mc.Faction, effect.Value);   // the speaker's faction's global trust (slot 9), whoever the target is
                     break;
                 case DialogueActions.AttackChaseForever or DialogueActions.AttackStayNearHome:
                     if (mc is not null && tc is not null) FlagFrom(world, mc, me, target, tc, MemoryTag.TempEnemy);
                     Aggro?.Notice(world, me, target);
                     Attack(world, me, target);
                     break;
-                case DialogueActions.AttackIfNoCoexist when mc is not null && tc is not null && !data.Relations.Coexists(mc.Faction, tc.Faction):
+                case DialogueActions.AttackIfNoCoexist when mc is not null && tc is not null && !_data.Relations.Coexists(mc.Faction, tc.Faction):
                     FlagFrom(world, mc, me, target, tc, MemoryTag.TempEnemy);
                     Aggro?.Notice(world, me, target);
                     Attack(world, me, target);
@@ -74,34 +74,34 @@ public sealed partial class DialogueSystem
                     break;
                 case DialogueActions.CharacterEditor:
                     c.Ended = true;
-                    request = new DialogueRequest(++requestId, DialogueRequestKind.CharacterEditor, target, me);
+                    _request = new DialogueRequest(++_requestId, DialogueRequestKind.CharacterEditor, target, me);
                     return;
                 case DialogueActions.ChooseSlavesSelling or DialogueActions.ChooseSlavesBuying or DialogueActions.ChooseAnimalsBuying when target != me:
                     // The character trading window opens as the conversation closes (OpenCharacterTrade), a speech bubble's at once; val0 is the price override.
-                    characterTradeAfter = (effect.Action switch
+                    _characterTradeAfter = (effect.Action switch
                     {
                         DialogueActions.ChooseSlavesSelling => CharacterTradeKind.SlaveSelling,
                         DialogueActions.ChooseSlavesBuying => CharacterTradeKind.SlaveBuying,
                         _ => CharacterTradeKind.AnimalBuying,
                     }, me, target, effect.Value);
-                    if (!ReferenceEquals(open, c)) { OpenCharacterTrade(world); break; }
+                    if (!ReferenceEquals(_open, c)) { OpenCharacterTrade(world); break; }
                     c.Ended = true;
                     return;
                 case ChoosePrisonerBail when Arrests is not null:
                     c.Ended = true;
-                    bailAfter = (me, target);   // the bail list opens as the conversation closes (OpenBail)
+                    _bailAfter = (me, target);   // the bail list opens as the conversation closes (OpenBail)
                     return;
-                case DialogueActions.AssignBounty when tc is not null && mc is not null && effect.Value > 0 && data.Relations.Contains(mc.Faction):
-                {
-                    // FUN_140853e20 (Verified): marks the pending crime booked, then adds the amount to the speaker's faction's booking entry (none kept without one).
-                    if (tc.Pending is { } pending) pending.Booked = true;
-                    if (Crime.CrimeFactions.BookingKey(data.Relations, mc.Faction) is var key and >= 0)
-                        (tc.Bounties ??= new Crime.BountyLedger()).Get(key, data.Factions[key].Name).Amount += effect.Value;
-                    break;
-                }
+                case DialogueActions.AssignBounty when tc is not null && mc is not null && effect.Value > 0 && _data.Relations.Contains(mc.Faction):
+                    {
+                        // FUN_140853e20 (Verified): marks the pending crime booked, then adds the amount to the speaker's faction's booking entry (none kept without one).
+                        if (tc.Pending is { } pending) pending.Booked = true;
+                        if (Crime.CrimeFactions.BookingKey(_data.Relations, mc.Faction) is var key and >= 0)
+                            (tc.Bounties ??= new Crime.BountyLedger()).Get(key, _data.Factions[key].Name).Amount += effect.Value;
+                        break;
+                    }
                 // Without an amount only a speaker whose CHARACTER has `assigns bounties` books the target's pending crime (Character::canAssignBounties, Verified).
                 case DialogueActions.AssignBounty when tc is not null && mc is not null && effect.Value <= 0 && Arrests is { } booker
-                    && data.Db.Find(mc.RecordId)?.GetBool("assigns bounties") == true && world.Characters.TryResolveNext(target, out int culprit):
+                    && _data.Db.Find(mc.RecordId)?.GetBool("assigns bounties") == true && world.Characters.TryResolveNext(target, out int culprit):
                     booker.Crimes.Book(world, culprit, booker.Crimes.Factions.BookingOf(mc.Faction), me);   // for the law faction (getLawEnforcementFaction)
                     break;
                 case DialogueActions.CrimeAlarm when tc is not null && mc is not null && Arrests is { } law
@@ -129,12 +129,12 @@ public sealed partial class DialogueSystem
                     TalkToLeader(world, c, mc, target, tc);
                     break;
                 case DialogueActions.ArrestTarget when tc is not null:
-                {
-                    bool capture = Arrests?.CapturesInTown(world, me, tc) == true;   // one answer for the memory and the task
-                    ArrestMemory(world, me, mc, target, tc, capture);
-                    Arrests?.ArrestFromDialogue(world, me, target, capture);
-                    break;
-                }
+                    {
+                        bool capture = Arrests?.CapturesInTown(world, me, tc) == true;   // one answer for the memory and the task
+                        ArrestMemory(world, me, mc, target, tc, capture);
+                        Arrests?.ArrestFromDialogue(world, me, target, capture);
+                        break;
+                    }
                 case DialogueActions.TagEscapedSlave when tc is not null:
                     Locks.FixtureRegistry.TagEscaped(world, tc);
                     break;
@@ -142,27 +142,27 @@ public sealed partial class DialogueSystem
                     Locks.FixtureRegistry.FreeSlave(world, freed, tc);
                     break;
                 case DialogueActions.ClearBounty when tc?.Bounties is { } ledger && mc is not null:
-                    if (ledger.BookedFor(data.Relations, mc.Faction) is { } entry) ledger.Remove(entry);
-                    if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < data.SiteFactions.Count && ledger.BookedFor(data.Relations, data.SiteFactions[town]) is { } local)
+                    if (ledger.BookedFor(_data.Relations, mc.Faction) is { } entry) ledger.Remove(entry);
+                    if (Position(world, target) is { } at && TownAt(at) is >= 0 and var town && town < _data.SiteFactions.Count && ledger.BookedFor(_data.Relations, _data.SiteFactions[town]) is { } local)
                         ledger.Remove(local);
                     if (ledger.Count == 0) tc.Bounties = null;
                     tc.Recognition = 0;
                     break;
                 case DialogueActions.IncreaseFactionRank when mc is not null:
-                    data.Relations.RaiseRank(mc.Faction, effect.Value);
+                    _data.Relations.RaiseRank(mc.Faction, effect.Value);
                     break;
                 case DialogueActions.LockThisDialog when mc is not null && c.Root is { } current:
                     Lock(mc, current.StringId, true);
                     break;
                 case DialogueActions.AssaultPhase or DialogueActions.RetreatPhase:
-                    population?.SetCampaignPhase(world, me, effect.Action == DialogueActions.AssaultPhase);
+                    _population?.SetCampaignPhase(world, me, effect.Action == DialogueActions.AssaultPhase);
                     break;
                 case DialogueActions.FollowWhileTalking when !target.IsNone && mc is { IsPlayer: false }:
-                    followers[me] = target;
+                    _followers[me] = target;
                     StartFollowing(world, me, target);
                     break;
                 case DialogueActions.ThugHunter when !target.IsNone && mc is { IsPlayer: false }:
-                    stalkers[me] = new Stalk(target);
+                    _stalkers[me] = new Stalk(target);
                     break;
                 case DialogueActions.RunAway when mc is not null && tc is not null:
                     RunAway(world, me, mc, target, tc);
@@ -182,11 +182,11 @@ public sealed partial class DialogueSystem
                 case DialogueActions.SeparateToMyOwnSquad when mc is not null:
                     Separate(world, mc.IsPlayer || mc.Faction == world.Player.Faction ? target : me);
                     break;
-                case DialogueActions.DeclareWar when mc is not null && tc is not null && data.Relations.Contains(mc.Faction) && data.Relations.Contains(tc.Faction):
-                    PlayerRelations.DeclareWar(world, data.Relations, mc.Faction, tc.Faction);
+                case DialogueActions.DeclareWar when mc is not null && tc is not null && _data.Relations.Contains(mc.Faction) && _data.Relations.Contains(tc.Faction):
+                    PlayerRelations.DeclareWar(world, _data.Relations, mc.Faction, tc.Faction);
                     break;
-                case DialogueActions.EndWar when mc is not null && tc is not null && data.Relations.Contains(mc.Faction) && data.Relations.Contains(tc.Faction):
-                    PlayerRelations.EndWar(world, data.Relations, mc.Faction, tc.Faction);
+                case DialogueActions.EndWar when mc is not null && tc is not null && _data.Relations.Contains(mc.Faction) && _data.Relations.Contains(tc.Faction):
+                    PlayerRelations.EndWar(world, _data.Relations, mc.Faction, tc.Faction);
                     break;
                 case DialogueActions.SummonMySquad:
                     Summon(world, me);
@@ -209,8 +209,8 @@ public sealed partial class DialogueSystem
         // Last, for a speaker squad outside the player's faction (FUN_140273330): change AI replaces its packages, then AI contract starts the contract aimed at the target.
         if (mc is { SquadId: >= 0 } && mc.Faction != world.Player.Faction && !mc.IsPlayer)
         {
-            if (line.ChangeAi is { } package) world.Defer(new Ai.ChangeAi(mc.SquadId, package) { Tick = world.Tick + 1 });
-            if (line.AiContract is { } contract) world.Defer(new Ai.StartContract(mc.SquadId, contract.Package, contract.Hours, target.IsNone ? null : target) { Tick = world.Tick + 1 });
+            if (line.ChangeAi is { } package) world.Defer(new ChangeAi(mc.SquadId, package) { Tick = world.Tick + 1 });
+            if (line.AiContract is { } contract) world.Defer(new StartContract(mc.SquadId, contract.Package, contract.Hours, target.IsNone ? null : target) { Tick = world.Tick + 1 });
         }
     }
 
@@ -245,7 +245,7 @@ public sealed partial class DialogueSystem
     {
         foreach (var (id, count) in line.GiveItems)
         {
-            if (data.Items.Create(id, count is >= 2 and <= 49 ? count : 1) is not { } item) continue;
+            if (_data.Items.Create(id, count is >= 2 and <= 49 ? count : 1) is not { } item) continue;
             string name = item.Name;
             if (tc.Inventory?.Add(item) != true && Position(world, target) is { } at) world.GroundItems.Drop(item, at, 0);
             world.Post($"{Loc.Tr("Received")} {name}");
@@ -265,7 +265,7 @@ public sealed partial class DialogueSystem
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!table.Next[i].Alive || table.Cold(i) is not { Medical.Dead: false } c || c.Faction != tc.Faction || c.SlaveState != 0) continue;
-            if (c.Fighter?.IsAnimal == true || c.Appearance?.Animal is not null || c.Race is null || dialogue.RaceMatches(c.Race.StringId, race.StringId)) continue;
+            if (c.Fighter?.IsAnimal == true || c.Appearance?.Animal is not null || c.Race is null || _dialogue.RaceMatches(c.Race.StringId, race.StringId)) continue;
             if (Vector3.DistanceSquared(table.Next[i].Position, at) > 100 * 100) continue;
             Locks.FixtureRegistry.Enslave(world, c, mc.Faction, mc.SquadId);
             Memory.Remember(world, c.SquadId, me, MemoryTag.None);   // its squad remembers the speaker (the tag is not visible in the decompile; engine: none)
@@ -287,10 +287,10 @@ public sealed partial class DialogueSystem
 
     void ChangeRelation(World world, int a, int b, int amount)
     {
-        var (before, after) = data.Relations.Add(a, b, amount);
+        var (before, after) = _data.Relations.Add(a, b, amount);
         int other = a == world.Player.Faction ? b : a;
         if (b == world.Player.Faction || a == world.Player.Faction)
-            if (PlayerRelations.Notice(data.Factions[other].Name, before, after) is { } text) world.Post(text);
+            if (PlayerRelations.Notice(_data.Factions[other].Name, before, after) is { } text) world.Post(text);
     }
 
     /// <summary>Money to (or from, when negative) the character's faction: the player's purse, else its squad's.</summary>
@@ -309,7 +309,7 @@ public sealed partial class DialogueSystem
         var table = world.Characters;
         if (!table.TryResolveNext(target, out _) || !table.TryResolveNext(me, out int s) || !table.Next[s].Alive) return;
         TaskStart.Stand(table, s);
-        if (world.SystemOf<Ai.AiSystem>() is { } ai && table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true } && ai.OrderAssault(world, me, target)) return;
+        if (world.SystemOf<AiSystem>() is { } ai && table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true } && ai.OrderAssault(world, me, target)) return;
         if (table.Cold(s) is { IsPlayer: false, IsImprisoned: false, Medical.Incapacitated: false, Fighter.CanAttack: true })
             world.Defer(new Combat.AttackOrder([me], target) { Tick = world.Tick + 1, Source = TaskSource.Npc });
     }
@@ -356,19 +356,19 @@ public sealed partial class DialogueSystem
             case "COST": return line?.Cost is { } cost ? cost.ToString("N0", CultureInfo.InvariantCulture) : "";
             case "MYNAME": return NameOf(world, me);
             case "YOURNAME": return Cold(world, other)?.Name ?? "you";
-            case "TARGETFACTION": return Cold(world, other) is { } o && data.Relations.Contains(o.Faction) ? data.Factions[o.Faction].Name : "you";
-            case "PLAYERFACTION": return data.Relations.Contains(world.Player.Faction) ? data.Factions[world.Player.Faction].Name : "";
+            case "TARGETFACTION": return Cold(world, other) is { } o && _data.Relations.Contains(o.Faction) ? _data.Factions[o.Faction].Name : "you";
+            case "PLAYERFACTION": return _data.Relations.Contains(world.Player.Faction) ? _data.Factions[world.Player.Faction].Name : "";
         }
-        if (dialogue.WordSwap(token) is not { } swap) return "";
+        if (_dialogue.WordSwap(token) is not { } swap) return "";
         // The full line walk over the swap's lines (FUN_14067a530 :168-220 into FUN_14067a0c0): the target is the conversation's, or the passed one when that is the owner; run a second time
         // when the first finds nothing; the picked line and its parents (the swap, a root it came through) are stamped used (FUN_140675630).
         var walkTarget = c.Player.IsNone || c.Player == me ? other : c.Player;
         var picked = Pick(world, c, swap.Children, 0, walkTarget) ?? Pick(world, c, swap.Children, 0, walkTarget);
         if (picked is not { } p) return "";
         double now = world.GameHours;
-        lastUse[p.Line.StringId] = now;
-        lastUse[swap.StringId] = now;
-        if (p.Root is { } through) lastUse[through.StringId] = now;
+        _lastUse[p.Line.StringId] = now;
+        _lastUse[swap.StringId] = now;
+        if (p.Root is { } through) _lastUse[through.StringId] = now;
         return Expand(world, c, p.Line, PickText(world, p.Speaker, p.Line), me, other, depth + 1);
     }
 }

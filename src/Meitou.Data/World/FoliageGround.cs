@@ -15,19 +15,19 @@ public sealed class FoliageGround
     public const int Size = 129;
     public const float Spacing = 36;
 
-    readonly float[] heights;
+    readonly float[] _heights;
 
     public FoliageGround(float x0, float z0, float[] heights)
     {
         if (heights.Length != Size * Size) throw new ArgumentException($"{heights.Length} heights for a {Size}² grid.", nameof(heights));
-        (X0, Z0, this.heights) = (x0, z0, heights);
+        (X0, Z0, this._heights) = (x0, z0, heights);
     }
 
     public float X0 { get; }
     public float Z0 { get; }
 
     /// <summary>The 129 x 129 grid, row = +Z (for the layout cache).</summary>
-    internal ReadOnlySpan<float> Heights => heights;
+    internal ReadOnlySpan<float> Heights => _heights;
 
     /// <summary>The zone's grid from the heightmap (reads 129 rows of the file).</summary>
     public static FoliageGround Read(TerrainHeightmap map, ZoneCoordinate zone)
@@ -39,7 +39,7 @@ public sealed class FoliageGround
         return new FoliageGround((float)x0, (float)z0, h);
     }
 
-    public float At(int i, int j) => heights[Math.Clamp(j, 0, Size - 1) * Size + Math.Clamp(i, 0, Size - 1)];
+    public float At(int i, int j) => _heights[Math.Clamp(j, 0, Size - 1) * Size + Math.Clamp(i, 0, Size - 1)];
 
     /// <summary>Bilinear height, the point clamped to the grid.</summary>
     public float Height(float x, float z)
@@ -51,8 +51,8 @@ public sealed class FoliageGround
         int i = (int)fu, j = (int)fv;
         int i1 = Math.Min(i + 1, Size - 1), j1 = Math.Min(j + 1, Size - 1);
         float tu = u - fu, tv = v - fv;
-        float top = (float)(tu * heights[j * Size + i1] + heights[j * Size + i] * (1.0 - tu));
-        float bottom = (float)(tu * heights[j1 * Size + i1] + heights[j1 * Size + i] * (1.0 - tu));
+        float top = (float)(tu * _heights[j * Size + i1] + _heights[j * Size + i] * (1.0 - tu));
+        float bottom = (float)(tu * _heights[j1 * Size + i1] + _heights[j1 * Size + i] * (1.0 - tu));
         return (float)(top * (1.0 - tv) + bottom * tv);
     }
 
@@ -61,9 +61,9 @@ public sealed class FoliageGround
     {
         float u = Math.Clamp((x - X0) / Spacing, 0, Size - 1), v = Math.Clamp((z - Z0) / Spacing, 0, Size - 1);
         int i = (int)u, j = (int)v;
-        float h = heights[j * Size + i];
-        float left = i > 0 ? heights[j * Size + i - 1] : h;
-        float down = j < Size - 1 ? heights[(j + 1) * Size + i] : h;
+        float h = _heights[j * Size + i];
+        float left = i > 0 ? _heights[j * Size + i - 1] : h;
+        float down = j < Size - 1 ? _heights[(j + 1) * Size + i] : h;
         return Math.Max(MathF.Abs(h - left), MathF.Abs(h - down));
     }
 
@@ -89,7 +89,7 @@ public sealed class FoliageOverlay
     public const int ZonePixels = 128;
     public const int Window = ZonePixels + 1 + 2 * Margin;
 
-    readonly byte[] rgba;
+    readonly byte[] _rgba;
 
     /// <param name="tileRgba">The zone's overlay tile, RGBA rows of <see cref="TilePixels"/>, row = +Z.</param>
     public FoliageOverlay(ZoneCoordinate zone, byte[] tileRgba)
@@ -103,12 +103,12 @@ public sealed class FoliageOverlay
         TileZ0 = TileZ * TilePixels * PixelSize - WorldLayout.HalfWorldSize;
         ZonePixelX = zone.X % zonesPerTile * ZonePixels;
         ZonePixelZ = zone.Y % zonesPerTile * ZonePixels;
-        rgba = new byte[Window * Window * 4];
+        _rgba = new byte[Window * Window * 4];
         for (int j = 0; j < Window; j++)
             for (int i = 0; i < Window; i++)
             {
                 int ti = Math.Clamp(ZonePixelX - Margin + i, 0, TilePixels - 1), tj = Math.Clamp(ZonePixelZ - Margin + j, 0, TilePixels - 1);
-                Buffer.BlockCopy(tileRgba, (tj * TilePixels + ti) * 4, rgba, (j * Window + i) * 4, 4);
+                Buffer.BlockCopy(tileRgba, (tj * TilePixels + ti) * 4, _rgba, (j * Window + i) * 4, 4);
             }
     }
 
@@ -137,11 +137,11 @@ public sealed class FoliageOverlay
     static bool InTile(int i, int j) => i is >= 0 and < TilePixels && j is >= 0 and < TilePixels;
 
     /// <summary>Channel value (0 R, 1 G, 2 B, 3 A) at tile pixel (i, j); 0 outside the tile.</summary>
-    public byte Get(int channel, int i, int j) => InTile(i, j) ? rgba[Offset(i, j) + channel] : (byte)0;
+    public byte Get(int channel, int i, int j) => InTile(i, j) ? _rgba[Offset(i, j) + channel] : (byte)0;
 
     public void Set(int channel, int i, int j, byte value)
     {
-        if (InTile(i, j)) rgba[Offset(i, j) + channel] = value;
+        if (InTile(i, j)) _rgba[Offset(i, j) + channel] = value;
     }
 
     /// <summary>Road weight at tile pixel (i, j).</summary>

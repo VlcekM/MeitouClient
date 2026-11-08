@@ -81,8 +81,8 @@ sealed class GpuObjectMesh
     public List<GpuObjectPart> Parts { get; } = [];
     public required float[] Distances;
     /// <summary>How a draw picks among the levels (the merged list with the generated ones, or the file's only: <see cref="ObjectLodGen.Enabled"/>).</summary>
-    public LodCurve Curve { get => curve ??= LodCurve.Of(Distances); set => curve = value; }
-    LodCurve? curve;
+    public LodCurve Curve { get => _curve ??= LodCurve.Of(Distances); set => _curve = value; }
+    LodCurve? _curve;
     /// <summary>For each level: the mesh to draw instead (manual levels), else null.</summary>
     public required GpuObjectMesh?[] Manual;
     public required Vector3 Centre;
@@ -137,26 +137,26 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
 
     BufferUse RayInput => gpuContext.HasRayQuery ? BufferUse.RayInput : 0;
 
-    readonly Dictionary<string, ObjectMesh> meshes = new(StringComparer.OrdinalIgnoreCase);
-    readonly Dictionary<ObjectMesh, float> wanted = [];
-    readonly List<ObjectMesh> running = [];
-    int frame;
+    readonly Dictionary<string, ObjectMesh> _meshes = new(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<ObjectMesh, float> _wanted = [];
+    readonly List<ObjectMesh> _running = [];
+    int _frame;
 
     /// <summary>Decodes running at once.</summary>
     public int MaxJobs { get; set; } = 4;
     public List<string> Messages { get; } = [];
-    public int Resident => meshes.Values.Count(m => m.Status == ObjectMesh.State.Resident);
-    public int Total => meshes.Count;
+    public int Resident => _meshes.Values.Count(m => m.Status == ObjectMesh.State.Resident);
+    public int Total => _meshes.Count;
     public long Bytes { get; private set; }
     /// <summary>Decodes running or wanted, and meshes whose upload is queued.</summary>
-    public int Pending => running.Count + wanted.Count + reshaping.Count + reshapeQueued;
-    public bool Idle => running.Count == 0 && wanted.Count == 0 && reshaping.Count == 0 && reshapeQueued == 0;
+    public int Pending => _running.Count + _wanted.Count + _reshaping.Count + _reshapeQueued;
+    public bool Idle => _running.Count == 0 && _wanted.Count == 0 && _reshaping.Count == 0 && _reshapeQueued == 0;
 
     // ---- distance-based streaming of the finest LOD level (docs/renderer-native.md 8.12) ----
 
-    readonly List<ObjectMesh> reshaping = [];
+    readonly List<ObjectMesh> _reshaping = [];
     /// <summary>Reshaped meshes whose upload is queued (until the swap).</summary>
-    int reshapeQueued;
+    int _reshapeQueued;
     /// <summary>Meshes remade with another finest level held: finer (something came near), coarser (nothing near needs it), and the finer ones in flight.</summary>
     public int Refined { get; private set; }
     public int Coarsened { get; private set; }
@@ -203,23 +203,23 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     public bool Retarget(ObjectMesh m, float near)
     {
         if (m.Status != ObjectMesh.State.Resident || m.Reshape is not null || m.Distant) return false;
-        if (reshaping.Count >= MaxReshapes || Guard is { Streaming: false } && m.Gpu!.MinLevel < m.Gpu.Curve.LevelFor(near * LodBias)) return false;
+        if (_reshaping.Count >= MaxReshapes || Guard is { Streaming: false } && m.Gpu!.MinLevel < m.Gpu.Curve.LevelFor(near * LodBias)) return false;
         string key = m.Key;
         float bias = LodBias;
         bool keep = m.KeepLevelIndices;
         m.Reshape = BackgroundWork.Run(() => Decode(key, false, 0, keep, near, false, bias));
-        reshaping.Add(m);
+        _reshaping.Add(m);
         return true;
     }
 
     /// <summary>The reshape decodes that finished: the new parts are queued for upload, and swapped in place of the old once uploaded.</summary>
     void PumpReshapes()
     {
-        for (int i = 0; i < reshaping.Count; i++)
+        for (int i = 0; i < _reshaping.Count; i++)
         {
-            var m = reshaping[i];
+            var m = _reshaping[i];
             if (!m.Reshape!.IsCompleted) continue;
-            reshaping.RemoveAt(i--);
+            _reshaping.RemoveAt(i--);
             DecodedObjectMesh? decoded = null;
             try { decoded = m.Reshape.Result; }
             catch (AggregateException e) { Messages.Add($"mesh {m.Key}: {e.InnerException?.Message ?? e.Message}"); }
@@ -236,7 +236,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
 
     public ObjectMesh Get(string key, bool distant = false)
     {
-        if (!meshes.TryGetValue(key, out var m)) meshes[key] = m = new ObjectMesh { Key = key, Distant = distant };
+        if (!_meshes.TryGetValue(key, out var m)) _meshes[key] = m = new ObjectMesh { Key = key, Distant = distant };
         return m;
     }
 
@@ -248,7 +248,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     public void Request(ObjectMesh mesh, float near, float order)
     {
         if (mesh.Status != ObjectMesh.State.None) return;
-        wanted[mesh] = wanted.TryGetValue(mesh, out var old) ? Math.Min(old, order) : order;
+        _wanted[mesh] = _wanted.TryGetValue(mesh, out var old) ? Math.Min(old, order) : order;
         mesh.WantedNear = Math.Min(mesh.WantedNear, near + WantedSlack);
     }
 
@@ -258,12 +258,12 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     /// <summary>Starts decodes (nearest first) and queues the uploads of finished ones.</summary>
     public void Pump()
     {
-        frame++;
-        for (int i = 0; i < running.Count; i++)
+        _frame++;
+        for (int i = 0; i < _running.Count; i++)
         {
-            var m = running[i];
+            var m = _running[i];
             if (!m.Job!.IsCompleted) continue;
-            running.RemoveAt(i--);
+            _running.RemoveAt(i--);
             DecodedObjectMesh? decoded = null;
             try { decoded = m.Job.Result; }
             catch (AggregateException e) { Messages.Add($"mesh {m.Key}: {e.InnerException?.Message ?? e.Message}"); }
@@ -273,15 +273,15 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             QueueUpload(m, decoded);
         }
         PumpReshapes();
-        if (wanted.Count == 0) return;
+        if (_wanted.Count == 0) return;
         // Memory pressure: only what is wanted within the guard's near reach is decoded, and nothing past its priority ceiling (the scan asks again).
         bool nearOnly = Guard is { Streaming: false };
-        if (Guard is { StreamsNear: false }) { wanted.Clear(); return; }
-        var order = wanted.OrderBy(p => p.Value).Select(p => p.Key).ToList();
-        wanted.Clear();
+        if (Guard is { StreamsNear: false }) { _wanted.Clear(); return; }
+        var order = _wanted.OrderBy(p => p.Value).Select(p => p.Key).ToList();
+        _wanted.Clear();
         foreach (var m in order)
         {
-            if (running.Count >= MaxJobs) break;
+            if (_running.Count >= MaxJobs) break;
             if (m.Status != ObjectMesh.State.None || nearOnly && m.WantedNear - WantedSlack > VramGuard.NearReach) continue;
             m.Status = ObjectMesh.State.Loading;
             string key = m.Key;
@@ -290,7 +290,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             float near = Math.Max(m.WantedNear - LookAhead, 0), bias = LodBias;
             m.WantedNear = float.PositiveInfinity;
             m.Job = BackgroundWork.Run(() => Decode(key, distant, 0, keep, near, true, bias));
-            running.Add(m);
+            _running.Add(m);
         }
     }
 
@@ -439,8 +439,14 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             }
             part = new ModelPart
             {
-                SubMeshIndex = part.SubMeshIndex, MaterialName = part.MaterialName, Vertices = kept.ToArray(), Indices = arrays[minLevel],
-                HasUv = part.HasUv, HasTangents = part.HasTangents, HasColours = part.HasColours, Skinned = part.Skinned,
+                SubMeshIndex = part.SubMeshIndex,
+                MaterialName = part.MaterialName,
+                Vertices = kept.ToArray(),
+                Indices = arrays[minLevel],
+                HasUv = part.HasUv,
+                HasTangents = part.HasTangents,
+                HasColours = part.HasColours,
+                Skinned = part.Skinned,
             };
         }
         var offset = new int[levelCount];
@@ -469,11 +475,17 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         {
             gp = new GpuObjectPart
             {
-                SubMeshIndex = part.SubMeshIndex, MaterialName = part.MaterialName, HasTangents = part.HasTangents, HasColours = part.HasColours,
+                SubMeshIndex = part.SubMeshIndex,
+                MaterialName = part.MaterialName,
+                HasTangents = part.HasTangents,
+                HasColours = part.HasColours,
                 // With ray queries the global illumination's acceleration structures are built from these same buffers (docs/render-gi.md).
                 Vertices = DeviceBuffer.Create(gpuContext, (ulong)vertexBytes, BufferUse.Vertex | RayInput, AllocationName),
                 Indices = DeviceBuffer.Create(gpuContext, (ulong)indexBytes, BufferUse.Index | RayInput, AllocationName),
-                Offset = prepared.Offset, Count = prepared.Count, LevelIndices = prepared.Levels, UvScale = prepared.UvScale,
+                Offset = prepared.Offset,
+                Count = prepared.Count,
+                LevelIndices = prepared.Levels,
+                UvScale = prepared.UvScale,
             };
         }, label + " (allocate)");
         for (int at = 0; at < vertexBytes; at += SlabBytes)
@@ -548,7 +560,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     public double GuardIdleSeconds { get; set; } = 2;
     /// <summary>Called with every GPU mesh (manual levels included) that was deleted, so users of it can forget it.</summary>
     public Action<GpuObjectMesh>? Unloaded { get; set; }
-    long lastTrim;
+    long _lastTrim;
 
     /// <summary>
     /// Deletes the GPU buffers of meshes not drawn for <see cref="IdleSeconds"/> (earlier, least recently used first, while over the high-water
@@ -558,12 +570,12 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     public void Trim()
     {
         long now = Environment.TickCount64;
-        if (now - lastTrim < 1000) return;
-        lastTrim = now;
+        if (now - _lastTrim < 1000) return;
+        _lastTrim = now;
         bool guarded = Guard?.Pressure ?? false;
         bool pressure = Bytes > MarkMb * 1048576;
         List<ObjectMesh>? victims = null;
-        foreach (var m in meshes.Values)
+        foreach (var m in _meshes.Values)
         {
             if (m.Status != ObjectMesh.State.Resident || m.Reshape is not null) continue;
             double idle = (now - m.LastUsed) / 1000.0;
@@ -588,14 +600,14 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     /// <summary>Waits for every running decode (offscreen rendering).</summary>
     public void WaitForJobs()
     {
-        foreach (var m in running.ToArray()) { try { m.Job!.Wait(); } catch (AggregateException) { } }
-        foreach (var m in reshaping.ToArray()) { try { m.Reshape!.Wait(); } catch (AggregateException) { } }
+        foreach (var m in _running.ToArray()) { try { m.Job!.Wait(); } catch (AggregateException) { } }
+        foreach (var m in _reshaping.ToArray()) { try { m.Reshape!.Wait(); } catch (AggregateException) { } }
     }
 
     public void Dispose()
     {
         WaitForJobs();
-        foreach (var mesh in meshes.Values)
+        foreach (var mesh in _meshes.Values)
             if (mesh.Gpu is { } gpu) Delete(gpu);
     }
 
@@ -631,10 +643,10 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             var innerGpu = fresh.Manual[level]!;
             for (int i = 0; i < inner.Prepared.Count; i++) QueuePart(innerGpu, inner.Prepared[i], $"mesh {mesh.Key} manual {level} part {i} (reshaped)");
         }
-        reshapeQueued++;
+        _reshapeQueued++;
         uploads.Add(() =>
         {
-            reshapeQueued--;
+            _reshapeQueued--;
             if (mesh.Gpu is not { } old || mesh.Status != ObjectMesh.State.Resident || old.Manual.Length != fresh.Manual.Length)
             {
                 DeleteBuffers(fresh);

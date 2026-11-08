@@ -20,7 +20,7 @@ public static class ResearchGate
         var ids = new List<string>();
         void Add(string id)
         {
-            if (db.Find(id) is { Type: FcsRecordType.RESEARCH } && !ids.Contains(id, StringComparer.Ordinal)) ids.Add(id);
+            if (db.Find(id) is { Type: FcsRecordType.Research } && !ids.Contains(id, StringComparer.Ordinal)) ids.Add(id);
         }
         if (start is not null)
             foreach (var link in start.Research) Add(link.Id);
@@ -40,10 +40,10 @@ public static class ResearchGate
         foreach (var id in completed) times[id] = times.GetValueOrDefault(id) + 1;
         foreach (var (id, finished) in times)
         {
-            if (db.Find(id) is not { Type: FcsRecordType.RESEARCH } research) continue;
+            if (db.Find(id) is not { Type: FcsRecordType.Research } research) continue;
             bool repeats = research.GetInt("repeats") > 0;
             foreach (var building in research.GetReferences("enable buildings"))
-                if ((!repeats || building.Values.Value0 >= 0 && building.Values.Value0 < finished) && db.Find(building.TargetStringId) is { Type: FcsRecordType.BUILDING })
+                if ((!repeats || building.Values.Value0 >= 0 && building.Values.Value0 < finished) && db.Find(building.TargetStringId) is { Type: FcsRecordType.Building })
                     unlocked.Add(building.TargetStringId);
         }
         return unlocked;

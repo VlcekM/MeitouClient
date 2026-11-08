@@ -24,7 +24,7 @@ namespace Meitou.Tests.Simulation;
 public class DecisionTests
 {
     /// <summary>The rig after its opening fight is stopped: the fighter stands idle, no longer sneaking, with the decision trace on.</summary>
-    static TaskStartTests.Rig Quiet(bool senses = false, Meitou.Data.Gameplay.FactionRelations? relations = null)
+    static TaskStartTests.Rig Quiet(bool senses = false, FactionRelations? relations = null)
     {
         var rig = new TaskStartTests.Rig(carrying: false, decide: true, senses: senses, relations: relations);
         rig.World.RunTicks(3);
@@ -40,7 +40,7 @@ public class DecisionTests
     {
         var at = rig.World.Characters.Next[rig.Fighter.Slot].Position;
         var foe = rig.Add(at.X + 12, at.Z, player: false);
-        rig.Say(new Meitou.Simulation.Combat.AttackOrder([foe], rig.Fighter) { Tick = rig.World.Tick });
+        rig.Say(new AttackOrder([foe], rig.Fighter) { Tick = rig.World.Tick });
         return foe;
     }
 
@@ -79,7 +79,7 @@ public class DecisionTests
     {
         using var rig = Quiet();
         var f = rig.Fighter;
-        rig.Say(new AddJob([f], TaskType.OPERATE_MACHINERY, rig.WellSite) { Tick = rig.World.Tick });
+        rig.Say(new AddJob([f], TaskType.OperateMachinery, rig.WellSite) { Tick = rig.World.Tick });
         RunUntil(rig, () => rig.Task(f) == CharacterTask.Operate, 600, "operating the well");
         var foe = Attacker(rig);
         RunUntil(rig, () => rig.Task(f) == CharacterTask.Attack, 120, "fighting back");
@@ -93,7 +93,7 @@ public class DecisionTests
     {
         var at = rig.World.Characters.Next[rig.Mate.Slot].Position;
         var foe = rig.Add(at.X + 12, at.Z, player: false);
-        rig.Say(new Meitou.Simulation.Combat.AttackOrder([foe], rig.Mate) { Tick = rig.World.Tick });
+        rig.Say(new AttackOrder([foe], rig.Mate) { Tick = rig.World.Tick });
         return foe;
     }
 
@@ -146,7 +146,7 @@ public class DecisionTests
         var foe = Attacker(rig);
         RunUntil(rig, () => rig.Task(f) == CharacterTask.Attack, 120, "fighting back");
         Assert.Equal(foe.Slot, rig.Combat.StateOf(f).TargetSlot);
-        Assert.Equal([TaskType.FIRST_AID_ORDER], rig.Cold(f).OrderQueue.Select(e => e.Row));
+        Assert.Equal([TaskType.FirstAidOrder], rig.Cold(f).OrderQueue.Select(e => e.Row));
         Assert.Contains(rig.Cold(f).Decision!.Lines, l => l.StartsWith("1 Orders: ") && !l.EndsWith("no order"));
     }
 
@@ -159,7 +159,7 @@ public class DecisionTests
     {
         using var rig = Quiet();
         var f = rig.Fighter;
-        rig.Say(new AddJob([f], TaskType.OPERATE_MACHINERY, rig.WellSite) { Tick = rig.World.Tick });
+        rig.Say(new AddJob([f], TaskType.OperateMachinery, rig.WellSite) { Tick = rig.World.Tick });
         RunUntil(rig, () => rig.Task(f) == CharacterTask.Operate, 600, "operating the well");
         rig.Say(new RestOrder([f]) { Tick = rig.World.Tick });
         rig.World.RunTick();
@@ -178,20 +178,20 @@ public class DecisionTests
     {
         using var rig = Quiet();
         var f = rig.Fighter;
-        rig.Say(new AddJob([f], TaskType.OPERATE_MACHINERY, rig.WellSite) { Tick = rig.World.Tick });
+        rig.Say(new AddJob([f], TaskType.OperateMachinery, rig.WellSite) { Tick = rig.World.Tick });
         rig.Say(new MedicJobCommand([f]) { Tick = rig.World.Tick + 1 });
         RunUntil(rig, () => rig.Task(f) == CharacterTask.Operate && rig.Cold(f).Jobs.Count == 2, 600, "operating the well (the higher job)");
         rig.Say(new OrdersCommand([f], CharacterOrders.Jobs, On: false) { Tick = rig.World.Tick });
         RunUntil(rig, () => rig.Task(f) == CharacterTask.Treat, 2 * ProductionSystem.JobCheckTicks + 2, "the medic job running with the switch off");
-        Assert.Equal((TaskType.JOB_MEDIC, 1), (rig.Cold(f).Running!.Row, rig.Cold(f).Running!.Job));
-        Assert.Contains($"5 Jobs [0] {(int)TaskType.OPERATE_MACHINERY}: jobs switch off", rig.Cold(f).Decision!.Lines);
+        Assert.Equal((TaskType.JobMedic, 1), (rig.Cold(f).Running!.Row, rig.Cold(f).Running!.Job));
+        Assert.Contains($"5 Jobs [0] {(int)TaskType.OperateMachinery}: jobs switch off", rig.Cold(f).Decision!.Lines);
     }
 
     /// <summary>A plain material (item function 0) for the implicit ditch job 242 (Ditch items, on in a new game) to carry to the rig's store.</summary>
     static void GiveWater(TaskStartTests.Rig rig) =>
-        Assert.True(rig.Cold(rig.Fighter).Inventory!.Add(new ItemInstance { Record = "50-t", Name = "Water", Type = Meitou.Data.Fcs.FcsRecordType.ITEM, Quantity = 1 }));
+        Assert.True(rig.Cold(rig.Fighter).Inventory!.Add(new ItemInstance { Record = "50-t", Name = "Water", Type = Data.Fcs.FcsRecordType.Item, Quantity = 1 }));
 
-    static bool Ditching(CharacterCold cold) => cold.Running is { Implicit: true, Row: TaskType.DITCH_ALL_RESOURCES };
+    static bool Ditching(CharacterCold cold) => cold.Running is { Implicit: true, Row: TaskType.DitchAllResources };
 
     /// <summary>
     /// An implicit job beats idleness (step 5 after the list, before step 6): an idle character carrying a material takes it to the store, and stands idle once it has none.
@@ -221,7 +221,7 @@ public class DecisionTests
         var f = rig.Fighter;
         GiveWater(rig);
         RunUntil(rig, () => Ditching(rig.Cold(f)), 2 * ProductionSystem.JobCheckTicks + 2, "ditching the water");
-        rig.Say(new AddJob([f], TaskType.OPERATE_MACHINERY, rig.WellSite) { Tick = rig.World.Tick });
+        rig.Say(new AddJob([f], TaskType.OperateMachinery, rig.WellSite) { Tick = rig.World.Tick });
         RunUntil(rig, () => rig.Task(f) == CharacterTask.Operate, 2 * ProductionSystem.JobCheckTicks + 2, "the operate job taking over");
         Assert.Equal("Jobs", rig.Cold(f).Decision!.Winner);
         for (int t = 0; t < 3 * ProductionSystem.JobCheckTicks; t++)
@@ -242,9 +242,9 @@ public class DecisionTests
         using var rig = new OrderQueueTests.TurretRig(aggro: true);
         var (gunner, enemy) = (rig.Gunner, rig.Enemy);
         rig.World.Decisions.Tracing = true;
-        rig.Say(new AddJob([gunner], TaskType.MAN_A_TURRET_PLAYER_JOB, rig.Turret) { Tick = 0 });
+        rig.Say(new AddJob([gunner], TaskType.ManATurretPlayerJob, rig.Turret) { Tick = 0 });
         rig.RunUntil(() => rig.Task(gunner) == CharacterTask.Operate && rig.Cold(gunner).OperateSite == rig.Turret, 600, "manning the turret");
-        rig.Say(new Meitou.Simulation.Combat.AttackOrder([enemy], gunner) { Tick = rig.World.Tick, Picked = true });
+        rig.Say(new AttackOrder([enemy], gunner) { Tick = rig.World.Tick, Picked = true });
         bool held = false;
         rig.RunUntil(() =>
         {
@@ -254,7 +254,7 @@ public class DecisionTests
             return rig.Task(gunner) == CharacterTask.Attack;
         }, 900, "the gunner fighting back");
         Assert.True(held, "the gunner kept its turret on the urgent job while the attacker was beyond 40");
-        Assert.Equal(enemy.Slot, rig.World.SystemOf<Meitou.Simulation.Combat.CombatSystem>()!.StateOf(gunner).TargetSlot);
+        Assert.Equal(enemy.Slot, rig.World.SystemOf<CombatSystem>()!.StateOf(gunner).TargetSlot);
     }
 
     /// <summary>A player character the step decides, beside the rig's bed or in the open, with the stats a failed roll needs (<c>strong</c>: strength 100 against a kidnapper's 0; else toughness).</summary>
@@ -307,7 +307,7 @@ public class DecisionTests
     /// <summary>
     /// The rig with the fighter enslaved to a master squad 300 units off whose Slave AI Goals list <paramref name="goal"/> (docs/game/ai-tasks.md "Obedient Slave"): the state setter gave it job 187, which the urgent pass runs.
     /// </summary>
-    static (TaskStartTests.Rig Rig, CharacterId Master) Enslaved(TaskType goal = TaskType.FOLLOW_SLAVEMASTER)
+    static (TaskStartTests.Rig Rig, CharacterId Master) Enslaved(TaskType goal = TaskType.FollowSlavemaster)
     {
         var rig = new TaskStartTests.Rig(carrying: false, decide: true, slaves: true);
         rig.World.RunTicks(3);

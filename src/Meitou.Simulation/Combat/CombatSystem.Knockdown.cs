@@ -15,7 +15,7 @@ public sealed partial class CombatSystem
     void Knockdown(World world, int victim, CharacterCold vc, Vector2 direction, float damage, int part, float lift = PushLift)
     {
         if (vc.Medical is not { Incapacitated: true }) return;
-        if (!options.AdvancedRagdolls) { vc.Knockdown = Vector3.Zero; return; }
+        if (!_options.AdvancedRagdolls) { vc.Knockdown = Vector3.Zero; return; }
         var motion = world.Characters.Previous[victim].Velocity;
         var push = Vector3.Zero;
         if (direction.LengthSquared() > 1e-6f)

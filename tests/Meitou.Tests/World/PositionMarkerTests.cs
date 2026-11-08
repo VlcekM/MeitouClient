@@ -12,19 +12,19 @@ public class PositionMarkerTests
     public void Marker_is_the_flagged_parts_offset_turned_and_scaled()
     {
         var db = EconomyTests.Db(
-            EconomyTests.Rec("building", FcsRecordType.BUILDING, r =>
+            EconomyTests.Rec("building", FcsRecordType.Building, r =>
             {
                 r.References["parts"] = [new("marker", 0, 0, 0), new("plain", 0, 0, 0)];
                 r.Floats["scale"] = 2;
             }),
-            EconomyTests.Rec("marker", FcsRecordType.BUILDING_PART, r =>
+            EconomyTests.Rec("marker", FcsRecordType.BuildingPart, r =>
             {
                 r.Filenames["phs or mesh"] = "bed.mesh";
                 r.Bools["is for position marker"] = true;
                 r.Floats["offset X"] = 10;
                 r.Floats["offset Y"] = 1;
             }),
-            EconomyTests.Rec("plain", FcsRecordType.BUILDING_PART, r => r.Filenames["phs or mesh"] = "plain.mesh"));
+            EconomyTests.Rec("plain", FcsRecordType.BuildingPart, r => r.Filenames["phs or mesh"] = "plain.mesh"));
         var at = new Vector3(100, 5, 200);
         var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathF.PI / 2);
         var marker = WorldObjectLayout.PositionMarker(db, db.Find("building")!, at, turn);

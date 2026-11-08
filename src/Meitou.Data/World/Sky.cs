@@ -14,7 +14,7 @@ public sealed record SkyClock(float LatitudeDegrees, float Sunrise, float Sunset
 
     public static SkyClock FromDatabase(GameDatabase db)
     {
-        var c = db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault();
+        var c = db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.Constants).FirstOrDefault();
         if (c is null) return Fallback;
         float rise = c.GetFloat("sunrise", 6), set = c.GetFloat("sunset", 20);
         if (set <= rise) (rise, set) = (Fallback.Sunrise, Fallback.Sunset);

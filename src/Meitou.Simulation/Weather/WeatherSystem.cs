@@ -28,7 +28,7 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
     public Dialogue.DialogueSystem? Talk { get; set; }
 
     /// <summary>The records, to read <c>is shelter</c> of the player's buildings (null: no building shelters).</summary>
-    public Meitou.Data.GameDatabase? Db { get; set; }
+    public Data.GameDatabase? Db { get; set; }
 
     /// <summary>The buildings' collision, for the shelter's roof (null: no building shelters; the combat system's, <see cref="Combat.CombatSystem.Buildings"/>).</summary>
     public Ragdolls.IRagdollEnvironment? Buildings { get; set; }
@@ -55,8 +55,8 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
     /// </summary>
     public const int EveryTicks = 5;
 
-    readonly Dictionary<(CharacterId, int), long> eventAfter = [];
-    readonly Dictionary<string, bool> shelterRecords = new(StringComparer.Ordinal);
+    readonly Dictionary<(CharacterId, int), long> _eventAfter = [];
+    readonly Dictionary<string, bool> _shelterRecords = new(StringComparer.Ordinal);
 
     public void SlowWorld(World world)
     {
@@ -138,9 +138,9 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
         if (cold.IsPlayer) (cold.WeatherNotice, cold.WeatherNoticeProtection) = (notice, protection);
         if (Talk is null) return;
         var id = world.Characters.IdOf(slot);
-        if (eventAfter.TryGetValue((id, ev), out long after) && world.Tick < after) return;
-        if (eventAfter.Count > 4096) eventAfter.Clear();
-        eventAfter[(id, ev)] = world.Tick + (long)MathF.Ceiling(EventPause / world.TickSeconds);
+        if (_eventAfter.TryGetValue((id, ev), out long after) && world.Tick < after) return;
+        if (_eventAfter.Count > 4096) _eventAfter.Clear();
+        _eventAfter[(id, ev)] = world.Tick + (long)MathF.Ceiling(EventPause / world.TickSeconds);
         Talk.FireEvent(world, id, CharacterId.None, ev);
     }
 
@@ -158,7 +158,7 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
         foreach (var site in world.Buildings.All)
         {
             if (!site.Complete || site.Destroyed || site.Ruined || Vector2.DistanceSquared(new Vector2(site.Position.X, site.Position.Z), new Vector2(at.X, at.Z)) > reach2) continue;
-            if (!shelterRecords.TryGetValue(site.Record, out bool shelter)) shelterRecords[site.Record] = shelter = Db.Find(site.Record)?.GetBool("is shelter") == true;
+            if (!_shelterRecords.TryGetValue(site.Record, out bool shelter)) _shelterRecords[site.Record] = shelter = Db.Find(site.Record)?.GetBool("is shelter") == true;
             if (!shelter) continue;
             near = true;
             break;

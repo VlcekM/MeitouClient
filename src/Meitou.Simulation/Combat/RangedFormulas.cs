@@ -169,7 +169,7 @@ public static class Ammunition
     {
         if (inventory is null || ammoId.Length == 0) return null;
         foreach (var i in inventory.Items)
-            if (i.Record == ammoId && i.Type != FcsRecordType.CONTAINER) return i;
+            if (i.Record == ammoId && i.Type != FcsRecordType.Container) return i;
         if (inventory.Backpack?.Contents is { } bag)
             foreach (var i in bag.Items)
                 if (i.Record == ammoId) return i;

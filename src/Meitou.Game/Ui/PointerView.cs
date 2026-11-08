@@ -11,13 +11,13 @@ namespace Meitou.Game.Ui;
 sealed class PointerView(PlayerInterface player)
 {
     // Whether the mouse was over a control in the last arranged UI (ArrangeUi), so the pointer needs no arrange of its own.
-    internal bool pointerOverUi;
+    internal bool PointerOverUi;
     // Whether that control is one a click acts on (an enabled button, or a control with an action: as UiClickables takes them), for the enhanced Hardware mouse's hand.
-    internal bool pointerOverButton;
+    internal bool PointerOverButton;
     // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and every RepickTicks ticks while only the
     // world moves (the picks walk every character, item and building near the ray: 0.5 ms).
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) pointer = (-1, default, false, false, "arrow", null, null);
-    Matrix4x4 pointerView;
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) _pointer = (-1, default, false, false, "arrow", null, null);
+    Matrix4x4 _pointerView;
     const long RepickTicks = 3;
 
     /// <summary>
@@ -37,7 +37,7 @@ sealed class PointerView(PlayerInterface player)
     public const float OutlineReach = 2000;
 
     bool WithinOutlineReach(CharacterId id) =>
-        player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c && Vector3.DistanceSquared(player.Eye, player.where(c)) <= OutlineReach * OutlineReach;
+        player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c && Vector3.DistanceSquared(player.Eye, player.Where(c)) <= OutlineReach * OutlineReach;
 
     /// <summary>
     /// The building under the cursor within <see cref="OutlineReach"/> along the ray (no character there, as a left click picks it) for the building outline: its placement key, floor and the colour of what a right
@@ -69,7 +69,7 @@ sealed class PointerView(PlayerInterface player)
         var list = new List<(CharacterId Id, Vector4 Colour)>();
         if (hover is { } h) list.Add(h);
         var selection = player.SelectedIds();
-        foreach (var c in player.session.CurrentSnapshot.Characters)
+        foreach (var c in player.Session.CurrentSnapshot.Characters)
             if (c.Id != hover?.Id && Vector3.DistanceSquared(c.Position, centre) <= radius * radius)
                 list.Add((c.Id, PointerColour(player.QuickOrderFor(c, selection)?.Pointer ?? "arrow")));
         return list;
@@ -84,44 +84,44 @@ sealed class PointerView(PlayerInterface player)
     /// Whether the character's faction is hostile to the player's, or it is fighting one of the player's characters (a neutral squad robbing them): only a hostile one gets
     /// the attack pointer, the red outline and the quick-attack right click.
     /// </summary>
-    bool Hostile(CharacterId id) => player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c || Hostile(c);
+    bool Hostile(CharacterId id) => player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c || Hostile(c);
     internal bool Hostile(CharacterSnapshot c) => c.HostileToPlayer;
 
     (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) Point()
     {
-        if (player.worldMap.mapDrag is not null) return (-1, player.mouse, player.CtrlHeld, player.AltHeld, "hand", null, null);   // the map's pan
-        if (player.UiVisible && pointerOverUi || player.UiCapturesPointer || player.contextMenuWindow.ContextMenuOpen || player.ModalOpen || player.dragging || player.settingsOpen || player.TitleOpen)
-            return (-1, player.mouse, player.CtrlHeld, player.AltHeld, "arrow", null, null);
-        if (player.build.BuildPointer() is { } building) return (-1, player.mouse, player.CtrlHeld, player.AltHeld, building, null, null);
-        var snapshot = player.session.CurrentSnapshot;
-        if (pointer.Tick >= 0 && (ulong)(snapshot.Tick - pointer.Tick) < RepickTicks && pointer.Mouse == player.mouse && pointer.Ctrl == player.CtrlHeld && pointer.Alt == player.AltHeld
-            && pointerView == player.ViewProjection) return pointer;
+        if (player.WorldMap.MapDrag is not null) return (-1, player.Mouse, player.CtrlHeld, player.AltHeld, "hand", null, null);   // the map's pan
+        if (player.UiVisible && PointerOverUi || player.UiCapturesPointer || player.ContextMenuWindow.ContextMenuOpen || player.ModalOpen || player.Dragging || player.SettingsOpen || player.TitleOpen)
+            return (-1, player.Mouse, player.CtrlHeld, player.AltHeld, "arrow", null, null);
+        if (player.Build.BuildPointer() is { } building) return (-1, player.Mouse, player.CtrlHeld, player.AltHeld, building, null, null);
+        var snapshot = player.Session.CurrentSnapshot;
+        if (_pointer.Tick >= 0 && (ulong)(snapshot.Tick - _pointer.Tick) < RepickTicks && _pointer.Mouse == player.Mouse && _pointer.Ctrl == player.CtrlHeld && _pointer.Alt == player.AltHeld
+            && _pointerView == player.ViewProjection) return _pointer;
         (string Name, CharacterId? Target) chosen = ("arrow", null);
         if (player.SelectedIds().Count > 0)
         {
-            if ((player.CtrlHeld || player.AltHeld) && player.picking.PickDowned(player.mouse) is { } downed) chosen = (player.AltHeld ? "search" : "lift", downed);
+            if ((player.CtrlHeld || player.AltHeld) && player.Picking.PickDowned(player.Mouse) is { } downed) chosen = (player.AltHeld ? "search" : "lift", downed);
             else
                 // The nearest target, as the right click takes it (PickAt).
-                switch (player.picking.PickAt(player.mouse).Kind)
+                switch (player.Picking.PickAt(player.Mouse).Kind)
                 {
-                    case WorldPicking.Picked.Character when player.QuickOrder(player.mouse) is { } order: chosen = (order.Pointer, order.Target); break;
-                    case WorldPicking.Picked.GroundItem: chosen = (player.groundItemPicks.StealsGroundItem(player.mouse) ? "steal" : "pick_item", null); break;
-                    case WorldPicking.Picked.Container when player.furniture.PickContainer(player.mouse) is { } container: chosen = (player.furniture.ContainerPointer(container), null); break;
-                    case WorldPicking.Picked.Door when player.furniture.PickDoor(player.mouse) is { } door: chosen = (player.furniture.DoorPointer(door), null); break;
+                    case WorldPicking.Picked.Character when player.QuickOrder(player.Mouse) is { } order: chosen = (order.Pointer, order.Target); break;
+                    case WorldPicking.Picked.GroundItem: chosen = (player.GroundItemPicks.StealsGroundItem(player.Mouse) ? "steal" : "pick_item", null); break;
+                    case WorldPicking.Picked.Container when player.Furniture.PickContainer(player.Mouse) is { } container: chosen = (player.Furniture.ContainerPointer(container), null); break;
+                    case WorldPicking.Picked.Door when player.Furniture.PickDoor(player.Mouse) is { } door: chosen = (player.Furniture.DoorPointer(door), null); break;
                     case WorldPicking.Picked.Bed or WorldPicking.Picked.Cage or WorldPicking.Picked.Dummy or WorldPicking.Picked.Seat: chosen = ("use", null); break;   // a bed's slot 130 pointer (UseableStuff, no inventory)
                     case WorldPicking.Picked.Rock: chosen = ("mine", null); break;   // a resource rock a right click would mine (the original's `mine` pointer)
-                    case WorldPicking.Picked.Site when player.build.SitePointer(player.mouse) is { } siteMode: chosen = (siteMode, null); break;
+                    case WorldPicking.Picked.Site when player.Build.SitePointer(player.Mouse) is { } siteMode: chosen = (siteMode, null); break;
                 }
         }
-        else if (player.QuickOrder(player.mouse) is { } over0) chosen = (over0.Pointer, over0.Target);   // nothing selected: the pointer only, as the original sets it before it looks for orders to give
-        chosen.Target ??= player.picking.PickWhere(player.mouse, _ => true);
+        else if (player.QuickOrder(player.Mouse) is { } over0) chosen = (over0.Pointer, over0.Target);   // nothing selected: the pointer only, as the original sets it before it looks for orders to give
+        chosen.Target ??= player.Picking.PickWhere(player.Mouse, _ => true);
         // A hostile character shows the attack pointer and the red outline even with nobody selected to send at it.
         if (chosen.Name == "arrow" && chosen.Target is { } over && snapshot.Characters.FirstOrDefault(c => c.Id == over) is { } overChar && StandingHostile(overChar))
             chosen.Name = "attk";
-        player.session.World.Player.Pointed = chosen.Target ?? CharacterId.None;
-        pointerView = player.ViewProjection;
-        var hovered = chosen.Target is null ? player.buildingSelection.PickBuildingAt(player.mouse) : null;
-        return pointer = (snapshot.Tick, player.mouse, player.CtrlHeld, player.AltHeld, chosen.Name, chosen.Target, hovered);
+        player.Session.World.Player.Pointed = chosen.Target ?? CharacterId.None;
+        _pointerView = player.ViewProjection;
+        var hovered = chosen.Target is null ? player.BuildingSelection.PickBuildingAt(player.Mouse) : null;
+        return _pointer = (snapshot.Tick, player.Mouse, player.CtrlHeld, player.AltHeld, chosen.Name, chosen.Target, hovered);
     }
 
     /// <summary>
@@ -130,17 +130,17 @@ sealed class PointerView(PlayerInterface player)
     /// </summary>
     internal void AddPointerChance(List<UiControl> controls)
     {
-        if (player.uiPainter is not { } painter || PointerChance(Point()) is not { } chance) return;
+        if (player.UiPainter is not { } painter || PointerChance(Point()) is not { } chance) return;
 
         float f = Math.Clamp(chance, 0, 1);
         var lines = new List<TooltipLine> { new("", ((int)(f * 100)).ToString(CultureInfo.InvariantCulture) + "%") };
         string colour = string.Create(CultureInfo.InvariantCulture, $"{1 - f:0.###} {f:0.###} 0");
         float minimum = player.TitleOpen ? 0 : player.StandardPixels;
-        var width = UiTooltips.Arrange(lines, TooltipKind.Floating, player.Width, player.Height, player.mouse, null,
+        var width = UiTooltips.Arrange(lines, TooltipKind.Floating, player.Width, player.Height, player.Mouse, null,
             (text, wrap) => painter.MeasureText(TooltipRuntime.TooltipFont, text, player.Height, wrap, minimum) is var s ? new(s.Width, s.Height) : default).Panel.Width;
 
-        var bottomRight = new Vector2(player.mouse.X + width / 2, player.mouse.Y - PointerChanceRise * player.Height / 1080f);
-        player.tooltipRuntime.PlaceTooltip(controls, painter, lines, TooltipKind.Floating, null, "pointer-chance", bottomRight, [colour]);
+        var bottomRight = new Vector2(player.Mouse.X + width / 2, player.Mouse.Y - PointerChanceRise * player.Height / 1080f);
+        player.TooltipRuntime.PlaceTooltip(controls, painter, lines, TooltipKind.Floating, null, "pointer-chance", bottomRight, [colour]);
     }
 
     /// <summary>
@@ -149,7 +149,7 @@ sealed class PointerView(PlayerInterface player)
     /// </summary>
     float? PointerChance((long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) p) => p.Name switch
     {
-        "knockout" when p.Target is { } id => player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.StealthKoChance * 0.01f,
+        "knockout" when p.Target is { } id => player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.StealthKoChance * 0.01f,
         "lockpick" => PointedLockChance(p.Target),
         _ => null,
     };
@@ -160,11 +160,11 @@ sealed class PointerView(PlayerInterface player)
     /// </summary>
     float? PointedLockChance(CharacterId? target)
     {
-        var snapshot = player.session.CurrentSnapshot;
+        var snapshot = player.Session.CurrentSnapshot;
         if (target is { } id && snapshot.Characters.FirstOrDefault(c => c.Id == id) is { Prison: { LockLevel: >= 0 } prison } caged)
-            return player.contextMenuWindow.LockChance(caged.Position, prison.LockLevel);
-        if (player.furniture.PickContainer(player.mouse) is { } container) return player.contextMenuWindow.LockChance(container.Position, container.Level);
-        if (player.furniture.PickDoor(player.mouse) is { Door: var door }) return player.contextMenuWindow.LockChance(door.Position, snapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Level);
+            return player.ContextMenuWindow.LockChance(caged.Position, prison.LockLevel);
+        if (player.Furniture.PickContainer(player.Mouse) is { } container) return player.ContextMenuWindow.LockChance(container.Position, container.Level);
+        if (player.Furniture.PickDoor(player.Mouse) is { Door: var door }) return player.ContextMenuWindow.LockChance(door.Position, snapshot.Doors.GetValueOrDefault((door.Building, door.Door)).Level);
         return null;
     }
 
@@ -173,7 +173,7 @@ sealed class PointerView(PlayerInterface player)
 
     /// <summary>Draws the pointer <paramref name="name"/> at <paramref name="at"/> (framebuffer pixels) over everything drawn so far; nothing without the UI painter.</summary>
     public void DrawPointer(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)
-        => player.uiPainter?.DrawPointer(name, at, width, height, pass);
+        => player.UiPainter?.DrawPointer(name, at, width, height, pass);
 
     /// <summary>
     /// Draws the pointer <paramref name="name"/> to the right of the Windows cursor at <paramref name="at"/> (the enhanced Hardware mouse): its left edge <see cref="BesideOffset"/>
@@ -181,7 +181,7 @@ sealed class PointerView(PlayerInterface player)
     /// </summary>
     public void DrawPointerBeside(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
-        if (name != "arrow") player.uiPainter?.DrawPointerBeside(name, at + BesideOffset * (height / 1080f), width, height, pass);
+        if (name != "arrow") player.UiPainter?.DrawPointerBeside(name, at + BesideOffset * (height / 1080f), width, height, pass);
     }
 
     /// <summary>Where the enhanced Hardware mouse puts the middle of the action pointer's left edge, from the mouse at 1080: just clear of the Windows arrow (engine choice).</summary>
@@ -191,8 +191,8 @@ sealed class PointerView(PlayerInterface player)
     /// Whether the enhanced Hardware mouse shows the hand for the pointer <paramref name="name"/>: an order a right click would give (not the walk, the map's pan or
     /// ground the characters cannot reach), or an enabled button under the mouse.
     /// </summary>
-    public bool PointsAtClickable(string name) => name is not ("arrow" or "hand" or "invalidmove") || player.UiVisible && pointerOverButton;
+    public bool PointsAtClickable(string name) => name is not ("arrow" or "hand" or "invalidmove") || player.UiVisible && PointerOverButton;
 
     /// <summary>The pointer <paramref name="name"/> as a picture with its hot spot, for the window system to draw (<see cref="Meitou.Game.Rendering.Ui.UiPainter.PointerImage"/>).</summary>
-    public (Meitou.Data.Textures.RgbaImage Image, int HotX, int HotY)? PointerImage(string name) => player.uiPainter?.PointerImage(name);
+    public (Data.Textures.RgbaImage Image, int HotX, int HotY)? PointerImage(string name) => player.UiPainter?.PointerImage(name);
 }

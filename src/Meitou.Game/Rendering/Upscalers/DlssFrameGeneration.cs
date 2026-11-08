@@ -21,14 +21,14 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
     const uint ModeOff = 0, ModeOn = 1, RetainResourcesWhenOff = 1 << 3;
     const byte SlTrue = 1, SlInvalid = 2;
 
-    readonly GpuContext ctx;
-    readonly Streamline sl;
-    readonly ViewportHandle* viewport;
-    GpuTexture? depthFlipped, motionFlipped, hudless, uiFlipped;
-    bool modeOn, modeSet, failed, loggedActive, loggedUnprepared;
-    int displayWidth, displayHeight;
-    uint lastStatus;
-    long lastStateTicks;
+    readonly GpuContext _ctx;
+    readonly Streamline _sl;
+    readonly ViewportHandle* _viewport;
+    GpuTexture? _depthFlipped, _motionFlipped, _hudless, _uiFlipped;
+    bool _modeOn, _modeSet, _failed, _loggedActive, _loggedUnprepared;
+    int _displayWidth, _displayHeight;
+    uint _lastStatus;
+    long _lastStateTicks;
 
     public bool Wanted { get; private set; }
     public bool Prepared { get; private set; }
@@ -40,10 +40,10 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
 
     DlssFrameGeneration(GpuContext ctx, Streamline sl)
     {
-        this.ctx = ctx;
-        this.sl = sl;
-        viewport = (ViewportHandle*)NativeMemory.AllocZeroed((nuint)sizeof(ViewportHandle));
-        *viewport = new ViewportHandle { StructType = ViewportType, StructVersion = 1, Value = Streamline.FrameGenerationViewport };
+        this._ctx = ctx;
+        this._sl = sl;
+        _viewport = (ViewportHandle*)NativeMemory.AllocZeroed((nuint)sizeof(ViewportHandle));
+        *_viewport = new ViewportHandle { StructType = ViewportType, StructVersion = 1, Value = Streamline.FrameGenerationViewport };
     }
 
     /// <summary>The generator on <paramref name="sl"/>, or null with the reason (DLSS frame generation not supported or not loaded).</summary>
@@ -56,35 +56,35 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
 
     public void BeginFrame(bool wanted, int displayW, int displayH)
     {
-        (displayWidth, displayHeight) = (displayW, displayH);
+        (_displayWidth, _displayHeight) = (displayW, displayH);
         Prepared = Enabled = false;
-        Wanted = wanted && !failed;
+        Wanted = wanted && !_failed;
     }
 
     /// <summary>Copies depth and motion flipped, sets this frame's constants (top-down) and tags them, valid until the present.</summary>
     public bool Prepare(FrameGenInputs i)
     {
         if (!Wanted) return false;
-        nint token = sl.FrameToken();
+        nint token = _sl.FrameToken();
         if (token == 0) return Fail("slGetNewFrameToken failed");
         var constants = CameraConstants(i.ViewToClip, i.ClipToPreviousClip, i.JitterPixels, i.Eye, i.Up, i.Right, i.Forward,
             i.Near, i.Far, i.FieldOfView, i.Aspect, i.Reset, bottomUp: false);
-        int rc = sl.SetConstants(&constants, token, viewport);
+        int rc = _sl.SetConstants(&constants, token, _viewport);
         if (rc != 0) return Fail($"slSetConstants failed ({rc})");
 
-        var depth = FrameGeneration.Target(ctx, ref depthFlipped, i.Depth.Desc.Format, i.RenderWidth, i.RenderHeight, "dlss-g depth top-down");
-        var motion = FrameGeneration.Target(ctx, ref motionFlipped, i.Motion.Desc.Format, i.RenderWidth, i.RenderHeight, "dlss-g motion top-down");
-        var list = (CommandList)ctx.BeginNative("dlss-g depth and motion");
+        var depth = FrameGeneration.Target(_ctx, ref _depthFlipped, i.Depth.Desc.Format, i.RenderWidth, i.RenderHeight, "dlss-g depth top-down");
+        var motion = FrameGeneration.Target(_ctx, ref _motionFlipped, i.Motion.Desc.Format, i.RenderWidth, i.RenderHeight, "dlss-g motion top-down");
+        var list = (CommandList)_ctx.BeginNative("dlss-g depth and motion");
         try
         {
-            FrameGeneration.Flip(ctx.Device.Vk, list.Handle, ctx.Device.NativeImage(i.Depth), ctx.Device.NativeImage(depth), i.RenderWidth, i.RenderHeight);
-            FrameGeneration.Flip(ctx.Device.Vk, list.Handle, ctx.Device.NativeImage(i.Motion), ctx.Device.NativeImage(motion), i.RenderWidth, i.RenderHeight);
+            FrameGeneration.Flip(_ctx.Device.Vk, list.Handle, _ctx.Device.NativeImage(i.Depth), _ctx.Device.NativeImage(depth), i.RenderWidth, i.RenderHeight);
+            FrameGeneration.Flip(_ctx.Device.Vk, list.Handle, _ctx.Device.NativeImage(i.Motion), _ctx.Device.NativeImage(motion), i.RenderWidth, i.RenderHeight);
             Barrier(list);
             rc = TagPair(token, list.Handle.Handle, depth, BufferDepth, motion, BufferMotionVectors);
         }
         finally
         {
-            ctx.EndNative(list);
+            _ctx.EndNative(list);
         }
         if (rc != 0) return Fail($"slSetTagForFrame (depth, motion) failed ({rc})");
         Prepared = true;
@@ -95,16 +95,16 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
     public bool Finish(GpuTexture world, GpuTexture? ui)
     {
         Enabled = Wanted && Prepared && ui is not null;
-        if (Wanted && !Prepared && !loggedUnprepared)
+        if (Wanted && !Prepared && !_loggedUnprepared)
         {
-            loggedUnprepared = true;
+            _loggedUnprepared = true;
             Console.WriteLine("frame generation  the post chain gave no depth and motion this frame (anti-aliasing / upscaling not temporal?): no frame is generated while that holds");
         }
         if (Enabled && !TagPicture(world, ui!)) Enabled = false;
         SetMode(Enabled);
-        if (Enabled && !loggedActive)
+        if (Enabled && !_loggedActive)
         {
-            loggedActive = true;
+            _loggedActive = true;
             Console.WriteLine("frame generation  DLSS active");
         }
         ReadState();
@@ -113,22 +113,22 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
 
     bool TagPicture(GpuTexture world, GpuTexture ui)
     {
-        nint token = sl.FrameToken();
+        nint token = _sl.FrameToken();
         if (token == 0) return Fail("slGetNewFrameToken failed");
-        var picture = FrameGeneration.Target(ctx, ref hudless, world.Desc.Format, displayWidth, displayHeight, "dlss-g hudless top-down");
-        var overlay = FrameGeneration.Target(ctx, ref uiFlipped, ui.Desc.Format, displayWidth, displayHeight, "dlss-g ui top-down");
-        var list = (CommandList)ctx.BeginNative("dlss-g world and interface");
+        var picture = FrameGeneration.Target(_ctx, ref _hudless, world.Desc.Format, _displayWidth, _displayHeight, "dlss-g hudless top-down");
+        var overlay = FrameGeneration.Target(_ctx, ref _uiFlipped, ui.Desc.Format, _displayWidth, _displayHeight, "dlss-g ui top-down");
+        var list = (CommandList)_ctx.BeginNative("dlss-g world and interface");
         int rc;
         try
         {
-            FrameGeneration.Flip(ctx.Device.Vk, list.Handle, ctx.Device.NativeImage(world), ctx.Device.NativeImage(picture), displayWidth, displayHeight);
-            FrameGeneration.Flip(ctx.Device.Vk, list.Handle, ctx.Device.NativeImage(ui), ctx.Device.NativeImage(overlay), displayWidth, displayHeight);
+            FrameGeneration.Flip(_ctx.Device.Vk, list.Handle, _ctx.Device.NativeImage(world), _ctx.Device.NativeImage(picture), _displayWidth, _displayHeight);
+            FrameGeneration.Flip(_ctx.Device.Vk, list.Handle, _ctx.Device.NativeImage(ui), _ctx.Device.NativeImage(overlay), _displayWidth, _displayHeight);
             Barrier(list);
             rc = TagPair(token, list.Handle.Handle, picture, BufferHudlessColor, overlay, BufferUiColorAndAlpha);
         }
         finally
         {
-            ctx.EndNative(list);
+            _ctx.EndNative(list);
         }
         return rc == 0 || Fail($"slSetTagForFrame (world, interface) failed ({rc})");
     }
@@ -139,51 +139,56 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         var b = new Silk.NET.Vulkan.MemoryBarrier2
         {
             SType = Silk.NET.Vulkan.StructureType.MemoryBarrier2,
-            SrcStageMask = Silk.NET.Vulkan.PipelineStageFlags2.BlitBit, SrcAccessMask = Silk.NET.Vulkan.AccessFlags2.TransferWriteBit,
+            SrcStageMask = Silk.NET.Vulkan.PipelineStageFlags2.BlitBit,
+            SrcAccessMask = Silk.NET.Vulkan.AccessFlags2.TransferWriteBit,
             DstStageMask = Silk.NET.Vulkan.PipelineStageFlags2.AllCommandsBit,
             DstAccessMask = Silk.NET.Vulkan.AccessFlags2.ShaderReadBit | Silk.NET.Vulkan.AccessFlags2.TransferReadBit,
         };
         var dep = new Silk.NET.Vulkan.DependencyInfo { SType = Silk.NET.Vulkan.StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &b };
-        ctx.Device.Vk.CmdPipelineBarrier2(list.Handle, &dep);
+        _ctx.Device.Vk.CmdPipelineBarrier2(list.Handle, &dep);
     }
 
     int TagPair(nint token, nint cb, GpuTexture a, uint aType, GpuTexture b, uint bType)
     {
-        var ra = Resource(ctx, a);
-        var rb = Resource(ctx, b);
+        var ra = Resource(_ctx, a);
+        var rb = Resource(_ctx, b);
         var tags = stackalloc ResourceTag[2];
         tags[0] = Tag(&ra, aType, ValidUntilPresent);
         tags[1] = Tag(&rb, bType, ValidUntilPresent);
-        return sl.SetTagForFrame(token, viewport, tags, 2, cb);
+        return _sl.SetTagForFrame(token, _viewport, tags, 2, cb);
     }
 
     /// <summary>Turns interpolation on or off for the next present (resources kept while off, so turning it back on does not stutter).</summary>
     void SetMode(bool on)
     {
-        if (modeSet && modeOn == on) return;
+        if (_modeSet && _modeOn == on) return;
         var options = new DlssgOptions
         {
-            StructType = DlssgOptionsType, StructVersion = 5,
-            Mode = on ? ModeOn : ModeOff, NumFramesToGenerate = 1, Flags = RetainResourcesWhenOff,
-            Reserved15 = SlInvalid, EnableUserInterfaceRecomposition = SlTrue,
+            StructType = DlssgOptionsType,
+            StructVersion = 5,
+            Mode = on ? ModeOn : ModeOff,
+            NumFramesToGenerate = 1,
+            Flags = RetainResourcesWhenOff,
+            Reserved15 = SlInvalid,
+            EnableUserInterfaceRecomposition = SlTrue,
         };
-        int rc = sl.DlssgSetOptions(viewport, &options);
+        int rc = _sl.DlssgSetOptions(_viewport, &options);
         if (rc != 0) { Fail($"slDLSSGSetOptions failed ({rc})"); return; }
-        (modeOn, modeSet) = (on, true);
+        (_modeOn, _modeSet) = (on, true);
     }
 
     /// <summary>About once a second: DLSS-G's state, its failures logged when they change (sl_dlss_g.h DLSSGStatus).</summary>
     void ReadState()
     {
         long now = Stopwatch.GetTimestamp();
-        long elapsed = now - lastStateTicks;
+        long elapsed = now - _lastStateTicks;
         if (elapsed < Stopwatch.Frequency) return;
-        lastStateTicks = now;
+        _lastStateTicks = now;
         var state = new DlssgState { StructType = DlssgStateType, StructVersion = 4 };
-        if (sl.DlssgGetState(viewport, &state, null) != 0) return;
+        if (_sl.DlssgGetState(_viewport, &state, null) != 0) return;
         PresentedPerRendered = state.NumFramesActuallyPresented;
-        if (state.Status == lastStatus) return;
-        lastStatus = state.Status;
+        if (state.Status == _lastStatus) return;
+        _lastStatus = state.Status;
         Console.WriteLine($"frame generation  DLSS state: {StatusText(state.Status)}; up to {state.NumFramesToGenerateMax} generated per rendered frame, "
             + $"{state.EstimatedVramUsageInBytes / (1 << 20)} MB, smallest side {state.MinWidthOrHeight}");
     }
@@ -198,20 +203,20 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
     bool Fail(string message)
     {
         Console.WriteLine($"frame generation  {message}; DLSS off for the rest of the run");
-        failed = true;
+        _failed = true;
         Wanted = Enabled = false;
         return false;
     }
 
     public void Dispose()
     {
-        if (modeOn) SetMode(false);
-        ctx.Device.WaitIdle();
-        sl.FreeResources(FeatureDlssG, viewport);
-        NativeMemory.Free(viewport);
-        depthFlipped?.Dispose();
-        motionFlipped?.Dispose();
-        hudless?.Dispose();
-        uiFlipped?.Dispose();
+        if (_modeOn) SetMode(false);
+        _ctx.Device.WaitIdle();
+        _sl.FreeResources(FeatureDlssG, _viewport);
+        NativeMemory.Free(_viewport);
+        _depthFlipped?.Dispose();
+        _motionFlipped?.Dispose();
+        _hudless?.Dispose();
+        _uiFlipped?.Dispose();
     }
 }

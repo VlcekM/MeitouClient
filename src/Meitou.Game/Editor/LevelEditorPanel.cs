@@ -28,63 +28,63 @@ public sealed class LevelEditorServices
 /// </summary>
 sealed class LevelEditorPanel(PlayerInterface player)
 {
-    internal LevelEditorServices? levelHost;
-    internal bool levelEditor, levelBuild;
-    HashSet<string>? levelEveryBuilding;
+    internal LevelEditorServices? Services;
+    internal bool LevelEditor, LevelBuild;
+    HashSet<string>? _levelEveryBuilding;
 
-    public LevelEditorServices? LevelHost { get => levelHost; set => levelHost = value; }
-    public bool LevelEditorOpen => levelEditor;
+    public LevelEditorServices? LevelHost { get => Services; set => Services = value; }
+    public bool LevelEditorOpen => LevelEditor;
 
     /// <summary>Opens the top bar (the F10 menu's Tools); the game keeps running under it.</summary>
     public void OpenLevelEditor()
     {
-        if (levelHost is null) return;
-        levelEditor = true;
-        player.faithfulScreens.Open("leveleditor");
+        if (Services is null) return;
+        LevelEditor = true;
+        player.FaithfulScreens.Open("leveleditor");
     }
 
     /// <summary>The original's <c>editor_toggle</c> (Shift+F12): opens the level editor, or closes it.</summary>
     public void ToggleLevelEditor()
     {
-        if (levelEditor) CloseLevelEditor();
+        if (LevelEditor) CloseLevelEditor();
         else OpenLevelEditor();
     }
 
     void CloseLevelEditor()
     {
-        if (levelBuild) player.build.SetBuildMode(false);
-        levelEditor = false;
-        player.faithfulScreens.Close("leveleditor");
+        if (LevelBuild) player.Build.SetBuildMode(false);
+        LevelEditor = false;
+        player.FaithfulScreens.Close("leveleditor");
     }
 
     /// <summary>Once a frame, before build mode's update: Esc may have closed the bar.</summary>
     internal void UpdateLevelEditor()
     {
-        if (levelEditor && !player.faithfulScreens.IsOpen("leveleditor")) CloseLevelEditor();
-        if (levelBuild && !player.build.buildMode) levelBuild = false;
+        if (LevelEditor && !player.FaithfulScreens.IsOpen("leveleditor")) CloseLevelEditor();
+        if (LevelBuild && !player.Build.Active) LevelBuild = false;
     }
 
     /// <summary>Stops placing without leaving the editor or build mode: the list's choice and the ghost go, the queued ghosts stay (Meitou's choice, the original's way is <b>Unknown</b>).</summary>
     internal void DropPlacementChoice()
     {
-        player.build.buildDiscarded = true;
-        player.build.buildMember = null;
-        player.build.ghost = null;
-        player.build.wallLine = null;
-        player.build.wallPieces.Clear();
-        player.faithfulScreens.ClearSelection("build", "BuildingsList");
+        player.Build.BuildDiscarded = true;
+        player.Build.BuildMember = null;
+        player.Build.Ghost = null;
+        player.Build.WallLine = null;
+        player.Build.WallPieces.Clear();
+        player.FaithfulScreens.ClearSelection("build", "BuildingsList");
     }
 
     /// <summary>Esc in the editor's build window drops the placement choice first; true when there was one (a second Esc closes the window as before).</summary>
     internal bool LevelEscape()
     {
-        if (!levelBuild || !player.build.buildMode || player.build.CurrentBuilding() is null || player.faithfulScreens.OpenScreens[^1] != "build") return false;
+        if (!LevelBuild || !player.Build.Active || player.Build.CurrentBuilding() is null || player.FaithfulScreens.OpenScreens[^1] != "build") return false;
         DropPlacementChoice();
         return true;
     }
 
     /// <summary>Every BUILDING counts as available in the editor.</summary>
-    internal IReadOnlySet<string> LevelEveryBuilding() => levelEveryBuilding ??= player.build.buildHost is { } host ? [.. host.Menu.Catalog.Select(b => b.Id)] : [];
+    internal IReadOnlySet<string> LevelEveryBuilding() => _levelEveryBuilding ??= player.Build.Services is { } host ? [.. host.Menu.Catalog.Select(b => b.Id)] : [];
 
     /// <summary>The top bar, centred at the top of the screen as in the original (its layout puts it at the left).</summary>
     internal static MyGuiLayout LevelEditorBar(MyGuiLayout layout) =>
@@ -97,7 +97,7 @@ sealed class LevelEditorPanel(PlayerInterface player)
     {
         foreach (string name in LevelEditorButtons) { b.Disabled.Remove(name); b.Actions[name] = name; }
         b.Text["snaps"] = "Fix stuff";   // the exe sets this caption over the layout's "Update Snaps"
-        b.Text["mod"] = levelHost?.ModName ?? "";
+        b.Text["mod"] = Services?.ModName ?? "";
     }
 
     internal void LevelEditorAction(MyGuiEvent e)
@@ -105,16 +105,16 @@ sealed class LevelEditorPanel(PlayerInterface player)
         switch (e.Widget)
         {
             case "buildings":
-                if (levelBuild) { player.build.SetBuildMode(false); break; }
-                if (player.build.buildMode) player.build.SetBuildMode(false);
-                levelBuild = true;
-                player.build.SetBuildMode(true);
-                if (!player.build.buildMode) levelBuild = false;
+                if (LevelBuild) { player.Build.SetBuildMode(false); break; }
+                if (player.Build.Active) player.Build.SetBuildMode(false);
+                LevelBuild = true;
+                player.Build.SetBuildMode(true);
+                if (!player.Build.Active) LevelBuild = false;
                 break;
-            case "save": if (levelHost is { } host) player.Notice(host.Save()); break;
+            case "save": if (Services is { } host) player.Notice(host.Save()); break;
             case "exit": CloseLevelEditor(); break;
             default:
-                string caption = e.Widget == "snaps" ? "Fix stuff" : player.faithfulScreens.Layout("leveleditor").Find(e.Widget)?.Properties.GetValueOrDefault("Caption") ?? e.Widget;
+                string caption = e.Widget == "snaps" ? "Fix stuff" : player.FaithfulScreens.Layout("leveleditor").Find(e.Widget)?.Properties.GetValueOrDefault("Caption") ?? e.Widget;
                 player.Notice($"{caption}: not in Meitou yet");
                 break;
         }
@@ -129,10 +129,10 @@ sealed class LevelEditorPanel(PlayerInterface player)
 
     internal void LevelConfirm()
     {
-        if (levelHost is null || player.build.buildQueue.Count == 0) return;
-        player.interfaceSounds.Sound("Building_Confirm");
-        levelHost.Place([.. player.build.buildQueue]);
-        player.build.buildQueue.Clear();
+        if (Services is null || player.Build.BuildQueue.Count == 0) return;
+        player.InterfaceSounds.Sound("Building_Confirm");
+        Services.Place([.. player.Build.BuildQueue]);
+        player.Build.BuildQueue.Clear();
     }
 
     /// <summary>
@@ -141,26 +141,26 @@ sealed class LevelEditorPanel(PlayerInterface player)
     /// </summary>
     internal bool LevelClearAt(Vector2 p)
     {
-        if (!levelBuild || levelHost is not { } host || player.Ray(p) is not { } ray) return false;
-        var groundPoint = player.picking.GroundHit(ray.Origin, ray.Direction);
-        if (groundPoint is { } g && player.build.buildQueue.FindLastIndex(q => q.Hull is { } hull && Inside(hull, new Vector2(g.X, g.Z))) is >= 0 and var queued)
+        if (!LevelBuild || Services is not { } host || player.Ray(p) is not { } ray) return false;
+        var groundPoint = player.Picking.GroundHit(ray.Origin, ray.Direction);
+        if (groundPoint is { } g && player.Build.BuildQueue.FindLastIndex(q => q.Hull is { } hull && Inside(hull, new Vector2(g.X, g.Z))) is >= 0 and var queued)
         {
-            player.interfaceSounds.Sound("Building_Undo");
-            player.build.buildQueue.RemoveAt(queued);
+            player.InterfaceSounds.Sound("Building_Undo");
+            player.Build.BuildQueue.RemoveAt(queued);
             return true;
         }
         float bestT = groundPoint is { } hit ? Vector3.Distance(ray.Origin, hit) : 6000;
         string? best = null;
         foreach (var b in host.Added())
-            if (player.build.buildHost?.Placement.Footprint(b.BuildingId) is { } footprint && b.WorldY is { } y
-                && player.picking.BuildingRayT(ray, footprint.Place(b.Position, b.Rotation), footprint.YMin, footprint.YMax, b.BuildingId, b.Position, y, b.Rotation) is { } t && t < bestT)
+            if (player.Build.Services?.Placement.Footprint(b.BuildingId) is { } footprint && b.WorldY is { } y
+                && player.Picking.BuildingRayT(ray, footprint.Place(b.Position, b.Rotation), footprint.YMin, footprint.YMax, b.BuildingId, b.Position, y, b.Rotation) is { } t && t < bestT)
                 (bestT, best) = (t, b.Key);
-        if (best is null && player.buildingSelection.PickBuilding(p) is { SiteId: null, Record: not null } level) best = level.Instance;
+        if (best is null && player.BuildingSelection.PickBuilding(p) is { SiteId: null, Record: not null } level) best = level.Instance;
         if (best is null) DropPlacementChoice();
         else if (host.Clear(best))
         {
-            if (player.buildingSelection.selectedBuilding?.Instance == best) player.buildingSelection.SetBuilding(null);
-            player.interfaceSounds.Sound("Building_Undo");
+            if (player.BuildingSelection.Selected?.Instance == best) player.BuildingSelection.SetBuilding(null);
+            player.InterfaceSounds.Sound("Building_Undo");
         }
         return true;
 

@@ -48,21 +48,21 @@ public sealed record WildSite(int Index, WildKind Kind, ZoneCoordinate Zone, int
 /// </summary>
 public sealed partial class PopulationSystem
 {
-    readonly ConcurrentQueue<BuiltWild> builtWild = new();
-    List<WildSite>? wildSites;
-    SiteState[] wildStates = [];
-    readonly Dictionary<ZoneCoordinate, List<int>> wildByZone = [];
-    readonly SortedSet<int> wildLoaded = [];
-    readonly List<int> wildBuffer = [];
+    readonly ConcurrentQueue<BuiltWild> _builtWild = new();
+    List<WildSite>? _wildSites;
+    SiteState[] _wildStates = [];
+    readonly Dictionary<ZoneCoordinate, List<int>> _wildByZone = [];
+    readonly SortedSet<int> _wildLoaded = [];
+    readonly List<int> _wildBuffer = [];
 
     /// <summary>The squads an unloaded wild site keeps as their characters (the Meitou <see cref="KeepWild"/> switch), by site; made again, where they stood, when it loads.</summary>
-    readonly SortedDictionary<int, List<KeptWild>> keptWild = [];
+    readonly SortedDictionary<int, List<KeptWild>> _keptWild = [];
 
     /// <summary>A kept wild squad: its characters, what it was made from and the circle it keeps to.</summary>
     internal sealed record KeptWild(StoredSquad Stored, string TemplateId, int Faction, long Money, int SpawnSize, Vector2 Centre, float Radius);
 
     /// <summary>The squads an unloaded wild site keeps (empty: none, or the site is loaded).</summary>
-    internal IReadOnlyList<KeptWild> KeptWildOf(int site) => keptWild.TryGetValue(site, out var kept) ? kept : [];
+    internal IReadOnlyList<KeptWild> KeptWildOf(int site) => _keptWild.TryGetValue(site, out var kept) ? kept : [];
 
     /// <summary>
     /// A wild site's squads, built. <paramref name="Rolls"/>: the nest rolls used (the next top-up's keys follow them); <paramref name="Exhausted"/>: a nest roll found no entry that fits or
@@ -74,26 +74,26 @@ public sealed partial class PopulationSystem
     sealed record NestBudget(int Cap, int Members, int[] Counts, int First, int Rolls, int Squads, bool Place = true, Vector2? Centre = null);
 
     /// <summary>The wild sites (sectors and nests), made at the first look of a world with biomes; empty before or without.</summary>
-    public IReadOnlyList<WildSite> WildSites => wildSites ?? [];
+    public IReadOnlyList<WildSite> WildSites => _wildSites ?? [];
 
     /// <summary>The nest (its TOWN record) a squad was made for, as the nest spawned it (derived, not saved: a load's nests spawn theirs again); null: not a nest's.</summary>
-    public TownData? NestOf(int squad) => nestSquads.GetValueOrDefault(squad);
+    public TownData? NestOf(int squad) => _nestSquads.GetValueOrDefault(squad);
 
-    readonly Dictionary<int, TownData> nestSquads = [];
-    public SiteStatus WildStatusOf(int site) => wildStates[site].Status;
+    readonly Dictionary<int, TownData> _nestSquads = [];
+    public SiteStatus WildStatusOf(int site) => _wildStates[site].Status;
     /// <summary>The squad ids a wild site has now.</summary>
-    public IReadOnlyList<int> WildSquadsOf(int site) => wildStates[site].Squads;
+    public IReadOnlyList<int> WildSquadsOf(int site) => _wildStates[site].Squads;
     /// <summary>Where a nest site stood when it last loaded (null: never loaded, or not a nest).</summary>
-    internal Vector2? WildCentreOf(int site) => site >= 0 && site < wildCentres.Length ? wildCentres[site] : null;
+    internal Vector2? WildCentreOf(int site) => site >= 0 && site < _wildCentres.Length ? _wildCentres[site] : null;
 
-    readonly List<WildSpawn> wildLog = [];
+    readonly List<WildSpawn> _wildLog = [];
     /// <summary>A wild squad made: when, by a sector or a nest (its biome group or nest name), the squad, its members.</summary>
     public readonly record struct WildSpawn(long Tick, WildKind Kind, string Place, string Squad, int Members);
     /// <summary>The wild squads made since the last call (for the host's log; not part of the state).</summary>
     public List<WildSpawn> TakeWildLog()
     {
-        var list = new List<WildSpawn>(wildLog);
-        wildLog.Clear();
+        var list = new List<WildSpawn>(_wildLog);
+        _wildLog.Clear();
         return list;
     }
 
@@ -101,15 +101,15 @@ public sealed partial class PopulationSystem
 
     void EnsureWild(World world)
     {
-        if (wildSites is not null || data.Biomes is not { } biomes) return;
+        if (_wildSites is not null || _data.Biomes is not { } biomes) return;
         var saved = world.Saved;
-        wildSites = BuildWildSites(data, settings, biomes, world.Seed, saved?.Nests, States);
-        wildStates = new SiteState[wildSites.Count];
-        wildCentres = new Vector2?[wildSites.Count];
-        for (int i = 0; i < wildStates.Length; i++) wildStates[i] = new SiteState();
-        foreach (var site in wildSites)
+        _wildSites = BuildWildSites(_data, _settings, biomes, world.Seed, saved?.Nests, States);
+        _wildStates = new SiteState[_wildSites.Count];
+        _wildCentres = new Vector2?[_wildSites.Count];
+        for (int i = 0; i < _wildStates.Length; i++) _wildStates[i] = new SiteState();
+        foreach (var site in _wildSites)
         {
-            if (!wildByZone.TryGetValue(site.Zone, out var list)) wildByZone[site.Zone] = list = [];
+            if (!_wildByZone.TryGetValue(site.Zone, out var list)) _wildByZone[site.Zone] = list = [];
             list.Add(site.Index);
         }
         if (saved is not null) BindSavedWild(world, saved);
@@ -123,7 +123,7 @@ public sealed partial class PopulationSystem
     {
         var byInstance = new Dictionary<string, int>(StringComparer.Ordinal);
         var sectorOf = new Dictionary<ZoneCoordinate, int>();
-        foreach (var site in wildSites!)
+        foreach (var site in _wildSites!)
         {
             if (site.SaveInstance is { } instance) byInstance.TryAdd(instance, site.Index);
             if (site.Kind == WildKind.Sector) sectorOf.TryAdd(site.Zone, site.Index);
@@ -139,22 +139,22 @@ public sealed partial class PopulationSystem
             var state = nest.State;
             var flags = (state.Bools.GetValueOrDefault("discovered") ? TownKnowledge.Discovered : 0) | (state.Bools.GetValueOrDefault("explored") ? TownKnowledge.Explored : 0)
                 | (state.Bools.GetValueOrDefault("recently discovered") ? TownKnowledge.Recent : 0);
-            if (flags == 0 || !byInstance.TryGetValue(nest.Instance, out int site) || wildSites[site].Nest is not { } town) continue;
-            var faction = wildSites[site].Faction >= 0 ? data.Factions[wildSites[site].Faction] : null;
+            if (flags == 0 || !byInstance.TryGetValue(nest.Instance, out int site) || _wildSites[site].Nest is not { } town) continue;
+            var faction = _wildSites[site].Faction >= 0 ? _data.Factions[_wildSites[site].Faction] : null;
             world.Player.KnowCamp(new CampView(site, town.Id, town.Name, faction?.Id ?? town.Faction ?? "", faction?.NotReal ?? false, nest.Position, flags), flags);
         }
         foreach (var nest in saved.Nests)
             if (byInstance.TryGetValue(nest.Instance, out int site))
             {
-                nestSaveIds[site] = (nest.Instance, nest.Handle);
-                NestPools(world, wildSites[site]);   // a save's nest grows from now on, visited or not (rolled ones exist once they load)
+                _nestSaveIds[site] = (nest.Instance, nest.Handle);
+                NestPools(world, _wildSites[site]);   // a save's nest grows from now on, visited or not (rolled ones exist once they load)
             }
     }
 
     /// <summary>The town-list entry and handle each nest site has in a save (a save's nests from the start; a rolled nest once a capture wrote it), so later saves reuse them.</summary>
-    readonly Dictionary<int, (string Instance, Meitou.Data.Save.Hand Handle)> nestSaveIds = [];
-    internal bool NestSaveId(int site, out (string Instance, Meitou.Data.Save.Hand Handle) id) => nestSaveIds.TryGetValue(site, out id);
-    internal void RememberNest(int site, string instance, Meitou.Data.Save.Hand handle) => nestSaveIds[site] = (instance, handle);
+    readonly Dictionary<int, (string Instance, Data.Save.Hand Handle)> _nestSaveIds = [];
+    internal bool NestSaveId(int site, out (string Instance, Data.Save.Hand Handle) id) => _nestSaveIds.TryGetValue(site, out id);
+    internal void RememberNest(int site, string instance, Data.Save.Hand handle) => _nestSaveIds[site] = (instance, handle);
 
     /// <summary>What a wild site holds already when it loads: the save's platoons bound to it that still have someone (squads, members, squads per template).</summary>
     sealed record WildHold(int Squads, int Members, Dictionary<string, int> Templates);
@@ -210,7 +210,7 @@ public sealed partial class PopulationSystem
         var savedOf = new Dictionary<int, List<Saving.SavedNest>>();
         foreach (var n in saved ?? [])
         {
-            if (data.Db.Find(n.TownId) is not { Type: Meitou.Data.Fcs.FcsRecordType.TOWN }) continue;
+            if (data.Db.Find(n.TownId) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town }) continue;
             var (cx, cz) = WeatherAreas.CellOf(n.Position.X, n.Position.Z);
             int g = biomes.GroupOf(cx, cz);
             if (!savedOf.TryGetValue(g, out var list)) savedOf[g] = list = [];
@@ -307,23 +307,23 @@ public sealed partial class PopulationSystem
     void StepWild(World world, long grace)
     {
         EnsureWild(world);
-        if (wildSites is null) return;
-        wildBuffer.Clear();
-        foreach (var zone in active)
-            if (wildByZone.TryGetValue(zone, out var list)) wildBuffer.AddRange(list);
-        wildBuffer.Sort();
-        foreach (int i in wildBuffer)
+        if (_wildSites is null) return;
+        _wildBuffer.Clear();
+        foreach (var zone in _active)
+            if (_wildByZone.TryGetValue(zone, out var list)) _wildBuffer.AddRange(list);
+        _wildBuffer.Sort();
+        foreach (int i in _wildBuffer)
         {
-            var state = wildStates[i];
-            if (state.Status == SiteStatus.Unloaded) LoadWild(world, wildSites[i], state);
+            var state = _wildStates[i];
+            if (state.Status == SiteStatus.Unloaded) LoadWild(world, _wildSites[i], state);
             else state.UnloadAtTick = -1;
         }
-        wildBuffer.Clear();
-        wildBuffer.AddRange(wildLoaded);
-        foreach (int i in wildBuffer)
+        _wildBuffer.Clear();
+        _wildBuffer.AddRange(_wildLoaded);
+        foreach (int i in _wildBuffer)
         {
-            var state = wildStates[i];
-            if (active.Contains(wildSites[i].Zone)) continue;
+            var state = _wildStates[i];
+            if (_active.Contains(_wildSites[i].Zone)) continue;
             if (AnyMemberActive(world, state)) { state.UnloadAtTick = -1; continue; }
             if (state.UnloadAtTick < 0) state.UnloadAtTick = world.Tick + grace;
             else if (world.Tick >= state.UnloadAtTick)
@@ -332,11 +332,11 @@ public sealed partial class PopulationSystem
                 else
                 {
                     KeepOccupiers(world, i, state);
-                    PayNestDespawn(world, wildSites[i], state);
+                    PayNestDespawn(world, _wildSites[i], state);
                 }
                 Drop(world, state);
                 FoldCamp(world, i);
-                wildLoaded.Remove(i);
+                _wildLoaded.Remove(i);
             }
         }
     }
@@ -357,7 +357,7 @@ public sealed partial class PopulationSystem
             if (stored.Members.Count == 0) continue;
             (kept ??= []).Add(new KeptWild(stored, squad.TemplateId, squad.Faction, squad.Money, squad.SpawnSize, squad.HomeCentre, squad.HomeRadius));
         }
-        if (kept is not null) keptWild[site] = kept;
+        if (kept is not null) _keptWild[site] = kept;
     }
 
     /// <summary>A squad running an occupation, whose platoon the original makes persistent while it lasts (docs/game/ai.md "Package classes"): kept out of the world by every switch.</summary>
@@ -377,24 +377,24 @@ public sealed partial class PopulationSystem
     /// <summary>Keeps the squads of <paramref name="state"/> (<see cref="KeepWildSquads"/>) after the ones <paramref name="site"/> keeps already.</summary>
     void KeepAlso(World world, int site, SiteState state)
     {
-        keptWild.Remove(site, out var before);
+        _keptWild.Remove(site, out var before);
         KeepWildSquads(world, site, state);
         if (before is null) return;
-        if (keptWild.TryGetValue(site, out var now)) before.AddRange(now);
-        keptWild[site] = before;
+        if (_keptWild.TryGetValue(site, out var now)) before.AddRange(now);
+        _keptWild[site] = before;
     }
 
     /// <summary>The site's kept squads into the world (serial, as it loads), counted as its own.</summary>
     void SpawnKeptWild(World world, int site, SiteState state)
     {
-        if (!keptWild.Remove(site, out var kept)) return;
+        if (!_keptWild.Remove(site, out var kept)) return;
         foreach (var k in kept)
         {
             if (OffscreenHealing) RecoverStored(world, k.Stored);
             if (SpawnKept(world, k.Stored, k.TemplateId, k.Faction, -1, -1, k.Stored.Anchor, k.Centre, k.Radius, k.SpawnSize) is not { } squad) continue;
             squad.Money = k.Money;
             state.Squads.Add(squad.Id);
-            if (wildSites![site].Kind == WildKind.Nest) nestSquads[squad.Id] = wildSites[site].Nest!;
+            if (_wildSites![site].Kind == WildKind.Nest) _nestSquads[squad.Id] = _wildSites[site].Nest!;
         }
     }
 
@@ -403,7 +403,7 @@ public sealed partial class PopulationSystem
         if (ZoneGate is { } gate && !gate(site.Zone)) return;   // retried at the next look
         state.Status = SiteStatus.Loading;
         state.LoadId++;
-        wildLoaded.Add(site.Index);
+        _wildLoaded.Add(site.Index);
         long loadId = state.LoadId;
         ulong seed = world.Seed;
         var walk = world.Walkability;
@@ -417,12 +417,12 @@ public sealed partial class PopulationSystem
             var counts = new int[site.Nest!.RoamingSquads.Count];
             for (int i = 0; hold is not null && i < counts.Length; i++) counts[i] = hold.Templates.GetValueOrDefault(site.Nest.RoamingSquads[i].Id);
             var budget = new NestBudget(cap, hold?.Members ?? 0, counts, 0, 64, 64);
-            if (work is null) SpawnWild(world, BuildNest(site, loadId, seed, walk, players, budget));
-            else work.Add(() => builtWild.Enqueue(BuildNest(site, loadId, seed, walk, players, budget)));
+            if (_work is null) SpawnWild(world, BuildNest(site, loadId, seed, walk, players, budget));
+            else _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, players, budget)));
             return;
         }
-        if (work is null) SpawnWild(world, BuildSector(site, loadId, seed, walk, players, hold));
-        else work.Add(() => builtWild.Enqueue(BuildSector(site, loadId, seed, walk, players, hold)));
+        if (_work is null) SpawnWild(world, BuildSector(site, loadId, seed, walk, players, hold));
+        else _work.Add(() => _builtWild.Enqueue(BuildSector(site, loadId, seed, walk, players, hold)));
     }
 
     static Vector2[] PlayerSpots(World world)
@@ -435,8 +435,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>The build being spawned one squad per tick (docs/game/ai.md "Squad factory queue"), and the next of its squads.</summary>
-    (BuiltWild Build, int Next)? spawningWild;
-    readonly List<BuiltWild> readyWild = [];
+    (BuiltWild Build, int Next)? _spawningWild;
+    readonly List<BuiltWild> _readyWild = [];
 
     /// <summary>
     /// Spawns at most one squad of the finished wild builds (the original builds one queued squad request per rendered frame, <c>FUN_140583310</c>; a tick stands for a frame here).
@@ -444,24 +444,24 @@ public sealed partial class PopulationSystem
     /// </summary>
     bool DrainWild(World world)
     {
-        while (builtWild.TryDequeue(out var queued)) readyWild.Add(queued);
-        readyWild.Sort(static (a, b) => a.Site.CompareTo(b.Site));
+        while (_builtWild.TryDequeue(out var queued)) _readyWild.Add(queued);
+        _readyWild.Sort(static (a, b) => a.Site.CompareTo(b.Site));
         while (true)
         {
-            if (spawningWild is null)
+            if (_spawningWild is null)
             {
-                if (readyWild.Count == 0) return false;
-                var b = readyWild[0];
-                readyWild.RemoveAt(0);
+                if (_readyWild.Count == 0) return false;
+                var b = _readyWild[0];
+                _readyWild.RemoveAt(0);
                 if (!BeginWild(world, b)) continue;
-                spawningWild = (b, 0);
+                _spawningWild = (b, 0);
             }
-            var (build, next) = spawningWild.Value;
-            if (wildStates[build.Site].LoadId != build.LoadId) { spawningWild = null; continue; }   // unloaded meanwhile
-            if (next >= build.Squads.Count) { EndWild(world, build); spawningWild = null; continue; }   // nothing (more) to make costs no frame
+            var (build, next) = _spawningWild.Value;
+            if (_wildStates[build.Site].LoadId != build.LoadId) { _spawningWild = null; continue; }   // unloaded meanwhile
+            if (next >= build.Squads.Count) { EndWild(world, build); _spawningWild = null; continue; }   // nothing (more) to make costs no frame
             SpawnWildSquad(world, build, build.Squads[next]);
-            spawningWild = (build, next + 1);
-            if (next + 1 >= build.Squads.Count) { EndWild(world, build); spawningWild = null; }
+            _spawningWild = (build, next + 1);
+            if (next + 1 >= build.Squads.Count) { EndWild(world, build); _spawningWild = null; }
             return true;
         }
     }
@@ -476,12 +476,12 @@ public sealed partial class PopulationSystem
 
     bool BeginWild(World world, BuiltWild b)
     {
-        var state = wildStates[b.Site];
+        var state = _wildStates[b.Site];
         if (state.LoadId != b.LoadId || state.Status != (b.TopUp ? SiteStatus.Loaded : SiteStatus.Loading)) return false;   // unloaded meanwhile
         state.Pending = false;
         state.Made = (b.TopUp ? state.Made : 0) + b.Rolls;
-        var site = wildSites![b.Site];
-        if (site.Kind == WildKind.Nest && (b.Squads.Count > 0 || site.SaveInstance is not null)) wildCentres[b.Site] = b.Centre;
+        var site = _wildSites![b.Site];
+        if (site.Kind == WildKind.Nest && (b.Squads.Count > 0 || site.SaveInstance is not null)) _wildCentres[b.Site] = b.Centre;
         if (!b.TopUp) SpawnKeptWild(world, b.Site, state);
         if (b.Layout is { IsEmpty: false } layout) StandCamp(world, site.Index, layout, site.Faction, b.Centre, site.Nest!.Id, -1);
         return true;
@@ -489,24 +489,24 @@ public sealed partial class PopulationSystem
 
     void SpawnWildSquad(World world, BuiltWild b, BuiltSquad built)
     {
-        var state = wildStates[b.Site];
-        var site = wildSites![b.Site];
+        var state = _wildStates[b.Site];
+        var site = _wildSites![b.Site];
         var squad = SpawnSquad(world, built, null, 0);
         if (site.Kind == WildKind.Nest)
         {
             squad.HomeCentre = b.Centre;
             squad.HomeRadius = NestRadius(site.Nest!);
-            nestSquads[squad.Id] = site.Nest!;
+            _nestSquads[squad.Id] = site.Nest!;
         }
-        else squad.HomeRadius = settings.HomelessHomeRadius;
+        else squad.HomeRadius = _settings.HomelessHomeRadius;
         state.Squads.Add(squad.Id);
-        if (wildLog.Count < 256) wildLog.Add(new WildSpawn(world.Tick, site.Kind, site.Kind == WildKind.Nest ? site.Nest!.Name : data.Biomes!.Groups[site.Group].Name, squad.Name, squad.Members.Count));
+        if (_wildLog.Count < 256) _wildLog.Add(new WildSpawn(world.Tick, site.Kind, site.Kind == WildKind.Nest ? site.Nest!.Name : _data.Biomes!.Groups[site.Group].Name, squad.Name, squad.Members.Count));
     }
 
     void EndWild(World world, BuiltWild b)
     {
-        var state = wildStates[b.Site];
-        var site = wildSites![b.Site];
+        var state = _wildStates[b.Site];
+        var site = _wildSites![b.Site];
         state.Status = SiteStatus.Loaded;
         if (!b.TopUp) state.UnloadAtTick = -1;
         if (site.Kind == WildKind.Nest && b.Exhausted) CheckWipe(world, site, state);
@@ -556,23 +556,23 @@ public sealed partial class PopulationSystem
     }
 
     bool TemplateUsable(string id) =>
-        data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r).WorldState.All(w => IWorldStates.Passes(States, data.Db, w.Id, w.V0));
+        _data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r).WorldState.All(w => IWorldStates.Passes(States, _data.Db, w.Id, w.V0));
 
     /// <summary>A sector's squads as it loads, or with <paramref name="topUp"/> ≥ 0 the one squad of the area tick's refill number <paramref name="topUp"/> (<c>PopulationHomeless.cs</c>).</summary>
     BuiltWild BuildSector(WildSite site, long loadId, ulong seed, IWalkability walk, Vector2[] players, WildHold? hold, int topUp = -1)
     {
         var squads = new List<BuiltSquad>();
-        var group = data.Biomes!.Groups[site.Group];
+        var group = _data.Biomes!.Groups[site.Group];
         var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(site.Zone.X, site.Zone.Y);
         var centre = new Vector2((minX + maxX) / 2, (minZ + maxZ) / 2);
         // A sector whose nearest town is the player's makes nothing (6.2).
-        if (NearestTown(centre, out _) is { } nearest && data.PlayerFaction >= 0 && data.SiteFactions[nearest.Index] == data.PlayerFaction)
+        if (NearestTown(centre, out _) is { } nearest && _data.PlayerFaction >= 0 && _data.SiteFactions[nearest.Index] == _data.PlayerFaction)
             return new BuiltWild(site.Index, loadId, centre, squads, TopUp: topUp >= 0);
         // A sector whose own town is a nest with roaming squads makes none of the biome's: the original's maker then draws from the nest's
         // pool within its free budget (docs/game/factions-squads-towns.md "Homeless squads"), which Meitou leaves to the nest's own site.
         if (OwnNest(site, centre) is { RoamingSquads.Count: > 0 })
             return new BuiltWild(site.Index, loadId, centre, squads, TopUp: topUp >= 0);
-        int n = HomelessCount(group, settings.PopulationMultiplier);
+        int n = HomelessCount(group, _settings.PopulationMultiplier);
         var counts = new int[group.HomelessSpawns.Count];
         // The save's homeless squads standing in this sector are of its count (and of their entry's).
         for (int i = 0; hold is not null && i < counts.Length; i++) counts[i] = hold.Templates.GetValueOrDefault(group.HomelessSpawns[i].Id);
@@ -582,14 +582,14 @@ public sealed partial class PopulationSystem
         for (int s = first; s < n; s++)
         {
             ulong key = Rng.Mix(SeedSalts.HomelessSquad ^ (ulong)site.Zone.X << 40 ^ (ulong)site.Zone.Y << 24 ^ (uint)s);
-            var weights = HomelessWeights(group, settings.PopulationMultiplier, counts, TemplateUsable);
+            var weights = HomelessWeights(group, _settings.PopulationMultiplier, counts, TemplateUsable);
             int e = Pick(weights, Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.HomelessPick));
             if (e < 0) break;
             counts[e]++;
-            var template = SquadTemplate.From(data.Db.Find(group.HomelessSpawns[e].Id)!);
-            int faction = data.SpawnFactionOf(template);
+            var template = SquadTemplate.From(_data.Db.Find(group.HomelessSpawns[e].Id)!);
+            int faction = _data.SpawnFactionOf(template);
             if (PlaceInSector(minX, minZ, maxX, maxZ, faction, seed, key, walk, players) is not { } spot) continue;
-            if (BuildOne(template, faction, faction >= 0 ? data.Factions[faction] : null, key, seed, spot) is { } one) squads.Add(one);
+            if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot) is { } one) squads.Add(one);
         }
         return topUp >= 0 ? new BuiltWild(site.Index, loadId, centre, squads, Rolls: 1, TopUp: true) : new BuiltWild(site.Index, loadId, centre, squads);
     }
@@ -597,7 +597,7 @@ public sealed partial class PopulationSystem
     /// <summary>How near a town a nest marker may not be used (<b>Verified</b>, 6,250,000 squared in <c>FUN_1408f6350</c>).</summary>
     const float MarkerTownGap = 2500;
 
-    TownSite? NearestTown(Vector2 p, out float distance) => NearestTown(data, p, out distance);
+    TownSite? NearestTown(Vector2 p, out float distance) => NearestTown(_data, p, out distance);
 
     /// <summary>
     /// The nest that is a sector's own town (<c>FUN_1408f62e0</c>: the town nearest the sector's centre, when it stands in the sector): the nearest nest site
@@ -608,7 +608,7 @@ public sealed partial class PopulationSystem
     {
         var town = NearestTown(centre, out float nearest);
         WildSite? own = null;
-        foreach (var s in wildSites!)
+        foreach (var s in _wildSites!)
         {
             if (s.Kind != WildKind.Nest || s.Spots.Count == 0)
                 continue;
@@ -643,14 +643,14 @@ public sealed partial class PopulationSystem
             ulong roll = Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.WildPlace + (ulong)t);
             var p = new Vector2(minX + Rng.Float(roll) * (maxX - minX), minZ + Rng.Float(Rng.Mix(roll)) * (maxZ - minZ));
             if (NearestTown(p, out _) is { } nearest) p = PushOut(p, nearest, 2);
-            foreach (var s in data.Sites)
+            foreach (var s in _data.Sites)
             {
                 if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null) continue;
-                if (data.SiteFactions[s.Index] != faction) p = PushOut(p, s, 1);
+                if (_data.SiteFactions[s.Index] != faction) p = PushOut(p, s, 1);
             }
             bool tooClose = false;
             foreach (var at in players)
-                if (Vector2.DistanceSquared(at, p) < settings.HomelessPlayerDistance * settings.HomelessPlayerDistance) { tooClose = true; break; }
+                if (Vector2.DistanceSquared(at, p) < _settings.HomelessPlayerDistance * _settings.HomelessPlayerDistance) { tooClose = true; break; }
             if (tooClose || !walk.IsWalkable(p.X, p.Y)) continue;
             return p;
         }
@@ -682,7 +682,7 @@ public sealed partial class PopulationSystem
         var counts = (int[])budget.Counts.Clone();
         var templates = new SquadTemplate?[entries.Count];
         for (int i = 0; i < entries.Count; i++)
-            if (entries[i].V0 > 0 && TemplateUsable(entries[i].Id)) templates[i] = SquadTemplate.From(data.Db.Find(entries[i].Id)!);
+            if (entries[i].V0 > 0 && TemplateUsable(entries[i].Id)) templates[i] = SquadTemplate.From(_data.Db.Find(entries[i].Id)!);
         float radius = NestRadius(nest);
         // The members already of its pool (the save's squads, or the nest's in the world) count against the cap, their templates against the weights.
         int members = budget.Members;
@@ -694,7 +694,7 @@ public sealed partial class PopulationSystem
             // An entry fits the free room, or any size does while the pool is empty and more than 4 are free (FUN_1408f7e80).
             int free = cap - members;
             for (int i = 0; i < entries.Count; i++)
-                weights[i] = templates[i] is { } t && (SquadFactory.ExpectedSize(t, settings.SquadSizeMultiplier) <= free || members == 0 && free > 4)
+                weights[i] = templates[i] is { } t && (SquadFactory.ExpectedSize(t, _settings.SquadSizeMultiplier) <= free || members == 0 && free > 4)
                     ? MathF.Max(0, entries[i].V0 - counts[i]) : 0;
             ulong key = Rng.Mix(Rng.Mix(SeedSalts.NestSquad ^ site.Key) ^ (uint)(budget.First + s));
             rolls++;
@@ -707,22 +707,22 @@ public sealed partial class PopulationSystem
             if (!budget.Place) break;
             counts[e]++;
             var template = templates[e]!;
-            int faction = data.SpawnFactionOf(template, site.Nest is not null ? site.Faction : null);
+            int faction = _data.SpawnFactionOf(template, site.Nest is not null ? site.Faction : null);
             Vector2? spot = null;
             for (int t = 0; t < 12 && spot is null; t++)
             {
                 var p = Rng.PointInDisc(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.WildPlace + (ulong)t), c, radius * 0.6f);
                 bool tooClose = false;
                 foreach (var at in players)
-                    if (Vector2.DistanceSquared(at, p) < settings.NestPlayerDistance * settings.NestPlayerDistance) { tooClose = true; break; }
+                    if (Vector2.DistanceSquared(at, p) < _settings.NestPlayerDistance * _settings.NestPlayerDistance) { tooClose = true; break; }
                 if (!tooClose && walk.IsWalkable(p.X, p.Y)) spot = p;
             }
             if (spot is null) continue;
-            if (BuildOne(template, faction, faction >= 0 ? data.Factions[faction] : null, key, seed, spot.Value) is not { } one) continue;
+            if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot.Value) is not { } one) continue;
             squads.Add(one);
             members += one.Plan.TotalMembers;
         }
-        var layout = topUp ? null : NestFurniture.Scatter(data.Db, nest, c, walk, seed, $"nest{(int)c.X},{(int)c.Y}:");   // keyed by place: a save names its cages
+        var layout = topUp ? null : NestFurniture.Scatter(_data.Db, nest, c, walk, seed, $"nest{(int)c.X},{(int)c.Y}:");   // keyed by place: a save names its cages
         return new BuiltWild(site.Index, loadId, c, squads, rolls, exhausted, topUp, layout);
     }
 }

@@ -18,12 +18,12 @@ public sealed class RoadNetwork
 
     sealed record Road(Vector2[] Points, float[] Along, float Length, int From, int To);
 
-    readonly List<Road> roads = [];
-    readonly List<Vector2> junctions = [];
-    readonly List<List<int>> edges = [];
-    readonly Dictionary<(int, int), List<(int Road, int Segment)>> grid = [];
+    readonly List<Road> _roads = [];
+    readonly List<Vector2> _junctions = [];
+    readonly List<List<int>> _edges = [];
+    readonly Dictionary<(int, int), List<(int Road, int Segment)>> _grid = [];
 
-    public int Count => roads.Count;
+    public int Count => _roads.Count;
 
     public RoadNetwork(IEnumerable<RoadPath> paths)
     {
@@ -31,9 +31,9 @@ public sealed class RoadNetwork
         int Junction(int number, Vector2 at)
         {
             if (junctionOf.TryGetValue(number, out int j)) return j;
-            junctionOf[number] = j = junctions.Count;
-            junctions.Add(at);
-            edges.Add([]);
+            junctionOf[number] = j = _junctions.Count;
+            _junctions.Add(at);
+            _edges.Add([]);
             return j;
         }
         foreach (var path in paths)
@@ -45,17 +45,17 @@ public sealed class RoadNetwork
             float total = along[^1];
             for (int i = 0; i < along.Length; i++) along[i] = total > 0 ? along[i] / total : 0;
             int from = Junction(path.Start, points[0]), to = Junction(path.End, points[^1]);
-            int index = roads.Count;
-            roads.Add(new Road(points, along, path.Length, from, to));
-            edges[from].Add(index);
-            if (to != from) edges[to].Add(index);
+            int index = _roads.Count;
+            _roads.Add(new Road(points, along, path.Length, from, to));
+            _edges[from].Add(index);
+            if (to != from) _edges[to].Add(index);
             for (int s = 0; s + 1 < points.Length; s++)
             {
                 var (a, b) = (points[s], points[s + 1]);
                 for (int cx = CellOf(MathF.Min(a.X, b.X)); cx <= CellOf(MathF.Max(a.X, b.X)); cx++)
                     for (int cz = CellOf(MathF.Min(a.Y, b.Y)); cz <= CellOf(MathF.Max(a.Y, b.Y)); cz++)
                     {
-                        if (!grid.TryGetValue((cx, cz), out var list)) grid[(cx, cz)] = list = [];
+                        if (!_grid.TryGetValue((cx, cz), out var list)) _grid[(cx, cz)] = list = [];
                         list.Add((index, s));
                     }
             }
@@ -80,11 +80,11 @@ public sealed class RoadNetwork
         for (int cx = x0 - r; cx <= x0 + r; cx++)
             for (int cz = z0 - r; cz <= z0 + r; cz++)
             {
-                if (!grid.TryGetValue((cx, cz), out var list)) continue;
+                if (!_grid.TryGetValue((cx, cz), out var list)) continue;
                 foreach (var (index, s) in list)
                 {
                     if (!seen.Add((index, s))) continue;
-                    var road = roads[index];
+                    var road = _roads[index];
                     var (a, b) = (road.Points[s], road.Points[s + 1]);
                     var ab = b - a;
                     float len2 = ab.LengthSquared();
@@ -111,7 +111,7 @@ public sealed class RoadNetwork
     {
         float straight = Vector2.Distance(from, to);
         float w = MathF.Max(0, 1 - roadPreference);
-        if (straight <= MinTrip || w >= 1 || roads.Count == 0) return null;
+        if (straight <= MinTrip || w >= 1 || _roads.Count == 0) return null;
         var dir = (to - from) / straight;
         float pull = Math.Clamp(w, 0.2f, 0.9f);
         if (Nearest(from, dir, pull) is not { } entry || Nearest(to, -dir, pull) is not { } exit) return null;
@@ -131,8 +131,8 @@ public sealed class RoadNetwork
     /// </summary>
     (float Cost, List<Vector2> Points)? Search(Spot entry, Spot exit)
     {
-        var er = roads[entry.Road];
-        var xr = roads[exit.Road];
+        var er = _roads[entry.Road];
+        var xr = _roads[exit.Road];
         // Start and goal on one road: along it.
         float direct = entry.Road == exit.Road ? MathF.Abs(entry.T - exit.T) * er.Length : float.MaxValue;
         var cost = new Dictionary<int, float>();
@@ -143,7 +143,7 @@ public sealed class RoadNetwork
             if (cost.TryGetValue(junction, out float old) && old <= c) return;
             cost[junction] = c;
             back[junction] = -1;
-            open.Enqueue(junction, c + Vector2.Distance(junctions[junction], exit.Point));
+            open.Enqueue(junction, c + Vector2.Distance(_junctions[junction], exit.Point));
         }
         Seed(er.From, entry.T * er.Length);
         Seed(er.To, (1 - entry.T) * er.Length);
@@ -158,16 +158,16 @@ public sealed class RoadNetwork
             // Reaching the exit road's junctions finishes along it.
             if (j == xr.From && g + exit.T * xr.Length < best) (best, bestJunction) = (g + exit.T * xr.Length, j);
             if (j == xr.To && g + (1 - exit.T) * xr.Length < best) (best, bestJunction) = (g + (1 - exit.T) * xr.Length, j);
-            foreach (int index in edges[j])
+            foreach (int index in _edges[j])
             {
                 if (index == entry.Road || index == exit.Road) continue;
-                var road = roads[index];
+                var road = _roads[index];
                 int other = road.From == j ? road.To : road.From;
                 float c = g + road.Length;
                 if (cost.TryGetValue(other, out float old) && old <= c) continue;
                 cost[other] = c;
                 back[other] = index;
-                open.Enqueue(other, c + Vector2.Distance(junctions[other], exit.Point));
+                open.Enqueue(other, c + Vector2.Distance(_junctions[other], exit.Point));
             }
         }
         if (best == float.MaxValue) return null;
@@ -179,13 +179,13 @@ public sealed class RoadNetwork
         }
         // Back from the junction the exit road was reached at, to a seed junction.
         var chain = new List<(int Road, int To)>();
-        for (int j = bestJunction; back.TryGetValue(j, out int via) && via >= 0; j = roads[via].From == j ? roads[via].To : roads[via].From) chain.Add((via, j));
+        for (int j = bestJunction; back.TryGetValue(j, out int via) && via >= 0; j = _roads[via].From == j ? _roads[via].To : _roads[via].From) chain.Add((via, j));
         chain.Reverse();
-        int first = chain.Count > 0 ? (roads[chain[0].Road].From == chain[0].To ? roads[chain[0].Road].To : roads[chain[0].Road].From) : bestJunction;
+        int first = chain.Count > 0 ? (_roads[chain[0].Road].From == chain[0].To ? _roads[chain[0].Road].To : _roads[chain[0].Road].From) : bestJunction;
         AddAlong(points, er, entry.T, first == er.From ? 0 : 1);
         foreach (var (index, end) in chain)
         {
-            var road = roads[index];
+            var road = _roads[index];
             AddAlong(points, road, road.To == end ? 0 : 1, road.To == end ? 1 : 0);
         }
         AddAlong(points, xr, bestJunction == xr.From ? 0 : 1, exit.T);

@@ -28,18 +28,18 @@ public class SurgeryTests
     public void A_surgeon_out_of_reach_too_little_money_and_a_new_race_or_gender_are_refused_and_a_valid_edit_takes_the_price()
     {
         // A dialogue whose one line opens the character editor and takes the price, on a CHARACTER that offers it.
-        var open = Rec("81-t", FcsRecordType.DIALOG_ACTION, "Editor");
+        var open = Rec("81-t", FcsRecordType.DialogAction, "Editor");
         open.Ints["action name"] = SurgeonDialogues.CharacterEditor;
-        var take = Rec("82-t", FcsRecordType.DIALOG_ACTION, "Take money");
+        var take = Rec("82-t", FcsRecordType.DialogAction, "Take money");
         take.Ints["action name"] = SurgeonDialogues.TakeMoney;
-        var line = Rec("83-t", FcsRecordType.DIALOGUE_LINE, "Change my looks");
+        var line = Rec("83-t", FcsRecordType.DialogueLine, "Change my looks");
         line.References["effects"] = [Ref("81-t"), Ref("82-t", Price)];
-        var dialogue = Rec("84-t", FcsRecordType.DIALOGUE, "Surgery");
+        var dialogue = Rec("84-t", FcsRecordType.Dialogue, "Surgery");
         dialogue.References["lines"] = [Ref("83-t")];
-        var surgeonRecord = Rec("85-t", FcsRecordType.CHARACTER, "Surgeon");
+        var surgeonRecord = Rec("85-t", FcsRecordType.Character, "Surgeon");
         surgeonRecord.References["race"] = [Ref("1-t", 100)];
         surgeonRecord.References["dialogue"] = [Ref("84-t")];
-        var db = Database(extra: [open, take, line, dialogue, surgeonRecord, Rec("86-t", FcsRecordType.RACE, "Other")]);
+        var db = Database(extra: [open, take, line, dialogue, surgeonRecord, Rec("86-t", FcsRecordType.Race, "Other")]);
         var race = db.Find("1-t")!;
         var data = PopulationData.Create(db, [new TownPlacement("inst", "30-t", Centre, null)], new Looks(race));
 
@@ -62,7 +62,7 @@ public class SurgeryTests
 
         FcsRecord Look(string raceId, bool female)
         {
-            var record = Rec("look", FcsRecordType.CHARACTER, "Look");
+            var record = Rec("look", FcsRecordType.Character, "Look");
             record.References["race"] = [Ref(raceId)];
             record.Bools["sex female"] = female;
             return record;
@@ -106,7 +106,7 @@ public class SurgeryTests
     [Fact]
     public void At_creation_a_name_only_edit_renames_an_animal_and_a_new_look_for_it_is_refused()
     {
-        var animalRecord = Rec("87-t", FcsRecordType.ANIMAL_CHARACTER, "Hound");
+        var animalRecord = Rec("87-t", FcsRecordType.AnimalCharacter, "Hound");
         animalRecord.References["race"] = [Ref("1-t", 100)];
         var db = Database(extra: [animalRecord]);
         var race = db.Find("1-t")!;
@@ -128,7 +128,7 @@ public class SurgeryTests
             world.RunTicks(1);
         }
 
-        var proposed = Rec("look", FcsRecordType.CHARACTER, "Look");
+        var proposed = Rec("look", FcsRecordType.Character, "Look");
         proposed.References["race"] = [Ref("1-t")];
         Edit(proposed, "Wrong");
         Assert.Single(world.TakeMessages());

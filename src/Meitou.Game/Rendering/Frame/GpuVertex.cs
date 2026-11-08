@@ -80,7 +80,13 @@ public static class GpuVertex
             ref readonly var v = ref vertices[i];
             packed[i] = new CharacterVertex
             {
-                Position = v.Position, Normal = new(new Vector4(v.Normal, 0)), Uv = v.Uv, Tangent = new(v.Tangent), Colour = v.Colour, Bones = v.Bones, Weights = new(v.Weights),
+                Position = v.Position,
+                Normal = new(new Vector4(v.Normal, 0)),
+                Uv = v.Uv,
+                Tangent = new(v.Tangent),
+                Colour = v.Colour,
+                Bones = v.Bones,
+                Weights = new(v.Weights),
             };
         }
         return bytes;
@@ -89,17 +95,17 @@ public static class GpuVertex
     /// <summary>The object layout's attributes at locations 0 to 4 (position, normal, uv, tangent, colour) over <paramref name="vertices"/>.</summary>
     public static LegacyProgram.Attribute?[] ObjectAttributes(DeviceBuffer vertices) =>
     [
-        Attribute(vertices, 0, InternalFormat.Rgb32f, ObjectSize), Attribute(vertices, 12, InternalFormat.Rgba16Snorm, ObjectSize),
-        Attribute(vertices, 20, InternalFormat.RG32f, ObjectSize), Attribute(vertices, 28, InternalFormat.Rgba16Snorm, ObjectSize),
-        Attribute(vertices, 36, InternalFormat.Rgba16f, ObjectSize),
+        Attribute(vertices, 0, InternalFormat.Rgb32F, ObjectSize), Attribute(vertices, 12, InternalFormat.Rgba16Snorm, ObjectSize),
+        Attribute(vertices, 20, InternalFormat.Rg32F, ObjectSize), Attribute(vertices, 28, InternalFormat.Rgba16Snorm, ObjectSize),
+        Attribute(vertices, 36, InternalFormat.Rgba16F, ObjectSize),
     ];
 
     /// <summary>The character layout's attributes at locations 0 to 6 (the object's five, bones, weights) over <paramref name="vertices"/>.</summary>
     public static LegacyProgram.Attribute?[] CharacterAttributes(DeviceBuffer vertices) =>
     [
-        Attribute(vertices, 0, InternalFormat.Rgb32f, CharacterSize), Attribute(vertices, 12, InternalFormat.Rgba16Snorm, CharacterSize),
-        Attribute(vertices, 20, InternalFormat.RG32f, CharacterSize), Attribute(vertices, 28, InternalFormat.Rgba16Snorm, CharacterSize),
-        Attribute(vertices, 36, InternalFormat.Rgba32f, CharacterSize), Attribute(vertices, 52, InternalFormat.Rgba8ui, CharacterSize),
+        Attribute(vertices, 0, InternalFormat.Rgb32F, CharacterSize), Attribute(vertices, 12, InternalFormat.Rgba16Snorm, CharacterSize),
+        Attribute(vertices, 20, InternalFormat.Rg32F, CharacterSize), Attribute(vertices, 28, InternalFormat.Rgba16Snorm, CharacterSize),
+        Attribute(vertices, 36, InternalFormat.Rgba32F, CharacterSize), Attribute(vertices, 52, InternalFormat.Rgba8Ui, CharacterSize),
         Attribute(vertices, 56, InternalFormat.Rgba16, CharacterSize),
     ];
 

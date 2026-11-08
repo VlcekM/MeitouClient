@@ -11,19 +11,19 @@ internal sealed unsafe partial class CharacterRenderer
 {
     /// <summary>Set by the host when the temporal upscalers run: the palettes of last frame are kept for <see cref="DrawMotion"/>.</summary>
     public bool Motion { get; set; }
-    bool motionHooked;
+    bool _motionHooked;
 
     // The characters' motion for the temporal upscalers (PostProcess.ObjectMotion).
 
-    Matrix4x4 motionViewProjection, motionUnjittered, previousUnjittered, motionRelative, motionRelativeUnjittered, previousRelativeUnjittered;
-    Vector3 previousEye;
-    bool motionHasRelative;
-    Vector4[] motionFrustum = [];
-    Vector3 motionEye;
-    bool motionCamera, havePreviousCamera;
-    int motionCalls;
-    uint motionDepth;
-    (SampledTexture Texture, uint Index)? motionDepthIndex;
+    Matrix4x4 _motionViewProjection, _motionUnjittered, _previousUnjittered, _motionRelative, _motionRelativeUnjittered, _previousRelativeUnjittered;
+    Vector3 _previousEye;
+    bool _motionHasRelative;
+    Vector4[] _motionFrustum = [];
+    Vector3 _motionEye;
+    bool _motionCamera, _havePreviousCamera;
+    int _motionCalls;
+    uint _motionDepth;
+    (SampledTexture Texture, uint Index)? _motionDepthIndex;
 
     /// <summary>
     /// The scene frame as the post chain's motion pass needs it (a no-op without a temporal upscaler): hooks the characters' motion into
@@ -33,21 +33,21 @@ internal sealed unsafe partial class CharacterRenderer
         Matrix4x4? relative = null, Matrix4x4? relativeUnjittered = null)
     {
         if (post is not { Temporal: true }) return;
-        if (!motionHooked)
+        if (!_motionHooked)
         {
-            motionHooked = true;
+            _motionHooked = true;
             post.ObjectMotion = t => { foliage?.DrawGrassMotion(t); DrawMotion(t); };
         }
         SetMotionCamera(viewProjection, unjittered, eye, frustum);
-        motionHasRelative = relative is not null && relativeUnjittered is not null;
-        if (motionHasRelative) (motionRelative, motionRelativeUnjittered) = (relative!.Value, relativeUnjittered!.Value);
+        _motionHasRelative = relative is not null && relativeUnjittered is not null;
+        if (_motionHasRelative) (_motionRelative, _motionRelativeUnjittered) = (relative!.Value, relativeUnjittered!.Value);
     }
 
     /// <summary>The scene camera for <see cref="DrawMotion"/> (the grass's <c>SetMotionCamera</c>): this frame's view-projection as drawn (jittered) and unjittered.</summary>
     void SetMotionCamera(Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye, Vector4[] frustum)
     {
-        (motionViewProjection, motionUnjittered, motionEye, motionFrustum) = (viewProjection, unjittered, eye, frustum);
-        motionCamera = true;
+        (_motionViewProjection, _motionUnjittered, _motionEye, _motionFrustum) = (viewProjection, unjittered, eye, frustum);
+        _motionCamera = true;
         Motion = true;
     }
 
@@ -57,36 +57,36 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     void DrawMotion(MotionTargets targets)
     {
-        if (!motionCamera) return;
-        motionCamera = false;
-        var previous = havePreviousCamera ? previousUnjittered : motionUnjittered;
+        if (!_motionCamera) return;
+        _motionCamera = false;
+        var previous = _havePreviousCamera ? _previousUnjittered : _motionUnjittered;
         // Last frame's camera for positions relative to this frame's eye: its rotation-only matrix after the move from this eye to last frame's (exact in double: both
         // eyes are floats), so the velocity carries no rounding of either eye's coordinates.
         Matrix4x4? previousRelative = null;
-        if (motionHasRelative)
+        if (_motionHasRelative)
         {
-            var move = havePreviousCamera ? new Vector3((float)((double)motionEye.X - previousEye.X), (float)((double)motionEye.Y - previousEye.Y), (float)((double)motionEye.Z - previousEye.Z)) : Vector3.Zero;
-            previousRelative = Matrix4x4.CreateTranslation(move) * (havePreviousCamera ? previousRelativeUnjittered : motionRelativeUnjittered);
-            (previousRelativeUnjittered, previousEye) = (motionRelativeUnjittered, motionEye);
+            var move = _havePreviousCamera ? new Vector3((float)((double)_motionEye.X - _previousEye.X), (float)((double)_motionEye.Y - _previousEye.Y), (float)((double)_motionEye.Z - _previousEye.Z)) : Vector3.Zero;
+            previousRelative = Matrix4x4.CreateTranslation(move) * (_havePreviousCamera ? _previousRelativeUnjittered : _motionRelativeUnjittered);
+            (_previousRelativeUnjittered, _previousEye) = (_motionRelativeUnjittered, _motionEye);
         }
-        (previousUnjittered, havePreviousCamera) = (motionUnjittered, true);
-        if (liveCount == 0) return;
-        motionCalls++;
-        if (motionDepthIndex is { } known && known.Texture == targets.Depth) motionDepth = known.Index;
+        (_previousUnjittered, _havePreviousCamera) = (_motionUnjittered, true);
+        if (_liveCount == 0) return;
+        _motionCalls++;
+        if (_motionDepthIndex is { } known && known.Texture == targets.Depth) _motionDepth = known.Index;
         else
         {
-            if (motionDepthIndex is { } old) Gpu.Bindless.Free(BindlessKind.Texture2D, old.Index);
-            motionDepthIndex = (targets.Depth, motionDepth = Gpu.Bindless.Register(BindlessKind.Texture2D, targets.Depth));
+            if (_motionDepthIndex is { } old) Gpu.Bindless.Free(BindlessKind.Texture2D, old.Index);
+            _motionDepthIndex = (targets.Depth, _motionDepth = Gpu.Bindless.Register(BindlessKind.Texture2D, targets.Depth));
         }
-        motionPass = true;
+        _motionPass = true;
         // This draw is the "characters" stage's, not the post chain's: the lap before ends the post time so far, the one after is the characters'.
         StageClock.Lap(StageClock.Post, "post to motion");
         try
         {
-            DrawView(new ViewConstants { ViewProjection = motionViewProjection, PreviousViewProjection = previous, Eye = motionEye, NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc }, motionEye, motionFrustum,
-                relative: motionHasRelative ? motionRelative : null, previousRelative: previousRelative);
+            DrawView(new ViewConstants { ViewProjection = _motionViewProjection, PreviousViewProjection = previous, Eye = _motionEye, NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc }, _motionEye, _motionFrustum,
+                relative: _motionHasRelative ? _motionRelative : null, previousRelative: previousRelative);
         }
-        finally { motionPass = false; }
+        finally { _motionPass = false; }
         StageClock.Lap(StageClock.Characters, "characters motion");
     }
 }

@@ -45,7 +45,7 @@ public class CampaignTests(ITestOutputHelper output)
     [Fact, Slow]
     public void A_raid_on_a_player_outpost_gathers_travels_wins_and_is_removed_and_a_save_in_the_middle_keeps_it()
     {
-        const float Distance = 12000;
+        const float distance = 12000;
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
         var levels = InstallData.Levels!;
         var data = PopulationData.Create(InstallData.FullLoadOrder!, levels.Towns());
@@ -69,9 +69,9 @@ public class CampaignTests(ITestOutputHelper output)
         }
         Assert.NotNull(pick);
         var (faction, campaign, home) = pick.Value;
-        var outpost = world.Buildings.AddTown(home.Position + new Vector3(Distance, 0, 0), data.PlayerFaction);
+        var outpost = world.Buildings.AddTown(home.Position + new Vector3(distance, 0, 0), data.PlayerFaction);
         // A roll aims only at a player town one of the player's characters is in (Town slot 70); one stands there until the raid sets out.
-        string human = data.Db.OfType(Meitou.Data.Fcs.FcsRecordType.CHARACTER)
+        string human = data.Db.OfType(Data.Fcs.FcsRecordType.Character)
             .First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0 && data.Db.Find(x.TargetStringId)?.BaseName == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
         var watcher = population.SpawnSandbox(world, human, new Vector2(outpost.Position.X, outpost.Position.Z), player: true);
         output.WriteLine($"{data.Factions[faction].Name}: {campaign.Name} ({campaign.NumForces} men) against an outpost by {home.Town.Name}");

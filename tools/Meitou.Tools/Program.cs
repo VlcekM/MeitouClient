@@ -141,7 +141,7 @@ static int Load(GameInstall install)
 static int Armour(GameInstall install, string name)
 {
     var db = GameDatabase.Load(LoadOrder.FromInstall(install));
-    foreach (var r in db.Records.Values.Where(r => r.Name == name && r.Type == FcsRecordType.ARMOUR))
+    foreach (var r in db.Records.Values.Where(r => r.Name == name && r.Type == FcsRecordType.Armour))
     {
         Console.WriteLine($"{r.StringId} {r.Name} defined by {r.DefinedBy}, modified by {string.Join(", ", r.ModifiedBy)}");
         foreach (var f in r.Floats.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
@@ -151,7 +151,7 @@ static int Armour(GameInstall install, string name)
         string platoons = Path.Combine(install.Root, "save", "quicksave", "platoon");
         if (!Directory.Exists(platoons)) continue;
         foreach (string file in Directory.EnumerateFiles(platoons, "*.platoon"))
-            foreach (var s in Meitou.Data.Save.SaveFile.ReadFile(file).Records.Where(x => x.RecordType == FcsRecordType.INVENTORY_ITEM_STATE && x.Strings.GetValueOrDefault("base data sid") == r.StringId))
+            foreach (var s in Meitou.Data.Save.SaveFile.ReadFile(file).Records.Where(x => x.RecordType == FcsRecordType.InventoryItemState && x.Strings.GetValueOrDefault("base data sid") == r.StringId))
                 Console.WriteLine($"  SAVED {Path.GetFileName(file)} quality {s.Floats.GetValueOrDefault("quality")} level {s.Ints.GetValueOrDefault("level")} section {s.Strings.GetValueOrDefault("section")} material {s.Strings.GetValueOrDefault("material sid")}");
     }
     return 0;

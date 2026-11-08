@@ -35,7 +35,7 @@ public class KidnapTests
     /// <summary>A package whose every role list holds goal 254 (find, kidnap and put in a cage), always in its hours.</summary>
     static AiPackage Kidnapping()
     {
-        var goal = new AiGoal(new AiTask("t", "kidnap", TaskType.FINAL_KIDNAPPER_CAGE_JOB, TaskPriority.Urgent, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1);
+        var goal = new AiGoal(new AiTask("t", "kidnap", TaskType.FinalKidnapperCageJob, TaskPriority.Urgent, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1);
         return new AiPackage { Id = "kidnap", Name = "kidnap", Roles = [[goal], [goal], [goal], [], []] };
     }
 
@@ -103,7 +103,7 @@ public class KidnapTests
             [new PlayerSystem(), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, population, new Meitou.Simulation.Dialogue.DialogueSystem(data)]);
         int city = data.FactionIndex("50-a");
         // Goal 177 in every role list, always in its hours.
-        var goal = new AiGoal(new AiTask("t", "loot", TaskType.LOOT_THE_DEAD, TaskPriority.Urgent, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1);
+        var goal = new AiGoal(new AiTask("t", "loot", TaskType.LootTheDead, TaskPriority.Urgent, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1);
         var board = new Blackboard([new(0, new AiPackage { Id = "loot", Name = "loot", Roles = [[goal], [goal], [goal], [], []] })]);
         board.Update();
         var bandits = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = city, Ai = board };
@@ -111,7 +111,7 @@ public class KidnapTests
         var bandit = new Combatant { Name = "bandit" }.MakeCold();
         var pack = new Inventory();
         (bandit.Faction, bandit.NpcClass, bandit.Inventory, bandit.Ai) = (city, FundamentalType.Bandit, pack, new AiMind { Squad = bandits });
-        pack.Items.Add(new ItemInstance { Record = "sabre", Type = FcsRecordType.WEAPON, Section = "hip" });
+        pack.Items.Add(new ItemInstance { Record = "sabre", Type = FcsRecordType.Weapon, Section = "hip" });
         var looter = Add(world, bandit, Vector2.Zero, bandits);
 
         var players = new Squad { Id = world.Squads.NextId(), TemplateId = "p", Faction = data.Relations.PlayerFaction };
@@ -119,9 +119,9 @@ public class KidnapTests
         var hero = new Combatant { Name = "hero" }.MakeCold();
         var pockets = new Inventory();
         (hero.Faction, hero.IsPlayer, hero.Inventory) = (data.Relations.PlayerFaction, true, pockets);
-        var bread = new ItemInstance { Record = "bread", Type = FcsRecordType.ITEM, ItemFunction = 3 };
-        var wrench = new ItemInstance { Record = "wrench", Type = FcsRecordType.ITEM };
-        var katana = new ItemInstance { Record = "katana", Type = FcsRecordType.WEAPON, Section = "hip" };
+        var bread = new ItemInstance { Record = "bread", Type = FcsRecordType.Item, ItemFunction = 3 };
+        var wrench = new ItemInstance { Record = "wrench", Type = FcsRecordType.Item };
+        var katana = new ItemInstance { Record = "katana", Type = FcsRecordType.Weapon, Section = "hip" };
         Assert.True(pockets.Add(bread) && pockets.Add(wrench));
         pockets.Items.Add(katana);
         var victim = Add(world, hero, new Vector2(30, 0), players);
@@ -232,7 +232,7 @@ public class KidnapTests
         Assert.Equal(CrimeSystem.RecentlyWantedSeconds, cold.RecentlyWanted);
 
         // The save keeps state and owner.
-        var record = SyntheticTown.Rec("1-s", FcsRecordType.CHARACTER, "state");
+        var record = SyntheticTown.Rec("1-s", FcsRecordType.Character, "state");
         SlaveSave.Write(record, cold, data);
         var loaded = new Combatant().MakeCold();
         SlaveSave.Read(record, loaded, data);
@@ -300,7 +300,7 @@ public class KidnapTests
         var (world, cold, city, data) = SlaveRig();
         using var owned = world;
         (cold.SlaveState, cold.SlaveOwner, cold.SlaveSince) = (3, city, 34.00063);
-        var record = SyntheticTown.Rec("1-s", FcsRecordType.CHARACTER, "state");
+        var record = SyntheticTown.Rec("1-s", FcsRecordType.Character, "state");
         SlaveSave.Write(record, cold, data);
         Assert.Equal(34.00063f, record.Floats[SlaveSave.SinceKey]);
         var loaded = new Combatant().MakeCold();
@@ -372,7 +372,7 @@ public class KidnapInstallTests(ITestOutputHelper output)
         world.RunTicks(15);
         var war = population.Wars[faction];
         foreach (var m in population.Wars) m.UpdateTime = m == war ? 0 : 1e9;
-        string human = db.OfType(FcsRecordType.CHARACTER).First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0 && db.Find(x.TargetStringId)?.Name == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
+        string human = db.OfType(FcsRecordType.Character).First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0 && db.Find(x.TargetStringId)?.Name == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
         var at = new Vector2(outpost.Position.X, outpost.Position.Z);
         var heroes = new List<CharacterId> { population.SpawnSandbox(world, human, at, player: true) };
         for (int k = 1; k < 4; k++) heroes.Add(population.SpawnSandbox(world, human, at + new Vector2(30 * k, 20), player: true, variant: k, faction: data.PlayerFaction));
@@ -416,21 +416,21 @@ public class KidnapInstallTests(ITestOutputHelper output)
         });
         using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, walk, set.Systems);
         var population = new PopulationSystem(data, new PopulationSettings());
-        string human = db.OfType(FcsRecordType.CHARACTER).First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0 && db.Find(x.TargetStringId)?.Name == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
+        string human = db.OfType(FcsRecordType.Character).First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0 && db.Find(x.TargetStringId)?.Name == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
         var worker = population.SpawnSandbox(world, human, new Vector2(5000, 5000), player: true);
         var wearer = population.SpawnSandbox(world, human, new Vector2(5100, 5000), player: false, variant: 1);
         var table = world.Characters;
         var wc = table.Cold(wearer.Slot)!;
         wc.Medical!.KnockOut(100000);
 
-        var record = db.OfType(FcsRecordType.ARMOUR).First(r => r.GetBool("is locked"));
+        var record = db.OfType(FcsRecordType.Armour).First(r => r.GetBool("is locked"));
         var shackles = data.Items.Create(record.StringId)!;
         shackles.Section = "main";
         Assert.True(table.Cold(worker.Slot)!.Inventory!.Add(shackles));
         // Something already worn in that slot.
-        var other = db.OfType(FcsRecordType.ARMOUR).Select(r => data.Items.Create(r.StringId)!).First(i => !i.IsLocked && i.EquipmentSection == shackles.EquipmentSection);
+        var other = db.OfType(FcsRecordType.Armour).Select(r => data.Items.Create(r.StringId)!).First(i => !i.IsLocked && i.EquipmentSection == shackles.EquipmentSection);
         wc.Inventory!.Items.RemoveAll(i => i.Section == shackles.EquipmentSection);
-        Assert.True(Meitou.Simulation.Items.InventoryCommands.TryEquip(wc.Inventory, other));
+        Assert.True(InventoryCommands.TryEquip(wc.Inventory, other));
         Assert.True(LockSystem.CanBeShackled(wc, true));
 
         world.Commands.Enqueue(new PutShacklesOrder([worker], wearer) { Tick = world.Tick });

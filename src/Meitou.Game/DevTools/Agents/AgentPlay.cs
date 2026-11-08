@@ -39,14 +39,14 @@ sealed class AgentPlay(GameHost host)
                 else { con.Error("usage: observe [--radius <m>] [--full] | observe --brief [--changed]"); return; }
             }
             if (changed && !brief) { con.Error("usage: observe --brief [--changed]"); return; }
-            string json = brief ? host.player.agentOrders.ControlBriefJson(changed) : host.player.agentOrders.ControlObserveJson(radius, full);
-            host.agentChannel.PrintData(con, json);
+            string json = brief ? host.Player.AgentOrders.ControlBriefJson(changed) : host.Player.AgentOrders.ControlObserveJson(radius, full);
+            host.AgentChannel.PrintData(con, json);
         });
 
         add("stop", "stop", "stop the selected characters (the Stop order: drops their orders and queue)", (args, con) =>
         {
             if (!loaded(con)) return;
-            Result(con, host.player.agentOrders.ControlStop(out string m), m);
+            Result(con, host.Player.AgentOrders.ControlStop(out string m), m);
         });
 
         add("follow", "follow <id> [--guard]", "the selected characters follow a character (--guard: bodyguard, also fights the target's attackers)", (args, con) =>
@@ -56,35 +56,35 @@ sealed class AgentPlay(GameHost host)
             var words = args.Where(a => !a.Equals("--guard", StringComparison.OrdinalIgnoreCase)).ToList();
             if (words.Count != 1) { con.Error("usage: follow <c:slot.gen> [--guard]"); return; }
             if (!Character(words[0], con, "follow", out var id)) return;
-            Result(con, host.player.agentOrders.ControlFollow(id, guard, out string m), m);
+            Result(con, host.Player.AgentOrders.ControlFollow(id, guard, out string m), m);
         });
 
         add("stance", "stance block|hold|passive|ranged|taunt|sneak|jobs [on|off]", "flip (or set) a stance toggle of the selected characters, as the orders panel does; no on|off flips it. observe.squad[].stance lists what is on", (args, con) =>
         {
             if (!loaded(con)) return;
             if (args.Count is < 1 or > 2 || (args.Count == 2 && args[1].ToLowerInvariant() is not ("on" or "off"))) { con.Error("usage: stance block|hold|passive|ranged|taunt|sneak|jobs [on|off]"); return; }
-            Result(con, host.player.agentOrders.ControlStance(args[0], args.Count == 2 ? args[1].Equals("on", StringComparison.OrdinalIgnoreCase) : null, out string m), m);
+            Result(con, host.Player.AgentOrders.ControlStance(args[0], args.Count == 2 ? args[1].Equals("on", StringComparison.OrdinalIgnoreCase) : null, out string m), m);
         });
 
         add("pickup", "pickup <item id | nearest>", "the selected characters (the nearest able one) walk to a loose item and take it; ids are in observe.groundItems or ground-items", (args, con) =>
         {
             if (!loaded(con)) return;
             if (args.Count != 1) { con.Error("usage: pickup <item id | nearest>"); return; }
-            Result(con, host.player.agentOrders.ControlPickup(args[0], out string m), m);
+            Result(con, host.Player.AgentOrders.ControlPickup(args[0], out string m), m);
         });
 
         add("loot", "loot <id>", "the selected characters take everything that fits from a dead or knocked-out character (observe.nearby.bodies)", (args, con) =>
         {
             if (!loaded(con)) return;
             if (args.Count != 1 || !Character(args[0], con, "loot", out var id)) { if (args.Count != 1) con.Error("usage: loot <c:slot.gen>"); return; }
-            Result(con, host.player.agentOrders.ControlLoot(id, out string m), m);
+            Result(con, host.Player.AgentOrders.ControlLoot(id, out string m), m);
         });
 
         add("firstaid", "firstaid <id>", "the selected characters walk to a patient and bandage them with a first aid kit (the patient may be a selected character itself)", (args, con) =>
         {
             if (!loaded(con)) return;
             if (args.Count != 1 || !Character(args[0], con, "firstaid", out var id)) { if (args.Count != 1) con.Error("usage: firstaid <c:slot.gen>"); return; }
-            Result(con, host.player.agentOrders.ControlFirstAid(id, out string m), m);
+            Result(con, host.Player.AgentOrders.ControlFirstAid(id, out string m), m);
         });
 
         add("build-list", "build-list [text] [--all] [--limit n]", "the building types the player may place now (those research unlocked) with their material costs, as JSON; text filters id, name and category; --all adds the locked ones", (args, con) =>
@@ -99,8 +99,8 @@ sealed class AgentPlay(GameHost host)
                 if (args[a].Equals("--limit", StringComparison.OrdinalIgnoreCase) && a + 1 < args.Count && int.TryParse(args[a + 1], NumberStyles.None, CultureInfo.InvariantCulture, out limit)) { a++; continue; }
                 words.Add(args[a]);
             }
-            string json = host.player.agentOrders.ControlBuildListJson(string.Join(' ', words), all, Math.Clamp(limit, 1, 300));
-            host.agentChannel.PrintData(con, json);
+            string json = host.Player.AgentOrders.ControlBuildListJson(string.Join(' ', words), all, Math.Clamp(limit, 1, 300));
+            host.AgentChannel.PrintData(con, json);
         });
 
         add("build", "build <type> <x> <z> [rotationDegrees] [--anyway]", "real build mode: judge the spot by the placement rules, then confirm a construction site (PlaceBuildings) and send the selected characters to build it; refused with the reason for a locked type, a bad spot or missing materials (--anyway places the site regardless, for a base store to supply). Types: build-list", (args, con) =>
@@ -111,8 +111,8 @@ sealed class AgentPlay(GameHost host)
             float yaw = 0;
             if (words.Count is < 3 or > 4 || !AgentWorld.Num(words[1], out float x) || !AgentWorld.Num(words[2], out float z) || (words.Count == 4 && !AgentWorld.Num(words[3], out yaw)))
             { con.Error("usage: build <type> <x> <z> [rotationDegrees] [--anyway]"); return; }
-            bool ok = host.player.agentOrders.ControlBuild(words[0], x, z, yaw, anyway, out string m, out string json);
-            if (json.Length > 0) host.agentChannel.controlData = json;
+            bool ok = host.Player.AgentOrders.ControlBuild(words[0], x, z, yaw, anyway, out string m, out string json);
+            if (json.Length > 0) host.AgentChannel.ControlData = json;
             Result(con, ok, m);
         });
 
@@ -120,7 +120,7 @@ sealed class AgentPlay(GameHost host)
         {
             if (!loaded(con)) return;
             if (args.Count != 1) { con.Error("usage: operate <building id>"); return; }
-            Result(con, host.player.agentOrders.ControlOperate(args[0], out string m), m);
+            Result(con, host.Player.AgentOrders.ControlOperate(args[0], out string m), m);
         });
 
         add("craft", "craft <bench id> [recipe key|name] [count]", "without a recipe: list a crafting bench's recipes (JSON); with one: queue it count times (default 1)", (args, con) =>
@@ -128,8 +128,8 @@ sealed class AgentPlay(GameHost host)
             if (!loaded(con)) return;
             int count = 1;
             if (args.Count is < 1 or > 3 || (args.Count == 3 && (!int.TryParse(args[2], NumberStyles.None, CultureInfo.InvariantCulture, out count) || count < 1 || count > 100))) { con.Error("usage: craft <bench id> [recipe] [count 1..100]"); return; }
-            bool ok = host.player.agentOrders.ControlCraft(args[0], args.Count > 1 ? args[1] : null, count, out string m, out string json);
-            if (json.Length > 0) host.agentChannel.controlData = json;
+            bool ok = host.Player.AgentOrders.ControlCraft(args[0], args.Count > 1 ? args[1] : null, count, out string m, out string json);
+            if (json.Length > 0) host.AgentChannel.ControlData = json;
             Result(con, ok, m);
         });
 
@@ -137,10 +137,10 @@ sealed class AgentPlay(GameHost host)
         {
             if (!loaded(con)) return;
             if (args.Count != 1 || !int.TryParse(args[0], NumberStyles.None, CultureInfo.InvariantCulture, out int n) || n < 1 || n > 3000) { con.Error("usage: step <n 1..3000>"); return; }
-            if (!host.session.Simulation.IsPaused) { con.Error("step: the game is running; pause first"); return; }
-            long before = host.session.World.Tick;
-            long after = host.session.Step(n);
-            host.agentChannel.controlData = System.Text.Json.JsonSerializer.Serialize(new { ticksRun = after - before, tick = after, gameHours = Math.Round(host.session.World.GameHours, 3) });
+            if (!host.Session.Simulation.IsPaused) { con.Error("step: the game is running; pause first"); return; }
+            long before = host.Session.World.Tick;
+            long after = host.Session.Step(n);
+            host.AgentChannel.ControlData = JsonSerializer.Serialize(new { ticksRun = after - before, tick = after, gameHours = Math.Round(host.Session.World.GameHours, 3) });
             con.Print($"stepped {after - before} ticks to {after}");
         });
 
@@ -149,7 +149,7 @@ sealed class AgentPlay(GameHost host)
             if (!loaded(con)) return;
             if (!ControlTargets(args, con, "hurt", out var who, out var rest)) return;
             if (rest.Count is < 1 or > 2 || !AgentWorld.Num(rest[0], out float cut) || cut <= 0) { con.Error("usage: hurt <damage> [part id] [--id <c:slot.gen>]"); return; }
-            host.session.World.Commands.Enqueue(new DebugDamage(who, cut, rest.Count == 2 ? rest[1] : null) { Tick = host.session.World.Tick });
+            host.Session.World.Commands.Enqueue(new DebugDamage(who, cut, rest.Count == 2 ? rest[1] : null) { Tick = host.Session.World.Tick });
             con.Print($"hurt {who.Length} by {cut:0.#}");
         });
 
@@ -162,12 +162,12 @@ sealed class AgentPlay(GameHost host)
     /// <summary>The <c>research</c> arguments: <c>research list</c> (JSON) and <c>research queue &lt;tech&gt;</c>; no argument is the dev console's finish-all.</summary>
     internal void ControlResearch(IReadOnlyList<string> args, DevConsole con)
     {
-        if (host.Covered || host.player.TitleOpen) { con.Error("no world is loaded yet"); return; }
+        if (host.Covered || host.Player.TitleOpen) { con.Error("no world is loaded yet"); return; }
         string sub = args[0].ToLowerInvariant();
-        if (sub == "list" && args.Count == 1) { string json = host.player.agentOrders.ControlResearchJson(); host.agentChannel.PrintData(con, json); return; }
+        if (sub == "list" && args.Count == 1) { string json = host.Player.AgentOrders.ControlResearchJson(); host.AgentChannel.PrintData(con, json); return; }
         if (sub == "queue" && args.Count >= 2)
         {
-            if (host.player.agentOrders.ControlQueueResearch(string.Join(' ', args.Skip(1)), out string m)) con.Print(m); else con.Error(m);
+            if (host.Player.AgentOrders.ControlQueueResearch(string.Join(' ', args.Skip(1)), out string m)) con.Print(m); else con.Error(m);
             return;
         }
         con.Error("usage: research (finish all) | research list | research queue <tech id or name>");
@@ -180,7 +180,7 @@ sealed class AgentPlay(GameHost host)
         public string Id = id; public HashSet<CharacterId> Before = before; public float X = x, Z = z; public bool Ko = ko, Dead = dead, Downed; public long Deadline = deadline; public CharacterId Found = CharacterId.None; public string? Weapon; public bool Aggro, Armed;
     }
 
-    readonly List<ControlSpawn> controlSpawns = [];
+    readonly List<ControlSpawn> _controlSpawns = [];
 
     /// <summary>The characters a command with an optional <c>--id &lt;c:slot.gen&gt;</c> means: that one, else the selection. False with an error printed.</summary>
     internal bool ControlTargets(IReadOnlyList<string> args, DevConsole con, string verb, out CharacterId[] who, out List<string> rest)
@@ -199,11 +199,11 @@ sealed class AgentPlay(GameHost host)
         }
         if (one is { } target)
         {
-            if (!host.session.CurrentSnapshot.Characters.Any(c => c.Id == target)) { con.Error($"{verb}: no character c:{target.Slot}.{target.Generation}"); return false; }
+            if (!host.Session.CurrentSnapshot.Characters.Any(c => c.Id == target)) { con.Error($"{verb}: no character c:{target.Slot}.{target.Generation}"); return false; }
             who = [target];
             return true;
         }
-        who = host.player.agentOrders.ControlOrderers().ToArray();
+        who = host.Player.AgentOrders.ControlOrderers().ToArray();
         if (who.Length == 0) { con.Error($"{verb}: select characters first (or pass --id <c:slot.gen>)"); return false; }
         return true;
     }
@@ -225,7 +225,7 @@ sealed class AgentPlay(GameHost host)
         }
         if (!haveRadius || numbers.Count is not (0 or 2)) { con.Error(usage); return; }
         if (radius <= 0 || radius > 2000) { con.Error("kill: --radius must be above 0 and at most 2000 metres"); return; }
-        var snap = host.session.CurrentSnapshot;
+        var snap = host.Session.CurrentSnapshot;
         float cx, cz;
         if (numbers.Count == 2) (cx, cz) = (numbers[0], numbers[1]);
         else
@@ -234,7 +234,7 @@ sealed class AgentPlay(GameHost host)
             if (lead is null) { con.Error("kill: no squad member to centre on (pass <x> <z>)"); return; }
             (cx, cz) = (lead.Position.X, lead.Position.Z);
         }
-        int own = host.session.World.Player.Faction;
+        int own = host.Session.World.Player.Faction;
         var ids = new List<CharacterId>();
         foreach (var c in snap.Characters)
         {
@@ -242,7 +242,7 @@ sealed class AgentPlay(GameHost host)
             if (Vector2.Distance(new Vector2(c.Position.X, c.Position.Z), new Vector2(cx, cz)) > radius) continue;
             ids.Add(c.Id);
         }
-        if (ids.Count > 0) host.session.World.Commands.Enqueue(new DebugKill(ids) { Tick = host.session.World.Tick });
+        if (ids.Count > 0) host.Session.World.Commands.Enqueue(new DebugKill(ids) { Tick = host.Session.World.Tick });
         var shown = ids.Take(20).Select(i => $"\"c:{i.Slot}.{i.Generation}\"");
         con.Print($"{{\"killed\":{ids.Count},\"radius\":{radius.ToString(CultureInfo.InvariantCulture)},\"ids\":[{string.Join(",", shown)}],\"idsTruncated\":{(ids.Count > 20 ? "true" : "false")}}}");
     }
@@ -262,39 +262,39 @@ sealed class AgentPlay(GameHost host)
         {
             if (!loaded(con)) return;
             if (args.Count != 1) { con.Error("usage: work <site id>"); return; }
-            Result(con, host.player.agentOrders.ControlWork(args[0], out string m), m);
+            Result(con, host.Player.AgentOrders.ControlWork(args[0], out string m), m);
         });
 
         add("prospect", "prospect", "the first selected character prospects where it stands (the Prospect button); about a game second later observe.resources holds the zone, the coverages and the iron and copper rocks near the spot with their yields", (args, con) =>
         {
             if (!loaded(con)) return;
-            Result(con, host.player.agentOrders.ControlProspect(out string m), m);
+            Result(con, host.Player.AgentOrders.ControlProspect(out string m), m);
         });
 
         add("equip", "equip <item name or record>", "the first selected character right-clicks an item of its inventory: it goes to the slot that takes it, a worn one back to the grid (name: exact, else part of it; see observe.squad[].inventory)", (args, con) =>
         {
             if (!loaded(con)) return;
             if (args.Count == 0) { con.Error("usage: equip <item name or record>"); return; }
-            Result(con, host.player.agentOrders.ControlEquip(string.Join(' ', args), out string m), m);
+            Result(con, host.Player.AgentOrders.ControlEquip(string.Join(' ', args), out string m), m);
         });
 
         add("carry", "carry <id>", "the selected characters pick up a downed character (a knocked-out or dead body, or a stranger: a kidnap)", (args, con) =>
         {
             if (!loaded(con)) return;
             if (args.Count != 1 || !Character(args[0], con, "carry", out var id)) { if (args.Count != 1) con.Error("usage: carry <c:slot.gen>"); return; }
-            Result(con, host.player.agentOrders.ControlCarry(id, out string m), m);
+            Result(con, host.Player.AgentOrders.ControlCarry(id, out string m), m);
         });
 
         add("putdown", "putdown", "the selected characters put down whom they carry", (args, con) =>
         {
             if (!loaded(con)) return;
-            Result(con, host.player.agentOrders.ControlPutDown(out string m), m);
+            Result(con, host.Player.AgentOrders.ControlPutDown(out string m), m);
         });
 
         add("say", "say <text> [--id <c:slot.gen>]", "write in game as a character: the text (at most 200 characters) shows as a speech bubble over its head for 2 + 0.12 s per character (the game's own bubble, as an order refused is barked), visible in the normal view; speaker: --id, else the first selected character, else the first squad member; display only, the world is not changed", (args, con) =>
         {
             if (!loaded(con)) return;
-            var snap = host.session.CurrentSnapshot;
+            var snap = host.Session.CurrentSnapshot;
             CharacterId who = CharacterId.None;
             var words = new List<string>();
             for (int a = 0; a < args.Count; a++)
@@ -320,7 +320,7 @@ sealed class AgentPlay(GameHost host)
                 if (lead is null) { con.Error("say: no living squad member to speak (pass --id <c:slot.gen>)"); return; }
                 who = lead.Id;
             }
-            host.session.World.Commands.Enqueue(new DebugSay(who, text) { Tick = host.session.World.Tick });
+            host.Session.World.Commands.Enqueue(new DebugSay(who, text) { Tick = host.Session.World.Tick });
             con.Print($"said as c:{who.Slot}.{who.Generation}: {text}");
         });
 
@@ -330,17 +330,17 @@ sealed class AgentPlay(GameHost host)
             string sub = args.Count > 0 ? args[0].ToLowerInvariant() : "";
             if (args.Count == 0)
             {
-                if (host.player.agentOrders.ControlTradeJson(out string json)) { host.agentChannel.controlData = json; con.Print("trade open"); }
+                if (host.Player.AgentOrders.ControlTradeJson(out string json)) { host.AgentChannel.ControlData = json; con.Print("trade open"); }
                 else con.Error("trade: no trade is open (trade open <trader id>; the customer must walk up, so step first)");
             }
-            else if (sub == "open" && args.Count == 2) { if (Character(args[1], con, "trade open", out var id)) Result(con, host.player.agentOrders.ControlTradeOpen(id, out string m), m); }
-            else if (sub == "close" && args.Count == 1) Result(con, host.player.agentOrders.ControlTradeClose(out string m), m);
+            else if (sub == "open" && args.Count == 2) { if (Character(args[1], con, "trade open", out var id)) Result(con, host.Player.AgentOrders.ControlTradeOpen(id, out string m), m); }
+            else if (sub == "close" && args.Count == 1) Result(con, host.Player.AgentOrders.ControlTradeClose(out string m), m);
             else if (sub is "buy" or "sell" && args.Count >= 2)
             {
                 int n = 1;
                 var words = args.Skip(1).ToList();
                 if (words.Count > 1 && int.TryParse(words[^1], NumberStyles.None, CultureInfo.InvariantCulture, out int parsed)) { n = parsed; words.RemoveAt(words.Count - 1); }
-                Result(con, host.player.agentOrders.ControlTradeDeal(sub == "buy", string.Join(' ', words), n, out string m), m);
+                Result(con, host.Player.AgentOrders.ControlTradeDeal(sub == "buy", string.Join(' ', words), n, out string m), m);
             }
             else con.Error("usage: trade | trade open <trader id> | trade buy|sell <item name> [n] | trade close");
         });
@@ -351,7 +351,7 @@ sealed class AgentPlay(GameHost host)
             if (!ControlTargets(args, con, "ko", out var who, out var rest)) return;
             float seconds = 600;
             if (rest.Count > 1 || (rest.Count == 1 && (!AgentWorld.Num(rest[0], out seconds) || seconds <= 0))) { con.Error("usage: ko [seconds] [--id <c:slot.gen>]"); return; }
-            host.session.World.Commands.Enqueue(new DebugKnockOut(who, seconds) { Tick = host.session.World.Tick });
+            host.Session.World.Commands.Enqueue(new DebugKnockOut(who, seconds) { Tick = host.Session.World.Tick });
             con.Print($"knocked out {who.Length} for {seconds:0.#} s");
         });
 
@@ -360,7 +360,7 @@ sealed class AgentPlay(GameHost host)
             if (!loaded(con)) return;
             if (!ControlTargets(args, con, "wake", out var who, out var rest)) return;
             if (rest.Count > 0) { con.Error("usage: wake [--id <c:slot.gen>]"); return; }
-            var chars = host.session.CurrentSnapshot.Characters;
+            var chars = host.Session.CurrentSnapshot.Characters;
             var down = new List<CharacterId>();
             foreach (var id in who)
             {
@@ -369,17 +369,17 @@ sealed class AgentPlay(GameHost host)
                 if (body is { Unconscious: true }) down.Add(id);
             }
             if (down.Count == 0) { con.Error("wake: none of them is unconscious"); return; }
-            host.session.World.Commands.Enqueue(new DebugWake(down) { Tick = host.session.World.Tick });
+            host.Session.World.Commands.Enqueue(new DebugWake(down) { Tick = host.Session.World.Tick });
             con.Print($"woke {down.Count}");
         });
 
         add("bandits-loot", "bandits-loot [on|off]", "read the New game option \"Bandits loot the player\" (CAMERA bl) of the running world; on/off sets it (test aid)", (args, con) =>
         {
             if (!loaded(con)) return;
-            if (args.Count == 1 && args[0].Equals("on", StringComparison.OrdinalIgnoreCase)) host.session.World.Player.BanditsLoot = true;
-            else if (args.Count == 1 && args[0].Equals("off", StringComparison.OrdinalIgnoreCase)) host.session.World.Player.BanditsLoot = false;
+            if (args.Count == 1 && args[0].Equals("on", StringComparison.OrdinalIgnoreCase)) host.Session.World.Player.BanditsLoot = true;
+            else if (args.Count == 1 && args[0].Equals("off", StringComparison.OrdinalIgnoreCase)) host.Session.World.Player.BanditsLoot = false;
             else if (args.Count != 0) { con.Error("usage: bandits-loot [on|off]"); return; }
-            con.Print($"bandits-loot {(host.session.World.Player.BanditsLoot ? "on" : "off")}");
+            con.Print($"bandits-loot {(host.Session.World.Player.BanditsLoot ? "on" : "off")}");
         });
 
         add("spawn-at", "spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]]", "--aggro: also arm the spawn (weapon item, default Katana) and order it to attack the lead of the squad (test aid for fights); spawn a hostile character (default record 'Dust Bandit') at world X Z without a pointer; the reply has its id, state and position (a paused game steps a few ticks to make it appear); --ko / --dead leave a body to test loot, carry and first aid on", (args, con) =>
@@ -398,26 +398,26 @@ sealed class AgentPlay(GameHost host)
             }
             if (plain.Count < 2 || !AgentWorld.Num(plain[0], out float x) || !AgentWorld.Num(plain[1], out float z) || (ko && dead) || (aggro && (ko || dead))) { con.Error("usage: spawn-at <x> <z> [record] [--ko | --dead] [--aggro [weapon]]"); return; }
             string record = plain.Count > 2 ? string.Join(' ', plain.Skip(2)) : "Dust Bandit";
-            if (host.debugMenu.DebugRecord(record, character: true) is not { } npc) { con.Error($"spawn-at: no character record matches '{record}'"); return; }
+            if (host.DebugMenu.DebugRecord(record, character: true) is not { } npc) { con.Error($"spawn-at: no character record matches '{record}'"); return; }
             string? weaponId = null;
             if (aggro)
             {
-                if (host.debugMenu.DebugRecord(weapon, character: false) is not { } w) { con.Error($"spawn-at: no item record matches '{weapon}'"); return; }
+                if (host.DebugMenu.DebugRecord(weapon, character: false) is not { } w) { con.Error($"spawn-at: no item record matches '{weapon}'"); return; }
                 weaponId = w.Id;
             }
-            var before = new HashSet<CharacterId>(host.player.agentOrders.ControlCharactersNear(x, z).Select(c => c.Id));
-            host.session.World.Commands.Enqueue(new DebugSpawn(npc.Id, new System.Numerics.Vector2(x, z)) { Tick = host.session.World.Tick });
-            var pending = new ControlSpawn(host.agentChannel.currentControlId ?? "0", before, x, z, ko, dead, Stopwatch.GetTimestamp() + 5 * Stopwatch.Frequency) { Aggro = aggro, Weapon = weaponId };
-            if (host.session.Simulation.IsPaused)
+            var before = new HashSet<CharacterId>(host.Player.AgentOrders.ControlCharactersNear(x, z).Select(c => c.Id));
+            host.Session.World.Commands.Enqueue(new DebugSpawn(npc.Id, new Vector2(x, z)) { Tick = host.Session.World.Tick });
+            var pending = new ControlSpawn(host.AgentChannel.CurrentControlId ?? "0", before, x, z, ko, dead, Stopwatch.GetTimestamp() + 5 * Stopwatch.Frequency) { Aggro = aggro, Weapon = weaponId };
+            if (host.Session.Simulation.IsPaused)
             {
-                for (int k = 0; k < 6 && !ControlSpawnProgress(pending, out _, out _); k++) host.session.Step(1);
+                for (int k = 0; k < 6 && !ControlSpawnProgress(pending, out _, out _); k++) host.Session.Step(1);
                 if (!ControlSpawnProgress(pending, out string json, out string error)) { con.Error($"spawn-at: {error}"); return; }
-                host.agentChannel.controlData = json;
+                host.AgentChannel.ControlData = json;
                 con.Print($"spawned {npc.Name}");
                 return;
             }
-            controlSpawns.Add(pending);
-            host.agentChannel.controlReplyDeferred = true;
+            _controlSpawns.Add(pending);
+            host.AgentChannel.ControlReplyDeferred = true;
             con.Print("spawn pending");
         });
     }
@@ -431,43 +431,43 @@ sealed class AgentPlay(GameHost host)
         error = "the character did not appear";
         if (s.Found.IsNone)
         {
-            var hits = host.player.agentOrders.ControlCharactersNear(s.X, s.Z).Where(c => !c.Player && !s.Before.Contains(c.Id) && c.Dist < 300).OrderBy(c => c.Dist).ToList();
+            var hits = host.Player.AgentOrders.ControlCharactersNear(s.X, s.Z).Where(c => !c.Player && !s.Before.Contains(c.Id) && c.Dist < 300).OrderBy(c => c.Dist).ToList();
             if (hits.Count == 0) return false;
             s.Found = hits[0].Id;
         }
-        var near = host.player.agentOrders.ControlCharactersNear(s.X, s.Z).FirstOrDefault(c => c.Id == s.Found);
-        if (s.Aggro && !s.Armed && host.player.agentOrders.ControlSquad() is { Count: > 0 } squad)
+        var near = host.Player.AgentOrders.ControlCharactersNear(s.X, s.Z).FirstOrDefault(c => c.Id == s.Found);
+        if (s.Aggro && !s.Armed && host.Player.AgentOrders.ControlSquad() is { Count: > 0 } squad)
         {
             s.Armed = true;
-            host.session.World.Commands.Enqueue(new DebugGiveItem(s.Found, s.Weapon!, 1) { Tick = host.session.World.Tick });
-            host.session.World.Commands.Enqueue(new Meitou.Simulation.Combat.AttackOrder([s.Found], squad[0]) { Tick = host.session.World.Tick });
+            host.Session.World.Commands.Enqueue(new DebugGiveItem(s.Found, s.Weapon!, 1) { Tick = host.Session.World.Tick });
+            host.Session.World.Commands.Enqueue(new Simulation.Combat.AttackOrder([s.Found], squad[0]) { Tick = host.Session.World.Tick });
         }
         if ((s.Ko || s.Dead) && !s.Downed)
         {
-            host.session.World.Commands.Enqueue(s.Dead ? new DebugKill([s.Found]) { Tick = host.session.World.Tick } : new DebugKnockOut([s.Found], 600) { Tick = host.session.World.Tick });
+            host.Session.World.Commands.Enqueue(s.Dead ? new DebugKill([s.Found]) { Tick = host.Session.World.Tick } : new DebugKnockOut([s.Found], 600) { Tick = host.Session.World.Tick });
             s.Downed = true;
             error = "the character did not go down";
             return false;
         }
         if ((s.Ko || s.Dead) && !near.Down) { error = "the character did not go down"; return false; }
-        json = host.player.agentOrders.ControlCharacterJson(s.Found) ?? "";
+        json = host.Player.AgentOrders.ControlCharacterJson(s.Found) ?? "";
         return json.Length > 0;
     }
 
     /// <summary>Every poll: finishes the pending spawn-at replies (a running game), or fails them after 5 real seconds.</summary>
     internal void ControlSpawnPoll()
     {
-        for (int i = controlSpawns.Count - 1; i >= 0; i--)
+        for (int i = _controlSpawns.Count - 1; i >= 0; i--)
         {
-            var s = controlSpawns[i];
-            if (ControlSpawnProgress(s, out string json, out string error)) { controlSpawns.RemoveAt(i); host.agentChannel.ControlWrite(s.Id, true, "", json); }
-            else if (Stopwatch.GetTimestamp() >= s.Deadline) { controlSpawns.RemoveAt(i); host.agentChannel.ControlWrite(s.Id, false, "spawn-at: " + error); }
+            var s = _controlSpawns[i];
+            if (ControlSpawnProgress(s, out string json, out string error)) { _controlSpawns.RemoveAt(i); host.AgentChannel.ControlWrite(s.Id, true, "", json); }
+            else if (Stopwatch.GetTimestamp() >= s.Deadline) { _controlSpawns.RemoveAt(i); host.AgentChannel.ControlWrite(s.Id, false, "spawn-at: " + error); }
         }
     }
 
     // <summary>The <c>ask</c> and <c>task</c> console commands (agent-playtest): the player types a question or an instruction in the dev console and an AI agent reads the queue file (docs/procedures/playtest/agent-play-api.md, "Ask and task").</summary>
     const int AskMaxLength = 300;
-    readonly object askLock = new();
+    readonly object _askLock = new();
 
     void RegisterControlAskCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add)
     {
@@ -480,17 +480,17 @@ sealed class AgentPlay(GameHost host)
         string text = string.Join(' ', args).Trim().Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
         if (text.Length == 0) { con.Error($"usage: {kind} <text>"); return; }
         if (text.Length > AskMaxLength) { con.Error($"{kind}: text is {text.Length} characters, at most {AskMaxLength}"); return; }
-        string dir = host.agentChannel.controlDir ?? AppContext.BaseDirectory;
+        string dir = host.AgentChannel.ControlDir ?? AppContext.BaseDirectory;
         string path = Path.Combine(dir, "asks.log");
         try
         {
             int n;
-            lock (askLock)
+            lock (_askLock)
             {
                 n = (File.Exists(path) ? File.ReadAllLines(path).Count(l => l.Length > 0) : 0) + 1;
                 File.AppendAllText(path, $"{DateTimeOffset.Now.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture)}\t{kind}\t{text}\n", new UTF8Encoding(false));
             }
-            con.Print($"queued {kind} #{n}" + (host.agentChannel.controlDir is null ? $" (no control dir: {path})" : ""));
+            con.Print($"queued {kind} #{n}" + (host.AgentChannel.ControlDir is null ? $" (no control dir: {path})" : ""));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { con.Error($"{kind}: cannot write {path}: {e.Message}"); }
     }
@@ -502,8 +502,8 @@ sealed class AgentPlay(GameHost host)
             CharacterId? id = null;
             if (args.Count == 2 && args[0] == "--id" && AgentOrders.TryParseCharacter(args[1], out var parsed)) id = parsed;
             else if (args.Count != 0) { con.Error("usage: combat-status [--id c:<slot>.<gen>]"); return; }
-            string? json = host.player.agentOrders.ControlCombatStatusJson(id, out string error);
-            if (json is null) con.Error(error); else host.agentChannel.PrintData(con, json);
+            string? json = host.Player.AgentOrders.ControlCombatStatusJson(id, out string error);
+            if (json is null) con.Error(error); else host.AgentChannel.PrintData(con, json);
         });
     }
 
@@ -517,23 +517,23 @@ sealed class AgentPlay(GameHost host)
             string what = string.Join(' ', args);
             if (what.Equals("backpack", StringComparison.OrdinalIgnoreCase) || what.Equals("pack", StringComparison.OrdinalIgnoreCase))
             {
-                var who = host.player.agentOrders.ControlOrderers();
+                var who = host.Player.AgentOrders.ControlOrderers();
                 if (who.Count == 0) { con.Error("refused: no character selected (use select first)"); return; }
-                host.session.World.Commands.Enqueue(new DebugStripItems(who[0], true) { Tick = host.session.World.Tick });
-                host.session.ApplyPausedCommandsNow();
+                host.Session.World.Commands.Enqueue(new DebugStripItems(who[0], true) { Tick = host.Session.World.Tick });
+                host.Session.ApplyPausedCommandsNow();
                 con.Print("unequip backpack: the worn backpack is removed and destroyed with its contents (it is never dropped and never put into the grids)");
                 return;
             }
-            if (host.player.agentOrders.ControlUnequip(string.Join(' ', args), out string m)) con.Print(m); else con.Error(m);
+            if (host.Player.AgentOrders.ControlUnequip(string.Join(' ', args), out string m)) con.Print(m); else con.Error(m);
         });
 
         add("strip-inventory", "strip-inventory", "the first selected character loses EVERY carried item: grids, worn clothing and weapons, the backpack with its contents are destroyed (prosthetic limbs and locked shackles stay); nothing is dropped; for test characters before a persona", (args, con) =>
         {
             if (!loaded(con)) return;
-            var who = host.player.agentOrders.ControlOrderers();
+            var who = host.Player.AgentOrders.ControlOrderers();
             if (who.Count == 0) { con.Error("refused: no character selected (use select first)"); return; }
-            host.session.World.Commands.Enqueue(new DebugStripItems(who[0], false) { Tick = host.session.World.Tick });
-            host.session.ApplyPausedCommandsNow();
+            host.Session.World.Commands.Enqueue(new DebugStripItems(who[0], false) { Tick = host.Session.World.Tick });
+            host.Session.ApplyPausedCommandsNow();
             con.Print($"strip-inventory: every carried item of {who[0]} destroyed (nothing dropped)");
         });
 
@@ -553,15 +553,15 @@ sealed class AgentPlay(GameHost host)
             }
             FcsRecordType? only = type switch
             {
-                "armour" or "armor" => FcsRecordType.ARMOUR,
-                "weapon" => FcsRecordType.WEAPON,
-                "item" => FcsRecordType.ITEM,
-                "crossbow" => FcsRecordType.CROSSBOW,
-                "container" => FcsRecordType.CONTAINER,
+                "armour" or "armor" => FcsRecordType.Armour,
+                "weapon" => FcsRecordType.Weapon,
+                "item" => FcsRecordType.Item,
+                "crossbow" => FcsRecordType.Crossbow,
+                "container" => FcsRecordType.Container,
                 _ => null,
             };
             if (type.Length > 0 && only is null) { con.Error("find-item: --type is armour, weapon, item, crossbow or container"); return; }
-            if (host.scene.Database is not { } db) { con.Error("find-item: no game data loaded"); return; }
+            if (host.Scene.Database is not { } db) { con.Error("find-item: no game data loaded"); return; }
             var hits = db.Records.Values
                 .Where(r => DebugGiveItem.ItemTypes.Contains(r.Type) && (only is null || r.Type == only) && r.Name.Length > 0
                     && (text.Length == 0 || r.Name.Contains(text, StringComparison.OrdinalIgnoreCase) || r.StringId.Contains(text, StringComparison.OrdinalIgnoreCase)))
@@ -594,7 +594,7 @@ sealed class AgentPlay(GameHost host)
                 w.WriteEndArray();
                 w.WriteEndObject();
             }
-            host.agentChannel.controlData = Encoding.UTF8.GetString(ms.ToArray());
+            host.AgentChannel.ControlData = Encoding.UTF8.GetString(ms.ToArray());
             con.Print($"{hits.Count} item records match '{text}'{(hits.Count > limit ? $", {limit} shown" : "")}");
         });
     }
@@ -617,43 +617,43 @@ sealed class AgentPlay(GameHost host)
         public long RealDeadline;
     }
 
-    readonly List<ControlMoveWait> controlMoveWaits = [];
+    readonly List<ControlMoveWait> _controlMoveWaits = [];
 
     /// <summary>Starts a waited move after the order was given; true when the reply is deferred or already written into <paramref name="con"/>.</summary>
     internal void ControlMoveWaitStart(DevConsole con, float x, float z, float waitSeconds, float stuckSeconds)
     {
-        var who = host.player.agentOrders.ControlOrderers();
-        if (who.Count == 0 || host.player.agentOrders.ControlPosition($"c:{who[0].Slot}.{who[0].Generation}") is not { } p0) { con.Error("order: no position for the ordered character"); return; }
-        var w = new ControlMoveWait(host.agentChannel.currentControlId ?? "0", who[0], x, z, host.session.World.Tick,
+        var who = host.Player.AgentOrders.ControlOrderers();
+        if (who.Count == 0 || host.Player.AgentOrders.ControlPosition($"c:{who[0].Slot}.{who[0].Generation}") is not { } p0) { con.Error("order: no position for the ordered character"); return; }
+        var w = new ControlMoveWait(host.AgentChannel.CurrentControlId ?? "0", who[0], x, z, host.Session.World.Tick,
             (int)MathF.Ceiling(waitSeconds * MoveWaitTicksPerSecond), (int)MathF.Ceiling(stuckSeconds * MoveWaitTicksPerSecond), Vector2.Distance(new Vector2(p0.X, p0.Z), new Vector2(x, z)));
-        if (host.session.Simulation.IsPaused)
+        if (host.Session.Simulation.IsPaused)
         {
             // A paused game takes no tick of its own: run them here, checking every tick, but never more than a frame can bear (like `step`).
             int steps = 0, cap = Math.Min(w.TimeoutTicks + 2, MoveWaitPausedTickCap);
-            while (steps < cap && !ControlMoveWaitProgress(w, out _)) { host.session.Step(1); steps++; }
+            while (steps < cap && !ControlMoveWaitProgress(w, out _)) { host.Session.Step(1); steps++; }
             if (steps >= cap && w.TimeoutTicks + 2 > cap && !ControlMoveWaitProgress(w, out _))
             {
                 con.Error($"order: paused wait stopped after {cap} ticks without a result (cap); the move goes on - `step` and `observe`, or unpause and use wait-for");
                 return;
             }
-            host.agentChannel.controlData = ControlMoveWaitLast;
+            host.AgentChannel.ControlData = _controlMoveWaitLast;
             con.Print("move wait done (paused game stepped)");
             return;
         }
-        w.RealDeadline = System.Diagnostics.Stopwatch.GetTimestamp() + (long)((waitSeconds * 4 + 30) * System.Diagnostics.Stopwatch.Frequency);   // safety net: a stalled world never ticks
-        controlMoveWaits.Add(w);
-        host.agentChannel.controlReplyDeferred = true;
+        w.RealDeadline = Stopwatch.GetTimestamp() + (long)((waitSeconds * 4 + 30) * Stopwatch.Frequency);   // safety net: a stalled world never ticks
+        _controlMoveWaits.Add(w);
+        host.AgentChannel.ControlReplyDeferred = true;
         con.Print("move wait pending");
     }
 
-    string ControlMoveWaitLast = "";
+    string _controlMoveWaitLast = "";
 
-    /// <summary>One check; true (reply JSON in <see cref="ControlMoveWaitLast"/>) once arrived, stuck or timed out.</summary>
+    /// <summary>One check; true (reply JSON in <see cref="_controlMoveWaitLast"/>) once arrived, stuck or timed out.</summary>
     bool ControlMoveWaitProgress(ControlMoveWait w, out string json)
     {
         json = "";
-        var p = host.player.agentOrders.ControlPosition($"c:{w.Who.Slot}.{w.Who.Generation}");
-        long ticks = host.session.World.Tick - w.StartTick;
+        var p = host.Player.AgentOrders.ControlPosition($"c:{w.Who.Slot}.{w.Who.Generation}");
+        long ticks = host.Session.World.Tick - w.StartTick;
         string result;
         float dist;
         if (p is not { } pos) { dist = -1; result = "lost"; }
@@ -663,8 +663,8 @@ sealed class AgentPlay(GameHost host)
             if (dist <= MoveWaitArriveRadius) result = "arrived";
             else
             {
-                if (dist <= w.BestDist - MoveWaitProgressStep) { w.BestDist = dist; w.ProgressTick = host.session.World.Tick; }
-                if (host.session.World.Tick - w.ProgressTick >= w.StuckTicks) result = "stuck";
+                if (dist <= w.BestDist - MoveWaitProgressStep) { w.BestDist = dist; w.ProgressTick = host.Session.World.Tick; }
+                if (host.Session.World.Tick - w.ProgressTick >= w.StuckTicks) result = "stuck";
                 else if (ticks >= w.TimeoutTicks) result = "timeout";
                 else return false;
             }
@@ -673,18 +673,18 @@ sealed class AgentPlay(GameHost host)
         json = p is { } q
             ? $"{{\"result\":\"{result}\",\"pos\":[{q.X.ToString("0.#", c)},{q.Z.ToString("0.#", c)}],\"dist_to_target\":{dist.ToString("0.#", c)},\"ticks\":{ticks},\"id\":\"c:{w.Who.Slot}.{w.Who.Generation}\"}}"
             : $"{{\"result\":\"lost\",\"pos\":null,\"dist_to_target\":null,\"ticks\":{ticks},\"id\":\"c:{w.Who.Slot}.{w.Who.Generation}\"}}";
-        ControlMoveWaitLast = json;
+        _controlMoveWaitLast = json;
         return true;
     }
 
     /// <summary>Every poll: finish the pending waited moves.</summary>
     internal void ControlMoveWaitPoll()
     {
-        for (int i = controlMoveWaits.Count - 1; i >= 0; i--)
+        for (int i = _controlMoveWaits.Count - 1; i >= 0; i--)
         {
-            var w = controlMoveWaits[i];
-            if (ControlMoveWaitProgress(w, out string json)) { controlMoveWaits.RemoveAt(i); host.agentChannel.ControlWrite(w.Id, true, "", json); }
-            else if (System.Diagnostics.Stopwatch.GetTimestamp() >= w.RealDeadline) { controlMoveWaits.RemoveAt(i); host.agentChannel.ControlWrite(w.Id, false, "order: the world did not tick (wait gave up)"); }
+            var w = _controlMoveWaits[i];
+            if (ControlMoveWaitProgress(w, out string json)) { _controlMoveWaits.RemoveAt(i); host.AgentChannel.ControlWrite(w.Id, true, "", json); }
+            else if (Stopwatch.GetTimestamp() >= w.RealDeadline) { _controlMoveWaits.RemoveAt(i); host.AgentChannel.ControlWrite(w.Id, false, "order: the world did not tick (wait gave up)"); }
         }
     }
 }

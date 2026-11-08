@@ -22,13 +22,13 @@ public class AnimalAnimationTests
 
     static string Path(string root, string fcs) => System.IO.Path.Combine(root, fcs.Replace('\\', System.IO.Path.DirectorySeparatorChar).TrimStart('.', System.IO.Path.DirectorySeparatorChar));
 
-    static readonly Lazy<AnimationLengths> lengths = new(() => AnimationLengths.Load(InstallData.Install!.Root, InstallData.BaseGame));
+    static readonly Lazy<AnimationLengths> Lengths = new(() => AnimationLengths.Load(InstallData.Install!.Root, InstallData.BaseGame));
 
     [Fact]
     public void Every_animal_has_a_look_from_its_race_whose_mesh_skeleton_and_fur_fit()
     {
         var (db, root) = Install();
-        var animals = db.OfType(FcsRecordType.ANIMAL_CHARACTER).ToList();
+        var animals = db.OfType(FcsRecordType.AnimalCharacter).ToList();
         Assert.NotEmpty(animals);
         foreach (var record in animals)
         {
@@ -37,7 +37,7 @@ public class AnimalAnimationTests
             Assert.Equal(look.Race.GetPath("male mesh"), look.Race.GetPath("female mesh"));   // the male mesh stands for both
             var mesh = OgreMeshReader.ReadFile(Path(root, look.BodyMesh));
             var skeleton = OgreSkeletonReader.ReadFile(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Path(root, look.BodyMesh))!, mesh.SkeletonName!));
-            Assert.True(lengths.Value.HasSpecies(look.Race.StringId), $"{record.Name}: its race's skeleton was read");
+            Assert.True(Lengths.Value.HasSpecies(look.Race.StringId), $"{record.Name}: its race's skeleton was read");
             Assert.NotNull(look.BodyTexture);
             // The fur (the race's hair ATTACHMENT) is skinned with the body's bone palette: its own skeleton's handles name the same bones.
             foreach (var fur in look.Parts.Where(p => p.Mode == AttachMode.SharedSkeleton))

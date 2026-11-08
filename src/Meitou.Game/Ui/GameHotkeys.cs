@@ -25,7 +25,7 @@ sealed class GameHotkeys(PlayerInterface player)
     ];
 
     /// <summary>Whether <paramref name="key"/> is one of <paramref name="action"/>'s bindings.</summary>
-    internal bool Bound(InputAction action, EngineKey key) => player.session.Bindings.Get(action).Contains(Binding.Of(key));
+    internal bool Bound(InputAction action, EngineKey key) => player.Session.Bindings.Get(action).Contains(Binding.Of(key));
 
     /// <summary>Whether <paramref name="key"/> opens a window: inventory, character, help, map, faction, research or crafting.</summary>
     internal bool WindowKey(EngineKey key) => Bound(InputAction.ToggleInventory, key) || Bound(InputAction.ToggleCharacterStats, key) || Bound(InputAction.ToggleHelp, key)
@@ -51,14 +51,14 @@ sealed class GameHotkeys(PlayerInterface player)
         var action = HotkeyActions.Where(a => Bound(a, key)).Select(a => (InputAction?)a).FirstOrDefault();
         if (action is null) return false;
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        bool doubleTap = ++player.hotkeyEventsThisFrame == 1 && action == player.lastHotkey && System.Diagnostics.Stopwatch.GetElapsedTime(player.lastHotkeyAt, now).TotalSeconds < PlayerInterface.DoubleTapSeconds;
-        (player.lastHotkey, player.lastHotkeyAt) = player.hotkeyEventsThisFrame == 1 ? (action, now) : (null, now);
+        bool doubleTap = ++player.HotkeyEventsThisFrame == 1 && action == player.LastHotkey && System.Diagnostics.Stopwatch.GetElapsedTime(player.LastHotkeyAt, now).TotalSeconds < PlayerInterface.DoubleTapSeconds;
+        (player.LastHotkey, player.LastHotkeyAt) = player.HotkeyEventsThisFrame == 1 ? (action, now) : (null, now);
         return doubleTap;
     }
 
     public void Key(EngineKey key, bool shift)
     {
-        player.uiInput++;
+        player.UiInput++;
         bool doubleTap = HotkeyDoubleTap(key);
         // select_0..9 (events 100..109, keys 1..9 and 0 by default): the active squad's members; a second press within half a second centres on the member.
         if (Array.FindIndex(SelectMemberActions, a => Bound(a, key)) is var member and >= 0)
@@ -66,24 +66,24 @@ sealed class GameHotkeys(PlayerInterface player)
             player.SelectMember(member, shift, doubleTap);
             return;
         }
-        bool free = player.session.Camera.IsFree;
+        bool free = player.Session.Camera.IsFree;
         // toggle_build: the build window and the placement ghost; not over the title, the editor or while the free camera flies.
-        if (Bound(InputAction.ToggleBuild, key) && !free && !player.TitleOpen && !player.characterEditor.EditorOpen) player.build.ToggleBuildMode();
+        if (Bound(InputAction.ToggleBuild, key) && !free && !player.TitleOpen && !player.CharacterEditor.EditorOpen) player.Build.ToggleBuildMode();
         // focus_char: put the pivot on the lead selected character without following it (the free camera's F is its down key).
         else if (Bound(InputAction.FocusCharacter, key) && !free && player.Selected().FirstOrDefault() is { } lead) player.CentreOn(lead.Id, follow: false);
         else if (Bound(InputAction.SelectAll, key)) player.Select(player.ActiveSquadMembers(), shift);
         else if (Bound(InputAction.NextCharacter, key)) StepCharacter(1);
         else if (Bound(InputAction.PreviousCharacter, key)) StepCharacter(-1);
         else if (free) return;   // the orders below are not given from the free camera (its R is up)
-        else if (Bound(InputAction.StopMovement, key)) player.Say(new StopCommand(player.SelectedIds()) { Tick = player.session.World.Tick });
+        else if (Bound(InputAction.StopMovement, key)) player.Say(new StopCommand(player.SelectedIds()) { Tick = player.Session.World.Tick });
         else if (OrderHotkey(key) is { } order) player.ExecuteUiAction("order." + order, "");
         else if (Bound(InputAction.CycleRunSpeed, key)) player.ExecuteUiAction("runspeed.1", "");   // the right speed arrow (FUN_140722630)
         // Medic and Rescue: one search each, with Shift the job (58, with 57 for a squad with a robot / 148) added to the lists, as their buttons.
-        else if (Bound(InputAction.Medic, key)) player.Say(new Meitou.Simulation.FirstAid.MedicJobCommand(player.SelectedIds(), shift) { Tick = player.session.World.Tick });
-        else if (Bound(InputAction.Rescue, key)) player.Say(new Meitou.Simulation.Carrying.RescueJobCommand(player.SelectedIds(), shift) { Tick = player.session.World.Tick });
+        else if (Bound(InputAction.Medic, key)) player.Say(new Simulation.FirstAid.MedicJobCommand(player.SelectedIds(), shift) { Tick = player.Session.World.Tick });
+        else if (Bound(InputAction.Rescue, key)) player.Say(new Simulation.Carrying.RescueJobCommand(player.SelectedIds(), shift) { Tick = player.Session.World.Tick });
         else if (Bound(InputAction.Prospect, key)) player.ExecuteUiAction("prospect", "");
-        else if (Bound(InputAction.Rest, key)) player.Say(new Meitou.Simulation.FirstAid.RestOrder(player.SelectedIds()) { Tick = player.session.World.Tick });
-        else if (Bound(InputAction.PutDown, key)) player.Say(new Meitou.Simulation.Carrying.PutDownOrder(player.SelectedIds()) { Tick = player.session.World.Tick });
+        else if (Bound(InputAction.Rest, key)) player.Say(new Simulation.FirstAid.RestOrder(player.SelectedIds()) { Tick = player.Session.World.Tick });
+        else if (Bound(InputAction.PutDown, key)) player.Say(new Simulation.Carrying.PutDownOrder(player.SelectedIds()) { Tick = player.Session.World.Tick });
     }
 
     /// <summary>
@@ -92,7 +92,7 @@ sealed class GameHotkeys(PlayerInterface player)
     /// </summary>
     void StepCharacter(int step)
     {
-        var snapshot = player.session.CurrentSnapshot;
+        var snapshot = player.Session.CurrentSnapshot;
         if (snapshot.PlayerSquads.FirstOrDefault(s => s.Id == snapshot.ActiveSquad) is not { Members.Count: >= 2 }) return;
         var present = player.PlayerCharacters().ToHashSet();
         if (player.Lead() is { IsPlayer: true, Body: not { Dead: true } } focus && snapshot.PlayerSquads.FirstOrDefault(s => s.Members.Contains(focus.Id)) is { } squad

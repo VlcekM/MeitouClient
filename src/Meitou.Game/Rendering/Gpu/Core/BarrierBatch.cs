@@ -22,7 +22,9 @@ public struct BarrierBatch
     /// <summary>Everything before against everything after (the seam's barrier).</summary>
     public static BarrierBatch Full => new()
     {
-        SrcStages = PipelineStageFlags2.AllCommandsBit, SrcAccess = AccessFlags2.MemoryWriteBit,
-        DstStages = PipelineStageFlags2.AllCommandsBit, DstAccess = AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit,
+        SrcStages = PipelineStageFlags2.AllCommandsBit,
+        SrcAccess = AccessFlags2.MemoryWriteBit,
+        DstStages = PipelineStageFlags2.AllCommandsBit,
+        DstAccess = AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit,
     };
 }

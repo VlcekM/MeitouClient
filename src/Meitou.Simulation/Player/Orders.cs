@@ -111,7 +111,7 @@ public static class Orders
     /// </summary>
     public static bool RangedExempt(CharacterCold cold) =>
         RangedMode(cold) && cold.Medical is { Prone: false } medical
-        && (cold.Gunning is not null || medical.BothArmsWork && cold.Fighter?.Crossbow is { } x && (x.AtBack || cold.DrawnWeapon == Meitou.Data.Gameplay.HandHold.OfCategory((int)Meitou.Data.Gameplay.Combat.WeaponCategory.Bow).Weapon));
+        && (cold.Gunning is not null || medical.BothArmsWork && cold.Fighter?.Crossbow is { } x && (x.AtBack || cold.DrawnWeapon == Data.Gameplay.HandHold.OfCategory((int)Data.Gameplay.Combat.WeaponCategory.Bow).Weapon));
 
     /// <summary>Writes the orders and the run speed into a character's GAMESTATE_CHARACTER record.</summary>
     public static void Write(FcsRecord state, CharacterCold cold)

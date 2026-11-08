@@ -16,52 +16,52 @@ sealed class CorpseFlies(GameHost host)
     const float FlyMove = 5;
 
     // The corpses with flies shown (their effect key and where it stands), the records (resolved once per database) and this frame's set.
-    readonly Dictionary<CharacterId, Vector3> flyCorpses = [];
-    readonly HashSet<CharacterId> flyCorpsesSeen = [];
-    readonly List<CharacterId> flyCorpsesGone = [];
-    object? flyRecordsFor;
-    Meitou.Data.GameRecord? flyEffect;
-    AmbientSound? flySound;
+    readonly Dictionary<CharacterId, Vector3> _flyCorpses = [];
+    readonly HashSet<CharacterId> _flyCorpsesSeen = [];
+    readonly List<CharacterId> _flyCorpsesGone = [];
+    object? _flyRecordsFor;
+    Data.GameRecord? _flyEffect;
+    AmbientSound? _flySound;
 
     static string FlyKey(CharacterId id) => $"flies/{id}";
 
     /// <summary>Once a frame with the buildings: the effect at each corpse with flies, gone with them.</summary>
     internal void UpdateCorpseFlies()
     {
-        if (!ReferenceEquals(flyRecordsFor, host.scene.Database))
+        if (!ReferenceEquals(_flyRecordsFor, host.Scene.Database))
         {
-            flyRecordsFor = host.scene.Database;
-            flyEffect = host.scene.Database?.Find(FlyEffectId);
-            flySound = host.scene.Database?.Find(FlySoundId) is { } sound ? AmbientSound.From(sound) : null;
+            _flyRecordsFor = host.Scene.Database;
+            _flyEffect = host.Scene.Database?.Find(FlyEffectId);
+            _flySound = host.Scene.Database?.Find(FlySoundId) is { } sound ? AmbientSound.From(sound) : null;
         }
-        var particles = host.gpu?.Particles;
-        flyCorpsesSeen.Clear();
-        foreach (var c in host.session.CurrentSnapshot.Characters)
+        var particles = host.Gpu?.Particles;
+        _flyCorpsesSeen.Clear();
+        foreach (var c in host.Session.CurrentSnapshot.Characters)
         {
             if (!c.HasFlies) continue;
-            flyCorpsesSeen.Add(c.Id);
-            if (flyCorpses.TryGetValue(c.Id, out var at) && Vector3.DistanceSquared(at, c.Position) < FlyMove * FlyMove) continue;
-            flyCorpses[c.Id] = c.Position;
-            if (particles is not null && flyEffect is { } effect)
+            _flyCorpsesSeen.Add(c.Id);
+            if (_flyCorpses.TryGetValue(c.Id, out var at) && Vector3.DistanceSquared(at, c.Position) < FlyMove * FlyMove) continue;
+            _flyCorpses[c.Id] = c.Position;
+            if (particles is not null && _flyEffect is { } effect)
                 particles.SetBuildingEffects(FlyKey(c.Id), [new PlacedEffect(effect, effect, effect, FlyKey(c.Id), c.Position, Quaternion.Identity)]);
         }
-        if (flyCorpses.Count == flyCorpsesSeen.Count) return;
-        flyCorpsesGone.Clear();
-        foreach (var id in flyCorpses.Keys)
-            if (!flyCorpsesSeen.Contains(id)) flyCorpsesGone.Add(id);
-        foreach (var id in flyCorpsesGone)
+        if (_flyCorpses.Count == _flyCorpsesSeen.Count) return;
+        _flyCorpsesGone.Clear();
+        foreach (var id in _flyCorpses.Keys)
+            if (!_flyCorpsesSeen.Contains(id)) _flyCorpsesGone.Add(id);
+        foreach (var id in _flyCorpsesGone)
         {
-            flyCorpses.Remove(id);
+            _flyCorpses.Remove(id);
             particles?.RemoveBuildingEffects(FlyKey(id));
-            host.sound.worldEmitters?.Remove(FlyKey(id));
+            host.Sound.WorldEmitters?.Remove(FlyKey(id));
         }
     }
 
     /// <summary>With the world audio: the Corpse Flies emitter at each corpse that has its effect.</summary>
     internal void UpdateCorpseFlyEmitters(WorldEmitters emitters)
     {
-        if (flySound is not { } sound) return;
-        foreach (var (id, at) in flyCorpses)
+        if (_flySound is not { } sound) return;
+        foreach (var (id, at) in _flyCorpses)
         {
             string key = FlyKey(id);
             if (!emitters.Contains(key)) emitters.Add(new PlacedEmitter(key, sound, at));

@@ -74,7 +74,7 @@ public sealed partial class CaptiveSystem
     /// </summary>
     bool StripArmour(World world, Fixture rack, int c, CharacterCold cc, float dt)
     {
-        if (cc.Inventory is not { } inventory || inventory.Items.FirstOrDefault(i => i.Type == FcsRecordType.ARMOUR && i.Section == "armour") is not { } piece) return false;
+        if (cc.Inventory is not { } inventory || inventory.Items.FirstOrDefault(i => i.Type == FcsRecordType.Armour && i.Section == "armour") is not { } piece) return false;
         rack.RackTimer += dt;
         if (data.Combat.Armour(piece.Record) is { } armour)
         {
@@ -82,7 +82,7 @@ public sealed partial class CaptiveSystem
             if (p.CutDefence + p.BluntDefence >= rack.RackTimer * ArmourStripRate) return true;
         }
         inventory.Items.Remove(piece);
-        assembly.RefreshEquipment(cc);
+        _assembly.RefreshEquipment(cc);
         rack.RackTimer = 0;
         return true;
     }

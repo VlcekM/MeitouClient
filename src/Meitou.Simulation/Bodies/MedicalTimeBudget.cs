@@ -21,9 +21,9 @@ public sealed class MedicalTimeBudget
     /// </summary>
     public const float NpcRange = 3250;
 
-    int unflaggedCursor = -1;
-    int flaggedCursor = -1;
-    int flaggedLastFrame;
+    int _unflaggedCursor = -1;
+    int _flaggedCursor = -1;
+    int _flaggedLastFrame;
 
     /// <summary>The flagged characters' turns this frame: a quarter of last frame's flagged count, at least <see cref="FlaggedTurnsMin"/> while that quarter is under 5.</summary>
     public static int FlaggedTurns(int flaggedLastFrame)
@@ -37,8 +37,8 @@ public sealed class MedicalTimeBudget
     {
         var table = world.Characters;
         int listed = table.Count;
-        var unflaggedRound = new Round(unflaggedCursor, UnflaggedTurns);
-        var flaggedRound = new Round(flaggedCursor, FlaggedTurns(flaggedLastFrame));
+        var unflaggedRound = new Round(_unflaggedCursor, UnflaggedTurns);
+        var flaggedRound = new Round(_flaggedCursor, FlaggedTurns(_flaggedLastFrame));
         int flagged = 0;
         int position = 0;
         for (int i = 0; i < table.HighWater; i++)
@@ -50,9 +50,9 @@ public sealed class MedicalTimeBudget
             if (turn && cold.Medical is { Dead: false }) cold.MedicalBudgetSeconds += world.TickSeconds;
             position++;
         }
-        unflaggedCursor = unflaggedRound.NextCursor;
-        flaggedCursor = flaggedRound.NextCursor;
-        flaggedLastFrame = flagged;
+        _unflaggedCursor = unflaggedRound.NextCursor;
+        _flaggedCursor = flaggedRound.NextCursor;
+        _flaggedLastFrame = flagged;
     }
 
     /// <summary>
@@ -66,10 +66,10 @@ public sealed class MedicalTimeBudget
     /// <summary>One budget's pass over the list: it continues after last frame's last turn, and the list's head takes what the tail leaves (the original's wrap rule).</summary>
     struct Round(int cursor, int turns)
     {
-        int taken;
-        int last = -1;
+        int _taken;
+        int _last = -1;
 
-        public readonly int NextCursor => taken == turns ? last : -1;
+        public readonly int NextCursor => _taken == turns ? _last : -1;
 
         /// <summary>
         /// Whether the character at list <paramref name="position"/> gets a turn: it lies after the cursor, or the turns so far are under what the tail after the cursor would leave
@@ -78,9 +78,9 @@ public sealed class MedicalTimeBudget
         /// </summary>
         public bool Take(int position, int listed)
         {
-            if (taken >= turns || cursor >= position && taken >= cursor - listed + 1 + turns) return false;
-            taken++;
-            if (taken == turns) last = position;
+            if (_taken >= turns || cursor >= position && _taken >= cursor - listed + 1 + turns) return false;
+            _taken++;
+            if (_taken == turns) _last = position;
             return true;
         }
     }

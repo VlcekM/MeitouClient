@@ -9,35 +9,35 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 internal readonly struct HeightSnapshot
 {
-    readonly ushort[] coarse;
-    readonly int coarseSize;
-    readonly HeightWindow fine;
-    readonly float fineBand, fx0, fz0, fx1, fz1;
+    readonly ushort[] _coarse;
+    readonly int _coarseSize;
+    readonly HeightWindow _fine;
+    readonly float _fineBand, _fx0, _fz0, _fx1, _fz1;
 
     /// <summary>The fine window it was taken with: the same one means the same heights (they are never written after they are published).</summary>
-    public HeightWindow Fine => fine;
+    public HeightWindow Fine => _fine;
 
     public HeightSnapshot(ushort[] coarse, int coarseSize, HeightWindow fine, float fineBand)
     {
-        this.coarse = coarse;
-        this.coarseSize = coarseSize;
-        this.fine = fine;
-        this.fineBand = fineBand;
+        this._coarse = coarse;
+        this._coarseSize = coarseSize;
+        this._fine = fine;
+        this._fineBand = fineBand;
         var (x0, z0) = fine.WorldOf(0, 0);
-        fx0 = (float)x0;
-        fz0 = (float)z0;
-        fx1 = fx0 + (fine.Columns - 1) * fine.Spacing;
-        fz1 = fz0 + (fine.Rows - 1) * fine.Spacing;
+        _fx0 = (float)x0;
+        _fz0 = (float)z0;
+        _fx1 = _fx0 + (fine.Columns - 1) * fine.Spacing;
+        _fz1 = _fz0 + (fine.Rows - 1) * fine.Spacing;
     }
 
     /// <summary>Height at a world point (bilinear in the coarse grid, blended into the fine window across its edge band).</summary>
     public float HeightAt(float x, float z)
     {
         float h = WorldLayout.HalfWorldSize;
-        float c = Bilinear(coarse, coarseSize, coarseSize, x + h, z + h, WorldLayout.WorldSize / (float)(coarseSize - 1));
-        float w = Math.Clamp(Math.Min(Math.Min(x - fx0, fx1 - x), Math.Min(z - fz0, fz1 - z)) / fineBand, 0, 1);
+        float c = Bilinear(_coarse, _coarseSize, _coarseSize, x + h, z + h, WorldLayout.WorldSize / (float)(_coarseSize - 1));
+        float w = Math.Clamp(Math.Min(Math.Min(x - _fx0, _fx1 - x), Math.Min(z - _fz0, _fz1 - z)) / _fineBand, 0, 1);
         if (w <= 0) return c;
-        return c + (Bilinear(fine.Raw, fine.Columns, fine.Rows, x - fx0, z - fz0, fine.Spacing) - c) * w;
+        return c + (Bilinear(_fine.Raw, _fine.Columns, _fine.Rows, x - _fx0, z - _fz0, _fine.Spacing) - c) * w;
     }
 
     static float Bilinear(ushort[] raw, int cols, int rows, float x, float z, float spacing)
@@ -54,9 +54,9 @@ internal readonly struct HeightSnapshot
 /// <summary>A terrain height source for a worker thread: <see cref="Refresh"/> (render thread, while no worker reads it) takes a <see cref="HeightSnapshot"/>, <see cref="HeightAt"/> reads it.</summary>
 public sealed class TerrainHeights
 {
-    HeightSnapshot snapshot;
+    HeightSnapshot _snapshot;
 
-    public void Refresh(TerrainRenderer terrain) => snapshot = terrain.Snapshot();
+    public void Refresh(TerrainRenderer terrain) => _snapshot = terrain.Snapshot();
 
-    public float HeightAt(float x, float z) => snapshot.HeightAt(x, z);
+    public float HeightAt(float x, float z) => _snapshot.HeightAt(x, z);
 }

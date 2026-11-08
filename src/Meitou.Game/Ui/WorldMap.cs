@@ -22,13 +22,13 @@ public readonly record struct MapFaction(string Name, float Relation, MapStandin
 /// <summary>The world map (Overview's MAP tab), after the original's MapScreen (docs/game/ui-screens.md "Map").</summary>
 sealed class WorldMap(PlayerInterface player)
 {
-    readonly UiMapView mapView = new() { FitWhole = true };
-    UiRect mapViewport;
-    internal Vector2? mapDrag;
-    internal bool mapRightPressed, mapShown;
-    Vector3 movementMarker;
-    long movementMarkerUntil;
-    readonly Dictionary<string, Vector2> markerSizes = new(StringComparer.Ordinal);
+    readonly UiMapView _mapView = new() { FitWhole = true };
+    UiRect _mapViewport;
+    internal Vector2? MapDrag;
+    internal bool MapRightPressed, MapShown;
+    Vector3 _movementMarker;
+    long _movementMarkerUntil;
+    readonly Dictionary<string, Vector2> _markerSizes = new(StringComparer.Ordinal);
 
     /// <summary>The placed towns (the population's sites, in the order of <see cref="WorldSnapshot.Towns"/>); the host sets it.</summary>
     public Func<IReadOnlyList<TownSite>>? MapTowns { get; set; }
@@ -52,11 +52,11 @@ sealed class WorldMap(PlayerInterface player)
     float UiScale => player.Height / 1080f;
     /// <summary>Whether the overview shows its Map tab now (the F10 map-teleport hint reads it).</summary>
     public bool MapTabShown => MapTabOpen;
-    bool MapTabOpen => player.UiVisible && player.faithfulScreens.IsOpen("overview") && player.faithfulScreens.GetTab("overview", "TabsMain") == 0;
-    bool OverMap(Vector2 p) => MapTabOpen && mapViewport.Contains(p.X, p.Y) && !player.faithfulScreens.HasModal;
+    bool MapTabOpen => player.UiVisible && player.FaithfulScreens.IsOpen("overview") && player.FaithfulScreens.GetTab("overview", "TabsMain") == 0;
+    bool OverMap(Vector2 p) => MapTabOpen && _mapViewport.Contains(p.X, p.Y) && !player.FaithfulScreens.HasModal;
     /// <summary>The original's map scale: on-screen pixels per pixel of the 4096 canvas. The least fits the whole map, the most is 1.5 x the UI scale.</summary>
-    float MapScale => mapView.Size(mapViewport) / MapCanvas;
-    float MapMinScale => Math.Min(mapViewport.Width, mapViewport.Height) / MapCanvas;
+    float MapScale => _mapView.Size(_mapViewport) / MapCanvas;
+    float MapMinScale => Math.Min(_mapViewport.Width, _mapViewport.Height) / MapCanvas;
     /// <summary>0 below 0.4 x the UI scale (no characters or labels, small towns), 1 to 0.75 x, else 2.</summary>
     int MapZoomLevel => MapScale < 0.4f * UiScale ? 0 : MapScale <= 0.75f * UiScale ? 1 : 2;
 
@@ -64,7 +64,7 @@ sealed class WorldMap(PlayerInterface player)
     internal bool MapPointerDown(Vector2 p)
     {
         if (!OverMap(p)) return false;
-        mapDrag = p; mapPickFrom = p; return true;
+        MapDrag = p; _mapPickFrom = p; return true;
     }
 
     /// <summary>
@@ -79,28 +79,28 @@ sealed class WorldMap(PlayerInterface player)
     public void ArmMapPick(Action<Vector3> pick) { MapPick = pick; MapPickSticky = true; }
 
     public void DisarmMapPick() { MapPick = null; MapPickSticky = false; }
-    Vector2? mapPickFrom;
+    Vector2? _mapPickFrom;
     const float MapPickSlop = 4;
 
     /// <summary>The left button up: a click on the map (not a pan) hands its world point to <see cref="MapPick"/>.</summary>
     internal void MapPickUp(Vector2 p)
     {
-        var from = mapPickFrom;
-        mapPickFrom = null;
+        var from = _mapPickFrom;
+        _mapPickFrom = null;
         if (MapPick is not { } pick || from is not { } start || Vector2.Distance(start, p) > MapPickSlop * MathF.Max(1, UiScale) || !OverMap(p)) return;
         if (!MapPickSticky) MapPick = null;
-        pick(MapWorld(Vector2.Clamp(mapView.At(mapViewport, p), Vector2.Zero, Vector2.One)));
+        pick(MapWorld(Vector2.Clamp(_mapView.At(_mapViewport, p), Vector2.Zero, Vector2.One)));
     }
     internal bool MapPointerMove(Vector2 p)
     {
-        if (mapDrag is not { } previous) return false;
-        mapView.Pan(mapViewport, p - previous); mapDrag = p; return true;
+        if (MapDrag is not { } previous) return false;
+        _mapView.Pan(_mapViewport, p - previous); MapDrag = p; return true;
     }
     /// <summary>The right button does nothing until it comes up (<see cref="MapRightUp"/>).</summary>
     internal bool MapRightDown(Vector2 p)
     {
         if (!OverMap(p)) return false;
-        mapRightPressed = true; return true;
+        MapRightPressed = true; return true;
     }
     /// <summary>
     /// A move order for the selection to the world point under the cursor (clamped to the map), its height the ground's but at least 100. Shift does not queue, as in the
@@ -108,16 +108,16 @@ sealed class WorldMap(PlayerInterface player)
     /// </summary>
     internal bool MapRightUp(Vector2 p)
     {
-        if (!mapRightPressed) return false;
-        mapRightPressed = false;
+        if (!MapRightPressed) return false;
+        MapRightPressed = false;
         if (!OverMap(p)) return true;
         if (player.SelectedIds().Count > 0)
         {
-            var at = MapWorld(Vector2.Clamp(mapView.At(mapViewport, p), Vector2.Zero, Vector2.One));
-            at.Y = MathF.Max(player.ground(at.X, at.Z), 100);
+            var at = MapWorld(Vector2.Clamp(_mapView.At(_mapViewport, p), Vector2.Zero, Vector2.One));
+            at.Y = MathF.Max(player.Ground(at.X, at.Z), 100);
             player.Move(at, queued: false);
-            movementMarker = at;
-            movementMarkerUntil = Stopwatch.GetTimestamp() + (long)(MovementMarkerSeconds * Stopwatch.Frequency);
+            _movementMarker = at;
+            _movementMarkerUntil = Stopwatch.GetTimestamp() + (long)(MovementMarkerSeconds * Stopwatch.Frequency);
         }
         return true;
     }
@@ -130,58 +130,63 @@ sealed class WorldMap(PlayerInterface player)
     void MapScaleAt(Vector2 p, float scale)
     {
         if (MapScale <= 0) return;
-        mapView.ZoomAt(mapViewport, p, Math.Max(scale, MapMinScale) / MapScale);
+        _mapView.ZoomAt(_mapViewport, p, Math.Max(scale, MapMinScale) / MapScale);
     }
     internal void MapAction(string widget)
     {
-        if (widget == "MapCenterButton") mapView.CentreOn(MapPoint(player.session.Camera.Current.Target));
+        if (widget == "MapCenterButton") _mapView.CentreOn(MapPoint(player.Session.Camera.Current.Target));
         else if (widget is "MapZoomInButton" or "MapZoomOutButton")
-            MapScaleAt(new(mapViewport.X + mapViewport.Width / 2, mapViewport.Y + mapViewport.Height / 2), MapScale + (widget == "MapZoomInButton" ? MapMinScale : -MapMinScale));
+            MapScaleAt(new(_mapViewport.X + _mapViewport.Width / 2, _mapViewport.Y + _mapViewport.Height / 2), MapScale + (widget == "MapZoomInButton" ? MapMinScale : -MapMinScale));
     }
 
     /// <summary>Once a frame: opening the map centres it on the camera and hides the movement marker; closing the overview on it marks the new discoveries seen.</summary>
     internal void UpdateMap()
     {
         bool shown = MapTabOpen;
-        if (shown && !mapShown)
+        if (shown && !MapShown)
         {
-            mapView.CentreOn(MapPoint(player.session.Camera.Current.Target));
-            movementMarkerUntil = 0;
+            _mapView.CentreOn(MapPoint(player.Session.Camera.Current.Target));
+            _movementMarkerUntil = 0;
         }
-        if (!shown && mapShown && !player.faithfulScreens.IsOpen("overview") && player.session.CurrentSnapshot.Towns.Any(t => (t & TownKnowledge.Recent) != 0))
-            player.Say(new SeenDiscoveriesCommand { Tick = player.session.World.Tick });
-        if (!shown) { mapDrag = null; mapRightPressed = false; if (!MapPickSticky) MapPick = null; mapPickFrom = null; }
-        mapShown = shown;
+        if (!shown && MapShown && !player.FaithfulScreens.IsOpen("overview") && player.Session.CurrentSnapshot.Towns.Any(t => (t & TownKnowledge.Recent) != 0))
+            player.Say(new SeenDiscoveriesCommand { Tick = player.Session.World.Tick });
+        if (!shown) { MapDrag = null; MapRightPressed = false; if (!MapPickSticky) MapPick = null; _mapPickFrom = null; }
+        MapShown = shown;
     }
 
     internal void AddMapContent(string id, List<UiControl> controls)
     {
         if (id != "overview") return;
         int imageIndex = controls.FindIndex(c => c.Name == "MapImage");
-        if (imageIndex < 0) { mapViewport = default; return; }
-        var image = controls[imageIndex]; mapViewport = image.Bounds.Intersect(image.Clip ?? image.Bounds);
-        if (mapViewport.Width <= 0 || mapViewport.Height <= 0) return;
+        if (imageIndex < 0) { _mapViewport = default; return; }
+        var image = controls[imageIndex]; _mapViewport = image.Bounds.Intersect(image.Clip ?? image.Bounds);
+        if (_mapViewport.Width <= 0 || _mapViewport.Height <= 0) return;
         float ui = UiScale;
-        mapView.MaxZoom = 1.5f * ui / MapMinScale;
-        var bounds = mapView.ImageBounds(mapViewport);
-        controls[imageIndex] = image with { Bounds = bounds, Clip = mapViewport, Pickable = true };
+        _mapView.MaxZoom = 1.5f * ui / MapMinScale;
+        var bounds = _mapView.ImageBounds(_mapViewport);
+        controls[imageIndex] = image with { Bounds = bounds, Clip = _mapViewport, Pickable = true };
         int level = MapZoomLevel;
         Vector2 Screen(Vector3 world) { var n = MapPoint(world); return new(bounds.X + n.X * bounds.Width, bounds.Y + n.Y * bounds.Height); }
         Vector2 GroupSize(string group)
         {
-            if (markerSizes.TryGetValue(group, out var known)) return known;
+            if (_markerSizes.TryGetValue(group, out var known)) return known;
             var props = new Dictionary<string, string> { ["ImageResource"] = "Kenshi_MapMarkers", ["ImageGroup"] = group, ["ImageName"] = group };
-            return markerSizes[group] = MyGuiImages.Resolve(player.uiResources, props) is { } i ? new(i.Source.Width, i.Source.Height) : new(32);
+            return _markerSizes[group] = MyGuiImages.Resolve(player.UiResources, props) is { } i ? new(i.Source.Width, i.Source.Height) : new(32);
         }
         void Marker(string name, string group, UiRect box, Vector4 colour, float angle = 0, string? tooltip = null)
         {
-            if (box.Intersect(mapViewport).Width <= 0 || box.Intersect(mapViewport).Height <= 0) return;
-            var props = new Dictionary<string, string> { ["ImageResource"] = "Kenshi_MapMarkers", ["ImageGroup"] = group, ["ImageName"] = group,
-                ["Colour"] = FormattableString.Invariant($"{colour.X} {colour.Y} {colour.Z} {colour.W}") };
+            if (box.Intersect(_mapViewport).Width <= 0 || box.Intersect(_mapViewport).Height <= 0) return;
+            var props = new Dictionary<string, string>
+            {
+                ["ImageResource"] = "Kenshi_MapMarkers",
+                ["ImageGroup"] = group,
+                ["ImageName"] = group,
+                ["Colour"] = FormattableString.Invariant($"{colour.X} {colour.Y} {colour.Z} {colour.W}")
+            };
             if (angle != 0) props["ImageAngle"] = angle.ToString(CultureInfo.InvariantCulture);
             // Type 4, a map place (the original's "hand" payload, FUN_140922e60): rows of the data, a tab between a row's label and value.
             if (tooltip is not null) { props[UiTooltips.Type] = "4"; props[UiTooltips.Data] = tooltip; }
-            controls.Insert(++imageIndex, new(name, "ImageBox", box, "", "", "", true, props, default, Pickable: tooltip is not null, Clip: mapViewport));
+            controls.Insert(++imageIndex, new(name, "ImageBox", box, "", "", "", true, props, default, Pickable: tooltip is not null, Clip: _mapViewport));
         }
         void Label(string name, string text, Vector2 topCentre, Vector4 colour)
         {
@@ -189,13 +194,13 @@ sealed class WorldMap(PlayerInterface player)
             var props = new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "HCenter Top" };
             // MyGUI's text shadow: the text again in black, a pixel down and right, under it.
             controls.Insert(++imageIndex, new(name + "-shadow", "TextBox", new(topCentre.X - width / 2 + 1, topCentre.Y + 1, width, height), text, "", "", true, props, default,
-                new Vector4(0, 0, 0, colour.W), Pickable: false, TextScale: ui, Clip: mapViewport));
+                new Vector4(0, 0, 0, colour.W), Pickable: false, TextScale: ui, Clip: _mapViewport));
             controls.Insert(++imageIndex, new(name, "TextBox", new(topCentre.X - width / 2, topCentre.Y, width, height), text, "", "", true, props, default,
-                colour, Pickable: false, TextScale: ui, Clip: mapViewport));
+                colour, Pickable: false, TextScale: ui, Clip: _mapViewport));
         }
 
         // Towns, camps and nests: discovered ones only; which zoom levels show each kind, its size, label and tooltip (docs/game/ui-screens.md "Map").
-        var snapshot = player.session.CurrentSnapshot;
+        var snapshot = player.Session.CurrentSnapshot;
         var players = snapshot.Characters.Where(c => c.IsPlayer).ToList();
         bool PlayerNear(Vector3 at) => players.Any(c => Vector2.DistanceSquared(new(c.Position.X, c.Position.Z), new(at.X, at.Z)) <= NestShowRange * NestShowRange);
         void Place(string name, TownType type, string townName, string unexploredName, string? factionId, Vector3 position, TownKnowledge known)
@@ -207,8 +212,13 @@ sealed class WorldMap(PlayerInterface player)
             var faction = MapFactionOf?.Invoke(factionId);
             string group = type switch
             {
-                TownType.Nest => faction?.Wildlife == true ? "Nest" : "Camp", TownType.Outpost or TownType.Military or TownType.Prison => "Outpost", TownType.Town => "Town",
-                TownType.Village => "Village", TownType.Ruins => "Ruin", TownType.SlaveCamp => "Workcamp", _ => "SmallPlace",
+                TownType.Nest => faction?.Wildlife == true ? "Nest" : "Camp",
+                TownType.Outpost or TownType.Military or TownType.Prison => "Outpost",
+                TownType.Town => "Town",
+                TownType.Village => "Village",
+                TownType.Ruins => "Ruin",
+                TownType.SlaveCamp => "Workcamp",
+                _ => "SmallPlace",
             };
             float factor = level == 0 ? 0.5f : type == TownType.Town ? (level == 1 ? 0.75f : 1) : 0.85f;
             var size = GroupSize(group) * ui * factor;
@@ -216,7 +226,10 @@ sealed class WorldMap(PlayerInterface player)
             var box = new UiRect(centre.X - size.X / 2, centre.Y - size.Y / 2, size.X, size.Y);
             var colour = !explored ? NeutralColour : (faction?.Standing ?? MapStanding.Neutral) switch
             {
-                MapStanding.Player => PlayerColour, MapStanding.Ally => AllyColour, MapStanding.Enemy => EnemyColour, _ => NeutralColour,
+                MapStanding.Player => PlayerColour,
+                MapStanding.Ally => AllyColour,
+                MapStanding.Enemy => EnemyColour,
+                _ => NeutralColour,
             };
             string shownName = explored || unexploredName.Length == 0 ? townName : unexploredName;
             // An explored place's tooltip: its name, its faction and the player's relation to it.
@@ -246,22 +259,22 @@ sealed class WorldMap(PlayerInterface player)
             var size = GroupSize("Character") * ui;
             foreach (var character in players)
             {
-                var at = Screen(player.where(character));
+                var at = Screen(player.Where(character));
                 Marker("map-character-" + character.Id, "Character", new(at.X - size.X / 2, at.Y - size.Y / 2, size.X, size.Y), character.Selected ? SelectedColour : PlayerColour);
             }
         }
 
         // The movement marker stands on the ordered point (its bottom centre) for 3 s.
-        if (Stopwatch.GetTimestamp() < movementMarkerUntil)
+        if (Stopwatch.GetTimestamp() < _movementMarkerUntil)
         {
             var size = GroupSize("Movement") * ui;
-            var at = Screen(movementMarker);
+            var at = Screen(_movementMarker);
             Marker("map-movement", "Movement", new(at.X - size.X / 2, at.Y - size.Y, size.X, size.Y), MovementColour);
         }
 
         // The camera, turned to its view: the angle between the level view direction and -Z, negative towards -X.
         {
-            var camera = player.session.Camera.Current;
+            var camera = player.Session.Camera.Current;
             var look = new Vector2(camera.Forward.X, camera.Forward.Z);
             float angle = look.LengthSquared() > 1e-8f ? MathF.Acos(Math.Clamp(-Vector2.Normalize(look).Y, -1, 1)) * (look.X < 0 ? -1 : 1) : 0;
             var size = GroupSize("Camera") * ui;
@@ -288,34 +301,34 @@ sealed class WorldMap(PlayerInterface player)
     internal bool InventoryRightClick(Vector2 p, bool shift)
     {
         if (!player.UiVisible) return false;
-        if (player.frontend.confirmation is not null) return true;   // an open question (the fencing prompt) swallows the click, as the original's pending state does
-        if (player.faithfulScreens.HitTest(p) is not { } picked || !picked.Control.Enabled) return false;
-        var trade = player.session.CurrentSnapshot.Trade;
+        if (player.Frontend.PendingConfirmation is not null) return true;   // an open question (the fencing prompt) swallows the click, as the original's pending state does
+        if (player.FaithfulScreens.HitTest(p) is not { } picked || !picked.Control.Enabled) return false;
+        var trade = player.Session.CurrentSnapshot.Trade;
         if (trade is not null && picked.Control.Properties.TryGetValue("TradeItem", out var stockIndex))
         {
             if (trade.Stock.FirstOrDefault(i => i.Index == int.Parse(stockIndex, CultureInfo.InvariantCulture)) is not { } stock) return false;
-            player.Say(new BuyItem(stock.Token, shift ? stock.Quantity : 1) { Tick = player.session.World.Tick, Equip = true, Into = player.inventoryWindows.InventoryOwner()?.Id ?? CharacterId.None });
+            player.Say(new BuyItem(stock.Token, shift ? stock.Quantity : 1) { Tick = player.Session.World.Tick, Equip = true, Into = player.InventoryWindows.InventoryOwner()?.Id ?? CharacterId.None });
             return true;
         }
         if (trade is null && WindowRightClick(picked.Screen, picked.Control, shift)) return true;
-        if (TradeWindows.IsLootScreen(picked.Screen) || !picked.Control.Properties.TryGetValue("InventoryItem", out var index) || player.inventoryWindows.WindowCharacter(picked.Screen) is not { ItemGrid: { } grid } lead) return false;
+        if (TradeWindows.IsLootScreen(picked.Screen) || !picked.Control.Properties.TryGetValue("InventoryItem", out var index) || player.InventoryWindows.WindowCharacter(picked.Screen) is not { ItemGrid: { } grid } lead) return false;
         var item = grid.Items.FirstOrDefault(i => i.Index == int.Parse(index, CultureInfo.InvariantCulture));
         if (item is null) return false;
         var token = new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality);
         if (trade is not null && lead.IsPlayer && InventoryCommands.IsMovableSection(item.Section))
         {
-            player.tradeWindows.Sell(trade, lead.Id, token, shift ? item.Quantity : 1, null, 0);
+            player.TradeWindows.Sell(trade, lead.Id, token, shift ? item.Quantity : 1, null, 0);
             return true;
         }
         if (trade is null && OtherCharacterWindow(picked.Screen, lead.Id) is { } other)
         {
             if (!InventoryCommands.IsMovableSection(item.Section)) return false;
-            bool otherBag = other == player.inventoryWindows.InventoryOwner()?.Id && player.faithfulScreens.IsOpen("bag");
-            player.Say(new QuickMoveItem(lead.Id, token, shift, false) { Tick = player.session.World.Tick, Into = other, IntoBag = otherBag });
+            bool otherBag = other == player.InventoryWindows.InventoryOwner()?.Id && player.FaithfulScreens.IsOpen("bag");
+            player.Say(new QuickMoveItem(lead.Id, token, shift, false) { Tick = player.Session.World.Tick, Into = other, IntoBag = otherBag });
             return true;
         }
-        if (MapItemTowns?.Invoke(item.Record) is not null) player.Say(new ReadMapItem(lead.Id, token) { Tick = player.session.World.Tick });
-        else player.Say(new QuickMoveItem(lead.Id, token, shift, player.faithfulScreens.IsOpen("bag") && !InventoryWindows.IsPinnedInventory(picked.Screen)) { Tick = player.session.World.Tick });
+        if (MapItemTowns?.Invoke(item.Record) is not null) player.Say(new ReadMapItem(lead.Id, token) { Tick = player.Session.World.Tick });
+        else player.Say(new QuickMoveItem(lead.Id, token, shift, player.FaithfulScreens.IsOpen("bag") && !InventoryWindows.IsPinnedInventory(picked.Screen)) { Tick = player.Session.World.Tick });
         return true;
     }
 
@@ -326,9 +339,9 @@ sealed class WorldMap(PlayerInterface player)
     CharacterId? OtherCharacterWindow(string screen, CharacterId own)
     {
         if (screen is not ("inventory" or "bag") && !InventoryWindows.IsPinnedInventory(screen)) return null;
-        var open = player.faithfulScreens.OpenScreens;
+        var open = player.FaithfulScreens.OpenScreens;
         for (int i = open.Count - 1; i >= 0; i--)
-            if ((open[i] == "inventory" || InventoryWindows.IsPinnedInventory(open[i])) && player.inventoryWindows.WindowCharacter(open[i]) is { } other && other.Id != own) return other.Id;
+            if ((open[i] == "inventory" || InventoryWindows.IsPinnedInventory(open[i])) && player.InventoryWindows.WindowCharacter(open[i]) is { } other && other.Id != own) return other.Id;
         return null;
     }
 
@@ -340,34 +353,34 @@ sealed class WorldMap(PlayerInterface player)
     bool WindowRightClick(string screen, UiControl control, bool shift)
     {
         int count = shift ? 0 : 1;
-        if (!player.faithfulScreens.IsOpen("inventory") || player.inventoryWindows.InventoryOwner() is not { ItemGrid: { } grid } lead) return false;
-        var machine = player.production.Machine(player.production.shownMachine) is { } shown && player.faithfulScreens.IsOpen(ProductionWindows.MachineScreen(shown)) ? shown : null;
-        bool loot = player.faithfulScreens.IsOpen("loot") && lead.Id == player.session.CurrentSnapshot.LootOpener;
+        if (!player.FaithfulScreens.IsOpen("inventory") || player.InventoryWindows.InventoryOwner() is not { ItemGrid: { } grid } lead) return false;
+        var machine = player.Production.Machine(player.Production.ShownMachine) is { } shown && player.FaithfulScreens.IsOpen(ProductionWindows.MachineScreen(shown)) ? shown : null;
+        bool loot = player.FaithfulScreens.IsOpen("loot") && lead.Id == player.Session.CurrentSnapshot.LootOpener;
         if (machine is not null && control.Properties.TryGetValue("MachineItem", out var raw))
         {
             int code = int.Parse(raw, CultureInfo.InvariantCulture);
-            player.Say(new TakeFromMachine(lead.Id, machine.Site, code >= 1000 ? -1 : code - 10, Math.Max(0, code - 1000), Count: count) { Tick = player.session.World.Tick, BagFirst = player.faithfulScreens.IsOpen("bag") });
+            player.Say(new TakeFromMachine(lead.Id, machine.Site, code >= 1000 ? -1 : code - 10, Math.Max(0, code - 1000), Count: count) { Tick = player.Session.World.Tick, BagFirst = player.FaithfulScreens.IsOpen("bag") });
             return true;
         }
         if (!control.Properties.TryGetValue("InventoryItem", out var index)) return false;
         int at = int.Parse(index, CultureInfo.InvariantCulture);
         if (TradeWindows.IsLootScreen(screen))
         {
-            if (!loot || player.tradeWindows.LootBody()?.ItemGrid?.Items.FirstOrDefault(i => i.Index == at) is not { } looted) return false;
-            player.Say(new TakeLootItem(Token(looted)) { Tick = player.session.World.Tick, Count = count, BagFirst = player.faithfulScreens.IsOpen("bag") });
+            if (!loot || player.TradeWindows.LootBody()?.ItemGrid?.Items.FirstOrDefault(i => i.Index == at) is not { } looted) return false;
+            player.Say(new TakeLootItem(Token(looted)) { Tick = player.Session.World.Tick, Count = count, BagFirst = player.FaithfulScreens.IsOpen("bag") });
             return true;
         }
         if (screen is not ("inventory" or "bag") || grid.Items.FirstOrDefault(i => i.Index == at) is not { } item || !InventoryCommands.IsMovableSection(item.Section)) return false;
         if (loot)
         {
-            player.Say(new PutLootItem(lead.Id, Token(item)) { Tick = player.session.World.Tick, Count = count, BagFirst = player.faithfulScreens.IsOpen("loot-bag") });
+            player.Say(new PutLootItem(lead.Id, Token(item)) { Tick = player.Session.World.Tick, Count = count, BagFirst = player.FaithfulScreens.IsOpen("loot-bag") });
             return true;
         }
         if (machine is null) return false;
         bool inputs = machine.Inputs.Count > 0 || machine.Storage is null;
         int slot = inputs ? machine.Inputs.ToList().FindIndex(i => i.Item == item.Record) : -1;
         if (inputs && slot < 0) return true;   // no input takes it
-        player.Say(new PutInMachine(lead.Id, Token(item), machine.Site, slot, -1, 0, count) { Tick = player.session.World.Tick });
+        player.Say(new PutInMachine(lead.Id, Token(item), machine.Site, slot, -1, 0, count) { Tick = player.Session.World.Tick });
         return true;
 
         static InventoryItemToken Token(InventoryItemView i) => new(i.Index, i.Record, i.Section, i.X, i.Y, i.Quantity, i.Quality);

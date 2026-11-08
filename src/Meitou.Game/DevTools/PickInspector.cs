@@ -32,12 +32,12 @@ sealed class PickInspector(PlayerInterface player)
     /// <summary>The geometry to draw (positions relative to <c>Origin</c>, <c>Meitou.Game.Rendering.Overlays.NavmeshOverlayRenderer</c> layout: 7 floats a vertex).</summary>
     public (Vector3 Origin, float[] Fill, float[] Edges) InspectorGeometry { get; private set; } = (Vector3.Zero, [], []);
 
-    string inspectorKey = "";
+    string _inspectorKey = "";
 
     /// <summary>Forgets what was drawn (a switch changed), so the next frame rebuilds it.</summary>
     public void InspectorChanged()
     {
-        inspectorKey = "";
+        _inspectorKey = "";
         if (!InspectorDrawing) { InspectorGeometry = (Vector3.Zero, [], []); InspectorRevision++; }
     }
 
@@ -47,23 +47,23 @@ sealed class PickInspector(PlayerInterface player)
     List<InspectedBuilding> InspectBuildings((Vector3 Origin, Vector3 Direction) ray, float limit)
     {
         var result = new List<InspectedBuilding>();
-        if (player.build.buildHost is not { } host) return result;
+        if (player.Build.Services is not { } host) return result;
         foreach (var candidate in host.Placement.StaticAlong(ray.Origin, ray.Direction, limit))
         {
             var b = candidate.Placement;
-            float y = b.WorldY ?? player.ground(b.Position.X, b.Position.Z) + b.Position.Y;
+            float y = b.WorldY ?? player.Ground(b.Position.X, b.Position.Z) + b.Position.Y;
             var hull = candidate.Footprint.Place(b.Position, b.Rotation);
             var info = host.WorldInfo(b);
             result.Add(new(info.Name, b.BuildingId, b.Key, BuildMode.RayPrism(ray.Origin, ray.Direction, hull, y + candidate.Footprint.YMin, y + candidate.Footprint.YMax),
                 hull, [.. candidate.Footprint.PlaceShapes(b.Position, b.Rotation)], y, candidate.Footprint.YMin, candidate.Footprint.YMax, b.Position, b.Rotation));
         }
         // The player's own sites (what the hammer pointer and a click on a site test): hull prism from the site's position, turned by its yaw.
-        foreach (var site in player.session.CurrentSnapshot.Buildings)
+        foreach (var site in player.Session.CurrentSnapshot.Buildings)
         {
             if (host.Placement.Footprint(site.Record) is not { } footprint) continue;
-            var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, Meitou.Game.Building.PlacementCheck.YawOf(site.Rotation));
+            var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, PlacementCheck.YawOf(site.Rotation));
             var hull = footprint.Place(site.Position, rotation);
-            result.Add(new("[site] " + player.build.SiteName(site), site.Record, site.Id, BuildMode.RayPrism(ray.Origin, ray.Direction, hull, site.Position.Y + footprint.YMin, site.Position.Y + footprint.YMax),
+            result.Add(new("[site] " + player.Build.SiteName(site), site.Record, site.Id, BuildMode.RayPrism(ray.Origin, ray.Direction, hull, site.Position.Y + footprint.YMin, site.Position.Y + footprint.YMax),
                 hull, [.. footprint.PlaceShapes(site.Position, rotation)], site.Position.Y, footprint.YMin, footprint.YMax, site.Position, rotation));
         }
         return result;
@@ -81,8 +81,8 @@ sealed class PickInspector(PlayerInterface player)
     /// <summary>The panel, and the hull drawing when it changed.</summary>
     internal void AddInspectorPanel(List<UiControl> controls)
     {
-        if (!InspectorOn || player.Ray(player.mouse) is not { } ray) return;
-        var ground = player.picking.GroundHit(ray.Origin, ray.Direction);
+        if (!InspectorOn || player.Ray(player.Mouse) is not { } ray) return;
+        var ground = player.Picking.GroundHit(ray.Origin, ray.Direction);
         float limit = ground is { } g ? Vector3.Distance(ray.Origin, g) : 6000;
         var buildings = InspectBuildings(ray, limit);
         var hits = buildings.Where(b => b.Hit is { } t && t < limit).OrderBy(b => b.Hit).ToList();
@@ -90,14 +90,14 @@ sealed class PickInspector(PlayerInterface player)
         var lines = new List<PlayerInterface.HudLine>();
         if (ground is { } at)
         {
-            var zone = Meitou.Data.World.WorldLayout.ZoneOf(at.X, at.Z);
+            var zone = Data.World.WorldLayout.ZoneOf(at.X, at.Z);
             lines.Add(new("Ground", $"{N(at.X)}, {N(at.Y)}, {N(at.Z)}"));
             lines.Add(new("Zone", $"{zone.X}, {zone.Y}"));
             lines.Add(new("Ground distance", N(limit)));
         }
         else lines.Add(new("Ground", "the ray leaves the world"));
         lines.Add(new("Click selects", picked is null ? "no building" : picked.Name));
-        lines.Add(new("Hammer pointer (your site)", player.build.PickSite(player.mouse) is { } hammered ? player.build.SiteName(hammered) : "none"));
+        lines.Add(new("Hammer pointer (your site)", player.Build.PickSite(player.Mouse) is { } hammered ? player.Build.SiteName(hammered) : "none"));
         if (picked is not null)
         {
             var (min, max) = (new Vector2(float.MaxValue), new Vector2(float.MinValue));
@@ -117,16 +117,16 @@ sealed class PickInspector(PlayerInterface player)
         }
         if (buildings.Count - hits.Count > 0) lines.Add(new("Near, not hit", buildings.Count - hits.Count + " buildings"));
         // Resource rocks (hand mining): a rock is hit as a sphere of its radius, looked for within 200 of the ground point; each line is how far the ray passes from its centre against its radius.
-        if (player.furniture.Rocks?.Invoke() is { } rocks && ground is { } rockGround)
+        if (player.Furniture.Rocks?.Invoke() is { } rocks && ground is { } rockGround)
         {
             var near = rocks.Near(0, rockGround.X, rockGround.Z, 200);
-            var picked2 = player.furniture.PickRockAt(player.mouse);
+            var picked2 = player.Furniture.PickRockAt(player.Mouse);
             lines.Add(new("Rock a click mines", picked2 is { } r ? $"{r.Rock.Record} (hit {N(r.T)})" : near.Count == 0 ? "none (no rocks within 200)" : "none"));
             foreach (var rock in near.OrderBy(r => Vector3.Cross(r.Position - ray.Origin, ray.Direction).Length()).Take(3))
                 lines.Add(new("  " + rock.Record, $"misses by {N(Vector3.Cross(rock.Position - ray.Origin, ray.Direction).Length())}, radius {N(rock.Radius)}"));
         }
-        else lines.Add(new("Rocks", player.furniture.Rocks is null ? "no rock source" : "none loaded"));
-        if (player.buildingSelection.selectedBuilding is { } sel) lines.Add(new("Selected building", sel.Name));
+        else lines.Add(new("Rocks", player.Furniture.Rocks is null ? "no rock source" : "none loaded"));
+        if (player.BuildingSelection.Selected is { } sel) lines.Add(new("Selected building", sel.Name));
         lines.Add(new("Selected characters", player.SelectedIds().Count.ToString(CultureInfo.InvariantCulture)));
         if (InspectorPanel)
         {
@@ -146,8 +146,8 @@ sealed class PickInspector(PlayerInterface player)
     void UpdateInspectorGeometry(List<InspectedBuilding> buildings, InspectedBuilding? picked, Vector3? ground)
     {
         string key = (InspectorHull ? "h" : "") + (InspectorShapes ? "s" : "") + (InspectorMesh ? "m" : "") + "|" + (picked?.Key ?? "") + "|" + string.Join(',', buildings.Select(b => b.Key));
-        if (key == inspectorKey) return;
-        inspectorKey = key;
+        if (key == _inspectorKey) return;
+        _inspectorKey = key;
         var origin = picked is { } p ? new Vector3(MathF.Round(p.Hull[0].X), p.Y, MathF.Round(p.Hull[0].Y)) : ground ?? Vector3.Zero;
         var fill = new List<float>();
         var edges = new List<float>();
@@ -166,7 +166,7 @@ sealed class PickInspector(PlayerInterface player)
                     Prism(edges, shape, b.Y + b.YMin, b.Y + b.YMax, origin, new Vector4(0.2f, 1f, 0.3f, 0.9f));
                     if (isPicked) HullFloor(fill, shape, b.Y + b.YMin + 3, origin, new Vector4(0.2f, 1f, 0.3f, 0.12f));
                 }
-            if (InspectorMesh && isPicked && player.build.buildHost is { } host && b.Record is { } record)
+            if (InspectorMesh && isPicked && player.Build.Services is { } host && b.Record is { } record)
                 CollisionEdges(edges, host.Placement.CollisionMesh(record), b, origin, new Vector4(0.3f, 0.8f, 1f, 0.9f));
         }
         InspectorGeometry = (origin, [.. fill], [.. edges]);

@@ -36,21 +36,21 @@ public sealed class CoarseRoute
     const ushort Water = 1 << 8;
     const int WetShift = 9;
 
-    readonly Func<float, float, float> terrain;
-    Func<Func<float, float, float>>? slopeTerrain;
-    Func<IReadOnlyList<Vector2[]>>? obstacles;
-    readonly Lazy<ushort[]> cells;
+    readonly Func<float, float, float> _terrain;
+    Func<Func<float, float, float>>? _slopeTerrain;
+    Func<IReadOnlyList<Vector2[]>>? _obstacles;
+    readonly Lazy<ushort[]> _cells;
     // Bit k of a cell: the step in direction k crosses a building's footprint (filled with the grid). The player's buildings have their own layer,
     // replaced whole when they change (empty: none).
-    byte[] crossings = [];
-    volatile byte[] playerCrossings = [];
+    byte[] _crossings = [];
+    volatile byte[] _playerCrossings = [];
 
     /// <summary>Sets the player's buildings (footprints as for the constructor's obstacles), replacing the last set; the next search sees them.</summary>
-    public void SetPlayerObstacles(IReadOnlyList<Vector2[]> hulls) => playerCrossings = hulls.Count == 0 ? [] : Crossings(hulls);
-    readonly object searchLock = new();
-    float[]? g;
-    int[]? parent, stamp;
-    int generation;
+    public void SetPlayerObstacles(IReadOnlyList<Vector2[]> hulls) => _playerCrossings = hulls.Count == 0 ? [] : Crossings(hulls);
+    readonly object _searchLock = new();
+    float[]? _g;
+    int[]? _parent, _stamp;
+    int _generation;
 
     /// <param name="terrainHeight">Heights of the route's points; must be safe from any thread.</param>
     /// <param name="slopeTerrain">
@@ -60,14 +60,14 @@ public sealed class CoarseRoute
     /// <param name="obstacles">Makes the building footprints (world X/Z polygons, convex) the grid is built with (once, then dropped). Null: none.</param>
     public CoarseRoute(Func<float, float, float> terrainHeight, Func<Func<float, float, float>>? slopeTerrain = null, Func<IReadOnlyList<Vector2[]>>? obstacles = null)
     {
-        terrain = terrainHeight;
-        this.slopeTerrain = slopeTerrain;
-        this.obstacles = obstacles;
-        cells = new Lazy<ushort[]>(Build, LazyThreadSafetyMode.ExecutionAndPublication);
+        _terrain = terrainHeight;
+        this._slopeTerrain = slopeTerrain;
+        this._obstacles = obstacles;
+        _cells = new Lazy<ushort[]>(Build, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>Builds the grid now (it is otherwise built by the first <see cref="Find"/>, which then holds every path thread asking meanwhile: ~3 s).</summary>
-    public void Warm() => _ = cells.Value;
+    public void Warm() => _ = _cells.Value;
 
     static float Origin => -WorldLayout.HalfWorldSize;
     static int CellOf(float v) => Math.Clamp((int)MathF.Floor((v - Origin) / Cell), 0, Side - 1);
@@ -75,8 +75,8 @@ public sealed class CoarseRoute
 
     ushort[] Build()
     {
-        var height = slopeTerrain?.Invoke() ?? terrain;
-        slopeTerrain = null;
+        var height = _slopeTerrain?.Invoke() ?? _terrain;
+        _slopeTerrain = null;
         var result = new ushort[Side * Side];
         float rise = MathF.Tan(MaxSlopeDegrees * MathF.PI / 180) * SlopeStep;
         Parallel.For(0, Side, z =>
@@ -109,8 +109,8 @@ public sealed class CoarseRoute
                 }
         for (int z = 0; z < Side; z++)
             for (int x = 0; x < Side; x++) result[z * Side + x] |= Border(x, z);
-        crossings = Crossings(obstacles?.Invoke() ?? []);
-        obstacles = null;
+        _crossings = Crossings(_obstacles?.Invoke() ?? []);
+        _obstacles = null;
         return result;
     }
 
@@ -142,14 +142,14 @@ public sealed class CoarseRoute
 
     // The level data's crossings with the player's layer on top (a copy only while the player has buildings), cached per pair of arrays.
     sealed record Layers(byte[] Static, byte[] Player, byte[] Both);
-    volatile Layers? combined;
+    volatile Layers? _combined;
     byte[] Combined(byte[] level, byte[] player)
     {
         if (player.Length == 0) return level;
-        if (combined is { } c && ReferenceEquals(c.Static, level) && ReferenceEquals(c.Player, player)) return c.Both;
+        if (_combined is { } c && ReferenceEquals(c.Static, level) && ReferenceEquals(c.Player, player)) return c.Both;
         var both = level.Length == 0 ? new byte[Side * Side] : (byte[])level.Clone();
         for (int i = 0; i < both.Length; i++) both[i] |= player[i];
-        combined = new Layers(level, player, both);
+        _combined = new Layers(level, player, both);
         return both;
     }
 
@@ -207,21 +207,21 @@ public sealed class CoarseRoute
 
     List<Vector3> Find(Vector3 from, Vector3 to, WaterCost water, bool slopes)
     {
-        var map = cells.Value;
-        var crossing = Combined(crossings, playerCrossings);
+        var map = _cells.Value;
+        var crossing = Combined(_crossings, _playerCrossings);
         int sx = CellOf(from.X), sz = CellOf(from.Z), gx = CellOf(to.X), gz = CellOf(to.Z);
         int start = sz * Side + sx, goal = gz * Side + gx;
         // By wet state 1..3, never below dry ground.
         Span<float> waterCost = [1, MathF.Max(1, water[1]), MathF.Max(1, water[2]), MathF.Max(1, water[3])];
         List<int> cellsOnRoute;
-        lock (searchLock)
+        lock (_searchLock)
         {
-            g ??= new float[Side * Side];
-            parent ??= new int[Side * Side];
-            stamp ??= new int[Side * Side];
-            if (++generation == int.MaxValue) { Array.Clear(stamp); generation = 1; }
+            _g ??= new float[Side * Side];
+            _parent ??= new int[Side * Side];
+            _stamp ??= new int[Side * Side];
+            if (++_generation == int.MaxValue) { Array.Clear(_stamp); _generation = 1; }
             var open = new PriorityQueue<int, float>();
-            g[start] = 0; parent[start] = -1; stamp[start] = generation;
+            _g[start] = 0; _parent[start] = -1; _stamp[start] = _generation;
             open.Enqueue(start, 0);
             int expanded = 0;
             bool found = false;
@@ -229,7 +229,7 @@ public sealed class CoarseRoute
             {
                 if (cell == goal) { found = true; break; }
                 int cx = cell % Side, cz = cell / Side;
-                float gc = g[cell];
+                float gc = _g[cell];
                 if (f > gc + HeuristicWeight * Heuristic(cx, cz, gx, gz) + 1e-3f) continue;   // a stale entry
                 if (++expanded > MaxExpanded) break;
                 SafePoint.Every(expanded);
@@ -245,14 +245,14 @@ public sealed class CoarseRoute
                     float cost = step * 0.5f * (waterCost[(flags >> WetShift) & 3] + waterCost[(map[next] >> WetShift) & 3]);
                     if ((crossing[cell] & (1 << k)) != 0) cost *= BuildingCost;
                     float gn = gc + cost;
-                    if (stamp[next] == generation && gn >= g[next]) continue;
-                    stamp[next] = generation; g[next] = gn; parent[next] = cell;
+                    if (_stamp[next] == _generation && gn >= _g[next]) continue;
+                    _stamp[next] = _generation; _g[next] = gn; _parent[next] = cell;
                     open.Enqueue(next, gn + HeuristicWeight * Heuristic(cx + dx, cz + dz, gx, gz));
                 }
             }
             if (!found) return [];
             cellsOnRoute = [];
-            for (int c = goal; c >= 0; c = parent[c]) cellsOnRoute.Add(c);
+            for (int c = goal; c >= 0; c = _parent[c]) cellsOnRoute.Add(c);
         }
         cellsOnRoute.Reverse();
 
@@ -263,7 +263,7 @@ public sealed class CoarseRoute
             int a = cellsOnRoute[i - 1], b = cellsOnRoute[i], c = cellsOnRoute[i + 1];
             if (b - a == c - b) continue;
             var centre = Centre(b % Side, b / Side);
-            route.Add(new Vector3(centre.X, MathF.Max(terrain(centre.X, centre.Y), WorldWater.Height), centre.Y));
+            route.Add(new Vector3(centre.X, MathF.Max(_terrain(centre.X, centre.Y), WorldWater.Height), centre.Y));
         }
         route.Add(to);
         return Smooth(route, slopes ? map : null, crossing);

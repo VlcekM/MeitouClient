@@ -77,7 +77,7 @@ public sealed class BuildServices
     public required Func<IReadOnlyList<PlacementTown>> Towns { get; init; }
     public required Func<string> PlayerFactionId { get; init; }
     /// <summary>What the panel shows of a level-data building: its name, type, town, owner faction and public flags.</summary>
-    public Func<Meitou.Data.World.BuildingPlacement, WorldBuildingInfo> WorldInfo { get; init; } = p => new(p.BuildingId, null, null, null);
+    public Func<BuildingPlacement, WorldBuildingInfo> WorldInfo { get; init; } = p => new(p.BuildingId, null, null, null);
     /// <summary>Hands the renderer the ghosts to draw this frame (empty: none).</summary>
     public required Action<IReadOnlyList<WorldObjectRenderer.GhostDraw>> DrawGhosts { get; init; }
 }

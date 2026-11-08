@@ -44,22 +44,22 @@ public sealed class ItemSlots
         public int Made;
     }
 
-    readonly List<Slot> all = [];
-    readonly HashSet<int> sites = [];
-    readonly Dictionary<string, ItemPlacementGroup?> groups = new(StringComparer.Ordinal);
-    readonly HashSet<int> lying = [];
-    long seenRevision = -1;
+    readonly List<Slot> _all = [];
+    readonly HashSet<int> _sites = [];
+    readonly Dictionary<string, ItemPlacementGroup?> _groups = new(StringComparer.Ordinal);
+    readonly HashSet<int> _lying = [];
+    long _seenRevision = -1;
 
-    public int Count => all.Count;
+    public int Count => _all.Count;
     /// <summary>How many slots hold an item.</summary>
-    public int Filled => all.Count(s => s.Item >= 0);
+    public int Filled => _all.Count(s => s.Item >= 0);
 
     /// <summary>How many item slots the building with run-time name <paramref name="buildingKey"/> has and how many hold an item.</summary>
     public (int Total, int Filled) OfBuilding(string buildingKey)
     {
         string prefix = buildingKey + "/item";
         int total = 0, filled = 0;
-        foreach (var s in all)
+        foreach (var s in _all)
             if (s.Id.StartsWith(prefix, StringComparison.Ordinal)) { total++; if (s.Item >= 0) filled++; }
         return (total, filled);
     }
@@ -67,7 +67,7 @@ public sealed class ItemSlots
     /// <summary>Registers the slots of a town's buildings once, binding the loaded items lying in them.</summary>
     public void RegisterSite(World world, PopulationData data, int site)
     {
-        if (site < 0 || site >= data.Sites.Count || !sites.Add(site)) return;
+        if (site < 0 || site >= data.Sites.Count || !_sites.Add(site)) return;
         foreach (var b in data.Sites[site].Buildings) AddBuilding(world, data, site, b);
     }
 
@@ -77,7 +77,7 @@ public sealed class ItemSlots
     /// </summary>
     public void RelayBuilding(World world, PopulationData data, int site, TownBuilding old, TownBuilding relaid)
     {
-        if (!sites.Contains(site)) return;
+        if (!_sites.Contains(site)) return;
         EmptyBuilding(world, old);
         AddBuilding(world, data, site, relaid);
     }
@@ -85,7 +85,7 @@ public sealed class ItemSlots
     /// <summary>A building added to a registered town while the world runs (<see cref="TownEdits.Place"/>): its slots, as <see cref="RegisterSite"/> makes a loaded one's. A town not registered yet takes them when it is.</summary>
     internal void PlaceBuilding(World world, PopulationData data, int site, TownBuilding b)
     {
-        if (sites.Contains(site)) AddBuilding(world, data, site, b);
+        if (_sites.Contains(site)) AddBuilding(world, data, site, b);
     }
 
     /// <summary>A building taken out of a town (<see cref="TownEdits.Clear"/>): its slots go; the items lying in them stay on the ground.</summary>
@@ -93,13 +93,13 @@ public sealed class ItemSlots
     {
         if (b.ItemSlots.Count == 0) return;
         var ids = b.ItemSlots.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
-        all.RemoveAll(s => ids.Contains(s.Id));
+        _all.RemoveAll(s => ids.Contains(s.Id));
     }
 
     void AddBuilding(World world, PopulationData data, int site, TownBuilding b)
     {
         if (b.ItemSlots.Count == 0 || world.Fixtures.IsEmptied(b.Key)   // a bought house has none (EmptyBuilding)
-            || all.Any(s => s.Id.StartsWith(b.Key + "/item", StringComparison.Ordinal))) return;
+            || _all.Any(s => s.Id.StartsWith(b.Key + "/item", StringComparison.Ordinal))) return;
         int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
         int owner = data.LevelOwnerOf(b, townFaction);
         owner = world.Fixtures.PropertyOwner(b.Key) ?? owner;
@@ -108,7 +108,11 @@ public sealed class ItemSlots
             if (Group(data.Db, s.GroupId) is not { } group) continue;
             var slot = new Slot
             {
-                Id = s.Id, GroupId = s.GroupId, Position = s.Position, Yaw = TownBuildings.YawOf(s.Rotation), Owner = owner,
+                Id = s.Id,
+                GroupId = s.GroupId,
+                Position = s.Position,
+                Yaw = TownBuildings.YawOf(s.Rotation),
+                Owner = owner,
                 Zone = WorldLayout.ZoneOf(s.Position.X, s.Position.Z),
             };
             if (Lying(world, slot, group) is { } found)
@@ -116,7 +120,7 @@ public sealed class ItemSlots
                 world.GroundItems.Claim(found, slot.Id, owner);
                 slot.Item = found;
             }
-            all.Add(slot);
+            _all.Add(slot);
         }
     }
 
@@ -127,16 +131,16 @@ public sealed class ItemSlots
     public void EmptyBuilding(World world, TownBuilding building)
     {
         var ids = building.ItemSlots.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
-        foreach (var slot in all)
+        foreach (var slot in _all)
             if (ids.Contains(slot.Id) && slot.Item >= 0) world.GroundItems.Take(slot.Item);
-        all.RemoveAll(s => ids.Contains(s.Id));
+        _all.RemoveAll(s => ids.Contains(s.Id));
     }
 
     /// <summary>A building's slots and the items lying in them take <paramref name="owner"/>, including later refills (a town override hands the town's buildings back).</summary>
     public void TransferBuilding(World world, TownBuilding building, int owner)
     {
         var ids = building.ItemSlots.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
-        foreach (var slot in all)
+        foreach (var slot in _all)
         {
             if (!ids.Contains(slot.Id)) continue;
             slot.Owner = owner;
@@ -157,36 +161,36 @@ public sealed class ItemSlots
 
     ItemPlacementGroup? Group(GameDatabase db, string id)
     {
-        if (!groups.TryGetValue(id, out var group))
-            groups[id] = group = db.Find(id) is { Type: FcsRecordType.ITEM_PLACEMENT_GROUP } r && ItemPlacementGroup.From(db, r) is { Items.Entries.Count: > 0 } g ? g : null;
+        if (!_groups.TryGetValue(id, out var group))
+            _groups[id] = group = db.Find(id) is { Type: FcsRecordType.ItemPlacementGroup } r && ItemPlacementGroup.From(db, r) is { Items.Entries.Count: > 0 } g ? g : null;
         return group;
     }
 
     /// <summary>The slots of a zone start again: empty and due (a replaced town's zone, whose ITEM_PLACEMENT_GROUP states the original drops). Their items are the caller's to remove.</summary>
     public void ResetZone(ZoneCoordinate zone)
     {
-        foreach (var s in all)
+        foreach (var s in _all)
             if (s.Zone == zone) (s.Item, s.DueAt) = (-1, double.MinValue);
     }
 
     /// <summary>Empties the slots whose item left the ground and fills the due ones in active zones.</summary>
     public void Step(World world, PopulationData data)
     {
-        if (all.Count == 0 || world.ActiveZones is not { } active) return;
-        if (seenRevision != world.GroundItems.Revision)
+        if (_all.Count == 0 || world.ActiveZones is not { } active) return;
+        if (_seenRevision != world.GroundItems.Revision)
         {
-            lying.Clear();
-            foreach (var g in world.GroundItems.All) if (g.Slot is not null) lying.Add(g.Id);
-            foreach (var s in all)
+            _lying.Clear();
+            foreach (var g in world.GroundItems.All) if (g.Slot is not null) _lying.Add(g.Id);
+            foreach (var s in _all)
             {
-                if (s.Item < 0 || lying.Contains(s.Item)) continue;
+                if (s.Item < 0 || _lying.Contains(s.Item)) continue;
                 s.Item = -1;
                 s.DueAt = NextDue(world, Group(data.Db, s.GroupId)!, s);
             }
         }
-        foreach (var s in all)
+        foreach (var s in _all)
             if (s.Item < 0 && world.GameHours >= s.DueAt && active.Contains(s.Zone)) Fill(world, data, s);
-        seenRevision = world.GroundItems.Revision;
+        _seenRevision = world.GroundItems.Revision;
     }
 
     /// <summary>When an emptied slot is due again: now plus a whole number of hours in the group's [min, max] respawn hours (<c>FUN_140549e60</c>).</summary>
@@ -200,8 +204,8 @@ public sealed class ItemSlots
     /// The item types a slot keeps while they lie in it (<c>FUN_140549e60</c>, <b>Verified</b>): ITEM, WEAPON, ARMOUR, CONTAINER, NEST_ITEM, MAP_ITEM, CROSSBOW, LIMB_REPLACEMENT.
     /// Any other (a BLUEPRINT) is let go at once: the slot is due again after the respawn time whether or not the item still lies there.
     /// </summary>
-    static bool Kept(FcsRecordType type) => type is FcsRecordType.ITEM or FcsRecordType.WEAPON or FcsRecordType.ARMOUR or FcsRecordType.CONTAINER or FcsRecordType.NEST_ITEM
-        or FcsRecordType.MAP_ITEM or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT;
+    static bool Kept(FcsRecordType type) => type is FcsRecordType.Item or FcsRecordType.Weapon or FcsRecordType.Armour or FcsRecordType.Container or FcsRecordType.NestItem
+        or FcsRecordType.MapItem or FcsRecordType.Crossbow or FcsRecordType.LimbReplacement;
 
     void Fill(World world, PopulationData data, Slot s)
     {
@@ -226,15 +230,15 @@ public sealed class ItemSlots
     /// One item of an item list as the original's pick makes it (<c>FUN_1409540d0</c>): a weighted entry, the grade's quality for armour (from <paramref name="owner"/>'s faction), a
     /// weapon's manufacturer and model. Null (with the entry's type) when the data cannot make it, or a weapon has no usable manufacturer (<c>NoMaker</c>).
     /// </summary>
-    public static (ItemInstance? Item, FcsRecordType Type, bool NoMaker) Roll(PopulationData data, Meitou.Data.Gameplay.Economy.VendorList list, int owner, ref RandomStream rng)
+    public static (ItemInstance? Item, FcsRecordType Type, bool NoMaker) Roll(PopulationData data, VendorList list, int owner, ref RandomStream rng)
     {
         var entry = list.Entries.Count == 1 ? list.Entries[0] : ShopFiller.Pick(list.Entries, ref rng);   // FUN_1409540d0: one entry is taken with no draw
         var faction = (uint)owner < (uint)data.Factions.Count ? data.Db.Find(data.Factions[owner].Id) : null;
         // The original hands every pick the grade's quality (FUN_140580750, Verified): it becomes the level of armour, crossbows and limbs; what it does to a plain ITEM is Unknown (none here).
         float quality = CharacterGenerator.QualityOfGrade(ShopFiller.Grade(faction, ref rng));
-        if (entry.Type is not (FcsRecordType.ARMOUR or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT)) quality = 0;
+        if (entry.Type is not (FcsRecordType.Armour or FcsRecordType.Crossbow or FcsRecordType.LimbReplacement)) quality = 0;
         if (data.Items.Create(entry.Id, 1, quality) is not { } item) return (null, entry.Type, false);
-        if (entry.Type != FcsRecordType.WEAPON) return (item, entry.Type, false);
+        if (entry.Type != FcsRecordType.Weapon) return (item, entry.Type, false);
         if (ShopFiller.Maker(list, data.Db, ref rng) is not { } made) return (null, entry.Type, true);
         item.CompanyId = made.Maker.StringId;
         item.MaterialId = made.Model ?? "";
@@ -244,8 +248,8 @@ public sealed class ItemSlots
 
     public void Hash(ref StateHasher h)
     {
-        h.Add(all.Count);
-        foreach (var s in all)
+        h.Add(_all.Count);
+        foreach (var s in _all)
         {
             h.Add(s.Item);
             h.Add(s.DueAt);

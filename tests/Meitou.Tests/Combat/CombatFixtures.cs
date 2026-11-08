@@ -11,8 +11,8 @@ static class CombatFixtures
     public static CombatConstants Constants { get; } = CombatConstants.BaseGame;
 
     /// <summary>The senses a fight reads (target choice, threats; docs/game/perception.md "Senses"): the look without attacks on sight, as the standard systems add it without the Aggro part.</summary>
-    public static Meitou.Simulation.Aggro.AggroSystem Senses(Meitou.Simulation.Combat.CombatSystem combat) =>
-        new(combat.Relations ?? Meitou.Data.Gameplay.FactionRelations.Build([]), new Meitou.Simulation.Aggro.AggroSettings { AttackOnSight = false }) { Combat = combat };
+    public static Meitou.Simulation.Aggro.AggroSystem Senses(CombatSystem combat) =>
+        new(combat.Relations ?? FactionRelations.Build([]), new Meitou.Simulation.Aggro.AggroSettings { AttackOnSight = false }) { Combat = combat };
 
     /// <summary>WEAPON "Katana" (476-gamedata.base) as dumped from the base game: cut 1, blunt 0, penetration -0.3, bleed 1.2, human 1.1, robot 0.6, attack +4, defence -4, length 21, 2 kg.</summary>
     public static WeaponData Katana { get; } = new()

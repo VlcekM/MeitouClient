@@ -12,9 +12,9 @@ namespace Meitou.Reports;
 /// </summary>
 sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAuth> log)
 {
-    readonly SemaphoreSlim gate = new(1, 1);
-    string? token;
-    DateTimeOffset expires;
+    readonly SemaphoreSlim _gate = new(1, 1);
+    string? _token;
+    DateTimeOffset _expires;
 
     public bool Configured => config.GithubAppId is not null && config.GithubAppKey is not null || config.GithubToken is not null;
 
@@ -22,10 +22,10 @@ sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAu
     public async Task<string?> Token()
     {
         if (config.GithubAppId is not { } appId || config.GithubAppKey is not { } key) return config.GithubToken;
-        await gate.WaitAsync();
+        await _gate.WaitAsync();
         try
         {
-            if (token is not null && DateTimeOffset.UtcNow < expires.AddMinutes(-5)) return token;
+            if (_token is not null && DateTimeOffset.UtcNow < _expires.AddMinutes(-5)) return _token;
             string jwt;
             try { jwt = Jwt(appId, key); }
             catch (Exception e) when (e is CryptographicException or ArgumentException)
@@ -37,11 +37,11 @@ sealed class GithubAuth(Config config, IHttpClientFactory http, ILogger<GithubAu
             if (installation?["id"] is not { } id) return null;
             var created = await Send(HttpMethod.Post, $"https://api.github.com/app/installations/{(long)id}/access_tokens", jwt);
             if (created?["token"] is not { } t || created["expires_at"] is not { } at) return null;
-            token = (string)t!;
-            expires = DateTimeOffset.Parse((string)at!, System.Globalization.CultureInfo.InvariantCulture);
-            return token;
+            _token = (string)t!;
+            _expires = DateTimeOffset.Parse((string)at!, System.Globalization.CultureInfo.InvariantCulture);
+            return _token;
         }
-        finally { gate.Release(); }
+        finally { _gate.Release(); }
     }
 
     async Task<JsonNode?> Send(HttpMethod method, string url, string jwt)

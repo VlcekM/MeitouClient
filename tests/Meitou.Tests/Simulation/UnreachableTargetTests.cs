@@ -67,7 +67,7 @@ public class UnreachableTargetTests
     public void A_reachable_target_is_still_chased()
     {
         var (world, _, a, b) = Rig(false, false);
-        using var _w = world;
+        using var w = world;
         world.RunTicks((int)(5 / world.TickSeconds));
         Assert.False(PursuitSystem.PathImpossible(world.Characters.Cold(a.Slot)!, b, world.Tick));
         Assert.True(world.Characters.Previous[a.Slot].Position.X > 1050, "walked towards the target");

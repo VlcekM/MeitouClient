@@ -23,13 +23,13 @@ public sealed class NavGateRegions : IGateRegions
 
     public static readonly NavGateRegions Empty = new(NavWorld.Empty, [], []);
 
-    readonly NavWorld world;
-    readonly Dictionary<long, int> codes;
+    readonly NavWorld _world;
+    readonly Dictionary<long, int> _codes;
 
     NavGateRegions(NavWorld world, Dictionary<long, int> codes, IReadOnlyList<GateLink> gates)
     {
-        this.world = world;
-        this.codes = codes;
+        this._world = world;
+        this._codes = codes;
         Gates = gates;
     }
 
@@ -38,7 +38,7 @@ public sealed class NavGateRegions : IGateRegions
     /// <summary>The number of walled regions (codes 1..n).</summary>
     public int RegionCount { get; private init; }
 
-    public int CodeAt(Vector3 at) => world.TryFindPolygon(at, FindDistance, out var p, out _) ? codes.GetValueOrDefault(p.Key) : -1;
+    public int CodeAt(Vector3 at) => _world.TryFindPolygon(at, FindDistance, out var p, out _) ? _codes.GetValueOrDefault(p.Key) : -1;
 
     /// <summary>Labels <paramref name="world"/>; <paramref name="isGate"/> tells which door owners (building instance ids) are gates.</summary>
     public static NavGateRegions Label(NavWorld world, Func<string, bool> isGate)

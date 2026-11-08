@@ -14,7 +14,7 @@ public static class LosslessUtf8
         var sb = new StringBuilder(bytes.Length);
         while (!bytes.IsEmpty)
         {
-            if (System.Text.Rune.DecodeFromUtf8(bytes, out var rune, out int used) == System.Buffers.OperationStatus.Done)
+            if (Rune.DecodeFromUtf8(bytes, out var rune, out int used) == System.Buffers.OperationStatus.Done)
             {
                 sb.Append(rune.ToString());
                 bytes = bytes[used..];
@@ -42,13 +42,13 @@ public static class LosslessUtf8
             }
             if (char.IsHighSurrogate(c) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
             {
-                int n = new System.Text.Rune(c, s[i + 1]).EncodeToUtf8(buffer);
+                int n = new Rune(c, s[i + 1]).EncodeToUtf8(buffer);
                 for (int k = 0; k < n; k++) bytes.Add(buffer[k]);
                 i++;
                 continue;
             }
             if (char.IsSurrogate(c)) throw new ArgumentException("A lone surrogate other than an escaped byte cannot be written.", nameof(s));
-            int len = new System.Text.Rune(c).EncodeToUtf8(buffer);
+            int len = new Rune(c).EncodeToUtf8(buffer);
             for (int k = 0; k < len; k++) bytes.Add(buffer[k]);
         }
         return [.. bytes];

@@ -35,7 +35,7 @@ public static class OrderSave
     {
         foreach (var key in ai.Ints.Keys.Where(k => k.StartsWith(Type, StringComparison.Ordinal) || k.StartsWith(MeitouSite, StringComparison.Ordinal)).ToList()) ai.Ints.Remove(key);
         foreach (var key in ai.Strings.Keys.Where(k => k.StartsWith(MeitouSite, StringComparison.Ordinal)).ToList()) ai.Strings.Remove(key);
-        foreach (var key in ai.Vector3s.Keys.Where(k => k.StartsWith(Point, StringComparison.Ordinal)).ToList()) ai.Vector3s.Remove(key);
+        foreach (var key in ai.Vector3S.Keys.Where(k => k.StartsWith(Point, StringComparison.Ordinal)).ToList()) ai.Vector3S.Remove(key);
         int i = 0;
         if (cold.SavedOrders is { } pending)
         {
@@ -59,14 +59,14 @@ public static class OrderSave
     static void Put(FcsRecord ai, int i, TaskType row, Vector3 point, Hand hand, string? site, int kind)
     {
         ai.Ints[Type + i] = (int)row;
-        ai.Vector3s[Point + i] = point;
+        ai.Vector3S[Point + i] = point;
         hand.Write(ai, Target + i);
         if (site is not null) ai.Strings[MeitouSite + i] = site;
         if (kind != 0) ai.Ints[MeitouKind + i] = kind;
     }
 
     /// <summary>The row as the original numbers it: the Sleep order is 258 <c>USE_BED_ORDER</c> (Meitou's row 98 is the task it starts); the other rows are the same.</summary>
-    static TaskType SavedRow(TaskType row) => row == TaskType.USE_BED ? TaskType.USE_BED_ORDER : row;
+    static TaskType SavedRow(TaskType row) => row == TaskType.UseBed ? TaskType.UseBedOrder : row;
 
     /// <summary>The handle of the building a site or fixture is, when it is the building itself (a bed the player built too) and the save holds its state; else the null handle (the site id names it).</summary>
     static Hand SiteHand(World world, string id, IReadOnlyDictionary<string, FcsRecord> buildings)
@@ -87,13 +87,13 @@ public static class OrderSave
         for (int i = 0; ai.Ints.TryGetValue(Type + i, out int row); i++)
         {
             var hand = Hand.Read(ai, Target + i);
-            var point = ai.Vector3s.GetValueOrDefault(Point + i);
+            var point = ai.Vector3S.GetValueOrDefault(Point + i);
             string? site = ai.Strings.TryGetValue(MeitouSite + i, out var id) && id.Length > 0 ? id : null;
             string? key = null;
             bool lost = false;
-            if (site is null && !hand.IsNull && hand.Type != (int)FcsRecordType.CHARACTER)
+            if (site is null && !hand.IsNull && hand.Type != (int)FcsRecordType.Character)
             {
-                if (hand.Type == (int)FcsRecordType.BUILDING && handles.Building(hand) is { } b && instanceOf.TryGetValue(b, out var instance)) key = instance;
+                if (hand.Type == (int)FcsRecordType.Building && handles.Building(hand) is { } b && instanceOf.TryGetValue(b, out var instance)) key = instance;
                 else lost = true;
             }
             (orders ??= []).Add(new SavedOrder((TaskType)row, point, hand, site, key, ai.Ints.GetValueOrDefault(MeitouKind + i), lost));
@@ -114,10 +114,10 @@ public static class OrderSave
         var self = table.IdOf(slot);
         foreach (var o in saved)
         {
-            var row = o.Row == TaskType.USE_BED_ORDER ? TaskType.USE_BED : o.Row;
+            var row = o.Row == TaskType.UseBedOrder ? TaskType.UseBed : o.Row;
             if (o.Lost || world.OrderOwnerOf(row) is not { } owner) continue;
             var target = CharacterId.None;
-            if (o is { Hand: { IsNull: false, Type: (int)FcsRecordType.CHARACTER } } && (target = Find(table, o.Hand)).IsNone) continue;
+            if (o is { Hand: { IsNull: false, Type: (int)FcsRecordType.Character } } && (target = Find(table, o.Hand)).IsNone) continue;
             string? site = null;
             if ((o.Site ?? o.InstanceKey) is not null && (site = SiteOf(world, o)) is null) continue;
             cold.OrderQueue.Add(new OrderEntry(row, owner) { Target = target, Site = site, Point = o.Point, Detail = owner.LoadDetail(world, self, row, o.Kind, target) });

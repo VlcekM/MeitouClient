@@ -65,7 +65,8 @@ public sealed class AppearanceLimits
                     int min = Int(e, "min", 0), max = Int(e, "max", 0);
                     limits.Ranges.Add(new AppearanceRange(name, cat, min, max, Mid(e, min, max), group, Variation(e, min, max, defaultDeviation))
                     {
-                        Target = NonEmpty((string?)e.Attribute("target")), TargetOpposite = NonEmpty((string?)e.Attribute("target_opposite")),
+                        Target = NonEmpty((string?)e.Attribute("target")),
+                        TargetOpposite = NonEmpty((string?)e.Attribute("target_opposite")),
                     });
                 }
                 else if (e.Name.LocalName == "ColourRange")

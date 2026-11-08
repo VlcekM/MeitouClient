@@ -25,26 +25,26 @@ sealed class SkinScattering : IDisposable
         (7.41f, 0.078f, 0.0f, 0.0f),
     ];
 
-    readonly IGpuContext gpu;
-    readonly GpuTexture texture;
+    readonly IGpuContext _gpu;
+    readonly GpuTexture _texture;
 
     /// <summary>The table's index in the bindless 2D array.</summary>
     public uint Index { get; }
 
     public SkinScattering(IGpuContext gpu)
     {
-        this.gpu = gpu;
+        this._gpu = gpu;
         var texels = Bake();
         var data = new Half[texels.Length];
         for (int i = 0; i < texels.Length; i++) data[i] = (Half)texels[i];
         using (var batch = gpu.Uploads.Begin())
         {
-            texture = batch.Create(new TextureDesc(InternalFormat.Rgba16f, Width, Height, Name: "skin scattering"));
-            batch.Write(texture, 0, 0, new PixelRect(0, 0, Width, Height), System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.AsSpan()));
+            _texture = batch.Create(new TextureDesc(InternalFormat.Rgba16F, Width, Height, Name: "skin scattering"));
+            batch.Write(_texture, 0, 0, new PixelRect(0, 0, Width, Height), System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.AsSpan()));
         }
         var sampler = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
-        Index = gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, texture.View()));
+        Index = gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, _texture.View()));
     }
 
     /// <summary>
@@ -100,7 +100,7 @@ sealed class SkinScattering : IDisposable
 
     public void Dispose()
     {
-        gpu.Bindless.Free(BindlessKind.Texture2D, Index);
-        texture.Dispose();
+        _gpu.Bindless.Free(BindlessKind.Texture2D, Index);
+        _texture.Dispose();
     }
 }

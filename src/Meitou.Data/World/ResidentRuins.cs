@@ -29,9 +29,9 @@ public static class ResidentRuins
             int ruined = 0;
             foreach (var placement in levels.Towns())
             {
-                if (!buildings.TryGetValue(placement.InstanceId, out var list) || db.Find(placement.TownId) is not { Type: Fcs.FcsRecordType.TOWN } record) continue;
+                if (!buildings.TryGetValue(placement.InstanceId, out var list) || db.Find(placement.TownId) is not { Type: Fcs.FcsRecordType.Town } record) continue;
                 var town = TownData.From(record);
-                var faction = town.Faction is { } id && db.Find(id) is { Type: Fcs.FcsRecordType.FACTION } f ? FactionData.From(f) : null;
+                var faction = town.Faction is { } id && db.Find(id) is { Type: Fcs.FcsRecordType.Faction } f ? FactionData.From(f) : null;
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
                 {
                     if (t.BuildingRuined && Ruin(db, levels, b)) ruined++;

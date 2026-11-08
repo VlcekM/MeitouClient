@@ -13,14 +13,14 @@ namespace Meitou.Simulation.Bodies;
 /// </summary>
 public sealed class BodyFactory(GameDatabase db)
 {
-    readonly ConcurrentDictionary<string, RaceData> races = new();
+    readonly ConcurrentDictionary<string, RaceData> _races = new();
 
     public GameDatabase Db { get; } = db;
     public GameConstants Constants { get; } = GameConstants.FromDatabase(db);
     public BodyOptions Options { get; init; } = BodyOptions.Default;
 
     /// <summary>The data of a RACE record (cached).</summary>
-    public RaceData Race(GameRecord race) => races.GetOrAdd(race.StringId, _ => RaceData.From(race, Db));
+    public RaceData Race(GameRecord race) => _races.GetOrAdd(race.StringId, _ => RaceData.From(race, Db));
 
     /// <summary>
     /// The stats and the medical state of a character of <paramref name="race"/>, made from the CHARACTER record <paramref name="character"/> (null: defaults). An ANIMAL_CHARACTER

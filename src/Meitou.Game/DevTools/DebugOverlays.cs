@@ -14,19 +14,19 @@ sealed class DebugOverlays(GameHost host)
 {
     // The character boxes (Meitou only; a checkbox on the F11 statistics' characters line, and the F10 Overlays row "Character boxes", one shared switch) that outline, over everything, each character its "drawn" count
     // counts (CharacterRenderer.CountedBoxes: in the colour view's frustum and not hidden by fog, whether or not anything covers it).
-    internal bool characterBoxes;
+    internal bool CharacterBoxes;
     // Where the checkboxes were drawn last (x0, y0, x1, y1), null while the statistics are hidden.
-    internal Vector4? characterBoxesToggle, walkPathsToggle;
-    internal readonly List<(string Line, Vector4 Rect)> statsLaidOut = [];
-    readonly List<Vector4> countedBoxes = [];
+    internal Vector4? CharacterBoxesToggle, WalkPathsToggle;
+    internal readonly List<(string Line, Vector4 Rect)> StatsLaidOut = [];
+    readonly List<Vector4> _countedBoxes = [];
 
     static readonly Vector4 CharacterBoxColour = new(1f, 0.85f, 0.2f, 0.9f);
 
     /// <summary>Ticks the statistics' checkboxes as their switches stand (the lines are built once a second).</summary>
     internal void TickStatsToggles(List<string> stats)
     {
-        TickStatsToggle(stats, characterBoxes, WorldStats.CharacterBoxesOff, WorldStats.CharacterBoxesOn);
-        TickStatsToggle(stats, walkPaths, WorldStats.PathsOff, WorldStats.PathsOn);
+        TickStatsToggle(stats, CharacterBoxes, WorldStats.CharacterBoxesOff, WorldStats.CharacterBoxesOn);
+        TickStatsToggle(stats, WalkPaths, WorldStats.PathsOff, WorldStats.PathsOn);
     }
 
     static void TickStatsToggle(List<string> stats, bool on, string off, string ticked)
@@ -40,14 +40,14 @@ sealed class DebugOverlays(GameHost host)
     /// <summary>Where the checkboxes are in the panel just drawn (from its laid-out lines).</summary>
     internal void FindStatsToggles(float charWidth)
     {
-        characterBoxesToggle = FindStatsToggle(characterBoxes ? WorldStats.CharacterBoxesOn : WorldStats.CharacterBoxesOff, charWidth);
-        walkPathsToggle = FindStatsToggle(walkPaths ? WorldStats.PathsOn : WorldStats.PathsOff, charWidth);
+        CharacterBoxesToggle = FindStatsToggle(CharacterBoxes ? WorldStats.CharacterBoxesOn : WorldStats.CharacterBoxesOff, charWidth);
+        WalkPathsToggle = FindStatsToggle(WalkPaths ? WorldStats.PathsOn : WorldStats.PathsOff, charWidth);
     }
 
     /// <summary>A checkbox's rectangle in the panel just drawn, or null when it is not there.</summary>
     Vector4? FindStatsToggle(string marker, float charWidth)
     {
-        foreach (var (line, rect) in statsLaidOut)
+        foreach (var (line, rect) in StatsLaidOut)
         {
             int at = line.IndexOf(marker, StringComparison.Ordinal);
             if (at < 0) continue;
@@ -60,8 +60,8 @@ sealed class DebugOverlays(GameHost host)
     /// <summary>A left click on a checkbox flips its switch; true when one took the click.</summary>
     internal bool StatsToggleClick(Vector2 at)
     {
-        if (Inside(characterBoxesToggle, at)) { characterBoxes = !characterBoxes; return true; }
-        if (Inside(walkPathsToggle, at)) { walkPaths = !walkPaths; return true; }
+        if (Inside(CharacterBoxesToggle, at)) { CharacterBoxes = !CharacterBoxes; return true; }
+        if (Inside(WalkPathsToggle, at)) { WalkPaths = !WalkPaths; return true; }
         return false;
     }
 
@@ -71,9 +71,9 @@ sealed class DebugOverlays(GameHost host)
     internal void DrawCharacterBoxes(DebugOverlay overlay, CharacterRenderer characters, WorldCamera camera, int width, int height)
     {
         var viewProjection = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
-        characters.CountedBoxes(viewProjection, width, height, countedBoxes);
+        characters.CountedBoxes(viewProjection, width, height, _countedBoxes);
         const float line = 1.5f;
-        foreach (var whole in countedBoxes)
+        foreach (var whole in _countedBoxes)
         {
             // A third of the bounding sphere's box each way, round its centre: the whole box spans weapons and ragdoll reach and hides the crowd.
             var mid = new Vector2(whole.X + whole.Z, whole.Y + whole.W) * 0.5f;
@@ -84,7 +84,7 @@ sealed class DebugOverlays(GameHost host)
             overlay.Rect(b.X, b.Y, b.X + line, b.W, CharacterBoxColour);
             overlay.Rect(b.Z - line, b.Y, b.Z, b.W, CharacterBoxColour);
         }
-        overlay.Text($"{countedBoxes.Count} counted", 16, height - overlay.LineHeight - 8, CharacterBoxColour);
+        overlay.Text($"{_countedBoxes.Count} counted", 16, height - overlay.LineHeight - 8, CharacterBoxColour);
         overlay.Flush(width, height);
     }
 
@@ -96,20 +96,20 @@ sealed class DebugOverlays(GameHost host)
     /// <summary>How far above the meshes the view is drawn, so the ground does not hide them (the original's a little higher, so the two do not fight).</summary>
     const float NavOverlayLift = 3, OriginalOverlayLift = 4;
 
-    internal NavView navView;
-    internal NavmeshOverlayRenderer? navOverlayRenderer;
-    internal (NavWorld World, NavView View)? navOverlayShown;
-    internal Task<(Vector3 Origin, float[] Fill, float[] Edges)>? navOverlayBuild;
+    internal NavView NavViewMode;
+    internal NavmeshOverlayRenderer? NavOverlayRenderer;
+    internal (NavWorld World, NavView View)? NavOverlayShown;
+    internal Task<(Vector3 Origin, float[] Fill, float[] Edges)>? NavOverlayBuild;
     // The original's tiles read so far (null: the install has none for the zone).
-    readonly ConcurrentDictionary<ZoneCoordinate, OriginalNavMesh?> originalTiles = new();
+    readonly ConcurrentDictionary<ZoneCoordinate, OriginalNavMesh?> _originalTiles = new();
 
     internal void ToggleNavOverlay()
     {
-        if (host.nav is null || navOverlayRenderer is not { } overlay) { Console.WriteLine("navmesh   no navmesh in this scene"); return; }
-        navView = (NavView)(((int)navView + 1) % 4);
-        overlay.Visible = navView != NavView.Off;
-        if (navView == NavView.Off) { overlay.Clear(); navOverlayShown = null; }
-        Console.WriteLine(navView switch
+        if (host.Nav is null || NavOverlayRenderer is not { } overlay) { Console.WriteLine("navmesh   no navmesh in this scene"); return; }
+        NavViewMode = (NavView)(((int)NavViewMode + 1) % 4);
+        overlay.Visible = NavViewMode != NavView.Off;
+        if (NavViewMode == NavView.Off) { overlay.Clear(); NavOverlayShown = null; }
+        Console.WriteLine(NavViewMode switch
         {
             NavView.Meitou => "navmesh   Meitou's (Shift+F11: the original's)",
             NavView.Original => "navmesh   the original's cached tiles (Shift+F11: both)",
@@ -118,36 +118,36 @@ sealed class DebugOverlays(GameHost host)
         });
     }
 
-    int inspectorShown = -1;
+    int _inspectorShown = -1;
 
     /// <summary>Once a frame: the inspector's hulls go to their renderer when they changed (docs/viewer.md "Pick & collision inspector").</summary>
     internal void UpdateInspectorOverlay()
     {
-        if (!host.player.inspector.InspectorDrawing) { if (host.gpu.InspectorOverlay is { Visible: true } hidden) hidden.Visible = false; inspectorShown = -1; return; }
-        if (host.gpu.InspectorOverlay is not { } overlay) return;
+        if (!host.Player.Inspector.InspectorDrawing) { if (host.Gpu.InspectorOverlay is { Visible: true } hidden) hidden.Visible = false; _inspectorShown = -1; return; }
+        if (host.Gpu.InspectorOverlay is not { } overlay) return;
         overlay.Visible = true;
-        if (inspectorShown == host.player.inspector.InspectorRevision) return;
-        inspectorShown = host.player.inspector.InspectorRevision;
-        var (origin, fill, edges) = host.player.inspector.InspectorGeometry;
+        if (_inspectorShown == host.Player.Inspector.InspectorRevision) return;
+        _inspectorShown = host.Player.Inspector.InspectorRevision;
+        var (origin, fill, edges) = host.Player.Inspector.InspectorGeometry;
         overlay.SetMesh(origin, fill, edges);
     }
 
     /// <summary>Once a frame: a finished build goes to the renderer; a changed world or view starts the next.</summary>
     internal void UpdateNavOverlay()
     {
-        if (host.nav is null || navOverlayRenderer is not { Visible: true } overlay) return;
-        if (navOverlayBuild is { IsCompleted: true } done)
+        if (host.Nav is null || NavOverlayRenderer is not { Visible: true } overlay) return;
+        if (NavOverlayBuild is { IsCompleted: true } done)
         {
             if (done.IsCompletedSuccessfully) { var (origin, fill, edges) = done.Result; overlay.SetMesh(origin, fill, edges); }
             else Console.Error.WriteLine($"navmesh   view not built: {done.Exception?.GetBaseException().Message}");
-            navOverlayBuild = null;
+            NavOverlayBuild = null;
         }
-        var shown = (host.nav.Walkability.World, navView);
-        if (navOverlayBuild is null && navOverlayShown != shown)
+        var shown = (host.Nav.Walkability.World, NavViewMode);
+        if (NavOverlayBuild is null && NavOverlayShown != shown)
         {
-            navOverlayShown = shown;
+            NavOverlayShown = shown;
             var (world, view) = shown;
-            navOverlayBuild = Task.Run(() => BuildNavOverlay(world, view));
+            NavOverlayBuild = Task.Run(() => BuildNavOverlay(world, view));
         }
     }
 
@@ -159,7 +159,7 @@ sealed class DebugOverlays(GameHost host)
         if (view is NavView.Meitou or NavView.Both) AddMeitouMesh(world, fill, edges, ref origin);
         if (view is NavView.Original or NavView.Both)
             foreach (var zone in world.Zones)
-                if (originalTiles.GetOrAdd(zone, z => OriginalNavTiles.LoadExterior(host.install, z)) is { } mesh) AddOriginalMesh(mesh, fill, edges, ref origin);
+                if (_originalTiles.GetOrAdd(zone, z => OriginalNavTiles.LoadExterior(host.Install, z)) is { } mesh) AddOriginalMesh(mesh, fill, edges, ref origin);
         return (origin ?? Vector3.Zero, [.. fill], [.. edges]);
     }
 
@@ -248,7 +248,7 @@ sealed class DebugOverlays(GameHost host)
     // F11's path view (Meitou only; docs/game/pathfinding.md "Meitou debug view"): a checkbox on the statistics' characters line that draws, over everything and
     // still once F11 is closed, the path each selected or inspected character follows (CharacterSnapshot.Path): from its feet to the next waypoint,
     // then the navmesh part, then the provisional long-range part (CharacterSnapshot.PathExact), the next waypoint and the end marked.
-    internal bool walkPaths;
+    internal bool WalkPaths;
 
     /// <summary>How far above the waypoints the path is drawn, so the ground does not swallow it (the navmesh view's lift).</summary>
     const float PathLift = NavOverlayLift;

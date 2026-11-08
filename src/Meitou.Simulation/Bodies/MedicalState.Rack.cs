@@ -20,9 +20,9 @@ public sealed partial class MedicalState
     public RackStretch StretchLimbs(float dt, in MedicalContext ctx, bool limbLoss, List<MedicalEvent>? events = null)
     {
         bool anyFlesh = false, busy = false;
-        for (int i = 0; i < parts.Length; i++)
+        for (int i = 0; i < _parts.Length; i++)
         {
-            var p = parts[i];
+            var p = _parts[i];
             if (p.Template.Side == BodySide.None) continue;
             if (RackLevel(p) <= -p.MaxHp)
             {
@@ -33,15 +33,15 @@ public sealed partial class MedicalState
         }
         if (anyFlesh) busy = true;
         else
-            for (int i = 0; i < parts.Length; i++)
+            for (int i = 0; i < _parts.Length; i++)
             {
-                var p = parts[i];
+                var p = _parts[i];
                 if (p.Template.Side != BodySide.None || RackLevel(p) <= -p.MaxHp) continue;
                 Stretch(i, p, dt, ctx, events);
                 busy = true;
             }
         float none = -1, sided = -1;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             float ratio = RackLevel(p) / p.MaxHp;
             if (p.Template.Side == BodySide.None) none = MathF.Max(none, ratio);

@@ -259,20 +259,23 @@ public static class CharacterShape
             foreach (var name in Sliders)
                 if (body.Floats.TryGetValue(name, out var v)) sliders[name] = v;
         float muscle = 0;
-        if (c.Character?.GetReferences("stats").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(s => s?.Type == FcsRecordType.STATS) is { } stats)
+        if (c.Character?.GetReferences("stats").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(s => s?.Type == FcsRecordType.Stats) is { } stats)
             muscle = MuscleFromStats(stats.GetFloat("strength"), stats.GetFloat("weapon smith"), stats.GetFloat("armour smith"));
         // hide stump: Kenshi reads it from the item worn under the name "armour"; the viewer takes the body-slot ARMOUR.
-        var bodyArmour = c.Parts.FirstOrDefault(p => p.Record.Type == FcsRecordType.ARMOUR && p.Slot == AttachSlot.Body)?.Record;
+        var bodyArmour = c.Parts.FirstOrDefault(p => p.Record.Type == FcsRecordType.Armour && p.Slot == AttachSlot.Body)?.Record;
         int State(int k) => c.Loadout?.Limbs[k]?.State ?? 0;
         return new CharacterShapeInput
         {
-            Sliders = sliders, Female = c.Female, Muscle = muscle,
+            Sliders = sliders,
+            Female = c.Female,
+            Muscle = muscle,
             // Limb factor 0 only for a stump (state 1, uses_hide_stump); a prosthetic keeps the bone sizes so it skins to them.
             Missing = Enumerable.Range(0, 4).Where(k => State(k) == 1).Select(k => (Limb)k).ToHashSet(),
             HideStump = (HideStump)((bodyArmour?.GetInt("hide stump") ?? 0) & 3),
             LegRatio = LegRatioOf(c.Parts),
             // The thigh narrows to 0.8 when its leg is a stump (uses_hide_stump: the leg part's limb slot, FUN_140643ba0, in state 1).
-            NarrowLeftThigh = State(2) == 1, NarrowRightThigh = State(3) == 1,
+            NarrowLeftThigh = State(2) == 1,
+            NarrowRightThigh = State(3) == 1,
         };
     }
 
@@ -287,8 +290,8 @@ public static class CharacterShape
         int flags = 0;
         foreach (var p in parts)
         {
-            if (p.Record.Type == FcsRecordType.ARMOUR && p.Slot == AttachSlot.Boots) boot = p.Record.GetFloat("boot height");
-            else if (p.Record.Type == FcsRecordType.LIMB_REPLACEMENT)
+            if (p.Record.Type == FcsRecordType.Armour && p.Slot == AttachSlot.Boots) boot = p.Record.GetFloat("boot height");
+            else if (p.Record.Type == FcsRecordType.LimbReplacement)
                 switch (p.Record.GetInt("slot"))
                 {
                     case 52: flags |= 1; left = p.Record.GetFloat("offset"); break;
@@ -309,8 +312,8 @@ public static class CharacterShape
         int flags = 0;
         foreach (var p in parts)
         {
-            if (p.Record.Type == FcsRecordType.ARMOUR && p.Slot == AttachSlot.Boots) boot = p.Record.GetFloat("boot height");
-            else if (p.Record.Type == FcsRecordType.LIMB_REPLACEMENT)
+            if (p.Record.Type == FcsRecordType.Armour && p.Slot == AttachSlot.Boots) boot = p.Record.GetFloat("boot height");
+            else if (p.Record.Type == FcsRecordType.LimbReplacement)
                 switch (p.Record.GetInt("slot"))
                 {
                     case 52: flags |= 1; left = p.Record.GetFloat("offset"); break;
@@ -351,7 +354,10 @@ public static class CharacterShape
                     foreach (var limb in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                         missing.Add(limb.ToLowerInvariant() switch
                         {
-                            "larm" => Limb.LeftArm, "rarm" => Limb.RightArm, "lleg" => Limb.LeftLeg, "rleg" => Limb.RightLeg,
+                            "larm" => Limb.LeftArm,
+                            "rarm" => Limb.RightArm,
+                            "lleg" => Limb.LeftLeg,
+                            "rleg" => Limb.RightLeg,
                             _ => throw new FormatException($"--shape missing: unknown limb '{limb}' (larm, rarm, lleg, rleg)"),
                         });
                     applied.Add($"missing={string.Join(",", missing)}");

@@ -22,10 +22,10 @@ public static class MapEffectPlacers
         var result = new List<MapEffectPlacement>();
         foreach (var (_, feature) in features.All())
         {
-            if (db.Find(feature.StringId) is not { Type: FcsRecordType.MAP_FEATURES } record) continue;
+            if (db.Find(feature.StringId) is not { Type: FcsRecordType.MapFeatures } record) continue;
             foreach (var instance in record.Instances.Values)
             {
-                if (instance.IsCleared || db.Find(instance.Target) is not { Type: FcsRecordType.EFFECT } effect) continue;
+                if (instance.IsCleared || db.Find(instance.Target) is not { Type: FcsRecordType.Effect } effect) continue;
                 if (!effects.TryGetValue(effect.StringId, out var def)) effects[effect.StringId] = def = EffectRecord.From(effect, db);
                 result.Add(new MapEffectPlacement(def, feature.Position + Vector3.Transform(instance.Position * feature.Scale, feature.Rotation), record.Name));
             }

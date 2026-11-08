@@ -74,7 +74,7 @@ public sealed record ExposureConstants(float Min, float Max, float NightDarkness
 
     public static ExposureConstants FromDatabase(GameDatabase db)
     {
-        var c = db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault();
+        var c = db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.Constants).FirstOrDefault();
         if (c is null) return Default;
         return new ExposureConstants(c.GetFloat("exposure min", Default.Min), c.GetFloat("exposure max", Default.Max), c.GetFloat("night darkness", Default.NightDarkness));
     }
@@ -102,7 +102,7 @@ public static class AmbientMap
     public static RgbaImage Build(GameDatabase db, RgbaImage biomeMap)
     {
         var byIndex = new Dictionary<uint, GameRecord>();
-        foreach (var r in db.OfType(FcsRecordType.BIOMES).OrderBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var r in db.OfType(FcsRecordType.Biomes).OrderBy(r => r.StringId, StringComparer.Ordinal))
             byIndex.TryAdd((uint)r.GetInt("index") & 0xFFFFFF, r);
         var cache = new Dictionary<uint, (byte, byte, byte, byte)>();
         var pixels = new byte[biomeMap.Width * biomeMap.Height * 4];

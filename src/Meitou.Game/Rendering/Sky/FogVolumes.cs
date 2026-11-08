@@ -42,13 +42,13 @@ internal sealed class FogVolumes
     public readonly record struct EffectFog(string Name, bool Cylinder, Vector3 Position, Vector3 End, float Radius, float Distance, Vector3 Colour,
         float Alpha, bool Additive, float Fade);
 
-    readonly List<Volume> statics = [];
-    readonly List<Volume> effects = [];
-    readonly List<(Volume V, float Distance)> picked = [];
-    readonly Vector4[] data = new Vector4[FogVolumeShaders.MaxData];
-    int used;
-    int kept;
-    Vector4 eyeLight, info;
+    readonly List<Volume> _statics = [];
+    readonly List<Volume> _effects = [];
+    readonly List<(Volume V, float Distance)> _picked = [];
+    readonly Vector4[] _data = new Vector4[FogVolumeShaders.MaxData];
+    int _used;
+    int _kept;
+    Vector4 _eyeLight, _info;
 
     /// <summary>Off: no volume is drawn (<c>--no-fog-volumes</c>; also while the simple sky is on).</summary>
     public bool Enabled { get; set; } = true;
@@ -59,21 +59,21 @@ internal sealed class FogVolumes
     /// <summary>What <see cref="Hidden(Vector3, Vector3, CullKind)"/> left out since the last <see cref="Update"/>, by <see cref="CullKind"/> (statistics).</summary>
     public int[] Culled { get; } = new int[CullKinds];
     /// <summary>The block the fog cull works from this frame (null: the cull is off), and the distance from the eye beyond which a box inside it is hidden.</summary>
-    public string? CullBlock => occluder?.Name;
-    public float CullRadius => occluder is null ? 0 : MathF.Sqrt(hideRadiusSquared);
+    public string? CullBlock => _occluder?.Name;
+    public float CullRadius => _occluder is null ? 0 : MathF.Sqrt(_hideRadiusSquared);
     /// <summary>What the cull works from this frame, for a caller that caches answers of <see cref="Covers"/>: the block (null: none), its hide distance and the weather fog's distance (0: none).</summary>
-    internal (object? Block, float Radius, float Weather) CullState => (occluder, CullRadius, AtmosphereDistance ?? 0);
+    internal (object? Block, float Radius, float Weather) CullState => (_occluder, CullRadius, AtmosphereDistance ?? 0);
     /// <summary>True when <see cref="Covers"/> can answer yes this frame (a block the eye is in, or the weather fog complete).</summary>
-    public bool CullActive => occluder is not null || atmosphereRadiusSquared > 0;
+    public bool CullActive => _occluder is not null || _atmosphereRadiusSquared > 0;
     /// <summary>The lowest y a box may reach and still lie inside the cull's block (its early-out box); very low when only the weather fog culls.</summary>
-    public float CullFloor => occluder is { } v ? v.BoxMin.Y : -1e6f;
-    Volume? occluder;
-    float hideRadiusSquared;
-    Vector3 cullEye;
-    float atmosphereRadiusSquared;
+    public float CullFloor => _occluder is { } v ? v.BoxMin.Y : -1e6f;
+    Volume? _occluder;
+    float _hideRadiusSquared;
+    Vector3 _cullEye;
+    float _atmosphereRadiusSquared;
     /// <summary>The distance beyond which the weather's fog (with the haze) hides everything this frame (<see cref="SkyRenderer.FogCullDistance"/>), shown by the statistics; null: none, or the cull is off or a placed fog volume is in view.
     /// The shadow cascades' far distance is clamped to it (<see cref="ShadowPass.RangeCap"/>).</summary>
-    public float? AtmosphereDistance => atmosphereRadiusSquared > 0 ? MathF.Sqrt(atmosphereRadiusSquared) : null;
+    public float? AtmosphereDistance => _atmosphereRadiusSquared > 0 ? MathF.Sqrt(_atmosphereRadiusSquared) : null;
 
     /// <summary>
     /// The distance beyond which the placed fog block the eye is in hides every pixel of the view: the cull's radius when the block also hides the sky in
@@ -81,7 +81,7 @@ internal sealed class FogVolumes
     /// surface lies inside the block); null otherwise. The shadow range is capped to it (<see cref="ShadowPass.SetFogHide"/>): a receiver within the
     /// distance has a view depth under it.
     /// </summary>
-    public float? ShadowHideDistance => occluder is not null && SkyHidden ? CullRadius : null;
+    public float? ShadowHideDistance => _occluder is not null && SkyHidden ? CullRadius : null;
     /// <summary>True when the eye is inside a placed block but its hide radius is not known this frame because the by-direction solve is still running in the background (it takes a few frames after the eye leaves its margin):
     /// <see cref="ShadowHideDistance"/> is null then, but the block still hides the view, so the shadow cap waits for the radius instead of being released.</summary>
     public bool ShadowHidePending { get; private set; }
@@ -171,28 +171,28 @@ internal sealed class FogVolumes
     /// <see cref="CloudShadowFade"/> (0 inside one, 1 with none near or the volumes off).</summary>
     public float CloudShadowScale { get; private set; } = 1;
     /// <summary>The vec4s of <c>uFogVolumeData</c> in use after the last <see cref="Update"/>.</summary>
-    public int UsedData => used;
+    public int UsedData => _used;
     /// <summary>The weather effects' fog volumes handed to the last <see cref="Update"/>, and how many of them were in view and drawn.</summary>
     public int EffectVolumes { get; private set; }
     public int EffectVolumesDrawn { get; private set; }
     public IReadOnlyList<FogFeature> Features { get; }
-    internal IReadOnlyList<Volume> Statics => statics;
-    internal ReadOnlySpan<Vector4> Data => data.AsSpan(0, used);
+    internal IReadOnlyList<Volume> Statics => _statics;
+    internal ReadOnlySpan<Vector4> Data => _data.AsSpan(0, _used);
 
     public FogVolumes(IReadOnlyList<FogFeature> features)
     {
         Features = features;
         foreach (var f in features)
-            if (Build(f) is { } v) statics.Add(v);
+            if (Build(f) is { } v) _statics.Add(v);
     }
 
     /// <summary>With the frame globals published (the world's renderer).</summary>
     public FogVolumes(IGpuContext gpu, IReadOnlyList<FogFeature> features) : this(features)
     {
         var g = gpu.Globals;
-        g.PublishUniform("uFogVolumeEye", () => eyeLight);
-        g.PublishUniform("uFogVolumeInfo", () => info);
-        g.PublishUniformArray("uFogVolumeData", data, () => used);
+        g.PublishUniform("uFogVolumeEye", () => _eyeLight);
+        g.PublishUniform("uFogVolumeInfo", () => _info);
+        g.PublishUniformArray("uFogVolumeData", _data, () => _used);
     }
 
     /// <summary>The game's light on the blocks (post/fog.hlsl <c>fog_planes_fs</c>): <c>max(0.08, sunColour.w · 1.6 · saturate(3 sunY + 0.2))</c>.
@@ -205,41 +205,41 @@ internal sealed class FogVolumes
         switch (f.Type)
         {
             case FogFeatureType.Block:
-            {
-                // The box: the sections at the lowest and the highest height (a convex block's sections in between lie within both boxes), up to its
-                // highest corner, or the highest height when it is open upwards ("Volcano01").
-                var low = f.SectionBounds(SectionHeight);
-                var high = f.SectionBounds(HighHeight);
-                if ((low ?? high) is not { } first) return null;
-                var corners = f.Corners();
-                float top = high is not null ? HighHeight : corners.Count > 0 ? corners.Max(c => c.Y) : HighHeight;
-                var (min, max) = first;
-                if (high is { } h) { min = Vector2.Min(min, h.Min); max = Vector2.Max(max, h.Max); }
-                var v = new Volume(f.Name, FogVolumeShaders.BlockType)
                 {
-                    BoxMin = new Vector3(min.X, SectionHeight, min.Y),
-                    BoxMax = new Vector3(max.X, MathF.Max(top, SectionHeight), max.Y),
-                };
-                // The game's node sits at the corners' mean (FUN_14010b6a0), and Ogre sorts transparent objects by the node's distance.
-                v.SortCentre = corners.Count > 0 ? corners.Aggregate(Vector3.Zero, (a, c) => a + c) / corners.Count : (v.BoxMin + v.BoxMax) * 0.5f;
-                v.Data[0] = new Vector4(v.BoxMin, FogVolumeShaders.BlockType);
-                v.Data[1] = new Vector4(v.BoxMax, f.EdgeBlur);
-                v.Data[2] = new Vector4(f.Colour, f.Density);
-                for (int k = 0; k < 7; k++) v.Data[3 + k] = f.Planes[k];
-                return v;
-            }
+                    // The box: the sections at the lowest and the highest height (a convex block's sections in between lie within both boxes), up to its
+                    // highest corner, or the highest height when it is open upwards ("Volcano01").
+                    var low = f.SectionBounds(SectionHeight);
+                    var high = f.SectionBounds(HighHeight);
+                    if ((low ?? high) is not { } first) return null;
+                    var corners = f.Corners();
+                    float top = high is not null ? HighHeight : corners.Count > 0 ? corners.Max(c => c.Y) : HighHeight;
+                    var (min, max) = first;
+                    if (high is { } h) { min = Vector2.Min(min, h.Min); max = Vector2.Max(max, h.Max); }
+                    var v = new Volume(f.Name, FogVolumeShaders.BlockType)
+                    {
+                        BoxMin = new Vector3(min.X, SectionHeight, min.Y),
+                        BoxMax = new Vector3(max.X, MathF.Max(top, SectionHeight), max.Y),
+                    };
+                    // The game's node sits at the corners' mean (FUN_14010b6a0), and Ogre sorts transparent objects by the node's distance.
+                    v.SortCentre = corners.Count > 0 ? corners.Aggregate(Vector3.Zero, (a, c) => a + c) / corners.Count : (v.BoxMin + v.BoxMax) * 0.5f;
+                    v.Data[0] = new Vector4(v.BoxMin, FogVolumeShaders.BlockType);
+                    v.Data[1] = new Vector4(v.BoxMax, f.EdgeBlur);
+                    v.Data[2] = new Vector4(f.Colour, f.Density);
+                    for (int k = 0; k < 7; k++) v.Data[3 + k] = f.Planes[k];
+                    return v;
+                }
             case FogFeatureType.Sphere:
-            {
-                var v = new Volume(f.Name, FogVolumeShaders.SphereType);
-                SetSphere(v, f.Position, f.Radius, f.Density, f.Colour, 1, false);
-                return v;
-            }
+                {
+                    var v = new Volume(f.Name, FogVolumeShaders.SphereType);
+                    SetSphere(v, f.Position, f.Radius, f.Density, f.Colour, 1, false);
+                    return v;
+                }
             case FogFeatureType.Beam:
-            {
-                var v = new Volume(f.Name, FogVolumeShaders.BeamType);
-                SetBeam(v, f.Position, f.End, f.Radius, f.Density, f.EdgeBlur, f.Colour, 1, false);
-                return v;
-            }
+                {
+                    var v = new Volume(f.Name, FogVolumeShaders.BeamType);
+                    SetBeam(v, f.Position, f.End, f.Radius, f.Density, f.EdgeBlur, f.Colour, 1, false);
+                    return v;
+                }
             default:
                 return null;
         }
@@ -294,15 +294,15 @@ internal sealed class FogVolumes
     public void Update(Vector3 eye, Vector3 forward, float fieldOfView, float aspect, float far, float sunY, bool on, IReadOnlyList<EffectFog>? effectFogs = null, float? atmosphereCull = null)
     {
         Active.Clear();
-        atmosphereRadiusSquared = 0;
-        cullEye = eye;
-        picked.Clear();
-        occluder = null;
+        _atmosphereRadiusSquared = 0;
+        _cullEye = eye;
+        _picked.Clear();
+        _occluder = null;
         ShadowHidePending = false;
         Array.Clear(Culled);
-        used = 0;
+        _used = 0;
         Dropped = 0;
-        kept = 0;
+        _kept = 0;
         EffectVolumes = effectFogs?.Count ?? 0;
         EffectVolumesDrawn = 0;
         CloudShadowScale = 1;
@@ -312,7 +312,7 @@ internal sealed class FogVolumes
         if (on && Enabled)
         {
             var wedge = Wedge.From(forward, fieldOfView, aspect);
-            if (!HidePlaced) foreach (var v in statics) Consider(v, eye, far, wedge);
+            if (!HidePlaced) foreach (var v in _statics) Consider(v, eye, far, wedge);
             int e = 0;
             if (effectFogs is not null)
                 foreach (var fog in effectFogs)
@@ -322,52 +322,52 @@ internal sealed class FogVolumes
                     // The game's inside test reads the node's position relative to the effect's node, so a camera inside an effect's
                     // sphere is never "inside" and the hull's back faces are culled: from inside, the sphere is not drawn (docs: Verified (decompiled)).
                     if (!fog.Cylinder && Vector3.DistanceSquared(eye, fog.Position) < radius * radius) continue;
-                    if (e == effects.Count) effects.Add(new Volume("", fog.Cylinder ? FogVolumeShaders.BeamType : FogVolumeShaders.SphereType));
-                    if (effects[e].Type != (fog.Cylinder ? FogVolumeShaders.BeamType : FogVolumeShaders.SphereType))
-                        effects[e] = new Volume("", fog.Cylinder ? FogVolumeShaders.BeamType : FogVolumeShaders.SphereType);
-                    var v = effects[e++];
+                    if (e == _effects.Count) _effects.Add(new Volume("", fog.Cylinder ? FogVolumeShaders.BeamType : FogVolumeShaders.SphereType));
+                    if (_effects[e].Type != (fog.Cylinder ? FogVolumeShaders.BeamType : FogVolumeShaders.SphereType))
+                        _effects[e] = new Volume("", fog.Cylinder ? FogVolumeShaders.BeamType : FogVolumeShaders.SphereType);
+                    var v = _effects[e++];
                     v.Name = fog.Name;
                     if (fog.Cylinder) SetBeam(v, fog.Position, fog.End, radius, Density(distance), 1f / 300f, fog.Colour, fog.Alpha, fog.Additive);
                     else SetSphere(v, fog.Position, radius, Density(distance), fog.Colour, fog.Alpha, fog.Additive);
                     Consider(v, eye, far, wedge);
                 }
             // Nearest first while they fit, then written farthest first (the game's transparent objects are sorted back to front).
-            picked.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+            _picked.Sort((a, b) => a.Distance.CompareTo(b.Distance));
             int keep = 0;
-            for (; keep < picked.Count; keep++)
+            for (; keep < _picked.Count; keep++)
             {
-                int length = picked[keep].V.Data.Length;
-                if (used + length > data.Length) break;
-                used += length;
+                int length = _picked[keep].V.Data.Length;
+                if (_used + length > _data.Length) break;
+                _used += length;
             }
-            Dropped = picked.Count - keep;
-            kept = keep;
+            Dropped = _picked.Count - keep;
+            _kept = keep;
             int at = 0;
             for (int i = keep - 1; i >= 0; i--)
             {
-                var v = picked[i].V;
-                v.Data.CopyTo(data, at);
+                var v = _picked[i].V;
+                v.Data.CopyTo(_data, at);
                 at += v.Data.Length;
                 Active.Add(v.Name);
-                if (effects.Contains(v)) EffectVolumesDrawn++;
+                if (_effects.Contains(v)) EffectVolumesDrawn++;
             }
         }
-        if (on && Enabled && CullEnabled && used > 0 && picked.Count > 0) PrepareCull(picked[0].V, eye, far);
-        SkyExitDistance = occluder is null ? null : SkyExit(occluder, eye, forward, fieldOfView, aspect);
-        SkyHidden = SkyExitDistance >= MathF.Sqrt(hideRadiusSquared) && hideRadiusSquared > 0;
+        if (on && Enabled && CullEnabled && _used > 0 && _picked.Count > 0) PrepareCull(_picked[0].V, eye, far);
+        SkyExitDistance = _occluder is null ? null : SkyExit(_occluder, eye, forward, fieldOfView, aspect);
+        SkyHidden = SkyExitDistance >= MathF.Sqrt(_hideRadiusSquared) && _hideRadiusSquared > 0;
         // A placed volume that reaches past the distance reads the scene's depth along rays that end there: a left-out surface (the sky at the far clip in its place) would change
         // the length of its path. One wholly inside the distance is behind nothing that is left out.
-        if (CullEnabled && atmosphereCull is { } atmosphere && atmosphere > 0 && VolumesWithin(atmosphere * atmosphere, eye)) atmosphereRadiusSquared = atmosphere * atmosphere;
-        eyeLight = new Vector4(eye, Light(sunY));
-        info = new Vector4(used, KenshiLighting.Daylight(sunY), 0, 0);
+        if (CullEnabled && atmosphereCull is { } atmosphere && atmosphere > 0 && VolumesWithin(atmosphere * atmosphere, eye)) _atmosphereRadiusSquared = atmosphere * atmosphere;
+        _eyeLight = new Vector4(eye, Light(sunY));
+        _info = new Vector4(_used, KenshiLighting.Daylight(sunY), 0, 0);
     }
 
     /// <summary>True when every volume written for the shaders (the first <c>kept</c> of <c>picked</c>) lies wholly within the distance <paramref name="radiusSquared"/> of the eye (its farthest box corner).</summary>
     bool VolumesWithin(float radiusSquared, Vector3 eye)
     {
-        for (int i = 0; i < kept; i++)
+        for (int i = 0; i < _kept; i++)
         {
-            var v = picked[i].V;
+            var v = _picked[i].V;
             var far = Vector3.Max(Vector3.Abs(v.BoxMin - eye), Vector3.Abs(v.BoxMax - eye));
             if (far.LengthSquared() >= radiusSquared) return false;
         }
@@ -379,7 +379,7 @@ internal sealed class FogVolumes
         var nearest = Vector3.Clamp(eye, v.BoxMin, v.BoxMax);
         if (Vector3.DistanceSquared(nearest, eye) > far * far) return;   // beyond the far clip: the game's path through it is empty
         if (!wedge.Touches(eye, v.BoxMin, v.BoxMax)) return;
-        picked.Add((v, Vector3.Distance(v.SortCentre, eye)));
+        _picked.Add((v, Vector3.Distance(v.SortCentre, eye)));
     }
 
     /// <summary>
@@ -389,10 +389,10 @@ internal sealed class FogVolumes
     /// </summary>
     internal readonly struct Wedge
     {
-        readonly Vector2 left, right;   // outward normals of the two edges, in (x, z)
-        readonly bool all;
+        readonly Vector2 _left, _right;   // outward normals of the two edges, in (x, z)
+        readonly bool _all;
 
-        Wedge(Vector2 left, Vector2 right, bool all) { this.left = left; this.right = right; this.all = all; }
+        Wedge(Vector2 left, Vector2 right, bool all) { this._left = left; this._right = right; this._all = all; }
 
         public static Wedge From(Vector3 forward, float fieldOfView, float aspect)
         {
@@ -422,13 +422,13 @@ internal sealed class FogVolumes
         /// <summary>False when the box's footprint lies wholly outside one edge.</summary>
         public bool Touches(Vector3 eye, Vector3 min, Vector3 max)
         {
-            if (all) return true;
+            if (_all) return true;
             bool outLeft = true, outRight = true;
             for (int i = 0; i < 4; i++)
             {
                 var p = new Vector2((i & 1) == 0 ? min.X : max.X, (i & 2) == 0 ? min.Z : max.Z) - new Vector2(eye.X, eye.Z);
-                if (Vector2.Dot(p, left) <= 0) outLeft = false;
-                if (Vector2.Dot(p, right) <= 0) outRight = false;
+                if (Vector2.Dot(p, _left) <= 0) outLeft = false;
+                if (Vector2.Dot(p, _right) <= 0) outRight = false;
             }
             return !outLeft && !outRight;
         }
@@ -461,11 +461,11 @@ internal sealed class FogVolumes
         float? plain = HideDistance(last.Data[1].W, last.Data[2].W, inside, far);
         float? byDirection = DirectionRadius(last, eye, far);
         // Both bounds are proven: the smaller is used.
-        if ((plain, byDirection) is (null, null)) { ShadowHidePending = solving is not null; return; }   // no radius yet: a solve in flight will give one (the shadow cap waits for it)
+        if ((plain, byDirection) is (null, null)) { ShadowHidePending = _solving is not null; return; }   // no radius yet: a solve in flight will give one (the shadow cap waits for it)
         float radius = Math.Min(plain ?? float.MaxValue, byDirection ?? float.MaxValue);
-        occluder = last;
-        hideRadiusSquared = radius * radius;
-        cullEye = eye;
+        _occluder = last;
+        _hideRadiusSquared = radius * radius;
+        _cullEye = eye;
     }
 
     /// <summary>How far the eye may move from where <see cref="HideDistanceByDirection"/> was solved before it is solved again.</summary>
@@ -477,8 +477,8 @@ internal sealed class FogVolumes
     /// <summary>Off: only <see cref="HideDistance"/> (for measuring what the direction bound adds).</summary>
     public bool DirectionBound { get; set; } = true;
     readonly record struct DirectionSolve(Volume Block, Vector3 Centre, float Far, float? Radius);
-    DirectionSolve? solved;
-    Task<DirectionSolve>? solving;
+    DirectionSolve? _solved;
+    Task<DirectionSolve>? _solving;
 
     /// <summary>
     /// <see cref="HideDistanceByDirection"/> for an eye within <see cref="DirectionSolveMargin"/> of where it was last solved for this block and far
@@ -487,15 +487,15 @@ internal sealed class FogVolumes
     float? DirectionRadius(Volume block, Vector3 eye, float far)
     {
         if (!DirectionBound) return null;
-        if (solving is { IsCompleted: true } done) { solved = done.Result; solving = null; }
+        if (_solving is { IsCompleted: true } done) { _solved = done.Result; _solving = null; }
         bool Fits(DirectionSolve s) => s.Block == block && s.Far == far && Vector3.Distance(s.Centre, eye) <= DirectionSolveMargin;
-        if (solved is { } s && Fits(s)) return s.Radius;
-        if (solving is not null) return null;
+        if (_solved is { } s && Fits(s)) return s.Radius;
+        if (_solving is not null) return null;
         var planes = block.Data.AsSpan(3, 7).ToArray();
         float edgeBlur = block.Data[1].W, density = block.Data[2].W;
         DirectionSolve Solve() => new(block, eye, far, HideDistanceByDirection(planes, eye, DirectionSolveMargin, edgeBlur, density, far, DirectionSolveBudget));
-        if (SolveInline) { solved = Solve(); return Fits(solved.Value) ? solved.Value.Radius : null; }
-        solving = Task.Run(Solve);
+        if (SolveInline) { _solved = Solve(); return Fits(_solved.Value) ? _solved.Value.Radius : null; }
+        _solving = Task.Run(Solve);
         return null;
     }
 
@@ -576,7 +576,7 @@ internal sealed class FogVolumes
             if (insideLo[i] <= 1) return null;
         }
         // A little above CullAlpha: the shader works in float.
-        const double Threshold = CullAlpha + 5e-4;
+        const double threshold = CullAlpha + 5e-4;
         var queue = new PriorityQueue<DirectionCell, double>();
         for (int face = 0; face < 6; face++)
             for (int a = 0; a < 4; a++)
@@ -606,7 +606,7 @@ internal sealed class FogVolumes
             }
             if (!feasible) continue;
             edge *= 1 + 0.9 * Math.Max(Math.Abs(cy) - delta, 0);
-            if (cell.L0 * density * edge >= Threshold) continue;
+            if (cell.L0 * density * edge >= threshold) continue;
             double spreadPath = cell.L1 - cell.L0, spreadDirection = delta * cell.L1;
             double tolerance = Math.Max(16, cell.L1 * 0.02);
             // Paths up to L1 may fail (and at L1 itself, in a cell of the same priority not yet split): R is past it, and none when that is the far clip.
@@ -661,13 +661,13 @@ internal sealed class FogVolumes
     /// </summary>
     public bool WriteCull(Span<Vector4> into)
     {
-        if (occluder is null && atmosphereRadiusSquared <= 0) return false;
+        if (_occluder is null && _atmosphereRadiusSquared <= 0) return false;
         into.Clear();
         // [0].w: the weather fog's distance squared (0: none); [1].w: 1 when the eye's block is there (box, planes and [2].w are then set).
-        into[0].W = atmosphereRadiusSquared;
-        into[2] = new Vector4(cullEye, hideRadiusSquared);
-        if (occluder is not { } v) return true;
-        into[0] = new Vector4(v.BoxMin, atmosphereRadiusSquared);
+        into[0].W = _atmosphereRadiusSquared;
+        into[2] = new Vector4(_cullEye, _hideRadiusSquared);
+        if (_occluder is not { } v) return true;
+        into[0] = new Vector4(v.BoxMin, _atmosphereRadiusSquared);
         into[1] = new Vector4(v.BoxMax, 1);
         for (int k = 0; k < 7; k++) into[3 + k] = v.Data[3 + k];
         return true;
@@ -680,9 +680,9 @@ internal sealed class FogVolumes
     public bool Covers(Vector3 min, Vector3 max)
     {
         // The weather fog: the nearest point of the box is past the distance where the fog alone makes the pixel (a sphere about the eye, the shader's length(position - eye)).
-        if (atmosphereRadiusSquared > 0 && Vector3.DistanceSquared(Vector3.Clamp(cullEye, min, max), cullEye) >= atmosphereRadiusSquared) return true;
-        if (occluder is not { } v) return false;
-        if (Vector3.DistanceSquared(Vector3.Clamp(cullEye, min, max), cullEye) < hideRadiusSquared) return false;
+        if (_atmosphereRadiusSquared > 0 && Vector3.DistanceSquared(Vector3.Clamp(_cullEye, min, max), _cullEye) >= _atmosphereRadiusSquared) return true;
+        if (_occluder is not { } v) return false;
+        if (Vector3.DistanceSquared(Vector3.Clamp(_cullEye, min, max), _cullEye) < _hideRadiusSquared) return false;
         if (min.X < v.BoxMin.X || min.Y < v.BoxMin.Y || min.Z < v.BoxMin.Z || max.X > v.BoxMax.X || max.Y > v.BoxMax.Y || max.Z > v.BoxMax.Z) return false;
         for (int k = 0; k < 7; k++)
         {

@@ -7,14 +7,14 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public sealed unsafe partial class GpuContext
 {
-    CommandList? segment;
+    CommandList? _segment;
     // The guest segment open now: the host's list or an inline secondary.
-    CommandList? guest;
+    CommandList? _guest;
     enum GuestKind { Host, Inline }
-    GuestKind guestKind;
+    GuestKind _guestKind;
 
     /// <summary>A native segment is open (<see cref="BeginNative"/> or <see cref="BeginGuest"/>).</summary>
-    public bool SegmentOpen => segment is not null || guest is not null;
+    public bool SegmentOpen => _segment is not null || _guest is not null;
 
     /// <summary>
     /// The frame's command list for a segment of the caller's own (renderings, copies, dispatches): what was recorded before is complete and
@@ -30,17 +30,17 @@ public sealed unsafe partial class GpuContext
         Frame.States.AssumeFullBarrier();
         Frame.Stats.NativeSegments++;
         list.BeginLabel(label);
-        segment = list;
+        _segment = list;
         return list;
     }
 
     public void EndNative(IGpuCommandList cmd)
     {
-        if (segment is null || !ReferenceEquals(cmd, segment)) throw new InvalidOperationException("EndNative without a matching BeginNative");
+        if (_segment is null || !ReferenceEquals(cmd, _segment)) throw new InvalidOperationException("EndNative without a matching BeginNative");
         if (PassOpen) throw new InvalidOperationException("EndNative with a host pass open");
         cmd.EndLabel();
-        FullBarrier(segment.Handle);
-        segment = null;
+        FullBarrier(_segment.Handle);
+        _segment = null;
     }
 
     /// <summary>
@@ -50,19 +50,19 @@ public sealed unsafe partial class GpuContext
     /// </summary>
     public CommandList BeginGuest(string label)
     {
-        if (guest is not null) throw new InvalidOperationException("BeginGuest inside a guest segment");
-        if (passList is { } host)
+        if (_guest is not null) throw new InvalidOperationException("BeginGuest inside a guest segment");
+        if (_passList is { } host)
         {
             if (Frame.Parallel.Open)
             {
-                guestKind = GuestKind.Inline;
-                return guest = Frame.Parallel.BeginInline(label);
+                _guestKind = GuestKind.Inline;
+                return _guest = Frame.Parallel.BeginInline(label);
             }
             host.Invalidate();
             Frame.Stats.NativeSegments++;
             host.BeginLabel(label);
-            guestKind = GuestKind.Host;
-            return guest = host;
+            _guestKind = GuestKind.Host;
+            return _guest = host;
         }
         throw new InvalidOperationException("BeginGuest without a host pass");
     }
@@ -71,9 +71,9 @@ public sealed unsafe partial class GpuContext
 
     public void EndGuest(IGpuCommandList cmd)
     {
-        if (guest is null || !ReferenceEquals(cmd, guest)) throw new InvalidOperationException("EndGuest without a matching BeginGuest");
-        guest = null;
-        if (guestKind == GuestKind.Inline) Frame.Parallel.EndInline((CommandList)cmd);
+        if (_guest is null || !ReferenceEquals(cmd, _guest)) throw new InvalidOperationException("EndGuest without a matching BeginGuest");
+        _guest = null;
+        if (_guestKind == GuestKind.Inline) Frame.Parallel.EndInline((CommandList)cmd);
         else cmd.EndLabel();
     }
 
@@ -83,7 +83,7 @@ public sealed unsafe partial class GpuContext
     /// </summary>
     public void Interleave(Action<IGpuCommandList> record)
     {
-        if (passList is { } host && guest is null)
+        if (_passList is { } host && _guest is null)
         {
             if (Frame.Parallel.Open)
             {

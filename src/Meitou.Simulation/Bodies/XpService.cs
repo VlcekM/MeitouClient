@@ -43,7 +43,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     public float SkillDifferenceFactor(float own, float other)
     {
         float diff = other - own;
-        float k = diff >= 0 ? constants.SkillDiffXp2xBonus : constants.SkillDiffXp0xPenalty;
+        float k = diff >= 0 ? constants.SkillDiffXp2XBonus : constants.SkillDiffXp0XPenalty;
         return 1 + diff * 0.01f * (100 / k);
     }
 
@@ -72,7 +72,7 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// <c>weight strength diff 1x</c>, 0, <c>weight strength diff max</c>). A heavy weapon trains strength faster.
     /// </summary>
     public float WeaponWeightStrengthFactor(float weaponWeight, float strength, float strengthInjuryMultiplier) =>
-        constants.MinStrengthXpMult + Math.Clamp((weaponWeight - strength * strengthInjuryMultiplier) / constants.WeightStrengthDiff1x, 0, constants.WeightStrengthDiffMax);
+        constants.MinStrengthXpMult + Math.Clamp((weaponWeight - strength * strengthInjuryMultiplier) / constants.WeightStrengthDiff1X, 0, constants.WeightStrengthDiffMax);
 
     /// <summary>
     /// A combat event for one character (<c>FUN_1408c6980</c>). <paramref name="opponentSkill"/> is the opponent's defence for the attacker's events

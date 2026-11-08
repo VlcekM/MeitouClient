@@ -599,10 +599,17 @@ public static class ImpostorShaders
     /// <summary>The impostor program's own uniforms: <see cref="ImpostorPush"/> members, the atlas maps by their bindless index.</summary>
     static readonly Dictionary<string, string> NativeMap = new()
     {
-        ["uImpostor"] = "pc.sphere", ["uCameraUp"] = "pc.cameraUp", ["uImpostorGrid"] = "pc.grid",
-        ["uImpostorAlbedo"] = "textures2D[pc.albedo]", ["uImpostorNormal"] = "textures2D[pc.normal]", ["uImpostorGloss"] = "pc.gloss",
-        ["uImpostorBlend"] = "pc.blend", ["uImpostorDebug"] = "pc.debug", ["uCoverage"] = "pc.coverage",
-        ["uImpostorView"] = "pc.view", ["uImpostorBox"] = "pc.spare",
+        ["uImpostor"] = "pc.sphere",
+        ["uCameraUp"] = "pc.cameraUp",
+        ["uImpostorGrid"] = "pc.grid",
+        ["uImpostorAlbedo"] = "textures2D[pc.albedo]",
+        ["uImpostorNormal"] = "textures2D[pc.normal]",
+        ["uImpostorGloss"] = "pc.gloss",
+        ["uImpostorBlend"] = "pc.blend",
+        ["uImpostorDebug"] = "pc.debug",
+        ["uCoverage"] = "pc.coverage",
+        ["uImpostorView"] = "pc.view",
+        ["uImpostorBox"] = "pc.spare",
     };
 
     /// <summary><see cref="Vertex"/> in the native model.</summary>
@@ -636,8 +643,13 @@ public static class ImpostorShaders
 
     static readonly Dictionary<string, string> RockNativeMap = new(NativeMap)
     {
-        ["uRockGround"] = "textures2D[pc.rockGround]", ["uRockWorldColour"] = "textures2D[pc.rockWorldColour]", ["uRockColour"] = "textures2D[pc.rockColour]",
-        ["uRockRegion"] = "pc.rockRegion", ["uRockHalfWorld"] = "pc.rockHalfWorld", ["uRockFarStart"] = "pc.rockFarStart", ["uRockFarEnd"] = "pc.rockFarEnd",
+        ["uRockGround"] = "textures2D[pc.rockGround]",
+        ["uRockWorldColour"] = "textures2D[pc.rockWorldColour]",
+        ["uRockColour"] = "textures2D[pc.rockColour]",
+        ["uRockRegion"] = "pc.rockRegion",
+        ["uRockHalfWorld"] = "pc.rockHalfWorld",
+        ["uRockFarStart"] = "pc.rockFarStart",
+        ["uRockFarEnd"] = "pc.rockFarEnd",
         ["uRockFlags"] = "pc.rockFlags",
     };
 

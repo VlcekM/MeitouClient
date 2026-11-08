@@ -25,25 +25,25 @@ public class DialogueTests
     /// "plain" (score 0) says hello.
     /// </summary>
     static PopulationData Data() => PopulationData.Create(Db([
-        Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
-        Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Villagers"),
-        Rec("npc-d", FcsRecordType.CHARACTER, r => { r.Name = "Villager"; r.References["dialogue"] = [Ref("rich-d"), Ref("plain-d")]; }),
-        Rec("money-d", FcsRecordType.DIALOG_ACTION, r => r.Ints["condition name"] = DialogueConditions.PlayerMoney),
-        Rec("pay-d", FcsRecordType.DIALOG_ACTION, r => r.Ints["action name"] = DialogueActions.TakeMoney),
-        Rec("rich-d", FcsRecordType.DIALOGUE, r => { r.References["conditions"] = [Ref("money-d", 500)]; r.References["lines"] = [Ref("rich-l")]; }),
-        Rec("rich-l", FcsRecordType.DIALOGUE_LINE, r => { r.Strings["text0"] = "/GREETING/, rich /YOURNAME/."; r.References["lines"] = [Ref("buy-l"), Ref("bye-l")]; }),
-        Rec("buy-l", FcsRecordType.DIALOGUE_LINE, r =>
+        Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
+        Rec("f-d", FcsRecordType.Faction, r => r.Name = "Villagers"),
+        Rec("npc-d", FcsRecordType.Character, r => { r.Name = "Villager"; r.References["dialogue"] = [Ref("rich-d"), Ref("plain-d")]; }),
+        Rec("money-d", FcsRecordType.DialogAction, r => r.Ints["condition name"] = DialogueConditions.PlayerMoney),
+        Rec("pay-d", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.TakeMoney),
+        Rec("rich-d", FcsRecordType.Dialogue, r => { r.References["conditions"] = [Ref("money-d", 500)]; r.References["lines"] = [Ref("rich-l")]; }),
+        Rec("rich-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "/GREETING/, rich /YOURNAME/."; r.References["lines"] = [Ref("buy-l"), Ref("bye-l")]; }),
+        Rec("buy-l", FcsRecordType.DialogueLine, r =>
         {
             r.Ints["speaker"] = (int)Talker.Target;
             r.Strings["text0"] = "Here, c./COST/.";
             r.References["effects"] = [Ref("pay-d", 100)];
             r.References["locks"] = [Ref("rich-d")];
         }),
-        Rec("bye-l", FcsRecordType.DIALOGUE_LINE, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Bye."; }),
-        Rec("plain-d", FcsRecordType.DIALOGUE, r => r.References["lines"] = [Ref("plain-l")]),
-        Rec("plain-l", FcsRecordType.DIALOGUE_LINE, r => r.Strings["text0"] = "Hello."),
-        Rec("greet-d", FcsRecordType.WORD_SWAPS, r => { r.Name = "GREETING"; r.References["lines"] = [Ref("greet-l")]; }),
-        Rec("greet-l", FcsRecordType.DIALOGUE_LINE, r => r.Strings["text0"] = "well met"),
+        Rec("bye-l", FcsRecordType.DialogueLine, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Bye."; }),
+        Rec("plain-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("plain-l")]),
+        Rec("plain-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "Hello."),
+        Rec("greet-d", FcsRecordType.WordSwaps, r => { r.Name = "GREETING"; r.References["lines"] = [Ref("greet-l")]; }),
+        Rec("greet-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "well met"),
     ]), []);
 
     /// <summary>
@@ -51,23 +51,23 @@ public class DialogueTests
     /// (c.10,000 and DA_INCREASE_FACTION_RANK capped at 1); at rank 1 (checked with `who` 1, which the game ignores) it offers to buy.
     /// </summary>
     static PopulationData Guild() => PopulationData.Create(Db([
-        Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
-        Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Thieves"),
-        Rec("npc-d", FcsRecordType.CHARACTER, r => { r.Name = "Villager"; r.References["dialogue"] = [Ref("stranger-d"), Ref("member-d")]; }),
-        Rec("rank-d", FcsRecordType.DIALOG_ACTION, r => r.Ints["condition name"] = 10),
-        Rec("rank-who-d", FcsRecordType.DIALOG_ACTION, r => { r.Ints["condition name"] = 10; r.Ints["who"] = 1; }),
-        Rec("pay-d", FcsRecordType.DIALOG_ACTION, r => r.Ints["action name"] = DialogueActions.TakeMoney),
-        Rec("raise-d", FcsRecordType.DIALOG_ACTION, r => r.Ints["action name"] = DialogueActions.IncreaseFactionRank),
-        Rec("stranger-d", FcsRecordType.DIALOGUE, r => { r.References["conditions"] = [Ref("rank-d", 0)]; r.References["lines"] = [Ref("stranger-l")]; }),
-        Rec("stranger-l", FcsRecordType.DIALOGUE_LINE, r => { r.Strings["text0"] = "I don't know you."; r.References["lines"] = [Ref("join-l")]; }),
-        Rec("join-l", FcsRecordType.DIALOGUE_LINE, r =>
+        Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
+        Rec("f-d", FcsRecordType.Faction, r => r.Name = "Thieves"),
+        Rec("npc-d", FcsRecordType.Character, r => { r.Name = "Villager"; r.References["dialogue"] = [Ref("stranger-d"), Ref("member-d")]; }),
+        Rec("rank-d", FcsRecordType.DialogAction, r => r.Ints["condition name"] = 10),
+        Rec("rank-who-d", FcsRecordType.DialogAction, r => { r.Ints["condition name"] = 10; r.Ints["who"] = 1; }),
+        Rec("pay-d", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.TakeMoney),
+        Rec("raise-d", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.IncreaseFactionRank),
+        Rec("stranger-d", FcsRecordType.Dialogue, r => { r.References["conditions"] = [Ref("rank-d", 0)]; r.References["lines"] = [Ref("stranger-l")]; }),
+        Rec("stranger-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "I don't know you."; r.References["lines"] = [Ref("join-l")]; }),
+        Rec("join-l", FcsRecordType.DialogueLine, r =>
         {
             r.Ints["speaker"] = (int)Talker.Target;
             r.Strings["text0"] = "I'll join.";
             r.References["effects"] = [Ref("pay-d", 10000), Ref("raise-d", 1)];
         }),
-        Rec("member-d", FcsRecordType.DIALOGUE, r => { r.References["conditions"] = [Ref("rank-who-d", 1)]; r.References["lines"] = [Ref("member-l")]; }),
-        Rec("member-l", FcsRecordType.DIALOGUE_LINE, r => r.Strings["text0"] = "Need to sell off some junk?"),
+        Rec("member-d", FcsRecordType.Dialogue, r => { r.References["conditions"] = [Ref("rank-who-d", 1)]; r.References["lines"] = [Ref("member-l")]; }),
+        Rec("member-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "Need to sell off some junk?"),
     ]), []);
 
     sealed class Village : IDisposable
@@ -95,7 +95,7 @@ public class DialogueTests
         {
             var squad = new Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = faction, HomeCentre = at, HomeRadius = 10 };
             World.Squads.Add(squad);
-            var cold = new Meitou.Tests.Combat.Combatant { Name = name }.MakeCold();
+            var cold = new Combat.Combatant { Name = name }.MakeCold();
             cold.Faction = faction;
             cold.IsPlayer = player;
             cold.RecordId = record;
@@ -144,21 +144,21 @@ public class DialogueTests
         Assert.Equal("Hello.", v.Talk!.Text);
 
         // The lock is saved as the original's lok0 pair.
-        var state = new FcsRecord { StringId = "s", RecordType = FcsRecordType.GAMESTATE_CHARACTER };
+        var state = new FcsRecord { StringId = "s", RecordType = FcsRecordType.GamestateCharacter };
         DialogueSave.Write(state, cold);
         Assert.Equal(("rich-d", true), (state.Strings["lok0"], state.Bools["lok0"]));
-        var loaded = new Meitou.Tests.Combat.Combatant { Name = "x" }.MakeCold();
+        var loaded = new Combat.Combatant { Name = "x" }.MakeCold();
         DialogueSave.Read(state, loaded);
         Assert.True(loaded.DialogueLocks!["rich-d"]);
     }
 
     /// <summary>A dumb villager (Agnu, Ray) with one dialogue; <paramref name="listed"/>: the dialogue's <c>is character</c> names it.</summary>
     static PopulationData Dumb(bool listed) => PopulationData.Create(Db([
-        Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
-        Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Villagers"),
-        Rec("npc-d", FcsRecordType.CHARACTER, r => { r.Name = "Villager"; r.Bools["dumb"] = true; r.References["dialogue"] = [Ref("plain-d")]; }),
-        Rec("plain-d", FcsRecordType.DIALOGUE, r => { r.References["lines"] = [Ref("plain-l")]; if (listed) r.References["is character"] = [Ref("npc-d")]; }),
-        Rec("plain-l", FcsRecordType.DIALOGUE_LINE, r => r.Strings["text0"] = "Hello."),
+        Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
+        Rec("f-d", FcsRecordType.Faction, r => r.Name = "Villagers"),
+        Rec("npc-d", FcsRecordType.Character, r => { r.Name = "Villager"; r.Bools["dumb"] = true; r.References["dialogue"] = [Ref("plain-d")]; }),
+        Rec("plain-d", FcsRecordType.Dialogue, r => { r.References["lines"] = [Ref("plain-l")]; if (listed) r.References["is character"] = [Ref("npc-d")]; }),
+        Rec("plain-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "Hello."),
     ]), []);
 
     [Fact]
@@ -207,22 +207,22 @@ public class DialogueTests
     public void A_greeting_between_npcs_sets_off_the_crowd_and_the_target_answers()
     {
         var data = PopulationData.Create(Db([
-            Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
-            Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Villagers"),
-            Rec("guard-c", FcsRecordType.CHARACTER, r => { r.Name = "Guard"; r.References["dialogue package"] = [Ref("guard-p")]; }),
-            Rec("guard-p", FcsRecordType.DIALOGUE_PACKAGE, r => r.References["dialogs"] = [Ref("hail-d", 3)]),
-            Rec("player-dc", FcsRecordType.DIALOG_ACTION, r => { r.Ints["condition name"] = 36; r.Ints["who"] = (int)Talker.Target; }),
-            Rec("hail-d", FcsRecordType.DIALOGUE, r => { r.Bools["monologue"] = true; r.References["lines"] = [Ref("hail-l")]; }),
-            Rec("hail-l", FcsRecordType.DIALOGUE_LINE, r =>
+            Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
+            Rec("f-d", FcsRecordType.Faction, r => r.Name = "Villagers"),
+            Rec("guard-c", FcsRecordType.Character, r => { r.Name = "Guard"; r.References["dialogue package"] = [Ref("guard-p")]; }),
+            Rec("guard-p", FcsRecordType.DialoguePackage, r => r.References["dialogs"] = [Ref("hail-d", 3)]),
+            Rec("player-dc", FcsRecordType.DialogAction, r => { r.Ints["condition name"] = 36; r.Ints["who"] = (int)Talker.Target; }),
+            Rec("hail-d", FcsRecordType.Dialogue, r => { r.Bools["monologue"] = true; r.References["lines"] = [Ref("hail-l")]; }),
+            Rec("hail-l", FcsRecordType.DialogueLine, r =>
             {
                 r.Strings["text0"] = "Hail, /YOURNAME/.";
                 r.References["conditions"] = [Ref("player-dc", 0)];
                 r.References["crowd trigger"] = [Ref("cheer-d", 100)];
                 r.References["lines"] = [Ref("answer-l")];
             }),
-            Rec("answer-l", FcsRecordType.DIALOGUE_LINE, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Hail yourself."; }),
-            Rec("cheer-d", FcsRecordType.DIALOGUE, r => { r.Bools["monologue"] = true; r.References["lines"] = [Ref("cheer-l")]; }),
-            Rec("cheer-l", FcsRecordType.DIALOGUE_LINE, r => r.Strings["text0"] = "Hurrah!"),
+            Rec("answer-l", FcsRecordType.DialogueLine, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "Hail yourself."; }),
+            Rec("cheer-d", FcsRecordType.Dialogue, r => { r.Bools["monologue"] = true; r.References["lines"] = [Ref("cheer-l")]; }),
+            Rec("cheer-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "Hurrah!"),
         ]), []);
         var dialogue = new DialogueSystem(data, new DialogueSettings { AmbientEvents = true });
         var ground = new OpenGroundWalkability((_, _) => 150);
@@ -237,7 +237,7 @@ public class DialogueTests
                 last = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = faction };
                 world.Squads.Add(last);
             }
-            var cold = new Meitou.Tests.Combat.Combatant { Name = name }.MakeCold();
+            var cold = new Combat.Combatant { Name = name }.MakeCold();
             (cold.Faction, cold.IsPlayer, cold.RecordId, cold.Inventory, cold.SquadId) = (faction, player, record, new Inventory(), last!.Id);
             var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 150, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
             last.Members.Add(id);
@@ -266,15 +266,15 @@ public class DialogueTests
     public void Talk_to_leader_sends_the_leader_to_open_a_conversation()
     {
         var data = PopulationData.Create(Db([
-            Rec("204-gamedata.base", FcsRecordType.FACTION, r => r.Name = "Nameless"),
-            Rec("f-d", FcsRecordType.FACTION, r => r.Name = "Villagers"),
-            Rec("guard-c", FcsRecordType.CHARACTER, r => { r.Name = "Guard"; r.References["dialogue"] = [Ref("ask-d")]; }),
-            Rec("boss-c", FcsRecordType.CHARACTER, r => { r.Name = "Boss"; r.References["dialogue"] = [Ref("boss-d")]; }),
-            Rec("leader-da", FcsRecordType.DIALOG_ACTION, r => r.Ints["action name"] = DialogueActions.TalkToLeader),
-            Rec("ask-d", FcsRecordType.DIALOGUE, r => r.References["lines"] = [Ref("ask-l")]),
-            Rec("ask-l", FcsRecordType.DIALOGUE_LINE, r => { r.Strings["text0"] = "Talk to the boss."; r.References["effects"] = [Ref("leader-da")]; }),
-            Rec("boss-d", FcsRecordType.DIALOGUE, r => r.References["lines"] = [Ref("boss-l")]),
-            Rec("boss-l", FcsRecordType.DIALOGUE_LINE, r => r.Strings["text0"] = "What do you want?"),
+            Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
+            Rec("f-d", FcsRecordType.Faction, r => r.Name = "Villagers"),
+            Rec("guard-c", FcsRecordType.Character, r => { r.Name = "Guard"; r.References["dialogue"] = [Ref("ask-d")]; }),
+            Rec("boss-c", FcsRecordType.Character, r => { r.Name = "Boss"; r.References["dialogue"] = [Ref("boss-d")]; }),
+            Rec("leader-da", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.TalkToLeader),
+            Rec("ask-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("ask-l")]),
+            Rec("ask-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "Talk to the boss."; r.References["effects"] = [Ref("leader-da")]; }),
+            Rec("boss-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("boss-l")]),
+            Rec("boss-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "What do you want?"),
         ]), []);
         var dialogue = new DialogueSystem(data);
         var ground = new OpenGroundWalkability((_, _) => 150);
@@ -289,7 +289,7 @@ public class DialogueTests
                 last = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = faction };
                 world.Squads.Add(last);
             }
-            var cold = new Meitou.Tests.Combat.Combatant { Name = name }.MakeCold();
+            var cold = new Combat.Combatant { Name = name }.MakeCold();
             (cold.Faction, cold.IsPlayer, cold.RecordId, cold.Inventory, cold.SquadId) = (faction, player, record, new Inventory(), last!.Id);
             var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 150, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
             last.Members.Add(id);
@@ -321,11 +321,11 @@ public class DialogueTests
     public void Buying_a_caged_slave_lists_it_at_its_value_and_paying_frees_it()
     {
         var data = ArrestTests.Town([
-            Rec("slaver-c", FcsRecordType.CHARACTER, r => { r.Name = "Slaver"; r.References["dialogue"] = [Ref("trade-d")]; }),
-            Rec("buy-da", FcsRecordType.DIALOG_ACTION, r => r.Ints["action name"] = 42),
-            Rec("trade-d", FcsRecordType.DIALOGUE, r => r.References["lines"] = [Ref("trade-l")]),
-            Rec("trade-l", FcsRecordType.DIALOGUE_LINE, r => { r.Strings["text0"] = "Looking to trade?"; r.References["lines"] = [Ref("buy-l")]; }),
-            Rec("buy-l", FcsRecordType.DIALOGUE_LINE, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "I'm looking to buy some slaves"; r.References["effects"] = [Ref("buy-da")]; }),
+            Rec("slaver-c", FcsRecordType.Character, r => { r.Name = "Slaver"; r.References["dialogue"] = [Ref("trade-d")]; }),
+            Rec("buy-da", FcsRecordType.DialogAction, r => r.Ints["action name"] = 42),
+            Rec("trade-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("trade-l")]),
+            Rec("trade-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "Looking to trade?"; r.References["lines"] = [Ref("buy-l")]; }),
+            Rec("buy-l", FcsRecordType.DialogueLine, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "I'm looking to buy some slaves"; r.References["effects"] = [Ref("buy-da")]; }),
         ]);
         var dialogue = new DialogueSystem(data);
         var ground = new OpenGroundWalkability((_, _) => 150);
@@ -336,7 +336,7 @@ public class DialogueTests
         var centre = new Vector3(2000, 150, 2000);
         CharacterId Spawn(string name, Vector3 at, Squad squad, Action<CharacterCold> tweak)
         {
-            var cold = new Meitou.Tests.Combat.Combatant { Name = name }.MakeCold();
+            var cold = new Combat.Combatant { Name = name }.MakeCold();
             (cold.Inventory, cold.SquadId) = (new Inventory(), squad.Id);
             tweak(cold);
             var id = world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
@@ -432,7 +432,7 @@ public class DialogueInstallTests
         var at = table.Next[barman].Position;
         var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "p", Faction = data.PlayerFaction };
         world.Squads.Add(squad);
-        var cold = new Meitou.Tests.Combat.Combatant { Name = "hero" }.MakeCold();
+        var cold = new Combat.Combatant { Name = "hero" }.MakeCold();
         cold.Faction = data.PlayerFaction;
         cold.IsPlayer = true;
         cold.Inventory = new Inventory();
@@ -482,7 +482,7 @@ public class DialogueInstallTests
         {
             var squad = new Squad { Id = world.Squads.NextId(), TemplateId = template, Faction = faction, HomeCentre = new(x, 0), HomeRadius = 10 };
             world.Squads.Add(squad);
-            var cold = new Meitou.Tests.Combat.Combatant { Name = name }.MakeCold();
+            var cold = new Combat.Combatant { Name = name }.MakeCold();
             cold.Faction = faction;
             cold.IsPlayer = player;
             cold.Inventory = new Inventory();

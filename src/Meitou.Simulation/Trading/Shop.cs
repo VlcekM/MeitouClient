@@ -31,10 +31,10 @@ public sealed class Shop
     /// <summary>How many times the stock was filled: the key of the next fill's rolls.</summary>
     public int Fills { get; set; }
 
-    List<GridRegion>? unused;
+    List<GridRegion>? _unused;
 
     /// <summary>The cells of <see cref="Stock"/> outside every container (<see cref="Unused"/>, made once: the layout never changes).</summary>
-    public IReadOnlyList<GridRegion> UnusedCells => unused ??= Unused(Stock);
+    public IReadOnlyList<GridRegion> UnusedCells => _unused ??= Unused(Stock);
 
     /// <summary>The stock containers of a building shop (fixture ids), in the order of <see cref="Inventory.Regions"/> of <see cref="Stock"/>; empty for a squad shop.</summary>
     public IReadOnlyList<string> Containers { get; init; } = [];
@@ -63,7 +63,9 @@ public sealed class Shop
         var (placed, layout, rows) = best!.Value;
         return new Shop
         {
-            Terms = terms, Building = building.Key, Containers = [.. placed.Select(f => f.Id)],
+            Terms = terms,
+            Building = building.Key,
+            Containers = [.. placed.Select(f => f.Id)],
             Stock = new Inventory(width, rows) { StackBonusMult = StockStackMult, Regions = layout },
         };
     }
@@ -202,7 +204,7 @@ public static class ShopFiller
         var faction = (uint)shop.Terms.Faction < (uint)data.Factions.Count ? data.Db.Find(data.Factions[shop.Terms.Faction].Id) : null;
         var lists = new List<(VendorList List, int Weight)>();
         foreach (var link in VendorLinks(template, faction))
-            if (data.Db.Find(link.Id) is { Type: FcsRecordType.VENDOR_LIST } record) lists.Add((VendorList.From(data.Db, record), link.V0 == 0 ? 100 : link.V0));
+            if (data.Db.Find(link.Id) is { Type: FcsRecordType.VendorList } record) lists.Add((VendorList.From(data.Db, record), link.V0 == 0 ? 100 : link.V0));
         long totalWeight = lists.Sum(l => (long)l.Weight);
         var town = market.SiteCulture(shop.Terms.Site);
         var own = market.FactionCulture(shop.Terms.Faction);
@@ -249,8 +251,8 @@ public static class ShopFiller
     static void AddSpecials(Shop shop, string templateId, GameDatabase db, Market market)
     {
         if (db.Find(templateId) is not { } template) return;
-        AddSpecialList(shop, template.GetReferences("special items"), FcsRecordType.ITEM, db, market);
-        AddSpecialList(shop, template.GetReferences("special map items"), FcsRecordType.MAP_ITEM, db, market);
+        AddSpecialList(shop, template.GetReferences("special items"), FcsRecordType.Item, db, market);
+        AddSpecialList(shop, template.GetReferences("special map items"), FcsRecordType.MapItem, db, market);
     }
 
     static void AddSpecialList(Shop shop, IReadOnlyList<GameReference> list, FcsRecordType type, GameDatabase db, Market market)
@@ -295,11 +297,11 @@ public static class ShopFiller
 
     static ItemInstance? Make(VendorEntry entry, VendorList list, GameRecord? faction, SquadTemplate template, Market market, GameDatabase db, ref RandomStream rng)
     {
-        float quality = entry.Type == FcsRecordType.ARMOUR ? CharacterGenerator.QualityOfGrade(Grade(faction, ref rng)) : 0;
+        float quality = entry.Type == FcsRecordType.Armour ? CharacterGenerator.QualityOfGrade(Grade(faction, ref rng)) : 0;
         if (market.Items.Create(entry.Id, 1, quality) is not { } item) return null;
-        if (entry.Type == FcsRecordType.LIMB_REPLACEMENT) item.Level = CharacterGenerator.QualityOfGrade(LimbGrade(template.RoboticsLevels, ref rng));
-        if (entry.Type == FcsRecordType.CROSSBOW) item.Level = CharacterGenerator.QualityOfGrade(CrossbowGrade(template.CrossbowLevels, ref rng));
-        if (entry.Type == FcsRecordType.WEAPON && Maker(list, db, ref rng) is { } made)
+        if (entry.Type == FcsRecordType.LimbReplacement) item.Level = CharacterGenerator.QualityOfGrade(LimbGrade(template.RoboticsLevels, ref rng));
+        if (entry.Type == FcsRecordType.Crossbow) item.Level = CharacterGenerator.QualityOfGrade(CrossbowGrade(template.CrossbowLevels, ref rng));
+        if (entry.Type == FcsRecordType.Weapon && Maker(list, db, ref rng) is { } made)
         {
             item.CompanyId = made.Maker.StringId;
             item.MaterialId = made.Model ?? "";

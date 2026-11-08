@@ -64,8 +64,12 @@ public static class FoliageGrouping
         for (int g = 0; g < keys.Count; g++) groups.Add(new FoliageInstanceGroup(keys[g].Mesh, keys[g].Layer, records[g], maxScale[g]));
         return new GroupedFoliageZone
         {
-            Zone = zone, Ground = ground, Groups = groups, InstanceCount = slots.Length,
-            MinY = slots.Length == 0 ? 0 : minY, MaxY = slots.Length == 0 ? 0 : maxY,
+            Zone = zone,
+            Ground = ground,
+            Groups = groups,
+            InstanceCount = slots.Length,
+            MinY = slots.Length == 0 ? 0 : minY,
+            MaxY = slots.Length == 0 ? 0 : maxY,
         };
     }
 }

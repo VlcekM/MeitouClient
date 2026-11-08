@@ -11,25 +11,25 @@ public sealed partial class FixtureRegistry
     public const float NotPublicPolice = 1e-5f;
 
     // The population data the registered buildings came from (relations, factions, towns): what the usable test reads. Derived, not hashed.
-    PopulationData? usableData;
+    PopulationData? _usableData;
     // A town building's Open to public flag at registration (the saved state, else the level's <c>is public day</c>, public when absent: the AI's reading, AiSystem places); derived.
-    readonly Dictionary<string, bool> levelPublic = new(StringComparer.Ordinal);
+    readonly Dictionary<string, bool> _levelPublic = new(StringComparer.Ordinal);
 
     // Placed buildings flagged `is inside building` (a piece of another building, saved state first, else the level's); derived.
-    readonly HashSet<string> nested = new(StringComparer.Ordinal);
+    readonly HashSet<string> _nested = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Whether a fixture stands inside another building, the original's parent hand (vfunc <c>0x1d8</c>) being set (<b>Observed</b>): an item of a building's interior layout, or a placed building flagged
     /// <c>is inside building</c> (the parent's own key is not kept, so its flags are the fixture building's).
     /// </summary>
-    public bool IsInside(Fixture f) => f.Id != f.Building || nested.Contains(f.Building);
+    public bool IsInside(Fixture f) => f.Id != f.Building || _nested.Contains(f.Building);
 
     /// <summary>Whether a building is open to the public (the original's <c>Building::isPublic</c> <c>+0xc8</c>, <b>Observed</b>): as the player set it, else as its state reads, else public.</summary>
-    public bool IsPublic(string building) => PublicFlagOf(building) ?? (levelPublic.TryGetValue(building, out bool open) ? open : true);
+    public bool IsPublic(string building) => PublicFlagOf(building) ?? (_levelPublic.TryGetValue(building, out bool open) ? open : true);
 
     /// <summary>The town a fixture's building stands in (<c>FUN_1400f6c20</c>): its site, else the town whose radius holds it.</summary>
     CampaignTown TownOfFixture(World world, Fixture f) =>
-        f.Site >= 0 ? CampaignTown.OfSite(f.Site) : usableData is { } data ? AiSystem.TownAt(data, world, f.Position) : CampaignTown.None;
+        f.Site >= 0 ? CampaignTown.OfSite(f.Site) : _usableData is { } data ? AiSystem.TownAt(data, world, f.Position) : CampaignTown.None;
 
     /// <summary>The cage finder gathers the buildings within the town radius times this of its centre (<c>DAT_1416b1640</c>, <b>Verified</b>).</summary>
     public const float TownReach = 1.1f;
@@ -54,7 +54,7 @@ public sealed partial class FixtureRegistry
     /// </summary>
     public Func<Vector3, bool> TownCandidates(World world, PopulationData data, CharacterCold carrier, Vector3 at)
     {
-        usableData ??= data;
+        _usableData ??= data;
         var town = AiSystem.TownAt(data, world, at);
         if (town.IsNone) town = NearestTownOf(world, data, carrier.Faction, at);
         if (town.IsNone) return static _ => true;
@@ -121,7 +121,7 @@ public sealed partial class FixtureRegistry
         var squad = world.Squads.Find(carrier.SquadId);
         int faction = squad?.Faction ?? carrier.Faction;
         if (faction < 0 || owner == faction) return true;
-        if (usableData is not { } data) return false;
+        if (_usableData is not { } data) return false;
         if (f is not null && squad?.Ai is { CurrentClass: PackageClass.OccupyTown, Destination.IsNone: false } board && TownOfFixture(world, f) == board.Destination) return true;
         var relations = data.Relations;
         bool known = owner >= 0 && relations.Contains(owner) && relations.Contains(faction);

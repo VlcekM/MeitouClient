@@ -11,33 +11,33 @@ namespace Meitou.Data;
 /// </summary>
 public sealed unsafe class NativeBuffer : MemoryManager<byte>
 {
-    static long liveBytes;
+    static long s_liveBytes;
 
     /// <summary>The bytes of every block not freed yet, over the process.</summary>
-    public static long LiveBytes => Interlocked.Read(ref liveBytes);
+    public static long LiveBytes => Interlocked.Read(ref s_liveBytes);
 
-    nint pointer;
+    nint _pointer;
 
     public NativeBuffer(int length)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(length);
-        pointer = (nint)NativeMemory.Alloc((nuint)Math.Max(length, 1));
+        _pointer = (nint)NativeMemory.Alloc((nuint)Math.Max(length, 1));
         Length = length;
-        Interlocked.Add(ref liveBytes, length);
+        Interlocked.Add(ref s_liveBytes, length);
     }
 
     public int Length { get; }
 
     public override Span<byte> GetSpan()
     {
-        nint p = pointer;
+        nint p = _pointer;
         ObjectDisposedException.ThrowIf(p == 0, this);
         return new Span<byte>((void*)p, Length);
     }
 
     public override MemoryHandle Pin(int elementIndex = 0)
     {
-        nint p = pointer;
+        nint p = _pointer;
         ObjectDisposedException.ThrowIf(p == 0, this);
         ArgumentOutOfRangeException.ThrowIfGreaterThan((uint)elementIndex, (uint)Length, nameof(elementIndex));
         return new MemoryHandle((byte*)p + elementIndex);   // native memory never moves: nothing to pin
@@ -47,9 +47,9 @@ public sealed unsafe class NativeBuffer : MemoryManager<byte>
 
     protected override void Dispose(bool disposing)
     {
-        nint p = Interlocked.Exchange(ref pointer, 0);
+        nint p = Interlocked.Exchange(ref _pointer, 0);
         if (p == 0) return;
         NativeMemory.Free((void*)p);
-        Interlocked.Add(ref liveBytes, -Length);
+        Interlocked.Add(ref s_liveBytes, -Length);
     }
 }

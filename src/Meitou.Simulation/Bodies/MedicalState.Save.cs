@@ -63,7 +63,7 @@ public sealed partial class MedicalState
         get
         {
             int bits = 0;
-            foreach (var p in parts)
+            foreach (var p in _parts)
                 if (p.Template.LimbSlot is >= 0 and < 4 and var k) bits |= ((int)p.Limb & 3) << (2 * k);
             return bits;
         }
@@ -72,7 +72,7 @@ public sealed partial class MedicalState
     /// <summary>The part of limb slot 0 to 3 (0 left arm, 1 right arm, 2 left leg, 3 right leg); null when the anatomy has none.</summary>
     public HealthPart? LimbPart(int slot)
     {
-        foreach (var p in parts)
+        foreach (var p in _parts)
             if (p.Template.LimbSlot == slot) return p;
         return null;
     }
@@ -122,7 +122,12 @@ public sealed partial class MedicalState
             float F(string name, float fallback = 0) => floats.TryGetValue(name + k, out float v) ? v : fallback;
             parts.Add(new HealthPart(template, (int)F("hit"), baseHp)
             {
-                Flesh = F("flesh"), Bandage = F("bandage"), Rig = F("rig"), Stun = F("stun"), Wear = F("wear"), HitMult = F("hitmult", 1),
+                Flesh = F("flesh"),
+                Bandage = F("bandage"),
+                Rig = F("rig"),
+                Stun = F("stun"),
+                Wear = F("wear"),
+                HitMult = F("hitmult", 1),
                 SelfHealing = race.SelfHealing,
             });
         }

@@ -29,18 +29,18 @@ public sealed unsafe class Ngx : IDisposable
     [StructLayout(LayoutKind.Sequential)] struct FeatureCommonInfo { public PathListInfo PathList; public nint Internal; public LoggingInfo Logging; }
 
     // NVSDK_NGX_VULKAN_Init_with_ProjectID, called through libffi (InitFromNativeCaller).
-    readonly nint init;
-    readonly delegate* unmanaged<nint, int> shutdown;
+    readonly nint _init;
+    readonly delegate* unmanaged<nint, int> _shutdown;
     /// <summary>The strings handed to NGX at init (paths, project id, version), kept until it is shut down.</summary>
-    readonly List<nint> initStrings = [];
-    readonly delegate* unmanaged<void**, int> getCapabilityParameters;
+    readonly List<nint> _initStrings = [];
+    readonly delegate* unmanaged<void**, int> _getCapabilityParameters;
     internal readonly delegate* unmanaged<void**, int> AllocateParameters;
     internal readonly delegate* unmanaged<void*, int> DestroyParameters;
     internal readonly delegate* unmanaged<nint, nint, int, void*, void**, int> CreateFeature;
     internal readonly delegate* unmanaged<void*, int> ReleaseFeature;
     internal readonly delegate* unmanaged<nint, void*, void*, nint, int> EvaluateFeature;
-    nint device;
-    bool disposed;
+    nint _device;
+    bool _disposed;
 
     public string[] InstanceExtensions { get; }
     public string[] DeviceExtensions { get; }
@@ -51,9 +51,9 @@ public sealed unsafe class Ngx : IDisposable
 
     Ngx(nint lib, string[] instance, string[] device, string? modelPath)
     {
-        init = NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_Init_with_ProjectID");
-        shutdown = (delegate* unmanaged<nint, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_Shutdown1");
-        getCapabilityParameters = (delegate* unmanaged<void**, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_GetCapabilityParameters");
+        _init = NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_Init_with_ProjectID");
+        _shutdown = (delegate* unmanaged<nint, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_Shutdown1");
+        _getCapabilityParameters = (delegate* unmanaged<void**, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_GetCapabilityParameters");
         AllocateParameters = (delegate* unmanaged<void**, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_AllocateParameters");
         DestroyParameters = (delegate* unmanaged<void*, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_DestroyParameters");
         CreateFeature = (delegate* unmanaged<nint, nint, int, void*, void**, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_VULKAN_CreateFeature1");
@@ -158,13 +158,13 @@ public sealed unsafe class Ngx : IDisposable
             Logging = new LoggingInfo { Callback = (nint)(delegate* unmanaged<byte*, int, int, void>)&OnLog, MinimumLevel = Verbose ? 2 : 1, DisableOtherSinks = 1 },
         };
         int? initialised = OperatingSystem.IsWindows()
-            ? ((delegate* unmanaged<byte*, int, byte*, byte*, nint, nint, nint, nint, nint, FeatureCommonInfo*, uint, int>)init)(project, 0, version, dataPath, d.Instance.Handle, d.PhysicalDevice.Handle, d.Device.Handle, 0, 0, &info, ApiVersion)
-            : InitFromNativeCaller(init, project, 0, version, dataPath, d.Instance.Handle, d.PhysicalDevice.Handle, d.Device.Handle, &info, ApiVersion);
+            ? ((delegate* unmanaged<byte*, int, byte*, byte*, nint, nint, nint, nint, nint, FeatureCommonInfo*, uint, int>)_init)(project, 0, version, dataPath, d.Instance.Handle, d.PhysicalDevice.Handle, d.Device.Handle, 0, 0, &info, ApiVersion)
+            : InitFromNativeCaller(_init, project, 0, version, dataPath, d.Instance.Handle, d.PhysicalDevice.Handle, d.Device.Handle, &info, ApiVersion);
         if (initialised is null) return false;
         if (initialised != ResultSuccess) { Console.WriteLine($"ngx       init failed ({initialised:x}) on {d.DeviceName}"); return false; }
-        device = d.Device.Handle;
+        _device = d.Device.Handle;
         void* caps;
-        int rc = getCapabilityParameters(&caps);
+        int rc = _getCapabilityParameters(&caps);
         if (rc != ResultSuccess) { Console.WriteLine($"ngx       NVSDK_NGX_VULKAN_GetCapabilityParameters failed ({rc:x})"); return false; }
         int available = 0, outdated = 0, initResult = 0;
         NgxParameters.GetInt(caps, "SuperSampling.Available\0"u8, &available);
@@ -200,8 +200,8 @@ public sealed unsafe class Ngx : IDisposable
         var types = stackalloc void*[11] { pointer, int32, pointer, pointer, pointer, pointer, pointer, pointer, pointer, pointer, uint32 };
         var values = stackalloc void*[11] { &project, &engine, &version, &dataPath, &instance, &physicalDevice, &device, &gipa, &gdpa, &info, &apiVersion };
         var cif = stackalloc byte[64];   // ffi_cif: abi, nargs, arg_types, rtype, bytes, flags (32 bytes on x86-64)
-        const int FfiUnix64 = 2;
-        int status = prepare(cif, FfiUnix64, 11, int32, types);
+        const int ffiUnix64 = 2;
+        int status = prepare(cif, ffiUnix64, 11, int32, types);
         if (status != 0) { Console.WriteLine($"ngx       ffi_prep_cif failed ({status})"); return null; }
         ulong result = 0;   // integer returns need sizeof(ffi_arg)
         call(cif, function, &result, values);
@@ -218,7 +218,7 @@ public sealed unsafe class Ngx : IDisposable
 
     byte* Keep(byte* p)
     {
-        initStrings.Add((nint)p);
+        _initStrings.Add((nint)p);
         return p;
     }
 
@@ -253,11 +253,11 @@ public sealed unsafe class Ngx : IDisposable
 
     public void Dispose()
     {
-        if (disposed) return;
-        disposed = true;
-        if (device != 0) shutdown(device);
-        foreach (var p in initStrings) NativeMemory.Free((void*)p);
-        initStrings.Clear();
+        if (_disposed) return;
+        _disposed = true;
+        if (_device != 0) _shutdown(_device);
+        foreach (var p in _initStrings) NativeMemory.Free((void*)p);
+        _initStrings.Clear();
     }
 }
 
@@ -267,39 +267,39 @@ public sealed unsafe class Ngx : IDisposable
 /// </summary>
 static unsafe class NgxParameters
 {
-    static delegate* unmanaged<void*, byte*, float, void> setF;
-    static delegate* unmanaged<void*, byte*, uint, void> setUI;
-    static delegate* unmanaged<void*, byte*, int, void> setI;
-    static delegate* unmanaged<void*, byte*, void*, void> setVoidPointer;
-    static delegate* unmanaged<void*, byte*, int*, int> getI;
+    static delegate* unmanaged<void*, byte*, float, void> s_setF;
+    static delegate* unmanaged<void*, byte*, uint, void> s_setUi;
+    static delegate* unmanaged<void*, byte*, int, void> s_setI;
+    static delegate* unmanaged<void*, byte*, void*, void> s_setVoidPointer;
+    static delegate* unmanaged<void*, byte*, int*, int> s_getI;
 
     public static void Load(nint lib)
     {
-        setF = (delegate* unmanaged<void*, byte*, float, void>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_SetF");
-        setUI = (delegate* unmanaged<void*, byte*, uint, void>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_SetUI");
-        setI = (delegate* unmanaged<void*, byte*, int, void>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_SetI");
-        setVoidPointer = (delegate* unmanaged<void*, byte*, void*, void>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_SetVoidPointer");
-        getI = (delegate* unmanaged<void*, byte*, int*, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_GetI");
+        s_setF = (delegate* unmanaged<void*, byte*, float, void>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_SetF");
+        s_setUi = (delegate* unmanaged<void*, byte*, uint, void>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_SetUI");
+        s_setI = (delegate* unmanaged<void*, byte*, int, void>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_SetI");
+        s_setVoidPointer = (delegate* unmanaged<void*, byte*, void*, void>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_SetVoidPointer");
+        s_getI = (delegate* unmanaged<void*, byte*, int*, int>)NativeLibrary.GetExport(lib, "NVSDK_NGX_Parameter_GetI");
     }
 
     public static void SetFloat(void* p, ReadOnlySpan<byte> name, float value)
     {
-        fixed (byte* n = name) setF(p, n, value);
+        fixed (byte* n = name) s_setF(p, n, value);
     }
     public static void SetUInt(void* p, ReadOnlySpan<byte> name, uint value)
     {
-        fixed (byte* n = name) setUI(p, n, value);
+        fixed (byte* n = name) s_setUi(p, n, value);
     }
     public static void SetInt(void* p, ReadOnlySpan<byte> name, int value)
     {
-        fixed (byte* n = name) setI(p, n, value);
+        fixed (byte* n = name) s_setI(p, n, value);
     }
     public static void SetPointer(void* p, ReadOnlySpan<byte> name, void* value)
     {
-        fixed (byte* n = name) setVoidPointer(p, n, value);
+        fixed (byte* n = name) s_setVoidPointer(p, n, value);
     }
     public static int GetInt(void* p, ReadOnlySpan<byte> name, int* value)
     {
-        fixed (byte* n = name) return getI(p, n, value);
+        fixed (byte* n = name) return s_getI(p, n, value);
     }
 }

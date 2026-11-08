@@ -1,5 +1,5 @@
-using Meitou.Simulation.Items;
 using Meitou.Data.Gameplay.Construction;
+using Meitou.Simulation.Items;
 using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Production;
@@ -139,7 +139,10 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
     /// <summary>The panel of a machine's class: farms; BF_BED 6; BF_TRAINING 7; BF_TURRET 12; every other class (furnaces too) Production.</summary>
     static MachinePanel PanelOf(MachineData d) => d.Farm is not null ? MachinePanel.Farm : d.Function switch
     {
-        6 => MachinePanel.Bed, MachineData.TrainingFunction => MachinePanel.Training, 12 => MachinePanel.Turret, _ => MachinePanel.Production,
+        6 => MachinePanel.Bed,
+        MachineData.TrainingFunction => MachinePanel.Training,
+        12 => MachinePanel.Turret,
+        _ => MachinePanel.Production,
     };
 
     internal static MachineSnapshot Of(Machine m, ItemFactory items)
@@ -149,20 +152,40 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
         MachineSlotView? output = m.Output is { } o ? new MachineSlotView(o.Recipe.Item, Name(o.Recipe.Item), o.Count, o.Recipe.Capacity, Math.Clamp(o.Progress, 0, 1), items.Info(o.Recipe.Item)?.Width ?? 1, items.Info(o.Recipe.Item)?.Height ?? 1) : null;
         InventoryView? storage = m.Storage is { } s ? new InventoryView(s.Width, s.Height, 0, 0,
             Array.AsReadOnly(s.Items.Select((item, index) => new InventoryItemView(index, item.Record, item.Name, "main", item.X, item.Y, item.Width, item.Height, item.Quantity, item.Weight, item.Quality)
-                { Material = item.MaterialId, Colour = item.ColourId, Charge = item.ChargeFraction }).ToArray())) : null;
+            { Material = item.MaterialId, Colour = item.ColourId, Charge = item.ChargeFraction }).ToArray())) : null;
         FarmView? farm = m.Farm is { } f && m.Data.Farm is { } fd
             ? new FarmView(f.Growth, f.Death, f.Harvested, f.Plants.Length, f.Status, m.Yield, m.CropMatch, ProductionSystem.Ripeness(f)) { PlantGrowth = [.. f.Plants] } : null;
         // The classes that update their emitter every frame tell it the efficiency and the power; the others powered it once, when built, with no operators (efficiency 0).
         var sound = m.Data.PowersEmitterEachFrame ? new MachineSound(m.Efficiency, m.HasPower && m.Efficiency > 0) : new MachineSound(0, true);
-        return new MachineSnapshot(m.Site, m.Data.Id, inputs, output, storage, farm, m.Status, m.Operators, m.Data.MaxOperators) { Sound = sound, Rotation = m.Rotation, Wind = m.Data.IsWind ? new WindView(m.Wind, m.WindSpeed, m.WindRotor, m.WindRated, m.PowerOn) : null, TechLevel = m.Data.IsResearch ? m.Data.TechLevel : 0, Operable = m.Data.Operable, IsAutomatic = m.Data.IsAutomatic, InputsEmpty = m.HasEmptyInputs, IsStorage = m.Data.IsStorage, Function = m.Data.Function, StorageLimitName = m.Data.StorageLimit is [var only] ? Name(only) : null, StorageCapacity = m.Data.StorageLimit is [_] ? (int)m.Data.StackBonusMult : 0, Craft = Crafting(m, items),
+        return new MachineSnapshot(m.Site, m.Data.Id, inputs, output, storage, farm, m.Status, m.Operators, m.Data.MaxOperators)
+        {
+            Sound = sound,
+            Rotation = m.Rotation,
+            Wind = m.Data.IsWind ? new WindView(m.Wind, m.WindSpeed, m.WindRotor, m.WindRated, m.PowerOn) : null,
+            TechLevel = m.Data.IsResearch ? m.Data.TechLevel : 0,
+            Operable = m.Data.Operable,
+            IsAutomatic = m.Data.IsAutomatic,
+            InputsEmpty = m.HasEmptyInputs,
+            IsStorage = m.Data.IsStorage,
+            Function = m.Data.Function,
+            StorageLimitName = m.Data.StorageLimit is [var only] ? Name(only) : null,
+            StorageCapacity = m.Data.StorageLimit is [_] ? (int)m.Data.StackBonusMult : 0,
+            Craft = Crafting(m, items),
             Power = m.Data.IsConsumer || m.Data.IsGenerator || m.Data.IsBattery ? new PowerView(m.Data.IsBattery ? PowerKind.Battery : m.Data.IsGenerator ? PowerKind.Generator : PowerKind.Consumer, m.Demand, m.Granted, m.Usage, m.Charge, m.Store, m.Inputs.Length == 0 || Array.Exists(m.Inputs, i => i.Level > 0 || i.Count > 0), m.PowerOn, m.GetsBattery) { OnGrid = m.OnGrid, GridCharging = m.GridCharging, GridDraining = m.GridDraining } : null,
-            Panel = PanelOf(m.Data), OutputValue = m.Data.OutputValue, Research = m.ProductionMult, Broken = m.Broken, Hydroponic = m.Data.Farm is { Indoor: true },
+            Panel = PanelOf(m.Data),
+            OutputValue = m.Data.OutputValue,
+            Research = m.ProductionMult,
+            Broken = m.Broken,
+            Hydroponic = m.Data.Farm is { Indoor: true },
             Furnace = m.Data.IsFurnace ? new FurnaceView(m.Burning, m.Metal) : null,
             Efficiency = new(m.Operators, m.Data.PowerOperators, m.Health, m.Power, m.Data.IsConsumer, m.Data.OutputRate * m.ProductionMult, m.Yield)
             {
-                Starved = m.Farm is { Status: FarmStatus.NoWater }, Drought = m.Data.Farm?.DroughtMultiplier ?? 1,
-                Rain = m.Data.Function == MachineData.RainCollectorFunction ? m.Rain : null, Active = m.Active,
-            } };
+                Starved = m.Farm is { Status: FarmStatus.NoWater },
+                Drought = m.Data.Farm?.DroughtMultiplier ?? 1,
+                Rain = m.Data.Function == MachineData.RainCollectorFunction ? m.Rain : null,
+                Active = m.Active,
+            }
+        };
     }
 
     static CraftView? Crafting(Machine m, ItemFactory items) => m.Craft is { } c

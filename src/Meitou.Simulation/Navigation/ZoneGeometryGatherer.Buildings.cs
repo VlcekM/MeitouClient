@@ -15,16 +15,16 @@ internal sealed partial class ZoneGeometryGatherer
     {
         var lo = zoneMin - new Vector2(margin + BuildingReach);
         var hi = zoneMax + new Vector2(margin + BuildingReach);
-        Func<double, double, float> terrain = map.HeightAt;
+        Func<double, double, float> terrain = _map.HeightAt;
         for (int dz = -1; dz <= 1; dz++)
             for (int dx = -1; dx <= 1; dx++)
             {
                 var z = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
                 // Runtime placements replace town houses by global key, or append newly placed buildings.
-                foreach (var b in BuildingPlacements.Overlay(BuildingsByZone.GetValueOrDefault(z) ?? [], runtime?.In(z) ?? []))
+                foreach (var b in BuildingPlacements.Overlay(BuildingsByZone.GetValueOrDefault(z) ?? [], _runtime?.In(z) ?? []))
                 {
                     if (b.Position.X < lo.X || b.Position.X > hi.X || b.Position.Z < lo.Y || b.Position.Z > hi.Y) continue;
-                    if (BuildingPlacements.Resolve(b, db, levels, terrain) is { } resolved) yield return resolved;
+                    if (BuildingPlacements.Resolve(b, _db, _levels, terrain) is { } resolved) yield return resolved;
                 }
             }
     }
@@ -82,7 +82,7 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>The state record of a placement in its zone file (null when it has none).</summary>
-    GameRecord? StateOf(BuildingPlacement b) => b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+    GameRecord? StateOf(BuildingPlacement b) => b.StateId is not null && _levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
 
     /// <summary>
     /// The objects of a building's layouts placed in the world (docs/formats/zones.md, "Building layouts"): the signs and stalls of its exterior layout and the
@@ -98,9 +98,9 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     internal IEnumerable<(string Name, List<Vector3> Shapes)> InteriorLayouts(InteriorSite site)
     {
-        foreach (var name in layouts.Names(site.Record, exterior: false))
-            if (layouts.Find(site.Record, name, exterior: false) is { } layout)
-                yield return (name, layouts.Items(layout).SelectMany(i => ShapeMiddles(site, i)).ToList());
+        foreach (var name in _layouts.Names(site.Record, exterior: false))
+            if (_layouts.Find(site.Record, name, exterior: false) is { } layout)
+                yield return (name, _layouts.Items(layout).SelectMany(i => ShapeMiddles(site, i)).ToList());
     }
 
     IEnumerable<Vector3> ShapeMiddles(InteriorSite site, LayoutItem item)
@@ -108,9 +108,9 @@ internal sealed partial class ZoneGeometryGatherer
         if ((PathMode)item.Building.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Ignore) yield break;
         var (at, rotation) = BuildingLayouts.Place(site.Position, site.Placement.Rotation, item);
         var node = NodeMatrix(item.Building, at, rotation);
-        foreach (var mesh in WorldObjectLayout.Building(db, item.Building, item.InstanceId, at, rotation, new BuildingState(false)))
+        foreach (var mesh in WorldObjectLayout.Building(_db, item.Building, item.InstanceId, at, rotation, new BuildingState(false)))
         {
-            if (mesh.CollisionPath(false) is not { Length: > 0 } path || collision.Get(path) is not { } prepared || mesh.Source.GetBool("passable")) continue;
+            if (mesh.CollisionPath(false) is not { Length: > 0 } path || _collision.Get(path) is not { } prepared || mesh.Source.GetBool("passable")) continue;
             foreach (var shape in prepared.Shapes)
             {
                 var pts = shape.Vertices.Select(v => Vector3.Transform(v, node)).ToArray();
@@ -126,8 +126,8 @@ internal sealed partial class ZoneGeometryGatherer
         {
             if (!exterior && b.WithoutInterior) continue;
             string? name = !exterior && InteriorLayoutOverrides.TryGetValue(b.Key, out var chosen) ? chosen : b.LayoutName(state, exterior);
-            if (name is not { Length: > 0 } || layouts.Find(record, name, exterior) is not { } layout) continue;
-            foreach (var item in layouts.Items(layout, b))
+            if (name is not { Length: > 0 } || _layouts.Find(record, name, exterior) is not { } layout) continue;
+            foreach (var item in _layouts.Items(layout, b))
             {
                 var (at, rotation) = BuildingLayouts.Place(position, b.Rotation, item);
                 yield return (item, at, rotation);
@@ -150,7 +150,7 @@ internal sealed partial class ZoneGeometryGatherer
         var node = NodeMatrix(building, position, rotation);
 
         // The `interior` list is part of the physical building as drawn (interior stairs: Storm House, docs/game/pathfinding.md "Interiors").
-        var placed = WorldObjectLayout.Building(db, building, placementId, position, rotation, new BuildingState(destroyed) { WithInterior = !destroyed });
+        var placed = WorldObjectLayout.Building(_db, building, placementId, position, rotation, new BuildingState(destroyed) { WithInterior = !destroyed });
         var doors = building.GetReferences("doors").Select(r => r.TargetStringId).ToHashSet();
         foreach (var mesh in placed)
         {
@@ -164,9 +164,9 @@ internal sealed partial class ZoneGeometryGatherer
         // The interior mask part is created apart from the parts list; its collision is the indoor hull.
         // Only a shell carves with its hull (wall gates such as the Hub's gates and Heft's Ancient Lab Ramp have a mask over a passage, issue #140).
         if (interior is null && IsShellWithInterior(building))
-        foreach (var r in building.GetReferences("interior mask"))
-            if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BUILDING_PART } mask && mask.GetPath("xml collision") is { Length: > 0 } maskPath)
-                AddPart(g, building, mask, maskPath, node, isDoor: false, interiorMask: true, instanceId: placementId);
+            foreach (var r in building.GetReferences("interior mask"))
+                if (_db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingPart } mask && mask.GetPath("xml collision") is { Length: > 0 } maskPath)
+                    AddPart(g, building, mask, maskPath, node, isDoor: false, interiorMask: true, instanceId: placementId);
     }
 
     /// <summary>
@@ -188,7 +188,7 @@ internal sealed partial class ZoneGeometryGatherer
 
     void AddPart(ZoneGeometry g, GameRecord owner, GameRecord part, string path, Matrix4x4 node, bool isDoor, bool interiorMask, string instanceId, InteriorContext? interior = null, int? floorOverride = null, bool open = false, bool upper = false)
     {
-        var prepared = collision.Get(path);
+        var prepared = _collision.Get(path);
         if (prepared is null) return;
         g.Stats.PartsWithCollision++;
         var mode = (PathMode)owner.GetInt("path mode", (int)PathMode.Obstacle);
@@ -361,7 +361,7 @@ internal sealed partial class ZoneGeometryGatherer
     {
         var node = NodeMatrix(building, position, rotation);
         var doors = building.GetReferences("doors").Select(r => r.TargetStringId).ToHashSet();
-        foreach (var mesh in WorldObjectLayout.Building(db, building, placementId, position, rotation, new BuildingState(destroyed)))
+        foreach (var mesh in WorldObjectLayout.Building(_db, building, placementId, position, rotation, new BuildingState(destroyed)))
         {
             var part = mesh.Source;
             string path = mesh.CollisionPath(destroyed);
@@ -369,7 +369,7 @@ internal sealed partial class ZoneGeometryGatherer
             // Groups 23..26: a building that is ignored by paths, or a passable part (ragdolls do not collide with them).
             bool passable = (PathMode)mesh.Owner.GetInt("path mode", (int)PathMode.Obstacle) == PathMode.Ignore || part.GetBool("passable");
             if (passable != roofs) continue;
-            if (collision.Get(path) is not { } prepared) continue;
+            if (_collision.Get(path) is not { } prepared) continue;
             foreach (var shape in prepared.Shapes)
                 foreach (int i in shape.Indices) output.Add(Vector3.Transform(shape.Vertices[i], node));
         }

@@ -23,15 +23,15 @@ public sealed class NamePool
     public static NamePool Load(string installRoot)
     {
         string data = Path.Combine(installRoot, "data");
-        var install = Meitou.Content.GameInstall.IsValid(installRoot) ? Meitou.Content.GameInstall.Open(installRoot) : null;
+        var install = Content.GameInstall.IsValid(installRoot) ? Content.GameInstall.Open(installRoot) : null;
         return new NamePool(Lines(install, data, "namesM.txt"), Lines(install, data, "namesF.txt"), Lines(install, data, "namesMF.txt"));
     }
 
-    static IEnumerable<string> Lines(Meitou.Content.GameInstall? install, string data, string name)
+    static IEnumerable<string> Lines(Content.GameInstall? install, string data, string name)
     {
         try
         {
-            var path = (install is null ? null : Meitou.Data.Ogre.GameResources.Find(install, name, "General")) ?? Meitou.Localisation.Loc.FindTextFile(data, name);
+            var path = (install is null ? null : Ogre.GameResources.Find(install, name, "General")) ?? Loc.FindTextFile(data, name);
             return path is not null ? [.. File.ReadAllLines(path).Select(l => l.Trim()).Where(l => l.Length > 0)] : [];
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }

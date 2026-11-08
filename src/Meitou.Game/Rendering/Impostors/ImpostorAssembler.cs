@@ -22,31 +22,31 @@ namespace Meitou.Game.Rendering.Impostors;
 /// </summary>
 public sealed class ImpostorAssembler
 {
-    readonly int grid, frame, levels;
+    readonly int _grid, _frame, _levels;
     /// <summary>RGBA8 levels per map: [map][level], each <c>(grid x frame / 2^level)^2</c> pixels, rows bottom first.</summary>
-    readonly byte[][][] maps;
-    double glossSum, glossWeight;
+    readonly byte[][][] _maps;
+    double _glossSum, _glossWeight;
 
     public ImpostorAssembler(int grid, int frame, int levels)
     {
-        (this.grid, this.frame, this.levels) = (grid, frame, levels);
-        if (mapPools.GetOrAdd((grid, frame, levels), _ => new()).TryTake(out var pooled)) { maps = pooled; return; }
-        maps = new byte[2][][];
+        (this._grid, this._frame, this._levels) = (grid, frame, levels);
+        if (MapPools.GetOrAdd((grid, frame, levels), _ => new()).TryTake(out var pooled)) { _maps = pooled; return; }
+        _maps = new byte[2][][];
         for (int m = 0; m < 2; m++)
         {
-            maps[m] = new byte[levels][];
+            _maps[m] = new byte[levels][];
             for (int l = 0; l < levels; l++)
             {
                 int size = grid * (frame >> l);
                 // Every texel of every level is written by Store, so the memory need not be cleared (it is up to 100 MB for a large atlas).
-                maps[m][l] = GC.AllocateUninitializedArray<byte>(size * size * 4);
+                _maps[m][l] = GC.AllocateUninitializedArray<byte>(size * size * 4);
             }
         }
     }
 
     /// <summary>The RGBA8 levels of finished bakes, kept for the next bake of the same size (a large atlas is two maps of about 50 MB: allocating them
     /// anew for every bake made the collector stall the render thread).</summary>
-    static readonly ConcurrentDictionary<(int Grid, int Frame, int Levels), ConcurrentBag<byte[][][]>> mapPools = new();
+    static readonly ConcurrentDictionary<(int Grid, int Frame, int Levels), ConcurrentBag<byte[][][]>> MapPools = new();
 
     /// <summary>The arrays of one frame's filtering, reused from frame to frame (and from bake to bake).</summary>
     sealed class Scratch
@@ -80,13 +80,13 @@ public sealed class ImpostorAssembler
         }
     }
 
-    static readonly ConcurrentDictionary<(int Frame, int Levels), ConcurrentBag<Scratch>> pools = new();
+    static readonly ConcurrentDictionary<(int Frame, int Levels), ConcurrentBag<Scratch>> Pools = new();
 
     /// <summary>Drops the pooled scratch (a few MB per worker for each frame size seen).</summary>
     public static void ReleasePool()
     {
-        pools.Clear();
-        mapPools.Clear();
+        Pools.Clear();
+        MapPools.Clear();
     }
 
     /// <summary>
@@ -101,19 +101,19 @@ public sealed class ImpostorAssembler
 
     /// <summary>As <see cref="AddRow(int, byte[], byte[], byte[])"/>, reading the pictures from memory (the readback buffer's mapping: no copy).</summary>
     public unsafe void AddRow(int row, nint albedo, nint normal, nint depth) =>
-        Parallel.For(0, grid, i => Frame(i, row, (byte*)albedo, (byte*)normal, (byte*)depth));
+        Parallel.For(0, _grid, i => Frame(i, row, (byte*)albedo, (byte*)normal, (byte*)depth));
 
     unsafe void Frame(int column, int row, byte* albedo, byte* normal, byte* gloss)
     {
-        var pool = pools.GetOrAdd((frame, levels), _ => new());
-        if (!pool.TryTake(out var scratch)) scratch = new Scratch(frame, levels);
+        var pool = Pools.GetOrAdd((_frame, _levels), _ => new());
+        if (!pool.TryTake(out var scratch)) scratch = new Scratch(_frame, _levels);
         try { Frame(scratch, column, row, albedo, normal, gloss); }
         finally { if (pool.Count < Environment.ProcessorCount) pool.Add(scratch); }
     }
 
     unsafe void Frame(Scratch scratch, int column, int row, byte* albedo, byte* normal, byte* gloss)
     {
-        int f = frame, width = grid * f, n = f * f;
+        int f = _frame, width = _grid * f, n = f * f;
         var cov = scratch.Cov;
         var alb = scratch.Alb;
         var nrm = scratch.Nrm;
@@ -135,7 +135,7 @@ public sealed class ImpostorAssembler
                 (alb[p * 3], alb[p * 3 + 1], alb[p * 3 + 2]) = (a.X, a.Y, a.Z);
                 (nrm[p * 3], nrm[p * 3 + 1], nrm[p * 3 + 2]) = (nn.X, nn.Y, nn.Z);
             }
-        lock (this) { glossSum += glossTotal; glossWeight += glossCover; }
+        lock (this) { _glossSum += glossTotal; _glossWeight += glossCover; }
 
         // The frame's covered area (the mean of the samples): every level's coverage, level 0's too, is scaled so that the runtime cut
         // (coverage >= 0.5) keeps that share of its pixels. Without it branches thinner than half a pixel vanish (their 2 x 2 coverage is 0.25).
@@ -151,7 +151,7 @@ public sealed class ImpostorAssembler
             (nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]) = (v.X, v.Y, v.Z);
         }
 
-        for (int level = 0; level < levels; level++)
+        for (int level = 0; level < _levels; level++)
         {
             int size = f >> level;
             if (level > 0)
@@ -275,9 +275,9 @@ public sealed class ImpostorAssembler
 
     void Store(int column, int row, int level, int size, float[] cov, float scale, float[] alb, float[] nrm)
     {
-        int atlas = grid * size;
-        var a = maps[(int)ImpostorMap.Albedo][level];
-        var nm = maps[(int)ImpostorMap.Normal][level];
+        int atlas = _grid * size;
+        var a = _maps[(int)ImpostorMap.Albedo][level];
+        var nm = _maps[(int)ImpostorMap.Normal][level];
         static byte B(float v) => (byte)Math.Clamp(MathF.Round(v * 255), 0, 255);
         for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)
@@ -298,13 +298,13 @@ public sealed class ImpostorAssembler
         var textures = new ImpostorTexture[2];
         for (int m = 0; m < 2; m++)
         {
-            var data = new ReadOnlyMemory<byte>[levels];
-            for (int l = 0; l < levels; l++) data[l] = ImpostorEncoder.Encode(encodings[m], maps[m][l], grid * (frame >> l));
+            var data = new ReadOnlyMemory<byte>[_levels];
+            for (int l = 0; l < _levels; l++) data[l] = ImpostorEncoder.Encode(encodings[m], _maps[m][l], _grid * (_frame >> l));
             textures[m] = new ImpostorTexture { Map = (ImpostorMap)m, Encoding = encodings[m], Levels = data };
         }
         // The encoded levels are new arrays (the RGBA8 option keeps the maps themselves): the maps go back to the pool.
-        if (compress && mapPools.GetOrAdd((grid, frame, levels), _ => new()) is { Count: < 2 } pool) pool.Add(maps);
-        float gloss = glossWeight > 0 ? (float)(glossSum / glossWeight) : 0.3f;
-        return new ImpostorAtlas { Grid = grid, FramePixels = frame, Centre = centre, Radius = radius, Gloss = Math.Clamp(gloss, 0, 1), Name = name, Textures = textures };
+        if (compress && MapPools.GetOrAdd((_grid, _frame, _levels), _ => new()) is { Count: < 2 } pool) pool.Add(_maps);
+        float gloss = _glossWeight > 0 ? (float)(_glossSum / _glossWeight) : 0.3f;
+        return new ImpostorAtlas { Grid = _grid, FramePixels = _frame, Centre = centre, Radius = radius, Gloss = Math.Clamp(gloss, 0, 1), Name = name, Textures = textures };
     }
 }

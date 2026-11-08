@@ -13,24 +13,24 @@ public sealed class BuildingTowns
     /// <summary>TownType.TOWN_NEST_MARKER, skipped by the game's nearest-town lookup.</summary>
     public const int NestMarkerType = 8;
 
-    readonly GameDatabase db;
-    readonly Dictionary<(int C, int CS), TownPlacement> byHandle = [];
-    readonly List<(TownPlacement Town, Vector2 At)> towns = [];
-    readonly Dictionary<string, GameRecord?> materials = new(StringComparer.Ordinal);
+    readonly GameDatabase _db;
+    readonly Dictionary<(int C, int CS), TownPlacement> _byHandle = [];
+    readonly List<(TownPlacement Town, Vector2 At)> _towns = [];
+    readonly Dictionary<string, GameRecord?> _materials = new(StringComparer.Ordinal);
 
     public BuildingTowns(GameDatabase db, WorldLevelData world)
     {
-        this.db = db;
+        this._db = db;
         var placements = new Dictionary<string, TownPlacement>(StringComparer.Ordinal);
         foreach (var t in world.Towns())
         {
             placements[t.InstanceId] = t;
             if (db.Find(t.TownId) is { } record && record.GetInt("type") != NestMarkerType)
-                towns.Add((t, new Vector2(t.Position.X, t.Position.Z)));
+                _towns.Add((t, new Vector2(t.Position.X, t.Position.Z)));
         }
-        foreach (var state in world.Level.OfType(FcsRecordType.GAMESTATE_TOWN))
+        foreach (var state in world.Level.OfType(FcsRecordType.GamestateTown))
             if (state.Ints.ContainsKey("handC") && placements.TryGetValue(state.GetString("instance"), out var t))
-                byHandle[(state.GetInt("handC"), state.GetInt("handCS"))] = t;
+                _byHandle[(state.GetInt("handC"), state.GetInt("handCS"))] = t;
     }
 
     /// <summary>The town of a building with state <paramref name="state"/> (or none) at <paramref name="position"/>, or null when there are no towns.</summary>
@@ -38,8 +38,8 @@ public sealed class BuildingTowns
 
     /// <summary>The town a GAMESTATE_BUILDING's <c>town*</c> handle names, or null when it has none or no town state matches.</summary>
     public TownPlacement? TownByHandle(GameRecord? state) =>
-        state is not null && state.GetInt("townTYPE") == (int)FcsRecordType.TOWN && state.Ints.ContainsKey("townC") &&
-        byHandle.TryGetValue((state.GetInt("townC"), state.GetInt("townCS")), out var town) ? town : null;
+        state is not null && state.GetInt("townTYPE") == (int)FcsRecordType.Town && state.Ints.ContainsKey("townC") &&
+        _byHandle.TryGetValue((state.GetInt("townC"), state.GetInt("townCS")), out var town) ? town : null;
 
     /// <summary>The nearest town by X/Z that is not a nest marker.</summary>
     public TownPlacement? NearestTown(Vector3 position)
@@ -47,7 +47,7 @@ public sealed class BuildingTowns
         var at = new Vector2(position.X, position.Z);
         TownPlacement? best = null;
         float bestDistance = float.MaxValue;
-        foreach (var (t, p) in towns)
+        foreach (var (t, p) in _towns)
         {
             float d = Vector2.DistanceSquared(p, at);
             if (d < bestDistance) { bestDistance = d; best = t; }
@@ -59,8 +59,8 @@ public sealed class BuildingTowns
     public GameRecord? MaterialOf(TownPlacement? town)
     {
         if (town is null) return null;
-        if (!materials.TryGetValue(town.InstanceId, out var m))
-            materials[town.InstanceId] = m = db.Find(town.TownId) is { } record ? WorldObjectLayout.TownMaterial(db, record, town.InstanceId) : null;
+        if (!_materials.TryGetValue(town.InstanceId, out var m))
+            _materials[town.InstanceId] = m = _db.Find(town.TownId) is { } record ? WorldObjectLayout.TownMaterial(_db, record, town.InstanceId) : null;
         return m;
     }
 }

@@ -38,7 +38,7 @@ public sealed class LevelFile
 
     public bool IsLegacy => Format < 15;
 
-    public static LevelFile ReadFile(string path) => Read(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static LevelFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     public static LevelFile Read(byte[] bytes)
     {
@@ -141,8 +141,8 @@ public sealed class LevelFile
             Map(r, record.Ints, r => r.ReadInt32());
             if (format > 8)
             {
-                Map(r, record.Vector3s, r => new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
-                Map(r, record.Vector4s, r => new Vector4(r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
+                Map(r, record.Vector3S, r => new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
+                Map(r, record.Vector4S, r => new Vector4(r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
             }
             Map(r, record.Strings, Str);
             Map(r, record.Filenames, Str);

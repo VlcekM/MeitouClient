@@ -1,9 +1,9 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
-using Meitou.Game.Rendering.Gpu;
 using System.Runtime.InteropServices;
+using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Gpu.Core;
-using Silk.NET.Vulkan;
 using Meitou.Game.Rendering.Post;
+using Silk.NET.Vulkan;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Upscalers;
 
@@ -58,32 +58,32 @@ public sealed unsafe class FsrUpscaler : IUpscaler
         public uint Flags;
     }
 
-    readonly VulkanDevice device;
-    readonly GpuContext ctx;
-    readonly delegate* unmanaged<nint*, void*, void*, uint> createContext;
-    readonly delegate* unmanaged<nint*, void*, uint> destroyContext;
-    readonly delegate* unmanaged<nint*, void*, uint> dispatch;
-    readonly bool debug;
+    readonly VulkanDevice _device;
+    readonly GpuContext _ctx;
+    readonly delegate* unmanaged<nint*, void*, void*, uint> _createContext;
+    readonly delegate* unmanaged<nint*, void*, uint> _destroyContext;
+    readonly delegate* unmanaged<nint*, void*, uint> _dispatch;
+    readonly bool _debug;
     // The create descs must stay alive as long as the context (ffx_api.h), so they live in native memory.
-    readonly CreateUpscaleDesc* createDesc;
-    readonly BackendVkDesc* backendDesc;
-    nint context;
-    (int, int, int, int) contextSize;
-    bool failed;
+    readonly CreateUpscaleDesc* _createDesc;
+    readonly BackendVkDesc* _backendDesc;
+    nint _context;
+    (int, int, int, int) _contextSize;
+    bool _failed;
 
     public UpscalerKind Kind => UpscalerKind.Fsr;
     public string Name { get; private set; } = "fsr 3.1";
 
     FsrUpscaler(VulkanDevice device, GpuContext ctx, nint library)
     {
-        this.device = device;
-        this.ctx = ctx;
-        createContext = (delegate* unmanaged<nint*, void*, void*, uint>)NativeLibrary.GetExport(library, "ffxCreateContext");
-        destroyContext = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDestroyContext");
-        dispatch = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDispatch");
-        debug = Environment.GetEnvironmentVariable("MEITOU_UPSCALER_LOG") == "1";
-        createDesc = (CreateUpscaleDesc*)NativeMemory.AllocZeroed((nuint)sizeof(CreateUpscaleDesc));
-        backendDesc = (BackendVkDesc*)NativeMemory.AllocZeroed((nuint)sizeof(BackendVkDesc));
+        this._device = device;
+        this._ctx = ctx;
+        _createContext = (delegate* unmanaged<nint*, void*, void*, uint>)NativeLibrary.GetExport(library, "ffxCreateContext");
+        _destroyContext = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDestroyContext");
+        _dispatch = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDispatch");
+        _debug = Environment.GetEnvironmentVariable("MEITOU_UPSCALER_LOG") == "1";
+        _createDesc = (CreateUpscaleDesc*)NativeMemory.AllocZeroed((nuint)sizeof(CreateUpscaleDesc));
+        _backendDesc = (BackendVkDesc*)NativeMemory.AllocZeroed((nuint)sizeof(BackendVkDesc));
     }
 
     /// <summary>The upscaler, or null with the reason when the library is not found or does not load.</summary>
@@ -114,69 +114,74 @@ public sealed unsafe class FsrUpscaler : IUpscaler
     bool EnsureContext(UpscaleInputs i)
     {
         var size = (i.RenderWidth, i.RenderHeight, i.DisplayWidth, i.DisplayHeight);
-        if (context != 0 && contextSize == size) return true;
+        if (_context != 0 && _contextSize == size) return true;
         DestroyContext();
-        *backendDesc = new BackendVkDesc
+        *_backendDesc = new BackendVkDesc
         {
             Header = new ApiHeader { Type = BackendVkType },
-            Device = device.Device.Handle,
-            PhysicalDevice = device.PhysicalDevice.Handle,
+            Device = _device.Device.Handle,
+            PhysicalDevice = _device.PhysicalDevice.Handle,
             // FFX calls vkGetDeviceProcAddr through the loader the process is already bound to.
             DeviceProcAddr = NativeLibrary.GetExport(NativeLibrary.Load(VulkanLoaderName), "vkGetDeviceProcAddr"),
         };
-        *createDesc = new CreateUpscaleDesc
+        *_createDesc = new CreateUpscaleDesc
         {
-            Header = new ApiHeader { Type = CreateUpscaleType, Next = (nint)backendDesc },
+            Header = new ApiHeader { Type = CreateUpscaleType, Next = (nint)_backendDesc },
             // The scene colour is linear HDR before the exposure (which the chain applies after the upscaler): FSR measures its own.
-            Flags = EnableHdr | EnableAutoExposure | (debug ? EnableDebugChecking : 0),
+            Flags = EnableHdr | EnableAutoExposure | (_debug ? EnableDebugChecking : 0),
             MaxRenderSize = new Dimensions { Width = (uint)i.RenderWidth, Height = (uint)i.RenderHeight },
             MaxUpscaleSize = new Dimensions { Width = (uint)i.DisplayWidth, Height = (uint)i.DisplayHeight },
-            Message = debug ? (nint)(delegate* unmanaged<uint, char*, void>)&OnMessage : 0,
+            Message = _debug ? (nint)(delegate* unmanaged<uint, char*, void>)&OnMessage : 0,
         };
         nint created = 0;
-        uint rc = createContext(&created, createDesc, null);
+        uint rc = _createContext(&created, _createDesc, null);
         if (rc != 0)
         {
             Console.WriteLine($"upscaler  ffxCreateContext failed ({rc})");
             return false;
         }
-        context = created;
-        contextSize = size;
+        _context = created;
+        _contextSize = size;
         Name = $"fsr 3.1 {i.RenderWidth}x{i.RenderHeight}";
         return true;
     }
 
     void DestroyContext()
     {
-        if (context == 0) return;
-        device.WaitIdle();   // frames in flight may still use it
-        nint c = context;
-        destroyContext(&c, null);
-        context = 0;
+        if (_context == 0) return;
+        _device.WaitIdle();   // frames in flight may still use it
+        nint c = _context;
+        _destroyContext(&c, null);
+        _context = 0;
     }
 
     static uint SurfaceFormat(InternalFormat f) => f switch
     {
-        InternalFormat.Rgba16f => 4,
-        InternalFormat.Rgba32f => 3,
-        InternalFormat.RG16f => 18,
-        InternalFormat.R32f => 28,
+        InternalFormat.Rgba16F => 4,
+        InternalFormat.Rgba32F => 3,
+        InternalFormat.Rg16F => 18,
+        InternalFormat.R32F => 28,
         InternalFormat.Rgba8 => 10,
         InternalFormat.R8 => 25,
-        InternalFormat.R11fG11fB10f => 16,
+        InternalFormat.R11FG11FB10F => 16,
         _ => 0,
     };
 
-    ApiResource Resource(Meitou.Game.Rendering.Gpu.GpuTexture texture, bool output)
+    ApiResource Resource(GpuTexture texture, bool output)
     {
         var d = texture.Desc;
         return new ApiResource
         {
-            Handle = (nint)ctx.Device.NativeImage(texture).Handle,
+            Handle = (nint)_ctx.Device.NativeImage(texture).Handle,
             Description = new ResourceDescription
             {
-                Type = TypeTexture2D, Format = SurfaceFormat(d.Format), Width = (uint)d.Width, Height = (uint)d.Height,
-                Depth = 1, MipCount = 1, Usage = output ? UsageUav : 0,
+                Type = TypeTexture2D,
+                Format = SurfaceFormat(d.Format),
+                Width = (uint)d.Width,
+                Height = (uint)d.Height,
+                Depth = 1,
+                MipCount = 1,
+                Usage = output ? UsageUav : 0,
             },
             // Every native image stays in GENERAL: COMMON (inputs) and UNORDERED_ACCESS (output) are both GENERAL to the backend.
             State = output ? StateUnorderedAccess : StateCommon,
@@ -185,7 +190,7 @@ public sealed unsafe class FsrUpscaler : IUpscaler
 
     public bool Dispatch(UpscaleInputs i)
     {
-        if (failed || !EnsureContext(i)) { failed = true; return false; }
+        if (_failed || !EnsureContext(i)) { _failed = true; return false; }
         var desc = new DispatchUpscaleDesc
         {
             Header = new ApiHeader { Type = DispatchUpscaleType },
@@ -212,16 +217,16 @@ public sealed unsafe class FsrUpscaler : IUpscaler
             Flags = 0,
             ViewSpaceToMetersFactor = 0.1f,   // Kenshi units taken as decimetres (docs/formats/terrain.md "Unit size"; DECISIONS 16)
         };
-        var list = (CommandList)ctx.BeginNative("fsr upscale");
+        var list = (CommandList)_ctx.BeginNative("fsr upscale");
         var cb = list.Handle;
         desc.CommandList = cb.Handle;
-        nint c = context;
-        uint rc = dispatch(&c, &desc);
-        ctx.EndNative(list);
+        nint c = _context;
+        uint rc = _dispatch(&c, &desc);
+        _ctx.EndNative(list);
         if (rc != 0)
         {
             Console.WriteLine($"upscaler  ffxDispatch failed ({rc})");
-            failed = true;
+            _failed = true;
             return false;
         }
         return true;
@@ -230,8 +235,8 @@ public sealed unsafe class FsrUpscaler : IUpscaler
     public void Dispose()
     {
         DestroyContext();
-        NativeMemory.Free(createDesc);
-        NativeMemory.Free(backendDesc);
+        NativeMemory.Free(_createDesc);
+        NativeMemory.Free(_backendDesc);
         // The library stays loaded for the process: unloading it under a live device is not worth the risk.
     }
 }

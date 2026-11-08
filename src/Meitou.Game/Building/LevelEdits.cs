@@ -16,14 +16,14 @@ public sealed class LevelEdits
     /// <summary>A file in the mod folder that marks it as Meitou's: a folder of that name without it is someone else's and is never written.</summary>
     public const string MarkerFile = "meitou-level-editor.txt";
 
-    readonly Dictionary<string, BuildingPlacement> added = new(StringComparer.Ordinal);
-    readonly Dictionary<string, BuildingPlacement> cleared = new(StringComparer.Ordinal);
-    readonly Dictionary<ZoneCoordinate, int> nextId = [];
+    readonly Dictionary<string, BuildingPlacement> _added = new(StringComparer.Ordinal);
+    readonly Dictionary<string, BuildingPlacement> _cleared = new(StringComparer.Ordinal);
+    readonly Dictionary<ZoneCoordinate, int> _nextId = [];
 
-    public IReadOnlyCollection<BuildingPlacement> Added => added.Values;
-    public IReadOnlyCollection<BuildingPlacement> Cleared => cleared.Values;
-    public bool IsCleared(string key) => cleared.ContainsKey(key);
-    public bool IsEmpty => added.Count == 0 && cleared.Count == 0;
+    public IReadOnlyCollection<BuildingPlacement> Added => _added.Values;
+    public IReadOnlyCollection<BuildingPlacement> Cleared => _cleared.Values;
+    public bool IsCleared(string key) => _cleared.ContainsKey(key);
+    public bool IsEmpty => _added.Count == 0 && _cleared.Count == 0;
 
     /// <summary>
     /// A new building at <paramref name="position"/> (absolute height): its instance id is <c>&lt;n&gt;-zone&lt;x&gt;.&lt;z&gt;-INGAME</c>, n counting on from the zone's highest
@@ -32,28 +32,28 @@ public sealed class LevelEdits
     public BuildingPlacement Add(string record, Vector3 position, Quaternion rotation, float ground, WorldLevelData levels, string? interiorLayout = null, string? exteriorLayout = null)
     {
         var zone = WorldLayout.ZoneOf(position.X, position.Z);
-        int n = nextId.TryGetValue(zone, out int next) ? next : levels.ZoneInfo.TryGetValue(zone, out var info) ? info.NextId : 1;
+        int n = _nextId.TryGetValue(zone, out int next) ? next : levels.ZoneInfo.TryGetValue(zone, out var info) ? info.NextId : 1;
         string id;
         do id = $"{n++}-zone{zone.X}.{zone.Y}-INGAME";
         while (levels.Zones.TryGetValue(zone, out var db) && db.Records.Values.Any(r => r.Instances.ContainsKey(id)));
-        nextId[zone] = n;
+        _nextId[zone] = n;
         var placement = new BuildingPlacement(zone, id, record, new Vector3(position.X, position.Y - ground, position.Z), rotation, StateIdOf(id), position.Y) { InteriorLayout = interiorLayout, ExteriorLayout = exteriorLayout };
-        added[placement.Key] = placement;
+        _added[placement.Key] = placement;
         return placement;
     }
 
     /// <summary>Clears a building: one placed here is forgotten (true), a level-data one is noted for the save (false). Null when it was cleared already.</summary>
     public bool? Clear(BuildingPlacement placement)
     {
-        if (added.Remove(placement.Key)) return true;
-        return cleared.TryAdd(placement.Key, placement) ? false : null;
+        if (_added.Remove(placement.Key)) return true;
+        return _cleared.TryAdd(placement.Key, placement) ? false : null;
     }
 
     public void Forget()
     {
-        added.Clear();
-        cleared.Clear();
-        nextId.Clear();
+        _added.Clear();
+        _cleared.Clear();
+        _nextId.Clear();
     }
 
     /// <summary>
@@ -71,7 +71,7 @@ public sealed class LevelEdits
     static FcsFile EditFile(BuildingPlacement p, string recordName, bool cleared, bool withState = true)
     {
         var data = new FcsFile { FileType = FcsFileType.V15 };
-        var list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Name = "0", StringId = WorldLevelData.BuildingListId };
+        var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Name = "0", StringId = WorldLevelData.BuildingListId };
         data.Records.Add(list);
         var instance = new FcsInstance { Id = p.InstanceId, Target = cleared ? "" : p.BuildingId, Position = p.Position, Rotation = p.Rotation };
         if (!cleared)
@@ -83,7 +83,7 @@ public sealed class LevelEdits
         return data;
     }
 
-    static string StateIdOf(string instance) => instance + "-S" + ((int)FcsRecordType.GAMESTATE_BUILDING).ToString("x", System.Globalization.CultureInfo.InvariantCulture);
+    static string StateIdOf(string instance) => instance + "-S" + ((int)FcsRecordType.GamestateBuilding).ToString("x", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Writes one <c>zone.X.Y.zone</c> per zone with an edit into <paramref name="folder"/> (the mod's <c>leveldata/</c>), merged over what an earlier save left there: a placed building
@@ -111,22 +111,22 @@ public sealed class LevelEdits
         return files;
     }
 
-    List<ZoneCoordinate> EditedZones() => [.. added.Values.Concat(cleared.Values).Select(p => p.Zone).Distinct().OrderBy(z => z.Y).ThenBy(z => z.X)];
+    List<ZoneCoordinate> EditedZones() => [.. _added.Values.Concat(_cleared.Values).Select(p => p.Zone).Distinct().OrderBy(z => z.Y).ThenBy(z => z.X)];
 
     byte[] ZoneBytes(ZoneCoordinate zone, FcsFile data, WorldLevelData levels, Func<string, string> recordName)
     {
         var list = data.Records.FirstOrDefault(r => r.StringId == WorldLevelData.BuildingListId);
         if (list is null)
         {
-            list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Name = "0", StringId = WorldLevelData.BuildingListId };
+            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Name = "0", StringId = WorldLevelData.BuildingListId };
             data.Records.Add(list);
         }
-        foreach (var p in cleared.Values.Where(p => p.Zone == zone))
+        foreach (var p in _cleared.Values.Where(p => p.Zone == zone))
         {
             Put(list, new FcsInstance { Id = p.InstanceId, Target = "", Position = p.Position, Rotation = p.Rotation });
             if (p.StateId is { } state) data.Records.RemoveAll(r => r.StringId == state);
         }
-        foreach (var p in added.Values.Where(p => p.Zone == zone))
+        foreach (var p in _added.Values.Where(p => p.Zone == zone))
         {
             var instance = new FcsInstance { Id = p.InstanceId, Target = p.BuildingId, Position = p.Position, Rotation = p.Rotation };
             instance.States.Add(p.StateId!);
@@ -138,7 +138,7 @@ public sealed class LevelEdits
         data.Records.Remove(list);
         data.Records.Add(list);
         foreach (var r in data.Records) if (r.ByteSize == 0) r.ByteSize = 1;   // the writer then puts the real size
-        int highest = nextId.GetValueOrDefault(zone);
+        int highest = _nextId.GetValueOrDefault(zone);
         data.NextId = Math.Max(data.NextId, Math.Max(highest, levels.ZoneInfo.TryGetValue(zone, out var info) ? info.NextId : 0));
         using var stream = new MemoryStream();
         FcsWriter.Write(data, stream);
@@ -188,15 +188,15 @@ public sealed class LevelEdits
     /// <summary>Takes a building read from a game save back among the session's edits (the level data and the world are told by the host), so the next save and Save Mod hold it again.</summary>
     public void Restore(BuildingPlacement placement)
     {
-        added[placement.Key] = placement;
+        _added[placement.Key] = placement;
         int dash = placement.InstanceId.IndexOf('-');
-        if (dash > 0 && int.TryParse(placement.InstanceId.AsSpan(0, dash), out int n)) nextId[placement.Zone] = Math.Max(nextId.GetValueOrDefault(placement.Zone), n + 1);
+        if (dash > 0 && int.TryParse(placement.InstanceId.AsSpan(0, dash), out int n)) _nextId[placement.Zone] = Math.Max(_nextId.GetValueOrDefault(placement.Zone), n + 1);
     }
 
     /// <summary>The placed building's state: complete, not destroyed, its absolute height (the keys a level building's state carries; the full set a save writes is in docs/formats/zones.md).</summary>
     static FcsRecord State(BuildingPlacement p, string name)
     {
-        var state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Name = "0", StringId = p.StateId! };
+        var state = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Name = "0", StringId = p.StateId! };
         state.Bools["is complete"] = true;
         state.Bools["destroyed"] = false;
         state.Floats["world Y pos"] = p.WorldY ?? p.Position.Y;

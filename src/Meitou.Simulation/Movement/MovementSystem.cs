@@ -1,6 +1,6 @@
-using Meitou.Data.Gameplay.Ai;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.World;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
@@ -42,7 +42,7 @@ namespace Meitou.Simulation.Movement;
 public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDisposable, ITaskOwner, ITaskHandler, IOrderOwner
 {
     /// <summary>The fights the steering reads (null: no fight steering, as in worlds without combat; the world's combat system unless set).</summary>
-    public Combat.CombatSystem? Fights { get; set; }
+    public CombatSystem? Fights { get; set; }
     /// <summary>Speed gained per second in combat (docs/game/pathfinding.md, the combat / follow steering: "ramps up by 15 per second").</summary>
     public const float Acceleration = 15;
     /// <summary>R of the separation steering: neighbour radius plus margin; a human's footprint radius is 4.</summary>
@@ -236,7 +236,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
                 if (!table.TryResolveNext(follow.Target, out int led)) continue;
                 foreach (var id in follow.Characters.Count > 0 ? follow.Characters : world.Player.Selection.ToArray())
                     if (table.TryResolveNext(id, out int s) && s != led)
-                        PlayerOrders.Give(world, s, new OrderEntry(follow.Guard ? TaskType.BODYGUARD : TaskType.STAY_CLOSE_TO_TARGET, this) { Target = follow.Target }, follow.Queued);
+                        PlayerOrders.Give(world, s, new OrderEntry(follow.Guard ? TaskType.Bodyguard : TaskType.StayCloseToTarget, this) { Target = follow.Target }, follow.Queued);
                 continue;
             }
             if (command is not MoveOrder order) continue;
@@ -246,10 +246,10 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             foreach (var id in who)
             {
                 if (!table.TryResolveNext(id, out int found)) continue;
-                if (!TaskStart.Eligible(world, table.Cold(found)!, TaskType.MOVE_CUS_ORDERED))
+                if (!TaskStart.Eligible(world, table.Cold(found)!, TaskType.MoveCusOrdered))
                 {
                     // A prisoner stays in its cage (row 29 is not registered for the imprisoned or chained): the order waits in its queue.
-                    PlayerOrders.Give(world, found, new OrderEntry(TaskType.MOVE_CUS_ORDERED, this) { Point = order.Target }, order.Queued);
+                    PlayerOrders.Give(world, found, new OrderEntry(TaskType.MoveCusOrdered, this) { Point = order.Target }, order.Queued);
                     continue;
                 }
                 if (table.Cold(found)!.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, id);   // an order gets a sleeper up
@@ -262,7 +262,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
                 var target = targets[k];
                 table.Cold(slot)!.FollowOrder = CharacterId.None;
                 // Shift + right click: after the order in hand.
-                PlayerOrders.Give(world, slot, new OrderEntry(TaskType.MOVE_CUS_ORDERED, this) { Point = new Vector3(target.X, order.Target.Y, target.Y) }, order.Queued);
+                PlayerOrders.Give(world, slot, new OrderEntry(TaskType.MoveCusOrdered, this) { Point = new Vector3(target.X, order.Target.Y, target.Y) }, order.Queued);
             }
         }
         foreach (var squad in world.Squads.All) RefreshFormation(world, squad);
@@ -290,7 +290,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         FormationMember Of(CharacterId id)
         {
             var c = table.Cold(id.Slot)!;
-            return new FormationMember(id, c.Role, c.Animal is not null, Formation.RadiusScale * (c.FootprintRadius > 0 ? c.FootprintRadius : Combat.CombatTuning.DefaultFootprint));
+            return new FormationMember(id, c.Role, c.Animal is not null, Formation.RadiusScale * (c.FootprintRadius > 0 ? c.FootprintRadius : CombatTuning.DefaultFootprint));
         }
         var others = new List<FormationMember>();
         var slaves = new List<FormationMember>();
@@ -363,7 +363,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         {
             if (!table.TryResolveNext(id, out int s) || s == led || table.Cold(s) is not { IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true } cold) continue;
             if (cold.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, id);
-            TaskStart.Start(world, s, new TaskRequest(CharacterTask.Follow, row ?? (order.Guard ? TaskType.BODYGUARD : TaskType.STAY_CLOSE_TO_TARGET), source) { Job = job, Target = order.Target });
+            TaskStart.Start(world, s, new TaskRequest(CharacterTask.Follow, row ?? (order.Guard ? TaskType.Bodyguard : TaskType.StayCloseToTarget), source) { Job = job, Target = order.Target });
         }
     }
 
@@ -417,7 +417,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         var table = world.Characters;
         if (table.Cold(slot)!.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, table.IdOf(slot));
         TaskStart.Start(world, slot, order.IsMove
-            ? new TaskRequest(CharacterTask.GoTo, TaskType.MOVE_CUS_ORDERED, TaskSource.Order) { Point = order.Point }
+            ? new TaskRequest(CharacterTask.GoTo, TaskType.MoveCusOrdered, TaskSource.Order) { Point = order.Point }
             : new TaskRequest(CharacterTask.Follow, order.Row, TaskSource.Order) { Target = order.Target });
     }
 
@@ -438,7 +438,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
                 return;
             }
             GoToFloor(world, slot, request.Point, request.Mode ?? cold.RunSpeed);
-            cold.OrderMove = request.Row == TaskType.MOVE_CUS_ORDERED;
+            cold.OrderMove = request.Row == TaskType.MoveCusOrdered;
             return;
         }
         Stop(table, slot);
@@ -489,11 +489,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             }
             else if (table.TryResolveNext(order, out int next)) BreakCircle(world, ordered, next, seen);
         }
-        if (!cold.Jobs.Exists(j => j.Type == Meitou.Data.Gameplay.Ai.TaskType.STAY_CLOSE_TO_TARGET)) return;
+        if (!cold.Jobs.Exists(j => j.Type == TaskType.StayCloseToTarget)) return;
         for (int k = 0; k < cold.Jobs.Count; k++)
         {
             var job = cold.Jobs[k];
-            if (job.Type is not (Meitou.Data.Gameplay.Ai.TaskType.STAY_CLOSE_TO_TARGET or Meitou.Data.Gameplay.Ai.TaskType.BODYGUARD)) continue;
+            if (job.Type is not (TaskType.StayCloseToTarget or TaskType.Bodyguard)) continue;
             if (job.Character == ordered)
             {
                 Production.ProductionSystem.RemoveJob(world, slot, k);
@@ -518,7 +518,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     public void Schedule(World world)
     {
-        Fights ??= world.Systems.OfType<Combat.CombatSystem>().FirstOrDefault();
+        Fights ??= world.Systems.OfType<CombatSystem>().FirstOrDefault();
         var table = world.Characters;
         var next = table.Next;
         SpeedGroups(world);
@@ -827,7 +827,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
     readonly record struct SpeedGroupState(float Speed, Vector2 Centre, Vector2 Direction);
     // The player's speed groups of this tick, by key (serial Schedule; read by the parallel Move).
-    readonly Dictionary<int, SpeedGroupState> speedGroups = [];
+    readonly Dictionary<int, SpeedGroupState> _speedGroups = [];
 
     /// <summary>
     /// <c>SpeedGroup::getSpeed</c> (<c>1407f5740</c>, docs/game/pathfinding.md "Speed groups"), once per tick: a group's speed is the lowest top speed of its members not down and
@@ -835,7 +835,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// </summary>
     void SpeedGroups(World world)
     {
-        speedGroups.Clear();
+        _speedGroups.Clear();
         var table = world.Characters;
         var prev = table.Previous;
         var acc = new Dictionary<int, (float Speed, Vector2 Sum, int N, Vector2 Dir)>();
@@ -846,7 +846,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
             acc[c.SpeedGroup] = (MathF.Min(a.Speed, prev[s].MaxSpeed), a.Sum + new Vector2(prev[s].Position.X, prev[s].Position.Z), a.N + 1,
                 a.Dir + new Vector2(prev[s].Velocity.X, prev[s].Velocity.Z));
         }
-        foreach (var (key, a) in acc) speedGroups[key] = new SpeedGroupState(a.Speed, a.Sum / a.N, a.Dir);
+        foreach (var (key, a) in acc) _speedGroups[key] = new SpeedGroupState(a.Speed, a.Sum / a.N, a.Dir);
     }
 
     /// <summary>
@@ -855,7 +855,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// </summary>
     float GroupSpeed(World world, int slot, CharacterCold cold, Vector3 at)
     {
-        if (cold.SpeedGroup < 0 || !speedGroups.TryGetValue(cold.SpeedGroup, out var g)) return SlowestOfSquad(world, cold);
+        if (cold.SpeedGroup < 0 || !_speedGroups.TryGetValue(cold.SpeedGroup, out var g)) return SlowestOfSquad(world, cold);
         var off = new Vector2(at.X, at.Z) - g.Centre;
         return Vector2.Dot(off, g.Direction) > 0 ? g.Speed * MathF.Max(0.8f, 1 - 0.001f * off.Length()) : g.Speed;
     }
@@ -996,7 +996,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
 
             if (steering)
             {
-                var v = Combat.CombatSteering.Velocity(world, Fights!, i, cold, cold.Steer!, n.MaxSpeed, cold.Animation?.Strafing ?? false, speed > 0.01f, out var face);
+                var v = CombatSteering.Velocity(world, Fights!, i, cold, cold.Steer!, n.MaxSpeed, cold.Animation?.Strafing ?? false, speed > 0.01f, out var face);
                 // In water the steering's caller scales it by the water state (x0.75 / 0.5 / 0.4 in states 1-3, FUN_14065dba0; docs/game/combat.md "Fight steering").
                 if (water > 0) v *= water switch { 1 => 0.75f, 2 => 0.5f, _ => 0.4f };
                 float vs = v.Length();
@@ -1050,11 +1050,11 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
                         : n.Task == (byte)CharacterTask.Follow ? MathF.Min(top, cold.FollowSpeed)   // a follower's own desired speed, not its mode's cap
                         : MathF.Min(top, SpeedMode.Cap(mode, n.WalkSpeed));
                     // A fighter in its footwork closes in at a shuffle (docs/game/combat.md "Combat stance").
-                    if (cold.InCombat && !cold.CombatRunning && n.Task == (byte)CharacterTask.Attack) desired = MathF.Min(desired, Combat.CombatTuning.FootworkSpeed);
+                    if (cold.InCombat && !cold.CombatRunning && n.Task == (byte)CharacterTask.Attack) desired = MathF.Min(desired, CombatTuning.FootworkSpeed);
                     if (mode == SpeedMode.Group && cold.SpeedOverride <= 0 && n.Task != (byte)CharacterTask.Follow) desired = MathF.Min(desired, GroupSpeed(world, i, cold, p.Position));
                     if ((cold.Orders & CharacterOrders.Sneak) != 0 && cold.SpeedOverride <= 0) desired = MathF.Min(desired, Orders.SneakSpeed(desired, Orders.Stealth(cold)));
                     if (cold.PaceCap is { } pace && n.Task == (byte)CharacterTask.GoTo && !cold.InCombat) desired = MathF.Min(desired, pace);   // a campaign follower near its trail point
-                    if (cold.Medical is { Crawling: true } && cold.CarriedBy.IsNone) desired = Bodies.Speed.Crippled;   // the final override, after water and sneaking
+                    if (cold.Medical is { Crawling: true } && cold.CarriedBy.IsNone) desired = Speed.Crippled;   // the final override, after water and sneaking
                     // Braking into the last point, never past it.
                     if (last) desired = MathF.Min(desired, MathF.Min(MathF.Sqrt(2 * PathAcceleration(cold) * dist), dist / dt));
                     else if (!cold.InCombat) (dir, desired) = CornerBrake(p.Velocity, to, dir, desired, PathAcceleration(cold));
@@ -1077,7 +1077,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
                     dir = gap / dist;
                     desired = MathF.Min(MathF.Min(cold.FollowSpeed, top), dist / dt);
                     if ((cold.Orders & CharacterOrders.Sneak) != 0 && cold.SpeedOverride <= 0) desired = MathF.Min(desired, Orders.SneakSpeed(desired, Orders.Stealth(cold)));
-                    if (cold.Medical is { Crawling: true }) desired = MathF.Min(desired, Bodies.Speed.Crippled);
+                    if (cold.Medical is { Crawling: true }) desired = MathF.Min(desired, Speed.Crippled);
                 }
             }
 
@@ -1324,7 +1324,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     /// <summary>The solid radius of a body: <see cref="BodyShare"/> of its footprint (a human's when it has no race data).</summary>
-    static float BodyRadius(CharacterCold cold) => BodyShare * (cold.FootprintRadius > 0 ? cold.FootprintRadius : Combat.CombatTuning.DefaultFootprint);
+    static float BodyRadius(CharacterCold cold) => BodyShare * (cold.FootprintRadius > 0 ? cold.FootprintRadius : CombatTuning.DefaultFootprint);
 
     /// <summary>
     /// How far a character stepped to <paramref name="at"/> is put out of the standing bodies among its separation neighbours (partition-safe: the last tick's state of the
@@ -1391,7 +1391,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
         {
             if (s.Found || other == s.Self || !s.Table.Previous[other].Alive || s.Table.Cold(other) is not { CarriedBy.IsNone: true } c || c.Medical is { Incapacitated: true }) return;
             var at = s.Table.Previous[other].Position;
-            float r = Combat.CombatTuning.Footprint(c);
+            float r = CombatTuning.Footprint(c);
             if (Vector2.DistanceSquared(new Vector2(at.X, at.Z), s.Goal) < r * r) s.Found = true;
         });
         return state.Found;
@@ -1406,7 +1406,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     }
 
     static bool Seated(in CharacterHot h, CharacterCold c) => ((MoveFlags)h.Flags & MoveFlags.HasPath) == 0
-        && (h.Task == (byte)CharacterTask.Rest || h.Task == (byte)CharacterTask.Operate && c.Running is { Implicit: true, Row: Meitou.Data.Gameplay.Ai.TaskType.SIT_AROUND } run && run.Runs(CharacterTask.Operate));
+        && (h.Task == (byte)CharacterTask.Rest || h.Task == (byte)CharacterTask.Operate && c.Running is { Implicit: true, Row: TaskType.SitAround } run && run.Runs(CharacterTask.Operate));
 
     /// <summary>
     /// The heading turned from <paramref name="yaw"/> towards <paramref name="wanted"/> by at most <see cref="TurnRate"/> x <paramref name="dt"/>,

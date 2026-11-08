@@ -18,5 +18,5 @@ internal static class ConstantsRecord
 {
     /// <summary>The record named <c>GLOBAL CONSTANTS</c>, else the first CONSTANTS record, else null.</summary>
     public static GameRecord? Find(GameDatabase db) =>
-        db.OfType(Fcs.FcsRecordType.CONSTANTS).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(Fcs.FcsRecordType.CONSTANTS).FirstOrDefault();
+        db.OfType(Fcs.FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(Fcs.FcsRecordType.Constants).FirstOrDefault();
 }

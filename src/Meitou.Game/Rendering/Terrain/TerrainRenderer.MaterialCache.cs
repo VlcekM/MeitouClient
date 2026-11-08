@@ -25,18 +25,18 @@ public sealed unsafe partial class TerrainRenderer
     const int CacheLevels = 4, CacheSide = 2048, CacheStep = 64, CacheRows = 64, CacheBuildRows = 256;
     const float CacheTexel = 0.25f;
 
-    GpuTexture? cacheAlbedo, cacheNormal;
-    uint cacheAlbedoIndex = uint.MaxValue, cacheNormalIndex = uint.MaxValue;
-    TerrainProgram? cacheProgram;
-    GpuPipeline? cachePipeline;
-    bool cacheRefused;
+    GpuTexture? _cacheAlbedo, _cacheNormal;
+    uint _cacheAlbedoIndex = uint.MaxValue, _cacheNormalIndex = uint.MaxValue;
+    TerrainProgram? _cacheProgram;
+    GpuPipeline? _cachePipeline;
+    bool _cacheRefused;
     // Per level: the origin drawn from (w 0: not valid); a first bake's origin and rows done (-1: none running); a refresh's next row and rows left.
-    readonly Vector4[] cacheOrigin = new Vector4[CacheLevels];
-    readonly Vector2[] cacheTarget = new Vector2[CacheLevels];
-    readonly int[] cacheBuilt = [-1, -1, -1, -1];
-    readonly int[] cacheCursor = new int[CacheLevels], cacheStale = new int[CacheLevels];
-    int cacheKey;
-    float cacheReach;
+    readonly Vector4[] _cacheOrigin = new Vector4[CacheLevels];
+    readonly Vector2[] _cacheTarget = new Vector2[CacheLevels];
+    readonly int[] _cacheBuilt = [-1, -1, -1, -1];
+    readonly int[] _cacheCursor = new int[CacheLevels], _cacheStale = new int[CacheLevels];
+    int _cacheKey;
+    float _cacheReach;
 
     static long CacheBytes => 2L * CacheLevels * CacheSide * CacheSide * 4;
 
@@ -45,30 +45,30 @@ public sealed unsafe partial class TerrainRenderer
     {
         // Switched off, the levels keep what they hold (an A/B alternation finds them whole); the strips catch up when it is back on.
         if (!TerrainMaterialCache.Enabled) return;
-        if (cacheRefused || textures is not { HasBiomes: true, MapState: 2 } t || frame.Options is not { Textures: true })
+        if (_cacheRefused || _textures is not { HasBiomes: true, MapState: 2 } t || _frame.Options is not { Textures: true })
         {
-            Array.Clear(cacheOrigin);
-            Array.Fill(cacheBuilt, -1);
+            Array.Clear(_cacheOrigin);
+            Array.Fill(_cacheBuilt, -1);
             return;
         }
-        if (cacheAlbedo is null && !CreateCache(t)) return;
+        if (_cacheAlbedo is null && !CreateCache(t)) return;
 
         PrepareConstants(material: true, patches: true);
-        var c = constants;
+        var c = _constants;
         // The bake has no march (its program is built without it); uParallax gives the relief height's depth.
         (c.Displace, c.FarStart, c.FarEnd, c.Debug, c.Grid, c.InteriorCut, c.BloodCount, c.FieldCount, c.BakeLevels) = (0, 1e9f, 2e9f, 0, 0, 0, 0, 0, 0);
         int key = CacheKey(in c, t.MaterialVersion);
-        if (key != cacheKey)
+        if (key != _cacheKey)
         {
             // The inputs changed: a level being built starts again, a whole one is refreshed row by row while it is drawn from.
-            cacheKey = key;
+            _cacheKey = key;
             for (int k = 0; k < CacheLevels; k++)
             {
-                if (cacheBuilt[k] >= 0) cacheBuilt[k] = 0;
-                cacheStale[k] = CacheSide;
+                if (_cacheBuilt[k] >= 0) _cacheBuilt[k] = 0;
+                _cacheStale[k] = CacheSide;
             }
             // Within this the biomes' distance fade (far = distance / fade distance − 0.3) has not begun: the bake has none.
-            cacheReach = 0.3f * t.Resident.Select(b => b.FadeDistance).Where(f => f > 0).DefaultIfEmpty(float.MaxValue).Min();
+            _cacheReach = 0.3f * t.Resident.Select(b => b.FadeDistance).Where(f => f > 0).DefaultIfEmpty(float.MaxValue).Min();
         }
 
         IGpuCommandList? cmd = null;
@@ -79,15 +79,15 @@ public sealed unsafe partial class TerrainRenderer
             float texel = CacheTexel * (1 << k), side = texel * CacheSide, step = texel * CacheStep;
             var want = new Vector2(MathF.Floor((eye.X - side / 2) / step) * step, MathF.Floor((eye.Z - side / 2) / step) * step);
             int n = 0;
-            var current = cacheOrigin[k];
+            var current = _cacheOrigin[k];
             if (current.W > 0)
             {
                 var have = new Vector2(current.X, current.Y);
                 if (MathF.Abs(want.X - have.X) >= side || MathF.Abs(want.Y - have.Y) >= side)
                 {
                     // Nothing of it is still in place (a jump): built again.
-                    cacheOrigin[k] = default;
-                    cacheBuilt[k] = -1;
+                    _cacheOrigin[k] = default;
+                    _cacheBuilt[k] = -1;
                 }
                 else
                 {
@@ -102,13 +102,13 @@ public sealed unsafe partial class TerrainRenderer
                         float z0 = want.Y > have.Y ? have.Y + side : want.Y, z1 = want.Y > have.Y ? want.Y + side : have.Y;
                         n = Wrapped(rects, n, want.X, want.X + side, z0, z1, texel);
                     }
-                    cacheOrigin[k] = new Vector4(want, texel, CacheSide);
-                    if (budget > 0 && cacheStale[k] > 0)
+                    _cacheOrigin[k] = new Vector4(want, texel, CacheSide);
+                    if (budget > 0 && _cacheStale[k] > 0)
                     {
-                        int rows = Math.Min(Math.Min(budget, cacheStale[k]), CacheSide - cacheCursor[k]);
-                        rects[n++] = (0, cacheCursor[k], CacheSide, rows);
-                        cacheCursor[k] = (cacheCursor[k] + rows) % CacheSide;
-                        cacheStale[k] -= rows;
+                        int rows = Math.Min(Math.Min(budget, _cacheStale[k]), CacheSide - _cacheCursor[k]);
+                        rects[n++] = (0, _cacheCursor[k], CacheSide, rows);
+                        _cacheCursor[k] = (_cacheCursor[k] + rows) % CacheSide;
+                        _cacheStale[k] -= rows;
                         budget -= rows;
                     }
                     if (n > 0) Bake(ref cmd, k, want, texel, ref c, rects[..n]);
@@ -117,24 +117,24 @@ public sealed unsafe partial class TerrainRenderer
             }
             if (build <= 0) continue;
             // A first bake, towards the origin it started with; the strips catch up once it is whole.
-            if (cacheBuilt[k] < 0) { cacheBuilt[k] = 0; cacheTarget[k] = want; }
-            int chunk = Math.Min(build, CacheSide - cacheBuilt[k]);
-            rects[0] = (0, cacheBuilt[k], CacheSide, chunk);
-            cacheBuilt[k] += chunk;
+            if (_cacheBuilt[k] < 0) { _cacheBuilt[k] = 0; _cacheTarget[k] = want; }
+            int chunk = Math.Min(build, CacheSide - _cacheBuilt[k]);
+            rects[0] = (0, _cacheBuilt[k], CacheSide, chunk);
+            _cacheBuilt[k] += chunk;
             build -= chunk;
-            Bake(ref cmd, k, cacheTarget[k], texel, ref c, rects[..1]);
-            if (cacheBuilt[k] >= CacheSide)
+            Bake(ref cmd, k, _cacheTarget[k], texel, ref c, rects[..1]);
+            if (_cacheBuilt[k] >= CacheSide)
             {
-                cacheBuilt[k] = -1;
-                cacheStale[k] = 0;
-                cacheOrigin[k] = new Vector4(cacheTarget[k], texel, CacheSide);
-                Console.WriteLine($"terrain   material cache level {k} baked ({texel * CacheSide / 10:0} m square round {cacheTarget[k].X + side / 2:0}, {cacheTarget[k].Y + side / 2:0})");
+                _cacheBuilt[k] = -1;
+                _cacheStale[k] = 0;
+                _cacheOrigin[k] = new Vector4(_cacheTarget[k], texel, CacheSide);
+                Console.WriteLine($"terrain   material cache level {k} baked ({texel * CacheSide / 10:0} m square round {_cacheTarget[k].X + side / 2:0}, {_cacheTarget[k].Y + side / 2:0})");
             }
         }
         if (cmd is not null)
         {
             cmd.Order();
-            gpu.EndNative(cmd);
+            _gpu.EndNative(cmd);
         }
     }
 
@@ -142,20 +142,20 @@ public sealed unsafe partial class TerrainRenderer
     {
         if (t.Guard is { } guard && !guard.Allows((ulong)CacheBytes))
         {
-            cacheRefused = true;
+            _cacheRefused = true;
             Console.WriteLine($"terrain   material cache not made: memory budget (VramGuard, {CacheBytes >> 20} MB)");
             return false;
         }
         var desc = new TextureDesc(InternalFormat.Rgba8, CacheSide, CacheSide, Layers: CacheLevels, Kind: TextureKind.Texture2DArray,
             Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "terrain material cache albedo");
-        cacheAlbedo = gpu.CreateTexture(desc);
-        cacheNormal = gpu.CreateTexture(desc with { Name = "terrain material cache normal" });
-        var sampler = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.Repeat,
+        _cacheAlbedo = _gpu.CreateTexture(desc);
+        _cacheNormal = _gpu.CreateTexture(desc with { Name = "terrain material cache normal" });
+        var sampler = _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.Repeat,
             TextureWrapMode.Repeat, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 8, false, 0));
-        cacheAlbedoIndex = gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(sampler, cacheAlbedo.View()));
-        cacheNormalIndex = gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(sampler, cacheNormal.View()));
-        GpuSetLayout[] sets = [nativeFrame.SetLayout, GpuSetLayout.Bindless, constantsLayout];
-        cacheProgram = new TerrainProgram(gpu, sets, TerrainShaders.MaterialBakeVertexNative(), TerrainShaders.MaterialBakeFragmentNative(), "terrain material bake");
+        _cacheAlbedoIndex = _gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(sampler, _cacheAlbedo.View()));
+        _cacheNormalIndex = _gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(sampler, _cacheNormal.View()));
+        GpuSetLayout[] sets = [_nativeFrame.SetLayout, GpuSetLayout.Bindless, _constantsLayout];
+        _cacheProgram = new TerrainProgram(_gpu, sets, TerrainShaders.MaterialBakeVertexNative(), TerrainShaders.MaterialBakeFragmentNative(), "terrain material bake");
         return true;
     }
 
@@ -183,25 +183,25 @@ public sealed unsafe partial class TerrainRenderer
     /// <summary>Bakes <paramref name="rects"/> of level <paramref name="level"/> for its origin <paramref name="origin"/>: albedo and normal in one pass.</summary>
     void Bake(ref IGpuCommandList? cmd, int level, Vector2 origin, float texel, ref TerrainConstants c, ReadOnlySpan<(int X, int Y, int W, int H)> rects)
     {
-        cmd ??= gpu.BeginNative("terrain material cache");
+        cmd ??= _gpu.BeginNative("terrain material cache");
         c.BakeOrigin[level] = new Vector4(origin, texel, CacheSide);
-        var p = cacheProgram!;
-        var t = PassTargets.Of(cacheAlbedo, null, cacheNormal);
+        var p = _cacheProgram!;
+        var t = PassTargets.Of(_cacheAlbedo, null, _cacheNormal);
         t = t with
         {
-            Colour = new RenderTarget(cacheAlbedo!.Attachment(0, level), LoadOp.Load, default),
-            Extra = new RenderTarget(cacheNormal!.Attachment(0, level), LoadOp.Load, default),
+            Colour = new RenderTarget(_cacheAlbedo!.Attachment(0, level), LoadOp.Load, default),
+            Extra = new RenderTarget(_cacheNormal!.Attachment(0, level), LoadOp.Load, default),
         };
         cmd.BeginRendering(t.Rendering);
-        var state = DrawState.For(t.Formats, gpu.DepthClamp);
+        var state = DrawState.For(t.Formats, _gpu.DepthClamp);
         state.Record(cmd, t);
-        cmd.BindPipeline(cachePipeline ??= gpu.Pipelines.Get(state.Pipeline(p.P, new VertexLayout(), PrimitiveType.Triangles, t.Formats, "terrain material bake")));
+        cmd.BindPipeline(_cachePipeline ??= _gpu.Pipelines.Get(state.Pipeline(p.P, new VertexLayout(), PrimitiveType.Triangles, t.Formats, "terrain material bake")));
         var view = new ViewConstants { ViewProjection = Matrix4x4.Identity, Eye = Vector3.Zero, LightDir = Vector3.UnitY, FogDistance = 0 };
-        var binding = nativeFrame.Prepare(in view);
+        var binding = _nativeFrame.Prepare(in view);
         NativeFrame.Record(cmd, p.P, in binding);
-        var slice = gpu.Frame.WriteConstants(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in c)), uniformAlign);
+        var slice = _gpu.Frame.WriteConstants(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in c)), _uniformAlign);
         ulong key = (ulong)slice.Handle.Index;
-        if (!constantSets.TryGetValue(key, out var set)) constantSets[key] = set = ConstantSet(slice.Handle);
+        if (!_constantSets.TryGetValue(key, out var set)) _constantSets[key] = set = ConstantSet(slice.Handle);
         uint offset = (uint)slice.Offset;
         cmd.BindSets(p.P, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
         var push = new TerrainBakePush { Pass = level };
@@ -231,19 +231,19 @@ public sealed unsafe partial class TerrainRenderer
     /// <summary>The cache's levels for the patches' colour programs (<see cref="PrepareConstants"/>); none in the texture field (its tiles are not blended) or a debug view.</summary>
     void ApplyMaterialCache(ref TerrainConstants c)
     {
-        if (!TerrainMaterialCache.Enabled || cacheAlbedo is null || c.FieldCount > 0 || c.Debug != 0) return;
+        if (!TerrainMaterialCache.Enabled || _cacheAlbedo is null || c.FieldCount > 0 || c.Debug != 0) return;
         bool any = false;
-        for (int k = 0; k < CacheLevels; k++) { c.BakeOrigin[k] = cacheOrigin[k]; any |= cacheOrigin[k].W > 0; }
+        for (int k = 0; k < CacheLevels; k++) { c.BakeOrigin[k] = _cacheOrigin[k]; any |= _cacheOrigin[k].W > 0; }
         if (!any) return;
-        (c.BakeAlbedo, c.BakeNormal, c.BakeLevels, c.BakeReach) = (cacheAlbedoIndex, cacheNormalIndex, CacheLevels, cacheReach);
+        (c.BakeAlbedo, c.BakeNormal, c.BakeLevels, c.BakeReach) = (_cacheAlbedoIndex, _cacheNormalIndex, CacheLevels, _cacheReach);
     }
 
     void DisposeMaterialCache()
     {
-        if (cacheAlbedoIndex != uint.MaxValue) gpu.Bindless.Free(BindlessKind.Texture2DArray, cacheAlbedoIndex);
-        if (cacheNormalIndex != uint.MaxValue) gpu.Bindless.Free(BindlessKind.Texture2DArray, cacheNormalIndex);
-        cacheAlbedo?.Dispose();
-        cacheNormal?.Dispose();
-        cacheProgram?.Dispose();
+        if (_cacheAlbedoIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2DArray, _cacheAlbedoIndex);
+        if (_cacheNormalIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2DArray, _cacheNormalIndex);
+        _cacheAlbedo?.Dispose();
+        _cacheNormal?.Dispose();
+        _cacheProgram?.Dispose();
     }
 }

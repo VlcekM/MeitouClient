@@ -9,7 +9,7 @@ public enum MyGuiHinting { UseNative, ForceAuto, DisableAuto, DisableAll }
 /// <summary>Inclusive code point ranges (sorted, merged): the set a <c>ResourceTrueTypeFont</c> generates glyphs for.</summary>
 public sealed class MyGuiCodeRanges
 {
-    readonly (int First, int Last)[] ranges;
+    readonly (int First, int Last)[] _ranges;
 
     /// <summary>The Basic Multilingual Plane: the set of a font whose <c>Codes</c> list no <c>range</c>.</summary>
     public static MyGuiCodeRanges Bmp { get; } = new([(0, 0xFFFF)], []);
@@ -34,23 +34,23 @@ public sealed class MyGuiCodeRanges
             }
             merged = kept;
         }
-        ranges = [.. merged];
+        _ranges = [.. merged];
     }
 
     /// <summary>The merged ranges, ascending.</summary>
-    public IReadOnlyList<(int First, int Last)> Ranges => ranges;
+    public IReadOnlyList<(int First, int Last)> Ranges => _ranges;
 
     /// <summary>How many code points the set holds.</summary>
-    public long Count => ranges.Sum(r => (long)r.Last - r.First + 1);
+    public long Count => _ranges.Sum(r => (long)r.Last - r.First + 1);
 
     public bool Contains(int codePoint)
     {
-        int low = 0, high = ranges.Length - 1;
+        int low = 0, high = _ranges.Length - 1;
         while (low <= high)
         {
             int mid = (low + high) >> 1;
-            if (codePoint < ranges[mid].First) high = mid - 1;
-            else if (codePoint > ranges[mid].Last) low = mid + 1;
+            if (codePoint < _ranges[mid].First) high = mid - 1;
+            else if (codePoint > _ranges[mid].Last) low = mid + 1;
             else return true;
         }
         return false;
@@ -59,7 +59,7 @@ public sealed class MyGuiCodeRanges
     /// <summary>Every code point of the set, ascending.</summary>
     public IEnumerable<int> CodePoints()
     {
-        foreach (var (first, last) in ranges)
+        foreach (var (first, last) in _ranges)
             for (int c = first; c <= last; c++) yield return c;
     }
 }

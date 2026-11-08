@@ -193,7 +193,7 @@ public sealed record BiomeTerrain
     public static Dictionary<uint, BiomeTerrain> ByIndex(GameDatabase db)
     {
         var result = new Dictionary<uint, BiomeTerrain>();
-        foreach (var r in db.OfType(FcsRecordType.BIOMES).OrderBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var r in db.OfType(FcsRecordType.Biomes).OrderBy(r => r.StringId, StringComparer.Ordinal))
             result.TryAdd((uint)r.GetInt("index") & 0xFFFFFF, FromRecord(r));
         return result;
     }

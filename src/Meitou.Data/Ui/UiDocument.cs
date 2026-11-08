@@ -22,7 +22,7 @@ public sealed partial class UiBindings
     /// The text the code set for <paramref name="key"/>, in the active language when it is a message of the game's catalog (the original sets such
     /// captions through gettext; a layout's own captions stay as written). Null when the code set nothing.
     /// </summary>
-    public string? Coded(string key) => Text.TryGetValue(key, out var text) ? Localisation.Loc.Tr(text) : null;
+    public string? Coded(string key) => Text.TryGetValue(key, out var text) ? Loc.Tr(text) : null;
     public Dictionary<string, string> Actions { get; } = new(StringComparer.Ordinal);
     public HashSet<string> Hidden { get; } = new(StringComparer.Ordinal);
     public HashSet<string> Disabled { get; } = new(StringComparer.Ordinal);
@@ -70,10 +70,10 @@ public static partial class MyGuiPresentation
             // A caption written in the layout is the source string of the player's language (the layouts say "SKILLS", the catalog key is "Skills").
             // MyGUI's plain Widget has no text: it ignores a layout Caption (the character trading window's TradePanel says "Character Selection").
             string layoutCaption = w.Type == "Widget" ? "" : props.GetValueOrDefault("Caption") ?? "";
-            string caption = bindings.Coded(w.Name) ?? PartText(bindings, props) ?? Localisation.Loc.TrCaption(layoutCaption);
+            string caption = bindings.Coded(w.Name) ?? PartText(bindings, props) ?? Loc.TrCaption(layoutCaption);
             if (props.TryGetValue("CaptionOwner", out string? owner))
             {
-                caption = bindings.Coded(owner) ?? Localisation.Loc.TrCaption(layout.Find(owner)?.Properties.GetValueOrDefault("Caption") ?? "");
+                caption = bindings.Coded(owner) ?? Loc.TrCaption(layout.Find(owner)?.Properties.GetValueOrDefault("Caption") ?? "");
                 // An EditBox's WordWrap is its text's, which the template's client draws.
                 if (!props.ContainsKey("WordWrap") && ((bindings.Properties.GetValueOrDefault(owner)?.GetValueOrDefault("WordWrap")) ?? layout.Find(owner)?.Properties.GetValueOrDefault("WordWrap")) is { } wrap)
                     props["WordWrap"] = wrap;
@@ -110,7 +110,7 @@ public static partial class MyGuiPresentation
                 for (int i = 0; i < buttons; i++)
                     result.Add(new(w.Name + "@tab" + i, "Button", new(header.X + i * tabWidth, header.Y, tabWidth, header.Height),
                         captions?[i] ?? bindings.Coded(w.Name + "@tab" + i)
-                            ?? (pages[i].Properties.GetValueOrDefault("Caption") is { Length: > 0 } tabText ? Localisation.Loc.TrCaption(tabText) : null)
+                            ?? (pages[i].Properties.GetValueOrDefault("Caption") is { Length: > 0 } tabText ? Loc.TrCaption(tabText) : null)
                             ?? pages[i].Name, $"mygui:tab:{w.Name}:{i}", "Kenshi_SquadTabButton1Skin", enabled,
                         new Dictionary<string, string> { ["Checked"] = i == selected ? "true" : "false", ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" }, default, Clip: clip));
                 if (pages.Length > 0) Visit(pages[captions is null ? selected : 0], bounds, childClip, enabled, alpha);
@@ -144,4 +144,3 @@ public static partial class MyGuiPresentation
         c.Bounds.Contains(x, y) && (c.Clip is null || c.Clip.Value.Contains(x, y)) && c.Properties.GetValueOrDefault("NeedMouse") != "false" &&
         (c.Pickable ?? (c.Action.Length > 0 || c.Type == "Button" || c.Skin.Length > 0 && c.Skin != "PanelEmpty" || c.Background.W > 0)));
 }
-

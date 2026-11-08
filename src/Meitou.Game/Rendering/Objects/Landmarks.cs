@@ -22,9 +22,9 @@ sealed class LandmarkClass(AssetLocator assets)
     /// </summary>
     public const float MinRadius = 2000;
 
-    readonly ConcurrentDictionary<string, float> radii = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, float> _radii = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>The mesh's local bounds radius (0: the file was not found or unreadable). Safe from any thread; cached by path.</summary>
-    public float MeshRadius(string meshPath) => radii.GetOrAdd(meshPath, Probe);
+    public float MeshRadius(string meshPath) => _radii.GetOrAdd(meshPath, Probe);
 
     float Probe(string name)
     {

@@ -71,12 +71,12 @@ public sealed class CharacterCold
     /// <summary>Seconds left that a follower blocked on its way straight to its slot takes paths (<see cref="MovementSystem.FollowPathSeconds"/>).</summary>
     public float FollowPathTime { get; set; }
     /// <summary>A formation follower's heading (unit X/Z; zero until it starts), eased toward its leader's (<see cref="MovementSystem.HeadingEase"/>). Not saved; hashed while following.</summary>
-    public System.Numerics.Vector2 FollowHeading { get; set; }
+    public Vector2 FollowHeading { get; set; }
     /// <summary>The speed a follower wants this tick (<see cref="MovementSystem"/>, the original's desired speed). Not saved; hashed while following.</summary>
     public float FollowSpeed { get; set; }
     /// <summary>The follower steers straight at its aim (the original's <c>Task_Follow</c> flag +0xac, with its 50 to 100 hysteresis) and where it was at its last update (+0x94). Not saved; the flag is hashed while following.</summary>
     public bool FollowDirect { get; set; }
-    public System.Numerics.Vector3 FollowLast { get; set; }
+    public Vector3 FollowLast { get; set; }
     /// <summary>
     /// A campaign follower's pace near its trail point (task 215, <c>FUN_140349e70</c>; <see cref="PopulationSystem"/>'s campaign look sets it and clears it): its walk to the point goes
     /// no faster than this. Applies only to a <see cref="CharacterTask.GoTo"/> out of combat. Not saved (the next look sets it again); hashed while set.
@@ -87,13 +87,13 @@ public sealed class CharacterCold
     /// <summary>
     /// The <see cref="FollowOrder"/> runs row 45 Bodyguard (order or job; <see cref="Running"/>): the follower also defends its target (<see cref="RetaliationSystem"/>). Hashed with <see cref="FollowOrder"/>.
     /// </summary>
-    public bool Guarding => Running is { Row: Meitou.Data.Gameplay.Ai.TaskType.BODYGUARD };
+    public bool Guarding => Running is { Row: Data.Gameplay.Ai.TaskType.Bodyguard };
 
     /// <summary>
     /// A follower of row 31 or 289 left its follow for a fight that is a step of the row (<see cref="Running"/> kept through it, <see cref="TaskStart.Start"/>): once that fight leaves it idle
     /// it follows again, as the original's follow order is still queued; any other task first drops the row. Hashed only while set.
     /// </summary>
-    public bool FollowResume => Running is { Task: CharacterTask.Attack, Row: not Meitou.Data.Gameplay.Ai.TaskType.BODYGUARD } run && Production.PermaJobs.Follows(run.Row);
+    public bool FollowResume => Running is { Task: CharacterTask.Attack, Row: not Data.Gameplay.Ai.TaskType.Bodyguard } run && Production.PermaJobs.Follows(run.Row);
     /// <summary>The target a manned-turret gunner was told to shoot at (Shoot At, 235; <see cref="Combat.ShootAtOrder"/>); None: the gunner chooses. Not saved; hashed only while set.</summary>
     public CharacterId TurretTarget { get; set; } = CharacterId.None;
     /// <summary>The caged prisoner this character walks to free (Set Free, 110; <see cref="Locks.SetFreeOrder"/>); None: none. Not saved; hashed only while set.</summary>
@@ -127,7 +127,7 @@ public sealed class CharacterCold
     /// </summary>
     public Vector3[]? SplicePath { get; set; }
     public int SpliceEnd { get; set; }
-    public System.Numerics.Vector2 SpliceGoal { get; set; }
+    public Vector2 SpliceGoal { get; set; }
     /// <summary>The splice request in flight (0: none), and the last one sent, so its answer is never taken for a whole path. Not hashed.</summary>
     public long SpliceRequest { get; set; }
     public long LastSplice { get; set; }
@@ -140,7 +140,7 @@ public sealed class CharacterCold
     /// Other goals use the character's own height. Derived from orders and not hashed.
     /// </summary>
     public float GoalHeight { get; set; } = float.NaN;
-    public System.Numerics.Vector2 GoalHeightAt { get; set; }
+    public Vector2 GoalHeightAt { get; set; }
     /// <summary>
     /// How near (units) the walk's last waypoint counts as reached; 0: <see cref="MovementSystem.ArriveRadius"/>. The AI sets it for a walk to a node, post, seat
     /// or gun (<see cref="MovementSystem.SpotArrive"/>), which ends on the spot; <see cref="MovementSystem.GoTo"/> clears it. Derived from the AI and not hashed.
@@ -149,7 +149,7 @@ public sealed class CharacterCold
     /// <summary>Animation layers in play (made by <see cref="AnimationSystem"/>; null before the first tick it runs).</summary>
     public CharacterAnimation? Animation { get; set; }
     /// <summary>The kind of weapon drawn in the right hand (None while sheathed): the stance animations are chosen for.</summary>
-    public Meitou.Data.Gameplay.WeaponKinds DrawnWeapon { get; set; }
+    public Data.Gameplay.WeaponKinds DrawnWeapon { get; set; }
     /// <summary>The bolts loaded in the crossbow (the combat slot's, mirrored for the renderer's loaded string and bolts; display only: not hashed, not saved).</summary>
     public int CrossbowShots { get; set; }
     /// <summary>The numbers of the HUD's extended lines, refreshed by <see cref="BodySystem"/> every tick (display only: not hashed, not saved).</summary>
@@ -178,8 +178,8 @@ public sealed class CharacterCold
     /// (the original keeps them in its appearance only).
     /// </summary>
     public List<StuckBolt>? StuckBolts { get; set; }
-    public Meitou.Simulation.Bodies.CharacterStats? Stats { get; set; }
-    public Meitou.Simulation.Bodies.MedicalState? Medical { get; set; }
+    public CharacterStats? Stats { get; set; }
+    public MedicalState? Medical { get; set; }
     /// <summary>Sandbox only (the animation sandbox of the game host): replaces the movement mode of every order, and the speed the character walks at (0: the speed chain's). Not hashed; the normal game never sets them.</summary>
     public byte? ModeOverride { get; set; }
     public float SpeedOverride { get; set; }
@@ -207,10 +207,10 @@ public sealed class CharacterCold
     public WeatherNotice WeatherNotice { get; set; }
     public float WeatherNoticeProtection { get; set; }
     /// <summary>Where the last blood decal of its trail was left, and the drip build-up while it bleeds being carried (<see cref="BodySystem"/>, docs/game/blood-decals.md). Display only: not hashed, not saved.</summary>
-    public System.Numerics.Vector3 BloodMark { get; set; }
+    public Vector3 BloodMark { get; set; }
     public float BloodDrip { get; set; }
     /// <summary>Burst by a fatal hit in luckyren Mode (<see cref="World.Luckyren"/>): the blow's direction (X/Z); <see cref="BodySystem"/> removes it at the end of the tick. Not saved.</summary>
-    public System.Numerics.Vector2? Burst { get; set; }
+    public Vector2? Burst { get; set; }
     /// <summary>
     /// Meitou: the hit that put it down (<see cref="Ragdolls.RagdollBlow"/>; <see cref="Ragdolls.RagdollSystem"/> takes it and clears it). The original starts a ragdoll at rest. Not saved.
     /// </summary>
@@ -219,13 +219,13 @@ public sealed class CharacterCold
     /// Meitou: a throw given to a downed character (the debug explosion, <c>CombatSystem.Blast</c>): world units/s. <see cref="Ragdolls.RagdollSystem"/> adds it to the ragdoll's bodies
     /// (waking a frozen one) or, without a ragdoll, turns it into <see cref="Slide"/>, and clears it. Not hashed, not saved.
     /// </summary>
-    public System.Numerics.Vector3? Launch { get; set; }
+    public Vector3? Launch { get; set; }
     /// <summary>The flat speed (world units/s) a downed character without a ragdoll is still sliding at after a <see cref="Launch"/>; it drags to a stop. Not hashed, not saved.</summary>
-    public System.Numerics.Vector3 Slide { get; set; }
+    public Vector3 Slide { get; set; }
     /// <summary>The last <see cref="Blow"/> it was given, kept for the drawing (a cut-off head is thrown with it, <see cref="CharacterSnapshot.Knockdown"/>). Not hashed, not saved.</summary>
-    public System.Numerics.Vector3 Knockdown { get; set; }
+    public Vector3 Knockdown { get; set; }
     /// <summary>What it carries (null for anything without a race; an animal's grid is its <c>inventory w</c> x <c>inventory h</c>, its luggage on the backpack slot):<see cref="Meitou.Simulation.Items.FeedSystem"/> eats from it, <see cref="BodySystem"/> weighs it.</summary>
-    public Meitou.Simulation.Items.Inventory? Inventory { get; set; }
+    public Items.Inventory? Inventory { get; set; }
     /// <summary>The tick it died at (-1: alive); the corpse decays 12 game hours later (<see cref="BodySystem.SlowWorld"/>, which holds the clock back while it is carried or held).</summary>
     public long DiedTick { get; set; } = -1;
     /// <summary>The tick of the body system's last step for it (<see cref="BodySystem"/>, 2x and 5x step in turns); -1 before the first. Derived, not hashed or saved.</summary>
@@ -278,7 +278,7 @@ public sealed class CharacterCold
     /// </summary>
     public int FaceSlot { get; set; } = -1;
     /// <summary>The fight steering of a fighter in its footwork (<see cref="Combat.SteerState"/>; null until its first fight). Not saved; hashed while active or on a path chase.</summary>
-    public Combat.SteerState? Steer { get; set; }
+    public SteerState? Steer { get; set; }
     /// <summary>
     /// The fight steering's speed (the original's steering +0x12c, <c>FUN_1402af1e0</c>): it grows by <see cref="MovementSystem.Acceleration"/> per second up to the top speed while
     /// the character fights and is never reset, so a fighter that has got going keeps its pace through stops, new paths and the footwork (whose 18 caps the speed used, not this).
@@ -330,7 +330,7 @@ public sealed class CharacterCold
     /// </summary>
     public uint? PortraitSerial { get; set; }
     /// <summary>The build whose bone shape the character wears: made once, refreshed only while the character is of the player's faction (<c>FUN_140531820</c>, <c>FUN_1405338f0</c>). Not saved: made again at load, as the original.</summary>
-    public Meitou.Data.Characters.BodyBuild? ShapedBuild { get; set; }
+    public BodyBuild? ShapedBuild { get; set; }
     /// <summary>The character is running away (set and cleared by the <see cref="FleeSystem"/>, serial phases only): it neither looks for fights nor answers attacks.</summary>
     public bool Fleeing { get; set; }
     /// <summary>
@@ -354,7 +354,7 @@ public sealed class CharacterCold
     /// <summary>The hostile NPCs noticing or detecting this sneaker lately (<see cref="AggroSystem"/>, serial commit; display only: not hashed, not saved).</summary>
     public List<StealthWatcher>? Watchers { get; set; }
     /// <summary>Weapon and worn armour (track F, docs/simulation.md "Combat").</summary>
-    public Meitou.Simulation.Combat.Fighter? Fighter { get; set; }
+    public Fighter? Fighter { get; set; }
     /// <summary>The patient of the <see cref="CharacterTask.Treat"/> task (itself for self-treatment); meaningful only while the task is set (<see cref="FirstAid.FirstAidSystem"/>).</summary>
     public CharacterId TreatTarget { get; set; } = CharacterId.None;
     /// <summary>The treatment splints instead of bandaging (the original's <c>SPLINT_ORDER</c>, task "Splinting").</summary>
@@ -363,7 +363,7 @@ public sealed class CharacterCold
     /// The kit a first aid treatment is using (the first aid task's stored kit, +0x80, <c>FUN_14033c7e0</c>): kept while it is of the wanted function with charges left and still held, else searched again.
     /// Runtime only (not saved, not hashed): derived, as the next treatment tick finds the same kit again by the fewest-charges rule.
     /// </summary>
-    public (Meitou.Simulation.Items.ItemInstance Item, Meitou.Simulation.Items.Inventory Owner)? TreatKit { get; set; }
+    public (Items.ItemInstance Item, Items.Inventory Owner)? TreatKit { get; set; }
     /// <summary>
     /// The tick until which a medic treating this character asked it to stand still (the original's request of 62 Standing still on the patient's blackboard, renewed by every update of
     /// the first aid task, docs/game/ai-tasks.md "Medic jobs"; <see cref="FirstAid.FirstAidSystem"/>). <see cref="MovementSystem"/> holds an NPC still until then unless it fights or flees.
@@ -376,7 +376,7 @@ public sealed class CharacterCold
     /// </summary>
     public bool TreatKneels { get; set; }
     /// <summary>The medic job (58 <c>JOB_MEDIC</c>) is in <see cref="Jobs"/>: an idle character with a kit treats hurt squad mates by itself. NPCs with a kit do so without it (an engine rule until the AI).</summary>
-    public bool MedicJob => Jobs.Exists(j => j.Type == Meitou.Data.Gameplay.Ai.TaskType.JOB_MEDIC);
+    public bool MedicJob => Jobs.Exists(j => j.Type == Data.Gameplay.Ai.TaskType.JobMedic);
     /// <summary>The character this one carries on its left shoulder (none: not carrying); the original's <c>isCarrying</c> with the partner handle. Set and cleared by <see cref="Carrying.CarrySystem"/> in serial phases only, together with <see cref="CarriedBy"/> of the other.</summary>
     public CharacterId Carrying { get; set; } = CharacterId.None;
     /// <summary>The character carrying this one (none: not carried); the original's <c>isBeingCarried</c> with the partner handle.</summary>
@@ -408,14 +408,14 @@ public sealed class CharacterCold
     /// <summary>The NPC <see cref="CharacterTask.Loot"/>'s start flags (<see cref="Carrying.LootStart"/>), fixed when the task starts (<see cref="LiftTime"/> below 0); cleared with the task. Runtime only; hashed with the task.</summary>
     public Carrying.LootStart LootFlags { get; set; }
     /// <summary>The rescue job (148 <c>FIND_AND_RESCUE_IF_THERES_BEDS</c>, NUM8) is in <see cref="Jobs"/>: an idle character picks up a downed member of its faction by itself.</summary>
-    public bool RescueJob => Jobs.Exists(j => j.Type == Meitou.Data.Gameplay.Ai.TaskType.FIND_AND_RESCUE_IF_THERES_BEDS);
+    public bool RescueJob => Jobs.Exists(j => j.Type == Data.Gameplay.Ai.TaskType.FindAndRescueIfTheresBeds);
     /// <summary>The orders panel's toggles (<see cref="Meitou.Simulation.Player.Orders"/>); the player's characters only.</summary>
     public CharacterOrders Orders { get; set; } = CharacterOrders.Jobs;
     /// <summary>
     /// The point the Hold order holds (CharStats +0x130): where Hold was turned on, then, while on Hold, the destination of the running ground move order (its own or a queued
     /// one; <see cref="OrderMove"/>); null: where it stands (not saved).
     /// </summary>
-    public System.Numerics.Vector3? HoldPoint { get; set; }
+    public Vector3? HoldPoint { get; set; }
     /// <summary>The Stand Up order (28, <c>Task_UnCrouch</c>) is running: the crouch clip plays backwards (<see cref="AnimationSystem"/>) and <see cref="Bodies.MedicalState.StayingLow"/> clears when it is nearly back at its start. Not saved; hashed while set.</summary>
     public bool StandingUp { get; set; }
     /// <summary>The sleeper is getting out of a <c>gotobed</c> bed (<c>Task_GetOutOfBed</c>): the bed clip plays backwards (<see cref="AnimationSystem"/>) until <see cref="BedExitDone"/>. Not saved; hashed while set.</summary>
@@ -424,7 +424,7 @@ public sealed class CharacterCold
     /// <summary>The AI's manoeuvre mode (standing orders 8 and 9; the original's save key is unknown, so it is not saved, like <see cref="HoldPoint"/>).</summary>
     public ManoeuvreMode Manoeuvre { get; set; } = ManoeuvreMode.RoamFar;
     /// <summary>The AI's centre of movement (<c>AI::setCenterOfMovement</c>, +0x2c0): set by NEAR to where the character stands and by its ground move orders while not ROAM_FAR; null: none (not saved).</summary>
-    public System.Numerics.Vector3? CentreOfMovement { get; set; }
+    public Vector3? CentreOfMovement { get; set; }
     /// <summary>
     /// The running <see cref="CharacterTask.GoTo"/> is the player's ground move order or a queued one (the original's Task_Move flag <c>+0x95</c>, set for tasks 29 and 40 only):
     /// cleared by any other <see cref="MovementSystem.GoTo"/>. Runtime only.
@@ -445,7 +445,7 @@ public sealed class CharacterCold
     /// CHARACTER <c>NPC class</c> (the editor's CharacterTypeEnum; <c>fcs.def</c>'s default is MILITARY), set from the record at spawn; <c>None</c> for a character without a record
     /// (hand-made in tests). The crime rules read it (who is police, who may loot, who can be booked); not hashed, it follows from the record.
     /// </summary>
-    public Meitou.Data.Gameplay.FundamentalType NpcClass { get; set; }
+    public Data.Gameplay.FundamentalType NpcClass { get; set; }
     /// <summary>
     /// CHARACTER <c>faction importance</c> (the game's <c>Character+0x41c</c>, read by <c>FUN_14062b210</c>): how much a deed against it moves its faction's relations
     /// (<see cref="FactionDeeds.Weight"/>); 0 without a CHARACTER record. Set from the record at spawn, so not hashed.
@@ -456,7 +456,7 @@ public sealed class CharacterCold
     /// <summary>A crime nobody has booked yet (null: none); <see cref="Crime.CrimeSystem"/>, serial phases only. Hashed only while set.</summary>
     public Crime.PendingCrime? Pending { get; set; }
     /// <summary>What the AI decided for it (null: a character the AI does not run: the player's, or one whose squad has no AI packages); <see cref="Ai.AiSystem"/>.</summary>
-    public Ai.AiMind? Ai { get; set; }
+    public AiMind? Ai { get; set; }
     /// <summary>Held still by an interaction (a trader in an open trade, <see cref="Trading.TradeSystem"/>): the AI leaves it alone. Serial phases only.</summary>
     public bool Engaged { get; set; }
     /// <summary>
@@ -628,13 +628,13 @@ public sealed class CharacterCold
 /// </summary>
 public sealed class CharacterTable
 {
-    CharacterHot[] previous;
-    CharacterHot[] next;
-    CharacterCold?[] cold;
-    readonly Stack<int> free = [];
-    int highWater;
-    bool inTick;
-    TablePhase phase = TablePhase.Outside;
+    CharacterHot[] _previous;
+    CharacterHot[] _next;
+    CharacterCold?[] _cold;
+    readonly Stack<int> _free = [];
+    int _highWater;
+    bool _inTick;
+    TablePhase _phase = TablePhase.Outside;
 
     /// <summary>Limbs cut off in the tick (the character's slot, the limb slot 0 to 3): the population system rebuilds the look and drops the severed limb between ticks.</summary>
     public System.Collections.Concurrent.ConcurrentQueue<(int Character, int Limb)> LimbsChanged { get; } = new();
@@ -642,62 +642,62 @@ public sealed class CharacterTable
     public CharacterTable(int capacity = 256)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
-        previous = new CharacterHot[capacity];
-        next = new CharacterHot[capacity];
-        cold = new CharacterCold?[capacity];
+        _previous = new CharacterHot[capacity];
+        _next = new CharacterHot[capacity];
+        _cold = new CharacterCold?[capacity];
     }
 
     /// <summary>Slots ever used: every character is in 0..HighWater-1.</summary>
-    public int HighWater => highWater;
+    public int HighWater => _highWater;
     /// <summary>Characters alive.</summary>
-    public int Count => highWater - free.Count;
+    public int Count => _highWater - _free.Count;
     /// <summary>The characters ever added: a pass waiting for a character to appear runs again only when this has changed.</summary>
     public long Spawns { get; private set; }
 
     /// <summary>The last tick's state of the slots 0..HighWater-1.</summary>
-    public ReadOnlySpan<CharacterHot> Previous => previous.AsSpan(0, highWater);
+    public ReadOnlySpan<CharacterHot> Previous => _previous.AsSpan(0, _highWater);
     /// <summary>The state being computed, same slots. A phase writes only the slots of its own partition.</summary>
-    public Span<CharacterHot> Next => next.AsSpan(0, highWater);
+    public Span<CharacterHot> Next => _next.AsSpan(0, _highWater);
 
-    public CharacterCold? Cold(int slot) => cold[slot];
+    public CharacterCold? Cold(int slot) => _cold[slot];
 
     /// <summary>The id of the character in <paramref name="slot"/> as of the last tick.</summary>
-    public CharacterId IdOf(int slot) => new(slot, previous[slot].Generation);
+    public CharacterId IdOf(int slot) => new(slot, _previous[slot].Generation);
 
     /// <summary>Whether <paramref name="id"/> names a character alive as of the last tick.</summary>
     public bool IsAlive(CharacterId id) =>
-        id.Slot >= 0 && id.Slot < highWater && previous[id.Slot].Alive && previous[id.Slot].Generation == id.Generation;
+        id.Slot >= 0 && id.Slot < _highWater && _previous[id.Slot].Alive && _previous[id.Slot].Generation == id.Generation;
 
     /// <summary>Finds the slot of <paramref name="id"/> in the state being computed (for the commit, which sees removals and spawns of this tick).</summary>
     public bool TryResolveNext(CharacterId id, out int slot)
     {
         slot = id.Slot;
-        return slot >= 0 && slot < highWater && next[slot].Alive && next[slot].Generation == id.Generation;
+        return slot >= 0 && slot < _highWater && _next[slot].Alive && _next[slot].Generation == id.Generation;
     }
 
     internal TablePhase Phase
     {
-        get => phase;
-        set => phase = value;
+        get => _phase;
+        set => _phase = value;
     }
 
     /// <summary>The ticks begun (a paused interface step counts): the start path's debug stamp (<see cref="CharacterCold.TaskSetTick"/>).</summary>
     internal long Ticks { get; private set; }
 
     /// <summary>Sets the activity flag of a slot on the previous tick's state (<see cref="CharacterHot.Dormant"/>; serial phases).</summary>
-    internal void SetDormant(int slot, bool dormant) => previous[slot].Dormant = dormant;
+    internal void SetDormant(int slot, bool dormant) => _previous[slot].Dormant = dormant;
 
     internal void BeginTick()
     {
         Ticks++;
-        Array.Copy(previous, next, highWater);
-        inTick = true;
+        Array.Copy(_previous, _next, _highWater);
+        _inTick = true;
     }
 
     internal void EndTick()
     {
-        (previous, next) = (next, previous);
-        inTick = false;
+        (_previous, _next) = (_next, _previous);
+        _inTick = false;
     }
 
     /// <summary>
@@ -707,19 +707,19 @@ public sealed class CharacterTable
     public CharacterId Spawn(CharacterHot state, CharacterCold cold, long tick)
     {
         ArgumentNullException.ThrowIfNull(cold);
-        if (phase == TablePhase.Parallel) throw new InvalidOperationException("characters are spawned in the serial phases only");
+        if (_phase == TablePhase.Parallel) throw new InvalidOperationException("characters are spawned in the serial phases only");
         int slot;
         int generation;
-        if (free.Count > 0)
+        if (_free.Count > 0)
         {
-            slot = free.Pop();
-            generation = next[slot].Generation + 1;
+            slot = _free.Pop();
+            generation = _next[slot].Generation + 1;
         }
         else
         {
-            slot = highWater;
-            if (slot == previous.Length) Grow();
-            highWater++;
+            slot = _highWater;
+            if (slot == _previous.Length) Grow();
+            _highWater++;
             generation = 0;
         }
         state.Alive = true;
@@ -729,27 +729,27 @@ public sealed class CharacterTable
         if (state.Goal == Vector2.Zero) state.Goal = new Vector2(state.Position.X, state.Position.Z);
         cold.SpawnedTick = tick;
         cold.PortraitSerial ??= (uint)(Rng.Float(Rng.Mix(Rng.Key(new CharacterId(slot, generation)) ^ (ulong)tick * 0x9E3779B97F4A7C15UL)) * 4e9f);
-        next[slot] = state;
+        _next[slot] = state;
         // Outside a tick there is no "last tick" to keep apart from the new one.
-        if (!inTick) previous[slot] = state;
-        this.cold[slot] = cold;
+        if (!_inTick) _previous[slot] = state;
+        this._cold[slot] = cold;
         Spawns++;
         return new CharacterId(slot, generation);
     }
 
     /// <summary>The id the next <see cref="Spawn"/> will give (serial phases), so a character's seeded body can be made before it is added.</summary>
-    public CharacterId PeekNextId() => free.Count > 0 ? new CharacterId(free.Peek(), next[free.Peek()].Generation + 1) : new CharacterId(highWater, 0);
+    public CharacterId PeekNextId() => _free.Count > 0 ? new CharacterId(_free.Peek(), _next[_free.Peek()].Generation + 1) : new CharacterId(_highWater, 0);
 
     /// <summary>Removes a character in the state being computed; false when <paramref name="id"/> is not alive there. Serial phases only.</summary>
     public bool Remove(CharacterId id)
     {
-        if (phase is TablePhase.Parallel or TablePhase.Inputs or TablePhase.Schedule)
+        if (_phase is TablePhase.Parallel or TablePhase.Inputs or TablePhase.Schedule)
             throw new InvalidOperationException("characters are removed in the commit or the slow world only (a phase reads them as alive)");
         if (!TryResolveNext(id, out int slot)) return false;
-        next[slot].Alive = false;
-        if (!inTick) previous[slot].Alive = false;
-        cold[slot] = null;
-        free.Push(slot);
+        _next[slot].Alive = false;
+        if (!_inTick) _previous[slot].Alive = false;
+        _cold[slot] = null;
+        _free.Push(slot);
         return true;
     }
 
@@ -759,8 +759,8 @@ public sealed class CharacterTable
     /// </summary>
     public void Place(int slot, Vector3 position, float yaw, CharacterTask task = CharacterTask.Idle)
     {
-        if (phase == TablePhase.Parallel) throw new InvalidOperationException("characters are placed in the serial phases only");
-        ref var n = ref next[slot];
+        if (_phase == TablePhase.Parallel) throw new InvalidOperationException("characters are placed in the serial phases only");
+        ref var n = ref _next[slot];
         n.Position = position;
         n.Yaw = yaw;
         n.Velocity = Vector3.Zero;
@@ -768,24 +768,24 @@ public sealed class CharacterTable
         n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
         n.Task = (byte)task;
         n.TaskTime = 0;
-        if (!inTick) previous[slot] = n;
+        if (!_inTick) _previous[slot] = n;
     }
 
     void Grow()
     {
-        int size = previous.Length * 2;
-        Array.Resize(ref previous, size);
-        Array.Resize(ref next, size);
-        Array.Resize(ref cold, size);
+        int size = _previous.Length * 2;
+        Array.Resize(ref _previous, size);
+        Array.Resize(ref _next, size);
+        Array.Resize(ref _cold, size);
     }
 
     /// <summary>Adds the table's canonical state, in slot order, to <paramref name="hasher"/>: every slot's state, the free list in reuse order and the cold fields that matter.</summary>
     internal void Hash(ref StateHasher hasher)
     {
-        hasher.Add(highWater);
-        for (int i = 0; i < highWater; i++)
+        hasher.Add(_highWater);
+        for (int i = 0; i < _highWater; i++)
         {
-            ref readonly var c = ref previous[i];
+            ref readonly var c = ref _previous[i];
             hasher.Add(c.Alive);
             hasher.Add(c.Generation);
             if (!c.Alive) continue;
@@ -803,7 +803,7 @@ public sealed class CharacterTable
             hasher.Add(c.TaskTime);
             hasher.Add(c.MaxSpeed);
             hasher.Add(c.WalkSpeed);
-            var k = cold[i]!;
+            var k = _cold[i]!;
             hasher.Add(k.Faction);
             hasher.Add(k.SpawnedTick);
             hasher.Add(k.SquadId);
@@ -904,8 +904,8 @@ public sealed class CharacterTable
                 foreach (var perma in k.Jobs) { hasher.Add((int)perma.Type); hasher.Add(Rng.StableHash(perma.Site ?? "")); if (!perma.Character.IsNone) hasher.Add(perma.Character); }
             }
         }
-        hasher.Add(free.Count);
-        foreach (int slot in free) hasher.Add(slot);
+        hasher.Add(_free.Count);
+        foreach (int slot in _free) hasher.Add(slot);
     }
 }
 

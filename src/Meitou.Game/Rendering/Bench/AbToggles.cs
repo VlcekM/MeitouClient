@@ -11,12 +11,12 @@ public static class AbToggles
 {
     public sealed record Toggle(string Name, Func<bool> Get, Action<bool> Set, string Note);
 
-    static readonly Dictionary<string, Toggle> toggles = new(StringComparer.OrdinalIgnoreCase);
+    static readonly Dictionary<string, Toggle> Toggles = new(StringComparer.OrdinalIgnoreCase);
 
-    public static IEnumerable<Toggle> All => toggles.Values;
+    public static IEnumerable<Toggle> All => Toggles.Values;
 
     /// <summary>Adds (or replaces) a switch; <paramref name="set"/>(true) is side A, <paramref name="set"/>(false) side B.</summary>
-    public static void Register(string name, Func<bool> get, Action<bool> set, string note = "") => toggles[name] = new Toggle(name, get, set, note);
+    public static void Register(string name, Func<bool> get, Action<bool> set, string note = "") => Toggles[name] = new Toggle(name, get, set, note);
 
     /// <summary>Registers every Faithful / Meitou switch under its id (A = Meitou, B = Faithful).</summary>
     public static void RegisterEnhancements(IEnumerable<Enhancement> switches)
@@ -28,9 +28,9 @@ public static class AbToggles
         }
     }
 
-    public static bool TryGet(string name, out Toggle toggle) => toggles.TryGetValue(name, out toggle!);
+    public static bool TryGet(string name, out Toggle toggle) => Toggles.TryGetValue(name, out toggle!);
 
-    public static string Names => string.Join(", ", toggles.Keys.Order(StringComparer.OrdinalIgnoreCase));
+    public static string Names => string.Join(", ", Toggles.Keys.Order(StringComparer.OrdinalIgnoreCase));
 
-    public static void Clear() => toggles.Clear();
+    public static void Clear() => Toggles.Clear();
 }

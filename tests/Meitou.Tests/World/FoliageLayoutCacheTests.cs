@@ -9,36 +9,36 @@ namespace Meitou.Tests.World;
 /// <summary>The foliage layout cache (docs/formats/foliage.md, "Layout cache"), on a small catalog made here: no game files needed.</summary>
 public sealed class FoliageLayoutCacheTests : IDisposable
 {
-    readonly string temp = Path.Combine(Path.GetTempPath(), "meitou-foliage-cache-test-" + Guid.NewGuid().ToString("N"));
-    readonly GameInstall install;
+    readonly string _temp = Path.Combine(Path.GetTempPath(), "meitou-foliage-cache-test-" + Guid.NewGuid().ToString("N"));
+    readonly GameInstall _install;
 
     public FoliageLayoutCacheTests()
     {
-        Directory.CreateDirectory(Path.Combine(temp, "kenshi", "data"));
-        File.WriteAllBytes(Path.Combine(temp, "kenshi", "data", "gamedata.base"), []);
-        install = GameInstall.Open(Path.Combine(temp, "kenshi"));
+        Directory.CreateDirectory(Path.Combine(_temp, "kenshi", "data"));
+        File.WriteAllBytes(Path.Combine(_temp, "kenshi", "data", "gamedata.base"), []);
+        _install = GameInstall.Open(Path.Combine(_temp, "kenshi"));
     }
 
     public void Dispose()
     {
-        try { Directory.Delete(temp, true); } catch (IOException) { }
+        try { Directory.Delete(_temp, true); } catch (IOException) { }
     }
 
     static FcsRecord Rec(string id, FcsRecordType type) => new() { StringId = id, Flags = 0x10, Name = id, RecordType = type };
 
     static FoliageCatalog Catalog(float treeHeight = 1.5f)
     {
-        var tree = Rec("1-t.mod", FcsRecordType.FOLIAGE_MESH);
+        var tree = Rec("1-t.mod", FcsRecordType.FoliageMesh);
         tree.Floats["max height"] = treeHeight;
         tree.References["meshes"] = [new FcsReference("2-t.mod", 3, 0, 0)];
-        var leaf = Rec("2-t.mod", FcsRecordType.FOLIAGE_MESH);
-        var grass = Rec("3-t.mod", FcsRecordType.GRASS);
-        var grass2 = Rec("4-t.mod", FcsRecordType.GRASS);
-        var trees = Rec("10-t.mod", FcsRecordType.FOLIAGE_LAYER);
+        var leaf = Rec("2-t.mod", FcsRecordType.FoliageMesh);
+        var grass = Rec("3-t.mod", FcsRecordType.Grass);
+        var grass2 = Rec("4-t.mod", FcsRecordType.Grass);
+        var trees = Rec("10-t.mod", FcsRecordType.FoliageLayer);
         trees.References["meshes"] = [new FcsReference("1-t.mod", 5, 0, 0)];
-        var lawn = Rec("11-t.mod", FcsRecordType.FOLIAGE_LAYER);
+        var lawn = Rec("11-t.mod", FcsRecordType.FoliageLayer);
         lawn.References["grass"] = [new FcsReference("3-t.mod", 0, 0, 0), new FcsReference("4-t.mod", 1, 0, 0)];
-        var biome = Rec("20-t.mod", FcsRecordType.BIOMES);
+        var biome = Rec("20-t.mod", FcsRecordType.Biomes);
         biome.Ints["index"] = 0x112233;
         biome.References["foliage"] = [new FcsReference("10-t.mod", 0, 0, 0), new FcsReference("11-t.mod", 0, 0, 0)];
         var file = new FcsFile();
@@ -51,7 +51,7 @@ public sealed class FoliageLayoutCacheTests : IDisposable
     static readonly FoliageTown[] Towns = [new FoliageTown(new Vector2(100, 200), 2000f)];
 
     FoliageLayoutCache Open(FoliageCatalog catalog, string name, IEnumerable<FoliageTown>? towns = null) =>
-        new(install, catalog, towns ?? Towns, Path.Combine(temp, name), 0);
+        new(_install, catalog, towns ?? Towns, Path.Combine(_temp, name), 0);
 
     static (FoliageZone, FoliageGround) Zone(FoliageCatalog catalog, ZoneCoordinate coordinate, bool complete = true)
     {

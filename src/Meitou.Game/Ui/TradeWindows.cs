@@ -21,35 +21,35 @@ namespace Meitou.Game.Ui;
 sealed class TradeWindows(PlayerInterface player)
 {
     /// <summary>The trader whose window the interface opened (none: no trade shown) and whether its closing was already sent.</summary>
-    internal CharacterId shownTrader = CharacterId.None;
-    bool tradeCloseSent;
+    internal CharacterId ShownTrader = CharacterId.None;
+    bool _tradeCloseSent;
 
     /// <summary>Opens the trader beside the inventory when a trade opens, and ends the trade when the player closes its window.</summary>
     internal void SyncTradeScreens()
     {
-        if (player.faithfulScreens is null) return;
-        var trade = player.session.CurrentSnapshot.Trade;
+        if (player.FaithfulScreens is null) return;
+        var trade = player.Session.CurrentSnapshot.Trade;
         if (trade is null)
         {
-            if (!shownTrader.IsNone && player.faithfulScreens.IsOpen("trader")) player.faithfulScreens.Close("trader");
-            shownTrader = CharacterId.None;
-            tradeCloseSent = false;
+            if (!ShownTrader.IsNone && player.FaithfulScreens.IsOpen("trader")) player.FaithfulScreens.Close("trader");
+            ShownTrader = CharacterId.None;
+            _tradeCloseSent = false;
             return;
         }
-        if (trade.Trader != shownTrader)
+        if (trade.Trader != ShownTrader)
         {
-            shownTrader = trade.Trader;
-            tradeCloseSent = false;
-            player.faithfulScreens.ResetScroll("trader");
-            if (!player.faithfulScreens.IsOpen("inventory")) player.faithfulScreens.Open("inventory");
-            player.faithfulScreens.Open("trader");
+            ShownTrader = trade.Trader;
+            _tradeCloseSent = false;
+            player.FaithfulScreens.ResetScroll("trader");
+            if (!player.FaithfulScreens.IsOpen("inventory")) player.FaithfulScreens.Open("inventory");
+            player.FaithfulScreens.Open("trader");
             PlaceTradeWindows();
             return;
         }
-        if (!player.faithfulScreens.IsOpen("trader") && !tradeCloseSent)
+        if (!player.FaithfulScreens.IsOpen("trader") && !_tradeCloseSent)
         {
-            player.Say(new CloseTrade { Tick = player.session.World.Tick });
-            tradeCloseSent = true;
+            player.Say(new CloseTrade { Tick = player.Session.World.Tick });
+            _tradeCloseSent = true;
         }
     }
 
@@ -59,13 +59,13 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void PlaceTradeWindows()
     {
-        var frames = player.faithfulScreens.Arrange(player.Width, player.Height, player.screenRouter.BindFaithfulScreen, player.screenRouter.AddFaithfulContent);
+        var frames = player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen, player.ScreenRouter.AddFaithfulContent);
         UiRect? Root(string screen) => frames.FirstOrDefault(f => f.Id == screen)?.Controls.FirstOrDefault(c => c.Type == "Window")?.Bounds;
         float margin = (int)(Math.Min(player.Width, player.Height) * 0.05f), x = margin;
         void Put(string id)
         {
-            if (!player.faithfulScreens.IsOpen(id) || Root(id) is not { } r) return;
-            player.faithfulScreens.SetOffset(id, player.faithfulScreens.GetOffset(id) + new Vector2(x - r.X, margin - r.Y));
+            if (!player.FaithfulScreens.IsOpen(id) || Root(id) is not { } r) return;
+            player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + new Vector2(x - r.X, margin - r.Y));
             x += r.Width;
         }
         Put("bag");
@@ -78,12 +78,12 @@ sealed class TradeWindows(PlayerInterface player)
         controls.FirstOrDefault(c => c.Name == "backpack_content")?.Name ?? controls.FirstOrDefault(c => c.Name == "main")?.Name
         ?? controls.Where(c => c.Skin.Contains("InventorySlot", StringComparison.Ordinal)).OrderByDescending(c => c.Bounds.Width * c.Bounds.Height).FirstOrDefault()?.Name;
 
-    string? TraderGrid(string screen) => GridIn(player.faithfulScreens.Arrange(player.Width, player.Height, player.screenRouter.BindFaithfulScreen, player.screenRouter.AddFaithfulContent).First(f => f.Id == screen).Controls);
+    string? TraderGrid(string screen) => GridIn(player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen, player.ScreenRouter.AddFaithfulContent).First(f => f.Id == screen).Controls);
 
     /// <summary>The trader's name in the caption, its ARRANGE button; the money line is added after arranging.</summary>
     internal void BindTraderScreen(UiBindings b)
     {
-        var trade = player.session.CurrentSnapshot.Trade;
+        var trade = player.Session.CurrentSnapshot.Trade;
         b.Text["Root"] = trade?.TraderName.ToUpperInvariant() ?? "TRADER";
         b.Properties["datapanel"] = new Dictionary<string, string> { ["SkipCaption"] = "true" };
         b.Disabled.Remove("ArrangeButton");
@@ -97,7 +97,7 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     (float Dx, float Dy) TraderGrowth(int columns)
     {
-        var layout = player.faithfulScreens.Layout("trader");
+        var layout = player.FaithfulScreens.Layout("trader");
         if (layout.Find("Root") is not { } root || layout.Find("Content") is not { } content || layout.Find("backpack_content") is not { } grid) return (0, 0);
         var r = root.Position.RelativeTo(new(0, 0, player.Width, player.Height), root.RealPosition);
         float side = columns * player.InventoryCell;
@@ -106,8 +106,8 @@ sealed class TradeWindows(PlayerInterface player)
 
     internal void BindTraderGeometry(UiBindings b)
     {
-        var layout = player.faithfulScreens.Layout("trader");
-        if (player.session.CurrentSnapshot.Trade is { } trade && layout.Find("Root") is { } root)
+        var layout = player.FaithfulScreens.Layout("trader");
+        if (player.Session.CurrentSnapshot.Trade is { } trade && layout.Find("Root") is { } root)
         {
             var r = root.Position.RelativeTo(new(0, 0, player.Width, player.Height), root.RealPosition);
             int columns = Math.Max(1, trade.StockWidth), rows = Math.Max(1, trade.StockHeight);
@@ -129,8 +129,8 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void ArrangeTraderWindow(List<UiControl> controls)
     {
-        if (player.session.CurrentSnapshot.Trade is not { } trade) return;
-        var layout = player.faithfulScreens.Layout("trader");
+        if (player.Session.CurrentSnapshot.Trade is not { } trade) return;
+        var layout = player.FaithfulScreens.Layout("trader");
         int contentIndex = controls.FindIndex(c => c.Name == "Content"), viewIndex = controls.FindIndex(c => c.Name == "scrollview_backpack_content");
         if (contentIndex < 0 || viewIndex < 0 || layout.Find("Content") is not { } contentWidget) return;
         int columns = Math.Max(1, trade.StockWidth), rows = Math.Max(1, trade.StockHeight);
@@ -172,7 +172,7 @@ sealed class TradeWindows(PlayerInterface player)
     /// <summary>The money line and the stock in the trader window's grid.</summary>
     internal void AddTraderContent(List<UiControl> controls)
     {
-        if (player.session.CurrentSnapshot.Trade is not { } trade || GridIn(controls) is not { } gridName) return;
+        if (player.Session.CurrentSnapshot.Trade is not { } trade || GridIn(controls) is not { } gridName) return;
         player.AddLines(controls, "datapanel", [new("Money:", "c." + Money(trade.ShopMoney))], 20 * player.InventoryScale);
         var slot = controls.First(c => c.Name == gridName);
         int columns = Math.Max(1, trade.StockWidth), rows = Math.Max(1, trade.StockHeight);
@@ -184,8 +184,8 @@ sealed class TradeWindows(PlayerInterface player)
                 "", "", "", true, new Dictionary<string, string>(), new Vector4(0, 0, 0, 0.65f), Pickable: false, Clip: slot.Clip));
         foreach (var item in trade.Stock)
         {
-            if (player.inventoryWindows.Lifted(ItemOwner.Stock, item.Index)) continue;
-            player.itemCells.AddItemCell(controls, $"trade-item-{item.Index}",
+            if (player.InventoryWindows.Lifted(ItemOwner.Stock, item.Index)) continue;
+            player.ItemCells.AddItemCell(controls, $"trade-item-{item.Index}",
                 new(area.X + item.X * area.Width / columns, area.Y + item.Y * area.Height / rows, item.Width * area.Width / columns, item.Height * area.Height / rows),
                 item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "TradeItem", item.Index, slot.Clip, charge: item.Charge, colour: item.Colour);
         }
@@ -196,7 +196,7 @@ sealed class TradeWindows(PlayerInterface player)
     /// <b>Observed</b> by decompile, see <see cref="TooltipRuntime.ItemLines"/>). Null: no trade, or a character who cannot take the trade.
     /// </summary>
     internal TradeItemView? SellTip(CharacterId owner, int index) =>
-        player.session.CurrentSnapshot.Trade is { } trade && trade.GoodsOf.TryGetValue(owner, out var goods) ? goods.FirstOrDefault(g => g.Index == index) : null;
+        player.Session.CurrentSnapshot.Trade is { } trade && trade.GoodsOf.TryGetValue(owner, out var goods) ? goods.FirstOrDefault(g => g.Index == index) : null;
 
     /// <summary>
     /// The fencing prompt beside a seller's item (<see cref="TradeView.GoodsOf"/>) held over the stock (<c>FUN_140712920</c>, <b>Observed</b> by decompile). An illegal good first:
@@ -205,15 +205,15 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void AddFencePrompt(List<UiControl> controls)
     {
-        if (player.inventoryWindows.held is not { } item || player.session.CurrentSnapshot.Trade is not { } trade || item.From.Holder != ItemHolder.Character
-            || player.faithfulScreens.HitTest(player.mouse) is not { Screen: "trader" } || trade.Held is not { } goods) return;
+        if (player.InventoryWindows.Held is not { } item || player.Session.CurrentSnapshot.Trade is not { } trade || item.From.Holder != ItemHolder.Character
+            || player.FaithfulScreens.HitTest(player.Mouse) is not { Screen: "trader" } || trade.Held is not { } goods) return;
         (string Label, string Value, string Colour)? prompt = goods.Illegal ? (trade.BuysIllegal ? ("Illegal goods?", "No problem!", PlayerInterface.GoodColour) : ("ILLEGAL GOODS!", "NO!", PlayerInterface.BadColour))
             : !goods.Stolen ? null
             : goods.FenceChance is { } chance ? ("Fencing chance:", $"{(int)(chance * 100)}%", PlayerInterface.BadColour)
             : trade.BuysStolen ? ("Stolen goods?", "No problem!", PlayerInterface.GoodColour) : null;
         if (prompt is not { } p) return;
         float scale = player.InventoryScale, width = 240 * scale, height = 34 * scale;
-        var box = new UiRect(Math.Clamp(player.mouse.X + 18 * scale, 0, player.Width - width), Math.Clamp(player.mouse.Y - height - 8 * scale, 0, player.Height - height), width, height);
+        var box = new UiRect(Math.Clamp(player.Mouse.X + 18 * scale, 0, player.Width - width), Math.Clamp(player.Mouse.Y - height - 8 * scale, 0, player.Height - height), width, height);
         controls.Add(new("fence-prompt", "Widget", box, "", "", "Kenshi_GenericTextBoxSkin", true, new Dictionary<string, string>(), Vector4.Zero, Pickable: false));
         player.AddLines(controls, "fence-prompt", [new(p.Label, p.Value, p.Colour, p.Colour)], 20 * scale);
         int last = controls.Count;
@@ -228,13 +228,13 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void Sell(TradeView trade, CharacterId seller, InventoryItemToken token, int quantity, int? x, int y)
     {
-        var sale = new SellItem(token, quantity) { Tick = player.session.World.Tick, X = x, Y = y, From = seller };
+        var sale = new SellItem(token, quantity) { Tick = player.Session.World.Tick, X = x, Y = y, From = seller };
         if (!trade.GoodsOf.TryGetValue(seller, out var goods) || goods.FirstOrDefault(g => g.Index == token.Index) is not { FenceOdds: { } odds })
         {
             player.Say(sale);
             return;
         }
-        player.Confirm("FENCING ITEM", FenceQuestion(odds), () => player.Say(sale with { Tick = player.session.World.Tick }));
+        player.Confirm("FENCING ITEM", FenceQuestion(odds), () => player.Say(sale with { Tick = player.Session.World.Tick }));
         player.UpdateMenuPause();
     }
 
@@ -255,39 +255,39 @@ sealed class TradeWindows(PlayerInterface player)
     /// <summary>A row's height: the row layout's own (<c>Kenshi_CharacterSelectionBox</c> root, 0.180556 of the screen's height); its width is the scroll view's (engine choice).</summary>
     const float CharacterRowShare = 0.180556f;
 
-    internal MyGuiLayout? characterRowLayout;
+    internal MyGuiLayout? CharacterRowLayout;
     /// <summary>The window on show (its <see cref="CharacterTradeView.Id"/>; 0 none), whether its closing was sent, and the ticked rows' characters.</summary>
-    long shownCharacterTrade;
-    bool characterTradeCloseSent;
-    readonly HashSet<CharacterId> characterTradeTicked = [];
+    long _shownCharacterTrade;
+    bool _characterTradeCloseSent;
+    readonly HashSet<CharacterId> _characterTradeTicked = [];
 
     /// <summary>Opens the window when the world opens one, closes it when the world's closes, and tells the world when the player closed it.</summary>
     internal void SyncCharacterTradeScreen()
     {
-        if (player.faithfulScreens is null) return;
-        var trade = player.session.CurrentSnapshot.CharacterTrade;
+        if (player.FaithfulScreens is null) return;
+        var trade = player.Session.CurrentSnapshot.CharacterTrade;
         if (trade is null)
         {
-            if (shownCharacterTrade != 0 && player.faithfulScreens.IsOpen(CharacterTradeScreen)) player.faithfulScreens.Close(CharacterTradeScreen);
-            shownCharacterTrade = 0;
-            characterTradeCloseSent = false;
-            characterTradeTicked.Clear();
+            if (_shownCharacterTrade != 0 && player.FaithfulScreens.IsOpen(CharacterTradeScreen)) player.FaithfulScreens.Close(CharacterTradeScreen);
+            _shownCharacterTrade = 0;
+            _characterTradeCloseSent = false;
+            _characterTradeTicked.Clear();
             return;
         }
-        if (trade.Id != shownCharacterTrade)
+        if (trade.Id != _shownCharacterTrade)
         {
-            shownCharacterTrade = trade.Id;
-            characterTradeCloseSent = false;
-            characterTradeTicked.Clear();
-            player.contextMenuWindow.CloseContextMenu();
-            player.faithfulScreens.ResetScroll(CharacterTradeScreen);
-            player.faithfulScreens.Open(CharacterTradeScreen);
+            _shownCharacterTrade = trade.Id;
+            _characterTradeCloseSent = false;
+            _characterTradeTicked.Clear();
+            player.ContextMenuWindow.CloseContextMenu();
+            player.FaithfulScreens.ResetScroll(CharacterTradeScreen);
+            player.FaithfulScreens.Open(CharacterTradeScreen);
             return;
         }
-        if (!player.faithfulScreens.IsOpen(CharacterTradeScreen) && !characterTradeCloseSent)
+        if (!player.FaithfulScreens.IsOpen(CharacterTradeScreen) && !_characterTradeCloseSent)
         {
-            player.Say(new CloseCharacterTrade { Tick = player.session.World.Tick });
-            characterTradeCloseSent = true;
+            player.Say(new CloseCharacterTrade { Tick = player.Session.World.Tick });
+            _characterTradeCloseSent = true;
         }
     }
 
@@ -297,7 +297,7 @@ sealed class TradeWindows(PlayerInterface player)
         int count = 0;
         long total = 0;
         foreach (var row in trade.Rows)
-            if (characterTradeTicked.Contains(row.Character)) { count++; total += row.Price; }
+            if (_characterTradeTicked.Contains(row.Character)) { count++; total += row.Price; }
         return (count, total);
     }
 
@@ -305,7 +305,7 @@ sealed class TradeWindows(PlayerInterface player)
 
     internal void BindCharacterTradeScreen(UiBindings b)
     {
-        if (player.session.CurrentSnapshot.CharacterTrade is not { } trade) return;
+        if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade) return;
         var (count, total) = TickedRows(trade);
         bool affordable = total <= trade.BuyerMoney;
         b.Text["CaptionTextBox"] = trade.Title;
@@ -331,27 +331,27 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void AddCharacterTradeRows(List<UiControl> controls)
     {
-        if (player.session.CurrentSnapshot.CharacterTrade is not { } trade || characterRowLayout is null || controls.FirstOrDefault(c => c.Name == "CharacterSelectionItemBox") is not { } view) return;
+        if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade || CharacterRowLayout is null || controls.FirstOrDefault(c => c.Name == "CharacterSelectionItemBox") is not { } view) return;
         var client = controls.FirstOrDefault(x => x.Properties.GetValueOrDefault("TemplateOwner") == view.Name && x.Properties.GetValueOrDefault("TemplatePart") == "Client")?.Bounds ?? view.Bounds;
         var clip = view.Clip is { } outer ? client.Intersect(outer) : client;
         float x0 = MyGuiPresentation.Num(view.Properties, "CanvasX", client.X), y0 = MyGuiPresentation.Num(view.Properties, "CanvasY", client.Y);
         float rowHeight = CharacterRowHeight;
         var cells = CharacterTradePortraits().ToDictionary(p => p.Character, p => p.Cell);
         // The row's root is placed in screen fractions (position_real): the layout is arranged on the "screen" whose fractions make it the row's box.
-        var rootShare = characterRowLayout.Find("Root")?.Position is { Width: > 0, Height: > 0 } r ? (r.Width, r.Height) : (1f, 1f);
+        var rootShare = CharacterRowLayout.Find("Root")?.Position is { Width: > 0, Height: > 0 } r ? (r.Width, r.Height) : (1f, 1f);
         for (int i = 0; i < trade.Rows.Count; i++)
         {
             var row = trade.Rows[i];
             var box = new UiRect(x0, y0 + i * rowHeight, client.Width, rowHeight);
             if (box.Intersect(clip).Height <= 0) continue;
-            bool ticked = characterTradeTicked.Contains(row.Character);
+            bool ticked = _characterTradeTicked.Contains(row.Character);
             string prefix = "character-row-" + i.ToString(CultureInfo.InvariantCulture) + "-";
             var b = new UiBindings { TemplateScale = player.InventoryScale };
             b.Text["NameTextBox"] = row.Name;
             b.Text["PriceTextBox"] = "c." + Money(row.Price);
             b.Actions["CheckBox"] = "character-tick:" + i.ToString(CultureInfo.InvariantCulture);
             b.Properties["CheckBox"] = new Dictionary<string, string> { ["Checked"] = ticked ? "true" : "false", ["StateSelected"] = ticked ? "true" : "false" };
-            foreach (var c in MyGuiPresentation.Arrange(characterRowLayout, (int)MathF.Round(box.Width / rootShare.Item1), (int)MathF.Round(box.Height / rootShare.Item2), b, player.uiResources.Layers))
+            foreach (var c in MyGuiPresentation.Arrange(CharacterRowLayout, (int)MathF.Round(box.Width / rootShare.Item1), (int)MathF.Round(box.Height / rootShare.Item2), b, player.UiResources.Layers))
             {
                 var bounds = c.Bounds with { X = c.Bounds.X + box.X, Y = c.Bounds.Y + box.Y };
                 var own = c.Clip is { } inner ? (inner with { X = inner.X + box.X, Y = inner.Y + box.Y }).Intersect(clip) : clip;
@@ -360,7 +360,7 @@ sealed class TradeWindows(PlayerInterface player)
                 if (c.Name == "Portrait" && cells.TryGetValue(row.Character, out int cell))
                 {
                     controls.Add(new(prefix + "portrait", "ImageBox", bounds, "", "", "", true,
-                        new Dictionary<string, string> { ["ImageTexture"] = PortraitBar.PortraitTexture, ["ImageFlipV"] = "true", ["ImageRect"] = player.portraitBar.PortraitRect(cell) },
+                        new Dictionary<string, string> { ["ImageTexture"] = PortraitBar.PortraitTexture, ["ImageFlipV"] = "true", ["ImageRect"] = player.PortraitBar.PortraitRect(cell) },
                         Vector4.Zero, Pickable: false, Clip: own));
                 }
             }
@@ -374,20 +374,20 @@ sealed class TradeWindows(PlayerInterface player)
 
     internal void CharacterTradeAction(MyGuiEvent e)
     {
-        if (player.session.CurrentSnapshot.CharacterTrade is not { } trade) return;
+        if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade) return;
         if (e.Action.StartsWith("character-tick:", StringComparison.Ordinal) && int.TryParse(e.Action.AsSpan(15), NumberStyles.None, CultureInfo.InvariantCulture, out int i))
         {
-            if (i < trade.Rows.Count && !characterTradeTicked.Remove(trade.Rows[i].Character)) characterTradeTicked.Add(trade.Rows[i].Character);
+            if (i < trade.Rows.Count && !_characterTradeTicked.Remove(trade.Rows[i].Character)) _characterTradeTicked.Add(trade.Rows[i].Character);
         }
         else if (e.Widget == "ConfirmButton")
         {
             var (count, total) = TickedRows(trade);
             if (count == 0 || total > trade.BuyerMoney) return;
-            player.Say(new ConfirmCharacterTrade([.. trade.Rows.Select(r => r.Character).Where(characterTradeTicked.Contains)]) { Tick = player.session.World.Tick });
-            characterTradeCloseSent = true;
-            player.faithfulScreens.Close(CharacterTradeScreen);
+            player.Say(new ConfirmCharacterTrade([.. trade.Rows.Select(r => r.Character).Where(_characterTradeTicked.Contains)]) { Tick = player.Session.World.Tick });
+            _characterTradeCloseSent = true;
+            player.FaithfulScreens.Close(CharacterTradeScreen);
         }
-        else if (e.Widget == "CancelButton") player.faithfulScreens.Close(CharacterTradeScreen);
+        else if (e.Widget == "CancelButton") player.FaithfulScreens.Close(CharacterTradeScreen);
     }
 
     /// <summary>
@@ -396,8 +396,8 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     public IReadOnlyList<(CharacterId Character, int Cell)> CharacterTradePortraits()
     {
-        if (player.session.CurrentSnapshot.CharacterTrade is not { } trade || !player.faithfulScreens.IsOpen(CharacterTradeScreen)) return [];
-        int next = player.portraitBar.PortraitMembers().Count, end = player.session.CurrentSnapshot.Conversation is null ? PortraitBar.PortraitCells : PortraitBar.DialogueNpcCell;
+        if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade || !player.FaithfulScreens.IsOpen(CharacterTradeScreen)) return [];
+        int next = player.PortraitBar.PortraitMembers().Count, end = player.Session.CurrentSnapshot.Conversation is null ? PortraitBar.PortraitCells : PortraitBar.DialogueNpcCell;
         var list = new List<(CharacterId, int)>();
         foreach (var row in trade.Rows)
         {
@@ -411,11 +411,11 @@ sealed class TradeWindows(PlayerInterface player)
     // looter's, its worn gear in the equipment slots, and its bag in <c>loot-bag</c> (the generic window, OPEN BAG). Items are held with the mouse between the two characters' windows
     // (InventoryWindows) or moved with a right click (TakeLootItem, PutLootItem); closing it closes the loot (CloseContainer).
     /// <summary>The body whose loot window is shown, and one whose window the player closed (not reopened while the sim still has it open).</summary>
-    CharacterId shownLoot = CharacterId.None, closedLoot = CharacterId.None;
+    CharacterId _shownLoot = CharacterId.None, _closedLoot = CharacterId.None;
     /// <summary>The loot's bag window is wanted (OPEN BAG in the loot window toggles it).</summary>
-    internal bool lootBagOpen = true;
+    internal bool LootBagOpen = true;
     /// <summary>The character whose bag the loot window opened (not left open with OPEN BAG): it closes again with the loot window unless OPEN BAG was pressed meanwhile.</summary>
-    internal CharacterId lootOpenedBag = CharacterId.None;
+    internal CharacterId LootOpenedBag = CharacterId.None;
 
     internal static bool IsAnimal(CharacterSnapshot? c) => c is { Animal: true };
 
@@ -424,12 +424,12 @@ sealed class TradeWindows(PlayerInterface player)
     /// <summary>The open loot's body (its snapshot carries the item grid), or null.</summary>
     internal CharacterSnapshot? LootBody()
     {
-        var id = player.session.CurrentSnapshot.OpenLoot;
-        return id.IsNone ? null : player.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id);
+        var id = player.Session.CurrentSnapshot.OpenLoot;
+        return id.IsNone ? null : player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id);
     }
 
-    internal MyGuiLayout? characterInventoryLayout, animalInventoryLayout;
-    internal readonly Dictionary<string, bool> animalWindow = new(StringComparer.Ordinal);
+    internal MyGuiLayout? CharacterInventoryLayout, AnimalInventoryLayout;
+    internal readonly Dictionary<string, bool> AnimalWindow = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Once a frame, before the windows are arranged: the inventory and loot windows take the original's animal window (<c>Kenshi_InventoryAnimalWindow</c>: the main grid,
@@ -437,49 +437,49 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void SyncInventoryLayouts()
     {
-        if (player.faithfulScreens is null || characterInventoryLayout is null || animalInventoryLayout is null) return;
-        foreach (var (id, owner) in player.inventoryWindows.pinnedInventories.Keys.Select(slot => (slot, player.inventoryWindows.WindowCharacter(slot))).Prepend(("inventory", player.inventoryWindows.InventoryOwner())).Append(("loot", LootBody())))
+        if (player.FaithfulScreens is null || CharacterInventoryLayout is null || AnimalInventoryLayout is null) return;
+        foreach (var (id, owner) in player.InventoryWindows.PinnedInventories.Keys.Select(slot => (slot, player.InventoryWindows.WindowCharacter(slot))).Prepend(("inventory", player.InventoryWindows.InventoryOwner())).Append(("loot", LootBody())))
         {
             bool animal = IsAnimal(owner);
-            if (animalWindow.GetValueOrDefault(id) == animal) continue;
-            animalWindow[id] = animal;
-            player.faithfulScreens.Replace(id, animal ? animalInventoryLayout : characterInventoryLayout);
+            if (AnimalWindow.GetValueOrDefault(id) == animal) continue;
+            AnimalWindow[id] = animal;
+            player.FaithfulScreens.Replace(id, animal ? AnimalInventoryLayout : CharacterInventoryLayout);
         }
     }
 
     /// <summary>Once a frame: the loot windows follow the sim's open loot; the player closing the window closes the loot.</summary>
     internal void SyncLootScreen()
     {
-        if (player.faithfulScreens is null) return;
-        if (!lootOpenedBag.IsNone && !player.faithfulScreens.IsOpen("loot")) { player.inventoryWindows.bagOpen.Remove(lootOpenedBag); lootOpenedBag = CharacterId.None; }
-        var open = player.session.CurrentSnapshot.OpenLoot;
-        if (closedLoot != open) closedLoot = CharacterId.None;
-        if (!shownLoot.IsNone && shownLoot == open && !player.faithfulScreens.IsOpen("loot"))
+        if (player.FaithfulScreens is null) return;
+        if (!LootOpenedBag.IsNone && !player.FaithfulScreens.IsOpen("loot")) { player.InventoryWindows.BagOpen.Remove(LootOpenedBag); LootOpenedBag = CharacterId.None; }
+        var open = player.Session.CurrentSnapshot.OpenLoot;
+        if (_closedLoot != open) _closedLoot = CharacterId.None;
+        if (!_shownLoot.IsNone && _shownLoot == open && !player.FaithfulScreens.IsOpen("loot"))
         {
-            player.Say(new CloseContainer { Tick = player.session.World.Tick });
-            (closedLoot, shownLoot) = (open, CharacterId.None);
+            player.Say(new CloseContainer { Tick = player.Session.World.Tick });
+            (_closedLoot, _shownLoot) = (open, CharacterId.None);
             return;
         }
-        if (shownLoot != open && (open.IsNone || open != closedLoot))
+        if (_shownLoot != open && (open.IsNone || open != _closedLoot))
         {
-            if (!shownLoot.IsNone) player.faithfulScreens.Close("loot");
-            shownLoot = open;
+            if (!_shownLoot.IsNone) player.FaithfulScreens.Close("loot");
+            _shownLoot = open;
             if (!open.IsNone)
             {
-                if (player.Selected().Count > 0 && !player.faithfulScreens.IsOpen("inventory")) player.faithfulScreens.Open("inventory");
-                player.faithfulScreens.Open("loot");
+                if (player.Selected().Count > 0 && !player.FaithfulScreens.IsOpen("inventory")) player.FaithfulScreens.Open("inventory");
+                player.FaithfulScreens.Open("loot");
                 // The original opens both characters' bags with the window (the looted one's is open by default); OPEN BAG still toggles them afterwards. The looter's
                 // remembered OPEN BAG choice is kept: a bag opened here closes with the window.
-                if (player.inventoryWindows.InventoryOwner() is { } mine && player.inventoryWindows.bagOpen.Add(mine.Id)) lootOpenedBag = mine.Id;
-                player.inventoryLayout.PlaceWindowRow();
-                player.scrollBars.inventoryScroll.Remove("loot-bag");
+                if (player.InventoryWindows.InventoryOwner() is { } mine && player.InventoryWindows.BagOpen.Add(mine.Id)) LootOpenedBag = mine.Id;
+                player.InventoryLayout.PlaceWindowRow();
+                player.ScrollBars.InventoryScroll.Remove("loot-bag");
             }
         }
-        bool want = player.faithfulScreens.IsOpen("loot") && lootBagOpen && LootBody() is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } };
-        if (want == player.faithfulScreens.IsOpen("loot-bag")) return;
-        if (!want) { player.faithfulScreens.Close("loot-bag"); if (player.faithfulScreens.IsOpen("loot")) player.inventoryLayout.PlaceWindowRow(); return; }
-        player.faithfulScreens.Open("loot-bag");
-        player.inventoryLayout.PlaceWindowRow();
+        bool want = player.FaithfulScreens.IsOpen("loot") && LootBagOpen && LootBody() is { ItemGrid: { BagWidth: > 0, BagHeight: > 0 } };
+        if (want == player.FaithfulScreens.IsOpen("loot-bag")) return;
+        if (!want) { player.FaithfulScreens.Close("loot-bag"); if (player.FaithfulScreens.IsOpen("loot")) player.InventoryLayout.PlaceWindowRow(); return; }
+        player.FaithfulScreens.Open("loot-bag");
+        player.InventoryLayout.PlaceWindowRow();
     }
 
     internal void BindLootScreen(string id, UiBindings b)

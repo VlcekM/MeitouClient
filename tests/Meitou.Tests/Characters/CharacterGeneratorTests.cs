@@ -8,12 +8,12 @@ namespace Meitou.Tests.Characters;
 
 public class CharacterGeneratorTests
 {
-    static GameDatabase? cached;
-    static readonly Lock gate = new();
+    static GameDatabase? s_cached;
+    static readonly Lock Gate = new();
 
     static GameDatabase Database(GameInstall install)
     {
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
+        lock (Gate) return s_cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
     }
 
     static string Limits(GameInstall install, string file) => Path.Combine(install.DataDirectory, "editor", file);
@@ -52,7 +52,7 @@ public class CharacterGeneratorTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
         var db = Database(install);
-        var faction = CharacterAppearance.Find(db, "Dust Bandits", FcsRecordType.FACTION)!;
+        var faction = CharacterAppearance.Find(db, "Dust Bandits", FcsRecordType.Faction)!;
         var limits = AppearanceLimits.Read(Limits(install, "editor_data_human.xml"), false, 0.4f)!;
         var heads = new HashSet<string>();
         var skins = new HashSet<Vector3>();

@@ -29,45 +29,45 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
     /// <summary>How far (units) past the zone box the terrain, shapes and foliage reach (engine choice; the original's tiles overlap their neighbours).</summary>
     public const float DefaultMargin = 72;
 
-    readonly GameInstall install;
-    readonly GameDatabase db;
-    readonly WorldLevelData levels;
-    readonly CollisionCache collision;
-    readonly TerrainHeightmap map;
+    readonly GameInstall _install;
+    readonly GameDatabase _db;
+    readonly WorldLevelData _levels;
+    readonly CollisionCache _collision;
+    readonly TerrainHeightmap _map;
     // The level data's buildings by zone, made again when the level data was edited (WorldLevelData.EditRevision); one gatherer is used by one thread at a time.
-    Dictionary<ZoneCoordinate, List<BuildingPlacement>> byZone = [];
-    int indexedRevision = -1;
-    readonly List<Vector3>[]? seedsByZone;
-    readonly BuildingLayouts layouts;
+    Dictionary<ZoneCoordinate, List<BuildingPlacement>> _byZone = [];
+    int _indexedRevision = -1;
+    readonly List<Vector3>[]? _seedsByZone;
+    readonly BuildingLayouts _layouts;
 
-    readonly NavRuntimeBuildings? runtime;
+    readonly NavRuntimeBuildings? _runtime;
 
     public ZoneGeometryGatherer(GameInstall install, GameDatabase db, WorldLevelData levels, CollisionCache collision, NavRuntimeBuildings? runtime = null)
     {
-        this.install = install;
-        this.db = db;
-        this.levels = levels;
-        this.collision = collision;
-        this.runtime = runtime;
-        map = TerrainHeightmap.Open(install);
-        seedsByZone = NavSeeds.Load(install);
-        layouts = new BuildingLayouts(db, levels.Interiors);
-        layouts.UseSwaps(levels);
+        this._install = install;
+        this._db = db;
+        this._levels = levels;
+        this._collision = collision;
+        this._runtime = runtime;
+        _map = TerrainHeightmap.Open(install);
+        _seedsByZone = NavSeeds.Load(install);
+        _layouts = new BuildingLayouts(db, levels.Interiors);
+        _layouts.UseSwaps(levels);
     }
 
     Dictionary<ZoneCoordinate, List<BuildingPlacement>> BuildingsByZone
     {
         get
         {
-            int revision = levels.EditRevision;
-            if (indexedRevision == revision) return byZone;
+            int revision = _levels.EditRevision;
+            if (_indexedRevision == revision) return _byZone;
             var map = new Dictionary<ZoneCoordinate, List<BuildingPlacement>>();
-            foreach (var b in levels.Buildings())
+            foreach (var b in _levels.Buildings())
             {
                 if (!map.TryGetValue(b.Zone, out var list)) map[b.Zone] = list = [];
                 list.Add(b);
             }
-            (byZone, indexedRevision) = (map, revision);
+            (_byZone, _indexedRevision) = (map, revision);
             return map;
         }
     }
@@ -80,15 +80,15 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
 
     public void Dispose()
     {
-        map.Dispose();
-        foreach (var w in foliagePool) w.Dispose();
+        _map.Dispose();
+        foreach (var w in _foliagePool) w.Dispose();
     }
 
-    public float TerrainHeight(double x, double z) => map.HeightAt(x, z);
+    public float TerrainHeight(double x, double z) => _map.HeightAt(x, z);
 
     /// <summary>The seed points of a zone from seeds.def (docs: absolute positions, Y −99 when none was authored).</summary>
     public IReadOnlyList<Vector3> FileSeeds(ZoneCoordinate zone) =>
-        seedsByZone is not null && zone.IsInsideGrid ? seedsByZone[zone.Y * WorldLayout.ZoneCount + zone.X] : [];
+        _seedsByZone is not null && zone.IsInsideGrid ? _seedsByZone[zone.Y * WorldLayout.ZoneCount + zone.X] : [];
 
     /// <summary>Milliseconds the last <see cref="Gather"/> spent per phase (debug).</summary>
     public (double Terrain, double Buildings, double Foliage) Phases { get; private set; }
@@ -119,7 +119,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         if (foliageTask is not null) AddFoliage(g, foliageTask.GetAwaiter().GetResult());
         Phases = (terrain, buildings, sw.Elapsed.TotalMilliseconds); sw.Restart();
         AddSeeds(g);
-        g.Stats.MissingFiles = collision.Missing;
+        g.Stats.MissingFiles = _collision.Missing;
         return g;
     }
 }

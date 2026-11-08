@@ -14,9 +14,9 @@ public static partial class GameInstallSources
     /// The candidates from every launcher on this machine, in the order they are tried; scanned once per process. Windows: its registry and Heroic's list (the Wine and Linux
     /// launcher folders do not exist there).
     /// </summary>
-    public static IEnumerable<string> Launchers() => launchers.Value;
+    public static IEnumerable<string> Launchers() => LauncherList.Value;
 
-    static readonly Lazy<string[]> launchers = new(() =>
+    static readonly Lazy<string[]> LauncherList = new(() =>
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);

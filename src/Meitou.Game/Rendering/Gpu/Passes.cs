@@ -104,12 +104,12 @@ public sealed record DrawState(CullMode Cull, FrontFaceDirection Front, bool Dep
 /// </summary>
 public sealed unsafe partial class GpuContext
 {
-    PassTargets? passTargets;
-    DrawState? passState;
-    CommandList? passList;
+    PassTargets? _passTargets;
+    DrawState? _passState;
+    CommandList? _passList;
 
     /// <summary>A host's pass is open (<see cref="BeginHostPass"/>).</summary>
-    public bool PassOpen => passList is not null;
+    public bool PassOpen => _passList is not null;
 
     /// <summary>
     /// The caller has begun a rendering instance on <paramref name="cmd"/> (inside its own <c>BeginNative</c> segment) into
@@ -120,8 +120,8 @@ public sealed unsafe partial class GpuContext
     /// <inheritdoc/>
     public void BeginHostPass(IGpuCommandList cmd, PassTargets targets, DrawState state)
     {
-        if (passList is not null) throw new InvalidOperationException("a host pass is already open");
-        (passList, passTargets, passState) = ((CommandList)cmd, targets, state);
+        if (_passList is not null) throw new InvalidOperationException("a host pass is already open");
+        (_passList, _passTargets, _passState) = ((CommandList)cmd, targets, state);
     }
 
     /// <inheritdoc/>
@@ -152,26 +152,26 @@ public sealed unsafe partial class GpuContext
     /// <summary>The viewport and scissor (null: the whole viewport) the guests draw with from now on (a cascade's tile).</summary>
     public void SetPassViewport(PixelViewport viewport, PixelRect? scissor = null)
     {
-        if (passTargets is null) throw new InvalidOperationException("no host pass is open");
-        passTargets = passTargets.At(viewport, scissor);
+        if (_passTargets is null) throw new InvalidOperationException("no host pass is open");
+        _passTargets = _passTargets.At(viewport, scissor);
     }
 
     /// <summary>The state the guests draw with from now on.</summary>
     public void SetPassState(DrawState state)
     {
-        if (passList is null) throw new InvalidOperationException("no host pass is open");
-        passState = state;
+        if (_passList is null) throw new InvalidOperationException("no host pass is open");
+        _passState = state;
     }
 
     public void EndHostPass(IGpuCommandList cmd)
     {
-        if (passList is null || !ReferenceEquals(cmd, passList)) throw new InvalidOperationException("EndHostPass without a matching BeginHostPass");
-        (passList, passTargets, passState) = (null, null, null);
+        if (_passList is null || !ReferenceEquals(cmd, _passList)) throw new InvalidOperationException("EndHostPass without a matching BeginHostPass");
+        (_passList, _passTargets, _passState) = (null, null, null);
     }
 
     /// <summary>What the open pass draws into (its host's targets, viewport and scissor).</summary>
-    public PassTargets CurrentTargets() => passTargets ?? throw new InvalidOperationException("no pass is open");
+    public PassTargets CurrentTargets() => _passTargets ?? throw new InvalidOperationException("no pass is open");
 
     /// <summary>The state the open pass's host hands its guests .</summary>
-    public DrawState CurrentState() => passState ?? throw new InvalidOperationException("no pass is open");
+    public DrawState CurrentState() => _passState ?? throw new InvalidOperationException("no pass is open");
 }

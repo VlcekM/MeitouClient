@@ -20,21 +20,21 @@ public sealed class ResearchState
 {
     static readonly IReadOnlySet<string> Nothing = new HashSet<string>(StringComparer.Ordinal);
 
-    readonly List<string> completed = [];
-    readonly List<ResearchItem> queue = [];
-    readonly List<string> paid = [];
-    readonly Dictionary<string, float> partial = new(StringComparer.Ordinal);
+    readonly List<string> _completed = [];
+    readonly List<ResearchItem> _queue = [];
+    readonly List<string> _paid = [];
+    readonly Dictionary<string, float> _partial = new(StringComparer.Ordinal);
 
     /// <summary>The finished RESEARCH ids, in the order they were finished (the save's <c>finished&lt;k&gt;</c> order).</summary>
-    public IReadOnlyList<string> Completed => completed;
+    public IReadOnlyList<string> Completed => _completed;
     /// <summary>The BUILDING ids the completed research unlocks.</summary>
     public IReadOnlySet<string> Unlocked { get; private set; } = Nothing;
     /// <summary>The research queue; the first item is worked.</summary>
-    public IReadOnlyList<ResearchItem> Queue => queue;
+    public IReadOnlyList<ResearchItem> Queue => _queue;
     /// <summary>Research whose cost was paid (the save's <c>paid&lt;k&gt;</c>): queuing it again costs nothing (<b>Observed</b>, <c>FUN_1408343c0</c>).</summary>
-    public IReadOnlyList<string> Paid => paid;
+    public IReadOnlyList<string> Paid => _paid;
     /// <summary>The seconds of research taken off the queue, kept for when it is queued again.</summary>
-    public IReadOnlyDictionary<string, float> Partial => partial;
+    public IReadOnlyDictionary<string, float> Partial => _partial;
     /// <summary>The manager's tech level: 1, raised to L + 1 by each finished level upgrade of level L (<b>Observed</b>, <c>FUN_140830880</c>).</summary>
     public int TechLevel { get; private set; } = 1;
     /// <summary>
@@ -61,19 +61,19 @@ public sealed class ResearchState
     /// <summary>Replaces the whole state (a save's): finished, queued with their seconds, and paid ids.</summary>
     public void Set(GameDatabase db, IEnumerable<string> ids, IEnumerable<(string Id, float Seconds)> queued, IEnumerable<string> paidIds, IEnumerable<(string Id, float Seconds)> kept)
     {
-        completed.Clear();
+        _completed.Clear();
         BenchLevel = 0;
         // A repeatable research is listed once per time it was finished (engine reading: the save format of repetitions is Unknown); extra listings are dropped.
         foreach (var id in ids)
-            if (Times(id) < RepetitionsOf(db, id)) completed.Add(id);
-        queue.Clear();
+            if (Times(id) < RepetitionsOf(db, id)) _completed.Add(id);
+        _queue.Clear();
         foreach (var (id, s) in queued)
-            if (db.Find(id) is { Type: FcsRecordType.RESEARCH } && Times(id) < RepetitionsOf(db, id) && queue.TrueForAll(q => q.Id != id)) queue.Add(new ResearchItem(id, s));
-        paid.Clear();
+            if (db.Find(id) is { Type: FcsRecordType.Research } && Times(id) < RepetitionsOf(db, id) && _queue.TrueForAll(q => q.Id != id)) _queue.Add(new ResearchItem(id, s));
+        _paid.Clear();
         foreach (var id in paidIds)
-            if (!paid.Contains(id, StringComparer.Ordinal)) paid.Add(id);
-        partial.Clear();
-        foreach (var (id, s) in kept) partial[id] = s;
+            if (!_paid.Contains(id, StringComparer.Ordinal)) _paid.Add(id);
+        _partial.Clear();
+        foreach (var (id, s) in kept) _partial[id] = s;
         Refresh(db);
         Version++;
         Changed = false;
@@ -81,10 +81,10 @@ public sealed class ResearchState
 
     void Refresh(GameDatabase db)
     {
-        Unlocked = ResearchGate.Unlocked(db, completed);
+        Unlocked = ResearchGate.Unlocked(db, _completed);
         var crafts = new HashSet<(CraftKind, string)>();
-        foreach (var id in completed.Distinct(StringComparer.Ordinal))
-            if (db.Find(id) is { Type: FcsRecordType.RESEARCH } record)
+        foreach (var id in _completed.Distinct(StringComparer.Ordinal))
+            if (db.Find(id) is { Type: FcsRecordType.Research } record)
             {
                 // With repeats above 0 repetition j keeps the entries whose v0 is j; without repeats the lists are not filtered (Verified, FUN_1408320a0, FUN_140831e60).
                 int times = Times(id);
@@ -95,8 +95,8 @@ public sealed class ResearchState
         UnlockedCrafts = crafts;
         // Each finished repetition applies its improvements in finishing order: the multiplier is replaced, the increases add (Observed, FUN_140831a60).
         var upgrades = new Dictionary<string, BuildingUpgrade>(StringComparer.Ordinal);
-        foreach (var id in completed)
-            if (db.Find(id) is { Type: FcsRecordType.RESEARCH } record && ResearchData.From(record) is { ImproveBuildings.Count: > 0 } r)
+        foreach (var id in _completed)
+            if (db.Find(id) is { Type: FcsRecordType.Research } record && ResearchData.From(record) is { ImproveBuildings.Count: > 0 } r)
                 foreach (var building in r.ImproveBuildings)
                 {
                     var u = upgrades.GetValueOrDefault(building, BuildingUpgrade.None);
@@ -104,8 +104,8 @@ public sealed class ResearchState
                 }
         Upgrades = upgrades;
         int level = 1;
-        foreach (var id in completed)
-            if (db.Find(id) is { Type: FcsRecordType.RESEARCH } r && r.GetBool("is level upgrade") && r.GetInt("level") is var l && l >= level) level = l + 1;
+        foreach (var id in _completed)
+            if (db.Find(id) is { Type: FcsRecordType.Research } r && r.GetBool("is level upgrade") && r.GetInt("level") is var l && l >= level) level = l + 1;
         TechLevel = level;
     }
 
@@ -114,10 +114,10 @@ public sealed class ResearchState
     {
         int repetitions = RepetitionsOf(db, id);
         if (Times(id) >= repetitions) return false;
-        completed.Add(id);
-        queue.RemoveAll(q => q.Id == id);
-        partial.Remove(id);
-        if (repetitions > 1) paid.Remove(id);
+        _completed.Add(id);
+        _queue.RemoveAll(q => q.Id == id);
+        _partial.Remove(id);
+        if (repetitions > 1) _paid.Remove(id);
         Refresh(db);
         Touch();
         return true;
@@ -128,23 +128,23 @@ public sealed class ResearchState
     {
         int n = 0;
         foreach (var record in db.Records.Values)
-            if (record.Type == FcsRecordType.RESEARCH)
-                for (int repetitions = RepetitionsOf(db, record.StringId); Times(record.StringId) < repetitions; n++) completed.Add(record.StringId);
+            if (record.Type == FcsRecordType.Research)
+                for (int repetitions = RepetitionsOf(db, record.StringId); Times(record.StringId) < repetitions; n++) _completed.Add(record.StringId);
         if (n == 0) return 0;
-        queue.Clear();
-        partial.Clear();
+        _queue.Clear();
+        _partial.Clear();
         Refresh(db);
         Touch();
         return n;
     }
 
     public bool IsUnlocked(string building) => Unlocked.Contains(building);
-    public bool IsDone(string id) => completed.Contains(id, StringComparer.Ordinal);
+    public bool IsDone(string id) => _completed.Contains(id, StringComparer.Ordinal);
     /// <summary>How many times a research was finished.</summary>
     public int Times(string id)
     {
         int n = 0;
-        foreach (var c in completed) if (c == id) n++;
+        foreach (var c in _completed) if (c == id) n++;
         return n;
     }
     /// <summary>Every repetition is finished.</summary>
@@ -159,22 +159,22 @@ public sealed class ResearchState
     public IReadOnlySet<(CraftKind Kind, string Id)> UnlockedCrafts { get; private set; } = new HashSet<(CraftKind, string)>();
 
     /// <summary>How many times a research can be finished in all: its <c>repeats</c>, at least 1 (<b>Verified</b>, <c>FUN_140834b70</c>).</summary>
-    static int RepetitionsOf(GameDatabase db, string id) => db.Find(id) is { Type: FcsRecordType.RESEARCH } r ? Math.Max(1, r.GetInt("repeats")) : 1;
-    public bool IsQueued(string id) => queue.Exists(q => q.Id == id);
+    static int RepetitionsOf(GameDatabase db, string id) => db.Find(id) is { Type: FcsRecordType.Research } r ? Math.Max(1, r.GetInt("repeats")) : 1;
+    public bool IsQueued(string id) => _queue.Exists(q => q.Id == id);
 
     internal void Enqueue(string id)
     {
-        queue.Add(new ResearchItem(id, partial.Remove(id, out float s) ? s : 0));
-        if (!paid.Contains(id, StringComparer.Ordinal)) paid.Add(id);
+        _queue.Add(new ResearchItem(id, _partial.Remove(id, out float s) ? s : 0));
+        if (!_paid.Contains(id, StringComparer.Ordinal)) _paid.Add(id);
         Touch();
     }
 
     internal bool Dequeue(string id)
     {
-        int i = queue.FindIndex(q => q.Id == id);
+        int i = _queue.FindIndex(q => q.Id == id);
         if (i < 0) return false;
-        if (queue[i].Seconds > 0) partial[id] = queue[i].Seconds;
-        queue.RemoveAt(i);
+        if (_queue[i].Seconds > 0) _partial[id] = _queue[i].Seconds;
+        _queue.RemoveAt(i);
         Touch();
         return true;
     }
@@ -182,13 +182,13 @@ public sealed class ResearchState
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x52657365);
-        h.Add(completed.Count);
-        foreach (var id in completed) h.Add(Rng.StableHash(id));
-        h.Add(queue.Count);
-        foreach (var q in queue) { h.Add(Rng.StableHash(q.Id)); h.Add(q.Seconds); }
-        h.Add(paid.Count);
-        foreach (var id in paid) h.Add(Rng.StableHash(id));
-        foreach (var (id, s) in partial.OrderBy(p => p.Key, StringComparer.Ordinal)) { h.Add(Rng.StableHash(id)); h.Add(s); }
+        h.Add(_completed.Count);
+        foreach (var id in _completed) h.Add(Rng.StableHash(id));
+        h.Add(_queue.Count);
+        foreach (var q in _queue) { h.Add(Rng.StableHash(q.Id)); h.Add(q.Seconds); }
+        h.Add(_paid.Count);
+        foreach (var id in _paid) h.Add(Rng.StableHash(id));
+        foreach (var (id, s) in _partial.OrderBy(p => p.Key, StringComparer.Ordinal)) { h.Add(Rng.StableHash(id)); h.Add(s); }
     }
 }
 

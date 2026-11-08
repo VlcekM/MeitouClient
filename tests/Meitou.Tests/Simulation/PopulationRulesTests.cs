@@ -58,13 +58,13 @@ public class PopulationRulesTests
     {
         FcsRecord Swap(string id, string replace, params (string With, int Weight)[] with)
         {
-            var r = SyntheticTown.Rec(id, FcsRecordType.BUILDINGS_SWAP, id);
-            r.References["to replace"] = [SyntheticTown.Ref(replace)];
-            r.References["replace with"] = [.. with.Select(w => SyntheticTown.Ref(w.With, w.Weight))];
+            var r = Rec(id, FcsRecordType.BuildingsSwap, id);
+            r.References["to replace"] = [Ref(replace)];
+            r.References["replace with"] = [.. with.Select(w => Ref(w.With, w.Weight))];
             return r;
         }
-        var faction = SyntheticTown.Rec("f-t", FcsRecordType.FACTION, "F");
-        faction.References["buildings replacements"] = [SyntheticTown.Ref("s1"), SyntheticTown.Ref("s2"), SyntheticTown.Ref("s3"), SyntheticTown.Ref("s4")];
+        var faction = Rec("f-t", FcsRecordType.Faction, "F");
+        faction.References["buildings replacements"] = [Ref("s1"), Ref("s2"), Ref("s3"), Ref("s4")];
         var file = new FcsFile();
         file.Records.AddRange([faction, Swap("s1", "carpet"), Swap("s2", "chair", ("metal chair", 1)), Swap("s3", "table", ("a", 1), ("b", 3)), Swap("s4", "carpet", ("never", 1))]);
         var db = new GameDatabase();
@@ -82,16 +82,16 @@ public class PopulationRulesTests
     [Fact]
     public void A_layouts_furniture_is_swapped_by_the_buildings_owner()
     {
-        var faction = SyntheticTown.Rec("f-t", FcsRecordType.FACTION, "F");
-        faction.References["buildings replacements"] = [SyntheticTown.Ref("s1"), SyntheticTown.Ref("s2")];
-        var carpet = SyntheticTown.Rec("s1", FcsRecordType.BUILDINGS_SWAP, "s1");
-        carpet.References["to replace"] = [SyntheticTown.Ref("carpet")];
-        var chair = SyntheticTown.Rec("s2", FcsRecordType.BUILDINGS_SWAP, "s2");
-        chair.References["to replace"] = [SyntheticTown.Ref("chair")];
-        chair.References["replace with"] = [SyntheticTown.Ref("metal", 100)];
+        var faction = Rec("f-t", FcsRecordType.Faction, "F");
+        faction.References["buildings replacements"] = [Ref("s1"), Ref("s2")];
+        var carpet = Rec("s1", FcsRecordType.BuildingsSwap, "s1");
+        carpet.References["to replace"] = [Ref("carpet")];
+        var chair = Rec("s2", FcsRecordType.BuildingsSwap, "s2");
+        chair.References["to replace"] = [Ref("chair")];
+        chair.References["replace with"] = [Ref("metal", 100)];
         var records = new List<FcsRecord> { faction, carpet, chair };
-        foreach (var id in new[] { "carpet", "chair", "metal", "bldg" }) records.Add(SyntheticTown.Rec(id, FcsRecordType.BUILDING, id));
-        var layout = SyntheticTown.Rec("lay", FcsRecordType.INSTANCE_COLLECTION, "lay");
+        foreach (var id in new[] { "carpet", "chair", "metal", "bldg" }) records.Add(Rec(id, FcsRecordType.Building, id));
+        var layout = Rec("lay", FcsRecordType.InstanceCollection, "lay");
         layout.Strings["associated building"] = "bldg";
         layout.Instances.Add(new FcsInstance { Id = "a", Target = "carpet", Position = new Vector3(1, 0, 0) });
         layout.Instances.Add(new FcsInstance { Id = "b", Target = "chair", Position = new Vector3(2, 0, 0) });
@@ -103,8 +103,8 @@ public class PopulationRulesTests
         interiorsFile.Records.Add(layout);
         var interiors = new GameDatabase();
         interiors.Apply(interiorsFile, "interiors.level");
-        var layouts = new Meitou.Data.World.BuildingLayouts(db, interiors);
-        var placement = new Meitou.Data.World.BuildingPlacement(new Meitou.Data.World.ZoneCoordinate(1, 1), "p", "bldg", new Vector3(1, 1, 1), Quaternion.Identity, null, null);
+        var layouts = new BuildingLayouts(db, interiors);
+        var placement = new BuildingPlacement(new ZoneCoordinate(1, 1), "p", "bldg", new Vector3(1, 1, 1), Quaternion.Identity, null, null);
         var layoutRecord = interiors.Find("lay")!;
         Assert.Equal(["carpet", "chair"], layouts.Items(layoutRecord, placement).Select(i => i.Building.StringId));
         layouts.UseSwaps(BuildingSwaps.From(db), new Dictionary<string, string> { [placement.Key] = "f-t" });

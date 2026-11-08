@@ -106,12 +106,12 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     {
         var at = world.Characters.Next[slot].Position;
         GroundItem? best = null;
-        float d2best = FoodOnGroundRange * FoodOnGroundRange;
+        float d2Best = FoodOnGroundRange * FoodOnGroundRange;
         foreach (var g in world.GroundItems.All)
         {
             if (g.Item.ItemFunction is not (FoodFunction or RawFoodFunction) || g.Slot is not null || g.OwnedBy >= 0 && g.OwnedBy != cold.Faction) continue;
             float d2 = Vector3.DistanceSquared(at, g.Position);
-            if (d2 < d2best) (best, d2best) = (g, d2);
+            if (d2 < d2Best) (best, d2Best) = (g, d2);
         }
         return best;
     }
@@ -121,7 +121,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     {
         cold.PickingUpItem = food.Id;
         if (Vector3.Distance(world.Characters.Next[slot].Position, food.Position) > PlayerSystem.PickUpReach)
-            TaskStart.Walk(world, slot, food.Position, SpeedMode.Run, Meitou.Data.Gameplay.Ai.TaskType.EAT_FOOD_ON_GROUND, TaskSource.Goal);
+            TaskStart.Walk(world, slot, food.Position, SpeedMode.Run, Data.Gameplay.Ai.TaskType.EatFoodOnGround, TaskSource.Goal);
     }
 
     public void RegisterSources(DecisionSystem decisions) => decisions.Register(new PickingUpFood());
@@ -139,7 +139,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
             var cold = world.Characters.Cold(slot)!;
             if (cold is not { Medical: { Dead: false } med, Race: { } race, Inventory: { } own } || med.HasStatsObject) return DecisionCheck.No("not an animal");
             if (cold.PickingUpItem is not null)
-                return cold.Running is { Row: Meitou.Data.Gameplay.Ai.TaskType.EAT_FOOD_ON_GROUND } ? DecisionCheck.Runs : DecisionCheck.No("picking up an item");
+                return cold.Running is { Row: Data.Gameplay.Ai.TaskType.EatFoodOnGround } ? DecisionCheck.Runs : DecisionCheck.No("picking up an item");
             if (!WantsGroundFood(cold, race, med, own)) return DecisionCheck.No("desire 0 (not hungry, food on it, or fighting)");
             return GroundFood(world, slot, cold) is not null ? DecisionCheck.Run : DecisionCheck.No("no food on the ground");
         }
@@ -259,7 +259,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
         }
         med.Fed = amount * 0.01f;
         var at = world.Characters.Next[slot].Position;
-        world.Floaters?.Enqueue(Floater.Text(world.Characters.IdOf(slot), at, Meitou.Localisation.Loc.Tr("Ate {1}", item.Name)));
+        world.Floaters?.Enqueue(Floater.Text(world.Characters.IdOf(slot), at, Loc.Tr("Ate {1}", item.Name)));
         world.EmitSound(SoundKind.Eat, slot, at);
     }
 }

@@ -33,9 +33,9 @@ public sealed partial class CarrySystem
             foreach (var member in squad.Members)
             {
                 if (!table.TryResolveNext(member, out int slot) || table.Cold(slot) is not { IsPlayer: false, Inventory: not null, PickingUpItem: null } cold
-                    || !Ai.AiSystem.Holds(table.Next[slot], cold) || HasWeapon(cold) || cold.Medical is { } m && !m.ArmWorks(left: true) && !m.ArmWorks(left: false)) continue;
-                int role = (int)Ai.AiSystem.RoleOf(squad, member, cold);
-                if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.NOT_BE_UNARMED) ? 1 : 0;
+                    || !AiSystem.Holds(table.Next[slot], cold) || HasWeapon(cold) || cold.Medical is { } m && !m.ArmWorks(left: true) && !m.ArmWorks(left: false)) continue;
+                int role = (int)AiSystem.RoleOf(squad, member, cold);
+                if (duty[role] < 0) duty[role] = population.GoalDuty(world, squad, (AiRole)role, TaskType.NotBeUnarmed) ? 1 : 0;
                 if (duty[role] == 0) continue;
                 taken ??= Looting(table);
                 claimed ??= Claimed(table);
@@ -46,12 +46,12 @@ public sealed partial class CarrySystem
                     cold.PickingUpItem = item;
                     var at = world.GroundItems.Find(item)!.Position;
                     if (Vector2.Distance(new Vector2(table.Next[slot].Position.X, table.Next[slot].Position.Z), new Vector2(at.X, at.Z)) > PlayerSystem.PickUpReach)
-                        TaskStart.Walk(world, slot, at, SpeedMode.Run, TaskType.NOT_BE_UNARMED, TaskSource.Npc);
+                        TaskStart.Walk(world, slot, at, SpeedMode.Run, TaskType.NotBeUnarmed, TaskSource.Npc);
                 }
                 else if (body >= 0)
                 {
                     var task = (CharacterTask)table.Next[slot].Task;
-                    if (Start(world, slot, CharacterTask.Loot, TaskType.NOT_BE_UNARMED, TaskSource.Npc, table.IdOf(body), task is CharacterTask.Wander or CharacterTask.Follow ? task : CharacterTask.Idle))
+                    if (Start(world, slot, CharacterTask.Loot, TaskType.NotBeUnarmed, TaskSource.Npc, table.IdOf(body), task is CharacterTask.Wander or CharacterTask.Follow ? task : CharacterTask.Idle))
                         taken.Add(body);
                 }
             }
@@ -78,13 +78,13 @@ public sealed partial class CarrySystem
         var next = table.Next;
         var at = new Vector2(next[slot].Position.X, next[slot].Position.Z);
         float range2 = FindWeaponRange * FindWeaponRange;
-        bool inTown = !Ai.AiSystem.TownAt(data, world, next[slot].Position).IsNone;
+        bool inTown = !AiSystem.TownAt(data, world, next[slot].Position).IsNone;
         var sight = world.Sight;
         int item = -1;
         float best = range2;
         foreach (var g in world.GroundItems.All)
         {
-            if (g.Item.Type != FcsRecordType.WEAPON || g.Slot is not null || claimed.Contains(g.Id)) continue;
+            if (g.Item.Type != FcsRecordType.Weapon || g.Slot is not null || claimed.Contains(g.Id)) continue;
             float d2 = Vector2.DistanceSquared(at, new Vector2(g.Position.X, g.Position.Z));
             if (d2 > best) continue;
             // In a town it must lie where the character is (inside the same building, or both outdoors), and be nobody's or an enemy's (FUN_14099b1d0).

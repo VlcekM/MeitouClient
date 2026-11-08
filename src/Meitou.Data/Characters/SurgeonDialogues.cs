@@ -16,19 +16,19 @@ public sealed class SurgeonDialogues(GameDatabase db)
     /// <summary><c>DialogConditionEnum</c> numbers the offer accepts: the player's money, the speaker recruitable.</summary>
     public const int PlayerMoney = 2, IsRecruitable = 77;
 
-    readonly ConcurrentDictionary<string, int?> byDialogue = new(StringComparer.Ordinal);
-    readonly ConcurrentDictionary<(string, string), int?> byCharacter = new();
+    readonly ConcurrentDictionary<string, int?> _byDialogue = new(StringComparer.Ordinal);
+    readonly ConcurrentDictionary<(string, string), int?> _byCharacter = new();
 
     /// <summary>
     /// The cheapest surgery a CHARACTER offers through its own <c>dialogue</c>, its <c>dialogue package</c>s' <c>dialogs</c>, or (as its squad's leader) the squad
     /// template's <c>dialog leader</c> package; null when it offers none.
     /// </summary>
     public int? CostOf(string characterId, string? squadTemplateId, bool leader) =>
-        byCharacter.GetOrAdd((characterId, leader ? squadTemplateId ?? "" : ""), key => Find(key.Item1, key.Item2));
+        _byCharacter.GetOrAdd((characterId, leader ? squadTemplateId ?? "" : ""), key => Find(key.Item1, key.Item2));
 
     int? Find(string characterId, string templateId)
     {
-        if (db.Find(characterId) is not { Type: FcsRecordType.CHARACTER } character) return null;
+        if (db.Find(characterId) is not { Type: FcsRecordType.Character } character) return null;
         var dialogues = new List<string>();
         dialogues.AddRange(character.GetReferences("dialogue").Select(r => r.TargetStringId));
         foreach (var package in character.GetReferences("dialogue package").Select(r => db.Find(r.TargetStringId)))
@@ -38,20 +38,20 @@ public sealed class SurgeonDialogues(GameDatabase db)
                 if (package is not null) dialogues.AddRange(package.GetReferences("dialogs").Select(r => r.TargetStringId));
         int? best = null;
         foreach (string d in dialogues.Distinct())
-            if (byDialogue.GetOrAdd(d, Cost) is { } cost && (best is null || cost < best)) best = cost;
+            if (_byDialogue.GetOrAdd(d, Cost) is { } cost && (best is null || cost < best)) best = cost;
         return best;
     }
 
     /// <summary>The cheapest open editor line of a DIALOGUE (its own conditions included), or null.</summary>
     int? Cost(string dialogueId)
     {
-        if (db.Find(dialogueId) is not { Type: FcsRecordType.DIALOGUE } dialogue || !Open(dialogue)) return null;
+        if (db.Find(dialogueId) is not { Type: FcsRecordType.Dialogue } dialogue || !Open(dialogue)) return null;
         int? best = null;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         void Walk(GameRecord node, int depth)
         {
             if (depth > 30 || !seen.Add(node.StringId)) return;
-            if (node.Type == FcsRecordType.DIALOGUE_LINE && !Open(node)) return;
+            if (node.Type == FcsRecordType.DialogueLine && !Open(node)) return;
             var effects = node.GetReferences("effects").Select(r => (Action: db.Find(r.TargetStringId)?.GetInt("action name") ?? -1, r.Values.Value0)).ToList();
             if (effects.Any(e => e.Action == CharacterEditor))
             {

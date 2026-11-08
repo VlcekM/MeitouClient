@@ -9,8 +9,8 @@ namespace Meitou.Simulation.Items;
 public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
 {
     /// <summary>The record's name in the data files (<see cref="GameRecord.BaseName"/>): for finding an item by its English name, whatever the language.</summary>
-    public string BaseName { get => baseName ?? Name; init => baseName = value; }
-    string? baseName;
+    public string BaseName { get => _baseName ?? Name; init => _baseName = value; }
+    string? _baseName;
     /// <summary><c>weight kg</c>.</summary>
     public float Weight { get; init; }
     /// <summary><c>inventory footprint width</c> / <c>height</c>: cells in a grid.</summary>
@@ -59,7 +59,7 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     /// A food item: an ITEM with <c>item function</c> 3 (rice, bread, fish, dried meat...). Raw meat (15) is not eaten by people by this rule (race <c>special food</c> would say,
     /// <b>Unknown</b>).
     /// </summary>
-    public bool IsFood => Type == FcsRecordType.ITEM && Function == 3;
+    public bool IsFood => Type == FcsRecordType.Item && Function == 3;
 
     /// <summary>An ordinary first aid kit (<c>item function</c> 1): bandages organic body parts (<b>Observed</b>, character-stats.md).</summary>
     public const int FirstAidKitFunction = 1;
@@ -76,8 +76,8 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     public static (int Function, float Charges) FunctionOf(GameRecord r)
     {
         float charges = Math.Max(r.GetFloat("charges", 1), 1);
-        if (r.Type == FcsRecordType.CONTAINER) return (4, charges);
-        int function = r.Type switch { FcsRecordType.WEAPON => 5, FcsRecordType.ARMOUR => 6, FcsRecordType.ITEM => r.GetInt("item function"), _ => 0 };
+        if (r.Type == FcsRecordType.Container) return (4, charges);
+        int function = r.Type switch { FcsRecordType.Weapon => 5, FcsRecordType.Armour => 6, FcsRecordType.Item => r.GetInt("item function"), _ => 0 };
         if (function == 7) function = 0;
         if (function == 3 && charges <= 1) function = 0;
         return (function, charges);
@@ -89,7 +89,7 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
     /// </summary>
     public bool ScalesCharges => Scales(Type, Function, Charges);
 
-    static bool Scales(FcsRecordType type, int function, float charges) => type == FcsRecordType.ITEM && function is 3 or 15 && charges > 1;
+    static bool Scales(FcsRecordType type, int function, float charges) => type == FcsRecordType.Item && function is 3 or 15 && charges > 1;
 
     public static ItemInfo From(GameRecord r)
     {
@@ -108,17 +108,17 @@ public sealed record ItemInfo(string Id, string Name, FcsRecordType Type)
             Quality = r.GetFloat("quality"),
             StorageWidth = r.GetInt("storage size width"),
             StorageHeight = r.GetInt("storage size height"),
-            EncumbranceEffect = r.Type == FcsRecordType.CONTAINER ? Math.Max(r.GetFloat("encumbrance effect", 1), 0) : 1,
-            StackBonusMinimum = r.Type == FcsRecordType.CONTAINER ? r.GetInt("stackable bonus minimum", 1) : 1,
-            StackBonusMult = r.Type == FcsRecordType.CONTAINER ? r.GetFloat("stackable bonus mult", 1) : 1,
-            WornOnlyBy = Meitou.Data.Gameplay.RaceLimiter.Of(r).Only,
-            WornNeverBy = Meitou.Data.Gameplay.RaceLimiter.Of(r).Never,
+            EncumbranceEffect = r.Type == FcsRecordType.Container ? Math.Max(r.GetFloat("encumbrance effect", 1), 0) : 1,
+            StackBonusMinimum = r.Type == FcsRecordType.Container ? r.GetInt("stackable bonus minimum", 1) : 1,
+            StackBonusMult = r.Type == FcsRecordType.Container ? r.GetFloat("stackable bonus mult", 1) : 1,
+            WornOnlyBy = RaceLimiter.Of(r).Only,
+            WornNeverBy = RaceLimiter.Of(r).Never,
         };
     }
 
     /// <summary>The stack limit of an item record (<see cref="StackLimit"/>): 1 for the types that never stack, else the record's <c>stackable</c> (at least 1).</summary>
-    public static int StackLimitOf(GameRecord r) => r.Type is FcsRecordType.WEAPON or FcsRecordType.ARMOUR or FcsRecordType.CONTAINER or FcsRecordType.MAP_ITEM
-        or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT ? 1 : Math.Max(r.GetInt("stackable", 1), 1);
+    public static int StackLimitOf(GameRecord r) => r.Type is FcsRecordType.Weapon or FcsRecordType.Armour or FcsRecordType.Container or FcsRecordType.MapItem
+        or FcsRecordType.Crossbow or FcsRecordType.LimbReplacement ? 1 : Math.Max(r.GetInt("stackable", 1), 1);
 
     /// <summary>
     /// The stack limit of an item inside a container with the given bonus (the exe's <c>FUN_1407466b0</c>, <b>Observed</b>): trunc(max(limit, minimum) x mult), at least 1. The types that

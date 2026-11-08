@@ -9,20 +9,20 @@ namespace Meitou.Game.Rendering.Characters;
 internal sealed class CharacterTextureBudget
 {
     const long IntervalMs = 500;
-    long lastRebalance;
+    long _lastRebalance;
 
     /// <summary>The factor on every texture's need (distance over texel size): 1 while the cache is within its mark.</summary>
     public float NeedScale { get; private set; } = 1;
 
     /// <summary>The next <see cref="Update"/> commits the needs: the frame whose users offer them (and mark their textures used).</summary>
-    public bool Due => Environment.TickCount64 - lastRebalance >= IntervalMs;
+    public bool Due => Environment.TickCount64 - _lastRebalance >= IntervalMs;
 
     /// <summary>Once per <see cref="IntervalMs"/>: adjusts <see cref="NeedScale"/>, tells the cache how eagerly to coarsen, commits the frame's needs and rebalances.</summary>
     public void Update(WorldTextureCache cache)
     {
         long tick = Environment.TickCount64;
-        if (tick - lastRebalance < IntervalMs) return;
-        lastRebalance = tick;
+        if (tick - _lastRebalance < IntervalMs) return;
+        _lastRebalance = tick;
         double mark = cache.MarkMb * 1048576, resident = cache.ResidentBytes;
         if (resident > mark * 0.9) NeedScale = Math.Min(NeedScale * 1.6f, 512);
         else if (resident < mark * 0.5) NeedScale = Math.Max(NeedScale / 1.2f, 1);

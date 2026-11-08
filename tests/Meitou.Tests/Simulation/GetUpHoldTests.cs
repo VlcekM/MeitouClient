@@ -44,7 +44,7 @@ public class GetUpHoldTests
     public void The_hold_after_waking_ends_when_the_get_up_clip_does(float playSpeed)
     {
         var (world, cold, _, anim) = Wake(playSpeed);
-        using var _w = world;
+        using var w = world;
         Assert.True(cold.Animation!.Action >= 0 && CharacterFacts.GettingUp(cold, world.Tick), "the get-up clip plays and holds");
         long clipEnd = -1, holdEnd = -1;
         for (int t = 0; t < 600 && (clipEnd < 0 || holdEnd < 0); t++)
@@ -60,7 +60,7 @@ public class GetUpHoldTests
     public void A_waker_in_a_bed_plays_no_get_up_clip_and_is_not_held_for_one()
     {
         var (world, cold, _, anim) = Wake(1f, inBed: true);
-        using var _w = world;
+        using var w = world;
         Assert.True(anim.Action < 0);
         Assert.False(CharacterFacts.GettingUp(cold, world.Tick));
     }

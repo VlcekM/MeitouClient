@@ -31,7 +31,7 @@ public class FarmLayoutTests
     {
         var db = InstallData.BaseGame;
         Assert.SkipWhen(db is null, "Kenshi install not found");
-        FarmData Farm(string name) => MachineData.From(db!, db!.Records.Values.First(r => r.Type == FcsRecordType.BUILDING && r.Name == name))!.Farm!;
+        FarmData Farm(string name) => MachineData.From(db!, db!.Records.Values.First(r => r.Type == FcsRecordType.Building && r.Name == name))!.Farm!;
         var small = Farm("Wheat Farm S");
         Assert.Equal(25, FarmLayout.Count(small));
         Assert.Equal(49, FarmLayout.Count(Farm("Wheat Farm M")));

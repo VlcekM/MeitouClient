@@ -2,9 +2,9 @@ using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using Meitou.Game.Rendering.Frame;
 using Silk.NET.Core.Contexts;
 using Silk.NET.Shaderc;
-using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game.Rendering.Gpu.Shaders;
 
@@ -18,7 +18,7 @@ public sealed partial class GlslProgramCompiler
     /// <summary>Part of the cache key; bump when the output for the same source and options can change.</summary>
     public const int CacheVersion = 4;   // 4: clip depth remap removed, MEITOU_DEPTH_REVERSED; 3: bindings shifted after compiling, shaderc pinned
 
-    readonly ConcurrentDictionary<string, CompiledProgram> memory = new();
+    readonly ConcurrentDictionary<string, CompiledProgram> _memory = new();
 
     /// <summary>Options used when <see cref="Compile"/> is given none.</summary>
     public ShaderCompileOptions DefaultOptions { get; }
@@ -32,7 +32,7 @@ public sealed partial class GlslProgramCompiler
         options ??= DefaultOptions;
 
         string key = ShaderCache.Key(vertexGlsl, fragmentGlsl, options, CacheVersion);
-        if (options.UseMemoryCache && memory.TryGetValue(key, out var cached)) return cached.WithSource(ProgramSource.Memory);
+        if (options.UseMemoryCache && _memory.TryGetValue(key, out var cached)) return cached.WithSource(ProgramSource.Memory);
 
         var (vs, fs) = Preprocess(vertexGlsl, fragmentGlsl, options);
 
@@ -45,7 +45,7 @@ public sealed partial class GlslProgramCompiler
         }
         else program = CompileFresh(vs, fs, options, dir, key);
 
-        if (options.UseMemoryCache) memory[key] = program;
+        if (options.UseMemoryCache) _memory[key] = program;
         return program;
     }
 
@@ -61,7 +61,7 @@ public sealed partial class GlslProgramCompiler
     /// <summary>Cache version of the native model and compute shaders (docs/renderer-native.md 3.4); the legacy one is <see cref="CacheVersion"/>.</summary>
     public const int NativeCacheVersion = 5;   // 5: clip depth remap removed, MEITOU_DEPTH_REVERSED
 
-    readonly ConcurrentDictionary<string, byte[]> nativeMemory = new();
+    readonly ConcurrentDictionary<string, byte[]> _nativeMemory = new();
 
     /// <summary>
     /// A GLSL 450 compute shader for Vulkan (strict rules: explicit sets and bindings, no loose uniforms; no interface location injection,
@@ -88,7 +88,7 @@ public sealed partial class GlslProgramCompiler
         ArgumentNullException.ThrowIfNull(glsl);
         options ??= DefaultOptions;
         string key = ShaderCache.Key(stage + ":native", glsl, options, NativeCacheVersion);
-        if (options.UseMemoryCache && nativeMemory.TryGetValue(key, out var hit)) return hit;
+        if (options.UseMemoryCache && _nativeMemory.TryGetValue(key, out var hit)) return hit;
         string dir = options.CacheDirectory ?? ShaderCache.DefaultDirectory;
         byte[] spirv;
         if (options.UseDiskCache && ShaderCache.TryRead(dir, key, NativeCacheVersion, out var cached, out _)) spirv = cached;
@@ -98,7 +98,7 @@ public sealed partial class GlslProgramCompiler
             // The cache file holds a pair; a single stage is stored twice.
             if (options.UseDiskCache) ShaderCache.Write(dir, key, NativeCacheVersion, spirv, spirv);
         }
-        if (options.UseMemoryCache) nativeMemory[key] = spirv;
+        if (options.UseMemoryCache) _nativeMemory[key] = spirv;
         return spirv;
     }
 
@@ -202,12 +202,12 @@ public sealed partial class GlslProgramCompiler
         if (offset == 0) return;
         var w = MemoryMarshal.Cast<byte, uint>(spirv.AsSpan());
         if (w.Length < 5 || w[0] != 0x07230203) throw new ArgumentException("Not a SPIR-V module.", nameof(spirv));
-        const uint OpDecorate = 71, DecorationBinding = 33;
+        const uint opDecorate = 71, decorationBinding = 33;
         for (int i = 5; i < w.Length;)
         {
             int count = (int)(w[i] >> 16);
             if (count == 0 || i + count > w.Length) throw new ArgumentException("Truncated SPIR-V instruction.", nameof(spirv));
-            if ((w[i] & 0xFFFF) == OpDecorate && count == 4 && w[i + 2] == DecorationBinding) w[i + 3] += offset;
+            if ((w[i] & 0xFFFF) == opDecorate && count == 4 && w[i + 2] == decorationBinding) w[i + 3] += offset;
             i += count;
         }
     }

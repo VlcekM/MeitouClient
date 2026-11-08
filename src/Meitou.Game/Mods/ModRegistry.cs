@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
+using Meitou.Game.Ui;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
-using Meitou.Game.Ui;
 
 namespace Meitou.Modding;
 
@@ -34,8 +34,8 @@ sealed record ModSystemTag(string ModId, string Name);
 /// <summary>Every mod's committed registrations, in load order, and which mod made each system of a world.</summary>
 sealed class ModRegistry
 {
-    readonly Dictionary<(ModCodeKind Kind, int Code), string> owners = [];
-    readonly ConditionalWeakTable<ITickSystem, ModSystemTag> made = new();
+    readonly Dictionary<(ModCodeKind Kind, int Code), string> _owners = [];
+    readonly ConditionalWeakTable<ITickSystem, ModSystemTag> _made = new();
 
     public SimulationExtensions Simulation { get; } = new();
     public List<IUiExtension> Ui { get; } = [];
@@ -52,7 +52,7 @@ sealed class ModRegistry
             string reason = $"Mod codes start at {SimulationExtensions.FirstModCode}; lower numbers are the game's.";
             throw new ArgumentOutOfRangeException(nameof(code), code, reason);
         }
-        if (owners.TryGetValue((kind, code), out var owner)) throw new InvalidOperationException($"{kind} {code} is taken by mod '{owner}'.");
+        if (_owners.TryGetValue((kind, code), out var owner)) throw new InvalidOperationException($"{kind} {code} is taken by mod '{owner}'.");
         bool mine = kind switch
         {
             ModCodeKind.DialogueCondition => pending.Conditions.ContainsKey(code),
@@ -77,11 +77,11 @@ sealed class ModRegistry
     }
 
     /// <summary>The mod and name a world's system was made under; null for a standard system.</summary>
-    public ModSystemTag? TagOf(ITickSystem system) => made.TryGetValue(system, out var tag) ? tag : null;
+    public ModSystemTag? TagOf(ITickSystem system) => _made.TryGetValue(system, out var tag) ? tag : null;
 
     void Claim(ModCodeKind kind, int code, string mod, Action add)
     {
-        owners[(kind, code)] = mod;
+        _owners[(kind, code)] = mod;
         add();
     }
 
@@ -97,7 +97,7 @@ sealed class ModRegistry
                 Console.Error.WriteLine($"mod       {mod}: system '{factory.Name}' not made: {e}");
                 return null;
             }
-            if (system is not null) made.AddOrUpdate(system, new ModSystemTag(mod, factory.Name));
+            if (system is not null) _made.AddOrUpdate(system, new ModSystemTag(mod, factory.Name));
             return system;
         },
     };

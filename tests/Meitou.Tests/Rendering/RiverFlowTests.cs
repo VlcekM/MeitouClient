@@ -62,18 +62,18 @@ public class RiverFlowTests
 /// <summary>The river map baked from the game's own heights: its directions have no seams or pinwheels (neighbouring texels with weight point
 /// about the same way). Needs the install.</summary>
 [Slow]
-public class RiverFlowWorldTests(Xunit.ITestOutputHelper output)
+public class RiverFlowWorldTests(ITestOutputHelper output)
 {
     [Fact]
     public void Real_rivers_turn_smoothly()
     {
         Assert.SkipWhen(InstallData.Install is null, "no Kenshi install");
         var install = InstallData.Install!;
-        var flow = Meitou.Data.Textures.TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, Meitou.Data.World.WorldWater.FlowMap)));
+        var flow = Data.Textures.TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, Data.World.WorldWater.FlowMap)));
         int n = flow.Width;
-        using var heights = Meitou.Data.World.TerrainHeightmap.Open(install);
+        using var heights = Data.World.TerrainHeightmap.Open(install);
         var raw = heights.Downsample((heights.Size - 1) / n, out _);
-        var map = RiverFlowBake.Bake(raw, n, (ushort)Math.Ceiling(Meitou.Data.World.WorldWater.Height * ushort.MaxValue / Meitou.Data.World.WorldLayout.MaxHeight));
+        var map = RiverFlowBake.Bake(raw, n, (ushort)Math.Ceiling(Data.World.WorldWater.Height * ushort.MaxValue / Data.World.WorldLayout.MaxHeight));
         int pairs = 0, breaks = 0;
         for (int y = 0; y + 1 < n; y++)
             for (int x = 0; x + 1 < n; x++)

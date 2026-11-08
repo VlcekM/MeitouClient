@@ -17,17 +17,17 @@ public sealed class MusicDirector
     const string MainThemeBank = "MT_Music_Bank";
     const double UnloadAfter = 60;
 
-    readonly WwisePlayer player;
-    readonly Func<double> clock;
-    readonly Random random;
+    readonly WwisePlayer _player;
+    readonly Func<double> _clock;
+    readonly Random _random;
     // The biome music banks asked for, with the time each was last the current one.
-    readonly Dictionary<string, double> lastCurrent = new(StringComparer.OrdinalIgnoreCase);
-    float frequencyMinutes;
-    double deadline;
-    int index = -1;
-    string? remembered;
-    string? pendingBank;
-    bool firstChange = true;
+    readonly Dictionary<string, double> _lastCurrent = new(StringComparer.OrdinalIgnoreCase);
+    float _frequencyMinutes;
+    double _deadline;
+    int _index = -1;
+    string? _remembered;
+    string? _pendingBank;
+    bool _firstChange = true;
 
     /// <summary>The music of the region the camera is over, null for none.</summary>
     public string? Biome { get; private set; }
@@ -39,10 +39,10 @@ public sealed class MusicDirector
     public float Volume { get; private set; }
 
     /// <summary>The event the timer would post now (<c>Music_Dunes_Play</c>), null when no biome music is remembered.</summary>
-    public string? Remembered => remembered;
+    public string? Remembered => _remembered;
 
     /// <summary>Real seconds until the timer next fires (negative once due, e.g. during the title screen).</summary>
-    public double SecondsToNext => deadline - clock();
+    public double SecondsToNext => _deadline - _clock();
 
     /// <summary>
     /// <paramref name="frequencyMinutes"/>: settings.cfg <c>Music frequency</c> (default 5); <paramref name="volume"/>: <c>Music volume</c> (default
@@ -51,40 +51,40 @@ public sealed class MusicDirector
     /// </summary>
     public MusicDirector(WwisePlayer player, float frequencyMinutes, float volume, Func<double>? clock = null, Random? random = null)
     {
-        this.player = player;
+        this._player = player;
         if (clock is null)
         {
             var watch = Stopwatch.StartNew();
             clock = () => watch.Elapsed.TotalSeconds;
         }
-        this.clock = clock;
-        this.random = random ?? new Random();
-        this.frequencyMinutes = Math.Max(0.1f, frequencyMinutes);
-        deadline = clock() + Interval();
+        this._clock = clock;
+        this._random = random ?? new Random();
+        this._frequencyMinutes = Math.Max(0.1f, frequencyMinutes);
+        _deadline = clock() + Interval();
         SetVolume(volume);
     }
 
-    double Interval() => frequencyMinutes * 60;
+    double Interval() => _frequencyMinutes * 60;
 
     public void SetVolume(float volume)
     {
         Volume = Math.Clamp(volume, 0, 1);
-        player.SetParameter("User_Volume_Music", Volume * 100);
+        _player.SetParameter("User_Volume_Music", Volume * 100);
     }
 
     /// <summary>A changed <c>Music frequency</c> moves the deadline earlier when now + the new interval is sooner, never later.</summary>
     public void SetFrequency(float minutes)
     {
-        frequencyMinutes = Math.Max(0.1f, minutes);
-        deadline = Math.Min(deadline, clock() + Interval());
+        _frequencyMinutes = Math.Max(0.1f, minutes);
+        _deadline = Math.Min(_deadline, _clock() + Interval());
     }
 
     /// <summary>The title screen's music: loads the main theme's bank and posts <c>Boot_Up_Game</c> (the event waits for the bank).</summary>
     public void StartMainTheme()
     {
         TitleScreen = true;
-        player.LoadBank(MainThemeBank);
-        player.Post("Boot_Up_Game", AudioSystem.MusicObject);
+        _player.LoadBank(MainThemeBank);
+        _player.Post("Boot_Up_Game", AudioSystem.MusicObject);
     }
 
     /// <summary>
@@ -94,7 +94,7 @@ public sealed class MusicDirector
     public void OnCreateOrLoadGame()
     {
         TitleScreen = false;
-        player.Post("Create_or_Load_Game", AudioSystem.GuiObject);
+        _player.Post("Create_or_Load_Game", AudioSystem.GuiObject);
     }
 
     /// <summary>
@@ -103,16 +103,16 @@ public sealed class MusicDirector
     /// </summary>
     public void Update(BiomeMusic? music)
     {
-        double now = clock();
+        double now = _clock();
         if (music is { } m) ChangeBiome((int)m, now);
         CompleteLoad();
-        if (!TitleScreen && now >= deadline)
+        if (!TitleScreen && now >= _deadline)
         {
-            deadline = now + Interval() * (0.8 + 0.6 * random.NextDouble());
+            _deadline = now + Interval() * (0.8 + 0.6 * _random.NextDouble());
             // Moves on whether or not anything is posted; nothing checks whether music still plays, and no Stop is ever posted.
-            if (remembered is not null && Volume > 0) player.Post(remembered, AudioSystem.MusicObject);
+            if (_remembered is not null && Volume > 0) _player.Post(_remembered, AudioSystem.MusicObject);
         }
-        if (remembered is not null) lastCurrent[BankOf(Biome!)] = now;
+        if (_remembered is not null) _lastCurrent[BankOf(Biome!)] = now;
         UnloadStale(now);
     }
 
@@ -122,57 +122,57 @@ public sealed class MusicDirector
     void ChangeBiome(int next, double now)
     {
         if (next is < 0 or > 4) next = 4;
-        if (next == index) return;
-        index = next;
+        if (next == _index) return;
+        _index = next;
         // The first call after start drops the main theme's bank, whatever biome it is (a no-op when it never loaded).
-        if (firstChange)
+        if (_firstChange)
         {
-            firstChange = false;
-            player.UnloadBank(MainThemeBank);
+            _firstChange = false;
+            _player.UnloadBank(MainThemeBank);
         }
         if (next == 4)
         {
             Biome = null;
-            remembered = null;
-            pendingBank = null;
+            _remembered = null;
+            _pendingBank = null;
             return;
         }
         string bank = BankOf(Names[next]);
-        lastCurrent[bank] = now;
-        if (player.IsBankLoaded(bank)) Remember(Names[next]);
+        _lastCurrent[bank] = now;
+        if (_player.IsBankLoaded(bank)) Remember(Names[next]);
         else
         {
             // Queued: the switch and the event are set when the bank has loaded.
             Biome = null;
-            remembered = null;
-            pendingBank = bank;
-            player.LoadBank(bank);
+            _remembered = null;
+            _pendingBank = bank;
+            _player.LoadBank(bank);
         }
     }
 
     void CompleteLoad()
     {
-        if (pendingBank is null || !player.IsBankLoaded(pendingBank)) return;
-        if (index is >= 0 and <= 3 && BankOf(Names[index]) == pendingBank) Remember(Names[index]);
-        pendingBank = null;
+        if (_pendingBank is null || !_player.IsBankLoaded(_pendingBank)) return;
+        if (_index is >= 0 and <= 3 && BankOf(Names[_index]) == _pendingBank) Remember(Names[_index]);
+        _pendingBank = null;
     }
 
     void Remember(string name)
     {
         Biome = name;
-        remembered = $"Music_{name}_Play";
-        player.SetSwitch("Biomes", name);
+        _remembered = $"Music_{name}_Play";
+        _player.SetSwitch("Biomes", name);
     }
 
     /// <summary>Unloads biome music banks 60 s after they were last current, when no load is pending.</summary>
     void UnloadStale(double now)
     {
-        if (pendingBank is not null) return;
-        foreach (var (bank, last) in lastCurrent.ToArray())
+        if (_pendingBank is not null) return;
+        foreach (var (bank, last) in _lastCurrent.ToArray())
         {
-            if (now - last < UnloadAfter || !player.IsBankLoaded(bank)) continue;
-            lastCurrent.Remove(bank);
-            player.UnloadBank(bank);
+            if (now - last < UnloadAfter || !_player.IsBankLoaded(bank)) continue;
+            _lastCurrent.Remove(bank);
+            _player.UnloadBank(bank);
         }
     }
 }

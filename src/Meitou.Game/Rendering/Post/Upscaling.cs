@@ -60,7 +60,7 @@ public sealed class UpscaleOptions
         (Kind, Preferred, Scale, Sharpness, DlssPreset) = (other.Kind, other.Preferred, other.Scale, other.Sharpness, other.DlssPreset);
     }
 
-    public string Describe() => Kind == UpscalerKind.Off && EffectiveScale >= 1 ? "off" : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Kind.ToString().ToLowerInvariant()} at {EffectiveScale:0.###}");
+    public string Describe() => Kind == UpscalerKind.Off && EffectiveScale >= 1 ? "off" : string.Create(CultureInfo.InvariantCulture, $"{Kind.ToString().ToLowerInvariant()} at {EffectiveScale:0.###}");
 }
 
 /// <summary>

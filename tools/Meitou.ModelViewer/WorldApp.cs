@@ -65,8 +65,8 @@ static partial class WorldApp
     }
 
     /// <summary>Streamline for DLSS, loaded before the Vulkan device when <c>--upscaler dlss</c> asks for it.</summary>
-    static Streamline? streamline;
-    static Ngx? ngx;
+    static Streamline? s_streamline;
+    static Ngx? s_ngx;
 
     static string RendererName(WorldOptions o) =>
         o.Post.Upscale.Kind == UpscalerKind.Off ? "Vulkan" : $"Vulkan + {o.Post.Upscale.Kind.ToString().ToUpperInvariant()}";
@@ -85,21 +85,21 @@ static partial class WorldApp
         VulkanDisplay.TriangleMeasurements = o.BenchTris;
         VulkanDisplay.RayTracing = o.WantsRayTracing;
         using var display = new VulkanDisplay(null, vsync: false, dlss: o.Post.Upscale.Kind == UpscalerKind.Dlss);
-        streamline = display.Streamline;
-        ngx = display.Ngx;
+        s_streamline = display.Streamline;
+        s_ngx = display.Ngx;
         using var watch = VramWatch.Start(display.Context.Device);
         try { return Screenshot(display, install, scene, assets, o); }
-        finally { streamline = null; ngx = null; }
+        finally { s_streamline = null; s_ngx = null; }
     }
 
     /// <summary>Ends the frame (submits it).</summary>
     static void EndFrame(GpuContext context) => context.EndFrame();
 
-    static unsafe int Screenshot(Meitou.Game.Rendering.Display.VulkanDisplay display, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
+    static unsafe int Screenshot(VulkanDisplay display, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o)
     {
         var context = display.Context;
         using var gpu = CreateGpu(context, install, scene, assets, o, interactive: false);
-        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, streamline, ngx);
+        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, s_streamline, s_ngx);
         var (camera, render) = Setup(scene, o);
         Console.WriteLine($"camera    {CameraCode.Encode(camera)} ({CameraCode.Describe(camera)}; --camera-code puts a viewer here)");
         { var up = o.Post.Upscale; gpu.Objects?.SetView(o.Width, o.Height, camera.FieldOfView, up.Temporal ? (up.Kind == UpscalerKind.Taa ? -0.5f : -1f) : 0f); }   // before the first settle, so the textures load knowing the picture (the display size, the bias without the render scale: the same level)
@@ -181,7 +181,7 @@ static partial class WorldApp
             camera.Yaw += o.OrbitStep;
             if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
         }
-        WorldFrame.DetailedStats = true;   // per-cascade and per-step times in the statistics below
+        DetailedStats = true;   // per-cascade and per-step times in the statistics below
         // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
         for (int i = 0; i < gpu.Post!.WarmupFrames; i++) { Step(); Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance); EndFrame(context); }
         var drawWatch = Stopwatch.StartNew();
@@ -254,8 +254,8 @@ static partial class WorldApp
     {
         VulkanDisplay.RayTracing = o.WantsRayTracing;
         using var display = new VulkanDisplay(WindowFor(o), vsync: o.VSync, dlss: o.Post.Upscale.Kind == UpscalerKind.Dlss);
-        streamline = display.Streamline;
-        ngx = display.Ngx;
+        s_streamline = display.Streamline;
+        s_ngx = display.Ngx;
         var window = display.Window!;
         if (!o.Windowed) BorderlessFullScreen.Toggle(window);
         Gpu? gpu = null;
@@ -276,7 +276,7 @@ static partial class WorldApp
         SettingsPanel? panel = null;
         FrameProfiler? profiler = null;
         PassMeter? meter = null;
-        Meitou.Game.Audio.AudioSystem? audio = null;
+        Game.Audio.AudioSystem? audio = null;
         bool statsVisible = false, fpsVisible = false;
         string fpsText = "";
         double fpsWindowMs = 0;
@@ -289,7 +289,7 @@ static partial class WorldApp
 
         {
             gpu = CreateGpu(display.Context, install, scene, assets, o, interactive: true);
-            if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, streamline, ngx);
+            if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, s_streamline, s_ngx);
             overlay = DebugOverlay.TryCreate(display.Context, assets.Find);
             if (overlay is null) Console.WriteLine("keys      no monospace system font or game font found:the F10 key list and F11 statistics are unavailable");
             if (overlay is not null) overlay.Visible = o.ShowKeys;
@@ -300,7 +300,7 @@ static partial class WorldApp
             meter = PassMeter.TryCreate(display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
             if (!o.NoAudio)
             {
-                audio = Meitou.Game.Audio.AudioSystem.TryCreate(install, Meitou.Game.Audio.AudioSystem.AmbientVolumeSetting(install), out var audioError);
+                audio = Game.Audio.AudioSystem.TryCreate(install, Game.Audio.AudioSystem.AmbientVolumeSetting(install), out var audioError);
                 if (audio is not null) audio.Player.Gain = MathF.Pow(10, o.AudioGainDb / 20);
                 Console.WriteLine(audio is not null ? $"audio     {audio.DeviceName}, ambience and music from the Wwise banks{(o.AudioGainDb != 0 ? $", gain {o.AudioGainDb:+0.#;-0.#} dB" : "")} (--no-audio turns it off)" : $"audio     off: {audioError}");
             }

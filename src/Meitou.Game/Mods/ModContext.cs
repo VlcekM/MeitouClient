@@ -1,8 +1,8 @@
 using HarmonyLib;
 using Meitou.Content;
 using Meitou.Data;
-using Meitou.Simulation;
 using Meitou.Game.Ui;
+using Meitou.Simulation;
 using Meitou.Simulation.Population;
 
 namespace Meitou.Modding;
@@ -13,18 +13,18 @@ namespace Meitou.Modding;
 /// </summary>
 public sealed class ModContext
 {
-    readonly ModRegistry registry;
-    readonly Func<World?> world;
-    readonly IReadOnlyDictionary<string, string>? savedSettings;
-    Harmony? harmony;
+    readonly ModRegistry _registry;
+    readonly Func<World?> _world;
+    readonly IReadOnlyDictionary<string, string>? _savedSettings;
+    Harmony? _harmony;
 
     internal ModContext(LoadedMod mod, ModRegistry registry, GameDatabase data, PopulationData population, Func<World?> world,
         IReadOnlyDictionary<string, string>? savedSettings = null)
     {
         Mod = mod;
-        this.registry = registry;
-        this.world = world;
-        this.savedSettings = savedSettings;
+        this._registry = registry;
+        this._world = world;
+        this._savedSettings = savedSettings;
         Data = data;
         Population = population;
         RngPurpose = (RngPurpose)(uint)(Rng.StableHash(mod.Manifest.Id) | 0x8000_0000UL);
@@ -53,9 +53,9 @@ public sealed class ModContext
     public RngPurpose RngPurpose { get; }
 
     /// <summary>The mod's Harmony instance (id: the manifest id) on the game's one copy of Harmony.</summary>
-    public Harmony Harmony => harmony ??= new Harmony(Id);
+    public Harmony Harmony => _harmony ??= new Harmony(Id);
 
-    internal bool HasHarmony => harmony is not null;
+    internal bool HasHarmony => _harmony is not null;
 
     /// <summary>
     /// The entry instance of a declared dependency (docs/modding-dependencies.md "Using a dependency"), typed as the framework's own type or an
@@ -80,13 +80,13 @@ public sealed class ModContext
     public bool HasDependency(string id) => Mod.Dependencies.Any(m => m.Manifest.Id == id);
 
     /// <summary>The running world's tick, for a command's <see cref="SimCommand.Tick"/>; 0 before the first world.</summary>
-    public long Tick => world()?.Tick ?? 0;
+    public long Tick => _world()?.Tick ?? 0;
 
     /// <summary>Queues a command for the running world (any thread); its <see cref="SimCommand.Tick"/> says when it applies. Dropped (and logged) before the first world.</summary>
     public void Enqueue(SimCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
-        if (world() is { } w) w.Commands.Enqueue(command);
+        if (_world() is { } w) w.Commands.Enqueue(command);
         else Log($"no world yet: dropped {command.GetType().Name}");
     }
 
@@ -115,7 +115,7 @@ public sealed class ModContext
     {
         CheckOpen();
         ArgumentNullException.ThrowIfNull(handler);
-        registry.CheckFree(ModCodeKind.DialogueCondition, code, Pending, Id);
+        _registry.CheckFree(ModCodeKind.DialogueCondition, code, Pending, Id);
         Pending.Conditions[code] = handler;
     }
 
@@ -124,7 +124,7 @@ public sealed class ModContext
     {
         CheckOpen();
         ArgumentNullException.ThrowIfNull(handler);
-        registry.CheckFree(ModCodeKind.DialogueEffect, code, Pending, Id);
+        _registry.CheckFree(ModCodeKind.DialogueEffect, code, Pending, Id);
         Pending.Effects[code] = handler;
     }
 
@@ -136,8 +136,8 @@ public sealed class ModContext
     {
         CheckOpen();
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("A record type needs a name.", nameof(name));
-        if (Enum.IsDefined((Meitou.Data.Fcs.FcsRecordType)type)) throw new ArgumentException($"Record type {type} is a vanilla type.", nameof(type));
-        registry.CheckFree(ModCodeKind.RecordType, type, Pending, Id);
+        if (Enum.IsDefined((Data.Fcs.FcsRecordType)type)) throw new ArgumentException($"Record type {type} is a vanilla type.", nameof(type));
+        _registry.CheckFree(ModCodeKind.RecordType, type, Pending, Id);
         Pending.RecordTypes[type] = name;
     }
 
@@ -158,7 +158,7 @@ public sealed class ModContext
     /// oldest first; not called for a frame without any. A tick may be in flight, so <paramref name="view"/> must not touch the world, and the list is
     /// reused: copy what you keep. A throw is logged and the feed gets no more hits.
     /// </summary>
-    public void AddCombatHitFeed(Action<IReadOnlyList<Meitou.Simulation.Combat.CombatHit>> view)
+    public void AddCombatHitFeed(Action<IReadOnlyList<Simulation.Combat.CombatHit>> view)
     {
         CheckOpen();
         ArgumentNullException.ThrowIfNull(view);
@@ -190,8 +190,8 @@ public sealed class ModContext
             throw new ArgumentException($"{settings.GetType().Name} is a struct: the page would change a copy. Use a class.", nameof(settings));
         if (Pending.Settings is not null) throw new InvalidOperationException($"{Id}: AddSettings is allowed once per mod.");
         var group = new ModSettingsGroup(Id, Name, settings);
-        if (savedSettings is not null)
-            foreach (string key in group.Load(savedSettings)) Log($"saved setting '{key}' is not a value of a setting; ignored");
+        if (_savedSettings is not null)
+            foreach (string key in group.Load(_savedSettings)) Log($"saved setting '{key}' is not a value of a setting; ignored");
         Pending.Settings = group;
         return group;
     }

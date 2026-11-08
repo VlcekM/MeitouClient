@@ -1,4 +1,3 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -9,6 +8,7 @@ using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Characters;
@@ -33,8 +33,8 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     // A batch is named by an id per (mesh part, level, sidedness), the same in every view; each view keeps its own Batch per id (ViewBatches).
-    readonly Dictionary<(GpuObjectPart, int, bool), int> batchIds = [];
-    readonly List<(GpuObjectPart Part, int Level, bool TwoSided)> batchKeys = [];
+    readonly Dictionary<(GpuObjectPart, int, bool), int> _batchIds = [];
+    readonly List<(GpuObjectPart Part, int Level, bool TwoSided)> _batchKeys = [];
 
     /// <summary>One view's batches by id, those it fills, its chunks of gathered instances and its instance rows.</summary>
     sealed class ViewBatches
@@ -64,17 +64,17 @@ internal sealed unsafe partial class CharacterRenderer
 
     Batch NewBatch(int id)
     {
-        lock (batchIds)
+        lock (_batchIds)
         {
-            var (part, level, twoSided) = batchKeys[id];
+            var (part, level, twoSided) = _batchKeys[id];
             return new Batch { Part = part, Level = level, DoubleSided = twoSided };
         }
     }
 
-    readonly ViewBatches mainView = new();
+    readonly ViewBatches _mainView = new();
     // The shadow cascades' views by cascade index (PrepareDepth).
-    ViewBatches?[] cascadeViews = [];
-    bool depthPass, motionPass;
+    ViewBatches?[] _cascadeViews = [];
+    bool _depthPass, _motionPass;
 
     /// <summary>A view the placed parts are gathered for: its frustum, the shadow LOD floor and smallest caster radius (a depth view), and its batches.</summary>
     struct GatherView
@@ -84,8 +84,8 @@ internal sealed unsafe partial class CharacterRenderer
         public ViewBatches Batches;
     }
 
-    readonly GatherView[] oneView = new GatherView[1];
-    GatherView[] depthViews = [];
+    readonly GatherView[] _oneView = new GatherView[1];
+    GatherView[] _depthViews = [];
 
     /// <summary>The fog cull (set once by the world frame; the colour and motion passes use it, not the shadow cascades): characters wholly hidden by the fog the eye is in are skipped.</summary>
     internal FogVolumes? FogCull { get; set; }
@@ -100,7 +100,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, Vector3 light, Vector3 fogColour, float fogDistance, Matrix4x4? relative = null)
     {
-        shownLight = light;
+        _shownLight = light;
         DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance }, eye, frustum, relative: relative);
     }
 
@@ -113,10 +113,10 @@ internal sealed unsafe partial class CharacterRenderer
     /// <param name="cascade">The shadow cascade's index: its instances as <see cref="PrepareDepth"/> gathered them this frame, when it did (-1: gathered here).</param>
     public void DrawDepth(Matrix4x4 worldToClip, Vector3 lodEye, Vector4[] frustum, float lodFloor = 0, float minRadius = 0, int cascade = -1)
     {
-        var prepared = (uint)cascade < (uint)cascadeViews.Length && cascadeViews[cascade] is { } cv && cv.Stamp == updateStamp && cv.Frame == Gpu.Frame.Number && cv.Frustum == frustum ? cv : null;
-        depthPass = true;
+        var prepared = (uint)cascade < (uint)_cascadeViews.Length && _cascadeViews[cascade] is { } cv && cv.Stamp == _updateStamp && cv.Frame == Gpu.Frame.Number && cv.Frustum == frustum ? cv : null;
+        _depthPass = true;
         try { DrawView(new ViewConstants { ViewProjection = worldToClip, Eye = lodEye }, lodEye, frustum, lodFloor, minRadius, prepared); }
-        finally { depthPass = false; }
+        finally { _depthPass = false; }
     }
 
     /// <summary>
@@ -126,25 +126,25 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     public void PrepareDepth(Vector3 lodEye, ReadOnlySpan<(int Index, Vector4[] Frustum, float LodFloor, float MinRadius)> cascades)
     {
-        if (cascades.IsEmpty || portraitLive >= 0 || partStamp != updateStamp || lodEye != partOrigin) return;
-        if (depthViews.Length < cascades.Length) depthViews = new GatherView[cascades.Length];
+        if (cascades.IsEmpty || _portraitLive >= 0 || _partStamp != _updateStamp || lodEye != _partOrigin) return;
+        if (_depthViews.Length < cascades.Length) _depthViews = new GatherView[cascades.Length];
         foreach (var (index, frustum, lodFloor, minRadius) in cascades)
-            if (index >= cascadeViews.Length) Array.Resize(ref cascadeViews, index + 1);
+            if (index >= _cascadeViews.Length) Array.Resize(ref _cascadeViews, index + 1);
         for (int k = 0; k < cascades.Length; k++)
         {
             var (index, frustum, lodFloor, minRadius) = cascades[k];
-            var vb = cascadeViews[index] ??= new ViewBatches();
+            var vb = _cascadeViews[index] ??= new ViewBatches();
             vb.Begin();
-            (vb.Stamp, vb.Frame, vb.Frustum) = (updateStamp, Gpu.Frame.Number, frustum);
-            depthViews[k] = new GatherView { Frustum = frustum, LodFloor = lodFloor, MinRadius = minRadius, Batches = vb };
+            (vb.Stamp, vb.Frame, vb.Frustum) = (_updateStamp, Gpu.Frame.Number, frustum);
+            _depthViews[k] = new GatherView { Frustum = frustum, LodFloor = lodFloor, MinRadius = minRadius, Batches = vb };
         }
         int views = cascades.Length;
-        int chunkCount = Gather(depthViews, views, depth: true, motion: false);
-        var gathered = depthViews;
+        int chunkCount = Gather(_depthViews, views, depth: true, motion: false);
+        var gathered = _depthViews;
         Parallel.For(0, views, k => AssignSlots(gathered[k].Batches));
-        for (int k = 0; k < views; k++) AllocateRows(depthViews[k].Batches);
+        for (int k = 0; k < views; k++) AllocateRows(_depthViews[k].Batches);
         Parallel.For(0, views * chunkCount, n => Scatter(gathered[n / chunkCount].Batches, n % chunkCount));
-        for (int k = 0; k < views; k++) depthViews[k] = default;
+        for (int k = 0; k < views; k++) _depthViews[k] = default;
     }
 
     void DrawView(in ViewConstants worldView, Vector3 eye, Vector4[] frustum, float lodFloor = 0, float minRadius = 0, ViewBatches? prepared = null,
@@ -165,14 +165,14 @@ internal sealed unsafe partial class CharacterRenderer
         Array.Clear(LevelParts);
         Array.Clear(LevelTriangles);
 
-        var vb = prepared ?? mainView;
+        var vb = prepared ?? _mainView;
         if (prepared is null) Collect(vb, eye, origin, frustum, lodFloor, minRadius);
         (DrawnCharacters, DrawnParts) = (vb.Characters, vb.Parts);
-        if (!depthPass && !motionPass && portraitLive < 0) (countedFrustum, countedFog) = (frustum, FogCull);
+        if (!_depthPass && !_motionPass && _portraitLive < 0) (_countedFrustum, _countedFog) = (frustum, FogCull);
         if (vb.Active.Count > 0) RecordDraws(in view, vb);
 
         LastDrawCpuMs = cpu.Elapsed.TotalMilliseconds;
-        if (!depthPass && portraitLive < 0 && vb.Active.Count > 0) drawCpu.Add(LastDrawCpuMs);
+        if (!_depthPass && _portraitLive < 0 && vb.Active.Count > 0) _drawCpu.Add(LastDrawCpuMs);
     }
 
     /// <summary>
@@ -183,27 +183,27 @@ internal sealed unsafe partial class CharacterRenderer
     {
         var active = vb.Active;
         var instances = vb.Instances;
-        var prog = motionPass ? motionProg : depthPass ? depthProg : colourProg;
-        string label = motionPass ? "characters motion" : depthPass ? "characters depth" : "characters";
+        var prog = _motionPass ? _motionProg : _depthPass ? _depthProg : _colourProg;
+        string label = _motionPass ? "characters motion" : _depthPass ? "characters depth" : "characters";
         var targets = Gpu.CurrentTargets();
         var state = Gpu.CurrentState() with { Cull = CullMode.None };
         // The colour pass writes alpha 1 (the scene host masks it off for everything else): the SSAO character mask (PostProcess).
-        if (!depthPass && !motionPass) state = state with { ColourMask = DrawState.Rgba };
+        if (!_depthPass && !_motionPass) state = state with { ColourMask = DrawState.Rgba };
 
-        var job = drawJobs.Rent();
+        var job = _drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, prog.P, 0);
-        job.Frame = nativeFrame.Prepare(in view, [bones.Binding, content.Materials.Binding(Gpu.Frame), content.Morphs.Binding(Gpu.Frame), previousBones.Binding]);
-        job.Cull = depthPass ? CullMode.None : CullMode.Back;
+        job.Frame = _nativeFrame.Prepare(in view, [_bones.Binding, _content.Materials.Binding(Gpu.Frame), _content.Morphs.Binding(Gpu.Frame), _previousBones.Binding]);
+        job.Cull = _depthPass ? CullMode.None : CullMode.Back;
         for (int a = 0; a < 9; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
-        job.Push = new CharacterPush { DepthIndex = motionPass ? motionDepth : 0, Fill = new(Fill, 0), SkinLut = SkinShading ? skinScattering.Index : 0 };
-        job.RowCount = motionPass ? 9 : 5;
+        job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, 0), SkinLut = SkinShading ? _skinScattering.Index : 0 };
+        job.RowCount = _motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
 
         int n = 0;
         foreach (var b in active)
         {
             var part = b.Part;
-            ref var native = ref (motionPass ? ref MotionNative(part) : ref depthPass ? ref part.DepthNative : ref part.ColourNative);
+            ref var native = ref (_motionPass ? ref MotionNative(part) : ref _depthPass ? ref part.DepthNative : ref part.ColourNative);
             Current(ref native, part, prog);
             job.Draws[n++] = new DrawJob.Draw
             {
@@ -219,10 +219,10 @@ internal sealed unsafe partial class CharacterRenderer
         }
         job.Count = n;
 
-        var timer = depthPass ? depthTimer : colourTimer;
-        if (portraitLive < 0) timer.Begin();
+        var timer = _depthPass ? _depthTimer : _colourTimer;
+        if (_portraitLive < 0) timer.Begin();
         Gpu.Record(label, job);
-        if (portraitLive < 0) timer.End();
+        if (_portraitLive < 0) timer.End();
     }
 
     /// <summary>The statistics of one draw: <paramref name="instances"/> of a level of <paramref name="indices"/> indices.</summary>
@@ -242,19 +242,19 @@ internal sealed unsafe partial class CharacterRenderer
     void Collect(ViewBatches vb, Vector3 eye, Vector3 origin, Vector4[] frustum, float lodFloor, float minRadius)
     {
         vb.Begin();
-        bool placed = portraitLive < 0 && partStamp == updateStamp && origin == partOrigin && eye == origin && (partMotion || !motionPass);
+        bool placed = _portraitLive < 0 && _partStamp == _updateStamp && origin == _partOrigin && eye == origin && (_partMotion || !_motionPass);
         if (placed)
         {
             CollectPlaced(vb, frustum, lodFloor, minRadius);
             return;
         }
 
-        int start = portraitLive >= 0 ? portraitLive : 0, end = portraitLive >= 0 ? portraitLive + 1 : liveCount;
+        int start = _portraitLive >= 0 ? _portraitLive : 0, end = _portraitLive >= 0 ? _portraitLive + 1 : _liveCount;
         for (int i = start; i < end; i++)
         {
-            ref var l = ref live[i];
-            if (portraitLive < 0 && (l.PortraitOnly || !FrustumTests.SphereVisible(frustum, l.Centre, l.Radius))) continue;
-            if (!depthPass && portraitLive < 0 && FogCull?.Hidden(l.Centre, l.Radius, FogVolumes.CullKind.Characters) == true) continue;
+            ref var l = ref _live[i];
+            if (_portraitLive < 0 && (l.PortraitOnly || !FrustumTests.SphereVisible(frustum, l.Centre, l.Radius))) continue;
+            if (!_depthPass && _portraitLive < 0 && FogCull?.Hidden(l.Centre, l.Radius, FogVolumes.CullKind.Characters) == true) continue;
             vb.Characters++;
             CollectCharacter(vb, in l, eye, origin, lodFloor, minRadius);
         }
@@ -269,9 +269,9 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>The view from the parts <see cref="Update"/> placed: gathered in parallel chunks, then the slots and rows laid out and scattered.</summary>
     void CollectPlaced(ViewBatches vb, Vector4[] frustum, float lodFloor, float minRadius)
     {
-        oneView[0] = new GatherView { Frustum = frustum, LodFloor = lodFloor, MinRadius = minRadius, Batches = vb };
-        Gather(oneView, 1, depthPass, motionPass);
-        oneView[0] = default;
+        _oneView[0] = new GatherView { Frustum = frustum, LodFloor = lodFloor, MinRadius = minRadius, Batches = vb };
+        Gather(_oneView, 1, _depthPass, _motionPass);
+        _oneView[0] = default;
         AssignSlots(vb);
         if (vb.Active.Count == 0) return;
         AllocateRows(vb);
@@ -281,7 +281,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// <summary>One character's shown parts placed relative to <paramref name="origin"/>, each part's level chosen and its instance added to the batches.</summary>
     void CollectCharacter(ViewBatches vb, in Live l, Vector3 eye, Vector3 origin, float lodFloor, float minRadius)
     {
-        bool interior = portraitLive < 0 && l.Interior;
+        bool interior = _portraitLive < 0 && l.Interior;
         var world = Relative(l.World, origin);
         float worldScale = world.ScaleLength();
         var parts = l.Asset.Parts;
@@ -289,9 +289,9 @@ internal sealed unsafe partial class CharacterRenderer
         {
             var part = parts[p];
             if (!part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn)) continue;
-            var model = part.Shared ? world : attach[l.AttachBase + part.AttachIndex] * world;
+            var model = part.Shared ? world : _attach[l.AttachBase + part.AttachIndex] * world;
             float modelScale = part.Shared ? worldScale : model.ScaleLength();
-            if (depthPass && part.BoundsRadius * modelScale < minRadius) continue;
+            if (_depthPass && part.BoundsRadius * modelScale < minRadius) continue;
 
             // The model is relative to the view's eye (above), so the LOD eye is too: with the world eye every part far from the origin took its last level.
             var centre = Vector3.Transform(part.BoundsCentre, model);
@@ -299,9 +299,9 @@ internal sealed unsafe partial class CharacterRenderer
             if (!GeneratedLod) level = FileLevel(part, MeshLod.Value(eye - origin, centre, part.FileRadius * modelScale));
             else
             {
-                float value = MeshLod.Value(eye - origin, centre, part.BoundsRadius * modelScale, depthPass ? LodBias * ShadowLodBias : LodBias);
-                if (depthPass) value = Math.Max(HairInShadow(part, l.Asset) ? value * CharacterContent.HairLodScale : value, lodFloor);
-                level = GeneratedLevel(part, value, depthPass);
+                float value = MeshLod.Value(eye - origin, centre, part.BoundsRadius * modelScale, _depthPass ? LodBias * ShadowLodBias : LodBias);
+                if (_depthPass) value = Math.Max(HairInShadow(part, l.Asset) ? value * CharacterContent.HairLodScale : value, lodFloor);
+                level = GeneratedLevel(part, value, _depthPass);
             }
 
             var instance = new CharInstance
@@ -312,7 +312,7 @@ internal sealed unsafe partial class CharacterRenderer
                 Flags = (interior ? 1u : 0u) | HiddenFlags(part, l.Asset),
                 MorphBase = part.Morphed ? l.Asset.MorphBase : 0,
             };
-            if (motionPass)
+            if (_motionPass)
             {
                 var previousWorld = Relative(l.State.PreviousWorld, origin);
                 instance.PreviousModel = part.Shared ? previousWorld : l.State.PreviousAttach[part.AttachIndex] * previousWorld;
@@ -373,7 +373,7 @@ internal sealed unsafe partial class CharacterRenderer
     // ------------------------------------------------------------------ parts placed once a frame
 
     /// <summary>
-    /// One part of a character in range as <see cref="Update"/> placed it, relative to its eye (<see cref="partOrigin"/>): the colour, motion and shadow views are all
+    /// One part of a character in range as <see cref="Update"/> placed it, relative to its eye (<see cref="CharacterRenderer._partOrigin"/>): the colour, motion and shadow views are all
     /// drawn from that eye, so they share the matrices and the distance the levels are chosen by.
     /// </summary>
     struct PartFrame
@@ -387,10 +387,10 @@ internal sealed unsafe partial class CharacterRenderer
         public bool Shows;
     }
 
-    PartFrame[] partFrames = new PartFrame[1024];
-    long partStamp = -1;
-    Vector3 partOrigin;
-    bool partMotion;
+    PartFrame[] _partFrames = new PartFrame[1024];
+    long _partStamp = -1;
+    Vector3 _partOrigin;
+    bool _partMotion;
 
     /// <summary>Places <paramref name="l"/>'s parts relative to <paramref name="origin"/> (and last frame's too, for <paramref name="motion"/>). Any thread: writes its own entries only.</summary>
     void PlaceParts(in Live l, Vector3 origin, bool motion)
@@ -402,10 +402,10 @@ internal sealed unsafe partial class CharacterRenderer
         for (int p = 0; p < parts.Count; p++)
         {
             var part = parts[p];
-            ref var f = ref partFrames[l.PartBase + p];
+            ref var f = ref _partFrames[l.PartBase + p];
             f.Shows = part.ShowsWith(l.WeaponDrawn, l.RangedDrawn, l.Shots, l.BackDrawn);
             if (!f.Shows) continue;
-            f.Model = part.Shared ? world : attach[l.AttachBase + part.AttachIndex] * world;
+            f.Model = part.Shared ? world : _attach[l.AttachBase + part.AttachIndex] * world;
             f.Scale = part.Shared ? worldScale : f.Model.ScaleLength();
             var centre = Vector3.Transform(part.BoundsCentre, f.Model);
             f.Lod = MeshLod.Value(Vector3.Zero, centre, part.BoundsRadius * f.Scale);
@@ -446,14 +446,14 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     int Gather(GatherView[] views, int viewCount, bool depth, bool motion)
     {
-        int count = (liveCount + ChunkCharacters - 1) / ChunkCharacters;
+        int count = (_liveCount + ChunkCharacters - 1) / ChunkCharacters;
         for (int k = 0; k < viewCount; k++)
         {
             var chunks = views[k].Batches.Chunks;
             while (chunks.Count < count) chunks.Add(new Chunk());
             views[k].Batches.ChunkCount = count;
         }
-        Parallel.For(0, count, c => GatherChunk(c, c * ChunkCharacters, Math.Min(liveCount, (c + 1) * ChunkCharacters), views, viewCount, depth, motion));
+        Parallel.For(0, count, c => GatherChunk(c, c * ChunkCharacters, Math.Min(_liveCount, (c + 1) * ChunkCharacters), views, viewCount, depth, motion));
         return count;
     }
 
@@ -469,7 +469,7 @@ internal sealed unsafe partial class CharacterRenderer
         float bias = depth ? LodBias * ShadowLodBias : LodBias;
         for (int i = from; i < to; i++)
         {
-            ref var l = ref live[i];
+            ref var l = ref _live[i];
             if (l.PortraitOnly) continue;
             uint seen = SeenBy(in l, c, views, viewCount, depth);
             if (seen == 0) continue;
@@ -477,7 +477,7 @@ internal sealed unsafe partial class CharacterRenderer
             var parts = l.Asset.Parts;
             for (int p = 0; p < parts.Count; p++)
             {
-                ref readonly var f = ref partFrames[l.PartBase + p];
+                ref readonly var f = ref _partFrames[l.PartBase + p];
                 if (f.Shows) GatherPart(in l, parts[p], in f, c, seen, views, viewCount, depth, motion, bias);
             }
         }
@@ -561,13 +561,13 @@ internal sealed unsafe partial class CharacterRenderer
     {
         int slot = (g * CachedLevels + lv) * 2 + (twoSided ? 1 : 0);
         if (lv < CachedLevels && part.Batches is { } cached && slot < cached.Length && cached[slot] > 0) return cached[slot] - 1;
-        lock (batchIds)
+        lock (_batchIds)
         {
             var key = (gp, lv, twoSided);
-            if (!batchIds.TryGetValue(key, out int id))
+            if (!_batchIds.TryGetValue(key, out int id))
             {
-                batchIds[key] = id = batchKeys.Count;
-                batchKeys.Add(key);
+                _batchIds[key] = id = _batchKeys.Count;
+                _batchKeys.Add(key);
             }
             if (lv < CachedLevels)
             {
@@ -617,11 +617,11 @@ internal sealed unsafe partial class CharacterRenderer
         return r;
     }
 
-    readonly Dictionary<GpuObjectPart, MotionHolder> motionNatives = [];
+    readonly Dictionary<GpuObjectPart, MotionHolder> _motionNatives = [];
     sealed class MotionHolder { public ObjectNativeMesh Native; }
     ref ObjectNativeMesh MotionNative(GpuObjectPart part)
     {
-        if (!motionNatives.TryGetValue(part, out var h)) motionNatives[part] = h = new MotionHolder();
+        if (!_motionNatives.TryGetValue(part, out var h)) _motionNatives[part] = h = new MotionHolder();
         return ref h.Native;
     }
 
@@ -632,10 +632,10 @@ internal sealed unsafe partial class CharacterRenderer
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
         part.Attributes.AsSpan().CopyTo(attributes);
         for (int a = 0; a < 4; a++)
-            attributes[CharacterShaders.InstanceLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32f, CharInstance.Size, true);
-        attributes[CharacterShaders.DataLocation] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32ui, CharInstance.Size, true);
+            attributes[CharacterShaders.InstanceLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32F, CharInstance.Size, true);
+        attributes[CharacterShaders.DataLocation] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32Ui, CharInstance.Size, true);
         for (int a = 0; a < 4; a++)
-            attributes[CharacterShaders.PreviousLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32f, CharInstance.Size, true);
+            attributes[CharacterShaders.PreviousLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32F, CharInstance.Size, true);
         n.Layout = p.Layout(attributes);
         n.Vertices = p.Buffers(attributes, p.Own);
         n.Elements = new GpuBufferBinding(part.Indices.Handle, 0, part.Indices.Size);
@@ -655,7 +655,7 @@ internal sealed unsafe partial class CharacterRenderer
         return m;
     }
 
-    readonly JobPool<DrawJob> drawJobs = new();
+    readonly JobPool<DrawJob> _drawJobs = new();
 
     /// <summary>One characters segment as prepared (<see cref="DrawView"/>): recorded on any thread.</summary>
     sealed class DrawJob : RecordJob
@@ -713,7 +713,7 @@ internal sealed unsafe partial class CharacterRenderer
         {
             Array.Clear(Draws, 0, Count);
             Count = 0;
-            Owner.drawJobs.Return(this);
+            Owner._drawJobs.Return(this);
         }
     }
 }

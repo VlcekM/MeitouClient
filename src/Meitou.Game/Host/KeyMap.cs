@@ -1,7 +1,7 @@
-using EngineKey = Meitou.Game.Host.Input.Key;
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
-using SilkKey = Silk.NET.Input.Key;
+using EngineKey = Meitou.Game.Host.Input.Key;
 using SilkButton = Silk.NET.Input.MouseButton;
+using SilkKey = Silk.NET.Input.Key;
 
 namespace Meitou.Game.Host;
 

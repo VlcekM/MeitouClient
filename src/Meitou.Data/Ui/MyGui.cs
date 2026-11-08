@@ -50,8 +50,14 @@ public readonly record struct UiRect(float X, float Y, float Width, float Height
         foreach (var range in text.Split(' '))
             flags |= text[range] switch
             {
-                "Right" => Align.Right, "HCenter" => Align.HCenter, "Bottom" => Align.Bottom, "VCenter" => Align.VCenter,
-                "Center" => Align.HCenter | Align.VCenter, "HStretch" => Align.HStretch, "VStretch" => Align.VStretch, "Stretch" => Align.HStretch | Align.VStretch,
+                "Right" => Align.Right,
+                "HCenter" => Align.HCenter,
+                "Bottom" => Align.Bottom,
+                "VCenter" => Align.VCenter,
+                "Center" => Align.HCenter | Align.VCenter,
+                "HStretch" => Align.HStretch,
+                "VStretch" => Align.VStretch,
+                "Stretch" => Align.HStretch | Align.VStretch,
                 _ => 0,
             };
         return flags;
@@ -76,8 +82,8 @@ public sealed record MyGuiLayout(string Version, IReadOnlyList<MyGuiWidget> Root
     /// The flattened tree, made once per tree (the HUD asks it every frame). Kept by the roots list rather than in a field, which a <c>with</c> copy would carry over
     /// to other roots and which would take part in the record's equality.
     /// </summary>
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<MyGuiWidget>, WidgetIndex> indexes = new();
-    WidgetIndex Index() => indexes.GetValue(Roots, static roots => new WidgetIndex(roots));
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<MyGuiWidget>, WidgetIndex> Indexes = new();
+    WidgetIndex Index() => Indexes.GetValue(Roots, static roots => new WidgetIndex(roots));
 
     sealed class WidgetIndex
     {

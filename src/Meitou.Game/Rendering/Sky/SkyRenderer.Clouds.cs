@@ -6,30 +6,30 @@ namespace Meitou.Game.Rendering.Sky;
 
 public sealed unsafe partial class SkyRenderer
 {
-    VolumetricCloudRenderer? volume;
+    VolumetricCloudRenderer? _volume;
 
     /// <summary>This frame's main-view volumetric clouds for the motion vectors, or null (no volume, or not marched this frame).</summary>
-    public CloudMotion? CloudMotion => volume?.MainMotion is { } m && m.Frame == Gpu.Frame.Number ? m : null;
-    SampledTexture volumeImage;
-    bool volumeShadowsReady;
-    bool VolumeEnabled => LitClouds && Physical && state.Valid && (CloudDensity > 0 || Warm);
+    public CloudMotion? CloudMotion => _volume?.MainMotion is { } m && m.Frame == Gpu.Frame.Number ? m : null;
+    SampledTexture _volumeImage;
+    bool _volumeShadowsReady;
+    bool VolumeEnabled => LitClouds && Physical && _state.Valid && (CloudDensity > 0 || Warm);
 
     /// <summary>
     /// The host's loading warm-up: the volume and its shadow map are drawn whatever the weather and the hour (a clear sky draws them empty), so that their pipelines are made under
     /// the loading cover and not when the first clouds come (seconds with a cold driver cache; docs/bench.md "Play benchmark").
     /// </summary>
     public bool Warm { get; set; }
-    bool VolumeShadows => VolumeEnabled && CloudShadows && volumeShadowsReady && volume is not null;
+    bool VolumeShadows => VolumeEnabled && CloudShadows && _volumeShadowsReady && _volume is not null;
 
     /// <summary>Records the volume's sun-transmission map before any world or reflection pass.</summary>
     public void PrepareCloudShadows()
     {
-        volumeShadowsReady = false;
-        if (!VolumeEnabled || !CloudShadows || state.Sun.Y <= 0.03f && !Warm) return;
-        volume ??= new VolumetricCloudRenderer(Gpu);
-        volume.Bottom = CloudHeight;
-        volume.RenderShadow(Eye, CloudDensity, CloudLayer.TextureShift(cloudOffset), state.Sun);
-        volumeShadowsReady = true;
+        _volumeShadowsReady = false;
+        if (!VolumeEnabled || !CloudShadows || _state.Sun.Y <= 0.03f && !Warm) return;
+        _volume ??= new VolumetricCloudRenderer(Gpu);
+        _volume.Bottom = CloudHeight;
+        _volume.RenderShadow(Eye, CloudDensity, CloudLayer.TextureShift(_cloudOffset), _state.Sun);
+        _volumeShadowsReady = true;
     }
 
     /// <summary>
@@ -53,8 +53,8 @@ public sealed unsafe partial class SkyRenderer
     public void SkipMainSky()
     {
         SkySkipped = true;
-        volumeImage = default;
-        volume?.InvalidateMain();
+        _volumeImage = default;
+        _volume?.InvalidateMain();
     }
 
     /// <summary>Whether the last <see cref="PrepareClouds"/> left the march out because the weather fog covers the sky (for the stats line).</summary>
@@ -79,26 +79,26 @@ public sealed unsafe partial class SkyRenderer
     /// </summary>
     public void PrepareClouds(Matrix4x4 viewProjection, int width, int height, Vector3 eye, bool reflection = false, bool fogVolumes = false)
     {
-        volumeImage = default;
+        _volumeImage = default;
         if (!reflection) CloudsFogged = SkySkipped = false;
         // Made with the first frame that could show it (under the loading cover), not when the weather first brings clouds: its noise atlas and three programs
         // held that frame ~30 ms (docs/bench.md "Play benchmark").
-        if (LitClouds && Physical && state.Valid) volume ??= new VolumetricCloudRenderer(Gpu);
-        if (!VolumeEnabled) { volume?.Invalidate(); return; }
+        if (LitClouds && Physical && _state.Valid) _volume ??= new VolumetricCloudRenderer(Gpu);
+        if (!VolumeEnabled) { _volume?.Invalidate(); return; }
         if (CloudFogSkip && !Warm && WeatherFogHidesSky(Uniforms()))
         {
             // The sky shader falls back to the flat layer, which the same fog covers; the history starts again when the fog thins.
             if (!reflection) CloudsFogged = true;
-            volume?.Invalidate();
+            _volume?.Invalidate();
             return;
         }
-        volume ??= new VolumetricCloudRenderer(Gpu);
-        volume.Bottom = CloudHeight;
-        var ambient = state.CloudAmbient;
+        _volume ??= new VolumetricCloudRenderer(Gpu);
+        _volume.Bottom = CloudHeight;
+        var ambient = _state.CloudAmbient;
         float grey = MeitouClouds.AmbientGreyAt(CloudDensity);
         float luma = Vector3.Dot(ambient, new Vector3(0.2126f, 0.7152f, 0.0722f));
         ambient = Vector3.Lerp(ambient, new Vector3(luma), grey);
-        volumeImage = volume.Render(viewProjection, eye, width, height, CloudDensity, CloudLayer.TextureShift(cloudOffset),
-            state.CloudKey, state.CloudKeyDirection, ambient, reflection, CloudFogSkip && fogVolumes && !reflection);
+        _volumeImage = _volume.Render(viewProjection, eye, width, height, CloudDensity, CloudLayer.TextureShift(_cloudOffset),
+            _state.CloudKey, _state.CloudKeyDirection, ambient, reflection, CloudFogSkip && fogVolumes && !reflection);
     }
 }

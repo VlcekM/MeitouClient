@@ -28,14 +28,14 @@ public sealed partial class FirstAidSystem
     const float PatientGridMargin = 200;
     /// <summary>The most a character may have moved since the grid snapshot for the margin to hold (each of the medic and the patient: 50 + 50 inside the 200).</summary>
     const float PatientGridJump = 50;
-    readonly List<int> patientCandidates = [];
+    readonly List<int> _patientCandidates = [];
 
     // What one automatic sweep (SlowWorld) works out once instead of for every medic: nothing it reads changes while the sweep runs (a treatment only sets a task).
-    bool sweeping;
-    readonly HashSet<int> sweepCageFactions = [];
+    bool _sweeping;
+    readonly HashSet<int> _sweepCageFactions = [];
     // Every character's organic and robot need (AidNeed) by slot * 2 + robot, and the slots with either above 0 in slot order.
-    float[] sweepNeeds = [];
-    readonly List<int> sweepNeedy = [];
+    float[] _sweepNeeds = [];
+    readonly List<int> _sweepNeedy = [];
 
     /// <summary>
     /// Starts a sweep: every character's first-aid needs and the ones with a need (the passes skip a patient whose <see cref="KitNeed"/> is 0, so these are a medic's only
@@ -44,23 +44,23 @@ public sealed partial class FirstAidSystem
     internal void BeginSweep(World world)
     {
         var table = world.Characters;
-        if (sweepNeeds.Length < table.HighWater * 2) sweepNeeds = new float[table.HighWater * 2];
+        if (_sweepNeeds.Length < table.HighWater * 2) _sweepNeeds = new float[table.HighWater * 2];
         var next = table.Next;
-        sweepNeedy.Clear();
+        _sweepNeedy.Clear();
         for (int s = 0; s < table.HighWater; s++)
         {
             float organic = 0, robot = 0;
             if (next[s].Alive && table.Cold(s) is { } c) (organic, robot) = AidNeeds(c);
-            (sweepNeeds[s * 2], sweepNeeds[s * 2 + 1]) = (organic, robot);
-            if (organic > 0 || robot > 0) sweepNeedy.Add(s);
+            (_sweepNeeds[s * 2], _sweepNeeds[s * 2 + 1]) = (organic, robot);
+            if (organic > 0 || robot > 0) _sweepNeedy.Add(s);
         }
-        sweepCageFactions.Clear();
+        _sweepCageFactions.Clear();
         for (int k = 0; k < world.Fixtures.All.Count; k++)
-            if (world.Fixtures.All[k] is { Kind: FixtureKind.Cage } cage) sweepCageFactions.Add(cage.Owner);
-        sweeping = true;
+            if (world.Fixtures.All[k] is { Kind: FixtureKind.Cage } cage) _sweepCageFactions.Add(cage.Owner);
+        _sweeping = true;
     }
 
-    internal void EndSweep() => sweeping = false;
+    internal void EndSweep() => _sweeping = false;
 
     struct CandidateCollector(List<int> slots)
     {
@@ -136,18 +136,18 @@ public sealed partial class FirstAidSystem
     }
 
     /// <summary>A chained slave of the medic's faction (<c>FUN_14032e2a0</c>: chained, owner faction the medic's).</summary>
-    internal static bool OwnedChained(CharacterCold medic, CharacterCold patient) => patient.SlaveState == 1 && Locks.LockSystem.WornShackles(patient) is not null && patient.SlaveOwner == medic.Faction;
+    internal static bool OwnedChained(CharacterCold medic, CharacterCold patient) => patient.SlaveState == 1 && LockSystem.WornShackles(patient) is not null && patient.SlaveOwner == medic.Faction;
 
     /// <summary>A patient chained to this very medic (<c>FUN_14032e1e0</c>: the chain flag and the chain's owner is the medic; Meitou's owner is <see cref="Kidnap.ObedientSlave.OwnerOf"/>).</summary>
     static bool ChainedTo(World world, CharacterId medic, CharacterCold patient) =>
-        Locks.LockSystem.WornShackles(patient) is not null && Kidnap.ObedientSlave.OwnerOf(world, patient) == medic;
+        LockSystem.WornShackles(patient) is not null && Kidnap.ObedientSlave.OwnerOf(world, patient) == medic;
 
     /// <summary>
     /// A chained slave on the medic squad's slave list (pass 3's candidates, <c>FUN_14099f690</c>: the platoon's ownerships): a slave member of the squad or one that obeys it (<see cref="CharacterCold.SlaveMaster"/>).
     /// Stand-in: <c>SlaveMaster</c> is runtime only, so a slave with no known master (after a load) counts for every squad of its owner faction.
     /// </summary>
     static bool SquadSlave(CharacterCold medic, CharacterCold slave) =>
-        slave.SlaveState == 1 && Locks.LockSystem.WornShackles(slave) is not null
+        slave.SlaveState == 1 && LockSystem.WornShackles(slave) is not null
         && (medic.SquadId >= 0 && (slave.SlaveMaster == medic.SquadId || slave.SquadId == medic.SquadId) || slave.SlaveMaster < 0 && slave.SlaveOwner == medic.Faction);
 
     /// <summary>The patient's need score for a kit type (<see cref="MedicalState.FirstAidNeed"/>); 0 for a body without a medical state.</summary>
@@ -194,7 +194,7 @@ public sealed partial class FirstAidSystem
 
     float SweepNeed(int slot, CharacterCold patient, bool robotKit)
     {
-        return sweeping ? sweepNeeds[slot * 2 + (robotKit ? 1 : 0)] : AidNeed(patient, robotKit);
+        return _sweeping ? _sweepNeeds[slot * 2 + (robotKit ? 1 : 0)] : AidNeed(patient, robotKit);
     }
 
     /// <summary>
@@ -253,7 +253,7 @@ public sealed partial class FirstAidSystem
         var table = world.Characters;
         var next = table.Next;
         var cold = table.Cold(i)!;
-        if (cold.Medical is not { Incapacitated: false } own || cold.Race is null || cold.Stats is null || cold.InCombat && !ordered || cold.IsImprisoned || !TaskStart.Eligible(world, cold, ordered ? TaskType.FIRST_AID_ORDER : TaskType.JOB_MEDIC)) return (-1, 0);
+        if (cold.Medical is not { Incapacitated: false } own || cold.Race is null || cold.Stats is null || cold.InCombat && !ordered || cold.IsImprisoned || !TaskStart.Eligible(world, cold, ordered ? TaskType.FirstAidOrder : TaskType.JobMedic)) return (-1, 0);
         // No fight in the squad: an NPC's stand-in for its goal's desire (FUN_140998410 is 0.01 with enemies about). The finder has no such test and the job list keeps any job
         // whose desire is above 0 (FUN_14050e5b0), so a player's medic job and Medic order treat a downed mate while the squad fights.
         if (!cold.IsPlayer && cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad && CharacterFacts.SquadFighting(table, squad)) return (-1, 0);
@@ -265,29 +265,29 @@ public sealed partial class FirstAidSystem
         bool heals = Relations is { } rel && rel.Contains(cold.Faction) && rel.Factions[cold.Faction].HealsStrangers;
         float range = AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight), range2 = range * range;
         var origin = next[i].Position;   // the range gate first in both passes: it is the cheapest test and drops nearly every character of the big save before the path, ally and enemy tests
-        List<int> candidates = patientCandidates;
+        List<int> candidates = _patientCandidates;
         var previous = table.Previous;
         // The grid is last tick's snapshot: a medic that spawned or jumped since (a teleport into a cage) is searched by the full scan.
         bool useGrid = previous[i].Alive && (previous[i].Position - origin).LengthSquared() <= PatientGridJump * PatientGridJump;
         // A sweep's candidates are the characters with a need (in slot order, as the grid's): the passes test the range on each.
-        if (sweeping) candidates = sweepNeedy;
+        if (_sweeping) candidates = _sweepNeedy;
         else if (useGrid)
         {
-            patientCandidates.Clear();
-            var collector = new CandidateCollector(patientCandidates);
+            _patientCandidates.Clear();
+            var collector = new CandidateCollector(_patientCandidates);
             world.Grid.Query(previous[i].Position.X, previous[i].Position.Z, range + PatientGridMargin, ref collector, CandidateCollector.Add);
             // What the snapshot cannot place: a character spawned, removed or moved farther than the margin allows since it was taken (spawns, teleports into a
             // cage or an interior) is added by its slot; every other one moved less than PatientGridJump, inside the margin.
             for (int s = 0; s < previous.Length; s++)
-                if (previous[s].Alive != next[s].Alive || (previous[s].Position - next[s].Position).LengthSquared() > PatientGridJump * PatientGridJump) patientCandidates.Add(s);
-            patientCandidates.Sort();
-            for (int k = patientCandidates.Count - 1; k > 0; k--)
-                if (patientCandidates[k] == patientCandidates[k - 1]) patientCandidates.RemoveAt(k);
+                if (previous[s].Alive != next[s].Alive || (previous[s].Position - next[s].Position).LengthSquared() > PatientGridJump * PatientGridJump) _patientCandidates.Add(s);
+            _patientCandidates.Sort();
+            for (int k = _patientCandidates.Count - 1; k > 0; k--)
+                if (_patientCandidates[k] == _patientCandidates[k - 1]) _patientCandidates.RemoveAt(k);
         }
         else
         {
-            patientCandidates.Clear();
-            for (int s = 0; s < table.HighWater; s++) patientCandidates.Add(s);
+            _patientCandidates.Clear();
+            for (int s = 0; s < table.HighWater; s++) _patientCandidates.Add(s);
         }
         int best = -1;
         float bestScore = 0;
@@ -329,7 +329,7 @@ public sealed partial class FirstAidSystem
 
         // Pass 2: strangers, prisoners, chained slaves.
         bool ownsCages = false;
-        if (sweeping) ownsCages = sweepCageFactions.Contains(cold.Faction);
+        if (_sweeping) ownsCages = _sweepCageFactions.Contains(cold.Faction);
         else
             for (int k = 0; k < world.Fixtures.All.Count; k++)
                 if (world.Fixtures.All[k] is { Kind: FixtureKind.Cage } cage && cage.Owner == cold.Faction) { ownsCages = true; break; }
@@ -439,7 +439,7 @@ public sealed partial class FirstAidSystem
         bool ordered = source == TaskSource.Order;
         var (patient, _) = FindPatient(world, i, taken, robotics, ordered);
         if (patient < 0) return false;
-        return StartJob(world, i, patient, taken, new TaskRequest(CharacterTask.Treat, ordered ? TaskType.FIRST_AID_ORDER : robotics ? TaskType.JOB_REPAIR_ROBOT : TaskType.JOB_MEDIC, source) { Job = job });
+        return StartJob(world, i, patient, taken, new TaskRequest(CharacterTask.Treat, ordered ? TaskType.FirstAidOrder : robotics ? TaskType.JobRepairRobot : TaskType.JobMedic, source) { Job = job });
     }
 
     /// <summary>
@@ -493,11 +493,11 @@ public sealed partial class FirstAidSystem
     {
         var table = world.Characters;
         if (table.Cold(carrier) is not { Medical: { } arms } cold || !HoldsKit(cold, ItemInfo.FirstAidKitFunction) || !(arms.ArmWorks(left: true) || arms.ArmWorks(left: false))) return false;
-        return StartJob(world, carrier, patient, SquadGoals.Of(world), new TaskRequest(CharacterTask.Treat, TaskType.FIRST_AID_ORDER, TaskSource.Goal));
+        return StartJob(world, carrier, patient, SquadGoals.Of(world), new TaskRequest(CharacterTask.Treat, TaskType.FirstAidOrder, TaskSource.Goal));
     }
 
     /// <summary>The Splint Rigging job's treatment (row 250).</summary>
-    static TaskRequest Splinting(int job) => new(CharacterTask.Treat, TaskType.SPLINT_JOB, TaskSource.Job) { Job = job };
+    static TaskRequest Splinting(int job) => new(CharacterTask.Treat, TaskType.SplintJob, TaskSource.Job) { Job = job };
 
     /// <summary>Starts a treatment of <paramref name="patient"/> (<paramref name="request"/> without its target); an NPC medic goes back afterwards to its standing task (<see cref="TaskStart.Standing"/>).</summary>
     static bool StartJob(World world, int i, int patient, SquadGoals taken, TaskRequest request)

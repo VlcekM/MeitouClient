@@ -106,9 +106,9 @@ public class FoliageGpuCullTests
                 var eye = new Vector3(random.Next(-200000, 200000), 300 + random.Next(0, 2000), random.Next(-200000, 200000));
                 var planes = Frustum(eye, (float)(random.NextDouble() * 6.28), (float)(random.NextDouble() * 0.8 - 0.6));
                 if (viewNumber == 5) planes = planes[..4];   // a shadow cascade's frustum may have fewer planes
-                const int PlainBatches = 5, SplitBatches = 4;
-                var groups = Synthetic(random, eye, planes, 40, PlainBatches);
-                var splitGroups = Synthetic(random, eye, planes, 30, SplitBatches);
+                const int plainBatches = 5, splitBatches = 4;
+                var groups = Synthetic(random, eye, planes, 40, plainBatches);
+                var splitGroups = Synthetic(random, eye, planes, 30, splitBatches);
                 var centre = new Vector3(0.25f, 3.5f, -0.75f);
                 for (int k = 0; k < splitGroups.Count; k++)
                 {
@@ -139,11 +139,11 @@ public class FoliageGpuCullTests
                 } while (!placed);
                 // Batches 0..4 the plain ones, then the split groups' meshes and then their impostors.
                 var batches = new List<(List<SyntheticGroup> Groups, uint Flags, uint[] IndexCounts)>();
-                for (int b = 0; b < PlainBatches; b++)
+                for (int b = 0; b < plainBatches; b++)
                     batches.Add(([.. groups.Where(g => g.Batch == b)], 0, [(uint)(100 * b + 3), (uint)(100 * b + 4)]));   // a mesh and its leaves
-                for (int b = 0; b < SplitBatches; b++)
+                for (int b = 0; b < splitBatches; b++)
                     batches.Add(([.. splitGroups.Where(g => g.Batch == b)], FoliageCullChunk.ImpostorMesh, [(uint)(30 + b)]));
-                for (int b = 0; b < SplitBatches; b++)
+                for (int b = 0; b < splitBatches; b++)
                     batches.Add(([.. splitGroups.Where(g => g.Batch == b)], FoliageCullChunk.Impostor, [6]));
                 var chunks = new List<FoliageCullChunk>();
                 var draws = new List<FoliageCullDraw>();
@@ -174,18 +174,18 @@ public class FoliageGpuCullTests
                 var expected = new List<Matrix4x4>[batches.Count];
                 for (int b = 0; b < batches.Count; b++) expected[b] = [];
                 var output = new FoliageCullOutput();
-                for (int b = 0; b < PlainBatches; b++)
+                for (int b = 0; b < plainBatches; b++)
                     foreach (var g in batches[b].Groups)
                     {
                         FoliageCull.CullGroup(g.Records, g.Range, eyeXz, view, record: false, output);
                         expected[b].AddRange(output.Visible.AsSpan(0, output.Count));
                     }
-                for (int b = 0; b < SplitBatches; b++)
-                    foreach (var g in batches[PlainBatches + b].Groups)
+                for (int b = 0; b < splitBatches; b++)
+                    foreach (var g in batches[plainBatches + b].Groups)
                     {
                         FoliageCull.CullGroup(g.Records, g.Range, eyeXz, view, record: false, output, FoliageCull.MeshPart | FoliageCull.ImpostorPart);
-                        expected[PlainBatches + b].AddRange(output.Visible.AsSpan(0, output.Count));
-                        expected[PlainBatches + SplitBatches + b].AddRange(output.ImpostorVisible.AsSpan(0, output.ImpostorCount));
+                        expected[plainBatches + b].AddRange(output.Visible.AsSpan(0, output.Count));
+                        expected[plainBatches + splitBatches + b].AddRange(output.ImpostorVisible.AsSpan(0, output.ImpostorCount));
                         foreach (var m in output.ImpostorVisible.AsSpan(0, output.ImpostorCount)) if (m.M14 < 0) inBand++;
                     }
                 int n = chunks.Count;
@@ -214,7 +214,7 @@ public class FoliageGpuCullTests
                         draw++;
                     }
                 }
-                totalVisible += expected.Take(PlainBatches).Sum(e => e.Count);
+                totalVisible += expected.Take(plainBatches).Sum(e => e.Count);
                 totalCandidates += groups.Sum(g => g.Records.Length);
             }
             Assert.True(cull.Grows > 0, "the arena should have grown");
@@ -248,13 +248,13 @@ public class FoliageGpuCullTests
                 var eye = new Vector3(random.Next(-5000, 5000), random.Next(20, 120), random.Next(-5000, 5000));
                 var local = OcclusionCullTests.Camera.Look(Vector3.Zero, (float)(random.NextDouble() * 0.2 - 0.1), (float)(random.NextDouble() * 0.2 - 0.1));
                 var cam = local with { Eye = eye };
-                const int W = OcclusionCullTests.W, H = OcclusionCullTests.H;
-                var z = new float[H, W];
+                const int w = OcclusionCullTests.W, h = OcclusionCullTests.H;
+                var z = new float[h, w];
                 // The scene lies round the origin; the camera is offset to a far position by moving the scene with it.
                 var moved = scene.Select(o => o with { Centre = o.Centre + eye }).ToList();
                 float jx = (float)random.NextDouble() - 0.5f, jy = (float)random.NextDouble() - 0.5f;
-                for (int y = 0; y < H; y++)
-                    for (int x = 0; x < W; x++)
+                for (int y = 0; y < h; y++)
+                    for (int x = 0; x < w; x++)
                         z[y, x] = OcclusionCullTests.DepthAt(moved, cam, x, y, jx, jy);
                 var pyramid = new OcclusionCullTests.Pyramid(z);
                 var sizes = pyramid.Sizes;
@@ -297,7 +297,7 @@ public class FoliageGpuCullTests
                 var work = cull.Prepare(chunks.ToArray(), draws);
                 using var pyramidBuffer = DeviceBuffer.Create(ctx, (ulong)data.Count * 4, BufferUse.Storage | BufferUse.TransferDst, "pyramid test");
                 ctx.Uploads.Write(pyramidBuffer, 0, MemoryMarshal.AsBytes(data.ToArray().AsSpan()));
-                var vectors = HizPyramid.Vectors(eye, Vector3.Distance(current, eye), cam.Right, cam.Up, cam.Back, OcclusionCullTests.TanX, OcclusionCullTests.TanY, W, H, sizes.Count, sizes[0].W, sizes[0].H, offsets);
+                var vectors = HizPyramid.Vectors(eye, Vector3.Distance(current, eye), cam.Right, cam.Up, cam.Back, OcclusionCullTests.TanX, OcclusionCullTests.TanY, w, h, sizes.Count, sizes[0].W, sizes[0].H, offsets);
                 var occlusion = new OcclusionView(new GpuBufferBinding(pyramidBuffer.Handle, 0, pyramidBuffer.Size), vectors);
                 var view = new FoliageCullView().Set([]);
                 var result = cull.Dispatch(work, view, new Vector2(current.X, current.Z), default, 0.999f, default, occlusion);

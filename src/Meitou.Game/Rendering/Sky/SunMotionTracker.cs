@@ -19,11 +19,11 @@ sealed class SunMotionTracker
     /// <summary>A larger step of the sun in one frame (degrees) is a jump of the clock, not a motion to follow.</summary>
     const float JumpAngle = 2;
 
-    Vector3 previous;
-    bool previousValid;
+    Vector3 _previous;
+    bool _previousValid;
 
     /// <summary>Forgets the previous sun (a camera cut or a teleport must not turn the old direction into a motion streak).</summary>
-    public void Reset() => previousValid = false;
+    public void Reset() => _previousValid = false;
 
     /// <summary>
     /// This frame's sun uniforms: xyz the direction to the sun, w cos <see cref="InnerAngle"/>; and xy the motion to add
@@ -38,22 +38,22 @@ sealed class SunMotionTracker
         var sun = new Vector3(raw.X, raw.Y, raw.Z);
         if (sun.LengthSquared() < 1e-6f)
         {
-            previousValid = false;
+            _previousValid = false;
             return default;
         }
         sun = Vector3.Normalize(sun);
         var result = default((Vector4 Sun, Vector4 Motion));
-        if (enabled && previousValid && framePreviousValid
-            && Vector3.Dot(sun, previous) is float c && c < 1 && c > MathF.Cos(JumpAngle * MathF.PI / 180)
+        if (enabled && _previousValid && framePreviousValid
+            && Vector3.Dot(sun, _previous) is float c && c < 1 && c > MathF.Cos(JumpAngle * MathF.PI / 180)
             && Project(sun, viewRotation, fov, aspect) is { } now
-            && Project(previous, viewRotation, fov, aspect) is { } before)
+            && Project(_previous, viewRotation, fov, aspect) is { } before)
         {
             // Both with this frame's camera: the camera's own motion is the reprojection's part already.
             var delta = (now - before) * 0.5f;
             result = (new Vector4(sun, MathF.Cos(InnerAngle * MathF.PI / 180)),
                 new Vector4(delta, MathF.Cos(OuterAngle * MathF.PI / 180), 1));
         }
-        (previous, previousValid) = (sun, true);
+        (_previous, _previousValid) = (sun, true);
         return result;
     }
 

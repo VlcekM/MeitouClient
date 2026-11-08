@@ -25,7 +25,7 @@ public sealed class ItemInstance
     public string[] WornNeverBy { get; init; } = [];
     /// <summary>Whether a character of the RACE <paramref name="race"/> may wear it (null: no wearer, no limit).</summary>
     public bool WearableBy(string? race, bool animal = false) => Wearable(WornOnlyBy, WornNeverBy, race, animal);
-    internal static bool Wearable(string[] only, string[] never, string? race, bool animal = false) => Meitou.Data.Gameplay.RaceLimiter.Allows(only, never, race, animal);
+    internal static bool Wearable(string[] only, string[] never, string? race, bool animal = false) => RaceLimiter.Allows(only, never, race, animal);
     /// <summary>Shackles' lock (level = ARMOUR <c>lock level</c> clamped 0..100, its <c>hardness</c>, locked when made: <c>FUN_14089a440</c>); null for other items.</summary>
     public Locks.LockState? Lock { get; set; }
     /// <summary>Worn and effectively locked: the item cannot be taken off, sold or moved (LockedArmour's tooltip: "locked in place and cannot be removed").</summary>
@@ -36,22 +36,22 @@ public sealed class ItemInstance
     public string Section { get; set; } = "main";
     public int X { get; set; }
     public int Y { get; set; }
-    int quantity = 1;
+    int _quantity = 1;
     public int Quantity
     {
-        get => quantity;
+        get => _quantity;
         set
         {
-            if (value < quantity && Buyback is { } receipt) Buyback = receipt.Skip(quantity - value);
-            else if (value > quantity) Buyback = null;
-            quantity = value;
+            if (value < _quantity && Buyback is { } receipt) Buyback = receipt.Skip(_quantity - value);
+            else if (value > _quantity) Buyback = null;
+            _quantity = value;
         }
     }
-    TradeReceipt? buyback;
+    TradeReceipt? _buyback;
     internal TradeReceipt? Buyback
     {
-        get => buyback is { Session.Active: true } ? buyback : null;
-        set => buyback = value;
+        get => _buyback is { Session.Active: true } ? _buyback : null;
+        set => _buyback = value;
     }
     public int Level { get; set; }
     /// <summary>
@@ -61,7 +61,7 @@ public sealed class ItemInstance
     public int GearLevel => GearLevelOf(Type, Level);
     /// <summary><see cref="GearLevel"/> for an item of <paramref name="type"/> at <paramref name="level"/>.</summary>
     public static int GearLevelOf(FcsRecordType type, int level) =>
-        type is FcsRecordType.WEAPON or FcsRecordType.ARMOUR or FcsRecordType.CROSSBOW or FcsRecordType.LIMB_REPLACEMENT ? level : 0;
+        type is FcsRecordType.Weapon or FcsRecordType.Armour or FcsRecordType.Crossbow or FcsRecordType.LimbReplacement ? level : 0;
     /// <summary>The name of the smith who crafted the item at a bench (the save key <c>crafter</c>; empty: not crafted by the player's smith). The tooltip prints it with the player faction's name.</summary>
     public string Crafter { get; set; } = "";
     /// <summary>The faction whose uniform the piece is (the save key <c>uniform</c>, the faction record id; empty: none): armour with one sells and buys at 0.3 of its price (<c>Armour+0x1e8</c>, <c>FUN_1408a9c20</c>, <b>Verified</b>).</summary>
@@ -82,20 +82,20 @@ public sealed class ItemInstance
     public int Width { get; init; } = 1;
     public int Height { get; init; } = 1;
     /// <summary>Weight of one unit in kg as it counts in the inventory total (weapons already scaled by <c>weapon inventory weight mult</c>).</summary>
-    public float UnitWeight { get => DynamicWeight is null ? baseWeight : WorkedWeight(); init => baseWeight = value; }
-    float baseWeight;
+    public float UnitWeight { get => DynamicWeight is null ? _baseWeight : WorkedWeight(); init => _baseWeight = value; }
+    float _baseWeight;
     /// <summary><see cref="DynamicWeight"/>'s answer for the inputs it was asked with (the inventory total reads it every tick); one object, so a reader on another thread sees a whole one.</summary>
     sealed record WeightMemo(int Level, string Material, string Company, float Weight);
-    WeightMemo? weightMemo;
+    WeightMemo? _weightMemo;
     float WorkedWeight()
     {
-        if (weightMemo is { } m && m.Level == Level && m.Material == MaterialId && m.Company == CompanyId) return m.Weight;
+        if (_weightMemo is { } m && m.Level == Level && m.Material == MaterialId && m.Company == CompanyId) return m.Weight;
         float weight = DynamicWeight!(this);
-        weightMemo = new(Level, MaterialId, CompanyId, weight);
+        _weightMemo = new(Level, MaterialId, CompanyId, weight);
         return weight;
     }
     /// <summary>The record weight (<see cref="UnitWeight"/> when nothing replaces it).</summary>
-    public float RecordWeight => baseWeight;
+    public float RecordWeight => _baseWeight;
     /// <summary>
     /// What replaces <see cref="RecordWeight"/> for items whose weight is worked out from the item: an armour piece's by its level and part coverage
     /// (<see cref="Meitou.Data.Gameplay.Combat.ArmourData.WeightAt"/>), a melee weapon's by its level, manufacturer and material (<c>WeaponStats</c>); null for anything else.
@@ -141,9 +141,38 @@ public sealed class ItemInstance
     /// <summary>A copy of this item with another quantity (a stack split off; never used for a backpack, whose contents are not copied).</summary>
     public ItemInstance WithQuantity(int quantity) => new()
     {
-        Record = Record, Name = Name, Type = Type, EquipmentSection = EquipmentSection, IsLocked = IsLocked, WornOnlyBy = WornOnlyBy, WornNeverBy = WornNeverBy, MaterialId = MaterialId, CompanyId = CompanyId, Section = Section, X = X, Y = Y, Quantity = quantity, Level = Level, Crafter = Crafter, Uniform = Uniform, ColourId = ColourId,
-        ItemFunction = ItemFunction, Quality = Quality, Charges = Charges, MaxCharges = MaxCharges, Width = Width, Height = Height, UnitWeight = baseWeight, DynamicWeight = DynamicWeight, StackLimit = StackLimit,
-        IsFood = IsFood, ContentsFactor = ContentsFactor, Mark = Mark, Death = Death, Unique = Unique, Buyback = Buyback?.Take(quantity),
+        Record = Record,
+        Name = Name,
+        Type = Type,
+        EquipmentSection = EquipmentSection,
+        IsLocked = IsLocked,
+        WornOnlyBy = WornOnlyBy,
+        WornNeverBy = WornNeverBy,
+        MaterialId = MaterialId,
+        CompanyId = CompanyId,
+        Section = Section,
+        X = X,
+        Y = Y,
+        Quantity = quantity,
+        Level = Level,
+        Crafter = Crafter,
+        Uniform = Uniform,
+        ColourId = ColourId,
+        ItemFunction = ItemFunction,
+        Quality = Quality,
+        Charges = Charges,
+        MaxCharges = MaxCharges,
+        Width = Width,
+        Height = Height,
+        UnitWeight = _baseWeight,
+        DynamicWeight = DynamicWeight,
+        StackLimit = StackLimit,
+        IsFood = IsFood,
+        ContentsFactor = ContentsFactor,
+        Mark = Mark,
+        Death = Death,
+        Unique = Unique,
+        Buyback = Buyback?.Take(quantity),
     };
 
     /// <summary>

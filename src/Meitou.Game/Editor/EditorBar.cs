@@ -96,7 +96,7 @@ sealed class EditorBar
         IEnumerable<HomeSpot> counter, IEnumerable<HomeSpot> posts, IEnumerable<HomeSpot> nodes)
     {
         var crowd = new List<(string, string?, Vector3, float, string, int)>();
-        bool IsCharacter(string id) => db.Find(id)?.Type == Meitou.Data.Fcs.FcsRecordType.CHARACTER;
+        bool IsCharacter(string id) => db.Find(id)?.Type == Data.Fcs.FcsRecordType.Character;
         if (db.Find(source.ResidentsTemplate) is { } residentRecord && SquadTemplate.From(residentRecord) is var residents)
         {
             if (residents.Leader is { } barman && IsCharacter(barman.Id) && counter.FirstOrDefault() is { Position: var at } spot && at != default)
@@ -138,7 +138,7 @@ sealed class EditorBar
         Vector3[] points;
         try
         {
-            var mesh = Meitou.Data.Ogre.OgreMeshReader.ReadFile(Path.Combine(install.Root, meshPath.TrimStart('.', '\\', '/')));
+            var mesh = Data.Ogre.OgreMeshReader.ReadFile(Path.Combine(install.Root, meshPath.TrimStart('.', '\\', '/')));
             points = [.. (mesh.SharedVertexData?.ReadPositions() ?? []), .. mesh.SubMeshes.SelectMany(s => s.VertexData?.ReadPositions() ?? [])];
         }
         catch (IOException) { return placed; }

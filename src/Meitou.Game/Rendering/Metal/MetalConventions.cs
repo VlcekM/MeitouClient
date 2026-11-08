@@ -16,68 +16,68 @@ public static class MetalConventions
     {
         InternalFormat.Rgba8 => MTLPixelFormat.RGBA8Unorm,
         InternalFormat.Srgb8Alpha8 => MTLPixelFormat.RGBA8UnormsRGB,
-        InternalFormat.Rgba16f => MTLPixelFormat.RGBA16Float,
-        InternalFormat.Rgba32f => MTLPixelFormat.RGBA32Float,
+        InternalFormat.Rgba16F => MTLPixelFormat.RGBA16Float,
+        InternalFormat.Rgba32F => MTLPixelFormat.RGBA32Float,
         InternalFormat.R8 => MTLPixelFormat.R8Unorm,
         InternalFormat.R16 => MTLPixelFormat.R16Unorm,
         InternalFormat.Rg16 => MTLPixelFormat.RG16Unorm,
-        InternalFormat.R16f => MTLPixelFormat.R16Float,
+        InternalFormat.R16F => MTLPixelFormat.R16Float,
         InternalFormat.Rgba16 => MTLPixelFormat.RGBA16Unorm,
-        InternalFormat.R32f => MTLPixelFormat.R32Float,
-        InternalFormat.RG16f => MTLPixelFormat.RG16Float,
-        InternalFormat.RG32f => MTLPixelFormat.RG32Float,
-        InternalFormat.R8ui => MTLPixelFormat.R8Uint,
-        InternalFormat.R32ui => MTLPixelFormat.R32Uint,
-        InternalFormat.R32i => MTLPixelFormat.R32Sint,
-        InternalFormat.R16ui => MTLPixelFormat.R16Uint,
-        InternalFormat.R16i => MTLPixelFormat.R16Sint,
-        InternalFormat.Rgba8ui => MTLPixelFormat.RGBA8Uint,
-        InternalFormat.Rgba16ui => MTLPixelFormat.RGBA16Uint,
-        InternalFormat.Rgba32ui => MTLPixelFormat.RGBA32Uint,
-        InternalFormat.Rgba32i => MTLPixelFormat.RGBA32Sint,
+        InternalFormat.R32F => MTLPixelFormat.R32Float,
+        InternalFormat.Rg16F => MTLPixelFormat.RG16Float,
+        InternalFormat.Rg32F => MTLPixelFormat.RG32Float,
+        InternalFormat.R8Ui => MTLPixelFormat.R8Uint,
+        InternalFormat.R32Ui => MTLPixelFormat.R32Uint,
+        InternalFormat.R32I => MTLPixelFormat.R32Sint,
+        InternalFormat.R16Ui => MTLPixelFormat.R16Uint,
+        InternalFormat.R16I => MTLPixelFormat.R16Sint,
+        InternalFormat.Rgba8Ui => MTLPixelFormat.RGBA8Uint,
+        InternalFormat.Rgba16Ui => MTLPixelFormat.RGBA16Uint,
+        InternalFormat.Rgba32Ui => MTLPixelFormat.RGBA32Uint,
+        InternalFormat.Rgba32I => MTLPixelFormat.RGBA32Sint,
         InternalFormat.CompressedRedRgtc1 => MTLPixelFormat.BC4RUnorm,
-        InternalFormat.CompressedRGRgtc2 => MTLPixelFormat.BC5RGUnorm,
+        InternalFormat.CompressedRgRgtc2 => MTLPixelFormat.BC5RGUnorm,
         InternalFormat.CompressedRgbaBptcUnorm => MTLPixelFormat.BC7RGBAUnorm,
-        InternalFormat.DepthComponent24 or InternalFormat.DepthComponent32f => MTLPixelFormat.Depth32Float,
-        InternalFormat.Depth24Stencil8 or InternalFormat.Depth32fStencil8 => MTLPixelFormat.Depth32FloatStencil8,
-        InternalFormat.CompressedRgbS3TCDxt1Ext or InternalFormat.CompressedRgbaS3TCDxt1Ext => MTLPixelFormat.BC1RGBA,
-        InternalFormat.CompressedRgbaS3TCDxt3Ext => MTLPixelFormat.BC2RGBA,
-        InternalFormat.CompressedRgbaS3TCDxt5Ext => MTLPixelFormat.BC3RGBA,
+        InternalFormat.DepthComponent24 or InternalFormat.DepthComponent32F => MTLPixelFormat.Depth32Float,
+        InternalFormat.Depth24Stencil8 or InternalFormat.Depth32FStencil8 => MTLPixelFormat.Depth32FloatStencil8,
+        InternalFormat.CompressedRgbS3TcDxt1Ext or InternalFormat.CompressedRgbaS3TcDxt1Ext => MTLPixelFormat.BC1RGBA,
+        InternalFormat.CompressedRgbaS3TcDxt3Ext => MTLPixelFormat.BC2RGBA,
+        InternalFormat.CompressedRgbaS3TcDxt5Ext => MTLPixelFormat.BC3RGBA,
         _ => throw new NotSupportedException($"no Metal pixel format for {f}"),
     };
 
     /// <summary>The engine's sRGB rule: the sRGB format is its linear twin's, as GlConventions names Vulkan's.</summary>
     public static bool IsDepthFormat(InternalFormat f) =>
-        f is InternalFormat.DepthComponent24 or InternalFormat.DepthComponent32f or InternalFormat.Depth24Stencil8 or InternalFormat.Depth32fStencil8;
+        f is InternalFormat.DepthComponent24 or InternalFormat.DepthComponent32F or InternalFormat.Depth24Stencil8 or InternalFormat.Depth32FStencil8;
 
     /// <summary>The bytes a texel (or a texture block) takes, as the uploads' row strides need.</summary>
     public static int TexelBytes(InternalFormat f) => f switch
     {
-        InternalFormat.CompressedRgbS3TCDxt1Ext or InternalFormat.CompressedRgbaS3TCDxt1Ext => 8,  // a 4x4 block
-        InternalFormat.CompressedRgbaS3TCDxt3Ext or InternalFormat.CompressedRgbaS3TCDxt5Ext or InternalFormat.CompressedRgbaBptcUnorm => 16,  // a 4x4 block
-        InternalFormat.Rgba16f => 8,
-        InternalFormat.Rgba32f => 16,
+        InternalFormat.CompressedRgbS3TcDxt1Ext or InternalFormat.CompressedRgbaS3TcDxt1Ext => 8,  // a 4x4 block
+        InternalFormat.CompressedRgbaS3TcDxt3Ext or InternalFormat.CompressedRgbaS3TcDxt5Ext or InternalFormat.CompressedRgbaBptcUnorm => 16,  // a 4x4 block
+        InternalFormat.Rgba16F => 8,
+        InternalFormat.Rgba32F => 16,
         InternalFormat.R8 => 1,
-        InternalFormat.R16 or InternalFormat.R16f => 2,
+        InternalFormat.R16 or InternalFormat.R16F => 2,
         InternalFormat.Rg16 or InternalFormat.Rgba16 => 4,
-        InternalFormat.R32f => 4,
-        InternalFormat.RG16f => 4,
-        InternalFormat.RG32f => 8,
-        InternalFormat.R8ui => 1,
-        InternalFormat.R32ui or InternalFormat.R32i => 4,
-        InternalFormat.R16ui or InternalFormat.R16i => 2,
-        InternalFormat.Rgba8ui or InternalFormat.Rgba16ui => 4,
-        InternalFormat.Rgba32ui or InternalFormat.Rgba32i => 16,
+        InternalFormat.R32F => 4,
+        InternalFormat.Rg16F => 4,
+        InternalFormat.Rg32F => 8,
+        InternalFormat.R8Ui => 1,
+        InternalFormat.R32Ui or InternalFormat.R32I => 4,
+        InternalFormat.R16Ui or InternalFormat.R16I => 2,
+        InternalFormat.Rgba8Ui or InternalFormat.Rgba16Ui => 4,
+        InternalFormat.Rgba32Ui or InternalFormat.Rgba32I => 16,
         InternalFormat.CompressedRedRgtc1 => 8,
-        InternalFormat.CompressedRGRgtc2 => 16,   // BC5: two channels
+        InternalFormat.CompressedRgRgtc2 => 16,   // BC5: two channels
         InternalFormat.Rgba8 or InternalFormat.Srgb8Alpha8 => 4,
         _ => throw new NotSupportedException($"no texel size for {f}"),
     };
 
     /// <summary>4 for the block formats (BC1's 4x4), else 1.</summary>
     public static int BlockWidth(InternalFormat f) =>
-        f is InternalFormat.CompressedRgbS3TCDxt1Ext or InternalFormat.CompressedRgbaS3TCDxt1Ext or InternalFormat.CompressedRgbaS3TCDxt3Ext
-            or InternalFormat.CompressedRgbaS3TCDxt5Ext or InternalFormat.CompressedRedRgtc1 or InternalFormat.CompressedRGRgtc2 or InternalFormat.CompressedRgbaBptcUnorm ? 4 : 1;
+        f is InternalFormat.CompressedRgbS3TcDxt1Ext or InternalFormat.CompressedRgbaS3TcDxt1Ext or InternalFormat.CompressedRgbaS3TcDxt3Ext
+            or InternalFormat.CompressedRgbaS3TcDxt5Ext or InternalFormat.CompressedRedRgtc1 or InternalFormat.CompressedRgRgtc2 or InternalFormat.CompressedRgbaBptcUnorm ? 4 : 1;
 
     public static MTLSamplerMinMagFilter Filter(TextureMinFilter f) =>
         f is TextureMinFilter.Nearest or TextureMinFilter.NearestMipmapNearest or TextureMinFilter.NearestMipmapLinear
@@ -170,28 +170,28 @@ public static class MetalConventions
 
     /// <summary>The winding passes through: Metal's NDC points up as GL's does (no flip, unlike Vulkan's).</summary>
     public static MTLWinding Winding(FrontFaceDirection f) =>
-        f == FrontFaceDirection.CW ? MTLWinding.Clockwise : MTLWinding.CounterClockwise;
+        f == FrontFaceDirection.Cw ? MTLWinding.Clockwise : MTLWinding.CounterClockwise;
 
     /// <summary>The vertex format of an attribute input (Metal's own vertex format table).</summary>
     public static MTLVertexFormat VertexFormat(InternalFormat f) => f switch
     {
         InternalFormat.R8 => MTLVertexFormat.UCharNormalized,
         InternalFormat.Rgba8 => MTLVertexFormat.UChar4Normalized,
-        InternalFormat.R8ui => MTLVertexFormat.UChar,
-        InternalFormat.R16f => MTLVertexFormat.Half,
-        InternalFormat.RG16f => MTLVertexFormat.Half2,
-        InternalFormat.R32f => MTLVertexFormat.Float,
-        InternalFormat.RG32f => MTLVertexFormat.Float2,
-        InternalFormat.Rgb32f => MTLVertexFormat.Float3,
-        InternalFormat.Rgba32f => MTLVertexFormat.Float4,
-        InternalFormat.Rgba16f => MTLVertexFormat.Half4,
+        InternalFormat.R8Ui => MTLVertexFormat.UChar,
+        InternalFormat.R16F => MTLVertexFormat.Half,
+        InternalFormat.Rg16F => MTLVertexFormat.Half2,
+        InternalFormat.R32F => MTLVertexFormat.Float,
+        InternalFormat.Rg32F => MTLVertexFormat.Float2,
+        InternalFormat.Rgb32F => MTLVertexFormat.Float3,
+        InternalFormat.Rgba32F => MTLVertexFormat.Float4,
+        InternalFormat.Rgba16F => MTLVertexFormat.Half4,
         InternalFormat.Rgba16 => MTLVertexFormat.UShort4Normalized,
         InternalFormat.Rgba16Snorm => MTLVertexFormat.Short4Normalized,
-        InternalFormat.Rgba8ui => MTLVertexFormat.UChar4,
-        InternalFormat.Rgba32ui => MTLVertexFormat.UInt4,
-        InternalFormat.Rgba32i => MTLVertexFormat.Int4,
-        InternalFormat.R32ui => MTLVertexFormat.UInt,
-        InternalFormat.R32i => MTLVertexFormat.Int,
+        InternalFormat.Rgba8Ui => MTLVertexFormat.UChar4,
+        InternalFormat.Rgba32Ui => MTLVertexFormat.UInt4,
+        InternalFormat.Rgba32I => MTLVertexFormat.Int4,
+        InternalFormat.R32Ui => MTLVertexFormat.UInt,
+        InternalFormat.R32I => MTLVertexFormat.Int,
         _ => throw new NotSupportedException($"no Metal vertex format for {f}"),
     };
 }

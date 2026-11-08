@@ -1,8 +1,7 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Runtime.InteropServices;
-
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Post;
 
@@ -15,9 +14,9 @@ public sealed unsafe partial class PostProcess
     /// <summary>The composite's key over the adapted luminance (hdr.material's EXPOSURE_KEY, PostProcessShaders.Composite).</summary>
     const float ExposureKey = 0.55f;
 
-    Target2D? upscaleExposure;
-    GpuProgram? upscaleExposureProgram;
-    GpuComputePipeline? upscaleExposurePipeline;
+    Target2D? _upscaleExposure;
+    GpuProgram? _upscaleExposureProgram;
+    GpuComputePipeline? _upscaleExposurePipeline;
 
     [StructLayout(LayoutKind.Sequential)]
     struct UpscaleExposurePush
@@ -28,39 +27,39 @@ public sealed unsafe partial class PostProcess
     /// <summary>The 1 x 1 exposure for the vendor upscaler, written in this frame's post segment; null where R32F cannot be a storage image (DLSS then measures its own).</summary>
     Target2D? WriteUpscaleExposure()
     {
-        if (!SupportsStorage(InternalFormat.R32f) || adaptB is null) return null;
-        if (upscaleExposure is null)
+        if (!SupportsStorage(InternalFormat.R32F) || _adaptB is null) return null;
+        if (_upscaleExposure is null)
         {
             using var batch = Gpu.Uploads.Begin();
-            upscaleExposure = Make(batch, 1, 1, InternalFormat.R32f, TextureMinFilter.Nearest, "post upscale exposure");
+            _upscaleExposure = Make(batch, 1, 1, InternalFormat.R32F, TextureMinFilter.Nearest, "post upscale exposure");
         }
-        if (upscaleExposureProgram is null)
+        if (_upscaleExposureProgram is null)
         {
-            upscaleExposureProgram = Gpu.Shaders.Compute(UpscaleExposureShader, "post upscale exposure");
-            upscaleExposurePipeline = Gpu.Pipelines.Get(new ComputePipelineDesc(upscaleExposureProgram!.Value, "post upscale exposure"));
+            _upscaleExposureProgram = Gpu.Shaders.Compute(UpscaleExposureShader, "post upscale exposure");
+            _upscaleExposurePipeline = Gpu.Pipelines.Get(new ComputePipelineDesc(_upscaleExposureProgram!.Value, "post upscale exposure"));
         }
 
         var cmd = Segment();
-        var adapted = Sampled(adaptB);
+        var adapted = Sampled(_adaptB);
         var bindings = stackalloc GpuBinding[2];
         bindings[0] = GpuBinding.Sampled(0, new SampledTexture(Point(), adapted.View));
-        bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, upscaleExposure.Texture.View()));
-        bool auto = AutoExposure is not null && adaptedValid;
+        bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, _upscaleExposure.Texture.View()));
+        bool auto = AutoExposure is not null && _adaptedValid;
         var push = new UpscaleExposurePush { Exposure = Options.Exposure, Key = ExposureKey, Auto = auto ? 1 : 0 };
         cmd.Order();
-        cmd.BindPipeline(upscaleExposurePipeline!.Value);
-        cmd.BindProgramResources(upscaleExposureProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 2));
-        cmd.PushConstants(upscaleExposureProgram!.Value, GpuStage.Compute, in push);
+        cmd.BindPipeline(_upscaleExposurePipeline!.Value);
+        cmd.BindProgramResources(_upscaleExposureProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 2));
+        cmd.PushConstants(_upscaleExposureProgram!.Value, GpuStage.Compute, in push);
         cmd.Dispatch(1, 1);
         cmd.Order();
-        return upscaleExposure;
+        return _upscaleExposure;
     }
 
     void DisposeUpscaleExposure()
     {
-        upscaleExposure?.Texture.Dispose();
-        upscaleExposure = null;
-        if (upscaleExposureProgram is { } p) Gpu.Shaders.Dispose(p);
+        _upscaleExposure?.Texture.Dispose();
+        _upscaleExposure = null;
+        if (_upscaleExposureProgram is { } p) Gpu.Shaders.Dispose(p);
     }
 
     const string UpscaleExposureShader = """

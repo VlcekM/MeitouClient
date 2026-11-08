@@ -16,7 +16,7 @@ public sealed record AnimationMask(string AnimationName, string? RecordName, str
     /// Whether a record's clip moves the character (<b>Verified</b>, docs/animation.md "Root motion"): an ANIMATION with <c>relocates</c>; a
     /// COMBAT_TECHNIQUE unless it is a block that is not a dodge (the combat code plays attacks and dodges with root motion whatever <c>gains ground</c> says).
     /// </summary>
-    public static bool MovesCharacter(GameRecord record) => record.Type == FcsRecordType.COMBAT_TECHNIQUE
+    public static bool MovesCharacter(GameRecord record) => record.Type == FcsRecordType.CombatTechnique
         ? !(record.GetBool("is block") && !record.GetBool("is dodge"))
         : record.GetBool("relocates");
 
@@ -42,7 +42,7 @@ public sealed record AnimationMask(string AnimationName, string? RecordName, str
         string animation = record.GetString("anim name", record.Name);
         var deleted = new HashSet<string>(StringComparer.Ordinal);
         var overrides = new HashSet<string>(StringComparer.Ordinal);
-        if (record.Type == FcsRecordType.ANIMATION)
+        if (record.Type == FcsRecordType.Animation)
         {
             if (record.GetBool("override L arm")) overrides.UnionWith([.. LeftArm, "Bip01 Prop1"]);
             if (record.GetBool("override R arm")) overrides.UnionWith([.. RightArm, "Bip01 Prop2"]);
@@ -94,25 +94,25 @@ public sealed record AnimationMask(string AnimationName, string? RecordName, str
     /// </summary>
     sealed class Index
     {
-        static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GameDatabase, Index> made = new();
-        int version;
+        static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GameDatabase, Index> Made = new();
+        int _version;
         public readonly Dictionary<string, GameRecord> ByName = new(StringComparer.OrdinalIgnoreCase), Techniques = new(StringComparer.OrdinalIgnoreCase),
             ByAnimation = new(StringComparer.OrdinalIgnoreCase);
 
         public static Index Of(GameDatabase db)
         {
-            if (made.TryGetValue(db, out var index) && index.version == db.Version) return index;
-            index = new Index { version = db.Version };
+            if (Made.TryGetValue(db, out var index) && index._version == db.Version) return index;
+            index = new Index { _version = db.Version };
             foreach (var r in db.Records.Values)
             {
-                if (r.Type == FcsRecordType.ANIMATION)
+                if (r.Type == FcsRecordType.Animation)
                 {
                     index.ByName.TryAdd(r.Name, r);
                     index.ByAnimation.TryAdd(r.GetString("anim name"), r);
                 }
-                else if (r.Type == FcsRecordType.COMBAT_TECHNIQUE) index.Techniques.TryAdd(r.Name, r);
+                else if (r.Type == FcsRecordType.CombatTechnique) index.Techniques.TryAdd(r.Name, r);
             }
-            made.AddOrUpdate(db, index);
+            Made.AddOrUpdate(db, index);
             return index;
         }
     }

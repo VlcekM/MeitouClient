@@ -36,7 +36,7 @@ sealed partial class GameHost
         a.Held(InputAction.Orbit) && a.MouseDelta != Vector2.Zero || a.Wheel != 0 || a.Pressed(InputAction.ToggleFreeCamera);
 
     /// <summary>A key or button bound to Orbit (middle button or Ctrl by default) is down.</summary>
-    internal bool OrbitHeld() => session.Bindings.Get(InputAction.Orbit).Any(session.Input.IsHeld);
+    internal bool OrbitHeld() => Session.Bindings.Get(InputAction.Orbit).Any(Session.Input.IsHeld);
 
     /// <summary>
     /// The button the interface sees for a physical one: the Select button is its left, the Command button its right (each falls back to its own default while unbound, so
@@ -45,8 +45,8 @@ sealed partial class GameHost
     /// </summary>
     internal EngineButton PlayerButton(EngineButton physical)
     {
-        var select = session.Bindings.Get(InputAction.Select);
-        var command = session.Bindings.Get(InputAction.Command);
+        var select = Session.Bindings.Get(InputAction.Select);
+        var command = Session.Bindings.Get(InputAction.Command);
         if (select.Count == 0 ? physical == EngineButton.Left : select.Contains(Binding.Of(physical))) return EngineButton.Left;
         if (command.Count == 0 ? physical == EngineButton.Right : command.Contains(Binding.Of(physical))) return EngineButton.Right;
         return physical is EngineButton.Left or EngineButton.Right ? EngineButton.Middle : physical;
@@ -56,7 +56,7 @@ sealed partial class GameHost
     internal void HoldPointer(Silk.NET.Input.IMouse mouse, Vector2 anchor)
     {
         mouse.Position = anchor;
-        session.Input.SetMousePosition(anchor.X, anchor.Y);
+        Session.Input.SetMousePosition(anchor.X, anchor.Y);
     }
 
 
@@ -79,10 +79,10 @@ sealed partial class GameHost
     /// </summary>
     void NoteAheadTick()
     {
-        if (!SpikeLog.Enabled || session.AheadMs <= SpikeSimMs) return;
-        var world = session.World;
+        if (!SpikeLog.Enabled || Session.AheadMs <= SpikeSimMs) return;
+        var world = Session.World;
         var profile = world.Profile;
-        SpikeLog.Note("sim ahead tick", ms: session.AheadMs);
+        SpikeLog.Note("sim ahead tick", ms: Session.AheadMs);
         for (int k = 0; k < profile.SystemMs.Length && k < world.Systems.Count; k++)
             if (profile.SystemMs[k] >= 2) SpikeLog.Note($"sim ahead {world.Systems[k].GetType().Name}", ms: profile.SystemMs[k]);
         foreach (var (name, ms) in profile.Parts)
@@ -92,23 +92,23 @@ sealed partial class GameHost
     /// <summary>Between ticks: the world's messages for the player go to the HUD and the log, the fights hostility started to the log.</summary>
     internal void WorldNews()
     {
-        var world = session.World;
+        var world = Session.World;
         foreach (string message in world.TakeMessages())
         {
             Console.WriteLine($"relations {message}");
-            player.Notice(message);
-            if (devConsoleHost.explodeAsker is { } asker && message.StartsWith("Explode at ", StringComparison.Ordinal)) { asker.Print(message); devConsoleHost.explodeAsker = null; }
+            Player.Notice(message);
+            if (DevConsoleHost.ExplodeAsker is { } asker && message.StartsWith("Explode at ", StringComparison.Ordinal)) { asker.Print(message); DevConsoleHost.ExplodeAsker = null; }
         }
-        foreach (var line in world.TakeSaid()) player.messageRoller.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
+        foreach (var line in world.TakeSaid()) Player.MessageRoller.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
         // Stealth knock-outs: the original's floating "*Thunk*" (a hit) or "Failed!" over the attacker, here as a notice.
-        if (world.Systems.OfType<Meitou.Simulation.Carrying.CarrySystem>().FirstOrDefault() is { Knockouts.Count: > 0 } carry)
+        if (world.Systems.OfType<Simulation.Carrying.CarrySystem>().FirstOrDefault() is { Knockouts.Count: > 0 } carry)
             foreach (var k in carry.TakeKnockouts())
                 if (world.Characters.IsAlive(k.Attacker) && world.Characters.Cold(k.Attacker.Slot) is { IsPlayer: true } attacker)
-                    player.Notice($"{attacker.Name}: {Loc.Tr(k.Success ? "*Thunk*" : "Failed!")}{(k.NoXp ? Loc.Tr(" (No XP)") : "")} ({Math.Clamp(k.Chance, 0, 100):0}%)", !k.Success);
-        if (population is not null)
-            foreach (var line in population.TakeTownLog()) Console.WriteLine($"town      {line}");
-        if (population is not null)
-            foreach (var w in population.TakeWildLog())
-                Console.WriteLine($"wild      tick {w.Tick}: {w.Squad} ({w.Members}) from the {(w.Kind == Meitou.Simulation.Population.WildKind.Nest ? "nest" : "sector of")} {w.Place}");
+                    Player.Notice($"{attacker.Name}: {Loc.Tr(k.Success ? "*Thunk*" : "Failed!")}{(k.NoXp ? Loc.Tr(" (No XP)") : "")} ({Math.Clamp(k.Chance, 0, 100):0}%)", !k.Success);
+        if (Population is not null)
+            foreach (var line in Population.TakeTownLog()) Console.WriteLine($"town      {line}");
+        if (Population is not null)
+            foreach (var w in Population.TakeWildLog())
+                Console.WriteLine($"wild      tick {w.Tick}: {w.Squad} ({w.Members}) from the {(w.Kind == Simulation.Population.WildKind.Nest ? "nest" : "sector of")} {w.Place}");
     }
 }

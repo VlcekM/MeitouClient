@@ -105,17 +105,28 @@ static unsafe class SlTypes
         var d = texture.Desc;
         return new SlResource
         {
-            StructType = ResourceType, StructVersion = 1,
+            StructType = ResourceType,
+            StructVersion = 1,
             Type = 0,   // eTex2d
-            Native = (nint)ctx.Device.NativeImage(texture).Handle, View = (nint)ctx.Device.NativeView(texture).Handle, State = (uint)ImageLayout.General,
-            Width = (uint)d.Width, Height = (uint)d.Height, NativeFormat = (uint)GlConventions.VkFormat(d.Format),
-            MipLevels = (uint)d.Levels, ArrayLayers = 1, Usage = (uint)ctx.Device.NativeUsage(texture),
+            Native = (nint)ctx.Device.NativeImage(texture).Handle,
+            View = (nint)ctx.Device.NativeView(texture).Handle,
+            State = (uint)ImageLayout.General,
+            Width = (uint)d.Width,
+            Height = (uint)d.Height,
+            NativeFormat = (uint)GlConventions.VkFormat(d.Format),
+            MipLevels = (uint)d.Levels,
+            ArrayLayers = 1,
+            Usage = (uint)ctx.Device.NativeUsage(texture),
         };
     }
 
     public static ResourceTag Tag(SlResource* resource, uint type, int lifecycle) => new()
     {
-        StructType = ResourceTagType, StructVersion = 1, Resource = resource, Type = type, Lifecycle = lifecycle,
+        StructType = ResourceTagType,
+        StructVersion = 1,
+        Resource = resource,
+        Type = type,
+        Lifecycle = lifecycle,
     };
 
     /// <summary>Flips y of a clip space: our clip y = +1 is image row H of a bottom-up picture, Streamline's is row 0.</summary>
@@ -135,15 +146,26 @@ static unsafe class SlTypes
         Matrix4x4.Invert(toPrevious, out var fromPrevious);
         return new Constants
         {
-            StructType = ConstantsType, StructVersion = 2,
-            CameraViewToClip = toClip, ClipToCameraView = clipToView, ClipToLensClip = Matrix4x4.Identity,
-            ClipToPrevClip = toPrevious, PrevClipToClip = fromPrevious,
+            StructType = ConstantsType,
+            StructVersion = 2,
+            CameraViewToClip = toClip,
+            ClipToCameraView = clipToView,
+            ClipToLensClip = Matrix4x4.Identity,
+            ClipToPrevClip = toPrevious,
+            PrevClipToClip = fromPrevious,
             JitterOffset = bottomUp ? jitterPixels : new Vector2(jitterPixels.X, -jitterPixels.Y),
             MvecScale = new Vector2(-1, bottomUp ? -1 : 1),
-            CameraPos = eye, CameraUp = up, CameraRight = right, CameraFwd = forward,
-            CameraNear = near, CameraFar = far, CameraFov = fov, CameraAspectRatio = aspect,
+            CameraPos = eye,
+            CameraUp = up,
+            CameraRight = right,
+            CameraFwd = forward,
+            CameraNear = near,
+            CameraFar = far,
+            CameraFov = fov,
+            CameraAspectRatio = aspect,
             MotionVectorsInvalidValue = float.MaxValue,
-            CameraMotionIncluded = 1, Reset = (byte)(reset ? 1 : 0),
+            CameraMotionIncluded = 1,
+            Reset = (byte)(reset ? 1 : 0),
             MinRelativeLinearDepthObjectSeparation = 40,
         };
     }

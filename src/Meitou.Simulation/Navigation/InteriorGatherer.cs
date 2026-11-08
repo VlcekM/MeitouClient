@@ -71,7 +71,7 @@ internal sealed partial class ZoneGeometryGatherer
     {
         var list = building.GetReferences("interior");
         if (list.Count == 0) return InteriorKind.None;
-        return db.Find(list[0].TargetStringId) is { } first
+        return _db.Find(list[0].TargetStringId) is { } first
             && (first.GetPath("phs or mesh").Length > 0 || first.GetString("phs or mesh").Length > 0 || first.GetReferences("parts").Count > 0)
             ? InteriorKind.Real : InteriorKind.Blank;
     }
@@ -85,7 +85,7 @@ internal sealed partial class ZoneGeometryGatherer
         if (building.GetBool("is wall gate") || building.GetBool("links together") || building.GetReferences("farm data").Count > 0) return false;
         var functionality = building.GetReferences("functionality");
         if (functionality.Count == 0) return true;
-        int function = db.Find(functionality[0].TargetStringId)?.GetInt("function") ?? 0;
+        int function = _db.Find(functionality[0].TargetStringId)?.GetInt("function") ?? 0;
         return function is 0 or 18;
     }
 
@@ -96,7 +96,7 @@ internal sealed partial class ZoneGeometryGatherer
         var points = new List<Vector3>();
         foreach (var (_, path) in MaskParts(building))
         {
-            if (collision.Get(path) is not { } prepared) continue;
+            if (_collision.Get(path) is not { } prepared) continue;
             foreach (var shape in prepared.Shapes)
                 foreach (var v in shape.Vertices) points.Add(Vector3.Transform(v, node));
         }
@@ -106,7 +106,7 @@ internal sealed partial class ZoneGeometryGatherer
     IEnumerable<(GameRecord Part, string Path)> MaskParts(GameRecord building)
     {
         foreach (var r in building.GetReferences("interior mask"))
-            if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BUILDING_PART } mask && mask.GetPath("xml collision") is { Length: > 0 } path)
+            if (_db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingPart } mask && mask.GetPath("xml collision") is { Length: > 0 } path)
                 yield return (mask, path);
     }
 
@@ -141,7 +141,7 @@ internal sealed partial class ZoneGeometryGatherer
         var boxMin = new Vector2(crossHighX && !crossLowX ? hi.X - side : lo.X, crossHighZ && !crossLowZ ? hi.Y - side : lo.Y);
         // A destroyed building's "destroyed boundary" (fcs.def: navmesh cutter for a destroyed interior) is a ring of walls round the ruin's floor, its doorway
         // and steps; cut halfway up, it outlines the floor.
-        var boundary = site.Destroyed && site.Record.GetPath("destroyed boundary") is { Length: > 0 } boundaryPath ? collision.Get(boundaryPath) : null;
+        var boundary = site.Destroyed && site.Record.GetPath("destroyed boundary") is { Length: > 0 } boundaryPath ? _collision.Get(boundaryPath) : null;
         List<(Vector2 A, Vector2 B)>? outline = null;
         if (boundary is not null)
         {
@@ -155,8 +155,16 @@ internal sealed partial class ZoneGeometryGatherer
         }
         var g = new ZoneGeometry
         {
-            Zone = site.Zone, ZoneMin = boxMin, ZoneMax = boxMin + new Vector2(side), Margin = 8, InteriorHull = hull, InteriorOf = site.Placement.Key, TrackParts = ownOnly || trackParts,
-            ClippedAtBorder = crossLowX || crossLowZ || crossHighX || crossHighZ, InteriorDestroyed = site.Destroyed, DestroyedOutline = outline,
+            Zone = site.Zone,
+            ZoneMin = boxMin,
+            ZoneMax = boxMin + new Vector2(side),
+            Margin = 8,
+            InteriorHull = hull,
+            InteriorOf = site.Placement.Key,
+            TrackParts = ownOnly || trackParts,
+            ClippedAtBorder = crossLowX || crossLowZ || crossHighX || crossHighZ,
+            InteriorDestroyed = site.Destroyed,
+            DestroyedOutline = outline,
             InteriorDoorless = site.Destroyed || !site.Record.GetReferences("doors").Any(),
         };
 

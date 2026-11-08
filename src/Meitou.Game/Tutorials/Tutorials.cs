@@ -14,7 +14,7 @@ readonly record struct TutorialPoll
     public bool UnderAttack { get; init; }
     public int PcCount { get; init; }
     /// <summary>The PCs, for the recruit tutorial's newest member.</summary>
-    public IReadOnlyList<Meitou.Simulation.CharacterId> Pcs { get; init; }
+    public IReadOnlyList<Simulation.CharacterId> Pcs { get; init; }
     public bool Stolen { get; init; }
     public bool AnyUnconscious { get; init; }
     public bool AnyConscious { get; init; }
@@ -64,18 +64,18 @@ sealed class TutorialManager
     /// <summary>What do I do? fires once its calm counter (2 per poll) passes this.</summary>
     const int CalmNeeded = 20;
 
-    readonly List<int> active = [], pending = [], drops = [];
-    readonly string path;
-    double timer;
-    int calm, recruits = -1;
-    HashSet<Meitou.Simulation.CharacterId>? recruitBase;
+    readonly List<int> _active = [], _pending = [], _drops = [];
+    readonly string _path;
+    double _timer;
+    int _calm, _recruits = -1;
+    HashSet<Simulation.CharacterId>? _recruitBase;
 
     /// <summary>The recruit the hired-recruit tutorial found (its Select page waits for them to be selected); null: none.</summary>
-    public Meitou.Simulation.CharacterId? Recruit { get; private set; }
+    public Simulation.CharacterId? Recruit { get; private set; }
 
     public TutorialManager(string path)
     {
-        this.path = path;
+        this._path = path;
         Load();
     }
 
@@ -83,30 +83,30 @@ sealed class TutorialManager
     public bool Enabled { get; set; } = true;
     /// <summary>No file was read: the one-off camera hint is due.</summary>
     public bool Fresh { get; private set; }
-    public IReadOnlyList<int> Active => active;
+    public IReadOnlyList<int> Active => _active;
     /// <summary>Each item's page (kept when it ends, as the original keeps it).</summary>
     public int[] Pages { get; } = new int[Names.Length];
-    bool dirty;
+    bool _dirty;
 
     void Load()
     {
         try
         {
-            using var r = new BinaryReader(File.OpenRead(path));
+            using var r = new BinaryReader(File.OpenRead(_path));
             if (r.ReadUInt32() != Magic) throw new InvalidDataException();
             r.ReadUInt32();
             var a = ReadList(r);
             var b = ReadList(r);
-            active.AddRange(a);
-            pending.AddRange(b);
+            _active.AddRange(a);
+            _pending.AddRange(b);
             Fresh = false;
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException or EndOfStreamException)
         {
-            active.Clear();
-            pending.Clear();
-            pending.AddRange(Enumerable.Range(0, Names.Length));
-            dirty = Fresh = true;
+            _active.Clear();
+            _pending.Clear();
+            _pending.AddRange(Enumerable.Range(0, Names.Length));
+            _dirty = Fresh = true;
         }
 
         static IEnumerable<int> ReadList(BinaryReader r)
@@ -121,48 +121,48 @@ sealed class TutorialManager
 
     void Save()
     {
-        dirty = false;
+        _dirty = false;
         try
         {
-            using var w = new BinaryWriter(File.Create(path));
+            using var w = new BinaryWriter(File.Create(_path));
             w.Write(Magic);
             w.Write((uint)Names.Length);
-            w.Write((uint)active.Count);
-            foreach (int id in active) w.Write((uint)id);
-            w.Write((uint)pending.Count);
-            foreach (int id in pending) w.Write((uint)id);
+            w.Write((uint)_active.Count);
+            foreach (int id in _active) w.Write((uint)id);
+            w.Write((uint)_pending.Count);
+            foreach (int id in _pending) w.Write((uint)id);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Console.Error.WriteLine($"tutorials save failed: {e.Message}"); }
     }
 
-    bool Ended(int id) => !active.Contains(id) && !pending.Contains(id);
+    bool Ended(int id) => !_active.Contains(id) && !_pending.Contains(id);
 
     /// <summary>One frame: drops, then every 2 s the pending items whose trigger holds turn active (returned, for the panel's flash and <c>Thing_Complete</c>); saves when changed.</summary>
     public List<int>? Update(double seconds, Func<TutorialPoll> poll)
     {
         if (!Enabled) return null;
-        if (drops.Count > 0)
+        if (_drops.Count > 0)
         {
-            foreach (int id in drops) pending.Remove(id);
-            drops.Clear();
-            dirty = true;
+            foreach (int id in _drops) _pending.Remove(id);
+            _drops.Clear();
+            _dirty = true;
         }
         List<int>? started = null;
-        timer -= seconds;
-        if (timer <= 0)
+        _timer -= seconds;
+        if (_timer <= 0)
         {
             var p = poll();
-            foreach (int id in pending.ToArray())
+            foreach (int id in _pending.ToArray())
                 if (Holds(id, p))
                 {
-                    pending.Remove(id);
-                    active.Add(id);
+                    _pending.Remove(id);
+                    _active.Add(id);
                     (started ??= []).Add(id);
-                    dirty = true;
+                    _dirty = true;
                 }
-            timer = PollSeconds;
+            _timer = PollSeconds;
         }
-        if (dirty) Save();
+        if (_dirty) Save();
         return started;
     }
 
@@ -174,17 +174,17 @@ sealed class TutorialManager
             case 0 or 1: return !p.EditorOrLoading;
             case 2:
                 if (p.EditorOrLoading) return false;
-                if (p.Unsettled) { calm = 0; return false; }
-                calm += 2;
-                return calm > CalmNeeded;
+                if (p.Unsettled) { _calm = 0; return false; }
+                _calm += 2;
+                return _calm > CalmNeeded;
             case 3: return Ended(2) && p.InTown;
             case 4: return p.NeedsFirstAid;
             case 5: return Ended(4) && p.NeedsFirstAid;
             case 6: return p.UnderAttack;
             case 7:
-                if (recruits < 0) { recruits = p.PcCount; recruitBase = [.. p.Pcs ?? []]; }
-                if (p.PcCount <= recruits) return false;
-                Recruit = (p.Pcs ?? []).LastOrDefault(c => recruitBase?.Contains(c) != true);
+                if (_recruits < 0) { _recruits = p.PcCount; _recruitBase = [.. p.Pcs ?? []]; }
+                if (p.PcCount <= _recruits) return false;
+                Recruit = (p.Pcs ?? []).LastOrDefault(c => _recruitBase?.Contains(c) != true);
                 return true;
             case 8: return p.Stolen;
             case 9: return p.AnyUnconscious;
@@ -205,10 +205,10 @@ sealed class TutorialManager
             case 24 or 30: return p.Placing;
             case 25: return p.CraftingComplete;
             case 26:
-                if (p.CraftingComplete) { drops.Add(id); return false; }
+                if (p.CraftingComplete) { _drops.Add(id); return false; }
                 return p.ManagementTab == 3;
             case 27:
-                if (p.ResearchComplete) { drops.Add(id); return false; }
+                if (p.ResearchComplete) { _drops.Add(id); return false; }
                 return p.ManagementTab == 2;
             case 28: return p.ResearchComplete;
             case 29: return p.Blueprint;
@@ -222,30 +222,30 @@ sealed class TutorialManager
     /// <summary>Dismissed (the line's X, DISMISS, or FINISH on the last page): out of the active list, ended.</summary>
     public void Dismiss(int id)
     {
-        if (active.Remove(id)) dirty = true;
+        if (_active.Remove(id)) _dirty = true;
     }
 
     /// <summary>The Tutorials window's ACTIVATE: an item not already active becomes active from its first page (true: added, for the flash and sound).</summary>
     public bool Activate(int id)
     {
-        if (active.Contains(id)) return false;
-        pending.Remove(id);
-        active.Add(id);
+        if (_active.Contains(id)) return false;
+        _pending.Remove(id);
+        _active.Add(id);
         // reset: page 0, except the recruit and prison items, whose own reset clears only their memory.
-        if (id == 7) (recruits, Recruit) = (-1, null);
+        if (id == 7) (_recruits, Recruit) = (-1, null);
         else if (id is not (11 or 12)) Pages[id] = 0;
-        dirty = true;
+        _dirty = true;
         return true;
     }
 
     /// <summary>Reset Tutorials: nothing active, everything pending, the file deleted (the next update writes it anew). Pages are kept.</summary>
     public void Reset()
     {
-        active.Clear();
-        pending.Clear();
-        pending.AddRange(Enumerable.Range(0, Names.Length));
-        try { if (File.Exists(path)) File.Delete(path); }
+        _active.Clear();
+        _pending.Clear();
+        _pending.AddRange(Enumerable.Range(0, Names.Length));
+        try { if (File.Exists(_path)) File.Delete(_path); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Console.Error.WriteLine($"tutorials reset: {e.Message}"); }
-        dirty = true;
+        _dirty = true;
     }
 }

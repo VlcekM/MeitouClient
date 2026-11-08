@@ -5,7 +5,7 @@ namespace Meitou.Tests.Rendering;
 /// <summary>The probes the fog hides (docs/render-gi.md "Probes in the fog"): the reach box of a probe column, the layers of it that are hidden, and the frame's probe list.</summary>
 public class GiFogHideTests
 {
-    const float S = 512, SY = 384;
+    const float S = 512, Sy = 384;
 
     [Fact]
     public void The_reach_box_holds_every_point_that_can_read_the_probes_of_the_column()
@@ -15,16 +15,16 @@ public class GiFogHideTests
         const float x = 10240, z = -20480, baseY = 100;
         for (int layers = 1; layers <= 7; layers++)
         {
-            var (min, max) = GiFogHide.ReachBox(x, z, baseY, S, SY, layers, -1000, 0);
-            float offset = 0.3f * MathF.Min(S, SY);
+            var (min, max) = GiFogHide.ReachBox(x, z, baseY, S, Sy, layers, -1000, 0);
+            float offset = 0.3f * MathF.Min(S, Sy);
             Assert.True(min.X <= x - S - offset && max.X >= x + S + offset);
             Assert.True(min.Z <= z - S - offset && max.Z >= z + S + offset);
-            Assert.True(max.Y >= baseY + (layers - 1 + 1.5f) * SY + offset, $"top for {layers} layers");
+            Assert.True(max.Y >= baseY + (layers - 1 + 1.5f) * Sy + offset, $"top for {layers} layers");
             Assert.True(min.Y <= -1000);   // the lowest layer is read from below, as far as the block goes
         }
         // Wider with the slack.
-        var (a, _) = GiFogHide.ReachBox(x, z, baseY, S, SY, 1, -1000, 0);
-        var (b, _) = GiFogHide.ReachBox(x, z, baseY, S, SY, 1, -1000, 64);
+        var (a, _) = GiFogHide.ReachBox(x, z, baseY, S, Sy, 1, -1000, 0);
+        var (b, _) = GiFogHide.ReachBox(x, z, baseY, S, Sy, 1, -1000, 64);
         Assert.Equal(a.X - 64, b.X);
     }
 

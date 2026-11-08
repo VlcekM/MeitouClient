@@ -183,7 +183,7 @@ public static class Enhancements
 /// ones that were Meitou before (all of them when they started Faithful). The Tab panel's checkboxes set them one by one.</summary>
 public sealed class MeitouToggle(IReadOnlyList<Enhancement> switches)
 {
-    bool[]? before;
+    bool[]? _before;
 
     /// <summary>Any switch is Meitou.</summary>
     public bool On => switches.Any(e => e.IsMeitou);
@@ -193,26 +193,26 @@ public sealed class MeitouToggle(IReadOnlyList<Enhancement> switches)
     {
         if (On)
         {
-            before = [.. switches.Select(e => e.IsMeitou)];
+            _before = [.. switches.Select(e => e.IsMeitou)];
             foreach (var e in switches) e.IsMeitou = false;
         }
         else
         {
-            for (int i = 0; i < switches.Count; i++) switches[i].IsMeitou = before?[i] ?? true;
+            for (int i = 0; i < switches.Count; i++) switches[i].IsMeitou = _before?[i] ?? true;
         }
         return On ? $"meitou    on: {string.Join(", ", switches.Where(e => e.IsMeitou).Select(e => e.Id))}" : "meitou    off, every switch Faithful (the game as it ships)";
     }
 
     /// <summary>The sweep's next switch (-1: no sweep) and when it flips (<see cref="System.Diagnostics.Stopwatch"/> ticks).</summary>
-    int sweep = -1;
-    long sweepNext;
+    int _sweep = -1;
+    long _sweepNext;
 
     /// <summary>Starts (or stops) a sweep: every switch flips in turn (Meitou to Faithful and back the other way), one a second (the viewer's Ctrl+F1).</summary>
     public string Sweep()
     {
-        if (sweep >= 0) { sweep = -1; return "meitou    sweep stopped"; }
+        if (_sweep >= 0) { _sweep = -1; return "meitou    sweep stopped"; }
         if (switches.Count == 0) return "meitou    no switches to sweep";
-        (sweep, sweepNext) = (0, System.Diagnostics.Stopwatch.GetTimestamp());
+        (_sweep, _sweepNext) = (0, System.Diagnostics.Stopwatch.GetTimestamp());
         return $"meitou    sweep: {switches.Count} switches flip in turn, 1 s apart (Ctrl+F1 stops)";
     }
 
@@ -220,12 +220,12 @@ public sealed class MeitouToggle(IReadOnlyList<Enhancement> switches)
     public string? TickSweep()
     {
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        if (sweep < 0 || now < sweepNext) return null;
-        var e = switches[sweep];
+        if (_sweep < 0 || now < _sweepNext) return null;
+        var e = switches[_sweep];
         e.IsMeitou = !e.IsMeitou;
-        string line = $"meitou    sweep {sweep + 1}/{switches.Count}: {e.Id} {(e.IsMeitou ? "Meitou" : "Faithful")}";
-        sweepNext = now + System.Diagnostics.Stopwatch.Frequency;
-        if (++sweep == switches.Count) sweep = -1;
+        string line = $"meitou    sweep {_sweep + 1}/{switches.Count}: {e.Id} {(e.IsMeitou ? "Meitou" : "Faithful")}";
+        _sweepNext = now + System.Diagnostics.Stopwatch.Frequency;
+        if (++_sweep == switches.Count) _sweep = -1;
         return line;
     }
 }

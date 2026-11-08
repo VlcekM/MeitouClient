@@ -42,13 +42,13 @@ public sealed class CharacterSoundProfile
         string? weapon = null;
         foreach (var part in look.Parts)
         {
-            if (part.Record.Type == FcsRecordType.ARMOUR && part.Slot is { } slot)
+            if (part.Record.Type == FcsRecordType.Armour && part.Slot is { } slot)
             {
                 if (slot == AttachSlot.Boots) boots = true;
                 if (slot == AttachSlot.Body) armour = Math.Max(armour, part.Record.GetInt("material type"));
             }
-            else if (weapon is null && part.Mode == AttachMode.Bone && part.Record.Type is FcsRecordType.WEAPON or FcsRecordType.CROSSBOW)
-                weapon = CharacterSounds.WeaponName(part.Record.Type == FcsRecordType.CROSSBOW ? 6 : part.Record.GetInt("skill category", 5));
+            else if (weapon is null && part.Mode == AttachMode.Bone && part.Record.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow)
+                weapon = CharacterSounds.WeaponName(part.Record.Type == FcsRecordType.Crossbow ? 6 : part.Record.GetInt("skill category", 5));
         }
         if (look.Animal is not null)
         {
@@ -143,15 +143,15 @@ public sealed class CharacterSounds
         public int Frame;
     }
 
-    readonly WwisePlayer player;
-    readonly GroundSurfaces? ground;
-    readonly Dictionary<ulong, Entry> entries = [];
-    readonly List<ulong> gone = [];
-    readonly Random random = new();
-    readonly Stopwatch clock = Stopwatch.StartNew();
-    readonly ulong[] pool = new ulong[ImpactPoolSize];
-    Vector3 camera;
-    int frame, poolAt;
+    readonly WwisePlayer _player;
+    readonly GroundSurfaces? _ground;
+    readonly Dictionary<ulong, Entry> _entries = [];
+    readonly List<ulong> _gone = [];
+    readonly Random _random = new();
+    readonly Stopwatch _clock = Stopwatch.StartNew();
+    readonly ulong[] _pool = new ulong[ImpactPoolSize];
+    Vector3 _camera;
+    int _frame, _poolAt;
 
     /// <summary>Events posted since the start, for the statistics: footsteps, other animation events, impacts, voices.</summary>
     public int Footsteps { get; private set; }
@@ -159,7 +159,7 @@ public sealed class CharacterSounds
     public int Impacts { get; private set; }
     public int Voices { get; private set; }
     public int Jobs { get; private set; }
-    public int Objects => entries.Count;
+    public int Objects => _entries.Count;
 
     /// <summary>
     /// The GroundType of the building floor under a character's feet, or -1 when the ground is not a building's (then the terrain's overlay decides): the host's lookup of what the
@@ -169,9 +169,9 @@ public sealed class CharacterSounds
 
     public CharacterSounds(WwisePlayer player, GroundSurfaces? ground)
     {
-        this.player = player;
-        this.ground = ground;
-        for (int i = 0; i < pool.Length; i++) pool[i] = ImpactPoolBase + (ulong)i;
+        this._player = player;
+        this._ground = ground;
+        for (int i = 0; i < _pool.Length; i++) _pool[i] = ImpactPoolBase + (ulong)i;
         player.LoadBank("VO_Bank");
         player.LoadBank("SFX_General_Bank");
     }
@@ -179,34 +179,34 @@ public sealed class CharacterSounds
     /// <summary>Starts a frame: where the camera's eye is (the origin of every distance limit).</summary>
     public void BeginFrame(Vector3 eye)
     {
-        camera = eye;
-        frame++;
+        _camera = eye;
+        _frame++;
     }
 
     /// <summary>Ends a frame: characters not handed over since the last one are gone, and lose their objects.</summary>
     public void EndFrame()
     {
-        gone.Clear();
-        foreach (var (key, e) in entries)
-            if (e.Frame != frame) gone.Add(key);
-        foreach (var key in gone) Remove(key);
+        _gone.Clear();
+        foreach (var (key, e) in _entries)
+            if (e.Frame != _frame) _gone.Add(key);
+        foreach (var key in _gone) Remove(key);
     }
 
     /// <summary>Ends everything: every object is unregistered (a new world, the main menu).</summary>
     public void Clear()
     {
-        foreach (var e in entries.Values) player.UnregisterObject(e.Object);
-        entries.Clear();
+        foreach (var e in _entries.Values) _player.UnregisterObject(e.Object);
+        _entries.Clear();
     }
 
     void Remove(ulong key)
     {
-        if (!entries.Remove(key, out var e)) return;
+        if (!_entries.Remove(key, out var e)) return;
         foreach (var c in e.Cursors) Stopped(e, c);
-        player.UnregisterObject(e.Object);
+        _player.UnregisterObject(e.Object);
     }
 
-    ulong nextObject = CharacterObjectBase;
+    ulong _nextObject = CharacterObjectBase;
 
     /// <summary>
     /// One character this frame: its place, facing and speed (units per second), and the animations it plays with their events. Characters beyond the drop radius are
@@ -214,21 +214,21 @@ public sealed class CharacterSounds
     /// </summary>
     public void Update(ulong key, CharacterSoundProfile profile, Vector3 position, float yaw, float speed, ReadOnlySpan<SoundLayer> layers, CharacterLoop loop = CharacterLoop.None, bool down = false, bool combat = false)
     {
-        float d2 = player.HeardDistanceSquared(position, camera);
-        entries.TryGetValue(key, out var e);
+        float d2 = _player.HeardDistanceSquared(position, _camera);
+        _entries.TryGetValue(key, out var e);
         if (e is null)
         {
             if (d2 > TrackRadius * TrackRadius) return;
-            e = new Entry { Object = nextObject++, NextPassive = clock.Elapsed.TotalSeconds + random.NextDouble() * 100 };
-            entries[key] = e;
-            player.RegisterObject(e.Object);
+            e = new Entry { Object = _nextObject++, NextPassive = _clock.Elapsed.TotalSeconds + _random.NextDouble() * 100 };
+            _entries[key] = e;
+            _player.RegisterObject(e.Object);
         }
         else if (d2 > DropRadius * DropRadius)
         {
             Remove(key);
             return;
         }
-        e.Frame = frame;
+        e.Frame = _frame;
         if (!ReferenceEquals(e.Profile, profile))
         {
             // A new look (equipment changed): the switches follow. A person's voice, an animal's voice and weapons, the weapon in hand.
@@ -237,21 +237,21 @@ public sealed class CharacterSounds
             e.Surface = -1;
             if (profile.Animal)
             {
-                if (first) { player.SetSwitch("Creature_VO", profile.Voice, e.Object); player.SetSwitch("Weapons", profile.Weapons!, e.Object); }
+                if (first) { _player.SetSwitch("Creature_VO", profile.Voice, e.Object); _player.SetSwitch("Weapons", profile.Weapons!, e.Object); }
             }
             else
             {
-                player.SetSwitch("VO_Races", profile.Voice, e.Object);
-                if (profile.Weapons is { } weapon) player.SetSwitch("Weapons", weapon, e.Object);
+                _player.SetSwitch("VO_Races", profile.Voice, e.Object);
+                if (profile.Weapons is { } weapon) _player.SetSwitch("Weapons", weapon, e.Object);
             }
         }
         e.Position = position;
         // No front: the attenuation cone of the impact sounds (90 / 245 degrees, -6 dB) would halve a blow on a fighter facing away from the listener (docs/audio.md "Attenuation").
-        player.SetPosition(e.Object, position);
+        _player.SetPosition(e.Object, position);
         if (d2 < SpeedLimit && MathF.Abs(speed - e.Speed) > 0.01f)
         {
             e.Speed = speed;
-            player.SetParameter("Movement_Speed", speed, e.Object);
+            _player.SetParameter("Movement_Speed", speed, e.Object);
         }
         if (speed > 0) UpdateSurface(e, position, d2);
         if (e.Profile.Ambient is { } ambient) UpdateAmbient(e, ambient, d2);
@@ -270,14 +270,14 @@ public sealed class CharacterSounds
         bool want = !e.Down && d2 <= sound.Range * sound.Range;
         if (want == e.AmbientOn) return;
         e.AmbientOn = want;
-        if (!want) { player.Post("Stop_Emitter", e.Object); return; }
+        if (!want) { _player.Post("Stop_Emitter", e.Object); return; }
         if (!e.AmbientSet)
         {
             e.AmbientSet = true;
-            player.SetSwitch("Emitters", sound.Emitter, e.Object);
-            if (sound.Intensity != 0) player.SetParameter("Intensity", sound.Intensity * 100, e.Object);
+            _player.SetSwitch("Emitters", sound.Emitter, e.Object);
+            if (sound.Intensity != 0) _player.SetParameter("Intensity", sound.Intensity * 100, e.Object);
         }
-        player.Post("Start_Emitter", e.Object);
+        _player.Post("Start_Emitter", e.Object);
     }
 
     void UpdateSurface(Entry e, Vector3 position, float d2)
@@ -288,7 +288,7 @@ public sealed class CharacterSounds
         {
             // A building's floor under the foot names its own material; anywhere else the terrain's overlay does.
             surface = BuildingFloor(e, position);
-            if (surface < 0 && ground is not null) surface = ground.At(position.X, position.Z);
+            if (surface < 0 && _ground is not null) surface = _ground.At(position.X, position.Z);
         }
         else return;
         if (surface < 0 || surface >= Shoes.Length) return;   // still loading; or a type past the table (a building's material 9: the exe reads past its name table, Unknown)
@@ -296,7 +296,7 @@ public sealed class CharacterSounds
         int packed = surface | (bare ? 0x100 : 0);
         if (e.Surface == packed) return;
         e.Surface = packed;
-        player.SetSwitch("Surface_Material", SurfaceName(surface, bare), e.Object);
+        _player.SetSwitch("Surface_Material", SurfaceName(surface, bare), e.Object);
     }
 
     int BuildingFloor(Entry e, Vector3 position)
@@ -324,7 +324,7 @@ public sealed class CharacterSounds
             {
                 e.Cursors.Add(cursor = new Cursor { Definition = layer.Definition, Events = events });
                 // An unarmed technique choosing its blow (FUN_1402b4570): the fist or the foot, the robot variant for a robot.
-                if (layer.Weapons is { } hth) player.SetSwitch("Weapons", e.Profile.Robot ? hth + "_Robot" : hth, e.Object);
+                if (layer.Weapons is { } hth) _player.SetSwitch("Weapons", e.Profile.Robot ? hth + "_Robot" : hth, e.Object);
             }
             else if (!ReferenceEquals(cursor.Events, events))
             {
@@ -332,13 +332,13 @@ public sealed class CharacterSounds
                 cursor.Events = events;
                 cursor.State.Rebase(events);
             }
-            cursor.Frame = frame;
+            cursor.Frame = _frame;
             cursor.State.Update(events, Math.Clamp(layer.Fraction, 0, 1), i == dominant, ev => Fire(e, ev, d2));
         }
         // An animation that is gone: its events' stop events (the destructor, FUN_1400647e0).
         for (int k = e.Cursors.Count - 1; k >= 0; k--)
         {
-            if (e.Cursors[k].Frame == frame) continue;
+            if (e.Cursors[k].Frame == _frame) continue;
             Stopped(e, e.Cursors[k]);
             e.Cursors.RemoveAt(k);
         }
@@ -347,7 +347,7 @@ public sealed class CharacterSounds
     void Stopped(Entry e, Cursor cursor)
     {
         foreach (var ev in cursor.Events)
-            if (ev.Stop.Length > 0) player.Post(ev.Stop, e.Object);
+            if (ev.Stop.Length > 0) _player.Post(ev.Stop, e.Object);
     }
 
     /// <summary><c>AnimationSFXEvent::vfunc_1</c> (<c>1400649c0</c>): the override switch, or the armour for a footstep, then the event within its distance.</summary>
@@ -358,23 +358,23 @@ public sealed class CharacterSounds
         {
             if (ev.Footstep)
             {
-                player.SetSwitch("Armor_Worn", ArmourName(e.Profile.ArmourMaterial), e.Object);
+                _player.SetSwitch("Armor_Worn", ArmourName(e.Profile.ArmourMaterial), e.Object);
                 limit = FootstepLimit;
             }
         }
-        else player.SetSwitch(ev.OverrideState, ev.OverrideValue, e.Object);
+        else _player.SetSwitch(ev.OverrideState, ev.OverrideValue, e.Object);
         if (d2 >= limit) return;
-        player.Post(ev.Event, e.Object);
+        _player.Post(ev.Event, e.Object);
         if (ev.Footstep) Footsteps++; else Swings++;
     }
 
     /// <summary>An animal's idle call (<c>CharacterAnimal::vfunc_29</c>): <c>VO_Creature_Passive</c> every 20 to 60 seconds, the first up to 100 s after it appears. Not while <paramref name="down"/> (slot 6, the timer stays due); in combat mode (<c>isInCombatMode</c>) the call is skipped and the timer still reschedules (Verified <c>FUN_1405cdf00</c>).</summary>
     void PassiveVoice(Entry e, float d2, bool down, bool combat)
     {
-        double now = clock.Elapsed.TotalSeconds;
+        double now = _clock.Elapsed.TotalSeconds;
         if (now < e.NextPassive || down) return;
-        if (!combat && d2 < EventLimit) { player.Post("VO_Creature_Passive", e.Object); Voices++; }
-        e.NextPassive = now + random.NextDouble() * 40 + 20;
+        if (!combat && d2 < EventLimit) { _player.Post("VO_Creature_Passive", e.Object); Voices++; }
+        e.NextPassive = now + _random.NextDouble() * 40 + 20;
     }
 
     // ------------------------------------------------------------------ jobs
@@ -396,11 +396,11 @@ public sealed class CharacterSounds
     void SetLoop(Entry e, CharacterLoop loop, float d2)
     {
         if (e.Loop == loop) return;
-        if (e.Loop != CharacterLoop.None) player.Post(LoopEvents(e.Loop).Stop, e.Object);
+        if (e.Loop != CharacterLoop.None) _player.Post(LoopEvents(e.Loop).Stop, e.Object);
         e.Loop = loop;
         if (loop == CharacterLoop.None) return;
         float limit = StartLimit(loop);
-        if (limit == 0 || d2 < limit) { player.Post(LoopEvents(loop).Start, e.Object); Jobs++; }
+        if (limit == 0 || d2 < limit) { _player.Post(LoopEvents(loop).Start, e.Object); Jobs++; }
     }
 
     /// <summary>
@@ -410,34 +410,34 @@ public sealed class CharacterSounds
     /// </summary>
     public void Job(ulong key, string eventName, float limit = EventLimit, string? group = null, string? value = null)
     {
-        if (!entries.TryGetValue(key, out var e)) return;
-        if (group is not null && value is not null) player.SetSwitch(group, value, e.Object);
-        if (limit != 0 && player.HeardDistanceSquared(e.Position, camera) >= limit) return;
+        if (!_entries.TryGetValue(key, out var e)) return;
+        if (group is not null && value is not null) _player.SetSwitch(group, value, e.Object);
+        if (limit != 0 && _player.HeardDistanceSquared(e.Position, _camera) >= limit) return;
         if (eventName == "Character_Unlock_Success" && e.Loop == CharacterLoop.Unlock) e.Loop = CharacterLoop.None;
-        player.Post(eventName, e.Object);
+        _player.Post(eventName, e.Object);
         Jobs++;
     }
 
     /// <summary>A person lifted onto a shoulder or set down (<c>FUN_14034fbe0</c>, <c>Task_PutDownObject</c>): posted on the carried person with its own <c>Armor_Worn</c>, 1000 units.</summary>
     public void Carried(ulong key, bool lifted)
     {
-        if (!entries.TryGetValue(key, out var e)) return;
-        player.SetSwitch("Armor_Worn", ArmourName(e.Profile.ArmourMaterial), e.Object);
-        if (player.HeardDistanceSquared(e.Position, camera) >= EventLimit) return;
-        player.Post(lifted ? "Character_Pick_Up_Person" : "Character_Drop_Person", e.Object);
+        if (!_entries.TryGetValue(key, out var e)) return;
+        _player.SetSwitch("Armor_Worn", ArmourName(e.Profile.ArmourMaterial), e.Object);
+        if (_player.HeardDistanceSquared(e.Position, _camera) >= EventLimit) return;
+        _player.Post(lifted ? "Character_Pick_Up_Person" : "Character_Drop_Person", e.Object);
         Jobs++;
     }
 
     // ------------------------------------------------------------------ combat
 
     /// <summary>Whether the character has an object now (it is near enough to be heard).</summary>
-    public bool Tracked(ulong key) => entries.ContainsKey(key);
+    public bool Tracked(ulong key) => _entries.ContainsKey(key);
 
     bool Post(ulong key, string ev, float limit = EventLimit)
     {
-        if (!entries.TryGetValue(key, out var e)) return false;
-        if (player.HeardDistanceSquared(LastPosition(e), camera) >= limit && limit != 0) return false;
-        player.Post(ev, e.Object);
+        if (!_entries.TryGetValue(key, out var e)) return false;
+        if (_player.HeardDistanceSquared(LastPosition(e), _camera) >= limit && limit != 0) return false;
+        _player.Post(ev, e.Object);
         return true;
     }
 
@@ -447,7 +447,7 @@ public sealed class CharacterSounds
     /// <summary>A melee blow landed on <paramref name="key"/>: the <c>Impacts</c> switch (<c>Light_Hit</c>, <c>Heavy_Hit</c>, <c>HtH_Impacts</c>, <c>HtH_Impacts_Robot</c>), <c>Impact</c> and, half the time, the pain voice (<c>CharacterAnimal::vfunc_62</c>).</summary>
     public void Hit(ulong key, bool heavy, bool attackerUnarmed, bool attackerRobot)
     {
-        if (!entries.TryGetValue(key, out var e)) return;
+        if (!_entries.TryGetValue(key, out var e)) return;
         string impacts = attackerUnarmed ? (attackerRobot ? "HtH_Impacts_Robot" : "HtH_Impacts") : heavy ? "Heavy_Hit" : "Light_Hit";
         Impact(e, impacts);
         PainVoice(e);
@@ -456,17 +456,17 @@ public sealed class CharacterSounds
     /// <summary>A melee blow was blocked: <c>Impacts</c> = <c>Parry</c> (<c>HtH_Impacts</c> when the attacker is unarmed and not a robot), <c>Impact</c>; no voice.</summary>
     public void Blocked(ulong key, bool attackerUnarmed, bool attackerRobot)
     {
-        if (!entries.TryGetValue(key, out var e)) return;
+        if (!_entries.TryGetValue(key, out var e)) return;
         Impact(e, attackerUnarmed && !attackerRobot ? "HtH_Impacts" : "Parry");
     }
 
     /// <summary>A bolt in a body (<c>FUN_140439c90</c>): <c>Deflection</c> with <c>Armor_Worn</c> when armour covers the spot, else <c>Impact</c> as the last <c>Impacts</c> value stood, and the pain voice.</summary>
     public void BoltHit(ulong key, bool armoured)
     {
-        if (!entries.TryGetValue(key, out var e)) return;
+        if (!_entries.TryGetValue(key, out var e)) return;
         if (armoured)
         {
-            player.SetSwitch("Armor_Worn", ArmourName(e.Profile.ArmourMaterial), e.Object);
+            _player.SetSwitch("Armor_Worn", ArmourName(e.Profile.ArmourMaterial), e.Object);
             Impact(e, "Light_Hit", "Deflection");
         }
         else Impact(e, "Light_Hit");
@@ -475,17 +475,17 @@ public sealed class CharacterSounds
 
     void Impact(Entry e, string impacts, string ev = "Impact")
     {
-        player.SetSwitch("Impacts", impacts, e.Object);
-        if (player.HeardDistanceSquared(LastPosition(e), camera) >= EventLimit) return;
-        player.Post(ev, e.Object);
+        _player.SetSwitch("Impacts", impacts, e.Object);
+        if (_player.HeardDistanceSquared(LastPosition(e), _camera) >= EventLimit) return;
+        _player.Post(ev, e.Object);
         Impacts++;
     }
 
     /// <summary>A person with 50 % (the random value's bit 8 clear) says <c>VO_Get_Hit</c>, an animal <c>VO_Creature_Take_Damage</c>.</summary>
     void PainVoice(Entry e)
     {
-        if ((random.Next() & 8) != 0 || player.HeardDistanceSquared(LastPosition(e), camera) >= EventLimit) return;
-        player.Post(e.Profile.Animal ? "VO_Creature_Take_Damage" : "VO_Get_Hit", e.Object);
+        if ((_random.Next() & 8) != 0 || _player.HeardDistanceSquared(LastPosition(e), _camera) >= EventLimit) return;
+        _player.Post(e.Profile.Animal ? "VO_Creature_Take_Damage" : "VO_Get_Hit", e.Object);
         Voices++;
     }
 
@@ -501,11 +501,11 @@ public sealed class CharacterSounds
     /// </summary>
     public void TurretShot(Vector3 at)
     {
-        if (player.HeardDistanceSquared(at, camera) >= EventLimit) return;
-        ulong id = pool[poolAt++ % pool.Length];
-        player.SetPosition(id, at);
-        player.SetSwitch("Weapons", "Turret", id);
-        player.Post("Attack", id);
+        if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
+        ulong id = _pool[_poolAt++ % _pool.Length];
+        _player.SetPosition(id, at);
+        _player.SetSwitch("Weapons", "Turret", id);
+        _player.Post("Attack", id);
         Swings++;
     }
 
@@ -515,22 +515,22 @@ public sealed class CharacterSounds
     /// </summary>
     public void WallBreak(Vector3 at, bool fix)
     {
-        if (player.HeardDistanceSquared(at, camera) >= EventLimit) return;
-        ulong id = pool[poolAt++ % pool.Length];
-        player.SetPosition(id, at);
-        if (fix) player.SetSwitch("Break", "Gate", id);
-        player.Post("Break", id);
+        if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
+        ulong id = _pool[_poolAt++ % _pool.Length];
+        _player.SetPosition(id, at);
+        if (fix) _player.SetSwitch("Break", "Gate", id);
+        _player.Post("Break", id);
         Impacts++;
     }
 
     /// <summary>A bolt stuck in the ground at <paramref name="at"/>: <c>Impact</c> on a pooled object there, <c>Impacts</c> = the ground's name (<c>Stone</c> for anything the table lacks).</summary>
     public void BoltStuck(Vector3 at, int surface)
     {
-        if (player.HeardDistanceSquared(at, camera) >= EventLimit) return;
-        ulong id = pool[poolAt++ % pool.Length];
-        player.SetPosition(id, at);
-        player.SetSwitch("Impacts", SurfaceName(surface, false) is { Length: > 0 } name ? name : "Stone", id);
-        player.Post("Impact", id);
+        if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
+        ulong id = _pool[_poolAt++ % _pool.Length];
+        _player.SetPosition(id, at);
+        _player.SetSwitch("Impacts", SurfaceName(surface, false) is { Length: > 0 } name ? name : "Stone", id);
+        _player.Post("Impact", id);
         Impacts++;
     }
 
@@ -543,11 +543,11 @@ public sealed class CharacterSounds
     /// </summary>
     public void Burst(Vector3 at)
     {
-        float distance = player.HeardDistanceSquared(at, camera);
+        float distance = _player.HeardDistanceSquared(at, _camera);
         PointImpact(at, "Heavy_Hit");
         if (distance >= SquelchLimit) return;
-        player.SetSwitch("Inventory_Items", "Meat", AudioSystem.GuiObject);
-        player.Post("Item_Drop", AudioSystem.GuiObject);
+        _player.SetSwitch("Inventory_Items", "Meat", AudioSystem.GuiObject);
+        _player.Post("Item_Drop", AudioSystem.GuiObject);
     }
 
     /// <summary>A luckyren piece of flesh landing at <paramref name="at"/>: <c>Impact</c> as a <c>Light_Hit</c> on a pooled object there.</summary>
@@ -555,29 +555,29 @@ public sealed class CharacterSounds
 
     void PointImpact(Vector3 at, string impacts)
     {
-        if (player.HeardDistanceSquared(at, camera) >= EventLimit) return;
-        ulong id = pool[poolAt++ % pool.Length];
-        player.SetPosition(id, at);
-        player.SetSwitch("Impacts", impacts, id);
-        player.Post("Impact", id);
+        if (_player.HeardDistanceSquared(at, _camera) >= EventLimit) return;
+        ulong id = _pool[_poolAt++ % _pool.Length];
+        _player.SetPosition(id, at);
+        _player.SetSwitch("Impacts", impacts, id);
+        _player.Post("Impact", id);
         Impacts++;
     }
 
     /// <summary>A character went down. An animal calls <c>VO_Creature_Die</c> (<c>FUN_1405cbd60</c>); the attacker animal <c>VO_Creature_Victory</c> (<c>CharacterAnimal::vfunc_62</c>).</summary>
     public void Down(ulong key, ulong attacker)
     {
-        if (entries.TryGetValue(key, out var e))
+        if (_entries.TryGetValue(key, out var e))
         {
             e.Down = true;
             if (e.Profile?.Animal == true && Post(key, "VO_Creature_Die")) Voices++;
         }
-        if (attacker != 0 && entries.TryGetValue(attacker, out var a) && a.Profile?.Animal == true && Post(attacker, "VO_Creature_Victory")) Voices++;
+        if (attacker != 0 && _entries.TryGetValue(attacker, out var a) && a.Profile?.Animal == true && Post(attacker, "VO_Creature_Victory")) Voices++;
     }
 
     /// <summary>An animal takes up a fight: <c>VO_Creature_Alert</c> (<c>FUN_14085a070</c>).</summary>
     public void Alert(ulong key)
     {
-        if (entries.TryGetValue(key, out var e) && e.Profile?.Animal == true && Post(key, "VO_Creature_Alert")) Voices++;
+        if (_entries.TryGetValue(key, out var e) && e.Profile?.Animal == true && Post(key, "VO_Creature_Alert")) Voices++;
     }
 
     /// <summary>One line for the statistics.</summary>

@@ -111,7 +111,7 @@ public class ObjectLodTests
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         int withLod = 0, checkedMeshes = 0;
-        foreach (var part in db.OfType(FcsRecordType.BUILDING_PART).Take(400))
+        foreach (var part in db.OfType(FcsRecordType.BuildingPart).Take(400))
         {
             var name = part.GetPath("phs or mesh");
             if (!name.EndsWith(".mesh", StringComparison.OrdinalIgnoreCase)) continue;

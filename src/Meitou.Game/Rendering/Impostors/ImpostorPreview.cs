@@ -1,13 +1,13 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Data.Ogre;
 using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
-using Silk.NET.Vulkan;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Sky;
+using Silk.NET.Vulkan;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Impostors;
 
@@ -20,24 +20,24 @@ namespace Meitou.Game.Rendering.Impostors;
 /// </summary>
 internal sealed class ImpostorPreview : IDisposable
 {
-    readonly GpuContext gpu;
-    readonly WorldTextureCache textures;
-    readonly NativeFrame frame;
-    readonly NativeProg meshProgram;
-    readonly ImpostorDraw impostors;
-    readonly List<(ImpostorBaker.Part[] Parts, Material Material)> meshes = [];
-    ImpostorTextures? atlas;
-    uint standIn;
+    readonly GpuContext _gpu;
+    readonly WorldTextureCache _textures;
+    readonly NativeFrame _frame;
+    readonly NativeProg _meshProgram;
+    readonly ImpostorDraw _impostors;
+    readonly List<(ImpostorBaker.Part[] Parts, Material Material)> _meshes = [];
+    ImpostorTextures? _atlas;
+    uint _standIn;
 
     sealed record Material(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2, ImpostorMaterial Settings);
 
     public ImpostorPreview(GpuContext gpu, AssetLocator assets)
     {
-        this.gpu = gpu;
-        textures = new WorldTextureCache(gpu, assets, "impostor textures") { IdleSeconds = double.MaxValue, HighWaterMb = double.MaxValue };
-        frame = new NativeFrame(gpu);
-        meshProgram = new NativeProg(gpu, frame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(), "impostor preview meshes");
-        impostors = new ImpostorDraw(gpu, frame);
+        this._gpu = gpu;
+        _textures = new WorldTextureCache(gpu, assets, "impostor textures") { IdleSeconds = double.MaxValue, HighWaterMb = double.MaxValue };
+        _frame = new NativeFrame(gpu);
+        _meshProgram = new NativeProg(gpu, _frame, FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(), "impostor preview meshes");
+        _impostors = new ImpostorDraw(gpu, _frame);
     }
 
     /// <summary>Blend the three frames instead of picking one per pixel.</summary>
@@ -47,17 +47,17 @@ internal sealed class ImpostorPreview : IDisposable
 
     uint StandIn()
     {
-        if (standIn == 0) standIn = gpu.Bindless.Register(BindlessKind.Texture2D, gpu.Dummy(FrameGlobals.Sampler2D("impostor stand-in")));
-        return standIn;
+        if (_standIn == 0) _standIn = _gpu.Bindless.Register(BindlessKind.Texture2D, _gpu.Dummy(FrameGlobals.Sampler2D("impostor stand-in")));
+        return _standIn;
     }
 
     /// <summary>The mesh (and leaves) to draw: buffers written through the open frame, textures loaded and uploaded (waits for them).</summary>
     public void SetMesh(ImpostorSource source, ImpostorMeshes model)
     {
-        Material Resolve(ImpostorMaterial m) => new(textures.Get(m.Diffuse, false), textures.Get(m.Normal, false), textures.Get(m.Diffuse2, false), textures.Get(m.Normal2, false), m);
-        meshes.Add((Upload(model.Main), Resolve(source.Main)));
-        if (model.Leaves is not null && source.Leaves is not null) meshes.Add((Upload(model.Leaves), Resolve(source.Leaves)));
-        while (textures.PendingCount > 0) textures.Pump(wait: true, max: 64);
+        Material Resolve(ImpostorMaterial m) => new(_textures.Get(m.Diffuse, false), _textures.Get(m.Normal, false), _textures.Get(m.Diffuse2, false), _textures.Get(m.Normal2, false), m);
+        _meshes.Add((Upload(model.Main), Resolve(source.Main)));
+        if (model.Leaves is not null && source.Leaves is not null) _meshes.Add((Upload(model.Leaves), Resolve(source.Leaves)));
+        while (_textures.PendingCount > 0) _textures.Pump(wait: true, max: 64);
     }
 
     ImpostorBaker.Part[] Upload(Model model)
@@ -67,18 +67,22 @@ internal sealed class ImpostorPreview : IDisposable
         {
             if (mp.Indices.Length == 0) continue;
             var packed = GpuVertex.PackObject(mp.Vertices);
-            var vertices = DeviceBuffer.Create(gpu, (ulong)packed.Length, BufferUse.Vertex, "impostor preview meshes");
-            var indices = DeviceBuffer.Create(gpu, (ulong)(mp.Indices.Length * sizeof(uint)), BufferUse.Index, "impostor preview meshes");
-            gpu.Uploads.Write(vertices, 0, packed);
-            gpu.Uploads.Write(indices, 0, MemoryMarshal.AsBytes(mp.Indices.AsSpan()));
+            var vertices = DeviceBuffer.Create(_gpu, (ulong)packed.Length, BufferUse.Vertex, "impostor preview meshes");
+            var indices = DeviceBuffer.Create(_gpu, (ulong)(mp.Indices.Length * sizeof(uint)), BufferUse.Index, "impostor preview meshes");
+            _gpu.Uploads.Write(vertices, 0, packed);
+            _gpu.Uploads.Write(indices, 0, MemoryMarshal.AsBytes(mp.Indices.AsSpan()));
             Span<LegacyProgram.Attribute?> attributes = new LegacyProgram.Attribute?[16];
             FoliageRenderer.VertexAttributes(vertices).AsSpan().CopyTo(attributes);
             for (int a = 0; a < 4; a++)
-                attributes[FoliageShaders.InstanceLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32f, 64, true);
+                attributes[FoliageShaders.InstanceLocation + a] = new LegacyProgram.Attribute(default, InternalFormat.Rgba32F, 64, true);
             parts.Add(new ImpostorBaker.Part
             {
-                Vertices = vertices, Indices = indices, Count = mp.Indices.Length, HasColours = mp.HasColours,
-                Layout = meshProgram.Layout(attributes), Bindings = meshProgram.Buffers(attributes, meshProgram.Own),
+                Vertices = vertices,
+                Indices = indices,
+                Count = mp.Indices.Length,
+                HasColours = mp.HasColours,
+                Layout = _meshProgram.Layout(attributes),
+                Bindings = _meshProgram.Buffers(attributes, _meshProgram.Own),
             });
         }
         return [.. parts];
@@ -86,16 +90,16 @@ internal sealed class ImpostorPreview : IDisposable
 
     public void SetAtlas(ImpostorAtlas baked)
     {
-        atlas?.Dispose();
-        using var batch = gpu.Uploads.Begin();
-        atlas = new ImpostorTextures(gpu, baked, batch);
-        atlas.Upload(batch);
+        _atlas?.Dispose();
+        using var batch = _gpu.Uploads.Begin();
+        _atlas = new ImpostorTextures(_gpu, baked, batch);
+        _atlas.Upload(batch);
     }
 
     /// <summary>The instance rows in the frame's constants, bound at locations 7 to 10 (row 0 w of each matrix: the fade, 2 = whole).</summary>
     GpuBufferBinding[] Rows(ReadOnlySpan<Matrix4x4> instances)
     {
-        var data = gpu.Frame.Constants.Write(instances, 16);
+        var data = _gpu.Frame.Constants.Write(instances, 16);
         return [.. Enumerable.Range(0, 4).Select(a => new GpuBufferBinding(data.Handle, data.Offset + (ulong)(16 * a)))];
     }
 
@@ -110,11 +114,11 @@ internal sealed class ImpostorPreview : IDisposable
         cmd.SetViewport(viewport);
         cmd.SetDepth(true, true, DepthFunction.Less);
         cmd.SetDepthBias(false, 0, 0);
-        frame.Bind(cmd, meshProgram.P, in view);
+        _frame.Bind(cmd, _meshProgram.P, in view);
         cmd.BindVertexBuffers(FoliageShaders.InstanceLocation, rows);
         uint stand = StandIn();
-        uint Index(uint key) => key == 0 ? stand : textures.Index(key, 0, stand);
-        foreach (var (parts, m) in meshes)
+        uint Index(uint key) => key == 0 ? stand : _textures.Index(key, 0, stand);
+        foreach (var (parts, m) in _meshes)
         {
             var s = m.Settings;
             uint diffuseKey = m.Diffuse?.Key ?? 0, normalKey = m.Normal?.Key ?? 0, diffuse2Key = m.Diffuse2?.Key ?? 0, normal2Key = m.Normal2?.Key ?? 0;
@@ -124,12 +128,26 @@ internal sealed class ImpostorPreview : IDisposable
             bool cut = normal && s.AlphaThreshold > 0;
             var pc = new MeshPush
             {
-                Tint = Vector3.One, TriplanarScale = 1f / 5000, AlphaChannel = 3, GreyChannel = -1, HeadDiffuse = stand, HeadNormal = stand,
-                Diffuse = textured ? Index(diffuseKey) : stand, Normal = normal ? Index(normalKey) : stand,
-                Diffuse2 = dual ? Index(diffuse2Key) : stand, Normal2 = dual && normal2Key != 0 ? Index(normal2Key) : stand,
-                NormalSwizzled = normal && m.Normal!.Swizzled ? 1u : 0u, HasDiffuse = textured ? 1u : 0u, Triplanar = textured && s.Triplanar ? 1u : 0u,
-                Tile = s.Tile, AlphaSource = cut ? 2 : 0, AlphaThreshold = cut ? s.AlphaThreshold : 0f, Specular = textured ? s.Specular : 0.3f,
-                HasNormal = normal || cut ? 1u : 0u, Coverage = coverage ? 1u : 0u, Spare = MeshSurface.NoWeather,
+                Tint = Vector3.One,
+                TriplanarScale = 1f / 5000,
+                AlphaChannel = 3,
+                GreyChannel = -1,
+                HeadDiffuse = stand,
+                HeadNormal = stand,
+                Diffuse = textured ? Index(diffuseKey) : stand,
+                Normal = normal ? Index(normalKey) : stand,
+                Diffuse2 = dual ? Index(diffuse2Key) : stand,
+                Normal2 = dual && normal2Key != 0 ? Index(normal2Key) : stand,
+                NormalSwizzled = normal && m.Normal!.Swizzled ? 1u : 0u,
+                HasDiffuse = textured ? 1u : 0u,
+                Triplanar = textured && s.Triplanar ? 1u : 0u,
+                Tile = s.Tile,
+                AlphaSource = cut ? 2 : 0,
+                AlphaThreshold = cut ? s.AlphaThreshold : 0f,
+                Specular = textured ? s.Specular : 0.3f,
+                HasNormal = normal || cut ? 1u : 0u,
+                Coverage = coverage ? 1u : 0u,
+                Spare = MeshSurface.NoWeather,
             };
             var state = MeshState with { Cull = s.DoubleSided ? CullMode.None : CullMode.Back, AlphaToCoverage = coverage };
             cmd.SetRaster(state.Cull, state.Front);
@@ -137,10 +155,10 @@ internal sealed class ImpostorPreview : IDisposable
             {
                 pc.HasDual = dual && p.HasColours ? 1u : 0u;
                 pc.UseVertexColour = p.HasColours ? 1u : 0u;
-                cmd.BindPipeline(gpu.Pipelines.Get(state.Pipeline(meshProgram.P, p.Layout, PrimitiveType.Triangles, formats, "impostor preview meshes")));
+                cmd.BindPipeline(_gpu.Pipelines.Get(state.Pipeline(_meshProgram.P, p.Layout, PrimitiveType.Triangles, formats, "impostor preview meshes")));
                 cmd.BindVertexBuffers(0, p.Bindings);
                 cmd.BindIndexBuffer(new GpuBufferBinding(p.Indices.Handle, 0, p.Indices.Size), IndexKind.U32);
-                cmd.PushConstants(meshProgram.P, GpuStage.Vertex | GpuStage.Fragment, in pc);
+                cmd.PushConstants(_meshProgram.P, GpuStage.Vertex | GpuStage.Fragment, in pc);
                 cmd.DrawIndexed((uint)p.Count, (uint)instances.Length);
             }
         }
@@ -150,7 +168,7 @@ internal sealed class ImpostorPreview : IDisposable
     public void DrawImpostors(IGpuCommandList cmd, AttachmentFormats formats, PixelViewport viewport, Matrix4x4 viewProjection, Vector3 eye, Vector3 cameraUp, Vector3 light,
         ReadOnlySpan<Matrix4x4> instances, bool coverage)
     {
-        if (atlas is null) return;
+        if (_atlas is null) return;
         var rows = Rows(instances);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogDistance = 0 };
         var state = MeshState with { Cull = CullMode.None, AlphaToCoverage = coverage };
@@ -158,30 +176,36 @@ internal sealed class ImpostorPreview : IDisposable
         cmd.SetRaster(state.Cull, state.Front);
         cmd.SetDepth(true, true, DepthFunction.Less);
         cmd.SetDepthBias(false, 0, 0);
-        frame.Bind(cmd, impostors.Program, in view);
-        var a = atlas.Atlas;
+        _frame.Bind(cmd, _impostors.Program, in view);
+        var a = _atlas.Atlas;
         var pc = new ImpostorPush
         {
-            Sphere = new Vector4(a.Centre, a.Radius), CameraUp = cameraUp, Grid = a.Grid,
-            Albedo = atlas.Index(0, 0), Normal = atlas.Index(1, 0), Gloss = a.Gloss,
-            Blend = Blend ? 1u : 0u, Debug = Debug, Coverage = coverage ? 1u : 0u,
+            Sphere = new Vector4(a.Centre, a.Radius),
+            CameraUp = cameraUp,
+            Grid = a.Grid,
+            Albedo = _atlas.Index(0, 0),
+            Normal = _atlas.Index(1, 0),
+            Gloss = a.Gloss,
+            Blend = Blend ? 1u : 0u,
+            Debug = Debug,
+            Coverage = coverage ? 1u : 0u,
         };
-        cmd.BindPipeline(impostors.Pipeline(ImpostorProgram.Plain, state, formats));
+        cmd.BindPipeline(_impostors.Pipeline(ImpostorProgram.Plain, state, formats));
         cmd.BindVertexBuffers(FoliageShaders.InstanceLocation, rows);
-        cmd.BindIndexBuffer(impostors.Quad, IndexKind.U32);
-        cmd.PushConstants(impostors.Program, GpuStage.Vertex | GpuStage.Fragment, in pc);
+        cmd.BindIndexBuffer(_impostors.Quad, IndexKind.U32);
+        cmd.PushConstants(_impostors.Program, GpuStage.Vertex | GpuStage.Fragment, in pc);
         cmd.DrawIndexed(6, (uint)instances.Length);
     }
 
     public void Dispose()
     {
-        atlas?.Dispose();
-        foreach (var (parts, _) in meshes)
+        _atlas?.Dispose();
+        foreach (var (parts, _) in _meshes)
             foreach (var p in parts) { p.Vertices.Dispose(); p.Indices.Dispose(); }
-        if (standIn != 0) gpu.Bindless.Free(BindlessKind.Texture2D, standIn);
-        meshProgram.Dispose();
-        impostors.Dispose();
-        frame.Dispose();
-        textures.Dispose();
+        if (_standIn != 0) _gpu.Bindless.Free(BindlessKind.Texture2D, _standIn);
+        _meshProgram.Dispose();
+        _impostors.Dispose();
+        _frame.Dispose();
+        _textures.Dispose();
     }
 }

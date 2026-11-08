@@ -461,8 +461,15 @@ public static class FoliageCardTrimming
             if (result.Stats.Trimmed == 0) continue;
             model.Parts[i] = new ModelPart
             {
-                SubMeshIndex = part.SubMeshIndex, MaterialName = part.MaterialName, Vertices = result.Vertices, Indices = part.Indices, HasUv = part.HasUv,
-                HasTangents = part.HasTangents, HasColours = part.HasColours, Skinned = part.Skinned, TrimmedIndices = result.Indices,
+                SubMeshIndex = part.SubMeshIndex,
+                MaterialName = part.MaterialName,
+                Vertices = result.Vertices,
+                Indices = part.Indices,
+                HasUv = part.HasUv,
+                HasTangents = part.HasTangents,
+                HasColours = part.HasColours,
+                Skinned = part.Skinned,
+                TrimmedIndices = result.Indices,
             };
         }
         return total;

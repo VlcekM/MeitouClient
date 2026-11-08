@@ -10,19 +10,19 @@ namespace Meitou.Game.Host;
 sealed unsafe partial class SplashWindow : IDisposable
 {
     const int Width = 960, Height = 540;
-    readonly Thread thread;
-    readonly ManualResetEventSlim created = new();
-    static nint window;
-    static byte[]? picture;   // BGRA, top row first
-    static int pictureWidth, pictureHeight;
-    static long started;
-    static nint font;   // the original's LOADING... face (Kenshi_UI_Messages: MailartRubberstamp-Regular.ttf), 0 when missing
+    readonly Thread _thread;
+    readonly ManualResetEventSlim _created = new();
+    static nint s_window;
+    static byte[]? s_picture;   // BGRA, top row first
+    static int s_pictureWidth, s_pictureHeight;
+    static long s_started;
+    static nint s_font;   // the original's LOADING... face (Kenshi_UI_Messages: MailartRubberstamp-Regular.ttf), 0 when missing
 
     SplashWindow(string? picturePath, string? fontPath)
     {
-        thread = new Thread(() => Run(picturePath, fontPath)) { IsBackground = true, Name = "splash" };
-        thread.Start();
-        created.Wait(TimeSpan.FromSeconds(2));
+        _thread = new Thread(() => Run(picturePath, fontPath)) { IsBackground = true, Name = "splash" };
+        _thread.Start();
+        _created.Wait(TimeSpan.FromSeconds(2));
     }
 
     /// <summary>Shows the splash (null off Windows or when it cannot be made). <paramref name="dataDirectory"/> is the game's <c>data</c> folder, for a loading picture.</summary>
@@ -42,39 +42,42 @@ sealed unsafe partial class SplashWindow : IDisposable
 
     void Run(string? picturePath, string? fontPath)
     {
-        started = Environment.TickCount64;
+        s_started = Environment.TickCount64;
         if (fontPath is not null && AddFontResourceExW(fontPath, 0x10 /* FR_PRIVATE */, 0) > 0)
-            fixed (char* face = "Mailart Rubberstamp") font = CreateFontW(-40, 0, 0, 0, 400, 0, 0, 0, 0, 0, 0, 4 /* ANTIALIASED_QUALITY */, 0, face);
+            fixed (char* face = "Mailart Rubberstamp") s_font = CreateFontW(-40, 0, 0, 0, 400, 0, 0, 0, 0, 0, 0, 4 /* ANTIALIASED_QUALITY */, 0, face);
         var instance = GetModuleHandleW(null);
         fixed (char* className = "MeitouSplash")
         fixed (char* title = "Meitou")
         {
-            var wc = new WNDCLASSEXW
+            var wc = new Wndclassexw
             {
-                cbSize = (uint)sizeof(WNDCLASSEXW), lpfnWndProc = &WndProc, hInstance = instance, lpszClassName = className,
+                cbSize = (uint)sizeof(Wndclassexw),
+                lpfnWndProc = &WndProc,
+                hInstance = instance,
+                lpszClassName = className,
                 hCursor = LoadCursorW(0, (nint)32514),   // IDC_WAIT
             };
             RegisterClassExW(&wc);
             int x = (GetSystemMetrics(0) - Width) / 2, y = (GetSystemMetrics(1) - Height) / 2;
-            window = CreateWindowExW(0x00040000 /* WS_EX_APPWINDOW */, className, title, 0x80000000u | 0x10000000u /* WS_POPUP | WS_VISIBLE */, x, y, Width, Height, 0, 0, instance, null);
+            s_window = CreateWindowExW(0x00040000 /* WS_EX_APPWINDOW */, className, title, 0x80000000u | 0x10000000u /* WS_POPUP | WS_VISIBLE */, x, y, Width, Height, 0, 0, instance, null);
         }
-        created.Set();
-        if (window == 0) return;
-        SetTimer(window, 1, 33, 0);
+        _created.Set();
+        if (s_window == 0) return;
+        SetTimer(s_window, 1, 33, 0);
         // The picture is decoded here, after the window shows (a DDS of the original, about 100 ms).
         if (picturePath is not null)
         {
             try
             {
-                var image = Meitou.Data.Textures.TextureLoader.LoadFile(picturePath, allMips: false).Levels[0];
+                var image = Data.Textures.TextureLoader.LoadFile(picturePath, allMips: false).Levels[0];
                 var bgra = new byte[image.Width * image.Height * 4];
                 for (int i = 0; i < bgra.Length; i += 4)
                     (bgra[i], bgra[i + 1], bgra[i + 2], bgra[i + 3]) = (image.Pixels[i + 2], image.Pixels[i + 1], image.Pixels[i], 255);
-                (pictureWidth, pictureHeight, picture) = (image.Width, image.Height, bgra);
+                (s_pictureWidth, s_pictureHeight, s_picture) = (image.Width, image.Height, bgra);
             }
             catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException) { Console.Error.WriteLine($"splash    {e.Message}"); }
         }
-        MSG msg;
+        Msg msg;
         while (GetMessageW(&msg, 0, 0, 0) > 0)
         {
             TranslateMessage(&msg);
@@ -98,49 +101,49 @@ sealed unsafe partial class SplashWindow : IDisposable
     /// <summary>The picture, a dark band with LOADING..., and twelve spokes round the middle, the bright one going round once a second; drawn off screen, then copied.</summary>
     static void Paint(nint hwnd)
     {
-        PAINTSTRUCT ps;
+        Paintstruct ps;
         var dc = BeginPaint(hwnd, &ps);
         var memory = CreateCompatibleDC(dc);
         var bitmap = CreateCompatibleBitmap(dc, Width, Height);
         var old = SelectObject(memory, bitmap);
         var background = CreateSolidBrush(Rgb(5, 5, 4));
-        var rect = new RECT { right = Width, bottom = Height };
+        var rect = new Rect { right = Width, bottom = Height };
         FillRect(memory, &rect, background);
         DeleteObject(background);
-        if (picture is { } pixels)
+        if (s_picture is { } pixels)
         {
-            var info = new BITMAPINFOHEADER { biSize = (uint)sizeof(BITMAPINFOHEADER), biWidth = pictureWidth, biHeight = -pictureHeight, biPlanes = 1, biBitCount = 32 };
+            var info = new Bitmapinfoheader { biSize = (uint)sizeof(Bitmapinfoheader), biWidth = s_pictureWidth, biHeight = -s_pictureHeight, biPlanes = 1, biBitCount = 32 };
             SetStretchBltMode(memory, 4);   // HALFTONE
-            fixed (byte* bits = pixels) StretchDIBits(memory, 0, 0, Width, Height, 0, 0, pictureWidth, pictureHeight, bits, &info, 0, 0x00CC0020);
+            fixed (byte* bits = pixels) StretchDIBits(memory, 0, 0, Width, Height, 0, 0, s_pictureWidth, s_pictureHeight, bits, &info, 0, 0x00CC0020);
         }
         // The band along the bottom (the original's panels: dark with a rust edge), LOADING... on its left in the original's stamp face, the spinner on its right.
-        const int BandHeight = 72;
+        const int bandHeight = 72;
         var band = CreateSolidBrush(Rgb(24, 21, 18));
-        var bandRect = new RECT { left = 0, top = Height - BandHeight, right = Width, bottom = Height };
+        var bandRect = new Rect { left = 0, top = Height - bandHeight, right = Width, bottom = Height };
         FillRect(memory, &bandRect, band);
         DeleteObject(band);
         var edge = CreateSolidBrush(Rgb(112, 62, 36));
-        var edgeRect = new RECT { left = 0, top = Height - BandHeight, right = Width, bottom = Height - BandHeight + 3 };
+        var edgeRect = new Rect { left = 0, top = Height - bandHeight, right = Width, bottom = Height - bandHeight + 3 };
         FillRect(memory, &edgeRect, edge);
         DeleteObject(edge);
         SetBkMode(memory, 1);   // TRANSPARENT
-        var oldFont = font != 0 ? SelectObject(memory, font) : 0;
+        var oldFont = s_font != 0 ? SelectObject(memory, s_font) : 0;
         fixed (char* text = "LOADING...")
         {
             SetTextColor(memory, Rgb(0, 0, 0));
-            TextOutW(memory, 30, Height - BandHeight + 18, text, 10);   // a shadow
+            TextOutW(memory, 30, Height - bandHeight + 18, text, 10);   // a shadow
             SetTextColor(memory, Rgb(222, 215, 206));
-            TextOutW(memory, 28, Height - BandHeight + 16, text, 10);
+            TextOutW(memory, 28, Height - bandHeight + 16, text, 10);
         }
         if (oldFont != 0) SelectObject(memory, oldFont);
 
-        int cx = Width - 44, cy = Height - BandHeight / 2 + 1;
-        double turn = (Environment.TickCount64 - started) / 1000.0 % 1;
-        const int Spokes = 12;
-        for (int i = 0; i < Spokes; i++)
+        int cx = Width - 44, cy = Height - bandHeight / 2 + 1;
+        double turn = (Environment.TickCount64 - s_started) / 1000.0 % 1;
+        const int spokes = 12;
+        for (int i = 0; i < spokes; i++)
         {
-            double a = i * Math.Tau / Spokes;
-            double behind = ((turn * Spokes - i) % Spokes + Spokes) % Spokes / Spokes;
+            double a = i * Math.Tau / spokes;
+            double behind = ((turn * spokes - i) % spokes + spokes) % spokes / spokes;
             double k = 0.12 + 0.88 * (1 - behind);
             var pen = CreatePen(0, 3, Rgb((byte)(24 + 206 * k), (byte)(21 + 193 * k), (byte)(18 + 160 * k)));
             var previous = SelectObject(memory, pen);
@@ -161,16 +164,16 @@ sealed unsafe partial class SplashWindow : IDisposable
     /// <summary>Closes the splash (the game window is showing).</summary>
     public void Dispose()
     {
-        if (window != 0) PostMessageW(window, 0x0010, 0, 0);   // WM_CLOSE
-        thread.Join(TimeSpan.FromSeconds(2));
-        window = 0;
-        if (font != 0) { DeleteObject(font); font = 0; }
-        picture = null;
-        created.Dispose();
+        if (s_window != 0) PostMessageW(s_window, 0x0010, 0, 0);   // WM_CLOSE
+        _thread.Join(TimeSpan.FromSeconds(2));
+        s_window = 0;
+        if (s_font != 0) { DeleteObject(s_font); s_font = 0; }
+        s_picture = null;
+        _created.Dispose();
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct WNDCLASSEXW
+    struct Wndclassexw
     {
         public uint cbSize, style;
         public delegate* unmanaged<nint, uint, nint, nint, nint> lpfnWndProc;
@@ -181,34 +184,34 @@ sealed unsafe partial class SplashWindow : IDisposable
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct MSG { public nint hwnd; public uint message; public nint wParam, lParam; public uint time; public int x, y; }
+    struct Msg { public nint hwnd; public uint message; public nint wParam, lParam; public uint time; public int x, y; }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct RECT { public int left, top, right, bottom; }
+    struct Rect { public int left, top, right, bottom; }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct PAINTSTRUCT { public nint hdc; public int fErase; public RECT rcPaint; public int fRestore, fIncUpdate; public fixed byte rgbReserved[32]; }
+    struct Paintstruct { public nint hdc; public int fErase; public Rect rcPaint; public int fRestore, fIncUpdate; public fixed byte rgbReserved[32]; }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct BITMAPINFOHEADER { public uint biSize; public int biWidth, biHeight; public ushort biPlanes, biBitCount; public uint biCompression, biSizeImage; public int biXPelsPerMeter, biYPelsPerMeter; public uint biClrUsed, biClrImportant; }
+    struct Bitmapinfoheader { public uint biSize; public int biWidth, biHeight; public ushort biPlanes, biBitCount; public uint biCompression, biSizeImage; public int biXPelsPerMeter, biYPelsPerMeter; public uint biClrUsed, biClrImportant; }
 
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial nint GetModuleHandleW(string? name);
-    [LibraryImport("user32.dll")] private static partial ushort RegisterClassExW(WNDCLASSEXW* wc);
+    [LibraryImport("user32.dll")] private static partial ushort RegisterClassExW(Wndclassexw* wc);
     [LibraryImport("user32.dll")] private static partial nint CreateWindowExW(uint exStyle, char* className, char* title, uint style, int x, int y, int w, int h, nint parent, nint menu, nint instance, void* param);
     [LibraryImport("user32.dll")] private static partial nint DefWindowProcW(nint hwnd, uint message, nint wParam, nint lParam);
-    [LibraryImport("user32.dll")] private static partial int GetMessageW(MSG* msg, nint hwnd, uint min, uint max);
-    [LibraryImport("user32.dll")] private static partial int TranslateMessage(MSG* msg);
-    [LibraryImport("user32.dll")] private static partial nint DispatchMessageW(MSG* msg);
+    [LibraryImport("user32.dll")] private static partial int GetMessageW(Msg* msg, nint hwnd, uint min, uint max);
+    [LibraryImport("user32.dll")] private static partial int TranslateMessage(Msg* msg);
+    [LibraryImport("user32.dll")] private static partial nint DispatchMessageW(Msg* msg);
     [LibraryImport("user32.dll")] private static partial void PostQuitMessage(int code);
     [LibraryImport("user32.dll")] private static partial int PostMessageW(nint hwnd, uint message, nint wParam, nint lParam);
     [LibraryImport("user32.dll")] private static partial nuint SetTimer(nint hwnd, nuint id, uint ms, nint callback);
     [LibraryImport("user32.dll")] private static partial int KillTimer(nint hwnd, nuint id);
-    [LibraryImport("user32.dll")] private static partial int InvalidateRect(nint hwnd, RECT* rect, int erase);
+    [LibraryImport("user32.dll")] private static partial int InvalidateRect(nint hwnd, Rect* rect, int erase);
     [LibraryImport("user32.dll")] private static partial int GetSystemMetrics(int index);
     [LibraryImport("user32.dll")] private static partial nint LoadCursorW(nint instance, nint name);
-    [LibraryImport("user32.dll")] private static partial nint BeginPaint(nint hwnd, PAINTSTRUCT* ps);
-    [LibraryImport("user32.dll")] private static partial int EndPaint(nint hwnd, PAINTSTRUCT* ps);
-    [LibraryImport("user32.dll")] private static partial int FillRect(nint dc, RECT* rect, nint brush);
+    [LibraryImport("user32.dll")] private static partial nint BeginPaint(nint hwnd, Paintstruct* ps);
+    [LibraryImport("user32.dll")] private static partial int EndPaint(nint hwnd, Paintstruct* ps);
+    [LibraryImport("user32.dll")] private static partial int FillRect(nint dc, Rect* rect, nint brush);
     [LibraryImport("gdi32.dll")] private static partial nint CreateCompatibleDC(nint dc);
     [LibraryImport("gdi32.dll")] private static partial nint CreateCompatibleBitmap(nint dc, int w, int h);
     [LibraryImport("gdi32.dll")] private static partial nint SelectObject(nint dc, nint obj);
@@ -222,7 +225,7 @@ sealed unsafe partial class SplashWindow : IDisposable
     [LibraryImport("gdi32.dll")] private static partial uint SetTextColor(nint dc, uint colour);
     [LibraryImport("gdi32.dll")] private static partial int TextOutW(nint dc, int x, int y, char* text, int length);
     [LibraryImport("gdi32.dll")] private static partial int SetStretchBltMode(nint dc, int mode);
-    [LibraryImport("gdi32.dll")] private static partial int StretchDIBits(nint dc, int x, int y, int w, int h, int sx, int sy, int sw, int sh, void* bits, BITMAPINFOHEADER* info, uint usage, uint rop);
+    [LibraryImport("gdi32.dll")] private static partial int StretchDIBits(nint dc, int x, int y, int w, int h, int sx, int sy, int sw, int sh, void* bits, Bitmapinfoheader* info, uint usage, uint rop);
     [LibraryImport("gdi32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial int AddFontResourceExW(string path, uint flags, nint reserved);
     [LibraryImport("gdi32.dll")] private static partial nint CreateFontW(int height, int width, int escapement, int orientation, int weight, uint italic, uint underline, uint strikeOut, uint charSet, uint outPrecision, uint clipPrecision, uint quality, uint pitchAndFamily, char* face);
     [LibraryImport("gdi32.dll")] private static partial int BitBlt(nint dc, int x, int y, int w, int h, nint source, int sx, int sy, uint rop);

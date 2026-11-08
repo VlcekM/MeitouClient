@@ -10,12 +10,12 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public static class OgreMeshReader
 {
-    public const string Version1_100 = "[MeshSerializer_v1.100]";
-    public const string Version1_8 = "[MeshSerializer_v1.8]";
-    public const string Version1_41 = "[MeshSerializer_v1.41]";
-    public const string Version1_40 = "[MeshSerializer_v1.40]";
+    public const string Version1100 = "[MeshSerializer_v1.100]";
+    public const string Version18 = "[MeshSerializer_v1.8]";
+    public const string Version141 = "[MeshSerializer_v1.41]";
+    public const string Version140 = "[MeshSerializer_v1.40]";
 
-    public static OgreMesh ReadFile(string path) => Read(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static OgreMesh ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     /// <summary>
     /// The mesh's bounds box without reading its geometry: walks the <c>M_MESH</c> sub-chunks by their length fields (seeking over the vertex and index
@@ -37,7 +37,7 @@ public static class OgreMeshReader
             int end = Array.IndexOf(line, (byte)'\n', 0, n);
             if (end < 0) return false;
             string version = System.Text.Encoding.ASCII.GetString(line, 0, end).TrimEnd('\r');
-            if (version is not (Version1_100 or Version1_8 or Version1_41 or Version1_40)) return false;
+            if (version is not (Version1100 or Version18 or Version141 or Version140)) return false;
             f.Position = 2 + end + 1;
             Span<byte> chunk = stackalloc byte[6];
             if (f.Read(chunk) < 6 || BitConverter.ToUInt16(chunk) != (ushort)Mesh) return false;
@@ -73,7 +73,7 @@ public static class OgreMeshReader
         try
         {
             var mesh = new OgreMesh { Version = s.ReadHeader() };
-            if (mesh.Version is not (Version1_100 or Version1_8 or Version1_41 or Version1_40))
+            if (mesh.Version is not (Version1100 or Version18 or Version141 or Version140))
                 throw new OgreFormatException($"Unsupported mesh version {mesh.Version}.", 0);
 
             while (!s.Eof)
@@ -116,7 +116,7 @@ public static class OgreMeshReader
                     mesh.BoneAssignments.Add(ReadBoneAssignment(s));
                     break;
                 case OgreMeshChunk.MeshLodLevel:
-                    mesh.Lod = mesh.Version == Version1_100 ? ReadLod(s, mesh) : ReadLodV1_8(s, mesh);
+                    mesh.Lod = mesh.Version == Version1100 ? ReadLod(s, mesh) : ReadLodV1_8(s, mesh);
                     break;
                 case MeshBounds:
                     mesh.Bounds = new OgreBounds(s.ReadVector3(), s.ReadVector3(), s.ReadFloat());
@@ -151,7 +151,7 @@ public static class OgreMeshReader
         while (s.TryReadChunk([Pose], out _, out _))
         {
             var pose = new OgrePose { Name = s.ReadString(), Target = s.ReadUInt16() };
-            pose.IncludesNormals = mesh.Version is not (Version1_41 or Version1_40) && s.ReadBool();
+            pose.IncludesNormals = mesh.Version is not (Version141 or Version140) && s.ReadBool();
             while (s.TryReadChunk([PoseVertex], out _, out _))
             {
                 uint index = s.ReadUInt32();
@@ -285,15 +285,15 @@ public static class OgreMeshReader
     static OgreLod ReadLodV1_8(OgreStream s, OgreMesh mesh)
     {
         // 1.40 has no strategy name and stores each level's distance squared (docs/formats/ogre-mesh.md).
-        bool v1_40 = mesh.Version == Version1_40;
-        var lod = new OgreLod { Strategy = v1_40 ? "Distance" : s.ReadString() };
+        bool v140 = mesh.Version == Version140;
+        var lod = new OgreLod { Strategy = v140 ? "Distance" : s.ReadString() };
         int levels = s.ReadUInt16();
         bool manual = s.ReadBool();
         for (int level = 1; level < levels; level++)
         {
             Expect(s, MeshLodUsage);
             float value = s.ReadFloat();
-            var entry = new OgreLodLevel { UserValue = v1_40 ? MathF.Sqrt(value) : value };
+            var entry = new OgreLodLevel { UserValue = v140 ? MathF.Sqrt(value) : value };
             if (manual)
             {
                 Expect(s, MeshLodManual);

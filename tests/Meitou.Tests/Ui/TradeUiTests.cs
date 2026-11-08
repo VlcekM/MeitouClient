@@ -18,10 +18,10 @@ namespace Meitou.Tests.Ui;
 /// <summary>The Faithful trade (docs/simulation.md "Trade"): the trader window opens with the trade, drags between it and the pockets buy and sell at the next tick, closing it ends the trade.</summary>
 public class TradeUiTests
 {
-    sealed class StockSource : ITickSystem, Meitou.Simulation.Trading.ITradeSource
+    sealed class StockSource : ITickSystem, ITradeSource
     {
-        public Meitou.Simulation.Trading.TradeView? Trade { get; set; }
-        public Meitou.Simulation.Trading.TradeView? PublishTrade() => Trade;
+        public TradeView? Trade { get; set; }
+        public TradeView? PublishTrade() => Trade;
     }
     static Vector2 Centre(UiControl c) => new(c.Bounds.X + c.Bounds.Width / 2, c.Bounds.Y + c.Bounds.Height / 2);
 

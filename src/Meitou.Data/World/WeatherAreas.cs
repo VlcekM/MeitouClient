@@ -17,13 +17,13 @@ public sealed class WeatherAreas
     public const int Origin = 32;
     public const string RelativePath = "newland/land/areasmap.tga";
 
-    readonly int[] colours;
+    readonly int[] _colours;
 
     /// <param name="colours">Row-major (z, then x), 64 × 64 entries, 0xRRGGBB.</param>
     public WeatherAreas(int[] colours)
     {
         if (colours.Length != Cells * Cells) throw new ArgumentException($"Expected {Cells * Cells} cells.", nameof(colours));
-        this.colours = colours;
+        this._colours = colours;
     }
 
     /// <summary>
@@ -31,7 +31,7 @@ public sealed class WeatherAreas
     /// <c>resourceExists</c> then <c>Image::load</c> there, so an enabled mod's <c>newland/land/areasmap.tga</c> replaces it), else <c>data/newland/land/areasmap.tga</c>.
     /// </summary>
     public static WeatherAreas Load(GameInstall install) =>
-        FromTga(File.ReadAllBytes(Meitou.Data.Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps") ?? Path.Combine(install.DataDirectory, RelativePath)));
+        FromTga(File.ReadAllBytes(Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps") ?? Path.Combine(install.DataDirectory, RelativePath)));
 
     public static WeatherAreas FromTga(ReadOnlySpan<byte> tga) => FromImage(TgaReader.Read(tga));
 
@@ -65,7 +65,7 @@ public sealed class WeatherAreas
     public static bool InMap(int cx, int cz) => (uint)cx < Cells && (uint)cz < Cells;
 
     /// <summary>The colour (0xRRGGBB) of a cell, or -1 outside the map.</summary>
-    public int ColourOf(int cx, int cz) => InMap(cx, cz) ? colours[cz * Cells + cx] : -1;
+    public int ColourOf(int cx, int cz) => InMap(cx, cz) ? _colours[cz * Cells + cx] : -1;
 
     /// <summary>The cell's rectangle in world units: minimum X, minimum Z, maximum X, maximum Z.</summary>
     public static (float MinX, float MinZ, float MaxX, float MaxZ) CellRect(int cx, int cz) =>
@@ -80,7 +80,7 @@ public sealed class WeatherAreas
     }
 
     /// <summary>The region of a cell; cells outside the map and colours without a BIOME_GROUP are in <see cref="WeatherData.None"/>.</summary>
-    public RegionDef RegionOf(WeatherData data, int cx, int cz) => InMap(cx, cz) ? data.RegionOfColour(colours[cz * Cells + cx]) : data.None;
+    public RegionDef RegionOf(WeatherData data, int cx, int cz) => InMap(cx, cz) ? data.RegionOfColour(_colours[cz * Cells + cx]) : data.None;
 
     public RegionDef RegionAt(WeatherData data, float x, float z)
     {

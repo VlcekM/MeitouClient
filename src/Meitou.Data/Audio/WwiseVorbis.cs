@@ -239,7 +239,7 @@ public sealed class WwiseVorbis
 
         int mappings = (int)r.Read(6) + 1;
         w.Write((uint)mappings - 1, 6);
-        int channelBits = VorbisBitWriter.ILog((uint)Channels - 1);
+        int channelBits = VorbisBitWriter.Log((uint)Channels - 1);
         for (int i = 0; i < mappings; i++)
         {
             w.Write(0, 16); // mapping type 0
@@ -278,7 +278,7 @@ public sealed class WwiseVorbis
             w.Write(0, 16); // transform type
             w.Copy(ref r, 8); // mapping
         }
-        modeBits = VorbisBitWriter.ILog((uint)modes - 1);
+        modeBits = VorbisBitWriter.Log((uint)modes - 1);
         w.Write(true); // framing
         if (r.Remaining >= 8) throw new InvalidDataException($"Setup packet has {r.Remaining} bits left over");
         return w.ToArray();
@@ -299,7 +299,7 @@ public sealed class WwiseVorbis
             uint current = 0;
             while (current < entries)
             {
-                int bits = VorbisBitWriter.ILog(entries - current);
+                int bits = VorbisBitWriter.Log(entries - current);
                 uint number = r.Read(bits);
                 w.Write(number, bits);
                 current += number;
@@ -385,58 +385,58 @@ public sealed class WwiseVorbis
     /// <summary>Builds Ogg pages: packets are laced into pages of up to 255 segments; <see cref="Flush"/> ends a page.</summary>
     sealed class OggWriter(int serial)
     {
-        readonly MemoryStream output = new();
-        readonly List<byte> segments = [];
-        readonly MemoryStream body = new();
-        long granule = -1;
-        int sequence;
-        bool first = true, ended;
+        readonly MemoryStream _output = new();
+        readonly List<byte> _segments = [];
+        readonly MemoryStream _body = new();
+        long _granule = -1;
+        int _sequence;
+        bool _first = true, _ended;
 
         public void Packet(byte[] packet, long packetGranule, bool last)
         {
             int left = packet.Length, at = 0;
             do
             {
-                if (segments.Count == 255) Flush(continued: true);
+                if (_segments.Count == 255) Flush(continued: true);
                 int n = Math.Min(255, left);
-                segments.Add((byte)n);
-                body.Write(packet, at, n);
+                _segments.Add((byte)n);
+                _body.Write(packet, at, n);
                 at += n;
                 left -= n;
             }
-            while (left > 0 || segments[^1] == 255);
-            granule = packetGranule;
-            ended = last;
-            if (body.Length > 8192 || last) Flush();
+            while (left > 0 || _segments[^1] == 255);
+            _granule = packetGranule;
+            _ended = last;
+            if (_body.Length > 8192 || last) Flush();
         }
 
         public void Flush() => Flush(continued: false);
 
-        bool continuation;
+        bool _continuation;
 
         void Flush(bool continued)
         {
-            if (segments.Count == 0) return;
-            var header = new byte[27 + segments.Count];
+            if (_segments.Count == 0) return;
+            var header = new byte[27 + _segments.Count];
             "OggS"u8.CopyTo(header);
-            header[5] = (byte)((continuation ? 1 : 0) | (first ? 2 : 0) | (ended && !continued ? 4 : 0));
-            BinaryPrimitives.WriteInt64LittleEndian(header.AsSpan(6), continued ? -1 : granule);
+            header[5] = (byte)((_continuation ? 1 : 0) | (_first ? 2 : 0) | (_ended && !continued ? 4 : 0));
+            BinaryPrimitives.WriteInt64LittleEndian(header.AsSpan(6), continued ? -1 : _granule);
             BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(14), serial);
-            BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(18), sequence++);
-            header[26] = (byte)segments.Count;
-            for (int i = 0; i < segments.Count; i++) header[27 + i] = segments[i];
-            var bodyBytes = body.ToArray();
+            BinaryPrimitives.WriteInt32LittleEndian(header.AsSpan(18), _sequence++);
+            header[26] = (byte)_segments.Count;
+            for (int i = 0; i < _segments.Count; i++) header[27 + i] = _segments[i];
+            var bodyBytes = _body.ToArray();
             uint crc = Crc(Crc(0, header), bodyBytes);
             BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(22), crc);
-            output.Write(header);
-            output.Write(bodyBytes);
-            segments.Clear();
-            body.SetLength(0);
-            first = false;
-            continuation = continued;
+            _output.Write(header);
+            _output.Write(bodyBytes);
+            _segments.Clear();
+            _body.SetLength(0);
+            _first = false;
+            _continuation = continued;
         }
 
-        public byte[] ToArray() => output.ToArray();
+        public byte[] ToArray() => _output.ToArray();
 
         static readonly uint[] Table = MakeTable();
 

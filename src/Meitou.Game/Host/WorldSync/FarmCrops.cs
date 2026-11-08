@@ -25,25 +25,25 @@ sealed class FarmCrops(GameHost host)
         public (float Growth, float Death, int Harvested)? Shown;
     }
 
-    readonly Dictionary<string, FarmLook> farms = new(StringComparer.Ordinal);
-    readonly Dictionary<string, FarmData?> farmData = new(StringComparer.Ordinal);
-    (long Machines, long Buildings) farmsVersion = (-1, -1);
+    readonly Dictionary<string, FarmLook> _farms = new(StringComparer.Ordinal);
+    readonly Dictionary<string, FarmData?> _farmData = new(StringComparer.Ordinal);
+    (long Machines, long Buildings) _farmsVersion = (-1, -1);
 
     /// <summary>Once a frame after <see cref="BuildingSync.UpdateBuildings"/>.</summary>
     internal void UpdateFarms(WorldSnapshot snapshot)
     {
-        if (host.ActiveObjects is not { } objects || host.scene.Database is not { } db) return;
+        if (host.ActiveObjects is not { } objects || host.Scene.Database is not { } db) return;
         var version = (snapshot.MachinesVersion, snapshot.BuildingsRevision);
-        if (version == farmsVersion) return;
-        farmsVersion = version;
+        if (version == _farmsVersion) return;
+        _farmsVersion = version;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var machine in snapshot.Machines)
         {
-            if (machine.Farm is not { } view || !host.buildingSync.shownBuildings.TryGetValue(machine.Site, out var site)) continue;
-            if (!farms.TryGetValue(site.Id, out var look) || look.Site.Record != site.Record || look.Site.Position != site.Position || look.Site.Rotation != site.Rotation)
+            if (machine.Farm is not { } view || !host.BuildingSync.ShownBuildings.TryGetValue(machine.Site, out var site)) continue;
+            if (!_farms.TryGetValue(site.Id, out var look) || look.Site.Record != site.Record || look.Site.Position != site.Position || look.Site.Rotation != site.Rotation)
             {
                 if (MakeFarm(db, objects, site) is not { } made) continue;
-                farms[site.Id] = look = made;
+                _farms[site.Id] = look = made;
             }
             seen.Add(site.Id);
             if (look.Shown == (view.Growth, view.Death, view.Harvested)) continue;
@@ -57,17 +57,17 @@ sealed class FarmCrops(GameHost host)
             }
             objects.SetFarmPlants(site.Id, look.Meshes, look.Transforms, look.Tints);
         }
-        foreach (string id in farms.Keys.Where(id => !seen.Contains(id)).ToArray())
+        foreach (string id in _farms.Keys.Where(id => !seen.Contains(id)).ToArray())
         {
             objects.RemoveFarmPlants(id);
-            farms.Remove(id);
+            _farms.Remove(id);
         }
     }
 
-    FarmLook? MakeFarm(Meitou.Data.GameDatabase db, Meitou.Game.Rendering.Objects.WorldObjectRenderer objects, BuildingSnapshot site)
+    FarmLook? MakeFarm(Data.GameDatabase db, Rendering.Objects.WorldObjectRenderer objects, BuildingSnapshot site)
     {
-        if (!farmData.TryGetValue(site.Record, out var data))
-            farmData[site.Record] = data = db.Find(site.Record) is { } r ? MachineData.From(db, r)?.Farm : null;
+        if (!_farmData.TryGetValue(site.Record, out var data))
+            _farmData[site.Record] = data = db.Find(site.Record) is { } r ? MachineData.From(db, r)?.Farm : null;
         if (data is not { Parts.Count: > 0 } || db.Find(site.Record) is not { } building) return null;
         var plants = FarmLayout.Plant(data, site.Position, site.Rotation, host.ActiveGround, WorldObjectLayout.Seed(site.Id));
         var meshes = plants.Meshes.Select(m => data.Parts[m.Part])
@@ -78,8 +78,8 @@ sealed class FarmCrops(GameHost host)
 
     internal void ForgetFarms()
     {
-        foreach (string id in farms.Keys) host.ActiveObjects?.RemoveFarmPlants(id);
-        farms.Clear();
-        farmsVersion = (-1, -1);
+        foreach (string id in _farms.Keys) host.ActiveObjects?.RemoveFarmPlants(id);
+        _farms.Clear();
+        _farmsVersion = (-1, -1);
     }
 }

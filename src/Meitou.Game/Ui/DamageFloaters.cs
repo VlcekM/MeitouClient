@@ -23,11 +23,11 @@ sealed class DamageFloaters(PlayerInterface player)
         public Vector3 Last { get; set; }
     }
 
-    internal readonly List<Live> floaters = [];
+    internal readonly List<Live> Floaters = [];
 
     internal void DrawFloaters(DebugOverlay o)
     {
-        var queue = player.session.World.Floaters ??= new();
+        var queue = player.Session.World.Floaters ??= new();
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         while (queue.TryDequeue(out var f))
         {
@@ -36,18 +36,18 @@ sealed class DamageFloaters(PlayerInterface player)
             if (FloaterText.Format(f, player.Floaters) is not { } text) continue;
             // A machine label starts at its own point.
             float height = f.Kind == FloaterKind.Label ? 0 : FloaterHeight;
-            floaters.Add(new Live(f.Target, text, FloaterText.Colour(f), now, FontMode(f.Kind), height) { Last = f.Kind == FloaterKind.Building ? Jittered(f.Position) : f.Position });
+            Floaters.Add(new Live(f.Target, text, FloaterText.Colour(f), now, FontMode(f.Kind), height) { Last = f.Kind == FloaterKind.Building ? Jittered(f.Position) : f.Position });
         }
         // A long fast-forward queues many at once: only the newest are worth showing.
-        if (floaters.Count > 24) floaters.RemoveRange(0, floaters.Count - 24);
-        floaters.RemoveAll(l => Rise(l, now) >= FloaterGone);
-        if (floaters.Count == 0) return;
+        if (Floaters.Count > 24) Floaters.RemoveRange(0, Floaters.Count - 24);
+        Floaters.RemoveAll(l => Rise(l, now) >= FloaterGone);
+        if (Floaters.Count == 0) return;
 
-        var ids = floaters.Select(l => l.Target).ToHashSet();
-        foreach (var c in player.session.CurrentSnapshot.Characters)
+        var ids = Floaters.Select(l => l.Target).ToHashSet();
+        foreach (var c in player.Session.CurrentSnapshot.Characters)
             if (ids.Contains(c.Id))
-                foreach (var l in floaters)
-                    if (l.Target == c.Id) l.Last = player.where(c);
+                foreach (var l in Floaters)
+                    if (l.Target == c.Id) l.Last = player.Where(c);
     }
 
     /// <summary>
@@ -69,11 +69,11 @@ sealed class DamageFloaters(PlayerInterface player)
     /// </summary>
     internal void AddFloaters(List<UiControl> controls)
     {
-        if (floaters.Count == 0) return;
+        if (Floaters.Count == 0) return;
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         float scale = player.Height / 1080f;
         int n = 0;
-        foreach (var l in floaters)
+        foreach (var l in Floaters)
         {
             float rise = Rise(l, now);
             if (rise >= FloaterGone || player.Project(l.Last + new Vector3(0, l.Height + rise, 0)) is not { } at) continue;
@@ -81,7 +81,8 @@ sealed class DamageFloaters(PlayerInterface player)
             controls.Add(new($"floater-{n++}", "TextBox", new(at.X, at.Y, 600 * scale, 40 * scale), l.Text, "", "", true,
                 new Dictionary<string, string>
                 {
-                    ["FontName"] = l.Mode == FloaterMode.Full ? "Kenshi_FloaterFont_Small" : "Kenshi_FloaterFont_Medium", ["TextAlign"] = "Left Top",
+                    ["FontName"] = l.Mode == FloaterMode.Full ? "Kenshi_FloaterFont_Small" : "Kenshi_FloaterFont_Medium",
+                    ["TextAlign"] = "Left Top",
                 }, Vector4.Zero, l.Colour with { W = l.Colour.W * alpha }, Pickable: false));
         }
     }

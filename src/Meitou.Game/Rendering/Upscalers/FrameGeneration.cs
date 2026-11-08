@@ -2,8 +2,8 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Game.Rendering.Gpu;
 using Meitou.Game.Rendering.Gpu.Core;
-using Silk.NET.Vulkan;
 using Meitou.Game.Rendering.Post;
+using Silk.NET.Vulkan;
 using static Meitou.Game.Rendering.Upscalers.FfxApi;
 
 namespace Meitou.Game.Rendering.Upscalers;
@@ -94,23 +94,23 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     [StructLayout(LayoutKind.Sequential)] struct Float3 { public float X, Y, Z; }
     [StructLayout(LayoutKind.Sequential)] struct CameraInfoDesc { public Header Header; public Float3 Position, Up, Right, Forward; }
 
-    readonly GpuContext ctx;
-    readonly VulkanDevice device;
-    readonly FfxSwapchain layer;
-    readonly delegate* unmanaged<nint*, void*, void*, uint> createContext;
-    readonly delegate* unmanaged<nint*, void*, uint> destroyContext;
-    readonly delegate* unmanaged<nint*, void*, uint> configure;
-    static delegate* unmanaged<nint*, void*, uint> dispatchFunction;   // the callback has no way to carry it
-    readonly bool debug;
+    readonly GpuContext _ctx;
+    readonly VulkanDevice _device;
+    readonly FfxSwapchain _layer;
+    readonly delegate* unmanaged<nint*, void*, void*, uint> _createContext;
+    readonly delegate* unmanaged<nint*, void*, uint> _destroyContext;
+    readonly delegate* unmanaged<nint*, void*, uint> _configure;
+    static delegate* unmanaged<nint*, void*, uint> s_dispatchFunction;   // the callback has no way to carry it
+    readonly bool _debug;
     // Kept as long as the context (ffx_api.h); the slot also is the callback's user context.
-    readonly CreateDesc* createDesc;
-    readonly BackendVkDesc* backendDesc;
-    readonly nint* contextSlot;
-    (int, int, uint) contextSize;
-    GpuTexture? depthFlipped, motionFlipped, uiFlipped;
-    ulong frameId;
-    bool resetNext = true, idAssigned, failed, layerGone, uiRegistered, loggedActive, loggedUnprepared;
-    int displayWidth, displayHeight;
+    readonly CreateDesc* _createDesc;
+    readonly BackendVkDesc* _backendDesc;
+    readonly nint* _contextSlot;
+    (int, int, uint) _contextSize;
+    GpuTexture? _depthFlipped, _motionFlipped, _uiFlipped;
+    ulong _frameId;
+    bool _resetNext = true, _idAssigned, _failed, _layerGone, _uiRegistered, _loggedActive, _loggedUnprepared;
+    int _displayWidth, _displayHeight;
 
     /// <summary>Frame generation is wanted for this frame (<see cref="BeginFrame"/>).</summary>
     public bool Wanted { get; private set; }
@@ -121,21 +121,21 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     /// <summary>This frame goes out with frame generation on (<see cref="Finish"/>): wanted and prepared.</summary>
     public bool Enabled { get; private set; }
     /// <summary>The number of the last frame handed over (it steps by 1 per rendered frame, by 2 where the logic must restart).</summary>
-    public ulong FrameId => frameId;
+    public ulong FrameId => _frameId;
 
     FrameGeneration(GpuContext ctx, FfxSwapchain layer, nint library)
     {
-        this.ctx = ctx;
-        device = ctx.Device;
-        this.layer = layer;
-        createContext = (delegate* unmanaged<nint*, void*, void*, uint>)NativeLibrary.GetExport(library, "ffxCreateContext");
-        destroyContext = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDestroyContext");
-        configure = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxConfigure");
-        dispatchFunction = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDispatch");
-        debug = Environment.GetEnvironmentVariable("MEITOU_UPSCALER_LOG") == "1";
-        createDesc = (CreateDesc*)NativeMemory.AllocZeroed((nuint)sizeof(CreateDesc));
-        backendDesc = (BackendVkDesc*)NativeMemory.AllocZeroed((nuint)sizeof(BackendVkDesc));
-        contextSlot = (nint*)NativeMemory.AllocZeroed((nuint)sizeof(nint));
+        this._ctx = ctx;
+        _device = ctx.Device;
+        this._layer = layer;
+        _createContext = (delegate* unmanaged<nint*, void*, void*, uint>)NativeLibrary.GetExport(library, "ffxCreateContext");
+        _destroyContext = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDestroyContext");
+        _configure = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxConfigure");
+        s_dispatchFunction = (delegate* unmanaged<nint*, void*, uint>)NativeLibrary.GetExport(library, "ffxDispatch");
+        _debug = Environment.GetEnvironmentVariable("MEITOU_UPSCALER_LOG") == "1";
+        _createDesc = (CreateDesc*)NativeMemory.AllocZeroed((nuint)sizeof(CreateDesc));
+        _backendDesc = (BackendVkDesc*)NativeMemory.AllocZeroed((nuint)sizeof(BackendVkDesc));
+        _contextSlot = (nint*)NativeMemory.AllocZeroed((nuint)sizeof(nint));
         layer.Disposing += OnLayerDisposing;
     }
 
@@ -143,7 +143,7 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     /// Not configured off first: after a failed remake the swapchain it was configured with may already be destroyed, and no present comes in between.</summary>
     void OnLayerDisposing()
     {
-        layerGone = true;
+        _layerGone = true;
         DestroyContext(configureOff: false);
     }
 
@@ -160,7 +160,7 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     [UnmanagedCallersOnly]
     static uint OnGenerate(void* desc, void* user)
     {
-        try { return dispatchFunction((nint*)user, desc); }
+        try { return s_dispatchFunction((nint*)user, desc); }
         catch (Exception) { return 1; }   // nothing may escape into the library
     }
 
@@ -169,66 +169,66 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
 
     bool EnsureContext(int displayW, int displayH)
     {
-        var size = (displayW, displayH, layer.SurfaceFormat);
-        if (*contextSlot != 0 && contextSize == size) return true;
+        var size = (displayW, displayH, _layer.SurfaceFormat);
+        if (*_contextSlot != 0 && _contextSize == size) return true;
         DestroyContext();
-        *backendDesc = new BackendVkDesc
+        *_backendDesc = new BackendVkDesc
         {
             Header = new Header { Type = BackendVkType },
-            Device = device.Device.Handle,
-            PhysicalDevice = device.PhysicalDevice.Handle,
+            Device = _device.Device.Handle,
+            PhysicalDevice = _device.PhysicalDevice.Handle,
             DeviceProcAddr = NativeLibrary.GetExport(NativeLibrary.Load(FsrUpscaler.VulkanLoaderName), "vkGetDeviceProcAddr"),
         };
-        *createDesc = new CreateDesc
+        *_createDesc = new CreateDesc
         {
-            Header = new Header { Type = CreateType, Next = (nint)backendDesc },
+            Header = new Header { Type = CreateType, Next = (nint)_backendDesc },
             // Depth 0..1 not inverted with finite planes, motion in render pixels without the jitter, LDR colour: the defaults.
-            Flags = debug ? EnableDebugChecking : 0,
+            Flags = _debug ? EnableDebugChecking : 0,
             DisplaySize = new Dimensions { Width = (uint)displayW, Height = (uint)displayH },
             MaxRenderSize = new Dimensions { Width = (uint)displayW, Height = (uint)displayH },
-            BackBufferFormat = layer.SurfaceFormat,
+            BackBufferFormat = _layer.SurfaceFormat,
         };
         nint created = 0;
-        uint rc = createContext(&created, createDesc, null);
+        uint rc = _createContext(&created, _createDesc, null);
         if (rc != 0) { Console.WriteLine($"frame generation  ffxCreateContext failed ({rc})"); return false; }
-        *contextSlot = created;
-        contextSize = size;
-        resetNext = true;
+        *_contextSlot = created;
+        _contextSize = size;
+        _resetNext = true;
         Console.WriteLine($"frame generation  context made for {displayW}x{displayH}");
         return true;
     }
 
     void DestroyContext(bool configureOff = true)
     {
-        if (*contextSlot == 0) return;
+        if (*_contextSlot == 0) return;
         // The layer may still call back into it from a present in flight: configure it off, wait for the device, then destroy.
-        if (configureOff) ConfigureFrame(false, frameId);
-        device.WaitIdle();
-        nint c = *contextSlot;
-        destroyContext(&c, null);
-        *contextSlot = 0;
+        if (configureOff) ConfigureFrame(false, _frameId);
+        _device.WaitIdle();
+        nint c = *_contextSlot;
+        _destroyContext(&c, null);
+        *_contextSlot = 0;
     }
 
     /// <summary>Starts a frame of <paramref name="displayW"/> × <paramref name="displayH"/>; <paramref name="wanted"/> is false under the loading screen and for screenshots and recorded frames.</summary>
     public void BeginFrame(bool wanted, int displayW, int displayH)
     {
-        (displayWidth, displayHeight) = (displayW, displayH);
+        (_displayWidth, _displayHeight) = (displayW, displayH);
         Prepared = Enabled = false;
-        idAssigned = false;
-        Wanted = wanted && !failed && !layerGone && EnsureContext(displayW, displayH);
-        if (wanted && !Wanted) failed = true;   // the context could not be made: off for the rest of the run
+        _idAssigned = false;
+        Wanted = wanted && !_failed && !_layerGone && EnsureContext(displayW, displayH);
+        if (wanted && !Wanted) _failed = true;   // the context could not be made: off for the rest of the run
     }
 
     ulong NextId(bool reset)
     {
-        if (!idAssigned)
+        if (!_idAssigned)
         {
             // Any step other than 1 restarts the logic (the header's rule): skip a number on a cut, after frames without it, on a new context.
-            frameId += reset || resetNext ? 2UL : 1UL;
-            resetNext = false;
-            idAssigned = true;
+            _frameId += reset || _resetNext ? 2UL : 1UL;
+            _resetNext = false;
+            _idAssigned = true;
         }
-        return frameId;
+        return _frameId;
     }
 
     /// <summary>Copies <paramref name="src"/> into <paramref name="dst"/> upside down (both in GENERAL): bottom-up to top-down.</summary>
@@ -247,7 +247,7 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         vk.CmdBlitImage(cb, src, ImageLayout.General, dst, ImageLayout.General, 1, &blit, Filter.Nearest);
     }
 
-    GpuTexture Target(ref GpuTexture? slot, InternalFormat format, int w, int h, string name) => Target(ctx, ref slot, format, w, h, name);
+    GpuTexture Target(ref GpuTexture? slot, InternalFormat format, int w, int h, string name) => Target(_ctx, ref slot, format, w, h, name);
 
     /// <summary>A copy target of the size and format asked, made again when they change.</summary>
     internal static GpuTexture Target(GpuContext ctx, ref GpuTexture? slot, InternalFormat format, int w, int h, string name)
@@ -266,13 +266,13 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     /// </summary>
     public bool Prepare(FrameGenInputs i)
     {
-        if (!Wanted || failed) return false;
-        var depth = Target(ref depthFlipped, i.Depth.Desc.Format, i.RenderWidth, i.RenderHeight, "fg depth top-down");
-        var motion = Target(ref motionFlipped, i.Motion.Desc.Format, i.RenderWidth, i.RenderHeight, "fg motion top-down");
-        var list = (CommandList)ctx.BeginNative("fg flip depth and motion");
-        Flip(device.Vk, list.Handle, device.NativeImage(i.Depth), device.NativeImage(depth), i.RenderWidth, i.RenderHeight);
-        Flip(device.Vk, list.Handle, device.NativeImage(i.Motion), device.NativeImage(motion), i.RenderWidth, i.RenderHeight);
-        ctx.EndNative(list);
+        if (!Wanted || _failed) return false;
+        var depth = Target(ref _depthFlipped, i.Depth.Desc.Format, i.RenderWidth, i.RenderHeight, "fg depth top-down");
+        var motion = Target(ref _motionFlipped, i.Motion.Desc.Format, i.RenderWidth, i.RenderHeight, "fg motion top-down");
+        var list = (CommandList)_ctx.BeginNative("fg flip depth and motion");
+        Flip(_device.Vk, list.Handle, _device.NativeImage(i.Depth), _device.NativeImage(depth), i.RenderWidth, i.RenderHeight);
+        Flip(_device.Vk, list.Handle, _device.NativeImage(i.Motion), _device.NativeImage(motion), i.RenderWidth, i.RenderHeight);
+        _ctx.EndNative(list);
 
         ulong id = NextId(i.Reset);
         var camera = new CameraInfoDesc
@@ -297,33 +297,33 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
             CameraFar = i.Far,
             CameraFovAngleVertical = i.FieldOfView,
             ViewSpaceToMetersFactor = 0.1f,   // as for the upscalers: Kenshi units taken as decimetres
-            Depth = Input(ctx, depth),
-            MotionVectors = Input(ctx, motion),
+            Depth = Input(_ctx, depth),
+            MotionVectors = Input(_ctx, motion),
         };
-        var cmd = (CommandList)ctx.BeginNative("fg prepare");
+        var cmd = (CommandList)_ctx.BeginNative("fg prepare");
         desc.CommandList = cmd.Handle.Handle;
-        uint rc = dispatchFunction(contextSlot, &desc);
-        ctx.EndNative(cmd);
-        if (rc != 0) { Console.WriteLine($"frame generation  prepare dispatch failed ({rc}); off for the rest of the run"); failed = true; return false; }
+        uint rc = s_dispatchFunction(_contextSlot, &desc);
+        _ctx.EndNative(cmd);
+        if (rc != 0) { Console.WriteLine($"frame generation  prepare dispatch failed ({rc}); off for the rest of the run"); _failed = true; return false; }
         Prepared = true;
         return true;
     }
 
     bool ConfigureFrame(bool enabled, ulong id)
     {
-        if (*contextSlot == 0) return true;   // no context yet (never wanted so far): nothing to configure
+        if (*_contextSlot == 0) return true;   // no context yet (never wanted so far): nothing to configure
         var d = new ConfigureDesc
         {
             Header = new Header { Type = ConfigureType },
-            SwapChain = (nint)layer.Swapchain.Handle,
+            SwapChain = (nint)_layer.Swapchain.Handle,
             // No present callback: the layer composes the registered interface picture itself.
             FrameGenerationCallback = (nint)(delegate* unmanaged<void*, void*, uint>)&OnGenerate,
-            FrameGenerationCallbackUserContext = (nint)contextSlot,
+            FrameGenerationCallbackUserContext = (nint)_contextSlot,
             FrameGenerationEnabled = (byte)(enabled ? 1 : 0),
             // GenerationRect left zero: the whole display (the SDK's provider fills it in when width and height are 0).
             FrameId = id,
         };
-        return configure(contextSlot, &d) == 0;
+        return _configure(_contextSlot, &d) == 0;
     }
 
     /// <summary>
@@ -333,37 +333,37 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     public bool Finish(GpuTexture world, GpuTexture? ui)
     {
         Enabled = Wanted && Prepared && ui is not null;
-        if (Wanted && !Prepared && !loggedUnprepared) { loggedUnprepared = true; Console.WriteLine("frame generation  the post chain gave no depth and motion this frame (anti-aliasing / upscaling not temporal?): no frame is generated while that holds"); }
-        if (Enabled && !loggedActive) { loggedActive = true; Console.WriteLine($"frame generation  active (frame {frameId + 1})"); }
+        if (Wanted && !Prepared && !_loggedUnprepared) { _loggedUnprepared = true; Console.WriteLine("frame generation  the post chain gave no depth and motion this frame (anti-aliasing / upscaling not temporal?): no frame is generated while that holds"); }
+        if (Enabled && !_loggedActive) { _loggedActive = true; Console.WriteLine($"frame generation  active (frame {_frameId + 1})"); }
         ulong id = NextId(false);
-        FfxApi.Resource? registered = null;
+        Resource? registered = null;
         if (Enabled)
         {
-            var flipped = Target(ref uiFlipped, InternalFormat.Rgba8, displayWidth, displayHeight, "fg ui top-down");
-            var list = (CommandList)ctx.BeginNative("fg flip ui");
-            Flip(device.Vk, list.Handle, device.NativeImage(ui!), device.NativeImage(flipped), displayWidth, displayHeight);
-            ctx.EndNative(list);
-            registered = Input(ctx, flipped);
+            var flipped = Target(ref _uiFlipped, InternalFormat.Rgba8, _displayWidth, _displayHeight, "fg ui top-down");
+            var list = (CommandList)_ctx.BeginNative("fg flip ui");
+            Flip(_device.Vk, list.Handle, _device.NativeImage(ui!), _device.NativeImage(flipped), _displayWidth, _displayHeight);
+            _ctx.EndNative(list);
+            registered = Input(_ctx, flipped);
         }
-        else resetNext = true;   // the next frame after frames without it starts afresh
-        if (!ConfigureFrame(Enabled, id)) { Console.WriteLine("frame generation  configure failed; off for the rest of the run"); failed = true; Enabled = false; }
-        if ((registered is not null || uiRegistered) && !layerGone)
+        else _resetNext = true;   // the next frame after frames without it starts afresh
+        if (!ConfigureFrame(Enabled, id)) { Console.WriteLine("frame generation  configure failed; off for the rest of the run"); _failed = true; Enabled = false; }
+        if ((registered is not null || _uiRegistered) && !_layerGone)
         {
-            if (!layer.RegisterUi(Enabled ? registered : null)) { Console.WriteLine("frame generation  registering the interface picture failed; off for the rest of the run"); failed = true; Enabled = false; }
-            uiRegistered = Enabled;
+            if (!_layer.RegisterUi(Enabled ? registered : null)) { Console.WriteLine("frame generation  registering the interface picture failed; off for the rest of the run"); _failed = true; Enabled = false; }
+            _uiRegistered = Enabled;
         }
         return Enabled;
     }
 
     public void Dispose()
     {
-        layer.Disposing -= OnLayerDisposing;
-        DestroyContext(configureOff: !layerGone);
-        depthFlipped?.Dispose();
-        motionFlipped?.Dispose();
-        uiFlipped?.Dispose();
-        NativeMemory.Free(createDesc);
-        NativeMemory.Free(backendDesc);
-        NativeMemory.Free(contextSlot);
+        _layer.Disposing -= OnLayerDisposing;
+        DestroyContext(configureOff: !_layerGone);
+        _depthFlipped?.Dispose();
+        _motionFlipped?.Dispose();
+        _uiFlipped?.Dispose();
+        NativeMemory.Free(_createDesc);
+        NativeMemory.Free(_backendDesc);
+        NativeMemory.Free(_contextSlot);
     }
 }

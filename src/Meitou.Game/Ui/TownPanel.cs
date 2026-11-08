@@ -14,9 +14,9 @@ sealed class TownPanel(PlayerInterface player)
     internal const string TownScreen = "town", TownNameBox = "OutpostNameEditBox", TownPublicTick = "OpenToPublicCheckBox";
 
     /// <summary>The outpost the panel shows (<see cref="PlayerTown.Number"/>), 0 for none.</summary>
-    internal int shownTown;
+    internal int ShownTown;
     /// <summary>What was typed in the name box and is not yet accepted (null: nothing), and for which outpost.</summary>
-    (int Town, string Name)? townDraft;
+    (int Town, string Name)? _townDraft;
 
     /// <summary>The town panel's subtree as a layout of its own, on the HUD's layer and shown (the HUD layout hides it until the code shows it).</summary>
     internal static MyGuiLayout TownPanelLayout(MyGuiLayout hud)
@@ -33,17 +33,17 @@ sealed class TownPanel(PlayerInterface player)
     /// </summary>
     internal void SyncTownPanel(bool hud)
     {
-        var outposts = player.session.CurrentSnapshot.Outposts;
-        var pivot = player.session.Camera.Current.Target;
+        var outposts = player.Session.CurrentSnapshot.Outposts;
+        var pivot = player.Session.Camera.Current.Target;
         static bool Within(OutpostSnapshot t, Vector3 p) => (t.Position.X - p.X) * (t.Position.X - p.X) + (t.Position.Z - p.Z) * (t.Position.Z - p.Z) <= t.Radius * t.Radius;
-        var town = outposts.FirstOrDefault(t => t.Number == shownTown) is { } kept && Within(kept, pivot) ? kept
-            : outposts.Where(t => t.Owner == player.session.World.Player.Faction)
+        var town = outposts.FirstOrDefault(t => t.Number == ShownTown) is { } kept && Within(kept, pivot) ? kept
+            : outposts.Where(t => t.Owner == player.Session.World.Player.Faction)
                 .MinBy(t => (t.Position.X - pivot.X) * (t.Position.X - pivot.X) + (t.Position.Z - pivot.Z) * (t.Position.Z - pivot.Z)) is { } nearest && Within(nearest, pivot) ? nearest : null;
         if (!hud) town = null;
-        shownTown = town?.Number ?? 0;
-        if (town is null) { if (player.faithfulScreens.IsOpen(TownScreen)) player.faithfulScreens.Close(TownScreen); return; }
-        if (!player.faithfulScreens.IsOpen(TownScreen)) player.faithfulScreens.Open(TownScreen);
-        if (player.faithfulScreens.Focus is not { Screen: TownScreen, Widget: TownNameBox }) player.faithfulScreens.SetText(TownScreen, TownNameBox, town.Name);
+        ShownTown = town?.Number ?? 0;
+        if (town is null) { if (player.FaithfulScreens.IsOpen(TownScreen)) player.FaithfulScreens.Close(TownScreen); return; }
+        if (!player.FaithfulScreens.IsOpen(TownScreen)) player.FaithfulScreens.Open(TownScreen);
+        if (player.FaithfulScreens.Focus is not { Screen: TownScreen, Widget: TownNameBox }) player.FaithfulScreens.SetText(TownScreen, TownNameBox, town.Name);
     }
 
     /// <summary>
@@ -52,12 +52,12 @@ sealed class TownPanel(PlayerInterface player)
     /// </summary>
     internal void BindTownScreen(UiBindings b)
     {
-        if (player.session.CurrentSnapshot.Outposts.FirstOrDefault(t => t.Number == shownTown) is not { } town) return;
-        bool own = town.Owner == player.session.World.Player.Faction;
+        if (player.Session.CurrentSnapshot.Outposts.FirstOrDefault(t => t.Number == ShownTown) is not { } town) return;
+        bool own = town.Owner == player.Session.World.Player.Faction;
         if (own) { b.Disabled.Remove(TownPublicTick); b.Actions[TownPublicTick] = TownPublicTick; }
         else b.Disabled.Add(TownNameBox);
         b.Properties[TownPublicTick] = new Dictionary<string, string> { ["StateSelected"] = town.Public ? "true" : "false", ["Checked"] = town.Public ? "true" : "false" };
-        var research = player.session.CurrentSnapshot.Research.Queue;
+        var research = player.Session.CurrentSnapshot.Research.Queue;
         b.Text["ResearchProgressBarCaption"] = research.Count > 0 ? research[0].Name : Loc.Tr("None");
         b.Progress["ResearchProgressBar"] = research.Count > 0 ? Percent(research[0].Progress) : 0;
         var p = town.Power;
@@ -74,19 +74,19 @@ sealed class TownPanel(PlayerInterface player)
     /// <summary>A text change in the name box is kept as the draft; the tick flips Open to public (<c>FUN_140721e50</c>, with <c>General_Click</c>).</summary>
     internal void TownAction(MyGuiEvent e)
     {
-        if (e.Widget == TownNameBox && e.Action == "text" && shownTown > 0) townDraft = (shownTown, e.Text);
-        else if (e.Widget == TownPublicTick && player.session.CurrentSnapshot.Outposts.FirstOrDefault(t => t.Number == shownTown) is { } town)
+        if (e.Widget == TownNameBox && e.Action == "text" && ShownTown > 0) _townDraft = (ShownTown, e.Text);
+        else if (e.Widget == TownPublicTick && player.Session.CurrentSnapshot.Outposts.FirstOrDefault(t => t.Number == ShownTown) is { } town)
         {
-            player.interfaceSounds.Sound("General_Click");
-            player.Say(new SetTownPublic(town.Number, !town.Public) { Tick = player.session.World.Tick });
+            player.InterfaceSounds.Sound("General_Click");
+            player.Say(new SetTownPublic(town.Number, !town.Public) { Tick = player.Session.World.Tick });
         }
     }
 
     /// <summary>Once a frame: a draft whose box no longer has the key focus is sent as <see cref="RenameTown"/> (the box's accept, <c>FUN_140722d60</c>).</summary>
     internal void UpdateTownName()
     {
-        if (townDraft is not { } draft || player.faithfulScreens.Focus is { Screen: TownScreen, Widget: TownNameBox }) return;
-        townDraft = null;
-        player.Say(new RenameTown(draft.Town, draft.Name) { Tick = player.session.World.Tick });
+        if (_townDraft is not { } draft || player.FaithfulScreens.Focus is { Screen: TownScreen, Widget: TownNameBox }) return;
+        _townDraft = null;
+        player.Say(new RenameTown(draft.Town, draft.Name) { Tick = player.Session.World.Tick });
     }
 }

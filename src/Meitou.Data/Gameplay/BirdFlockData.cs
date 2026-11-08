@@ -40,9 +40,9 @@ public sealed record BirdFlockData
     /// <summary>Every WILDLIFE_BIRDS record with the groups that list it.</summary>
     public static List<BirdFlockData> LoadAll(GameDatabase db)
     {
-        var groups = db.OfType(FcsRecordType.BIOME_GROUP).ToList();
+        var groups = db.OfType(FcsRecordType.BiomeGroup).ToList();
         var list = new List<BirdFlockData>();
-        foreach (var r in db.OfType(FcsRecordType.WILDLIFE_BIRDS))
+        foreach (var r in db.OfType(FcsRecordType.WildlifeBirds))
         {
             var amounts = new Dictionary<string, int>();
             foreach (var g in groups)
@@ -50,11 +50,23 @@ public sealed record BirdFlockData
                     if (link.TargetStringId == r.StringId) amounts[g.StringId] = link.Values.Value0;
             list.Add(new BirdFlockData
             {
-                Id = r.StringId, Mesh = r.GetPath("mesh"), Texture = r.GetPath("texture"), SpawnCount = r.GetInt("spawn count"), Speed = r.GetFloat("speed"),
-                Height = r.GetFloat("height"), GroundHeight = r.GetFloat("ground height"), GroundStrength = r.GetFloat("ground strength"),
-                ContourStrength = r.GetFloat("contour strength"), Distance = r.GetFloat("distance"), Flocking = r.GetBool("flocking"), Circling = r.GetBool("circling"),
-                SpawnHeightMin = r.GetFloat("spawn height min"), SpawnHeightMax = r.GetFloat("spawn height max"),
-                ScaleMin = r.GetFloat("scale min", 1), ScaleMax = r.GetFloat("scale max", 1), Amounts = amounts,
+                Id = r.StringId,
+                Mesh = r.GetPath("mesh"),
+                Texture = r.GetPath("texture"),
+                SpawnCount = r.GetInt("spawn count"),
+                Speed = r.GetFloat("speed"),
+                Height = r.GetFloat("height"),
+                GroundHeight = r.GetFloat("ground height"),
+                GroundStrength = r.GetFloat("ground strength"),
+                ContourStrength = r.GetFloat("contour strength"),
+                Distance = r.GetFloat("distance"),
+                Flocking = r.GetBool("flocking"),
+                Circling = r.GetBool("circling"),
+                SpawnHeightMin = r.GetFloat("spawn height min"),
+                SpawnHeightMax = r.GetFloat("spawn height max"),
+                ScaleMin = r.GetFloat("scale min", 1),
+                ScaleMax = r.GetFloat("scale max", 1),
+                Amounts = amounts,
             });
         }
         return list;

@@ -13,44 +13,44 @@ public static class GlConventions
 {
     /// <summary>The Vulkan format of a GL internal format. Nothing is sRGB; <c>DEPTH_COMPONENT24</c> is a 32-bit float depth buffer
     /// (engine choice: the same or finer); RGB8 is stored as RGBA8.</summary>
-    public static Format VkFormat(InternalFormat f) => (GLEnum)f switch
+    public static Format VkFormat(InternalFormat f) => (GlEnum)f switch
     {
-        GLEnum.Rgba8 or GLEnum.Rgba => Format.R8G8B8A8Unorm,
-        GLEnum.Rgb8 or GLEnum.Rgb => Format.R8G8B8A8Unorm,
-        GLEnum.Srgb8Alpha8 => Format.R8G8B8A8Srgb,
-        GLEnum.R8 => Format.R8Unorm,
-        GLEnum.R8ui => Format.R8Uint,
-        GLEnum.RG8 => Format.R8G8Unorm,
-        GLEnum.RG16 => Format.R16G16Unorm,
-        GLEnum.R16 => Format.R16Unorm,
-        GLEnum.R16ui => Format.R16Uint,
-        GLEnum.R16i => Format.R16Sint,
-        GLEnum.R16f => Format.R16Sfloat,
-        GLEnum.RG16f => Format.R16G16Sfloat,
-        GLEnum.Rgba16 => Format.R16G16B16A16Unorm,
-        (GLEnum)InternalFormat.Rgba16Snorm => Format.R16G16B16A16SNorm,
-        GLEnum.Rgba16f => Format.R16G16B16A16Sfloat,
-        GLEnum.Rgba16ui => Format.R16G16B16A16Uint,
-        GLEnum.R32f => Format.R32Sfloat,
-        GLEnum.R32ui => Format.R32Uint,
-        GLEnum.R32i => Format.R32Sint,
-        GLEnum.RG32f => Format.R32G32Sfloat,
-        GLEnum.Rgb32f => Format.R32G32B32Sfloat,
-        GLEnum.Rgba32f => Format.R32G32B32A32Sfloat,
-        GLEnum.Rgba32ui => Format.R32G32B32A32Uint,
-        GLEnum.Rgba32i => Format.R32G32B32A32Sint,
-        GLEnum.R11fG11fB10f => Format.B10G11R11UfloatPack32,
-        GLEnum.Rgba8ui => Format.R8G8B8A8Uint,
-        GLEnum.DepthComponent24 or GLEnum.DepthComponent => Format.D32Sfloat,   // engine choice: 32-bit float depth for GL's 24-bit (same or finer)
-        GLEnum.DepthComponent32f => Format.D32Sfloat,
-        GLEnum.Depth24Stencil8 => Format.D24UnormS8Uint,
-        (GLEnum)InternalFormat.CompressedRgbS3TCDxt1Ext => Format.BC1RgbUnormBlock,
-        (GLEnum)InternalFormat.CompressedRgbaS3TCDxt1Ext => Format.BC1RgbaUnormBlock,
-        (GLEnum)InternalFormat.CompressedRgbaS3TCDxt3Ext => Format.BC2UnormBlock,
-        (GLEnum)InternalFormat.CompressedRgbaS3TCDxt5Ext => Format.BC3UnormBlock,
-        GLEnum.CompressedRedRgtc1 => Format.BC4UnormBlock,
-        GLEnum.CompressedRGRgtc2 => Format.BC5UnormBlock,
-        (GLEnum)InternalFormat.CompressedRgbaBptcUnorm => Format.BC7UnormBlock,
+        GlEnum.Rgba8 or GlEnum.Rgba => Format.R8G8B8A8Unorm,
+        GlEnum.Rgb8 or GlEnum.Rgb => Format.R8G8B8A8Unorm,
+        GlEnum.Srgb8Alpha8 => Format.R8G8B8A8Srgb,
+        GlEnum.R8 => Format.R8Unorm,
+        GlEnum.R8Ui => Format.R8Uint,
+        GlEnum.Rg8 => Format.R8G8Unorm,
+        GlEnum.Rg16 => Format.R16G16Unorm,
+        GlEnum.R16 => Format.R16Unorm,
+        GlEnum.R16Ui => Format.R16Uint,
+        GlEnum.R16I => Format.R16Sint,
+        GlEnum.R16F => Format.R16Sfloat,
+        GlEnum.Rg16F => Format.R16G16Sfloat,
+        GlEnum.Rgba16 => Format.R16G16B16A16Unorm,
+        (GlEnum)InternalFormat.Rgba16Snorm => Format.R16G16B16A16SNorm,
+        GlEnum.Rgba16F => Format.R16G16B16A16Sfloat,
+        GlEnum.Rgba16Ui => Format.R16G16B16A16Uint,
+        GlEnum.R32F => Format.R32Sfloat,
+        GlEnum.R32Ui => Format.R32Uint,
+        GlEnum.R32I => Format.R32Sint,
+        GlEnum.Rg32F => Format.R32G32Sfloat,
+        GlEnum.Rgb32F => Format.R32G32B32Sfloat,
+        GlEnum.Rgba32F => Format.R32G32B32A32Sfloat,
+        GlEnum.Rgba32Ui => Format.R32G32B32A32Uint,
+        GlEnum.Rgba32I => Format.R32G32B32A32Sint,
+        GlEnum.R11FG11FB10F => Format.B10G11R11UfloatPack32,
+        GlEnum.Rgba8Ui => Format.R8G8B8A8Uint,
+        GlEnum.DepthComponent24 or GlEnum.DepthComponent => Format.D32Sfloat,   // engine choice: 32-bit float depth for GL's 24-bit (same or finer)
+        GlEnum.DepthComponent32F => Format.D32Sfloat,
+        GlEnum.Depth24Stencil8 => Format.D24UnormS8Uint,
+        (GlEnum)InternalFormat.CompressedRgbS3TcDxt1Ext => Format.BC1RgbUnormBlock,
+        (GlEnum)InternalFormat.CompressedRgbaS3TcDxt1Ext => Format.BC1RgbaUnormBlock,
+        (GlEnum)InternalFormat.CompressedRgbaS3TcDxt3Ext => Format.BC2UnormBlock,
+        (GlEnum)InternalFormat.CompressedRgbaS3TcDxt5Ext => Format.BC3UnormBlock,
+        GlEnum.CompressedRedRgtc1 => Format.BC4UnormBlock,
+        GlEnum.CompressedRgRgtc2 => Format.BC5UnormBlock,
+        (GlEnum)InternalFormat.CompressedRgbaBptcUnorm => Format.BC7UnormBlock,
         _ => throw new NotSupportedException($"texture format {f}"),
     };
 
@@ -87,14 +87,14 @@ public static class GlConventions
         or TextureMinFilter.NearestMipmapLinear ? Filter.Nearest : Filter.Linear;
 
     /// <summary>Whether the format is a depth buffer (with or without a stencil).</summary>
-    public static bool IsDepthFormat(InternalFormat f) => f is InternalFormat.DepthComponent24 or InternalFormat.DepthComponent32f
+    public static bool IsDepthFormat(InternalFormat f) => f is InternalFormat.DepthComponent24 or InternalFormat.DepthComponent32F
         or InternalFormat.Depth24Stencil8 or InternalFormat.Depth16;
 
     /// <summary>The Vulkan aspect of a texture (the depth bit for a depth format, the colour bit otherwise).</summary>
     public static ImageAspectFlags VkAspect(TextureDesc desc) => desc.IsDepth ? ImageAspectFlags.DepthBit : ImageAspectFlags.ColorBit;
 
     /// <summary>Formats sampled with nearest filtering and integer border colours.</summary>
-    public static bool IsIntegerFormat(InternalFormat f) => f is InternalFormat.Rgba8ui or InternalFormat.R32ui or InternalFormat.R16ui or InternalFormat.R8ui;
+    public static bool IsIntegerFormat(InternalFormat f) => f is InternalFormat.Rgba8Ui or InternalFormat.R32Ui or InternalFormat.R16Ui or InternalFormat.R8Ui;
 
     public static BlendFactor BlendFactor(BlendingFactor f) => f switch
     {
@@ -132,19 +132,19 @@ public static class GlConventions
     };
 
     /// <summary>A <c>TEXTURE_SWIZZLE_*</c> value.</summary>
-    public static ComponentSwizzle Swizzle(int gl) => (GLEnum)gl switch
+    public static ComponentSwizzle Swizzle(int gl) => (GlEnum)gl switch
     {
-        GLEnum.Red => ComponentSwizzle.R,
-        GLEnum.Green => ComponentSwizzle.G,
-        GLEnum.Blue => ComponentSwizzle.B,
-        GLEnum.Alpha => ComponentSwizzle.A,
-        GLEnum.Zero => ComponentSwizzle.Zero,
-        GLEnum.One => ComponentSwizzle.One,
+        GlEnum.Red => ComponentSwizzle.R,
+        GlEnum.Green => ComponentSwizzle.G,
+        GlEnum.Blue => ComponentSwizzle.B,
+        GlEnum.Alpha => ComponentSwizzle.A,
+        GlEnum.Zero => ComponentSwizzle.Zero,
+        GlEnum.One => ComponentSwizzle.One,
         _ => ComponentSwizzle.Identity,
     };
 
     /// <summary>GL's counter-clockwise front faces are clockwise in Vulkan's framebuffer space (same pixel rows, opposite sign of the area).</summary>
-    public static FrontFace VkFrontFace(FrontFaceDirection f) => f == FrontFaceDirection.Ccw ? Silk.NET.Vulkan.FrontFace.Clockwise : Silk.NET.Vulkan.FrontFace.CounterClockwise;
+    public static FrontFace VkFrontFace(FrontFaceDirection f) => f == FrontFaceDirection.Ccw ? FrontFace.Clockwise : FrontFace.CounterClockwise;
 
     public static PrimitiveTopology Topology(PrimitiveType mode) => mode switch
     {
@@ -168,21 +168,21 @@ public static class GlConventions
     };
 
     /// <summary>The Vulkan polygon mode of a GL polygon mode.</summary>
-    public static Silk.NET.Vulkan.PolygonMode VkPolygon(PolygonKind kind) => kind switch
+    public static PolygonMode VkPolygon(PolygonKind kind) => kind switch
     {
-        PolygonKind.Point => Silk.NET.Vulkan.PolygonMode.Point,
-        PolygonKind.Line => Silk.NET.Vulkan.PolygonMode.Line,
-        _ => Silk.NET.Vulkan.PolygonMode.Fill,
+        PolygonKind.Point => PolygonMode.Point,
+        PolygonKind.Line => PolygonMode.Line,
+        _ => PolygonMode.Fill,
     };
 
     /// <summary>The Vulkan blend equation of a GL one.</summary>
-    public static Silk.NET.Vulkan.BlendOp VkBlendOp(BlendOperation op) => op switch
+    public static BlendOp VkBlendOp(BlendOperation op) => op switch
     {
-        BlendOperation.Add => Silk.NET.Vulkan.BlendOp.Add,
-        BlendOperation.Subtract => Silk.NET.Vulkan.BlendOp.Subtract,
-        BlendOperation.ReverseSubtract => Silk.NET.Vulkan.BlendOp.ReverseSubtract,
-        BlendOperation.Min => Silk.NET.Vulkan.BlendOp.Min,
-        _ => Silk.NET.Vulkan.BlendOp.Max,
+        BlendOperation.Add => BlendOp.Add,
+        BlendOperation.Subtract => BlendOp.Subtract,
+        BlendOperation.ReverseSubtract => BlendOp.ReverseSubtract,
+        BlendOperation.Min => BlendOp.Min,
+        _ => BlendOp.Max,
     };
 
     /// <summary>The Vulkan colour mask of a GL one (the channels a draw writes).</summary>
@@ -203,27 +203,27 @@ public static class GlConventions
     public static Viewport VkViewport(PixelViewport v) => new(v.X, v.Y, v.Width, v.Height, v.MinDepth, v.MaxDepth);
 
     /// <summary>The Vulkan format of a GL vertex attribute (<c>glVertexAttribPointer</c> / <c>glVertexAttribIPointer</c>).</summary>
-    public static InternalFormat VertexFormat(GLEnum type, int size, bool normalized, bool integer) => (type, size, normalized, integer) switch
+    public static InternalFormat VertexFormat(GlEnum type, int size, bool normalized, bool integer) => (type, size, normalized, integer) switch
     {
-        (GLEnum.Float, 1, _, _) => InternalFormat.R32f,
-        (GLEnum.Float, 2, _, _) => InternalFormat.RG32f,
-        (GLEnum.Float, 3, _, _) => InternalFormat.Rgb32f,
-        (GLEnum.Float, 4, _, _) => InternalFormat.Rgba32f,
-        (GLEnum.UnsignedByte, 4, true, false) => InternalFormat.Rgba8,
-        (GLEnum.UnsignedByte, 4, false, true) => InternalFormat.Rgba8ui,
-        (GLEnum.UnsignedShort, 2, true, false) => InternalFormat.Rg16,
-        (GLEnum.UnsignedShort, 4, true, false) => InternalFormat.Rgba16,
-        (GLEnum.UnsignedShort, 4, false, true) => InternalFormat.Rgba16ui,
-        (GLEnum.Int, 1, _, true) => InternalFormat.R32i,
-        (GLEnum.UnsignedInt, 1, _, true) => InternalFormat.R32ui,
+        (GlEnum.Float, 1, _, _) => InternalFormat.R32F,
+        (GlEnum.Float, 2, _, _) => InternalFormat.Rg32F,
+        (GlEnum.Float, 3, _, _) => InternalFormat.Rgb32F,
+        (GlEnum.Float, 4, _, _) => InternalFormat.Rgba32F,
+        (GlEnum.UnsignedByte, 4, true, false) => InternalFormat.Rgba8,
+        (GlEnum.UnsignedByte, 4, false, true) => InternalFormat.Rgba8Ui,
+        (GlEnum.UnsignedShort, 2, true, false) => InternalFormat.Rg16,
+        (GlEnum.UnsignedShort, 4, true, false) => InternalFormat.Rgba16,
+        (GlEnum.UnsignedShort, 4, false, true) => InternalFormat.Rgba16Ui,
+        (GlEnum.Int, 1, _, true) => InternalFormat.R32I,
+        (GlEnum.UnsignedInt, 1, _, true) => InternalFormat.R32Ui,
         _ => throw new NotSupportedException($"vertex attribute {type} x{size} normalized {normalized} integer {integer}"),
     };
 
     /// <summary>Bytes of one tightly packed vertex attribute (GL's stride 0).</summary>
-    public static uint VertexBytes(GLEnum type, int size) => (uint)size * type switch
+    public static uint VertexBytes(GlEnum type, int size) => (uint)size * type switch
     {
-        GLEnum.UnsignedByte or GLEnum.Byte => 1u,
-        GLEnum.UnsignedShort or GLEnum.Short or GLEnum.HalfFloat => 2u,
+        GlEnum.UnsignedByte or GlEnum.Byte => 1u,
+        GlEnum.UnsignedShort or GlEnum.Short or GlEnum.HalfFloat => 2u,
         _ => 4u,
     };
 
@@ -231,9 +231,9 @@ public static class GlConventions
     /// float at offset 0, integer at <see cref="GpuDefaults.DummyIntOffset"/>).</summary>
     public static InternalFormat DummyVertexFormat(ScalarKind kind) => kind switch
     {
-        ScalarKind.Int => InternalFormat.Rgba32i,
-        ScalarKind.UInt or ScalarKind.Bool => InternalFormat.Rgba32ui,
-        _ => InternalFormat.Rgba32f,
+        ScalarKind.Int => InternalFormat.Rgba32I,
+        ScalarKind.UInt or ScalarKind.Bool => InternalFormat.Rgba32Ui,
+        _ => InternalFormat.Rgba32F,
     };
 
     /// <summary>The dummy vertex buffer offset a disabled attribute of this kind reads.</summary>
@@ -311,7 +311,7 @@ public enum DepthFunction : int
 
 public enum FrontFaceDirection : int
 {
-    CW = 0x900,
+    Cw = 0x900,
     Ccw = 0x901,
 }
 
@@ -343,7 +343,7 @@ public readonly record struct PixelRect(int X, int Y, uint Width, uint Height);
 /// <summary>GL's viewport: a pixel rectangle with the depth range.</summary>
 public readonly record struct PixelViewport(float X, float Y, float Width, float Height, float MinDepth = 0, float MaxDepth = 1);
 
-public enum GLEnum : int
+public enum GlEnum : int
 {
     NoError = 0x0,
     Zero = 0x0,
@@ -369,35 +369,34 @@ public enum GLEnum : int
     DepthComponent24 = 0x81A6,
     R8 = 0x8229,
     R16 = 0x822A,
-    RG8 = 0x822B,
-    RG16 = 0x822C,
-    R16f = 0x822D,
-    R32f = 0x822E,
-    RG16f = 0x822F,
-    RG32f = 0x8230,
-    Rgba32f = 0x8814,
-    Rgba16f = 0x881A,
+    Rg8 = 0x822B,
+    R16F = 0x822D,
+    R32F = 0x822E,
+    Rg16F = 0x822F,
+    Rg32F = 0x8230,
+    Rgba32F = 0x8814,
+    Rgba16F = 0x881A,
     CompareRefToTexture = 0x884E,
     Depth24Stencil8 = 0x88F0,
-    R11fG11fB10f = 0x8C3A,
-    DepthComponent32f = 0x8CAC,
+    R11FG11FB10F = 0x8C3A,
+    DepthComponent32F = 0x8CAC,
     FramebufferComplete = 0x8CD5,
     MaxSamples = 0x8D57,
-    Rgba8ui = 0x8D7C,
+    Rgba8Ui = 0x8D7C,
     CompressedRedRgtc1 = 0x8DBB,
-    CompressedRGRgtc2 = 0x8DBD,
+    CompressedRgRgtc2 = 0x8DBD,
     Srgb8Alpha8 = 0x8C43,
     Rgba16 = 0x805A,
-    R8ui = 0x8232,
+    R8Ui = 0x8232,
     Rg16 = 0x822C,
-    R16ui = 0x8234,
-    R16i = 0x8239,
-    R32i = 0x8235,
-    R32ui = 0x8236,
-    Rgba16ui = 0x8D76,
-    Rgba32ui = 0x8D70,
-    Rgba32i = 0x8D82,
-    Rgb32f = 0x8815,
+    R16Ui = 0x8234,
+    R16I = 0x8239,
+    R32I = 0x8235,
+    R32Ui = 0x8236,
+    Rgba16Ui = 0x8D76,
+    Rgba32Ui = 0x8D70,
+    Rgba32I = 0x8D82,
+    Rgb32F = 0x8815,
 
 }
 
@@ -410,36 +409,36 @@ public enum InternalFormat : int
     DepthComponent24 = 0x81A6,
     R8 = 0x8229,
     R16 = 0x822A,
-    R16f = 0x822D,
-    R32f = 0x822E,
-    RG16f = 0x822F,
-    RG32f = 0x8230,
-    R8ui = 0x8232,
+    R16F = 0x822D,
+    R32F = 0x822E,
+    Rg16F = 0x822F,
+    Rg32F = 0x8230,
+    R8Ui = 0x8232,
     Rg16 = 0x822C,
-    R16ui = 0x8234,
-    R16i = 0x8239,
-    R32i = 0x8235,
-    R32ui = 0x8236,
-    CompressedRgbS3TCDxt1Ext = 0x83F0,
-    CompressedRgbaS3TCDxt1Ext = 0x83F1,
-    CompressedRgbaS3TCDxt3Ext = 0x83F2,
-    CompressedRgbaS3TCDxt5Ext = 0x83F3,
-    Rgba32f = 0x8814,
-    Rgb32f = 0x8815,
-    Rgba16f = 0x881A,
-    R11fG11fB10f = 0x8C3A,
+    R16Ui = 0x8234,
+    R16I = 0x8239,
+    R32I = 0x8235,
+    R32Ui = 0x8236,
+    CompressedRgbS3TcDxt1Ext = 0x83F0,
+    CompressedRgbaS3TcDxt1Ext = 0x83F1,
+    CompressedRgbaS3TcDxt3Ext = 0x83F2,
+    CompressedRgbaS3TcDxt5Ext = 0x83F3,
+    Rgba32F = 0x8814,
+    Rgb32F = 0x8815,
+    Rgba16F = 0x881A,
+    R11FG11FB10F = 0x8C3A,
     Srgb8Alpha8 = 0x8C43,
-    DepthComponent32f = 0x8CAC,
+    DepthComponent32F = 0x8CAC,
     Depth24Stencil8 = 0x88F0,
-    Rgba8ui = 0x8D7C,
-    Rgba16ui = 0x8D76,
-    Rgba32ui = 0x8D70,
-    Rgba32i = 0x8D82,
+    Rgba8Ui = 0x8D7C,
+    Rgba16Ui = 0x8D76,
+    Rgba32Ui = 0x8D70,
+    Rgba32I = 0x8D82,
     CompressedRedRgtc1 = 0x8DBB,
-    CompressedRGRgtc2 = 0x8DBD,
+    CompressedRgRgtc2 = 0x8DBD,
     CompressedRgbaBptcUnorm = 0x8E8C,
     Depth16 = 0x81A5,
-    Depth32fStencil8 = 0x8CAD,
+    Depth32FStencil8 = 0x8CAD,
 }
 
 public enum PrimitiveType : int
@@ -465,7 +464,7 @@ public enum LoadOp : int
 public readonly record struct ClearColour(float R, float G, float B, float A)
 {
     /// <summary>The clear colour as the backend's own (Vulkan's).</summary>
-    public Silk.NET.Vulkan.ClearColorValue Vk => new(R, G, B, A);
+    public ClearColorValue Vk => new(R, G, B, A);
 }
 
 /// <summary>The index format of a vertex index buffer (GL's index type).</summary>

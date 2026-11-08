@@ -16,20 +16,20 @@ public static class CodeModApi
 /// </summary>
 public sealed class CodeModPass
 {
-    readonly List<(string Name, CodeModManifest Manifest)> loaded = [];
-    readonly Dictionary<string, string> refused = new(StringComparer.Ordinal);
+    readonly List<(string Name, CodeModManifest Manifest)> _loaded = [];
+    readonly Dictionary<string, string> _refused = new(StringComparer.Ordinal);
 
     /// <summary>The reason each refused mod did not load, by mod name.</summary>
-    public IReadOnlyDictionary<string, string> Refusals => refused;
+    public IReadOnlyDictionary<string, string> Refusals => _refused;
 
-    public void Loaded(string name, CodeModManifest manifest) => loaded.Add((name, manifest));
+    public void Loaded(string name, CodeModManifest manifest) => _loaded.Add((name, manifest));
 
-    public void Refused(string name, string reason) => refused[name] = reason;
+    public void Refused(string name, string reason) => _refused[name] = reason;
 
     /// <summary>The loaded mod with this manifest id, if any.</summary>
     public (string Name, CodeModManifest Manifest)? LoadedWithId(string id)
     {
-        foreach (var mod in loaded)
+        foreach (var mod in _loaded)
             if (mod.Manifest.Id == id) return mod;
         return null;
     }
@@ -37,7 +37,7 @@ public sealed class CodeModPass
     /// <summary>The first loaded mod that matches.</summary>
     public (string Name, CodeModManifest Manifest)? FirstLoaded(Func<CodeModManifest, bool> match)
     {
-        foreach (var mod in loaded)
+        foreach (var mod in _loaded)
             if (match(mod.Manifest)) return mod;
         return null;
     }

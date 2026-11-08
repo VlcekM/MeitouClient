@@ -83,22 +83,22 @@ public sealed class TutorialCatalog
         (2601, [G(2602), G(2603)]),
     ];
 
-    readonly Dictionary<int, string> texts = [];
+    readonly Dictionary<int, string> _texts = [];
 
     /// <summary>The English msgid at a source line ("" when the template lacks it).</summary>
-    public string EnglishAt(int line) => texts.GetValueOrDefault(line, "");
+    public string EnglishAt(int line) => _texts.GetValueOrDefault(line, "");
     /// <summary>The text at a source line in the active language.</summary>
-    public string TextAt(int line) => Meitou.Localisation.Loc.Tr(EnglishAt(line));
+    public string TextAt(int line) => Loc.Tr(EnglishAt(line));
     public string Title(int id) => TextAt(Items[id].Title);
     /// <summary>The template had the tutorials' texts.</summary>
-    public bool HasTexts => texts.Count > 0;
+    public bool HasTexts => _texts.Count > 0;
 
     public static TutorialCatalog From(IEnumerable<PotEntry> entries)
     {
         var result = new TutorialCatalog();
         foreach (var entry in entries)
             foreach (var (file, line) in entry.References)
-                if (file == Source) result.texts[line] = entry.Id;
+                if (file == Source) result._texts[line] = entry.Id;
         return result;
     }
 }

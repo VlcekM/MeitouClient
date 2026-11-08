@@ -9,12 +9,12 @@ namespace Meitou.Tests.Characters;
 
 public class CharacterAppearanceTests
 {
-    static GameDatabase? cached;
-    static readonly Lock gate = new();
+    static GameDatabase? s_cached;
+    static readonly Lock Gate = new();
 
     static GameDatabase Database(GameInstall install)
     {
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
+        lock (Gate) return s_cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
     }
 
     static string DataFile(GameInstall install, params string[] parts) => Path.Combine([install.DataDirectory, .. parts]);
@@ -91,7 +91,7 @@ public class CharacterAppearanceTests
         var file = FcsReader.Read(stream);
         Assert.Equal(FcsFileType.V15, file.FileType);
         var exported = Assert.Single(file.Records);
-        Assert.Equal((FcsRecordType.CHARACTER_APPEARANCE, 1, "1--INGAME"), (exported.RecordType, exported.Id, exported.StringId));
+        Assert.Equal((FcsRecordType.CharacterAppearance, 1, "1--INGAME"), (exported.RecordType, exported.Id, exported.StringId));
 
         var other = AppearanceFile.Read(DataFile(install, "character", "bodies", "Beep.bod2")).Record;
         var target = new CharacterDraft(db, install.Root, other, "Beep");
@@ -100,7 +100,7 @@ public class CharacterAppearanceTests
         Assert.Equal(source.Female, target.Female);
         Assert.Equal(source.Record.Floats, target.Record.Floats);
         Assert.Equal(source.Record.Strings, target.Record.Strings);
-        Assert.Equal(source.Record.Vector3s, target.Record.Vector3s);
+        Assert.Equal(source.Record.Vector3S, target.Record.Vector3S);
         Assert.Equal(other.StringId, target.Record.StringId);
     }
 
@@ -112,11 +112,11 @@ public class CharacterAppearanceTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
         var db = Database(install);
-        var faction = db.OfType(FcsRecordType.FACTION).First(f => Meitou.Data.Gameplay.ItemColours.Of(db, f) is not null);
-        var scheme = Meitou.Data.Gameplay.ItemColours.Of(db, faction)!;
-        var own = db.OfType(FcsRecordType.COLOR_DATA).First(c => c.StringId != scheme.StringId);
-        var prosthetic = db.OfType(FcsRecordType.LIMB_REPLACEMENT).First(l => Meitou.Data.Gameplay.ItemColours.Of(db, l) is null && l.GetPath("mesh").Length > 0);
-        var race = db.OfType(FcsRecordType.RACE).First(r => r.Name == "Greenlander");
+        var faction = db.OfType(FcsRecordType.Faction).First(f => Data.Gameplay.ItemColours.Of(db, f) is not null);
+        var scheme = Data.Gameplay.ItemColours.Of(db, faction)!;
+        var own = db.OfType(FcsRecordType.ColorData).First(c => c.StringId != scheme.StringId);
+        var prosthetic = db.OfType(FcsRecordType.LimbReplacement).First(l => Data.Gameplay.ItemColours.Of(db, l) is null && l.GetPath("mesh").Length > 0);
+        var race = db.OfType(FcsRecordType.Race).First(r => r.Name == "Greenlander");
         var loadout = CharacterGenerator.Generate(db, install.Root, race, 1, female: false, faction);
         loadout.Limbs[0] = new LoadoutLimb(2, prosthetic, 0, own);
         loadout.Limbs[1] = new LoadoutLimb(2, prosthetic);

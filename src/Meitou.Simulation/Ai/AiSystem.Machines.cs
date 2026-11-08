@@ -16,7 +16,7 @@ public sealed partial class AiSystem
     /// </summary>
     TownBuilding? StepBuilding(AiMind mind, int town)
     {
-        if (mind.Step is not (TaskType.OPERATE_MACHINERY or TaskType.COLLECT_OUTPUT_RESOURCE or TaskType.FILL_MACHINE or TaskType.MOVE_ON_FREE_WILL or TaskType.MOVE_ON_FREE_WILL_FAST)
+        if (mind.Step is not (TaskType.OperateMachinery or TaskType.CollectOutputResource or TaskType.FillMachine or TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast)
             || mind.Plan[0].Target is not { Kind: Targets.Work } at) return mind.WorkBuilding;
         foreach (var b in Places(town).Workplaces)
             if (b.Position.X == at.Position.X && b.Position.Z == at.Position.Z) return b;
@@ -29,9 +29,9 @@ public sealed partial class AiSystem
     /// </summary>
     static void WorkAtMachine(AiMind mind, TaskType goal, TownBuilding? building)
     {
-        if (goal != TaskType.AUTO_LABOURING_MINES || building is null) return;
-        if (mind.Step == TaskType.OPERATE_MACHINERY) mind.WorkOperate = building;
-        else if (mind.Step == TaskType.COLLECT_OUTPUT_RESOURCE) mind.CollectFrom = building;
-        else if (mind.Step == TaskType.FILL_MACHINE) mind.FillTo = building;
+        if (goal != TaskType.AutoLabouringMines || building is null) return;
+        if (mind.Step == TaskType.OperateMachinery) mind.WorkOperate = building;
+        else if (mind.Step == TaskType.CollectOutputResource) mind.CollectFrom = building;
+        else if (mind.Step == TaskType.FillMachine) mind.FillTo = building;
     }
 }

@@ -276,23 +276,23 @@ internal static class MeshSimplifier
     /// <summary>The symmetric 4x4 error matrix of a set of weighted planes.</summary>
     struct Quadric
     {
-        double a, b, c, d, e, f, g, h, i, j;
+        double _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
 
         public static Quadric Plane(Vector3 n, float offset, float weight)
         {
             double x = n.X, y = n.Y, z = n.Z, o = offset, w = weight;
-            return new Quadric { a = w * x * x, b = w * x * y, c = w * x * z, d = w * x * o, e = w * y * y, f = w * y * z, g = w * y * o, h = w * z * z, i = w * z * o, j = w * o * o };
+            return new Quadric { _a = w * x * x, _b = w * x * y, _c = w * x * z, _d = w * x * o, _e = w * y * y, _f = w * y * z, _g = w * y * o, _h = w * z * z, _i = w * z * o, _j = w * o * o };
         }
 
         public void Add(in Quadric o)
         {
-            a += o.a; b += o.b; c += o.c; d += o.d; e += o.e; f += o.f; g += o.g; h += o.h; i += o.i; j += o.j;
+            _a += o._a; _b += o._b; _c += o._c; _d += o._d; _e += o._e; _f += o._f; _g += o._g; _h += o._h; _i += o._i; _j += o._j;
         }
 
         public readonly double Evaluate(Vector3 p)
         {
             double x = p.X, y = p.Y, z = p.Z;
-            return a * x * x + 2 * b * x * y + 2 * c * x * z + 2 * d * x + e * y * y + 2 * f * y * z + 2 * g * y + h * z * z + 2 * i * z + j;
+            return _a * x * x + 2 * _b * x * y + 2 * _c * x * z + 2 * _d * x + _e * y * y + 2 * _f * y * z + 2 * _g * y + _h * z * z + 2 * _i * z + _j;
         }
     }
 }

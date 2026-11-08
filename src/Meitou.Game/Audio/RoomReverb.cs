@@ -14,38 +14,41 @@ sealed class RoomReverb
     const int Spread = 23;
     const float MaxPreDelay = 0.25f;
 
-    readonly int rate;
-    readonly Comb[] combsLeft, combsRight;
-    readonly Allpass[] allpassLeft, allpassRight;
-    readonly float[] preLeft;
-    int preIndex;
+    readonly int _rate;
+    readonly Comb[] _combsLeft, _combsRight;
+    readonly Allpass[] _allpassLeft, _allpassRight;
+    readonly float[] _preLeft;
+    int _preIndex;
 
     // Parameters (set by Configure); the combs' feedback follows the decay time.
-    float decay = 1, damping = 0.4f, diffusion = 0.5f, width = 1, preDelaySeconds;
-    float inputNorm = 1;
+    float _decay = 1, _damping = 0.4f, _diffusion = 0.5f, _width = 1, _preDelaySeconds;
+    float _inputNorm = 1;
+
     // Two one-pole high-passes on the input (about 250 Hz): below the first comb resonances every comb has the same gain and they add coherently
     // (up to 25 dB more), which a real room does not do to low rumble.
-    float highPassA, hp1, hp2;
-    float enable, enableTarget;
+    private readonly float _highPassA;
+    private float _hp1;
+    private float _hp2;
+    float _enable, _enableTarget;
 
-    int silentBlocks;
+    int _silentBlocks;
 
     public RoomReverb(int sampleRate)
     {
-        rate = sampleRate;
+        _rate = sampleRate;
         float scale = sampleRate / 44100f;
-        combsLeft = [.. CombTunings.Select(t => new Comb((int)(t * scale)))];
-        combsRight = [.. CombTunings.Select(t => new Comb((int)((t + Spread) * scale)))];
-        allpassLeft = [.. AllpassTunings.Select(t => new Allpass((int)(t * scale)))];
-        allpassRight = [.. AllpassTunings.Select(t => new Allpass((int)((t + Spread) * scale)))];
+        _combsLeft = [.. CombTunings.Select(t => new Comb((int)(t * scale)))];
+        _combsRight = [.. CombTunings.Select(t => new Comb((int)((t + Spread) * scale)))];
+        _allpassLeft = [.. AllpassTunings.Select(t => new Allpass((int)(t * scale)))];
+        _allpassRight = [.. AllpassTunings.Select(t => new Allpass((int)((t + Spread) * scale)))];
         int pre = (int)(MaxPreDelay * sampleRate) + 1;
-        preLeft = new float[pre];
-        highPassA = 1 - MathF.Exp(-2 * MathF.PI * 250f / sampleRate);
+        _preLeft = new float[pre];
+        _highPassA = 1 - MathF.Exp(-2 * MathF.PI * 250f / sampleRate);
         Configure(1, 5, 50, 100, 0);
     }
 
     /// <summary>True when the tail has died away (several blocks of silence): with nothing going in, the caller may skip <see cref="Process"/>.</summary>
-    public bool TailDead => silentBlocks > 4;
+    public bool TailDead => _silentBlocks > 4;
 
     /// <summary>
     /// <paramref name="decaySeconds"/>: time for the tail to fall 60 dB; <paramref name="hfDampingKHz"/>: the high-frequency damping (higher
@@ -54,33 +57,33 @@ sealed class RoomReverb
     /// </summary>
     public void Configure(float decaySeconds, float hfDampingKHz, float diffusionPercent, float widthDegrees, float preDelayMs)
     {
-        decay = Math.Clamp(decaySeconds, 0.05f, 20f);
+        _decay = Math.Clamp(decaySeconds, 0.05f, 20f);
         // One-pole low-pass in each comb's loop; the loop runs every 25-37 ms, so a cutoff of twice the stated frequency keeps the damping gentle.
-        float cutoff = Math.Clamp(hfDampingKHz * 2000f, 500f, rate * 0.45f);
-        damping = MathF.Exp(-2 * MathF.PI * cutoff / rate);
-        diffusion = Math.Clamp(diffusionPercent / 100f, 0, 1);
-        width = Math.Clamp(widthDegrees / 180f, 0, 1);
-        preDelaySeconds = Math.Clamp(preDelayMs / 1000f, 0, MaxPreDelay - 0.001f);
+        float cutoff = Math.Clamp(hfDampingKHz * 2000f, 500f, _rate * 0.45f);
+        _damping = MathF.Exp(-2 * MathF.PI * cutoff / _rate);
+        _diffusion = Math.Clamp(diffusionPercent / 100f, 0, 1);
+        _width = Math.Clamp(widthDegrees / 180f, 0, 1);
+        _preDelaySeconds = Math.Clamp(preDelayMs / 1000f, 0, MaxPreDelay - 0.001f);
         float gSum = 0;
-        for (int i = 0; i < combsLeft.Length; i++)
+        for (int i = 0; i < _combsLeft.Length; i++)
         {
-            float g = MathF.Pow(10, -3f * combsLeft[i].Length / rate / decay);
-            combsLeft[i].Feedback = combsRight[i].Feedback = g;
+            float g = MathF.Pow(10, -3f * _combsLeft[i].Length / _rate / _decay);
+            _combsLeft[i].Feedback = _combsRight[i].Feedback = g;
             gSum += g * g;
         }
-        float gMean = gSum / combsLeft.Length;
+        float gMean = gSum / _combsLeft.Length;
         // A white input through a comb bank gains sqrt(mean 1 / (1 - g²)) in power; undo it so the wet level is the caller's.
-        inputNorm = MathF.Sqrt(1 - Math.Min(gMean, 0.9999f)) / MathF.Sqrt(combsLeft.Length);
-        float apGain = 0.3f + 0.4f * diffusion;
-        foreach (var a in allpassLeft) a.Feedback = apGain;
-        foreach (var a in allpassRight) a.Feedback = apGain;
+        _inputNorm = MathF.Sqrt(1 - Math.Min(gMean, 0.9999f)) / MathF.Sqrt(_combsLeft.Length);
+        float apGain = 0.3f + 0.4f * _diffusion;
+        foreach (var a in _allpassLeft) a.Feedback = apGain;
+        foreach (var a in _allpassRight) a.Feedback = apGain;
     }
 
     /// <summary>The effect is on (the input is let in) or bypassed (the input is shut and the tail rings out).</summary>
     public bool Enabled
     {
-        get => enableTarget > 0;
-        set => enableTarget = value ? 1 : 0;
+        get => _enableTarget > 0;
+        set => _enableTarget = value ? 1 : 0;
     }
 
     /// <summary>
@@ -90,95 +93,95 @@ sealed class RoomReverb
     public void Process(float[] input, float[] output, int frames, float level)
     {
         float peak = 0;
-        float step = 1f / (0.05f * rate); // the input gate ramps over 50 ms
-        float wet1 = (1 + width) / 2, wet2 = (1 - width) / 2;
-        int pre = preLeft.Length;
-        int delay = (int)(preDelaySeconds * rate);
+        float step = 1f / (0.05f * _rate); // the input gate ramps over 50 ms
+        float wet1 = (1 + _width) / 2, wet2 = (1 - _width) / 2;
+        int pre = _preLeft.Length;
+        int delay = (int)(_preDelaySeconds * _rate);
         for (int f = 0; f < frames; f++)
         {
-            if (enable < enableTarget) enable = Math.Min(enableTarget, enable + step);
-            else if (enable > enableTarget) enable = Math.Max(enableTarget, enable - step);
-            float mono = (input[2 * f] + input[2 * f + 1]) * enable;
-            hp1 += highPassA * (mono - hp1);
-            float stage = mono - hp1;
-            hp2 += highPassA * (stage - hp2);
-            preLeft[preIndex] = stage - hp2;
-            int read = preIndex - delay;
+            if (_enable < _enableTarget) _enable = Math.Min(_enableTarget, _enable + step);
+            else if (_enable > _enableTarget) _enable = Math.Max(_enableTarget, _enable - step);
+            float mono = (input[2 * f] + input[2 * f + 1]) * _enable;
+            _hp1 += _highPassA * (mono - _hp1);
+            float stage = mono - _hp1;
+            _hp2 += _highPassA * (stage - _hp2);
+            _preLeft[_preIndex] = stage - _hp2;
+            int read = _preIndex - delay;
             if (read < 0) read += pre;
-            if (++preIndex == pre) preIndex = 0;
-            float x = preLeft[read] * inputNorm;
+            if (++_preIndex == pre) _preIndex = 0;
+            float x = _preLeft[read] * _inputNorm;
             float outL = 0, outR = 0;
-            for (int i = 0; i < combsLeft.Length; i++)
+            for (int i = 0; i < _combsLeft.Length; i++)
             {
-                outL += combsLeft[i].Tick(x, damping);
-                outR += combsRight[i].Tick(x, damping);
+                outL += _combsLeft[i].Tick(x, _damping);
+                outR += _combsRight[i].Tick(x, _damping);
             }
-            for (int i = 0; i < allpassLeft.Length; i++)
+            for (int i = 0; i < _allpassLeft.Length; i++)
             {
-                outL = allpassLeft[i].Tick(outL);
-                outR = allpassRight[i].Tick(outR);
+                outL = _allpassLeft[i].Tick(outL);
+                outR = _allpassRight[i].Tick(outR);
             }
             float yl = (outL * wet1 + outR * wet2) * level, yr = (outR * wet1 + outL * wet2) * level;
             output[2 * f] += yl;
             output[2 * f + 1] += yr;
             peak = Math.Max(peak, Math.Max(Math.Abs(outL), Math.Abs(outR)));
         }
-        if (peak < 1e-6f) silentBlocks++;
-        else silentBlocks = 0;
+        if (peak < 1e-6f) _silentBlocks++;
+        else _silentBlocks = 0;
     }
 
     /// <summary>Forgets the tail.</summary>
     public void Clear()
     {
-        foreach (var c in combsLeft) c.Clear();
-        foreach (var c in combsRight) c.Clear();
-        foreach (var a in allpassLeft) a.Clear();
-        foreach (var a in allpassRight) a.Clear();
-        Array.Clear(preLeft);
-        hp1 = hp2 = 0;
-        silentBlocks = 0;
+        foreach (var c in _combsLeft) c.Clear();
+        foreach (var c in _combsRight) c.Clear();
+        foreach (var a in _allpassLeft) a.Clear();
+        foreach (var a in _allpassRight) a.Clear();
+        Array.Clear(_preLeft);
+        _hp1 = _hp2 = 0;
+        _silentBlocks = 0;
     }
 
     sealed class Comb(int length)
     {
-        readonly float[] buffer = new float[Math.Max(1, length)];
-        int index;
-        float store;
+        readonly float[] _buffer = new float[Math.Max(1, length)];
+        int _index;
+        float _store;
         public float Feedback;
-        public int Length => buffer.Length;
+        public int Length => _buffer.Length;
 
         public float Tick(float input, float damping)
         {
-            float output = buffer[index];
-            store = output * (1 - damping) + store * damping;
-            buffer[index] = input + store * Feedback;
-            if (++index == buffer.Length) index = 0;
+            float output = _buffer[_index];
+            _store = output * (1 - damping) + _store * damping;
+            _buffer[_index] = input + _store * Feedback;
+            if (++_index == _buffer.Length) _index = 0;
             return output;
         }
 
         public void Clear()
         {
-            Array.Clear(buffer);
-            store = 0;
+            Array.Clear(_buffer);
+            _store = 0;
         }
     }
 
     sealed class Allpass(int length)
     {
-        readonly float[] buffer = new float[Math.Max(1, length)];
-        int index;
+        readonly float[] _buffer = new float[Math.Max(1, length)];
+        int _index;
         public float Feedback = 0.5f;
 
         public float Tick(float input)
         {
-            float delayed = buffer[index];
+            float delayed = _buffer[_index];
             float w = input + delayed * Feedback;
             float output = delayed - Feedback * w;
-            buffer[index] = w;
-            if (++index == buffer.Length) index = 0;
+            _buffer[_index] = w;
+            if (++_index == _buffer.Length) _index = 0;
             return output;
         }
 
-        public void Clear() => Array.Clear(buffer);
+        public void Clear() => Array.Clear(_buffer);
     }
 }

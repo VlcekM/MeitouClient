@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using Silk.NET.Vulkan;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Profiling;
+using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Gpu;
 
@@ -30,11 +30,11 @@ public abstract class RecordJob
 /// <summary>A pool of one kind of job, render thread only: <see cref="Rent"/> in Prepare, the job goes back when released.</summary>
 public sealed class JobPool<T> where T : RecordJob, new()
 {
-    readonly Stack<T> free = new();
+    readonly Stack<T> _free = new();
 
-    public T Rent() => free.Count > 0 ? free.Pop() : new T();
+    public T Rent() => _free.Count > 0 ? _free.Pop() : new T();
 
-    public void Return(T job) => free.Push(job);
+    public void Return(T job) => _free.Push(job);
 }
 
 /// <summary>
@@ -77,21 +77,21 @@ public sealed class ParallelPass
         public long Ticks;
     }
 
-    readonly GpuContext ctx;
-    Entry[] entries = new Entry[64];
-    int count;
-    int[] jobs = new int[64];
-    int jobCount, work;
-    CommandBuffer[] handles = new CommandBuffer[64];
-    CommandList? primary;
-    AttachmentFormats formats;
-    CommandList? inline;
-    readonly Action<int> recordOne;
+    readonly GpuContext _ctx;
+    Entry[] _entries = new Entry[64];
+    int _count;
+    int[] _jobs = new int[64];
+    int _jobCount, _work;
+    CommandBuffer[] _handles = new CommandBuffer[64];
+    CommandList? _primary;
+    AttachmentFormats _formats;
+    CommandList? _inline;
+    readonly Action<int> _recordOne;
 
     internal ParallelPass(GpuContext ctx)
     {
-        this.ctx = ctx;
-        recordOne = k => RecordEntry(jobs[k], threaded: true);
+        this._ctx = ctx;
+        _recordOne = k => RecordEntry(_jobs[k], threaded: true);
     }
 
     /// <summary>A host's rendering is open with secondaries (between <see cref="Begin"/> and <see cref="End"/>).</summary>
@@ -108,37 +108,37 @@ public sealed class ParallelPass
     {
         RenderJobs.AssertNotInJob();
         if (Open) throw new InvalidOperationException("a parallel pass is already open");
-        (primary, formats, Stage, Open, count, jobCount, work) = (host, targets, stage, true, 0, 0, 0);
+        (_primary, _formats, Stage, Open, _count, _jobCount, _work) = (host, targets, stage, true, 0, 0, 0);
         Totals.Reset();
     }
 
     /// <summary>A prepared segment, recorded at <see cref="End"/> into a secondary of its own, executed in this order.</summary>
     public void Add(string label, RecordJob job)
     {
-        if (!Open || inline is not null) throw new InvalidOperationException("ParallelPass.Add outside the pass or inside an inline segment");
+        if (!Open || _inline is not null) throw new InvalidOperationException("ParallelPass.Add outside the pass or inside an inline segment");
         ref var e = ref Next();
         (e.Job, e.Label, e.List, e.Stage, e.Ticks) = (job, label, null, Stage, 0);
-        if (jobCount == jobs.Length) Array.Resize(ref jobs, jobs.Length * 2);
-        jobs[jobCount++] = count - 1;
-        work += job.Size;
-        ctx.Frame.Stats.NativeSegments++;
+        if (_jobCount == _jobs.Length) Array.Resize(ref _jobs, _jobs.Length * 2);
+        _jobs[_jobCount++] = _count - 1;
+        _work += job.Size;
+        _ctx.Frame.Stats.NativeSegments++;
     }
 
     /// <summary>A secondary recorded on the render thread now (an unported guest's segment, a timestamp), executed in this order; end it with <see cref="EndInline"/>.</summary>
     public CommandList BeginInline(string label)
     {
         RenderJobs.AssertNotInJob();
-        if (!Open || inline is not null) throw new InvalidOperationException("ParallelPass.BeginInline outside the pass or inside another inline segment");
-        var list = ctx.Frame.BeginSecondary(formats);
+        if (!Open || _inline is not null) throw new InvalidOperationException("ParallelPass.BeginInline outside the pass or inside another inline segment");
+        var list = _ctx.Frame.BeginSecondary(_formats);
         list.BeginLabel(label);
-        ctx.Frame.Stats.NativeSegments++;
-        return inline = list;
+        _ctx.Frame.Stats.NativeSegments++;
+        return _inline = list;
     }
 
     public void EndInline(CommandList list)
     {
-        if (!ReferenceEquals(list, inline)) throw new InvalidOperationException("EndInline without a matching BeginInline");
-        inline = null;
+        if (!ReferenceEquals(list, _inline)) throw new InvalidOperationException("EndInline without a matching BeginInline");
+        _inline = null;
         list.EndLabel();
         list.EndSecondary();
         ref var e = ref Next();
@@ -153,17 +153,17 @@ public sealed class ParallelPass
     public void End()
     {
         if (!Open) throw new InvalidOperationException("ParallelPass.End without Begin");
-        if (inline is not null) throw new InvalidOperationException("ParallelPass.End with an inline segment open");
-        bool threaded = Recording.Mode >= 2 && jobCount > 1 && work >= Recording.MinThreadedDraws;
-        if (threaded) RenderJobs.For(jobCount, recordOne);
-        else for (int k = 0; k < jobCount; k++) RecordEntry(jobs[k], threaded: false);
-        if (handles.Length < count) handles = new CommandBuffer[Math.Max(count, handles.Length * 2)];
-        var frameStats = ctx.Frame.Stats;
-        for (int i = 0; i < count; i++)
+        if (_inline is not null) throw new InvalidOperationException("ParallelPass.End with an inline segment open");
+        bool threaded = Recording.Mode >= 2 && _jobCount > 1 && _work >= Recording.MinThreadedDraws;
+        if (threaded) RenderJobs.For(_jobCount, _recordOne);
+        else for (int k = 0; k < _jobCount; k++) RecordEntry(_jobs[k], threaded: false);
+        if (_handles.Length < _count) _handles = new CommandBuffer[Math.Max(_count, _handles.Length * 2)];
+        var frameStats = _ctx.Frame.Stats;
+        for (int i = 0; i < _count; i++)
         {
-            ref var e = ref entries[i];
+            ref var e = ref _entries[i];
             var list = e.List!;
-            handles[i] = list.Handle;
+            _handles[i] = list.Handle;
             Add(Totals, list.Stats);
             if (e.Job is { } job)
             {
@@ -174,19 +174,19 @@ public sealed class ParallelPass
             e.List = null;
         }
         Add(frameStats, Totals);
-        primary!.ExecuteCommands(handles.AsSpan(0, count));
+        _primary!.ExecuteCommands(_handles.AsSpan(0, _count));
         Open = false;
-        primary = null;
+        _primary = null;
     }
 
     void RecordEntry(int i, bool threaded)
     {
-        ref var e = ref entries[i];
+        ref var e = ref _entries[i];
         long t0 = Stopwatch.GetTimestamp();
         RenderJobs.SetInJob(true);
         try
         {
-            var list = ctx.Frame.BeginSecondary(formats);
+            var list = _ctx.Frame.BeginSecondary(_formats);
             list.BeginLabel(e.Label);
             e.Job!.Record(list);
             list.EndLabel();
@@ -199,8 +199,8 @@ public sealed class ParallelPass
 
     ref Entry Next()
     {
-        if (count == entries.Length) Array.Resize(ref entries, entries.Length * 2);
-        return ref entries[count++];
+        if (_count == _entries.Length) Array.Resize(ref _entries, _entries.Length * 2);
+        return ref _entries[_count++];
     }
 
     static void Add(GpuStats to, GpuStats from)

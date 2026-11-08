@@ -1,7 +1,7 @@
-using Meitou.Data.World;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using Meitou.Data.World;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Shadows;
@@ -333,9 +333,18 @@ static class FoliageShaders
     /// <summary>The blade programs' own uniforms: <see cref="GrassPush"/> members (the camera, light, fog and sway phases are <see cref="ViewConstants"/>).</summary>
     static readonly Dictionary<string, string> GrassMap = new()
     {
-        ["uSize"] = "pc.size", ["uColourBounds"] = "pc.colourBounds", ["uSway"] = "pc.sway", ["uRange"] = "pc.range", ["uFrequency"] = "pc.frequency",
-        ["uCross"] = "pc.cross", ["uHasColourMap"] = "pc.hasColourMap", ["uCoverage"] = "pc.coverage", ["uWireframe"] = "pc.wireframe",
-        ["uSprite"] = "textures2D[pc.sprite]", ["uColourMap"] = "textures2D[pc.colourMap]", ["uNearDepth"] = "textures2D[pc.nearDepth]",
+        ["uSize"] = "pc.size",
+        ["uColourBounds"] = "pc.colourBounds",
+        ["uSway"] = "pc.sway",
+        ["uRange"] = "pc.range",
+        ["uFrequency"] = "pc.frequency",
+        ["uCross"] = "pc.cross",
+        ["uHasColourMap"] = "pc.hasColourMap",
+        ["uCoverage"] = "pc.coverage",
+        ["uWireframe"] = "pc.wireframe",
+        ["uSprite"] = "textures2D[pc.sprite]",
+        ["uColourMap"] = "textures2D[pc.colourMap]",
+        ["uNearDepth"] = "textures2D[pc.nearDepth]",
     };
 
     public static string GrassVertexNative() => NativeShaders.Port(GrassVertex, NativeShaders.Map(GrassMap), GrassPushMembers);

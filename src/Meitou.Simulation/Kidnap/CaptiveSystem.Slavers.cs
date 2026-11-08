@@ -7,7 +7,7 @@ public sealed partial class CaptiveSystem
     const int RestoreEveryTicks = 20;
 
     // The table's spawn count at the last pass: an owner not in the world can only appear through a spawn, so the pass waits for one.
-    long slaversSeenSpawns = -1;
+    long _slaversSeenSpawns = -1;
 
     /// <summary>
     /// A loaded slave whose save names its owner character (<see cref="Saving.SavedCharacterLink.Slaver"/>) takes it once that character is
@@ -18,8 +18,8 @@ public sealed partial class CaptiveSystem
     void RestoreSlavers(World world)
     {
         var table = world.Characters;
-        if (table.Spawns == slaversSeenSpawns) return;
-        slaversSeenSpawns = table.Spawns;
+        if (table.Spawns == _slaversSeenSpawns) return;
+        _slaversSeenSpawns = table.Spawns;
         var next = table.Next;
         Dictionary<(int C, int I), int>? bySave = null;
         for (int i = 0; i < table.HighWater; i++)
@@ -33,7 +33,7 @@ public sealed partial class CaptiveSystem
 
             bySave ??= SavedSlots(table);
             if (!bySave.TryGetValue((link.Slaver.C, link.Slaver.I), out int owner) || owner == i) continue;
-            link.Slaver = Meitou.Data.Save.Hand.Null;
+            link.Slaver = Data.Save.Hand.Null;
             Adopt(cold, table.Cold(owner)!);
         }
     }

@@ -25,7 +25,7 @@ public sealed record WorldEventStateData
         IReadOnlyList<(string, int)> Npcs(string list) =>
             [.. r.GetReferences(list).Where(x => db.Find(x.TargetStringId) is not null).Select(x => (x.TargetStringId, x.Values.Value0))];
         IReadOnlyList<(string, bool)> Factions(string list) =>
-            [.. r.GetReferences(list).Where(x => db.Find(x.TargetStringId) is { Type: FcsRecordType.FACTION }).Select(x => (x.TargetStringId, x.Values.Value0 == 1))];
+            [.. r.GetReferences(list).Where(x => db.Find(x.TargetStringId) is { Type: FcsRecordType.Faction }).Select(x => (x.TargetStringId, x.Values.Value0 == 1))];
         return new WorldEventStateData
         {
             Id = r.StringId,

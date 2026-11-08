@@ -11,7 +11,7 @@ public static class VolumetricCloudShaders
         uniform vec4 uVolume; // coverage, wrapped wind texture shift, frame jitter
         uniform vec3 uEye;
         uniform vec2 uCloudSlab; // the slab's base and top (the cloud height setting)
-        const float CLOUD_EXTINCTION = {{F(Meitou.Data.World.VolumetricClouds.Extinction)}};
+        const float CLOUD_EXTINCTION = {{F(Data.World.VolumetricClouds.Extinction)}};
         vec3 cloudNoise(vec3 p)
         {
             vec3 q = fract(p) * 64.0;
@@ -26,8 +26,8 @@ public static class VolumetricCloudShaders
             float h = (p.y - uCloudSlab.x) / (uCloudSlab.y - uCloudSlab.x);
             if (h <= 0.0 || h >= 1.0 || uVolume.x <= 0.0) return 0.0;
             // The original wind texture shift corresponds to six times the ground wind at this altitude.
-            p.xz += uVolume.yz * {{F(Meitou.Data.World.VolumetricClouds.PatternPeriod)}};
-            float weather = cloudNoise(vec3(p.x / {{F(Meitou.Data.World.VolumetricClouds.PatternPeriod)}}, 0.37, p.z / {{F(Meitou.Data.World.VolumetricClouds.PatternPeriod)}})).b;
+            p.xz += uVolume.yz * {{F(Data.World.VolumetricClouds.PatternPeriod)}};
+            float weather = cloudNoise(vec3(p.x / {{F(Data.World.VolumetricClouds.PatternPeriod)}}, 0.37, p.z / {{F(Data.World.VolumetricClouds.PatternPeriod)}})).b;
             float cover = smoothstep(0.85 - 0.75 * uVolume.x, 1.05 - 0.75 * uVolume.x, weather);
             cover = mix(cover, 1.0, smoothstep(0.75, 1.0, uVolume.x));
             // Where the weather leaves no cover the sky is clear and the shape is not read. A high shape value made a body at almost no cover
@@ -35,11 +35,11 @@ public static class VolumetricCloudShaders
             // over a cloud's width. Over the last 0.08 of cover the shape must rise up to 0.2 higher instead (0.83 at none, above 99.9 % of it),
             // so such a cloud thins out along its own shape (docs/render-clouds.md).
             if (cover <= 0.0) return 0.0;
-            vec3 n = cloudNoise(p / {{F(Meitou.Data.World.VolumetricClouds.ShapePeriod)}});
+            vec3 n = cloudNoise(p / {{F(Data.World.VolumetricClouds.ShapePeriod)}});
             float profile = smoothstep(0.0, 0.12, h) * (1.0 - smoothstep(0.45, 1.0, h));
             float threshold = (1.0 - cover) * 0.55 + 0.08 + 0.2 * (1.0 - smoothstep(0.0, 0.08, cover));
             float body = clamp((n.r * profile - threshold) / 0.45, 0.0, 1.0);
-            float erosion = detail ? cloudNoise(p / {{F(Meitou.Data.World.VolumetricClouds.DetailPeriod)}}).g : 0.5;
+            float erosion = detail ? cloudNoise(p / {{F(Data.World.VolumetricClouds.DetailPeriod)}}).g : 0.5;
             return clamp(body - (1.0 - erosion) * 0.16, 0.0, 1.0);
         }
         bool cloudInterval(vec3 eye, vec3 ray, out vec2 interval)
@@ -48,11 +48,11 @@ public static class VolumetricCloudShaders
             if (abs(ray.y) < 1e-6)
             {
                 if (eye.y <= uCloudSlab.x || eye.y >= uCloudSlab.y) return false;
-                interval = vec2(0.0, {{F(Meitou.Data.World.VolumetricClouds.MaxDistance)}});
+                interval = vec2(0.0, {{F(Data.World.VolumetricClouds.MaxDistance)}});
                 return true;
             }
             vec2 hits = (uCloudSlab - eye.y) / ray.y;
-            interval = vec2(max(min(hits.x, hits.y), 0.0), min(max(hits.x, hits.y), {{F(Meitou.Data.World.VolumetricClouds.MaxDistance)}}));
+            interval = vec2(max(min(hits.x, hits.y), 0.0), min(max(hits.x, hits.y), {{F(Data.World.VolumetricClouds.MaxDistance)}}));
             return interval.y > interval.x;
         }
         float cloudDensity(vec3 p) { return cloudDensityAt(p, true); }

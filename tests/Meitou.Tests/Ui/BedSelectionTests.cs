@@ -28,14 +28,14 @@ public class BedSelectionTests
         const UiMode mode = UiMode.Meitou;
         var install = GameInstall.Locate(); Assert.SkipWhen(install is null, "Kenshi install not found");
         var (original, house) = HousePurchaseTests.Setup();
-        var bedRecord = new FcsRecord { StringId = "camp-bed", Name = "Camp Bed", RecordType = FcsRecordType.BUILDING, Flags = 0x10 };
+        var bedRecord = new FcsRecord { StringId = "camp-bed", Name = "Camp Bed", RecordType = FcsRecordType.Building, Flags = 0x10 };
         bedRecord.Ints["build materials"] = 1;
         bedRecord.Ints["max operators"] = 1;
         bedRecord.Floats["output rate"] = 4;
         bedRecord.References["functionality"] = [new("bed-function", 0, 0, 0)];
-        var function = new FcsRecord { StringId = "bed-function", RecordType = FcsRecordType.BUILDING_FUNCTIONALITY, Flags = 0x10 };
+        var function = new FcsRecord { StringId = "bed-function", RecordType = FcsRecordType.BuildingFunctionality, Flags = 0x10 };
         function.Ints["function"] = TownBuildings.BedFunction;
-        var residents = new FcsRecord { StringId = "residents", RecordType = FcsRecordType.SQUAD_TEMPLATE, Flags = 0x10 };
+        var residents = new FcsRecord { StringId = "residents", RecordType = FcsRecordType.SquadTemplate, Flags = 0x10 };
         residents.Bools["public beds"] = true; residents.Ints["bed usage cost"] = 100;
         var file = new FcsFile(); file.Records.AddRange([bedRecord, function, residents]); original.Db.Apply(file, "test.mod");
         house = house with { Name = "Bar", Spots = [new(HomeSpotKind.Bed, new(100, 0, 100), 0) { Record = "camp-bed" }] };
@@ -54,9 +54,9 @@ public class BedSelectionTests
         {
             Width = 1600, Height = 900, FactionName = _ => "Owner",
         };
-        ui.buildingSelection.BuildTarget = id => BuildingBuildData.From(data.Db.Find(id)!).Target;
+        ui.BuildingSelection.BuildTarget = id => BuildingBuildData.From(data.Db.Find(id)!).Target;
         ui.LoadUi(mode, name => resources.Find(name));
-        ui.build.BuildHost = new BuildServices
+        ui.Build.BuildHost = new BuildServices
         {
             Menu = new BuildMenu([]), ItemName = id => data.Db.Find(id)?.Name ?? id, Description = _ => "", Parts = _ => [],
             Placement = new PlacementServices { Ground = (_, _) => 0, Footprint = _ => null, StaticAround = (_, _) => [] },
@@ -67,7 +67,7 @@ public class BedSelectionTests
             * Meitou.Game.Rendering.Frame.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
         try
         {
-            ui.buildingSelection.SetBuilding(new("Bar", "House", "Owner", "Town", null, house.Key, house.Position, null, Record: house.BuildingId));
+            ui.BuildingSelection.SetBuilding(new("Bar", "House", "Owner", "Town", null, house.Key, house.Position, null, Record: house.BuildingId));
             world.RunTick();
             Assert.Null(world.Snapshot.InspectedBuilding!.Bed);
             var point = new Vector2(800, 450);
@@ -78,24 +78,24 @@ public class BedSelectionTests
             Assert.Equal(100, world.Snapshot.InspectedBuilding.Bed!.Cost);
             Assert.Contains(ui.UiFrame, c => c.Caption == "Camp Bed");
             var focus = new BuildingSelection.SelectedBuilding("Camp Bed", null, "Owner", null, null, bed.Id, bed.Position, null, Record: bed.Record);
-            var lines = ui.buildingSelection.BuildingLines(focus);
+            var lines = ui.BuildingSelection.BuildingLines(focus);
             Assert.Contains(lines.State, l => l.Label == "Town:");
             Assert.Contains(lines.State, l => l.Label == "Cost to use:" && l.Value == "(Pay c.100)");
             Assert.Contains(lines.Stats, l => l.Label == "Healing bonus:" && l.Value == "x4");
             Assert.DoesNotContain(lines.Stats, l => l.Label is "Open/Close:" or "Security:" or "Open to public:");
-            var condition = Assert.Single(ui.buildingSelection.BuildingRows(focus));
+            var condition = Assert.Single(ui.BuildingSelection.BuildingRows(focus));
             Assert.Equal("Condition", condition.Name); Assert.Equal("1", condition.Value);
             Assert.Equal(1, condition.Yellow);
             // Changing access rules must update the selected panel rather than caching the original price.
             data.Relations.Set(data.FactionIndex("owner"), data.PlayerFaction, 100);
             world.RunTick();
             Assert.Equal(0, world.Snapshot.InspectedBuilding!.Bed!.Cost);
-            Assert.DoesNotContain(ui.buildingSelection.BuildingLines(focus).State, l => l.Label == "Cost to use:");
+            Assert.DoesNotContain(ui.BuildingSelection.BuildingLines(focus).State, l => l.Label == "Cost to use:");
             data.Relations.Set(data.FactionIndex("owner"), data.PlayerFaction, 0);
             world.Squads.Remove(1);
             world.RunTick();
             Assert.Equal(-1, world.Snapshot.InspectedBuilding!.Bed!.Cost);
-            Assert.Contains(ui.buildingSelection.BuildingLines(focus).State, l => l.Label == "Cost to use:" && l.Value == "Private");
+            Assert.Contains(ui.BuildingSelection.BuildingLines(focus).State, l => l.Label == "Cost to use:" && l.Value == "Private");
         }
         finally { ui.DisposeUi(); }
     }

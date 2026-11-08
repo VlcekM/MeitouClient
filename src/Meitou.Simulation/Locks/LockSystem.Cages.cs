@@ -29,8 +29,8 @@ public sealed partial class LockSystem
         var table = world.Characters;
         if (!table.TryResolveNext(order.Prisoner, out int p) || table.Cold(p) is not { IsImprisoned: true, InWhat: { } where } pc || world.Fixtures.Find(where) is not { } cage) return;
         if (!Conscious(pc)) return;
-        int best = NearestWorker(world, order.Characters, cage, TaskType.RELEASE_PRISONER);
-        if (best >= 0) StartWork(world, best, CharacterTask.GoTo, TaskType.RELEASE_PRISONER, cage.Id, order.Prisoner, queued: order.Queued);
+        int best = NearestWorker(world, order.Characters, cage, TaskType.ReleasePrisoner);
+        if (best >= 0) StartWork(world, best, CharacterTask.GoTo, TaskType.ReleasePrisoner, cage.Id, order.Prisoner, queued: order.Queued);
     }
 
     static bool Conscious(CharacterCold c) => CharacterFacts.Conscious(c);   // Set Free's precondition 125
@@ -39,9 +39,9 @@ public sealed partial class LockSystem
     {
         var table = world.Characters;
         if (world.Fixtures.Find(order.Cage) is not { Kind: FixtureKind.Cage } cage || !FixtureRegistry.IsFree(table, cage)) return;
-        int best = NearestWorker(world, order.Characters, cage, TaskType.USE_CAGE);
+        int best = NearestWorker(world, order.Characters, cage, TaskType.UseCage);
         if (best < 0 || !table.Cold(best)!.Carrying.IsNone) return;
-        StartWork(world, best, CharacterTask.GoTo, TaskType.USE_CAGE, cage.Id, queued: order.Queued);
+        StartWork(world, best, CharacterTask.GoTo, TaskType.UseCage, cage.Id, queued: order.Queued);
     }
 
     /// <summary>
@@ -81,9 +81,9 @@ public sealed partial class LockSystem
     }
 
     /// <summary>Whether the character's role list in its squad's running package holds one of the goals in its hours.</summary>
-    static bool Lists(Ai.Blackboard board, Squad squad, CharacterId id, CharacterCold c, int hour, Meitou.Data.Gameplay.Ai.TaskType a, Meitou.Data.Gameplay.Ai.TaskType b, Meitou.Data.Gameplay.Ai.TaskType other = Meitou.Data.Gameplay.Ai.TaskType.None)
+    static bool Lists(Blackboard board, Squad squad, CharacterId id, CharacterCold c, int hour, TaskType a, TaskType b, TaskType other = TaskType.None)
     {
-        var roles = board.Roles[(int)Ai.AiSystem.RoleOf(squad, id, c)];
+        var roles = board.Roles[(int)AiSystem.RoleOf(squad, id, c)];
         for (int g = 0; g < roles.Count; g++)
             if (roles[g].Task.Type is var t && (t == a || t == b || t == other) && roles[g].InWindow(hour)) return true;
         return false;
@@ -102,7 +102,7 @@ public sealed partial class LockSystem
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!table.Next[s].Alive || table.Cold(s) is not { IsImprisoned: false, IsPlayer: false, Shackles: null, Medical.Incapacitated: false, CarriedBy.IsNone: true, Ai: { Squad: { Ai: { } board } squad } } c
-                || !Lists(board, squad, table.IdOf(s), c, hour, Meitou.Data.Gameplay.Ai.TaskType.TOTAL_ESCAPE, Meitou.Data.Gameplay.Ai.TaskType.TOTAL_ESCAPE)) continue;
+                || !Lists(board, squad, table.IdOf(s), c, hour, TaskType.TotalEscape, TaskType.TotalEscape)) continue;
             if (WornShackles(c) is null)
             {
                 TakeOffCuffs(world, c, table.Next[s].Position);
@@ -144,7 +144,7 @@ public sealed partial class LockSystem
             if (f.Kind != FixtureKind.Cage || FixtureRegistry.IsFree(table, f) || f.Lock is { Locked: true } || !table.TryResolveNext(f.Occupant, out int s)) continue;
             if (table.Cold(s) is not { IsImprisoned: true, IsPlayer: false, Medical.Incapacitated: false, Ai: { Squad: { Ai: { } board } squad } } c) continue;
             // 256, 207 (Escape cage: A !79, B !54, the same task with the escape flag) or 202 TOTAL_ESCAPE, whose !79 the cage rows (133 / 207 / 256) provide once the cage is unlocked.
-            if (Lists(board, squad, f.Occupant, c, hour, Meitou.Data.Gameplay.Ai.TaskType.GET_OUT_OF_CAGE_OPPORTUNISTIC, Meitou.Data.Gameplay.Ai.TaskType.TOTAL_ESCAPE, Meitou.Data.Gameplay.Ai.TaskType.GET_OUT_OF_CAGE_ESCAPE))
+            if (Lists(board, squad, f.Occupant, c, hour, TaskType.GetOutOfCageOpportunistic, TaskType.TotalEscape, TaskType.GetOutOfCageEscape))
                 world.Fixtures.GetOut(world, f.Occupant, Crimes);
         }
     }

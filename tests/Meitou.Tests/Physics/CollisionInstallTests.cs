@@ -20,13 +20,13 @@ public class CollisionInstallTests
         {
             foreach (var list in new[] { "parts", "interior" })
                 foreach (var r in holder.GetReferences(list))
-                    if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BUILDING_PART } part && seen.Add(part.StringId))
+                    if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingPart } part && seen.Add(part.StringId))
                     {
                         result.Add(part);
                         Visit(part);
                     }
         }
-        foreach (var b in db.OfType(FcsRecordType.BUILDING)) Visit(b);
+        foreach (var b in db.OfType(FcsRecordType.Building)) Visit(b);
         return result;
     }
 

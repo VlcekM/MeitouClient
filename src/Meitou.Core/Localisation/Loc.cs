@@ -12,15 +12,15 @@ namespace Meitou.Localisation;
 /// </summary>
 public static class Loc
 {
-    static GameLanguage language = GameLanguage.English;
-    static GettextCatalog catalog = GettextCatalog.Empty, meitou = GettextCatalog.Empty;
-    static CultureInfo culture = CultureInfo.InvariantCulture;
+    static GameLanguage s_language = GameLanguage.English;
+    static GettextCatalog s_catalog = GettextCatalog.Empty, s_meitou = GettextCatalog.Empty;
+    static CultureInfo s_culture = CultureInfo.InvariantCulture;
 
     /// <summary>The active language (English until <see cref="Use(GameInstall)"/> ran).</summary>
-    public static GameLanguage Language => language;
+    public static GameLanguage Language => s_language;
 
     /// <summary>True when a catalog is loaded, i.e. some strings may differ from their English source.</summary>
-    public static bool Translating => catalog.Count > 0 || meitou.Count > 0;
+    public static bool Translating => s_catalog.Count > 0 || s_meitou.Count > 0;
 
     /// <summary>Selects the language of <paramref name="install"/> and loads its message catalog.</summary>
     public static void Use(GameInstall install) => Use(GameLanguage.Detect(install));
@@ -30,24 +30,24 @@ public static class Loc
     {
         var loaded = GettextCatalog.Load(selected.MessagesDirectory);
         var own = MeitouTranslations.Load(selected.Code, selected.OverlayFolder);
-        language = selected;
-        catalog = loaded;
-        meitou = own;
-        culture = CultureOf(selected.Code);
+        s_language = selected;
+        s_catalog = loaded;
+        s_meitou = own;
+        s_culture = CultureOf(selected.Code);
     }
 
     /// <summary>
     /// <paramref name="english"/> in the active language: the game's translation, else Meitou's own, else unchanged (so a text that was never a
     /// <c>msgid</c> passes through).
     /// </summary>
-    public static string Tr(string english) => !Translating ? english : catalog.Find(english) ?? meitou.Find(english) ?? english;
+    public static string Tr(string english) => !Translating ? english : s_catalog.Find(english) ?? s_meitou.Find(english) ?? english;
 
     /// <summary>
     /// <paramref name="english"/> under the message context <paramref name="context"/> (<c>msgctxt</c>, <c>pgettext</c>): a Meitou text whose msgid the
     /// game's catalog already translates with another sense ("Loaded" is its ranged-weapon label). The context's entry in either catalog, else <see cref="Tr(string)"/>.
     /// </summary>
     public static string TrIn(string context, string english) =>
-        !Translating ? english : catalog.Find(english, context) ?? meitou.Find(english, context) ?? Tr(english);
+        !Translating ? english : s_catalog.Find(english, context) ?? s_meitou.Find(english, context) ?? Tr(english);
 
     /// <summary>
     /// <see cref="Tr(string)"/> followed by <see cref="Format"/>: the boost-style placeholders <c>{1}</c>, <c>{1,num}</c> and <c>{1,num=fix,p=2}</c>
@@ -63,7 +63,7 @@ public static class Loc
     public static string TrCaption(string english)
     {
         if (!Translating || english.Length == 0) return english;
-        return catalog.Find(english) ?? meitou.Find(english) ?? catalog.FindIgnoringCase(english) ?? meitou.FindIgnoringCase(english) ?? english;
+        return s_catalog.Find(english) ?? s_meitou.Find(english) ?? s_catalog.FindIgnoringCase(english) ?? s_meitou.FindIgnoringCase(english) ?? english;
     }
 
     /// <summary>
@@ -71,7 +71,7 @@ public static class Loc
     /// <paramref name="n"/> by its <c>Plural-Forms</c> rule, else the English one. <paramref name="args"/> fill the placeholders (usually <paramref name="n"/> itself).
     /// </summary>
     public static string Plural(string singular, string plural, long n, params object?[] args) =>
-        Format((Translating ? catalog.FindPlural(singular, n) ?? meitou.FindPlural(singular, n) : null) ?? (n == 1 ? singular : plural), args);
+        Format((Translating ? s_catalog.FindPlural(singular, n) ?? s_meitou.FindPlural(singular, n) : null) ?? (n == 1 ? singular : plural), args);
 
     /// <summary>
     /// Substitutes <c>{N}</c>, <c>{N,num}</c> and <c>{N,num=fix,p=K}</c> (N is 1-based) with <paramref name="args"/>: <c>num</c> writes a number in the
@@ -114,10 +114,10 @@ public static class Loc
             else if (option.StartsWith("p=", StringComparison.Ordinal) && int.TryParse(option.AsSpan(2), NumberStyles.None, CultureInfo.InvariantCulture, out int p)) precision = p;
         }
         if (!num || value is not IFormattable number) return value.ToString() ?? "";
-        if (fix && precision >= 0) return number.ToString("F" + precision.ToString(CultureInfo.InvariantCulture), culture);
+        if (fix && precision >= 0) return number.ToString("F" + precision.ToString(CultureInfo.InvariantCulture), s_culture);
         // Without fix, p is the significant digits (the stream's general format).
-        if (precision > 0 && value is float or double or decimal) return number.ToString("G" + precision.ToString(CultureInfo.InvariantCulture), culture);
-        return value is float or double or decimal ? number.ToString("#,0.######", culture) : number.ToString("N0", culture);
+        if (precision > 0 && value is float or double or decimal) return number.ToString("G" + precision.ToString(CultureInfo.InvariantCulture), s_culture);
+        return value is float or double or decimal ? number.ToString("#,0.######", s_culture) : number.ToString("N0", s_culture);
     }
 
     /// <summary>The .NET culture of a locale code like <c>de_DE</c>; the invariant culture when the runtime does not know it.</summary>
@@ -133,7 +133,7 @@ public static class Loc
     /// </summary>
     public static string? FindTextFile(string dataDirectory, string name)
     {
-        if (language.OverlayFolder is { } folder && Path.Combine(folder, name) is var own && File.Exists(own)) return own;
+        if (s_language.OverlayFolder is { } folder && Path.Combine(folder, name) is var own && File.Exists(own)) return own;
         var basic = Path.Combine(dataDirectory, name);
         return File.Exists(basic) ? basic : null;
     }

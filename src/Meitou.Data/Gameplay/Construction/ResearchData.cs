@@ -127,5 +127,5 @@ public sealed record ResearchData
     };
 
     /// <summary>Every RESEARCH record, in the database's order.</summary>
-    public static List<ResearchData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.RESEARCH).Select(From)];
+    public static List<ResearchData> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.Research).Select(From)];
 }

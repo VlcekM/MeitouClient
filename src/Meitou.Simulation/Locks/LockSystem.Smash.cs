@@ -33,7 +33,7 @@ public sealed partial class LockSystem
     /// <summary>The fallback of <see cref="FindGateBasher"/>: no gate leads to the target, so the planner's 270 picks a wall of the attacker's region to smash; true when the plan does.</summary>
     bool FindWallBasher(World world, int s, int t, CharacterCold c, int code)
     {
-        if (NearestWall(world, world.Characters.Next[s].Position, code) is not { } wall || !gatePlan.PlansSmash(world, Combat, this, s, t, wall)) return false;
+        if (NearestWall(world, world.Characters.Next[s].Position, code) is not { } wall || !_gatePlan.PlansSmash(world, Combat, this, s, t, wall)) return false;
         c.Bashing = wall.Id;
         c.BashWall = true;
         c.BashTime = 0;

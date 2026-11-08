@@ -107,8 +107,8 @@ public static class FcsReader
         });
         ReadMap(r, record.Floats, r => r.ReadSingle());
         ReadMap(r, record.Ints, r => r.ReadInt32());
-        ReadMap(r, record.Vector3s, r => new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
-        ReadMap(r, record.Vector4s, ReadVector4);
+        ReadMap(r, record.Vector3S, r => new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
+        ReadMap(r, record.Vector4S, ReadVector4);
         ReadMap(r, record.Strings, ReadString);
         ReadMap(r, record.Filenames, ReadString);
 

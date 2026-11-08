@@ -11,15 +11,15 @@ namespace Meitou.Data.Audio;
 /// </summary>
 public sealed class WwiseCodebookLibrary
 {
-    readonly byte[][] codebooks;
+    readonly byte[][] _codebooks;
 
-    WwiseCodebookLibrary(byte[][] codebooks) => this.codebooks = codebooks;
+    WwiseCodebookLibrary(byte[][] codebooks) => this._codebooks = codebooks;
 
-    public int Count => codebooks.Length;
+    public int Count => _codebooks.Length;
 
     /// <summary>The packed codebook <paramref name="index"/>.</summary>
     public ReadOnlySpan<byte> Packed(int index) =>
-        (uint)index < (uint)codebooks.Length ? codebooks[index] : throw new InvalidDataException($"Codebook {index} is not in the library ({codebooks.Length})");
+        (uint)index < (uint)_codebooks.Length ? _codebooks[index] : throw new InvalidDataException($"Codebook {index} is not in the library ({_codebooks.Length})");
 
     public static WwiseCodebookLibrary FromCodebooks(IEnumerable<byte[]> codebooks) => new([.. codebooks]);
 
@@ -56,8 +56,8 @@ public sealed class WwiseCodebookLibrary
                 w.Write(CacheVersion);
                 w.Write(exe.Length);
                 w.Write(stamp);
-                w.Write(library.codebooks.Length);
-                foreach (var book in library.codebooks)
+                w.Write(library._codebooks.Length);
+                foreach (var book in library._codebooks)
                 {
                     w.Write((ushort)book.Length);
                     w.Write(book);

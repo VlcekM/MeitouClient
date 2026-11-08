@@ -16,21 +16,21 @@ namespace Meitou.Tests.Simulation;
 [Slow]
 public class HubTests
 {
-    static (GameDatabase Db, PopulationData Data, TownSite Hub)? cached;
-    static readonly Lock gate = new();
+    static (GameDatabase Db, PopulationData Data, TownSite Hub)? s_cached;
+    static readonly Lock Gate = new();
 
     static (GameDatabase Db, PopulationData Data, TownSite Hub) Load()
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
-        lock (gate)
+        lock (Gate)
         {
-            if (cached is { } c) return c;
+            if (s_cached is { } c) return c;
             var db = InstallData.BaseGame!;
             var levels = InstallData.Levels!;
             var data = PopulationData.Create(db, levels.Towns());
             var hub = data.Sites.Single(s => s.Town.Name == "The Hub");
-            return (cached = (db, data, hub)).Value;
+            return (s_cached = (db, data, hub)).Value;
         }
     }
 
@@ -51,7 +51,7 @@ public class HubTests
         using var world = Make(data, hub, 1);
         world.RunTick();
         var faction = data.Factions.First(f => f.Id == hub.Town.Faction);
-        var entries = Meitou.Data.World.ResidentHomes.Entries(hub.Town, faction);
+        var entries = ResidentHomes.Entries(hub.Town, faction);
         Assert.NotEmpty(entries);
 
         // The camera's 3 x 3 block of zones is loaded, so a neighbouring town gets its residents too: only the Hub's are counted.

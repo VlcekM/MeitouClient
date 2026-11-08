@@ -1,17 +1,15 @@
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 using System.Diagnostics;
 using System.Numerics;
 using Meitou.Data.World;
-
 using Meitou.Game.Rendering.Gpu;
-using GpuTexture = Meitou.Game.Rendering.Gpu.GpuTexture;
-
 using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
 using Meitou.Game.Rendering.Water;
+using GpuTexture = Meitou.Game.Rendering.Gpu.GpuTexture;
+using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Frame;
 
@@ -46,28 +44,28 @@ public sealed class ReflectionPass : IDisposable
     public bool NoShadows { get; set; } = true;
     /// <summary>Set by the frame loop while the shadows switch is Faithful: the reflection then keeps the shadows as before (what the game does is Unknown).</summary>
     public bool FaithfulShadows { get; set; }
-    FrameBlock? unshadowed;
+    FrameBlock? _unshadowed;
 
     /// <summary>The native GPU API (all native since phase 8 stage 3: the pass is the guests' host, docs/renderer-native.md 8.9).</summary>
     public IGpuContext Gpu { get; }
-    readonly PassTimer timer;
-    readonly WorldRenderOptions options = new();
+    readonly PassTimer _timer;
+    readonly WorldRenderOptions _options = new();
     // The texture the water samples, and the depth beside it when the scene is drawn without multisampling; else the multisampled twins the
     // scene is drawn into, resolved into the colour.
-    GpuTexture? colour, depth, msColour, msDepth;
-    int samples, builtFor;   // builtFor: the Samples the targets were made for
-    int width, height, skipped, age;
-    bool hasImage;
-    Vector3 lastEye;
-    float lastFov;
-    Matrix4x4 lastView;
-    readonly List<double> gpuSamples = [];
-    readonly List<double> cpuSamples = [];
+    GpuTexture? _colour, _depth, _msColour, _msDepth;
+    int _samples, _builtFor;   // builtFor: the Samples the targets were made for
+    int _width, _height, _skipped, _age;
+    bool _hasImage;
+    Vector3 _lastEye;
+    float _lastFov;
+    Matrix4x4 _lastView;
+    readonly List<double> _gpuSamples = [];
+    readonly List<double> _cpuSamples = [];
 
     public ReflectionPass(IGpuContext gpu)
     {
         Gpu = gpu;
-        timer = new PassTimer(gpu);
+        _timer = new PassTimer(gpu);
     }
 
     /// <summary>The game's <c>water reflection</c> when the key is missing, and <c>reflection range</c> (docs/formats/settings.md).</summary>
@@ -130,13 +128,13 @@ public sealed class ReflectionPass : IDisposable
     /// </summary>
     public float NearestWater { get; private set; } = float.NaN;
     /// <summary>The last run found no water in view, at this picture size: the verdict is reused as an image would be (<see cref="CanReuse"/>).</summary>
-    bool noWater;
-    int noWaterWidth, noWaterHeight;
+    bool _noWater;
+    int _noWaterWidth, _noWaterHeight;
     /// <summary>Things whose bounding sphere is under this many texels of radius in the reflection are left out of it.</summary>
     public float MinTexels { get; set; } = 1.5f;
-    HeightSnapshot heights;
-    Vector3 realEye;
-    float texelScale;
+    HeightSnapshot _heights;
+    Vector3 _realEye;
+    float _texelScale;
 
     /// <summary>
     /// Whether a thing (a bounding sphere in world space, above the water) can show in the water's reflection: the ray from the eye to
@@ -148,15 +146,15 @@ public sealed class ReflectionPass : IDisposable
     {
         if (!CullToWater || Warm) return true;
         float plane = WorldWater.Height;
-        float he = realEye.Y - plane, hc = centre.Y - plane;
+        float he = _realEye.Y - plane, hc = centre.Y - plane;
         if (hc + radius <= -WaterPad) return false;   // wholly below the water: the oblique clip removes it
         // Too small to leave a mark: under MinTexels texels of radius in the half-resolution image (seen from the mirrored eye).
-        float ddx = centre.X - realEye.X, ddz = centre.Z - realEye.Z, up = he + hc;
-        if (radius * radius * texelScale * texelScale < MinTexels * MinTexels * (ddx * ddx + ddz * ddz + up * up)) return false;
+        float ddx = centre.X - _realEye.X, ddz = centre.Z - _realEye.Z, up = he + hc;
+        if (radius * radius * _texelScale * _texelScale < MinTexels * MinTexels * (ddx * ddx + ddz * ddz + up * up)) return false;
         // Image points of the sphere's points P (height hp above the water) land at eye + t (P - eye) with t = he / (he + hp), so the
         // footprint lies in discs of radius t * r along the segment between the highest and the lowest point's t.
         float tMin = he / (he + hc + radius), tMax = he / (he + Math.Max(hc - radius, 0));
-        float ex = realEye.X, ez = realEye.Z, dx = centre.X - ex, dz = centre.Z - ez;
+        float ex = _realEye.X, ez = _realEye.Z, dx = centre.X - ex, dz = centre.Z - ez;
         // Water further from the eye than the weather fog's distance is the fog colour whatever it reflects (WaterRenderer ends in atmoApply).
         if (HideDistance is { } hide)
         {
@@ -169,12 +167,12 @@ public sealed class ReflectionPass : IDisposable
         {
             float t = steps == 1 ? 0.5f * (tMin + tMax) : tMin + (tMax - tMin) * s / (steps - 1);
             float qx = ex + t * dx, qz = ez + t * dz, rr = t * radius + WaterPad;
-            if (heights.HeightAt(qx, qz) < level) return true;
+            if (_heights.HeightAt(qx, qz) < level) return true;
             // A grid over the footprint's square, a point every 100 units or so (at most 9 by 9), so a pond inside a big footprint is found.
             int n = Math.Clamp((int)MathF.Ceiling(rr / 100), 1, 4);
             for (int i = -n; i <= n; i++)
                 for (int j = -n; j <= n; j++)
-                    if (heights.HeightAt(qx + rr * i / n, qz + rr * j / n) < level) return true;
+                    if (_heights.HeightAt(qx + rr * i / n, qz + rr * j / n) < level) return true;
         }
         return false;
     }
@@ -187,13 +185,13 @@ public sealed class ReflectionPass : IDisposable
     /// (Phase 8 stage 2.) The reflection as the water samples it: the native colour with the sampler its GL name was given until then (linear,
     /// clamped to the edge, no mips, so no LOD bias; <see cref="SamplerDesc.FromGl"/>, R at GL's default). Default before the first pass.
     /// </summary>
-    public SampledTexture Sampled => colour is null ? default
+    public SampledTexture Sampled => _colour is null ? default
         : new(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), colour.View());
-    public int Width => width;
-    public int Height => height;
+            TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0)), _colour.View());
+    public int Width => _width;
+    public int Height => _height;
     /// <summary>The samples the targets in use were made with (0: single-sample; otherwise the MSAA count).</summary>
-    public int SamplesInUse => samples;
+    public int SamplesInUse => _samples;
     /// <summary>Time the CPU spent recording the last reflection pass, and what the GPU spent on it (a few frames late).</summary>
     public double CpuMs { get; private set; }
     public double GpuMs { get; private set; }
@@ -204,40 +202,40 @@ public sealed class ReflectionPass : IDisposable
 
     void Resize(int w, int h)
     {
-        if (w == width && h == height && colour is not null && builtFor == Samples) return;
+        if (w == _width && h == _height && _colour is not null && _builtFor == Samples) return;
         Free();
-        (width, height, builtFor) = (w, h, Samples);
-        colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16f, w, h, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferDst, Name: "reflection colour"));
+        (_width, _height, _builtFor) = (w, h, Samples);
+        _colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, w, h, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferDst, Name: "reflection colour"));
 
         // The picture is drawn multisampled and resolved: the mirrored shoreline, fences and rooflines are hard edges, and
         // without it each texel of the half-resolution image is a visible stair step that the wave distortion then smears.
         // The API's sample counts are powers of two; a requested odd count (or one above the device's) takes the next
         // lower supported count rather than making an invalid texture.
         int maxSamples = Gpu.MaxSampleCount;
-        samples = 1;
-        while (samples * 2 <= Samples && samples * 2 <= maxSamples) samples *= 2;
-        if (samples <= 1) samples = 0;
+        _samples = 1;
+        while (_samples * 2 <= Samples && _samples * 2 <= maxSamples) _samples *= 2;
+        if (_samples <= 1) _samples = 0;
         GpuTexture Target(InternalFormat format, TextureUse use, int count, string name, bool privateMemory) =>
             Gpu.CreateTexture(new TextureDesc(format, w, h, Samples: Math.Max(count, 1), Use: use, Name: name, Private: privateMemory));
-        if (samples == 0)
+        if (_samples == 0)
         {
-            depth = Target(InternalFormat.DepthComponent24, TextureUse.DepthTarget | TextureUse.Sampled, 1, "reflection depth", false);
+            _depth = Target(InternalFormat.DepthComponent24, TextureUse.DepthTarget | TextureUse.Sampled, 1, "reflection depth", false);
             return;
         }
         // Multisample render targets are not CPU-visible on Metal: their storage is private (Vulkan ignores the hint).
-        msColour = Target(InternalFormat.Rgba16f, TextureUse.ColourTarget | TextureUse.TransferSrc, samples, "reflection colour msaa", true);
-        msDepth = Target(InternalFormat.DepthComponent24, TextureUse.DepthTarget | TextureUse.Sampled, samples, "reflection depth msaa", true);
+        _msColour = Target(InternalFormat.Rgba16F, TextureUse.ColourTarget | TextureUse.TransferSrc, _samples, "reflection colour msaa", true);
+        _msDepth = Target(InternalFormat.DepthComponent24, TextureUse.DepthTarget | TextureUse.Sampled, _samples, "reflection depth msaa", true);
     }
 
     void Free()
     {
-        if (colour is null) return;
+        if (_colour is null) return;
         // Released after the frames in flight.
-        colour.Dispose();
-        depth?.Dispose();
-        msColour?.Dispose();
-        msDepth?.Dispose();
-        (colour, depth, msColour, msDepth) = (null, null, null, null);
+        _colour.Dispose();
+        _depth?.Dispose();
+        _msColour?.Dispose();
+        _msDepth?.Dispose();
+        (_colour, _depth, _msColour, _msDepth) = (null, null, null, null);
     }
 
     /// <summary>Collects finished GPU timings: native timestamps, read once their frame's slot comes round. Nothing waits, also with
@@ -245,7 +243,7 @@ public sealed class ReflectionPass : IDisposable
     public void Poll(bool wait = false)
     {
         _ = wait;
-        if (timer.Poll(gpuSamples) is { } ms) GpuMs = ms;
+        if (_timer.Poll(_gpuSamples) is { } ms) GpuMs = ms;
     }
 
     /// <summary>
@@ -258,22 +256,22 @@ public sealed class ReflectionPass : IDisposable
         Valid = false;
         var eye = camera.Eye;
         float plane = WorldWater.Height;
-        if (eye.Y <= plane + 1 || fullWidth < 8 || fullHeight < 8) { hasImage = noWater = false; NearestWater = float.NaN; return; }   // under the water there is nothing to reflect
+        if (eye.Y <= plane + 1 || fullWidth < 8 || fullHeight < 8) { _hasImage = _noWater = false; NearestWater = float.NaN; return; }   // under the water there is nothing to reflect
         var watch = Stopwatch.StartNew();
         Poll();
-        lapAt = Stopwatch.GetTimestamp();
+        _lapAt = Stopwatch.GetTimestamp();
         Array.Clear(LastPhaseMs);
-        if (!Warm && CanReuse(camera, fullWidth, fullHeight)) { Valid = hasImage; skipped++; age++; return; }   // the image, or the verdict that there is no water in view
-        age = 0;
-        lastEye = eye;
-        lastView = camera.View;
-        lastFov = camera.FieldOfView;
-        heights = terrain.Snapshot();
-        realEye = eye;
+        if (!Warm && CanReuse(camera, fullWidth, fullHeight)) { Valid = _hasImage; _skipped++; _age++; return; }   // the image, or the verdict that there is no water in view
+        _age = 0;
+        _lastEye = eye;
+        _lastView = camera.View;
+        _lastFov = camera.FieldOfView;
+        _heights = terrain.Snapshot();
+        _realEye = eye;
         // Where the water is on the screen, as a rectangle of the reflection's clip space: what is outside it is never looked up.
         var rect = new Vector4(-1, -1, 1, 1);
         NearestWater = float.NaN;
-        noWater = false;
+        _noWater = false;
         if (CropToWater && !Warm)
         {
             if (WaterRect(camera, (float)fullWidth / fullHeight, out float nearestWater) is { } wet) { rect = wet; NearestWater = nearestWater; }
@@ -282,14 +280,14 @@ public sealed class ReflectionPass : IDisposable
                 // No water in view: nothing to reflect, and nothing for the water pass's ocean and refraction to serve (the water itself
                 // is still drawn: what is past WaterDistance shows the haze). The verdict is kept like an image, so the rays are not cast again next frame.
                 NearestWater = float.PositiveInfinity;
-                (noWater, noWaterWidth, noWaterHeight) = (true, fullWidth, fullHeight);
-                Valid = hasImage = false;
+                (_noWater, _noWaterWidth, _noWaterHeight) = (true, fullWidth, fullHeight);
+                Valid = _hasImage = false;
                 return;
             }
         }
 
         Resize(Math.Max((int)(fullWidth * Scale), 64), Math.Max((int)(fullHeight * Scale), 64));
-        timer.Begin();
+        _timer.Begin();
 
         // The world mirrored about the water, seen from the real eye: the same as the unmirrored world seen from the
         // mirrored eye (which is also where distances for LOD, objects and haze are measured from).
@@ -306,11 +304,11 @@ public sealed class ReflectionPass : IDisposable
         var rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
         // The sky derives its rays with the backend's clip depths (DEPTH_NEAREST, DEPTH_SKY), so its matrix follows the scene convention.
         var skyProjection = rotation * DepthConvention.Apply(Perspective(camera.FieldOfView, aspect, 1, 1000));
-        sky.PrepareClouds(skyProjection, width, height, mirroredEye, reflection: true);
+        sky.PrepareClouds(skyProjection, _width, _height, mirroredEye, reflection: true);
         var cmd = Gpu.BeginNative("reflection");
         bool unlit = NoShadows && !FaithfulShadows;
-        if (unlit) Gpu.Globals.OverrideBlock(ShadowShaders.ReceiverBlock, (unshadowed ??= new FrameBlock(Gpu, ShadowPass.ReceiverBytes)).Binding);   // zeros: shadows off
-        var target = msColour is not null ? PassTargets.Of(msColour, msDepth) : PassTargets.Of(colour, depth);
+        if (unlit) Gpu.Globals.OverrideBlock(ShadowShaders.ReceiverBlock, (_unshadowed ??= new FrameBlock(Gpu, ShadowPass.ReceiverBytes)).Binding);   // zeros: shadows off
+        var target = _msColour is not null ? PassTargets.Of(_msColour, _msDepth) : PassTargets.Of(_colour, _depth);
         // Wave 4 (docs/renderer-native.md 6): the guests' segments are secondaries, recorded on the job threads when the pass ends.
         bool secondaries = Gpu.RecordsSecondaries;
         cmd.BeginRendering(new RenderingDesc(
@@ -325,39 +323,39 @@ public sealed class ReflectionPass : IDisposable
         sky.Draw(skyProjection, colours);
         Lap(0);
 
-        options.Textures = render.Textures;
-        options.NormalMaps = false;
-        options.Objects = render.Objects;
-        options.Water = render.Water;
-        options.Wireframe = 0;
-        options.Debug = 0;
-        options.TerrainPixelError = render.TerrainPixelError;
-        options.TerrainPixelScale = render.TerrainPixelScale * TerrainLodScale;
-        options.MaterialDistance = Math.Min(render.MaterialDistance, MaterialDistance);
+        _options.Textures = render.Textures;
+        _options.NormalMaps = false;
+        _options.Objects = render.Objects;
+        _options.Water = render.Water;
+        _options.Wireframe = 0;
+        _options.Debug = 0;
+        _options.TerrainPixelError = render.TerrainPixelError;
+        _options.TerrainPixelScale = render.TerrainPixelScale * TerrainLodScale;
+        _options.MaterialDistance = Math.Min(render.MaterialDistance, MaterialDistance);
 
         terrain.BeginFrame();
-        texelScale = 0.5f * height / (MathF.Tan(camera.FieldOfView / 2) * Margin);   // texels of the half-resolution image per unit of (size / distance)
+        _texelScale = 0.5f * _height / (MathF.Tan(camera.FieldOfView / 2) * Margin);   // texels of the half-resolution image per unit of (size / distance)
         var drawn = DrawMirrored(camera, aspect, view, clip, rect, mirroredEye, terrain, light, drawObjects);
         if (unlit) Gpu.Globals.OverrideBlock(ShadowShaders.ReceiverBlock, null);
         (DrawnChunks, DrawnTriangles) = (terrain.DrawnChunks, terrain.DrawnTriangles);
         var (mapped, nearest) = drawn ?? default;
         ViewProjection = mapped;   // x and y do not depend on the near plane
-        Valid = hasImage = drawn is not null;
+        Valid = _hasImage = drawn is not null;
 
         if (Gpu is GpuContext parallelGpu && parallelGpu.Frame.Parallel.Open) parallelGpu.Frame.Parallel.End();
         cmd.EndRendering();
-        if (msColour is not null)
+        if (_msColour is not null)
         {
             // The multisampled colour into the texture the water samples (a resolve, as the framebuffer blit was), between full barriers.
             cmd.Order();
-            cmd.Resolve(msColour, colour!);
+            cmd.Resolve(_msColour, _colour!);
         }
         Gpu.EndHostPass(cmd);
-        if (FogVolumes && hasImage) RunFog(cmd, nearest, mapped, mirroredEye);
+        if (FogVolumes && _hasImage) RunFog(cmd, nearest, mapped, mirroredEye);
         Gpu.EndNative(cmd);
-        timer.End();
+        _timer.End();
         CpuMs = watch.Elapsed.TotalMilliseconds;
-        cpuSamples.Add(CpuMs);
+        _cpuSamples.Add(CpuMs);
     }
 
     /// <summary>
@@ -375,7 +373,7 @@ public sealed class ReflectionPass : IDisposable
         var standard = Perspective(camera.FieldOfView, aspect, near, far);
         var viewProjection = view * DepthConvention.Apply(Oblique(standard, view, clip));
         var frustum = Frustum(viewProjection, rect);
-        terrain.Draw(viewProjection, mirroredEye, frustum, options, light, WorldWater.Height - 1, secondary: true);
+        terrain.Draw(viewProjection, mirroredEye, frustum, _options, light, WorldWater.Height - 1, secondary: true);
         Lap(1);
         drawObjects?.Invoke(viewProjection, mirroredEye, frustum);
         return (view * DepthConvention.Apply(standard), viewProjection);
@@ -387,16 +385,16 @@ public sealed class ReflectionPass : IDisposable
     /// </summary>
     bool CanReuse(WorldCamera camera, int fullWidth, int fullHeight)
     {
-        if (age >= MaxAge || builtFor != Samples) return false;
+        if (_age >= MaxAge || _builtFor != Samples) return false;
         // An image at this size, or the no-water verdict at this size (heights stream in, so it is checked again after MaxAge frames like an image).
-        if (hasImage ? colour is null || msColour is null && samples != 0 || width != Math.Max((int)(fullWidth * Scale), 64) || height != Math.Max((int)(fullHeight * Scale), 64)
-                     : !noWater || fullWidth != noWaterWidth || fullHeight != noWaterHeight) return false;
+        if (_hasImage ? _colour is null || _msColour is null && _samples != 0 || _width != Math.Max((int)(fullWidth * Scale), 64) || _height != Math.Max((int)(fullHeight * Scale), 64)
+                     : !_noWater || fullWidth != _noWaterWidth || fullHeight != _noWaterHeight) return false;
         var view = camera.View;
-        float shift = Vector3.Distance(camera.Eye, lastEye);
+        float shift = Vector3.Distance(camera.Eye, _lastEye);
         // About a texel of parallax for things 3000 units away, and no more than a tenth of a degree of turn.
-        float turn = Vector3.Dot(new Vector3(view.M13, view.M23, view.M33), new Vector3(lastView.M13, lastView.M23, lastView.M33));
-        float up = Vector3.Dot(new Vector3(view.M12, view.M22, view.M32), new Vector3(lastView.M12, lastView.M22, lastView.M32));
-        return camera.FieldOfView == lastFov && shift <= 3 + 0.004f * (camera.Eye.Y - WorldWater.Height) && turn > 0.999998f && up > 0.999998f;
+        float turn = Vector3.Dot(new Vector3(view.M13, view.M23, view.M33), new Vector3(_lastView.M13, _lastView.M23, _lastView.M33));
+        float up = Vector3.Dot(new Vector3(view.M12, view.M22, view.M32), new Vector3(_lastView.M12, _lastView.M22, _lastView.M32));
+        return camera.FieldOfView == _lastFov && shift <= 3 + 0.004f * (camera.Eye.Y - WorldWater.Height) && turn > 0.999998f && up > 0.999998f;
     }
 
     /// <summary>The <see cref="StageClock"/> stage of the reflection's recording jobs.</summary>
@@ -404,8 +402,8 @@ public sealed class ReflectionPass : IDisposable
 
     /// <summary>CPU time of the parts of the pass (sky, terrain, objects, foliage), summed over the passes drawn; the scene callback adds its own.</summary>
     public readonly double[] PhaseMs = new double[5];
-    long lapAt;
-    public void Lap(int phase) { long now = Stopwatch.GetTimestamp(); double ms = (now - lapAt) * 1000.0 / Stopwatch.Frequency; PhaseMs[phase] += ms; LastPhaseMs[phase] += ms; lapAt = now; }
+    long _lapAt;
+    public void Lap(int phase) { long now = Stopwatch.GetTimestamp(); double ms = (now - _lapAt) * 1000.0 / Stopwatch.Frequency; PhaseMs[phase] += ms; LastPhaseMs[phase] += ms; _lapAt = now; }
     /// <summary>The same for the last pass alone.</summary>
     public readonly double[] LastPhaseMs = new double[5];
     public string DescribeLast() => $"setup {LastPhaseMs[4]:0.0}, sky {LastPhaseMs[0]:0.0}, terrain {LastPhaseMs[1]:0.0}, objects {LastPhaseMs[2]:0.0}, foliage {LastPhaseMs[3]:0.0}";
@@ -421,9 +419,9 @@ public sealed class ReflectionPass : IDisposable
             if (s.Count == 0) return "none";
             return $"mean {s.Average():0.00}, p95 {s[Math.Min((int)(s.Count * 0.95), s.Count - 1)]:0.00}, max {s[^1]:0.00}";
         }
-        int frames = cpuSamples.Count + skipped;
-        double perFrame(IEnumerable<double> v) => v.Skip(1).Sum() / Math.Max(frames - 1, 1);
-        return $"{cpuSamples.Count} passes drawn, {skipped} frames reused, {(samples == 0 ? "single-sample" : $"{samples}x samples")}; per frame mean cpu {perFrame(cpuSamples):0.00} ms, gpu {perFrame(gpuSamples):0.00} ms; per pass: gpu {One(gpuSamples)}, cpu {One(cpuSamples)} ms (cpu mean by part: terrain {PhaseMs[1] / Math.Max(cpuSamples.Count, 1):0.00}, objects {PhaseMs[2] / Math.Max(cpuSamples.Count, 1):0.00}, foliage {PhaseMs[3] / Math.Max(cpuSamples.Count, 1):0.00}); nearest water {NearestWater:0} units";
+        int frames = _cpuSamples.Count + _skipped;
+        double PerFrame(IEnumerable<double> v) => v.Skip(1).Sum() / Math.Max(frames - 1, 1);
+        return $"{_cpuSamples.Count} passes drawn, {_skipped} frames reused, {(_samples == 0 ? "single-sample" : $"{_samples}x samples")}; per frame mean cpu {PerFrame(_cpuSamples):0.00} ms, gpu {PerFrame(_gpuSamples):0.00} ms; per pass: gpu {One(_gpuSamples)}, cpu {One(_cpuSamples)} ms (cpu mean by part: terrain {PhaseMs[1] / Math.Max(_cpuSamples.Count, 1):0.00}, objects {PhaseMs[2] / Math.Max(_cpuSamples.Count, 1):0.00}, foliage {PhaseMs[3] / Math.Max(_cpuSamples.Count, 1):0.00}); nearest water {NearestWater:0} units";
     }
 
     /// <summary>
@@ -481,7 +479,7 @@ public sealed class ReflectionPass : IDisposable
     /// </summary>
     Vector4? WaterRect(WorldCamera camera, float aspect, out float nearest)
     {
-        float plane = WorldWater.Height, he = realEye.Y - plane;
+        float plane = WorldWater.Height, he = _realEye.Y - plane;
         nearest = float.NaN;
         if (!Matrix4x4.Invert(camera.View, out var inverse)) return new Vector4(-1, -1, 1, 1);
         nearest = float.PositiveInfinity;
@@ -496,9 +494,9 @@ public sealed class ReflectionPass : IDisposable
             {
                 var dir = Vector3.TransformNormal(new Vector3(((i + 0.5f) / nx * 2 - 1) * tan * aspect, ((j + 0.5f) / ny * 2 - 1) * tan, -1), inverse);
                 if (dir.Y > -1e-4f) continue;
-                var p = realEye + dir * (he / -dir.Y);
+                var p = _realEye + dir * (he / -dir.Y);
                 float distance = dir.Length() * (he / -dir.Y);
-                if (distance > far || heights.HeightAt(p.X, p.Z) >= level) continue;
+                if (distance > far || _heights.HeightAt(p.X, p.Z) >= level) continue;
                 nearest = MathF.Min(nearest, distance);
                 var c = Vector4.Transform(new Vector4(p, 1), mapped);
                 if (c.W <= 1e-3f) continue;
@@ -520,9 +518,9 @@ public sealed class ReflectionPass : IDisposable
     /// shows; the volumes along that part are laid over the texel (the main fog pass already fogs the part from the eye to the water).
     /// </summary>
     public bool FogVolumes { get; set; }
-    LegacyProgram? fogProgram;
-    int fogProgramSamples = -1;
-    GpuPipeline? fogPipeline;
+    LegacyProgram? _fogProgram;
+    int _fogProgramSamples = -1;
+    GpuPipeline? _fogPipeline;
 
     /// <summary>The fog pass over the reflection: the fog volume functions with the texel's distance rebuilt from the reflection's depth
     /// (<paramref name="multisampled"/>: its first sample) through the inverse of the mirrored, oblique view-projection it was drawn with, and the
@@ -562,20 +560,20 @@ public sealed class ReflectionPass : IDisposable
 
     void RunFog(IGpuCommandList cmd, Matrix4x4 nearViewProjection, Matrix4x4 nearRays, Vector3 mirroredEye)
     {
-        var depthTexture = msDepth ?? depth;
-        if (depthTexture is null || colour is null || !Matrix4x4.Invert(nearViewProjection, out var inverse) || !Matrix4x4.Invert(nearRays, out var rayInverse)) return;
-        if (fogProgram is null || fogProgramSamples != samples)
+        var depthTexture = _msDepth ?? _depth;
+        if (depthTexture is null || _colour is null || !Matrix4x4.Invert(nearViewProjection, out var inverse) || !Matrix4x4.Invert(nearRays, out var rayInverse)) return;
+        if (_fogProgram is null || _fogProgramSamples != _samples)
         {
-            fogProgram?.Dispose();
-            fogProgram = LegacyProgram.Create(Gpu, PostProcessShaders.Vertex, FogFragment(samples > 0), "reflection fog volumes");
-            fogProgramSamples = samples;
+            _fogProgram?.Dispose();
+            _fogProgram = LegacyProgram.Create(Gpu, PostProcessShaders.Vertex, FogFragment(_samples > 0), "reflection fog volumes");
+            _fogProgramSamples = _samples;
             // The fog volumes pass's blend: scene Ã— transmittance (alpha) + the fog's light, colour only.
             var state = new DrawState(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal, false, 0, 0,
                 new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha), DrawState.Rgb, PolygonKind.Fill, false, false);
-            fogPipeline = Gpu.Pipelines.Get(state.Pipeline(fogProgram.Program, fogProgram.VertexLayout([]), PrimitiveType.Triangles,
-                new AttachmentFormats(colour.Desc.Format, InternalFormat.None), fogProgram.Name));
+            _fogPipeline = Gpu.Pipelines.Get(state.Pipeline(_fogProgram.Program, _fogProgram.VertexLayout([]), PrimitiveType.Triangles,
+                new AttachmentFormats(_colour.Desc.Format, InternalFormat.None), _fogProgram.Name));
         }
-        var p = fogProgram;
+        var p = _fogProgram;
         p.Bind(p.Sampler("uDepth"), new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), depthTexture.View()));
         p.Set(p.Uniform("uInverse"), in inverse);
@@ -584,13 +582,13 @@ public sealed class ReflectionPass : IDisposable
         p.Set(p.Uniform("uWaterY"), WorldWater.Height);
         p.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
         cmd.Order();
-        cmd.BeginRendering(new RenderingDesc(PassTargets.Of(colour, null).Colour, default, width, height));
-        cmd.SetViewport(new PixelViewport(0, 0, width, height, 0, 1));
-        cmd.SetScissor(new PixelRect(0, 0, (uint)width, (uint)height));
+        cmd.BeginRendering(new RenderingDesc(PassTargets.Of(_colour, null).Colour, default, _width, _height));
+        cmd.SetViewport(new PixelViewport(0, 0, _width, _height, 0, 1));
+        cmd.SetScissor(new PixelRect(0, 0, (uint)_width, (uint)_height));
         cmd.SetRaster(CullMode.None, FrontFaceDirection.Ccw);
         cmd.SetDepth(false, false, DepthFunction.Lequal);
         cmd.SetDepthBias(false, 0, 0);
-        cmd.BindPipeline(fogPipeline!.Value);
+        cmd.BindPipeline(_fogPipeline!.Value);
         p.Flush(cmd);
         cmd.Draw(3);
         cmd.EndRendering();
@@ -599,6 +597,6 @@ public sealed class ReflectionPass : IDisposable
     public void Dispose()
     {
         Free();
-        fogProgram?.Dispose();
+        _fogProgram?.Dispose();
     }
 }

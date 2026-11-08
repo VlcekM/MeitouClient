@@ -47,16 +47,16 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// <summary>Characters that started running so far.</summary>
     public long Fled { get; private set; }
 
-    readonly List<Squad> squads = [];
-    readonly HashSet<int> attacked = [];
-    readonly HashSet<int> seen = [];
-    readonly List<int> standing = [];
+    readonly List<Squad> _squads = [];
+    readonly HashSet<int> _attacked = [];
+    readonly HashSet<int> _seen = [];
+    readonly List<int> _standing = [];
     // The characters standing this check by faction (in slot order) and, per faction asked, the standing enemies of it: a battle of one faction, or of
     // factions at peace, needs no scans, and a few enemies in a big crowd are checked directly rather than by a grid scan over the whole crowd.
-    readonly Dictionary<int, List<int>> standingBy = [];
-    readonly List<int> standingFactions = [];
-    readonly Dictionary<int, List<int>> enemiesOf = [];
-    readonly Stack<List<int>> spare = [];
+    readonly Dictionary<int, List<int>> _standingBy = [];
+    readonly List<int> _standingFactions = [];
+    readonly Dictionary<int, List<int>> _enemiesOf = [];
+    readonly Stack<List<int>> _spare = [];
     /// <summary>Up to this many enemies standing, a scan tests each of them instead of querying the grid.</summary>
     const int DirectEnemies = 256;
 
@@ -64,13 +64,13 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     {
         var table = world.Characters;
         bool check = world.Tick % CheckEveryTicks == 0;
-        if (check) { Attacked(table); StandingFactions(table); standingAt = world.Tick; }
+        if (check) { Attacked(table); StandingFactions(table); _standingAt = world.Tick; }
         // Flights the AI asked for in this tick's think: Self preservation's provider 35 (from the threats), or a goal 35 (from the enemies it senses).
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || table.Cold(i) is not { Ai.FleeRequest: not Ai.FleeAsk.None } asker) continue;
+            if (!table.Next[i].Alive || table.Cold(i) is not { Ai.FleeRequest: not FleeAsk.None } asker) continue;
             var ask = asker.Ai!.FleeRequest;
-            asker.Ai.FleeRequest = Ai.FleeAsk.None;
+            asker.Ai.FleeRequest = FleeAsk.None;
             if (!asker.Fleeing && !asker.IsPlayer && asker.Medical is not { Incapacitated: true }) Begin(world, table, i, ask);
         }
         // Characters already running: the next hop, or the end when it is safe.
@@ -82,7 +82,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             if (check && (cold.FleesAlone ? Unthreatened(world, i, cold) : Safe(world, table, i)))
             {
                 cold.Fleeing = cold.FleesAlone = false;
-                TaskStart.Become(world, i, CharacterTask.Wander, Meitou.Data.Gameplay.Ai.TaskType.WANDERER, TaskSource.Npc);
+                TaskStart.Become(world, i, CharacterTask.Wander, Data.Gameplay.Ai.TaskType.Wanderer, TaskSource.Npc);
                 n.TaskTime = 0;
                 continue;
             }
@@ -93,36 +93,36 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         }
         if (!check || !SquadBreak) return;
         // Squads in a fight that break.
-        squads.Clear();
-        squads.AddRange(world.Squads.All);
-        squads.Sort((a, b) => a.Id.CompareTo(b.Id));
-        foreach (var squad in squads) Consider(world, table, squad);
+        _squads.Clear();
+        _squads.AddRange(world.Squads.All);
+        _squads.Sort((a, b) => a.Id.CompareTo(b.Id));
+        foreach (var squad in _squads) Consider(world, table, squad);
     }
 
     void Consider(World world, CharacterTable table, Squad squad)
     {
         if (!Relations.Contains(squad.Faction)) return;
         int size = 0, able = 0;
-        bool fighting = false, home = Ai.SquadIntact.PersistentHome(squad);
-        standing.Clear();
+        bool fighting = false, home = SquadIntact.PersistentHome(squad);
+        _standing.Clear();
         foreach (var m in squad.Members)
         {
             if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { } c) continue;
             // A member running alone (Self preservation) does not stop its squad from breaking; it counts as the others do and is not started again.
             if (c.IsPlayer || c.Fleeing && !c.FleesAlone) return;
             size++;
-            if (Ai.SquadIntact.Able(world, c, home)) able++;
+            if (SquadIntact.Able(world, c, home)) able++;
             bool down = c.Medical is { Incapacitated: true };
             if (down || c.Fighter is null) continue;
-            standing.Add(s);
+            _standing.Add(s);
             if (c.InCombat || table.Next[s].Task == (byte)CharacterTask.Attack) fighting = true;
         }
         // The squad-intact test (Ai.SquadIntact, FUN_14079acf0, docs/game/perception.md "Fleeing"): a member caged or carried off by a non-ally keeps it intact; else it
         // needs a leader and someone able; under 4 members it holds while the leader is up, from 4 while those able to fight are a share of the squad. No enemy is counted.
-        if (!fighting || standing.Count == 0 || Ai.SquadIntact.Held(table, squad, Relations)) return;
-        if (Ai.SquadIntact.Decide(able, size, !squad.Leader.IsNone, Ai.SquadIntact.Down(table, squad.Leader), home)) return;
+        if (!fighting || _standing.Count == 0 || SquadIntact.Held(table, squad, Relations)) return;
+        if (SquadIntact.Decide(able, size, !squad.Leader.IsNone, SquadIntact.Down(table, squad.Leader), home)) return;
         Broken++;
-        foreach (int s in standing)
+        foreach (int s in _standing)
         {
             if (table.Cold(s)!.Fleeing) continue;
             var (centre, k) = Centre(world, table, s);
@@ -136,18 +136,18 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// a threat still attacks it and its body still takes the choice to running; it runs from their centre and stops when none is left. From the enemies it senses
     /// (<see cref="Ai.FleeAsk.Enemies"/>, a goal 35): as a broken squad's member does.
     /// </summary>
-    void Begin(World world, CharacterTable table, int s, Ai.FleeAsk ask)
+    void Begin(World world, CharacterTable table, int s, FleeAsk ask)
     {
         var cold = table.Cold(s)!;
-        if (ask == Ai.FleeAsk.Threat)
+        if (ask == FleeAsk.Threat)
         {
             float level = combat.ThreatLevel(world, s, out var threats);
-            if (level <= 0 || !Ai.SelfPreservation.Runs(cold, level, Ai.SelfPreservation.Walled(world, s))) return;
+            if (level <= 0 || !SelfPreservation.Runs(cold, level, SelfPreservation.Walled(world, s))) return;
             cold.FleesAlone = true;
             Begin(world, table, s, threats, 1);
             return;
         }
-        if (standingAt != world.Tick) { StandingFactions(table); standingAt = world.Tick; }
+        if (_standingAt != world.Tick) { StandingFactions(table); _standingAt = world.Tick; }
         var (centre, k) = Centre(world, table, s);
         cold.FleesAlone = false;
         Begin(world, table, s, centre, k);
@@ -183,7 +183,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     bool Unthreatened(World world, int s, CharacterCold cold)
     {
         float level = combat.ThreatLevel(world, s, out _);
-        return level <= 0 || !Ai.SelfPreservation.Runs(cold, level, Ai.SelfPreservation.Walled(world, s));
+        return level <= 0 || !SelfPreservation.Runs(cold, level, SelfPreservation.Walled(world, s));
     }
 
     /// <summary>
@@ -205,7 +205,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         {
             var tags = e.Tags;
             if ((tags & (SenseTag.Neutral | SenseTag.Enemy)) == 0 || (tags & (SenseTag.Ko | SenseTag.Imprisoned)) != 0 || e.Target == s || (uint)e.Target >= (uint)table.HighWater) continue;
-            if (!table.Next[e.Target].Alive || table.Next[e.Target].Generation != e.Generation || table.Cold(e.Target) is not { } c || Ai.TaskAggression.OfGoal(c) <= 0) continue;
+            if (!table.Next[e.Target].Alive || table.Next[e.Target].Generation != e.Generation || table.Cold(e.Target) is not { } c || TaskAggression.OfGoal(c) <= 0) continue;
             centre += table.Next[e.Target].Position;
             k++;
         }
@@ -213,7 +213,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     }
 
     // The tick StandingFactions was last built on (a request may come on any tick, the periodic check on every CheckEveryTicks).
-    long standingAt = -1;
+    long _standingAt = -1;
 
     struct Scan
     {
@@ -233,8 +233,15 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         var cold = table.Cold(s)!;
         var scan = new Scan
         {
-            Table = table, Relations = Relations, Self = s, Faction = cold.Faction, Eye = table.Next[s].Position,
-            Range = AggroSystem.RangeOf(cold, SightRange), Limit = limit, Into = into, Each = each,
+            Table = table,
+            Relations = Relations,
+            Self = s,
+            Faction = cold.Faction,
+            Eye = table.Next[s].Position,
+            Range = AggroSystem.RangeOf(cold, SightRange),
+            Limit = limit,
+            Into = into,
+            Each = each,
         };
         var enemies = EnemiesOf(cold.Faction);
         if (enemies.Count <= DirectEnemies) foreach (int e in enemies) Visit(e, ref scan);
@@ -253,7 +260,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         s.Each?.Invoke(slot, p);
     }
 
-    bool Safe(World world, CharacterTable table, int s) => !attacked.Contains(s) && (!AnyEnemy(table.Cold(s)!.Faction) || !Enemies(world, table, s, null, null));
+    bool Safe(World world, CharacterTable table, int s) => !_attacked.Contains(s) && (!AnyEnemy(table.Cold(s)!.Faction) || !Enemies(world, table, s, null, null));
 
     /// <summary>Whether a character standing anywhere this check (<see cref="StandingFactions"/>) is an enemy of <paramref name="faction"/>: when none is, no scan can find one.</summary>
     bool AnyEnemy(int faction) => EnemiesOf(faction).Count > 0;
@@ -261,29 +268,29 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// <summary>The characters standing this check whose faction is an enemy of <paramref name="faction"/>, by faction in order of first appearance, then slot.</summary>
     List<int> EnemiesOf(int faction)
     {
-        if (enemiesOf.TryGetValue(faction, out var list)) return list;
-        list = spare.Count > 0 ? spare.Pop() : [];
-        foreach (int other in standingFactions)
-            if (AggroSystem.IsEnemy(Relations, faction, other)) list.AddRange(standingBy[other]);
-        enemiesOf[faction] = list;
+        if (_enemiesOf.TryGetValue(faction, out var list)) return list;
+        list = _spare.Count > 0 ? _spare.Pop() : [];
+        foreach (int other in _standingFactions)
+            if (AggroSystem.IsEnemy(Relations, faction, other)) list.AddRange(_standingBy[other]);
+        _enemiesOf[faction] = list;
         return list;
     }
 
     /// <summary>The characters standing (alive, not down) by faction, for <see cref="EnemiesOf"/>; once per check.</summary>
     void StandingFactions(CharacterTable table)
     {
-        foreach (var l in standingBy.Values) { l.Clear(); spare.Push(l); }
-        foreach (var l in enemiesOf.Values) { l.Clear(); spare.Push(l); }
-        standingBy.Clear();
-        enemiesOf.Clear();
-        standingFactions.Clear();
+        foreach (var l in _standingBy.Values) { l.Clear(); _spare.Push(l); }
+        foreach (var l in _enemiesOf.Values) { l.Clear(); _spare.Push(l); }
+        _standingBy.Clear();
+        _enemiesOf.Clear();
+        _standingFactions.Clear();
         for (int i = 0; i < table.HighWater; i++)
         {
             if (!table.Next[i].Alive || table.Cold(i) is not { Medical.Incapacitated: false } c) continue;
-            if (!standingBy.TryGetValue(c.Faction, out var l))
+            if (!_standingBy.TryGetValue(c.Faction, out var l))
             {
-                standingBy[c.Faction] = l = spare.Count > 0 ? spare.Pop() : [];
-                standingFactions.Add(c.Faction);
+                _standingBy[c.Faction] = l = _spare.Count > 0 ? _spare.Pop() : [];
+                _standingFactions.Add(c.Faction);
             }
             l.Add(i);
         }
@@ -292,13 +299,13 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     /// <summary>The slots some living character is fighting (the combat state as of this tick).</summary>
     void Attacked(CharacterTable table)
     {
-        attacked.Clear();
+        _attacked.Clear();
         for (int i = 0; i < table.HighWater; i++)
         {
             ref readonly var n = ref table.Next[i];
             if (!n.Alive || n.Task != (byte)CharacterTask.Attack) continue;
             var st = combat.StateOf(new CharacterId(i, n.Generation));
-            if (st.TargetSlot >= 0) attacked.Add(st.TargetSlot);
+            if (st.TargetSlot >= 0) _attacked.Add(st.TargetSlot);
         }
     }
 
@@ -318,7 +325,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         var id = new CharacterId(s, n.Generation);
         float r = Rng.Float(Rng.Hash(world.Seed, Rng.Key(id), RngPurpose.Flee, ((ulong)world.Tick << 2) | 2));
         var start = from ?? new Vector2(n.Position.X, n.Position.Z);
-        TaskStart.Walk(world, s, start + direction * (distance + RunSpread * r), SpeedMode.Free, Meitou.Data.Gameplay.Ai.TaskType.RUN_AWAY, TaskSource.Npc);
+        TaskStart.Walk(world, s, start + direction * (distance + RunSpread * r), SpeedMode.Free, Data.Gameplay.Ai.TaskType.RunAway, TaskSource.Npc);
     }
 
     public void Hash(ref StateHasher hasher)

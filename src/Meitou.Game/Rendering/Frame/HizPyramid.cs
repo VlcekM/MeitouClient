@@ -38,34 +38,34 @@ public sealed unsafe class HizPyramid : IDisposable
     /// <summary>The levels the first kernel makes (the others come from the second).</summary>
     const int FusedLevels = 5;
 
-    readonly GpuContext ctx;
-    readonly GpuProgram baseProgram, reduceProgram;
-    readonly GpuComputePipeline basePipeline, reducePipeline;
-    DeviceBuffer? buffer;
-    readonly uint[] offsets = new uint[MaxLevels];
-    int levelCount, width, height, baseWidth, baseHeight;
+    readonly GpuContext _ctx;
+    readonly GpuProgram _baseProgram, _reduceProgram;
+    readonly GpuComputePipeline _basePipeline, _reducePipeline;
+    DeviceBuffer? _buffer;
+    readonly uint[] _offsets = new uint[MaxLevels];
+    int _levelCount, _width, _height, _baseWidth, _baseHeight;
     // The camera the depth was drawn from.
-    Vector3 eye, right, up, back;
-    float tanX, tanY;
-    long builtFrame = long.MinValue;
-    GpuSampler sampler;
+    Vector3 _eye, _right, _up, _back;
+    float _tanX, _tanY;
+    long _builtFrame = long.MinValue;
+    readonly GpuSampler _sampler;
 
     public HizPyramid(GpuContext ctx)
     {
-        this.ctx = ctx;
-        baseProgram = ctx.Shaders.Compute(HizShaders.Base, "hiz base");
-        reduceProgram = ctx.Shaders.Compute(HizShaders.Reduce, "hiz reduce");
-        basePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(baseProgram, "hiz base"));
-        reducePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(reduceProgram, "hiz reduce"));
-        sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+        this._ctx = ctx;
+        _baseProgram = ctx.Shaders.Compute(HizShaders.Base, "hiz base");
+        _reduceProgram = ctx.Shaders.Compute(HizShaders.Reduce, "hiz reduce");
+        _basePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_baseProgram, "hiz base"));
+        _reducePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_reduceProgram, "hiz reduce"));
+        _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
             TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
     }
 
     /// <summary>Whether a pyramid is held (built since the depth's size last changed).</summary>
-    public bool HasData => buffer is not null && builtFrame != long.MinValue;
+    public bool HasData => _buffer is not null && _builtFrame != long.MinValue;
     /// <summary>The level count and level 0's size, for the statistics.</summary>
-    public string Describe => HasData ? $"{levelCount} levels from {baseWidth} x {baseHeight}, {buffer!.Size / 1024} KB" : "none";
-    internal DeviceBuffer? Storage => buffer;
+    public string Describe => HasData ? $"{_levelCount} levels from {_baseWidth} x {_baseHeight}, {_buffer!.Size / 1024} KB" : "none";
+    internal DeviceBuffer? Storage => _buffer;
     /// <summary>Frames built.</summary>
     public long Builds { get; private set; }
 
@@ -109,7 +109,7 @@ public sealed unsafe class HizPyramid : IDisposable
         // The cull reads it in the next frame's pre-frame commands.
         cmd.Order();
         cmd.EndLabel();
-        builtFrame = ctx.Frame.Number;
+        _builtFrame = _ctx.Frame.Number;
         Builds++;
     }
 
@@ -118,16 +118,16 @@ public sealed unsafe class HizPyramid : IDisposable
     {
         ulong texels = 0;
         foreach (var (lw, lh) in levels) texels += (ulong)lw * (ulong)lh;
-        if (buffer is null || buffer.Size < texels * 8 || width != w || height != h)
+        if (_buffer is null || _buffer.Size < texels * 8 || _width != w || _height != h)
         {
-            buffer?.Dispose();   // deferred: earlier frames' cull may still read it
-            buffer = DeviceBuffer.Create(ctx, texels * 8, BufferUse.Storage | BufferUse.TransferSrc, "hiz pyramid");
+            _buffer?.Dispose();   // deferred: earlier frames' cull may still read it
+            _buffer = DeviceBuffer.Create(_ctx, texels * 8, BufferUse.Storage | BufferUse.TransferSrc, "hiz pyramid");
         }
-        (width, height, baseWidth, baseHeight, levelCount) = (w, h, levels[0].W, levels[0].H, levels.Count);
+        (_width, _height, _baseWidth, _baseHeight, _levelCount) = (w, h, levels[0].W, levels[0].H, levels.Count);
         uint offset = 0;
         for (int i = 0; i < levels.Count; i++)
         {
-            offsets[i] = offset;
+            _offsets[i] = offset;
             offset += (uint)(levels[i].W * levels[i].H);
         }
     }
@@ -135,28 +135,37 @@ public sealed unsafe class HizPyramid : IDisposable
     /// <summary>The camera the depth was drawn from, for <see cref="ViewFor"/>.</summary>
     void KeepCamera(Vector3 eyePosition, Matrix4x4 viewRotation, float fieldOfView, float aspect)
     {
-        eye = eyePosition;
-        right = new Vector3(viewRotation.M11, viewRotation.M21, viewRotation.M31);
-        up = new Vector3(viewRotation.M12, viewRotation.M22, viewRotation.M32);
-        back = new Vector3(viewRotation.M13, viewRotation.M23, viewRotation.M33);
-        tanY = MathF.Tan(fieldOfView * 0.5f);
-        tanX = tanY * aspect;
+        _eye = eyePosition;
+        _right = new Vector3(viewRotation.M11, viewRotation.M21, viewRotation.M31);
+        _up = new Vector3(viewRotation.M12, viewRotation.M22, viewRotation.M32);
+        _back = new Vector3(viewRotation.M13, viewRotation.M23, viewRotation.M33);
+        _tanY = MathF.Tan(fieldOfView * 0.5f);
+        _tanX = _tanY * aspect;
     }
 
     /// <summary>Levels 0 to 4 in one dispatch (a 16 x 16 tile of level 0 per workgroup, the rest through shared memory).</summary>
     void RecordBase(IGpuCommandList cmd, GpuTexture depth, Vector2 planes, List<(int W, int H)> levels)
     {
         var bindings = stackalloc GpuBinding[2];
-        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(sampler, depth.View()));
-        bindings[1] = GpuBinding.Storage(1, new GpuBufferBinding(buffer!.Handle, 0, buffer.Size));
-        cmd.BindPipeline(basePipeline);
-        cmd.BindProgramResources(baseProgram, 0, new ReadOnlySpan<GpuBinding>(bindings, 2));
+        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(_sampler, depth.View()));
+        bindings[1] = GpuBinding.Storage(1, new GpuBufferBinding(_buffer!.Handle, 0, _buffer.Size));
+        cmd.BindPipeline(_basePipeline);
+        cmd.BindProgramResources(_baseProgram, 0, new ReadOnlySpan<GpuBinding>(bindings, 2));
         var push = new BasePush
         {
-            Planes = planes, Width = (uint)width, Height = (uint)height, BaseWidth = (uint)levels[0].W, BaseHeight = (uint)levels[0].H,
-            Levels = (uint)levels.Count, Offset0 = offsets[0], Offset1 = offsets[1], Offset2 = offsets[2], Offset3 = offsets[3], Offset4 = offsets[4],
+            Planes = planes,
+            Width = (uint)_width,
+            Height = (uint)_height,
+            BaseWidth = (uint)levels[0].W,
+            BaseHeight = (uint)levels[0].H,
+            Levels = (uint)levels.Count,
+            Offset0 = _offsets[0],
+            Offset1 = _offsets[1],
+            Offset2 = _offsets[2],
+            Offset3 = _offsets[3],
+            Offset4 = _offsets[4],
         };
-        cmd.PushConstants(baseProgram, GpuStage.Compute, in push);
+        cmd.PushConstants(_baseProgram, GpuStage.Compute, in push);
         cmd.Dispatch((uint)((levels[0].W + 15) / 16), (uint)((levels[0].H + 15) / 16));
     }
 
@@ -164,17 +173,17 @@ public sealed unsafe class HizPyramid : IDisposable
     void RecordReduce(IGpuCommandList cmd, List<(int W, int H)> levels)
     {
         var bindings = stackalloc GpuBinding[1];
-        bindings[0] = GpuBinding.Storage(0, new GpuBufferBinding(buffer!.Handle, 0, buffer.Size));
-        cmd.BindPipeline(reducePipeline);
-        cmd.BindProgramResources(reduceProgram, 0, new ReadOnlySpan<GpuBinding>(bindings, 1));
+        bindings[0] = GpuBinding.Storage(0, new GpuBufferBinding(_buffer!.Handle, 0, _buffer.Size));
+        cmd.BindPipeline(_reducePipeline);
+        cmd.BindProgramResources(_reduceProgram, 0, new ReadOnlySpan<GpuBinding>(bindings, 1));
         var push = new ReducePush { BaseWidth = (uint)levels[0].W, BaseHeight = (uint)levels[0].H, Levels = (uint)levels.Count };
-        for (int i = 0; i < MaxLevels; i++) push.Offsets[i] = i < levels.Count ? offsets[i] : 0;
-        cmd.PushConstants(reduceProgram, GpuStage.Compute, in push);
+        for (int i = 0; i < MaxLevels; i++) push.Offsets[i] = i < levels.Count ? _offsets[i] : 0;
+        cmd.PushConstants(_reduceProgram, GpuStage.Compute, in push);
         cmd.Dispatch(1);
     }
 
     /// <summary>Forgets the pyramid (the depth's size or the camera's continuity changed): no frame uses it until the next <see cref="Build"/>.</summary>
-    public void Invalidate() => builtFrame = long.MinValue;
+    public void Invalidate() => _builtFrame = long.MinValue;
 
     /// <summary>
     /// What the current frame's cull may use: the last frame's pyramid when it is the frame just before this one, and the eye <paramref name="current"/> has not
@@ -182,10 +191,10 @@ public sealed unsafe class HizPyramid : IDisposable
     /// </summary>
     public OcclusionView ViewFor(Vector3 current, float maxStep = 5000f)
     {
-        if (!HasData || ctx.Frame.Number - builtFrame > 1) return default;
-        float step = Vector3.Distance(current, eye);
+        if (!HasData || _ctx.Frame.Number - _builtFrame > 1) return default;
+        float step = Vector3.Distance(current, _eye);
         if (!(step <= maxStep)) return default;
-        return new OcclusionView(new GpuBufferBinding(buffer!.Handle, 0, buffer.Size), Vectors(eye, step, right, up, back, tanX, tanY, width, height, levelCount, baseWidth, baseHeight, offsets));
+        return new OcclusionView(new GpuBufferBinding(_buffer!.Handle, 0, _buffer.Size), Vectors(_eye, step, _right, _up, _back, _tanX, _tanY, _width, _height, _levelCount, _baseWidth, _baseHeight, _offsets));
     }
 
     /// <summary>The vec4s of <see cref="OcclusionView.Vectors"/>: the camera the depth was drawn from (<paramref name="eye"/>, view axes, tangents of half the field of view, size) and the eye's step since.</summary>
@@ -228,12 +237,12 @@ public sealed unsafe class HizPyramid : IDisposable
 
     public void Dispose()
     {
-        foreach (var p in new[] { baseProgram, reduceProgram })
+        foreach (var p in new[] { _baseProgram, _reduceProgram })
         {
-            ctx.Pipelines.Forget(p);
-            ctx.Shaders.Dispose(p);
+            _ctx.Pipelines.Forget(p);
+            _ctx.Shaders.Dispose(p);
         }
-        buffer?.Dispose();
+        _buffer?.Dispose();
     }
 }
 

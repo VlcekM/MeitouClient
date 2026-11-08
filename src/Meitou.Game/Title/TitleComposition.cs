@@ -96,7 +96,12 @@ sealed class TitleComposition
             var shape = CharacterShape.InputFor(database, Appearance);
             var sliders = new Dictionary<string, float>(shape.Sliders, StringComparer.Ordinal)
             {
-                ["Shoulders"] = 111, ["Frame"] = 105, ["Chest"] = 106, ["Arm bulk"] = 110, ["Neck width"] = 106, ["Waist"] = 99,
+                ["Shoulders"] = 111,
+                ["Frame"] = 105,
+                ["Chest"] = 106,
+                ["Arm bulk"] = 110,
+                ["Neck width"] = 106,
+                ["Waist"] = 99,
             };
             Appearance.Shape = shape with { Muscle = 0.6f, Sliders = sliders };
         }
@@ -122,7 +127,7 @@ sealed class TitleComposition
             {
                 // A building record by name, laid out as the game lays out a placed one: its origin on the plateau's top under its screen point,
                 // or with a distance ahead, on the ground that far along the ray.
-                if (database.Records.Values.FirstOrDefault(r => r.Type == Meitou.Data.Fcs.FcsRecordType.BUILDING && r.Name == name) is not { } building) continue;
+                if (database.Records.Values.FirstOrDefault(r => r.Type == Data.Fcs.FcsRecordType.Building && r.Name == name) is not { } building) continue;
                 var toward = RayThrough(view, screen);
                 var foot = view.Eye + toward * (ahead / MathF.Max(new Vector2(toward.X, toward.Z).Length(), 1e-3f));
                 foot = ahead == 0 && plateauTop is { } level ? PlaneHit(view, level, screen) : foot with { Y = ground(foot.X, foot.Z) };
@@ -138,7 +143,7 @@ sealed class TitleComposition
             Vector3[] points;
             try
             {
-                var mesh = Meitou.Data.Ogre.OgreMeshReader.ReadFile(Path.Combine(install.Root, meshPath.TrimStart('.', '\\', '/')));
+                var mesh = Data.Ogre.OgreMeshReader.ReadFile(Path.Combine(install.Root, meshPath.TrimStart('.', '\\', '/')));
                 points = [.. (mesh.SharedVertexData?.ReadPositions() ?? []), .. mesh.SubMeshes.SelectMany(s => s.VertexData?.ReadPositions() ?? [])];
             }
             catch (IOException) { continue; }
@@ -178,9 +183,9 @@ sealed class TitleComposition
     /// <summary>The map feature, else the foliage mesh, drawing the mesh file named <paramref name="mesh"/>; null when the data has none.</summary>
     internal static GameRecord? FeatureRecord(GameDatabase database, string mesh)
     {
-        GameRecord? Of(Meitou.Data.Fcs.FcsRecordType type) => database.Records.Values.FirstOrDefault(r => r.Type == type &&
+        GameRecord? Of(Data.Fcs.FcsRecordType type) => database.Records.Values.FirstOrDefault(r => r.Type == type &&
             string.Equals(Path.GetFileName(r.GetPath("mesh").Replace('\\', '/')), mesh, StringComparison.OrdinalIgnoreCase));
-        return Of(Meitou.Data.Fcs.FcsRecordType.MAP_FEATURES) ?? Of(Meitou.Data.Fcs.FcsRecordType.FOLIAGE_MESH);
+        return Of(Data.Fcs.FcsRecordType.MapFeatures) ?? Of(Data.Fcs.FcsRecordType.FoliageMesh);
     }
 
     /// <summary>

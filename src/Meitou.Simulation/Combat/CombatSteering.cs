@@ -98,8 +98,8 @@ public static class CombatSteering
     public static (float Enemy, float Ally, float Stop, float Start) Draws(ulong seed, ulong key, CharacterCold cold)
     {
         float r = CombatTuning.Footprint(cold) * (cold.Medical?.ScaleK ?? 1);
-        float u(ulong k) => CombatRolls.Float(seed, key, CombatRoll.Steering, k);
-        float stop = 3 + 3 * u(2), start = 30 + 3 * stop + 12 * u(3);
+        float U(ulong k) => CombatRolls.Float(seed, key, CombatRoll.Steering, k);
+        float stop = 3 + 3 * U(2), start = 30 + 3 * stop + 12 * U(3);
         if (cold.Fighter is { IsAnimal: false } f)
         {
             float e = 1 - f.EncumbranceFactor;
@@ -108,7 +108,7 @@ public static class CombatSteering
         }
         stop = Math.Clamp(stop, 0, 20);
         start = MathF.Max(MathF.Min(start, 90), stop + 10);
-        return (15 + 30 * u(0), 1.5f * r + 30 * u(1), stop, start);
+        return (15 + 30 * U(0), 1.5f * r + 30 * U(1), stop, start);
     }
 
     [System.Runtime.CompilerServices.InlineArray(Gathered)]
@@ -233,8 +233,18 @@ public static class CombatSteering
         var (enemyDist, allyDist, stop, start) = Draws(world.Seed, Rng.Key(world.Characters.IdOf(i)), cold);
         var q = new Push
         {
-            World = world, Combat = combat, Me = i, Target = t, Faction = cold.Faction, At = me, Radius = rs, Own = radius, Face = line, Turn = s.PowerThrough,
-            EnemyReach = rs + enemyDist, AllyReach = rs + allyDist,
+            World = world,
+            Combat = combat,
+            Me = i,
+            Target = t,
+            Faction = cold.Faction,
+            At = me,
+            Radius = rs,
+            Own = radius,
+            Face = line,
+            Turn = s.PowerThrough,
+            EnemyReach = rs + enemyDist,
+            AllyReach = rs + allyDist,
         };
         // The repulsion takes the nearest MaxRepulsions bodies that push (they push hardest). A body pushes only within both the flocking list's reach and its own
         // reach, so nothing farther than the nearer of the two (plus a large body's radius) is looked at. First the nearest by distance alone, the flocking list's

@@ -47,8 +47,17 @@ public sealed partial class CombatSystem
         int protectee = cold.Guarding && table.TryResolveNext(cold.FollowOrder, out int p) && p != i ? p : -1;
         var q = new Choice
         {
-            Self = i, Current = s.TargetSlot, Cold = cold, Player = cold.IsPlayer, Hold = hold, Prone = cold.Medical!.Prone, Animal = cold.Fighter!.IsAnimal,
-            HoldPoint = hold ? Orders.HoldPointOf(cold, prev[i].Position) : default, Protectee = protectee, Best = -1, BestScore = PickFloor,
+            Self = i,
+            Current = s.TargetSlot,
+            Cold = cold,
+            Player = cold.IsPlayer,
+            Hold = hold,
+            Prone = cold.Medical!.Prone,
+            Animal = cold.Fighter!.IsAnimal,
+            HoldPoint = hold ? Orders.HoldPointOf(cold, prev[i].Position) : default,
+            Protectee = protectee,
+            Best = -1,
+            BestScore = PickFloor,
         };
         bool Known(int a)
         {
@@ -58,11 +67,11 @@ public sealed partial class CombatSystem
         if (protectee >= 0)
         {
             int pg = prev[protectee].Generation;
-            foreach (var (_, _, _, a) in index.AttackersOf(protectee))
-                if (read[a].TargetGeneration == pg && !Crippled(table, a) && Known(a)) Consider(world, ref q, a, false);
+            foreach (var (_, _, _, a) in _index.AttackersOf(protectee))
+                if (_read[a].TargetGeneration == pg && !Crippled(table, a) && Known(a)) Consider(world, ref q, a, false);
         }
         int generation = prev[i].Generation;
-        foreach (var (_, _, _, a) in index.AttackersOf(i)) if (read[a].TargetGeneration == generation && !Crippled(table, a) && Known(a)) Consider(world, ref q, a, false);
+        foreach (var (_, _, _, a) in _index.AttackersOf(i)) if (_read[a].TargetGeneration == generation && !Crippled(table, a) && Known(a)) Consider(world, ref q, a, false);
         var senses = CharacterFacts.Senses(world, i);
         if (senses is not null)
             foreach (var t in senses.Threats)
@@ -93,7 +102,7 @@ public sealed partial class CombatSystem
         var table = world.Characters;
         var prev = table.Previous;
         int t = s.TaskSlot;
-        if ((uint)t >= (uint)prev.Length || !prev[t].Alive || prev[t].Generation != s.TaskGeneration || read[t].Down
+        if ((uint)t >= (uint)prev.Length || !prev[t].Alive || prev[t].Generation != s.TaskGeneration || _read[t].Down
             || table.Cold(t) is not { Medical.Incapacitated: false, CarriedBy.IsNone: true }) return true;
         return senses is null || !senses.Knows(new CharacterId(t, s.TaskGeneration));
     }
@@ -122,10 +131,10 @@ public sealed partial class CombatSystem
             return Relations is not { } r || !(r.Contains(tc.Faction) && r.Contains(cold.Faction) && r.IsAlly(cold.Faction, tc.Faction));
         }
         int generation = prev[subject].Generation;
-        foreach (var (_, _, _, a) in index.AttackersOf(subject))
-            if (read[a].TargetGeneration == generation && Joinable(a)) Consider(world, ref q, a, looker != subject);
-        int own = read[subject].TargetSlot;
-        if (own >= 0 && own != looker && (uint)own < (uint)prev.Length && prev[own].Generation == read[subject].TargetGeneration && Joinable(own)
+        foreach (var (_, _, _, a) in _index.AttackersOf(subject))
+            if (_read[a].TargetGeneration == generation && Joinable(a)) Consider(world, ref q, a, looker != subject);
+        int own = _read[subject].TargetSlot;
+        if (own >= 0 && own != looker && (uint)own < (uint)prev.Length && prev[own].Generation == _read[subject].TargetGeneration && Joinable(own)
             && table.Cold(own) is { } oc && Relations is { } rel
             && (AggroSystem.IsEnemy(rel, cold.Faction, oc.Faction) || AggroSystem.IsEnemy(rel, oc.Faction, cold.Faction)))
             Consider(world, ref q, own, looker != subject);
@@ -140,12 +149,12 @@ public sealed partial class CombatSystem
         var table = world.Characters;
         var prev = table.Previous;
         int i = q.Self;
-        if (c == i || (uint)c >= (uint)prev.Length || !prev[c].Alive || read[c].Down || table.Cold(c) is not { Medical.Incapacitated: false, IsImprisoned: false, CarriedBy.IsNone: true } tc) return;   // a carried one is dropped by Act's target test
+        if (c == i || (uint)c >= (uint)prev.Length || !prev[c].Alive || _read[c].Down || table.Cold(c) is not { Medical.Incapacitated: false, IsImprisoned: false, CarriedBy.IsNone: true } tc) return;   // a carried one is dropped by Act's target test
         // One it found no path to lately is left out (AITaskSytem::isPathImpossible).
         if (PursuitSystem.PathImpossible(q.Cold, new CharacterId(c, prev[c].Generation), world.Tick)) return;
         // The current target is whoever the order named, of any faction.
         if (c != q.Current && (tc.Faction == q.Cold.Faction || q.Cold.SquadId >= 0 && tc.SquadId == q.Cold.SquadId)) return;
-        ref readonly var o = ref read[c];
+        ref readonly var o = ref _read[c];
         if (q.Hold && !Orders.HoldPost(prev[i].Position, q.HoldPoint, prev[c].Position, prev[c].Velocity, prev[c].Yaw, tc.Medical is { Crawling: true } || o.AttackTech >= 0, o.TargetSlot >= 0)) return;
         int attackers = AttackerCount(world, c) + (q.Pending is { } pending ? pending.GetValueOrDefault(c) : 0);
         float dx = prev[c].Position.X - prev[i].Position.X, dz = prev[c].Position.Z - prev[i].Position.Z;
@@ -158,7 +167,7 @@ public sealed partial class CombatSystem
             Taunt = Orders.Has(tc, CharacterOrders.Taunt),
             Passive = Orders.Has(tc, CharacterOrders.Passive),
             // +10 for one on the AI task's target (the protectee) that does not fight it back, with under two attackers (FUN_14059e300).
-            Protect = (protect || q.Protectee >= 0 && o.TargetSlot == q.Protectee && read[q.Protectee].TargetSlot != c) && attackers < 2,
+            Protect = (protect || q.Protectee >= 0 && o.TargetSlot == q.Protectee && _read[q.Protectee].TargetSlot != c) && attackers < 2,
             Distance = MathF.Sqrt(dx * dx + dz * dz),
             Fighting = o.TargetSlot >= 0,
             Gunner = tc.Gunning is not null,
@@ -187,8 +196,8 @@ public sealed partial class CombatSystem
         var prev = table.Previous;
         if ((uint)slot >= (uint)table.HighWater || !prev[slot].Alive || table.Cold(slot) is not { } c || CharacterFacts.Down(c) || c.Medical is { Dead: true }) return 0;
         int n = 0, only = -1, generation = prev[slot].Generation;
-        foreach (var (_, _, _, a) in index.AttackersOf(slot))
-            if (read[a].TargetGeneration == generation && !read[a].Down) { n++; only = a; }
+        foreach (var (_, _, _, a) in _index.AttackersOf(slot))
+            if (_read[a].TargetGeneration == generation && !_read[a].Down) { n++; only = a; }
         if (n == 1 && AttackerCount(world, only) > 1) return 0.01f;
         float v = n > 0 ? 0.25f * Math.Min(n, 5) - 0.2f : 0;
         if (senses is not null) v = MathF.Max(v, 0.1f * senses.ThreatToMe);
@@ -202,7 +211,7 @@ public sealed partial class CombatSystem
     public int AttackerCount(World world, int slot)
     {
         int n = 0, generation = world.Characters.Previous[slot].Generation;
-        foreach (var (_, _, _, a) in index.AttackersOf(slot)) if (read[a].TargetGeneration == generation && !read[a].Down) n++;
+        foreach (var (_, _, _, a) in _index.AttackersOf(slot)) if (_read[a].TargetGeneration == generation && !_read[a].Down) n++;
         return n;
     }
 
@@ -221,7 +230,7 @@ public sealed partial class CombatSystem
     {
         var table = world.Characters;
         if (table.Cold(a) is not { } ac || table.Cold(t) is not { } tc) return false;
-        ref readonly var o = ref read[t];
+        ref readonly var o = ref _read[t];
         if (o.HitFrom == a) return true;
         if (!tc.IsPlayer && !(ac.IsPlayer && o.TargetSlot != a)) return true;
         var prev = table.Previous;
@@ -239,8 +248,8 @@ public sealed partial class CombatSystem
     public bool IsEnemyOf(World world, int c, CharacterCold oc, int me, int myFaction)
     {
         var prev = world.Characters.Previous;
-        if (read[c].TargetSlot == me && read[c].TargetGeneration == prev[me].Generation) return true;
-        if (read[me].TargetSlot == c && read[me].TargetGeneration == prev[c].Generation) return true;
+        if (_read[c].TargetSlot == me && _read[c].TargetGeneration == prev[me].Generation) return true;
+        if (_read[me].TargetSlot == c && _read[me].TargetGeneration == prev[c].Generation) return true;
         return CharacterFacts.RegardsEnemy(Relations, oc.Faction, myFaction);
     }
 

@@ -153,13 +153,13 @@ public sealed class SavePlatoon(FcsRecord record, SaveFile? file)
     public string? FileName => ContentFile.Length > "platoon/".Length ? ContentFile : null;
     public bool IsLoaded => File is not null;
     public Hand Handle { get => Hand.Read(Record, "handle"); set => value.Write(Record, "handle"); }
-    public Vector3 Position { get => Record.Vector3s.GetValueOrDefault("position"); set => Record.Vector3s["position"] = value; }
+    public Vector3 Position { get => Record.Vector3S.GetValueOrDefault("position"); set => Record.Vector3S["position"] = value; }
     public int Money { get => Record.Ints.GetValueOrDefault("money"); set => Record.Ints["money"] = value; }
     public int CharCount { get => Record.Ints.GetValueOrDefault("char count"); set => Record.Ints["char count"] = value; }
     public bool IsDead => Record.Bools.GetValueOrDefault("dead");
 
     /// <summary>The collection of the file that lists the characters.</summary>
-    public FcsRecord? Collection => File?.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.INSTANCE_COLLECTION && r.Ints.ContainsKey("char count"));
+    public FcsRecord? Collection => File?.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.InstanceCollection && r.Ints.ContainsKey("char count"));
 
     public override string ToString() => Name;
 }
@@ -178,12 +178,12 @@ public sealed class SaveZone(ZoneCoordinate coordinate, SaveFile file)
     public static int ContainerIdOf(ZoneCoordinate z) => z.Y * WorldLayout.ZoneCount + z.X + 1;
 
     /// <summary><c>0-buildinglist</c>: the zone's whole placed-building list; null when the zone has no building.</summary>
-    public FcsRecord? BuildingList => File.Records.FirstOrDefault(r => r.StringId.EndsWith("-buildinglist", StringComparison.Ordinal) && r.RecordType == FcsRecordType.INSTANCE_COLLECTION);
+    public FcsRecord? BuildingList => File.Records.FirstOrDefault(r => r.StringId.EndsWith("-buildinglist", StringComparison.Ordinal) && r.RecordType == FcsRecordType.InstanceCollection);
 
     /// <summary><c>1-itemlist</c>: loose items lying in the zone.</summary>
-    public FcsRecord? ItemList => File.Records.FirstOrDefault(r => r.StringId.EndsWith("-itemlist", StringComparison.Ordinal) && r.RecordType == FcsRecordType.INSTANCE_COLLECTION);
+    public FcsRecord? ItemList => File.Records.FirstOrDefault(r => r.StringId.EndsWith("-itemlist", StringComparison.Ordinal) && r.RecordType == FcsRecordType.InstanceCollection);
 
-    public IEnumerable<FcsRecord> BuildingStates => File.Records.Where(r => r.RecordType == FcsRecordType.GAMESTATE_BUILDING);
+    public IEnumerable<FcsRecord> BuildingStates => File.Records.Where(r => r.RecordType == FcsRecordType.GamestateBuilding);
 
     /// <summary>
     /// The saved building list laid over the base game's placements of the zone, by instance id (the order the game loads them in: base layers first, then the
@@ -206,7 +206,7 @@ public sealed class SaveZone(ZoneCoordinate coordinate, SaveFile file)
             foreach (var i in list.Instances)
             {
                 // The building state; an inventory state can come first.
-                FcsRecord? state = i.States.Select(s => states.GetValueOrDefault(s)).FirstOrDefault(r => r?.RecordType == FcsRecordType.GAMESTATE_BUILDING)
+                FcsRecord? state = i.States.Select(s => states.GetValueOrDefault(s)).FirstOrDefault(r => r?.RecordType == FcsRecordType.GamestateBuilding)
                     ?? (i.States.Count > 0 ? states.GetValueOrDefault(i.States[0]) : null);
                 bool inBase = merged.ContainsKey(i.Id);
                 if (!inBase) order.Add(i.Id);

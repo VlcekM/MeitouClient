@@ -18,49 +18,49 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
     const string Simulation = "simulation";
     const int VisibleRows = 24;
     /// <summary>The record names, techniques included, each once.</summary>
-    readonly string[] names = [Simulation, .. library.Definitions.Select(d => d.Name).Distinct(StringComparer.Ordinal).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)];
-    string filter = "";
-    List<string> shown = [];
-    int scroll, highlight;
-    string? current;
-    float length = 1;
-    long pickedAt;
+    readonly string[] _names = [Simulation, .. library.Definitions.Select(d => d.Name).Distinct(StringComparer.Ordinal).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)];
+    string _filter = "";
+    List<string> _shown = [];
+    int _scroll, _highlight;
+    string? _current;
+    float _length = 1;
+    long _pickedAt;
     // The button and the open list, as last drawn (pixels).
-    float buttonX0, buttonY0, buttonX1, buttonY1, listX0, listY0, listX1, listY1, rowHeight = 20;
+    float _buttonX0, _buttonY0, _buttonX1, _buttonY1, _listX0, _listY0, _listX1, _listY1, _rowHeight = 20;
 
     public bool Open { get; private set; }
 
     /// <summary>The forced animation's record name, null when the simulation animates the hero.</summary>
-    public string? Current => current;
+    public string? Current => _current;
 
-    public string ButtonText => $"animation: {current ?? Simulation} v";
+    public string ButtonText => $"animation: {_current ?? Simulation} v";
 
     /// <summary>The hero's pose this frame: the picked clip looping by the wall clock, or null for the simulation's.</summary>
-    public CharacterPose[]? Pose() => current is null ? null : [new CharacterPose(current, (float)(Stopwatch.GetElapsedTime(pickedAt).TotalSeconds % length), 1)];
+    public CharacterPose[]? Pose() => _current is null ? null : [new CharacterPose(_current, (float)(Stopwatch.GetElapsedTime(_pickedAt).TotalSeconds % _length), 1)];
 
-    public string Status => current is null ? "" : $"loops {length:0.00} s";
+    public string Status => _current is null ? "" : $"loops {_length:0.00} s";
 
     void Pick(string name)
     {
         Open = false;
-        if (name == Simulation) { current = null; return; }
-        current = name;
+        if (name == Simulation) { _current = null; return; }
+        _current = name;
         int at = library.IndexOfAny(name);
-        length = lengths?.Of(at >= 0 ? library.Definitions[at].Clip : name) ?? 1;
-        pickedAt = Stopwatch.GetTimestamp();
+        _length = lengths?.Of(at >= 0 ? library.Definitions[at].Clip : name) ?? 1;
+        _pickedAt = Stopwatch.GetTimestamp();
     }
 
     void Refilter()
     {
-        shown = [.. names.Where(n => n == Simulation || n.Contains(filter, StringComparison.OrdinalIgnoreCase))];
-        scroll = 0;
-        highlight = 0;
+        _shown = [.. _names.Where(n => n == Simulation || n.Contains(_filter, StringComparison.OrdinalIgnoreCase))];
+        _scroll = 0;
+        _highlight = 0;
     }
 
     void ClampScroll()
     {
-        highlight = Math.Clamp(highlight, 0, Math.Max(0, shown.Count - 1));
-        scroll = Math.Clamp(scroll, Math.Max(0, highlight - VisibleRows + 1), Math.Min(highlight, Math.Max(0, shown.Count - VisibleRows)));
+        _highlight = Math.Clamp(_highlight, 0, Math.Max(0, _shown.Count - 1));
+        _scroll = Math.Clamp(_scroll, Math.Max(0, _highlight - VisibleRows + 1), Math.Min(_highlight, Math.Max(0, _shown.Count - VisibleRows)));
     }
 
     static bool In(Vector2 p, float x0, float y0, float x1, float y1) => p.X >= x0 && p.X <= x1 && p.Y >= y0 && p.Y <= y1;
@@ -71,17 +71,17 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
         if (Open)
         {
             Open = false;
-            if (In(p, listX0, listY0, listX1, listY1))
+            if (In(p, _listX0, _listY0, _listX1, _listY1))
             {
-                int k = scroll + (int)((p.Y - listY0) / rowHeight);
-                if (k >= 0 && k < shown.Count) Pick(shown[k]);
+                int k = _scroll + (int)((p.Y - _listY0) / _rowHeight);
+                if (k >= 0 && k < _shown.Count) Pick(_shown[k]);
                 return true;
             }
-            if (In(p, buttonX0, buttonY0, buttonX1, buttonY1)) return true;
+            if (In(p, _buttonX0, _buttonY0, _buttonX1, _buttonY1)) return true;
             return false;
         }
-        if (!In(p, buttonX0, buttonY0, buttonX1, buttonY1)) return false;
-        filter = "";
+        if (!In(p, _buttonX0, _buttonY0, _buttonX1, _buttonY1)) return false;
+        _filter = "";
         Refilter();
         Open = true;
         return true;
@@ -90,7 +90,7 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
     public bool Scroll(float wheel)
     {
         if (!Open) return false;
-        highlight = Math.Clamp(highlight - (int)MathF.Round(wheel) * 3, 0, Math.Max(0, shown.Count - 1));
+        _highlight = Math.Clamp(_highlight - (int)MathF.Round(wheel) * 3, 0, Math.Max(0, _shown.Count - 1));
         ClampScroll();
         return true;
     }
@@ -101,41 +101,41 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
         switch (key)
         {
             case EngineKey.Escape: Open = false; break;
-            case EngineKey.Enter: if (shown.Count > 0) Pick(shown[highlight]); break;
-            case EngineKey.Up: highlight--; ClampScroll(); break;
-            case EngineKey.Down: highlight++; ClampScroll(); break;
-            case EngineKey.PageUp: highlight -= VisibleRows; ClampScroll(); break;
-            case EngineKey.PageDown: highlight += VisibleRows; ClampScroll(); break;
-            case EngineKey.Backspace when filter.Length > 0: filter = filter[..^1]; Refilter(); break;
+            case EngineKey.Enter: if (_shown.Count > 0) Pick(_shown[_highlight]); break;
+            case EngineKey.Up: _highlight--; ClampScroll(); break;
+            case EngineKey.Down: _highlight++; ClampScroll(); break;
+            case EngineKey.PageUp: _highlight -= VisibleRows; ClampScroll(); break;
+            case EngineKey.PageDown: _highlight += VisibleRows; ClampScroll(); break;
+            case EngineKey.Backspace when _filter.Length > 0: _filter = _filter[..^1]; Refilter(); break;
         }
     }
 
     public void TextInput(char c)
     {
         if (!Open || char.IsControl(c)) return;
-        filter += c;
+        _filter += c;
         Refilter();
     }
 
     /// <summary>Draws the button at (<paramref name="x"/>, <paramref name="y"/>) over <paramref name="width"/> pixels and, when open, the list under it.</summary>
     public void Draw(DebugOverlay o, float x, float y, float width)
     {
-        rowHeight = o.LineHeight + 4;
-        (buttonX0, buttonY0, buttonX1, buttonY1) = (x, y, x + width, y + rowHeight);
-        o.Rect(buttonX0, buttonY0, buttonX1, buttonY1, Open ? new Vector4(0.3f, 0.3f, 0.32f, 1) : new Vector4(0.2f, 0.2f, 0.22f, 1));
+        _rowHeight = o.LineHeight + 4;
+        (_buttonX0, _buttonY0, _buttonX1, _buttonY1) = (x, y, x + width, y + _rowHeight);
+        o.Rect(_buttonX0, _buttonY0, _buttonX1, _buttonY1, Open ? new Vector4(0.3f, 0.3f, 0.32f, 1) : new Vector4(0.2f, 0.2f, 0.22f, 1));
         o.Text(o.FitText(ButtonText, width - 8), x + 4, y + 2, DebugOverlay.TextColour);
         if (!Open) return;
-        int rows = Math.Min(VisibleRows, shown.Count);
-        (listX0, listY0, listX1, listY1) = (x, buttonY1 + 2, x + width, buttonY1 + 2 + (rows + 1) * rowHeight);
-        o.Rect(listX0, listY0, listX1, listY1, new Vector4(0.1f, 0.1f, 0.11f, 0.97f));
-        o.Text(filter.Length > 0 ? $"filter: {filter}_   {shown.Count} of {names.Length}" : $"type to filter   {shown.Count}", x + 4, listY0 + 2, new Vector4(0.7f, 0.75f, 0.8f, 1));
+        int rows = Math.Min(VisibleRows, _shown.Count);
+        (_listX0, _listY0, _listX1, _listY1) = (x, _buttonY1 + 2, x + width, _buttonY1 + 2 + (rows + 1) * _rowHeight);
+        o.Rect(_listX0, _listY0, _listX1, _listY1, new Vector4(0.1f, 0.1f, 0.11f, 0.97f));
+        o.Text(_filter.Length > 0 ? $"filter: {_filter}_   {_shown.Count} of {_names.Length}" : $"type to filter   {_shown.Count}", x + 4, _listY0 + 2, new Vector4(0.7f, 0.75f, 0.8f, 1));
         for (int i = 0; i < rows; i++)
         {
-            int k = scroll + i;
-            float top = listY0 + (i + 1) * rowHeight;
-            if (k == highlight) o.Rect(listX0, top, listX1, top + rowHeight, new Vector4(0.25f, 0.3f, 0.4f, 1));
-            bool chosen = shown[k] == (current ?? Simulation);
-            o.Text(o.FitText((chosen ? "x " : "  ") + shown[k], width - 8), x + 4, top + 2, chosen ? new Vector4(1f, 0.9f, 0.4f, 1) : DebugOverlay.TextColour);
+            int k = _scroll + i;
+            float top = _listY0 + (i + 1) * _rowHeight;
+            if (k == _highlight) o.Rect(_listX0, top, _listX1, top + _rowHeight, new Vector4(0.25f, 0.3f, 0.4f, 1));
+            bool chosen = _shown[k] == (_current ?? Simulation);
+            o.Text(o.FitText((chosen ? "x " : "  ") + _shown[k], width - 8), x + 4, top + 2, chosen ? new Vector4(1f, 0.9f, 0.4f, 1) : DebugOverlay.TextColour);
         }
     }
 }

@@ -46,17 +46,17 @@ public sealed partial class UiPainter
     public float TextHeight(UiControl control, int viewportHeight, float minimumTextPixels)
     {
         string fontName = control.Properties.GetValueOrDefault("FontName")
-            ?? (resources.Templates.TryGetValue(control.Skin, out var template)
+            ?? (_resources.Templates.TryGetValue(control.Skin, out var template)
                 ? template.Descendants("Property").FirstOrDefault(p => (string?)p.Attribute("key") == "FontName")?.Attribute("value")?.Value : null)
             ?? "Kenshi_StandardFont_Medium";
-        float wrap = control.Properties.GetValueOrDefault("WordWrap") == "true" ? UiTextLayout.ContentRect(resources, control).Width : 0;
+        float wrap = control.Properties.GetValueOrDefault("WordWrap") == "true" ? UiTextLayout.ContentRect(_resources, control).Width : 0;
         return MeasureText(fontName, control.Caption, viewportHeight, wrap, minimumTextPixels).Height;
     }
 
     public TextSize MeasureText(string fontName, string text, int viewportHeight, float wrapWidth, float minimumTextPixels)
     {
-        var font = ResourceFont(fontName, viewportHeight / 1080f, minimumTextPixels) ?? standardFont ?? overlay;
-        float scale = font == standardFont || font == overlay ? Math.Clamp(viewportHeight / 1080f, 0.5f, 1.5f) : 1;
+        var font = ResourceFont(fontName, viewportHeight / 1080f, minimumTextPixels) ?? _standardFont ?? _overlay;
+        float scale = font == _standardFont || font == _overlay ? Math.Clamp(viewportHeight / 1080f, 0.5f, 1.5f) : 1;
         return Measure(font, text, wrapWidth, scale);
     }
 
@@ -68,7 +68,7 @@ public sealed partial class UiPainter
     public (IReadOnlyList<string> Lines, TextSize Size) WrapCaption(string fontName, string text, float textScale, float wrapWidth, float minimumTextPixels)
     {
         var resourceFont = ResourceFont(fontName, textScale, minimumTextPixels);
-        var font = resourceFont ?? standardFont ?? overlay;
+        var font = resourceFont ?? _standardFont ?? _overlay;
         float scale = resourceFont is null ? textScale : 1;
         text = MyGuiTextTags.Strip(text.Replace("\\n", "\n", StringComparison.Ordinal));
         var lines = font.WrapText(text, wrapWidth, scale);
@@ -87,7 +87,7 @@ public sealed partial class UiPainter
         }
         if (ResourceFont("Kenshi_StandardFont", resourceScale, 0) is { } resourceFont)
             return Measure(resourceFont, text, wrapWidth, 1);
-        return Measure(standardFont ?? overlay, text, wrapWidth, resourceScale);
+        return Measure(_standardFont ?? _overlay, text, wrapWidth, resourceScale);
     }
 
     static TextSize Measure(DebugOverlay font, string text, float wrapWidth, float scale)

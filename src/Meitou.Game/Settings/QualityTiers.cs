@@ -18,7 +18,7 @@ sealed class QualityTiers(SettingsMenu menu)
     internal sealed record PresetSlider(string Label, float Low, float Medium, float Ultra, bool Scale = false, string? Mode = null, float? High = null, bool LowFixed = false);
 
     // --low-end's large foliage range, as a multiple of the default; the medium and small ranges follow it.
-    const float LowFoliageRange = WorldOptions.LowEndLargeRange / global::Meitou.Data.World.FoliageSizes.DefaultLargeRange;
+    const float LowFoliageRange = WorldOptions.LowEndLargeRange / Data.World.FoliageSizes.DefaultLargeRange;
 
     internal static readonly PresetSlider[] PresetSliders =
     [
@@ -81,8 +81,8 @@ sealed class QualityTiers(SettingsMenu menu)
     internal float PresetTarget(PresetSlider p, Slider slider, int preset)
     {
         float start = 0;
-        for (int i = 0; i < menu.values.Sliders.Count; i++) if (ReferenceEquals(menu.values.Sliders[i], slider)) start = menu.defaults[i];
-        if (p.Mode is { } mode && menu.values.Toggles.FirstOrDefault(t => t.Label == mode) is { } toggle && (toggle.Get() ? slider.Meitou : slider.Faithful) is { } mark)
+        for (int i = 0; i < menu.Values.Sliders.Count; i++) if (ReferenceEquals(menu.Values.Sliders[i], slider)) start = menu.Defaults[i];
+        if (p.Mode is { } mode && menu.Values.Toggles.FirstOrDefault(t => t.Label == mode) is { } toggle && (toggle.Get() ? slider.Meitou : slider.Faithful) is { } mark)
             start = mark;
         float factor = preset switch { 0 => p.Low, 1 => p.Medium, 3 => p.Ultra, _ => float.NaN };
         float value = preset == HighPreset ? p.High ?? start
@@ -90,27 +90,27 @@ sealed class QualityTiers(SettingsMenu menu)
             : float.IsNegativeInfinity(factor) ? slider.Min
             : (p.Scale || p.Mode is not null) && !(preset == 0 && p.LowFixed) ? start * factor : factor;
         // A Faithful shadow distance stays within the game's slider.
-        if (p.Mode == "Shadows" && !menu.values.Toggles.Any(t => t.Label == "Shadows" && t.Get()) && value > slider.Min)
-            value = Math.Min(value, global::Meitou.Data.World.KenshiShadows.MaxRange);
+        if (p.Mode == "Shadows" && !menu.Values.Toggles.Any(t => t.Label == "Shadows" && t.Get()) && value > slider.Min)
+            value = Math.Min(value, Data.World.KenshiShadows.MaxRange);
         return Math.Clamp(value, slider.Min, slider.Max);
     }
 
     internal IEnumerable<(PresetSlider Preset, Slider Slider)> PresetPairs() =>
-        PresetSliders.Select(p => (p, menu.values.Sliders.FirstOrDefault(s => s.Label == p.Label))).Where(x => x.Item2 is not null)!;
+        PresetSliders.Select(p => (p, menu.Values.Sliders.FirstOrDefault(s => s.Label == p.Label))).Where(x => x.Item2 is not null)!;
 
     IEnumerable<(PresetToggle Preset, Toggle Toggle, bool Default)> PresetSwitches() =>
-        PresetToggles.Select(p => (p, Index: menu.values.Toggles.ToList().FindIndex(t => t.Label == p.Label))).Where(x => x.Index >= 0)
-            .Select(x => (x.p, menu.values.Toggles[x.Index], menu.toggleDefaults[x.Index]));
+        PresetToggles.Select(p => (p, Index: menu.Values.Toggles.ToList().FindIndex(t => t.Label == p.Label))).Where(x => x.Index >= 0)
+            .Select(x => (x.p, menu.Values.Toggles[x.Index], menu.ToggleDefaults[x.Index]));
 
     internal static bool SwitchTarget(PresetToggle p, bool start, int preset) => preset switch { 0 => p.Low, 1 => p.Medium, 3 => p.Ultra, _ => start };
 
     /// <summary>The tier every tier slider (and, with the Meitou look, every tier switch) sits at, else <see cref="CustomPreset"/>; the look switches do not count.</summary>
-    bool CascadeFor(int preset) => preset switch { 0 or 1 => false, 3 => true, _ => menu.toggleDefaults[menu.values.Toggles.Select(t => t.Label).ToList().IndexOf(FifthCascade)] };
+    bool CascadeFor(int preset) => preset switch { 0 or 1 => false, 3 => true, _ => menu.ToggleDefaults[menu.Values.Toggles.Select(t => t.Label).ToList().IndexOf(FifthCascade)] };
 
     internal int CurrentPreset()
     {
-        bool faithful = menu.lookPresets.FaithfulLook;
-        var cascade = menu.values.Toggles.FirstOrDefault(t => t.Label == FifthCascade);
+        bool faithful = menu.LookPresets.FaithfulLook;
+        var cascade = menu.Values.Toggles.FirstOrDefault(t => t.Label == FifthCascade);
         for (int preset = 0; preset < CustomPreset; preset++)
             if (PresetPairs().All(x => MathF.Abs(x.Slider.FractionOf(x.Slider.Get()) - x.Slider.FractionOf(PresetTarget(x.Preset, x.Slider, preset))) <= 0.005f)
                 && (faithful || PresetSwitches().All(x => x.Toggle.Get() == SwitchTarget(x.Preset, x.Default, preset)))
@@ -134,16 +134,16 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     internal void ApplySavedPreset()
     {
-        int preset = Array.IndexOf(PresetNames, menu.config.GraphicsPreset);
+        int preset = Array.IndexOf(PresetNames, menu.Config.GraphicsPreset);
         if (preset is >= 0 and < CustomPreset && preset != CurrentPreset())
         {
             ApplyPreset(preset);
-            menu.notice = "";
+            menu.Notice = "";
         }
         // At Low the look switches it holds off stay off, also where the launcher's look turned them on (unless kept on).
-        foreach (var label in menu.lookPresets.LowCut())
-            if (menu.values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } toggle) toggle.Set(false);
-        lastTier = CurrentPreset();
+        foreach (var label in menu.LookPresets.LowCut())
+            if (menu.Values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } toggle) toggle.Set(false);
+        LastTier = CurrentPreset();
     }
 
     /// <summary>
@@ -154,76 +154,76 @@ sealed class QualityTiers(SettingsMenu menu)
     {
         ApplyPreset(MediumPreset);
         string[] off = ["Indirect light", "Indoor GI", WorldFrame.GroundParallaxSwitch, WorldFrame.GroundDisplaceSwitch, WorldFrame.RockSmoothingSwitch, WorldFrame.OutlineRefineSwitch];
-        foreach (var toggle in menu.values.Toggles.Where(t => off.Contains(t.Label) && t.Get())) toggle.Set(false);
-        if (menu.values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(2);   // SMAA
-        if (menu.values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale) scale.Set(1);
-        menu.notice = "";
-        lastTier = CurrentPreset();
+        foreach (var toggle in menu.Values.Toggles.Where(t => off.Contains(t.Label) && t.Get())) toggle.Set(false);
+        if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(2);   // SMAA
+        if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale) scale.Set(1);
+        menu.Notice = "";
+        LastTier = CurrentPreset();
     }
 
     /// <summary>The tier being applied (<see cref="ApplyPreset"/>, <see cref="LookPresets.SetFaithful"/>), so the Low cut follows it before the sliders reach it.</summary>
-    internal int? tierOverride;
+    internal int? TierOverride;
     /// <summary>The tier the settings sat at when last looked (<see cref="SyncTier"/>); -1 not yet.</summary>
-    internal int lastTier = -1;
+    internal int LastTier = -1;
 
     /// <summary>The quality tier: the one the settings sit at (<see cref="CurrentPreset"/>), so a slider moved off it makes it Custom.</summary>
-    internal int Tier => tierOverride ?? CurrentPreset();
+    internal int Tier => TierOverride ?? CurrentPreset();
 
     /// <summary>Once the settings leave Low (a slider moved), the look switches Low held off come back.</summary>
     internal void SyncTier()
     {
         int now = CurrentPreset();
-        if (now == lastTier) return;
-        bool leftLow = lastTier == LowPreset;
-        lastTier = now;
-        if (leftLow && !menu.lookPresets.FaithfulLook) menu.lookPresets.ApplyLowCut();
+        if (now == LastTier) return;
+        bool leftLow = LastTier == LowPreset;
+        LastTier = now;
+        if (leftLow && !menu.LookPresets.FaithfulLook) menu.LookPresets.ApplyLowCut();
     }
 
     /// <summary>Saves the preset the settings sit at (Custom when none), for the launcher to show.</summary>
-    internal void SavePreset() => menu.config.GraphicsPreset = PresetNames[CurrentPreset()];
+    internal void SavePreset() => menu.Config.GraphicsPreset = PresetNames[CurrentPreset()];
 
     void ApplyPreset(int preset)
     {
         if (preset is < 0 or >= CustomPreset) return;
-        tierOverride = preset;
+        TierOverride = preset;
         try { ApplyTier(preset); }
-        finally { tierOverride = null; }
-        lastTier = CurrentPreset();
-        menu.notice = preset == LowPreset && menu.lookPresets.LowCut().Any()
-            ? Loc.Tr("Low quality applied: {1} off until you keep them on.", menu.lookPresets.LowCutList())
+        finally { TierOverride = null; }
+        LastTier = CurrentPreset();
+        menu.Notice = preset == LowPreset && menu.LookPresets.LowCut().Any()
+            ? Loc.Tr("Low quality applied: {1} off until you keep them on.", menu.LookPresets.LowCutList())
             : Loc.Tr("{1} quality applied.", Loc.Tr(PresetNames[preset]));
     }
 
     void ApplyTier(int preset)
     {
-        if (preset == LowPreset && menu.values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.ParticleSliders[0]) is { } particles) particles.Set(1);   // a quarter of the render size
+        if (preset == LowPreset && menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.ParticleSliders[0]) is { } particles) particles.Set(1);   // a quarter of the render size
         // The switches first: they move the distances that sit at their mode's default, and the mode decides the distances' base.
-        if (!menu.lookPresets.FaithfulLook)
+        if (!menu.LookPresets.FaithfulLook)
         {
             foreach (var (p, toggle, start) in PresetSwitches())
                 if (toggle.Get() != SwitchTarget(p, start, preset)) toggle.Set(SwitchTarget(p, start, preset));
-            menu.lookPresets.ApplyLowCut();
+            menu.LookPresets.ApplyLowCut();
             if (preset == LowPreset)
                 foreach (var label in LowOffToggles)
-                    if (menu.values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } relief) relief.Set(false);
+                    if (menu.Values.Toggles.FirstOrDefault(t => t.Label == label && t.Get()) is { } relief) relief.Set(false);
         }
         if (preset == LowPreset)
         {
             // --low-end's switches outside the look (anti-aliasing), then no anti-aliasing at all (not even FXAA) at its render scale.
-            foreach (var toggle in menu.values.Toggles.Where(t => t.Remaster && LowOffSwitches.Contains(t.Label) && !LookPresets.IsLook(t.Label, true) && t.Get())) toggle.Set(false);
-            if (menu.values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(0);
-            if (menu.values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale) scale.Set(WorldOptions.LowEndRenderScale);
+            foreach (var toggle in menu.Values.Toggles.Where(t => t.Remaster && LowOffSwitches.Contains(t.Label) && !LookPresets.IsLook(t.Label, true) && t.Get())) toggle.Set(false);
+            if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(0);
+            if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale) scale.Set(WorldOptions.LowEndRenderScale);
         }
         if (preset == HighPreset) SetHighRenderScale();
         foreach (var (p, slider) in PresetPairs()) slider.Set(PresetTarget(p, slider, preset));
-        if (menu.values.Toggles.FirstOrDefault(t => t.Label == FifthCascade) is { } cascade && cascade.Get() != CascadeFor(preset)) cascade.Set(CascadeFor(preset));
+        if (menu.Values.Toggles.FirstOrDefault(t => t.Label == FifthCascade) is { } cascade && cascade.Get() != CascadeFor(preset)) cascade.Set(CascadeFor(preset));
     }
 
     /// <summary>High's render scale: Quality with an upscaler (TAA, FSR, DLSS), native without one (no plain scaling).</summary>
     void SetHighRenderScale()
     {
-        var antiAliasing = menu.values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]);
-        if (menu.values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is not { } scale) return;
+        var antiAliasing = menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]);
+        if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is not { } scale) return;
         bool upscaler = antiAliasing is not null && antiAliasing.Get() >= 3;
         scale.Set(upscaler ? UpscaleOptions.DefaultScale : 1);
     }

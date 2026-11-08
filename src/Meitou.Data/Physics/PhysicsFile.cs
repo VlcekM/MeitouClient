@@ -31,7 +31,7 @@ public sealed class PhysicsFile
     public List<PhysicsBodyActor> Actors { get; } = [];
     public List<PhysicsJoint> Joints { get; } = [];
 
-    public static PhysicsFile ReadFile(string path) => Read(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static PhysicsFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     /// <summary>Reads a whole file; throws <see cref="FormatException"/> when the data is cut short, has bad counts or does not end where the layout does.</summary>
     public static PhysicsFile Read(byte[] data)
@@ -148,12 +148,12 @@ public sealed class PhysicsFile
     /// <summary>A bounds-checked little-endian cursor over the file.</summary>
     ref struct Reader(byte[] data)
     {
-        readonly byte[] data = data;
+        readonly byte[] _data = data;
         public int Position;
 
         public ReadOnlySpan<byte> Bytes(int n)
         {
-            var s = data.AsSpan(Position, n);
+            var s = _data.AsSpan(Position, n);
             Position += n;
             return s;
         }

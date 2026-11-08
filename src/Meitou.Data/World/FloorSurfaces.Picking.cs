@@ -11,7 +11,7 @@ public sealed partial class FloorSurfaces
     public (float Distance, Vector3 Position)? MoveHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
         (float Distance, Vector3 Position)? best = null;
-        foreach (var s in surfaces)
+        foreach (var s in _surfaces)
         {
             if (s.Floor > floor || !RayBox(origin, direction, new(s.Min.X, s.YMin, s.Min.Y), new(s.Max.X, s.YMax, s.Max.Y), maxDistance)) continue;
             for (int i = 0; i + 2 < s.Corners.Length; i += 3)
@@ -40,7 +40,7 @@ public sealed partial class FloorSurfaces
         var origin = point + new Vector3(0, reach, 0);
         float nearest = float.MaxValue;
         Vector3? normal = null;
-        foreach (var s in surfaces)
+        foreach (var s in _surfaces)
         {
             if (s.Floor > floor || point.X < s.Min.X || point.X > s.Max.X || point.Z < s.Min.Y || point.Z > s.Max.Y) continue;
             foreach (int i in s.Grid.At(new Vector2(point.X, point.Z)))
@@ -60,7 +60,7 @@ public sealed partial class FloorSurfaces
     {
         Vector3? best = null;
         const float wallReach = 4;
-        foreach (var s in surfaces)
+        foreach (var s in _surfaces)
         {
             if (s.Floor > floor || point.X < s.Min.X - wallReach || point.X > s.Max.X + wallReach || point.Z < s.Min.Y - wallReach || point.Z > s.Max.Y + wallReach) continue;
             for (int i = 0; i + 2 < s.Corners.Length; i += 3)

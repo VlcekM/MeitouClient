@@ -327,7 +327,7 @@ sealed class HudPanels(PlayerInterface player)
         bool robot = hud?.Robot ?? false;
         int w = WoundSeverity(parts ?? [], hud?.KoPoint ?? hud?.Extended?.KoPoint);
         float bleeding = hud?.Bleeding ?? 0;
-        (string, string?, string) Word(string word, string? colour, string tip) => (Loc.Tr(word), colour, Loc.Tr(tip));
+        static (string, string?, string) Word(string word, string? colour, string tip) => (Loc.Tr(word), colour, Loc.Tr(tip));
         if (body.Dead) return Word("Dead", PlayerInterface.BadColour, "Gone forever. RIP.");
         if (body.BeingEaten) return Word("BEING EATEN ALIVE!!", PlayerInterface.BadColour, "Something is eating you alive! AAAAAAHHHHHHHHHH!!");
         if (body.Blood <= 0 && w == 1) return Word("Dying", PlayerInterface.BadColour, "Severe limb damage has now led to critical blood loss. You will die without medical attention.");
@@ -368,14 +368,14 @@ sealed class HudPanels(PlayerInterface player)
     internal void AddHudText(List<UiControl> controls)
     {
         float row = 20 * player.Height / 1080f, sidePixels = player.StandardPixels;
-        if (player.buildingSelection.BuildingFocus() is { } focus)
+        if (player.BuildingSelection.BuildingFocus() is { } focus)
         {
-            var (name, state, stats, _, _, extended) = player.buildingSelection.BuildingLines(focus);
+            var (name, state, stats, _, _, extended) = player.BuildingSelection.BuildingLines(focus);
             player.AddLines(controls, "NameText", [name], row, sidePixels);
             player.AddLines(controls, "StateText", state, row, sidePixels);
             player.AddLines(controls, "StatsText", stats, row, sidePixels);
             // Section 7 ("Stats 2"): only a turret fills it (TurretBuilding slot 40: Workers and Efficiency).
-            if (player.infoExpanded) player.AddLines(controls, "ExtendedStatsText", extended, row, sidePixels);
+            if (player.InfoExpanded) player.AddLines(controls, "ExtendedStatsText", extended, row, sidePixels);
             AddMedicalText(controls, sidePixels);
             return;
         }
@@ -387,15 +387,15 @@ sealed class HudPanels(PlayerInterface player)
         // The base game draws the stats labels in the painted face (Observed: glyph shapes and widths match Sentencia at its resized 22 pt); the values
         // take the standard face, like the medical column's numbers.
         player.AddLines(controls, "StatsText", StatsLines(lead), row, font: "Kenshi_PaintedTextFont_Medium", valueFont: "Kenshi_StandardFont_Medium", valuePixels: sidePixels);
-        if (player.infoExpanded) player.AddLines(controls, "ExtendedStatsText", ExtendedLines(lead, player.SpeedUnit).Select(line => line with
-            { Label = line.Label.ToUpperInvariant(), LabelColour = PlayerInterface.MainColour }).ToArray(), row, sidePixels);
+        if (player.InfoExpanded) player.AddLines(controls, "ExtendedStatsText", ExtendedLines(lead, player.SpeedUnit).Select(line => line with
+        { Label = line.Label.ToUpperInvariant(), LabelColour = PlayerInterface.MainColour }).ToArray(), row, sidePixels);
         AddMedicalText(controls, sidePixels);
     }
 
     /// <summary>The medical rows' names (centred on the bar), arrows and numbers.</summary>
     void AddMedicalText(List<UiControl> controls, float sidePixels)
     {
-        foreach (var (bar, name, arrows) in medicalRows)
+        foreach (var (bar, name, arrows) in _medicalRows)
         {
             // The names made once per row: inside the predicates they were a new string for every control compared, every frame.
             string panelName = bar + "Datapanel", valueName = bar + "Value";
@@ -413,14 +413,17 @@ sealed class HudPanels(PlayerInterface player)
             {
                 var value = controls[valueIndex];
                 float height = Math.Max(value.Bounds.Height, 20 * player.Height / 1080f);
-                controls[valueIndex] = value with { Bounds = value.Bounds with { Y = value.Bounds.Y + (value.Bounds.Height - height) / 2, Height = height },
-                    Properties = new Dictionary<string, string>(value.Properties) { ["FontPixels"] = pixels } };
+                controls[valueIndex] = value with
+                {
+                    Bounds = value.Bounds with { Y = value.Bounds.Y + (value.Bounds.Height - height) / 2, Height = height },
+                    Properties = new Dictionary<string, string>(value.Properties) { ["FontPixels"] = pixels }
+                };
             }
         }
     }
 
     /// <summary>The medical rows bound this frame: the bar widget, the row's name and its arrows (<see cref="BindMedicalBars"/>).</summary>
-    readonly List<(string Bar, string Name, string Arrows)> medicalRows = [];
+    readonly List<(string Bar, string Name, string Arrows)> _medicalRows = [];
 
     /// <summary>
     /// A bar's fraction in steps of 1/1024, about half a pixel of a bar on a 4K panel: hunger and blood creep every tick, and an unrounded fraction made the HUD's
@@ -435,7 +438,7 @@ sealed class HudPanels(PlayerInterface player)
     /// </summary>
     internal void BindMedicalBars(UiBindings b, CharacterSnapshot? lead, IReadOnlyList<PlayerInterface.MedicalRow>? buildingRows = null)
     {
-        medicalRows.Clear();
+        _medicalRows.Clear();
         var rows = new List<PlayerInterface.MedicalRow>(buildingRows ?? []);
         if (buildingRows is null && lead?.Body is { } body)
         {
@@ -453,10 +456,10 @@ sealed class HudPanels(PlayerInterface player)
                 // The original's row (FUN_14088a8f0): the green and the number are the flesh less the stun, the yellow adds the bandage, the white is the green plus the splint (rig x 0.01),
                 // none on a stump; a stump or a crushed limb shows the Crushed layer.
                 float max = Math.Max(part.Maximum, 1e-3f), health = part.Flesh - part.Stun, green = health / max;
-                bool stump = part.Limb == Meitou.Simulation.Bodies.LimbState.Stump;
+                bool stump = part.Limb == Simulation.Bodies.LimbState.Stump;
                 rows.Add(new(part.Name, green, (health + part.Bandage) / max, (max - part.Stun) / max, ((int)MathF.Floor(health + 0.1f)).ToString(CultureInfo.InvariantCulture),
                     TooltipRuntime.PartArrows(part, koPoint), part.Robotic, TooltipRuntime.PartTip(part, koPoint, body.Unconscious))
-                    { White = stump ? 0 : Math.Clamp(green + part.Rig * 0.01f, 0f, 1f), Crushed = stump || part.Limb == Meitou.Simulation.Bodies.LimbState.Crushed });
+                { White = stump ? 0 : Math.Clamp(green + part.Rig * 0.01f, 0f, 1f), Crushed = stump || part.Limb == Simulation.Bodies.LimbState.Crushed });
             }
             float hunger = body.Hunger;
             // '>' digesting, '<!' below 2, none in a bed, else '<'. Robot races have no Hunger row.
@@ -466,7 +469,7 @@ sealed class HudPanels(PlayerInterface player)
                 string tip = TooltipRuntime.HungerTip(hunger, body.Unconscious, player.ActiveSquadMembers().Count);
                 // The original's Hunger tooltip (FUN_14088a8f0) is the Hunger Rate rows (FUN_14088a2b0) with the sentence under them (#377).
                 rows.Add(new(Loc.Tr("Hunger"), hunger - 2, hunger - 1, hunger, ((int)(hunger * 100)).ToString(CultureInfo.InvariantCulture), hungerArrows, false, tip)
-                    { TooltipRows = hud?.ExtendedTips is { } tips ? [.. tips.Hunger, (tip, "")] : null });
+                { TooltipRows = hud?.ExtendedTips is { } tips ? [.. tips.Hunger, (tip, "")] : null });
             }
         }
         for (int i = 1; i <= 9; i++)
@@ -489,14 +492,14 @@ sealed class HudPanels(PlayerInterface player)
             if (r.Robot) b.Progress[name + "Robot"] = BarStep(Math.Max(r.Green, 0)); else b.Hidden.Add(name + "Robot");
             b.Text[name + "Datapanel"] = "";
             b.Text[name + "Value"] = r.Value;
-            b.Properties[name + "Value"] = new Dictionary<string, string> { ["TextAlign"] = "Center", ["TextColour"] = MyGuiColours.TemplateInk(player.uiResources, "Kenshi_TextboxStandardText") };
-            medicalRows.Add((name, r.Name, r.Arrows));
+            b.Properties[name + "Value"] = new Dictionary<string, string> { ["TextAlign"] = "Center", ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_TextboxStandardText") };
+            _medicalRows.Add((name, r.Name, r.Arrows));
         }
         if (buildingRows is null && lead?.Body is not null)
         {
             var (word, colour, _) = HealthWord(lead);
             b.Text["HealthText"] = word;
-            b.Properties["HealthText"] = new Dictionary<string, string> { ["TextAlign"] = "Center", ["TextColour"] = colour ?? MyGuiColours.TemplateInk(player.uiResources, "Kenshi_TextboxStandardText") };
+            b.Properties["HealthText"] = new Dictionary<string, string> { ["TextAlign"] = "Center", ["TextColour"] = colour ?? MyGuiColours.TemplateInk(player.UiResources, "Kenshi_TextboxStandardText") };
         }
     }
 }

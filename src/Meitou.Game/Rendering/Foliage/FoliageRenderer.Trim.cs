@@ -40,7 +40,7 @@ public sealed unsafe partial class FoliageRenderer
         var diffuse = leaves ? mesh.LeavesTexture : mesh.Texture;
         var normal = leaves ? mesh.LeavesNormal : mesh.Normal;
         if (!cutOut || !(threshold > 0) || (!leaves && (mesh.TileX != 1 || mesh.TileY != 1))) return model;
-        string? Find(string? n) => n is null ? null : assets.Find(Path.GetFileName(n.Replace('\\', '/'))) ?? assets.Find(n);
+        string? Find(string? n) => n is null ? null : _assets.Find(Path.GetFileName(n.Replace('\\', '/'))) ?? _assets.Find(n);
         if (Find(diffuse) is null || Find(normal) is not { } normalPath) return model;
         var stats = FoliageCardTrimming.Apply(model, normalPath, threshold);
         lock (Messages) CardTrimStats += stats;

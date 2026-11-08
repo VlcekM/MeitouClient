@@ -14,24 +14,24 @@ public sealed class GettextCatalog
     const char ContextSeparator = '\u0004';
 
     // Key (msgid, or msgctxt 0x04 msgid) -> translated forms; a message without plural has one form.
-    readonly Dictionary<string, string[]> messages = new(StringComparer.Ordinal);
+    readonly Dictionary<string, string[]> _messages = new(StringComparer.Ordinal);
 
     // The same messages keyed without case, made on demand (see FindIgnoringCase): a UI layout captions a section "SKILLS" while the catalog's key is "Skills".
-    Dictionary<string, string[]>? byCase;
-    int byCaseVersion = -1;
-    int version;
+    Dictionary<string, string[]>? _byCase;
+    int _byCaseVersion = -1;
+    int _version;
 
     /// <summary>Stores one message and marks the case-free index stale.</summary>
     void Set(string key, string[] forms)
     {
-        messages[key] = forms;
-        version++;
+        _messages[key] = forms;
+        _version++;
     }
 
     public PluralRule Plurals { get; private set; } = PluralRule.Germanic;
 
     /// <summary>How many messages have a translation.</summary>
-    public int Count => messages.Count;
+    public int Count => _messages.Count;
 
     /// <summary>A catalog with no messages: every lookup returns null.</summary>
     public static GettextCatalog Empty { get; } = new();
@@ -58,17 +58,17 @@ public sealed class GettextCatalog
     }
 
     /// <summary>Every message's key and first form.</summary>
-    public IEnumerable<KeyValuePair<string, string>> Messages => messages.Select(m => new KeyValuePair<string, string>(m.Key, m.Value[0]));
+    public IEnumerable<KeyValuePair<string, string>> Messages => _messages.Select(m => new KeyValuePair<string, string>(m.Key, m.Value[0]));
 
     /// <summary>Puts <paramref name="later"/>'s messages over this catalog's (a later file overrides an earlier one); the plural rule stays.</summary>
     public void Add(GettextCatalog later)
     {
-        foreach (var (key, forms) in later.messages) Set(key, forms);
+        foreach (var (key, forms) in later._messages) Set(key, forms);
     }
 
     /// <summary>The translation of <paramref name="msgid"/> (first form), or null when the catalog has none.</summary>
     public string? Find(string msgid, string? context = null) =>
-        messages.TryGetValue(context is null ? msgid : context + ContextSeparator + msgid, out var forms) ? forms[0] : null;
+        _messages.TryGetValue(context is null ? msgid : context + ContextSeparator + msgid, out var forms) ? forms[0] : null;
 
     /// <summary>
     /// The translation of <paramref name="msgid"/> ignoring case, or null: a UI layout captions what the catalog keys, but in capitals
@@ -76,20 +76,20 @@ public sealed class GettextCatalog
     /// </summary>
     public string? FindIgnoringCase(string msgid)
     {
-        if (byCaseVersion != version || byCase is null)
+        if (_byCaseVersion != _version || _byCase is null)
         {
             // Touched by hand: the catalog can hold the same word in two cases ("Map" and "MAP"), so the first spelling wins instead of throwing.
-            byCase = new(StringComparer.OrdinalIgnoreCase);
-            foreach (var message in messages) byCase.TryAdd(message.Key, message.Value);
-            byCaseVersion = version;
+            _byCase = new(StringComparer.OrdinalIgnoreCase);
+            foreach (var message in _messages) _byCase.TryAdd(message.Key, message.Value);
+            _byCaseVersion = _version;
         }
-        return byCase.TryGetValue(msgid, out var forms) ? forms[0] : null;
+        return _byCase.TryGetValue(msgid, out var forms) ? forms[0] : null;
     }
 
     /// <summary>The translated plural form for <paramref name="n"/> of the message whose singular source text is <paramref name="singular"/>, or null.</summary>
     public string? FindPlural(string singular, long n, string? context = null)
     {
-        if (!messages.TryGetValue(context is null ? singular : context + ContextSeparator + singular, out var forms)) return null;
+        if (!_messages.TryGetValue(context is null ? singular : context + ContextSeparator + singular, out var forms)) return null;
         int index = Plurals.Index(n);
         return forms[index < forms.Length ? index : forms.Length - 1];
     }
@@ -257,7 +257,13 @@ public sealed class GettextCatalog
             char next = inner[++i];
             result.Append(next switch
             {
-                'n' => '\n', 't' => '\t', 'r' => '\r', 'a' => '\a', 'b' => '\b', 'f' => '\f', 'v' => '\v',
+                'n' => '\n',
+                't' => '\t',
+                'r' => '\r',
+                'a' => '\a',
+                'b' => '\b',
+                'f' => '\f',
+                'v' => '\v',
                 _ => next,   // \" \\ and unknown escapes
             });
         }

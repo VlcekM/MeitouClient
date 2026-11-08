@@ -126,9 +126,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>Bounties below this are fined (the "Small bounty" dialogue's <c>0 &lt; b &lt; 1050</c>, <b>Verified</b> by probe).</summary>
     public const int FineLimit = 1050;
 
-    readonly List<Arrest> arrests = [];
-    readonly List<Spotting> spottings = [];
-    readonly List<ArrestEvent> log = [];
+    readonly List<Arrest> _arrests = [];
+    readonly List<Spotting> _spottings = [];
+    readonly List<ArrestEvent> _log = [];
 
     public ArrestSettings Settings { get; } = settings ?? new ArrestSettings();
     public CrimeSystem Crimes { get; } = crimes;
@@ -138,12 +138,12 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     public Kidnap.CaptiveSystem? Captives { get; set; }
     /// <summary>The relation event of a caging (<see cref="FactionDeeds.Caged"/>: the captive's faction about the one who caged it); null: none.</summary>
     public FactionDeeds? Deeds { get; set; }
-    public IReadOnlyList<Arrest> Arrests => arrests;
-    public IReadOnlyList<Spotting> Spottings => spottings;
+    public IReadOnlyList<Arrest> Arrests => _arrests;
+    public IReadOnlyList<Spotting> Spottings => _spottings;
     /// <summary>The dialogue spotting fires events 44 and 45 through; null, or its event lines off (<see cref="Dialogue.DialogueSettings.AmbientEvents"/>): the engine's fine or arrest instead.</summary>
     public Dialogue.DialogueSystem? Talk { get; set; }
     bool Talks => Talk is { Settings.AmbientEvents: true };
-    public IReadOnlyList<ArrestEvent> Log => log;
+    public IReadOnlyList<ArrestEvent> Log => _log;
 
     /// <summary>
     /// The fine of the "Bounty extortion pay" dialogue (<b>Verified</b> by probe of the base load order): 100 more for every started 100 above 250, from 400; 300 up to 250
@@ -170,10 +170,10 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     public void SlowWorld(World world)
     {
         foreach (var b in Crimes.BookingsOf(world.Tick)) Booked(world, b);
-        for (int k = 0; k < spottings.Count;)
+        for (int k = 0; k < _spottings.Count;)
         {
-            if (StepSpotting(world, spottings[k])) k++;
-            else spottings.RemoveAt(k);
+            if (StepSpotting(world, _spottings[k])) k++;
+            else _spottings.RemoveAt(k);
         }
         if (world.Tick % Math.Max(1, Settings.SpotEveryTicks) == 0)
         {
@@ -182,20 +182,20 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             DropFreedOutsideTowns(world);
         }
         BountyDuty(world);
-        for (int k = 0; k < arrests.Count;)
+        for (int k = 0; k < _arrests.Count;)
         {
-            if (Step(world, arrests[k])) k++;
-            else arrests.RemoveAt(k);
+            if (Step(world, _arrests[k])) k++;
+            else _arrests.RemoveAt(k);
         }
-        for (int k = 0; k < cagings.Count;)
+        for (int k = 0; k < _cagings.Count;)
         {
-            if (StepCaging(world, cagings[k])) k++;
-            else cagings.RemoveAt(k);
+            if (StepCaging(world, _cagings[k])) k++;
+            else _cagings.RemoveAt(k);
         }
-        for (int k = 0; k < hunts.Count;)
+        for (int k = 0; k < _hunts.Count;)
         {
-            if (StepHunt(world, hunts[k])) k++;
-            else hunts.RemoveAt(k);
+            if (StepHunt(world, _hunts[k])) k++;
+            else _hunts.RemoveAt(k);
         }
     }
 
@@ -208,13 +208,13 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (Towns is not { } data) return;
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
-            if (table.Next[s].Alive && table.Cold(s) is { Freed: true } c && Ai.AiSystem.TownAt(data, world, table.Next[s].Position).IsNone) c.Freed = false;
+            if (table.Next[s].Alive && table.Cold(s) is { Freed: true } c && AiSystem.TownAt(data, world, table.Next[s].Position).IsNone) c.Freed = false;
     }
 
     bool Busy(CharacterId id)
     {
-        foreach (var a in arrests) if (a.Guard == id || a.Target == id) return true;
-        foreach (var h in hunts) if (h.Rest <= 0 && h.Hunter == id) return true;
+        foreach (var a in _arrests) if (a.Guard == id || a.Target == id) return true;
+        foreach (var h in _hunts) if (h.Rest <= 0 && h.Hunter == id) return true;
         return false;
     }
 
@@ -230,7 +230,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>A target the police may go after: a living, awake player character, not carried or in a cage, not already being arrested or left to a spotting's dialogue.</summary>
     bool Suspect(World world, int slot) =>
         world.Characters.Next[slot].Alive && world.Characters.Cold(slot) is { IsPlayer: true, IsImprisoned: false, CarriedBy.IsNone: true, Medical.Incapacitated: false } && !Busy(world.Characters.IdOf(slot))
-        && !spottings.Exists(p => p.Target == world.Characters.IdOf(slot));
+        && !_spottings.Exists(p => p.Target == world.Characters.IdOf(slot));
 
     /// <summary>A police-like witness booked a crime (the original's witnessed-crime dialogues): he deals with the culprit at once.</summary>
     void Booked(World world, Booking b)
@@ -340,7 +340,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (catcher < 0) return false;
         var gc = table.Cold(catcher)!;
         var arrest = new Arrest { Guard = table.IdOf(catcher), Target = table.IdOf(s), Faction = gc.Faction, Enslave = true };
-        arrests.Add(arrest);
+        _arrests.Add(arrest);
         gc.Engaged = true;
         BeginFight(world, arrest, catcher, s);
         if (Talks) Talk!.FireEvent(world, arrest.Guard, arrest.Target, EscapingSlaveSpotted);
@@ -368,15 +368,15 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>How far beyond its gates a town reaches for slave catching (an engine choice).</summary>
     public const float GateMargin = 100;
 
-    readonly Dictionary<int, Vector2[]> townGates = [];
+    readonly Dictionary<int, Vector2[]> _townGates = [];
 
     /// <summary>Where the town's gates stand, in X/Z (none without building data).</summary>
     Vector2[] TownGates(World world, int site)
     {
-        if (townGates.TryGetValue(site, out var list)) return list;
+        if (_townGates.TryGetValue(site, out var list)) return list;
         list = world.Systems.OfType<PopulationSystem>().FirstOrDefault()?.Data is { } data && (uint)site < (uint)data.Sites.Count
             ? [.. data.Sites[site].Buildings.Where(b => b.IsGate).Select(b => new Vector2(b.Position.X, b.Position.Z))] : [];
-        return townGates[site] = list;
+        return _townGates[site] = list;
     }
 
     /// <summary>
@@ -390,7 +390,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var guard = table.IdOf(g);
         var target = table.IdOf(t);
         if (Talk!.FireEvent(world, guard, target, ev)) Note(world, ArrestEventKind.Spotted, guard, target, table.Cold(g)!.Faction, ev);
-        if (!Busy(target)) spottings.Add(new Spotting { Guard = guard, Target = target, Event = ev, Until = world.Tick + (long)MathF.Ceiling(Settings.SpotRetrySeconds / world.TickSeconds) });
+        if (!Busy(target)) _spottings.Add(new Spotting { Guard = guard, Target = target, Event = ev, Until = world.Tick + (long)MathF.Ceiling(Settings.SpotRetrySeconds / world.TickSeconds) });
     }
 
     /// <summary>One tick of a spotting; false when it is over: an arrest took the target, the bounty is paid (DA 49), or the time is up while the guard no longer talks.</summary>
@@ -414,7 +414,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var table = world.Characters;
         if (table.Cold(guard) is not { SquadId: >= 0 } c || world.Squads.Find(c.SquadId) is not { TownOwn: true } squad) return false;
         var p = table.Next[guard].Position;
-        if (Towns is { } data) return Ai.AiSystem.TownAt(data, world, p).Site == squad.Town;
+        if (Towns is { } data) return AiSystem.TownAt(data, world, p).Site == squad.Town;
         float r = squad.HomeRadius * Settings.TownSlack;
         return Vector2.DistanceSquared(new Vector2(p.X, p.Z), squad.HomeCentre) <= r * r;
     }
@@ -437,13 +437,13 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             return;
         }
         var arrest = new Arrest { Guard = guard, Target = target, Faction = gc.Faction };
-        arrests.Add(arrest);
+        _arrests.Add(arrest);
         gc.Engaged = true;   // the AI leaves him alone until the arrest ends
         if (!force && bounty is > 0 and < FineLimit)
         {
             arrest.Phase = ArrestPhase.Fine;
             arrest.Fine = FineFor(bounty);
-            TaskStart.Walk(world, g, new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z), SpeedMode.Free, TaskType.ARREST_TARGET, TaskSource.Npc);
+            TaskStart.Walk(world, g, new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z), SpeedMode.Free, TaskType.ArrestTarget, TaskSource.Npc);
             Note(world, ArrestEventKind.Fine, guard, target, gc.Faction, arrest.Fine);
         }
         else BeginFight(world, arrest, g, t);
@@ -462,7 +462,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// <summary>Another guard's arrest already fights this target (several guards arresting one character post one message, engine choice).</summary>
     bool FoughtByOther(Arrest self)
     {
-        foreach (var a in arrests) if (!ReferenceEquals(a, self) && a.Target == self.Target && a.Phase == ArrestPhase.Fight) return true;
+        foreach (var a in _arrests) if (!ReferenceEquals(a, self) && a.Target == self.Target && a.Phase == ArrestPhase.Fight) return true;
         return false;
     }
 
@@ -499,83 +499,83 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         switch (a.Phase)
         {
             case ArrestPhase.Fine:
-            {
-                if (!tc.CarriedBy.IsNone) return End(world, a, ArrestEventKind.GaveUp);
-                if (gc.InCombat || gn.Task == (byte)CharacterTask.Attack)
                 {
-                    // Pulled into a fight: with the target itself fighting, it is an arrest; else he gives up the fine.
-                    if (!tc.InCombat) return End(world, a, ArrestEventKind.GaveUp);
-                    BeginFight(world, a, g, t);
-                    return true;
-                }
-                if (gap <= Settings.TalkRange)
-                {
-                    TaskStart.Stand(table, g);
-                    if (world.Player.Money > a.Fine && tc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, a.Faction) is { } entry)
+                    if (!tc.CarriedBy.IsNone) return End(world, a, ArrestEventKind.GaveUp);
+                    if (gc.InCombat || gn.Task == (byte)CharacterTask.Attack)
                     {
-                        world.Player.Money -= a.Fine;
-                        ledger.Remove(entry);
-                        if (ledger.Count == 0) tc.Bounties = null;
-                        tc.Recognition = 0;
-                        world.Post(Loc.Tr("{1} paid a fine of c.{2} to {3}; the bounty is cleared", tc.Name, a.Fine, entry.FactionName));
-                        return End(world, a, ArrestEventKind.Paid);
+                        // Pulled into a fight: with the target itself fighting, it is an arrest; else he gives up the fine.
+                        if (!tc.InCombat) return End(world, a, ArrestEventKind.GaveUp);
+                        BeginFight(world, a, g, t);
+                        return true;
                     }
-                    world.Post(Loc.Tr("{1} cannot pay the fine of c.{2}", tc.Name, a.Fine));
-                    BeginFight(world, a, g, t);
+                    if (gap <= Settings.TalkRange)
+                    {
+                        TaskStart.Stand(table, g);
+                        if (world.Player.Money > a.Fine && tc.Bounties is { } ledger && ledger.BookedFor(Crimes.Factions.Relations, a.Faction) is { } entry)
+                        {
+                            world.Player.Money -= a.Fine;
+                            ledger.Remove(entry);
+                            if (ledger.Count == 0) tc.Bounties = null;
+                            tc.Recognition = 0;
+                            world.Post(Loc.Tr("{1} paid a fine of c.{2} to {3}; the bounty is cleared", tc.Name, a.Fine, entry.FactionName));
+                            return End(world, a, ArrestEventKind.Paid);
+                        }
+                        world.Post(Loc.Tr("{1} cannot pay the fine of c.{2}", tc.Name, a.Fine));
+                        BeginFight(world, a, g, t);
+                        return true;
+                    }
+                    if (gap > Settings.FineLeash || a.Time > Settings.FineSeconds)
+                    {
+                        BeginFight(world, a, g, t);
+                        return true;
+                    }
+                    // Keep walking after the target (a new path when it moved on, the first-aid pattern's cadence).
+                    var goal = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
+                    if ((world.Tick + g) % 15 == 0 && (gn.Task != (byte)CharacterTask.GoTo || Vector2.DistanceSquared(goal, gn.Goal) > 20 * 20))
+                        TaskStart.Walk(world, g, goal, SpeedMode.Free, TaskType.ArrestTarget, TaskSource.Npc);
                     return true;
                 }
-                if (gap > Settings.FineLeash || a.Time > Settings.FineSeconds)
-                {
-                    BeginFight(world, a, g, t);
-                    return true;
-                }
-                // Keep walking after the target (a new path when it moved on, the first-aid pattern's cadence).
-                var goal = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
-                if ((world.Tick + g) % 15 == 0 && (gn.Task != (byte)CharacterTask.GoTo || Vector2.DistanceSquared(goal, gn.Goal) > 20 * 20))
-                    TaskStart.Walk(world, g, goal, SpeedMode.Free, TaskType.ARREST_TARGET, TaskSource.Npc);
-                return true;
-            }
             case ArrestPhase.Fight:
-            {
-                if (tc.Medical is { Incapacitated: true })
                 {
-                    if (Carry is null) return End(world, a, ArrestEventKind.GaveUp);
-                    if (gc.Carrying == a.Target) { a.Phase = ArrestPhase.Lift; return true; }
-                    if (gc.InCombat) return true;   // still trading blows (the KO tick, a squad mate): wait
-                    if (NeedsStrip(a, tc)) { BeginStrip(a); return true; }   // 203 needs 118 target unarmed: its provider 181 comes before the lift
-                    // Not from an ally who carries it already, nor with no cage to take it to: a lift then would only be dropped again, and guards
-                    // passed the bodies round a full station (#339; the original's arrest goal wants a free cage, docs/game/economy.md "Arrest goal").
-                    if (CarriedByAlly(world, gc, tc) || !CageFor(world, a, g)) return End(world, a, ArrestEventKind.GaveUp);
-                    // Row 240 Capture Target is the chain's lift (snatch byte set): it takes a body another carries too.
-                    if (Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Npc, row: TaskType.LIFT_PERSON_SNATCHING_ALLOWED_IN_TOWN_ONLY)) { a.Phase = ArrestPhase.Lift; a.Waited = 0; return true; }
-                    a.Waited += dt;
-                    return a.Waited <= 10 || End(world, a, ArrestEventKind.GaveUp);
+                    if (tc.Medical is { Incapacitated: true })
+                    {
+                        if (Carry is null) return End(world, a, ArrestEventKind.GaveUp);
+                        if (gc.Carrying == a.Target) { a.Phase = ArrestPhase.Lift; return true; }
+                        if (gc.InCombat) return true;   // still trading blows (the KO tick, a squad mate): wait
+                        if (NeedsStrip(a, tc)) { BeginStrip(a); return true; }   // 203 needs 118 target unarmed: its provider 181 comes before the lift
+                                                                                 // Not from an ally who carries it already, nor with no cage to take it to: a lift then would only be dropped again, and guards
+                                                                                 // passed the bodies round a full station (#339; the original's arrest goal wants a free cage, docs/game/economy.md "Arrest goal").
+                        if (CarriedByAlly(world, gc, tc) || !CageFor(world, a, g)) return End(world, a, ArrestEventKind.GaveUp);
+                        // Row 240 Capture Target is the chain's lift (snatch byte set): it takes a body another carries too.
+                        if (Carry.BeginPickUp(world, g, a.Target, source: TaskSource.Npc, row: TaskType.LiftPersonSnatchingAllowedInTownOnly)) { a.Phase = ArrestPhase.Lift; a.Waited = 0; return true; }
+                        a.Waited += dt;
+                        return a.Waited <= 10 || End(world, a, ArrestEventKind.GaveUp);
+                    }
+                    if (gn.Task != (byte)CharacterTask.Attack && !gc.InCombat && a.Time >= 1)
+                    {
+                        // The fight stopped (the leash, a lost target) with the target still up: again while it is near, else he gives up.
+                        if (gap > 2 * Settings.SpotRange) return End(world, a, ArrestEventKind.GaveUp);
+                        a.Time = 0;
+                        Attack(world, g, t);
+                    }
+                    return true;
                 }
-                if (gn.Task != (byte)CharacterTask.Attack && !gc.InCombat && a.Time >= 1)
-                {
-                    // The fight stopped (the leash, a lost target) with the target still up: again while it is near, else he gives up.
-                    if (gap > 2 * Settings.SpotRange) return End(world, a, ArrestEventKind.GaveUp);
-                    a.Time = 0;
-                    Attack(world, g, t);
-                }
-                return true;
-            }
             case ArrestPhase.Strip: return StepStrip(world, a, g, t);
             case ArrestPhase.Lift:
-            {
-                if (gc.Carrying == a.Target)
                 {
-                    Note(world, ArrestEventKind.Lifted, a.Guard, a.Target, a.Faction, 0);
-                    a.Phase = ArrestPhase.Walk;
-                    a.Tries = 0;
-                    return ToCage(world, a, g, t);
+                    if (gc.Carrying == a.Target)
+                    {
+                        Note(world, ArrestEventKind.Lifted, a.Guard, a.Target, a.Faction, 0);
+                        a.Phase = ArrestPhase.Walk;
+                        a.Tries = 0;
+                        return ToCage(world, a, g, t);
+                    }
+                    if (gn.Task == (byte)CharacterTask.PickUp) return true;
+                    if (++a.Tries > 5) return End(world, a, ArrestEventKind.GaveUp);
+                    a.Phase = ArrestPhase.Fight;
+                    a.Time = 0;
+                    return true;
                 }
-                if (gn.Task == (byte)CharacterTask.PickUp) return true;
-                if (++a.Tries > 5) return End(world, a, ArrestEventKind.GaveUp);
-                a.Phase = ArrestPhase.Fight;
-                a.Time = 0;
-                return true;
-            }
             case ArrestPhase.Walk: return StepWalk(world, a, g, t);
         }
         return true;
@@ -607,7 +607,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
             world.Fixtures.MarkUnreachable(world, cage, a.Faction);
             return Drop(world, a, g);
         }
-        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FIND_CAGE_AND_PUT_IN_IF_BOUNTY, TaskSource.Npc);
+        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FindCageAndPutInIfBounty, TaskSource.Npc);
         return true;
     }
 
@@ -658,7 +658,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         if (Vector2.Distance(here, to) > Captives.Settings.Reach)
         {
             if ((world.Tick + g) % 15 == 0 && (gn.Task != (byte)CharacterTask.GoTo || Vector2.DistanceSquared(to, gn.Goal) > 20 * 20))
-                TaskStart.Walk(world, g, to, SpeedMode.Free, TaskType.STRIP_TARGETS_WEAPONS, TaskSource.Npc);
+                TaskStart.Walk(world, g, to, SpeedMode.Free, TaskType.StripTargetsWeapons, TaskSource.Npc);
             a.Time = 0;
             a.Waited += world.TickSeconds;   // the walk up: the lift's patience
             return a.Waited <= StripWalkSeconds || End(world, a, ArrestEventKind.GaveUp);
@@ -686,7 +686,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         var cage = GuardCage(world, g, a);
         if (cage is null) return Drop(world, a, g);
         a.Cage = cage.Id;
-        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FIND_CAGE_AND_PUT_IN_IF_BOUNTY, TaskSource.Npc);
+        TaskStart.Walk(world, g, cage.Position, SpeedMode.Free, TaskType.FindCageAndPutInIfBounty, TaskSource.Npc);
         return true;
     }
 
@@ -712,7 +712,7 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
     bool Reserved(Fixture f, Arrest? self)
     {
-        foreach (var a in arrests) if (!ReferenceEquals(a, self) && a.Cage == f.Id) return true;
+        foreach (var a in _arrests) if (!ReferenceEquals(a, self) && a.Cage == f.Id) return true;
         return false;
     }
 
@@ -740,22 +740,22 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
 
     void Note(World world, ArrestEventKind kind, CharacterId guard, CharacterId target, int faction, int amount)
     {
-        if (Settings.RecordLog) log.Add(new ArrestEvent(world.Tick, kind, guard, target, faction, amount));
+        if (Settings.RecordLog) _log.Add(new ArrestEvent(world.Tick, kind, guard, target, faction, amount));
     }
 
     public void Hash(ref StateHasher hasher)
     {
         HashBounties(ref hasher);
         HashDisguise(ref hasher);
-        if (spottings.Count > 0)
+        if (_spottings.Count > 0)
         {
             hasher.Add(0x53706F74);
-            hasher.Add(spottings.Count);
-            foreach (var p in spottings) p.Hash(ref hasher);
+            hasher.Add(_spottings.Count);
+            foreach (var p in _spottings) p.Hash(ref hasher);
         }
-        if (arrests.Count == 0) return;   // only while an arrest runs, so worlds without them hash as before
+        if (_arrests.Count == 0) return;   // only while an arrest runs, so worlds without them hash as before
         hasher.Add(0x41727273);
-        hasher.Add(arrests.Count);
-        foreach (var a in arrests) a.Hash(ref hasher);
+        hasher.Add(_arrests.Count);
+        foreach (var a in _arrests) a.Hash(ref hasher);
     }
 }

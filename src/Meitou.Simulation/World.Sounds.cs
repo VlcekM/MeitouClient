@@ -56,13 +56,13 @@ public readonly record struct SoundEvent(SoundKind Kind, CharacterId Subject, Ch
 
 public sealed partial class World
 {
-    volatile System.Collections.Concurrent.ConcurrentQueue<SoundEvent>? sounds;
+    volatile System.Collections.Concurrent.ConcurrentQueue<SoundEvent>? _sounds;
 
     /// <summary>
     /// Where combat queues what the host should play (blocks, hits, shots, bolts, characters going down); null (the default) records none. The host sets it while it
     /// plays sounds and empties it every frame. Nothing in the simulation reads it, so it cannot change a run.
     /// </summary>
-    public System.Collections.Concurrent.ConcurrentQueue<SoundEvent>? Sounds { get => sounds; set => sounds = value; }
+    public System.Collections.Concurrent.ConcurrentQueue<SoundEvent>? Sounds { get => _sounds; set => _sounds = value; }
 
     /// <summary>
     /// The characters that parried a weapon blow, for the host's sparks at their weapon (docs/game/combat.md "Block sparks"); null (the default) records none. Display only:
@@ -73,6 +73,6 @@ public sealed partial class World
     /// <summary>Queues a sound-worthy happening for the host (nothing while <see cref="Sounds"/> is null); <paramref name="slot"/> is the character it happens to (-1 none). Display only.</summary>
     public void EmitSound(SoundKind kind, int slot, Vector3 at, string? item = null)
     {
-        if (sounds is { } queue) queue.Enqueue(new SoundEvent(kind, slot >= 0 ? Characters.IdOf(slot) : CharacterId.None, CharacterId.None, at, Item: item));
+        if (_sounds is { } queue) queue.Enqueue(new SoundEvent(kind, slot >= 0 ? Characters.IdOf(slot) : CharacterId.None, CharacterId.None, at, Item: item));
     }
 }

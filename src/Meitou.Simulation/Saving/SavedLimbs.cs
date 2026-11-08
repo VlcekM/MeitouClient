@@ -33,8 +33,18 @@ static class SavedLimbs
             var item = p.ReplacementItem is { } i ? SavedKit.FromItem(i) : new SaveItem { BaseId = limb.StringId, Level = (int)MathF.Round(p.ReplacementQuality * 100) };
             items[slot] = new SaveItem
             {
-                BaseId = item.BaseId, MaterialId = item.MaterialId, CompanyId = item.CompanyId, ColourId = item.ColourId, Section = LimbReplacement.SlotOf(slot), Quantity = 1, Level = item.Level,
-                ItemFunction = item.ItemFunction, Quality = item.Quality, Charges = item.Charges, Unique = item.Unique, Source = item.Source,
+                BaseId = item.BaseId,
+                MaterialId = item.MaterialId,
+                CompanyId = item.CompanyId,
+                ColourId = item.ColourId,
+                Section = LimbReplacement.SlotOf(slot),
+                Quantity = 1,
+                Level = item.Level,
+                ItemFunction = item.ItemFunction,
+                Quality = item.Quality,
+                Charges = item.Charges,
+                Unique = item.Unique,
+                Source = item.Source,
             };
         }
         SaveLimbs.Write(file, medical, state.LimbBits, items);

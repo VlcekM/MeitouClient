@@ -22,7 +22,7 @@ namespace Meitou.Simulation.Player
     /// </summary>
     public sealed partial class PlayerSystem : ITaskOwner, ITaskHandler, IOrderOwner
     {
-        public void RegisterTasks(TaskHandlers tasks) => tasks.Register(Meitou.Data.Gameplay.Ai.TaskType.PICKUP, this);
+        public void RegisterTasks(TaskHandlers tasks) => tasks.Register(Meitou.Data.Gameplay.Ai.TaskType.Pickup, this);
 
         /// <summary>A pick-up of the ground item in <see cref="TaskRequest.Detail"/>, or the walk to the container <see cref="TaskRequest.Site"/> (to open it, or only to it: <see cref="ContainerWalk"/>).</summary>
         void ITaskHandler.Start(World world, int slot, in TaskRequest request)
@@ -93,15 +93,15 @@ namespace Meitou.Simulation.Player
             foreach (var id in order.Characters.Count > 0 ? order.Characters : world.Player.Selection.ToArray())
             {
                 if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, Inventory: not null, IsImprisoned: false } c || !c.CarriedBy.IsNone
-                    || !TaskStart.Eligible(world, c, Meitou.Data.Gameplay.Ai.TaskType.PICKUP) || !MayPickUp(c, item.Item)) continue;
+                    || !TaskStart.Eligible(world, c, Meitou.Data.Gameplay.Ai.TaskType.Pickup) || !MayPickUp(c, item.Item)) continue;
                 float d = Vector2.Distance(Flat(table.Next[s].Position), Flat(item.Position));
                 if (d < bestDistance) (best, bestDistance) = (s, d);
             }
             if (best < 0) return;
             if (walkOnly && world.SystemOf<MovementSystem>() is { } movement)
-                PlayerOrders.Give(world, best, new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.MOVE_CUS_ORDERED, movement) { Point = item.Position }, order.Queued);
+                PlayerOrders.Give(world, best, new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.MoveCusOrdered, movement) { Point = item.Position }, order.Queued);
             else if (!walkOnly)
-                PlayerOrders.Give(world, best, new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.PICKUP, this) { Point = item.Position, Detail = order.Item }, order.Queued);
+                PlayerOrders.Give(world, best, new OrderEntry(Meitou.Data.Gameplay.Ai.TaskType.Pickup, this) { Point = item.Position, Detail = order.Item }, order.Queued);
         }
 
         /// <summary>
@@ -124,7 +124,7 @@ namespace Meitou.Simulation.Player
                 return;
             }
             bool far = Vector2.Distance(Flat(world.Characters.Next[slot].Position), Flat(order.Point)) > PickUpReach;
-            TaskStart.Start(world, slot, new TaskRequest(far ? CharacterTask.GoTo : CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.PICKUP, TaskSource.Order) { Point = order.Point, Detail = item });
+            TaskStart.Start(world, slot, new TaskRequest(far ? CharacterTask.GoTo : CharacterTask.Idle, Meitou.Data.Gameplay.Ai.TaskType.Pickup, TaskSource.Order) { Point = order.Point, Detail = item });
         }
 
         /// <summary>Each tick: a walker in reach takes its item; one whose item is gone, who was given another goal or stopped, or who is down gives up.</summary>
@@ -166,7 +166,7 @@ namespace Meitou.Simulation.Player
                     world.GroundItems.Take(id);
                     // Task_Pickup: another faction's item taken inside a building is a Theft.
                     if (item.OwnedBy >= 0 && item.OwnedBy != c.Faction && world.Sight.BuildingOf(s) is not null) world.SystemOf<Crime.CrimeSystem>()?.StolePickUp(world, s, item.OwnedBy);
-                    if (wear) assembly?.RefreshEquipment(c);
+                    if (wear) _assembly?.RefreshEquipment(c);
                     world.EmitSound(SoundKind.PickedUp, s, next[s].Position);
                 }
                 else
