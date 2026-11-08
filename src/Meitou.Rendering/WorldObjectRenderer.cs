@@ -822,7 +822,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // it with the one ambient, docs/render-gi.md "Indoor"), not an outer wall of a closed building, so a hidden floor or a ceiling plane over it does not leave it black.
         if (p.Kind == PlacedKind.BuildingPart && p.Floor > 0 && p.ParentPlacementId is null && InteriorView.TryGetValue(p.PlacementId, out int shownFloor) && p.Floor <= shownFloor) return true;
         if (p.ParentPlacementId is not null) return InInterior(inst);
-        return p.Kind == PlacedKind.BuildingPart && InteriorOf(inst) is { Inside: true, Building: { } holder } && holder != p.PlacementId;
+        // A loose item on a shelf or a floor indoors is lit as the room is: the hybrid GI's cache gave it nothing and, without the indoor floor, it read pitch black.
+        return (p.Kind == PlacedKind.BuildingPart || p.Kind == PlacedKind.Item) && InteriorOf(inst) is { Inside: true, Building: { } holder } && holder != p.PlacementId;
     }
 
     ObjectStreamer.InteriorAnswer InteriorOf(ObjectStreamer.Instance inst)
