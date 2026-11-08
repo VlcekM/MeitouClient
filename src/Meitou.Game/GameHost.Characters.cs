@@ -316,8 +316,7 @@ sealed partial class GameHost
         distantFor = reachOf is null ? default : distantKey;
         foreach (var c in current.Characters)
         {
-            var inBar = editing is { } shown ? EditorBarPlace(c.Id, shown) : null;
-            if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
+            if (c.Appearance is null || editing is { } edited && c.Id != edited) continue;
             // The snapshot's place: a tick's motion is well inside InReach's margin.
             if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !portraitKeys.Contains(DrawKey(c.Id)) && c.Id != sandboxHero)
             {
@@ -364,19 +363,13 @@ sealed partial class GameHost
             if (player.EditorIdle(c.Id) is { } stance) poses = EditorStancePoses(c.Id, stance);
             // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
             else if (player.IsEditorAnimal(c.Id)) poses = [.. poses.Select(p => p with { Time = EditorClipTime(p.Animation, (float)realTime.Elapsed.TotalSeconds) })];
-            // The Meitou editor's bar (GameHost.EditorBar.cs): the shown character stands in it, the others sit on its seats.
-            if (inBar is { } place)
-            {
-                (position, yaw, rotation) = (place.Position, place.Yaw, null);
-                if (place.Clip is { } clip) poses = [new CharacterPose(clip, EditorClipTime(clip, (float)realTime.Elapsed.TotalSeconds), 1)];
-            }
             if (c.Id == sandboxHero && sandboxPicker?.Pose() is { } forced) poses = forced;   // the sandbox drop-down loops a picked clip on the hero
             var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
             var look = player.EditorPreview(c.Id, c.Appearance) ?? held;
             if (editing is null) CutHead(c, look);
             var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             var bones = !posed ? null : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot));
-            bool hidden = inBar is null && hiddenIndoors.Contains(c.Id);
+            bool hidden = hiddenIndoors.Contains(c.Id);
             bool fullRated = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null;
             var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated);
             if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
@@ -388,7 +381,6 @@ sealed partial class GameHost
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });
         }
         if (editing is null) AddHeads(list);
-        else AddEditorCrowd(list);
     }
 
     readonly System.Runtime.CompilerServices.ConditionalWeakTable<Meitou.Data.Characters.CharacterAppearance, Dictionary<string, Meitou.Data.Characters.CharacterAppearance>> heldLooks = new();

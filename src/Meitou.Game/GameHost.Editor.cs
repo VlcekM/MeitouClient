@@ -77,16 +77,15 @@ sealed partial class GameHost
     /// The frame of the character editor, in place of the world's: the original draws the edited character alone, lit plainly, over the plain ground texture
     /// (compositor <c>Kenshi_Character_Editor</c>, docs/characters.md). The renderer draws the character into the stage picture from the editor's orbit; the interface puts
     /// <c>SandyGround.dds</c> and the picture behind its panels (<c>PlayerInterface.EditorBackdrop</c>).
-    /// <paramref name="posed"/>: the world pass has just updated the characters this frame (the Meitou bar's), so they are not updated again.
     /// </summary>
-    void DrawEditorStage(int width, int height, bool posed = false)
+    void DrawEditorStage(int width, int height)
     {
         if (ActiveCharacters is not { } characters) return;
         editorStaged = true;
         if (player.EditorView() is not { } view || session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == view.Character) is not { } c) { characters.StageRequest = null; return; }
         characters.StageRequest = new EditorStageRequest(DrawKey(view.Character), width, height, view.Yaw, view.Elevation, view.Distance, view.Head, camera.FieldOfView, EditorStageShift);
         characters.SetView(width, height, camera.FieldOfView);
-        if (!posed) characters.Update(DrawnPosition(c));
+        characters.Update(DrawnPosition(c));
         // The platform casts into the studio's maps (Meitou, previewsun), as the character does.
         characters.StageCasters = ActiveObjects is { } caster ? (viewProjection, eye) => caster.RecordStagePropDepth(viewProjection, eye) : null;
         characters.DrawStage();
@@ -95,20 +94,25 @@ sealed partial class GameHost
         if (characters.StageTexture is { } stage) player.SetUiTexture(PlayerInterface.StageTexture, stage.Texture, stage.Sampled);
     }
 
-    /// <summary>The character the stage's platform was placed for (it is placed once per character, where the character stands when first shown).</summary>
+    /// <summary>The character the stage's set was placed for (it is placed once per character, where the character stands when first shown), and whether that set is the bar.</summary>
     CharacterId? editorPlatformFor;
+    bool editorSetIsBar;
 
     /// <summary>
-    /// The platform under the edited character (<see cref="Meitou.Data.World.WorldObjectLayout.EditorPlatformMesh"/>): its stage frame is the character's turned half round, as the
-    /// original stands the characters on it turned so. The objects keep streaming meanwhile (the world's frame, which would, is not drawn), and the platform is drawn into the stage picture.
+    /// The set round the edited character: the platform (<see cref="Meitou.Data.World.WorldObjectLayout.EditorPlatformMesh"/>), its stage frame the character's turned half round, as the
+    /// original stands the characters on it turned so, or the bar (the <c>editorbar</c> switch, <see cref="EditorBar"/>). The objects keep streaming meanwhile (the world's frame, which
+    /// would, is not drawn), and the set is drawn into the stage picture.
     /// </summary>
     void DrawEditorPlatform(CharacterId character, CharacterRenderer characters)
     {
         if (ActiveObjects is not { } objects || popData is not { } data || characters.StageView is not { } stage || characters.StageDrawTarget is not { } target) return;
-        if (editorPlatformFor != character)
+        bool bar = PreviewStudio.Bar;
+        if (editorPlatformFor != character || editorSetIsBar != bar)
         {
-            editorPlatformFor = character;
-            objects.SetStageProp(Meitou.Data.World.WorldObjectLayout.EditorPlatformMesh(data.Db, Matrix4x4.CreateRotationY(MathF.PI) * stage.Feet));
+            (editorPlatformFor, editorSetIsBar) = (character, bar);
+            var set = bar && scene.Objects is { } world ? EditorBar.Set(world, stage.Feet) : null;
+            set ??= Meitou.Data.World.WorldObjectLayout.EditorPlatformMesh(data.Db, Matrix4x4.CreateRotationY(MathF.PI) * stage.Feet) is { } platform ? [platform] : [];
+            objects.SetStageProps(set, stage.Feet.Translation);
         }
         objects.Update(stage.Eye);
         objects.DrawStageProp(target.Colour, target.Depth, stage.ViewProjection, stage.Eye, stage.Light, target.FogDistance, characters);
@@ -125,6 +129,21 @@ sealed partial class GameHost
         ActiveCharacters?.ReleaseCloseUps();
         if (editorPlatformFor is null) return;
         editorPlatformFor = null;
-        ActiveObjects?.SetStageProp(null);
+        ActiveObjects?.SetStageProps([], default);
+    }
+
+    /// <summary>
+    /// The time a clip held in the editor (the stance preview, an animal's idle) is drawn at, <paramref name="seconds"/> after it started: at its record's play
+    /// speed, a one-shot clip (no <c>loop</c>) held at its last frame as the simulation holds one (<see cref="AnimationSystem"/>), not wrapped round by the renderer. A clip
+    /// that sits down (mods' animations) would otherwise stand up and sit down again over and over (issue #242).
+    /// </summary>
+    float EditorClipTime(string clip, float seconds)
+    {
+        if (animationLibrary?.IndexOf(clip) is not (>= 0 and int k)) return 0;
+        var d = animationLibrary.Definitions[k];
+        float time = seconds * d.PlaySpeed;
+        if (d.Loop) return time;
+        float length = animationLengths?.Of(d.Clip) ?? 1;
+        return Math.Clamp(time, 0, length * 0.999f);
     }
 }

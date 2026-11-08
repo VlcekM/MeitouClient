@@ -3,10 +3,12 @@ using Meitou.Rendering.Gpu;
 
 namespace Meitou.Rendering.Characters;
 
-/// <summary>The <c>previewsun</c> switch (Meitou): the editor's stage and the portraits lit by the studio's fixed sun, with its shadow and occlusion.</summary>
+/// <summary>The <c>previewsun</c> switch (Meitou): the editor's stage and the portraits lit by the studio's fixed sun, with its shadow and occlusion. <see cref="Bar"/>, the
+/// <c>editorbar</c> switch (Meitou, optional): the editor's set is a bar instead of the platform.</summary>
 public static class PreviewStudio
 {
     public static bool Sun { get; set; } = true;
+    public static bool Bar { get; set; }
 }
 
 /// <summary>

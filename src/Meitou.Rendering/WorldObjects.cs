@@ -234,7 +234,7 @@ sealed class WorldObjects : IDisposable
         foreach (var b in Levels.Buildings())
         {
             if (b.Position == Vector3.Zero || Database.Find(b.BuildingId) is not { } record) continue;
-            var state = b.StateId is not null && Levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+            var state = b.StateId is not null && Levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
             if (state is not null && state.GetBool("destroyed")) continue;
             bool incomplete = state is not null && state.Bools.TryGetValue("is complete", out bool complete) && !complete;
             bool sounds = !incomplete && record.GetReferences("sounds").Count > 0;
@@ -269,7 +269,7 @@ sealed class WorldObjects : IDisposable
         foreach (var b in Levels.Buildings())
         {
             if (b.Position == Vector3.Zero || Database.Find(b.BuildingId) is not { } record) continue;
-            var state = b.StateId is not null && Levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+            var state = b.StateId is not null && Levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
             if (state is not null && state.Bools.TryGetValue("is complete", out bool complete) && !complete) continue;
             float y = b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y;
             var position = new Vector3(b.Position.X, y, b.Position.Z);
@@ -318,7 +318,7 @@ sealed class WorldObjects : IDisposable
                 // Y: the placement's absolute height when it has one (the building ground + instance Y, or a state's "world Y pos"), else terrain height + the instance's Y (zones.md).
                 float y = b.WorldY ?? map.HeightAt(b.Position.X, b.Position.Z) + b.Position.Y;
                 if (b.WorldY is not null) Interlocked.Increment(ref fromState);
-                var state = b.StateId is not null && Levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+                var state = b.StateId is not null && Levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
                 bool isDestroyed = b.DestroyedOverride ?? state?.GetBool("destroyed") ?? false;
                 if (isDestroyed) Interlocked.Increment(ref destroyed);
                 var town = Towns.TownOf(state, b.Position);

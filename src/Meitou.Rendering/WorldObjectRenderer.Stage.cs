@@ -5,50 +5,65 @@ using Meitou.Rendering.Gpu;
 namespace Meitou.Rendering;
 
 /// <summary>
-/// The character editor's platform (docs/characters.md "Character editor", Preview): the original stands the edited characters on a building part in its own scene; here
-/// that part is a loose instance (so the streaming loads its mesh and textures) drawn into the character renderer's stage picture after the character, lit as it is.
+/// The character editor's set (docs/characters.md "Character editor", Preview): the original stands the edited characters on a building part in its own scene; here
+/// that part, or the bar's meshes (the <c>editorbar</c> switch), are loose instances (so the streaming loads their meshes and textures) drawn into the character renderer's stage picture after the character, lit as it is.
 /// </summary>
 public sealed unsafe partial class WorldObjectRenderer
 {
-    PlacedMesh? stageProp;
-    ObjectStreamer.Instance? stageInstance;
+    readonly List<ObjectStreamer.Instance> stageInstances = [];
+    Vector3 stageCasterCentre;
+    /// <summary>How far from the character, past its own radius, a prop still casts into the studio's maps (they hold the character's sphere; the rest of a room need not be drawn 34 times).</summary>
+    const float StageCasterReach = 80;
 
-    /// <summary>The stage's prop is not ready to draw yet: its mesh or materials are loading, or its textures are not all resident (a still waits for it).</summary>
-    public bool StagePropPending => stageInstance is { } inst && inst.Mesh.Status != ObjectMesh.State.Failed
-        && (inst.Gpu is null || inst.Materials is not { } set || !set.Parts.All(p => p.TexturesSettled));
+    /// <summary>The stage's props are not ready to draw yet: their meshes or materials are loading, or their textures are not all resident (a still waits for them).</summary>
+    public bool StagePropPending => stageInstances.Exists(inst => inst.Mesh.Status != ObjectMesh.State.Failed
+        && (inst.Gpu is null || inst.Materials is not { } set || !set.Parts.All(p => p.TexturesSettled)));
 
-    /// <summary>Sets the mesh the stage shows under the character (null: none, the editor is closed).</summary>
-    public void SetStageProp(PlacedMesh? prop)
+    /// <summary>Sets the meshes the stage shows round the character (none: the editor is closed). <paramref name="casterCentre"/>: where the character stands.</summary>
+    public void SetStageProps(IReadOnlyList<PlacedMesh> props, Vector3 casterCentre)
     {
-        if (prop == stageProp) return;
-        if (stageInstance is not null) streamer.DropLoose(stageInstance);
-        stageProp = prop;
-        stageInstance = prop is null ? null : streamer.MakeLoose(prop);
+        foreach (var inst in stageInstances) streamer.DropLoose(inst);
+        stageInstances.Clear();
+        stageCasterCentre = casterCentre;
+        foreach (var prop in props) stageInstances.Add(streamer.MakeLoose(prop));
+    }
+
+    /// <summary>The loaded props into this frame's instance data, relative to <paramref name="origin"/>; <paramref name="castersOnly"/>: those near enough the character to cast. The number written.</summary>
+    int FillStageInstances(Vector3 origin, bool castersOnly)
+    {
+        foreach (var b in batchMap.Values) b.Count = 0;
+        active.Clear();
+        long now = Environment.TickCount64;
+        foreach (var inst in stageInstances)
+        {
+            if (inst is not { Gpu: { } gpu, Materials: { } materials }) continue;
+            if (castersOnly && Vector3.Distance(inst.Centre, stageCasterCentre) - inst.Radius > StageCasterReach) continue;
+            inst.Mesh.LastUsed = now;
+            Add(gpu, materials, gpu.MinLevel, inst.Transform * Matrix4x4.CreateTranslation(-origin), 0, 2, 0);
+        }
+        int total = 0;
+        foreach (var b in active) { b.Offset = total; total += b.Count; }
+        if (total == 0) return 0;
+        instances = Gpu.Frame.AllocateConstants((ulong)total * InstanceStride, 16);
+        var target = new Span<byte>(instances.Pointer, total * InstanceStride);
+        foreach (var b in active)
+            System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
+        return total;
     }
 
     /// <summary>
     /// Draws the stage's prop into <paramref name="colour"/> and <paramref name="depth"/>, which hold the character already (outside any pass): the stage's camera and light,
-    /// the stage's lighting (a fog distance of -2) and no weather. Nothing while its mesh is not loaded.
+    /// the stage's lighting (a fog distance of -2) and no weather. What is not loaded yet is left out.
     /// </summary>
     /// <param name="studio">The characters, whose stage has a studio view this frame (Meitou, previewsun): the platform is lit by it.</param>
     /// <summary>
     /// The stage's prop into the pass the caller has open (the character renderer's studio maps: the sun's, the sky's, the camera's depth), seen through
-    /// <paramref name="viewProjection"/> (world) from <paramref name="origin"/>, as a studio depth draw (cut-outs only). Nothing while its mesh is not loaded.
+    /// <paramref name="viewProjection"/> (world) from <paramref name="origin"/>, as a studio depth draw (cut-outs only). What is not loaded yet is left out.
     /// </summary>
     internal void RecordStagePropDepth(Matrix4x4 viewProjection, Vector3 origin)
     {
-        if (stageInstance is not { Gpu: { } gpu, Materials: { } materials } inst) return;
-        foreach (var b in batchMap.Values) b.Count = 0;
-        active.Clear();
-        Add(gpu, materials, gpu.MinLevel, inst.Transform * Matrix4x4.CreateTranslation(-origin), 0, 2, 0);
-        int total = 0;
-        foreach (var b in active) { b.Offset = total; total += b.Count; }
-        if (total > 0)
+        if (FillStageInstances(origin, castersOnly: true) > 0)
         {
-            instances = Gpu.Frame.AllocateConstants((ulong)total * InstanceStride, 16);
-            var target = new Span<byte>(instances.Pointer, total * InstanceStride);
-            foreach (var b in active)
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
             var constants = new ViewConstants { ViewProjection = Matrix4x4.CreateTranslation(origin) * viewProjection, Eye = Vector3.Zero, FogDistance = -5 };
             PrepareDraws(iconOptions, wire: false);
             for (int d = 0; d < drawCount; d++) draws[d].Push.Spare = MeshSurface.NoWeather;
@@ -60,19 +75,8 @@ public sealed unsafe partial class WorldObjectRenderer
 
     internal void DrawStageProp(GpuTexture colour, GpuTexture depth, Matrix4x4 viewProjection, Vector3 eye, Vector3 light, float fogDistance = -2, Characters.CharacterRenderer? studio = null)
     {
-        if (stageInstance is not { Gpu: { } gpu, Materials: { } materials } inst) return;
-        foreach (var b in batchMap.Values) b.Count = 0;
-        active.Clear();
-        inst.Mesh.LastUsed = Environment.TickCount64;
         // Relative to the eye: at world coordinates (tens of thousands of units) the plates and bolts a hair above the planks would fight for depth.
-        Add(gpu, materials, gpu.MinLevel, inst.Transform * Matrix4x4.CreateTranslation(-eye), 0, 2, 0);
-        int total = 0;
-        foreach (var b in active) { b.Offset = total; total += b.Count; }
-        if (total == 0) return;
-        instances = Gpu.Frame.AllocateConstants((ulong)total * InstanceStride, 16);
-        var target = new Span<byte>(instances.Pointer, total * InstanceStride);
-        foreach (var b in active)
-            System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.Data.AsSpan(0, b.Count)).CopyTo(target[(b.Offset * InstanceStride)..]);
+        if (FillStageInstances(eye, castersOnly: false) == 0) return;
         var cmd = Gpu.BeginNative("character stage platform");
         var targets = PassTargets.Of(colour, depth);
         cmd.BeginRendering(new RenderingDesc(targets.Colour, targets.Depth, targets.Width, targets.Height));

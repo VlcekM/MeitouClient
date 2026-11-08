@@ -75,8 +75,6 @@ sealed partial class PlayerInterface
     public IReadOnlyList<CharacterId> EditorCharacters => EditorOpen ? editor!.Characters : [];
     /// <summary>Whether the open editor lists <paramref name="id"/> as an animal (its page offers the name only).</summary>
     public bool IsEditorAnimal(CharacterId id) => EditorOpen && editor!.Animals.Contains(id);
-    /// <summary>The host draws the editor's scene in the world (the Meitou bar, <see cref="EditorBar"/>): the backdrop is left out.</summary>
-    public bool EditorInWorld { get; set; }
 
     /// <summary>
     /// Opens the editor for <paramref name="characters"/> (the start's squad at creation; one character at a surgeon). Animals are listed too, as the original's window
@@ -244,7 +242,7 @@ sealed partial class PlayerInterface
     List<UiControl> EditorBackdrop()
     {
         var backdrop = new List<UiControl>();
-        if (uiPainter is not { } painter || EditorInWorld) return backdrop;
+        if (uiPainter is not { } painter) return backdrop;
         groundFile ??= findAsset?.Invoke("SandyGround.dds") ?? "";
         var all = new UiRect(0, 0, Width, Height);
         // A sand colour first, so the window is covered before the ground texture is decoded.
