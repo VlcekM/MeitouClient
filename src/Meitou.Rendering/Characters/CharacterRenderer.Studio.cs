@@ -43,10 +43,11 @@ internal sealed unsafe partial class CharacterRenderer
         var up = MathF.Abs(toSun.Y) > 0.95f ? Vector3.UnitZ : Vector3.UnitY;
         var lightRelative = Matrix4x4.CreateLookAt(toSun * (radius * 2), Vector3.Zero, up) * Matrix4x4.CreateOrthographicOffCenter(-radius, radius, -radius, radius, 0, radius * 4);
         MakeStudioShadow();
-        DrawStudioDepth(index, Matrix4x4.CreateTranslation(-centre) * lightRelative, centre + toSun * (radius * 2), studioShadowColour!, studioShadowDepth!, StudioShadowSize, StudioShadowSize, "studio shadow");
+        // The camera's eye picks the levels of detail, so the map holds the meshes the picture shows (a coarser level from the sun's distance shaded its own finer one).
+        DrawStudioDepth(index, Matrix4x4.CreateTranslation(-centre) * lightRelative, centre + toSun * (radius * 2), eye, studioShadowColour!, studioShadowDepth!, StudioShadowSize, StudioShadowSize, "studio shadow");
 
         // The camera's depth, then the occlusion from it.
-        DrawStudioDepth(index, viewProjection, eye, colour, depth, width, height, "studio depth");
+        DrawStudioDepth(index, viewProjection, eye, eye, colour, depth, width, height, "studio depth");
         RunStudioAo(depth, width, height, projection, radius);
 
         var v = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = toSun, FogDistance = StudioColour };
@@ -73,7 +74,7 @@ internal sealed unsafe partial class CharacterRenderer
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
     /// <summary><paramref name="index"/>'s character's depth (cut-outs included) into <paramref name="depth"/>, cleared, its colour target only a carrier.</summary>
-    void DrawStudioDepth(int index, Matrix4x4 viewProjection, Vector3 eye, GpuTexture colour, GpuTexture depth, int width, int height, string label)
+    void DrawStudioDepth(int index, Matrix4x4 viewProjection, Vector3 eye, Vector3 lodEye, GpuTexture colour, GpuTexture depth, int width, int height, string label)
     {
         var cmd = Gpu.BeginNative(label);
         var target = PassTargets.Of(colour, depth);
@@ -84,7 +85,7 @@ internal sealed unsafe partial class CharacterRenderer
         Gpu.SetPassViewport(new PixelViewport(0, 0, width, height, 0, 1), rect);
         int was = portraitLive;
         portraitLive = index;
-        try { DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, FogDistance = StudioDepth }, eye, []); }
+        try { DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, FogDistance = StudioDepth }, lodEye, []); }
         finally { portraitLive = was; }
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();

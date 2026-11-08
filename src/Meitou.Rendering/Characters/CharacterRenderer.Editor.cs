@@ -95,7 +95,14 @@ internal sealed unsafe partial class CharacterRenderer
             var projection = perspective * Matrix4x4.CreateTranslation(r.ShiftX, 0, 0);
             var light = Vector3.Normalize(Vector3.TransformNormal(StageLight, l.World));
             // The studio (previewsun): the stage's light raised to a sun, its shadow and occlusion drawn first.
-            if (StudioOn) light = Vector3.Normalize(Vector3.TransformNormal(StudioStageSun, l.World));
+            if (StudioOn)
+            {
+                // The studio's sun from the camera's front right, about 35 degrees up, whichever way the editor turns the camera (in the character's
+                // frame it came from the side, and the skirt shaded the legs).
+                var toEye = Vector3.Normalize(new Vector3(eye.X - l.Centre.X, 0, eye.Z - l.Centre.Z));
+                var leftOfCamera = Vector3.Cross(toEye, Vector3.UnitY);
+                light = Vector3.Normalize(0.75f * toEye - 0.45f * leftOfCamera + 0.62f * Vector3.UnitY);
+            }
             Matrix4x4.Decompose(l.World, out _, out var facing, out _);
             StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
             constants = StudioOn
@@ -147,8 +154,6 @@ internal sealed unsafe partial class CharacterRenderer
 
     /// <summary>The stage's light direction (towards the light) in the character's frame: the original's (-3, 2, -3) on the stage, where the character faces the stage's -z.</summary>
     static readonly Vector3 StageLight = new(3, 2, 3);
-    /// <summary>The studio's sun on the stage (Meitou, previewsun): the stage light's side, about 30 degrees up, so it reaches under a hood.</summary>
-    static readonly Vector3 StudioStageSun = new(3, 2.6f, 3.4f);
 
     /// <summary>
     /// The eye and the pivot it looks at, in the world: the pivot is 12 units above the feet (the original's stage root is 12 below the camera rig's pivot, whatever the

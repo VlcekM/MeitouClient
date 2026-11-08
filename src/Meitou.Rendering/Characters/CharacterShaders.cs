@@ -274,7 +274,7 @@ static class CharacterShaders
             float slope = 1.0 - clamp(dot(n, l), 0.0, 1.0);
             vec4 c = m * vec4(world - view.cutRanges[0].xyz + n * (texel * (1.0 + 2.0 * slope)) + l * (texel * 1.5), 1.0);
             vec3 q = c.xyz / c.w;
-            vec2 uv = vec2(q.x, -q.y) * 0.5 + 0.5;   // the map's first row is the top of its clip space (y down)
+            vec2 uv = q.xy * 0.5 + 0.5;   // the viewport is not flipped (GlConventions.VkViewport): clip y -1 is the map's first row
             vec2 size = vec2(textureSize(textures2D[nonuniformEXT(view.cutPad)], 0));
             vec2 base = uv * size - 0.5;
             vec2 f = fract(base);
@@ -495,6 +495,7 @@ static class CharacterShaders
                 float spec = pow(max(dot(n, h), 0.0), 8.0 + 56.0 * gloss) * gloss * 0.6;
                 colour = albedo * (sky * studioOcclusion() + diffSkin * studioSun * shade) + spec * diff * studioSun * shade;
                 if (surfaceOn) colour += surfaceSpecular(l) * studioSun * shade;
+                {{(Environment.GetEnvironmentVariable("MEITOU_STUDIO_DEBUG") == "1" ? "colour = vec3(shade, studioOcclusion(), max(dot(n, l), 0.0));" : "")}}
             }
             // The editor's stage (CharacterRenderer.DrawStage, a fog distance of -2): the game's rtt.hlsl (AtmosphereShaders.stageLight); -3 the same unclamped (Meitou's stage and
             // portraits, which also take the Meitou skin; the game's stage keeps its plain N.L).
