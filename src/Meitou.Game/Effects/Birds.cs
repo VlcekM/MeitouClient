@@ -39,10 +39,8 @@ sealed class Birds(GameHost host)
 
         var flocks = _flocks ?? CreateFlocks(db);
         bool async = host.WorldOptions.Screenshot is null && !host.Duel.IsDuel;
-        if (_step!.Busy)
-            return;
-        if (_started && async)
-            ShowFlocks(flocks);
+        if (_step!.Busy) return;
+        if (_started && async) ShowFlocks(flocks);
 
         UpdateAttractors(db);
         SetStepInputs(aspect);
@@ -141,8 +139,7 @@ sealed class Birds(GameHost host)
         var animals = new List<BirdAttractor>();
         foreach (var c in snapshot.Characters)
         {
-            if (c.Animal && db.Find(c.RecordId) is { } animal)
-                AddAttractors(animals, c.Id, animal, c.Position);
+            if (c.Animal && db.Find(c.RecordId) is { } animal) AddAttractors(animals, c.Id, animal, c.Position);
         }
 
         if (changed || animals.Count > 0 || _hadAnimals)
@@ -156,8 +153,7 @@ sealed class Birds(GameHost host)
     /// </summary>
     bool ResetForNewWorld()
     {
-        if (ReferenceEquals(_attractorsFor, host.Session.World))
-            return false;
+        if (ReferenceEquals(_attractorsFor, host.Session.World)) return false;
 
         _attractorsFor = host.Session.World;
         _levelAttractors.Clear();
@@ -168,8 +164,7 @@ sealed class Birds(GameHost host)
 
     bool TakeLevelAttractors()
     {
-        if (_levelSources is not { IsCompletedSuccessfully: true } read)
-            return false;
+        if (_levelSources is not { IsCompletedSuccessfully: true } read) return false;
 
         foreach (var (key, record, at) in read.Result)
             AddAttractors(_levelAttractors, key, record, at);
@@ -180,8 +175,7 @@ sealed class Birds(GameHost host)
 
     bool UpdateBuildingAttractors(Data.GameDatabase db, WorldSnapshot snapshot)
     {
-        if (snapshot.BuildingsRevision == _buildingsRevision)
-            return false;
+        if (snapshot.BuildingsRevision == _buildingsRevision) return false;
 
         _buildingsRevision = snapshot.BuildingsRevision;
         _buildingAttractors.Clear();

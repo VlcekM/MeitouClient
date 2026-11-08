@@ -245,8 +245,7 @@ sealed partial class GameHost(
         try
         {
 #if MEITOU_METAL
-            if (GameOptions.Renderer == "metal")
-                return Metal();
+            if (GameOptions.Renderer == "metal") return Metal();
 #endif
             if (GameOptions.Renderer != "vulkan")
             {
@@ -272,8 +271,7 @@ sealed partial class GameHost(
     /// </summary>
     internal bool OpensOnTitle(bool interactive)
     {
-        if (GameOptions.TitlePreview)
-            return true;
+        if (GameOptions.TitlePreview) return true;
 
         bool startAsked = start is not null || StartSave is not null || Sandbox.IsSandbox || Duel.IsDuel || Battle.IsBattle;
         return interactive && !startAsked && !GameOptions.NoPopulation;
@@ -383,8 +381,7 @@ sealed partial class GameHost(
 
             var built = Saves.BuildSystems(interactive);
             Population = built.Population;
-            if (Nav is not null)
-                Population!.ZoneGate = zone => Nav.Walkability.World.Contains(zone);
+            if (Nav is not null) Population!.ZoneGate = zone => Nav.Walkability.World.Contains(zone);
 
             Saves.SnapshotPlayerTowns();
             systems = built.Systems;
@@ -436,8 +433,7 @@ sealed partial class GameHost(
     /// </summary>
     static GameClock GameClockFor(Data.Gameplay.GameConstants? c, double startHour, long startDay)
     {
-        if (c is null)
-            return new GameClock(startHour, startDay);
+        if (c is null) return new GameClock(startHour, startDay);
 
         return new GameClock(startHour, startDay, sunrise: c.Sunrise, sunset: c.Sunset, daysPerYear: c.DaysPerYear);
     }
@@ -508,8 +504,7 @@ sealed partial class GameHost(
         }
 
         // F9 is the game's quickload now (F5 quicksave); older saved configs took F9 for the fps counter, which is on Ctrl+F9 and unbound here.
-        if (BoundOnlyTo(InputAction.ToggleFps, Binding.Of(EngineKey.F9)))
-            bindings.Set(InputAction.ToggleFps);
+        if (BoundOnlyTo(InputAction.ToggleFps, Binding.Of(EngineKey.F9))) bindings.Set(InputAction.ToggleFps);
 
         // Tab is the game's change_squad, not the settings (they open from the Esc menu); older saved configs bound Tab to them.
         if (BoundOnlyTo(InputAction.ToggleSettings, Binding.Of(EngineKey.Tab)))
@@ -570,8 +565,7 @@ sealed partial class GameHost(
     /// </summary>
     void ConfigureFrontend(bool interactive)
     {
-        if (Sandbox.IsSandbox)
-            Player.ReservedKeys.UnionWith([Key.Z, Key.X, Key.C, Key.Y, Key.P, Key.G]);
+        if (Sandbox.IsSandbox) Player.ReservedKeys.UnionWith([Key.Z, Key.X, Key.C, Key.Y, Key.P, Key.G]);
 
         string localSaves = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save");
         string credits = Assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "";
@@ -585,8 +579,7 @@ sealed partial class GameHost(
             LogMods(Player.TitleMenu.Mods);
         }
 
-        if (OpensOnTitle(interactive))
-            Player.Frontend.ShowTitle();
+        if (OpensOnTitle(interactive)) Player.Frontend.ShowTitle();
     }
 
     /// <summary>
@@ -605,8 +598,7 @@ sealed partial class GameHost(
     /// </summary>
     void LoadStartZones(bool interactive)
     {
-        if (Nav is null || start is null && interactive)
-            return;
+        if (Nav is null || start is null && interactive) return;
 
         var watch = Stopwatch.StartNew();
         var zones = Simulation.Population.ZoneActivation.ZonesAround(Scene.Focus, 0);
@@ -623,8 +615,7 @@ sealed partial class GameHost(
     /// </summary>
     Vector3 PlaceStart(Vector3 target, bool interactive)
     {
-        if (Population is null)
-            return target;
+        if (Population is null) return target;
 
         if (start is not null)
         {
@@ -639,22 +630,17 @@ sealed partial class GameHost(
                 Session.World.Commands.Enqueue(new Simulation.Editing.FinishCreation { Tick = Session.World.Tick });
         }
 
-        if (Sandbox.IsSandbox)
-            target = Sandbox.SandboxSpawn();
-        if (Duel.IsDuel)
-            target = Duel.DuelStart();
-        if (Battle.IsBattle)
-            target = Battle.BattleStart();
-        if (!Sandbox.IsSandbox && Sandbox.Crowd > 0)
-            Sandbox.SpawnCrowd(target, Sandbox.Crowd);
+        if (Sandbox.IsSandbox) target = Sandbox.SandboxSpawn();
+        if (Duel.IsDuel) target = Duel.DuelStart();
+        if (Battle.IsBattle) target = Battle.BattleStart();
+        if (!Sandbox.IsSandbox && Sandbox.Crowd > 0) Sandbox.SpawnCrowd(target, Sandbox.Crowd);
 
         return target;
     }
 
     void CreateCharacterRenderer(Rendering.Gpu.GpuContext context)
     {
-        if (Scene.Database is not { } characterDb || GameOptions.NoPopulation || Gpu.Characters is not null)
-            return;
+        if (Scene.Database is not { } characterDb || GameOptions.NoPopulation || Gpu.Characters is not null) return;
 
         Gpu.Characters = new CharacterRenderer(context, Install, characterDb, Assets, CharacterRigs)
         {
@@ -679,8 +665,7 @@ sealed partial class GameHost(
 
         SendFocus();
         ApplyCamera(Session.Camera.Current);
-        if (TitleScreen.TitleVisible)
-            TitleScreen.ApplyTitleCamera();
+        if (TitleScreen.TitleVisible) TitleScreen.ApplyTitleCamera();
     }
 
     /// <summary>
@@ -688,8 +673,7 @@ sealed partial class GameHost(
     /// </summary>
     void LoadStartSave(bool interactive)
     {
-        if (StartSave is not { } save || GameOptions.Load is not { } folder)
-            return;
+        if (StartSave is not { } save || GameOptions.Load is not { } folder) return;
 
         Saves.ReadingFolder = folder;
         Task navmesh;
@@ -747,8 +731,7 @@ sealed partial class GameHost(
     /// </summary>
     bool SaveInUse(string folder)
     {
-        if (!Session.World.Player.Exists || Saves.SaveInUse is not { } used)
-            return false;
+        if (!Session.World.Player.Exists || Saves.SaveInUse is not { } used) return false;
 
         return string.Equals(Path.GetFullPath(used), Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase);
     }
@@ -855,8 +838,7 @@ sealed partial class GameHost(
     /// </summary>
     MapFaction? MapFactionOf(string? id)
     {
-        if (PopData is not { } d || id is null || d.FactionIndex(id) is not (>= 0 and var town))
-            return null;
+        if (PopData is not { } d || id is null || d.FactionIndex(id) is not (>= 0 and var town)) return null;
 
         var faction = d.Factions[town];
         if (Session.World.Player.Faction is not (>= 0 and var mine))
@@ -895,8 +877,7 @@ sealed partial class GameHost(
         Simulation.Trading.Market? shelf = null;
         return tip =>
         {
-            if (PopData is not { } d || d.Db.Find(tip.Record) is not { } r)
-                return null;
+            if (PopData is not { } d || d.Db.Find(tip.Record) is not { } r) return null;
 
             if (r.Type is Data.Fcs.FcsRecordType.Armour or Data.Fcs.FcsRecordType.Weapon or Data.Fcs.FcsRecordType.Crossbow)
             {
@@ -986,8 +967,7 @@ sealed partial class GameHost(
     /// </summary>
     internal void FinishNavUnload()
     {
-        if (_navUnloading.Count == 0)
-            return;
+        if (_navUnloading.Count == 0) return;
 
         _navUnload.Wait();
         _navUnloading = [];
@@ -1001,8 +981,7 @@ sealed partial class GameHost(
     /// </summary>
     internal void UpdateNav(bool wait = false)
     {
-        if (Nav is null || Population is null)
-            return;
+        if (Nav is null || Population is null) return;
 
         UpdateGateRegions(Nav);
         long now = Stopwatch.GetTimestamp();
@@ -1014,13 +993,11 @@ sealed partial class GameHost(
             _navUnloading = [];
             _relabelGates = true;
         }
-        if (wait)
-            FinishNavUnload();
+        if (wait) FinishNavUnload();
 
         var pending = LoadWantedZones(Nav, Population, now);
         DropStaleZones(Nav, now);
-        if (wait)
-            Task.WaitAll([.. pending]);
+        if (wait) Task.WaitAll([.. pending]);
 
         SendRepath(pending, wait, now);
     }
@@ -1034,10 +1011,8 @@ sealed partial class GameHost(
         var pending = new List<Task<Simulation.Navigation.NavZoneReady>>();
         foreach (var z in population.ActiveZones.Concat(nav.Walkability.RouteZones(TimeSpan.FromSeconds(30))))
         {
-            if (_navUnloading.Contains(z))
-                continue;
-            if (!NavZones.ContainsKey(z))
-                pending.Add(nav.LoadZone(z));
+            if (_navUnloading.Contains(z)) continue;
+            if (!NavZones.ContainsKey(z)) pending.Add(nav.LoadZone(z));
 
             NavZones[z] = now;
         }
@@ -1055,8 +1030,7 @@ sealed partial class GameHost(
         if (overCache > 0)
             stale.AddRange(NavZones.Where(e => !stale.Contains(e.Key)).OrderBy(e => e.Value).Take(overCache).Select(e => e.Key));
 
-        if (stale.Count == 0 || _navUnloading.Count > 0)
-            return;
+        if (stale.Count == 0 || _navUnloading.Count > 0) return;
 
         foreach (var z in stale)
             NavZones.Remove(z);
@@ -1080,8 +1054,7 @@ sealed partial class GameHost(
             }
 
             bool coalescing = !wait && Stopwatch.GetElapsedTime(_lastRepath, now).TotalSeconds < RepathCoalesceSeconds;
-            if (_navReady.Count == 0 || coalescing)
-                return;
+            if (_navReady.Count == 0 || coalescing) return;
 
             zones = [.. _navReady];
             _navReady.Clear();
@@ -1145,8 +1118,7 @@ sealed partial class GameHost(
     internal void DrawWorld(int width, int height)
     {
         SyncPreviewLook();
-        if (!Player.CharacterEditor.EditorOpen)
-            CharacterEditor.ClearEditorBar();
+        if (!Player.CharacterEditor.EditorOpen) CharacterEditor.ClearEditorBar();
 
         if (TitleScreen.TitleVisible)
         {
@@ -1159,8 +1131,7 @@ sealed partial class GameHost(
             return;
         }
 
-        if (Gpu.Characters is { StageRequest: not null } staged)
-            staged.StageRequest = null;
+        if (Gpu.Characters is { StageRequest: not null } staged) staged.StageRequest = null;
         CharacterEditor.ClearEditorStage();
 
         FeedFrameClocks();
@@ -1173,8 +1144,7 @@ sealed partial class GameHost(
     /// </summary>
     void SyncPreviewLook()
     {
-        if (Gpu.Characters is not { } previews)
-            return;
+        if (Gpu.Characters is not { } previews) return;
 
         previews.Look = PreviewLook.Of(WorldOptions.Post);
         Player.PortraitBar.PortraitSize = CharacterRenderer.PortraitSizeFor(previews.Look);
@@ -1187,8 +1157,7 @@ sealed partial class GameHost(
     void FeedFrameClocks()
     {
         double seconds = AnimClock ? AnimSeconds : RealTime.Elapsed.TotalSeconds;
-        if (Gpu.Foliage is { } foliage && WorldOptions.Screenshot is null)
-            foliage.SwaySeconds = seconds;
+        if (Gpu.Foliage is { } foliage && WorldOptions.Screenshot is null) foliage.SwaySeconds = seconds;
 
         // The heat haze's gameTime: game hours since the start (it stops while paused, as in the game).
         Gpu.GameHours = Session.Clock.HoursSinceStart;
@@ -1235,8 +1204,7 @@ sealed partial class GameHost(
 
         // The next world tick runs on its own thread while the world is drawn from the shown snapshots (docs/simulation.md "Tick ahead"): from here to the
         // join nothing the renderer calls back may touch the world, only the session's snapshots.
-        if (TickAhead)
-            Session.BeginTickAhead();
+        if (TickAhead) Session.BeginTickAhead();
         try
         {
             WorldFrame.Draw(Gpu, Scene, Camera, Render, width, height, PresentationHour ?? hour, gameTime, WorldOptions.FogDistance, weatherHour: hour);
@@ -1246,8 +1214,7 @@ sealed partial class GameHost(
             Session.EndTickAhead();
         }
 
-        if (TickAhead)
-            NoteAheadTick();
+        if (TickAhead) NoteAheadTick();
     }
 
     #endregion

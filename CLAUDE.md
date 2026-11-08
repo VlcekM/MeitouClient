@@ -52,10 +52,20 @@ drop-in replacement that runs original content and mods unchanged.
 
 ## Code style
 
-- Keep methods short: one job each, roughly a screen at most. Split a longer method into named steps, and split one you're
-  editing when it has grown past that.
-- Use whitespace: a blank line between logical groups, one statement per line, multi-statement `if` bodies in braces on their
-  own lines, and wrap lines past ~150 characters (or name a local).
+- Keep methods short: one job each, roughly a screen at most. Split a longer method into named steps (its body reads as a list of
+  calls), and split one you're editing when it has grown past that. Keep every comment that records a fact next to its code.
+- Regions: a class with more than one responsibility gets one `#region` per responsibility, not nested. A region's fields and
+  constants sit at its top, then its entry points, then their private steps; never fields between or after methods. A region whose
+  state no other region touches becomes a class of its own.
+- Doc comments: `/// <summary>`, the text, `/// </summary>` on separate lines, for every member including fields; the text
+  wrapped at ~150. A summary sits directly on its member, never above a `//` comment or another member.
+- Whitespace: a blank line between logical groups (setup, each decision, each group of side effects, the return); a comment that
+  opens a group has a blank line before it. One statement per line.
+- `if`: a short single-statement body stays on the `if` line (`if (x is null) return;`, the line ~120 at most); a longer one
+  goes on the next line; a body of more statements, or spanning lines, goes in braces on their own lines. `try`/`catch`/`finally`
+  bodies always in braces on their own lines. Guard clauses first, then the main path unindented.
+- Lines: wrap past ~150, preferably by naming a local; a repeated long expression becomes a helper. A lambda longer than a line
+  becomes a named method (method group) or a statement lambda laid out like a method. Chained `?:` and LINQ calls one per line.
 
 ## Branches
 
