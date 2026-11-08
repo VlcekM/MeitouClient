@@ -1088,12 +1088,22 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   - **findGuardNodeForTown**: keeps a current target that is still a node, else `findNode(NODE_GUARD_POST, false, false)`; factor
     1 whatever it finds.
   - **`AI::findNode`** (`FUN_14099e920`): keeps the character's current node of the type while it is free or the character's (home
-    only: still in the home). Home only: a random node of the type in the home (`FUN_14038c2f0`; no holder test), then a general
-    node. Else a uniform draw (`FUN_14038b000`) over the node manager's list for the character's town (+0x50), of the nodes held
+    only: still in the home). Home only: a random node of the type in the home held by no one or by the character (`FUN_14038c2f0`, the
+    same holder test as the town draw below, **Verified**); for a guard post, outside indoorsOnly and when it found fewer than two,
+    also the town list's nodes whose building (`+0xd0`) is the home: the gate posts below. Then a general node. Else a uniform draw (`FUN_14038b000`) over the node manager's list for the character's town (+0x50), of the nodes held
     by no one (holder type 11, null) or by the character; no type test. A found node is registered with the node manager
     (`FUN_14038a5a0`). None found: a null target, with which the plan cannot run ([planner](#planner), Can run, **Observed**).
   - **Observed** (KenshiProbe state 0.5 live check, Rebirth Gate Guards, N = 1): the 38 holders of each Defensive Gate II stand on
-    3 or 4 guard posts of that gate, 60 to 120 from its centre, often two members on one post; no layout in the data has such nodes.
+    3 or 4 guard posts of that gate, 60 to 120 from its centre, often two members on one post (or two close ones: the home search
+    above holds a post for one character); no layout in the data has such nodes.
+  - **Gate posts** (**Verified**, `FUN_14038b650`, called only by the door setup `FUN_14029cc90`): a gate's guard posts are made at run
+    time, `n-guardpost` nodes (`1186-gamedata.base`) off its door points ([180 Man the gate](#town-goals)), put in the town list with
+    the gate as their building; none is made where a node already stands near the point. The door setup fails until the door's physics
+    body exists, and a per-frame world update (`FUN_1404cdad0`) retries the pending gates, so a gate has no posts until its area has
+    loaded. A gate member that thinks before then finds no post: 38 cannot run and 157 wins, then holds through its commitment
+    (**Observed**: after a save load in the original, three of the five Rebirth gate squads start on 157; the original's snapshots
+    hold 54 characters for the first 132 s, 128 from 198 s). Meitou has every building at load, so its gate members start on 38: the
+    start depends on the original's loading, not on a rule.
     The 157 holders walk to posts across the town, up to about 1400 away. What the town list holds is **Unknown** (the walks fit
     the town buildings' guard posts).
   - Meitou: 157 holds a guard post of its town ([simulation](../simulation.md#ai)); 38 and 268 take the home's posts, a gate
@@ -1211,7 +1221,7 @@ update `FUN_140511130`, `Character::setupAI` `FUN_140621b70`; KenshiLib names **
   two points (`FUN_14029cc90`) are its leaf's centre ± 15 (constant `0x14168a258`) along the leaf's thin axis, dropped to the ground;
   Meitou takes the fallback gate nearest the squad (one `Blackboard.Gate` per squad), not nearest each guard (engine choice, one guard per gate squad in practice).
   which side `+0x3bc` is depends on a door body offset (**Unknown**). Gate BUILDING records have no nodes (**Verified**, the merged
-  load order's Defensive Gates II-V), yet the gate members' 38 finds 3 or 4 posts per gate at run time (Static guard above).
+  load order's Defensive Gates II-V), the door setup makes the gate's guard posts at run time (Gate posts above).
 
 ## Perma-jobs
 
