@@ -73,10 +73,14 @@ public sealed partial class FoliageRenderer
 
     /// <summary>A grass page's patch for the traced sun (<see cref="Gi.TracedGrass"/>): its identity (a dropped page's buffer is never seen again), where its blades are in
     /// the arena, those the density shows, the page's corner and the patch's card sizes (min width, max width, min height, max height), and this frame's sprite.</summary>
-    internal readonly record struct RayGrassPatch(object Key, uint FirstBlade, int Blades, Vector3 Corner, Vector4 Size, bool Cross, uint Sprite, float Distance);
+    internal readonly record struct RayGrassPatch(object Key, uint FirstBlade, int Blades, Vector3 Corner, Vector4 Size, bool Cross, uint Sprite, float Distance, float Sway);
 
     /// <summary>The arena holding the blades (read by <see cref="Gi.TracedGrass"/>'s kernel).</summary>
     internal (GpuBuffer Buffer, ulong Bytes) RayGrassBlades => (grassStore.BladeBuffer, grassStore.ArenaBytes);
+
+    /// <summary>This frame's sway phase and the sway's frequency, as the blade program's (<see cref="Gi.TracedGrass"/>'s near cards follow it).</summary>
+    internal float RayGrassPhase => SwayPhase();
+    internal const float RayGrassFrequency = 2f;
 
     /// <summary>A grass page's side.</summary>
     internal const float RayGrassPageSize = PageSize;
@@ -107,7 +111,7 @@ public sealed partial class FoliageRenderer
             if (b.Shown == 0 || distance >= GrassRange(patch) || b.Sprite is not { Key: not 0 } sprite) continue;
             var g = patch.Grass;
             var size = new Vector4(g.QuadMinWidth, g.QuadMaxWidth, g.QuadMinHeight, g.QuadMaxHeight);
-            into.Add(new RayGrassPatch(b, b.FirstBlade, b.Shown, corner, size, g.CrossQuads, RayTexture(sprite), distance));
+            into.Add(new RayGrassPatch(b, b.FirstBlade, b.Shown, corner, size, g.CrossQuads, RayTexture(sprite), distance, patch.Layer.Wind ? g.SwayLength : 0f));
         }
     }
 

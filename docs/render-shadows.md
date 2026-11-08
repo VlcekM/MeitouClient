@@ -103,7 +103,7 @@ by distance from the eye. **Observed** (zone 14,30, 16:00, before this rule): a 
 shadows: at boom 1400 the whole view; at boom 900 the far half. Now 152 patches, 90 MB at boom 900. A kernel expands the arena's blades at rest into a vertex buffer (65536
 blades a patch at most), one rigid instance each. Blades whose foot or top is in a drawn interior mask's box collapse to a point (KenshiNative's fix, by box: over-cuts a
 non-convex mask's concavity). A changed mask set or density rebuilds the page. A blade's ray ignores blades within 8 units (the 4-unit blind range and half its fade): the
-sway (the traced card is at rest) and overlapping twin cards. Grass shadows do not sway.
+sway and overlapping twin cards. Patches within 800 units of the eye across the ground (`SwayReach`, at most 1M triangles a frame, nearest first) sway with the drawn blades (same phase and length as the blade program, top edge): the kernel writes their vertices again and their structures are refitted, the top level refitted over them. Past that the cards hold still.
 
 **Scene fill.** Objects within the probes' 6000 go in first, then the foliage, then the objects out to the shadows' range while room is left past the reserve for grass and
 characters (a longer range filled the instances and cut the trees). A foliage group's spheres and bounds are filled when the traced scene asks for them (the culls filled them

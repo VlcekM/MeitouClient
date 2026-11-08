@@ -8,8 +8,8 @@ namespace Meitou.Rendering.Gi;
 
 /// <summary>
 /// The grass in the traced sun's scene (docs/render-shadows.md "Traced sun"): a page's patch near the eye becomes a bottom-level structure of its cards at rest, one rigid
-/// instance under a mask of its own (the probes never see it), built within a budget and dropped when unused. The blades live on the GPU only, so a kernel expands them
-/// (<see cref="Expand"/>); a blade in an interior mask collapses to a point. A card's vertices are its corners in order, which is all a hit needs for its coordinates.
+/// instance under a mask of its own (the probes never see it), built within a budget and dropped when unused; the patches near the eye follow the drawn blades' sway (their vertices
+/// expanded again and their structures refitted each frame, <see cref="SwayReach"/>). The blades live on the GPU only, so a kernel expands them (<see cref="Expand"/>); a blade in an interior mask collapses to a point. A card's vertices are its corners in order, which is all a hit needs for its coordinates.
 /// Render thread only.
 /// </summary>
 sealed unsafe class TracedGrass : IDisposable
@@ -23,13 +23,17 @@ sealed unsafe class TracedGrass : IDisposable
     /// <summary>Most patches traced, and most blades of one (the first ones: the density's order keeps a prefix even).</summary>
     public const int MaxInstances = 1024;
     const int MaxBlades = 1 << 16, MaxQuads = MaxBlades * 2, VerticesPerQuad = 4, IndicesPerQuad = 6, MaxCuts = 32;
+    /// <summary>How far from the eye, across the ground, a patch's cards sway with the drawn blades, and the triangles refitted a frame at most (nearest first). Past either the cards
+    /// hold still: a few units of sway are not seen in a far shadow.</summary>
+    const float SwayReach = 800;
+    const int MaxSwayTriangles = 1_000_000;
     /// <summary>World units: what a blade's own ray does not see of other cards (a card's sway from its traced copy, a twin on top of it), and the fade to all of them past that.</summary>
     const float BlindRange = 4, BlindFade = 8;
     const float SpriteThreshold = 0.6f;
 
     /// <summary>
     /// A patch's blades into its vertices, one group per 64: <c>blades[(first + b) * 5..]</c> is x, y, z, scale 0..1, yaw (<c>FoliageGrassField</c>, as the blade program reads them), the
-    /// card as that program places it with no sway or sinking, relative to the corner. A blade whose foot or top is in a mask's box leaves no area.
+    /// card as that program places it with no sinking and with the sway of <c>sway</c> (length, phase, frequency; a length of 0: at rest), relative to the corner. A blade whose foot or top is in a mask's box leaves no area.
     /// </summary>
     public const string Expand = """
         #version 460
@@ -40,6 +44,7 @@ sealed unsafe class TracedGrass : IDisposable
         {
             vec4 size;       // min width, max width, min height, max height
             vec4 corner;     // what the vertices are relative to
+            vec4 sway;       // the top edge's sway: length, phase, frequency (the blade program's)
             uvec4 counts;    // blades, cards a blade, mask boxes, the first blade
             mat4 toBox[32];
             vec4 boxMin[32];
@@ -73,6 +78,7 @@ sealed unsafe class TracedGrass : IDisposable
                 {
                     float u = float(c & 1u), v = float(c >> 1u);
                     vec3 place = cut ? root : root + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
+                    if (!cut && v == 0.0) place.x += p.sway.x * sin(p.sway.y + root.x * p.sway.z);
                     uint to = ((b * p.counts.y + q) * 4u + c) * 3u;
                     vec3 local = place - p.corner.xyz;
                     vertices[to] = local.x;
@@ -91,13 +97,16 @@ sealed unsafe class TracedGrass : IDisposable
         public required Vector3 Corner;
         public required int Blades;
         public required int CutHash;
+        public required TriangleGeometry Geometry;
+        public required bool Updatable;
+        public long Built;
         public long LastUsed;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     struct Params
     {
-        public Vector4 Size, Corner;
+        public Vector4 Size, Corner, Sway;
         public uint Blades, Cards, Cuts, First;
         public fixed float ToBox[MaxCuts * 16];
         public fixed float BoxMin[MaxCuts * 4];
@@ -112,6 +121,7 @@ sealed unsafe class TracedGrass : IDisposable
     readonly List<FoliageRenderer.RayGrassPatch> patches = [];
     readonly List<(Entry Entry, uint Sprite)> shown = [];
     readonly List<object> stale = [];
+    readonly List<Entry> swayed = [];
     readonly List<InteriorMaskCut> pageCuts = [];
     long bytes;
     float tallest;
@@ -147,8 +157,11 @@ sealed unsafe class TracedGrass : IDisposable
         range = Math.Clamp(reach, MinRange, MaxRange);
         foliage.RayGrass(eye, range, patches);
         shown.Clear();
+        swayed.Clear();
         tallest = 0;
-        int builds = 0, triangles = 0;
+        int builds = 0, triangles = 0, swayTriangles = 0;
+        float phase = foliage.RayGrassPhase;
+        CommandList? list = null;
         foreach (var patch in patches)
         {
             if (shown.Count >= MaxInstances) break;
@@ -157,16 +170,35 @@ sealed unsafe class TracedGrass : IDisposable
             entry.LastUsed = frame;
             shown.Add((entry, patch.Sprite));
             tallest = MathF.Max(tallest, patch.Size.W);
+            // Current left this patch's masks in pageCuts. A structure built this frame stands as built; a held one of another blade count does not match the arena any more.
+            int cards = patch.Cross ? 2 : 1, swayCost = entry.Blades * cards * 2;
+            if (!Sways(patch) || !entry.Updatable || entry.Built == frame || entry.Blades != Math.Min(patch.Blades, MaxBlades) || swayTriangles + swayCost > MaxSwayTriangles) continue;
+            swayTriangles += swayCost;
+            list ??= (CommandList)open();
+            RecordExpand(list, foliage.RayGrassBlades, entry.Vertices, patch, entry.Blades, cards, new Vector4(patch.Sway, phase, FoliageRenderer.RayGrassFrequency, 0));
+            swayed.Add(entry);
         }
+        if (list is not null)
+        {
+            list.Barrier(BarrierBatch.Full);
+            foreach (var entry in swayed) entry.Blas.RefitBottom(list, [entry.Geometry]);
+        }
+        SwayedTriangles = swayTriangles;
         Evict(frame);
     }
+
+    /// <summary>The triangles refitted this frame (0: every structure is as it was, the scene's top level need not follow).</summary>
+    public int SwayedTriangles { get; private set; }
+
+    static bool Sways(in FoliageRenderer.RayGrassPatch patch) => patch.Sway != 0 && patch.Distance < SwayReach;
 
     Entry? Current(Func<IGpuCommandList> open, FoliageRenderer foliage, in FoliageRenderer.RayGrassPatch patch, IReadOnlyList<InteriorMaskCut> cuts, long frame, ref int builds, ref int triangles)
     {
         int blades = Math.Min(patch.Blades, MaxBlades);
         int hash = CollectCuts(patch, cuts);
         bool have = entries.TryGetValue(patch.Key, out var entry);
-        if (have && entry!.Blades == blades && entry.CutHash == hash) return entry;
+        // A patch come within the sway's reach is built again to be refittable.
+        if (have && entry!.Blades == blades && entry.CutHash == hash && (entry.Updatable || !Sways(patch))) return entry;
         int newTriangles = blades * (patch.Cross ? 2 : 1) * 2;
         if (builds >= MaxBuilds || triangles + newTriangles > MaxBuildTriangles || bytes >= MaxBytes) return entry;   // the old one holds until there is budget
         builds++;
@@ -202,26 +234,28 @@ sealed unsafe class TracedGrass : IDisposable
         int cards = patch.Cross ? 2 : 1, quads = blades * cards;
         var vertices = DeviceBuffer.Create(ctx, (ulong)quads * VerticesPerQuad * 12, BufferUse.Storage | BufferUse.RayInput, "traced grass vertices");
         var cmd = (CommandList)open();
-        RecordExpand(cmd, foliage.RayGrassBlades, vertices, patch, blades, cards);
+        RecordExpand(cmd, foliage.RayGrassBlades, vertices, patch, blades, cards, default);
         cmd.Barrier(BarrierBatch.Full);
         ulong vertexAddress = ctx.Device.Address(vertices.Handle), indexAddress = ctx.Device.Address(indices.Handle);
-        var blas = AccelerationStructure.BuildBottom(ctx.Device, cmd, [new TriangleGeometry(vertexAddress, 12, (uint)(quads * VerticesPerQuad), indexAddress, (uint)(quads * 2), false)], "traced grass");
-        blas.ReleaseScratch();
+        var geometry = new TriangleGeometry(vertexAddress, 12, (uint)(quads * VerticesPerQuad), indexAddress, (uint)(quads * 2), false);
+        bool updatable = Sways(patch);
+        var blas = AccelerationStructure.BuildBottom(ctx.Device, cmd, [geometry], "traced grass", updatable);
+        if (!updatable) blas.ReleaseScratch();
         bytes += (long)(blas.Bytes + vertices.Size);
         var entry = new Entry
         {
-            Blas = blas, Vertices = vertices, Corner = patch.Corner, Blades = blades, CutHash = hash, LastUsed = frame,
+            Blas = blas, Vertices = vertices, Corner = patch.Corner, Blades = blades, CutHash = hash, LastUsed = frame, Built = frame, Geometry = geometry, Updatable = updatable,
             Record = new GeometryRecord { Vertices = vertexAddress, Indices = indexAddress, Stride = 12, Kind = GeometryRecord.Grass, AlphaThreshold = SpriteThreshold },
         };
         entries[patch.Key] = entry;
         return entry;
     }
 
-    void RecordExpand(CommandList cmd, (GpuBuffer Buffer, ulong Bytes) blades, DeviceBuffer vertices, in FoliageRenderer.RayGrassPatch patch, int count, int cards)
+    void RecordExpand(CommandList cmd, (GpuBuffer Buffer, ulong Bytes) blades, DeviceBuffer vertices, in FoliageRenderer.RayGrassPatch patch, int count, int cards, Vector4 sway)
     {
         var parameters = new Params
         {
-            Size = patch.Size, Corner = new Vector4(patch.Corner, 0), Blades = (uint)count, Cards = (uint)cards, Cuts = (uint)pageCuts.Count, First = patch.FirstBlade,
+            Size = patch.Size, Corner = new Vector4(patch.Corner, 0), Sway = sway, Blades = (uint)count, Cards = (uint)cards, Cuts = (uint)pageCuts.Count, First = patch.FirstBlade,
         };
         for (int i = 0; i < pageCuts.Count; i++)
         {
@@ -283,7 +317,7 @@ sealed unsafe class TracedGrass : IDisposable
         foreach (var key in entries.Keys.ToArray()) Drop(key, entries[key]);
     }
 
-    public string Describe() => $"{entries.Count} grass structures ({bytes / (1024 * 1024)} MB), {shown.Count} traced";
+    public string Describe() => $"{entries.Count} grass structures ({bytes / (1024 * 1024)} MB), {shown.Count} traced, {swayed.Count} swaying ({SwayedTriangles / 1000}k triangles)";
 
     public void Dispose()
     {

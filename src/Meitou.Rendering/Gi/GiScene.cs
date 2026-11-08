@@ -276,8 +276,8 @@ internal sealed unsafe class GiScene : IDisposable
         // origin and the object set hold, see ReuseTop). The instances are plain data, so equal bytes are an equal structure.
         var bytes = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(instances));
         bool equal = ReuseTop && topSlot.BuiltTrace == TopFastTrace && topSlot.BuiltBytes is { } built && topSlot.BuiltLength == bytes.Length && bytes.SequenceEqual(built.AsSpan(0, bytes.Length));
-        // Characters move: their structures were refitted this frame, so the top level is refitted over them (built again now and then, as it loses quality).
-        bool moving = (people?.Shown ?? 0) > 0, same = equal && !moving;
+        // Characters and the near grass move: their structures were refitted this frame, so the top level is refitted over them (built again now and then, as it loses quality).
+        bool moving = (people?.Shown ?? 0) > 0 || (Casters && grass is { SwayedTriangles: > 0 }), same = equal && !moving;
         bool refitTop = equal && moving && topSlot.BuiltUpdatable && topSlot.Refits < TopRefits;
         TopReused = same;
         if (!same)
