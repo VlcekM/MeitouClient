@@ -114,8 +114,9 @@ public sealed partial class ProductionSystem
                 if (task == CharacterTask.Attack && follow.Runs(task)) return DecisionCheck.Runs;
                 if (MovementSystem.FightStepOver(table, slot, cold)) return FollowedBy(world, slot, cold, k) is not null ? DecisionCheck.Run : DecisionCheck.No("its character is gone");
             }
-            // An operator carrying or carried looks at no job (and keeps the one it is on).
-            if (!Able(cold)) return runs ? DecisionCheck.Runs : DecisionCheck.No("carrying, carried or down");
+            // An operator carrying or carried looks at no job (and keeps the one it is on); an idle carrier still takes up a follow job.
+            bool onErrand = owner.errands.ContainsKey(table.IdOf(slot));
+            if (!AbleFor(cold, type, task, onErrand)) return runs ? DecisionCheck.Runs : DecisionCheck.No("carrying, carried or down");
             // 234's effect (using the turret) is planned through 146, whose list B has !158: not while a melee attacker is within 40 (docs/game/ai-tasks.md "Precedence").
             if (type == TaskType.MAN_A_TURRET_PLAYER_JOB && world.SystemOf<Combat.CombatSystem>() is { } combat && CharacterFacts.ImmediateThreat(combat, world, slot))
                 return DecisionCheck.No("a melee threat within 40 (146 needs !158)");

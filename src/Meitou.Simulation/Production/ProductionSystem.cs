@@ -399,6 +399,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     static bool Able(CharacterCold cold) =>
         cold.Medical is not { Incapacitated: true } && cold.CarriedBy.IsNone && cold.Carrying.IsNone;
 
+    /// <summary>
+    /// <see cref="Able"/> for a list job of <paramref name="type"/>, except that a carrier standing idle with nothing under way (no provenance, no errand; e.g. after a pick-up
+    /// order) takes up a follow row (31, 45, 289; their list B has no IS_CARRYING_SOMETHING 47, docs/game/ai-tasks.md).
+    /// </summary>
+    static bool AbleFor(CharacterCold cold, TaskType type, CharacterTask task, bool onErrand) =>
+        cold.Medical is not { Incapacitated: true } && cold.CarriedBy.IsNone
+        && (cold.Carrying.IsNone || PermaJobs.Follows(type) && task == CharacterTask.Idle && cold.Running is null && !onErrand);
+
     static int OperatorsOf(World world, string site)
     {
         var table = world.Characters;
