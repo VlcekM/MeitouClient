@@ -120,7 +120,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
                 DlaaPreset = Preset, QualityPreset = Preset, BalancedPreset = Preset, PerformancePreset = Preset, UltraPerformancePreset = Preset,
             };
             int rc = sl.DlssSetOptions(viewport, &o);
-            if (rc != 0) return Fail($"slDLSSSetOptions failed ({rc})");
+            if (!Succeeded(rc)) return Fail($"slDLSSSetOptions failed ({rc})");
             options = (mode, i.DisplayWidth, i.DisplayHeight);
         }
 
@@ -134,7 +134,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         nint token;
         uint index = frameIndex++;
         int r = sl.GetNewFrameToken(&token, &index);
-        if (r != 0) return Fail($"slGetNewFrameToken failed ({r})");
+        if (!Succeeded(r)) return Fail($"slGetNewFrameToken failed ({r})");
 
         var viewToClip = i.ViewToClip * FlipY;
         Matrix4x4.Invert(viewToClip, out var clipToView);
@@ -154,7 +154,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
             MinRelativeLinearDepthObjectSeparation = 40,
         };
         r = sl.SetConstants(&constants, token, viewport);
-        if (r != 0) return Fail($"slSetConstants failed ({r})");
+        if (!Succeeded(r)) return Fail($"slSetConstants failed ({r})");
 
         var list = (CommandList)ctx.BeginNative("dlss upscale");
         var cb = list.Handle;
@@ -176,10 +176,12 @@ public sealed unsafe class DlssUpscaler : IUpscaler
             // reactive mask. Observed: the CNN presets (e.g. E) use it, DLSS 310's default transformer preset ignores it.
             if (hint) tags[4] = Tag(&reactive, BufferBiasCurrentColorHint);
             r = sl.SetTagForFrame(token, viewport, tags, hint ? 5u : 4u, cb.Handle);
-            if (r != 0) return Fail($"slSetTagForFrame failed ({r})");
+            if (!Succeeded(r)) return Fail($"slSetTagForFrame failed ({r})");
             void* input = viewport;
             r = sl.EvaluateFeature(FeatureDlss, token, &input, 1, cb.Handle);
-            if (r != 0) return Fail($"slEvaluateFeature failed ({r})");
+            if (!Succeeded(r)) return Fail($"slEvaluateFeature failed ({r})");
+            // MEITOU_DLSS_FAIL_AT=n: report a failure after the n-th evaluation was recorded, as Streamline's out-of-memory warning once did (test hook for the fallback path).
+            if (FailAt > 0 && ++evaluated == FailAt) return Fail("forced failure after the evaluation was recorded (MEITOU_DLSS_FAIL_AT)");
         }
         finally
         {
@@ -192,6 +194,21 @@ public sealed unsafe class DlssUpscaler : IUpscaler
     {
         StructType = Streamline.ResourceTagType, StructVersion = 1, Resource = resource, Type = type, Lifecycle = ValidUntilEvaluate,
     };
+
+    /// <summary>Streamline's <c>eWarnOutOfVRAM</c> (39): the call did its work, the driver warns that the card's memory budget is exceeded.</summary>
+    const int WarnOutOfVram = 39;
+    static readonly int FailAt = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_DLSS_FAIL_AT"), out int failAt) ? failAt : 0;
+    int evaluated;
+    bool warnedVram;
+
+    /// <summary>A Streamline result that is not a failure: ok, or the out-of-memory warning (the evaluation was recorded and runs; counting it a failure dropped DLSS and freed its resources under the recorded frame).</summary>
+    bool Succeeded(int result)
+    {
+        if (result == 0) return true;
+        if (result != WarnOutOfVram) return false;
+        if (!warnedVram) { warnedVram = true; Console.WriteLine("upscaler  DLSS: Streamline warns the video memory budget is exceeded (kept going)"); }
+        return true;
+    }
 
     bool Fail(string message)
     {

@@ -52,6 +52,11 @@ sealed partial class GameHost
             InteriorDebug.HideMesh = args.Count == 1 && args[0] != "off" ? args[0] : null;
             con.Print(InteriorDebug.HideMesh is null ? "off" : "hiding " + InteriorDebug.HideMesh);
         });
+        add("vram", "vram", "debug: device-local memory in use and the budget (MB), as the memory guard samples it", (args, con) =>
+        {
+            if (gpu.Guard is not { } g) { con.Error("no memory guard"); return; }
+            con.Print(FormattableString.Invariant($"vram {g.Fraction * g.BudgetBytes / 1048576:F0} / {g.BudgetBytes / 1048576} MB ({g.Fraction:P1})"));
+        });
         add("object-sort", "object-sort <on|off>", "debug: colour batches of the objects are drawn nearest first (on, the default with the reach switch) or in the order met (off)", (args, con) =>
         {
             if (args.Count != 1 || args[0] is not ("on" or "off")) { con.Error("usage: object-sort <on|off>"); return; }

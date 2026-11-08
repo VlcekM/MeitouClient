@@ -125,6 +125,7 @@ c help                                # one usage line per command; `c help <nam
 | `step` | `step <n>` |
 | `stop` | `stop` |
 | `task` | `task <text>` |
+| `vram` | `vram` (debug: device-local memory in use and the budget, MB) |
 | `terrain-height` | `terrain-height <x> <z> [radius step]` |
 | `tp` | `tp <x> <z> \| tp <town name>` |
 | `tpcursor` | `tpcursor` |
