@@ -678,6 +678,7 @@ sealed partial class GameHost
                 session.Input.SetMousePosition(fedMouse.X, fedMouse.Y);
                 if (!Covered && !(PanelLive() && panel?.MouseMove(fedMouse) == true) && !cinema.MouseMove(fedMouse)) player.MouseMove(fedMouse);
             }
+            PumpPendingSay();
             // The control channel's `click`: one step per frame (move, a frame for the ghost and hover to follow, press, release), through the same press and release as the window's.
             if (pointerSteps.Count > 0)
             {

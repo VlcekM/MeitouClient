@@ -665,6 +665,7 @@ is world-free, so a mod's `AddCommand` can register into it later.
 | `help [word]` | list the commands, or one command's usage; with no exact name, search names, usage and descriptions for the word |
 | `godmode [on\|off]` | god mode for all player characters (no argument toggles) |
 | `clear` | empty the scrollback |
+| `version [--say]` | print `Meitou <tag> (<commit>)`; `--say` also has the first selected (else first living squad) character say it as a speech bubble 1 s later |
 | `money <delta>` | add or (negative) take away cats, never below 0 |
 | `heal` | heal the selected (else the inspected) characters fully |
 | `maxstats` | every stat 100, same targets |
