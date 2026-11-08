@@ -22,8 +22,8 @@ sealed partial class GameHost
     static string FrameGenerationState(VulkanDisplay display, FrameGenerationMethod loaded, FrameGenerationMethod now)
     {
         bool available = loaded == FrameGenerationMethod.Dlss ? display.DlssFrameGeneration : display.FrameGeneration;
-        if (now == FrameGenerationMethod.Off) return "off";
         if (now != loaded) return $"{FrameGenerationName(now)} after a restart";
+        if (loaded == FrameGenerationMethod.Off) return "off";
         return available ? "active" : "unavailable (see the log), plain swapchain in use";
     }
 
@@ -74,6 +74,7 @@ sealed partial class GameHost
             if (player.PointerImage(name) is not { } pointer)
             {
                 cursor.Type = CursorType.Standard;
+                cursor.StandardCursor = standard = StandardCursor.Default;
                 return;
             }
             cursor.Type = CursorType.Custom;

@@ -45,7 +45,7 @@ sealed class UserConfig
     public bool VSync { get; set; }
     /// <summary>Frame generation: a generated frame between each two rendered ones, by <see cref="FrameGenerationVendor"/>: FSR 3's
     /// frame-interpolation swapchain (Windows, Proton and Linux, needs <c>amd_fidelityfx_vk.dll</c> / <c>libamd_fidelityfx_vk.so</c>) or DLSS's through
-    /// Streamline (<c>FrameGeneration</c>). Off by default. Switches live where <see cref="FrameGenerationToLoad"/> loaded it.</summary>
+    /// Streamline (<c>FrameGeneration</c>). Off by default; read at start-up, so a change takes effect after a restart.</summary>
     public bool FrameGeneration { get; set; }
     /// <summary>Whose frame generation <see cref="FrameGeneration"/> turns on: FSR 3 (the default) or DLSS (Windows, RTX 40 or later, through Streamline; read at start-up).</summary>
     public FrameGenerationVendor FrameGenerationVendor { get; set; }
@@ -62,14 +62,6 @@ sealed class UserConfig
             if (FrameGeneration) FrameGenerationVendor = value == Meitou.Rendering.FrameGenerationMethod.Dlss ? FrameGenerationVendor.Dlss : FrameGenerationVendor.Fsr;
         }
     }
-
-    /// <summary>
-    /// The frame generation the display loads at start-up: DLSS's whenever it is the vendor, so the switch turns it on and off in the game (loaded and off it
-    /// cost 0.2-0.3 ms a frame, within noise: docs/render-post.md "DLSS frame generation"); FSR 3's only when on (its swapchain is a layer of its own).
-    /// </summary>
-    [JsonIgnore]
-    public Meitou.Rendering.FrameGenerationMethod FrameGenerationToLoad => FrameGenerationVendor == FrameGenerationVendor.Dlss
-        ? Meitou.Rendering.FrameGenerationMethod.Dlss : FrameGenerationMethod;
     /// <summary>The Metal display default: MetalFX balanced (temporal at 0.50); Native is used when MetalFX is unavailable.</summary>
     public MetalUpscalerMode MetalUpscaler { get; set; } = MetalUpscalerMode.Temporal;
     /// <summary>The Metal render scale; the default 0.50 is the balanced profile. The Metal settings panel edits it live.</summary>

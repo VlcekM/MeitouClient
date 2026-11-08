@@ -266,7 +266,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, up to 33 ms more input delay.";
     const string FrameGenerationTemplate = "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
         + "FSR 3 (AMD's, any GPU) needs the FidelityFX library; DLSS (NVIDIA's, Windows, RTX 40 or later) needs Streamline's frame generation DLLs and turns Reflex on. "
-        + "Both work with TAA, FSR and DLSS upscaling. DLSS switches at once; FSR 3, and a change between the two, after a restart. Now: {1}";
+        + "Both work with TAA, FSR and DLSS upscaling. A change takes effect after a restart. Now: {1}";
 
     internal static readonly string[] FrameGenerationChoices = ["Off", "FSR 3", "DLSS"];
 
@@ -374,7 +374,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Add(new("Feedback button", "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu.",
                 Toggle: new("Feedback button", () => config.FeedbackButton, v => player.FeedbackButtonInPlay = config.FeedbackButton = v, OnOff: true)));
         if (page == 2)
-            result.Add(new("Hardware mouse", "Use the Windows cursor instead of the game's drawn pointer (no hover pointers).",
+            result.Add(new("Hardware mouse", "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on).",
                 Toggle: new("Hardware mouse", () => config.HardwareMouse, v => config.HardwareMouse = v)));
         if (page == 2 && config.HardwareMouse)
             result.Add(new("Enhanced hardware mouse", "The icon of what a right click would do beside the Windows cursor (none for a walk), and the hand over buttons and targets.",

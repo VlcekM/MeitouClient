@@ -130,7 +130,7 @@ static class LauncherSchema
         {
             Key = Key(nameof(UserConfig.FrameGeneration)), Kind = SettingKind.Toggle, Name = "Frame generation",
             Description = "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
-                + "Works with TAA, FSR and DLSS upscaling. DLSS switches in the game too; FSR 3 turns on at start-up.",
+                + "Works with TAA, FSR and DLSS upscaling. Turns on and off at start-up.",
             Default = defaults.FrameGeneration ? 1 : 0, On = "On", Off = "Off",
         },
         new()

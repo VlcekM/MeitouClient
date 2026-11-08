@@ -34,7 +34,7 @@ sealed partial class GameHost
         // The world's files are read on a worker from here on: while the window and the device are made, then behind the loading screen.
         var sceneRead = LoadScene is { } readScene ? Task.Run(readScene) : null;
         BeginAudio();
-        var frameGenerationAtStart = config.FrameGenerationToLoad;   // the vendor is read at start-up only; the switch is live for the loaded one
+        var frameGenerationAtStart = config.FrameGenerationMethod;   // read at start-up only: a change in the settings waits for a restart
         using var display = new VulkanDisplay(headless ? null : WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),
@@ -733,15 +733,14 @@ sealed partial class GameHost
                 var backbuffer = display.Backbuffer ?? (headlessTarget ??= display.Context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.X, size.Y,
                     Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "headless backbuffer")));
                 gpu.Post!.Target = backbuffer;
-                // Frame generation (the loaded one): made on the first frame; wanted while the setting asks for it, except under the loading screen and for saved pictures.
+                // Frame generation (the one loaded at start-up): made on the first frame; wanted except under the loading screen and for saved pictures.
                 if (frameGen is Meitou.Rendering.Upscalers.FrameGeneration && display.FrameGenerationLayer is null) { frameGen.Dispose(); frameGen = null; }   // the layer fell back to the plain swapchain
                 if (!frameGenTried)
                 {
                     frameGenTried = true;
                     frameGen = CreateFrameGenerator(display);
                 }
-                bool frameGenWanted = config.FrameGenerationMethod == frameGenerationAtStart
-                    && !Covered && !screenshotRequested && !feedbackShotRequested && takeFile is null;
+                bool frameGenWanted = !Covered && !screenshotRequested && !feedbackShotRequested && takeFile is null;
                 frameGen?.BeginFrame(frameGenWanted, size.X, size.Y);
                 gpu.Post!.FrameGen = frameGen;
                 // The interface draws into a transparent layer of its own, laid over the backbuffer just before the present.

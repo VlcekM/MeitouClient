@@ -101,7 +101,7 @@ swapchain code needs Vulkan headers 1.3.237+, so the script uses Khronos' 1.3.29
 
 NVIDIA's DLSS-G through Streamline 2.14.16 (Windows; `Upscalers/DlssFrameGeneration.cs`, guide: Streamline's `ProgrammingGuideDLSS_G.md`,
 `ProgrammingGuideManualHooking.md`, `ProgrammingGuideReflex.md`). One generated frame per rendered one: multi-frame generation is D3D12 only.
-- **Loading:** with DLSS as the vendor (`UserConfig.FrameGenerationToLoad`, the switch on or off, so it switches in the game) `slInit` loads DLSS, DLSS-G, Reflex and PCL (`sl.dlss_g.dll`, `nvngx_dlssg.dll`, `sl.reflex.dll`, `sl.pcl.dll` beside
+- **Loading:** with the switch on and DLSS as the vendor (read at start-up; a change in the settings waits for a restart) `slInit` loads DLSS, DLSS-G, Reflex and PCL (`sl.dlss_g.dll`, `nvngx_dlssg.dll`, `sl.reflex.dll`, `sl.pcl.dll` beside
   the interposer; missing ones are logged and frame generation stays off). Each feature's `slGetFeatureRequirements` is unioned: extensions,
   1.2/1.3 features, graphics and compute queues (created after ours in the graphics family; `VulkanInfo` gets the first index after ours). Where
   `slIsFeatureSupported` fails for DLSS-G, Reflex or PCL, DLSS-G is unloaded (`slSetFeatureLoaded`): loaded, it makes the swapchain render off-screen
@@ -121,7 +121,7 @@ NVIDIA's DLSS-G through Streamline 2.14.16 (Windows; `Upscalers/DlssFrameGenerat
 - **State:** `slDLSSGGetState` about once a second; status failures (resolution too low, Reflex not detected, constants invalid ...) are logged
   when they change. `numFramesActuallyPresented` is the frames presented for the last rendered one (1 = none generated, 2 = one), not a count
   since the previous call; the stats panel shows it as `x2 shown` beside the rendered rate.
-- **Loaded and off** (**Observed**, play bench idle/orbit/pan, 2560x1440 window at render scale 1.0, GPU-bound, RTX 4070, 3 interleaved pairs,
+- **Loaded with the mode off** (**Observed**, play bench idle/orbit/pan, 2560x1440 window at render scale 1.0, GPU-bound, RTX 4070, 3 interleaved pairs,
   2026-11-08): mean frame 11.2 / 12.7 / 11.6 ms not loaded against 11.4 / 13.0 / 10.8 loaded with the mode off: +0.2-0.3 ms at most, within noise;
   the render thread's `driver-wait` +0.14 ms (Reflex). Under CPU-bound frames (1920x1080 at 0.67) run-to-run noise (±50%) hid any difference.
 - **Pointer:** with any frame generation the game's pointer is the window's cursor (its image cropped from its sheet at the drawn size, hot spot
