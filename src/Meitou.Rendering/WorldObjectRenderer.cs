@@ -820,7 +820,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (p.Interior) return true;
         // A part of an upper floor of a building in the interior view, at or below the viewed floor: its floor slab is seen from inside the cut-away room (the game lights
         // it with the one ambient, docs/render-gi.md "Indoor"), not an outer wall of a closed building, so a hidden floor or a ceiling plane over it does not leave it black.
-        if (p.Kind == PlacedKind.BuildingPart && p.Floor > 0 && p.ParentPlacementId is null && InteriorView.TryGetValue(p.PlacementId, out int shownFloor) && p.Floor <= shownFloor) return true;
+        // Floor 0 too: the top of a wall the view cuts open sits under the hidden wall above it, its rays start among hidden geometry and the hybrid GI's cache flickered there, black, even paused.
+        if (p.Kind == PlacedKind.BuildingPart && p.ParentPlacementId is null && InteriorView.TryGetValue(p.PlacementId, out int shownFloor) && p.Floor <= shownFloor) return true;
         if (p.ParentPlacementId is not null) return InInterior(inst);
         // A loose item on a shelf or a floor indoors is lit as the room is: the hybrid GI's cache gave it nothing and, without the indoor floor, it read pitch black.
         return (p.Kind == PlacedKind.BuildingPart || p.Kind == PlacedKind.Item) && InteriorOf(inst) is { Inside: true, Building: { } holder } && holder != p.PlacementId;
