@@ -54,8 +54,8 @@ sealed partial class GameHost
     /// <summary>A new upright print within this share of its length of one of the body's last prints is not made: one footfall, one print (a toe or shin contact, a foot replanted, two feet close).</summary>
     const float PrintGap = 0.6f;
 
-    /// <summary>How far (units) a heel or toe piece may lie from the edge of a sole of the same body and still belong to it.</summary>
-    const float PieceReach = 0.5f;
+    /// <summary>How far (units) a heel or toe piece may lie from the edge of a sole of the same body and still belong to it, and how much of that sole's length it is at most.</summary>
+    const float PieceReach = 0.5f, PieceShare = 0.8f;
 
     /// <summary>How many of a body's last prints are remembered for <see cref="PrintGap"/>.</summary>
     const int RecentPrints = 8;
@@ -157,7 +157,7 @@ sealed partial class GameHost
         if (st.Printed) return;
         st.Printed = true;
         var print = PrintOf(patch, heading, depth, upright, animal);
-        if (upright && !Remember(ref w, print, Partial(patch, upright, animal))) return;
+        if (upright && !Remember(ref w, print, upright && !animal && print.Kind == TrailKind.Foot)) return;
         Press(trails, ground, at, print);
     }
 
@@ -175,17 +175,17 @@ sealed partial class GameHost
     static bool Partial(in ContactPatch patch, bool upright, bool animal) => upright && !animal && patch.Flat && patch.Length <= SoleAspect * patch.Width;
 
     /// <summary>
-    /// Notes a print among the body's last ones; false (nothing noted) when it is within <see cref="PrintGap"/> of its length of one of them: that footfall already printed. A heel or toe
-    /// <paramref name="partial"/> is also left out when it touches one of them (within <see cref="PieceReach"/>): it belongs to that sole.
+    /// Notes a print among the body's last ones; false (nothing noted) when it is within <see cref="PrintGap"/> of its length of one of them: that footfall already printed. A <paramref name="foot"/>
+    /// print under 0.8 of the length of one it touches (within <see cref="PieceReach"/>) is also left out: a heel or toe piece belongs to the sole beside it.
     /// </summary>
-    static bool Remember(ref Walker w, in TrailStamp print, bool partial)
+    static bool Remember(ref Walker w, in TrailStamp print, bool foot)
     {
         w.Recent ??= new Vector3[RecentPrints];
         foreach (var p in w.Recent)
         {
             if (p.Z <= 0) continue;
             float d = Vector2.Distance(new Vector2(p.X, p.Y), print.Centre);
-            if (d < PrintGap * MathF.Max(p.Z, print.Length) || (partial && d < (p.Z + print.Length) / 2 + PieceReach)) return false;
+            if (d < PrintGap * MathF.Max(p.Z, print.Length) || (foot && print.Length < PieceShare * p.Z && d < (p.Z + print.Length) / 2 + PieceReach)) return false;
         }
         w.Recent[w.RecentNext++ % RecentPrints] = new Vector3(print.Centre, print.Length);
         return true;
