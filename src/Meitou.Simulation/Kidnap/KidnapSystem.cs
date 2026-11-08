@@ -46,10 +46,13 @@ public sealed class Abduction
     public bool Marching { get; init; }
     /// <summary>The town a marching carrier gives up in when no cage there is free (a site index; it cages in any town of its faction on the way): its campaign's home, or the home town of an AI squad that retreats with its captive; -1: any town of its faction.</summary>
     public int HomeSite { get; init; } = -1;
+    /// <summary>A slaver's carry of its downed slave (168): it goes on with its squad and cages the slave once a cage is found, never dropping it for want of one (goal 112 finds no target).</summary>
+    public bool Hauls { get; init; }
 
     internal void Hash(ref StateHasher h)
     {
         h.Add(Carrier); h.Add(Victim); h.Add(Faction); h.Add((int)Phase); h.Add(Time); h.Add(Tries); h.Add(Marching); h.Add(HomeSite); h.Add(Cage is { } c ? Rng.StableHash(c) : 0UL);
+        if (Hauls) h.Add(0x48617573);   // only when set, so the other carries hash as before
     }
 }
 
@@ -116,19 +119,20 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
     /// <summary>
     /// Has the member in <paramref name="slot"/> lift <paramref name="victim"/> and carry it to a cage of its faction or an ally in range (the carrying and caging of goals 167 and 168, which the
     /// <see cref="CaptiveSystem"/> starts once it has cuffed or found the captive; the original's goal 112 puts the carried one in a cage). False when the member cannot carry, the victim
-    /// is someone's pick already, or no free cage is in range.
+    /// is someone's pick already, or no free cage is in range. With <paramref name="hauls"/> (a slave, goal 168) no cage is needed: see <see cref="Abduction.Hauls"/>.
     /// </summary>
-    public bool Carry(World world, int slot, CharacterId victim)
+    public bool Carry(World world, int slot, CharacterId victim, bool hauls = false)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(victim, out int v) || !FreeKidnapper(world, slot) || Busy(table.IdOf(slot))) return false;
         foreach (var a in abductions) if (a.Victim == victim) return false;
         var cold = table.Cold(slot)!;
-        if (CageFor(world, table.Next[v].Position, cold, null) is null) return false;
+        if (!hauls && CageFor(world, table.Next[v].Position, cold, null) is null) return false;
         var task = (CharacterTask)table.Next[slot].Task;
-        if (!carry.BeginPickUp(world, slot, victim, TaskStart.Standing(cold, task), kidnap: true, source: TaskSource.Goal, row: TaskType.CARRY_WOUNDED_SLAVES)) return false;
+        var resume = hauls ? HaulResume(world, slot, cold) : TaskStart.Standing(cold, task);
+        if (!carry.BeginPickUp(world, slot, victim, resume, kidnap: true, source: TaskSource.Goal, row: TaskType.CARRY_WOUNDED_SLAVES)) return false;
         cold.Engaged = true;
-        abductions.Add(new Abduction { Carrier = table.IdOf(slot), Victim = victim, Faction = cold.Faction });
+        abductions.Add(new Abduction { Carrier = table.IdOf(slot), Victim = victim, Faction = cold.Faction, Hauls = hauls });
         return true;
     }
 
@@ -257,6 +261,7 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
                 // the home x100 but does not require it) and drops the captive when its home town (any, without a HomeSite) has no free cage; any other carrier waits a while for one
                 // (engine choices; the original's give-up rule is Unknown).
                 if ((world.Tick + g) % world.Every(Settings.LookEveryTicks) != 0) return true;
+                if (a.Hauls) return CageFor(world, gn.Position, gc, a) is { } cageFound ? ToCage(world, a, g, cageFound) : true;
                 int town = TownOf(world, gn.Position, gc.Faction);
                 if (a.Marching && town < 0) return true;
                 if (CageFor(world, gn.Position, gc, a) is { } found) return ToCage(world, a, g, found);
@@ -351,8 +356,26 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
     {
         var table = world.Characters;
         a.Cage = null;
-        if (++a.Tries > Settings.CageWalks || CageFor(world, table.Next[g].Position, table.Cold(g)!, a) is not { } cage) return Drop(world, a, g);
+        if (++a.Tries > Settings.CageWalks || CageFor(world, table.Next[g].Position, table.Cold(g)!, a) is not { } cage) return a.Hauls ? CarryOn(world, a, g) : Drop(world, a, g);
         return ToCage(world, a, g, cage);
+    }
+
+    /// <summary>What a hauling carrier does once it has the slave: a squad member follows its leader (goal 141, the next of its list), the leader stands.</summary>
+    static CharacterTask HaulResume(World world, int slot, CharacterCold cold) =>
+        world.Squads.Find(cold.SquadId) is { } squad && squad.Leader != world.Characters.IdOf(slot) ? CharacterTask.Follow : CharacterTask.Idle;
+
+    /// <summary>A hauling carrier with no cage to go to keeps its slave and goes back to its squad (<see cref="Abduction.Hauls"/>).</summary>
+    bool CarryOn(World world, Abduction a, int g)
+    {
+        a.Phase = KidnapPhase.Carry;
+        a.Tries = 0;
+        a.Time = 0;
+        var table = world.Characters;
+        if (table.Next[g].Task != (byte)CharacterTask.GoTo) return true;
+        if (world.Squads.Find(table.Cold(g)!.SquadId) is { } squad && squad.Leader != a.Carrier)
+            TaskStart.Become(world, g, CharacterTask.Follow, TaskType.FOLLOW_SQUADLEADER, TaskSource.Goal);
+        else TaskStart.Stand(table, g);
+        return true;
     }
 
     bool Drop(World world, Abduction a, int g)

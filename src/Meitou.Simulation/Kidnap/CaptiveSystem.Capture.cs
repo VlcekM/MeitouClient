@@ -14,8 +14,9 @@ namespace Meitou.Simulation.Kidnap;
 /// enforcement, trader and diplomat, not maimed, and not in shackles (engine guard). The
 /// capturer walks to it, strips its weapons (the <c>hip</c> and <c>back</c> sections go to the capturer, after 0.8 s of <c>medic</c>, <c>Task_StripWeapons</c>), cuffs it
 /// (<c>Task_CuffTarget</c>: a "Restraining" bar, <c>medic</c>, event 37 to the captive when it is full; the shackles are an <b>engine choice</b>, their source in the original is <b>Unknown</b>)
-/// and carries it to a cage of its faction (goal 112 in the original, here <see cref="KidnapSystem.Carry"/>).</item>
-/// <item><b>Carry</b> (168 "Carrying slaves", finder <c>FUN_1408cdf50</c>): the same for a downed slave owned by the carrier's faction, with no strip or cuff.</item>
+/// and the cuff makes it a slave of the capturer's faction (<c>setChainedMode</c>, see <see cref="Hand"/>).</item>
+/// <item><b>Carry</b> (168 "Carrying slaves", finder <c>FUN_1408cdf50</c>): a downed slave owned by the carrier's faction is lifted and carried along with the squad until a cage is
+/// found (goal 112 in the original, here <see cref="KidnapSystem.Carry"/> hauling).</item>
 /// <item><b>Shout</b> (188 "Working the slaves", finder <c>FUN_1408cd940</c>): the worker says event 38 SHOUT_AT_SLAVE_WORKER to a random slave of its squad that is alive, uncarried and uncaged
 /// (the row's TaskData event, <b>Verified</b>: the registration of 188 stores 0x26 at <c>+0x130</c>) and keeps with it, saying the event
 /// again every <see cref="CaptiveSettings.ShoutSeconds"/>, until it says a line: the row's B list is <c>isDialogDelivered</c>, and the
@@ -197,8 +198,8 @@ public sealed partial class CaptiveSystem
                     FirstAid.FirstAidSystem.TreatBeforeLift(world, slot, v);
                     return null;
                 }
-                // The carry needs a free cage, as the arrest goal does. The capture finder (FUN_1408cdd00) has no cage test: with none, the captive is cuffed and left (Hand).
-                if (v < 0 || !capture && !Kidnap.HasCage(world, table.Next[v].Position, cold)) return null;
+                // Neither finder (FUN_1408cdd00, FUN_1408cdf50) tests for a cage: the cuffed captive is enslaved (Hand), and a lifted slave is carried until goal 112 finds one.
+                if (v < 0) return null;
                 return new CaptiveJob
                 {
                     Kind = capture ? CaptiveJobKind.Capture : CaptiveJobKind.Carry, Worker = worker, Captive = table.IdOf(v), Cage = "", Faction = cold.Faction,
@@ -325,17 +326,28 @@ public sealed partial class CaptiveSystem
     }
 
     /// <summary>
-    /// Ends the job and, when a cage of the worker's faction is in range, has the kidnapping system carry the captive to it (engine stand-in for the original's lift and goal 112).
-    /// Else the captive stays where it lies, cuffed and still free: the original's carry (168, <c>FUN_1408cdf50</c>) takes only slaves (state 1) owned by the carrier's faction, the cuff
-    /// (<c>FUN_14034af20</c>) sets neither (a non-prison cage does, <c>FUN_140330600</c>; all <b>Verified</b>), and no other goal of the slavers' lists lifts it (<b>Observed</b>, the row tables).
+    /// Ends the job. A capture's captive is now chained: the cuff's message (type 5, read by the world's update <c>FUN_1407b65b0</c>) runs <c>setChainedMode</c> (<c>FUN_14032e590</c>,
+    /// <b>Verified</b>), which makes it a slave (state 1) of the cuffer's faction, obeying it (job 187); 168 then lifts it like any downed slave. A carry has the kidnapping system lift
+    /// the slave and haul it (<see cref="KidnapSystem.Carry"/>; goal 112 cages it once a cage is found).
     /// </summary>
     bool Hand(World world, CaptiveJob j, int w)
     {
         Note(world, CaptiveEventKind.Captured, j);
         var captive = j.Captive;
+        var kind = j.Kind;
         End(world, j, null);
-        if (Kidnap is null || !Kidnap.Carry(world, w, captive)) SetWait(givenUp, captive, world.GameHours + Settings.GiveUpHours);
+        if (kind == CaptiveJobKind.Capture) Chain(world, w, captive);
+        else if (Kidnap is null || !Kidnap.Carry(world, w, captive, hauls: true)) SetWait(givenUp, captive, world.GameHours + Settings.GiveUpHours);
         return false;
+    }
+
+    /// <summary><c>setChainedMode</c>'s slave state and owner: a slave of the cuffer's faction obeying the cuffer's squad (the original's owner is the cuffer character).</summary>
+    void Chain(World world, int w, CharacterId captive)
+    {
+        var table = world.Characters;
+        if (table.Cold(w) is not { } wc || !table.TryResolveNext(captive, out int c) || table.Cold(c) is not { Medical.Dead: false } cc) return;
+        FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
+        if (Settings.RecordLog) log.Add(new CaptiveEvent(world.Tick, CaptiveEventKind.Enslaved, CaptiveJobKind.Capture, table.IdOf(w), captive));
     }
 
     /// <summary>
