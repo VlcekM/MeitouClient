@@ -227,8 +227,9 @@ public sealed partial class MedicalState
                 p.Bandage -= heal;
                 p.Flesh = MathF.Min(p.Flesh + heal, m);
             }
-            // Wear repair in a repair bed: wear moves into the treated pool, which stays within the part's HP.
-            if (p.Wear > 0 && ctx.RepairRate > 0)
+            // Repair in a repair bed: the amount comes off the wear and goes into the treated pool, which stays within the part's HP; with no wear left it treats the
+            // untreated damage (character-stats.md "Part tick").
+            if (ctx.RepairRate > 0)
             {
                 float amount = dtb * 0.05f * c.RestingHealRateMult * ctx.RepairRate;
                 float full = p.MaxHp + p.Wear;
