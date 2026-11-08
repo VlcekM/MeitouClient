@@ -176,4 +176,36 @@ public class PlayerTownImportTests
         Assert.Equal(removed.Number, site.Town);
         Assert.Same(survivor, Assert.Single(world.Buildings.Towns));
     }
+
+    [Fact]
+    public void Save_writes_the_current_outpost_radius()
+    {
+        var builder = new SaveBuilder(7);
+        var state = Town(builder, "Town state Camp", "camp", Player, new Hand((int)FcsRecordType.TOWN, 4, 55, 2, 9), false, 1800);
+        var (_, list) = SaveWithInstances(("camp", new Vector3(100, 300, 200), [state]));
+        builder.Game.TownInstanceList = list;
+
+        using var world = World();
+        BuildingSave.Read(builder.Game, world, new GameDatabase(), Player, 7);
+        var town = Assert.Single(world.Buildings.Towns);
+        town.Override = 3400;
+
+        BuildingSave.Write(builder.Game, world, Player);
+
+        Assert.Equal(3400, state.Record.Ints["override"]);
+    }
+
+    [Fact]
+    public void Reassessing_after_the_last_building_is_removed_removes_the_town()
+    {
+        using var world = World();
+        var town = world.Buildings.AddTown(Vector3.Zero, 7);
+        var site = Site("last-building", Vector3.Zero, town.Number);
+        world.Buildings.Add(site);
+        world.Buildings.Remove(site);
+
+        ConstructionSystem.ReassessTown(world, town);
+
+        Assert.Empty(world.Buildings.Towns);
+    }
 }

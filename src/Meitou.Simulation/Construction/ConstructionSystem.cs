@@ -804,15 +804,19 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// Moves a player town's centre to its buildings and sizes its radius to them (<c>Town::reassessTownPosition</c>,
     /// docs/game/buildings-production.md "Outposts"): the mean of its outdoor buildings, on walkable ground when some is near, then
     /// <see cref="TownRadiusMargin"/> beyond the farthest. Engine choice: a plain mean (the original weighs two building sets, <b>Unknown</b> which);
-    /// a town without buildings keeps its place.
+    /// placement/dismantle reassessment removes an empty town, while load-time reassessment preserves an empty saved town.
     /// </summary>
-    public static void ReassessTown(World world, PlayerTown town, bool mergeOverlaps = true)
+    public static void ReassessTown(World world, PlayerTown town, bool mergeOverlaps = true, bool removeEmpty = true)
     {
         var sum = Vector3.Zero;
         int count = 0;
         foreach (var s in world.Buildings.All)
             if (s.Town == town.Number && s.Parent is null) { sum += s.Position; count++; }
-        if (count == 0) return;
+        if (count == 0)
+        {
+            if (removeEmpty) world.Buildings.RemoveTown(town);
+            return;
+        }
         var centre = sum / count;
         if (WalkableSpots.Nearest(world.Walkability, new Vector2(centre.X, centre.Z), out var spot)) centre = new Vector3(spot.X, centre.Y, spot.Y);
         float radius = TownRadiusStart;
@@ -829,7 +833,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     /// </summary>
     public static void ReassessTowns(World world)
     {
-        foreach (var town in world.Buildings.Towns) ReassessTown(world, town, mergeOverlaps: false);
+        foreach (var town in world.Buildings.Towns) ReassessTown(world, town, mergeOverlaps: false, removeEmpty: false);
     }
 
     static void MergeOverlappingTown(World world, PlayerTown town)

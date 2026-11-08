@@ -593,8 +593,8 @@ towns' keys: `instance` = the entry id, `is nest` false, `building material`, `p
 `replacementTown` (the string id of the TOWN in the town's place, "" none: [town overrides](../game/factions-squads-towns.md#town-overrides)), `trade goods`, optionally `faction` = the player faction, `factions here<i>`, `discovered` / `explored` /
 `recently discovered`, `artifacts count`, the handle `hand*` (type 13 TOWN) and the population floats; plus int
 `override` (Town+0x51c, the player town's [reassessed radius](../game/buildings-production.md#placement); 0 when made), written only for a town
-whose faction is the player's. How the float is stored under an int key is **Unknown**; Meitou writes 0 and reassesses on load.
-Buildings name it by their `town` handle. **Verified** (`FUN_14092ae80`): removing an overlapping town does not rewrite those handles. A later town reassessment is not part of `loadGame` after this removal, so a building whose handle no longer resolves remains without a player-town assignment; Meitou maps that unresolved handle to town 0.
+whose faction is the player's. How the float is stored under an int key is **Unknown**; Meitou writes the current radius and reads it back.
+Buildings name it by their `town` handle. **Verified** (`FUN_140555650`, the building-state load path; `FUN_1402a14b0` / `FUN_1402a1750`, building state hooks; `FUN_1406bd000`, the handle reader): the town reference is resolved through the saved handle and an unresolved reference becomes the canonical null handle, not a nearest-town lookup. **Verified** (`FUN_14092ae80`): removing an overlapping town does not rewrite those handles. A later town reassessment is not part of `loadGame` after this removal, so a building whose handle no longer resolves remains without a player-town assignment; Meitou maps that unresolved handle to town 0.
 
 **Verified** against `Beep Fan Club 1/quick.save` (2026-11-08): both outpost entries target `player_town_template`, and their `Town state` records have `instance` and `hand` but no `faction` key. `current` and `quicksave` were present as directories but contained no `quick.save`, so they could not be compared.
 
