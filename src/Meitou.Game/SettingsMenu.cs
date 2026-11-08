@@ -335,6 +335,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             if (!OperatingSystem.IsMacOS())
                 result.Add(new("Frame generation (FSR 3)", FrameGenerationHint(),
                     Toggle: new("Frame generation (FSR 3)", () => config.FrameGeneration, v => config.FrameGeneration = v, OnOff: true), Raw: "frameGeneration"));
+            result.RemoveAll(e => e.Raw == WorldFrame.DlssPresetSlider && !DlssChosen());
             result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
             result = [.. result.SelectMany(ModeEntries)];
         }
@@ -540,6 +541,9 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Insert(0, PageSidesEntry(result, "All fixes", "Every bug on this page as the game ships it, or every fix.", "fix"));
         return result;
     }
+
+    /// <summary>Anti-aliasing/upscaling is at DLSS (its last choice), so the DLSS preset row is shown under it.</summary>
+    bool DlssChosen() => values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing && MathF.Round(antiAliasing.Get()) == 5;
 
     static string ActionLabel(InputAction action) => Regex.Replace(action.ToString(), "(?<=[a-z0-9])(?=[A-Z])|(?<=[a-z])(?=[0-9])", " ");
     Func<string>? pendingAction;
