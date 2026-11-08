@@ -19,7 +19,7 @@ namespace Meitou.Game;
 sealed partial class GameHost
 {
     TitleComposition? titleComposition;
-    TitleBattle? titleBattle;
+    internal TitleBattle? titleBattle;
     Meitou.Data.Characters.CharacterAppearance[] titleAppearances = [];
     bool TitleCharactersReady => ActiveCharacters is not { } characters ||
         titleAppearances.Length > 0 && titleAppearances.All(characters.IsPrepared) && !characters.ContentPending;
@@ -31,7 +31,7 @@ sealed partial class GameHost
     float? gameplayLens;
     /// <summary>The gameplay character source, set aside while the title shows its staged actors.</summary>
     Action<CharacterDrawList>? gameplayCharacters;
-    bool TitleVisible => player.TitleOpen && player.UiMode == UiMode.Meitou;
+    internal bool TitleVisible => player.TitleOpen && player.UiMode == UiMode.Meitou;
     float TitleHour => scene.Clock.Sunrise + 0.75f;
     /// <summary>The moons' fill light, and the shafts' air layer (a multiple of the usual) on the title: thick morning air so the low sun casts strong rays.</summary>
     const float TitlePlanetFill = 0.8f, TitleShaftAir = 2, TitleClouds = 0.38f;
@@ -155,7 +155,7 @@ sealed partial class GameHost
     /// The title's own view of the real world (<see cref="TitleComposition.Spot"/>), independent of the gameplay camera rig; the world's renderers
     /// stream round it as round any camera. While the title shows, only its staged actors are drawn.
     /// </summary>
-    void ApplyTitleCamera()
+    internal void ApplyTitleCamera()
     {
         if (!TitleVisible)
         {
@@ -253,7 +253,7 @@ sealed partial class GameHost
                 unit.Tint = new Vector3(1, 0.86f, 0.68f) * ((0.4f + 0.25f * gust) * fade);
     }
 
-    void DisposeTitleScene()
+    internal void DisposeTitleScene()
     {
         titleParticles?.Dispose();
         titleParticles = null;

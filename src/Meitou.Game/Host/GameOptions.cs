@@ -81,13 +81,13 @@ sealed class GameOptions
     public double? ShotAfter;
     /// <summary><c>--screenshot-out &lt;png&gt;</c>: where <see cref="ShotAfter"/> saves (default <control-dir>/shot.png, else ./meitou-shot.png).</summary>
     public string? ShotOut;
-    /// <summary><c>--play-bench &lt;dir&gt;</c>: the interactive game driven by a script, every frame measured, the results written there (GameHost.PlayBench.cs).</summary>
+    /// <summary><c>--play-bench &lt;dir&gt;</c>: the interactive game driven by a script, every frame measured, the results written there (PlayBench).</summary>
     public string? PlayBench;
     /// <summary><c>--no-precompile</c>: the methods are compiled on their first call only, not ahead on a background thread (JitWarmup).</summary>
     public bool NoPrecompile;
     /// <summary>The renderer for the whole frame: <c>vulkan</c> (the default) or <c>metal</c> (macOS: the scene, HUD and faithful panels, the port's current slice).</summary>
     public string Renderer = "vulkan";
-    /// <summary>With <c>--screenshot</c>: a staged scene to check behaviour offscreen (<c>--scene</c>: fight, turret, bed, acid, menu; GameHost.Scenes.cs).</summary>
+    /// <summary>With <c>--screenshot</c>: a staged scene to check behaviour offscreen (<c>--scene</c>: fight, turret, bed, acid, menu; ScreenshotScenes).</summary>
     public string? Scene;
     /// <summary>The scene's frames and the control ticks between them (<c>--scene-frames</c>, <c>--scene-every</c>).</summary>
     public int SceneFrames = 8, SceneEvery = 30;

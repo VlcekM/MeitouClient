@@ -28,7 +28,7 @@ sealed partial class GameHost
     /// <summary><c>--battle-map fog</c>: a spot in the Fog Islands picked in the game view, about 460 units from the plateau first used (-71170, -40200: about 880 high, level to 13 units over 800 x 800, in its fog volumes, 10k from any building).</summary>
     public static readonly Vector2 FogBattleSpot = new(-71560, -39953);
 
-    bool IsBattle => g.Battle is not null;
+    internal bool IsBattle => g.Battle is not null;
     /// <summary>The floor is the sandbox's: the animation sandbox's, or the battle's with <c>--battle-map sandbox</c>.</summary>
     bool IsFlat => IsSandbox || IsBattle && g.BattleFlat;
 
@@ -195,7 +195,7 @@ sealed partial class GameHost
     /// The live counter at the top middle: each side's fighters still standing (the battle's own test: not incapacitated) and still alive (down but not dead count),
     /// of how many it started with. Interface pass only (after the world draw's tick has joined).
     /// </summary>
-    void DrawBattleCounter(DebugOverlay o, int width, int height)
+    internal void DrawBattleCounter(DebugOverlay o, int width, int height)
     {
         var world = session.World;
         if (battleCountedAt != world.Tick || battleCountedIn != world)
@@ -227,7 +227,7 @@ sealed partial class GameHost
     }
 
     /// <summary>Once per frame, between ticks: Backspace starts the battle again in a new world made the same way.</summary>
-    void BattleFrame()
+    internal void BattleFrame()
     {
         if (!IsBattle || !battleRestartRequested) return;
         battleRestartRequested = false;

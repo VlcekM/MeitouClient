@@ -23,7 +23,7 @@ sealed class FeedbackSettings
 /// <summary>
 /// Meitou's feedback button, always at the top right in both UI modes, and the form it opens: a title, the text, and ticks for a screenshot
 /// (taken when the button is pressed, without the menus), a save made when sending and log.txt. The player's Discord name goes along unless unticked; the ticks and the name
-/// are remembered (<see cref="FeedbackSettings"/>). The host (GameHost.Feedback.cs) takes the
+/// are remembered (<see cref="FeedbackSettings"/>). The host (FeedbackCapture) takes the
 /// picture, makes the files and sends them to the reports service, which opens a GitHub issue (docs/play-reports.md "Feedback").
 /// </summary>
 sealed partial class PlayerInterface

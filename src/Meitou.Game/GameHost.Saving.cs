@@ -33,7 +33,7 @@ sealed partial class GameHost
     // The save the game in play came from or was last written to: the load window cannot delete it.
     string? saveInUse;
     (string Folder, ImportOptions Options)? importRequested;
-    Task? saveWrite;
+    internal Task? saveWrite;
 
     // What the world was loaded from: the next capture carries the save's records the world does not model through (null for a world that started new).
     internal LoadedSave? loadedSave;
@@ -133,7 +133,7 @@ sealed partial class GameHost
     void HandleSaves(double realDt)
     {
         while (saveNotices.TryDequeue(out var notice)) player.Notice(notice.Text, notice.Error);
-        HandleFeedback();
+        feedbackCapture.HandleFeedback();
         PrintSavedLog();
         Autosave(realDt);
         if (quickSaveRequested) { quickSaveRequested = false; QuickSaveNow(); }
@@ -172,16 +172,16 @@ sealed partial class GameHost
     }
 
     /// <summary>Whether this run has a game to save and load: the population (so not <c>--no-population</c> or the sandbox).</summary>
-    bool SavesAvailable(out string reason)
+    internal bool SavesAvailable(out string reason)
     {
         reason = popData is null || population is null || IsFlat ? "No game to save or load here (needs the town population)" : "";
         return reason.Length == 0;
     }
 
-    bool Busy() => saveWrite is { IsCompleted: false } || Covered;
+    internal bool Busy() => saveWrite is { IsCompleted: false } || Covered;
 
     /// <summary>Saves the world; a <paramref name="feedback"/> save (into a temporary folder for the feedback report) leaves the save in use alone, shows no notice and fails its write task.</summary>
-    void QuickSaveNow(string? destination = null, bool feedback = false)
+    internal void QuickSaveNow(string? destination = null, bool feedback = false)
     {
         if (!SavesAvailable(out string reason)) { player.Notice(reason, true); return; }
         session.SettleAhead();   // a tick run ahead counts as run: the saved world and its clock agree
@@ -232,7 +232,7 @@ sealed partial class GameHost
     }
 
     /// <summary>The save's NPC platoons made since the last call (one line each), to the log.</summary>
-    void PrintSavedLog()
+    internal void PrintSavedLog()
     {
         if (session.World.Saved is { } saved)
             foreach (var line in saved.TakeLog()) Console.WriteLine($"saved     {line}");

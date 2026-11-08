@@ -481,16 +481,16 @@ sealed partial class GameHost
                 assets.Find("credits.txt") is { } creditsFile ? File.ReadAllText(creditsFile) : "");
             // The picks the interface asks the host for: the drawn character meshes, the buildings' floors and their closed shells.
             hud.MeshHit = (id, origin, direction) => characters?.RayHit(DrawKey(id), origin, direction);
-            hud.Floor = (() => viewedFloor, StepFloor);
-            hud.BuildingMoveHit = (origin, direction, distance) => objects?.MoveHit(origin, direction, viewedFloor, distance);
-            hud.SurfaceMoveHit = SurfaceMoveHit;
+            hud.Floor = (() => interiors.viewedFloor, interiors.StepFloor);
+            hud.BuildingMoveHit = (origin, direction, distance) => objects?.MoveHit(origin, direction, interiors.viewedFloor, distance);
+            hud.SurfaceMoveHit = interiors.SurfaceMoveHit;
             hud.ClosedBuildingHit = (origin, direction, distance) => objects?.ClosedBuildingHit(origin, direction, distance);
-            hud.HiddenInWorld = hiddenIndoors.Contains;
+            hud.HiddenInWorld = interiors.hiddenIndoors.Contains;
             hud.DrawnHead = id => characters?.BonePosition(DrawKey(id), "Bip01 Head");
             hud.ShownInteriorHit = (origin, direction, distance) => objects?.ShownInteriorHit(origin, direction, distance);
-            hud.AboveViewedFloor = AboveViewedFloor;
-            hud.GroundItemShape = GroundShape;
-            hud.GroundItemHidden = hiddenGround.Contains;
+            hud.AboveViewedFloor = interiors.AboveViewedFloor;
+            hud.GroundItemShape = groundItemSync.GroundShape;
+            hud.GroundItemHidden = groundItemSync.hiddenGround.Contains;
             hud.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
             hoverOutline = new HoverOutlineRenderer(ctx);
             moveMarker = MarkerRenderer.Create(ctx, assets.Find);
@@ -613,7 +613,7 @@ sealed partial class GameHost
                 if (e.Action == "save") saveRequestedFolder = SaveCatalog.Folder(QuickSave.DefaultRoot, e.Text);
                 else if (e.Action == "load") loadRequestedFolder = e.Text;
                 else if (e.Action == "new-game") newGameRequested = e.Text;
-                else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) FeedbackAction(e);
+                else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) feedbackCapture.FeedbackAction(e);
                 else if (e.Action == "main-menu") mainMenuRequested = true;
                 else if (e.Widget == "OptionsButton" && settings is not null) settings.Visible = true;
                 else if (e.Widget == "ExitGameButton" || e.Action == "exit") quit = true;
@@ -1027,8 +1027,8 @@ sealed partial class GameHost
         {
             if (actions.Pressed(InputAction.QuickSave)) quickSaveRequested = true;
             if (actions.Pressed(InputAction.QuickLoad)) quickLoadRequested = true;
-            if (actions.Pressed(InputAction.FloorUp)) StepFloor(1);
-            if (actions.Pressed(InputAction.FloorDown)) StepFloor(-1);
+            if (actions.Pressed(InputAction.FloorUp)) interiors.StepFloor(1);
+            if (actions.Pressed(InputAction.FloorDown)) interiors.StepFloor(-1);
             if (hud is not null)
             {
                 // Panning, or leaving for the free camera, lets go of the character the camera follows; turning and
@@ -1065,7 +1065,7 @@ sealed partial class GameHost
         // The still's selection, --move-to walk and --ticks happen on the first frame: its Settle calls upload textures through
         // the open frame (Metal cannot open one before a drawable exists), and the loop then only lets the picture warm up.
         bool still = o.Screenshot is not null, stillPrepared = false;
-        string?[] stillPanels = hud is not null && still ? StillPanels() : new string?[] { null };
+        string?[] stillPanels = hud is not null && still ? screenshotScenes.StillPanels() : new string?[] { null };
         int stillPanel = 0, stillPanelFrames = 0;
         // A run can still open one shared layout by name for manual review; the still loop owns its panels.
         if (!still && hud is not null && g.UiPanel is { Length: > 0 } selectedPanel && selectedPanel is not ("trade" or "talk" or "edited"))
@@ -1074,14 +1074,14 @@ sealed partial class GameHost
         {
             if (panelName == "trade")
             {
-                if (player is null || !ShowcaseTrade()) return false;
+                if (player is null || !screenshotScenes.ShowcaseTrade()) return false;
                 // The trade picture shows a stock item's tooltip: the pointer rests on the first item.
                 if (player.UiFrame.FirstOrDefault(c => c.Name.StartsWith("trade-item-", StringComparison.Ordinal) &&
                         !c.Name.EndsWith("-background", StringComparison.Ordinal) && !c.Name.EndsWith("-icon", StringComparison.Ordinal)) is { } item)
                     player.MouseMove(new Vector2(item.Bounds.X + item.Bounds.Width / 2, item.Bounds.Y + item.Bounds.Height / 2));
                 return true;
             }
-            if (panelName == "talk") return player is not null && ShowcaseTalk();
+            if (panelName == "talk") return player is not null && screenshotScenes.ShowcaseTalk();
             if (panelName == "edited" && player is not null)
             {
                 player.ShowcaseEdit();
@@ -1254,10 +1254,10 @@ sealed partial class GameHost
                 UpdateNav();
                 debugOverlays.UpdateNavOverlay();
                 // Diagnostic isolation for the far-travel freeze: skip the runtime building/ground-item/lamps diff.
-                if (Environment.GetEnvironmentVariable("MEITOU_METAL_NO_BUILDINGS") != "1") UpdateBuildings();
+                if (Environment.GetEnvironmentVariable("MEITOU_METAL_NO_BUILDINGS") != "1") buildingSync.UpdateBuildings();
                 // The interior view (docs/formats/zones.md): the player's building opens, its upper floors and their characters are hidden.
                 // It must run before the character draw list (which carries aboveFloor) and before the shadow casters.
-                UpdateInteriorView();
+                interiors.UpdateInteriorView();
                 // The next world tick may run on its own thread while the frame is drawn, as in the Vulkan loop (docs/simulation.md "Tick ahead").
                 tickAhead = !Covered && skyArrival is null && !IsDuel && !TitleVisible && !player.EditorOpen && g.PlayBench is null && TickAheadWanted();
             }
@@ -1319,7 +1319,7 @@ sealed partial class GameHost
             }
             if (still && !stillPrepared)
             {
-                PrepareStill(ctx, finish: false);
+                screenshotScenes.PrepareStill(ctx, finish: false);
                 stillPrepared = true;
             }
             if (settleAfterWorldLoad)
@@ -1431,8 +1431,8 @@ sealed partial class GameHost
                 }
             }
             if (editorBarFrame is { } barFrame) characterEditor.EndEditorBar(barFrame, size.X, size.Y);
-            // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (GameHost.Feedback.cs).
-            bool feedbackShot = feedbackShotRequested && hud is not null && !still;
+            // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (FeedbackCapture).
+            bool feedbackShot = feedbackCapture.feedbackShotRequested && hud is not null && !still;
             if (hud is not null) hud.ShotWithoutMenus = feedbackShot;
             if (overlay is not null)
             {
@@ -1564,7 +1564,7 @@ sealed partial class GameHost
                 hud!.ShotWithoutMenus = false;
                 var picture = ctx.Readback(backbuffer);
                 for (int i = 3; i < picture.Length; i += 4) picture[i] = 255;
-                FeedbackCaptured(picture, backbuffer.Desc.Width, backbuffer.Desc.Height);
+                feedbackCapture.FeedbackCaptured(picture, backbuffer.Desc.Width, backbuffer.Desc.Height);
             }
             if (screenshotNow)
             {
@@ -1586,7 +1586,7 @@ sealed partial class GameHost
                     string? panelName = stillPanels[stillPanel];
                     if (foliage is not null && stillPanel == stillPanels.Length - 1)
                         Console.WriteLine($"metal     foliage: {foliage.DrawnInstances} instances, {foliage.DrawnBlades} blades, {foliage.DrawCalls} calls");
-                    Capture(ctx, backbuffer, StillPicturePath(panelName));
+                    Capture(ctx, backbuffer, screenshotScenes.StillPicturePath(panelName));
                     stillPanel++;
                     stillPanelFrames = 0;
                     if (stillPanel >= stillPanels.Length) break;

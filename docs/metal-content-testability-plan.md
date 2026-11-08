@@ -266,7 +266,7 @@ Metal warm-up frames render without advancing the simulation.
 
 ### Changes
 
-- Extract the still preparation from `GameHost.Screenshot.cs` into a shared helper usable by both
+- Extract the still preparation from `ScreenshotScenes` into a shared helper usable by both
   hosts:
   - select the player squad for `--ui-showcase`;
   - apply `--move-to` through a `MoveOrder` and advance the requested ticks;

@@ -62,7 +62,7 @@ sealed partial class GameHost
     /// Gives the interface the install's item icons and, where the game has no saved picture, the character renderer's drawing of the item and the object renderer's of a building
     /// (from build mode's parts).
     /// </summary>
-    void ConnectItemIcons()
+    internal void ConnectItemIcons()
     {
         iconsEnhanced = null;
         SyncIconLook();

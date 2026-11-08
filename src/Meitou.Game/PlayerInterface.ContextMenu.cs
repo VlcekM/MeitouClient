@@ -483,7 +483,7 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// The <c>--scene menu</c> harness (GameHost.Scenes.cs): opens at once, with no hold, the context menu of the <paramref name="kind"/> ("character", "door", "container", "cage")
+    /// The <c>--scene menu</c> harness (ScreenshotScenes): opens at once, with no hold, the context menu of the <paramref name="kind"/> ("character", "door", "container", "cage")
     /// nearest to <paramref name="near"/> that is on screen; its title and verbs are printed. False when there is none or it has no verbs.
     /// </summary>
     internal bool OpenSceneMenu(string kind, Vector3 near)

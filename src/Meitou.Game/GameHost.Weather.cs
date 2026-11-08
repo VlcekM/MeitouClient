@@ -12,7 +12,7 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
-    sealed class HostWeather(Func<WorldWeather?> weather) : IWeatherSource
+    internal sealed class HostWeather(Func<WorldWeather?> weather) : IWeatherSource
     {
         public readonly List<WeatherAffectZone> ZoneList = [];
         public IReadOnlyList<WeatherAffectZone> Zones => ZoneList;
@@ -28,7 +28,7 @@ sealed partial class GameHost
         }
     }
 
-    HostWeather? hostWeather;
+    internal HostWeather? hostWeather;
 
     /// <summary>
     /// Once a frame, before the simulation's ticks: hands the weather to the world and collects the affecting units of the particle groups (units whose life is over do not act;

@@ -159,7 +159,7 @@ sealed partial class GameHost
                 poses[i] = new CharacterPose(layer.Name, time, weight);
             }
             var bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot));
-            list.Add(Drawn(c, c.Appearance, position, yaw, poses, rotation, bones, hiddenIndoors.Contains(c.Id), c.IsPlayer));
+            list.Add(Drawn(c, c.Appearance, position, yaw, poses, rotation, bones, interiors.hiddenIndoors.Contains(c.Id), c.IsPlayer));
         }
     }
 
@@ -242,7 +242,7 @@ sealed partial class GameHost
     {
         var look = HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
         decapitation.CutHead(c, look);
-        bool hidden = hiddenIndoors.Contains(c.Id);
+        bool hidden = interiors.hiddenIndoors.Contains(c.Id);
         list.Distant.Add(new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale, Hidden = hidden, Build = c.Build });
         if (heldPending is not null) list.Distant.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, c.Position, DrawnYaw(c), []) { Hidden = true });
     }
@@ -308,7 +308,7 @@ sealed partial class GameHost
                 (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
             }
             // A character hidden indoors is not drawn (CharacterRenderer: as one out of reach) unless for its portrait: its poses are not read either.
-            bool posed = reachOf is null || !hiddenIndoors.Contains(c.Id) || portraitKeys.Contains(DrawKey(c.Id));
+            bool posed = reachOf is null || !interiors.hiddenIndoors.Contains(c.Id) || portraitKeys.Contains(DrawKey(c.Id));
             var poses = !posed ? [] : Slot(ref posesBySlot, c.Id.Slot) is { } kept && kept.Length == c.Animations.Count ? kept : posesBySlot[c.Id.Slot] = new CharacterPose[c.Animations.Count];
             for (int i = 0; i < poses.Length; i++)
             {
@@ -340,7 +340,7 @@ sealed partial class GameHost
             if (editing is null) decapitation.CutHead(c, look);
             var glide = player.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             var bones = !posed ? null : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref ragdollsBySlot, c.Id.Slot), ref Slot(ref spareRagdollsBySlot, c.Id.Slot));
-            bool hidden = inBar is null && hiddenIndoors.Contains(c.Id);
+            bool hidden = inBar is null && interiors.hiddenIndoors.Contains(c.Id);
             bool fullRated = editing is not null || fullRate.Contains(c.Id) || c.Id == sandboxHero && sandboxPicker?.Current is not null;
             var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated);
             if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };

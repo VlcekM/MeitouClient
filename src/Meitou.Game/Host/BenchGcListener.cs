@@ -3,7 +3,7 @@ using System.Diagnostics.Tracing;
 namespace Meitou.Game.Host;
 
 /// <summary>
-/// The play benchmark's view of the garbage collector (GameHost.PlayBench.cs), from the runtime's own events in process: the allocation samples by type
+/// The play benchmark's view of the garbage collector (PlayBench), from the runtime's own events in process: the allocation samples by type
 /// (one about every 100 KB allocated, so each stands for about 100 KB), and every collection's generation, reason and pause (the runtime suspended to
 /// restarted). Started and stopped around the script; read after.
 /// </summary>

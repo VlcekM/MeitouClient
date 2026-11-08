@@ -5,13 +5,13 @@ using Meitou.Simulation;
 using Meitou.Simulation.Construction;
 using Meitou.Simulation.Production;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host.WorldSync;
 
 /// <summary>
 /// The crops of the player's farms (docs/game/buildings-production.md "Farm plants"): each farm machine of the snapshot is laid out once per building (positions, meshes,
 /// seeded by its id) and its plants' transforms follow its <see cref="FarmView.PlantGrowth"/> and death whenever the machines change.
 /// </summary>
-sealed partial class GameHost
+sealed class FarmCrops(GameHost host)
 {
     sealed class FarmLook(BuildingSnapshot site, FarmData data, FarmPlants plants, PlacedMesh[] meshes, float height)
     {
@@ -29,17 +29,17 @@ sealed partial class GameHost
     readonly Dictionary<string, FarmData?> farmData = new(StringComparer.Ordinal);
     (long Machines, long Buildings) farmsVersion = (-1, -1);
 
-    /// <summary>Once a frame after <see cref="UpdateBuildings"/>.</summary>
-    void UpdateFarms(WorldSnapshot snapshot)
+    /// <summary>Once a frame after <see cref="BuildingSync.UpdateBuildings"/>.</summary>
+    internal void UpdateFarms(WorldSnapshot snapshot)
     {
-        if (ActiveObjects is not { } objects || scene.Database is not { } db) return;
+        if (host.ActiveObjects is not { } objects || host.scene.Database is not { } db) return;
         var version = (snapshot.MachinesVersion, snapshot.BuildingsRevision);
         if (version == farmsVersion) return;
         farmsVersion = version;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var machine in snapshot.Machines)
         {
-            if (machine.Farm is not { } view || !shownBuildings.TryGetValue(machine.Site, out var site)) continue;
+            if (machine.Farm is not { } view || !host.buildingSync.shownBuildings.TryGetValue(machine.Site, out var site)) continue;
             if (!farms.TryGetValue(site.Id, out var look) || look.Site.Record != site.Record || look.Site.Position != site.Position || look.Site.Rotation != site.Rotation)
             {
                 if (MakeFarm(db, objects, site) is not { } made) continue;
@@ -69,16 +69,16 @@ sealed partial class GameHost
         if (!farmData.TryGetValue(site.Record, out var data))
             farmData[site.Record] = data = db.Find(site.Record) is { } r ? MachineData.From(db, r)?.Farm : null;
         if (data is not { Parts.Count: > 0 } || db.Find(site.Record) is not { } building) return null;
-        var plants = FarmLayout.Plant(data, site.Position, site.Rotation, ActiveGround, WorldObjectLayout.Seed(site.Id));
+        var plants = FarmLayout.Plant(data, site.Position, site.Rotation, host.ActiveGround, WorldObjectLayout.Seed(site.Id));
         var meshes = plants.Meshes.Select(m => data.Parts[m.Part])
             .Select(p => new PlacedMesh(p.Mesh, Matrix4x4.Identity, p.Record, building, site.Id, PlacedKind.BuildingPart) { Material = p.Material }).ToArray();
         float height = data.Parts.Max(p => objects.MeshTop(p.Mesh));
         return new FarmLook(site, data, plants, meshes, height);
     }
 
-    void ForgetFarms()
+    internal void ForgetFarms()
     {
-        foreach (string id in farms.Keys) ActiveObjects?.RemoveFarmPlants(id);
+        foreach (string id in farms.Keys) host.ActiveObjects?.RemoveFarmPlants(id);
         farms.Clear();
         farmsVersion = (-1, -1);
     }

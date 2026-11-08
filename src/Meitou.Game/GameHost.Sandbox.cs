@@ -25,7 +25,7 @@ sealed partial class GameHost
     /// <summary>The patrol runs along X between -200 and 200 (a 400-unit leg).</summary>
     const float PatrolHalf = 200;
 
-    bool IsSandbox => g.Sandbox > 0;
+    internal bool IsSandbox => g.Sandbox > 0;
 
     CharacterId sandboxHero = CharacterId.None, sandboxFoe = CharacterId.None;
     byte? sandboxMode;
@@ -220,7 +220,7 @@ sealed partial class GameHost
         camera.Target = DrawnPosition(followed);
     }
 
-    void SandboxFollowCamera()
+    internal void SandboxFollowCamera()
     {
         if (!IsSandbox || !sandboxFollow || session.Camera.IsFree) return;
         var characters = session.CurrentSnapshot.Characters;
@@ -237,7 +237,7 @@ sealed partial class GameHost
     }
 
     /// <summary>The debug panel, over the finished picture and the HUD (the floor's grid is the terrain's: <see cref="WorldRenderOptions.Grid"/>).</summary>
-    void DrawSandbox(DebugOverlay o, int width, int height)
+    internal void DrawSandbox(DebugOverlay o, int width, int height)
     {
         float buttonW = o.CharWidth + 12, buttonH = o.LineHeight + 4;
         void Toggle(float x1, float y0, string arrow)

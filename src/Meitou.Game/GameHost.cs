@@ -29,6 +29,7 @@ using Meitou.Game.Audio;
 using Meitou.Game.DevTools;
 using Meitou.Game.DevTools.Agents;
 using Meitou.Game.Editor;
+using Meitou.Game.Host.WorldSync;
 using EngineKey = Meitou.Game.Host.Input.Key;
 using EngineButton = Meitou.Game.Host.Input.MouseButton;
 using SilkKey = Silk.NET.Input.Key;
@@ -42,6 +43,15 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, GameOptions g, UserConfig config, Meitou.Data.Gameplay.NewGameStart? start)
 {
+    internal BuildingSync buildingSync = null!;
+    internal FarmCrops farmCrops = null!;
+    internal TownChanges townChanges = null!;
+    internal GroundItemSync groundItemSync = null!;
+    internal InteriorView interiors = null!;
+    internal PlayBench playBench = null!;
+    internal ScreenshotScenes screenshotScenes = null!;
+    internal FeedbackCapture feedbackCapture = null!;
+
     internal readonly GameOptions g = g;
     internal AgentChannel agentChannel = null!;
     internal AgentPlay agentPlay = null!;
@@ -74,7 +84,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// <summary>The native splash shown since the program started; closed when the game window first shows.</summary>
     public IDisposable? Splash { get; init; }
     internal WorldSession session = null!;   // disposed with the host (Run)
-    Meitou.Simulation.Population.PopulationSystem? population;
+    internal Meitou.Simulation.Population.PopulationSystem? population;
     /// <summary>The fights started by faction hostility (printed to the log); null in the sandbox and without the population.</summary>
     // The game data the world was built from, kept to build the next world of a quickload (GameHost.Saving.cs).
     internal Meitou.Simulation.Population.PopulationData? popData;
@@ -92,7 +102,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     const double RepathCoalesceSeconds = 1;
     /// <summary>The far cadence (docs/simulation.md "Far cadence"): a character far from the camera and from every player character steps once in this many ticks.</summary>
     const int FarTickPeriod = 4;
-    readonly Dictionary<Meitou.Data.World.ZoneCoordinate, long> navZones = [];
+    internal readonly Dictionary<Meitou.Data.World.ZoneCoordinate, long> navZones = [];
     const double NavCacheSeconds = 120;
     const int NavCacheZones = 60;
     internal PlayerInterface player = null!;
@@ -116,8 +126,8 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     internal WorldCamera camera = null!;
     internal WorldRenderOptions render = null!;
     internal readonly Stopwatch realTime = Stopwatch.StartNew();
-    Meitou.Game.Rendering.Upscalers.Streamline? streamline;
-    Meitou.Game.Rendering.Upscalers.Ngx? ngx;
+    internal Meitou.Game.Rendering.Upscalers.Streamline? streamline;
+    internal Meitou.Game.Rendering.Upscalers.Ngx? ngx;
     internal bool screenshotRequested;
     /// <summary>Frames in a row that could not be drawn while a control screenshot waits; at 30 the screenshot is answered with an error.</summary>
     int shotNoFrame;
@@ -140,6 +150,14 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
 
     public int Run()
     {
+        buildingSync = new(this);
+        farmCrops = new(this);
+        townChanges = new(this);
+        groundItemSync = new(this);
+        interiors = new(this);
+        playBench = new(this);
+        screenshotScenes = new(this);
+        feedbackCapture = new(this);
         agentChannel = new(this);
         agentPlay = new(this);
         agentWorld = new(this);
@@ -165,7 +183,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
                 Console.Error.WriteLine($"the {g.Renderer} renderer is macOS only.");
                 return 2;
             }
-            return o.Screenshot is not null ? Screenshot() : Interactive();
+            return o.Screenshot is not null ? screenshotScenes.Screenshot() : Interactive();
         }
         finally { sound.DisposeAudio(); DisposeTitleScene(); session?.Dispose(); nav?.Dispose(); ragdollGeometry?.Dispose(); ownedScene?.Dispose(); }
     }
@@ -173,7 +191,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     /// <summary>The start opens on the title (no start, save, sandbox or duel was asked for).</summary>
     bool OpensOnTitle(bool interactive) => g.TitlePreview || interactive && start is null && StartSave is null && !IsSandbox && !IsDuel && !IsBattle && !g.NoPopulation;
 
-    void Boot(VulkanDisplay display, bool interactive)
+    internal void Boot(VulkanDisplay display, bool interactive)
     {
         var context = display.Context;
         o.Day ??= (int)GameClock.DefaultStartDay;   // the weather schedule starts on the clock's first day (--day moves both)
@@ -277,7 +295,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         };
         // The region (BIOME_GROUP) under a point, for the biome banner.
         ui.RegionAt = (x, z) => ActiveWeather?.World.RegionAt(x, z).Def is { } def ? (def.StringId, def.Name) : null;
-        ui.BuildHost = MakeBuildServices();
+        ui.BuildHost = buildingSync.MakeBuildServices();
         ui.FactionName = faction => faction >= 0 && faction == session.World.Player.Faction && session.World.Player.FactionName is { } renamed ? renamed : popData is { } d && faction >= 0 && faction < d.Factions.Count ? d.Factions[faction].Name : null;
         // The rename's test (FUN_1402e7950, as RenameFactionCommand's): another faction of the data has the name.
         ui.FactionNameTaken = name => popData is { } fd && fd.Factions.Where((f, i) => i != session.World.Player.Faction).Any(f => f.Name == name);
@@ -389,14 +407,14 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         debugOverlays.navOverlayRenderer = gpu.NavmeshOverlay;
         gpu.InspectorOverlay ??= new NavmeshOverlayRenderer(context);
         player.MeshHit = (id, origin, direction) => gpu.Characters?.RayHit(DrawKey(id), origin, direction);
-        player.Floor = (() => viewedFloor, StepFloor);
-        player.HiddenInWorld = hiddenIndoors.Contains;
+        player.Floor = (() => interiors.viewedFloor, interiors.StepFloor);
+        player.HiddenInWorld = interiors.hiddenIndoors.Contains;
         player.DrawnHead = id => gpu.Characters?.BonePosition(DrawKey(id), "Bip01 Head");
-        player.AboveViewedFloor = AboveViewedFloor;
-        player.GroundItemShape = GroundShape;
-        player.GroundItemHidden = hiddenGround.Contains;
-        player.BuildingMoveHit = (origin, direction, distance) => gpu.Objects?.MoveHit(origin, direction, viewedFloor, distance);
-        player.SurfaceMoveHit = SurfaceMoveHit;
+        player.AboveViewedFloor = interiors.AboveViewedFloor;
+        player.GroundItemShape = groundItemSync.GroundShape;
+        player.GroundItemHidden = groundItemSync.hiddenGround.Contains;
+        player.BuildingMoveHit = (origin, direction, distance) => gpu.Objects?.MoveHit(origin, direction, interiors.viewedFloor, distance);
+        player.SurfaceMoveHit = interiors.SurfaceMoveHit;
         player.ClosedBuildingHit = (origin, direction, distance) => gpu.Objects?.ClosedBuildingHit(origin, direction, distance);
         player.ShownInteriorHit = (origin, direction, distance) => gpu.Objects?.ShownInteriorHit(origin, direction, distance);
         player.DoorShape = (record, door) => nav?.Walkability.DoorGeometry?.Shape(record, door) ?? [];
@@ -483,7 +501,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         return new GameClock(startHour, startDay, sunrise: c.Sunrise, sunset: c.Sunset, daysPerYear: c.DaysPerYear);
     }
 
-    void ApplyCamera(CameraState s)
+    internal void ApplyCamera(CameraState s)
     {
         camera.Target = s.Target;
         camera.Yaw = s.Yaw;
@@ -499,7 +517,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     HashSet<Meitou.Data.World.ZoneCoordinate> navUnloading = [];
 
     /// <summary>Waits for the zones being dropped (a load right after must not be undone by it).</summary>
-    void FinishNavUnload()
+    internal void FinishNavUnload()
     {
         if (navUnloading.Count == 0) return;
         navUnload.Wait();
@@ -507,7 +525,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         relabelGates = true;
     }
 
-    void UpdateNav(bool wait = false)
+    internal void UpdateNav(bool wait = false)
     {
         if (nav is null || population is null) return;
         UpdateGateRegions(nav);
@@ -580,7 +598,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
     }
 
     /// <summary>Gives the player interface the camera it picks with.</summary>
-    void UpdateView(int width, int height)
+    internal void UpdateView(int width, int height)
     {
         player.ViewProjection = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
         player.Eye = camera.Eye;
@@ -588,7 +606,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         player.Height = height;
     }
 
-    void DrawWorld(int width, int height)
+    internal void DrawWorld(int width, int height)
     {
         // The stage and the portraits finished as the world is (a change of the options redraws the portraits).
         if (gpu.Characters is { } previews)
@@ -624,7 +642,7 @@ sealed partial class GameHost(GameInstall install, WorldScene scene, AssetLocato
         UpdateBirds();
         Meitou.Game.Rendering.Profiling.StageClock.Lap(Meitou.Game.Rendering.Profiling.StageClock.Birds, "birds");
         UpdateWeatherSource();
-        UpdateInteriorView();
+        interiors.UpdateInteriorView();
         // The frame's animation time (particles, water, wet surfaces) is game time: still while paused, faster at higher speeds. The clock moves in whole
         // 1/30 s ticks, so it runs on by the alpha the characters are drawn at; at 1x the weather particles otherwise moved at 30 Hz.
         double shownSeconds = session.Clock.GameSeconds + session.SimulationAlpha * session.Simulation.TickSeconds;

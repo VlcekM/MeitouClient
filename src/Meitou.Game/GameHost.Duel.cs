@@ -31,7 +31,7 @@ sealed partial class GameHost
     /// </summary>
     const int DuelLeadTicks = 1200, DuelHoldTicks = 120, DuelMaxTicks = 9000, DuelOpenTicks = 1800;
 
-    bool IsDuel => g.Duel && !IsSandbox;
+    internal bool IsDuel => g.Duel && !IsSandbox;
 
     Vector3 duelSpot;
     Vector2 duelShift;
@@ -164,13 +164,13 @@ sealed partial class GameHost
     }
 
     /// <summary>After the frame's ticks: the duel's sun stands still (the hour of the lap's start, or the Tab slider's), so every lap and every moment of one has the same light.</summary>
-    void DuelHoldClock()
+    internal void DuelHoldClock()
     {
         if (IsDuel) session.Clock.HoldHourOfDay(duelHour);
     }
 
     /// <summary>Once per frame, between ticks: a restart asked for (Backspace, a cinema flight starting) or the end of the lap starts the next one.</summary>
-    void DuelFrame(bool flightStarted)
+    internal void DuelFrame(bool flightStarted)
     {
         if (!IsDuel) return;
         var world = session.World;

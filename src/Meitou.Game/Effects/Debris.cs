@@ -3,6 +3,7 @@ using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
+using Meitou.Game.Host.WorldSync;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Simulation;
@@ -11,13 +12,12 @@ using Meitou.Simulation.Items;
 
 namespace Meitou.Game.Effects;
 
-/// <summary>
-/// luckyren Mode's burst (docs/game/luckyren.md): an <see cref="BloodMarkKind.Explosion"/> throws the game's bone meshes and the race's severed limbs out of
-/// the body, which fly, tumble and bounce on the ground and then lie there as long as a corpse would, and it splashes blood all round (with the
-/// <c>Blood</c> setting on). Display only: the pieces move in game time (still while paused) and are not saved.
-/// </summary>
+/// <summary>The pieces that fly and lie on the ground, display only: luckyren Mode's burst, falling severed limbs, and the bolts with their tracers.</summary>
 sealed class Debris(GameHost host)
 {
+    // luckyren Mode's burst (docs/game/luckyren.md): an BloodMarkKind.Explosion throws the game's bone meshes and the race's severed limbs out of
+    // the body, which fly, tumble and bounce on the ground and then lie there as long as a corpse would, and it splashes blood all round (with the
+    // <c>Blood</c> setting on). Display only: the pieces move in game time (still while paused) and are not saved.
     /// <summary>The nest bones' meshes (<c>data/items/nests</c>; only <c>bone1</c> has an item record, whose material all of them take).</summary>
     static readonly string[] BoneMeshes = [.. Enumerable.Range(1, 14).Select(i => $"bone{i}.mesh")];
 
@@ -51,7 +51,7 @@ sealed class Debris(GameHost host)
     readonly Dictionary<string, string[]> limbMeshes = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The fall of a severed limb (<see cref="GameHost.StartFall"/>; docs/formats/collision.md "Item physics": the original's item is a dynamic PhysX body made at the stump's bone with no
+    /// The fall of a severed limb (<see cref="GroundItemSync.StartFall"/>; docs/formats/collision.md "Item physics": the original's item is a dynamic PhysX body made at the stump's bone with no
     /// speed of its own, in the scene's gravity 98.1, tipping to rest on the ground). Its mesh's origin falls from <see cref="Start"/> (the stump, once sampled) to <see cref="Rest"/>'s
     /// height, drifting at <see cref="Drift"/> (units/s), then turns from <see cref="Hanging"/> to <see cref="Lying"/> in <see cref="FallTipTime"/>, and the item is shown at rest.
     /// </summary>
@@ -414,7 +414,7 @@ sealed class Debris(GameHost host)
     /// <summary>Sets a landed limb down where the object path would have put it, drawn as debris with the severed limb's look.</summary>
     internal void RestLimb(GroundItemSnapshot g, Quaternion rotation, float y)
     {
-        if (host.scene.Database?.Find(g.Record) is not { } item || WorldObjectLayout.ItemMesh(item) is not { Length: > 0 } mesh || LimbLookOf(g.Record) is not { } look) { host.ShowGround(g, rotation, y); return; }
+        if (host.scene.Database?.Find(g.Record) is not { } item || WorldObjectLayout.ItemMesh(item) is not { Length: > 0 } mesh || LimbLookOf(g.Record) is not { } look) { host.groundItemSync.ShowGround(g, rotation, y); return; }
         restLimbs[g.Id] = new RestingLimb(mesh, ToneOf(look, g)!, rotation, new Vector3(g.Position.X, y, g.Position.Z));
     }
 
@@ -471,7 +471,7 @@ sealed class Debris(GameHost host)
     void AddRestingLimbs()
     {
         foreach (var (id, r) in restLimbs)
-            if (!host.hiddenGround.Contains(id) && host.gpu.Debris?.Extent(r.Mesh, null, r.Look) is not null)
+            if (!host.groundItemSync.hiddenGround.Contains(id) && host.gpu.Debris?.Extent(r.Mesh, null, r.Look) is not null)
                 host.gpu.DebrisPieces.Add(new DebrisPiece(r.Mesh, 1, r.Rotation, LimbMiddle(r.Mesh, r.Look, r.Rotation, r.Origin), 1, r.Look));
     }
 }

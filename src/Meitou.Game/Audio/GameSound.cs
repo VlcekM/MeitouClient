@@ -9,6 +9,7 @@ using Meitou.Data.Gameplay.Combat;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.Particles;
 using Meitou.Data.World;
+using Meitou.Game.Host.WorldSync;
 using Meitou.Simulation;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Movement;
@@ -705,7 +706,7 @@ sealed class GameSound(GameHost host)
     /// the building's <c>interior material</c> when the character stands inside a building's indoor hull, else its <c>exterior material</c>.
     /// </summary>
     int FloorSurface(Vector3 feet) =>
-        host.ActiveObjects is { } objects ? objects.FloorMaterialUnder(feet, objects.InteriorAt(feet, GameHost.InsideMargin) is not null) : -1;
+        host.ActiveObjects is { } objects ? objects.FloorMaterialUnder(feet, objects.InteriorAt(feet, InteriorView.InsideMargin) is not null) : -1;
 
     // <summary>The interface's sounds (docs/audio.md "Interface"): <see cref="PlayerInterface.UiSound"/> goes to <see cref="UiSounds"/> on the GUI object while audio runs, also on the title screen.</summary>
     UiSounds? uiSounds;

@@ -7,7 +7,7 @@ using Meitou.Game.Rendering.Profiling;
 using Meitou.Simulation;
 using Meitou.Simulation.Factions;
 
-namespace Meitou.Game;
+namespace Meitou.Game.DevTools;
 
 /// <summary>
 /// <c>--play-bench &lt;dir&gt;</c> (docs/bench.md, "Play benchmark"): the interactive game driven by a script instead of a player, every frame measured. Once the
@@ -16,7 +16,7 @@ namespace Meitou.Game;
 /// the render thread's stages and the GPU's (<see cref="FrameProfiler"/>), the garbage collections, allocation and memory; then it writes frames.csv
 /// and summary.md and quits. The frame limit and vsync are off for it.
 /// </summary>
-sealed partial class GameHost
+sealed class PlayBench(GameHost host)
 {
     sealed record BenchSegment(string Name, double Seconds, Action<double, double>? Frame = null, Action? Begin = null);
 
@@ -47,14 +47,14 @@ sealed partial class GameHost
 
     /// <summary>The game loop's sections a frame's wall time splits into (<see cref="BenchLap"/>): the last runs from the end of the drawing to the next frame.</summary>
     static readonly string[] BenchSections = ["events", "update", "host", "camera", "audio", "view", "begin-frame", "render", "tail"];
-    const int BenchTail = 8;
+    internal const int BenchTail = 8;
     long benchLapAt;
     readonly double[] benchLaps = new double[BenchSections.Length];
 
     /// <summary>Ends loop section <paramref name="section"/> (<see cref="BenchSections"/>) for the benchmark; the tail goes to the frame recorded last.</summary>
-    void BenchLap(int section)
+    internal void BenchLap(int section)
     {
-        if (g.PlayBench is null) return;
+        if (host.g.PlayBench is null) return;
         long now = Stopwatch.GetTimestamp();
         double ms = benchLapAt == 0 ? 0 : (now - benchLapAt) * 1000.0 / Stopwatch.Frequency;
         benchLapAt = now;
@@ -82,16 +82,16 @@ sealed partial class GameHost
     CharacterId benchLeader;
 
     /// <summary>The frame's script step (before the world's update): false once the script is done. Waits for the world (no loading screen, a player character) first.</summary>
-    bool PlayBenchFrame(double dt, FrameProfiler? profiler)
+    internal bool PlayBenchFrame(double dt, FrameProfiler? profiler)
     {
-        if (g.PlayBench is null) return true;
+        if (host.g.PlayBench is null) return true;
         if (benchScript is null)
         {
-            var players = session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToList();
-            if (Covered || TitleVisible || players.Count == 0) { benchReadyFor = 0; return true; }
+            var players = host.session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToList();
+            if (host.Covered || host.TitleVisible || players.Count == 0) { benchReadyFor = 0; return true; }
             if ((benchReadyFor += dt) < 1) return true;
-            benchLeader = (playerSquad is { Leader.IsNone: false } squad ? squad.Leader : players[0].Id);
-            benchOrigin = session.Camera.Strategy.PivotXZ;
+            benchLeader = (host.playerSquad is { Leader.IsNone: false } squad ? squad.Leader : players[0].Id);
+            benchOrigin = host.session.Camera.Strategy.PivotXZ;
             benchDirection = benchOrigin.LengthSquared() > 1 ? Vector2.Normalize(-benchOrigin) : Vector2.UnitX;
             benchScript = BenchScript();
             // MEITOU_BENCH_ONLY=settle,zoom: only those segments (iterating on one hitch).
@@ -118,17 +118,17 @@ sealed partial class GameHost
         }
         double t = benchClock - benchSegmentStart;
         // A modal screen (a message box) pauses the game until a player answers: the script says which and closes it.
-        if (player.ModalOpen && !benchScript[benchSegment].Name.StartsWith("panels", StringComparison.Ordinal))
+        if (host.player.ModalOpen && !benchScript[benchSegment].Name.StartsWith("panels", StringComparison.Ordinal))
         {
-            Console.WriteLine($"bench     a modal screen paused the game: {string.Join(", ", player.OpenScreens)}; closed");
-            player.ShowUiPanel(null);
+            Console.WriteLine($"bench     a modal screen paused the game: {string.Join(", ", host.player.OpenScreens)}; closed");
+            host.player.ShowUiPanel(null);
         }
         benchScript[benchSegment].Frame?.Invoke(t, dt);
-        benchCurrent = new BenchFrame { Segment = benchSegment, T = benchClock, FrameMs = dt * 1000, Characters = session.CurrentSnapshot.Characters.Count, Far = session.World.FarSkipped, StartMs = benchGc?.NowMs ?? 0 };
+        benchCurrent = new BenchFrame { Segment = benchSegment, T = benchClock, FrameMs = dt * 1000, Characters = host.session.CurrentSnapshot.Characters.Count, Far = host.session.World.FarSkipped, StartMs = benchGc?.NowMs ?? 0 };
         if (profiler is not null) profiler.Tag = benchFrames.Count;
-        session.World.Profile.Clear();
-        (session.CameraMs, session.HandlersMs) = (0, 0);
-        benchTickAt = session.World.Tick;
+        host.session.World.Profile.Clear();
+        (host.session.CameraMs, host.session.HandlersMs) = (0, 0);
+        benchTickAt = host.session.World.Tick;
         return true;
     }
 
@@ -141,15 +141,15 @@ sealed partial class GameHost
     }
 
     /// <summary>After the world's update: its wall time and the ticks it ran.</summary>
-    void PlayBenchUpdated(double ms)
+    internal void PlayBenchUpdated(double ms)
     {
         if (benchCurrent is not { } f) return;
         f.UpdateMs = ms;
-        (f.CameraMs, f.HandlersMs) = (session.CameraMs, session.HandlersMs);
-        f.Ticks = (int)(session.World.Tick - benchTickAt);
-        var profile = session.World.Profile;
+        (f.CameraMs, f.HandlersMs) = (host.session.CameraMs, host.session.HandlersMs);
+        f.Ticks = (int)(host.session.World.Tick - benchTickAt);
+        var profile = host.session.World.Profile;
         Array.Copy(profile.PhaseMs, f.Steps, f.Steps.Length);
-        var systems = session.World.Systems;
+        var systems = host.session.World.Systems;
         for (int k = 0; k < profile.SystemMs.Length && k < systems.Count; k++)
         {
             string system = systems[k].GetType().Name;
@@ -160,7 +160,7 @@ sealed partial class GameHost
     }
 
     /// <summary>After the frame is presented: the render thread's stages (StageClock, read before the next frame starts it), the collections and memory.</summary>
-    void PlayBenchRendered(double busyMs, int latePipelines)
+    internal void PlayBenchRendered(double busyMs, int latePipelines)
     {
         if (benchCurrent is not { } f) return;
         (f.LatePipelines, benchLateAt) = (benchFrames.Count > 0 ? latePipelines - benchLateAt : 0, latePipelines);
@@ -178,7 +178,7 @@ sealed partial class GameHost
         }
         (benchGcAt, benchAllocAt, benchPauseAt) = (gc, alloc, pause);
         f.WorkingSetMb = Environment.WorkingSet / 1048576.0;
-        if (benchFrames.Count % 30 == 0 && gpu.Sky.Gpu is Meitou.Game.Rendering.Gpu.GpuContext vk) benchVramMb = vk.Device.VideoMemory().Used / 1048576.0;
+        if (benchFrames.Count % 30 == 0 && host.gpu.Sky.Gpu is Meitou.Game.Rendering.Gpu.GpuContext vk) benchVramMb = vk.Device.VideoMemory().Used / 1048576.0;
         f.VramMb = benchVramMb;
         benchFrames.Add(f);
         benchCurrent = null;
@@ -187,13 +187,13 @@ sealed partial class GameHost
     /// <summary>The script: each segment's length and what it does each frame (t: seconds into it, dt: the frame's).</summary>
     BenchSegment[] BenchScript()
     {
-        var strategy = session.Camera.Strategy;
+        var strategy = host.session.Camera.Strategy;
         float yaw0 = strategy.Yaw, pitch0 = strategy.Pitch, distance0 = strategy.Distance;
-        Vector3 LeaderAt() => session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == benchLeader)?.Position ?? new Vector3(benchOrigin.X, 0, benchOrigin.Y);
+        Vector3 LeaderAt() => host.session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == benchLeader)?.Position ?? new Vector3(benchOrigin.X, 0, benchOrigin.Y);
         void Look(Vector2 at, float yaw, float pitch, float distance) => strategy.Place(at, yaw, pitch, distance);
         void OnLeader() { var p = LeaderAt(); Look(new Vector2(p.X, p.Z), strategy.Yaw, pitch0, distance0); }
-        List<CharacterId> Squad() => [.. session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).Select(c => c.Id)];
-        void Order(SimCommand command) => session.World.Commands.Enqueue(command with { Tick = session.World.Tick });
+        List<CharacterId> Squad() => [.. host.session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).Select(c => c.Id)];
+        void Order(SimCommand command) => host.session.World.Commands.Enqueue(command with { Tick = host.session.World.Tick });
         // The nearest of what the script interacts with, said on the console (or that there is none within reach).
         T? Nearest<T>(string what, IEnumerable<T> items, Func<T, Vector3> at) where T : class
         {
@@ -217,7 +217,7 @@ sealed partial class GameHost
         return
         [
             new("settle", 8),
-            new("idle", 10, Begin: () => { player.Follow = null; Look(benchOrigin, yaw0, pitch0, distance0); }),
+            new("idle", 10, Begin: () => { host.player.Follow = null; Look(benchOrigin, yaw0, pitch0, distance0); }),
             new("orbit", 12, (t, dt) => strategy.Rotate((float)(dt * 2 * Math.PI / 12))),
             new("zoom", 10, (t, dt) =>
             {
@@ -228,38 +228,38 @@ sealed partial class GameHost
                 Begin: () => pan = Vector2.Zero),
             new("travel", 30, (t, dt) => { pan += benchDirection * (float)(3000 * dt); Look(benchOrigin + pan, strategy.Yaw, pitch0, distance0); }),
             new("return", 10, Begin: () => Look(benchOrigin, yaw0, pitch0, distance0)),
-            new("speed-x2", 10, (t, dt) => OnLeader(), Begin: () => session.Simulation.SetSpeed(2)),
-            new("speed-x5", 15, (t, dt) => OnLeader(), Begin: () => session.Simulation.SetSpeed(5)),
-            new("talk", 10, Retry(() => session.CurrentSnapshot.Conversation is not null, () => { if (talkee is not null) Order(new Meitou.Simulation.Dialogue.TalkOrder(benchLeader, talkee.Id) { Tick = 0 }); }), Begin: () =>
+            new("speed-x2", 10, (t, dt) => OnLeader(), Begin: () => host.session.Simulation.SetSpeed(2)),
+            new("speed-x5", 15, (t, dt) => OnLeader(), Begin: () => host.session.Simulation.SetSpeed(5)),
+            new("talk", 10, Retry(() => host.session.CurrentSnapshot.Conversation is not null, () => { if (talkee is not null) Order(new Meitou.Simulation.Dialogue.TalkOrder(benchLeader, talkee.Id) { Tick = 0 }); }), Begin: () =>
             {
-                session.Simulation.SetSpeed(1);
-                talkee = Nearest("talker", session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Alive(c) && session.World.CanTalk(c.Id, benchLeader)).ToList(), c => c.Position);
+                host.session.Simulation.SetSpeed(1);
+                talkee = Nearest("talker", host.session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Alive(c) && host.session.World.CanTalk(c.Id, benchLeader)).ToList(), c => c.Position);
                 if (talkee is not null) Order(new Meitou.Simulation.Dialogue.TalkOrder(benchLeader, talkee.Id) { Tick = 0 });
             }),
-            new("trade", 12, Retry(() => session.CurrentSnapshot.Trade is not null, () => { if (trader is not null) Order(new Meitou.Simulation.Trading.OpenTrade(benchLeader, trader.Id) { Tick = 0 }); }), Begin: () =>
+            new("trade", 12, Retry(() => host.session.CurrentSnapshot.Trade is not null, () => { if (trader is not null) Order(new Meitou.Simulation.Trading.OpenTrade(benchLeader, trader.Id) { Tick = 0 }); }), Begin: () =>
             {
                 Order(new Meitou.Simulation.Dialogue.EndConversation { Tick = 0 });
-                trader = Nearest("trader", session.CurrentSnapshot.Characters.Where(c => c.IsTrader && Alive(c)).ToList(), c => c.Position);
+                trader = Nearest("trader", host.session.CurrentSnapshot.Characters.Where(c => c.IsTrader && Alive(c)).ToList(), c => c.Position);
                 if (trader is not null) Order(new Meitou.Simulation.Trading.OpenTrade(benchLeader, trader.Id) { Tick = 0 });
             }),
             new("container", 10, (t, dt) => OnLeader(), Begin: () =>
             {
                 Order(new Meitou.Simulation.Trading.CloseTrade { Tick = 0 });
-                box = Nearest("container", session.CurrentSnapshot.Containers.Where(c => !c.Locked).ToList(), c => c.Position);
+                box = Nearest("container", host.session.CurrentSnapshot.Containers.Where(c => !c.Locked).ToList(), c => c.Position);
                 if (box is not null) Order(new Meitou.Simulation.Items.OpenContainerOrder([benchLeader], box.Id) { Tick = 0 });
             }),
             new("doors", 8, (t, dt) => OnLeader(), Begin: () =>
             {
                 Order(new Meitou.Simulation.Items.CloseContainer { Tick = 0 });
                 var leader = LeaderAt();
-                var doors = session.CurrentSnapshot.DoorPicks.OrderBy(d => Vector3.DistanceSquared(d.Position, leader)).Take(3).ToList();
+                var doors = host.session.CurrentSnapshot.DoorPicks.OrderBy(d => Vector3.DistanceSquared(d.Position, leader)).Take(3).ToList();
                 Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"bench     doors: {doors.Count}, the nearest {(doors.Count > 0 ? Vector3.Distance(doors[0].Position, leader) : float.NaN):0} away"));
                 foreach (var door in doors) Order(new Meitou.Simulation.Locks.DoorOrder([benchLeader], door.Id) { Tick = 0 });
             }),
             new("pick-up", 8, (t, dt) => OnLeader(), Begin: () =>
             {
                 var leader = LeaderAt();
-                var items = session.CurrentSnapshot.GroundItems;
+                var items = host.session.CurrentSnapshot.GroundItems;
                 if (items.Count == 0) { Console.WriteLine("bench     no ground item"); return; }
                 var item = items.MinBy(i => Vector3.DistanceSquared(i.Position, leader));
                 Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"bench     ground item {item.Name} {Vector3.Distance(item.Position, leader):0} away"));
@@ -278,15 +278,15 @@ sealed partial class GameHost
             }),
             new("walk", 15, (t, dt) => OnLeader(), Begin: () =>
             {
-                session.Simulation.SetSpeed(1);
+                host.session.Simulation.SetSpeed(1);
                 var at = LeaderAt();
-                session.World.Commands.Enqueue(new MoveOrder(Squad(), at + new Vector3(benchDirection.X * 600, 0, benchDirection.Y * 600)) { Tick = session.World.Tick });
+                host.session.World.Commands.Enqueue(new MoveOrder(Squad(), at + new Vector3(benchDirection.X * 600, 0, benchDirection.Y * 600)) { Tick = host.session.World.Tick });
             }),
             new("fight", 25, (t, dt) => OnLeader(), Begin: () =>
             {
-                var world = session.World;
+                var world = host.session.World;
                 var at = LeaderAt();
-                if (debugMenu.DebugRecord(g.SceneNpc, character: true) is not { } npc) { Console.WriteLine($"bench     no character record matches '{g.SceneNpc}': no fight"); return; }
+                if (host.debugMenu.DebugRecord(host.g.SceneNpc, character: true) is not { } npc) { Console.WriteLine($"bench     no character record matches '{host.g.SceneNpc}': no fight"); return; }
                 for (int k = 0; k < 6; k++)
                     world.Commands.Enqueue(new DebugSpawn(npc.Id, new Vector2(at.X + 50 + 15 * (k % 3), at.Z - 20 + 20 * (k / 3))) { Tick = world.Tick });
                 Console.WriteLine($"bench     fight: six {npc.Name} spawned beside the squad");
@@ -294,12 +294,12 @@ sealed partial class GameHost
             new("fight-on", 0.1, Begin: () =>
             {
                 var at = LeaderAt();
-                if (session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Vector3.Distance(c.Position, at) < 150).OrderBy(c => Vector3.DistanceSquared(c.Position, at)).FirstOrDefault() is { } enemy)
-                    session.World.Commands.Enqueue(new Meitou.Simulation.Combat.AttackOrder(Squad(), enemy.Id) { Tick = session.World.Tick });
+                if (host.session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Vector3.Distance(c.Position, at) < 150).OrderBy(c => Vector3.DistanceSquared(c.Position, at)).FirstOrDefault() is { } enemy)
+                    host.session.World.Commands.Enqueue(new Meitou.Simulation.Combat.AttackOrder(Squad(), enemy.Id) { Tick = host.session.World.Tick });
             }),
-            new("loot", 8, Retry(() => !session.CurrentSnapshot.OpenLoot.IsNone, () => { if (body is not null) Order(new Meitou.Simulation.Carrying.OpenLootOrder([benchLeader], body.Id) { Tick = 0 }); }), Begin: () =>
+            new("loot", 8, Retry(() => !host.session.CurrentSnapshot.OpenLoot.IsNone, () => { if (body is not null) Order(new Meitou.Simulation.Carrying.OpenLootOrder([benchLeader], body.Id) { Tick = 0 }); }), Begin: () =>
             {
-                body = Nearest("downed body", session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && !Alive(c)).ToList(), c => c.Position);
+                body = Nearest("downed body", host.session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && !Alive(c)).ToList(), c => c.Position);
                 if (body is not null) Order(new Meitou.Simulation.Carrying.OpenLootOrder([benchLeader], body.Id) { Tick = 0 });
             }),
             new("panels", 12, (t, dt) =>
@@ -308,7 +308,7 @@ sealed partial class GameHost
                 if (panel != benchPanel)
                 {
                     benchPanel = panel;
-                    try { player.ShowUiPanel(panel); }
+                    try { host.player.ShowUiPanel(panel); }
                     catch (InvalidOperationException e) { Console.WriteLine($"bench     panel {panel}: {e.Message}"); }
                 }
             }, Begin: () => benchPanel = "-"),
@@ -319,28 +319,28 @@ sealed partial class GameHost
                 if (panel != benchPanel)
                 {
                     benchPanel = panel;
-                    try { player.ShowUiPanel(panel); }
+                    try { host.player.ShowUiPanel(panel); }
                     catch (Exception e) when (e is InvalidOperationException or ArgumentException) { Console.WriteLine($"bench     panel {panel}: {e.Message}"); }
                 }
             }, Begin: () => benchPanel = "-"),
             // The far grazing view: the most terrain, foliage and objects in sight.
-            new("horizon", 12, (t, dt) => Look(benchOrigin, yaw0 + (float)(t * 2 * Math.PI / 12), 0.12f, 900), Begin: () => player.ShowUiPanel(null)),
+            new("horizon", 12, (t, dt) => Look(benchOrigin, yaw0 + (float)(t * 2 * Math.PI / 12), 0.12f, 900), Begin: () => host.player.ShowUiPanel(null)),
             new("overview", 8, Begin: () =>
             {
-                player.ShowUiPanel(null);
+                host.player.ShowUiPanel(null);
                 Look(benchOrigin, yaw0, 1.2f, Meitou.Data.World.KenshiCamera.MaxDistance);
             }),
             // Every player character in turn, twice, 6 s each, as a double click on its portrait does (a character flight with "Character flights" on, else a cut).
-            new("flights", 6 * 2 * Math.Max(1, session.CurrentSnapshot.PlayerSquads.Sum(s => s.Members.Count)), (t, dt) =>
+            new("flights", 6 * 2 * Math.Max(1, host.session.CurrentSnapshot.PlayerSquads.Sum(s => s.Members.Count)), (t, dt) =>
             {
-                var members = session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).ToList();
+                var members = host.session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).ToList();
                 int hop = (int)(t / 6);
                 if (members.Count == 0 || hop == flightHop) return;
                 flightHop = hop;
                 var id = members[hop % members.Count];
-                if (player.FlyTo?.Invoke(id) != true) player.Follow = id;
+                if (host.player.FlyTo?.Invoke(id) != true) host.player.Follow = id;
                 Console.WriteLine($"bench     flight {hop + 1} to {id}");
-            }, Begin: () => { player.ShowUiPanel(null); flightHop = -1; }),
+            }, Begin: () => { host.player.ShowUiPanel(null); flightHop = -1; }),
         ];
     }
 
@@ -348,9 +348,9 @@ sealed partial class GameHost
     int flightHop = -1;
 
     /// <summary>Writes frames.csv and summary.md into the bench directory (after the loop).</summary>
-    void WritePlayBench(Silk.NET.Maths.Vector2D<int> size)
+    internal void WritePlayBench(Silk.NET.Maths.Vector2D<int> size)
     {
-        if (g.PlayBench is not { } dir || benchScript is null) return;
+        if (host.g.PlayBench is not { } dir || benchScript is null) return;
         Directory.CreateDirectory(dir);
         var ci = CultureInfo.InvariantCulture;
         var stages = StageClock.Names;
@@ -420,9 +420,9 @@ sealed partial class GameHost
         var sb = new StringBuilder();
         static double P(List<double> v, double q) { if (v.Count == 0) return 0; var s = v.Order().ToList(); return s[Math.Min(s.Count - 1, (int)(q * s.Count))]; }
         var stages = StageClock.Names;
-        string device = gpu.Sky.Gpu is Meitou.Game.Rendering.Gpu.GpuContext vk ? vk.Device.DeviceName : "Metal";
-        sb.Append(ci, $"# Play benchmark\n\n{benchFrames.Count} frames, {sz.X}x{sz.Y}, {device}, upscaler {o.Post.Upscale.Kind} at {o.Post.Upscale.EffectiveScale:0.00}; frame limit and vsync off.\n\n");
-        if (gpu.Shadow is { Meitou: true } shadowPass) sb.Append(ci, $"Shadows: {shadowPass.DescribeMeitou()}.\n\n");
+        string device = host.gpu.Sky.Gpu is Meitou.Game.Rendering.Gpu.GpuContext vk ? vk.Device.DeviceName : "Metal";
+        sb.Append(ci, $"# Play benchmark\n\n{benchFrames.Count} frames, {sz.X}x{sz.Y}, {device}, upscaler {host.o.Post.Upscale.Kind} at {host.o.Post.Upscale.EffectiveScale:0.00}; frame limit and vsync off.\n\n");
+        if (host.gpu.Shadow is { Meitou: true } shadowPass) sb.Append(ci, $"Shadows: {shadowPass.DescribeMeitou()}.\n\n");
         sb.Append("| segment | frames | fps | frame ms p50 | p95 | p99 | max | update ms | ticks/frame | sim ms/tick | gpu ms | render cpu ms | alloc MB/s | gen2 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
         for (int s = 0; s < benchScript!.Length; s++)
         {

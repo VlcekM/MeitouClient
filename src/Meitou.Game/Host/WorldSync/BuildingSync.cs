@@ -1,10 +1,15 @@
+using System.Diagnostics;
+using System.Numerics;
+using Meitou.Data.Gameplay.Combat;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
+using Meitou.Game.Rendering.Objects;
 using Meitou.Simulation;
 using Meitou.Simulation.Construction;
+using Meitou.Simulation.Locks;
 using Meitou.Simulation.Population;
 
-namespace Meitou.Game;
+namespace Meitou.Game.Host.WorldSync;
 
 /// <summary>
 /// The host's side of player construction (docs/simulation.md "Buildings", "Host seam: snapshot diff"): the snapshot's <see cref="WorldSnapshot.Buildings"/> are diffed by id
@@ -12,12 +17,12 @@ namespace Meitou.Game;
 /// one leaves both; a completed one enters the navmesh and lights its lamps. The scaffold of a site that is not finished is read from <c>Progress / Target</c> every frame.
 /// The loaded nests' buildings (<see cref="WorldSnapshot.NestBuildings"/>) go through the same diff as complete sites.
 /// </summary>
-sealed partial class GameHost
+sealed class BuildingSync(GameHost host)
 {
     World? buildingsWorld;
     long buildingsRevision = -1, nestBuildingsRevision = -1;
     // What the overlays were last told, by instance id.
-    readonly Dictionary<string, BuildingSnapshot> shownBuildings = new(StringComparer.Ordinal);
+    internal readonly Dictionary<string, BuildingSnapshot> shownBuildings = new(StringComparer.Ordinal);
     readonly HashSet<string> shownNestMeshes = new(StringComparer.Ordinal);
     readonly HashSet<string> navBuildings = new(StringComparer.Ordinal), litBuildings = new(StringComparer.Ordinal), effectBuildings = new(StringComparer.Ordinal);
     readonly Dictionary<string, float> constructionLook = new(StringComparer.Ordinal);
@@ -25,24 +30,24 @@ sealed partial class GameHost
 
     /// <summary>The build fields of every BUILDING, by id (read once from the game database).</summary>
     internal Dictionary<string, BuildingBuildData> BuildData() =>
-        buildData ??= scene.Database is { } db ? BuildingBuildData.LoadAll(db).GroupBy(b => b.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal) : [];
+        buildData ??= host.scene.Database is { } db ? BuildingBuildData.LoadAll(db).GroupBy(b => b.Id, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal) : [];
 
     /// <summary>Once a frame, before the world is drawn.</summary>
     internal void UpdateBuildings()
     {
-        if (!ReferenceEquals(buildingsWorld, session.World))
+        if (!ReferenceEquals(buildingsWorld, host.session.World))
         {
             // A new world (a loaded save, a new game): the old world's sites go, the new one's first snapshot carries all of its own.
             ForgetBuildings();
-            buildingsWorld = session.World;
+            buildingsWorld = host.session.World;
             // The old world's level edits leave the level data, the loaded save's own (if any) are put back.
-            levelEditorHost.LevelEditsFollowWorld();
-            if (levelEditorHost.pendingLevelEdits is { Count: > 0 } edits) levelEditorHost.ReplayLevelEdits(edits);
-            levelEditorHost.pendingLevelEdits = null;
+            host.levelEditorHost.LevelEditsFollowWorld();
+            if (host.levelEditorHost.pendingLevelEdits is { Count: > 0 } edits) host.levelEditorHost.ReplayLevelEdits(edits);
+            host.levelEditorHost.pendingLevelEdits = null;
         }
-        var snapshot = session.CurrentSnapshot;
-        UpdateRuins(snapshot);
-        UpdateEmptiedHouses(snapshot);
+        var snapshot = host.session.CurrentSnapshot;
+        host.townChanges.UpdateRuins(snapshot);
+        host.townChanges.UpdateEmptiedHouses(snapshot);
         if (snapshot.BuildingsRevision != buildingsRevision || snapshot.NestBuildingsRevision != nestBuildingsRevision)
         {
             DiffBuildings(snapshot);
@@ -50,18 +55,18 @@ sealed partial class GameHost
             buildingsRevision = snapshot.BuildingsRevision;
             nestBuildingsRevision = snapshot.NestBuildingsRevision;
         }
-        corpseFlies.UpdateCorpseFlies();
+        host.corpseFlies.UpdateCorpseFlies();
         // A lit building's lamps burn at its power share (granted / demand, 1 for one that draws nothing): dark without supply (docs/formats/lights.md "When a light is on").
-        if (ActiveLamps is { } lamps && litBuildings.Count > 0)
+        if (host.ActiveLamps is { } lamps && litBuildings.Count > 0)
             foreach (var m in snapshot.Machines)
                 if (m.Power is { Kind: Meitou.Simulation.Production.PowerKind.Consumer } pw && litBuildings.Contains(m.Site))
                     lamps.SetRuntimePower(m.Site, pw.Demand > 0 ? pw.Granted / pw.Demand : 1);
-        UpdateGroundItems(snapshot);
+        host.groundItemSync.UpdateGroundItems(snapshot);
         UpdateDoors();
         UpdateTurretPoses(snapshot);
         UpdateRotors(snapshot);
-        UpdateFarms(snapshot);
-        if (ActiveObjects is not { } objects) return;
+        host.farmCrops.UpdateFarms(snapshot);
+        if (host.ActiveObjects is not { } objects) return;
         constructionLook.Clear();
         foreach (var site in snapshot.Buildings)
             if (!site.Complete && !site.Destroyed) constructionLook[site.Id] = ConstructionLook(site);
@@ -83,14 +88,14 @@ sealed partial class GameHost
     {
         var current = new Dictionary<string, BuildingSnapshot>(StringComparer.Ordinal);
         foreach (var site in snapshot.Buildings)
-            if (site.LevelPlacement is not { } level || !site.Destroyed || !LevelDestroyed(level)) current[site.Id] = site;   // a ruin the level already draws as one needs no overlay
+            if (site.LevelPlacement is not { } level || !site.Destroyed || !host.townChanges.LevelDestroyed(level)) current[site.Id] = site;   // a ruin the level already draws as one needs no overlay
         foreach (var site in snapshot.NestBuildings) current[site.Id] = site;   // the loaded nests' buildings, complete
         foreach (string id in shownBuildings.Keys.Where(id => !current.ContainsKey(id)).ToArray())
         {
-            ActiveObjects?.RemoveRuntime(id);
-            if (navBuildings.Remove(id)) nav?.RemoveRuntimeBuilding(id);
-            if (litBuildings.Remove(id)) ActiveLamps?.RemoveRuntime(id);
-            if (effectBuildings.Remove(id)) gpu?.Particles?.RemoveBuildingEffects(id);
+            host.ActiveObjects?.RemoveRuntime(id);
+            if (navBuildings.Remove(id)) host.nav?.RemoveRuntimeBuilding(id);
+            if (litBuildings.Remove(id)) host.ActiveLamps?.RemoveRuntime(id);
+            if (effectBuildings.Remove(id)) host.gpu?.Particles?.RemoveBuildingEffects(id);
             shownBuildings.Remove(id);
         }
         foreach (var site in current.Values)
@@ -104,10 +109,10 @@ sealed partial class GameHost
                 shownBuildings[site.Id] = site;
                 continue;
             }
-            if (shown is not null && navBuildings.Remove(site.Id)) nav?.RemoveRuntimeBuilding(site.Id);   // moved or changed: out, then in again
-            if (shown is not null && litBuildings.Remove(site.Id)) ActiveLamps?.RemoveRuntime(site.Id);
-            if (shown is not null && effectBuildings.Remove(site.Id)) gpu?.Particles?.RemoveBuildingEffects(site.Id);
-            ActiveObjects?.AddRuntime(placement);
+            if (shown is not null && navBuildings.Remove(site.Id)) host.nav?.RemoveRuntimeBuilding(site.Id);   // moved or changed: out, then in again
+            if (shown is not null && litBuildings.Remove(site.Id)) host.ActiveLamps?.RemoveRuntime(site.Id);
+            if (shown is not null && effectBuildings.Remove(site.Id)) host.gpu?.Particles?.RemoveBuildingEffects(site.Id);
+            host.ActiveObjects?.AddRuntime(placement);
             AddToNavmesh(site, placement);
             UpdateLamps(site);
             UpdateEffects(site);
@@ -122,14 +127,14 @@ sealed partial class GameHost
         foreach (var m in snapshot.NestMeshes) current.TryAdd(NestMeshId(m), m);
         foreach (string id in shownNestMeshes.Where(id => !current.ContainsKey(id)).ToArray())
         {
-            ActiveObjects?.RemoveRuntime(id);
+            host.ActiveObjects?.RemoveRuntime(id);
             shownNestMeshes.Remove(id);
         }
         foreach (var (id, m) in current)
         {
             if (!shownNestMeshes.Add(id)) continue;
             var rotation = System.Numerics.Quaternion.CreateFromAxisAngle(System.Numerics.Vector3.UnitY, m.Yaw);
-            ActiveObjects?.AddRuntime(new BuildingPlacement(WorldLayout.ZoneOf(m.Position.X, m.Position.Z), id, m.Record, m.Position, rotation, null, m.Position.Y)
+            host.ActiveObjects?.AddRuntime(new BuildingPlacement(WorldLayout.ZoneOf(m.Position.X, m.Position.Z), id, m.Record, m.Position, rotation, null, m.Position.Y)
                 { Key = id, ItemMesh = m.Mesh, ItemScale = m.Scale });
         }
     }
@@ -143,15 +148,15 @@ sealed partial class GameHost
     /// </summary>
     void UpdateLamps(BuildingSnapshot site)
     {
-        if (ActiveLamps is not { } lamps) return;
+        if (host.ActiveLamps is not { } lamps) return;
         if (!site.Complete)
         {
             if (site.LevelPlacement is not null) { litBuildings.Remove(site.Id); lamps.SetRuntime(site.Id, []); }
             else if (litBuildings.Remove(site.Id)) lamps.RemoveRuntime(site.Id);
             return;
         }
-        if (!litBuildings.Add(site.Id) || scene.Database is not { } db || db.Find(site.Record) is not { } record) return;
-        if (site.LevelPlacement is not null && scene.Objects is { } objects)
+        if (!litBuildings.Add(site.Id) || host.scene.Database is not { } db || db.Find(site.Record) is not { } record) return;
+        if (site.LevelPlacement is not null && host.scene.Objects is { } objects)
         {
             lamps.SetRuntime(site.Id, WorldLights.ForBuilding(db, objects.Levels, new(Placement(site), record, site.Position, site.Destroyed), objects.Layouts));
             return;
@@ -165,13 +170,13 @@ sealed partial class GameHost
     /// <summary>A building's effects (a campfire's fire; docs/formats/lights.md "Effects on buildings") run while it is complete, as its lamps.</summary>
     void UpdateEffects(BuildingSnapshot site)
     {
-        if (gpu.Particles is not { } particles) return;
+        if (host.gpu.Particles is not { } particles) return;
         if (!site.Complete)
         {
             if (effectBuildings.Remove(site.Id)) particles.RemoveBuildingEffects(site.Id);
             return;
         }
-        if (!effectBuildings.Add(site.Id) || scene.Database is not { } db || db.Find(site.Record) is not { } record) return;
+        if (!effectBuildings.Add(site.Id) || host.scene.Database is not { } db || db.Find(site.Record) is not { } record) return;
         var placed = new List<PlacedEffect>();
         WorldObjectLayout.Building(db, record, site.Id, site.Position, site.Rotation, new BuildingState { Identity = site.Id }, null, placed);
         particles.SetBuildingEffects(site.Id, placed);
@@ -189,44 +194,44 @@ sealed partial class GameHost
     /// <summary>Navmesh membership (engine reading of the Observed rebuild on placing): <c>path mode</c> not 0 and the building complete or without a <c>build threshold</c>.</summary>
     void AddToNavmesh(BuildingSnapshot site, BuildingPlacement placement)
     {
-        if (nav is null || navBuildings.Contains(site.Id) || !BuildData().TryGetValue(site.Record, out var data)) return;
+        if (host.nav is null || navBuildings.Contains(site.Id) || !BuildData().TryGetValue(site.Record, out var data)) return;
         if (data.PathMode == 0 || site.LevelPlacement is null && !site.Complete && data.BuildThreshold != 0) return;
         navBuildings.Add(site.Id);
-        nav.AddRuntimeBuilding(placement);   // the zones loaded are built again; UpdateNav sends the RepathCommand when one is ready
+        host.nav.AddRuntimeBuilding(placement);   // the zones loaded are built again; UpdateNav sends the RepathCommand when one is ready
     }
 
     internal void ForgetBuildings()
     {
-        ActiveObjects?.ClearRuntime();
-        ActiveLamps?.ClearRuntime();
-        foreach (string id in effectBuildings) gpu?.Particles?.RemoveBuildingEffects(id);   // the world's own building effects stay
+        host.ActiveObjects?.ClearRuntime();
+        host.ActiveLamps?.ClearRuntime();
+        foreach (string id in effectBuildings) host.gpu?.Particles?.RemoveBuildingEffects(id);   // the world's own building effects stay
         effectBuildings.Clear();
         litBuildings.Clear();
         levelOwners = null;
-        ForgetGroundItems();
-        ForgetRuins();
-        ForgetEmptiedHouses();
-        ForgetFarms();
-        foreach (string id in navBuildings) nav?.RemoveRuntimeBuilding(id);
+        host.groundItemSync.ForgetGroundItems();
+        host.townChanges.ForgetRuins();
+        host.townChanges.ForgetEmptiedHouses();
+        host.farmCrops.ForgetFarms();
+        foreach (string id in navBuildings) host.nav?.RemoveRuntimeBuilding(id);
         navBuildings.Clear();
         shownBuildings.Clear();
         constructionLook.Clear();
         buildingsRevision = -1;
         nestBuildingsRevision = -1;
         shownNestMeshes.Clear();
-        if (ActiveObjects is { } objects) objects.Construction = null;
+        if (host.ActiveObjects is { } objects) objects.Construction = null;
     }
 
     /// <summary>
     /// What the player's build mode needs (docs/simulation.md "Buildings", PlayerInterface.Build.cs): the catalog of BUILDINGs, their texts and parts, the placement services
     /// (terrain, collision footprints) and the ghost drawing. Null without a game database.
     /// </summary>
-    Building.BuildServices? MakeBuildServices()
+    internal Building.BuildServices? MakeBuildServices()
     {
-        if (scene.Database is not { } db) return null;
-        var footprints = new Meitou.Simulation.Navigation.BuildingFootprints(install, db, IsSandbox || IsDuel || IsBattle ? null : scene.Objects?.Levels);
+        if (host.scene.Database is not { } db) return null;
+        var footprints = new Meitou.Simulation.Navigation.BuildingFootprints(host.install, db, host.IsSandbox || host.IsDuel || host.IsBattle ? null : host.scene.Objects?.Levels);
         var parts = new Dictionary<string, IReadOnlyList<Meitou.Data.World.PlacedMesh>>(StringComparer.Ordinal);
-        var icons = new Meitou.Data.Gameplay.Construction.BuildingIcons(Path.Combine(install.DataDirectory, "icons", "buildings"));
+        var icons = new Meitou.Data.Gameplay.Construction.BuildingIcons(Path.Combine(host.install.DataDirectory, "icons", "buildings"));
         IReadOnlyList<Meitou.Data.Gameplay.Construction.PlacementTown>? towns = null;
         // Per level building of a town: the town, its owner's name and where it sits in the town's buildings (a relaid one takes the same place).
         Dictionary<(Meitou.Data.World.ZoneCoordinate, string), (string Town, string? Owner, int Site, int Index)>? townOf = null;
@@ -242,7 +247,7 @@ sealed partial class GameHost
         (string Record, System.Numerics.Vector3 At, Meitou.Data.Gameplay.Construction.PlacementReadout? Readout)? lastReadout = null;
         Meitou.Data.Gameplay.Construction.PlacementReadout? Readout(string record, System.Numerics.Vector3 at)
         {
-            if (popData is not { } d) return null;
+            if (host.popData is not { } d) return null;
             if (field?.Data != d) (field, lastReadout) = ((d, new Meitou.Data.Gameplay.Construction.ResourceField(d.Db, d.Biomes, d.ResourceNodes)), null);
             if (lastReadout is { } last && last.Record == record && last.At == at) return last.Readout;
             if (!machines.TryGetValue(record, out var machine))
@@ -266,25 +271,25 @@ sealed partial class GameHost
             IconFile = icons.Find,
             Placement = new Building.PlacementServices
             {
-                Ground = ActiveGround,
+                Ground = host.ActiveGround,
                 Footprint = footprints.Of,
                 CollisionMesh = footprints.Mesh,
                 CollisionFile = footprints.File,
                 Plot = footprints.Plot,
                 PartBounds = footprints.PartBounds,
-                LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => ActiveGround((float)x, (float)z)),
+                LinkedAround = (centre, radius) => footprints.LinkedAround(centre, radius, (x, z) => host.ActiveGround((float)x, (float)z)),
                 StaticAround = footprints.StaticAround,
                 StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
                 StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
                 // The movement pick's floors up to the viewed one: the build window's floor arrows choose the floor the ghost stands on.
-                FloorAlong = (origin, direction, length) => gpu.Objects?.FloorHit(origin, direction, viewedFloor, length) is { } hit
-                    ? (hit.Position, GhostFloorOf(hit.Room, hit.Room.FloorAt(hit.Position)) with { Ceiling = hit.Room.CeilingAbove(hit.Position), Normal = hit.Room.FloorNormal(hit.Position, viewedFloor, FloorSurfaces.RayStart) }) : null,
+                FloorAlong = (origin, direction, length) => host.gpu.Objects?.FloorHit(origin, direction, host.interiors.viewedFloor, length) is { } hit
+                    ? (hit.Position, GhostFloorOf(hit.Room, hit.Room.FloorAt(hit.Position)) with { Ceiling = hit.Room.CeilingAbove(hit.Position), Normal = hit.Room.FloorNormal(hit.Position, host.interiors.viewedFloor, FloorSurfaces.RayStart) }) : null,
                 Readout = Readout,
             },
             WorldInfo = placement =>
             {
                 var (zone, instance) = (placement.Zone, placement.InstanceId);
-                if ((townOf is null || townOfRevision != popData?.BuildingsRevision) && popData is { } d)
+                if ((townOf is null || townOfRevision != host.popData?.BuildingsRevision) && host.popData is { } d)
                 {
                     townOfRevision = d.BuildingsRevision;
                     townOf = [];
@@ -300,20 +305,20 @@ sealed partial class GameHost
                         }
                     }
                 }
-                var levels = scene.Objects?.Levels;
+                var levels = host.scene.Objects?.Levels;
                 var state = levels is not null && placement.StateId is { } stateId && levels.Zones.TryGetValue(zone, out var zoneDb) ? zoneDb.Find(stateId) : null;
                 var info = townOf is not null && townOf.TryGetValue((zone, instance), out var found) ? found : default((string Town, string? Owner, int Site, int Index)?);
-                var building = info is { } at && popData is { } live && at.Site < live.Sites.Count && at.Index < live.Sites[at.Site].Buildings.Count
+                var building = info is { } at && host.popData is { } live && at.Site < live.Sites.Count && at.Index < live.Sites[at.Site].Buildings.Count
                     ? live.Sites[at.Site].Buildings[at.Index] : null;
-                var saved = session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key);
+                var saved = host.session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key);
                 var (name, type) = WorldBuildingName(db, placement, state, saved, building?.Key == placement.Key ? building : null);
                 var (town, owner) = info is { } t ? (t.Town, t.Owner) : (null, null);
                 return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false,
-                    shownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
+                    host.townChanges.shownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
             },
-            Towns = () => towns ??= popData is { } d ? [.. d.Sites.Select(s => new Meitou.Data.Gameplay.Construction.PlacementTown(s.Town, new(s.Position.X, s.Position.Z)))] : [],
-            PlayerFactionId = () => popData is { } d && d.PlayerFaction is >= 0 and var mine && mine < d.Factions.Count ? d.Factions[mine].Id : "",
-            DrawGhosts = draws => ActiveObjects?.SetGhosts(draws),
+            Towns = () => towns ??= host.popData is { } d ? [.. d.Sites.Select(s => new Meitou.Data.Gameplay.Construction.PlacementTown(s.Town, new(s.Position.X, s.Position.Z)))] : [],
+            PlayerFactionId = () => host.popData is { } d && d.PlayerFaction is >= 0 and var mine && mine < d.Factions.Count ? d.Factions[mine].Id : "",
+            DrawGhosts = draws => host.ActiveObjects?.SetGhosts(draws),
         };
     }
 
@@ -351,18 +356,18 @@ sealed partial class GameHost
         if (shownBuildings.TryGetValue(room.PlacementId, out var shown) && shown.LevelPlacement is null) return new(room.PlacementId, room.Footprint, floor);
         if (LevelOwners()?.TryGetValue(room.PlacementId, out var level) != true) return new(room.PlacementId, room.Footprint, floor, room.PlacementId) { OwnerNotReal = true };
 
-        string player = popData is { } p && p.PlayerFaction is >= 0 and var mine && mine < p.Factions.Count ? p.Factions[mine].Id : "";
-        bool owned = session.CurrentSnapshot.OwnedTownBuildings.Contains(room.PlacementId) || player.Length > 0 && level.Owner == player;
+        string player = host.popData is { } p && p.PlayerFaction is >= 0 and var mine && mine < p.Factions.Count ? p.Factions[mine].Id : "";
+        bool owned = host.session.CurrentSnapshot.OwnedTownBuildings.Contains(room.PlacementId) || player.Length > 0 && level.Owner == player;
         return new(room.PlacementId, room.Footprint, floor, level.Instance, owned)
         {
-            Destroyed = shownRuins.TryGetValue(room.PlacementId, out var ruin) ? ruin.Destroyed : session.World.Fixtures.SavedDestroyed(level.Building),
-            OwnerNotReal = level.Owner is not { } owner || popData?.Factions.FirstOrDefault(f => f.Id == owner) is not { NotReal: false },
+            Destroyed = host.townChanges.shownRuins.TryGetValue(room.PlacementId, out var ruin) ? ruin.Destroyed : host.session.World.Fixtures.SavedDestroyed(level.Building),
+            OwnerNotReal = level.Owner is not { } owner || host.popData?.Factions.FirstOrDefault(f => f.Id == owner) is not { NotReal: false },
         };
     }
 
     Dictionary<string, (string Instance, string? Owner, TownBuilding Building)>? LevelOwners()
     {
-        if (popData is not { } d || levelOwners is not null && levelOwnersRevision == d.BuildingsRevision) return levelOwners;
+        if (host.popData is not { } d || levelOwners is not null && levelOwnersRevision == d.BuildingsRevision) return levelOwners;
 
         levelOwnersRevision = d.BuildingsRevision;
         levelOwners = new(StringComparer.Ordinal);
@@ -372,5 +377,114 @@ sealed partial class GameHost
             foreach (var b in site.Buildings) levelOwners[b.Key] = (b.InstanceId, b.OwnerFactionId ?? townOwner, b);
         }
         return levelOwners;
+    }
+
+    // <summary>The doors' open amounts from the snapshot to the object renderer (docs/simulation.md "Cages, beds and locks"), made again only when the snapshot's door table is a new one.</summary>
+    IReadOnlyDictionary<(string Building, int Door), DoorView>? shownDoors;
+
+    /// <summary>Once a frame, with the buildings.</summary>
+    void UpdateDoors()
+    {
+        if (host.ActiveObjects is not { } objects) return;
+        var doors = host.session.CurrentSnapshot.Doors;
+        if (ReferenceEquals(doors, shownDoors)) return;
+        shownDoors = doors;
+        var open = new Dictionary<(string Placement, int Door), float>(doors.Count);
+        foreach (var (key, view) in doors)
+            if (view.Open > 0) open[key] = view.Open;
+        objects.Doors = open.Count == 0 ? null : open;
+    }
+
+    // The parts that turn by themselves (WorldObjectRenderer.AdvanceRotors, docs/game/buildings-production.md "Rotating parts"): each frame the object renderer is told the scheduled wind
+    // and what each building's ROTATION_OUTPUT parts turn by, then moves them by the frame's game time (real time x speed, 0 while paused). Display only.
+    readonly Dictionary<string, float> rotorOutputs = new(StringComparer.Ordinal);
+    readonly Dictionary<string, float> levelRotorOutputs = new(StringComparer.Ordinal);
+    readonly HashSet<string> unbuiltSites = new(StringComparer.Ordinal);
+    readonly Stopwatch rotorClock = new();
+
+    /// <summary>Once a frame, with the buildings.</summary>
+    void UpdateRotors(Meitou.Simulation.WorldSnapshot snapshot)
+    {
+        if (host.gpu?.Objects is not { } objects) return;
+        rotorOutputs.Clear();
+        foreach (var m in snapshot.Machines)
+            if (!m.IsContainer) rotorOutputs[m.Site] = m.Rotation;
+        unbuiltSites.Clear();
+        foreach (var site in snapshot.Buildings)
+            if (!site.Complete) unbuiltSites.Add(site.Id);
+        objects.RotorOutput ??= RotorOutputOf;
+        objects.RotorUnbuilt ??= placed => unbuiltSites.Contains(placed.PlacementId);
+        objects.RotorWind ??= (x, z) => host.gpu.Weather?.World is { } weather ? weather.WindAt(x, z) : (0, Vector2.Zero);
+        float real = rotorClock.IsRunning ? (float)Math.Min(rotorClock.Elapsed.TotalSeconds, 0.25) : 0;
+        rotorClock.Restart();
+        var sim = host.session.Simulation;
+        objects.AdvanceRotors(sim.IsPaused ? 0 : real * (float)sim.Speed);
+    }
+
+    /// <summary>
+    /// A building's ROTATION_OUTPUT share: a player machine's (<see cref="Meitou.Simulation.Production.MachineSnapshot.Rotation"/>); a level building, which the simulation does not run, by its data as
+    /// its sound emitter is (engine choice): a generator its output x 0.01, a battery and a machine that needs neither operators nor power its <c>output rate</c>, any other machine 0, a building
+    /// without a function 1 (the plain building's).
+    /// </summary>
+    float RotorOutputOf(PlacedMesh placed)
+    {
+        if (rotorOutputs.TryGetValue(placed.PlacementId, out float share)) return share;
+        string id = placed.Owner.StringId;
+        if (levelRotorOutputs.TryGetValue(id, out share)) return share;
+        var data = host.scene.Database is { } db ? MachineData.From(db, placed.Owner) : null;
+        share = data is null ? 1
+            : data.IsGenerator ? data.PowerOutput * 0.01f
+            : data.IsBattery || (data.PowerOperators == 0 && data.PowerOutput == 0) ? data.OutputRate
+            : 0;
+        levelRotorOutputs[id] = share;
+        return share;
+    }
+
+    // The turrets' turning parts from the snapshot to the object renderer (WorldObjectRenderer.Turrets, docs/simulation.md "Combat", turrets): a manned, simulated turret
+    // (MannedTurret.Angles) is drawn with its parts turned by the angles of the last two snapshots, interpolated by the simulation's alpha. Display only. A turret keeps its last
+    // turn when its gunner leaves (the building keeps the turn, as the simulation's turret does); a world change drops them all.
+    readonly Dictionary<string, TurretPose> turretPoses = new(StringComparer.Ordinal);
+    readonly Dictionary<string, float[]> previousTurretAngles = new(StringComparer.Ordinal);
+    // The turrets whose records are missing (not retried).
+    readonly HashSet<string> turretPoseMissing = new(StringComparer.Ordinal);
+    World? turretPosesWorld;
+
+    /// <summary>Once a frame, with the buildings.</summary>
+    internal void UpdateTurretPoses(WorldSnapshot snapshot)
+    {
+        if (host.gpu?.Objects is not { } objects || host.scene.Database is not { } db) return;
+        if (!ReferenceEquals(turretPosesWorld, host.session.World))
+        {
+            turretPosesWorld = host.session.World;
+            turretPoses.Clear();
+            turretPoseMissing.Clear();
+            objects.Turrets = null;
+        }
+        previousTurretAngles.Clear();
+        foreach (var c in host.session.PreviousSnapshot.Characters)
+            if (c.Turret is { Simulated: true, Angles: { } before }) previousTurretAngles[c.Turret.Key] = before;
+        float alpha = host.session.SimulationAlpha;
+        bool added = false;
+        foreach (var c in snapshot.Characters)
+        {
+            if (c.Turret is not { Simulated: true, Angles: { } angles } post || turretPoseMissing.Contains(post.Key)) continue;
+            if (!turretPoses.TryGetValue(post.Key, out var pose))
+            {
+                if (db.Find(post.BuildingId) is not { } building || TurretGun.From(db, building) is not { } gun) { turretPoseMissing.Add(post.Key); continue; }
+                turretPoses[post.Key] = pose = new TurretPose([.. gun.Parts.Select(p => p.Id)]);
+                added = true;
+            }
+            previousTurretAngles.TryGetValue(post.Key, out var old);
+            bool changed = false;
+            for (int k = 0; k < pose.Angles.Length && k < angles.Length; k++)
+            {
+                float shown = old is not null && k < old.Length ? old[k] + (angles[k] - old[k]) * alpha : angles[k];
+                if (shown == pose.Angles[k]) continue;
+                pose.Angles[k] = shown;
+                changed = true;
+            }
+            if (changed) pose.Version++;
+        }
+        if (added) objects.Turrets = new Dictionary<string, TurretPose>(turretPoses, StringComparer.Ordinal);
     }
 }

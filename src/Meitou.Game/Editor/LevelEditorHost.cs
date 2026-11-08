@@ -1,6 +1,7 @@
 using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Game.Building;
+using Meitou.Game.Host.WorldSync;
 using Meitou.Game.Rendering.Objects;
 using Meitou.Simulation;
 
@@ -45,7 +46,7 @@ sealed class LevelEditorHost(GameHost host)
 
     /// <summary>
     /// A loaded save or a new game replaces the world: the edits of the old one are taken out of the level data, the renderer, the navmesh and the town lists again (their runtime placements
-    /// go with <see cref="GameHost.ForgetBuildings"/>). Run by <see cref="GameHost.UpdateBuildings"/> as soon as the world is another, and by every editor action; then <see cref="ReplayLevelEdits"/>
+    /// go with <see cref="BuildingSync.ForgetBuildings"/>). Run by <see cref="BuildingSync.UpdateBuildings"/> as soon as the world is another, and by every editor action; then <see cref="ReplayLevelEdits"/>
     /// puts back the loaded save's own.
     /// </summary>
     internal void LevelEditsFollowWorld()
@@ -83,7 +84,7 @@ sealed class LevelEditorHost(GameHost host)
 
     /// <summary>
     /// The edits a game save holds (<see cref="SaveGame.LevelEdits"/>), applied to the world just loaded as the live edits were: Called once the host has met the new world
-    /// (<see cref="GameHost.UpdateBuildings"/>). Placed buildings join the level data, the renderer, the navmesh, the lights and the town simulation as a placement does, cleared ones are cleared
+    /// (<see cref="BuildingSync.UpdateBuildings"/>). Placed buildings join the level data, the renderer, the navmesh, the lights and the town simulation as a placement does, cleared ones are cleared
     /// as a click does; both go among <see cref="levelEdits"/> again, so the next save and Save Mod hold them. A building the level data has already (the mod written by Save Mod
     /// is active) is only noted.
     /// </summary>
@@ -100,7 +101,7 @@ sealed class LevelEditorHost(GameHost host)
             {
                 bool known = LevelBuildingsByKey(objects).TryGetValue(placement.Key, out var existing) && existing.BuildingId == placement.BuildingId;
                 levelEdits.Restore(placement);
-                if (!known) ApplyPlaced(objects, placement, host.BuildData().TryGetValue(placement.BuildingId, out var data) ? data.PathMode : 2, townBuilder);
+                if (!known) ApplyPlaced(objects, placement, host.buildingSync.BuildData().TryGetValue(placement.BuildingId, out var data) ? data.PathMode : 2, townBuilder);
                 placed++;
             }
             foreach (string key in clearKeys)

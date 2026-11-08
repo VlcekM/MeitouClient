@@ -512,7 +512,7 @@ sealed partial class GameHost
             else if (e.Action == "load") loadRequestedFolder = e.Text;
             else if (e.Action == "import") importRequested = (e.Text, player.ImportFlags);
             else if (e.Action == "new-game") newGameRequested = e.Text;
-            else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) FeedbackAction(e);
+            else if (e.Action.StartsWith("feedback-", StringComparison.Ordinal)) feedbackCapture.FeedbackAction(e);
             else if (e.Action == "main-menu") mainMenuRequested = true;
             else if (e.Widget == "OptionsButton" && panel is not null) panel.Visible = true;
             else if (e.Widget == "ExitGameButton") quit = true;
@@ -541,8 +541,8 @@ sealed partial class GameHost
             if (actions.Pressed(InputAction.QuickSave)) quickSaveRequested = true;
             if (actions.Pressed(InputAction.QuickLoad)) quickLoadRequested = true;
             // PageUp / PageDown step the viewed floor in the strategy camera: in the free camera and on a held one the cinema takes them for the lens.
-            if (actions.Pressed(InputAction.FloorUp)) StepFloor(1);
-            if (actions.Pressed(InputAction.FloorDown)) StepFloor(-1);
+            if (actions.Pressed(InputAction.FloorUp)) interiors.StepFloor(1);
+            if (actions.Pressed(InputAction.FloorDown)) interiors.StepFloor(-1);
             if (actions.Pressed(InputAction.CycleProfiler) && debugMenu.profiler is not null) debugMenu.profiler.Showing = (FrameProfiler.Mode)(((int)debugMenu.profiler.Showing + 1) % 3);
             // The camera the cinema left (a cut, a scrub, the end of a flight) goes back to the rig at the first camera input: the free camera at
             // that eye (only it can stand anywhere), or with ; the strategy camera where the view meets the ground. A flight in progress keeps it.
@@ -568,7 +568,7 @@ sealed partial class GameHost
         GpuTexture? headlessTarget = null;
         while (window?.IsClosing != true && !quit)
         {
-            BenchLap(BenchTail);
+            playBench.BenchLap(PlayBench.BenchTail);
             display.BeginLatencyFrame();   // DLSS frame generation's Reflex: before the input is read
             window?.DoEvents();
             if (window?.IsClosing == true) break;
@@ -603,8 +603,8 @@ sealed partial class GameHost
             DuelFrame(cinema.Playing && !cinemaWasPlaying || cinema.Recording && !cinemaWasRecording);
             BattleFrame();
             (cinemaWasPlaying, cinemaWasRecording) = (cinema.Playing, cinema.Recording);
-            if (!PlayBenchFrame(dt, debugMenu.profiler)) quit = true;
-            BenchLap(0);
+            if (!playBench.PlayBenchFrame(dt, debugMenu.profiler)) quit = true;
+            playBench.BenchLap(0);
             long a0 = Stopwatch.GetTimestamp();
             if (panel?.Visible == true)
             {
@@ -620,9 +620,9 @@ sealed partial class GameHost
             DuelHoldClock();
             double advanceMs = Stopwatch.GetElapsedTime(a0).TotalMilliseconds;
             advanceTotal += advanceMs;
-            PlayBenchUpdated(advanceMs);   // before SimProfile, which clears the world's tick profile
+            playBench.PlayBenchUpdated(advanceMs);   // before SimProfile, which clears the world's tick profile
             if (debugMenu.profiler is not null) SimProfile(debugMenu.profiler, advanceMs);   // F12's sim row and its parts
-            BenchLap(1);
+            playBench.BenchLap(1);
             WorldNews();
             HandleSaves(frameDt);   // a quicksave or quickload asked for by a key, the autosave: between ticks, none in flight
             HandleNewGame();
@@ -633,8 +633,8 @@ sealed partial class GameHost
             UpdateNav();
             debugOverlays.UpdateNavOverlay();
             debugOverlays.UpdateInspectorOverlay();
-            UpdateBuildings();
-            BenchLap(2);
+            buildingSync.UpdateBuildings();
+            playBench.BenchLap(2);
             agentWorld.ControlCameraMoveTick();   // a timed `camera ... --over` move, before the camera is drawn
             if (!cinemaHolds) ApplyCamera(session.CameraAt());
             cinema.Advance(cinema.FrameTime(dt));   // a flight through the keys moves the camera (and takes it from the rig)
@@ -656,9 +656,9 @@ sealed partial class GameHost
             characterEditor.OpenPendingEditor();
             characterEditor.ResumeAfterCreation();
             if (!cinemaHolds) ApplyTitleCamera();
-            BenchLap(3);
+            playBench.BenchLap(3);
             sound.UpdateAudio(dt);
-            BenchLap(4);
+            playBench.BenchLap(4);
             if (TitleVisible && !warming) titleBattle?.Advance(frameDt);
             if (skyArrival is not null)
             {
@@ -735,12 +735,12 @@ sealed partial class GameHost
             else
                 gpu.HoverKeys = outlining && pointerWorld && player.HoverTarget is { } hover ? [(DrawKey(hover.Id), hover.Colour)] : [];
             gpu.OutlinedBuildings = outlines && config.BuildingOutline ? player.OutlinedBuildings(hover: pointerWorld) : [];
-            BenchLap(5);
+            playBench.BenchLap(5);
             bool began = display.BeginFrame(size.X, size.Y);
             if (began)
             {
                 shotNoFrame = 0;
-                BenchLap(6);
+                playBench.BenchLap(6);
                 long t0 = Stopwatch.GetTimestamp();
                 // The chain and the panel draw into the window's backbuffer (made again when the size changes).
                 var backbuffer = display.Backbuffer ?? (headlessTarget ??= display.Context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.X, size.Y,
@@ -753,7 +753,7 @@ sealed partial class GameHost
                     frameGenTried = true;
                     frameGen = FrameGenerationSetup.CreateFrameGenerator(display);
                 }
-                bool frameGenWanted = !Covered && !screenshotRequested && !feedbackShotRequested && takeFile is null;
+                bool frameGenWanted = !Covered && !screenshotRequested && !feedbackCapture.feedbackShotRequested && takeFile is null;
                 frameGen?.BeginFrame(frameGenWanted, size.X, size.Y);
                 gpu.Post!.FrameGen = frameGen;
                 // The interface draws into a transparent layer of its own, laid over the backbuffer just before the present.
@@ -795,8 +795,8 @@ sealed partial class GameHost
                 }
                 drawTotal += Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
                 bool shot = screenshotRequested, take = takeFile is not null;
-                // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (GameHost.Feedback.cs).
-                bool feedbackShot = feedbackShotRequested && !take;
+                // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (FeedbackCapture).
+                bool feedbackShot = feedbackCapture.feedbackShotRequested && !take;
                 player.ShotWithoutMenus = feedbackShot;
                 // The game's interface (markers, HUD, panels, debug overlays): hidden by F7, the cinema's clean picture and in recorded frames.
                 bool revealing = loading is { Exiting: true } && sceneLoad is null && !warming && skyArrival is null;
@@ -909,8 +909,8 @@ sealed partial class GameHost
                 if (GpuContext.DiagSubmit) display.Context.SubmitAndWait();
                 display.Present(finalPicture);
                 debugMenu.profiler?.EndFrame();
-                BenchLap(7);
-                PlayBenchRendered(Stopwatch.GetElapsedTime(t0).TotalMilliseconds, display.Context.Pipelines.LatePipelines);
+                playBench.BenchLap(7);
+                playBench.PlayBenchRendered(Stopwatch.GetElapsedTime(t0).TotalMilliseconds, display.Context.Pipelines.LatePipelines);
                 if (display.Context.GpuFrameMs > 0) { gpuSum += display.Context.GpuFrameMs; gpuSamples++; }
                 statsFrames++;
                 terrainTris += gpu.Terrain.DrawnTriangles;
@@ -924,7 +924,7 @@ sealed partial class GameHost
                 if (feedbackShot)
                 {
                     player.ShotWithoutMenus = false;
-                    FeedbackCaptured(FramebufferCapture.ReadPicture(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null), size.X, size.Y);
+                    feedbackCapture.FeedbackCaptured(FramebufferCapture.ReadPicture(display.Context, finalPicture ?? backbuffer, size.X, size.Y, topDown: finalPicture is not null), size.X, size.Y);
                 }
             }
             else if (screenshotRequested && agentChannel.shotPath is not null && ++shotNoFrame >= 30) agentChannel.ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
@@ -962,7 +962,7 @@ sealed partial class GameHost
                 Limit(frame, now, (frameGen is { Enabled: true } ? 2.0 : 1.0) / fpsLimit);
             }
         }
-        WritePlayBench(FramebufferSizeNow());
+        playBench.WritePlayBench(FramebufferSizeNow());
         // A save still being written finishes before the game closes (the original's quit waits while its save manager is busy, FUN_14082b6e0, Verified).
         try { saveWrite?.Wait(); } catch (AggregateException) { }
         SaveSettings();

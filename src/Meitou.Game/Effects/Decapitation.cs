@@ -9,15 +9,14 @@ using Meitou.Simulation;
 
 namespace Meitou.Game.Effects;
 
-/// <summary>
-/// Cut-off heads (Meitou decapitation, docs/game/character-stats.md "Decapitation (Meitou)"): drawn by the character renderer, not the simulation's. When a character the
-/// renderer drew with its head last frame is listed headless, its head falls from where it was: the look's <see cref="CharacterAppearance.SeveredHead"/>, holding the bones
-/// of that last frame (taken at once, <see cref="Rendering.Characters.CharacterRenderer.HoldPose"/>), placed by the body's placement then, turned about the head bone and dropped
-/// until it meets the ground or a body lying under it. The fall's clock starts once the head's look is ready (so it is seen falling), timed by the shown tick as the severed
-/// limbs are (still while paused). Not saved: a load or a new game clears them; past the dropped-items limit the oldest goes.
-/// </summary>
+/// <summary>Meitou decapitation's drawing (docs/game/character-stats.md "Decapitation (Meitou)"): the falling head and the neck's spurts of blood.</summary>
 sealed class Decapitation(GameHost host)
 {
+    // Cut-off heads (Meitou decapitation, docs/game/character-stats.md "Decapitation (Meitou)"): drawn by the character renderer, not the simulation's. When a character the
+    // renderer drew with its head last frame is listed headless, its head falls from where it was: the look's CharacterAppearance.SeveredHead, holding the bones
+    // of that last frame (taken at once, Rendering.Characters.CharacterRenderer.HoldPose), placed by the body's placement then, turned about the head bone and dropped
+    // until it meets the ground or a body lying under it. The fall's clock starts once the head's look is ready (so it is seen falling), timed by the shown tick as the severed
+    // limbs are (still while paused). Not saved: a load or a new game clears them; past the dropped-items limit the oldest goes.
     sealed class FallingHead
     {
         public required long Key, From;

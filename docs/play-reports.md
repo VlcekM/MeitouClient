@@ -47,7 +47,7 @@ the last `X-Forwarded-For` entry. Port 8080.
 ## Feedback
 
 The game's FEEDBACK button (top right in both UI modes, title included; the Interface setting "Feedback button" (`UserConfig.FeedbackButton`,
-default on) hides it during play except with the Esc menu open; `PlayerInterface.Feedback.cs`, `GameHost.Feedback.cs`,
+default on) hides it during play except with the Esc menu open; `PlayerInterface.Feedback.cs`, `FeedbackCapture`,
 `FeedbackSender.cs`) opens a modal form: title (required, 100 chars), text (5000), and ticks for a screenshot, a navmesh screenshot, a save and log.txt (it
 can show folder names), and the player's Discord name (64 chars, ticked by default). The ticks and the name are kept in meitou.user.json
 (`feedback`) and saved on each send. The screenshot is the frame after the press, drawn without the game menu and what it opens, the form, the settings

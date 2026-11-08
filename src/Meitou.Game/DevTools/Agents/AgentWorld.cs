@@ -386,7 +386,7 @@ sealed class AgentWorld(GameHost host)
             float yaw = 0, lift = 0;
             if (args.Count < 3 || args.Count > 5 || (args.Count == 5 && !Num(args[4], out lift)) || !Num(args[1], out float px) || !Num(args[2], out float pz) || (args.Count >= 4 && !Num(args[3], out yaw))) { con.Error("usage: place-building <building> <x> <z> [yawDegrees] [heightAboveGround] [--interior <layout>] [--exterior <layout>]"); return; }
             if (host.scene.Objects is null) { con.Error("no world loaded"); return; }
-            var all = host.BuildData();
+            var all = host.buildingSync.BuildData();
             if (!all.TryGetValue(args[0], out var data))
             {
                 var named = all.Values.Where(b => string.Equals(b.Name, args[0], StringComparison.OrdinalIgnoreCase)).ToList();
@@ -701,7 +701,7 @@ sealed class AgentWorld(GameHost host)
         add("buildings", "buildings [text]", "list the placeable BUILDING records (id, name, category, path mode, furniture flags) whose id, name or category contains text", (args, con) =>
         {
             string text = args.Count > 0 ? string.Join(' ', args) : "";
-            var list = host.BuildData().Values.Where(b => text.Length == 0 || b.Id.Contains(text, StringComparison.OrdinalIgnoreCase) || b.Name.Contains(text, StringComparison.OrdinalIgnoreCase)
+            var list = host.buildingSync.BuildData().Values.Where(b => text.Length == 0 || b.Id.Contains(text, StringComparison.OrdinalIgnoreCase) || b.Name.Contains(text, StringComparison.OrdinalIgnoreCase)
                 || b.Category.Contains(text, StringComparison.OrdinalIgnoreCase)).OrderBy(b => b.Category, StringComparer.Ordinal).ThenBy(b => b.Name, StringComparer.Ordinal).ToList();
             con.Print($"{list.Count} buildings");
             foreach (var b in list.Take(400))
@@ -712,7 +712,7 @@ sealed class AgentWorld(GameHost host)
         {
             if (args.Count is < 1 or > 2 || host.scene.Database is not { } db) { con.Error("usage: layouts <building record id or name> [exterior]"); return; }
             var record = db.Find(args[0]);
-            if (record is null && host.BuildData().Values.FirstOrDefault(b => string.Equals(b.Name, args[0], StringComparison.OrdinalIgnoreCase)) is { } bd) record = db.Find(bd.Id);
+            if (record is null && host.buildingSync.BuildData().Values.FirstOrDefault(b => string.Equals(b.Name, args[0], StringComparison.OrdinalIgnoreCase)) is { } bd) record = db.Find(bd.Id);
             if (record is null) { con.Error($"no building '{args[0]}'"); return; }
             bool exterior = args.Count == 2;
             var list = host.interiorEditorHost.InteriorEditorLayouts(record, exterior);

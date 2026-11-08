@@ -297,7 +297,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_DLSS_PRESET` | `src/Meitou.Game/Rendering/Upscalers/VendorUpscalers.cs` | Overrides the DLSS preset number (the settings' DLSS preset otherwise). |
 | `MEITOU_NGX_LOG` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `1` prints NGX's whole log (DLSS on Linux). |
 | `MEITOU_DLSS` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `0` keeps NGX from loading (no DLSS on Linux; the game uses TAA). |
-| `MEITOU_BENCH_ONLY` | `src/Meitou.Game/GameHost.PlayBench.cs` | Comma list of `--play-bench` segments to run (e.g. `settle,zoom`). |
+| `MEITOU_BENCH_ONLY` | `src/Meitou.Game/PlayBench` | Comma list of `--play-bench` segments to run (e.g. `settle,zoom`). |
 | `MEITOU_TERRAIN_NO_NORMAL` | `src/Meitou.Game/GameHost.Metal.cs` | `1`/`true`: terrain shader variant without normal mapping (A/B; fixed before the first draw). |
 | `MEITOU_METAL_GPU_BUDGET_MB` | `src/Meitou.Game/GameHost.Metal.cs` | Metal video-memory budget in MB (default 5 GB). The launcher sets it on macOS. |
 | `MEITOU_METAL_NO_TAA` | `GameHost.Metal.cs` | `1`/`true`: native size, no jitter, no temporal resolve (diagnostic). |
