@@ -67,7 +67,8 @@ public sealed unsafe partial class PostProcess
     (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) fogShadow;
 
     /// <summary>The uniforms both merged passes share; the grid and range those of this frame's shafts (unused while neither layer reads them).</summary>
-    void SetLayerCommon(LayerPass p, (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) shaft)
+    /// <param name="shadowedFog">False: the fog volumes unshadowed (their shadow added after the upscaler, <see cref="CompositeLateFogShadow"/>).</param>
+    void SetLayerCommon(LayerPass p, (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) shaft, bool shadowedFog = true)
     {
         Bind(p.P, p.NearDepth, sceneDepth);
         p.P.Set(p.NearPlanes, planes.X, planes.Y);
@@ -83,7 +84,7 @@ public sealed unsafe partial class PostProcess
         p.P.Set(p.Grid, shaft.Grid);
         p.P.Set(p.Range, shaft.Range);
         Bind(p.P, p.ShaftInjected, shaft.Darkening > 0 ? shaftInjected : null);
-        p.P.Set(p.ShaftFog, shaft.Darkening, shaftInjected?.Width ?? 1, shaftInjected?.Height ?? 1, 0);
+        p.P.Set(p.ShaftFog, shadowedFog ? shaft.Darkening : 0, shaftInjected?.Width ?? 1, shaftInjected?.Height ?? 1, 0);
         // The shafts' layer: its atlases and parameters (read only where the pass applies the shafts).
         Bind(p.P, p.Light, shaftsPending ? shaftLight : null);
         Bind(p.P, p.Scatter, shaftsPending ? shaftScatter : null);
@@ -98,6 +99,7 @@ public sealed unsafe partial class PostProcess
     {
         fogShadow = shaftFrame;
         fogPending = true;
+        PrepareLateFogShadow(fogShadow);
         PrepareHalfLayers(FogHalf, ShaftsHalf && shaftsPending, fogShadow);
     }
 
@@ -113,7 +115,7 @@ public sealed unsafe partial class PostProcess
             layerHalf = Make(batch, hw, hh, InternalFormat.Rgba16f, TextureMinFilter.Nearest, "post layers half");
         }
         var f = layersHalfPass ??= new LayerPass(Gpu, PostProcessShaders.LayersHalf, "post layers half");
-        SetLayerCommon(f, grid);
+        SetLayerCommon(f, grid, !LateFogShadowOn);
         f.P.Set(f.Layers, shafts ? 1 : 0, fog ? 1 : 0, 0, 0);
         f.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
         Draw(f.P, layerHalf);
@@ -140,7 +142,7 @@ public sealed unsafe partial class PostProcess
                 layerMask = Make(batch, w, h, InternalFormat.DepthComponent24, TextureMinFilter.Nearest, "post layers mask");
             }
             var l = sceneLayersLean ??= new SceneLayersPass(Gpu, PostProcessShaders.SceneLayersLean, "post scene layers lean");
-            SetLayerCommon(l, grid);
+            SetLayerCommon(l, grid, !LateFogShadowOn);
             Bind(l.P, l.LayerHalfTexture, layerHalf);
             Bind(l.P, l.Ao, occlusion ? aoB : null);
             l.P.Set(l.Layers, shaftsPending ? 1 : 0, fogPending ? 1 : 0, occlusion ? 1 : 0, 0);
@@ -152,7 +154,7 @@ public sealed unsafe partial class PostProcess
             if (SsaoStamps) Stamp("layers lean");
         }
         var p = sceneLayers ??= new SceneLayersPass(Gpu, PostProcessShaders.SceneLayers, "post scene layers");
-        SetLayerCommon(p, grid);
+        SetLayerCommon(p, grid, !LateFogShadowOn);
         Bind(p.P, p.LayerHalfTexture, half && !lean ? layerHalf : null);
         Bind(p.P, p.Ao, occlusion ? aoB : null);
         p.P.Set(p.Layers, shaftsPending ? 1 : 0, fogPending ? 1 : 0, occlusion ? 1 : 0, 0);
