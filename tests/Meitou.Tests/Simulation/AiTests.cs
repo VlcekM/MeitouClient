@@ -4,6 +4,7 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Simulation;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Locks;
 using Meitou.Simulation.Ai;
 using Meitou.Data.World;
 using static Meitou.Tests.Simulation.SyntheticTown;
@@ -328,7 +329,9 @@ public class AiTests(ITestOutputHelper output)
         world.RunTicks(1200);
 
         Assert.False(world.Fixtures.AllDoorsLocked(shop.Key));
-        Assert.All(world.Fixtures.OfBuilding(shop.Key).Where(f => f.Kind == Meitou.Simulation.Locks.FixtureKind.Door), f => Assert.False(f.Lock!.Locked));
+        var shopDoor = Assert.Single(world.Fixtures.OfBuilding(shop.Key), f => f.Kind == FixtureKind.Door);
+        Assert.False(shopDoor.Lock!.Locked);
+        Assert.Equal(DoorMotion.Open, shopDoor.Motion);
         var p = world.Characters.Previous[leader.Slot].Position;
         Assert.InRange(Vector2.Distance(new Vector2(p.X, p.Z), new Vector2(node.X, node.Z)), 0, 13);
     }
