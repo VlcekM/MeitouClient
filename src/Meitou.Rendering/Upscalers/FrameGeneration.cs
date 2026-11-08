@@ -7,15 +7,40 @@ using static Meitou.Rendering.Upscalers.FfxApi;
 
 namespace Meitou.Rendering.Upscalers;
 
-/// <summary>One frame's inputs to frame generation: the post chain's depth and motion (bottom-up, as for the upscalers: see <see cref="UpscaleInputs"/>) and the camera.</summary>
+/// <summary>One frame's inputs to frame generation: the post chain's depth and motion (bottom-up, as for the upscalers: see <see cref="UpscaleInputs"/>) and the camera
+/// (<see cref="ViewToClip"/> and <see cref="ClipToPreviousClip"/> as in <see cref="UpscaleInputs"/>).</summary>
 public sealed record FrameGenInputs
 {
     public required GpuTexture Depth, Motion;
     public required int RenderWidth, RenderHeight;
     public required Vector2 JitterPixels;
-    public required float Near, Far, FieldOfView, DeltaSeconds;
+    public required float Near, Far, FieldOfView, DeltaSeconds, Aspect;
     public required bool Reset;
     public required Vector3 Eye, Right, Up, Forward;
+    public required Matrix4x4 ViewToClip, ClipToPreviousClip;
+}
+
+/// <summary>
+/// Frame generation as the game loop and the post chain drive it, whichever vendor's: <see cref="BeginFrame"/>, <see cref="Prepare"/> from the post chain
+/// (depth and motion), <see cref="Finish"/> before the present. AMD's (<see cref="FrameGeneration"/>) shows the world alone and lays the interface over every
+/// frame itself; NVIDIA's (<see cref="DlssFrameGeneration"/>) shows the finished picture and is told which part is interface.
+/// </summary>
+public interface IFrameGenerator : IDisposable
+{
+    /// <summary>Frame generation is wanted for this frame (<see cref="BeginFrame"/>).</summary>
+    bool Wanted { get; }
+    /// <summary>This frame goes out with frame generation on (<see cref="Finish"/>).</summary>
+    bool Enabled { get; }
+    /// <summary>With <see cref="Enabled"/>: the window is shown the world alone (the backbuffer), not the picture with the interface.</summary>
+    bool PresentsWorldAlone { get; }
+    /// <summary>Starts a frame of <paramref name="displayW"/> × <paramref name="displayH"/>; <paramref name="wanted"/> is false under the loading screen and for
+    /// screenshots and recorded frames.</summary>
+    void BeginFrame(bool wanted, int displayW, int displayH);
+    /// <summary>Takes this frame's depth and motion; call after the post chain made them, outside a native segment.</summary>
+    bool Prepare(FrameGenInputs inputs);
+    /// <summary>Before the present: <paramref name="world"/> is the bottom-up backbuffer (the world alone), <paramref name="ui"/> the bottom-up premultiplied
+    /// interface layer. True when frame generation runs on this frame's present.</summary>
+    bool Finish(GpuTexture world, GpuTexture? ui);
 }
 
 /// <summary>
@@ -31,7 +56,7 @@ public sealed record FrameGenInputs
 /// motion's y scale changes sign: x -renderWidth, y +renderHeight (the upscalers' scale is -renderWidth, -renderHeight in the bottom-up layout), the jitter's y is negated.
 /// </para>
 /// </summary>
-public sealed unsafe class FrameGeneration : IDisposable
+public sealed unsafe class FrameGeneration : IFrameGenerator
 {
     const ulong CreateType = 0x00020001, ConfigureType = 0x00020002, PrepareType = 0x00020004, CameraInfoType = 0x0002000a, BackendVkType = 0x00000003;
     const uint EnableDebugChecking = 1 << 6;
@@ -88,6 +113,8 @@ public sealed unsafe class FrameGeneration : IDisposable
 
     /// <summary>Frame generation is wanted for this frame (<see cref="BeginFrame"/>).</summary>
     public bool Wanted { get; private set; }
+    /// <summary>The world is shown alone; the layer lays the registered interface over it.</summary>
+    public bool PresentsWorldAlone => true;
     /// <summary>The post chain gave depth and motion this frame (<see cref="Prepare"/>), so the frame can be interpolated.</summary>
     public bool Prepared { get; private set; }
     /// <summary>This frame goes out with frame generation on (<see cref="Finish"/>): wanted and prepared.</summary>
@@ -203,7 +230,8 @@ public sealed unsafe class FrameGeneration : IDisposable
         return frameId;
     }
 
-    static void Flip(Vk vk, CommandBuffer cb, Image src, Image dst, int w, int h)
+    /// <summary>Copies <paramref name="src"/> into <paramref name="dst"/> upside down (both in GENERAL): bottom-up to top-down.</summary>
+    internal static void Flip(Vk vk, CommandBuffer cb, Image src, Image dst, int w, int h)
     {
         var blit = new ImageBlit
         {
@@ -218,9 +246,12 @@ public sealed unsafe class FrameGeneration : IDisposable
         vk.CmdBlitImage(cb, src, ImageLayout.General, dst, ImageLayout.General, 1, &blit, Filter.Nearest);
     }
 
-    GpuTexture Target(ref GpuTexture? slot, InternalFormat format, int w, int h, string name)
+    GpuTexture Target(ref GpuTexture? slot, InternalFormat format, int w, int h, string name) => Target(ctx, ref slot, format, w, h, name);
+
+    /// <summary>A copy target of the size and format asked, made again when they change.</summary>
+    internal static GpuTexture Target(GpuContext ctx, ref GpuTexture? slot, InternalFormat format, int w, int h, string name)
     {
-        if (slot is null || slot.Desc.Width != w || slot.Desc.Height != h)
+        if (slot is null || slot.Desc.Width != w || slot.Desc.Height != h || slot.Desc.Format != format)
         {
             slot?.Dispose();   // released after the frames in flight
             slot = ctx.CreateTexture(new TextureDesc(format, w, h, Use: TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst, Name: name));
@@ -298,7 +329,7 @@ public sealed unsafe class FrameGeneration : IDisposable
     /// Before the present: hands the interface picture (<paramref name="ui"/>, the bottom-up premultiplied RGBA8 layer; flipped here) to the layer and
     /// configures the context for this frame. Frame generation runs on this frame's present only when it was wanted and prepared. True when it does.
     /// </summary>
-    public bool Finish(GpuTexture? ui)
+    public bool Finish(GpuTexture world, GpuTexture? ui)
     {
         Enabled = Wanted && Prepared && ui is not null;
         if (Wanted && !Prepared && !loggedUnprepared) { loggedUnprepared = true; Console.WriteLine("frame generation  the post chain gave no depth and motion this frame (anti-aliasing / upscaling not temporal?): no frame is generated while that holds"); }

@@ -63,7 +63,8 @@ as a cause of ghosting in high-contrast scenes; the effect on foliage ghosting h
 
 ## Frame generation
 
-The `FrameGeneration` setting (off by default, read at start-up) presents through AMD's FSR 3 frame-interpolation swapchain
+The `FrameGeneration` setting (off by default, read at start-up) picks whose by `FrameGenerationVendor` (FSR 3 by default, or DLSS: "DLSS frame
+generation" below). FSR 3 presents through AMD's frame-interpolation swapchain
 (`Upscalers/FfxSwapchain.cs`) and interpolates one frame between each two rendered ones (`Upscalers/FrameGeneration.cs`), on top
 of TAA, FSR or DLSS. Library: `amd_fidelityfx_vk.dll` (AMD's prebuilt, Windows/Proton) or `libamd_fidelityfx_vk.so` (Linux:
 `tools/scripts/build-ffx-linux.sh`, AMD's SDK 1.1.4 source plus `tools/patches/fidelityfx-sdk-1.1.4-linux.patch`; AMD's
@@ -95,6 +96,41 @@ swapchain code needs Vulkan headers 1.3.237+, so the script uses Khronos' 1.3.29
   swapchain's pipelines, a descriptor pool size list that drops `STORAGE_BUFFER` (**Observed**, PR #133).
 - **Performance** (**Observed**, single runs, RTX 3070, PR #133): about 1.4 ms more per rendered frame (Proton, TAA),
   presented fps 1.5-1.75x that without it; for about 8 s after it starts the present is slow (31-60 fps).
+
+### DLSS frame generation
+
+NVIDIA's DLSS-G through Streamline 2.14.16 (Windows; `Upscalers/DlssFrameGeneration.cs`, guide: Streamline's `ProgrammingGuideDLSS_G.md`,
+`ProgrammingGuideManualHooking.md`, `ProgrammingGuideReflex.md`). One generated frame per rendered one: multi-frame generation is D3D12 only.
+- **Loading:** with DLSS as the vendor (`UserConfig.FrameGenerationToLoad`, the switch on or off, so it switches in the game) `slInit` loads DLSS, DLSS-G, Reflex and PCL (`sl.dlss_g.dll`, `nvngx_dlssg.dll`, `sl.reflex.dll`, `sl.pcl.dll` beside
+  the interposer; missing ones are logged and frame generation stays off). Each feature's `slGetFeatureRequirements` is unioned: extensions,
+  1.2/1.3 features, graphics and compute queues (created after ours in the graphics family; `VulkanInfo` gets the first index after ours). Where
+  `slIsFeatureSupported` fails for DLSS-G, Reflex or PCL, DLSS-G is unloaded (`slSetFeatureLoaded`): loaded, it makes the swapchain render off-screen
+  even while off.
+- **Hooks** (manual hooking, `sl_hooks.h`): swapchain create/destroy/images/acquire, present and `vkDeviceWaitIdle` go through the interposer's
+  proxies; Streamline owns the real swapchain and presents from its own queue. Its `vkCreateWin32SurfaceKHR` hook records the window behind a
+  surface and calls through an instance table only `slSetVulkanInfo` fills (**Verified**, 2.14.16 `sl.interposer/vulkan/wrapper.cpp`; headless
+  probe: an access violation before, a surface after), so the window's surface is made again through it once the device is handed over and
+  replaces the first one (`VulkanDevice.ReplaceSurface`).
+- **Frame:** one frame token per rendered frame (`Streamline.BeginFrame` at the top of the game loop: `slReflexSleep`, then PCL markers simulation
+  start/end, render submit start/end, present start/end); DLSS upscaling uses the same token. Reflex low latency is on while DLSS-G is loaded.
+- **Viewports:** upscaling on viewport 0 with constants for the post chain's bottom-up images, DLSS-G on viewport 1 with top-down ones (no y
+  flip, motion scale −1, +1, jitter y negated). Whether DLSS-G accepts constants on another viewport than the upscaler's is **Unknown** (untested).
+- **Inputs** (all `eValidUntilPresent`): depth and motion copied flipped at the render size; the backbuffer before the interface (hudless) and
+  the interface layer (premultiplied RGBA8, `UIColorAndAlpha`) copied flipped at the display size. The window shows the finished picture.
+  User interface recomposition on; `eRetainResourcesWhenOff`; mode off under the loading screen and for screenshots.
+- **State:** `slDLSSGGetState` about once a second; status failures (resolution too low, Reflex not detected, constants invalid ...) are logged
+  when they change. `numFramesActuallyPresented` counts from the previous call; the stats panel shows it per second beside the rendered rate.
+- **Loaded and off** (**Observed**, play bench idle/orbit/pan, 2560x1440 window at render scale 1.0, GPU-bound, RTX 4070, 3 interleaved pairs,
+  2026-11-08): mean frame 11.2 / 12.7 / 11.6 ms not loaded against 11.4 / 13.0 / 10.8 loaded with the mode off: +0.2-0.3 ms at most, within noise;
+  the render thread's `driver-wait` +0.14 ms (Reflex). Under CPU-bound frames (1920x1080 at 0.67) run-to-run noise (±50%) hid any difference.
+- **Pointer:** with any frame generation the game's pointer is the window's cursor (its image cropped from its sheet at the drawn size, hot spot
+  on the mouse; `GameHost.SystemPointer`), not drawn in the interface: there it reaches the screen a held-back frame late and is interpolated.
+- **Observed** (headless device, RTX 4070, Streamline 2.14.16, 2026-11-08): DLSS-G, Reflex and PCL report supported; together with DLSS they ask
+  for 1 graphics and 2 compute queues, 1.3 `synchronization2`, and device extensions including `VK_NV_optical_flow` and `VK_NV_low_latency2`.
+  The list leaves out `VK_KHR_present_id`, which `VK_NV_low_latency2` requires (validation error): `VulkanDevice` adds it, with its feature, when
+  the device has a surface.
+- **Observed** (game window, same machine, 2026-11-08): "DLSS active" with no status failures; a one-off "Invalid backbuffer resource extent"
+  warning (it falls back to the whole backbuffer) and recurring "flipMetering FC feedback: 1" warnings.
 
 ## SSAO, fog and layers
 

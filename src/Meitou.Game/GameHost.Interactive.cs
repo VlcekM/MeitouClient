@@ -34,7 +34,7 @@ sealed partial class GameHost
         // The world's files are read on a worker from here on: while the window and the device are made, then behind the loading screen.
         var sceneRead = LoadScene is { } readScene ? Task.Run(readScene) : null;
         BeginAudio();
-        bool frameGenerationAtStart = config.FrameGeneration;   // read at start-up only
+        var frameGenerationAtStart = config.FrameGenerationToLoad;   // the vendor is read at start-up only; the switch is live for the loaded one
         using var display = new VulkanDisplay(headless ? null : WindowOptions.Default with
         {
             Size = new Vector2D<int>(o.Width, o.Height),
@@ -43,7 +43,7 @@ sealed partial class GameHost
             IsVisible = false,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
-        }, vsync, dlss: true, frameGeneration: frameGenerationAtStart);   // Load before the device so the settings panel can switch to DLSS without restarting.
+        }, vsync, dlss: true, frameGeneration: headless ? FrameGenerationMethod.Off : frameGenerationAtStart);   // Load before the device so the settings panel can switch to DLSS without restarting.
         streamline = display.Streamline;
         ngx = display.Ngx;
         var window = headless ? null : display.Window!;
@@ -129,9 +129,8 @@ sealed partial class GameHost
                     Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps"), config)
             {
                 UpscalerStatus = () => gpu.Post?.ActiveUpscaler ?? "Off",
-                // The state is the start-up setting's; a change shows as pending until the restart.
-                FrameGenerationStatus = () => (display.FrameGeneration ? "active" : frameGenerationAtStart ? "unavailable (see the log), plain swapchain in use" : "off")
-                    + (config.FrameGeneration != frameGenerationAtStart ? $", {(config.FrameGeneration ? "on" : "off")} after a restart" : ""),
+                // The loaded frame generation's state; a change it cannot follow shows as pending until the restart.
+                FrameGenerationStatus = () => FrameGenerationState(display, frameGenerationAtStart, config.FrameGenerationMethod),
                 ModSettings = () => mods?.Settings ?? [],
                 AttackSlotsChanged = slots => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots); },
                 LateDefencesChanged = on => { foreach (var combat in session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on; },
@@ -544,7 +543,8 @@ sealed partial class GameHost
             }
         };
         Meitou.Rendering.UiLayer? uiLayer = null;
-        Meitou.Rendering.Upscalers.FrameGeneration? frameGen = null;
+        Meitou.Rendering.Upscalers.IFrameGenerator? frameGen = null;
+        var systemPointer = new SystemPointer();
         bool frameGenTried = false;
         double drawTotal = 0, gpuSum = 0, statsTimer = 0;
         int gpuSamples = 0, statsFrames = 0;
@@ -557,6 +557,7 @@ sealed partial class GameHost
         while (window?.IsClosing != true && !quit)
         {
             BenchLap(BenchTail);
+            display.BeginLatencyFrame();   // DLSS frame generation's Reflex: before the input is read
             window?.DoEvents();
             if (window?.IsClosing == true) break;
             if (controlQuit) { quit = true; break; }
@@ -733,15 +734,16 @@ sealed partial class GameHost
                 var backbuffer = display.Backbuffer ?? (headlessTarget ??= display.Context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.X, size.Y,
                     Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "headless backbuffer")));
                 gpu.Post!.Target = backbuffer;
-                // Frame generation (the setting, when the FFX layer is in use): made on the first frame; wanted except under the loading screen and for saved pictures.
-                if (frameGen is not null && display.FrameGenerationLayer is null) { frameGen.Dispose(); frameGen = null; }   // the layer fell back to the plain swapchain
-                if (!frameGenTried && display.FrameGenerationLayer is { } fgLayer)
+                // Frame generation (the loaded one): made on the first frame; wanted while the setting asks for it, except under the loading screen and for saved pictures.
+                if (frameGen is Meitou.Rendering.Upscalers.FrameGeneration && display.FrameGenerationLayer is null) { frameGen.Dispose(); frameGen = null; }   // the layer fell back to the plain swapchain
+                if (!frameGenTried)
                 {
                     frameGenTried = true;
-                    frameGen = Meitou.Rendering.Upscalers.FrameGeneration.TryCreate(display.Context, fgLayer, out var fgWhy);
-                    if (frameGen is null) Console.WriteLine($"frame generation  unavailable: {fgWhy}");
+                    frameGen = CreateFrameGenerator(display);
                 }
-                frameGen?.BeginFrame(!Covered && !screenshotRequested && !feedbackShotRequested && takeFile is null, size.X, size.Y);
+                bool frameGenWanted = config.FrameGenerationMethod == frameGenerationAtStart
+                    && !Covered && !screenshotRequested && !feedbackShotRequested && takeFile is null;
+                frameGen?.BeginFrame(frameGenWanted, size.X, size.Y);
                 gpu.Post!.FrameGen = frameGen;
                 // The interface draws into a transparent layer of its own, laid over the backbuffer just before the present.
                 uiLayer ??= new Meitou.Rendering.UiLayer(display.Context);
@@ -868,19 +870,27 @@ sealed partial class GameHost
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiLoading);
                 // The mouse pointer over everything, as the original's Pointer layer; never in saved pictures. What the right button would do picks it,
                 // the arrow over the settings panel, the cinema's editor and the loading screen. The free camera hides it (the original's `invisible`);
-                // Hardware mouse shows Windows' cursor instead.
+                // Hardware mouse shows Windows' cursor instead. With frame generation the window system draws the game's pointer (SystemPointer): in a frame it would
+                // come a held-back frame late and be interpolated.
                 if (!shot && !take && !feedbackShot && overlay is not null && pointerMouse is not null)
                 {
+                    bool byWindow = frameGen is { Wanted: true } && !config.HardwareMouse && !freeLook;
                     var cursorMode = orbitAnchor is not null ? Silk.NET.Input.CursorMode.Disabled
-                        : config.HardwareMouse && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
+                        : (config.HardwareMouse || byWindow) && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
                     if (cursorMode != windowCursor) pointerMouse.Cursor.CursorMode = windowCursor = cursorMode;
-                    if (!config.HardwareMouse && !freeLook) player.DrawPointer(pointerWorld ? player.PointerName : "arrow", pointerAt, size.X, size.Y);
+                    string pointerName = pointerWorld ? player.PointerName : "arrow";
+                    if (byWindow) systemPointer.Show(pointerMouse.Cursor, player, pointerName);
+                    else
+                    {
+                        systemPointer.Standard(pointerMouse.Cursor);
+                        if (!config.HardwareMouse && !freeLook) player.DrawPointer(pointerName, pointerAt, size.X, size.Y);
+                    }
                 }
                 // World and interface into the top-down picture the window shows (and a screenshot reads). With frame generation on this frame the window shows the
                 // world alone (the backbuffer, flipped by the present) and the layer lays the interface over every frame, generated ones too.
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiPointer);
-                bool generating = frameGen is not null && frameGen.Finish(uiTarget);
-                var finalPicture = generating ? null : uiLayer.Composite(backbuffer);
+                bool generating = frameGen is not null && frameGen.Finish(backbuffer, uiTarget);
+                var finalPicture = generating && frameGen!.PresentsWorldAlone ? null : uiLayer.Composite(backbuffer);
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiComposite);
                 if (GpuContext.DiagSubmit) display.Context.SubmitAndWait();
                 display.Present(finalPicture);
@@ -910,7 +920,7 @@ sealed partial class GameHost
                 // Once a second: the frame and the simulation, then the renderer's sections.
                 stats.Clear();
                 stats.Add("Performance");
-                stats.Add($"  frame rate    {statsFrames / statsTimer:0} fps{(frameGen is { Enabled: true } ? " (x2 shown with frame generation)" : "")}, {(display.VSync ? "vsync" : fpsLimit > 0 ? $"limit {fpsLimit}" : "uncapped")}; graphics card {(gpuSamples > 0 ? $"{gpuSum / gpuSamples:0.0}" : "-")} ms a frame");
+                stats.Add($"  frame rate    {statsFrames / statsTimer:0} fps{FrameGenerationShown(frameGen)}, {(display.VSync ? "vsync" : fpsLimit > 0 ? $"limit {fpsLimit}" : "uncapped")}; graphics card {(gpuSamples > 0 ? $"{gpuSum / gpuSamples:0.0}" : "-")} ms a frame");
                 long ticks = session.Simulation.TotalTicks - statsTicks;
                 statsTicks = session.Simulation.TotalTicks;
                 stats.Add($"  simulation    {ticks / statsTimer:0} ticks/s, {session.CurrentSnapshot.Characters.Count} characters, {session.Simulation.DroppedTicks} ticks dropped since the start");

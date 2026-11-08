@@ -59,6 +59,13 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// <summary>The surface from <see cref="VulkanDeviceOptions.CreateSurface"/> (default when headless); destroyed on dispose.</summary>
     public SurfaceKHR Surface { get; private set; }
     public bool HasSurface => Surface.Handle != 0;
+
+    /// <summary>Puts <paramref name="surface"/> (the same window's, made another way) in place of the surface, which is destroyed. Before any swapchain exists.</summary>
+    public void ReplaceSurface(SurfaceKHR surface)
+    {
+        if (Surface.Handle != 0 && khrSurface != null) khrSurface.DestroySurface(Instance, Surface, null);
+        Surface = surface;
+    }
     /// <summary>The KHR_surface instance extension functions (null when headless).</summary>
     public KhrSurface? SurfaceExtension => khrSurface;
 
@@ -795,6 +802,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         var accel = new PhysicalDeviceAccelerationStructureFeaturesKHR { SType = StructureType.PhysicalDeviceAccelerationStructureFeaturesKhr };
         var rayQuery = new PhysicalDeviceRayQueryFeaturesKHR { SType = StructureType.PhysicalDeviceRayQueryFeaturesKhr };
         var vrs = new PhysicalDeviceFragmentShadingRateFeaturesKHR { SType = StructureType.PhysicalDeviceFragmentShadingRateFeaturesKhr };
+        var presentId = new PhysicalDevicePresentIdFeaturesKHR { SType = StructureType.PhysicalDevicePresentIDFeaturesKhr };
 
         bool extEds2 = have.Contains("VK_EXT_extended_dynamic_state2");
         bool extEds3 = have.Contains("VK_EXT_extended_dynamic_state3");
@@ -803,6 +811,8 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool extBary = options.TriangleMeasurements && have.Contains("VK_KHR_fragment_shader_barycentric");
         bool extRay = options.RayTracing && have.Contains("VK_KHR_acceleration_structure") && have.Contains("VK_KHR_ray_query") && have.Contains("VK_KHR_deferred_host_operations");
         bool extVrs = have.Contains("VK_KHR_fragment_shading_rate");
+        // VK_NV_low_latency2 (Reflex, which DLSS frame generation asks for) requires present ids, which Streamline's list leaves out (validation, 2026-11-08).
+        bool extPresentId = options.CreateSurface != null && options.DeviceExtensions?.Contains("VK_NV_low_latency2") == true && have.Contains("VK_KHR_present_id");
 
         void* chain = null;
         void Link<T>(ref T s, bool use) where T : unmanaged
@@ -829,6 +839,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         Link(ref accel, extRay);
         Link(ref rayQuery, extRay);
         Link(ref vrs, extVrs);
+        Link(ref presentId, extPresentId);
 
         var f2 = new PhysicalDeviceFeatures2 { SType = StructureType.PhysicalDeviceFeatures2, PNext = chain };
         Vk.GetPhysicalDeviceFeatures2(pd, &f2);
@@ -986,6 +997,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         if (extBary) names.Add("VK_KHR_fragment_shader_barycentric");
         if (HasRayQuery) names.AddRange(["VK_KHR_acceleration_structure", "VK_KHR_ray_query", "VK_KHR_deferred_host_operations"]);
         if (extVrs) names.Add("VK_KHR_fragment_shading_rate");
+        if (extPresentId) names.Add("VK_KHR_present_id");
         // Only read by VideoMemory (the viewer's statistics): the process's usage and budget per heap.
         HasMemoryBudget = have.Contains("VK_EXT_memory_budget");
         if (HasMemoryBudget) names.Add("VK_EXT_memory_budget");
@@ -1267,11 +1279,16 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// <summary>Frees the image once every frame that could use it has finished.</summary>
     public void DeferFree(ImageAllocation i) => Frames.DeferDelete(() => Allocator.Free(i));
 
+    /// <summary>Waits through this function instead of the driver's <c>vkDeviceWaitIdle</c> when set (Streamline's proxy with DLSS frame generation,
+    /// whose present thread must be idle too).</summary>
+    public delegate* unmanaged<Device, Result> WaitIdleFunction { get; set; }
+
     public void WaitIdle()
     {
         lock (QueueLock)
         {
-            Vk.DeviceWaitIdle(Device);
+            if (WaitIdleFunction != null) WaitIdleFunction(Device);
+            else Vk.DeviceWaitIdle(Device);
         }
     }
 

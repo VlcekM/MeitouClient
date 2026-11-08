@@ -827,6 +827,43 @@ public sealed partial class UiPainter : IDisposable
         overlay.Flush(width, height, null, pass);
     }
 
+    readonly Dictionary<string, (RgbaImage Image, int HotX, int HotY)?> pointerImages = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The pointer <paramref name="name"/> as a picture of its own at the size it is drawn (<see cref="DrawPointer"/>'s), with its hot spot, for a cursor the
+    /// window system draws (frame generation: GameHost.FrameGeneration.cs); null for an unknown name or an unreadable texture.
+    /// </summary>
+    public (RgbaImage Image, int HotX, int HotY)? PointerImage(string name)
+    {
+        if (pointerImages.TryGetValue(name, out var cached)) return cached;
+        if (!pointers.TryGetValue(name, out var pointer)) pointers[name] = pointer = MyGuiPointers.Resolve(resources, name);
+        RgbaImage? sheet = null;
+        try
+        {
+            if (pointer is not null && resolve(pointer.Image.Texture) is { } path) sheet = TextureLoader.LoadFile(path, allMips: false).Levels[0];
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException) { }
+        var made = pointer is null || sheet is null ? ((RgbaImage, int, int)?)null
+            : (Crop(sheet, pointer.Image.Source, (int)MathF.Round(pointer.Width), (int)MathF.Round(pointer.Height)), (int)MathF.Round(pointer.PointX), (int)MathF.Round(pointer.PointY));
+        return pointerImages[name] = made;
+    }
+
+    /// <summary>The <paramref name="source"/> part of <paramref name="sheet"/> scaled to <paramref name="width"/> × <paramref name="height"/> (nearest texel).</summary>
+    static RgbaImage Crop(RgbaImage sheet, UiRect source, int width, int height)
+    {
+        var image = new RgbaImage(Math.Max(width, 1), Math.Max(height, 1));
+        for (int y = 0; y < image.Height; y++)
+        {
+            int sy = Math.Clamp((int)(source.Y + (y + 0.5f) * source.Height / image.Height), 0, sheet.Height - 1);
+            for (int x = 0; x < image.Width; x++)
+            {
+                int sx = Math.Clamp((int)(source.X + (x + 0.5f) * source.Width / image.Width), 0, sheet.Width - 1);
+                Array.Copy(sheet.Pixels, (sy * sheet.Width + sx) * 4, image.Pixels, (y * image.Width + x) * 4, 4);
+            }
+        }
+        return image;
+    }
+
     (GpuTexture Texture, SampledTexture Sampled) LoadTexture(string name)
     {
         if (external.TryGetValue(name, out var given) || textures.TryGetValue(name, out given)) return given;

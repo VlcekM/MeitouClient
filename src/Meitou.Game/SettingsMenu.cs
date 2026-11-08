@@ -261,9 +261,11 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 
     internal const string TickAheadHint = "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
         + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, up to 33 ms more input delay.";
-    const string FrameGenerationTemplate = "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: "
-        + "nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. "
-        + "Takes effect after a restart. Now: {1}";
+    const string FrameGenerationTemplate = "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
+        + "FSR 3 (AMD's, any GPU) needs the FidelityFX library; DLSS (NVIDIA's, Windows, RTX 40 or later) needs Streamline's frame generation DLLs and turns Reflex on. "
+        + "Both work with TAA, FSR and DLSS upscaling. DLSS switches at once; FSR 3, and a change between the two, after a restart. Now: {1}";
+
+    internal static readonly string[] FrameGenerationChoices = ["Off", "FSR 3", "DLSS"];
 
     string FrameGenerationHint() => Loc.Tr(FrameGenerationTemplate, Loc.Tr(FrameGenerationStatus?.Invoke() ?? "off"));
 
@@ -333,8 +335,8 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
             result.Add(new("World tick alongside drawing", TickAheadHint, Choice: new(() => TickAheadChoices, () => (int)config.TickAhead, i => config.TickAhead = (TickAheadMode)i),
                 Raw: "tickAhead"));
             if (!OperatingSystem.IsMacOS())
-                result.Add(new("Frame generation (FSR 3)", FrameGenerationHint(),
-                    Toggle: new("Frame generation (FSR 3)", () => config.FrameGeneration, v => config.FrameGeneration = v, OnOff: true), Raw: "frameGeneration"));
+                result.Add(new("Frame generation", FrameGenerationHint(), Choice: new(() => FrameGenerationChoices, () => (int)config.FrameGenerationMethod,
+                    i => config.FrameGenerationMethod = (FrameGenerationMethod)i), Raw: "frameGeneration"));
             result.RemoveAll(e => !ShownNow(e));
             result = [.. result.OrderBy(e => LauncherSchema.Order(e.Raw ?? ""))];
             result = [.. result.SelectMany(ModeEntries)];

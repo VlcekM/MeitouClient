@@ -7,6 +7,9 @@ namespace Meitou.Rendering;
 /// jittered frames at a render scale (the built-in TAA, AMD FSR, NVIDIA DLSS). docs/engine.md "Upscaling".</summary>
 public enum UpscalerKind { Off, Taa, Fsr, Dlss, MetalFx }
 
+/// <summary>The Frame generation setting: off, AMD's FSR 3 frame-interpolation swapchain, or NVIDIA's DLSS frame generation through Streamline (docs/render-post.md).</summary>
+public enum FrameGenerationMethod { Off, Fsr, Dlss }
+
 /// <summary>The upscaler options of <see cref="PostOptions"/>: which one, the render scale (per axis) and the sharpening.</summary>
 public sealed class UpscaleOptions
 {

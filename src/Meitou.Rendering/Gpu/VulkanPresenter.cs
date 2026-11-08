@@ -40,6 +40,9 @@ public sealed unsafe class VulkanPresenter : IDisposable
     /// (frames are generated on top of it by <see cref="Upscalers.FrameGeneration"/>). Null for the plain swapchain; set to null again, with a log line, when it fails.</summary>
     public FfxSwapchain? FrameGeneration { get; set; }
 
+    /// <summary>Streamline's swapchain calls (DLSS frame generation, which owns the real swapchain and presents from its own queue): set before the first frame.</summary>
+    public Streamline.SwapchainHooks? StreamlineHooks { get; set; }
+
     /// <summary>What the frame is drawn into (RGBA8, the window's framebuffer size; made again when the size changes): valid after <see cref="BeginFrame"/>.</summary>
     public GpuTexture? Backbuffer { get; private set; }
 
@@ -84,6 +87,7 @@ public sealed unsafe class VulkanPresenter : IDisposable
         long acquireStart = Stopwatch.GetTimestamp();
         Result r;
         if (FrameGeneration is { } fg) fixed (uint* pi = &imageIndex) r = fg.Acquire(device.Device, swapchain, ulong.MaxValue, semaphore, default, pi);
+        else if (StreamlineHooks is { } sl) fixed (uint* pi = &imageIndex) r = sl.Acquire(device.Device, swapchain, ulong.MaxValue, semaphore, default, pi);
         else r = khr.AcquireNextImage(device.Device, swapchain, ulong.MaxValue, semaphore, default, ref imageIndex);
         AcquireTicks += Stopwatch.GetTimestamp() - acquireStart;
         if (r is Result.ErrorOutOfDateKhr) { stale = true; acquiredImage = false; return true; }   // draw anyway; nothing is shown
@@ -190,7 +194,7 @@ public sealed unsafe class VulkanPresenter : IDisposable
         uint count = Math.Max(caps.MinImageCount + 1, 3);
         if (caps.MaxImageCount > 0) count = Math.Min(count, caps.MaxImageCount);
         var old = swapchain;
-        bool layer = FrameGeneration is not null;
+        bool layer = FrameGeneration is not null || StreamlineHooks is not null;
         var info = new SwapchainCreateInfoKHR
         {
             SType = StructureType.SwapchainCreateInfoKhr,
@@ -218,13 +222,26 @@ public sealed unsafe class VulkanPresenter : IDisposable
                 info.ImageUsage = ImageUsageFlags.TransferDstBit | ImageUsageFlags.ColorAttachmentBit;
             }
         }
-        if (FrameGeneration is null)
+        if (FrameGeneration is null && StreamlineHooks is { } slc)
+        {
+            SwapchainKHR made;
+            VulkanException.Check(slc.Create(device.Device, &info, null, &made), "vkCreateSwapchainKHR (Streamline)");
+            swapchain = made;
+            if (old.Handle != 0) slc.Destroy(device.Device, old, null);
+        }
+        else if (FrameGeneration is null)
         {
             VulkanException.Check(khr.CreateSwapchain(device.Device, &info, null, out swapchain), "vkCreateSwapchainKHR");
             if (old.Handle != 0) khr.DestroySwapchain(device.Device, old, null);
         }
         uint imageCount = 0;
-        if (FrameGeneration is { } fgi)
+        if (FrameGeneration is null && StreamlineHooks is { } sli)
+        {
+            VulkanException.Check(sli.GetImages(device.Device, swapchain, &imageCount, null), "vkGetSwapchainImagesKHR (Streamline)");
+            images = new Image[imageCount];
+            fixed (Image* pi = images) VulkanException.Check(sli.GetImages(device.Device, swapchain, &imageCount, pi), "vkGetSwapchainImagesKHR (Streamline)");
+        }
+        else if (FrameGeneration is { } fgi)
         {
             VulkanException.Check(fgi.GetImages(device.Device, swapchain, &imageCount, null), "vkGetSwapchainImagesKHR (FFX)");
             images = new Image[imageCount];
@@ -253,6 +270,7 @@ public sealed unsafe class VulkanPresenter : IDisposable
         foreach (var s in rendered) vk.DestroySemaphore(device.Device, s, null);
         foreach (var s in acquired) vk.DestroySemaphore(device.Device, s, null);
         if (FrameGeneration is { } fg) { fg.Dispose(); FrameGeneration = null; }   // destroys the swapchain it made
+        else if (swapchain.Handle != 0 && StreamlineHooks is { } sl) sl.Destroy(device.Device, swapchain, null);
         else if (swapchain.Handle != 0) khr.DestroySwapchain(device.Device, swapchain, null);
     }
 }

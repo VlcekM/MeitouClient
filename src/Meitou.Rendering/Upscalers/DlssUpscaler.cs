@@ -1,59 +1,22 @@
 using Meitou.Rendering.Gpu;
 using Meitou.Rendering.Gpu.Core;
-using System.Numerics;
 using System.Runtime.InteropServices;
-using Silk.NET.Vulkan;
+using static Meitou.Rendering.Upscalers.SlTypes;
 
 namespace Meitou.Rendering.Upscalers;
 
 /// <summary>
 /// NVIDIA DLSS Super Resolution through <see cref="Streamline"/> (which must have been initialised before the device and attached to it).
-/// Per frame: a frame token, the camera constants, the tagged images (depth, motion, colour in, colour out, the exposure and water hint when given) and the evaluation,
+/// Per frame: the frame's token (<see cref="Streamline.FrameToken"/>), the camera constants, the tagged images (depth, motion, colour in, colour out, the exposure and water hint when given) and the evaluation,
 /// recorded into the <see cref="GpuContext"/>'s frame. The DLSS mode follows the render scale (DLAA at 1); the render size stays ours.
 /// Conventions as for FSR (<see cref="UpscaleInputs"/>): our images are bottom-up, so the matrices given to DLSS have their y flipped
 /// to describe the picture as stored (row 0 at clip y = +1, as DLSS assumes), and motion is scaled by −1 (DLSS: towards the previous position).
 /// </summary>
 public sealed unsafe class DlssUpscaler : IUpscaler
 {
-    [StructLayout(LayoutKind.Sequential)] struct ViewportHandle { public nint Next; public Guid StructType; public nuint StructVersion; public uint Value; }
-    [StructLayout(LayoutKind.Sequential)] struct Extent { public uint Top, Left, Width, Height; }
-    [StructLayout(LayoutKind.Sequential)]
-    struct SlResource
-    {
-        public nint Next; public Guid StructType; public nuint StructVersion;
-        public byte Type; public nint Native, Memory, View; public uint State;
-        public uint Width, Height, NativeFormat, MipLevels, ArrayLayers; public ulong GpuVirtualAddress; public uint Flags, Usage; public ushort InternalFlags, Reserved;
-    }
-    [StructLayout(LayoutKind.Sequential)] struct ResourceTag { public nint Next; public Guid StructType; public nuint StructVersion; public SlResource* Resource; public uint Type; public int Lifecycle; public Extent Extent; }
-    [StructLayout(LayoutKind.Sequential)]
-    struct Constants
-    {
-        public nint Next; public Guid StructType; public nuint StructVersion;
-        public Matrix4x4 CameraViewToClip, ClipToCameraView, ClipToLensClip, ClipToPrevClip, PrevClipToClip;
-        public Vector2 JitterOffset, MvecScale, CameraPinholeOffset;
-        public Vector3 CameraPos, CameraUp, CameraRight, CameraFwd;
-        public float CameraNear, CameraFar, CameraFov, CameraAspectRatio, MotionVectorsInvalidValue;
-        public byte DepthInverted, CameraMotionIncluded, MotionVectors3D, Reset, OrthographicProjection, MotionVectorsDilated, MotionVectorsJittered;
-        public float MinRelativeLinearDepthObjectSeparation;
-    }
-    [StructLayout(LayoutKind.Sequential)]
-    struct DlssOptions
-    {
-        public nint Next; public Guid StructType; public nuint StructVersion;
-        public uint Mode, OutputWidth, OutputHeight; public float Sharpness, PreExposure, ExposureScale;
-        public byte ColorBuffersHdr, IndicatorInvertAxisX, IndicatorInvertAxisY;
-        public uint DlaaPreset, QualityPreset, BalancedPreset, PerformancePreset, UltraPerformancePreset, UltraQualityPreset;
-        public byte UseAutoExposure, AlphaUpscalingEnabled;
-    }
-
-    const uint FeatureDlss = 0, BufferDepth = 0, BufferMotionVectors = 1, BufferScalingInputColor = 3, BufferScalingOutputColor = 4, BufferExposure = 13,
-        BufferBiasCurrentColorHint = 29;
-    const int ValidUntilEvaluate = 2;
-
     readonly Streamline sl;
     readonly GpuContext ctx;
     readonly ViewportHandle* viewport;
-    uint frameIndex;
     (uint Mode, int Width, int Height, uint Preset, bool AutoExposure) options = (uint.MaxValue, 0, 0, 0, false);
     (int Width, int Height) named;
     bool failed;
@@ -66,7 +29,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         this.sl = sl;
         this.ctx = ctx;
         viewport = (ViewportHandle*)NativeMemory.AllocZeroed((nuint)sizeof(ViewportHandle));
-        *viewport = new ViewportHandle { StructType = Streamline.ViewportType, StructVersion = 1, Value = 0 };
+        *viewport = new ViewportHandle { StructType = ViewportType, StructVersion = 1, Value = Streamline.UpscaleViewport };
     }
 
     public static DlssUpscaler? TryCreate(Streamline? sl, GpuContext ctx, out string? reason)
@@ -87,22 +50,6 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         >= 0.45f => 1,   // eMaxPerformance
         _ => 4,          // eUltraPerformance
     };
-
-    /// <summary>Flips y of a clip space: our clip y = +1 is image row H (bottom-up), DLSS's is row 0.</summary>
-    static readonly Matrix4x4 FlipY = Matrix4x4.CreateScale(1, -1, 1);
-
-    SlResource Resource(Meitou.Rendering.Gpu.GpuTexture texture, uint layout)
-    {
-        var d = texture.Desc;
-        return new SlResource
-        {
-            StructType = Streamline.ResourceType, StructVersion = 1,
-            Type = 0,   // eTex2d
-            Native = (nint)ctx.Device.NativeImage(texture).Handle, View = (nint)ctx.Device.NativeView(texture).Handle, State = layout,
-            Width = (uint)d.Width, Height = (uint)d.Height, NativeFormat = (uint)GlConventions.VkFormat(d.Format),
-            MipLevels = (uint)d.Levels, ArrayLayers = 1, Usage = (uint)ctx.Device.NativeUsage(texture),
-        };
-    }
 
     public bool Dispatch(UpscaleInputs i)
     {
@@ -129,7 +76,7 @@ public sealed unsafe class DlssUpscaler : IUpscaler
 
         var o = new DlssOptions
         {
-            StructType = Streamline.DlssOptionsType, StructVersion = 3,
+            StructType = DlssOptionsType, StructVersion = 3,
             Mode = mode, OutputWidth = (uint)i.DisplayWidth, OutputHeight = (uint)i.DisplayHeight,
             PreExposure = 1, ExposureScale = 1, ColorBuffersHdr = 1, UseAutoExposure = (byte)(autoExposure ? 1 : 0),
             DlaaPreset = preset, QualityPreset = preset, BalancedPreset = preset, PerformancePreset = preset, UltraPerformancePreset = preset,
@@ -143,56 +90,21 @@ public sealed unsafe class DlssUpscaler : IUpscaler
 
     bool Evaluate(UpscaleInputs i)
     {
-        nint token;
-        uint index = frameIndex++;
-        int r = sl.GetNewFrameToken(&token, &index);
-        if (r != 0) return Fail($"slGetNewFrameToken failed ({r})");
-
-        var viewToClip = i.ViewToClip * FlipY;
-        Matrix4x4.Invert(viewToClip, out var clipToView);
-        var toPrevious = FlipY * i.ClipToPreviousClip * FlipY;
-        Matrix4x4.Invert(toPrevious, out var fromPrevious);
-        var constants = new Constants
-        {
-            StructType = Streamline.ConstantsType, StructVersion = 2,
-            CameraViewToClip = viewToClip, ClipToCameraView = clipToView, ClipToLensClip = Matrix4x4.Identity,
-            ClipToPrevClip = toPrevious, PrevClipToClip = fromPrevious,
-            JitterOffset = i.JitterPixels,
-            MvecScale = new Vector2(-1, -1),   // ours: UV from previous to current; DLSS: normalised, towards the previous position
-            CameraPos = i.Eye, CameraUp = i.Up, CameraRight = i.Right, CameraFwd = i.Forward,
-            CameraNear = i.Near, CameraFar = i.Far, CameraFov = i.FieldOfView, CameraAspectRatio = i.Aspect,
-            MotionVectorsInvalidValue = float.MaxValue,
-            CameraMotionIncluded = 1, Reset = (byte)(i.Reset ? 1 : 0),
-            MinRelativeLinearDepthObjectSeparation = 40,
-        };
-        r = sl.SetConstants(&constants, token, viewport);
+        // Our images are bottom-up: the constants describe them as stored.
+        nint token = sl.FrameToken();
+        if (token == 0) return Fail("slGetNewFrameToken failed");
+        var constants = CameraConstants(i.ViewToClip, i.ClipToPreviousClip, i.JitterPixels, i.Eye, i.Up, i.Right, i.Forward,
+            i.Near, i.Far, i.FieldOfView, i.Aspect, i.Reset, bottomUp: true);
+        int r = sl.SetConstants(&constants, token, viewport);
         if (r != 0) return Fail($"slSetConstants failed ({r})");
 
         var list = (CommandList)ctx.BeginNative("dlss upscale");
-        var cb = list.Handle;
         try
         {
-            // Every native image stays in GENERAL.
-            var depth = Resource(i.Depth, (uint)ImageLayout.General);
-            var motion = Resource(i.Motion, (uint)ImageLayout.General);
-            var colour = Resource(i.Colour, (uint)ImageLayout.General);
-            var output = Resource(i.Output, (uint)ImageLayout.General);
-            var reactive = i.Reactive is null ? default : Resource(i.Reactive, (uint)ImageLayout.General);
-            var exposure = i.Exposure is null ? default : Resource(i.Exposure, (uint)ImageLayout.General);
-            var tags = stackalloc ResourceTag[6];
-            uint count = 0;
-            tags[count++] = Tag(&depth, BufferDepth);
-            tags[count++] = Tag(&motion, BufferMotionVectors);
-            tags[count++] = Tag(&colour, BufferScalingInputColor);
-            tags[count++] = Tag(&output, BufferScalingOutputColor);
-            // The water mask as DLSS's bias towards the current frame (lerp(history, current, bias); NGX's "Bias.Current.Color.Mask"), as FSR's
-            // reactive mask. Observed: the CNN presets (e.g. E) use it, DLSS 310's default transformer preset ignores it.
-            if (i.Reactive is not null) tags[count++] = Tag(&reactive, BufferBiasCurrentColorHint);
-            if (i.Exposure is not null) tags[count++] = Tag(&exposure, BufferExposure);
-            r = sl.SetTagForFrame(token, viewport, tags, count, cb.Handle);
+            r = Tag(i, token, list.Handle.Handle);
             if (r != 0) return Fail($"slSetTagForFrame failed ({r})");
             void* input = viewport;
-            r = sl.EvaluateFeature(FeatureDlss, token, &input, 1, cb.Handle);
+            r = sl.EvaluateFeature(FeatureDlss, token, &input, 1, list.Handle.Handle);
             if (r != 0) return Fail($"slEvaluateFeature failed ({r})");
         }
         finally
@@ -202,10 +114,27 @@ public sealed unsafe class DlssUpscaler : IUpscaler
         return true;
     }
 
-    static ResourceTag Tag(SlResource* resource, uint type) => new()
+    /// <summary>Tags this frame's images, valid until the evaluation; every native image stays in GENERAL.</summary>
+    int Tag(UpscaleInputs i, nint token, nint cb)
     {
-        StructType = Streamline.ResourceTagType, StructVersion = 1, Resource = resource, Type = type, Lifecycle = ValidUntilEvaluate,
-    };
+        var depth = Resource(ctx, i.Depth);
+        var motion = Resource(ctx, i.Motion);
+        var colour = Resource(ctx, i.Colour);
+        var output = Resource(ctx, i.Output);
+        var reactive = i.Reactive is null ? default : Resource(ctx, i.Reactive);
+        var exposure = i.Exposure is null ? default : Resource(ctx, i.Exposure);
+        var tags = stackalloc ResourceTag[6];
+        uint count = 0;
+        tags[count++] = SlTypes.Tag(&depth, BufferDepth, ValidUntilEvaluate);
+        tags[count++] = SlTypes.Tag(&motion, BufferMotionVectors, ValidUntilEvaluate);
+        tags[count++] = SlTypes.Tag(&colour, BufferScalingInputColor, ValidUntilEvaluate);
+        tags[count++] = SlTypes.Tag(&output, BufferScalingOutputColor, ValidUntilEvaluate);
+        // The water mask as DLSS's bias towards the current frame (lerp(history, current, bias); NGX's "Bias.Current.Color.Mask"), as FSR's
+        // reactive mask. Observed: the CNN presets (e.g. E) use it, DLSS 310's default transformer preset ignores it.
+        if (i.Reactive is not null) tags[count++] = SlTypes.Tag(&reactive, BufferBiasCurrentColorHint, ValidUntilEvaluate);
+        if (i.Exposure is not null) tags[count++] = SlTypes.Tag(&exposure, BufferExposure, ValidUntilEvaluate);
+        return sl.SetTagForFrame(token, viewport, tags, count, cb);
+    }
 
     bool Fail(string message)
     {

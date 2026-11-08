@@ -173,4 +173,7 @@ sealed partial class PlayerInterface
     /// <summary>Draws the pointer <paramref name="name"/> at <paramref name="at"/> (framebuffer pixels) over everything drawn so far; nothing without the UI painter.</summary>
     public void DrawPointer(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)
         => uiPainter?.DrawPointer(name, at, width, height, pass);
+
+    /// <summary>The pointer <paramref name="name"/> as a picture with its hot spot, for the window system to draw (<see cref="Meitou.Rendering.Ui.UiPainter.PointerImage"/>).</summary>
+    public (Meitou.Data.Textures.RgbaImage Image, int HotX, int HotY)? PointerImage(string name) => uiPainter?.PointerImage(name);
 }

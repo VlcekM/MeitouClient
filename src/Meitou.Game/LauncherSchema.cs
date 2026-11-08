@@ -123,6 +123,25 @@ static class LauncherSchema
         yield return Switch(WorldFrame.OutlineRefineSwitch, "Off", "Meitou: on", false);
     }
 
+    /// <summary>Frame generation: the switch, and whose (FSR 3 or DLSS) as a two-step slider of its own key.</summary>
+    static SettingDescription[] FrameGenerationSettings(UserConfig defaults) =>
+    [
+        new()
+        {
+            Key = Key(nameof(UserConfig.FrameGeneration)), Kind = SettingKind.Toggle, Name = "Frame generation",
+            Description = "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
+                + "Works with TAA, FSR and DLSS upscaling. DLSS switches in the game too; FSR 3 turns on at start-up.",
+            Default = defaults.FrameGeneration ? 1 : 0, On = "On", Off = "Off",
+        },
+        new()
+        {
+            Key = Key(nameof(UserConfig.FrameGenerationVendor)), Kind = SettingKind.Slider, Name = "Frame generation by",
+            Description = "FSR 3: AMD's, any GPU, needs the FidelityFX library (amd_fidelityfx_vk.dll, libamd_fidelityfx_vk.so). DLSS: NVIDIA's, Windows with an RTX 40 "
+                + "or later, needs Streamline's frame generation DLLs (sl.dlss_g.dll, nvngx_dlssg.dll, sl.reflex.dll, sl.pcl.dll) and turns Reflex on. Takes effect at start-up.",
+            Default = (int)defaults.FrameGenerationVendor, Shown = (int)defaults.FrameGenerationVendor, Min = 0, Max = 1, Step = 1, Labels = ["FSR 3", "DLSS"],
+        },
+    ];
+
     public static SettingsSchema Create()
     {
         var defaults = new UserConfig();
@@ -139,9 +158,7 @@ static class LauncherSchema
                     Default = defaults.VSync ? 1 : 0 },
                 new() { Key = Key(nameof(UserConfig.FpsLimit)), Kind = SettingKind.Slider, Name = "Frame limit", Description = SettingsMenu.SliderHint("Frame limit"),
                     Default = defaults.FpsLimit, Shown = defaults.FpsLimit, Min = 0, Max = 360, Step = 5, Suffix = " fps", OffBelow = 1, OffText = "Unlimited" },
-                .. (!OperatingSystem.IsMacOS() ? (SettingDescription[])[new() { Key = Key(nameof(UserConfig.FrameGeneration)), Kind = SettingKind.Toggle, Name = "Frame generation (FSR 3)",
-                    Description = "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library (amd_fidelityfx_vk.dll, libamd_fidelityfx_vk.so). Takes effect at start-up.",
-                    Default = defaults.FrameGeneration ? 1 : 0, On = "On", Off = "Off" }] : []),
+                .. (!OperatingSystem.IsMacOS() ? FrameGenerationSettings(defaults) : []),
                 new() { Key = Key(nameof(UserConfig.TickAhead)), Kind = SettingKind.Slider, Name = "World tick alongside drawing", Description = SettingsMenu.TickAheadHint,
                     Default = (int)defaults.TickAhead, Shown = (int)defaults.TickAhead, Min = 0, Max = 2, Step = 1, Labels = [.. SettingsMenu.TickAheadChoices] },
                 // Null defaults below: the game's value depends on the Faithful / Meitou mode and the computer until the setting is saved.

@@ -98,7 +98,7 @@ both osx RIDs on macOS) and attaches all four zips to the one `v<version>` relea
 Native dependencies off Windows:
 - Bundled from NuGet runtimes (**Verified** in the linux-x64 publish output): `libopenal.so`/`.dylib` (OpenAL Soft 1.23.1),
   `libglfw.so.3`/`.3.dylib` (GLFW 3.4), `libshaderc_shared`.
-- Only in the win-x64 zip: DLSS/Streamline 2.14.16 (`sl.*.dll`, `nvngx_dlss.dll`, `NvLowLatencyVk.dll`) and FSR (`amd_fidelityfx_vk.dll`),
+- Only in the win-x64 zip: DLSS/Streamline 2.14.16 (`sl.*.dll`, `nvngx_dlss.dll`, `nvngx_dlssg.dll`, `NvLowLatencyVk.dll`) and FSR (`amd_fidelityfx_vk.dll`),
   copied from the vendor SDK zips by `package-release.ps1`; both load via `NativeLibrary.TryLoad` and report a reason when missing. `FsrUpscaler` also loads the Vulkan loader by name (`vulkan-1.dll`, `libvulkan.1.dylib` on macOS).
 - Only in the linux-x64 zip: the DLSS model `libnvidia-ngx-dlss.so.310.9.16` (NVIDIA DLSS SDK 310.9.16, `lib/Linux_x86_64/rel`) and NGX's
   client library `libmeitou_ngx.so` (the SDK's static `libnvsdk_ngx.a`, linked by `tools/scripts/build-ngx-shim.sh`), with NVIDIA's licence,

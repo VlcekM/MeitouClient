@@ -7,6 +7,9 @@ namespace Meitou.Game;
 /// <summary>The unit the run speed is shown in.</summary>
 enum SpeedUnit { Mph, Kmh }
 
+/// <summary>Whose frame generation the Frame generation setting turns on (<see cref="UserConfig.FrameGenerationVendor"/>): AMD's FSR 3 or NVIDIA's DLSS.</summary>
+enum FrameGenerationVendor { Fsr, Dlss }
+
 /// <summary>When the next world tick runs during the world draw (<see cref="UserConfig.TickAhead"/>): never (Faithful), while ticks are expensive (Meitou), always.</summary>
 enum TickAheadMode { Faithful, Dynamic, Always }
 
@@ -40,9 +43,33 @@ sealed class UserConfig
     /// <summary>Frames per second when vsync is off; 0 = unlimited. Engine default 150.</summary>
     public int FpsLimit { get; set; } = 150;
     public bool VSync { get; set; }
-    /// <summary>Frame generation (FSR 3): the swapchain goes through AMD's frame-interpolation layer (Windows, Proton and Linux, needs <c>amd_fidelityfx_vk.dll</c> / <c>libamd_fidelityfx_vk.so</c>; read at start-up), which
-    /// presents a generated frame between each two rendered ones (<c>FrameGeneration</c>). Off by default.</summary>
+    /// <summary>Frame generation: a generated frame between each two rendered ones, by <see cref="FrameGenerationVendor"/>: FSR 3's
+    /// frame-interpolation swapchain (Windows, Proton and Linux, needs <c>amd_fidelityfx_vk.dll</c> / <c>libamd_fidelityfx_vk.so</c>) or DLSS's through
+    /// Streamline (<c>FrameGeneration</c>). Off by default. Switches live where <see cref="FrameGenerationToLoad"/> loaded it.</summary>
     public bool FrameGeneration { get; set; }
+    /// <summary>Whose frame generation <see cref="FrameGeneration"/> turns on: FSR 3 (the default) or DLSS (Windows, RTX 40 or later, through Streamline; read at start-up).</summary>
+    public FrameGenerationVendor FrameGenerationVendor { get; set; }
+
+    /// <summary>The frame generation to start with: off, or <see cref="FrameGenerationVendor"/>'s.</summary>
+    [JsonIgnore]
+    public Meitou.Rendering.FrameGenerationMethod FrameGenerationMethod
+    {
+        get => !FrameGeneration ? Meitou.Rendering.FrameGenerationMethod.Off
+            : FrameGenerationVendor == FrameGenerationVendor.Dlss ? Meitou.Rendering.FrameGenerationMethod.Dlss : Meitou.Rendering.FrameGenerationMethod.Fsr;
+        set
+        {
+            FrameGeneration = value != Meitou.Rendering.FrameGenerationMethod.Off;
+            if (FrameGeneration) FrameGenerationVendor = value == Meitou.Rendering.FrameGenerationMethod.Dlss ? FrameGenerationVendor.Dlss : FrameGenerationVendor.Fsr;
+        }
+    }
+
+    /// <summary>
+    /// The frame generation the display loads at start-up: DLSS's whenever it is the vendor, so the switch turns it on and off in the game (loaded and off it
+    /// cost 0.2-0.3 ms a frame, within noise: docs/render-post.md "DLSS frame generation"); FSR 3's only when on (its swapchain is a layer of its own).
+    /// </summary>
+    [JsonIgnore]
+    public Meitou.Rendering.FrameGenerationMethod FrameGenerationToLoad => FrameGenerationVendor == FrameGenerationVendor.Dlss
+        ? Meitou.Rendering.FrameGenerationMethod.Dlss : FrameGenerationMethod;
     /// <summary>The Metal display default: MetalFX balanced (temporal at 0.50); Native is used when MetalFX is unavailable.</summary>
     public MetalUpscalerMode MetalUpscaler { get; set; } = MetalUpscalerMode.Temporal;
     /// <summary>The Metal render scale; the default 0.50 is the balanced profile. The Metal settings panel edits it live.</summary>

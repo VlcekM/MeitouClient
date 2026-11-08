@@ -1625,8 +1625,11 @@ msgstr "色彩"
 msgid "VSync"
 msgstr "垂直同步"
 
-msgid "Frame generation (FSR 3)"
-msgstr "帧生成（FSR 3）"
+msgid "Frame generation"
+msgstr "帧生成"
+
+msgid "Frame generation by"
+msgstr "帧生成方式"
 
 msgid "Ground relief quality"
 msgstr "地面起伏质量"
@@ -2302,8 +2305,11 @@ msgstr "启用弩箭拖尾。"
 msgid "Enable mesh welding."
 msgstr "启用网格焊接。"
 
-msgid "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library (amd_fidelityfx_vk.dll, libamd_fidelityfx_vk.so). Takes effect at start-up."
-msgstr "通过 AMD 的 FSR 3 帧插值层，在每两帧已渲染的画面之间生成一帧：显示的帧数几乎翻倍，输入延迟略有增加。可与 TAA、FSR 和 DLSS 一起使用；需要 FidelityFX 库（amd_fidelityfx_vk.dll、libamd_fidelityfx_vk.so）。启动时生效。"
+msgid "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS upscaling. DLSS switches in the game too; FSR 3 turns on at start-up."
+msgstr "在每两帧已渲染的画面之间生成一帧：显示的帧数几乎翻倍，输入延迟略有增加。可与 TAA、FSR 和 DLSS 放大一起使用。DLSS 也可在游戏中切换；FSR 3 在启动时开启。"
+
+msgid "FSR 3: AMD's, any GPU, needs the FidelityFX library (amd_fidelityfx_vk.dll, libamd_fidelityfx_vk.so). DLSS: NVIDIA's, Windows with an RTX 40 or later, needs Streamline's frame generation DLLs (sl.dlss_g.dll, nvngx_dlssg.dll, sl.reflex.dll, sl.pcl.dll) and turns Reflex on. Takes effect at start-up."
+msgstr "FSR 3：AMD 的方案，适用于任何显卡，需要 FidelityFX 库（amd_fidelityfx_vk.dll、libamd_fidelityfx_vk.so）。DLSS：NVIDIA 的方案，需要 Windows 和 RTX 40 系列或更新的显卡，需要 Streamline 的帧生成 DLL（sl.dlss_g.dll、nvngx_dlssg.dll、sl.reflex.dll、sl.pcl.dll），并会开启 Reflex。启动时生效。"
 
 msgid "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, up to 33 ms more input delay."
 msgstr "忠实：先运行世界再绘制，与游戏一致。Meitou／繁忙时：世界繁忙（大混战、人群拥挤）时，在绘制这一帧的同时运行下一个世界步进。Meitou／每帧：每帧都并行，角色很多时帧率会高得多，最多增加 33 毫秒输入延迟。"
@@ -2743,8 +2749,8 @@ msgstr "有医疗工作的角色也会救治非敌对派系中倒下的人"
 msgid "Characters with the medic job will heal any downed character, enemies included"
 msgstr "有医疗工作的角色会救治任何倒下的人，包括敌人"
 
-msgid "Shows a generated frame between each two rendered ones through AMD's FSR 3 frame-interpolation layer: nearly twice the frames shown, with a little more input delay. Works with TAA, FSR and DLSS; needs the FidelityFX library. Takes effect after a restart. Now: {1}"
-msgstr "通过 AMD FSR 3 的帧插值层，在每两帧渲染画面之间生成一帧：显示帧数接近翻倍，输入延迟略增。支持 TAA、FSR 与 DLSS；需要 FidelityFX 库。重启后生效。当前：{1}"
+msgid "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. FSR 3 (AMD's, any GPU) needs the FidelityFX library; DLSS (NVIDIA's, Windows, RTX 40 or later) needs Streamline's frame generation DLLs and turns Reflex on. Both work with TAA, FSR and DLSS upscaling. DLSS switches at once; FSR 3, and a change between the two, after a restart. Now: {1}"
+msgstr "在每两帧渲染画面之间生成一帧：显示帧数接近翻倍，输入延迟略增。FSR 3（AMD 的方案，任何显卡）需要 FidelityFX 库；DLSS（NVIDIA 的方案，Windows，RTX 40 系列或更新）需要 Streamline 的帧生成 DLL，并会开启 Reflex。两者都支持 TAA、FSR 与 DLSS 放大。DLSS 即时切换；FSR 3 以及两者之间的切换需重启后生效。当前：{1}"
 
 msgid "Low holds off: {1}."
 msgstr "低画质下会关闭：{1}。"
