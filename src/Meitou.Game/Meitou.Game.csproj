@@ -67,11 +67,11 @@
     <!-- Gen0 budget at most 16 MB: the default let ~1 GB pile up between collections, and each gen0/gen1 paused every thread 20-190 ms (docs/engine.md "GC"). -->
     <RuntimeHostConfigurationOption Include="System.GC.Gen0MaxBudget" Value="16777216" />
     <!-- The window icon: the two moons, 256 x 256 raw RGBA (assets/branding). -->
-    <EmbeddedResource Include="../../assets/branding/meitou-256.rgba" LogicalName="meitou-256.rgba" />
+    <EmbeddedResource Include="../../assets/branding/meitou-256.rgba" LogicalName="meitou-256.rgba" Link="Assets/meitou-256.rgba" />
     <!-- The Meitou title's wordmark (TitleLogo). -->
-    <EmbeddedResource Include="../../assets/branding/kenshi-logo.png" LogicalName="kenshi-logo.png" />
+    <EmbeddedResource Include="../../assets/branding/kenshi-logo.png" LogicalName="kenshi-logo.png" Link="Assets/kenshi-logo.png" />
     <!-- The picture under the luckyren Mode setting (SettingsMenuArt). -->
-    <EmbeddedResource Include="../../assets/luckyren-mode.png" LogicalName="luckyren-mode.png" />
+    <EmbeddedResource Include="../../assets/luckyren-mode.png" LogicalName="luckyren-mode.png" Link="Assets/luckyren-mode.png" />
   </ItemGroup>
 
   <Target Name="ReadBuildRevision" BeforeTargets="GetAssemblyAttributes">
