@@ -118,6 +118,7 @@ static partial class WorldFrame
             giProbes.CloudShadows = post.Options.GiCloudShadowing;
         }
         // The traced sun needs the surface target and the rays; without either the cascades light the frame as ever.
+        if (gpu.Objects is { } casters) casters.HiddenFloorsCast = gpu.Shadow is { Meitou: true };   // Faithful shadows: the floor view's hidden parts cast nothing, as in the game
         gpu.Traced = giResolve && gpu.Post is { Options.TracedSun: true } && gpu.Gi is not null && gpu.Shadow is { Enabled: true, Meitou: true };
         if (gpu.Post is { } tracedPost) (tracedPost.TracedSun, tracedPost.TracedDebug, tracedPost.SunShadowed) = (gpu.Traced, gpu.DebugShadows == 4, gpu.Shadow is { Enabled: true });
         if (gpu.Gi is { } tracedScene) tracedScene.Traced = gpu.Traced;

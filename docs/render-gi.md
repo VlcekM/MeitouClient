@@ -73,7 +73,7 @@ Interior meshes, furniture inside building masks (layout furniture, and player-p
 standing in another building's hull), and indoor characters take indirect light of
 luminance max(GI, original ambient); its hue mixes ambient to GI hue by smoothstep(0.1, 0.25, GI/ambient)
 (Hub bar, **Observed**: GI/ambient 0.15-0.3 round lamps, 0.05-0.15 elsewhere, nowhere above 0.3).
-Direct sun/lamps and the probe feedback remain unscaled. `GiProbes.InteriorGain` <= 1 disables it.
+The floor is capped at luminance 0.6 (`InteriorFloorCap`), its hue fading to grey as the cap bites: by day the sky's ambient lit shut rooms evenly, in the sky's colour (**Observed**, a Hub building at 11:30 with its roof hidden: mean 42/255 uncapped, 20 capped). Direct sun/lamps and the probe feedback remain unscaled. `GiProbes.InteriorGain` <= 1 disables it.
 **Observed** (Hub bar): corners/upper walls read under a quarter of the ambient (dark probe-cell
 blotches under the former 4x gain capped at ambient); full GI hue at ambient luminance reads
 saturated yellow on unlit walls; a linear GI-share mix nearly matches GI off.

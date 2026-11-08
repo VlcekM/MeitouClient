@@ -222,7 +222,7 @@ Motion vectors (temporal upscalers): an instance with a door, turret joint or ro
   - 1 820 objects with the flag (yard tents, torches) stay.
 - A building inside another (`PlacedMesh.Contained`) is hidden while the building whose hull holds it is closed (`ClosedAround`); a player site takes its parent's hull over a neighbour's within the 2-unit margin (`PlacedMesh.ContainerId`). These are player sites with a parent (saved with `flags` 0), and zone states with `is inside building` and no outside flag.
 - Shadow passes keep what the floor view hides above the viewed floor (parts, objects standing above it; `WorldObjectRenderer.DrawReal`), so a lower
-  floor stays shaded under its ceiling (a watchtower's floor 0 was sunlit). Whether the game's hidden floors cast shadows is **Unknown**.
+  floor stays shaded under its ceiling (a watchtower's floor 0 was sunlit). The traced scene keeps them too (`WorldObjectRenderer.LeftOutOfRays`): the rays stand for the sun and the sky, so a roof the view hides still shades the room and blocks the sky. Faithful shadows leave them out (`HiddenFloorsCast`), as the game does: **Verified** (decompile) `Building::setFloorVisibility` (`FUN_1405482e0`) calls the scene node's `setVisible(vis, cascade)` for each physical entity of the floor, and an invisible object is in no camera's queue, the shadow cameras' included.
 - **Not done:** interior lamps still light a closed interior.
 
 ## Validation

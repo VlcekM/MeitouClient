@@ -155,17 +155,22 @@ static class GiShaders
         }
 
         // Presentation gain only: never feed amplified light back into the probe solver.
-        // Indoors the light is at least the game's ambient luminance (no surface darker than without GI; the probes see corners as dark), more
+        // Indoors the light is at least the game's ambient luminance up to InteriorFloorCap (the probes see corners as dark), more
         // where the GI is brighter. Its colour turns from the ambient's to the GI's as the GI's share of the ambient rises from 0.1 to 0.25 (in the
         // Hub bar the lamps' surroundings read 0.15-0.3, the rest 0.05-0.15): warm round the lamps, neutral where they barely reach.
         // uGiParams.w <= 1 leaves the GI as it is.
+        const float InteriorFloorCap = 0.6;
         vec3 giSurfaceIrradiance(vec3 irradiance, vec3 sky, bool interior)
         {
             if (!interior || uGiParams.w <= 1.0) return irradiance;
             const vec3 lum = vec3(0.2126, 0.7152, 0.0722);
             float value = max(dot(irradiance, lum), 1e-6), ambient = max(dot(sky, lum), 1e-6);
-            vec3 hue = mix(sky / ambient, irradiance / value, smoothstep(0.1, 0.25, value / ambient));
-            return hue * max(value, ambient);
+            // The floor is capped: by day the sky's ambient is several times the night's and lit shut rooms evenly, in the sky's colour. Past the cap its hue
+            // goes grey as the cap bites (the night's ambient is under it: unchanged).
+            float floorValue = min(ambient, InteriorFloorCap);
+            vec3 skyHue = mix(sky / ambient, vec3(1.0), 1.0 - floorValue / ambient);
+            vec3 hue = mix(skyHue, irradiance / value, smoothstep(0.1, 0.25, value / floorValue));
+            return hue * max(value, floorValue);
         }
 
         """;

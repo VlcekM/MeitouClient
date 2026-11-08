@@ -353,12 +353,12 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         {
             if (ObjectStreamer.ZoneDistance(zone.X0, zone.Z0, eye) > range) continue;
             foreach (var inst in zone.Real)
-                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !InteriorHidden(inst.Placed) && !ClosedAround(inst) && !UnderConstruction(inst))
+                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !LeftOutOfRays(inst.Placed) && !ClosedAround(inst) && !UnderConstruction(inst))
                     yield return inst;
         }
         if (streamer.LandmarkZone is { } landmarks)
             foreach (var inst in landmarks.Real)
-                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !InteriorHidden(inst.Placed) && !ClosedAround(inst)) yield return inst;
+                if (inst.Gpu is not null && inst.Materials is not null && Vector3.Distance(inst.Centre, eye) - inst.Radius <= range && !LeftOutOfRays(inst.Placed) && !ClosedAround(inst)) yield return inst;
     }
 
     bool UnderConstruction(ObjectStreamer.Instance inst) =>
@@ -1041,6 +1041,15 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         return p.Floor > floor && !AllFloors;
     }
 
+    /// <summary>
+    /// Meitou's shadows: the parts the floor view hides still cast (<c>docs/render-objects.md</c> "Closed interiors"). The original's do not:
+    /// <c>Building::setFloorVisibility</c> hides the floor's scene nodes, which leaves them out of every camera's queue, the shadows' too. Faithful shadows keep that.
+    /// </summary>
+    public bool HiddenFloorsCast { get; set; } = true;
+
+    /// <summary>What the traced scene leaves out: the rays stand for the shadows and the light in the room, so the roof a floor view hides still blocks the sun and the sky.</summary>
+    bool LeftOutOfRays(PlacedMesh p) => InteriorDebug.ShadowsLeaveOutHidden ? InteriorHidden(p) : OutsideHidden(p);
+
     /// <summary>What <see cref="InteriorHidden"/> leaves out whatever the viewed floor: an interior part of a building not in the interior view.</summary>
     bool OutsideHidden(PlacedMesh p) =>
         p.Kind == PlacedKind.BuildingPart && p.Interior && !InteriorView.ContainsKey(p.ParentPlacementId ?? p.PlacementId);
@@ -1172,7 +1181,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
         // A shadow pass keeps what the floor view hides above the viewed floor, so a lower floor stays shaded under its ceiling (docs/render-objects.md
         // "Closed interiors"): only a closed building's interior parts stay out.
-        if ((depthPass && !InteriorDebug.ShadowsLeaveOutHidden ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
+        if ((depthPass && HiddenFloorsCast && !InteriorDebug.ShadowsLeaveOutHidden ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
         if (inst.Placed.DoorIndex >= 0) PoseDoor(inst, gpu);
         if (inst.Placed.Joints is not null) PoseJoints(inst, gpu);
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
