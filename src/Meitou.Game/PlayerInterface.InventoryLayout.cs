@@ -207,27 +207,28 @@ sealed partial class PlayerInterface
     /// A vertical scrollbar as the original's <c>Kenshi_ScrollBarV</c> template draws it in <paramref name="bar"/>: arrows at both ends, the track between them and a thumb
     /// <c>MinTrackSize</c> (10) or more tall, sized to the visible share of the canvas. The arrows scroll by steps, a click on the track beside the thumb by a page, the thumb drags.
     /// </summary>
-    void AddScrollBar(string id, List<UiControl> controls, UiRect bar, float visible, float canvas, float scroll, float maximum, UiRect? clip)
+    void AddScrollBar(string id, List<UiControl> controls, UiRect bar, float visible, float canvas, float scroll, float maximum, UiRect? clip,
+        string prefix = "inventory-scroll")
     {
         float scale = InventoryScale;
         void Part(string name, UiRect bounds, string skin, string action = "", bool pickable = false) => controls.Add(new(name, action.Length > 0 || pickable ? "Button" : "Widget", bounds, "", action, skin, true,
             new Dictionary<string, string>(), Vector4.Zero, Pickable: action.Length > 0 || pickable, Clip: clip));
-        Part("inventory-scroll", bar, "Kenshi_TextBoxEmptySkin");
-        Part("inventory-scroll-up", new(bar.X, bar.Y + 2 * scale, bar.Width, 12 * scale), "Kenshi_SmallArrowUpSkin", "inventory-scroll:1");
-        Part("inventory-scroll-down", new(bar.X, bar.Y + bar.Height - 14 * scale, bar.Width, 12 * scale), "Kenshi_SmallArrowDownSkin", "inventory-scroll:-1");
+        Part(prefix, bar, "Kenshi_TextBoxEmptySkin");
+        Part(prefix + "-up", new(bar.X, bar.Y + 2 * scale, bar.Width, 12 * scale), "Kenshi_SmallArrowUpSkin", prefix + ":1");
+        Part(prefix + "-down", new(bar.X, bar.Y + bar.Height - 14 * scale, bar.Width, 12 * scale), "Kenshi_SmallArrowDownSkin", prefix + ":-1");
         var track = new UiRect(bar.X, bar.Y + 14 * scale, bar.Width, Math.Max(0, bar.Height - 28 * scale));
         float thumb = Math.Clamp(track.Height * visible / Math.Max(1, canvas), Math.Min(10 * scale, track.Height), track.Height);
         float top = track.Y + (track.Height - thumb) * scroll / maximum;
-        Part("inventory-scroll-page-up", new(track.X, track.Y, track.Width, top - track.Y), "", "inventory-scroll-page:1");
-        Part("inventory-scroll-page-down", new(track.X, top + thumb, track.Width, track.Y + track.Height - top - thumb), "", "inventory-scroll-page:-1");
-        Part("inventory-scroll-thumb", new(track.X, top, track.Width, thumb), "Kenshi_SmallBarSkin", pickable: true);
+        Part(prefix + "-page-up", new(track.X, track.Y, track.Width, top - track.Y), "", prefix + "-page:1");
+        Part(prefix + "-page-down", new(track.X, top + thumb, track.Width, track.Y + track.Height - top - thumb), "", prefix + "-page:-1");
+        Part(prefix + "-thumb", new(track.X, top, track.Width, thumb), "Kenshi_SmallBarSkin", pickable: true);
         inventoryTracks[id] = (track, thumb);
     }
 
     /// <summary>Takes the thumb of a window's scrollbar under the pointer (true: taken).</summary>
     bool ScrollThumbDown(string screen, UiControl picked, Vector2 p)
     {
-        if (picked.Name != "inventory-scroll-thumb" || !inventoryTracks.ContainsKey(screen)) return false;
+        if (!picked.Name.EndsWith("-thumb", StringComparison.Ordinal) || !inventoryTracks.ContainsKey(screen)) return false;
         scrollDrag = (screen, p.Y - picked.Bounds.Y);
         return true;
     }

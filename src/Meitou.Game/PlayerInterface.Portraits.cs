@@ -100,6 +100,8 @@ sealed partial class PlayerInterface
     {
         if (squadBarRow <= 0 || !squadBarPage.Contains(p.X, p.Y)) return false;
         squadBarScroll -= MathF.Sign(steps) * squadBarRow;
+        if (inventoryViews.TryGetValue("SquadPanel", out var view))
+            squadBarScroll = inventoryScroll["SquadPanel"] = Math.Clamp(squadBarScroll, 0, view.Maximum);
         return true;
     }
 
@@ -124,6 +126,29 @@ sealed partial class PlayerInterface
         float fit = Math.Min(page.Height * 0.9f, page.Width * 0.9f / Math.Min(members.Count, 10)) / scale;
         float size = MathF.Floor(Math.Clamp(fit, 60, 128) / 2) * 2 * scale, k = size / PortraitLayoutSize;
         int columns = Math.Max(1, (int)(page.Width / size)), rows = (members.Count + columns - 1) / columns;
+        float maximum = Math.Max(0, rows * size - page.Height);
+        if (maximum > 0)
+        {
+            float barWidth = 17 * scale;
+            page = page with { Width = Math.Max(0, page.Width - barWidth) };
+            fit = Math.Min(page.Height * 0.9f, page.Width * 0.9f / Math.Min(members.Count, 10)) / scale;
+            size = MathF.Floor(Math.Clamp(fit, 60, 128) / 2) * 2 * scale;
+            k = size / PortraitLayoutSize;
+            columns = Math.Max(1, (int)(page.Width / size));
+            rows = (members.Count + columns - 1) / columns;
+            maximum = Math.Max(0, rows * size - page.Height);
+            squadBarScroll = Math.Clamp(inventoryScroll.GetValueOrDefault("SquadPanel"), 0, maximum);
+            inventoryScroll["SquadPanel"] = squadBarScroll;
+            inventoryViews["SquadPanel"] = (page, maximum);
+            AddScrollBar("SquadPanel", controls, new(page.X + page.Width, page.Y, barWidth, page.Height), page.Height,
+                page.Height + maximum, squadBarScroll, maximum, panel, "hud-squad");
+        }
+        else
+        {
+            inventoryViews.Remove("SquadPanel");
+            inventoryTracks.Remove("SquadPanel");
+            squadBarScroll = 0;
+        }
         squadBarPage = page;
         squadBarRow = size;
         squadBarScroll = Math.Clamp(squadBarScroll, 0, Math.Max(0, rows * size - page.Height));
