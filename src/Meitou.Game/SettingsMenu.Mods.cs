@@ -5,7 +5,10 @@ using Meitou.Localisation;
 
 namespace Meitou.Game;
 
-/// <summary>The MODS page: the loaded mods in load order, and the selected mod's author, description and data problems.</summary>
+/// <summary>
+/// The MODS page: the loaded mods in load order, each with its code's settings under it (SettingsMenu.ModSettings.cs), and the selected mod's author,
+/// description and data problems.
+/// </summary>
 sealed partial class SettingsMenu
 {
     const float ModRowHeight = 26;
@@ -32,18 +35,36 @@ sealed partial class SettingsMenu
     {
         var report = player.Mods;
         var rows = report?.Rows ?? [];
+        var lines = ModsLines(rows);
         viewport = R(212, 98, 888, 296);
-        maxScroll = Math.Max(0, rows.Count * ModRowHeight * scale - viewport.Height);
+        maxScroll = Math.Max(0, lines.Sum(LineHeight) * scale - viewport.Height);
         AdvanceScroll();
-        for (int i = 0; i < rows.Count; i++)
+        float y = 98 - scroll / scale;
+        foreach (var line in lines)
         {
-            float y = 98 + i * ModRowHeight - scroll / scale;
-            if (y + ModRowHeight >= 98 && y <= 394) DrawModRow(rows[i], i, y);
+            float height = LineHeight(line);
+            if (y + height >= 98 && y <= 394) DrawModsLine(rows, line, y);
+            y += height;
         }
 
         Button("Copy", R(212, 402, 120, 28), CopyMod);
         Button("Copy all problems", R(340, 402, 200, 28), CopyProblems);
         DrawModsDetail(report);
+    }
+
+    float LineHeight(ModsLine line) => line.Entry is { } entry ? EntryHeight(entry) : ModRowHeight;
+
+    void DrawModsLine(IReadOnlyList<ModRow> rows, ModsLine line, float y)
+    {
+        if (line.Entry is not { } entry)
+        {
+            DrawModRow(rows[line.Row], line.Row, y);
+            return;
+        }
+
+        // By key: every mod's group header is labelled Settings.
+        animationScope = entry.Raw ?? entry.Label;
+        DrawEntry(entry, y);
     }
 
     void DrawModRow(ModRow row, int index, float y)

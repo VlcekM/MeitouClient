@@ -4,8 +4,8 @@ using Meitou.Rendering;
 namespace Meitou.Game;
 
 /// <summary>
-/// The Mod settings page: the settings code mods registered with <c>ModContext.AddSettings</c> (docs/modding.md "Settings"), one group per mod in
-/// load order, drawn with the page's own rows. A change sets the mod's property at once and is kept in <see cref="UserConfig.ModSettings"/>.
+/// The settings code mods registered with <c>ModContext.AddSettings</c> (docs/modding.md "Settings"), on the MODS page: a group under its mod's row,
+/// drawn with the page's own rows. A change sets the mod's property at once and is kept in <see cref="UserConfig.ModSettings"/>.
 /// </summary>
 sealed partial class SettingsMenu
 {
@@ -15,30 +15,41 @@ sealed partial class SettingsMenu
     /// <summary>Mod groups shown once already: a group starts open the first time it is shown.</summary>
     readonly HashSet<string> modGroupsSeen = [];
 
-    List<Entry> ModSettingsEntries()
+    /// <summary>A line of the MODS list: the mod row <see cref="Row"/>, or a settings row (<see cref="Entry"/>).</summary>
+    readonly record struct ModsLine(int Row, Entry? Entry);
+
+    /// <summary>Each mod's row with its settings group under it; a group whose mod has no row (not in the list file) comes last, under its name.</summary>
+    List<ModsLine> ModsLines(IReadOnlyList<ModRow> rows)
     {
         var groups = ModSettings();
-        if (groups.Count == 0)
-            return [new("No mod settings", "A code mod's settings appear here when it registers them (docs/modding.md, \"Settings\").")];
+        var placed = new HashSet<ModSettingsGroup>();
+        var lines = new List<ModsLine>();
+        for (int i = 0; i < rows.Count; i++)
+        {
+            lines.Add(new(i, null));
+            if (rows[i].Separator) continue;
 
-        var result = new List<Entry>();
-        foreach (var group in groups)
-            AddModGroup(result, group);
-        return result;
+            foreach (var group in groups.Where(g => g.Name == rows[i].Name && placed.Add(g)))
+                AddModGroup(lines, group, "Settings");
+        }
+
+        foreach (var group in groups.Where(placed.Add))
+            AddModGroup(lines, group, group.Name);
+        return lines;
     }
 
-    void AddModGroup(List<Entry> result, ModSettingsGroup group)
+    void AddModGroup(List<ModsLine> lines, ModSettingsGroup group, string label)
     {
         string id = "mod:" + group.ModId;
         if (modGroupsSeen.Add(id)) openGroups.Add(id);
         bool open = openGroups.Contains(id);
         bool changed = group.Settings.Any(s => !s.IsDefault);
         Action? reset = changed ? () => ResetModGroup(group) : null;
-        result.Add(new(group.Name, "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset));
+        lines.Add(new(-1, new(label, "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset)));
         if (!open) return;
 
         foreach (var setting in group.Settings)
-            result.Add(ModSettingEntry(setting, id));
+            lines.Add(new(-1, ModSettingEntry(setting, id)));
     }
 
     Entry ModSettingEntry(ModSetting setting, string group)

@@ -5,7 +5,7 @@ namespace Meitou.Modding;
 
 /// <summary>
 /// Marks a public property of an object a mod registers with <see cref="ModContext.AddSettings"/> (docs/modding.md "Settings") as a setting on the
-/// Settings screen's Mod settings page: a <c>bool</c> is an Off | On switch, an <c>int</c>, <c>float</c> or <c>double</c> a slider over
+/// Settings screen's Mods page: a <c>bool</c> is an Off | On switch, an <c>int</c>, <c>float</c> or <c>double</c> a slider over
 /// <see cref="Min"/> to <see cref="Max"/>, an enum or a <c>string</c> with <see cref="Options"/> a list.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
@@ -162,7 +162,7 @@ public sealed class ModSetting
     };
 }
 
-/// <summary>The settings one mod registered, in the order of its properties; shown as one group on the Mod settings page.</summary>
+/// <summary>The settings one mod registered, in the order of its properties; shown as one group under the mod on the Mods page.</summary>
 public sealed class ModSettingsGroup
 {
     internal ModSettingsGroup(string modId, string name, object target)

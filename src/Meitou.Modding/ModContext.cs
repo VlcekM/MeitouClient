@@ -178,7 +178,7 @@ public sealed class ModContext
 
     /// <summary>
     /// The mod's settings (docs/modding.md "Settings"): the public properties of <paramref name="settings"/> marked
-    /// <see cref="SettingAttribute"/>, one group on the Settings screen's Mod settings page. The player's saved values are set on the object before
+    /// <see cref="SettingAttribute"/>, one group under the mod on the Settings screen's Mods page. The player's saved values are set on the object before
     /// this returns; the values it has now are the defaults. Once per mod.
     /// </summary>
     public ModSettingsGroup AddSettings(object settings)

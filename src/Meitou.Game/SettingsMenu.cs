@@ -13,11 +13,9 @@ namespace Meitou.Game;
 sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBindings bindings, Action save, Slider frameLimit, UserConfig config)
 {
     static readonly string[] Pages =
-        ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes", "Mods", "Mod settings"];
-    /// <summary>The MODS page (SettingsMenu.Mods.cs): it lists the loaded mods instead of settings.</summary>
+        ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes", "Mods"];
+    /// <summary>The MODS page (SettingsMenu.Mods.cs): the loaded mods, each with the settings its code registered (SettingsMenu.ModSettings.cs).</summary>
     const int ModsPage = 8;
-    /// <summary>The Mod settings page (SettingsMenu.ModSettings.cs): the settings code mods registered.</summary>
-    const int ModSettingsPage = 9;
     /// <summary>The names <c>ui-open settings:&lt;name&gt;</c> takes: a page, or <c>graphics:&lt;sub-page&gt;</c>; compared ignoring case (spaces and "&amp;" count).</summary>
     internal static IEnumerable<string> PageNames => Pages.Select(p => p.ToLowerInvariant()).Concat(GraphicsPages.Select(p => "graphics:" + p.ToLowerInvariant()));
 
@@ -303,7 +301,6 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
 
     List<Entry> Entries()
     {
-        if (page == ModSettingsPage) return ModSettingsEntries();
         string section = page == 1 ? GraphicsPages[graphicsPage] : Pages[page];
         // In the catalogue's order, the launcher's (LauncherSchema.Order).
         var result = values.Sliders.Where(s => s.Label is not ("Time of day" or "Time speed") && Section(s.Label) == section && ReliefSliderShown(s.Label))
