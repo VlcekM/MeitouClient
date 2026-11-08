@@ -120,7 +120,7 @@ Per frame (`gi cache`): **evict** slots no texel touched for 600 frames (120 pas
 normal from the depth, but where it turns over 45 degrees from the stored shading normal (a silhouette, a crest, a pixel-thin part) the plane through one neighbour
 per axis nearest that normal, else the shading normal: no texel takes a plane it is not on) makes its cells (two levels x two axes at most) and adds its position and normal into their sums (12-bit fixed point within the cell),
 listing each cell once; **trace**: one workgroup per listed cell, `RaysPerCell` 32 cosine rays from its surface point (the texels' mean, averaged over up to 64 frames),
-`Reach` 150, shaded as a probe ray's (`GiShaders.HitShade`; a miss reads the probes at the ray's end in its direction, a back face the probes where it started; clamp 16
+`Reach` 150, shaded as a probe ray's (`GiShaders.HitShade`; a miss reads the probes at the ray's end in its direction; a back face is shaded as a surface, since drawn-one-sided canvas is hit from below and reading the probes at the ray's start there varied per frame, **Observed** probe-leak2 deck under the tents, paused frame-to-frame luma range 1.8 -> 0.6, 0.56 with GI off; clamp 16
 a channel). Each frame traces one of `Ring` 16 direction subsets (a Fibonacci lattice shifted by the subset's R2 point and a per-cell random shift); its mean replaces
 that subset's slot (E5B9G9R9 word) and the cell's light is the mean of the subsets it holds. A still scene's cell therefore holds a fixed set of 512 rays and does not
 change; a change of light is followed linearly over 16 frames, except that a subset traced again whose light moved by over `ChangeShare` 25 % of the cell's (in a

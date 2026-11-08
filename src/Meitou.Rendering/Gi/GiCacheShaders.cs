@@ -355,8 +355,8 @@ static class GiCacheShaders
             vec3 sky = skyIrradiance(dir) * {{F(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular)}} * ambientMap(end).rgb * lightDir.w;
             return mix(sky, cache.rgb, cache.a);
         }
-        // One ray's light: a front (or foliage) hit lit as a probe ray's; a miss, the probes at its end; a back face (the ray left from inside a drawn level the trace
-        // does not have) learns nothing, so the probes where it started. Clamped per channel (KenshiNative's firefly clamp).
+        // One ray's light: a hit lit as a probe ray's, on either side (the underside of a tent's canvas is a surface: it is drawn one-sided and the probes where the ray
+        // started moved from frame to frame, docs/render-gi.md "Radiance cache"); a miss, the probes at its end. Clamped per channel (KenshiNative's firefly clamp).
         vec3 rayLight(vec3 world, vec3 dir)
         {
             rayQueryEXT rq;
@@ -366,7 +366,6 @@ static class GiCacheShaders
             float t = rayQueryGetIntersectionTEXT(rq, true);
             int record = rayQueryGetIntersectionInstanceCustomIndexEXT(rq, true) + rayQueryGetIntersectionGeometryIndexEXT(rq, true);
             Geometry g = geometries[record];
-            if (!rayQueryGetIntersectionFrontFaceEXT(rq, true) && g.kind != {{GeometryRecord.Foliage}}u) return min(cached(world, dir), vec3(cacheReach.y));
             float env = lightDir.w;
         {{GiShaders.HitShade}}
             return min(colour * (sun + ambient + lamps), vec3(cacheReach.y));
