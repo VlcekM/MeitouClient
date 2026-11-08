@@ -1066,11 +1066,14 @@ Arrests, the recognition meter and the marker are hashed only while set. What a 
   enemies (engine: Heng's Outlaw slaves, uncaged without building data, drew its Samurai into fights). **Observed** (real-data
   probe 2026-10-21): Rebirth's 10 Rebirth Cage Guards squads make 34 caged Rebirth Slaves.
 - **Slave catching** (`ArrestSystem.CatchSlave`, the spotting sweep; the packages' Capture Slaves, 167, in `addon- slave catching`, which Rebirth's gate guards and garrison inherit;
-  **engine** rules, the original's escape test and finder are **Unknown**): an awake NPC of the owner faction in its own town that sees a player slave (daylight sight, full range)
+  **engine** rules, the original's spotting test and finder are **Unknown**): an awake NPC of the owner faction in its own town that sees a player slave (daylight sight, full range)
   tags it escaping (2) when it wears no locked shackles or stands outside the town; the nearest police-like or slaver one then captures an escaping slave as an arrest with
   `Enslave` (fight down, lift, cage; event 36 ESCAPING_SLAVE_SPOTTED as a bubble), and the caging makes it a slave (1) again. A town here is `InOwnTown`'s extent, else no farther
   from its centre than its gate nearest the point plus 100 (Rebirth's gates stand about 1500 out, its radius is 184); without gates, the extent only. **Observed** (probe): a start
   slave walking out of Rebirth is tagged just past the south gate, and once down is carried back and caged as a slave.
+- **Escape far from the owner** (`ArrestSystem.EscapeFarFromOwner`, on the spotting cadence; facts: [carry-loot](game/carry-loot.md#a-slave-far-from-its-owner-escapes)): any
+  slave (state 1), player or NPC, outside every town (`AiSystem.TownAt`, as for `Freed`) and farther than about 3 536 from its owner becomes an escaped slave. The owner is the
+  master squad's leader (`ObedientSlave.OwnerOf`); a slave without one is left alone, and the platoon and unresolved-handle paths are not modelled.
 - **Slave trading** (DA 41 / 42, `DialogueSystem.CharacterTrade`; facts: [economy 12](game/economy.md#12-slaves-prisoners-animals)): the line ends the conversation and the window
   opens as it closes (a speech-bubble line opens it at once; only for a player-character target). Rows, prices and the confirm's effects as in the original, with these **engine**
   choices: the buying list is every character in slave state 1 whose `SlaveOwner` is the slaver's faction, not dead (the original's per-owner set is not modelled); the selling

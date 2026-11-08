@@ -299,6 +299,16 @@ These writes are direct, not through the setter. State 1 never takes this path. 
 
 **Verified** by disassembly of a Kenshi 1.0.65 `kenshi_x64.exe`, sha256 `504b362c…cd3e`. In that build, the setter is `FUN_1405a3eb0`, the rule is `FUN_1405a44c0`, and its only caller is the vtable-reached `FUN_1405a4750`. Its constants are 24.0, 4.0 and 12.0. The other addresses in this file come from another build.
 
+### A slave far from its owner escapes
+
+The same update (1.0.68 `FUN_1405a4f50`, **Verified** by decompile) makes a slave (state 1) an escaped slave (2) through the setter when all of these hold:
+- the status object's current town (`+0x88`) is none, i.e. the slave is out of every town;
+- its owner handle (character `+0x328`) names a character that resolves, and the squared distance between them is above 12 500 000 (`DAT_1416f016c`, about 3 536).
+
+When the handle's character does not resolve, its platoon is looked up and the slave is measured to it the same way. A squad handle (0x5b) is resolved to its platoon. With neither found, the slave escapes unless `FUN_1404fe6e0` holds on the handle (meaning **Unknown**). A cage or a carry is not tested.
+
+Since the setter removes job 187 Obedient Slave, the slave then plans with its own lists. In the Rebirth hold (**Observed**, one slave), a slave sent to a workplace about 4 000 from its owner became an escaped slave and took its own 172 Getting in my cage, whose finder (`FUN_1408caaf0`) has no slave state test.
+
 Loading can free an escaped slave at once, because the clock is restored to the minute while the stamp is not. **Observed** with a "The Slaves" save written right after New Game:
 - the save holds `ssct` 34.00063 and the clock day 1 10:00, which is 34.0 h;
 - both escaped player characters were free within 120 calendar seconds of the load, in 5 runs out of 5, read with the KenshiOracle probe.
