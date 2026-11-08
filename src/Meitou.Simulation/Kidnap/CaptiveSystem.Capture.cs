@@ -197,8 +197,9 @@ public sealed partial class CaptiveSystem
                     FirstAid.FirstAidSystem.TreatBeforeLift(world, slot, v);
                     return null;
                 }
-                // No cage to take it to: not started, so no one is cuffed and left (engine; the carry, goal 112, needs a free cage as the arrest goal does).
-                return v < 0 || !Kidnap.HasCage(world, table.Next[v].Position, cold) ? null : new CaptiveJob
+                // The carry needs a free cage, as the arrest goal does. The capture finder (FUN_1408cdd00) has no cage test: with none, the captive is cuffed and left (Hand).
+                if (v < 0 || !capture && !Kidnap.HasCage(world, table.Next[v].Position, cold)) return null;
+                return new CaptiveJob
                 {
                     Kind = capture ? CaptiveJobKind.Capture : CaptiveJobKind.Carry, Worker = worker, Captive = table.IdOf(v), Cage = "", Faction = cold.Faction,
                 };
@@ -323,7 +324,11 @@ public sealed partial class CaptiveSystem
         return Hand(world, j, w);
     }
 
-    /// <summary>Ends the job and, when a cage of the worker's faction is in range, has the kidnapping system carry the captive to it.</summary>
+    /// <summary>
+    /// Ends the job and, when a cage of the worker's faction is in range, has the kidnapping system carry the captive to it (engine stand-in for the original's lift and goal 112).
+    /// Else the captive stays where it lies, cuffed and still free: the original's carry (168, <c>FUN_1408cdf50</c>) takes only slaves (state 1) owned by the carrier's faction, the cuff
+    /// (<c>FUN_14034af20</c>) sets neither (a non-prison cage does, <c>FUN_140330600</c>; all <b>Verified</b>), and no other goal of the slavers' lists lifts it (<b>Observed</b>, the row tables).
+    /// </summary>
     bool Hand(World world, CaptiveJob j, int w)
     {
         Note(world, CaptiveEventKind.Captured, j);
