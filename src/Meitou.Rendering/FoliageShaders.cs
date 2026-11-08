@@ -29,6 +29,7 @@ static class FoliageShaders
             layout(location = 9) in vec4 aInstance2;
             layout(location = 10) in vec4 aInstance3;
             out float vFade;
+            uniform vec3 uEye;
             #define uModel mat4(vec4(aInstance0.xyz, 0.0), vec4(aInstance1.xyz, 0.0), vec4(aInstance2.xyz, 0.0), vec4(aInstance3.xyz, 1.0))
             """, required: true);
         // invariant: the depth prepass (FoliagePrepass) and the colour pass compile this stage next to different fragment stages, and the colour pass tests depth EQUAL.
@@ -37,6 +38,12 @@ static class FoliageShaders
             void main()
             {
                 vFade = aInstance0.w;
+            """, required: true);
+        // Projected relative to the eye (docs/renderer-native.md "Render origin"): the instance's origin less the eye, exact, where the world
+        // position at tens of thousands of units steps by 0.004 and a swaying leaf near the camera shook with it.
+        v = Replace(v, @"gl_Position\s*=\s*uViewProjection\s*\*\s*p\s*;", """
+                vec4 local = skin * vec4(aPosition, 1.0);
+                gl_Position = uViewProjection * vec4(mat3(uModel) * local.xyz + (aInstance3.xyz - uEye), 1.0);
             """, required: true);
         return v;
     }
@@ -156,14 +163,16 @@ static class FoliageShaders
             float yaw = aYaw + (quad == 1 ? 1.5707963 : 0.0);
             vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
             float u = float(cu[corner]), v = float(cv[corner]);
-            vec3 p = aBlade.xyz + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
-            if (v == 0.0) p.x += uSway * sin(uTime + aBlade.x * uFrequency);
+            // The blade's own offsets, then its root less the eye (exact): projected relative to the eye (docs/renderer-native.md "Render origin").
+            vec3 o = side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
+            if (v == 0.0) o.x += uSway * sin(uTime + aBlade.x * uFrequency);
             float dist = distance(uEye.xz, aBlade.xz);
-            p.y -= height * clamp(5.0 * dist / uRange - 4.0, 0.0, 1.0);   // grows out of the ground over the last fifth of the range
+            o.y -= height * clamp(5.0 * dist / uRange - 4.0, 0.0, 1.0);   // grows out of the ground over the last fifth of the range
+            vec3 p = aBlade.xyz + o;
             vWorld = p;
             vUv = vec2(u, v);
             vFade = 1.0;
-            gl_Position = uViewProjection * vec4(p, 1.0);
+            gl_Position = uViewProjection * vec4((aBlade.xyz - uEye) + o, 1.0);
             vHazeMul = vec3(1.0);
             vHazeAdd = vec3(0.0);
             if (uFogDistance > 0.0) atmoApplyCoefficients(uEye, p, vHazeMul, vHazeAdd);
@@ -255,7 +264,8 @@ static class FoliageShaders
             float yaw = aYaw + (quad == 1 ? 1.5707963 : 0.0);
             vec3 side = vec3(cos(yaw), 0.0, sin(yaw));
             float u = float(cu[corner]), v = float(cv[corner]);
-            vec3 p = aBlade.xyz + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
+            // Relative to the eye, both frames (the previous view-projection is last frame's camera seen from this frame's eye).
+            vec3 p = (aBlade.xyz - uEye) + side * (u - 0.5) * width + vec3(0.0, (1.0 - v) * height, 0.0);
             vec3 q = p;
             if (v == 0.0)
             {

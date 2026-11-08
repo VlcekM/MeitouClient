@@ -1166,7 +1166,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         return source[..(line + 1)] + ConstantsBlock + source[(line + 1)..];
     }
 
-    static string NativeVertex(string source) => NativeShaders.Port(WithConstants(source), NativeMap);
+    static string NativeVertex(string source) => NativeShaders.Port(WithConstants(RenderOrigin.Relative(source)), NativeMap);
     static string NativeFragment(string source) => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(WithConstants(source), NativeMap), none: true);
 
     /// <summary>The native GPU API (phase 8 stage 2: the water makes no GL call; docs/renderer-native.md 8.6).</summary>
@@ -1657,7 +1657,7 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// no later draw (docs/renderer-native.md 8.6). Faithful draws the game's quad; Meitou the polar grid with <see cref="Animate"/>'s motion.
     /// </summary>
     /// <param name="time">Animation time; the game's unit for it is Unknown (the viewer uses real hours). Meitou uses the game clock instead.</param>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent, ReflectionPass? reflection = null)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent, ReflectionPass? reflection = null, Matrix4x4? relative = null)
     {
         var targets = Gpu.CurrentTargets();
         bool meitouWater = Meitou && meitou is not null;
@@ -1680,7 +1680,7 @@ public sealed unsafe class WaterRenderer : IDisposable
         cmd.SetDepthBias(state.BiasEnable, state.BiasConstant, state.BiasSlope);
         var view = new ViewConstants
         {
-            ViewProjection = viewProjection, Eye = eye, Time = time,
+            ViewProjection = RenderOrigin.ViewProjection(viewProjection, eye, relative), Eye = eye, Time = time,
             LightDir = light.SunDirection, FogColour = light.FogColour, FogDistance = light.FogDistance,
         };
         frame.Bind(cmd, p.Gpu, in view);

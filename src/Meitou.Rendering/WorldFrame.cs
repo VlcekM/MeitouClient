@@ -170,6 +170,8 @@ sealed class WorldOptions
     public (string A, string B)? BenchCompare;
     /// <summary>Offscreen pictures: radians the camera orbits by every frame (tests the motion vectors under a temporal upscaler).</summary>
     public float OrbitStep;
+    /// <summary><c>--sequence &lt;n&gt;</c>: with --screenshot, n more frames saved after the picture (<c>name-01.png</c>...), each a step of the motion (--orbit-step, --sway-step): a precision or motion check.</summary>
+    public int Sequence;
     /// <summary>Interactive window: the monitor it opens on (1-based; <c>--monitor</c>).</summary>
     public int? Monitor;
     /// <summary>Interactive window: a bordered, maximized window instead of borderless full screen (<c>--windowed</c>).</summary>
@@ -303,6 +305,7 @@ sealed class WorldOptions
           --bench-compare <a.json> <b.json>   print two bench results side by side and exit
           --crowd <n>              place n generated characters of the start town round the start point (the character renderer's test; stills pose them at 0.35 s)
           --orbit-step <degrees>   with --screenshot: the camera orbits this much every frame (checks the upscaler's motion vectors)
+          --sequence <n>           with --screenshot: n more frames saved after it (name-01.png ...), each one step of the motion
           --terrain-sandbox [cliffs] [x,z]   the empty world round a flat spot whose ground is a field of tiles, one per terrain texture (cliffs: on a steep face)
           --field-tour <dir>       with --terrain-sandbox: a picture of every tile and an index.html (--tour-distance <u>, --tour-pitch <deg>)
           --relief <Name=value>    a GroundRelief or RockSmoothing setting for the run (repeatable), e.g. --relief TargetSlope=0.3
@@ -525,6 +528,7 @@ sealed class WorldOptions
             case "--hidden-window": o.HiddenWindow = o.Windowed = true; break;
             case "--sway-step": o.SwayStep = r.Float(); break;
             case "--orbit-step": o.OrbitStep = r.Float() * MathF.PI / 180; break;
+            case "--sequence": o.Sequence = Math.Max(r.Int(), 0); break;
             case "--ab": o.Ab = r.Next(); break;
             case "--ab-period": o.AbPeriod = Math.Max(r.Int(), 1); break;
             case "--bench-frames": o.BenchFrames = Math.Max(r.Int(), 1); break;

@@ -84,7 +84,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     const int GridCells = 64;
 
-    record struct Frame(Matrix4x4 ViewProjection, Vector3 Eye, WorldRenderOptions Options, WorldLighting Light);
+    record struct Frame(Matrix4x4 ViewProjection, Vector3 Eye, WorldRenderOptions Options, WorldLighting Light, Matrix4x4? Relative = null);
 
     /// <param name="coarse">Whole-world raw heights, (<paramref name="coarseSize"/>)² samples (2^n + 1 per side).</param>
     /// <param name="fine">The loaded region at its own step.</param>
@@ -302,12 +302,13 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     internal FogVolumes? FogCull { get; set; }
 
     /// <summary>Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.</summary>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false, bool defer = false)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light, float cullBelow = float.NegativeInfinity, bool secondary = false, bool defer = false,
+        Matrix4x4? relative = null)
     {
         UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality, Trails is not null);
         current = secondary ? spare : quadtree;
         current.SetRanges(options.TerrainLod);
-        frame = new Frame(viewProjection, eye, options, light);
+        frame = new Frame(viewProjection, eye, options, light, relative);
         var fog = FogCull;
         current.Select(eye, bounds, (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max) && (fog is null || !fog.Hidden(min, max, FogVolumes.CullKind.Terrain)), nodes);
 
@@ -782,7 +783,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         var light = frame.Light;
         return new ViewConstants
         {
-            ViewProjection = frame.ViewProjection, Eye = frame.Eye, LightDir = light.SunDirection, FogColour = light.FogColour, FogDistance = light.FogDistance,
+            // The vertex stages project relative to the eye (RenderOrigin): the main view's precise matrix, else translation(eye) × the pass's.
+            ViewProjection = RenderOrigin.ViewProjection(frame.ViewProjection, frame.Eye, frame.Relative), Eye = frame.Eye, LightDir = light.SunDirection, FogColour = light.FogColour, FogDistance = light.FogDistance,
         };
     }
 

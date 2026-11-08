@@ -1690,7 +1690,7 @@ static partial class TerrainShaders
     static string Native(string legacy, string pushMembers = PushMembers)
     {
         const string preludeEnd = "#define gl_VertexID gl_VertexIndex\n";
-        string text = NativeShaders.Port(legacy, NativeShaders.Map(NativeMap), pushMembers);
+        string text = NativeShaders.Port(RenderOrigin.Relative(legacy), NativeShaders.Map(NativeMap), pushMembers);
         int at = text.IndexOf(preludeEnd, StringComparison.Ordinal);
         if (at < 0) throw new InvalidOperationException("TerrainShaders.Native: the native prelude no longer ends with the gl_VertexID define.");
         text = text.Insert(at + preludeEnd.Length, ConstantsBlock);

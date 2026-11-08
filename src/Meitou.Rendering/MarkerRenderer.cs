@@ -213,7 +213,7 @@ public sealed unsafe class MarkerRenderer : IDisposable
             Depth = t.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear },
         };
         cmd.BeginRendering(t.Rendering);
-        var vp = Matrix4x4.CreateTranslation(camera.Eye) * sceneViewProjection;
+        var vp = sceneViewProjection;   // eye-relative (RenderOrigin)
         program.Set(viewProjection, in vp);
         program.Set(sun, sunDirection);
         program.Set(depthScale, renderWidth / (float)width, renderHeight / (float)height);
