@@ -130,8 +130,10 @@ public sealed partial class AiSystem
         {
             if (t.IsNone) return true;
             var p = Me.Position;
-            if (_world.Characters.Cold(_slot)?.Ai is { } mind && mind.ArrivedThere(Flat(t.Position), Flat(p))) return true;   // its walk there ended on its own (isAtLocation)
-            float slack = t.Kind == Targets.Store ? StoreSlack : t.Kind == Targets.Turret ? TurretSlack : t.Kind == Targets.Work ? WorkReach : _system.Settings.PostSlack;
+            var mind = _world.Characters.Cold(_slot)?.Ai;
+            if (mind is not null && mind.ArrivedThere(Flat(t.Position), Flat(p))) return true;   // its walk there ended on its own (isAtLocation)
+            if (t.Kind == Targets.Work) return AtWork(in Me, t.Position, mind?.WorkRange ?? WorkReach);
+            float slack = t.Kind == Targets.Store ? StoreSlack : t.Kind == Targets.Turret ? TurretSlack : _system.Settings.PostSlack;
             if (Vector2.DistanceSquared(Flat(p), Flat(t.Position)) > slack * slack) return false;
             // A spot on a floor counts on that floor only (NaN: no floor).
             return float.IsNaN(t.Position.Y) || MathF.Abs(p.Y - t.Position.Y) <= FloorSlack;
