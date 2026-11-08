@@ -834,6 +834,7 @@ sealed partial class GameHost
         bool shiftDown = false, statsVisible = false, frameStatsVisible = showFrameStats, screenshotNow = false, gpuCaptureRequested = false;
         Vector2? lastMouse = null;
         var windowCursor = Silk.NET.Input.CursorMode.Normal;
+        var systemPointer = new SystemPointer();
         Vector2 Pixels(Vector2 p) => p * new Vector2(window.FramebufferSize.X / (float)Math.Max(window.Size.X, 1),
             window.FramebufferSize.Y / (float)Math.Max(window.Size.Y, 1));
         bool Held(SilkKey a, SilkKey b) => input.Keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
@@ -1469,17 +1470,26 @@ sealed partial class GameHost
                     settings.Draw(size.X, size.Y, overlayPass);
                     wrote = true;
                 }
-                // The mouse pointer over everything, as Vulkan draws it: the system cursor when Hardware mouse is on, else the
-                // game's own pointer. The free camera hides it, and saved pictures never contain it.
+                // The mouse pointer over everything, as Vulkan draws it: the system cursor when Hardware mouse is on (enhanced, with the action's pointer beside
+                // it and the hand over what a click acts on), else the game's own pointer. The free camera hides it, and saved pictures never contain it.
                 if (!still && !screenshotNow && !feedbackShot && pointerMouse is not null && hud is not null)
                 {
                     bool pointerWorld = !Covered && !g.NoPopulation && settings?.Visible != true && !TitleVisible;
                     bool freeLook = pointerWorld && session.Camera.IsFree;
                     var cursorMode = config.HardwareMouse && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
                     if (cursorMode != windowCursor) pointerMouse.Cursor.CursorMode = windowCursor = cursorMode;
+                    string pointerName = pointerWorld ? hud.PointerName : "arrow";
+                    bool enhanced = config.HardwareMouse && config.EnhancedHardwareMouse && !freeLook;
+                    bool hand = enhanced && (pointerWorld ? hud.PointsAtClickable(pointerName) : settings?.OverClickable(pointerAt) == true);
+                    systemPointer.Standard(pointerMouse.Cursor, hand ? Silk.NET.Input.StandardCursor.Hand : Silk.NET.Input.StandardCursor.Default);
                     if (!config.HardwareMouse && !freeLook)
                     {
-                        hud.DrawPointer(pointerWorld ? hud.PointerName : "arrow", pointerAt, size.X, size.Y, overlayPass);
+                        hud.DrawPointer(pointerName, pointerAt, size.X, size.Y, overlayPass);
+                        wrote = true;
+                    }
+                    else if (enhanced && pointerName != "arrow")
+                    {
+                        hud.DrawPointerBeside(pointerName, pointerAt, size.X, size.Y, overlayPass);
                         wrote = true;
                     }
                 }

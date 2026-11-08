@@ -791,10 +791,6 @@ public sealed partial class UiPainter : IDisposable
     readonly Dictionary<string, MyGuiPointer?> pointers = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Draws the mouse pointer <paramref name="name"/> (kenshi_pointers.xml) with its hot spot on <paramref name="mouse"/>, in screen pixels as MyGUI does; nothing for an unknown name.
-    /// Called last in a frame: the original's <c>Pointer</c> layer is above every other.
-    /// </summary>
-    /// <summary>
     /// The text index nearest <paramref name="p"/> in the one-line edit box under it as the last <see cref="Draw"/> laid it out (the gap between two characters closest to the pointer);
     /// null when no edit box was drawn there. The screen host places the caret with it.
     /// </summary>
@@ -813,13 +809,35 @@ public sealed partial class UiPainter : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Draws the mouse pointer <paramref name="name"/> (kenshi_pointers.xml) with its hot spot on <paramref name="mouse"/>, in screen pixels as MyGUI does; nothing for an unknown name.
+    /// Called last in a frame: the original's <c>Pointer</c> layer is above every other.
+    /// </summary>
     public void DrawPointer(string name, Vector2 mouse, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
+        if (Pointer(name) is { } pointer) DrawPointerImage(pointer, pointer.At(MathF.Round(mouse.X), MathF.Round(mouse.Y)), width, height, pass);
+    }
+
+    /// <summary>
+    /// Draws the pointer <paramref name="name"/> with its top left <paramref name="offset"/> pixels right of and below <paramref name="mouse"/>, beside a cursor the window system
+    /// draws (the enhanced Hardware mouse); nothing for an unknown name.
+    /// </summary>
+    public void DrawPointerBeside(string name, Vector2 mouse, float offset, int width, int height, DebugOverlay.OverlayPass? pass = null)
+    {
+        if (Pointer(name) is { } pointer)
+            DrawPointerImage(pointer, new(MathF.Round(mouse.X + offset), MathF.Round(mouse.Y + offset), pointer.Width, pointer.Height), width, height, pass);
+    }
+
+    MyGuiPointer? Pointer(string name)
+    {
         if (!pointers.TryGetValue(name, out var pointer)) pointers[name] = pointer = MyGuiPointers.Resolve(resources, name);
-        if (pointer is null) return;
+        return pointer;
+    }
+
+    void DrawPointerImage(MyGuiPointer pointer, UiRect at, int width, int height, DebugOverlay.OverlayPass? pass)
+    {
         overlay.Flush(width, height, null, pass);   // whatever was queued before (another texture, text) goes first
         var loaded = LoadTexture(pointer.Image.Texture);
-        var at = pointer.At(MathF.Round(mouse.X), MathF.Round(mouse.Y));
         var source = pointer.Image.Source;
         float w = loaded.Texture.Desc.Width, h = loaded.Texture.Desc.Height;
         overlay.Image(loaded.Sampled, new(at.X, at.Y, at.X + at.Width, at.Y + at.Height),
@@ -836,7 +854,7 @@ public sealed partial class UiPainter : IDisposable
     public (RgbaImage Image, int HotX, int HotY)? PointerImage(string name)
     {
         if (pointerImages.TryGetValue(name, out var cached)) return cached;
-        if (!pointers.TryGetValue(name, out var pointer)) pointers[name] = pointer = MyGuiPointers.Resolve(resources, name);
+        var pointer = Pointer(name);
         RgbaImage? sheet = null;
         try
         {

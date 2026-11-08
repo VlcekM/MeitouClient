@@ -869,7 +869,7 @@ sealed partial class GameHost
                 Meitou.Rendering.StageClock.UiPart(Meitou.Rendering.StageClock.UiLoading);
                 // The mouse pointer over everything, as the original's Pointer layer; never in saved pictures. What the right button would do picks it,
                 // the arrow over the settings panel, the cinema's editor and the loading screen. The free camera hides it (the original's `invisible`);
-                // Hardware mouse shows Windows' cursor instead. With frame generation the window system draws the game's pointer (SystemPointer): in a frame it would
+                // Hardware mouse shows Windows' cursor instead; enhanced, the action's pointer beside it and the hand over what a click acts on. With frame generation the window system draws the game's pointer (SystemPointer): in a frame it would
                 // come a held-back frame late and be interpolated.
                 if (!shot && !take && !feedbackShot && overlay is not null && pointerMouse is not null)
                 {
@@ -878,11 +878,14 @@ sealed partial class GameHost
                         : (config.HardwareMouse || byWindow) && !freeLook ? Silk.NET.Input.CursorMode.Normal : Silk.NET.Input.CursorMode.Hidden;
                     if (cursorMode != windowCursor) pointerMouse.Cursor.CursorMode = windowCursor = cursorMode;
                     string pointerName = pointerWorld ? player.PointerName : "arrow";
+                    bool enhanced = config.HardwareMouse && config.EnhancedHardwareMouse && !freeLook;
+                    bool hand = enhanced && (pointerWorld ? player.PointsAtClickable(pointerName) : panel?.OverClickable(pointerAt) == true);
                     if (byWindow) systemPointer.Show(pointerMouse.Cursor, player, pointerName);
                     else
                     {
-                        systemPointer.Standard(pointerMouse.Cursor);
+                        systemPointer.Standard(pointerMouse.Cursor, hand ? Silk.NET.Input.StandardCursor.Hand : Silk.NET.Input.StandardCursor.Default);
                         if (!config.HardwareMouse && !freeLook) player.DrawPointer(pointerName, pointerAt, size.X, size.Y);
+                        else if (enhanced) player.DrawPointerBeside(pointerName, pointerAt, size.X, size.Y);
                     }
                 }
                 // World and interface into the top-down picture the window shows (and a screenshot reads). With frame generation on this frame the window shows the

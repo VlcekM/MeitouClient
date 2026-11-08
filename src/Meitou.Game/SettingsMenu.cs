@@ -158,6 +158,9 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
     internal IReadOnlyList<(string Label, UiRect Bounds, Action Activate)> Clickables =>
         [.. hits.Where(h => h.Label.Length > 0 && h.Slider is null).Select(h => (h.Label, h.Bounds, h.Activate))];
 
+    /// <summary>Whether <paramref name="p"/> is over a widget a click acts on in the last frame (the enhanced Hardware mouse's hand).</summary>
+    public bool OverClickable(Vector2 p) => Visible && hits.Any(h => h.Bounds.Contains(p.X, p.Y));
+
     /// <summary>The sliders as the last frame drew them, with the track they sit on (agent control channel: ui-tree, ui-set).</summary>
     internal IReadOnlyList<(Slider Slider, UiRect Bounds)> SliderHits => [.. hits.Where(h => h.Slider is not null).Select(h => (h.Slider!, h.Bounds))];
 
@@ -373,6 +376,9 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         if (page == 2)
             result.Add(new("Hardware mouse", "Use the Windows cursor instead of the game's drawn pointer (no hover pointers).",
                 Toggle: new("Hardware mouse", () => config.HardwareMouse, v => config.HardwareMouse = v)));
+        if (page == 2 && config.HardwareMouse)
+            result.Add(new("Enhanced hardware mouse", "The icon of what a right click would do beside the Windows cursor (none for a walk), and the hand over buttons and targets.",
+                Toggle: new("Enhanced hardware mouse", () => config.EnhancedHardwareMouse, v => config.EnhancedHardwareMouse = v, OnOff: true), Depth: 1));
         if (page == 3)
             result.Add(new(CameraRotateSpeed.Label, "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6).", Slider: CameraRotateSpeed));
         if (page == 3)
@@ -789,6 +795,7 @@ sealed partial class SettingsMenu(PlayerInterface player, SettingsPanel values, 
         AudioChanged?.Invoke();
         SetGameplay(new());
         config.HardwareMouse = false;
+        config.EnhancedHardwareMouse = true;
         CameraRotateSpeed.Set(global::Meitou.Data.World.KenshiCamera.DefaultRotateSpeed);
         config.EdgeScroll = true;
         config.InvertX = false;

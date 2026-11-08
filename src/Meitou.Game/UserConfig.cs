@@ -202,6 +202,8 @@ sealed class UserConfig
     public bool HearFromSelected { get; set; }
     /// <summary>The Windows cursor instead of the game's drawn pointer (the original's <c>hardware_mouse</c>, default off; Interface settings).</summary>
     public bool HardwareMouse { get; set; }
+    /// <summary>With <see cref="HardwareMouse"/>: the action's pointer beside the Windows cursor and the hand over what a click acts on (Interface settings; Meitou only, default on).</summary>
+    public bool EnhancedHardwareMouse { get; set; } = true;
     /// <summary>Outline and tint the character under the cursor (Advanced settings; Meitou only, the game has none).</summary>
     public bool HoverOutline { get; set; } = true;
     /// <summary>Outline and tint the selected building, and the one under the cursor, the same way, except while its interior is shown (Advanced settings; Meitou only).</summary>

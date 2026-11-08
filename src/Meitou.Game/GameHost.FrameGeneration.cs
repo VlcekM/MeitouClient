@@ -59,12 +59,13 @@ sealed partial class GameHost
 
     /// <summary>
     /// The game's pointer as the window's cursor (a custom cursor image of the pointer at its drawn size, its hot spot on the mouse), set again only when the pointer
-    /// changes. While frame generation runs the window system draws it: in a frame it would reach the screen a held-back frame late and, as part of the
+    /// changes, or a system cursor. While frame generation runs the window system draws it: in a frame it would reach the screen a held-back frame late and, as part of the
     /// interface, be interpolated between frames.
     /// </summary>
     sealed class SystemPointer
     {
         string? shown;
+        StandardCursor standard = StandardCursor.Default;
 
         public void Show(ICursor cursor, PlayerInterface player, string name)
         {
@@ -81,13 +82,14 @@ sealed partial class GameHost
             cursor.Image = new Silk.NET.Core.RawImage(pointer.Image.Width, pointer.Image.Height, pointer.Image.Pixels);
         }
 
-        /// <summary>Back to the system's arrow (Hardware mouse, or frame generation off).</summary>
-        public void Standard(ICursor cursor)
+        /// <summary>Back to a system cursor (Hardware mouse, or frame generation off): the arrow, or the enhanced Hardware mouse's hand.</summary>
+        public void Standard(ICursor cursor, StandardCursor kind = StandardCursor.Default)
         {
-            if (shown is null) return;
+            if (shown is null && kind == standard) return;
             shown = null;
+            standard = kind;
             cursor.Type = CursorType.Standard;
-            cursor.StandardCursor = StandardCursor.Default;
+            cursor.StandardCursor = kind;
         }
     }
 }

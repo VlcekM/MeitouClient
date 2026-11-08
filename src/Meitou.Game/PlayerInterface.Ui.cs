@@ -216,7 +216,9 @@ sealed partial class PlayerInterface
         if (!TitleOpen) ReleaseTitleLogo();
         var controls = ArrangedBase(hud);
         AddFrameControls(controls, hud);
-        pointerOverUi = faithfulScreens.Contains(mouse) || MyGuiPresentation.HitTest(controls, mouse.X, mouse.Y) is not null;
+        var top = MyGuiPresentation.HitTest(controls, mouse.X, mouse.Y);
+        pointerOverUi = faithfulScreens.Contains(mouse) || top is not null;
+        pointerOverButton = top is { Enabled: true } && (top.Type == "Button" || top.Action.Length > 0);
         AddHoverLabel(controls);
         AddInspectorPanel(controls);
         return controls;

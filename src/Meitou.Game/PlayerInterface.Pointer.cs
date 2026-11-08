@@ -13,6 +13,8 @@ sealed partial class PlayerInterface
     public bool CtrlHeld, AltHeld;
     // Whether the mouse was over a control in the last arranged UI (ArrangeUi), so the pointer needs no arrange of its own.
     bool pointerOverUi;
+    // Whether that control is one a click acts on (an enabled button, or a control with an action: as UiClickables takes them), for the enhanced Hardware mouse's hand.
+    bool pointerOverButton;
     // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and every RepickTicks ticks while only the
     // world moves (the picks walk every character, item and building near the ray: 0.5 ms).
     (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (SelectedBuilding Building, float T)? Building) pointer = (-1, default, false, false, "arrow", null, null);
@@ -173,6 +175,24 @@ sealed partial class PlayerInterface
     /// <summary>Draws the pointer <paramref name="name"/> at <paramref name="at"/> (framebuffer pixels) over everything drawn so far; nothing without the UI painter.</summary>
     public void DrawPointer(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)
         => uiPainter?.DrawPointer(name, at, width, height, pass);
+
+    /// <summary>
+    /// Draws the pointer <paramref name="name"/> beside the Windows cursor at <paramref name="at"/> (the enhanced Hardware mouse), <see cref="BesideOffset"/> at 1080 right of and below it;
+    /// nothing for <c>arrow</c>, the walk or no order.
+    /// </summary>
+    public void DrawPointerBeside(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)
+    {
+        if (name != "arrow") uiPainter?.DrawPointerBeside(name, at, BesideOffset * height / 1080f, width, height, pass);
+    }
+
+    /// <summary>How far right of and below the mouse the enhanced Hardware mouse draws the action's pointer, at 1080 (clear of the Windows arrow; engine choice).</summary>
+    const float BesideOffset = 20;
+
+    /// <summary>
+    /// Whether the enhanced Hardware mouse shows the hand for the pointer <paramref name="name"/>: an order a right click would give (not the walk, the map's pan or
+    /// ground the characters cannot reach), or an enabled button under the mouse.
+    /// </summary>
+    public bool PointsAtClickable(string name) => name is not ("arrow" or "hand" or "invalidmove") || UiVisible && pointerOverButton;
 
     /// <summary>The pointer <paramref name="name"/> as a picture with its hot spot, for the window system to draw (<see cref="Meitou.Rendering.Ui.UiPainter.PointerImage"/>).</summary>
     public (Meitou.Data.Textures.RgbaImage Image, int HotX, int HotY)? PointerImage(string name) => uiPainter?.PointerImage(name);
