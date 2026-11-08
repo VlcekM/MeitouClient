@@ -580,8 +580,7 @@ sealed partial class GameHost
             fpsWindowFrames++;
             if (fpsWindow >= 0.1)
             {
-                fpsText = string.Create(System.Globalization.CultureInfo.InvariantCulture,
-                    $"{fpsWindowFrames / fpsWindow:0} fps  ({fpsWindow * 1000 / fpsWindowFrames:0.0} ms)");
+                fpsText = FpsCounterText(fpsWindowFrames, fpsWindow, frameGen);
                 fpsWindow = 0;
                 fpsWindowFrames = 0;
             }

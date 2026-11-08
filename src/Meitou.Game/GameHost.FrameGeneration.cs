@@ -27,13 +27,28 @@ sealed partial class GameHost
         return available ? "active" : "unavailable (see the log), plain swapchain in use";
     }
 
-    /// <summary>The stats panel's note on the frames shown per rendered one: DLSS reports what it presented, FSR 3 shows two.</summary>
-    static string FrameGenerationShown(IFrameGenerator? generator) => generator switch
+    /// <summary>Frames shown per rendered one: what DLSS reports it presented, two for FSR 3, one without frame generation.</summary>
+    static uint FramesShownPerRendered(IFrameGenerator? generator) => generator switch
     {
-        DlssFrameGeneration { Enabled: true, PresentedPerRendered: > 0 } dlss => $" rendered, x{dlss.PresentedPerRendered} shown",
-        { Enabled: true } => " rendered, x2 shown",
-        _ => "",
+        DlssFrameGeneration { Enabled: true, PresentedPerRendered: > 0 } dlss => dlss.PresentedPerRendered,
+        { Enabled: true } => 2,
+        _ => 1,
     };
+
+    /// <summary>The stats panel's note on the frames shown per rendered one.</summary>
+    static string FrameGenerationShown(IFrameGenerator? generator) =>
+        generator is { Enabled: true } ? $" rendered, x{FramesShownPerRendered(generator)} shown" : "";
+
+    /// <summary>The fps counter (Ctrl+F9): the frames shown per second, with frame generation also the rendered ones; and a rendered frame's time.</summary>
+    static string FpsCounterText(int frames, double seconds, IFrameGenerator? generator)
+    {
+        double rendered = frames / seconds;
+        double ms = seconds * 1000 / frames;
+        uint shown = FramesShownPerRendered(generator);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (shown <= 1) return string.Create(inv, $"{rendered:0} fps  ({ms:0.0} ms)");
+        return string.Create(inv, $"{rendered * shown:0} fps  ({rendered:0} rendered, {ms:0.0} ms)");
+    }
 
     internal static string FrameGenerationName(FrameGenerationMethod method) => method switch
     {
