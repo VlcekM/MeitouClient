@@ -111,7 +111,7 @@ only for groups they drew): **Observed** (Obedience, 08:00, offscreen) the block
 fog. The fine terrain grid's ray origin is taken down to the grid under displaced ground, never up onto it (a wall's foot against a cliff the grid passes above).
 
 **Not traced** (they cast no sun shadow while traced): construction sites (drawn clipped by their progress; the whole mesh would cast the finished building), debris
-(bolts, dropped items) and birds (no caster in any mode), particles, objects past the range or drawn only as impostors, foliage past 4000 (small foliage past 3000), grass
+(bolts, dropped items) and birds (no caster in any mode), particles, objects past the range or drawn only as impostors, foliage past the shadows' range (nearest first within the instance budget; small foliage past 3000), grass
 past the reach, characters past the 128 nearest or 4000. Landmarks keep their map.
 
 **Limits.** Blood on surfaces (`RecordSurfaces`) blends before the sun is added. The objects' traced transforms and level are the GI's: rotors and doors are frozen as the

@@ -464,7 +464,8 @@ internal sealed unsafe class GiScene : IDisposable
         foliageRecords.Clear();
         foliageSources.Clear();
         rayFoliage.Clear();
-        foliage.RayInstances(eye, FoliageRange, FoliageMinSize, rayFoliage);
+        // The traced sun's trees reach as far as its shadows, nearest first while the budget lasts; the probes' rays are shorter than either.
+        foliage.RayInstances(eye, Casters ? MathF.Max(FoliageRange, Range) : FoliageRange, FoliageMinSize, rayFoliage);
         rayFoliage.Sort((a, b) => a.Distance.CompareTo(b.Distance));
         (foliageOrigin, foliageEye, foliageFrame, foliageGeneration, foliageComplete, foliageCasters) = (Origin, eye, frame, foliage.RayGeneration, true, Casters);
         int room = MaxInstances - 2048 - (Casters ? SmallFoliageInstances + GrassInstances + TracedCharacters.MaxCharacters : 0);   // room for the terrain and the objects
