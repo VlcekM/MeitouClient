@@ -582,6 +582,9 @@ public static class BuildingSave
             hand.Write(state, "hand");
             state.Strings["faction"] = playerFactionId;
             state.Strings["instance"] = instance.Id;
+            state.Ints["override"] = (int)town.Override;
+            if (world.SystemOf<PopulationSystem>() is { } population)
+                state.Ints["plevel"] = population.TownLevel(world, town.Number);
             var zone = WorldLayout.ZoneOf(town.Position.X, town.Position.Z);
             state.Ints["zzX0"] = zone.X;
             state.Ints["zzY0"] = zone.Y;

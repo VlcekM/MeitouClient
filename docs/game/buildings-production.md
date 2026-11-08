@@ -260,6 +260,7 @@ shows the first failing message in this order (**Verified** unless marked):
   No residents: the template lists none, and the resident pick (`Town::chooseResidents` `FUN_1409370d0`, from the building
   `default resident` / `residents override`) runs from `ZoneManager::loadPhase2` (`FUN_140a0e760`) only for towns whose faction
   lacks the player flag (FACTION `+0x250`) (**Verified** by decompile and its only caller).
+- **Unresolved building towns** (**Verified**, `FUN_140555650`, `FUN_1402a14b0` / `FUN_1402a1750`, `FUN_1406bd000`): the saved `town` handle is resolved as a handle; when its town was removed or never existed, the building stores the canonical null town. It is not reassigned by position on first use, a tick, another placement or dismantling. It is absent from the player-town panel and town ownership association until a later placement operation assigns it.
 - **Centre, radius and placement-time merge** (**Verified** by decompile, `Town::reassessTownPosition` `FUN_1405488f0`, via `TownList::reassessTownPositions`
   `FUN_14054d080`; called on placement commit `FUN_1404d72a0`, dismantle `FUN_1402a2860` / `FUN_14054fea0` and town merge
   `FUN_140931840`): a player town's centre (+0x48) becomes a weighted mean of its buildings' position markers (two building
@@ -269,6 +270,7 @@ shows the first failing message in this order (**Verified** unless marked):
   town (2500 while it is at most 1), and `type`-based radii (table above) otherwise; campaigns' arrival and in-town tests
   (`FUN_140926d50`) use it. So the first building's spot stops being the centre as the base grows. Meitou:
   `ConstructionSystem.ReassessTown`, a plain mean of the town's outdoor sites (engine choice); load reassessment deliberately does not run the merge pass. **Verified** (`FUN_14054d080`, `FUN_140931840`, `FUN_140927060`, `FUN_14092b3c0`): on placement-time reassessment, overlapping same-owner towns use `distance² < (radiusA + radiusB)²`; the smaller-radius town survives, the other town's buildings move to it, and the other town is destroyed.
+  **Verified** (`FUN_14054d080`, `FUN_1402a2860`, `FUN_14054fea0`): the placement/dismantle reassessment removes a player town with no buildings; load-time normalization does not apply this empty-town removal.
 - **Slope** (slot 31 `FUN_1404daa20`): ground normal from four rays at the rotated bounding-box corners (outdoors) or
   one ray (indoors); slope = angle from vertical, compared with `max slope` in degrees. With `match slope` (forced for
   interior furniture and nodes) the ghost tilts to the ground and a slope over the limit fails; without it the tilt is
