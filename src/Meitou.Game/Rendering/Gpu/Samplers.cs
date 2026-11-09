@@ -5,10 +5,9 @@ using Sampler = Silk.NET.Vulkan.Sampler;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// GL's sampler state as a value (docs/renderer-native.md 2.4). <see cref="FromGl"/> is the rule VkGl used in <c>SamplerFor</c>, moved here
-/// so translated and native draws share it: integer formats sample nearest, a sampler without mipmaps clamps its LOD to 0.25 (GL's
-/// "no mips" behaviour), the LOD bias applies to mipmapped samplers only, anisotropy is clamped to 16, and the compare mode is used only by
-/// shadow samplers.
+/// GL's sampler state as a value (docs/renderer-native.md 2.4). <see cref="FromGl"/> is the rule VkGl used in <c>SamplerFor</c>, moved here so translated
+/// and native draws share it: integer formats sample nearest, a sampler without mipmaps clamps its LOD to 0.25 (GL's "no mips" behaviour), the LOD bias
+/// applies to mipmapped samplers only, anisotropy is clamped to 16, and the compare mode is used only by shadow samplers.
 /// </summary>
 public readonly record struct SamplerDesc(TextureMinFilter Min, TextureMagFilter Mag, bool Mipmapped,
     TextureWrapMode U, TextureWrapMode V, TextureWrapMode W, bool Compare, DepthFunction Op, bool TransparentBorder,
@@ -29,32 +28,42 @@ public readonly record struct SamplerDesc(TextureMinFilter Min, TextureMagFilter
 }
 
 /// <summary>
-/// One Vulkan sampler per <see cref="SamplerDesc"/>, for the device's lifetime. Applies the device rules: anisotropy only where the device
-/// has it, and on NVIDIA a −0.25 LOD bias for anisotropic samplers (its OpenGL picked mips a quarter level finer than its Vulkan driver;
-/// DECISIONS 9). Render thread only.
+/// One Vulkan sampler per <see cref="SamplerDesc"/>, for the device's lifetime. Applies the device rules: anisotropy only where the device has it, and on
+/// NVIDIA a −0.25 LOD bias for anisotropic samplers (its OpenGL picked mips a quarter level finer than its Vulkan driver; DECISIONS 9). Render thread only.
 /// </summary>
 public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
 {
     readonly VulkanDevice _device;
     readonly Dictionary<SamplerDesc, int> _samplers = [];
+    int _maxAnisotropy = 16;
 
     public SamplerCache(VulkanDevice device) => this._device = device;
 
     public int Count => _samplers.Count;
 
-    /// <summary>The Tab panel's anisotropic filtering: the most any sampler gets (1, 2, 4, 8 or 16; 16, the default, leaves every texture as asked). A change bumps <see cref="Generation"/>, which the caches of sampler bindings compare to make theirs again.</summary>
+    /// <summary>
+    /// The Tab panel's anisotropic filtering: the most any sampler gets (1, 2, 4, 8 or 16; 16, the default, leaves every texture as asked). A change bumps
+    /// <see cref="Generation"/>, which the caches of sampler bindings compare to make theirs again.
+    /// </summary>
     public int MaxAnisotropy
     {
         get => _maxAnisotropy;
-        set { value = Math.Clamp(value, 1, 16); if (value != _maxAnisotropy) (_maxAnisotropy, Generation) = (value, Generation + 1); }
+        set
+        {
+            value = Math.Clamp(value, 1, 16);
+            if (value != _maxAnisotropy) (_maxAnisotropy, Generation) = (value, Generation + 1);
+        }
     }
-    int _maxAnisotropy = 16;
+
     public int Generation { get; private set; }
 
     public GpuSampler Get(in SamplerDesc desc)
     {
-        var key = _device.SamplerAnisotropy ? desc with { Anisotropy = Math.Min(desc.Anisotropy, _maxAnisotropy) } : desc with { Anisotropy = 1 };
+        var key = _device.SamplerAnisotropy
+            ? desc with { Anisotropy = Math.Min(desc.Anisotropy, _maxAnisotropy) }
+            : desc with { Anisotropy = 1 };
         if (_samplers.TryGetValue(key, out var index)) return new GpuSampler(index, key);
+
         var vkFilters = GlConventions.VkFilters(key.Min);
         var info = new SamplerCreateInfo
         {
@@ -71,10 +80,12 @@ public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
             CompareOp = GlConventions.CompareOp(key.Op),
             MinLod = 0,
             MaxLod = key.Mipmapped ? Vk.LodClampNone : 0.25f,
+
             // NVIDIA's OpenGL picks mips a quarter level finer than its Vulkan driver with anisotropic filtering on: matched here
             // (docs/engine.md "Vulkan backend"; measured 1.2 -> 0.001 mean difference on the rock view). Plus the upscaler's bias.
             MipLodBias = (key.Anisotropy > 1 && _device.Properties.VendorID == 0x10DE ? -0.25f : 0) + key.LodBias,
-            BorderColor = key.IntegerFormat ? (key.TransparentBorder ? BorderColor.IntTransparentBlack : BorderColor.IntOpaqueBlack)
+            BorderColor = key.IntegerFormat
+                ? (key.TransparentBorder ? BorderColor.IntTransparentBlack : BorderColor.IntOpaqueBlack)
                 : key.TransparentBorder ? BorderColor.FloatTransparentBlack : BorderColor.FloatOpaqueWhite,
         };
         VulkanException.Check(_device.Vk.CreateSampler(_device.Device, &info, null, out var created), "vkCreateSampler");
@@ -85,6 +96,7 @@ public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
     public void Dispose()
     {
         foreach (var s in _samplers.Values) _device.Vk.DestroySampler(_device.Device, _device.SamplerAt(s), null);
+
         _samplers.Clear();
     }
 }

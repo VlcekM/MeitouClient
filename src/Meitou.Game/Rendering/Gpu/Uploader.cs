@@ -4,9 +4,9 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// Copies data into device buffers and textures through the frame's upload command buffer, which the host submits ahead of the frame's own
-/// (VkGl: <c>uploadCmd</c>, "before: uploadCmd"). An upload is therefore seen by the whole frame, and native and VkGl uploads keep their call
-/// order. Staging comes from the frame's <see cref="GpuFrame.Staging"/>. Render thread only, while a frame is open.
+/// Copies data into device buffers and textures through the frame's upload command buffer, which the host submits ahead of the frame's own (VkGl:
+/// <c>uploadCmd</c>, "before: uploadCmd"). An upload is therefore seen by the whole frame, and native and VkGl uploads keep their call order. Staging
+/// comes from the frame's <see cref="GpuFrame.Staging"/>. Render thread only, while a frame is open.
 /// </summary>
 public sealed unsafe class Uploader : IGpuUploads
 {
@@ -19,9 +19,12 @@ public sealed unsafe class Uploader : IGpuUploads
     public void Write(DeviceBuffer target, ulong offset, ReadOnlySpan<byte> data)
     {
         if (data.IsEmpty) return;
+
         if (target.UsedFrame == _ctx.Frame.Number)
             throw new InvalidOperationException("the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+
         if (offset + (ulong)data.Length > target.Size) throw new ArgumentOutOfRangeException(nameof(data), "write past the end of the buffer");
+
         var staging = _ctx.Frame.Staging.Write(data);
         var copy = new BufferCopy(staging.Offset, offset, (ulong)data.Length);
         var cmd = Cmd;
@@ -31,31 +34,44 @@ public sealed unsafe class Uploader : IGpuUploads
         if (SpikeLog.Enabled) SpikeLog.Note("upload " + target.Name, data.Length);
     }
 
-    /// <summary>Writes <paramref name="data"/>'s <paramref name="stride"/>-byte records each to its own offset of <paramref name="offsets"/> (in order): one staging copy and one copy command.</summary>
+    /// <summary>
+    /// Writes <paramref name="data"/>'s <paramref name="stride"/>-byte records each to its own offset of <paramref name="offsets"/> (in order): one staging
+    /// copy and one copy command.
+    /// </summary>
     public void WriteScattered(DeviceBuffer target, ReadOnlySpan<byte> data, int stride, ReadOnlySpan<ulong> offsets)
     {
         if (offsets.IsEmpty) return;
+
         if (target.UsedFrame == _ctx.Frame.Number)
             throw new InvalidOperationException("the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+
         if (data.Length != stride * offsets.Length) throw new ArgumentException("one record per offset", nameof(data));
+
         var staging = _ctx.Frame.Staging.Write(data);
         var copies = new BufferCopy[offsets.Length];
         for (int i = 0; i < offsets.Length; i++)
         {
             if (offsets[i] + (ulong)stride > target.Size) throw new ArgumentOutOfRangeException(nameof(offsets), "write past the end of the buffer");
+
             copies[i] = new BufferCopy(staging.Offset + (ulong)(i * stride), offsets[i], (ulong)stride);
         }
+
         var cmd = Cmd;
-        fixed (BufferCopy* p = copies) _ctx.Device.Vk.CmdCopyBuffer(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.BufferAt(target.Handle.Index), (uint)copies.Length, p);
+        fixed (BufferCopy* p = copies)
+            _ctx.Device.Vk.CmdCopyBuffer(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.BufferAt(target.Handle.Index), (uint)copies.Length, p);
+
         TransferBarrier(cmd);
         _ctx.Frame.Stats.UploadBytes += data.Length;
         if (SpikeLog.Enabled) SpikeLog.Note("upload " + target.Name, data.Length);
     }
 
-    /// <summary>Writes texels of one level and layer (tightly packed, in the texture's format; for block-compressed formats whole blocks).</summary>
+    /// <summary>
+    /// Writes texels of one level and layer (tightly packed, in the texture's format; for block-compressed formats whole blocks).
+    /// </summary>
     public void Write(GpuTexture target, int level, int layer, in PixelRect region, ReadOnlySpan<byte> data)
     {
         if (data.IsEmpty) return;
+
         var staging = _ctx.Frame.Staging.Write(data);
         var copy = new BufferImageCopy
         {
@@ -72,15 +88,17 @@ public sealed unsafe class Uploader : IGpuUploads
     }
 
     /// <summary>
-    /// (Added in phase 8 stage 1, terrain.) Uploads and the commands that belong with them (a new texture's layout transition, its mip
-    /// generation) for resources made outside the frame's passes, whether or not a frame is open: while one is, into the frame's upload
-    /// command buffer (<see cref="GpuFrame.PreFrame"/>, as <see cref="Write(Texture, int, int, in PixelRect, ReadOnlySpan{byte})"/>); otherwise
-    /// (at load, before the first frame: VkGl opened a frame for such uploads, the native API does not) into a one-shot command buffer with
-    /// staging of its own, which <see cref="UploadBatch.Dispose"/> submits and waits for. Render thread only.
+    /// (Added in phase 8 stage 1, terrain.) Uploads and the commands that belong with them (a new texture's layout transition, its mip generation) for
+    /// resources made outside the frame's passes, whether or not a frame is open: while one is, into the frame's upload command buffer
+    /// (<see cref="GpuFrame.PreFrame"/>, as <see cref="Write(Texture, int, int, in PixelRect, ReadOnlySpan{byte})"/>); otherwise (at load, before the first
+    /// frame: VkGl opened a frame for such uploads, the native API does not) into a one-shot command buffer with staging of its own, which
+    /// <see cref="UploadBatch.Dispose"/> submits and waits for. Render thread only.
     /// </summary>
     public IGpuUploadBatch Begin() => new UploadBatch(_ctx);
 
-    /// <summary>Orders successive uploads (two writes to overlapping ranges must not race).</summary>
+    /// <summary>
+    /// Orders successive uploads (two writes to overlapping ranges must not race).
+    /// </summary>
     internal static void TransferBarrier(Vk vk, CommandBuffer cmd)
     {
         var barrier = new MemoryBarrier2
@@ -99,9 +117,9 @@ public sealed unsafe class Uploader : IGpuUploads
 }
 
 /// <summary>
-/// A batch of uploads (<see cref="Uploader.Begin"/>): into the open frame's upload command buffer, or, without an open frame, into a
-/// one-shot command buffer that <see cref="Dispose"/> submits and waits for. <see cref="Commands"/> takes what goes with the uploads (layout
-/// transitions, <see cref="CommandList.GenerateMips"/>); they run after the uploads recorded before them.
+/// A batch of uploads (<see cref="Uploader.Begin"/>): into the open frame's upload command buffer, or, without an open frame, into a one-shot command
+/// buffer that <see cref="Dispose"/> submits and waits for. <see cref="Commands"/> takes what goes with the uploads (layout transitions,
+/// <see cref="CommandList.GenerateMips"/>); they run after the uploads recorded before them.
 /// </summary>
 public sealed unsafe class UploadBatch : IGpuUploadBatch
 {
@@ -116,18 +134,31 @@ public sealed unsafe class UploadBatch : IGpuUploadBatch
         Commands = _immediate ? new CommandList(ctx, new GpuStats()) { Handle = ctx.Device.BeginImmediate() } : ctx.Frame.PreFrame;
     }
 
-    /// <summary>Where the batch records (the frame's <see cref="GpuFrame.PreFrame"/>, or the one-shot buffer).</summary>
+    /// <summary>
+    /// Where the batch records (the frame's <see cref="GpuFrame.PreFrame"/>, or the one-shot buffer).
+    /// </summary>
     public CommandList Commands { get; }
+
     IGpuCommandList IGpuUploadBatch.Commands => Commands;
 
-    /// <summary>A new texture in GENERAL layout, its transition recorded into this batch.</summary>
+    /// <summary>
+    /// A new texture in GENERAL layout, its transition recorded into this batch.
+    /// </summary>
     public GpuTexture Create(TextureDesc desc) => _ctx.CreateTexture(desc, Commands.Handle);
 
-    /// <summary>Writes texels of one level and layer (tightly packed, in the texture's format; for block-compressed formats whole blocks).</summary>
+    /// <summary>
+    /// Writes texels of one level and layer (tightly packed, in the texture's format; for block-compressed formats whole blocks).
+    /// </summary>
     public void Write(GpuTexture target, int level, int layer, in PixelRect region, ReadOnlySpan<byte> data)
     {
         if (data.IsEmpty) return;
-        if (!_immediate) { _ctx.Uploads.Write(target, level, layer, region, data); return; }
+
+        if (!_immediate)
+        {
+            _ctx.Uploads.Write(target, level, layer, region, data);
+            return;
+        }
+
         var (buffer, offset) = Stage(data);
         var copy = new BufferImageCopy
         {
@@ -140,12 +171,21 @@ public sealed unsafe class UploadBatch : IGpuUploadBatch
         Uploader.TransferBarrier(_ctx.Device.Vk, Commands.Handle);
     }
 
-    /// <summary>Writes a device buffer's bytes from <paramref name="offset"/>.</summary>
+    /// <summary>
+    /// Writes a device buffer's bytes from <paramref name="offset"/>.
+    /// </summary>
     public void Write(DeviceBuffer target, ulong offset, ReadOnlySpan<byte> data)
     {
         if (data.IsEmpty) return;
-        if (!_immediate) { _ctx.Uploads.Write(target, offset, data); return; }
+
+        if (!_immediate)
+        {
+            _ctx.Uploads.Write(target, offset, data);
+            return;
+        }
+
         if (offset + (ulong)data.Length > target.Size) throw new ArgumentOutOfRangeException(nameof(data), "write past the end of the buffer");
+
         var (buffer, from) = Stage(data);
         var copy = new BufferCopy(from, offset, (ulong)data.Length);
         _ctx.Device.Vk.CmdCopyBuffer(Commands.Handle, buffer, _ctx.Device.BufferAt(target.Handle.Index), 1, &copy);
@@ -160,12 +200,16 @@ public sealed unsafe class UploadBatch : IGpuUploadBatch
         return (b.Buffer, 0);
     }
 
-    /// <summary>Without an open frame: submits the batch and waits for it. With one: nothing (the frame submits its upload buffer).</summary>
+    /// <summary>
+    /// Without an open frame: submits the batch and waits for it. With one: nothing (the frame submits its upload buffer).
+    /// </summary>
     public void Dispose()
     {
         if (!_immediate) return;
+
         _ctx.Device.EndImmediate(Commands.Handle);
         foreach (var b in _staging) _ctx.Device.Allocator.Free(b);
+
         _staging.Clear();
     }
 }

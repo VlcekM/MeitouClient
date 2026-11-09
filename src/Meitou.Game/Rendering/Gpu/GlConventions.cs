@@ -11,8 +11,12 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public static class GlConventions
 {
-    /// <summary>The Vulkan format of a GL internal format. Nothing is sRGB; <c>DEPTH_COMPONENT24</c> is a 32-bit float depth buffer
-    /// (engine choice: the same or finer); RGB8 is stored as RGBA8.</summary>
+    #region Formats
+
+    /// <summary>
+    /// The Vulkan format of a GL internal format. Nothing is sRGB; <c>DEPTH_COMPONENT24</c> is a 32-bit float depth buffer
+    /// (engine choice: the same or finer); RGB8 is stored as RGBA8.
+    /// </summary>
     public static Format VkFormat(InternalFormat f) => (GlEnum)f switch
     {
         GlEnum.Rgba8 or GlEnum.Rgba => Format.R8G8B8A8Unorm,
@@ -54,10 +58,18 @@ public static class GlConventions
         _ => throw new NotSupportedException($"texture format {f}"),
     };
 
-    /// <summary>The Vulkan format of a GL internal format, or <c>Undefined</c> for none (an attachment that is not there).</summary>
+    /// <summary>
+    /// The Vulkan format of a GL internal format, or <c>Undefined</c> for none (an attachment that is not there).
+    /// </summary>
     public static Format VkFormatOrUndefined(InternalFormat f) => f == InternalFormat.None ? Format.Undefined : VkFormat(f);
 
-    /// <summary>The Vulkan load op of the engine's.</summary>
+    #endregion
+
+    #region Draw state
+
+    /// <summary>
+    /// The Vulkan load op of the engine's.
+    /// </summary>
     public static AttachmentLoadOp VkLoadOp(LoadOp op) => op switch
     {
         LoadOp.Load => AttachmentLoadOp.Load,
@@ -65,10 +77,18 @@ public static class GlConventions
         _ => AttachmentLoadOp.DontCare,
     };
 
-    /// <summary>The Vulkan index type of the engine's.</summary>
+    /// <summary>
+    /// The Vulkan index type of the engine's.
+    /// </summary>
     public static IndexType VkIndexKind(IndexKind kind) => kind == IndexKind.U32 ? IndexType.Uint32 : IndexType.Uint16;
 
-    /// <summary>The Vulkan filters of a GL minification filter (the mip interpolation folded in).</summary>
+    #endregion
+
+    #region Textures
+
+    /// <summary>
+    /// The Vulkan filters of a GL minification filter (the mip interpolation folded in).
+    /// </summary>
     public static (Filter Min, SamplerMipmapMode Mip) VkFilters(TextureMinFilter min) => min switch
     {
         TextureMinFilter.Nearest => (Filter.Nearest, SamplerMipmapMode.Nearest),
@@ -79,22 +99,37 @@ public static class GlConventions
         _ => (Filter.Linear, SamplerMipmapMode.Linear),
     };
 
-    /// <summary>The Vulkan filter of a GL magnification filter.</summary>
+    /// <summary>
+    /// The Vulkan filter of a GL magnification filter.
+    /// </summary>
     public static Filter VkFilter(TextureMagFilter mag) => mag == TextureMagFilter.Nearest ? Filter.Nearest : Filter.Linear;
 
-    /// <summary>The Vulkan filter of a GL minification filter (the mip interpolation dropped).</summary>
+    /// <summary>
+    /// The Vulkan filter of a GL minification filter (the mip interpolation dropped).
+    /// </summary>
     public static Filter VkFilter(TextureMinFilter min) => min is TextureMinFilter.Nearest or TextureMinFilter.NearestMipmapNearest
         or TextureMinFilter.NearestMipmapLinear ? Filter.Nearest : Filter.Linear;
 
-    /// <summary>Whether the format is a depth buffer (with or without a stencil).</summary>
+    /// <summary>
+    /// Whether the format is a depth buffer (with or without a stencil).
+    /// </summary>
     public static bool IsDepthFormat(InternalFormat f) => f is InternalFormat.DepthComponent24 or InternalFormat.DepthComponent32F
         or InternalFormat.Depth24Stencil8 or InternalFormat.Depth16;
 
-    /// <summary>The Vulkan aspect of a texture (the depth bit for a depth format, the colour bit otherwise).</summary>
+    /// <summary>
+    /// The Vulkan aspect of a texture (the depth bit for a depth format, the colour bit otherwise).
+    /// </summary>
     public static ImageAspectFlags VkAspect(TextureDesc desc) => desc.IsDepth ? ImageAspectFlags.DepthBit : ImageAspectFlags.ColorBit;
 
-    /// <summary>Formats sampled with nearest filtering and integer border colours.</summary>
-    public static bool IsIntegerFormat(InternalFormat f) => f is InternalFormat.Rgba8Ui or InternalFormat.R32Ui or InternalFormat.R16Ui or InternalFormat.R8Ui;
+    /// <summary>
+    /// Formats sampled with nearest filtering and integer border colours.
+    /// </summary>
+    public static bool IsIntegerFormat(InternalFormat f) =>
+        f is InternalFormat.Rgba8Ui or InternalFormat.R32Ui or InternalFormat.R16Ui or InternalFormat.R8Ui;
+
+    #endregion
+
+    #region Blending and depth
 
     public static BlendFactor BlendFactor(BlendingFactor f) => f switch
     {
@@ -123,6 +158,10 @@ public static class GlConventions
         _ => Silk.NET.Vulkan.CompareOp.Always,
     };
 
+    #endregion
+
+    #region Samplers
+
     public static SamplerAddressMode AddressMode(TextureWrapMode m) => m switch
     {
         TextureWrapMode.ClampToEdge => SamplerAddressMode.ClampToEdge,
@@ -131,7 +170,9 @@ public static class GlConventions
         _ => SamplerAddressMode.Repeat,
     };
 
-    /// <summary>A <c>TEXTURE_SWIZZLE_*</c> value.</summary>
+    /// <summary>
+    /// A <c>TEXTURE_SWIZZLE_*</c> value.
+    /// </summary>
     public static ComponentSwizzle Swizzle(int gl) => (GlEnum)gl switch
     {
         GlEnum.Red => ComponentSwizzle.R,
@@ -143,7 +184,14 @@ public static class GlConventions
         _ => ComponentSwizzle.Identity,
     };
 
-    /// <summary>GL's counter-clockwise front faces are clockwise in Vulkan's framebuffer space (same pixel rows, opposite sign of the area).</summary>
+    #endregion
+
+    #region Pipeline state
+
+    /// <summary>
+    /// GL's counter-clockwise front faces are clockwise in Vulkan's framebuffer space (same pixel rows, opposite sign of the
+    /// area).
+    /// </summary>
     public static FrontFace VkFrontFace(FrontFaceDirection f) => f == FrontFaceDirection.Ccw ? FrontFace.Clockwise : FrontFace.CounterClockwise;
 
     public static PrimitiveTopology Topology(PrimitiveType mode) => mode switch
@@ -158,7 +206,9 @@ public static class GlConventions
         _ => throw new NotSupportedException($"primitive {mode}"),
     };
 
-    /// <summary>The Vulkan cull mode of a GL cull face.</summary>
+    /// <summary>
+    /// The Vulkan cull mode of a GL cull face.
+    /// </summary>
     public static CullModeFlags VkCull(CullMode mode) => mode switch
     {
         CullMode.None => CullModeFlags.None,
@@ -167,7 +217,9 @@ public static class GlConventions
         _ => CullModeFlags.FrontAndBack,
     };
 
-    /// <summary>The Vulkan polygon mode of a GL polygon mode.</summary>
+    /// <summary>
+    /// The Vulkan polygon mode of a GL polygon mode.
+    /// </summary>
     public static PolygonMode VkPolygon(PolygonKind kind) => kind switch
     {
         PolygonKind.Point => PolygonMode.Point,
@@ -175,7 +227,9 @@ public static class GlConventions
         _ => PolygonMode.Fill,
     };
 
-    /// <summary>The Vulkan blend equation of a GL one.</summary>
+    /// <summary>
+    /// The Vulkan blend equation of a GL one.
+    /// </summary>
     public static BlendOp VkBlendOp(BlendOperation op) => op switch
     {
         BlendOperation.Add => BlendOp.Add,
@@ -185,7 +239,9 @@ public static class GlConventions
         _ => BlendOp.Max,
     };
 
-    /// <summary>The Vulkan colour mask of a GL one (the channels a draw writes).</summary>
+    /// <summary>
+    /// The Vulkan colour mask of a GL one (the channels a draw writes).
+    /// </summary>
     public static ColorComponentFlags VkColorMask(ColorMask mask)
     {
         var flags = default(ColorComponentFlags);
@@ -196,13 +252,23 @@ public static class GlConventions
         return flags;
     }
 
-    /// <summary>The Vulkan scissor rectangle of a GL one.</summary>
+    /// <summary>
+    /// The Vulkan scissor rectangle of a GL one.
+    /// </summary>
     public static Rect2D VkRect(PixelRect r) => new(new Offset2D(r.X, r.Y), new Extent2D(r.Width, r.Height));
 
-    /// <summary>The Vulkan viewport of a GL one.</summary>
+    /// <summary>
+    /// The Vulkan viewport of a GL one.
+    /// </summary>
     public static Viewport VkViewport(PixelViewport v) => new(v.X, v.Y, v.Width, v.Height, v.MinDepth, v.MaxDepth);
 
-    /// <summary>The Vulkan format of a GL vertex attribute (<c>glVertexAttribPointer</c> / <c>glVertexAttribIPointer</c>).</summary>
+    #endregion
+
+    #region Vertex input
+
+    /// <summary>
+    /// The Vulkan format of a GL vertex attribute (<c>glVertexAttribPointer</c> / <c>glVertexAttribIPointer</c>).
+    /// </summary>
     public static InternalFormat VertexFormat(GlEnum type, int size, bool normalized, bool integer) => (type, size, normalized, integer) switch
     {
         (GlEnum.Float, 1, _, _) => InternalFormat.R32F,
@@ -219,7 +285,9 @@ public static class GlConventions
         _ => throw new NotSupportedException($"vertex attribute {type} x{size} normalized {normalized} integer {integer}"),
     };
 
-    /// <summary>Bytes of one tightly packed vertex attribute (GL's stride 0).</summary>
+    /// <summary>
+    /// Bytes of one tightly packed vertex attribute (GL's stride 0).
+    /// </summary>
     public static uint VertexBytes(GlEnum type, int size) => (uint)size * type switch
     {
         GlEnum.UnsignedByte or GlEnum.Byte => 1u,
@@ -227,8 +295,10 @@ public static class GlConventions
         _ => 4u,
     };
 
-    /// <summary>The format a disabled vertex attribute is read with (GL's current generic value (0, 0, 0, 1), from <see cref="GpuDefaults.DummyVertex"/>:
-    /// float at offset 0, integer at <see cref="GpuDefaults.DummyIntOffset"/>).</summary>
+    /// <summary>
+    /// The format a disabled vertex attribute is read with (GL's current generic value (0, 0, 0, 1), from
+    /// <see cref="GpuDefaults.DummyVertex"/>: float at offset 0, integer at <see cref="GpuDefaults.DummyIntOffset"/>).
+    /// </summary>
     public static InternalFormat DummyVertexFormat(ScalarKind kind) => kind switch
     {
         ScalarKind.Int => InternalFormat.Rgba32I,
@@ -236,27 +306,43 @@ public static class GlConventions
         _ => InternalFormat.Rgba32F,
     };
 
-    /// <summary>The dummy vertex buffer offset a disabled attribute of this kind reads.</summary>
+    /// <summary>
+    /// The dummy vertex buffer offset a disabled attribute of this kind reads.
+    /// </summary>
     public static ulong DummyVertexOffset(ScalarKind kind) => kind == ScalarKind.Float ? 0ul : GpuDefaults.DummyIntOffset;
 
-    /// <summary>The kind of texture a sampler reads: 0 2D, 1 2D array, 2 cube (VkGl's per-unit target slots).</summary>
+    #endregion
+
+    #region Texture slots
+
+    /// <summary>
+    /// The kind of texture a sampler reads: 0 2D, 1 2D array, 2 cube (VkGl's per-unit target slots).
+    /// </summary>
     public static int SamplerSlot(SamplerInfo s) => s.Dimension == SamplerDimension.Cube ? 2 : s.Arrayed ? 1 : 0;
 
-    /// <summary>The target slot of a GL texture target (0 2D, 1 2D array, 2 cube).</summary>
+    /// <summary>
+    /// The target slot of a GL texture target (0 2D, 1 2D array, 2 cube).
+    /// </summary>
     public static int TargetSlot(TextureTarget t) => t switch
     {
         TextureTarget.Texture2DArray => 1,
         TextureTarget.TextureCubeMap => 2,
         _ => 0,
     };
+
+    #endregion
 }
 
-/// <summary>GL's uniform semantics on a CPU copy of a default uniform block (VkGl and the native <c>LegacyProgram</c>).</summary>
+/// <summary>
+/// GL's uniform semantics on a CPU copy of a default uniform block (VkGl and the native <c>LegacyProgram</c>).
+/// </summary>
 public static unsafe class GlUniforms
 {
-    /// <summary>Copies tightly packed GL values (<paramref name="count"/> elements of <paramref name="columns"/> × <paramref name="rows"/>
+    /// <summary>
+    /// Copies tightly packed GL values (<paramref name="count"/> elements of <paramref name="columns"/> × <paramref name="rows"/>
     /// 4-byte components) into a default block at the reflected offset and strides. A float written to an int or bool member and an int
-    /// written to a float member convert as GL does; bools are stored as 0/1.</summary>
+    /// written to a float member convert as GL does; bools are stored as 0/1.
+    /// </summary>
     public static void Scatter(byte[] block, UniformLookup at, byte* src, int rows, int columns, int count, bool isInt)
     {
         var m = at.Member;
@@ -273,9 +359,14 @@ public static unsafe class GlUniforms
                         int srcIndex = (e * columns + c) * rows + r;
                         uint bits = ((uint*)src)[srcIndex];
                         // A float written to an int/bool member (glUniform1f on a bool) and an int to a float member convert as GL does.
-                        if (m.Kind == ScalarKind.Float && isInt) { float fv = (int)bits; bits = *(uint*)&fv; }
+                        if (m.Kind == ScalarKind.Float && isInt)
+                        {
+                            float fv = (int)bits;
+                            bits = *(uint*)&fv;
+                        }
                         else if (m.Kind != ScalarKind.Float && !isInt) bits = (uint)(int)*(float*)&bits;
-                        if (m.Kind == ScalarKind.Bool || (m.Kind == ScalarKind.UInt && !isInt)) bits = bits != 0 ? 1u : 0u;
+                        if (m.Kind == ScalarKind.Bool || (m.Kind == ScalarKind.UInt && !isInt))
+                            bits = bits != 0 ? 1u : 0u;
                         *(uint*)(dst + at.Offset + e * elemStride + c * colStride + r * 4) = bits;
                     }
     }
@@ -315,16 +406,24 @@ public enum FrontFaceDirection : int
     Ccw = 0x901,
 }
 
-/// <summary>GL's cull face: the faces a draw discards (the cull is off with <see cref="None"/>).</summary>
+/// <summary>
+/// GL's cull face: the faces a draw discards (the cull is off with <see cref="None"/>).
+/// </summary>
 public enum CullMode { None, Front, Back, FrontAndBack }
 
-/// <summary>GL's polygon mode: how a polygon's interior is filled.</summary>
+/// <summary>
+/// GL's polygon mode: how a polygon's interior is filled.
+/// </summary>
 public enum PolygonKind { Point, Line, Fill }
 
-/// <summary>GL's blend equation, for colour and for alpha separately.</summary>
+/// <summary>
+/// GL's blend equation, for colour and for alpha separately.
+/// </summary>
 public enum BlendOperation { Add, Subtract, ReverseSubtract, Min, Max }
 
-/// <summary>GL's colour mask (glColorMask): the channels a draw writes.</summary>
+/// <summary>
+/// GL's colour mask (glColorMask): the channels a draw writes.
+/// </summary>
 [Flags]
 public enum ColorMask
 {
@@ -337,10 +436,14 @@ public enum ColorMask
     All = R | G | B | A,
 }
 
-/// <summary>GL's scissor rectangle, in pixels.</summary>
+/// <summary>
+/// GL's scissor rectangle, in pixels.
+/// </summary>
 public readonly record struct PixelRect(int X, int Y, uint Width, uint Height);
 
-/// <summary>GL's viewport: a pixel rectangle with the depth range.</summary>
+/// <summary>
+/// GL's viewport: a pixel rectangle with the depth range.
+/// </summary>
 public readonly record struct PixelViewport(float X, float Y, float Width, float Height, float MinDepth = 0, float MaxDepth = 1);
 
 public enum GlEnum : int
@@ -397,7 +500,6 @@ public enum GlEnum : int
     Rgba32Ui = 0x8D70,
     Rgba32I = 0x8D82,
     Rgb32F = 0x8815,
-
 }
 
 public enum InternalFormat : int
@@ -452,7 +554,9 @@ public enum PrimitiveType : int
     PatchList = 0xE,
 }
 
-/// <summary>What a render target does with its contents when the pass begins (GL's load op).</summary>
+/// <summary>
+/// What a render target does with its contents when the pass begins (GL's load op).
+/// </summary>
 public enum LoadOp : int
 {
     Load = 0,
@@ -460,14 +564,20 @@ public enum LoadOp : int
     DontCare = 2,
 }
 
-/// <summary>The colour a render target is cleared to.</summary>
+/// <summary>
+/// The colour a render target is cleared to.
+/// </summary>
 public readonly record struct ClearColour(float R, float G, float B, float A)
 {
-    /// <summary>The clear colour as the backend's own (Vulkan's).</summary>
+    /// <summary>
+    /// The clear colour as the backend's own (Vulkan's).
+    /// </summary>
     public ClearColorValue Vk => new(R, G, B, A);
 }
 
-/// <summary>The index format of a vertex index buffer (GL's index type).</summary>
+/// <summary>
+/// The index format of a vertex index buffer (GL's index type).
+/// </summary>
 public enum IndexKind : int
 {
     U16 = 0,

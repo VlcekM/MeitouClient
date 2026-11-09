@@ -8,9 +8,6 @@ public sealed class VulkanException(string message, Result result = Result.Error
 
     public static void Check(Result r, string what)
     {
-        if (r != Result.Success)
-        {
-            throw new VulkanException($"{what} failed: {r}", r);
-        }
+        if (r != Result.Success) throw new VulkanException($"{what} failed: {r}", r);
     }
 }

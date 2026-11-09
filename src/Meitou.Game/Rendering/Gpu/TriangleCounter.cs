@@ -6,11 +6,12 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// The bench's triangle size histogram (<c>--bench-tris</c>, docs/bench.md "Triangle size histogram"): while <see cref="Begin"/> is in effect the
-/// colour programs of the main view (<see cref="TriangleBins.CategoryOf"/>) are made with a fragment shader that runs the original and then adds
-/// one to a counter in a storage buffer, by category and by the area of the sample's triangle (<see cref="TriangleBins.Instrument"/>). The buffer
-/// is reached by its device address, written into the shader text, so no renderer's layout or sets change. Normal programs and pipelines are
-/// never touched: the instrumented ones are separate pipelines (<see cref="PipelineLibrary.GetWithFragment"/>, swapped in at <see cref="CommandList.BindPipeline(GpuPipeline)"/>), made only while it is on.
+/// The bench's triangle size histogram (<c>--bench-tris</c>, docs/bench.md "Triangle size histogram"): while <see cref="Begin"/> is in effect the colour
+/// programs of the main view (<see cref="TriangleBins.CategoryOf"/>) are made with a fragment shader that runs the original and then adds one to a
+/// counter in a storage buffer, by category and by the area of the sample's triangle (<see cref="TriangleBins.Instrument"/>). The buffer is reached by
+/// its device address, written into the shader text, so no renderer's layout or sets change. Normal programs and pipelines are never touched: the
+/// instrumented ones are separate pipelines (<see cref="PipelineLibrary.GetWithFragment"/>, swapped in at <see cref="CommandList.BindPipeline(GpuPipeline)"/>),
+/// made only while it is on.
 /// </summary>
 public sealed unsafe class TriangleCounter : IDisposable
 {
@@ -28,17 +29,22 @@ public sealed unsafe class TriangleCounter : IDisposable
     readonly List<string> _skipped = [];
     readonly List<string> _counted = [];
 
-    /// <summary>Programs that were given a counting fragment shader.</summary>
+    /// <summary>
+    /// Programs that were given a counting fragment shader.
+    /// </summary>
     public IReadOnlyList<string> Counted => _counted;
 
-    public static bool Supported(GpuContext ctx) => ctx.Device.HasFragmentBarycentric && ctx.Device.HasBufferDeviceAddress;
-
-    /// <summary>Programs of a counted category whose text could not be instrumented (their triangles are missing from the histogram).</summary>
+    /// <summary>
+    /// Programs of a counted category whose text could not be instrumented (their triangles are missing from the histogram).
+    /// </summary>
     public IReadOnlyList<string> Skipped => _skipped;
+
+    public static bool Supported(GpuContext ctx) => ctx.Device.HasFragmentBarycentric && ctx.Device.HasBufferDeviceAddress;
 
     public TriangleCounter(GpuContext ctx)
     {
         if (!Supported(ctx)) throw new NotSupportedException("the device has no fragment shader barycentrics or buffer device address");
+
         this._ctx = ctx;
         _device = ctx.Device;
         _vk = _device.Vk;
@@ -47,15 +53,25 @@ public sealed unsafe class TriangleCounter : IDisposable
             SType = StructureType.BufferCreateInfo,
             Size = Bytes,
             SharingMode = SharingMode.Exclusive,
-            Usage = BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit | BufferUsageFlags.TransferSrcBit | BufferUsageFlags.TransferDstBit,
+            Usage = BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit
+                | BufferUsageFlags.TransferSrcBit | BufferUsageFlags.TransferDstBit,
         };
         VulkanException.Check(_vk.CreateBuffer(_device.Device, in info, null, out _buffer), "vkCreateBuffer(triangle counters)");
         _vk.GetBufferMemoryRequirements(_device.Device, _buffer, out var req);
         _vk.GetPhysicalDeviceMemoryProperties(_device.PhysicalDevice, out var props);
+
         uint type = uint.MaxValue;
         for (uint i = 0; i < props.MemoryTypeCount; i++)
-            if ((req.MemoryTypeBits & (1u << (int)i)) != 0 && (props.MemoryTypes[(int)i].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) != 0) { type = i; break; }
+        {
+            if ((req.MemoryTypeBits & (1u << (int)i)) != 0 && (props.MemoryTypes[(int)i].PropertyFlags & MemoryPropertyFlags.DeviceLocalBit) != 0)
+            {
+                type = i;
+                break;
+            }
+        }
+
         if (type == uint.MaxValue) throw new VulkanException("no device-local memory type for the triangle counters");
+
         var flags = new MemoryAllocateFlagsInfo { SType = StructureType.MemoryAllocateFlagsInfo, Flags = MemoryAllocateFlags.DeviceAddressBit };
         var alloc = new MemoryAllocateInfo { SType = StructureType.MemoryAllocateInfo, AllocationSize = req.Size, MemoryTypeIndex = type, PNext = &flags };
         VulkanException.Check(_vk.AllocateMemory(_device.Device, in alloc, null, out _memory), "vkAllocateMemory(triangle counters)");
@@ -66,17 +82,23 @@ public sealed unsafe class TriangleCounter : IDisposable
         _readback = ReadbackBuffer.Create(ctx, Bytes, "triangle counters readback");
     }
 
-    /// <summary>Zeroes the counters (in the frame being recorded, before its draws) and makes the pipelines created from now on count.</summary>
+    /// <summary>
+    /// Zeroes the counters (in the frame being recorded, before its draws) and makes the pipelines created from now on count.
+    /// </summary>
     public void Begin()
     {
         Clear();
         CommandList.PipelineSubstitute = Substitute;
     }
 
-    /// <summary>Back to the normal pipelines.</summary>
+    /// <summary>
+    /// Back to the normal pipelines.
+    /// </summary>
     public void End() => CommandList.PipelineSubstitute = null;
 
-    /// <summary>Zeroes the counters in the frame being recorded.</summary>
+    /// <summary>
+    /// Zeroes the counters in the frame being recorded.
+    /// </summary>
     public void Clear()
     {
         _ctx.EnsureFrame();
@@ -94,12 +116,14 @@ public sealed unsafe class TriangleCounter : IDisposable
     // Called from the recording threads: the modules are made under a lock (once per program).
     ShaderModule ModuleFor(GpuProgram program)
     {
-        lock (_modules) return ModuleForLocked(program);
+        lock (_modules)
+            return ModuleForLocked(program);
     }
 
     ShaderModule ModuleForLocked(GpuProgram program)
     {
         if (_modules.TryGetValue(program, out var module)) return module;
+
         int category = TriangleBins.CategoryOf(program.Name);
         if (category >= 0 && _ctx.Shaders.Backend(program).FragmentSource is { } source)
         {
@@ -110,10 +134,13 @@ public sealed unsafe class TriangleCounter : IDisposable
             }
             else _skipped.Add(program.Name);
         }
+
         return _modules[program] = module;
     }
 
-    /// <summary>The samples counted since <see cref="Clear"/>, per category, as the histogram of their triangles (the frame in progress is submitted and waited for).</summary>
+    /// <summary>
+    /// The samples counted since <see cref="Clear"/>, per category, as the histogram of their triangles (the frame in progress is submitted and waited for).
+    /// </summary>
     public Dictionary<string, SizeHistogram> Read()
     {
         _ctx.EnsureFrame();
@@ -121,15 +148,18 @@ public sealed unsafe class TriangleCounter : IDisposable
         list.CopyBuffer(_handle, _readback.Handle, new GpuBufferCopy(0, 0, Bytes));
         _ctx.EndNative(list);
         _ctx.Finish();
+
         var bytes = _readback.Read(0, Bytes);
         var counts = new uint[TriangleBins.Categories.Length * TriangleBins.Fine];
         System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(bytes).CopyTo(counts);
+
         var result = new Dictionary<string, SizeHistogram>();
         for (int c = 0; c < TriangleBins.Categories.Length; c++)
         {
             var h = TriangleBins.Fold(counts.AsSpan(c * TriangleBins.Fine, TriangleBins.Fine));
             if (h.TotalPixels > 0) result[TriangleBins.Categories[c]] = h;
         }
+
         return result;
     }
 
@@ -137,7 +167,9 @@ public sealed unsafe class TriangleCounter : IDisposable
     {
         End();
         _ctx.Finish();
-        foreach (var m in _modules.Values) if (m.Handle != 0) _vk.DestroyShaderModule(_device.Device, m, null);
+        foreach (var m in _modules.Values)
+            if (m.Handle != 0) _vk.DestroyShaderModule(_device.Device, m, null);
+
         _readback.Dispose();
         _vk.DestroyBuffer(_device.Device, _buffer, null);
         _vk.FreeMemory(_device.Device, _memory, null);

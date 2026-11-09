@@ -3,7 +3,9 @@ using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game.Rendering.Gpu.Shaders;
 
-/// <summary>A small SPIR-V parser: just enough of the word stream to describe a shader's resources and interface.</summary>
+/// <summary>
+/// A small SPIR-V parser: just enough of the word stream to describe a shader's resources and interface.
+/// </summary>
 public static class SpirvReflection
 {
     const uint MagicNumber = 0x07230203;
@@ -11,7 +13,8 @@ public static class SpirvReflection
     // opcodes
     const int OpName = 5, OpMemberName = 6, OpTypeVoid = 19, OpTypeBool = 20, OpTypeInt = 21, OpTypeFloat = 22, OpTypeVector = 23,
         OpTypeMatrix = 24, OpTypeImage = 25, OpTypeSampler = 26, OpTypeSampledImage = 27, OpTypeArray = 28, OpTypeRuntimeArray = 29,
-        OpTypeStruct = 30, OpTypePointer = 32, OpConstant = 43, OpFunction = 54, OpFunctionCall = 57, OpImageTexelPointer = 60, OpLoad = 61, OpStore = 62, OpAccessChain = 65, OpInBoundsAccessChain = 66, OpCopyObject = 83, OpVariable = 59, OpDecorate = 71, OpMemberDecorate = 72;
+        OpTypeStruct = 30, OpTypePointer = 32, OpConstant = 43, OpFunction = 54, OpFunctionCall = 57, OpImageTexelPointer = 60, OpLoad = 61,
+        OpStore = 62, OpAccessChain = 65, OpInBoundsAccessChain = 66, OpCopyObject = 83, OpVariable = 59, OpDecorate = 71, OpMemberDecorate = 72;
 
     // decorations
     const int DecBufferBlock = 3, DecRowMajor = 4, DecArrayStride = 6, DecMatrixStride = 7, DecBuiltIn = 11,
@@ -21,18 +24,32 @@ public static class SpirvReflection
     const int ScUniformConstant = 0, ScInput = 1, ScUniform = 2, ScOutput = 3, ScPushConstant = 9, ScStorageBuffer = 12;
 
     abstract record SType;
+
     sealed record Void : SType;
+
     sealed record Bool : SType;
+
     sealed record Int(int Width, bool Signed) : SType;
+
     sealed record Float(int Width) : SType;
+
     sealed record Vector(uint Component, int Count) : SType;
+
     sealed record Matrix(uint Column, int Columns) : SType;
-    sealed record Image(uint Sampled, int Dim, int Depth, bool Arrayed, bool Ms, uint Usage = 0) : SType;   // Sampled: the sampled type; Usage: 1 sampled, 2 storage
+
+    // Sampled: the sampled type; Usage: 1 sampled, 2 storage
+    sealed record Image(uint Sampled, int Dim, int Depth, bool Arrayed, bool Ms, uint Usage = 0) : SType;
+
     sealed record Sampler : SType;
+
     sealed record SampledImage(uint Image) : SType;
+
     sealed record Array(uint Element, uint LengthId) : SType;
+
     sealed record RuntimeArray(uint Element) : SType;
+
     sealed record Struct(uint[] Members) : SType;
+
     sealed record Pointer(int Storage, uint Pointee) : SType;
 
     sealed class Module
@@ -41,10 +58,18 @@ public static class SpirvReflection
         public readonly Dictionary<uint, string> Names = [];
         public readonly Dictionary<(uint, int), string> MemberNames = [];
         public readonly Dictionary<uint, uint> Constants = [];
-        public readonly Dictionary<uint, Dictionary<int, uint>> Decorations = [];                // id -> decoration -> first operand
-        public readonly Dictionary<(uint, int), Dictionary<int, uint>> MemberDecorations = [];    // (struct, member) -> decoration -> first operand
+
+        // id -> decoration -> first operand
+        public readonly Dictionary<uint, Dictionary<int, uint>> Decorations = [];
+
+        // (struct, member) -> decoration -> first operand
+        public readonly Dictionary<(uint, int), Dictionary<int, uint>> MemberDecorations = [];
+
         public readonly List<(uint Id, uint Type, int Storage)> Variables = [];
-        public readonly HashSet<uint> Used = [];   // variables a function body loads, stores, indexes or passes on
+
+        // variables a function body loads, stores, indexes or passes on
+        public readonly HashSet<uint> Used = [];
+
         public bool InFunction;
     }
 
@@ -52,6 +77,7 @@ public static class SpirvReflection
     {
         ArgumentNullException.ThrowIfNull(spirv);
         if (spirv.Length < 20 || spirv.Length % 4 != 0) throw new ArgumentException("Not a SPIR-V module (size).", nameof(spirv));
+
         var w = new uint[spirv.Length / 4];
         Buffer.BlockCopy(spirv, 0, w, 0, spirv.Length);
         if (w[0] != MagicNumber) throw new ArgumentException("Not a SPIR-V module (magic).", nameof(spirv));
@@ -61,9 +87,11 @@ public static class SpirvReflection
         {
             int count = (int)(w[i] >> 16), op = (int)(w[i] & 0xFFFF);
             if (count == 0 || i + count > w.Length) throw new ArgumentException("Truncated SPIR-V instruction.", nameof(spirv));
+
             ReadInstruction(m, op, w.AsSpan(i + 1, count - 1));
             i += count;
         }
+
         return Build(m);
     }
 
@@ -71,12 +99,34 @@ public static class SpirvReflection
     {
         switch (op)
         {
-            case OpFunction: m.InFunction = true; break;
-            case OpLoad or OpAccessChain or OpInBoundsAccessChain or OpCopyObject or OpImageTexelPointer when m.InFunction && a.Length > 2: m.Used.Add(a[2]); break;
-            case OpStore when m.InFunction: m.Used.Add(a[0]); break;
-            case OpFunctionCall when m.InFunction: for (int i = 3; i < a.Length; i++) m.Used.Add(a[i]); break;
-            case OpName: m.Names[a[0]] = Str(a[1..]); break;
-            case OpMemberName: m.MemberNames[(a[0], (int)a[1])] = Str(a[2..]); break;
+            case OpFunction:
+                m.InFunction = true;
+                break;
+            case OpLoad or OpAccessChain or OpInBoundsAccessChain or OpCopyObject or OpImageTexelPointer when m.InFunction && a.Length > 2:
+                m.Used.Add(a[2]);
+                break;
+            case OpStore when m.InFunction:
+                m.Used.Add(a[0]);
+                break;
+            case OpFunctionCall when m.InFunction:
+                for (int i = 3; i < a.Length; i++) m.Used.Add(a[i]);
+                break;
+            case OpName:
+                m.Names[a[0]] = Str(a[1..]);
+                break;
+            case OpMemberName:
+                m.MemberNames[(a[0], (int)a[1])] = Str(a[2..]);
+                break;
+            default:
+                ReadType(m, op, a);
+                break;
+        }
+    }
+
+    static void ReadType(Module m, int op, ReadOnlySpan<uint> a)
+    {
+        switch (op)
+        {
             case OpTypeVoid: m.Types[a[0]] = new Void(); break;
             case OpTypeBool: m.Types[a[0]] = new Bool(); break;
             case OpTypeInt: m.Types[a[0]] = new Int((int)a[1], a[2] != 0); break;
@@ -90,34 +140,44 @@ public static class SpirvReflection
             case OpTypeRuntimeArray: m.Types[a[0]] = new RuntimeArray(a[1]); break;
             case OpTypeStruct: m.Types[a[0]] = new Struct(a[1..].ToArray()); break;
             case OpTypePointer: m.Types[a[0]] = new Pointer((int)a[1], a[2]); break;
-            case OpConstant: if (a.Length >= 3) m.Constants[a[1]] = a[2]; break;
+            case OpConstant:
+                if (a.Length >= 3) m.Constants[a[1]] = a[2];
+                break;
             case OpVariable: m.Variables.Add((a[1], a[0], (int)a[2])); break;
-            case OpDecorate:
-                {
-                    if (!m.Decorations.TryGetValue(a[0], out var d)) m.Decorations[a[0]] = d = [];
-                    d[(int)a[1]] = a.Length > 2 ? a[2] : 0;
-                    break;
-                }
-            case OpMemberDecorate:
-                {
-                    var key = (a[0], (int)a[1]);
-                    if (!m.MemberDecorations.TryGetValue(key, out var d)) m.MemberDecorations[key] = d = [];
-                    d[(int)a[2]] = a.Length > 3 ? a[3] : 0;
-                    break;
-                }
+            case OpDecorate: ReadDecoration(m, a); break;
+            case OpMemberDecorate: ReadMemberDecoration(m, a); break;
         }
+    }
+
+    static void ReadDecoration(Module m, ReadOnlySpan<uint> a)
+    {
+        if (!m.Decorations.TryGetValue(a[0], out var d)) m.Decorations[a[0]] = d = [];
+
+        d[(int)a[1]] = a.Length > 2 ? a[2] : 0;
+    }
+
+    static void ReadMemberDecoration(Module m, ReadOnlySpan<uint> a)
+    {
+        var key = (a[0], (int)a[1]);
+        if (!m.MemberDecorations.TryGetValue(key, out var d)) m.MemberDecorations[key] = d = [];
+
+        d[(int)a[2]] = a.Length > 3 ? a[3] : 0;
     }
 
     static string Str(ReadOnlySpan<uint> words)
     {
         var bytes = new List<byte>();
         foreach (uint word in words)
+        {
             for (int s = 0; s < 32; s += 8)
             {
                 byte b = (byte)(word >> s);
                 if (b == 0) return Encoding.UTF8.GetString(bytes.ToArray());
+
                 bytes.Add(b);
             }
+        }
+
         return Encoding.UTF8.GetString(bytes.ToArray());
     }
 
@@ -133,6 +193,7 @@ public static class SpirvReflection
         foreach (var (id, typeId, storage) in m.Variables)
         {
             if (m.Types[typeId] is not Pointer ptr) continue;
+
             m.Decorations.TryGetValue(id, out var dec);
             dec ??= [];
             string name = m.Names.GetValueOrDefault(id, "");
@@ -141,58 +202,14 @@ public static class SpirvReflection
             switch (storage)
             {
                 case ScUniform or ScPushConstant or ScStorageBuffer:
-                    {
-                        uint structId = StripArrays(m, pointee);
-                        if (m.Types.GetValueOrDefault(structId) is not Struct st) break;
-                        var members = new List<BlockMember>();
-                        int size = 0;
-                        for (int i = 0; i < st.Members.Length; i++)
-                            size = Math.Max(size, AddMember(m, structId, i, st.Members[i], "", 0, members));
-                        if (storage != ScPushConstant && !m.Used.Contains(id)) { inactive.Add(m.Names.GetValueOrDefault(structId, name)); break; }
-                        bool bufferBlock = m.Decorations.TryGetValue(structId, out var sd) && sd.ContainsKey(DecBufferBlock);
-                        var kind = storage == ScPushConstant ? BlockKind.PushConstant : storage == ScStorageBuffer || bufferBlock ? BlockKind.StorageBuffer : BlockKind.Uniform;
-                        if (kind == BlockKind.Uniform) size = (size + 15) & ~15;
-                        blocks.Add(new UniformBlockInfo
-                        {
-                            Name = m.Names.GetValueOrDefault(structId, ""),
-                            InstanceName = name,
-                            Kind = kind,
-                            Set = (int)dec.GetValueOrDefault(DecDescriptorSet),
-                            Binding = kind == BlockKind.PushConstant ? -1 : (int)dec.GetValueOrDefault(DecBinding),
-                            Size = size,
-                            Members = members,
-                        });
-                        break;
-                    }
+                    AddBlock(m, id, storage, pointee, name, dec, blocks, inactive);
+                    break;
                 case ScUniformConstant:
-                    {
-                        int len = 0;
-                        uint t = pointee;
-                        if (m.Types.GetValueOrDefault(t) is Array arr) { len = ArrayLength(m, arr); t = arr.Element; }
-                        else if (m.Types.GetValueOrDefault(t) is RuntimeArray rarr) { len = -1; t = rarr.Element; }   // a bindless array
-                        if (m.Types.GetValueOrDefault(t) is Image { Usage: 2 } && len == 0)   // a storage image
-                        {
-                            if (m.Used.Contains(id)) storageImages.Add(new StorageImageInfo(name, (int)dec.GetValueOrDefault(DecDescriptorSet), (int)dec.GetValueOrDefault(DecBinding)));
-                            else inactive.Add(name);
-                            break;
-                        }
-                        if (m.Types.GetValueOrDefault(t) is not SampledImage si || m.Types[si.Image] is not Image img) break;
-                        if (!m.Used.Contains(id)) { inactive.Add(name); break; }
-                        var dim = img.Dim switch { 0 => SamplerDimension.Dim1D, 1 => SamplerDimension.Dim2D, 2 => SamplerDimension.Dim3D, 3 => SamplerDimension.Cube, _ => SamplerDimension.Other };
-                        samplers.Add(new SamplerInfo(name, (int)dec.GetValueOrDefault(DecDescriptorSet), (int)dec.GetValueOrDefault(DecBinding), dim, img.Arrayed, img.Ms, img.Depth == 1, ScalarOf(m, img.Sampled), len));
-                        break;
-                    }
+                    AddUniformConstant(m, id, pointee, name, dec, samplers, storageImages, inactive);
+                    break;
                 case ScInput or ScOutput:
-                    {
-                        if (dec.ContainsKey(DecBuiltIn) || !dec.TryGetValue(DecLocation, out uint loc)) break;
-                        int len = 0;
-                        uint t = pointee;
-                        if (m.Types.GetValueOrDefault(t) is Array arr) { len = ArrayLength(m, arr); t = arr.Element; }
-                        if (m.Types.GetValueOrDefault(t) is Struct) break;
-                        var (kind, cols, rows) = Shape(m, t);
-                        (storage == ScInput ? inputs : outputs).Add(new InterfaceVariable(name, (int)loc, kind, cols, rows, len));
-                        break;
-                    }
+                    AddInterface(m, storage, pointee, name, dec, inputs, outputs);
+                    break;
             }
         }
 
@@ -201,9 +218,109 @@ public static class SpirvReflection
         return new ShaderReflection { Blocks = blocks, Samplers = samplers, StorageImages = storageImages, Inputs = inputs, Outputs = outputs, Inactive = inactive };
     }
 
+    /// <summary>
+    /// A uniform, push constant or storage block variable: its members, unless the block is unused (then it is inactive).
+    /// </summary>
+    static void AddBlock(Module m, uint id, int storage, uint pointee, string name, Dictionary<int, uint> dec, List<UniformBlockInfo> blocks,
+        List<string> inactive)
+    {
+        uint structId = StripArrays(m, pointee);
+        if (m.Types.GetValueOrDefault(structId) is not Struct st) return;
+
+        var members = new List<BlockMember>();
+        int size = 0;
+        for (int i = 0; i < st.Members.Length; i++)
+            size = Math.Max(size, AddMember(m, structId, i, st.Members[i], "", 0, members));
+
+        if (storage != ScPushConstant && !m.Used.Contains(id))
+        {
+            inactive.Add(m.Names.GetValueOrDefault(structId, name));
+            return;
+        }
+
+        bool bufferBlock = m.Decorations.TryGetValue(structId, out var sd) && sd.ContainsKey(DecBufferBlock);
+        var kind = storage == ScPushConstant ? BlockKind.PushConstant : storage == ScStorageBuffer || bufferBlock ? BlockKind.StorageBuffer : BlockKind.Uniform;
+        if (kind == BlockKind.Uniform) size = (size + 15) & ~15;
+
+        blocks.Add(new UniformBlockInfo
+        {
+            Name = m.Names.GetValueOrDefault(structId, ""),
+            InstanceName = name,
+            Kind = kind,
+            Set = (int)dec.GetValueOrDefault(DecDescriptorSet),
+            Binding = kind == BlockKind.PushConstant ? -1 : (int)dec.GetValueOrDefault(DecBinding),
+            Size = size,
+            Members = members,
+        });
+    }
+
+    /// <summary>
+    /// A sampler, a sampled image array or a storage image.
+    /// </summary>
+    static void AddUniformConstant(Module m, uint id, uint pointee, string name, Dictionary<int, uint> dec, List<SamplerInfo> samplers,
+        List<StorageImageInfo> storageImages, List<string> inactive)
+    {
+        int len = 0;
+        uint t = pointee;
+        if (m.Types.GetValueOrDefault(t) is Array arr)
+        {
+            len = ArrayLength(m, arr);
+            t = arr.Element;
+        }
+        else if (m.Types.GetValueOrDefault(t) is RuntimeArray rarr)
+        {
+            // a bindless array
+            len = -1;
+            t = rarr.Element;
+        }
+
+        // a storage image
+        if (m.Types.GetValueOrDefault(t) is Image { Usage: 2 } && len == 0)
+        {
+            if (m.Used.Contains(id)) storageImages.Add(new StorageImageInfo(name, (int)dec.GetValueOrDefault(DecDescriptorSet), (int)dec.GetValueOrDefault(DecBinding)));
+            else inactive.Add(name);
+            return;
+        }
+
+        if (m.Types.GetValueOrDefault(t) is not SampledImage si || m.Types[si.Image] is not Image img) return;
+
+        if (!m.Used.Contains(id))
+        {
+            inactive.Add(name);
+            return;
+        }
+
+        var dim = img.Dim switch { 0 => SamplerDimension.Dim1D, 1 => SamplerDimension.Dim2D, 2 => SamplerDimension.Dim3D, 3 => SamplerDimension.Cube, _ => SamplerDimension.Other };
+        samplers.Add(new SamplerInfo(name, (int)dec.GetValueOrDefault(DecDescriptorSet), (int)dec.GetValueOrDefault(DecBinding), dim, img.Arrayed, img.Ms,
+            img.Depth == 1, ScalarOf(m, img.Sampled), len));
+    }
+
+    /// <summary>
+    /// A stage input or output with a location (built-ins, and structs, are left out).
+    /// </summary>
+    static void AddInterface(Module m, int storage, uint pointee, string name, Dictionary<int, uint> dec, List<InterfaceVariable> inputs,
+        List<InterfaceVariable> outputs)
+    {
+        if (dec.ContainsKey(DecBuiltIn) || !dec.TryGetValue(DecLocation, out uint loc)) return;
+
+        int len = 0;
+        uint t = pointee;
+        if (m.Types.GetValueOrDefault(t) is Array arr)
+        {
+            len = ArrayLength(m, arr);
+            t = arr.Element;
+        }
+
+        if (m.Types.GetValueOrDefault(t) is Struct) return;
+
+        var (kind, cols, rows) = Shape(m, t);
+        (storage == ScInput ? inputs : outputs).Add(new InterfaceVariable(name, (int)loc, kind, cols, rows, len));
+    }
+
     static uint StripArrays(Module m, uint t)
     {
         while (m.Types.GetValueOrDefault(t) is Array a) t = a.Element;
+
         return t;
     }
 
@@ -239,7 +356,9 @@ public static class SpirvReflection
         _ => 4,
     };
 
-    /// <summary>Adds a member (flattening structs) and returns the byte just past it.</summary>
+    /// <summary>
+    /// Adds a member (flattening structs) and returns the byte just past it.
+    /// </summary>
     static int AddMember(Module m, uint structId, int index, uint typeId, string prefix, int baseOffset, List<BlockMember> into)
     {
         m.MemberDecorations.TryGetValue((structId, index), out var dec);
@@ -258,30 +377,24 @@ public static class SpirvReflection
             arrayLen = ArrayLength(m, arr);
             arrayStride = (int)dec.GetValueOrDefault(DecArrayStride);
             t = arr.Element;
+
             // Arrays of arrays: reported as one flat run of the innermost element (the outer stride is the inner run's size).
-            if (m.Types.GetValueOrDefault(t) is Array inner)
+            if (m.Types.GetValueOrDefault(t) is Array)
             {
                 int innerLen = 1;
-                while (m.Types.GetValueOrDefault(t) is Array i2) { innerLen *= ArrayLength(m, i2); t = i2.Element; }
+                while (m.Types.GetValueOrDefault(t) is Array i2)
+                {
+                    innerLen *= ArrayLength(m, i2);
+                    t = i2.Element;
+                }
+
                 arrayStride = innerLen > 0 ? arrayStride / innerLen : arrayStride;
                 arrayLen *= innerLen;
-                _ = inner;
             }
         }
 
         if (m.Types.GetValueOrDefault(t) is Struct st)
-        {
-            int end = offset;
-            int n = Math.Max(1, arrayLen);
-            for (int e = 0; e < n; e++)
-            {
-                string en = arrayLen > 0 ? $"{name}[{e}]" : name;
-                int elemBase = offset + e * arrayStride;
-                for (int i = 0; i < st.Members.Length; i++)
-                    end = Math.Max(end, AddMember(m, t, i, st.Members[i], en + ".", elemBase, into));
-            }
-            return arrayLen > 0 ? offset + arrayLen * arrayStride : (end + 15) & ~15;
-        }
+            return AddStructMembers(m, st, t, name, offset, arrayLen, arrayStride, into);
 
         var (kind, cols, rows) = Shape(m, t);
         int matrixStride = (int)dec.GetValueOrDefault(DecMatrixStride);
@@ -291,9 +404,29 @@ public static class SpirvReflection
         if (arrayLen > 0)
         {
             if (arrayStride == 0) arrayStride = size;
+
             size = arrayStride * arrayLen;
         }
+
         into.Add(new BlockMember(name, offset, size, kind, cols, rows, arrayLen, arrayStride, matrixStride, rowMajor));
         return offset + size;
+    }
+
+    /// <summary>
+    /// The members of a struct member (every element of an array of structs), and the byte just past them (rounded to 16 for a lone struct).
+    /// </summary>
+    static int AddStructMembers(Module m, Struct st, uint t, string name, int offset, int arrayLen, int arrayStride, List<BlockMember> into)
+    {
+        int end = offset;
+        int n = Math.Max(1, arrayLen);
+        for (int e = 0; e < n; e++)
+        {
+            string en = arrayLen > 0 ? $"{name}[{e}]" : name;
+            int elemBase = offset + e * arrayStride;
+            for (int i = 0; i < st.Members.Length; i++)
+                end = Math.Max(end, AddMember(m, t, i, st.Members[i], en + ".", elemBase, into));
+        }
+
+        return arrayLen > 0 ? offset + arrayLen * arrayStride : (end + 15) & ~15;
     }
 }

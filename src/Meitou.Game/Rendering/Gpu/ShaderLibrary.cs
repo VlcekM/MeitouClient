@@ -6,22 +6,33 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Gpu;
 
-/// <summary>The descriptor model a <see cref="GpuProgram"/> follows (docs/renderer-native.md 3).</summary>
+/// <summary>
+/// The descriptor model a <see cref="GpuProgram"/> follows (docs/renderer-native.md 3).
+/// </summary>
 public enum ShaderModel
 {
-    /// <summary>GL-shaped: loose uniforms in default blocks (set 1, dynamic offsets), blocks and samplers at glslang's bindings in set 0.
-    /// Byte-identical to what VkGl builds (step P).</summary>
+    /// <summary>
+    /// GL-shaped: loose uniforms in default blocks (set 1, dynamic offsets), blocks and samplers at glslang's bindings in set 0.
+    /// Byte-identical to what VkGl builds (step P).
+    /// </summary>
     Legacy,
-    /// <summary>Explicit sets, push constants, bindless (step O and new code).</summary>
+
+    /// <summary>
+    /// Explicit sets, push constants, bindless (step O and new code).
+    /// </summary>
     Native,
     Compute,
 }
 
-/// <summary>Patches applied to compiled SPIR-V (shared by VkGl and the native API).</summary>
+/// <summary>
+/// Patches applied to compiled SPIR-V (shared by VkGl and the native API).
+/// </summary>
 public static class SpirvPatch
 {
-    /// <summary>A copy of <paramref name="spirv"/> with <c>gl_DefaultUniformBlock</c>'s variable decorated for set 1 at
-    /// <paramref name="binding"/> (the words are patched in place: same size). VkGl's <c>LinkProgram</c> step, moved here.</summary>
+    /// <summary>
+    /// A copy of <paramref name="spirv"/> with <c>gl_DefaultUniformBlock</c>'s variable decorated for set 1 at <paramref name="binding"/>
+    /// (the words are patched in place: same size). VkGl's <c>LinkProgram</c> step, moved here.
+    /// </summary>
     public static byte[] MoveDefaultBlock(byte[] spirv, uint binding)
     {
         var copy = (byte[])spirv.Clone();
@@ -35,7 +46,8 @@ public static class SpirvPatch
                 uint op = w[i] & 0xFFFF, count = w[i] >> 16;
                 if (count == 0) break;
                 var a = w.Slice(i + 1, (int)count - 1);
-                if (pass == 0 && op == 5 && System.Text.Encoding.ASCII.GetString(MemoryMarshal.AsBytes(a[1..])).TrimEnd('\0') == "gl_DefaultUniformBlock") structId = a[0];
+                if (pass == 0 && op == 5 && IsDefaultBlockName(a))
+                    structId = a[0];
                 else if (pass == 1 && op == 32 && a[2] == structId) pointers.Add(a[0]);
                 else if (pass == 1 && op == 59 && pointers.Contains(a[0])) variables.Add(a[1]);
                 else if (pass == 2 && op == 71 && variables.Contains(a[0]))
@@ -43,11 +55,20 @@ public static class SpirvPatch
                     if (a[1] == 34) a[2] = 1;              // DescriptorSet
                     else if (a[1] == 33) a[2] = binding;   // Binding
                 }
+
                 i += (int)count;
             }
-        if (structId == 0 || variables.Count == 0) throw new InvalidOperationException("SPIR-V: gl_DefaultUniformBlock not found");
+
+        if (structId == 0 || variables.Count == 0)
+            throw new InvalidOperationException("SPIR-V: gl_DefaultUniformBlock not found");
         return copy;
     }
+
+    /// <summary>
+    /// Whether an OpName's words name <c>gl_DefaultUniformBlock</c> (the name is the string after the id).
+    /// </summary>
+    static bool IsDefaultBlockName(Span<uint> words) =>
+        System.Text.Encoding.ASCII.GetString(MemoryMarshal.AsBytes(words[1..])).TrimEnd('\0') == "gl_DefaultUniformBlock";
 
     /// <summary>
     /// Flattens a module's (set, binding) pairs onto one binding table, as Metal's stages have (docs/metal-backend.md): every
@@ -92,12 +113,12 @@ public static class SpirvPatch
     }
 
     /// <summary>
-    /// The bindless set's combined arrays become plain image arrays with a sampler array beside each (the integer kinds have no
-    /// sampler: their fetches never read one) — what spirv-cross's Metal argument buffer needs and GLSL cannot express (no separate
-    /// integer or depth texture types). Every access chain, load and function that takes a sampler along is rewritten: a sample
-    /// loads the image and its sampler from the parallel arrays with the same index and pairs them again, a function gains one
-    /// sampler parameter, a call one argument. <paramref name="set"/> is the table's set; <paramref name="samplerOffset"/> is where
-    /// the sampler arrays' bindings begin above the texture arrays' (the backend's table total).
+    /// The bindless set's combined arrays become plain image arrays with a sampler array beside each (the integer kinds have no sampler: their
+    /// fetches never read one) — what spirv-cross's Metal argument buffer needs and GLSL cannot express (no separate integer or depth texture
+    /// types). Every access chain, load and function that takes a sampler along is rewritten: a sample loads the image and its sampler from the
+    /// parallel arrays with the same index and pairs them again, a function gains one sampler parameter, a call one argument.
+    /// <paramref name="set"/> is the table's set; <paramref name="samplerOffset"/> is where the sampler arrays' bindings begin above the
+    /// texture arrays' (the backend's table total).
     /// </summary>
     public static byte[] BindlessFetchImages(byte[] spirv, uint set, uint samplerOffset)
     {
@@ -118,16 +139,26 @@ public static class SpirvPatch
             uint op = w[i] & 0xFFFF, count = w[i] >> 16;
             if (count == 0) break;
             var a = w.Slice(i + 1, (int)count - 1);
-            if (op == 71 && count == 4) { if (a[1] == 34) sets[a[0]] = a[2]; else if (a[1] == 33) bindings[a[0]] = a[2]; }
+            if (op == 71 && count == 4)
+            {
+                if (a[1] == 34) sets[a[0]] = a[2];
+                else if (a[1] == 33) bindings[a[0]] = a[2];
+            }
             else if (op == 21) intScalars.Add(a[0]);
             else if (op == 25 && count >= 8) images[a[0]] = (a[1], a[2], a[3]);
             else if (op == 27 && count == 3) sampledImages[a[0]] = a[1];
             else if (op == 28 && count == 4) arrayElem[a[0]] = (a[1], a[2]);
             else if (op == 32 && count == 4) pointerAt[a[0]] = a[2];
             else if (op == 59) variables[a[1]] = a[0];
-            else if (op == 65 && count >= 5) { chains[a[1]] = a[2]; chainIndex[a[1]] = a[3]; }
+            else if (op == 65 && count >= 5)
+            {
+                chains[a[1]] = a[2];
+                chainIndex[a[1]] = a[3];
+            }
+
             i += (int)count;
         }
+
         // The arrays to split: the set's array variables whose element is a sampled image. The integer kinds' images get no sampler.
         uint next = w[3];                                     // fresh ids above the module's bound (word 3 = max id + 1)
         uint samplerType = 0;
@@ -137,10 +168,10 @@ public static class SpirvPatch
         {
             if (sets.GetValueOrDefault(id) != set) continue;
             if (!pointerAt.TryGetValue(ptr, out uint arr) || !arrayElem.TryGetValue(arr, out var shape)) continue;
-            if (!sampledImages.TryGetValue(shape.Elem, out uint image) || !images.TryGetValue(image, out var format)) continue;
+            if (!sampledImages.TryGetValue(shape.Elem, out uint image) || !images.TryGetValue(image, out var format))
+                continue;
             bool integer = intScalars.Contains(format.Scalar);
-            if (integer) { }
-            else if (samplerType == 0) samplerType = next++;
+            if (!integer && samplerType == 0) samplerType = next++;
             var made = new Made
             {
                 OldPtr = ptr,
@@ -153,10 +184,18 @@ public static class SpirvPatch
                 Integer = integer,
                 Binding = bindings.GetValueOrDefault(id) + samplerOffset,
             };
-            if (!integer) { made.SamplerArray = next++; made.SamplerArrayPtr = next++; made.SamplerElemPtr = next++; made.SamplerVar = next++; }
+            if (!integer)
+            {
+                made.SamplerArray = next++;
+                made.SamplerArrayPtr = next++;
+                made.SamplerElemPtr = next++;
+                made.SamplerVar = next++;
+            }
+
             ours[ptr] = made;
             oursByElem[shape.Elem] = made;
         }
+
         if (ours.Count == 0) return copy;
         var oursVars = new Dictionary<uint, uint>();              // ours' variable id -> old array pointer
         foreach (var (id, ptr) in variables)
@@ -170,6 +209,7 @@ public static class SpirvPatch
         var imagesDone = new Dictionary<uint, (Made Array, uint Sampler)>(); // image value (load, parameter) -> its array, its sampler value
         var loadIndex = new Dictionary<uint, uint>();             // image load result -> the index operand it used
         bool decorated = false;
+
         // Pass 2: the rewrite and the rebuild — the new types go in right after each old array pointer, before every use.
         var list = new List<uint>(w.Length + 128) { w[0], w[1], w[2], w[3], w[4] };
         for (int i = 5; i < w.Length;)
@@ -177,6 +217,7 @@ public static class SpirvPatch
             uint op = w[i] & 0xFFFF, count = w[i] >> 16;
             if (count == 0) break;
             var a = w.Slice(i + 1, (int)count - 1);
+
             // The new sampler type and the sampler variables' decorations go into the annotations section, before the first type.
             if (!decorated && op is >= 19 and <= 39)
             {
@@ -187,6 +228,7 @@ public static class SpirvPatch
                     list.AddRange([71u | (4u << 16), made2.SamplerVar, 34u, set]);          // DescriptorSet
                     list.AddRange([71u | (4u << 16), made2.SamplerVar, 33u, made2.Binding]);  // Binding
                 }
+
                 if (samplerType != 0) list.AddRange([26u | (2u << 16), samplerType]);          // OpTypeSampler
             }
             if (op == 15)
@@ -221,8 +263,16 @@ public static class SpirvPatch
                 for (int k = 2; k < a.Length; k++)
                 {
                     // A sampled image parameter becomes the image (and its sampler); a pointer to one becomes a pointer to the image.
-                    if (oursByElem.TryGetValue(a[k], out var byValue)) { types.Add(byValue.Image); types.Add(samplerType); }
-                    else if (oursPointers.TryGetValue(a[k], out var byPointer)) { types.Add(byPointer.ElemPtr); types.Add(samplerType); }
+                    if (oursByElem.TryGetValue(a[k], out var byValue))
+                    {
+                        types.Add(byValue.Image);
+                        types.Add(samplerType);
+                    }
+                    else if (oursPointers.TryGetValue(a[k], out var byPointer))
+                    {
+                        types.Add(byPointer.ElemPtr);
+                        types.Add(samplerType);
+                    }
                     else types.Add(a[k]);
                 }
                 types[0] = 33u | ((uint)types.Count << 16);
@@ -256,10 +306,24 @@ public static class SpirvPatch
                 {
                     Made value;
                     uint index, beside = 0;
-                    if (imagesDone.TryGetValue(a[k], out var loaded)) { value = loaded.Array; index = loadIndex.GetValueOrDefault(a[k]); beside = loaded.Sampler; }
-                    else if (chainMade.TryGetValue(a[k], out var chainArray)) { value = chainArray; index = chainIndex.GetValueOrDefault(a[k]); }
+                    if (imagesDone.TryGetValue(a[k], out var loaded))
+                    {
+                        value = loaded.Array;
+                        index = loadIndex.GetValueOrDefault(a[k]);
+                        beside = loaded.Sampler;
+                    }
+                    else if (chainMade.TryGetValue(a[k], out var chainArray))
+                    {
+                        value = chainArray;
+                        index = chainIndex.GetValueOrDefault(a[k]);
+                    }
                     else continue;
-                    if (beside != 0) { samplers[k] = beside; continue; }
+                    if (beside != 0)
+                    {
+                        samplers[k] = beside;
+                        continue;
+                    }
+
                     uint chain = next++, load = next++;
                     before.AddRange([65u | (5u << 16), value.SamplerElemPtr, chain, value.SamplerVar, index]);
                     before.AddRange([61u | (4u << 16), samplerType, load, chain]);
@@ -294,7 +358,8 @@ public static class SpirvPatch
                     imagesDone[a[1]] = (loadArray, 0);
                     loadIndex[a[1]] = chainIndex.GetValueOrDefault(a[2]);
                 }
-                else if (op == 61 && a[2] != 0 && pointerParams.TryGetValue(a[2], out uint samplerParam) && pointerMade.TryGetValue(a[2], out var loadMade))
+                else if (op == 61 && a[2] != 0 && pointerParams.TryGetValue(a[2], out uint samplerParam)
+                    && pointerMade.TryGetValue(a[2], out var loadMade))
                 {
                     words[1] = loadMade.Image;
                     imagesDone[a[1]] = (loadMade, samplerParam);
@@ -326,7 +391,9 @@ public static class SpirvPatch
         return MemoryMarshal.AsBytes(outWords.AsSpan()).ToArray();
     }
 
-    /// <summary>One combined array's split: the old array pointer, the plain image array's ids, and (not for the integer kinds) its sampler array's.</summary>
+    /// <summary>
+    /// One combined array's split: the old array pointer, the plain image array's ids, and (not for the integer kinds) its sampler array's.
+    /// </summary>
     sealed class Made
     {
         public uint OldPtr, ArrayPtr, ElemPtr, Array, Image, Sampled, Length, Binding;
@@ -342,8 +409,14 @@ public static class SpirvPatch
 /// </summary>
 internal sealed unsafe class VulkanProgram : IDisposable
 {
+    #region State
+
     readonly VulkanDevice _device;
     readonly DescriptorSetLayout[] _ownedSetLayouts;
+
+    #endregion
+
+    #region Construction
 
     internal VulkanProgram(VulkanDevice device, ProgramInfo info, DescriptorSetLayout[] setLayouts, DescriptorSetLayout[] ownedSetLayouts,
         PipelineLayout layout, bool pushDescriptors, ShaderStageFlags pushConstantStages)
@@ -362,6 +435,12 @@ internal sealed unsafe class VulkanProgram : IDisposable
         if (info.ComputeCode is not null) ComputeModule = CreateModule(info.ComputeCode);
     }
 
+    #endregion
+
+    #region Properties
+
+
+
     public ProgramInfo Info { get; }
     public int Index => Info.Index;
     public string Name => Info.Name;
@@ -372,34 +451,62 @@ internal sealed unsafe class VulkanProgram : IDisposable
     public ShaderModule VertexModule { get; }
     public ShaderModule FragmentModule { get; }
     public ShaderModule ComputeModule { get; }
-    /// <summary>The tessellation stages of a native program made by <see cref="ShaderLibrary.NativeTessellated"/> (0 otherwise): its pipelines
-    /// draw patch lists of three control points.</summary>
+    #endregion
+
+    #region Modules
+
+    /// <summary>
+    /// The tessellation stages of a native program made by <see cref="ShaderLibrary.NativeTessellated"/> (0 otherwise): its pipelines
+    /// draw patch lists of three control points.
+    /// </summary>
     public ShaderModule TessControlModule { get; }
     public ShaderModule TessEvaluationModule { get; }
     public bool Tessellated => TessEvaluationModule.Handle != 0;
-    /// <summary>The legacy compile result (reflection of both stages, default blocks), null for other models.</summary>
+
+    /// <summary>
+    /// The legacy compile result (reflection of both stages, default blocks), null for other models.
+    /// </summary>
     public CompiledProgram? Compiled => Info.Compiled;
     public ShaderReflection? VertexReflection => Info.VertexReflection;
     public ShaderReflection? FragmentReflection => Info.FragmentReflection;
     public ShaderReflection? ComputeReflection => Info.ComputeReflection;
     public DescriptorSetLayout[] SetLayouts { get; }
-    /// <summary>The program's sets in the engine's words (the layout the backend made).</summary>
+
+    /// <summary>
+    /// The program's sets in the engine's words (the layout the backend made).
+    /// </summary>
     public GpuSetLayout[] NeutralSets => Info.NeutralSets;
     public PipelineLayout Layout { get; }
-    /// <summary>Set 0 is a push-descriptor set.</summary>
+
+    /// <summary>
+    /// Set 0 is a push-descriptor set.
+    /// </summary>
     public bool PushDescriptors { get; }
     public uint PushConstantBytes => Info.PushConstantBytes;
     public ShaderStageFlags PushConstantStages { get; }
 
-    /// <summary>The GLSL of the fragment stage as compiled, kept for the native model only (the bench's instrumented variant is made from it).</summary>
+    /// <summary>
+    /// The GLSL of the fragment stage as compiled, kept for the native model only (the bench's instrumented variant is made from it).
+    /// </summary>
     public string? FragmentSource { get => Info.FragmentSource; set => Info.FragmentSource = value; }
 
-    /// <summary>A shader module of this device from <paramref name="spirv"/>; the caller destroys it.</summary>
+    #endregion
+
+    #region Lifetime
+
+    /// <summary>
+    /// A shader module of this device from <paramref name="spirv"/>; the caller destroys it.
+    /// </summary>
     internal ShaderModule CreateModule(byte[] spirv)
     {
         fixed (byte* code = spirv)
         {
-            var info = new ShaderModuleCreateInfo { SType = StructureType.ShaderModuleCreateInfo, CodeSize = (nuint)spirv.Length, PCode = (uint*)code };
+            var info = new ShaderModuleCreateInfo
+            {
+                SType = StructureType.ShaderModuleCreateInfo,
+                CodeSize = (nuint)spirv.Length,
+                PCode = (uint*)code,
+            };
             VulkanException.Check(_device.Vk.CreateShaderModule(_device.Device, &info, null, out var module), "vkCreateShaderModule");
             return module;
         }
@@ -421,6 +528,8 @@ internal sealed unsafe class VulkanProgram : IDisposable
             foreach (var s in sets) vk.DestroyDescriptorSetLayout(dev, s, null);
         });
     }
+
+    #endregion
 }
 
 /// <summary>
@@ -429,8 +538,19 @@ internal sealed unsafe class VulkanProgram : IDisposable
 /// </summary>
 public sealed unsafe class ShaderLibrary : IGpuShaders
 {
+    #region State
+
     readonly VulkanDevice _device;
     readonly List<VulkanProgram> _programs = [];
+
+    /// <summary>
+    /// The layouts the engine's sets were made into (one per set, shared by every program that uses it).
+    /// </summary>
+    readonly Dictionary<GpuSetLayout, DescriptorSetLayout> _setLayouts = [];
+
+    #endregion
+
+    #region Programs
 
     public ShaderLibrary(VulkanDevice device)
     {
@@ -438,17 +558,28 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         Compiler = new GlslProgramCompiler(new ShaderCompileOptions { DepthReversed = true });
     }
 
-    /// <summary>The backend's identity of a program handle (the Vulkan-only internals resolve through this).</summary>
+    /// <summary>
+    /// The backend's identity of a program handle (the Vulkan-only internals resolve through this).
+    /// </summary>
     internal VulkanProgram Backend(GpuProgram program) => _programs[program.Index];
 
-    /// <summary>Releases a program (its backend artifacts go once the frames in flight are done); the index is never reused.</summary>
+    /// <summary>
+    /// Releases a program (its backend artifacts go once the frames in flight are done); the index is never reused.
+    /// </summary>
     public void Dispose(GpuProgram program) => Backend(program).Dispose();
 
-    /// <summary>The compiler shared with VkGl (same options, same memory cache).</summary>
+    /// <summary>
+    /// The compiler shared with VkGl (same options, same memory cache).
+    /// </summary>
     public GlslProgramCompiler Compiler { get; }
 
-    /// <summary>The modules VkGl would make for this source pair: compiled, then each default block moved to set 1 (vertex binding 0,
-    /// fragment binding 1).</summary>
+    #endregion
+
+    #region Legacy
+
+    /// <summary>
+    /// The modules VkGl would make for this source pair: compiled, then each default block moved to set 1 (vertex binding 0, fragment binding 1).
+    /// </summary>
     public (CompiledProgram Compiled, byte[] Vertex, byte[] Fragment) LegacyCode(string vertexGlsl, string fragmentGlsl)
     {
         var c = Compiler.Compile(vertexGlsl, fragmentGlsl);
@@ -457,8 +588,10 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         return (c, v, f);
     }
 
-    /// <summary>A legacy program with VkGl's layout (<c>VkGl.CreateLayouts</c>): set 0 the named blocks and samplers of both stages (pushed
-    /// when the device's push-descriptor limit allows), set 1 the default blocks as dynamic uniform buffers.</summary>
+    /// <summary>
+    /// A legacy program with VkGl's layout (<c>VkGl.CreateLayouts</c>): set 0 the named blocks and samplers of both stages (pushed when the
+    /// device's push-descriptor limit allows), set 1 the default blocks as dynamic uniform buffers.
+    /// </summary>
     public GpuProgram Legacy(string vertexGlsl, string fragmentGlsl, string name)
     {
         var (c, v, f) = LegacyCode(vertexGlsl, fragmentGlsl);
@@ -466,34 +599,53 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         void Add(ShaderReflection r, ShaderStageFlags stage)
         {
             foreach (var b in r.Blocks)
+            {
                 if (b.Kind == BlockKind.Uniform && !b.IsDefault)
                     bindings.Add(new DescriptorSetLayoutBinding((uint)b.Binding, DescriptorType.UniformBuffer, 1, stage));
+            }
+
             foreach (var s in r.Samplers)
-                bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.CombinedImageSampler, (uint)Math.Max(1, s.ArrayLength), stage));
+            {
+                var descriptorCount = (uint)Math.Max(1, s.ArrayLength);
+                bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.CombinedImageSampler, descriptorCount, stage));
+            }
         }
+
         Add(c.Vertex, ShaderStageFlags.VertexBit);
         Add(c.Fragment, ShaderStageFlags.FragmentBit);
         int count = bindings.Sum(b => (int)b.DescriptorCount);
         bool push = _device.HasPushDescriptor && count <= _device.MaxPushDescriptors;
         var set0 = CreateSetLayout([.. bindings], push ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0);
         var dynamic = new List<DescriptorSetLayoutBinding>();
-        if (c.Vertex.DefaultBlock is not null) dynamic.Add(new DescriptorSetLayoutBinding(0, DescriptorType.UniformBufferDynamic, 1, ShaderStageFlags.VertexBit));
-        if (c.Fragment.DefaultBlock is not null) dynamic.Add(new DescriptorSetLayoutBinding(1, DescriptorType.UniformBufferDynamic, 1, ShaderStageFlags.FragmentBit));
+        if (c.Vertex.DefaultBlock is not null)
+            dynamic.Add(new DescriptorSetLayoutBinding(0, DescriptorType.UniformBufferDynamic, 1, ShaderStageFlags.VertexBit));
+        if (c.Fragment.DefaultBlock is not null)
+            dynamic.Add(new DescriptorSetLayoutBinding(1, DescriptorType.UniformBufferDynamic, 1, ShaderStageFlags.FragmentBit));
         var set1 = CreateSetLayout([.. dynamic], 0);
         var layout = CreateLayout([set0, set1], 0, 0);
-        // The engine's words for the same two sets: set 0 the named blocks and samplers, set 1 the default blocks (their offset is given when the set is bound).
+
+        // The engine's words for the same two sets: set 0 the named blocks and samplers, set 1 the default blocks (their offset is given
+        // when the set is bound).
         var slots = new List<GpuSlot>();
         void AddSlots(ShaderReflection r, GpuStage stage)
         {
             foreach (var b in r.Blocks)
-                if (b.Kind == BlockKind.Uniform && !b.IsDefault) slots.Add(new GpuSlot((uint)b.Binding, GpuSlotKind.UniformBuffer, stage));
-            foreach (var s in r.Samplers) slots.Add(new GpuSlot((uint)s.Binding, GpuSlotKind.CombinedSampler, stage, (uint)Math.Max(1, s.ArrayLength)));
+            {
+                if (b.Kind == BlockKind.Uniform && !b.IsDefault)
+                    slots.Add(new GpuSlot((uint)b.Binding, GpuSlotKind.UniformBuffer, stage));
+            }
+
+            foreach (var s in r.Samplers)
+                slots.Add(new GpuSlot((uint)s.Binding, GpuSlotKind.CombinedSampler, stage, (uint)Math.Max(1, s.ArrayLength)));
         }
+
         AddSlots(c.Vertex, GpuStage.Vertex);
         AddSlots(c.Fragment, GpuStage.Fragment);
         var defaultSlots = new List<GpuSlot>();
-        if (c.Vertex.DefaultBlock is not null) defaultSlots.Add(new GpuSlot(0, GpuSlotKind.UniformBuffer, GpuStage.Vertex, 1, OffsetAtBind: true));
-        if (c.Fragment.DefaultBlock is not null) defaultSlots.Add(new GpuSlot(1, GpuSlotKind.UniformBuffer, GpuStage.Fragment, 1, OffsetAtBind: true));
+        if (c.Vertex.DefaultBlock is not null)
+            defaultSlots.Add(new GpuSlot(0, GpuSlotKind.UniformBuffer, GpuStage.Vertex, 1, OffsetAtBind: true));
+        if (c.Fragment.DefaultBlock is not null)
+            defaultSlots.Add(new GpuSlot(1, GpuSlotKind.UniformBuffer, GpuStage.Fragment, 1, OffsetAtBind: true));
         var info = new ProgramInfo
         {
             Index = _programs.Count,
@@ -510,22 +662,51 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         return new GpuProgram(info.Index, info);
     }
 
-    /// <summary>A compute program: set 0 from the reflection (uniform and storage blocks, samplers; pushed when it fits), other sets
-    /// from <paramref name="extraSets"/> (sets 1.., not owned), push constants as the shader declares them.</summary>
+    #endregion
+
+    #region Compute
+
+    /// <summary>
+    /// A compute program: set 0 from the reflection (uniform and storage blocks, samplers; pushed when it fits), other sets from
+    /// <paramref name="extraSets"/> (sets 1.., not owned), push constants as the shader declares them.
+    /// </summary>
     public GpuProgram Compute(string glsl, string name, params GpuSetLayout[] extraSets)
     {
         var code = Compiler.CompileCompute(glsl);
         var r = SpirvReflection.Parse(code);
         var bindings = new List<DescriptorSetLayoutBinding>();
         foreach (var b in r.Blocks)
+        {
             if (b.Kind != BlockKind.PushConstant && b.Set == 0)
-                bindings.Add(new DescriptorSetLayoutBinding((uint)b.Binding, b.Kind == BlockKind.StorageBuffer ? DescriptorType.StorageBuffer : DescriptorType.UniformBuffer, 1, ShaderStageFlags.ComputeBit));
+            {
+                var type = b.Kind == BlockKind.StorageBuffer ? DescriptorType.StorageBuffer : DescriptorType.UniformBuffer;
+                bindings.Add(new DescriptorSetLayoutBinding((uint)b.Binding, type, 1, ShaderStageFlags.ComputeBit));
+            }
+        }
+
         foreach (var s in r.StorageImages)
-            if (s.Set == 0) bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.StorageImage, 1, ShaderStageFlags.ComputeBit));
+        {
+            if (s.Set == 0)
+                bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.StorageImage, 1, ShaderStageFlags.ComputeBit));
+        }
+
         foreach (var s in r.Samplers)
+        {
             if (s.Set == 0 && s.ArrayLength < 0)
-                throw new InvalidOperationException($"{name}: runtime-sized sampler array '{s.Name}' in set 0; declare the bindless table at an extra set (BindlessTable.Declarations(1))");
-            else if (s.Set == 0) bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.CombinedImageSampler, (uint)Math.Max(1, s.ArrayLength), ShaderStageFlags.ComputeBit));
+            {
+                throw new InvalidOperationException(
+                    $"{name}: runtime-sized sampler array '{s.Name}' in set 0; " +
+                    "declare the bindless table at an extra set (BindlessTable.Declarations(1))");
+            }
+
+            if (s.Set == 0)
+            {
+                var descriptorCount = (uint)Math.Max(1, s.ArrayLength);
+                bindings.Add(new DescriptorSetLayoutBinding((uint)s.Binding, DescriptorType.CombinedImageSampler, descriptorCount,
+                    ShaderStageFlags.ComputeBit));
+            }
+        }
+
         bool push = _device.HasPushDescriptor && bindings.Sum(b => (int)b.DescriptorCount) <= _device.MaxPushDescriptors;
         var set0 = CreateSetLayout([.. bindings], push ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0);
         uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);
@@ -545,15 +726,18 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         return new GpuProgram(info.Index, info);
     }
 
-    /// <summary>A compute program whose set 0 is given (<paramref name="set0"/>, always pushed: it needs push descriptors) instead of reflected:
-    /// for descriptor types the reflection does not read (storage images, acceleration structures). Push constants as the shader declares them.</summary>
+    /// <summary>
+    /// A compute program whose set 0 is given (<paramref name="set0"/>, always pushed: it needs push descriptors) instead of reflected: for
+    /// descriptor types the reflection does not read (storage images, acceleration structures). Push constants as the shader declares them.
+    /// </summary>
     public GpuProgram Compute(string glsl, string name, ReadOnlySpan<(uint Binding, DescriptorType Type)> set0, params GpuSetLayout[] extraSets)
     {
         if (!_device.HasPushDescriptor) throw new NotSupportedException($"{name}: needs push descriptors");
         var code = Compiler.CompileCompute(glsl);
         var r = SpirvReflection.Parse(code);
         var bindings = new DescriptorSetLayoutBinding[set0.Length];
-        for (int i = 0; i < set0.Length; i++) bindings[i] = new DescriptorSetLayoutBinding(set0[i].Binding, set0[i].Type, 1, ShaderStageFlags.ComputeBit);
+        for (int i = 0; i < set0.Length; i++)
+            bindings[i] = new DescriptorSetLayoutBinding(set0[i].Binding, set0[i].Type, 1, ShaderStageFlags.ComputeBit);
         var layout0 = CreateSetLayout(bindings, DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr);
         uint pc = (uint)(r.Blocks.FirstOrDefault(b => b.Kind == BlockKind.PushConstant)?.Size ?? 0);
         var sets = new[] { layout0 }.Concat(extraSets.Select(VkLayout)).ToArray();
@@ -572,11 +756,19 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         return new GpuProgram(info.Index, info);
     }
 
-    /// <summary>A native-model program: strict GLSL 450, the layout given by the model (<paramref name="setLayouts"/>, not owned) and a
-    /// push-constant block of <paramref name="pushConstantBytes"/> (at most 128) visible to both stages.</summary>
+    #endregion
+
+    #region Native
+
+    /// <summary>
+    /// A native-model program: strict GLSL 450, the layout given by the model (<paramref name="setLayouts"/>, not owned) and a push-constant
+    /// block of <paramref name="pushConstantBytes"/> (at most 128) visible to both stages.
+    /// </summary>
     public GpuProgram Native(string vertexGlsl, string fragmentGlsl, string name, GpuSetLayout[] setLayouts, uint pushConstantBytes)
     {
-        if (pushConstantBytes > 128) throw new ArgumentOutOfRangeException(nameof(pushConstantBytes), "push constants are limited to 128 bytes (the guaranteed minimum)");
+        if (pushConstantBytes > 128)
+            throw new ArgumentOutOfRangeException(nameof(pushConstantBytes), "push constants are limited to 128 bytes (the guaranteed minimum)");
+
         // The stages are linked by name as GL does (docs/renderer-native.md 3.4: InterfaceLocations stays for both models): varyings without
         // an explicit location get the same one in both stages, fragment outputs 0, 1, ... (explicit locations are kept).
         var (vs, fs) = InterfaceLocations.Apply(vertexGlsl, fragmentGlsl);
@@ -602,36 +794,98 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         var made = new GpuProgram(info.Index, info);
         program.FragmentSource = fs;
         foreach (var block in info.VertexReflection!.Blocks.Concat(info.FragmentReflection!.Blocks))
+        {
             if (block.Kind == BlockKind.PushConstant && block.Size > pushConstantBytes)
             {
                 program.Dispose();
-                throw new InvalidOperationException($"{name}: push-constant block '{block.Name}' is {block.Size} bytes, the layout's range {pushConstantBytes}");
+                throw new InvalidOperationException(
+                    $"{name}: push-constant block '{block.Name}' is {block.Size} bytes, the layout's range {pushConstantBytes}");
             }
+        }
+
         // The samplers declared in the bindless set must be the table's arrays (a float view read through a usampler is undefined).
         int bindless = Array.FindIndex(setLayouts, l => l == GpuSetLayout.Bindless);
         if (bindless >= 0)
+        {
             foreach (var s in info.VertexReflection!.Samplers.Concat(info.FragmentReflection!.Samplers))
-                if (s.Set == bindless)
+            {
+                if (s.Set != bindless) continue;
+                try
                 {
-                    try { BindlessTable.Check(s, name); }
-                    catch { program.Dispose(); throw; }
+                    BindlessTable.Check(s, name);
                 }
+                catch
+                {
+                    program.Dispose();
+                    throw;
+                }
+            }
+        }
+
         return made;
     }
 
-    /// <summary>The layouts the engine's sets were made into (one per set, shared by every program that uses it).</summary>
-    readonly Dictionary<GpuSetLayout, DescriptorSetLayout> _setLayouts = [];
-
-    /// <summary>Destroys the layouts the engine's sets were made into (once every frame that could use them has finished).</summary>
-    public void Dispose()
+    /// <summary>
+    /// A native-model program with tessellation (the device's <see cref="VulkanDevice.HasTessellation"/>): the vertex stage feeds the control
+    /// stage and the control stage the evaluation stage by explicit locations; the evaluation stage's outputs reach the fragment stage by name
+    /// as in <see cref="Native"/>. The push-constant range is visible to all four stages (a push must name them all:
+    /// <see cref="ShaderProgram.PushConstantStages"/>).
+    /// </summary>
+    public GpuProgram NativeTessellated(string vertexGlsl, string controlGlsl, string evaluationGlsl, string fragmentGlsl, string name,
+        GpuSetLayout[] setLayouts, uint pushConstantBytes)
     {
-        var (vk, dev) = (_device.Vk, _device.Device);
-        var layouts = _setLayouts.Values.ToArray();
-        _setLayouts.Clear();
-        _device.Frames.DeferDelete(() => { foreach (var l in layouts) vk.DestroyDescriptorSetLayout(dev, l, null); });
+        if (!_device.HasTessellation) throw new NotSupportedException($"{name}: the device has no tessellation shaders");
+        if (pushConstantBytes > 128)
+            throw new ArgumentOutOfRangeException(nameof(pushConstantBytes), "push constants are limited to 128 bytes (the guaranteed minimum)");
+
+        var (es, fs) = InterfaceLocations.Apply(evaluationGlsl, fragmentGlsl);
+        var v = Compiler.CompileNative(vertexGlsl, fragment: false);
+        var tc = Compiler.CompileNativeTessellation(controlGlsl, evaluation: false);
+        var te = Compiler.CompileNativeTessellation(es, evaluation: true);
+        var f = Compiler.CompileNative(fs, fragment: true);
+        var stages = ShaderStageFlags.VertexBit | ShaderStageFlags.TessellationControlBit | ShaderStageFlags.TessellationEvaluationBit
+            | ShaderStageFlags.FragmentBit;
+        var layouts = setLayouts.Select(VkLayout).ToArray();
+        var layout = CreateLayout(layouts, pushConstantBytes, stages);
+        var info = new ProgramInfo
+        {
+            Index = _programs.Count,
+            Name = name,
+            Model = ShaderModel.Native,
+            VertexCode = v,
+            FragmentCode = f,
+            TessControlCode = tc,
+            TessEvaluationCode = te,
+            VertexReflection = SpirvReflection.Parse(v),
+            FragmentReflection = SpirvReflection.Parse(f),
+            PushConstantBytes = pushConstantBytes,
+            NeutralSets = setLayouts,
+        };
+        var program = new VulkanProgram(_device, info, layouts, [], layout, false, pushConstantBytes > 0 ? stages : 0);
+        _programs.Add(program);
+        program.FragmentSource = fs;
+        return new GpuProgram(info.Index, info);
     }
 
-    /// <summary>The Vulkan layout of a set the engine described: the bindless table's is the table's own, the rest are made here.</summary>
+    #endregion
+
+    #region Set layouts
+
+    /// <summary>
+    /// The stages the native model's shared descriptor sets are visible to: vertex and fragment, and the tessellation stages where the device
+    /// has them (so a tessellated program can share the sets of the plain ones).
+    /// </summary>
+    public ShaderStageFlags GraphicsStages => ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit |
+        (_device.HasTessellation ? ShaderStageFlags.TessellationControlBit | ShaderStageFlags.TessellationEvaluationBit : 0);
+
+    /// <summary>
+    /// The bindless table's set layout (set by <see cref="GpuContext"/>), so <see cref="Native"/> can check a program's declarations of it.
+    /// </summary>
+    internal DescriptorSetLayout BindlessLayout { get; set; }
+
+    /// <summary>
+    /// The Vulkan layout of a set the engine described: the bindless table's is the table's own, the rest are made here.
+    /// </summary>
     internal DescriptorSetLayout VkLayout(GpuSetLayout set)
     {
         if (set.IsBindless) return BindlessLayout;
@@ -643,16 +897,22 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
             bindings[i] = new DescriptorSetLayoutBinding(s.Binding, VkDescriptorType(s), 1);
             bindings[i].StageFlags = VkStageFlags(s.Stages);
         }
+
         var layout = CreateSetLayout(bindings, CanPush(set) ? DescriptorSetLayoutCreateFlags.PushDescriptorBitKhr : 0);
         _setLayouts[set] = layout;
         return layout;
     }
 
-    /// <summary>Whether the device can push this set's descriptors (the renderers write it for every draw).</summary>
-    internal bool CanPush(GpuSetLayout set) => _device.HasPushDescriptor && set.PerDraw && set.Slots.Sum(s => (int)s.Count) <= _device.MaxPushDescriptors;
+    /// <summary>
+    /// Whether the device can push this set's descriptors (the renderers write it for every draw).
+    /// </summary>
+    internal bool CanPush(GpuSetLayout set) =>
+        _device.HasPushDescriptor && set.PerDraw && set.Slots.Sum(s => (int)s.Count) <= _device.MaxPushDescriptors;
 
-    /// <summary>Whether set <paramref name="set"/> of <paramref name="program"/> was made as a push-descriptor set: a legacy or compute
-    /// program's set 0 as it was compiled (it fit), any other set as <see cref="CanPush"/> made its layout.</summary>
+    /// <summary>
+    /// Whether set <paramref name="set"/> of <paramref name="program"/> was made as a push-descriptor set: a legacy or compute program's set 0
+    /// as it was compiled (it fit), any other set as <see cref="CanPush"/> made its layout.
+    /// </summary>
     internal bool Pushes(VulkanProgram program, uint set) =>
         set == 0 && program.Model is ShaderModel.Legacy or ShaderModel.Compute ? program.PushDescriptors
             : set < program.NeutralSets.Length && !program.NeutralSets[set].IsBindless && CanPush(program.NeutralSets[set]);
@@ -676,52 +936,24 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         return f;
     }
 
+    #endregion
+
+    #region Lifetime
+
     /// <summary>
-    /// A native-model program with tessellation (the device's <see cref="VulkanDevice.HasTessellation"/>): the vertex stage feeds the control stage
-    /// and the control stage the evaluation stage by explicit locations; the evaluation stage's outputs reach the fragment stage by name as in
-    /// <see cref="Native"/>. The push-constant range is visible to all four stages (a push must name them all: <see cref="ShaderProgram.PushConstantStages"/>).
+    /// Destroys the layouts the engine's sets were made into (once every frame that could use them has finished).
     /// </summary>
-    public GpuProgram NativeTessellated(string vertexGlsl, string controlGlsl, string evaluationGlsl, string fragmentGlsl, string name,
-        GpuSetLayout[] setLayouts, uint pushConstantBytes)
+    public void Dispose()
     {
-        if (!_device.HasTessellation) throw new NotSupportedException($"{name}: the device has no tessellation shaders");
-        if (pushConstantBytes > 128) throw new ArgumentOutOfRangeException(nameof(pushConstantBytes), "push constants are limited to 128 bytes (the guaranteed minimum)");
-        var (es, fs) = InterfaceLocations.Apply(evaluationGlsl, fragmentGlsl);
-        var v = Compiler.CompileNative(vertexGlsl, fragment: false);
-        var tc = Compiler.CompileNativeTessellation(controlGlsl, evaluation: false);
-        var te = Compiler.CompileNativeTessellation(es, evaluation: true);
-        var f = Compiler.CompileNative(fs, fragment: true);
-        var stages = ShaderStageFlags.VertexBit | ShaderStageFlags.TessellationControlBit | ShaderStageFlags.TessellationEvaluationBit | ShaderStageFlags.FragmentBit;
-        var layouts = setLayouts.Select(VkLayout).ToArray();
-        var layout = CreateLayout(layouts, pushConstantBytes, stages);
-        var info = new ProgramInfo
-        {
-            Index = _programs.Count,
-            Name = name,
-            Model = ShaderModel.Native,
-            VertexCode = v,
-            FragmentCode = f,
-            TessControlCode = tc,
-            TessEvaluationCode = te,
-            VertexReflection = SpirvReflection.Parse(v),
-            FragmentReflection = SpirvReflection.Parse(f),
-            PushConstantBytes = pushConstantBytes,
-            NeutralSets = setLayouts,
-        };
-        var program = new VulkanProgram(_device, info, layouts, [], layout, false, pushConstantBytes > 0 ? stages : 0);
-        _programs.Add(program);
-        program.FragmentSource = fs;
-        return new GpuProgram(info.Index, info);
+        var (vk, dev) = (_device.Vk, _device.Device);
+        var layouts = _setLayouts.Values.ToArray();
+        _setLayouts.Clear();
+        _device.Frames.DeferDelete(() => { foreach (var l in layouts) vk.DestroyDescriptorSetLayout(dev, l, null); });
     }
 
-    /// <summary>The stages the native model's shared descriptor sets are visible to: vertex and fragment, and the tessellation stages where the
-    /// device has them (so a tessellated program can share the sets of the plain ones).</summary>
-    public ShaderStageFlags GraphicsStages => ShaderStageFlags.VertexBit | ShaderStageFlags.FragmentBit |
-        (_device.HasTessellation ? ShaderStageFlags.TessellationControlBit | ShaderStageFlags.TessellationEvaluationBit : 0);
+    #endregion
 
-    /// <summary>The bindless table's set layout (set by <see cref="GpuContext"/>), so <see cref="Native"/> can check a program's
-    /// declarations of it.</summary>
-    internal DescriptorSetLayout BindlessLayout { get; set; }
+    #region Layouts
 
     internal DescriptorSetLayout CreateSetLayout(DescriptorSetLayoutBinding[] bindings, DescriptorSetLayoutCreateFlags flags)
     {
@@ -756,4 +988,6 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
             return layout;
         }
     }
+
+    #endregion
 }
