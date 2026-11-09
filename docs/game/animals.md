@@ -90,7 +90,8 @@ from the start.
   merged data: 43 animals, e.g. Bonedog 1 Animal Skin / 4 Animal Teeth / 3 Raw Meat; Pet Dog, Settler's Pup, Pack Beast Dead none).
 - Added when a new character's inventory is set up, after the `inventory` list (`Character::vfunc_88` `FUN_140622e80`, called last
   by both setup functions, not for an inventory loaded from a save); entries below 1 skipped; each item gets the byte `+0x138`
-  set (**Observed**, decompile). `FUN_140622e80` adds them only when its second argument is 0; the animal setup `FUN_14062a130` passes its own second argument
+  set (**Observed**, decompile). An emptied inventory loads empty (**Observed**, original: a player's Bonedog saved with an empty INVENTORY_STATE was
+  loaded and saved again with nothing; Meitou `SavedCharacters`, an empty state is the whole kit). `FUN_140622e80` adds them only when its second argument is 0; the animal setup `FUN_14062a130` passes its own second argument
   through, and the squad factory's spawn (`FUN_140581770`) calls the setup slot `0x2c0` with a request field (**Observed**). What that argument is, and whether it is
   why the player's own animals have none (#341), is **Unknown**: its `+0x20` / `+0x2c` hold a position and rotation copied onto the request, so it reads as a saved state the
   character is made from (**Inferred**).
