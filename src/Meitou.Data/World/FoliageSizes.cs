@@ -50,7 +50,9 @@ public static class FoliageSizes
     /// </summary>
     public static float Size(float boundsRadius, FoliageMesh mesh) => boundsRadius * Math.Max(mesh.MinScale, mesh.MaxScale);
 
-    public static FoliageSizeClass Classify(float size) => size >= LargeFrom ? FoliageSizeClass.Large : size >= MediumFrom ? FoliageSizeClass.Medium : FoliageSizeClass.Small;
+    public static FoliageSizeClass Classify(float size) => size >= LargeFrom ? FoliageSizeClass.Large
+        : size >= MediumFrom ? FoliageSizeClass.Medium
+        : FoliageSizeClass.Small;
 
     /// <summary>
     /// Vegetation at least this big (sizes of the giant trees and swamp canopies, 1339 to 3169) keeps the large impostor distance: it is a landmark.

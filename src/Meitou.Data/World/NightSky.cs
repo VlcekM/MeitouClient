@@ -289,7 +289,8 @@ public static class NightAir
     /// The share of a planet's light the night air in front of it hides, towards a direction of height <paramref name="y"/> at the sun's height
     /// <paramref name="sunY"/> (0 by day and in Faithful, where the planet is drawn as the game does).
     /// </summary>
-    public static float PlanetVeil(float sunY, float y, float hazeStrength = 1f) => Math.Clamp(Weight(sunY) * hazeStrength * MathF.Exp(-MathF.Max(y, 0) / VeilHeight), 0, 1);
+    public static float PlanetVeil(float sunY, float y, float hazeStrength = 1f) =>
+        Math.Clamp(Weight(sunY) * hazeStrength * MathF.Exp(-MathF.Max(y, 0) / VeilHeight), 0, 1);
 
     /// <summary>
     /// The night air's radiance towards a direction of height <paramref name="y"/> at the sun's height <paramref name="sunY"/>: what the haze adds to

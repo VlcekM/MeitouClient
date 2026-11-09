@@ -28,7 +28,8 @@ public readonly record struct WindInterpolation(double StartMinute, double Durat
 /// sequence).
 /// </summary>
 public sealed record WeatherRegionSnapshot(string RegionId, string SeasonId, int SeasonIndex, int SeasonEndDay, string WeatherId, int WeatherEntryIndex,
-    double WeatherStartMinute, double WeatherEndMinute, float Strength, WindInterpolation Wind, double NextWindUpdateMinute, RegionFog FogFrom, double FogFadeMinutes);
+    double WeatherStartMinute, double WeatherEndMinute, float Strength, WindInterpolation Wind, double NextWindUpdateMinute, RegionFog FogFrom,
+    double FogFadeMinutes);
 
 /// <summary>
 /// One weather region's schedule (docs/formats/weather.md "Seasons", "Choosing a weather", "Wind", "Fog"): the season calendar, the chain of weathers by
@@ -280,8 +281,8 @@ public sealed class WeatherRegion
 
     // ---- saving ----
 
-    public WeatherRegionSnapshot Snapshot() => new(Def.StringId, Season.Season.StringId, SeasonIndex, SeasonEndDay, Weather.StringId, WeatherEntryIndex, WeatherStartMinute,
-        WeatherEndMinute, Strength, _wind, NextWindUpdateMinute, _fogFrom, _fogFadeMinutes);
+    public WeatherRegionSnapshot Snapshot() => new(Def.StringId, Season.Season.StringId, SeasonIndex, SeasonEndDay, Weather.StringId, WeatherEntryIndex,
+        WeatherStartMinute, WeatherEndMinute, Strength, _wind, NextWindUpdateMinute, _fogFrom, _fogFadeMinutes);
 
     /// <summary>
     /// Continues from a snapshot of this region. The season and the weather are found by their StringIds (so a mod that reorders a list does not

@@ -8,7 +8,8 @@ namespace Meitou.Data.World;
 /// <paramref name="WindMax"/> the wind speeds of <c>wind speed rotation min/max</c> (max raised to min), <paramref name="Start"/> the random angle the part was placed at,
 /// <paramref name="ParentX"/> and <paramref name="ParentZ"/> the world directions of its parent's X and Z (the frame a ROTATION_WIND_DIRECTION head turns in).
 /// </summary>
-public sealed record RotorSpec(int Function, float SpeedMin, float SpeedMax, float WindMin, float WindMax, float Start, Vector3 ParentX, Vector3 ParentZ)
+public sealed record RotorSpec(int Function, float SpeedMin, float SpeedMax, float WindMin, float WindMax, float Start, Vector3 ParentX,
+    Vector3 ParentZ)
 {
     public const int Constant = 1, Output = 2, WindSpeed = 3, WindDirection = 4;
 

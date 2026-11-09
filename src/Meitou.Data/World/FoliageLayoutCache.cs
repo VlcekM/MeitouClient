@@ -21,7 +21,8 @@ public static class LoadCaches
 /// <summary>
 /// What the foliage layout cache did so far (a snapshot of <see cref="FoliageLayoutCache.Stats"/>).
 /// </summary>
-public readonly record struct FoliageLayoutCacheStats(int Hits, int Misses, int Rejected, int Written, double LoadMs, double ComputeMs, double SavedMs, long BytesRead, long BytesWritten)
+public readonly record struct FoliageLayoutCacheStats(int Hits, int Misses, int Rejected, int Written, double LoadMs, double ComputeMs, double SavedMs,
+    long BytesRead, long BytesWritten)
 {
     /// <summary>
     /// A one-line summary for the log.
@@ -30,7 +31,9 @@ public readonly record struct FoliageLayoutCacheStats(int Hits, int Misses, int 
     {
         var inv = CultureInfo.InvariantCulture;
         var odd = Rejected > 0 ? string.Create(inv, $" ({Rejected} unusable entries recomputed)") : "";
-        return string.Create(inv, $"layout cache {Hits} hits, {Misses} misses{odd}; hits loaded in {LoadMs:0} ms ({BytesRead / 1048576.0:0.0} MB), misses computed in {ComputeMs:0} ms, {Written} written ({BytesWritten / 1048576.0:0.0} MB); saved about {SavedMs / 1000:0.0} s of worker time");
+        return string.Create(inv, $"layout cache {Hits} hits, {Misses} misses{odd}; hits loaded in {LoadMs:0} ms ({BytesRead / 1048576.0:0.0} MB), ")
+            + string.Create(inv, $"misses computed in {ComputeMs:0} ms, {Written} written ({BytesWritten / 1048576.0:0.0} MB); ")
+            + string.Create(inv, $"saved about {SavedMs / 1000:0.0} s of worker time");
     }
 }
 
@@ -140,8 +143,9 @@ public sealed class FoliageLayoutCache
     /// <summary>
     /// What the cache did so far.
     /// </summary>
-    public FoliageLayoutCacheStats Stats => new(_hits, _misses, _rejected, _written, _loadTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency, _computeTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency,
-        Interlocked.Read(ref _savedMicros) / 1000.0, Interlocked.Read(ref _bytesRead), Interlocked.Read(ref _bytesWritten));
+    public FoliageLayoutCacheStats Stats => new(_hits, _misses, _rejected, _written, _loadTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency,
+        _computeTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency, Interlocked.Read(ref _savedMicros) / 1000.0, Interlocked.Read(ref _bytesRead),
+        Interlocked.Read(ref _bytesWritten));
 
     /// <summary>
     /// The file of a zone and layout kind.
@@ -207,7 +211,8 @@ public sealed class FoliageLayoutCache
         {
             result = Decode(bytes, length, zone, farOnly, grouped);
         }
-        catch (Exception e) when (e is ArgumentException or IndexOutOfRangeException or InvalidDataException or KeyNotFoundException or OverflowException or EndOfStreamException)
+        catch (Exception e) when (e is ArgumentException or IndexOutOfRangeException or InvalidDataException or KeyNotFoundException
+            or OverflowException or EndOfStreamException)
         {
             result = null;
         }
@@ -379,14 +384,18 @@ public sealed class FoliageLayoutCache
         var list = result.Instances;
         list.Capacity = disk.Length;
         foreach (ref readonly var d in disk)
-            list.Add(new FoliageInstance(meshes[d.Mesh], layers[d.Layer], new Vector3(d.X, d.Y, d.Z), d.Scale, d.Yaw, new Quaternion(d.Qx, d.Qy, d.Qz, d.Qw)));
+        {
+            list.Add(new FoliageInstance(meshes[d.Mesh], layers[d.Layer], new Vector3(d.X, d.Y, d.Z), d.Scale, d.Yaw,
+                new Quaternion(d.Qx, d.Qy, d.Qz, d.Qw)));
+        }
     }
 
     /// <summary>
     /// The file's records grouped as <see cref="FoliageGrouping.Group"/> groups the instances read from them (same groups in the same order, bit-identical records),
     /// in two passes over the file's span: count the instances of each (mesh, layer), then fill exact-size arrays.
     /// </summary>
-    static GroupedFoliageZone GroupDisk(FoliageZone zone, FoliageGround ground, ReadOnlySpan<InstanceOnDisk> disk, FoliageMesh[] meshes, FoliageLayer[] layers)
+    static GroupedFoliageZone GroupDisk(FoliageZone zone, FoliageGround ground, ReadOnlySpan<InstanceOnDisk> disk, FoliageMesh[] meshes,
+        FoliageLayer[] layers)
     {
         var slotOf = new Dictionary<int, int>();
         var keys = new List<int>();
@@ -400,7 +409,8 @@ public sealed class FoliageLayoutCache
         var (minY, maxY) = FillGroups(disk, slotOf, records, maxScale, filled);
 
         var groups = new List<FoliageInstanceGroup>(keys.Count);
-        for (int g = 0; g < keys.Count; g++) groups.Add(new FoliageInstanceGroup(meshes[(int)((uint)keys[g] >> 16)], layers[keys[g] & 0xFFFF], records[g], maxScale[g]));
+        for (int g = 0; g < keys.Count; g++)
+            groups.Add(new FoliageInstanceGroup(meshes[(int)((uint)keys[g] >> 16)], layers[keys[g] & 0xFFFF], records[g], maxScale[g]));
         return new GroupedFoliageZone
         {
             Zone = zone,
@@ -443,8 +453,8 @@ public sealed class FoliageLayoutCache
     /// <summary>
     /// The second pass: each instance's record into its slot's array, the slots' largest scales; returns the instances' lowest and highest Y.
     /// </summary>
-    static (float MinY, float MaxY) FillGroups(ReadOnlySpan<InstanceOnDisk> disk, Dictionary<int, int> slotOf, FoliageInstanceRecord[][] records, float[] maxScale,
-        int[] filled)
+    static (float MinY, float MaxY) FillGroups(ReadOnlySpan<InstanceOnDisk> disk, Dictionary<int, int> slotOf, FoliageInstanceRecord[][] records,
+        float[] maxScale, int[] filled)
     {
         float minY = float.PositiveInfinity, maxY = float.NegativeInfinity;
         int lastKey = -1, lastSlot = 0;
@@ -486,7 +496,8 @@ public sealed class FoliageLayoutCache
             if (bytes is null) return;
             System.IO.Directory.CreateDirectory(_directory);
             var path = PathFor(zone, farOnly);
-            var temporary = path + "." + Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + "." + Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture) + ".tmp";
+            var temporary = path + "." + Environment.ProcessId.ToString(CultureInfo.InvariantCulture) + "."
+                + Environment.CurrentManagedThreadId.ToString(CultureInfo.InvariantCulture) + ".tmp";
             File.WriteAllBytes(temporary, bytes);
             File.Move(temporary, path, overwrite: true);
             Interlocked.Increment(ref _written);

@@ -33,7 +33,8 @@ public sealed class WeatherAreas
     /// <c>resourceExists</c> then <c>Image::load</c> there, so an enabled mod's <c>newland/land/areasmap.tga</c> replaces it), else <c>data/newland/land/areasmap.tga</c>.
     /// </summary>
     public static WeatherAreas Load(GameInstall install) =>
-        FromTga(File.ReadAllBytes(Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps") ?? Path.Combine(install.DataDirectory, RelativePath)));
+        FromTga(File.ReadAllBytes(Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps")
+            ?? Path.Combine(install.DataDirectory, RelativePath)));
 
     public static WeatherAreas FromTga(ReadOnlySpan<byte> tga) => FromImage(TgaReader.Read(tga));
 
@@ -43,7 +44,8 @@ public sealed class WeatherAreas
     /// </summary>
     public static WeatherAreas FromImage(RgbaImage image)
     {
-        if (image.Width % Cells != 0 || image.Height % Cells != 0) throw new FormatException($"The areas map is {image.Width} x {image.Height}, not a multiple of {Cells}.");
+        if (image.Width % Cells != 0 || image.Height % Cells != 0)
+            throw new FormatException($"The areas map is {image.Width} x {image.Height}, not a multiple of {Cells}.");
         int pw = image.Width / Cells, ph = image.Height / Cells;
         var colours = new int[Cells * Cells];
         for (int z = 0; z < Cells; z++)

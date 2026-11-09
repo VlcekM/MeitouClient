@@ -49,10 +49,22 @@ public sealed class SaveCamera(FcsRecord record)
     public float BiomeTextTimer { get => Record.Floats.GetValueOrDefault("biome_text_timer"); set => Record.Floats["biome_text_timer"] = value; }
     public string BiomeTextGroup { get => Record.Strings.GetValueOrDefault("biome_text_groud", ""); set => Record.Strings["biome_text_groud"] = value; }
 
-    public float SkyUpdateCurrentTime { get => Record.Floats.GetValueOrDefault("sky update current time"); set => Record.Floats["sky update current time"] = value; }
-    public float SkyUpdateTotalTime { get => Record.Floats.GetValueOrDefault("sky update total time"); set => Record.Floats["sky update total time"] = value; }
+    public float SkyUpdateCurrentTime
+    {
+        get => Record.Floats.GetValueOrDefault("sky update current time");
+        set => Record.Floats["sky update current time"] = value;
+    }
+    public float SkyUpdateTotalTime
+    {
+        get => Record.Floats.GetValueOrDefault("sky update total time");
+        set => Record.Floats["sky update total time"] = value;
+    }
     public bool SkyUpdating { get => Record.Bools.GetValueOrDefault("sky updating"); set => Record.Bools["sky updating"] = value; }
-    public Vector3 SkyAmbientColorMult { get => Record.Vector3S.GetValueOrDefault("sky ambient color mult", Vector3.One); set => Record.Vector3S["sky ambient color mult"] = value; }
+    public Vector3 SkyAmbientColorMult
+    {
+        get => Record.Vector3S.GetValueOrDefault("sky ambient color mult", Vector3.One);
+        set => Record.Vector3S["sky ambient color mult"] = value;
+    }
     public float SkyCloudsDensity { get => Record.Floats.GetValueOrDefault("sky clouds density"); set => Record.Floats["sky clouds density"] = value; }
 
     /// <summary>

@@ -24,8 +24,8 @@ public static class SaveSurfaceDecals
             var shape = record.Vector4S.GetValueOrDefault(Shape + i);
             int kind = record.Ints.GetValueOrDefault(Kind + i);
             if ((kind & 0xFF) > (int)TerrainDecalType.Smear) continue;
-            decals.Add(new SurfaceBloodDecal((TerrainDecalType)(kind & 0xFF), (byte)(kind >> 8), centre, shape.X, shape.Y, shape.Z, unchecked((uint)record.Ints.GetValueOrDefault(Colour + i)),
-                (kind >> 16 & 1) != 0));
+            decals.Add(new SurfaceBloodDecal((TerrainDecalType)(kind & 0xFF), (byte)(kind >> 8), centre, shape.X, shape.Y, shape.Z,
+                unchecked((uint)record.Ints.GetValueOrDefault(Colour + i)), (kind >> 16 & 1) != 0));
         }
         return decals;
     }

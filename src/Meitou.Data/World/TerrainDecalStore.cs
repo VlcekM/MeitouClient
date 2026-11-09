@@ -175,7 +175,8 @@ public sealed class TerrainDecalStore
         var variants = _sizes[(int)type];
         if (variants.Length == 0 || !(life > 0)) return;
         float angle = MathF.Atan2(direction.X, direction.Y);
-        Place(new TerrainDecal(0, type, (byte)random.Next(variants.Length), 0, 0, 0, 0, (short)(int)(angle * 1000), abgr, _clock + life), new Vector2(at.X, at.Z), size);
+        var decal = new TerrainDecal(0, type, (byte)random.Next(variants.Length), 0, 0, 0, 0, (short)(int)(angle * 1000), abgr, _clock + life);
+        Place(decal, new Vector2(at.X, at.Z), size);
     }
 
     /// <summary>
@@ -203,7 +204,8 @@ public sealed class TerrainDecalStore
             Regrow(d, token.At, token.Size);
             return;
         }
-        Add(TerrainDecalType.Pool, new Vector3(token.At.X, at.Y, token.At.Y), new Vector2(random.NextSingle() - 0.5f, random.NextSingle() - 0.5f), token.Size, abgr, NewLife, random);
+        Add(TerrainDecalType.Pool, new Vector3(token.At.X, at.Y, token.At.Y), new Vector2(random.NextSingle() - 0.5f, random.NextSingle() - 0.5f),
+            token.Size, abgr, NewLife, random);
     }
 
     /// <summary>
@@ -314,7 +316,8 @@ public sealed class TerrainDecalStore
             var copy = d with { Key = key, LocalX = lx, LocalZ = lz };
             // The first pool at the place is the copy when it is this one (the same texture and turn); otherwise the list is searched.
             int at0 = cell.PoolAt(lx, lz);
-            if (at0 >= 0 && !Same(cell.Decals[at0], old)) at0 = cell.Decals.FindIndex(x => x.Type == old.Type && Same(x, old) && x.LocalX == lx && x.LocalZ == lz);
+            if (at0 >= 0 && !Same(cell.Decals[at0], old))
+                at0 = cell.Decals.FindIndex(x => x.Type == old.Type && Same(x, old) && x.LocalX == lx && x.LocalZ == lz);
             if (at0 >= 0)
             {
                 // Meitou: a grown pool's cell is drawn again from its list (one pass a frame however often the pool grew), not with the larger copy over the old one: that stacked

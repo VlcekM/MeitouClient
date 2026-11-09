@@ -351,11 +351,33 @@ public sealed class DialogueDatabase(GameDatabase db)
         return new DialogueSet(sorted, packageIds);
     }
 
+    /// <summary>
+    /// Reads <paramref name="record"/>'s node and, depth first, the lines below it that are not read yet; each new node goes to
+    /// <paramref name="built"/>.
+    /// </summary>
     DialogueNode Build(GameRecord record, List<DialogueNode> built)
     {
         var node = new DialogueNode(record);
         _nodes[record.StringId] = node;
         built.Add(node);
+        ReadSettings(node, record);
+
+        var (tagConditions, requiredTags) = ReadConditions(node, record);
+        node.Effects = [.. record.GetReferences("effects").Select(e => (Effect: e, Record: db.Find(e.TargetStringId)))
+            .Where(e => e.Record is not null)
+            .Select(e => new DialogueEffect(e.Record!.GetInt("action name"), e.Effect.Values.Value0)).Where(e => e.Action != DialogueActions.None)];
+        bool itemTyped = ReadReferences(node, record);
+
+        node.Score = Score(node, record, itemTyped, tagConditions, requiredTags);
+        node.Children = ReadChildren(record, built);
+        return node;
+    }
+
+    /// <summary>
+    /// The node's own fields: speaker, texts, repetition, chances and flags.
+    /// </summary>
+    static void ReadSettings(DialogueNode node, GameRecord record)
+    {
         node.Speaker = (Talker)record.GetInt("speaker");
         node.Interjection = record.GetBool("interjection");
         var texts = new List<string>();
@@ -371,7 +393,14 @@ public sealed class DialogueDatabase(GameDatabase db)
         node.Locked = record.GetBool("locked");
         node.OneAtATime = record.GetBool("one at a time");
         node.Monologue = record.GetBool("monologue");
+    }
 
+    /// <summary>
+    /// The node's <c>conditions</c>: tag conditions become its personality and memory masks, the rest its <see cref="DialogueNode.Conditions"/>.
+    /// Returns the count of tag conditions and of those that require their tag, for the score.
+    /// </summary>
+    (int TagConditions, int RequiredTags) ReadConditions(DialogueNode node, GameRecord record)
+    {
         var conditions = new List<DialogueCondition>();
         int tagConditions = 0, requiredTags = 0;
         foreach (var c in record.GetReferences("conditions"))
@@ -398,10 +427,15 @@ public sealed class DialogueDatabase(GameDatabase db)
             conditions.Add(new(dc, a.GetInt("compare by"), a.GetInt("who"), c.Values.Value0));
         }
         node.Conditions = conditions;
-        node.Effects = [.. record.GetReferences("effects").Select(e => (Effect: e, Record: db.Find(e.TargetStringId)))
-            .Where(e => e.Record is not null)
-            .Select(e => new DialogueEffect(e.Record!.GetInt("action name"), e.Effect.Values.Value0)).Where(e => e.Action != DialogueActions.None)];
+        return (tagConditions, requiredTags);
+    }
 
+    /// <summary>
+    /// The node's reference lists: the sets it matches on, the world states, items, relations and lines it changes. Returns whether its
+    /// <c>target has item type</c> resolves (it scores).
+    /// </summary>
+    bool ReadReferences(DialogueNode node, GameRecord record)
+    {
         HashSet<string> Set(string list) => new(record.GetReferences(list).Select(r => r.TargetStringId), StringComparer.Ordinal);
         node.InTownOf = Set("in town of");
         node.MyFaction = Set("my faction");
@@ -413,10 +447,12 @@ public sealed class DialogueDatabase(GameDatabase db)
         node.HasPackage = Set("has package");
         node.TargetCarryingCharacter = Set("target carrying character");
         node.TargetHasItem = Set("target has item");
+
         // Only the first reference is read (FUN_14067b070); it scores +2 once it resolves, whatever its function.
         var typeRefs = record.GetReferences("target has item type");
         bool itemTyped = typeRefs.Count > 0 && db.Find(typeRefs[0].TargetStringId) is not null;
         if (itemTyped) node.TargetHasItemFunction = db.Find(typeRefs[0].TargetStringId)!.GetInt("item function");
+
         node.WorldStates = [.. record.GetReferences("world state").Select(r => (r.TargetStringId, r.Values.Value0 != 0))];
         node.GiveItems = [.. record.GetReferences("give item").Select(r => (r.TargetStringId, r.Values.Value0))];
         node.ChangeRelations = [.. record.GetReferences("change relations").Select(r => (r.TargetStringId, r.Values.Value0))];
@@ -431,21 +467,33 @@ public sealed class DialogueDatabase(GameDatabase db)
         node.AiContract = contract.TargetStringId is { } package ? (package, contract.Values.Value0) : null;
         node.TriggerCampaigns = [.. record.GetReferences("trigger campaign")
             .Select(r => new CampaignLink(r.TargetStringId, r.Values.Value0, r.Values.Value1, r.Values.Value2))];
+        return itemTyped;
+    }
 
-        // The specificity score (FUN_14067b070, docs/game/dialogue.md "Score").
+    /// <summary>
+    /// The specificity score (FUN_14067b070, docs/game/dialogue.md "Score").
+    /// </summary>
+    static int Score(DialogueNode node, GameRecord record, bool itemTyped, int tagConditions, int requiredTags)
+    {
         int score = record.GetInt("score bonus");
         if (node.Speaker != Talker.Me) score++;
         if (node.Locked) score += 2;
         foreach (var set in new[] { node.InTownOf, node.MyFaction, node.TargetFaction, node.TargetRace })
             if (set.Count > 0) score += 2;
         if (itemTyped) score += 2;
-        score += 2 * node.TargetHasItem.Count + 2 * node.WorldStates.Count + conditions.Count + tagConditions + requiredTags;
+        score += 2 * node.TargetHasItem.Count + 2 * node.WorldStates.Count + node.Conditions.Count + tagConditions + requiredTags;
         if (node.ChancePermanent < 99) score++;
         if (node.TargetIsType > 0) score++;
         if (node.Interjection) score += 2;
         if (node.Speaker is >= Talker.Interjector1 and <= Talker.WholeSquad) score++;
-        node.Score = score;
+        return score;
+    }
 
+    /// <summary>
+    /// The node's <c>lines</c> in data order, each once; a line not read yet is read first.
+    /// </summary>
+    List<DialogueNode> ReadChildren(GameRecord record, List<DialogueNode> built)
+    {
         var children = new List<DialogueNode>();
         foreach (var l in record.GetReferences("lines"))
         {
@@ -453,8 +501,7 @@ public sealed class DialogueDatabase(GameDatabase db)
             var child = _nodes.GetValueOrDefault(line.StringId) ?? Build(line, built);
             if (!children.Contains(child)) children.Add(child);
         }
-        node.Children = children;
-        return node;
+        return children;
     }
 
     /// <summary>

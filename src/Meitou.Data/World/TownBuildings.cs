@@ -95,7 +95,8 @@ public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, floa
     /// <summary>
     /// A node a goal may stand at: neither a bed, a seat nor a dummy.
     /// </summary>
-    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training or HomeSpotKind.Workstation or HomeSpotKind.Other);
+    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training
+        or HomeSpotKind.Workstation or HomeSpotKind.Other);
 }
 
 /// <summary>
@@ -108,7 +109,8 @@ public readonly record struct TurretPost(Vector3 Position, float Yaw, float UseR
 /// A placed building of a town that squads can live in, with the beds and nodes of its interior layout (docs/formats/zones.md "Building layouts") and the shop and
 /// bar flags of its exterior layout. Position is the building's origin (absolute Y).
 /// </summary>
-public sealed record TownBuilding(string InstanceId, string BuildingId, string Name, Vector3 Position, float Yaw, bool IsShop, bool IsBar, IReadOnlyList<HomeSpot> Spots)
+public sealed record TownBuilding(string InstanceId, string BuildingId, string Name, Vector3 Position, float Yaw, bool IsShop, bool IsBar,
+    IReadOnlyList<HomeSpot> Spots)
 {
     public IEnumerable<HomeSpot> Of(HomeSpotKind kind) => Spots.Where(s => s.Kind == kind);
     public int Beds => Spots.Count(s => s.Kind == HomeSpotKind.Bed);
@@ -210,7 +212,8 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// The name of its interior or exterior layout now: its placement's (<see cref="TownBuildings.Relay"/>), else its level state's; "" for none.
     /// </summary>
     public string LayoutName(bool exterior) =>
-        Resolved?.Placement.LayoutName(LevelState, exterior) ?? LevelState?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
+        Resolved?.Placement.LayoutName(LevelState, exterior)
+        ?? LevelState?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
     /// <summary>
     /// The names of the interior and exterior layouts its record can take (its own and those of <c>shares interiors with</c>), case ignored.
     /// </summary>
@@ -259,7 +262,8 @@ public sealed record TownFixture(string Id, string RecordId, bool IsCage, Vector
     /// Its stock is a building shop's (functions 2 BF_RESOURCE_STORAGE, 9 BF_SHOP, 13 BF_GENERAL_STORAGE with an inventory; <c>FUN_1409562f0</c>,
     /// docs/game/economy.md "Building shops").
     /// </summary>
-    public bool HoldsShopStock => StorageWidth > 0 && StorageHeight > 0 && Function is TownBuildings.ResourceStorageFunction or TownBuildings.ShopFunction or TownBuildings.GeneralStorageFunction;
+    public bool HoldsShopStock => StorageWidth > 0 && StorageHeight > 0
+        && Function is TownBuildings.ResourceStorageFunction or TownBuildings.ShopFunction or TownBuildings.GeneralStorageFunction;
 }
 
 /// <summary>
@@ -332,8 +336,8 @@ public static class TownBuildings
     /// The buildings by town placement id (<see cref="TownPlacement.InstanceId"/>), each list in placement order. Without <paramref name="contents"/> their interior
     /// layouts are not laid out (no spots, fixtures, item slots, tables or furniture, no shop or bar): enough to house residents (<see cref="ResidentHomes.Assign"/>).
     /// </summary>
-    public static Dictionary<string, List<TownBuilding>> Build(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight,
-        bool contents = true)
+    public static Dictionary<string, List<TownBuilding>> Build(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts,
+        Func<double, double, float> terrainHeight, bool contents = true)
     {
         var builder = new TownBuildingBuilder(db, levels, layouts, terrainHeight, contents);
         var result = new Dictionary<string, List<TownBuilding>>(StringComparer.Ordinal);
@@ -351,7 +355,8 @@ public static class TownBuildings
     /// residents name them as the level data's do not. Its contents come from them, and the names ride on its placement
     /// (<see cref="BuildingPlacement.InteriorLayout"/>) so every reader lays it out alike. A building without a level state or placement stays as it is.
     /// </summary>
-    public static TownBuilding Relay(GameDatabase db, BuildingLayouts layouts, TownBuilding b, string interior, string exterior, BuildingNaming? naming = null)
+    public static TownBuilding Relay(GameDatabase db, BuildingLayouts layouts, TownBuilding b, string interior, string exterior,
+        BuildingNaming? naming = null)
     {
         if (b.Resolved is not { } resolved || b.LevelState is not { } state) return b;
         if (b.LayoutName(exterior: false) == interior && b.LayoutName(exterior: true) == exterior) return b with { Naming = naming ?? b.Naming };
@@ -406,8 +411,11 @@ public static class TownBuildings
         bool bed = false;
         foreach (var list in building.ReferenceLists)
             foreach (var r in building.GetReferences(list))
-                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingFunctionality } f && f.GetInt("function") is BedFunction or SkeletonBedFunction)
+            {
+                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingFunctionality } f
+                    && f.GetInt("function") is BedFunction or SkeletonBedFunction)
                     bed = true;
+            }
         cache[building.StringId] = bed;
         return bed;
     }

@@ -93,7 +93,8 @@ public static class FoliageLayoutCacheKey
         AppendFile(text, Path.Combine(install.DataDirectory, TerrainMaps.BiomeMap), "biomemap");
         var overlays = Path.Combine(install.DataDirectory, TerrainMaps.LandDirectory, "overlaymaps");
         if (!Directory.Exists(overlays)) return;
-        foreach (var f in Directory.EnumerateFiles(overlays, "new_overlay.*.png").OrderBy(f => f, StringComparer.Ordinal)) AppendFile(text, f, Path.GetFileName(f));
+        foreach (var f in Directory.EnumerateFiles(overlays, "new_overlay.*.png").OrderBy(f => f, StringComparer.Ordinal))
+            AppendFile(text, f, Path.GetFileName(f));
     }
 
     /// <summary>
@@ -102,8 +103,8 @@ public static class FoliageLayoutCacheKey
     static void AppendFile(StringBuilder text, string path, string name)
     {
         var info = new FileInfo(path);
-        text.Append("file|").Append(name).Append('|').Append(info.Exists ? info.Length : -1).Append('|').Append(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)
-            .Append('\n');
+        text.Append("file|").Append(name).Append('|').Append(info.Exists ? info.Length : -1).Append('|')
+            .Append(info.Exists ? info.LastWriteTimeUtc.Ticks : 0).Append('\n');
     }
 
     /// <summary>
@@ -141,7 +142,8 @@ public static class FoliageLayoutCacheKey
     static void AppendScalars(StringBuilder text, GameRecord r)
     {
         var inv = CultureInfo.InvariantCulture;
-        foreach (var (k, v) in r.Bools.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('b').Append(k).Append('=').Append(v ? 1 : 0).Append('\n');
+        foreach (var (k, v) in r.Bools.OrderBy(p => p.Key, StringComparer.Ordinal))
+            text.Append('b').Append(k).Append('=').Append(v ? 1 : 0).Append('\n');
         foreach (var (k, v) in r.Floats.OrderBy(p => p.Key, StringComparer.Ordinal))
             text.Append('f').Append(k).Append('=').Append(BitConverter.SingleToInt32Bits(v).ToString(inv)).Append('\n');
         foreach (var (k, v) in r.Ints.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('i').Append(k).Append('=').Append(v).Append('\n');

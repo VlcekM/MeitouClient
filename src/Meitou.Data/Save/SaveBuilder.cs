@@ -26,7 +26,8 @@ public sealed class SaveBuilder
         FactionCollectionPlayer = NewCollection(Game.Quick);
         Game.Reindex();
         Game.Camera.Version = SaveGame.GameVersion;
-        Game.Quick.SlotLists.AddRange([[], [], Enumerable.Range(1, SaveGame.ZoneContainerCount).ToArray(), Enumerable.Range(1, SaveGame.ZoneContainerCount).ToArray()]);
+        Game.Quick.SlotLists.AddRange(
+            [[], [], Enumerable.Range(1, SaveGame.ZoneContainerCount).ToArray(), Enumerable.Range(1, SaveGame.ZoneContainerCount).ToArray()]);
         Game.Portraits = SavePortraits.Blank();
     }
 
@@ -39,7 +40,8 @@ public sealed class SaveBuilder
         Game = game;
         var player = game.PlayerFaction;
         var collections = game.FactionCollections;
-        FactionCollectionPlayer = collections.FirstOrDefault(c => player is not null && c.Instances.Any(i => i.Target == player.Record.StringId)) ?? Quick(FcsRecordType.InstanceCollection);
+        FactionCollectionPlayer = collections.FirstOrDefault(c => player is not null && c.Instances.Any(i => i.Target == player.Record.StringId))
+            ?? Quick(FcsRecordType.InstanceCollection);
         FactionCollectionOthers = collections.FirstOrDefault(c => c != FactionCollectionPlayer) ?? Quick(FcsRecordType.InstanceCollection);
         _nextContainer = game.Platoons.Select(p => p.Handle.C).DefaultIfEmpty(0).Max() + 1;
         _nextTownContainer = game.Towns.Select(t => t.Handle.C).DefaultIfEmpty(0).Max() + 1;
@@ -135,7 +137,8 @@ public sealed class SaveBuilder
     /// Adds a faction: the GAMESTATE_FACTION, its WAR_SAVESTATE, and an instance in the player collection or the other one (the collections are what the game's
     /// faction writers walk). <paramref name="relations"/> is the faction's table (not for the player's faction, which has none).
     /// </summary>
-    public SaveFaction AddFaction(string factionId, string name, bool isPlayer, float prosperity, IEnumerable<SaveRelation>? relations = null, int platoonCounter = 0, int rank = 0)
+    public SaveFaction AddFaction(string factionId, string name, bool isPlayer, float prosperity, IEnumerable<SaveRelation>? relations = null,
+        int platoonCounter = 0, int rank = 0)
     {
         var war = Quick(FcsRecordType.WarSavestate);
         war.Floats["updatetime"] = 40;
@@ -159,7 +162,8 @@ public sealed class SaveBuilder
         }
 
         var collection = isPlayer ? FactionCollectionPlayer : FactionCollectionOthers;
-        collection.Instances.Add(new FcsInstance { Id = (collection.Instances.Count + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), Target = f.StringId });
+        string id = (collection.Instances.Count + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        collection.Instances.Add(new FcsInstance { Id = id, Target = f.StringId });
         Game.Factions.Add(faction);
         return faction;
     }
@@ -168,7 +172,8 @@ public sealed class SaveBuilder
     /// Adds the state of a town or nest. <paramref name="handleType"/> is 13 (TOWN) or 85 (NEST); each gets a container of its own, or keeps
     /// <paramref name="hand"/> (a level town state's).
     /// </summary>
-    public SaveTown AddTown(string name, string instance, string factionId, bool isNest, ZoneCoordinate? zone, int handleType = (int)FcsRecordType.Town, Hand? hand = null)
+    public SaveTown AddTown(string name, string instance, string factionId, bool isNest, ZoneCoordinate? zone, int handleType = (int)FcsRecordType.Town,
+        Hand? hand = null)
     {
         var r = Quick(FcsRecordType.GamestateTown, name);
         foreach (var k in new[] { "started", "explored", "recently discovered", "discovered", "ded" }) r.Bools[k] = false;
@@ -220,14 +225,16 @@ public sealed class SaveBuilder
     /// Adds a platoon: its PLATOON record and an empty platoon file (named <c>&lt;name&gt;.platoon</c>, the record's <c>content file</c>) with the characters'
     /// INSTANCE_COLLECTION. Characters are added with <see cref="AddCharacter"/>.
     /// </summary>
-    public SavePlatoon AddPlatoon(string name, string factionName, string factionId, string squadTemplate, Vector3 position, int money = 0, int squadIndex = 0)
+    public SavePlatoon AddPlatoon(string name, string factionName, string factionId, string squadTemplate, Vector3 position, int money = 0,
+        int squadIndex = 0)
     {
         var r = new FcsRecord { Type = (int)FcsRecordType.Platoon, Name = name, StringId = name, Id = NextNumber(Game.Quick) };
         Game.Quick.Records.Add(r);
         Game.Quick.Data.NextId = Math.Max(Game.Quick.Data.NextId, r.Id);
         // `persistent` with `sqt` 1 (every sqt-1 platoon of the samples is persistent): a caller writing another pool sets both.
         foreach (var k in new[] { "intact", "is resident", "canref", "persistent" }) r.Bools[k] = k is "intact" or "canref" or "persistent";
-        foreach (var k in new[] { "special", "dead", "never been activated", "imprisoned", "runningAwayMode", "homelok", "campaign" }) r.Bools[k] = false;
+        foreach (var k in new[] { "special", "dead", "never been activated", "imprisoned", "runningAwayMode", "homelok", "campaign" })
+            r.Bools[k] = false;
         r.Floats["towntime"] = 0;
         r.Floats["jobhr"] = 0;
         r.Ints["squad index"] = squadIndex;
@@ -238,10 +245,14 @@ public sealed class SaveBuilder
         r.Ints["slave count"] = 0;
         int cs = Serial();
         new Hand((int)FcsRecordType.Platoon, _nextContainer++, cs, 0, 0).Write(r, "handle");
-        foreach (var prefix in new[] { "currenttown", "hometown", "homebuilding", "occupied", "separated", "target town", "mission employer", "mission target", "mission town" })
+        foreach (var prefix in new[] { "currenttown", "hometown", "homebuilding", "occupied", "separated", "target town", "mission employer",
+            "mission target", "mission town" })
+        {
             Hand.Null.Write(r, prefix);
+        }
         r.Vector3S["position"] = position;
-        foreach (var k in new[] { "replacementAI", "contractjob", "mission data", "map area name", "map area sid", "currentPackage", "basetown" }) r.Strings[k] = "";
+        foreach (var k in new[] { "replacementAI", "contractjob", "mission data", "map area name", "map area sid", "currentPackage", "basetown" })
+            r.Strings[k] = "";
         r.Strings["platoon stringID"] = name;
         r.Strings["faction name"] = factionName;
         r.Strings["faction stringID"] = factionId;
@@ -285,7 +296,8 @@ public sealed class SaveBuilder
     /// handle (type 1, the platoon's container and serial, the next free slot from 1). The records start with the defaults of a character that has done nothing;
     /// fill STATS, MEDICAL_STATE and CHARACTER_APPEARANCE afterwards.
     /// </summary>
-    public SaveCharacter AddCharacter(SavePlatoon platoon, string recordId, string name, string ownerFactionId, Vector3 position, Quaternion rotation, bool isLeader = false, int squadMemberType = 0, float age = 0.5f)
+    public SaveCharacter AddCharacter(SavePlatoon platoon, string recordId, string name, string ownerFactionId, Vector3 position, Quaternion rotation,
+        bool isLeader = false, int squadMemberType = 0, float age = 0.5f)
     {
         var file = platoon.File ?? throw new InvalidOperationException("The platoon has no file.");
         var instance = new FcsInstance { Target = recordId, Position = position, Rotation = rotation };

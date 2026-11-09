@@ -79,9 +79,43 @@ public static class Artifacts
     {
         var result = new Dictionary<int, List<ArtifactStack>>();
         if (db.OfType(FcsRecordType.Artifacts).FirstOrDefault() is not { } record) return result;
-        var prices = PriceConstants.FromDatabase(db);
+
         var items = new List<Entry>();
         var gear = new List<Entry>();
+        ReadEntries(db, record, items, gear);
+
+        var itemTowns = new List<Taker>();
+        var gearTowns = new List<Taker>();
+        ReadTakers(towns, itemTowns, gearTowns);
+
+        var townOrder = Comparer<Taker>.Create(CompareTowns);
+        var entryOrder = Comparer<Entry>.Create(CompareEntries);
+        itemTowns = [.. itemTowns.Order(townOrder)];
+        gearTowns = [.. gearTowns.Order(townOrder)];
+        items = [.. items.Order(entryOrder)];
+        gear = [.. gear.Order(entryOrder)];
+        FindTowns(itemTowns, items);
+        FindTowns(gearTowns, gear);
+
+        SpreadGear(gearTowns, gear);
+        SpreadItems(itemTowns, items);
+
+        foreach (var t in gearTowns.Concat(itemTowns))
+        {
+            if (t.Given.Count == 0) continue;
+            if (!result.TryGetValue(t.Key, out var list)) result[t.Key] = list = [];
+            list.AddRange(t.Given.Select(g => g.Stack));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// The ARTIFACTS record's entries with their values: <c>items</c> into <paramref name="items"/>, the armours, crossbows, robotics and weapons
+    /// into <paramref name="gear"/>.
+    /// </summary>
+    static void ReadEntries(GameDatabase db, GameRecord record, List<Entry> items, List<Entry> gear)
+    {
+        var prices = PriceConstants.FromDatabase(db);
         void Add(List<Entry> into, ArtifactStack s)
         {
             // A gear entry of 0 units or an item entry of fewer never ends the original's spread; both are left out.
@@ -97,16 +131,22 @@ public static class Artifacts
                 Add(into, new ArtifactStack(found[i], "", "", level, refs[i].Values.Value0));
         }
         foreach (var list in new[] { "crossbows", "robotics" })
+        {
             foreach (var r in record.GetReferences(list))
             {
                 if (db.Find(r.TargetStringId) is null) continue;
                 if (r.Values.Value0 > 0) Add(gear, new ArtifactStack(r.TargetStringId, "", "", 95, r.Values.Value0));
                 if (r.Values.Value1 > 0) Add(gear, new ArtifactStack(r.TargetStringId, "", "", 80, r.Values.Value1));
             }
+        }
         AddWeapons(db, record, gear, Add);
+    }
 
-        var itemTowns = new List<Taker>();
-        var gearTowns = new List<Taker>();
+    /// <summary>
+    /// The towns that take items and those that take gear (each with a maximum value set), nests left out.
+    /// </summary>
+    static void ReadTakers(IEnumerable<ArtifactTown> towns, List<Taker> itemTowns, List<Taker> gearTowns)
+    {
         foreach (var t in towns)
         {
             if (t.Town.Type is TownType.Nest or TownType.NestMarker or TownType.Null) continue;
@@ -115,18 +155,16 @@ public static class Artifacts
             if (t.Town.GearArtifactsMaxValue != 0)
                 gearTowns.Add(new Taker(t.Key, t.Town, t.Position, (uint)t.Town.GearArtifactsMinValue, (uint)t.Town.GearArtifactsMaxValue));
         }
-        var townOrder = Comparer<Taker>.Create(CompareTowns);
-        var entryOrder = Comparer<Entry>.Create(CompareEntries);
-        itemTowns = [.. itemTowns.Order(townOrder)];
-        gearTowns = [.. gearTowns.Order(townOrder)];
-        items = [.. items.Order(entryOrder)];
-        gear = [.. gear.Order(entryOrder)];
-        FindTowns(itemTowns, items);
-        FindTowns(gearTowns, gear);
+    }
 
-        // Gear: one unit of the first artifact each town takes, then the rest unit by unit to towns drawn from each artifact's.
+    /// <summary>
+    /// Gear: one unit of the first artifact each town takes, then the rest unit by unit to towns drawn from each artifact's.
+    /// </summary>
+    static void SpreadGear(List<Taker> gearTowns, List<Entry> gear)
+    {
         var rng = new BoostRandom(Seed);
         foreach (var t in gearTowns)
+        {
             for (int k = 0; k < gear.Count; k++)
             {
                 if (!t.Accepts(gear[k].Value)) continue;
@@ -134,10 +172,16 @@ public static class Artifacts
                 if (gear[k].Left == 0) gear.RemoveAt(k);
                 break;
             }
+        }
         foreach (var e in gear)
             while (e.Towns.Count > 0 && e.Left > 0) gearTowns[e.Towns[rng.UniformInt(0, e.Towns.Count - 1)]].Add(e, 1);
+    }
 
-        // Items: spread over their towns in order by the towns' maxima.
+    /// <summary>
+    /// Items: spread over their towns in order by the towns' maxima.
+    /// </summary>
+    static void SpreadItems(List<Taker> itemTowns, List<Entry> items)
+    {
         foreach (var e in items)
         {
             if (e.Towns.Count == 0) continue;
@@ -162,14 +206,6 @@ public static class Artifacts
             }
             if (run > 0) itemTowns[e.Towns[at]].Add(e, run);
         }
-
-        foreach (var t in gearTowns.Concat(itemTowns))
-        {
-            if (t.Given.Count == 0) continue;
-            if (!result.TryGetValue(t.Key, out var list)) result[t.Key] = list = [];
-            list.AddRange(t.Given.Select(g => g.Stack));
-        }
-        return result;
     }
 
     /// <summary>

@@ -121,7 +121,8 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
             }
             var edges = new FootprintEdges { Points = [.. points], Normals = [.. normals] };
             // Fewer than three edges bound nothing (every point passes them), so the box may not either.
-            if (points.Count < 3 || footprint.Length < 3) (edges.Min, edges.Max, edges.Reach) = (new(float.NegativeInfinity), new(float.PositiveInfinity), 0);
+            if (points.Count < 3 || footprint.Length < 3)
+                (edges.Min, edges.Max, edges.Reach) = (new(float.NegativeInfinity), new(float.PositiveInfinity), 0);
             else
             {
                 (edges.Min, edges.Max) = (footprint[0], footprint[0]);
@@ -178,8 +179,11 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
         if (!FloorSurfaces.RayBox(origin, direction, min, max, maxDistance)) return null;
         float? best = null;
         for (int i = 0; i + 2 < _maskCorners.Length; i += 3)
-            if (FloorSurfaces.RayTriangle(origin, direction, _maskCorners[i], _maskCorners[i + 1], _maskCorners[i + 2]) is { } t && t <= maxDistance && (best is null || t < best))
+        {
+            if (FloorSurfaces.RayTriangle(origin, direction, _maskCorners[i], _maskCorners[i + 1], _maskCorners[i + 2]) is { } t && t <= maxDistance
+                && (best is null || t < best))
                 best = t;
+        }
         return best;
     }
 
@@ -205,7 +209,8 @@ public sealed record InteriorVolume(string PlacementId, Vector2[] Footprint, flo
     /// The volume of a building placed at <paramref name="position"/> / <paramref name="rotation"/>, or null when it has no <c>interior mask</c> part with a
     /// readable collision file, or is a gateway and <paramref name="gateways"/> is false (a gateway is walked under, not entered: no room, but its hull still answers the audio ray, <see cref="IsGateway"/>). <paramref name="collision"/> loads a record's collision path (shared, cached).
     /// </summary>
-    public static InteriorVolume? For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation, InteriorCollisions collision, bool gateways = false)
+    public static InteriorVolume? For(GameDatabase db, GameRecord building, string placementId, Vector3 position, Quaternion rotation,
+        InteriorCollisions collision, bool gateways = false)
     {
         bool gateway = building.GetBool("is gateway");
         if (gateway && !gateways) return null;
@@ -313,7 +318,9 @@ public sealed partial class FloorSurfaces
         InteriorCollisions collision)
     {
         var result = new FloorSurfaces();
-        if (building.GetInt("path mode", 2) == 0 || building.GetBool("is exterior furniture") || building.GetBool("is interior furniture")) return result;   // IGNORE: no floor groups
+        // IGNORE: no floor groups
+        if (building.GetInt("path mode", 2) == 0 || building.GetBool("is exterior furniture") || building.GetBool("is interior furniture"))
+            return result;
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var p in WorldObjectLayout.Building(db, building, placementId, position, rotation, new BuildingState { WithInterior = true }))
         {

@@ -23,7 +23,8 @@ public readonly record struct DoorLeaf(int Axis, float Distance, float Speed, fl
     /// The fields of a door's BUILDING record (the fcs.def defaults when absent: axis 0, 30 units, 1 per second, no step out).
     /// </summary>
     public static DoorLeaf Of(GameRecord door) =>
-        new(Math.Clamp(door.GetInt("door axis"), 0, 2), door.GetFloat("door move dist", 30), door.GetFloat("door move speed", 1), door.GetFloat("door comes out"));
+        new(Math.Clamp(door.GetInt("door axis"), 0, 2), door.GetFloat("door move dist", 30), door.GetFloat("door move speed", 1),
+            door.GetFloat("door comes out"));
 
     /// <summary>
     /// The leaf's displacement at open amount <paramref name="doa"/> in its part's local frame (<b>Verified</b> formula, kenshi_x64 <c>FUN_140298d10</c>): without a step out,

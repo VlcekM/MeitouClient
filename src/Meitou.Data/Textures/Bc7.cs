@@ -81,7 +81,8 @@ static class Bc7
     /// </summary>
     public static void DecodeBlock(ReadOnlySpan<byte> src, Span<byte> rgba)
     {
-        ulong lo = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src), hi = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src[8..]);
+        ulong lo = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src);
+        ulong hi = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src[8..]);
         int pos = 0;
         int Read(int n)
         {
@@ -142,7 +143,8 @@ static class Bc7
             }
             int e0 = s * 2 * 4, e1 = e0 + 4;
             int wc = Weight(colorBits, colorIdx), wa = Weight(alphaBits, alphaIdx);
-            int r = Mix(ep[e0], ep[e1], wc), g = Mix(ep[e0 + 1], ep[e1 + 1], wc), b = Mix(ep[e0 + 2], ep[e1 + 2], wc), a = Mix(ep[e0 + 3], ep[e1 + 3], wa);
+            int r = Mix(ep[e0], ep[e1], wc), g = Mix(ep[e0 + 1], ep[e1 + 1], wc);
+            int b = Mix(ep[e0 + 2], ep[e1 + 2], wc), a = Mix(ep[e0 + 3], ep[e1 + 3], wa);
             switch (rotation)
             {
                 case 1: (a, r) = (r, a); break;

@@ -25,8 +25,8 @@ public enum TerrainDecalType : byte
 /// <param name="Colour">ABGR (A in the top byte, R in the bottom): the race's blood colour and the decal's opacity.</param>
 /// <param name="Life">Seconds of game time left (99 when made; the opacity is at most this), as a save holds it; inside a <see cref="TerrainDecalStore"/> the
 /// <see cref="TerrainDecalStore.Clock"/> time it runs out at.</param>
-public record struct TerrainDecal(uint Key, TerrainDecalType Type, byte Variant, short LocalX, short LocalZ, short HalfWidth, short HalfHeight, short Rotation,
-    uint Colour, float Life);
+public record struct TerrainDecal(uint Key, TerrainDecalType Type, byte Variant, short LocalX, short LocalZ, short HalfWidth, short HalfHeight,
+    short Rotation, uint Colour, float Life);
 
 /// <summary>
 /// The cells blood decals are kept and drawn in: the terrain quadtree's level 10, 1024 × 1024 squares of 288 units over the world (docs/game/blood-decals.md).
@@ -96,4 +96,5 @@ public static class TerrainDecalCells
 /// <param name="Life">Seconds of game time left.</param>
 /// <param name="Colour">ABGR, as <see cref="TerrainDecal.Colour"/>.</param>
 /// <param name="Floor">Drawn only on up-facing pixels at its height (a pool, drip or smear); else on any surface facing it (a splash).</param>
-public readonly record struct SurfaceBloodDecal(TerrainDecalType Type, byte Variant, System.Numerics.Vector3 Centre, float Angle, float Size, float Life, uint Colour, bool Floor);
+public readonly record struct SurfaceBloodDecal(TerrainDecalType Type, byte Variant, System.Numerics.Vector3 Centre, float Angle, float Size,
+    float Life, uint Colour, bool Floor);

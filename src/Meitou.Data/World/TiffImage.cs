@@ -125,7 +125,13 @@ public sealed class TiffImage : IDisposable
 
     static long[] ReadValues(Stream stream, TiffTag tag, bool le)
     {
-        int size = tag.Type switch { 1 or 2 or 6 or 7 => 1, 3 or 8 => 2, 4 or 9 => 4, _ => throw new NotSupportedException($"TIFF tag {tag.Tag} has unsupported type {tag.Type}.") };
+        int size = tag.Type switch
+        {
+            1 or 2 or 6 or 7 => 1,
+            3 or 8 => 2,
+            4 or 9 => 4,
+            _ => throw new NotSupportedException($"TIFF tag {tag.Tag} has unsupported type {tag.Type}.")
+        };
         long byteCount = size * tag.Count;
         byte[] data;
         if (byteCount <= 4)

@@ -68,7 +68,8 @@ public sealed class BuildingLayouts
         foreach (var id in building.GetReferences("shares interiors with").Select(r => r.TargetStringId).Prepend(building.StringId))
         {
             if (!_byBuilding.TryGetValue((exterior, id), out var list)) continue;
-            var match = list.FirstOrDefault(r => r.Name == name) ?? list.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+            var match = list.FirstOrDefault(r => r.Name == name)
+                ?? list.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
             if (match is not null) return match;
         }
         return null;
@@ -122,7 +123,8 @@ public sealed class BuildingLayouts
     {
         foreach (var item in items)
         {
-            if (_swaps!.Replacement(owner, item.Building.StringId, BuildingSwapPass.Roll($"{key}/{item.InstanceId}")) is not { } answer) yield return item;
+            if (_swaps!.Replacement(owner, item.Building.StringId, BuildingSwapPass.Roll($"{key}/{item.InstanceId}")) is not { } answer)
+                yield return item;
             else if (answer.Length > 0 && _db.Find(answer) is { } replacement) yield return item with { Building = replacement };
         }
     }

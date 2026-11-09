@@ -515,7 +515,9 @@ public sealed class CharacterAppearance
         bool hideBeard = worn.Any(w => w.GetBool("hide beard"));
         foreach (var w in worn) result.HiddenParts |= w.GetInt("hide parts");
 
-        var hair = body?.HairId is { } hairId ? db.Find(hairId) : character is null || body is null ? PickHair(db, race, AttachSlot.Hair, random) : null;
+        var hair = body?.HairId is { } hairId ? db.Find(hairId)
+            : character is null || body is null ? PickHair(db, race, AttachSlot.Hair, random)
+            : null;
         var beard = body?.BeardId is { } beardId ? db.Find(beardId) : null;
         if (character?.GetBool("shaved") == true)
         {
