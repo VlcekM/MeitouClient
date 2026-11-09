@@ -65,8 +65,10 @@ public class OgreMaterialTests
         Assert.Equal("main", main.Name);
         Assert.False(main.Lighting);
         Assert.Equal(new Vector4(0, 1, 0, 1), main.Diffuse);
+
         // Base properties come first, so the raw list still has both diffuse lines.
         Assert.Equal(["lighting off", "diffuse 1 0 0", "diffuse 0 1 0"], main.Source.Properties.Select(p => p.ToString()));
+
         // Matched by name and overlaid; the unmatched base unit is inserted before; the new one stays last.
         Assert.Equal(["diffuseMap a.dds", "normalMap n2.dds", "extra e.dds"], main.TextureUnits.Select(u => $"{u.Name} {u.Texture}"));
         Assert.Equal(2, main.TextureUnits[1].Source.Properties.Count(p => p.Name == "texture"));
@@ -82,8 +84,10 @@ public class OgreMaterialTests
         };
         var all = Library("import * from \"base.material\"\nmaterial A : Base Second { }", files);
         Assert.Empty(all.Diagnostics);
+
         // Imported objects are only bases: they are not defined by the importing file.
         Assert.Equal(["A"], all.Materials.Keys);
+
         // Base's technique is copied in; Second's unnamed technique then pairs with that copy by position, and its
         // unnamed pass with the copy's first pass ("main": a named object can take an unnamed base by position).
         var a = Assert.Single(all.Find("A")!.Techniques);
@@ -96,6 +100,7 @@ public class OgreMaterialTests
 
         var missing = Library("import * from nothere.material\nmaterial A : Base { }");
         Assert.Equal([OgreScriptError.ImportNotFound, OgreScriptError.ObjectBaseNotFound], missing.Diagnostics.Select(d => d.Code));
+
         // Ogre only searches the file and its imports, never other files.
         Assert.Empty(missing.Find("A")!.Techniques);
     }
@@ -126,6 +131,7 @@ public class OgreMaterialTests
             """);
         var basePass = library.Find("Base")!.Techniques[0].Passes[0];
         Assert.Equal(new Vector4(0.25f, 0.5f, 1, 1), basePass.Diffuse);
+
         // The first top-level set wins (std::map insert).
         Assert.Equal(new OgreSceneBlend(OgreSceneBlendFactor.One, OgreSceneBlendFactor.One), basePass.SceneBlend);
         Assert.Equal(new Vector4(1, 1, 0, 0.5f), library.Find("Derived")!.Techniques[0].Passes[0].Diffuse);

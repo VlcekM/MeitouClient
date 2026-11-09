@@ -28,19 +28,29 @@ internal sealed class DeferredReleaseQueue
     {
         List<Action>? run = null;
         int released = 0;
+
         lock (_gate)
         {
             int limit = force ? int.MaxValue : Math.Max(0, budget);
+
             for (int i = 0; i < _items.Count && released < limit;)
             {
                 var item = _items[i];
-                if (!force && currentFrame - item.Frame < ringDepth) { i++; continue; }
+
+                if (!force && currentFrame - item.Frame < ringDepth)
+                {
+                    i++;
+                    continue;
+                }
+
                 (run ??= []).Add(item.Release);
                 _items.RemoveAt(i);
                 released++;
             }
         }
+
         if (run is not null) foreach (var release in run) release();
+
         return released;
     }
 }

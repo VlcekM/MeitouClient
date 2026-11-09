@@ -11,7 +11,9 @@ using static Meitou.Tests.Combat.CombatFixtures;
 
 namespace Meitou.Tests.Combat;
 
-/// <summary>The combat record views over invented records (no install), and the same facts over the install's records ([Slow]).</summary>
+/// <summary>
+/// The combat record views over invented records (no install), and the same facts over the install's records ([Slow]).
+/// </summary>
 public class CombatDataTests
 {
     static GameDatabase Db(params FcsRecord[] records)
@@ -98,7 +100,9 @@ public class CombatDataTests
     }
 }
 
-/// <summary>The facts of docs/game/combat.md checked against the install's records (base load order). Skipped without the game.</summary>
+/// <summary>
+/// The facts of docs/game/combat.md checked against the install's records (base load order). Skipped without the game.
+/// </summary>
 [Slow]
 public class CombatInstallTests
 {
@@ -128,22 +132,27 @@ public class CombatInstallTests
         Assert.Equal(0.509f, combo.StrikeProgress(1), 3);
         Assert.Equal(0.792f, combo.StrikeProgress(2), 3);
         Assert.Equal(0.527f, combo.StopProgress(1), 3);
+
         // The martial-arts rows count frames.
         var strike = all.Single(t => t.Name == "ma Double strike");
         Assert.Equal(57, strike.NumFrames);
         Assert.Equal(18f / 57, strike.StrikeProgress(1), 4);
         Assert.Equal(31f / 57, strike.StrikeProgress(2), 4);
         Assert.Equal(WeaponKinds.Unarmed, strike.Kinds);
+
         // Every sword, block and dodge row is in fractions.
         Assert.All(all.Where(t => t.Animal == 0 && !t.Kinds.HasFlag(WeaponKinds.Unarmed) || t.IsBlock), t => Assert.Equal(1, t.NumFrames));
+
         // Four human rows are disabled; one has no weapon flag at all.
         Assert.Equal(4, all.Count(t => t.Disabled));
         Assert.Equal(WeaponKinds.None, all.Single(t => t.Name == "heavy downcut").Kinds);
+
         // The "Dodge back" rows are flagged as blocks as well as dodges.
         var dodges = all.Where(t => t.Name.StartsWith("Dodge back")).ToList();
         Assert.Equal(4, dodges.Count);
         Assert.All(dodges, t => { Assert.True(t.IsBlock); Assert.True(t.IsDodge); });
         Assert.True(dodges.Single(t => t.Name.EndsWith("fly")).IsStumbleDodge);
+
         // The static rows: a negative distance marks the case a row is not for.
         var cutStatic = all.Single(t => t.Name == "Cut left static");
         Assert.Equal(-999f, cutStatic.AttackDistance);
@@ -152,7 +161,9 @@ public class CombatInstallTests
     }
 }
 
-/// <summary>A duel between two base-game characters with real gear, race, techniques, clip lengths and constants ([Slow]).</summary>
+/// <summary>
+/// A duel between two base-game characters with real gear, race, techniques, clip lengths and constants ([Slow]).
+/// </summary>
 [Slow]
 public class RealDuelTests(ITestOutputHelper output)
 {
@@ -163,9 +174,11 @@ public class RealDuelTests(ITestOutputHelper output)
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
+
         lock (Gate)
         {
             if (s_cached is { } c) return c;
+
             var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
             var race = RaceData.From(db.OfType(FcsRecordType.Race).First(r => r.Name == "Greenlander"), db);
             return (s_cached = (db, CombatDatabase.From(db), AnimationLengths.Load(install!.Root), race, install!)).Value;
@@ -179,20 +192,25 @@ public class RealDuelTests(ITestOutputHelper output)
         var maker = data.Manufacturers.First(m => m.Models.Any(e => e.Level == 50));
         var model = data.WeaponMaterial(maker.Models.First(e => e.Level == 50).ModelStringId)!;
         var chest = db.OfType(FcsRecordType.LocationalDamage).First(r => r.Name == "Chest").StringId;
-        var armour = data.Armours.Where(a => a.Class == ArmourClass.Heavy && a.CoverageOf(chest) >= 90).OrderBy(a => a.StringId, StringComparer.Ordinal).First();
+        var armour = data.Armours.Where(a => a.Class == ArmourClass.Heavy && a.CoverageOf(chest) >= 90).OrderBy(a => a.StringId,
+            StringComparer.Ordinal).First();
         var constants = GameConstants.FromDatabase(db);
         var combat = new CombatSystem(data.Techniques, data.Constants, constants, BodyOptions.Default, lengths, new CombatOptions { RecordLog = true });
         var world = new Meitou.Simulation.World(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 },
             new OpenGroundWalkability((_, _) => 150), [combat]);
+
         CharacterId Spawn(string name, float skill, ArmourData? worn, float x)
         {
             var stats = new CharacterStats();
             foreach (var s in new[] { StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Katanas, StatsEnumerated.Dexterity, StatsEnumerated.Strength, StatsEnumerated.Toughness })
                 stats[s] = skill;
-            var fighter = new Fighter(WeaponInstance.Create(0.5f, katana, maker, model, data.Constants), worn is null ? [] : [ArmourPiece.Create(worn, 0.6f)]);
+
+            var fighter = new Fighter(WeaponInstance.Create(0.5f, katana, maker, model, data.Constants),
+                worn is null ? [] : [ArmourPiece.Create(worn, 0.6f)]);
             var cold = new CharacterCold { Name = name, Stats = stats, Race = race, Medical = MedicalState.Create(race, stats.Strength), Fighter = fighter };
             return world.Characters.Spawn(new CharacterHot { Position = new(x, 150, 1000), Health = 100 }, cold, 0);
         }
+
         var a = Spawn("Plated", 45, armour, 1000);
         var b = Spawn("Bare", 55, null, 1014);
         world.Commands.Enqueue(new AttackOrder([a], b) { Tick = 0 });
@@ -204,31 +222,46 @@ public class RealDuelTests(ITestOutputHelper output)
     public void Real_gear_duel_resolves_and_matches_at_every_thread_count()
     {
         var (_, data, lengths, _, _) = Data();
+
         // The clips the human sword, block and dodge techniques name are all known to the skeletons (otherwise they would play 1 second).
         var human = data.Techniques.Where(t => t.Animal == 0 && !t.Disabled && (t.Kinds & WeaponKinds.Unarmed) == 0).ToList();
         output.WriteLine("clip lengths: " + string.Join(", ", human.Select(t => $"{t.AnimName} {lengths.Of(t.AnimName):0.00}")));
 
         List<CombatLogEntry>? first = null;
         ulong hash = 0;
+
         foreach (int threads in new[] { 1, 4, 16 })
         {
             var (world, combat, a, b) = Build(threads, 99);
+
             using (world)
             {
                 int ticks = 0;
+
                 while (ticks < 20000 && !world.Characters.Cold(a.Slot)!.Medical!.Incapacitated && !world.Characters.Cold(b.Slot)!.Medical!.Incapacitated)
                 {
                     world.RunTick();
                     ticks++;
                 }
+
                 var sa = combat.StateOf(a);
                 var sb = combat.StateOf(b);
                 output.WriteLine($"threads {threads}: {ticks} ticks ({ticks / 30f:0.0} s); plated thrown {sa.Thrown} landed {sa.Landed} taken {sa.Taken}; bare thrown {sb.Thrown} landed {sb.Landed} taken {sb.Taken}");
                 Assert.True(world.Characters.Cold(a.Slot)!.Medical!.Incapacitated != world.Characters.Cold(b.Slot)!.Medical!.Incapacitated);
-                if (first is null) { first = [.. combat.Log]; hash = world.StateHash(); }
-                else { Assert.Equal(first, combat.Log); Assert.Equal(hash, world.StateHash()); }
+
+                if (first is null)
+                {
+                    first = [.. combat.Log];
+                    hash = world.StateHash();
+                }
+                else
+                {
+                    Assert.Equal(first, combat.Log);
+                    Assert.Equal(hash, world.StateHash());
+                }
             }
         }
+
         Assert.InRange(first!.Count, 4, 400);
     }
 }

@@ -7,7 +7,9 @@ namespace Meitou.Tests.Ogre;
 
 public class OgreSkeletonReaderTests
 {
-    /// <summary>Writes Ogre serializer chunks: id, length (by default the true size including the 6-byte header), body.</summary>
+    /// <summary>
+    /// Writes Ogre serializer chunks: id, length (by default the true size including the 6-byte header), body.
+    /// </summary>
     sealed class Builder
     {
         readonly MemoryStream _ms = new();
@@ -39,25 +41,46 @@ public class OgreSkeletonReaderTests
             return this;
         }
 
-        /// <summary>A bone chunk as Ogre writes it: the length counts everything but the name.</summary>
+        /// <summary>
+        /// A bone chunk as Ogre writes it: the length counts everything but the name.
+        /// </summary>
         public Builder Bone(string name, ushort handle, Vector3 position, Quaternion orientation, Vector3? scale = null)
         {
             Begin(OgreSkeletonChunk.Bone).String(name).U16(handle).F32(position.X, position.Y, position.Z)
                 .F32(orientation.X, orientation.Y, orientation.Z, orientation.W);
             if (scale is { } sc) F32(sc.X, sc.Y, sc.Z);
+
             return End(OgreSkeletonReader.BoneLengthWithoutScale + (scale is null ? 0 : 12));
         }
 
         public Builder KeyFrame(float time, Quaternion rotation, Vector3 translation, Vector3? scale = null)
         {
-            Begin(OgreSkeletonChunk.AnimationKeyFrame).F32(time, rotation.X, rotation.Y, rotation.Z, rotation.W, translation.X, translation.Y, translation.Z);
+            Begin(OgreSkeletonChunk.AnimationKeyFrame).F32(time, rotation.X, rotation.Y, rotation.Z, rotation.W, translation.X, translation.Y,
+                translation.Z);
             if (scale is { } sc) F32(sc.X, sc.Y, sc.Z);
+
             return End();
         }
 
-        public Builder U16(ushort v) { _w.Write(v); return this; }
-        public Builder F32(params float[] v) { foreach (var f in v) _w.Write(f); return this; }
-        public Builder String(string s) { _w.Write(Encoding.UTF8.GetBytes(s + "\n")); return this; }
+        public Builder U16(ushort v)
+        {
+            _w.Write(v);
+            return this;
+        }
+
+        public Builder F32(params float[] v)
+        {
+            foreach (var f in v) _w.Write(f);
+
+            return this;
+        }
+
+        public Builder String(string s)
+        {
+            _w.Write(Encoding.UTF8.GetBytes(s + "\n"));
+            return this;
+        }
+
         public byte[] ToArray() => _ms.ToArray();
     }
 
@@ -169,8 +192,17 @@ public class OgreSkeletonReaderTests
         {
             var name = Path.GetRelativePath(install!.DataDirectory, file);
             OgreSkeleton skeleton;
-            try { skeleton = OgreSkeletonReader.ReadFile(file); }
-            catch (OgreFormatException e) { problems.Add($"{name}: {e.Message}"); return; }
+
+            try
+            {
+                skeleton = OgreSkeletonReader.ReadFile(file);
+            }
+            catch (OgreFormatException e)
+            {
+                problems.Add($"{name}: {e.Message}");
+                return;
+            }
+
             foreach (var p in Check(skeleton)) problems.Add($"{name}: {p}");
         });
         Assert.True(problems.IsEmpty, string.Join(Environment.NewLine, problems.Order()));
@@ -184,21 +216,25 @@ public class OgreSkeletonReaderTests
             yield return "bone handles are not contiguous from 0";
         if (skeleton.ChunkLengthMismatches > 0)
             yield return $"{skeleton.ChunkLengthMismatches} animation/track/keyframe chunks with a wrong stored length";
-        if (skeleton.Bones.Count > 256)
-            yield return $"{skeleton.Bones.Count} bones (Ogre's limit is 256)";
+        if (skeleton.Bones.Count > 256) yield return $"{skeleton.Bones.Count} bones (Ogre's limit is 256)";
         if (skeleton.Bones.Select(b => b.Name).Distinct().Count() != skeleton.Bones.Count)
             yield return "duplicate bone names";
 
         var byHandle = skeleton.Bones.ToDictionary(b => b.Handle);
+
         foreach (var bone in skeleton.Bones)
         {
             var seen = new HashSet<ushort>();
+
             for (var b = bone; b.Parent is { } parent; b = byHandle[parent])
+            {
                 if (!seen.Add(b.Handle))
                 {
                     yield return $"bone {bone.Name} is in a parent cycle";
                     break;
                 }
+            }
+
             if (MathF.Abs(bone.Orientation.Length() - 1) > tolerance)
                 yield return $"bone {bone.Name} orientation {bone.Orientation} is not unit length";
         }
@@ -207,11 +243,14 @@ public class OgreSkeletonReaderTests
         {
             if (animation.Tracks.Select(t => t.Bone).Distinct().Count() != animation.Tracks.Count)
                 yield return $"animation {animation.Name} has two tracks for one bone";
+
             foreach (var track in animation.Tracks)
             {
                 if (!byHandle.ContainsKey(track.Bone))
                     yield return $"animation {animation.Name} has a track for missing bone {track.Bone}";
+
                 float previous = float.NegativeInfinity;
+
                 foreach (var key in track.KeyFrames)
                 {
                     if (key.Time < -tolerance || key.Time > animation.Length + tolerance)
@@ -220,6 +259,7 @@ public class OgreSkeletonReaderTests
                         yield return $"animation {animation.Name} bone {track.Bone}: keyframe times go back ({previous} -> {key.Time})";
                     if (MathF.Abs(key.Rotation.Length() - 1) > tolerance)
                         yield return $"animation {animation.Name} bone {track.Bone}: rotation {key.Rotation} at {key.Time} is not unit length";
+
                     previous = key.Time;
                 }
             }

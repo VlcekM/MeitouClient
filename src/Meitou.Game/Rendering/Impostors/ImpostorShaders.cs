@@ -8,30 +8,45 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Game.Rendering.Impostors;
 
-/// <summary>The C# side of <see cref="ImpostorShaders.PushMembers"/> (std430 push constants, 80 bytes). GLSL bools are 32-bit (0 / 1).</summary>
+/// <summary>
+/// The C# side of <see cref="ImpostorShaders.PushMembers"/> (std430 push constants, 80 bytes). GLSL bools are 32-bit (0 / 1).
+/// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 80)]
 public struct ImpostorPush
 {
-    /// <summary>The baked bounding sphere (object space): centre, radius.</summary>
+    /// <summary>
+    /// The baked bounding sphere (object space): centre, radius.
+    /// </summary>
     [FieldOffset(0)] public Vector4 Sphere;
-    /// <summary>The camera's up axis (world): the billboards' roll.</summary>
+    /// <summary>
+    /// The camera's up axis (world): the billboards' roll.
+    /// </summary>
     [FieldOffset(16)] public Vector3 CameraUp;
     [FieldOffset(28)] public float Grid;
-    /// <summary>The atlas maps' bindless indices (2D float array).</summary>
+    /// <summary>
+    /// The atlas maps' bindless indices (2D float array).
+    /// </summary>
     [FieldOffset(32)] public uint Albedo;
     [FieldOffset(36)] public uint Normal;
-    /// <summary>The atlas's gloss x specular (<see cref="ImpostorAtlas.Gloss"/>), what the mesh passes to the lighting.</summary>
+    /// <summary>
+    /// The atlas's gloss x specular (<see cref="ImpostorAtlas.Gloss"/>), what the mesh passes to the lighting.
+    /// </summary>
     [FieldOffset(40)] public float Gloss;
     [FieldOffset(44)] public uint Spare2;
     [FieldOffset(48)] public uint Blend;
     [FieldOffset(52)] public int Debug;
     [FieldOffset(56)] public uint Coverage;
     [FieldOffset(60)] public uint Spare;
-    /// <summary>A directional view (w 1, a shadow cascade): the direction towards its viewer; w 0 uses the view's eye.</summary>
+    /// <summary>
+    /// A directional view (w 1, a shadow cascade): the direction towards its viewer; w 0 uses the view's eye.
+    /// </summary>
     [FieldOffset(64)] public Vector4 View;
 }
 
-/// <summary>The C# side of <see cref="ImpostorShaders.RockPushMembers"/> (std430 push constants, 128 bytes): <see cref="ImpostorPush"/> and the terrain's far-fade inputs.</summary>
+/// <summary>
+/// The C# side of <see cref="ImpostorShaders.RockPushMembers"/> (std430 push constants, 128 bytes): <see cref="ImpostorPush"/> and the terrain's
+/// far-fade inputs.
+/// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 128)]
 public struct ImpostorRockPush
 {
@@ -47,7 +62,9 @@ public struct ImpostorRockPush
     [FieldOffset(56)] public uint Coverage;
     [FieldOffset(60)] public uint Spare;
     [FieldOffset(64)] public Vector4 View;
-    /// <summary>The colour-map window (x0, z0, 1/width, 1/depth), the bindless indices of the ground, whole-world colour and colour maps.</summary>
+    /// <summary>
+    /// The colour-map window (x0, z0, 1/width, 1/depth), the bindless indices of the ground, whole-world colour and colour maps.
+    /// </summary>
     [FieldOffset(80)] public Vector4 Region;
     [FieldOffset(96)] public uint Ground;
     [FieldOffset(100)] public uint WorldColour;
@@ -55,7 +72,9 @@ public struct ImpostorRockPush
     [FieldOffset(108)] public float HalfWorld;
     [FieldOffset(112)] public float FarStart;
     [FieldOffset(116)] public float FarEnd;
-    /// <summary>Bit 0 ground map, 1 whole-world colour map, 2 colour map, 3 apply the colour map's tint.</summary>
+    /// <summary>
+    /// Bit 0 ground map, 1 whole-world colour map, 2 colour map, 3 apply the colour map's tint.
+    /// </summary>
     [FieldOffset(120)] public uint Flags;
 }
 
@@ -72,7 +91,9 @@ public struct ImpostorRockPush
 /// </summary>
 public static class ImpostorShaders
 {
-    /// <summary>The sampling functions (GLSL 3.30; no uniforms of their own).</summary>
+    /// <summary>
+    /// The sampling functions (GLSL 3.30; no uniforms of their own).
+    /// </summary>
     public const string Functions = """
 
         // ---- impostors (Meitou.Game.Rendering.Impostors.ImpostorShaders, docs/impostors.md) ----
@@ -346,7 +367,8 @@ public static class ImpostorShaders
         """;
 
 
-    /// <summary>The fragment stages' inputs and uniforms that the visibility test of <see cref="Fragment"/> and <see cref="PrepassFragment"/> reads (and the lighting's).</summary>
+    /// <summary>The fragment stages' inputs and uniforms that the visibility test of <see cref="Fragment"/> and <see cref="PrepassFragment"/> reads
+    /// (and the lighting's).</summary>
     const string FragmentInputs = """
         in vec3 vObjectPoint;
         flat in vec3 vObjectEye;
@@ -373,9 +395,10 @@ public static class ImpostorShaders
         """;
 
     /// <summary>
-    /// What decides whether a billboard pixel exists, shared by the colour program and the depth prepass (<see cref="PrepassFragment"/>) so that both make the same
-    /// decision: the fade, then the frame pick and the atlas sample (<c>s</c>), then the cut-out (<c>coverage</c>). <paramref name="discards"/> false (the colour after
-    /// the prepass, depth EQUAL): no fade and no cut-out, the prepass has taken both; the sample is still needed for the shading.
+    /// What decides whether a billboard pixel exists, shared by the colour program and the depth prepass (<see cref="PrepassFragment"/>) so that both
+    /// make the same decision: the fade, then the frame pick and the atlas sample (<c>s</c>), then the cut-out (<c>coverage</c>).
+    /// <paramref name="discards"/> false (the colour after the prepass, depth EQUAL): no fade and no cut-out, the prepass has taken both; the sample
+    /// is still needed for the shading.
     /// </summary>
     static string FragmentVisible(bool discards) => """
             // The fade: as the meshes (a dither threshold, 2 = whole); negative = the complement of the mesh's dither (the crossfade).
@@ -445,7 +468,8 @@ public static class ImpostorShaders
 
         """;
 
-    static string ColourFragment(bool discards) => "#version 330 core\n#define MS_NO_BLOCKER_SEARCH\n" + AtmosphereShaders.Functions + Functions + FragmentFunctions + FragmentInputs + "\n" + """
+    static string ColourFragment(bool discards) =>
+        "#version 330 core\n#define MS_NO_BLOCKER_SEARCH\n" + AtmosphereShaders.Functions + Functions + FragmentFunctions + FragmentInputs + "\n" + """
         uniform vec3 uLightDir;
         uniform vec3 uEye;
         uniform vec3 uFogColour;
@@ -468,15 +492,16 @@ public static class ImpostorShaders
     public static readonly string Fragment = ColourFragment(discards: true);
 
     /// <summary>
-    /// <see cref="Fragment"/> for the colour pass that follows the depth prepass (<see cref="ImpostorPrepass"/>, depth test EQUAL, no depth write): the same lighting
-    /// without the fade's and the cut-out's <c>discard</c>s, which the prepass made; only the pixels it left in the depth buffer reach the lighting.
+    /// <see cref="Fragment"/> for the colour pass that follows the depth prepass (<see cref="ImpostorPrepass"/>, depth test EQUAL, no depth write):
+    /// the same lighting without the fade's and the cut-out's <c>discard</c>s, which the prepass made; only the pixels it left in the depth buffer
+    /// reach the lighting.
     /// </summary>
     public static readonly string FragmentAfterPrepass = ColourFragment(discards: false);
 
     /// <summary>
-    /// The depth prepass of the billboards (<see cref="ImpostorPrepass"/>, the main colour view, colour mask 0): <see cref="Fragment"/>'s decision whether the pixel exists
-    /// (the fade, the frame pick, the cut-out) and nothing else, so the lighting runs once per visible pixel in the colour pass. The vertex stage is the same text
-    /// (<c>invariant gl_Position</c>), so the depths are equal.
+    /// The depth prepass of the billboards (<see cref="ImpostorPrepass"/>, the main colour view, colour mask 0): <see cref="Fragment"/>'s decision
+    /// whether the pixel exists (the fade, the frame pick, the cut-out) and nothing else, so the lighting runs once per visible pixel in the colour
+    /// pass. The vertex stage is the same text (<c>invariant gl_Position</c>), so the depths are equal.
     /// </summary>
     public static readonly string PrepassFragment = "#version 330 core\n" + Functions + FragmentFunctions + FragmentInputs + "\n" + """
         void main()
@@ -616,19 +641,21 @@ public static class ImpostorShaders
     public static string VertexNative() => NativeShaders.Port(Vertex, NativeShaders.Map(NativeMap), PushMembers);
 
     /// <summary><see cref="Fragment"/> in the native model.</summary>
-    public static string FragmentNative() => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(Fragment, NativeShaders.Map(NativeMap), PushMembers), inShader: true);
+    public static string FragmentNative() =>
+        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(Fragment, NativeShaders.Map(NativeMap), PushMembers), inShader: true);
 
     /// <summary><see cref="FragmentAfterPrepass"/> in the native model.</summary>
-    public static string FragmentAfterPrepassNative() => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(FragmentAfterPrepass, NativeShaders.Map(NativeMap), PushMembers), inShader: true);
+    public static string FragmentAfterPrepassNative() =>
+        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(FragmentAfterPrepass, NativeShaders.Map(NativeMap), PushMembers), inShader: true);
 
     /// <summary><see cref="PrepassFragment"/> in the native model.</summary>
     public static string PrepassFragmentNative() => NativeShaders.Port(PrepassFragment, NativeShaders.Map(NativeMap), PushMembers);
 
     // ---- TERRAIN-mode rocks (docs/impostors.md section 13) ----
 
-    /// <summary><see cref="PushMembers"/> and what a rock's impostor needs of the terrain (<see cref="ImpostorRockPush"/> is the C# side; offsets 80 to 123): the
-    /// colour-map window, the bindless indices of the ground, whole-world colour and colour maps, the world's half size, the distances the material fades to the
-    /// ground colour between, and which maps exist (bit 0 ground, 1 whole-world colour, 2 colour map).</summary>
+    /// <summary><see cref="PushMembers"/> and what a rock's impostor needs of the terrain (<see cref="ImpostorRockPush"/> is the C# side; offsets 80
+    /// to 123): the colour-map window, the bindless indices of the ground, whole-world colour and colour maps, the world's half size, the distances
+    /// the material fades to the ground colour between, and which maps exist (bit 0 ground, 1 whole-world colour, 2 colour map).</summary>
     public const string RockPushMembers = PushMembers + """
 
             vec4 rockRegion;
@@ -654,9 +681,10 @@ public static class ImpostorShaders
     };
 
     /// <summary>
-    /// <see cref="Fragment"/> for a TERRAIN-mode rock: what the terrain's mesh shader does with distance that the atlas (baked with the material fully applied, at the
-    /// transition distance) does not hold. The material fades to the biomes' ground colour between the material distance's 80% and 100% (the ground and
-    /// whole-world colour maps, as <c>TerrainShaders.Fragment</c> does it), per pixel from the eye's distance, before the lighting.
+    /// <see cref="Fragment"/> for a TERRAIN-mode rock: what the terrain's mesh shader does with distance that the atlas (baked with the material
+    /// fully applied, at the transition distance) does not hold. The material fades to the biomes' ground colour between the material distance's 80%
+    /// and 100% (the ground and whole-world colour maps, as <c>TerrainShaders.Fragment</c> does it), per pixel from the eye's distance, before the
+    /// lighting.
     /// </summary>
     public static string RockFragmentNative()
     {
@@ -692,18 +720,22 @@ public static class ImpostorShaders
                 }
             }
             """);
+
         // The terrain's wetness rule: 1 - gloss plus the layers' absorbance (a mean of the base game's biomes, Observed: the atlas holds no biome).
         f = Replace(f, @"float\s+absorbance\s*=\s*0\.9\s*;", "float absorbance = 1.0 - gloss + 0.4;");
         return Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(f, NativeShaders.Map(RockNativeMap), RockPushMembers), inShader: true);
     }
 
-    /// <summary>The rock program's vertex stage: the impostor quad (only <see cref="PushMembers"/> are read; the fragment stage's block is the larger one).</summary>
+    /// <summary>The rock program's vertex stage: the impostor quad (only <see cref="PushMembers"/> are read; the fragment stage's block is the larger
+    /// one).</summary>
     public static string RockVertexNative() => VertexNative();
 
     static string Replace(string source, string pattern, string replacement)
     {
         var regex = new Regex(pattern);
-        if (!regex.IsMatch(source)) throw new InvalidOperationException($"ImpostorShaders: '{pattern}' not found in the shared mesh shader; update the patch.");
+        if (!regex.IsMatch(source))
+            throw new InvalidOperationException($"ImpostorShaders: '{pattern}' not found in the shared mesh shader; update the patch.");
+
         return regex.Replace(source, _ => replacement, 1);
     }
 }

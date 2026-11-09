@@ -51,12 +51,15 @@ public class WaterTests
         var biomes = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install!.DataDirectory, TerrainMaps.BiomeMap)));
         Assert.Equal((128, 128), (map.Width, map.Height));
         int exact = 0, near = 0, total = 0;
+
         for (int y = 0; y < 128; y++)
+        {
             for (int x = 0; x < 128; x++)
             {
                 int o = ((y * 8 + 4) * 1024 + x * 8 + 4) * 4;
                 uint index = (uint)(biomes.Pixels[o] << 16 | biomes.Pixels[o + 1] << 8 | biomes.Pixels[o + 2]);
                 if (!water.TryGetValue(index, out var w)) continue;
+
                 int p = (y * 128 + x) * 4;
                 var c = w.Colour * 255;
                 float d = Math.Abs(map.Pixels[p] - c.X) + Math.Abs(map.Pixels[p + 1] - c.Y) + Math.Abs(map.Pixels[p + 2] - c.Z);
@@ -64,6 +67,8 @@ public class WaterTests
                 if (d < 0.5f) exact++;
                 if (d <= 12) near++;
             }
+        }
+
         Assert.True(exact > total / 2 && near > total * 3 / 4, $"{exact} exact, {near} within 12 of {total}");
     }
 }

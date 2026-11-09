@@ -25,14 +25,17 @@ public sealed class WorkerPool : IDisposable
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(threadCount, 1);
         ThreadCount = threadCount;
+
         if (threadCount == 1)
         {
             _threads = [];
             _wake = [];
             return;
         }
+
         _threads = new Thread[threadCount];
         _wake = new SemaphoreSlim[threadCount];
+
         for (int i = 0; i < threadCount; i++)
         {
             _wake[i] = new SemaphoreSlim(0);
@@ -44,16 +47,21 @@ public sealed class WorkerPool : IDisposable
 
     public int ThreadCount { get; }
 
-    /// <summary>Runs <paramref name="action"/> for 0..<paramref name="count"/>-1 on the workers and waits. Not reentrant; one caller at a time.</summary>
+    /// <summary>
+    /// Runs <paramref name="action"/> for 0..<paramref name="count"/>-1 on the workers and waits. Not reentrant; one caller at a time.
+    /// </summary>
     public void ForEach(int count, Action<int> action)
     {
         ArgumentNullException.ThrowIfNull(action);
         if (count <= 0) return;
+
         if (ThreadCount == 1 || count == 1)
         {
             for (int i = 0; i < count; i++) action(i);
+
             return;
         }
+
         ObjectDisposedException.ThrowIf(_stopping, this);
         _body = action;
         this._count = count;
@@ -62,6 +70,7 @@ public sealed class WorkerPool : IDisposable
         int woken = Math.Min(ThreadCount, count);
         _done.Reset(woken);
         for (int i = 0; i < woken; i++) _wake[i].Release();
+
         _done.Wait();
         _body = null;
         _failure?.Throw();
@@ -73,12 +82,14 @@ public sealed class WorkerPool : IDisposable
         {
             _wake[index].Wait();
             if (_stopping) return;
+
             try
             {
                 while (true)
                 {
                     int i = Interlocked.Increment(ref _next) - 1;
                     if (i >= _count) break;
+
                     _body!(i);
                 }
             }
@@ -97,10 +108,12 @@ public sealed class WorkerPool : IDisposable
     public void Dispose()
     {
         if (_stopping) return;
+
         _stopping = true;
         foreach (var w in _wake) w.Release();
         foreach (var t in _threads) t.Join();
         foreach (var w in _wake) w.Dispose();
+
         _done.Dispose();
     }
 }
