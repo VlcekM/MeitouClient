@@ -72,4 +72,5 @@ The game has none: this is Meitou's. From KenshiNative's traced lamp shadows (ne
 ## Open
 
 - The lights of weather effects are not in the list (formats/lights.md).
+- **Observed** (save spotlight-cross, console `lamps`): the pale blue band with a straight edge and stripes on the dune ripples is one lamp of `lights_otto.mod` (`5430`, spot, cone 90/100, almost horizontal): it goes with that lamp alone and does not change with `lampshadows` off. Whether the original shows the same band is **Unknown** (only its formula and the spot direction rule are **Verified**).
 - The Large Torch Post's light may sit about 25 units above its flame (scale applied twice, as in the exe); not checked in a picture yet.

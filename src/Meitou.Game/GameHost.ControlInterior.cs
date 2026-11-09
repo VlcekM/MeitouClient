@@ -63,6 +63,21 @@ sealed partial class GameHost
             InteriorDebug.NoObjectSort = args[0] == "off";
             con.Print("object sort " + args[0]);
         });
+        add("lamps", "lamps list [radius] | lamps off <index...> | lamps on", "debug: the lamps reaching the camera's target (index, position relative to it, colour, power, radius, type, cone, falloff, rule, owner); off leaves those indices out, on brings them all back", (args, con) =>
+        {
+            if (ActiveLamps is not { } lamps || args.Count == 0) { con.Error("usage: lamps list [radius] | lamps off <index...> | lamps on"); return; }
+            if (args[0] == "on") { lamps.DebugOff.Clear(); con.Print("all lamps on"); return; }
+            if (args[0] == "off") { foreach (var a in args.Skip(1)) lamps.DebugOff.Add(int.Parse(a)); con.Print($"{lamps.DebugOff.Count} lamps off"); return; }
+            float radius = args.Count > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
+            var at = camera.Target;
+            var listed = new System.Text.StringBuilder();
+            foreach (var (i, l) in lamps.Around(at, radius))
+            {
+                var d = l.Position - at;
+                listed.Append($" ## #{i} at {d.X:0} {d.Y:0} {d.Z:0} colour {l.Colour.X:0.00} {l.Colour.Y:0.00} {l.Colour.Z:0.00} power {l.Intensity:0.00} radius {l.Radius:0} {l.Type} dir {l.Direction.X:0.00} {l.Direction.Y:0.00} {l.Direction.Z:0.00} cone {l.InnerAngle * 57.3f:0}/{l.OuterAngle * 57.3f:0} falloff {l.Falloff:0.00} {l.Rule} interior={l.Interior} {l.LightId} of {l.BuildingId}");
+            }
+            con.Print(listed.ToString());
+        });
         add("interior-debug", "interior-debug <cover|shadow> <on|off>", "debug switches of the interior lighting: cover = the room-grid focus ignores surfaces above the viewed floor; shadow = shadow passes leave out what the view hides", (args, con) =>
         {
             if (args.Count != 2 || args[1] is not ("on" or "off")) { con.Error("usage: interior-debug <cover|shadow> <on|off>"); return; }

@@ -52,6 +52,20 @@ internal sealed class WorldLamps : IDisposable
     public int Count => lamps?.Length ?? 0;
     public int InGrid { get; private set; }
 
+    /// <summary>Debug (the console's <c>lamps</c>): the lamps left out of the grid, by index.</summary>
+    public HashSet<int> DebugOff { get; } = [];
+
+    /// <summary>Debug: the lamps whose reach touches <paramref name="at"/>, within <paramref name="radius"/> more, with their indices.</summary>
+    public IEnumerable<(int Index, WorldLight Light)> Around(Vector3 at, float radius)
+    {
+        int count = (lamps?.Length ?? 0) + Moving.Count;
+        for (int i = 0; i < count; i++)
+        {
+            var l = Lamp(i);
+            if (new Vector2(l.Position.X - at.X, l.Position.Z - at.Z).Length() <= l.Radius + radius) yield return (i, l);
+        }
+    }
+
     public WorldLamps(IGpuContext ctx, Func<IReadOnlyList<WorldLight>> load)
     {
         this.ctx = ctx;
@@ -197,6 +211,7 @@ internal sealed class WorldLamps : IDisposable
         near.Clear();
         for (int i = 0; i < count && near.Count < MaxLamps; i++)
         {
+            if (DebugOff.Contains(i)) continue;
             var l = Lamp(i);
             if (l.Position.X + l.Radius < x0 || l.Position.X - l.Radius > x1 || l.Position.Z + l.Radius < z0 || l.Position.Z - l.Radius > z1) continue;
             if (!WorldLights.IsLit(l, l.Interior && InteriorAllDay ? 0 : daylight) || PowerFactor(i) <= 0) continue;
