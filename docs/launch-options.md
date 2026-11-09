@@ -284,7 +284,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_DIAG_IDLE` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #108): each frame waits for every frame in flight before it begins. Slower frames. |
 | `MEITOU_DIAG_NO_MATERIAL_CACHE` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #319): the terrain material cache starts off; every pixel shades the layers. |
 | `MEITOU_DIAG_NO_GROW` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #319): the terrain near layer arrays and the grass store keep their first size (no growth for kept places or a longer grass distance). |
-| `MEITOU_VRAM_GUARD` | `src/Meitou.Game/Rendering/Frame/WorldGpuBuilder.cs`, `src/Meitou.Game/GameHost.Metal.cs` | `0` turns the memory-pressure guard off. On by default. |
+| `MEITOU_VRAM_GUARD` | `src/Meitou.Game/Rendering/Frame/WorldGpuBuilder.cs`, `src/Meitou.Game/Host/MetalGameLoop.cs` | `0` turns the memory-pressure guard off. On by default. |
 | `MEITOU_OBJECT_LOD_CACHE` | `src/Meitou.Game/Rendering/Objects/ObjectLodGen.cs` | Folder for the object LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
 | `MEITOU_CHARACTER_LOD_CACHE` | `src/Meitou.Game/Rendering/Characters/CharacterContent.cs` | Folder for the character LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
 | `MEITOU_IMPOSTOR_CACHE` | `src/Meitou.Game/Rendering/Impostors/ImpostorCache.cs` | Impostor cache folder. |
@@ -298,31 +298,31 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_NGX_LOG` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `1` prints NGX's whole log (DLSS on Linux). |
 | `MEITOU_DLSS` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `0` keeps NGX from loading (no DLSS on Linux; the game uses TAA). |
 | `MEITOU_BENCH_ONLY` | `src/Meitou.Game/PlayBench` | Comma list of `--play-bench` segments to run (e.g. `settle,zoom`). |
-| `MEITOU_TERRAIN_NO_NORMAL` | `src/Meitou.Game/GameHost.Metal.cs` | `1`/`true`: terrain shader variant without normal mapping (A/B; fixed before the first draw). |
-| `MEITOU_METAL_GPU_BUDGET_MB` | `src/Meitou.Game/GameHost.Metal.cs` | Metal video-memory budget in MB (default 5 GB). The launcher sets it on macOS. |
-| `MEITOU_METAL_NO_TAA` | `GameHost.Metal.cs` | `1`/`true`: native size, no jitter, no temporal resolve (diagnostic). |
-| `MEITOU_METALFX` | `GameHost.Metal.cs` | `1`/`true`: MetalFX upscaler (same as `--upscaler metalfx`). |
-| `MEITOU_METALFX_SPATIAL` | `GameHost.Metal.cs` | `1`/`true`: MetalFX spatial mode. |
-| `MEITOU_METAL_FOLIAGE` | `GameHost.Metal.cs` | `0`: foliage off on Metal (on by default). |
-| `MEITOU_METAL_CLOUD_SHADOWS` | `GameHost.Metal.cs` | `0`: cloud shadows off on Metal (on by default). |
-| `MEITOU_METAL_WATER` | `GameHost.Metal.cs` | `0`: water off on Metal (on by default). |
-| `MEITOU_METAL_SHADOWS` | `GameHost.Metal.cs` | `0`: shadows off on Metal (on by default). |
-| `MEITOU_METAL_NO_IMPOSTORS` | `GameHost.Metal.cs` | `1`: no impostors on Metal. |
-| `MEITOU_METAL_NO_TERRAIN_TEXTURES` | `GameHost.Metal.cs` | `1`: terrain textures off (prints a notice). |
-| `MEITOU_METAL_NO_PARTICLES` | `GameHost.Metal.cs` | `1`: no weather particles on Metal. |
-| `MEITOU_METAL_GROUND_RELIEF` | `GameHost.Metal.cs` | `0` or `false`: ground relief (parallax) off; on by default. |
-| `MEITOU_METAL_GI` | `GameHost.Metal.cs` | `1`/`true`: native Metal probe GI (opt-in; experimental). |
+| `MEITOU_TERRAIN_NO_NORMAL` | `src/Meitou.Game/Host/MetalGameLoop.cs` | `1`/`true`: terrain shader variant without normal mapping (A/B; fixed before the first draw). |
+| `MEITOU_METAL_GPU_BUDGET_MB` | `src/Meitou.Game/Host/MetalGameLoop.cs` | Metal video-memory budget in MB (default 5 GB). The launcher sets it on macOS. |
+| `MEITOU_METAL_NO_TAA` | `Host/MetalGameLoop.cs` | `1`/`true`: native size, no jitter, no temporal resolve (diagnostic). |
+| `MEITOU_METALFX` | `Host/MetalGameLoop.cs` | `1`/`true`: MetalFX upscaler (same as `--upscaler metalfx`). |
+| `MEITOU_METALFX_SPATIAL` | `Host/MetalGameLoop.cs` | `1`/`true`: MetalFX spatial mode. |
+| `MEITOU_METAL_FOLIAGE` | `Host/MetalGameLoop.cs` | `0`: foliage off on Metal (on by default). |
+| `MEITOU_METAL_CLOUD_SHADOWS` | `Host/MetalGameLoop.cs` | `0`: cloud shadows off on Metal (on by default). |
+| `MEITOU_METAL_WATER` | `Host/MetalGameLoop.cs` | `0`: water off on Metal (on by default). |
+| `MEITOU_METAL_SHADOWS` | `Host/MetalGameLoop.cs` | `0`: shadows off on Metal (on by default). |
+| `MEITOU_METAL_NO_IMPOSTORS` | `Host/MetalGameLoop.cs` | `1`: no impostors on Metal. |
+| `MEITOU_METAL_NO_TERRAIN_TEXTURES` | `Host/MetalGameLoop.cs` | `1`: terrain textures off (prints a notice). |
+| `MEITOU_METAL_NO_PARTICLES` | `Host/MetalGameLoop.cs` | `1`: no weather particles on Metal. |
+| `MEITOU_METAL_GROUND_RELIEF` | `Host/MetalGameLoop.cs` | `0` or `false`: ground relief (parallax) off; on by default. |
+| `MEITOU_METAL_GI` | `Host/MetalGameLoop.cs` | `1`/`true`: native Metal probe GI (opt-in; experimental). |
 | `MEITOU_METAL_GI_LOG` | `src/Meitou.Game/Rendering/Metal/Gi/MetalProbeGi.cs` | `1`: log the probe GI. |
 | `MEITOU_METAL_GI_FALLBACK` | `src/Meitou.Game/Rendering/Metal/Gi/MetalProbeGi.cs` | `1`: disables the sky-light term of the probe GI (A/B). |
-| `MEITOU_METAL_NO_GRASS` | `GameHost.Metal.cs` | `1`: no grass blades on Metal. |
-| `MEITOU_METAL_NO_FOLIAGE_MESHES` | `GameHost.Metal.cs` | `1`: no foliage meshes on Metal (grass only). |
-| `MEITOU_METAL_GPU_CULL` | `GameHost.Metal.cs`, `src/Meitou.Game/Rendering/Metal/MetalFrame.cs`, `src/Meitou.Game/Rendering/Foliage/FoliageRenderer.cs` | `1`/`true`: experimental GPU foliage cull (unsafe; the launcher removes it). |
-| `MEITOU_METAL_CPU_CULL` | `GameHost.Metal.cs` | `1`: force the CPU foliage cull, overriding the GPU cull. |
-| `MEITOU_METAL_TRACE` | `GameHost.Metal.cs` | `1`: trace output of the Metal frame loop. |
-| `MEITOU_METAL_NO_BUILDINGS` | `GameHost.Metal.cs` | `1`: skip the runtime building, ground-item and lamp updates (freeze diagnostic). |
+| `MEITOU_METAL_NO_GRASS` | `Host/MetalGameLoop.cs` | `1`: no grass blades on Metal. |
+| `MEITOU_METAL_NO_FOLIAGE_MESHES` | `Host/MetalGameLoop.cs` | `1`: no foliage meshes on Metal (grass only). |
+| `MEITOU_METAL_GPU_CULL` | `Host/MetalGameLoop.cs`, `src/Meitou.Game/Rendering/Metal/MetalFrame.cs`, `src/Meitou.Game/Rendering/Foliage/FoliageRenderer.cs` | `1`/`true`: experimental GPU foliage cull (unsafe; the launcher removes it). |
+| `MEITOU_METAL_CPU_CULL` | `Host/MetalGameLoop.cs` | `1`: force the CPU foliage cull, overriding the GPU cull. |
+| `MEITOU_METAL_TRACE` | `Host/MetalGameLoop.cs` | `1`: trace output of the Metal frame loop. |
+| `MEITOU_METAL_NO_BUILDINGS` | `Host/MetalGameLoop.cs` | `1`: skip the runtime building, ground-item and lamp updates (freeze diagnostic). |
 | `MEITOU_METAL_NO_PARTICLE_COVERAGE` | `src/Meitou.Game/Rendering/Metal/MetalPostChain.cs` | `1`/`true`: particles do not write TAA's coverage alpha. |
-| `MEITOU_METAL_OVERLAY` | `GameHost.Metal.cs` | `1`: add the frame-stats lines to a screenshot. |
-| `MEITOU_METAL_SETTINGS` | `GameHost.Metal.cs` | `1`/`true`: open the settings panel for a still. |
+| `MEITOU_METAL_OVERLAY` | `Host/MetalGameLoop.cs` | `1`: add the frame-stats lines to a screenshot. |
+| `MEITOU_METAL_SETTINGS` | `Host/MetalGameLoop.cs` | `1`/`true`: open the settings panel for a still. |
 | `MEITOU_METAL_FAST_MATH` | `src/Meitou.Game/Rendering/Metal/MetalShaders.cs` | Metal fast-math compile option: unset is Metal's default (on); `1` or `0` forces it. |
 | `MEITOU_METAL_DUMP` | `src/Meitou.Game/Rendering/Metal/MetalShaders.cs` | Folder to write the translated MSL of each shader into. |
 | `MEITOU_METAL_NO_COMPRESSION` | `src/Meitou.Game/Rendering/Metal/MetalContext.cs` | `1`: no lossless target compression (A/B). |
