@@ -373,16 +373,17 @@ internal static class SavedCharacters
             SavedLimbs.Apply(medical, sc.Platoon.File, sc.Medical, data.Items);
         }
 
-        // The kit: a character whose INVENTORY_STATE holds items gets them, and its look is its saved appearance wearing them. One with none (a
-        // Meitou save from before inventories were written) keeps the old rule for its clothes: rolled from the handle's serial, with the inventory a
-        // new character of the look would have.
+        // The kit: a character with an INVENTORY_STATE gets its items, none when it is empty (the original loads an emptied inventory empty and saves
+        // it so again: a dog saved with nothing does not get its death items back), and its look is its saved appearance wearing them. So a Meitou
+        // save written before items were (2026-10-08 to 10-14, empty states) loads its characters with nothing. One without the state keeps the old
+        // rule for its clothes: rolled from the handle's serial, with the inventory a new character of the look would have.
         var savedItems = sc.Inventory is { } invState && sc.Platoon.File is { } platoonFile ? SaveInventory.Read(platoonFile, invState) : [];
         var handle = sc.Handle;
         string ownerId = sc.OwnerFactionId;
         CharacterAppearance? look = null;
         int serial = handle.S & 0x7FFFFFFF;
 
-        if (savedItems.Count > 0 && appearances is { } source && SavedKit.LoadoutOf(sc.Appearance, savedItems, data.Db, serial) is { } kit)
+        if (sc.Inventory is not null && appearances is { } source && SavedKit.LoadoutOf(sc.Appearance, savedItems, data.Db, serial) is { } kit)
         {
             SavedKit.SetLimbs(kit, medical, data.Db);
             look = source.Create(sc.RecordId, kit);
@@ -390,7 +391,8 @@ internal static class SavedCharacters
 
         look ??= appearances?.Create(sc.RecordId, ownerId.Length > 0 ? ownerId : null, serial);
 
-        // Without items the clothes are rolled, but the body and face are still the saved ones (the CHARACTER_APPEARANCE holds the whole look).
+        // With no saved items the look's clothes (rolled, or none for an empty INVENTORY_STATE) go on the saved body and face (the
+        // CHARACTER_APPEARANCE holds the whole look).
         if (savedItems.Count == 0 && appearances is { } again && look?.Loadout is { } rolled)
         {
             var worn = SavedKit.Wear(rolled, sc.Appearance, data.Db);
@@ -457,7 +459,7 @@ internal static class SavedCharacters
         if (race is not null && stats is not null && medical is not null)
         {
             assembly.AttachSaved(cold, race, stats, medical, p.Record,
-                p.Inventory ?? (p.Items.Count > 0 ? SavedKit.ToInventory(p.Items, data.Items, notes, p.Record) : null),
+                p.Inventory ?? (sc.Inventory is not null ? SavedKit.ToInventory(p.Items, data.Items, notes, p.Record) : null),
                 sc.GameState is { } aged && aged.Floats.TryGetValue("age", out float age) ? age : 1);
         }
         else if (race is not null)
