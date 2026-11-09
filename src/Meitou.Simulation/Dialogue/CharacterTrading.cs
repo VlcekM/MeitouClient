@@ -5,6 +5,7 @@ using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
 using Meitou.Simulation.Movement;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Dialogue;
 
@@ -41,12 +42,8 @@ public sealed record CloseCharacterTrade : SimCommand;
 /// trading window (<c>FUN_14072a880</c>), opened as the conversation closes, with the speaker as the slaver and the player character as the customer.
 /// One window at a time; it closes on confirm, cancel, or when the slaver or the customer is no longer awake (engine choice).
 /// </summary>
-public sealed partial class DialogueSystem
+sealed class CharacterTrading(DialogueSystem system, PopulationData data)
 {
-    /// <summary>
-    /// EV_BOUGHT_ME_FROM_SLAVERY.
-    /// </summary>
-    internal const int BoughtMeFromSlavery = 51;
     /// <summary>
     /// How near the slaver a member of the customer's squad must be to be offered for sale (DA 41, 300 units, 3D).
     /// </summary>
@@ -71,15 +68,51 @@ public sealed partial class DialogueSystem
     static readonly StatsEnumerated[] TamedStats = [StatsEnumerated.Toughness, StatsEnumerated.Athletics, StatsEnumerated.MeleeDefence, StatsEnumerated.MeleeAttack,
         StatsEnumerated.MartialArts, StatsEnumerated.Dodge, StatsEnumerated.Stealth, StatsEnumerated.MassCombat, StatsEnumerated.Swimming];
 
+    /// <summary>
+    /// An open window: its id, kind, slaver, customer and rows.
+    /// </summary>
     sealed record CharacterTrade(long Id, CharacterTradeKind Kind, CharacterId Slaver, CharacterId Player, IReadOnlyList<CharacterTradeRow> Rows);
 
-    // The window to open when the conversation ends (val0 the price override), the open one and its view.
+    /// <summary>
+    /// The window to open when the conversation ends (val0 the price override).
+    /// </summary>
     (CharacterTradeKind Kind, CharacterId Slaver, CharacterId Player, int Price)? _characterTradeAfter;
+
+    /// <summary>
+    /// The open window.
+    /// </summary>
     CharacterTrade? _characterTrade;
+
+    /// <summary>
+    /// The open window's published view.
+    /// </summary>
     CharacterTradeView? _characterTradeView;
+
+    /// <summary>
+    /// The last window's <see cref="CharacterTradeView.Id"/>.
+    /// </summary>
     long _characterTradeId;
 
-    public CharacterTradeView? PublishCharacterTrade() => _characterTradeView;
+    /// <summary>
+    /// Builds the chains a sold character is put in, made on first use.
+    /// </summary>
+    CharacterAssembly? _chainAssembly;
+
+    /// <summary>
+    /// The open window as the UI shows it (null: none).
+    /// </summary>
+    public CharacterTradeView? View => _characterTradeView;
+
+    /// <summary>
+    /// Asks for the window a DA 41 / 42 / 48 line chose, opened by <see cref="OpenCharacterTrade"/> (val0 the price override).
+    /// </summary>
+    public void OpenAfter(CharacterTradeKind kind, CharacterId slaver, CharacterId player, int price) =>
+        _characterTradeAfter = (kind, slaver, player, price);
+
+    /// <summary>
+    /// Closes the window without a trade.
+    /// </summary>
+    public void Close() => _characterTrade = null;
 
     /// <summary>
     /// A slave's base price (<c>FUN_1406751f0</c>, economy.md section 12): clamp(trunc(strength x k + melee attack + dexterity x k) x RACE <c>buy
@@ -114,7 +147,7 @@ public sealed partial class DialogueSystem
     /// squad members that are not dead and within 300 units of the slaver, the customer included; buying lists every character in slave state 1 owned
     /// by the slaver's faction that is not dead (engine reading of the original's per-owner slave set).
     /// </summary>
-    void OpenCharacterTrade(World world)
+    public void OpenCharacterTrade(World world)
     {
         if (_characterTradeAfter is not { } t) return;
         _characterTradeAfter = null;
@@ -195,9 +228,15 @@ public sealed partial class DialogueSystem
         return $"{Loc.Tr(AnimalData.AgeWord(age))} ({((int)(age * 100)).ToString(CultureInfo.InvariantCulture)})";
     }
 
+    /// <summary>
+    /// One label/value line per stat: its name and its whole raw value.
+    /// </summary>
     static (string, string)[] StatLines(CharacterCold c, params StatsEnumerated[] stats) =>
         [.. stats.Select(s => (Loc.Tr(StatName(s)), ((int)(c.Stats?[s] ?? 0)).ToString(CultureInfo.InvariantCulture)))];
 
+    /// <summary>
+    /// A stat's label.
+    /// </summary>
     static string StatName(StatsEnumerated s) => s switch
     {
         StatsEnumerated.MeleeAttack => "Melee Attack",
@@ -216,14 +255,18 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// Closes the window when the slaver or the customer is no longer awake (engine choice).
     /// </summary>
-    void KeepCharacterTrade(World world)
+    public void KeepCharacterTrade(World world)
     {
         if (_characterTrade is not { } t) return;
         var table = world.Characters;
-        if (!table.TryResolveNext(t.Slaver, out int s) || !table.TryResolveNext(t.Player, out int p) || !Awake(table, s) || !Awake(table, p)) _characterTrade = null;
+        if (!table.TryResolveNext(t.Slaver, out int s) || !table.TryResolveNext(t.Player, out int p) || !DialogueSystem.Awake(table, s)
+            || !DialogueSystem.Awake(table, p)) _characterTrade = null;
     }
 
-    void RefreshCharacterTrade(World world)
+    /// <summary>
+    /// Rebuilds the published view of the open window (none: no view).
+    /// </summary>
+    public void RefreshCharacterTrade(World world)
     {
         if (_characterTrade is not { } t) { _characterTradeView = null; return; }
         bool buying = t.Kind != CharacterTradeKind.SlaveSelling;
@@ -236,7 +279,7 @@ public sealed partial class DialogueSystem
     /// window closes. The window's gate (<c>FUN_1407281c0</c>: a row ticked, the total within the buyer's money) is checked again here, as the money
     /// may have moved since the click.
     /// </summary>
-    void ConfirmTrade(World world, IReadOnlyList<CharacterId> selected)
+    public void ConfirmTrade(World world, IReadOnlyList<CharacterId> selected)
     {
         if (_characterTrade is not { } t) return;
         long buyerMoney = BuyerMoney(world, t);
@@ -286,8 +329,8 @@ public sealed partial class DialogueSystem
         TaskStart.Stand(table, slot);
         if (caged && table.TryResolveNext(player, out int buyer)) WalkOutOfCage(world, slot, buyer);
         if (Locks.LockSystem.WornShackles(c)?.Lock is { } l) l.Locked = false;
-        Memory.Remember(world, c.SquadId, player, MemoryTag.FreedMe);   // its (new) squad remembers the buyer as the one who freed it (FUN_1406add20, Observed)
-        if (Settings.AmbientEvents) Fire(world, id, player, BoughtMeFromSlavery);
+        system.Memory.Remember(world, c.SquadId, player, MemoryTag.FreedMe);   // its (new) squad remembers the buyer as the one who freed it (FUN_1406add20, Observed)
+        system.FireEvent(world, id, player, DialogueSystem.BoughtMeFromSlavery);
         ChangeTowardPlayer(world, slaver.Faction, 1);
         ChangeTowardPlayer(world, c.Faction, 4);
     }
@@ -320,7 +363,7 @@ public sealed partial class DialogueSystem
     void BuyAnimals(World world, CharacterTrade t, int seller, List<(int Slot, CharacterCold Cold, long Price)> chosen, long total)
     {
         var table = world.Characters;
-        int free = _data.Bodies.Constants.MaxFactionSize - PlayerHeads(world);
+        int free = data.Bodies.Constants.MaxFactionSize - DialogueSystem.PlayerHeads(world);
         if (chosen.Count > free)
         {
             _characterTrade = t;   // the original returns before closing
@@ -337,23 +380,12 @@ public sealed partial class DialogueSystem
             if (c.Stats is { } stats) foreach (var stat in TamedStats) stats[stat] *= 0.25f;
             var packed = c.Inventory?.Backpack?.Contents is { } bag ? bag.All().ToList() : [];
             foreach (var item in packed) c.Inventory!.Remove(item);
-            if (!JoinPlayer(world, slot, buyer)) continue;
+            if (!system.JoinPlayer(world, slot, buyer)) continue;
             foreach (var item in packed) GiveBack(world, sellerSquad, item);
             bought.Add(table.IdOf(slot));
         }
         if (world.Player.Money >= total) world.Player.Money -= total;
-        OpenAnimalEditor(t, bought);
-    }
-
-    /// <summary>
-    /// The end of the animal buying confirm (<c>FUN_1406aac20</c> -> <c>FUN_1406e32f0</c>, <b>Verified</b>): the character editor opens in mode 1 on
-    /// the animals that were bought, after the money is taken, and not at all when none was. The host acts on the request (it names them: the
-    /// editor's animal page, <see cref="Editing.CharacterEditing"/>'s name-only edit).
-    /// </summary>
-    void OpenAnimalEditor(CharacterTrade t, List<CharacterId> bought)
-    {
-        if (bought.Count == 0) return;
-        _request = new DialogueRequest(++_requestId, DialogueRequestKind.AnimalEditor, bought[0], t.Slaver) { Characters = bought };
+        system.OpenAnimalEditor(t.Slaver, bought);
     }
 
     /// <summary>
@@ -378,22 +410,23 @@ public sealed partial class DialogueSystem
     {
         Locks.FixtureRegistry.Enslave(world, c, slaver.Faction, slaver.SquadId);
         Chain(c);
-        Memory.Remember(world, c.SquadId, customer, MemoryTag.Captor);
+        system.Memory.Remember(world, c.SquadId, customer, MemoryTag.Captor);
         ChangeTowardPlayer(world, slaver.Faction, 4);
         ChangeTowardPlayer(world, c.Faction, -4);
     }
 
-    CharacterAssembly? _chainAssembly;
-
     /// <summary>
     /// Chains a character (<see cref="CharacterAssembly.Chain"/>).
     /// </summary>
-    void Chain(CharacterCold c) => (_chainAssembly ??= new CharacterAssembly(_data)).Chain(c);
+    void Chain(CharacterCold c) => (_chainAssembly ??= new CharacterAssembly(data)).Chain(c);
 
+    /// <summary>
+    /// Changes <paramref name="faction"/>'s relation toward the player's faction by the amount (not for the player's own faction or an unknown one).
+    /// </summary>
     void ChangeTowardPlayer(World world, int faction, int amount)
     {
-        if (world.Player.Faction < 0 || faction == world.Player.Faction || !_data.Relations.Contains(faction)) return;
-        ChangeRelation(world, faction, world.Player.Faction, amount);
+        if (world.Player.Faction < 0 || faction == world.Player.Faction || !data.Relations.Contains(faction)) return;
+        system.ChangeRelation(world, faction, world.Player.Faction, amount);
     }
 
     /// <summary>
@@ -405,13 +438,13 @@ public sealed partial class DialogueSystem
         var table = world.Characters;
         var id = table.IdOf(slot);
         var at = table.Next[slot].Position;
-        Leave(world, id, c);
+        DialogueSystem.Leave(world, id, c);
         Squad squad;
         if (world.Player.Faction >= 0 && c.Faction == world.Player.Faction)
-            squad = SquadManagement.NewSquad(world, _data.Db, at, _data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
+            squad = SquadManagement.NewSquad(world, data.Db, at, data.Factions[world.Player.Faction].Name is { Length: > 0 } f ? f : "Nameless");
         else
         {
-            var template = _data.Db.Find(SquadManagement.DismissTemplate);
+            var template = data.Db.Find(SquadManagement.DismissTemplate);
             squad = new Squad
             {
                 Id = world.Squads.NextId(),
