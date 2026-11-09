@@ -317,8 +317,18 @@ sealed partial class GameHost
         var water = worldGpu.Water;
         var lamps = worldGpu.Lamps;
         // The diagnostic opt-outs keep their old meaning now that the shared path owns construction.
-        if (!metalFoliage) { foliage?.Dispose(); worldGpu.Foliage = null; foliage = null; }
-        if (!metalWater) { water?.Dispose(); worldGpu.Water = null; water = null; }
+        if (!metalFoliage)
+        {
+            foliage?.Dispose();
+            worldGpu.Foliage = null;
+            foliage = null;
+        }
+        if (!metalWater)
+        {
+            water?.Dispose();
+            worldGpu.Water = null;
+            water = null;
+        }
         if (!metalShadows) shadow.Enabled = false;
         if (!metalCloudShadows) sky.CloudShadows = false;
         if (!metalImpostors) foliage?.DisableImpostors();
@@ -356,13 +366,16 @@ sealed partial class GameHost
             Console.WriteLine("metal     terrain normal maps off (MEITOU_TERRAIN_NO_NORMAL=1)");
         }
         Session = new WorldSession(Scene.Focus, (Scene.X0, Scene.Z0, Scene.X1, Scene.Z1), heights.HeightAt, WorldOptions.Hour, Config.TickRate,
-            clock: GameClockFor(constants ??= Scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null, WorldOptions.Hour, WorldOptions.Day ?? GameClock.DefaultStartDay),
-            simulation: Duel.WorldSettings = new Meitou.Simulation.WorldSettings { Seed = GameOptions.Seed, MinPartitionSize = 128, Threads = Math.Max(1, Config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)), FarTickPeriod = FarTickPeriod },
+            clock: GameClockFor(constants ??= Scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null,
+                    WorldOptions.Hour, WorldOptions.Day ?? GameClock.DefaultStartDay),
+            simulation: Duel.WorldSettings = new Meitou.Simulation.WorldSettings { Seed = GameOptions.Seed, MinPartitionSize = 128,
+                    Threads = Math.Max(1, Config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)), FarTickPeriod = FarTickPeriod },
             systems: systems, walkability: walkability);
         Session.World.BenchFacingFix = Config.FixBenchFacing;
         Session.Simulation.SetFastSpeeds(Config.FastSpeed, Config.FastestSpeed);
         Render.Grid = Sandbox.IsSandbox;
-        Session.Camera.Place(new Vector2((float)(WorldOptions.X ?? Scene.Focus.X), (float)(WorldOptions.Z ?? Scene.Focus.Z)), (float)(WorldOptions.Yaw ?? 30) * MathF.PI / 180,
+        Session.Camera.Place(new Vector2((float)(WorldOptions.X ?? Scene.Focus.X), (float)(WorldOptions.Z ?? Scene.Focus.Z)),
+                (float)(WorldOptions.Yaw ?? 30) * MathF.PI / 180,
             (float)(WorldOptions.Pitch ?? Meitou.Data.World.KenshiCamera.InitialPitchDegrees) * MathF.PI / 180,
             (float)(WorldOptions.Distance ?? Meitou.Data.World.KenshiCamera.InitialDistance));
         var startTarget = Session.Camera.Current.Target;
@@ -379,7 +392,8 @@ sealed partial class GameHost
                 Console.WriteLine($"metal     player squad: {PlayerSquad.Members.Count} characters, leader at {lead.X:0}, {lead.Z:0}");
                 // --new-game is a shortcut past the menus: the rolled characters are kept (the menu's New game opens the editor);
                 // a still keeps creation open for the showcase's editor pictures.
-                if (WorldOptions.Screenshot is null) Session.World.Commands.Enqueue(new Meitou.Simulation.Editing.FinishCreation { Tick = Session.World.Tick });
+                if (WorldOptions.Screenshot is null)
+                        Session.World.Commands.Enqueue(new Meitou.Simulation.Editing.FinishCreation { Tick = Session.World.Tick });
             }
             catch (InvalidOperationException e) { Console.WriteLine($"metal     player squad skipped: {e.Message}"); }
         }
@@ -403,7 +417,10 @@ sealed partial class GameHost
         if (characters is not null) Console.WriteLine($"metal     crowd ready ({characters.Assets} appearances)");
         else if (Scene.Database is { } characterDb && !GameOptions.NoPopulation)
         {
-            characters = new CharacterRenderer(ctx, Install, characterDb, Assets, CharacterRigs) { DrawDistance = GameplaySettings.NpcRange(Install), Source = FillWorldDrawList, SettleFirst = true, LoadBudget = 0, GeneratedLod = WorldOptions.CharacterLod, SkinShading = WorldOptions.SkinShading, SkinRaces = Config.SkinRaces, EnhancedIcons = WorldOptions.MeitouIcons, PoseClock = () => RealTime.Elapsed.TotalSeconds };
+            characters = new CharacterRenderer(ctx, Install, characterDb, Assets, CharacterRigs) { DrawDistance = GameplaySettings.NpcRange(Install),
+                    Source = FillWorldDrawList, SettleFirst = true, LoadBudget = 0, GeneratedLod = WorldOptions.CharacterLod,
+                    SkinShading = WorldOptions.SkinShading, SkinRaces = Config.SkinRaces, EnhancedIcons = WorldOptions.MeitouIcons,
+                    PoseClock = () => RealTime.Elapsed.TotalSeconds };
             worldGpu.Characters = characters;
             Console.WriteLine("metal     characters ready (population draw list)");
         }
@@ -435,7 +452,8 @@ sealed partial class GameHost
         NavmeshOverlayRenderer? navOverlay = null;
         if (overlay is not null)
         {
-            hud = new PlayerInterface(Session, heights.HeightAt, DrawnPosition) { SpeedUnit = Config.SpeedUnit, Floaters = Config.Floaters, FeedbackButtonInPlay = Config.FeedbackButton };
+            hud = new PlayerInterface(Session, heights.HeightAt, DrawnPosition) { SpeedUnit = Config.SpeedUnit, Floaters = Config.Floaters,
+                    FeedbackButtonInPlay = Config.FeedbackButton };
             Player = hud;
             hud.LoadUi(GameOptions.UiMode ?? Config.UiMode, Assets.Find);
             hud.CreateUiPainter(overlay, Assets.Find);
@@ -514,7 +532,8 @@ sealed partial class GameHost
         SendFocus();
         ApplyCamera(Session.Camera.Current);
         // --new-game is a shortcut past the creation editor; the same follow the editor's close gives a menu New Game.
-        if (hud is not null && start is not null && StartSave is null && WorldOptions.Screenshot is null && PlayerSquad is { Leader.IsNone: false } squad)
+        if (hud is not null && start is not null && StartSave is null && WorldOptions.Screenshot is null
+                && PlayerSquad is { Leader.IsNone: false } squad)
             hud.Follow = squad.Leader;
         // The camera rotation slider changes the same StrategyCamera settings the Vulkan host changes.
         void ApplyCameraRotateSpeed(float speed) => Session.Camera.Settings.RotateSpeedX = Session.Camera.Settings.RotateSpeedY =
@@ -576,7 +595,9 @@ sealed partial class GameHost
                     Config.Graphics.TryGetValue(slider.Label, out float value))
                     slider.Set(Math.Clamp(value, slider.Min, slider.Max));
             foreach (var toggle in settingsValues.Toggles)
-                if (!LookPresets.HiddenSwitch(toggle.Label) && !RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label) && Config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value) && (value >= 0.5f) != toggle.Get())
+                if (!LookPresets.HiddenSwitch(toggle.Label) && !RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label)
+                        && Config.Graphics.TryGetValue(SettingsMenu.SwitchKeyPrefix + toggle.Label, out float value)
+                        && (value >= 0.5f) != toggle.Get())
                     toggle.Set(value >= 0.5f);
             settings.Tiers.ApplySavedPreset();
             // The impostor atlas path is re-enabled after the frame-slot fence. Keep the diagnostic off switch as a
@@ -656,12 +677,14 @@ sealed partial class GameHost
                 v => ctx.Samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
                 Text: v => (1 << (int)MathF.Round(v)) + "x"));
             sliders.Add(new Slider(WorldFrame.TextureQualitySlider, 0, TextureQuality.Maximum, () => TextureQuality.Level,
-                v => TextureQuality.Level = (int)MathF.Round(v), "0", Text: v => TextureQuality.Labels[Math.Clamp((int)MathF.Round(v), 0, TextureQuality.Maximum)]));
+                v => TextureQuality.Level = (int)MathF.Round(v), "0",
+                        Text: v => TextureQuality.Labels[Math.Clamp((int)MathF.Round(v), 0, TextureQuality.Maximum)]));
 
             // World: the distances the Metal renderers actually read every frame.
             if (objects is not null)
             {
-                sliders.Add(new Slider("Object draw distance", 1000, 400000, () => objects.ObjectDistance, v => objects.ObjectDistance = v, "0", Logarithmic: true,
+                sliders.Add(new Slider("Object draw distance", 1000, 400000, () => objects.ObjectDistance, v => objects.ObjectDistance = v, "0",
+                        Logarithmic: true,
                     Faithful: Enhancements.FaithfulObjectDistance, Meitou: Enhancements.MeitouObjectDistance));
                 if (objects.HasLandmarks)
                     sliders.Add(new Slider("Landmark distance (Meitou)", 1000, 400000, () => objects.LandmarkDistance,
@@ -725,7 +748,8 @@ sealed partial class GameHost
                 v => sky.HazeStrength = v, "0.00", Faithful: 1, Meitou: Enhancements.MeitouHazeStrength));
             sliders.Add(new Slider("Planetshine strength (x physical)", 0, 200, () => sky.PlanetshineStrength,
                 v => sky.PlanetshineStrength = MathF.Round(v), "0"));
-            sliders.Add(new Slider(WorldFrame.CloudHeightSlider, Meitou.Data.World.VolumetricClouds.MinBottom, Meitou.Data.World.VolumetricClouds.MaxBottom,
+            sliders.Add(new Slider(WorldFrame.CloudHeightSlider, Meitou.Data.World.VolumetricClouds.MinBottom,
+                    Meitou.Data.World.VolumetricClouds.MaxBottom,
                 () => sky.CloudHeight, v => sky.CloudHeight = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
             sliders.Add(new Slider("Ambient light strength (1 = game)", 0, 3, () => sky.AmbientStrength,
                 v => sky.AmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
@@ -766,7 +790,8 @@ sealed partial class GameHost
             {
                 sliders.Add(new Slider(WorldFrame.WaterReflectionSlider, 0, 4, () => reflection.Level,
                     v => reflection.Level = (int)MathF.Round(v), "0",
-                    Text: v => (int)MathF.Round(v) switch { 0 => "0 off", 1 => "1 landscape", 2 => "2 characters", 3 => "3 buildings", _ => "4 everything" }));
+                    Text: v => (int)MathF.Round(v) switch { 0 => "0 off", 1 => "1 landscape", 2 => "2 characters", 3 => "3 buildings",
+                            _ => "4 everything" }));
                 sliders.Add(new Slider("Reflection range x (game 0.6)", 0.1f, 50, () => reflection.Range,
                     v => reflection.Range = v, "0.00", Logarithmic: true));
             }
@@ -798,13 +823,16 @@ sealed partial class GameHost
                 v => WorldOptions.Post.Grade = v >= 0.5f,
                 Text: v => v >= 0.5f ? $"saturation {PostOptions.Saturation:0.00}, contrast {PostOptions.Contrast:0.00}" : "off (as the game)"));
             sliders.Add(new Slider("Heat haze strength (1 = game)", 0, 3, () => WorldOptions.Post.HeatHazeStrength,
-                v => WorldOptions.Post.HeatHazeStrength = MathF.Round(v * 20) / 20, "0.00", Faithful: 1, Meitou: Enhancements.MeitouHeatHazeStrength));
+                v => WorldOptions.Post.HeatHazeStrength = MathF.Round(v * 20) / 20, "0.00", Faithful: 1,
+                        Meitou: Enhancements.MeitouHeatHazeStrength));
             sliders.Add(new Slider(WorldFrame.ParticleSliders[0], 0, 4,
                 () => WorldFrame.WeatherParticlesSlider(worldGpu.WeatherParticles, WorldOptions.Post), v =>
                 {
                     int i = (int)MathF.Round(v);
                     worldGpu.WeatherParticles = i > 0;
-                    if (i > 0) (WorldOptions.Post.LowResParticles, WorldOptions.Post.ParticleDivisor) = i switch { 1 => (true, 4), 2 => (true, 2), 3 => (true, 0), _ => (false, 0) };
+                    if (i > 0)
+                            (WorldOptions.Post.LowResParticles, WorldOptions.Post.ParticleDivisor) = i switch { 1 => (true, 4), 2 => (true, 2),
+                                    3 => (true, 0), _ => (false, 0) };
                 }, "0"));
             sliders.Add(new Slider(WorldFrame.ParticleSliders[1], 0.1f, 1, () => worldGpu.ParticleDensity,
                 v => worldGpu.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
@@ -860,8 +888,16 @@ sealed partial class GameHost
         {
             keyboard.KeyDown += (keyboard, key, _) =>
             {
-                if (key is SilkKey.ShiftLeft or SilkKey.ShiftRight) { shiftDown = true; if (hud is not null) hud.SlowModifier = true; }
-                if (key == SilkKey.Enter && Alt()) { ToggleFullScreen(); return; }
+                if (key is SilkKey.ShiftLeft or SilkKey.ShiftRight)
+                {
+                    shiftDown = true;
+                    if (hud is not null) hud.SlowModifier = true;
+                }
+                if (key == SilkKey.Enter && Alt())
+                {
+                    ToggleFullScreen();
+                    return;
+                }
                 if (Covered)
                 {
                     if (key is SilkKey.Escape or SilkKey.Space) SkyArrival?.Skip();
@@ -869,7 +905,11 @@ sealed partial class GameHost
                 }
                 bool ctrl = Ctrl();
                 // Ctrl+/ records one frame for Xcode's Metal debugger; it works over the settings dialog too.
-                if (ctrl && (key is SilkKey.Slash or SilkKey.KeypadDivide)) { gpuCaptureRequested = true; return; }
+                if (ctrl && (key is SilkKey.Slash or SilkKey.KeypadDivide))
+                {
+                    gpuCaptureRequested = true;
+                    return;
+                }
                 // The full settings dialog (Metal's F10 used to be a preset overlay; the preset now lives in Display).
                 if (settings?.Visible == true)
                 {
@@ -886,13 +926,22 @@ sealed partial class GameHost
                     if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } pickerKey) Sandbox.SandboxPicker.KeyDown(pickerKey);
                     return;
                 }
-                if (hud is not null && DebugToggle(key)) { DebugMenu.DebugMenuOpen = !DebugMenu.DebugMenuOpen; DebugMenu.DebugParts = null; return; }
+                if (hud is not null && DebugToggle(key))
+                {
+                    DebugMenu.DebugMenuOpen = !DebugMenu.DebugMenuOpen;
+                    DebugMenu.DebugParts = null;
+                    return;
+                }
                 if (DebugMenu.DebugMenuOpen)
                 {
                     if ((key == SilkKey.KeypadEnter ? EngineKey.Enter : KeyMap.Map(key)) is { } menuKey) DebugMenu.DebugMenuKey(menuKey);
                     return;
                 }
-                if (key == SilkKey.F10 && settings is not null) { settings.Visible = !settings.Visible; return; }
+                if (key == SilkKey.F10 && settings is not null)
+                {
+                    settings.Visible = !settings.Visible;
+                    return;
+                }
                 if (settings is not null && KeyMap.Map(key) is { } settingsToggle &&
                     Session.Bindings.Get(InputAction.ToggleSettings).Contains(Binding.Of(settingsToggle)))
                 {
@@ -900,11 +949,31 @@ sealed partial class GameHost
                     return;
                 }
                 // F11 lists the frame; F12 is the small frame-rate line (the profiler chart waits for Metal timestamps).
-                if (key == SilkKey.F11 && shiftDown) { DebugOverlays.ToggleNavOverlay(); return; }
-                if (key == SilkKey.F11) { statsVisible = !statsVisible; return; }
-                if (key == SilkKey.F12) { frameStatsVisible = !frameStatsVisible; return; }
-                if (key is SilkKey.F8 or SilkKey.PrintScreen) { screenshotNow = true; return; }
-                if (key == SilkKey.F7 && hud is not null) { hud.UiVisible = !hud.UiVisible; return; }
+                if (key == SilkKey.F11 && shiftDown)
+                {
+                    DebugOverlays.ToggleNavOverlay();
+                    return;
+                }
+                if (key == SilkKey.F11)
+                {
+                    statsVisible = !statsVisible;
+                    return;
+                }
+                if (key == SilkKey.F12)
+                {
+                    frameStatsVisible = !frameStatsVisible;
+                    return;
+                }
+                if (key is SilkKey.F8 or SilkKey.PrintScreen)
+                {
+                    screenshotNow = true;
+                    return;
+                }
+                if (key == SilkKey.F7 && hud is not null)
+                {
+                    hud.UiVisible = !hud.UiVisible;
+                    return;
+                }
                 // Ctrl+C copies the free camera's position as a viewer camera code; Ctrl+V flies to the clipboard's code or feedback camera location.
                 if (key is SilkKey.C or SilkKey.V && Session.Camera.IsFree && hud is not null && !hud.UiEditing && ctrl)
                 {
@@ -952,7 +1021,11 @@ sealed partial class GameHost
             };
             keyboard.KeyUp += (_, key, _) =>
             {
-                if (key is SilkKey.ShiftLeft or SilkKey.ShiftRight) { shiftDown = false; if (hud is not null) hud.SlowModifier = false; }
+                if (key is SilkKey.ShiftLeft or SilkKey.ShiftRight)
+                {
+                    shiftDown = false;
+                    if (hud is not null) hud.SlowModifier = false;
+                }
                 if (KeyMap.Map(key) is { } mapped) { Session.Input.SetKey(mapped, false); hud?.Build.BuildKeyUp(mapped); }
             };
             keyboard.KeyChar += (_, value) =>
@@ -968,14 +1041,27 @@ sealed partial class GameHost
         {
             mouse.MouseMove += (m, p) =>
             {
-                if (Covered) { lastMouse = p; return; }
-                if (settings?.Visible == true) { settings.MouseMove(Pixels(p)); lastMouse = p; return; }
+                if (Covered)
+                {
+                    lastMouse = p;
+                    return;
+                }
+                if (settings?.Visible == true)
+                {
+                    settings.MouseMove(Pixels(p));
+                    lastMouse = p;
+                    return;
+                }
                 bool hold = lastMouse is not null && OrbitHeld();
                 hud?.MouseMove(Pixels(hold ? lastMouse!.Value : p));
                 // The panels and their drags own the pointer: the camera must not also turn under them.
                 if (hud is { UiCapturesPointer: true }) { lastMouse = p; return; }
                 if (lastMouse is { } last) Session.Input.AddMouseDelta(p.X - last.X, p.Y - last.Y);
-                if (hold) { HoldPointer(m, lastMouse!.Value); return; }
+                if (hold)
+                {
+                    HoldPointer(m, lastMouse!.Value);
+                    return;
+                }
                 lastMouse = p;
             };
             mouse.MouseDown += (_, button) =>
@@ -983,7 +1069,11 @@ sealed partial class GameHost
                 if (Covered) return;
                 if (KeyMap.Map(button) is not { } mapped) return;
                 var at = Pixels(mouse.Position);
-                if (settings?.Visible == true) { settings.MouseDown(at, mapped); return; }
+                if (settings?.Visible == true)
+                {
+                    settings.MouseDown(at, mapped);
+                    return;
+                }
                 bool select = PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left;
                 if (hud is { UiVisible: true } && select && !Config.SandboxPanelCollapsed && Sandbox.SandboxPicker?.MouseDown(at) == true) return;
                 if (hud is { UiVisible: true } && select && Sandbox.SandboxToggleClick(at)) return;
@@ -994,7 +1084,11 @@ sealed partial class GameHost
             mouse.MouseUp += (_, button) =>
             {
                 if (Covered) return;
-                if (settings?.Visible == true) { settings.MouseUp(); return; }
+                if (settings?.Visible == true)
+                {
+                    settings.MouseUp();
+                    return;
+                }
                 if (KeyMap.Map(button) is not { } mapped) return;
                 hud?.MouseUp(PlayerButton(mapped), Pixels(mouse.Position), shiftDown);
                 Session.Input.SetMouseButton(mapped, false);
@@ -1002,7 +1096,11 @@ sealed partial class GameHost
             mouse.Scroll += (_, wheel) =>
             {
                 if (Covered) return;
-                if (settings?.Visible == true) { settings.Scroll(wheel.Y); return; }
+                if (settings?.Visible == true)
+                {
+                    settings.Scroll(wheel.Y);
+                    return;
+                }
                 var at = Pixels(mouse.Position);
                 if (hud is { UiVisible: true } && !Config.SandboxPanelCollapsed && Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
                 // A panel's own scroll wins; over any HUD rectangle the wheel does not zoom the camera, as in the Vulkan host.
@@ -1202,14 +1300,16 @@ sealed partial class GameHost
                 if (tour.Active && !tour.Advance(dt, Camera, TourPosition)) EndTour();
                 Gpu.Ahead = tour.ArrivalEye(TourPosition);
                 if (hud is not null)
-                    Gpu.Kept = Config.KeepTexturesAtCharacters ? [.. hud.PortraitBar.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()] : [];
+                    Gpu.Kept = Config.KeepTexturesAtCharacters
+                            ? [.. hud.PortraitBar.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()] : [];
                 if (!tourHolds && hud is not null)
                 {
                     Sandbox.SandboxFollowCamera();
                     Sandbox.FollowCamera();
                     CharacterEditor.EditorCamera();
                 }
-                // The merged character editor is shared with Vulkan: a new game opens it once the squad is in the snapshot, and the world resumes when it closes.
+                // The merged character editor is shared with Vulkan: a new game opens it once the squad is in the snapshot, and the world resumes
+                // when it closes.
                 CharacterEditor.OpenPendingEditor();
                 CharacterEditor.ResumeAfterCreation();
                 if (hud is not { CharacterEditor.EditorOpen: true }) { CharacterEditor.ClearEditorStage(); CharacterEditor.ClearEditorBar(); }
@@ -1227,7 +1327,8 @@ sealed partial class GameHost
                         Meitou.Data.World.KenshiCamera.EyeClearance(Camera.Distance) - clearEye.Y;
                     if (shortfall > 0) Camera.Target += new Vector3(0, shortfall, 0);
                 }
-                // The pointer's Ctrl/Alt modifiers and the Highlight key (Alt): labels on the ground items near the focus, signs and the hover outlines agree.
+                // The pointer's Ctrl/Alt modifiers and the Highlight key (Alt): labels on the ground items near the focus, signs and the hover
+                // outlines agree.
                 ctrlHeld = Ctrl();
                 altHeld = Alt();
                 highlighting = altHeld && !Covered && !TitleScreen.TitleVisible && hud is { UiVisible: true } &&
@@ -1255,13 +1356,18 @@ sealed partial class GameHost
                 // It must run before the character draw list (which carries aboveFloor) and before the shadow casters.
                 Interiors.UpdateInteriorView();
                 // The next world tick may run on its own thread while the frame is drawn, as in the Vulkan loop (docs/simulation.md "Tick ahead").
-                TickAhead = !Covered && SkyArrival is null && !Duel.IsDuel && !TitleScreen.TitleVisible && !Player.CharacterEditor.EditorOpen && GameOptions.PlayBench is null && TickAheadWanted();
+                TickAhead = !Covered && SkyArrival is null && !Duel.IsDuel && !TitleScreen.TitleVisible && !Player.CharacterEditor.EditorOpen
+                        && GameOptions.PlayBench is null && TickAheadWanted();
             }
             else
             {
                 // A still freezes the simulation after PrepareStill: only the panel and the warm-up frames change, never the tick.
                 TickAhead = false;
-                if (hud is not null) { hud.Width = size.X; hud.Height = size.Y; }
+                if (hud is not null)
+                {
+                    hud.Width = size.X;
+                    hud.Height = size.Y;
+                }
                 bool panelReady = false;
                 while (stillPanel < stillPanels.Length)
                 {
@@ -1328,12 +1434,16 @@ sealed partial class GameHost
             double drawableWait = display.LastDrawableWaitMilliseconds;
             long recordStart = Stopwatch.GetTimestamp();
             var backbuffer = ctx.Backbuffer;
-            // The editor's scene: in the Meitou UI the bar, drawn by the world pass below from the editor's camera (CharacterEditorHost); else the original's stage, the
-            // character and its platform drawn into the stage texture the interface shows over the world.
+            // The editor's scene: in the Meitou UI the bar, drawn by the world pass below from the editor's camera (CharacterEditorHost); else the
+            // original's stage, the character and its platform drawn into the stage texture the interface shows over the world.
             var editorBarFrame = hud is { CharacterEditor.EditorOpen: true } ? CharacterEditor.BeginEditorBar(size.X, size.Y) : null;
             // The still's objects are all resident before the first picture, as the Vulkan screenshot path settles them (its Settle
             // opens its own frame; here the frame is the first one's).
-            if (frames == 0) { objects?.Settle(Camera.Eye); foliage?.Settle(Camera.Eye); }
+            if (frames == 0)
+            {
+                objects?.Settle(Camera.Eye);
+                foliage?.Settle(Camera.Eye);
+            }
             // What the shared draw needs before it updates the characters: the squad's portrait requests and the hover masks.
             if (characters is not null)
             {
@@ -1359,7 +1469,8 @@ sealed partial class GameHost
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.
             bool titleLook = hud is not null && TitleScreen.TitleVisible;
-            float hour = editorBarFrame is not null ? CharacterEditorHost.EditorBarHour : PresentationHour ?? (titleLook ? TitleScreen.TitleHour : (float)Session.Clock.HourOfDay);
+            float hour = editorBarFrame is not null ? CharacterEditorHost.EditorBarHour : PresentationHour
+                    ?? (titleLook ? TitleScreen.TitleHour : (float)Session.Clock.HourOfDay);
             var aspect = size.X / (float)Math.Max(size.Y, 1);
             var eye = Camera.Eye;
             var view = Camera.View;
@@ -1461,7 +1572,8 @@ sealed partial class GameHost
                     statsLines.Add($"camera {Camera.Target.X:0}, {Camera.Target.Y:0}, {Camera.Target.Z:0}  yaw {Camera.Yaw * 180 / MathF.PI:0}  pitch {Camera.Pitch * 180 / MathF.PI:0}  boom {Camera.Distance:0}");
                     if (characters is not null) statsLines.Add(characters.Statistics());
                     if (foliage is not null) statsLines.Add($"foliage {foliage.DrawnInstances} instances, {foliage.DrawnBlades} blades, {foliage.DrawCalls} calls");
-                    overlay.Panel(size.X, size.Y, "Metal frame (F11 hides this)", statsLines, (hud is { UiVisible: true } ? hud.HudBottom : 0) + 8, textScale);
+                    overlay.Panel(size.X, size.Y, "Metal frame (F11 hides this)", statsLines, (hud is { UiVisible: true } ? hud.HudBottom : 0) + 8,
+                            textScale);
                     wrote = true;
                 }
                 if (frameStatsVisible && !feedbackShot)
@@ -1481,8 +1593,9 @@ sealed partial class GameHost
                     settings.Draw(size.X, size.Y, overlayPass);
                     wrote = true;
                 }
-                // The mouse pointer over everything, as Vulkan draws it: the system cursor when Hardware mouse is on (enhanced, with the action's pointer beside
-                // it and the hand over what a click acts on), else the game's own pointer. The free camera hides it, and saved pictures never contain it.
+                // The mouse pointer over everything, as Vulkan draws it: the system cursor when Hardware mouse is on (enhanced, with the action's
+                // pointer beside it and the hand over what a click acts on), else the game's own pointer. The free camera hides it, and saved
+                // pictures never contain it.
                 if (!still && !screenshotNow && !feedbackShot && pointerMouse is not null && hud is not null)
                 {
                     bool pointerWorld = !Covered && !GameOptions.NoPopulation && settings?.Visible != true && !TitleScreen.TitleVisible;
@@ -1491,7 +1604,8 @@ sealed partial class GameHost
                     if (cursorMode != windowCursor) pointerMouse.Cursor.CursorMode = windowCursor = cursorMode;
                     string pointerName = pointerWorld ? hud.PointerPanel.PointerName : "arrow";
                     bool enhanced = Config.HardwareMouse && Config.EnhancedHardwareMouse && !freeLook;
-                    bool hand = enhanced && (pointerWorld ? hud.PointerPanel.PointsAtClickable(pointerName) : settings?.OverClickable(pointerAt) == true);
+                    bool hand = enhanced
+                            && (pointerWorld ? hud.PointerPanel.PointsAtClickable(pointerName) : settings?.OverClickable(pointerAt) == true);
                     systemPointer.Standard(pointerMouse.Cursor, hand ? Silk.NET.Input.StandardCursor.Hand : Silk.NET.Input.StandardCursor.Default);
                     if (!Config.HardwareMouse && !freeLook)
                     {
@@ -1611,7 +1725,8 @@ sealed partial class GameHost
             Config.FullScreen = BorderlessFullScreen.IsOn(window);
             Config.MetalUpscaler = mode;
             Config.MetalRenderScale = ctx.RenderScale;
-            if (hud is not null && (!GameOptions.LowEnd || hud.UiMode != Meitou.Data.Ui.UiMode.Faithful)) Config.UiMode = hud.UiMode;   // --low-end's Faithful UI is for the run
+            if (hud is not null && (!GameOptions.LowEnd || hud.UiMode != Meitou.Data.Ui.UiMode.Faithful))
+                    Config.UiMode = hud.UiMode;   // --low-end's Faithful UI is for the run
             Config.Bindings = Session.Bindings.ToDictionary();
             if (settingsValues is not null)
             {
@@ -1623,7 +1738,8 @@ sealed partial class GameHost
                     Config.Graphics[slider.Label] = slider.Get();
                 }
                 foreach (var toggle in settingsValues.Toggles)
-                    if (!RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label)) Config.Graphics[SettingsMenu.SwitchKeyPrefix + toggle.Label] = toggle.Get() ? 1 : 0;
+                    if (!RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label))
+                            Config.Graphics[SettingsMenu.SwitchKeyPrefix + toggle.Label] = toggle.Get() ? 1 : 0;
                 settings?.Tiers.SavePreset();
             }
             Config.Save();
@@ -1659,7 +1775,9 @@ sealed partial class GameHost
         if (_worldHasRendered) _settleAfterWorldLoad = true;
     }
 
-    /// <summary>The backbuffer's picture as a PNG (the readback's rows are the picture's own: Metal draws right side up).</summary>
+    /// <summary>
+    /// The backbuffer's picture as a PNG (the readback's rows are the picture's own: Metal draws right side up).
+    /// </summary>
     static void Capture(MetalContext ctx, GpuTexture backbuffer, string path)
     {
         int w = backbuffer.Desc.Width, h = backbuffer.Desc.Height;

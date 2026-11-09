@@ -6,13 +6,16 @@ using Meitou.Simulation;
 namespace Meitou.Game.Effects;
 
 /// <summary>
-/// Corpse flies (docs/game/character-stats.md "Corpses"; <c>Character::periodicUpdate</c>, <b>Verified</b>): a corpse the simulation gave flies shows the EFFECT
-/// <c>55393-Newwworld.mod</c> "Fly-Particle" and plays the AMBIENT_SOUND <c>95425-sfx.mod</c> "Corpse Flies" at its place, both following it, until it loses them.
+/// Corpse flies (docs/game/character-stats.md "Corpses"; <c>Character::periodicUpdate</c>, <b>Verified</b>): a corpse the simulation gave flies shows
+/// the EFFECT <c>55393-Newwworld.mod</c> "Fly-Particle" and plays the AMBIENT_SOUND <c>95425-sfx.mod</c> "Corpse Flies" at its place, both following
+/// it, until it loses them.
 /// </summary>
 sealed class CorpseFlies(GameHost host)
 {
     const string FlyEffectId = "55393-Newwworld.mod", FlySoundId = "95425-sfx.mod";
-    /// <summary>A carried corpse's flies are placed again once it moved this far (units).</summary>
+    /// <summary>
+    /// A carried corpse's flies are placed again once it moved this far (units).
+    /// </summary>
     const float FlyMove = 5;
 
     // The corpses with flies shown (their effect key and where it stands), the records (resolved once per database) and this frame's set.
@@ -25,7 +28,9 @@ sealed class CorpseFlies(GameHost host)
 
     static string FlyKey(CharacterId id) => $"flies/{id}";
 
-    /// <summary>Once a frame with the buildings: the effect at each corpse with flies, gone with them.</summary>
+    /// <summary>
+    /// Once a frame with the buildings: the effect at each corpse with flies, gone with them.
+    /// </summary>
     internal void UpdateCorpseFlies()
     {
         if (!ReferenceEquals(_flyRecordsFor, host.Scene.Database))
@@ -57,7 +62,9 @@ sealed class CorpseFlies(GameHost host)
         }
     }
 
-    /// <summary>With the world audio: the Corpse Flies emitter at each corpse that has its effect.</summary>
+    /// <summary>
+    /// With the world audio: the Corpse Flies emitter at each corpse that has its effect.
+    /// </summary>
     internal void UpdateCorpseFlyEmitters(WorldEmitters emitters)
     {
         if (_flySound is not { } sound) return;

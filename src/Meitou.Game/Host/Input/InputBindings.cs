@@ -1,55 +1,97 @@
 namespace Meitou.Game.Host.Input;
 
-/// <summary>What the player can ask for; keys and buttons are bound to these (<see cref="InputBindings"/>).</summary>
+/// <summary>
+/// What the player can ask for; keys and buttons are bound to these (<see cref="InputBindings"/>).
+/// </summary>
 public enum InputAction
 {
     MoveForward, MoveBack, MoveLeft, MoveRight,
-    /// <summary>Free camera only: straight up and down.</summary>
+    /// <summary>
+    /// Free camera only: straight up and down.
+    /// </summary>
     MoveUp, MoveDown,
     RotateLeft, RotateRight,
     PitchUp, PitchDown,
     ZoomIn, ZoomOut,
-    /// <summary>Held, the mouse movement turns the camera.</summary>
+    /// <summary>
+    /// Held, the mouse movement turns the camera.
+    /// </summary>
     Orbit,
-    /// <summary>The game view's mouse buttons: Select (the game's left button) picks characters and presses the interface; Command (the right button) gives orders and opens menus.</summary>
+    /// <summary>
+    /// The game view's mouse buttons: Select (the game's left button) picks characters and presses the interface; Command (the right button) gives
+    /// orders and opens menus.
+    /// </summary>
     Select, Command,
-    /// <summary>The game's <c>toggle_fps_camera</c> (docs/formats/camera.md).</summary>
+    /// <summary>
+    /// The game's <c>toggle_fps_camera</c> (docs/formats/camera.md).
+    /// </summary>
     ToggleFreeCamera,
     Pause, TimeFaster, TimeSlower,
-    /// <summary>The game speed_1, speed_2, speed_3 actions: 1x, 2x, 5x.</summary>
+    /// <summary>
+    /// The game speed_1, speed_2, speed_3 actions: 1x, 2x, 5x.
+    /// </summary>
     Speed1, Speed2, Speed3,
     Screenshot, ToggleSettings,
-    /// <summary>The debug menu (the game's cheats), the frame statistics, the profiler chart (gpu, cpu, off).</summary>
+    /// <summary>
+    /// The debug menu (the game's cheats), the frame statistics, the profiler chart (gpu, cpu, off).
+    /// </summary>
     ToggleDebugMenu, ToggleStats, CycleProfiler,
-    /// <summary>The small frame-rate counter at the top left.</summary>
+    /// <summary>
+    /// The small frame-rate counter at the top left.
+    /// </summary>
     ToggleFps,
-    /// <summary>The game's quicksave and quickload (F5 and F9, docs/game/ui-input.md): the host saves to and loads from its own "quicksave" slot.</summary>
+    /// <summary>
+    /// The game's quicksave and quickload (F5 and F9, docs/game/ui-input.md): the host saves to and loads from its own "quicksave" slot.
+    /// </summary>
     QuickSave, QuickLoad,
-    /// <summary>The game's <c>floor_up</c> / <c>floor_down</c>: the viewed floor of the buildings with a player character inside (docs/formats/zones.md "Interior view").</summary>
+    /// <summary>
+    /// The game's <c>floor_up</c> / <c>floor_down</c>: the viewed floor of the buildings with a player character inside (docs/formats/zones.md
+    /// "Interior view").
+    /// </summary>
     FloorUp, FloorDown,
-    /// <summary>Held: highlight building signs in yellow.</summary>
+    /// <summary>
+    /// Held: highlight building signs in yellow.
+    /// </summary>
     Highlight,
-    /// <summary>The game's <c>toggle_bar</c> (F7, event 8): hides or shows the whole interface.</summary>
+    /// <summary>
+    /// The game's <c>toggle_bar</c> (F7, event 8): hides or shows the whole interface.
+    /// </summary>
     ToggleInterface,
-    /// <summary>The game's <c>toggle_inventory</c>, <c>toggle_stats</c>, <c>toggle_map</c>, <c>toggle_faction</c>, <c>toggle_research</c> and <c>toggle_crafting</c> (events 1..6): the windows.</summary>
+    /// <summary>
+    /// The game's <c>toggle_inventory</c>, <c>toggle_stats</c>, <c>toggle_map</c>, <c>toggle_faction</c>, <c>toggle_research</c> and
+    /// <c>toggle_crafting</c> (events 1..6): the windows.
+    /// </summary>
     ToggleInventory, ToggleCharacterStats, ToggleMap, ToggleFaction, ToggleResearch, ToggleCrafting, ToggleHelp,
-    /// <summary>The game's <c>change_squad</c> (0x23), <c>select_all</c> (0x22), <c>character_next</c> / <c>character_prev</c> (0x26 / 0x27) and <c>focus_char</c> (0x11).</summary>
+    /// <summary>
+    /// The game's <c>change_squad</c> (0x23), <c>select_all</c> (0x22), <c>character_next</c> / <c>character_prev</c> (0x26 / 0x27) and
+    /// <c>focus_char</c> (0x11).
+    /// </summary>
     ChangeSquad, SelectAll, NextCharacter, PreviousCharacter, FocusCharacter,
-    /// <summary>The game's <c>select_0</c> .. <c>select_9</c> (events 100..109, keys 1..9 and 0): the active squad's members by position.</summary>
-    SelectMember1, SelectMember2, SelectMember3, SelectMember4, SelectMember5, SelectMember6, SelectMember7, SelectMember8, SelectMember9, SelectMember10,
-    /// <summary>The game's <c>stop_movement</c> (0x16) and <c>toggle_build</c> (10).</summary>
+    /// <summary>
+    /// The game's <c>select_0</c> .. <c>select_9</c> (events 100..109, keys 1..9 and 0): the active squad's members by position.
+    /// </summary>
+    SelectMember1, SelectMember2, SelectMember3, SelectMember4, SelectMember5, SelectMember6, SelectMember7, SelectMember8, SelectMember9,
+            SelectMember10,
+    /// <summary>
+    /// The game's <c>stop_movement</c> (0x16) and <c>toggle_build</c> (10).
+    /// </summary>
     StopMovement, ToggleBuild,
     /// <summary>
-    /// The orders panel's hotkeys (events 0x17..0x21, each the panel button's own handler): <c>toggle_block</c>, <c>toggle_hold</c>, <c>toggle_passive</c>, <c>toggle_jobs</c>,
-    /// <c>toggle_ranged</c>, <c>toggle_sneak</c>, <c>toggle_taunt</c>, <c>cycle_run_speed</c>, <c>medic</c>, <c>rescue</c>, <c>prospect</c>.
+    /// The orders panel's hotkeys (events 0x17..0x21, each the panel button's own handler): <c>toggle_block</c>, <c>toggle_hold</c>,
+    /// <c>toggle_passive</c>, <c>toggle_jobs</c>, <c>toggle_ranged</c>, <c>toggle_sneak</c>, <c>toggle_taunt</c>, <c>cycle_run_speed</c>,
+    /// <c>medic</c>, <c>rescue</c>, <c>prospect</c>.
     /// </summary>
     ToggleBlock, ToggleHold, TogglePassive, ToggleJobs, ToggleRanged, ToggleSneak, ToggleTaunt, CycleRunSpeed, Medic, Rescue, Prospect,
-    /// <summary>Meitou's own: the selection sits down to rest, and the carriers put their bodies down (no binding in the game).</summary>
+    /// <summary>
+    /// Meitou's own: the selection sits down to rest, and the carriers put their bodies down (no binding in the game).
+    /// </summary>
     Rest, PutDown,
     Quit,
 }
 
-/// <summary>The actions of one tick: for each, held, pressed or released this tick, plus the mouse movement and wheel.</summary>
+/// <summary>
+/// The actions of one tick: for each, held, pressed or released this tick, plus the mouse movement and wheel.
+/// </summary>
 public sealed class ActionState
 {
     static readonly int Count = Enum.GetValues<InputAction>().Length;
@@ -64,9 +106,13 @@ public sealed class ActionState
     public float Wheel => Input.Wheel;
 
     public bool Held(InputAction a) => _held[(int)a];
-    /// <summary>Went down this tick: true in exactly one tick per press.</summary>
+    /// <summary>
+    /// Went down this tick: true in exactly one tick per press.
+    /// </summary>
     public bool Pressed(InputAction a) => _pressed[(int)a];
-    /// <summary>Went up this tick (and no other key bound to it is still down).</summary>
+    /// <summary>
+    /// Went up this tick (and no other key bound to it is still down).
+    /// </summary>
     public bool Released(InputAction a) => _released[(int)a];
 
     internal void Set(InputAction a, bool isHeld, bool isPressed, bool isReleased)
@@ -76,15 +122,18 @@ public sealed class ActionState
         _released[(int)a] = isReleased;
     }
 
-    /// <summary>A state with nothing held, for ticks driven without a host.</summary>
+    /// <summary>
+    /// A state with nothing held, for ticks driven without a host.
+    /// </summary>
     public static ActionState None { get; } = new(TickInput.None);
 }
 
 /// <summary>
-/// Maps actions to keys and mouse buttons: each action has any number of bindings and counts as held while any is down. The
-/// defaults are an engine choice except the time controls and <c>;</c> for the free camera, which are the game's (docs/game/ui-input.md: pause Space, speed_1..3 F2..F4) and the camera keys (arrows and WASD move, Q / E rotate, , and . tilt),
-/// and the game view's hotkeys (the windows, squad keys and the orders on the numpad), which are the game's too.
-/// A config file can override them through <see cref="Apply"/> with strings such as <c>"W,Up"</c> or <c>"Mouse:Middle"</c>.
+/// Maps actions to keys and mouse buttons: each action has any number of bindings and counts as held while any is down. The defaults are an engine
+/// choice except the time controls and <c>;</c> for the free camera, which are the game's (docs/game/ui-input.md: pause Space, speed_1..3 F2..F4) and
+/// the camera keys (arrows and WASD move, Q / E rotate, , and . tilt), and the game view's hotkeys (the windows, squad keys and the orders on the
+/// numpad), which are the game's too. A config file can override them through <see cref="Apply"/> with strings such as <c>"W,Up"</c> or
+/// <c>"Mouse:Middle"</c>.
 /// </summary>
 public sealed class InputBindings
 {
@@ -147,7 +196,8 @@ public sealed class InputBindings
         Set(InputAction.Rest, Key.L);
         Set(InputAction.PutDown, Key.K);
         Set(InputAction.Orbit, MouseButton.Middle, Key.LeftControl);
-        Set(InputAction.Select, MouseButton.Left);   // the game's buttons, rebindable: orbit with the right button and select with the middle one, say
+        Set(InputAction.Select,
+                MouseButton.Left);   // the game's buttons, rebindable: orbit with the right button and select with the middle one, say
         Set(InputAction.Command, MouseButton.Right);
         Set(InputAction.ToggleFreeCamera, Key.Semicolon);
         Set(InputAction.Pause, Key.Space);
@@ -198,11 +248,15 @@ public sealed class InputBindings
         return problems;
     }
 
-    /// <summary>The bindings as strings in the form <see cref="Apply"/> reads (to write a config file).</summary>
+    /// <summary>
+    /// The bindings as strings in the form <see cref="Apply"/> reads (to write a config file).
+    /// </summary>
     public Dictionary<string, string> ToDictionary() =>
         _map.ToDictionary(p => p.Key.ToString(), p => string.Join(",", p.Value.Select(b => b.ToString())));
 
-    /// <summary>Resolves one tick's input into actions.</summary>
+    /// <summary>
+    /// Resolves one tick's input into actions.
+    /// </summary>
     public ActionState Resolve(TickInput input)
     {
         var state = new ActionState(input);

@@ -13,13 +13,21 @@ namespace Meitou.Game.DevTools;
 /// </summary>
 sealed class SquadTour
 {
-    /// <summary>Seconds the camera stays on each member before the next hop.</summary>
+    /// <summary>
+    /// Seconds the camera stays on each member before the next hop.
+    /// </summary>
     const float Hold = 1.5f;
-    /// <summary>Seconds each hop takes, whatever its length (Advanced settings "Character flight time").</summary>
+    /// <summary>
+    /// Seconds each hop takes, whatever its length (Advanced settings "Character flight time").
+    /// </summary>
     public float HopSeconds { get; set; } = UserConfig.DefaultFlightSeconds;
-    /// <summary>The arc's extra boom at its top, per unit of ground crossed (at least <see cref="MinLift"/> times the view's own distance).</summary>
+    /// <summary>
+    /// The arc's extra boom at its top, per unit of ground crossed (at least <see cref="MinLift"/> times the view's own distance).
+    /// </summary>
     const float LiftPerDistance = 0.55f, MinLift = 1.5f;
-    /// <summary>How much steeper the camera looks down at the top of an arc (radians), and its limit.</summary>
+    /// <summary>
+    /// How much steeper the camera looks down at the top of an arc (radians), and its limit.
+    /// </summary>
     const float PitchLift = 0.35f, MaxPitch = 1.35f;
 
     readonly List<CharacterId> _stops = [];
@@ -29,10 +37,14 @@ sealed class SquadTour
     bool _holding;
 
     public bool Active { get; private set; }
-    /// <summary>The camera is on a hop now (not on a hold between hops).</summary>
+    /// <summary>
+    /// The camera is on a hop now (not on a hold between hops).
+    /// </summary>
     public bool Moving => Active && !_holding;
 
-    /// <summary>Starts at the camera's view of <paramref name="members"/>[0] (flying there first when the view is elsewhere).</summary>
+    /// <summary>
+    /// Starts at the camera's view of <paramref name="members"/>[0] (flying there first when the view is elsewhere).
+    /// </summary>
     public void Start(WorldCamera camera, IReadOnlyList<CharacterId> members, Func<CharacterId, Vector3?> position)
     {
         _stops.Clear();
@@ -44,7 +56,9 @@ sealed class SquadTour
         if (Active) BeginHop(camera, position);
     }
 
-    /// <summary>One hop from the camera's view to <paramref name="id"/>, ending on it.</summary>
+    /// <summary>
+    /// One hop from the camera's view to <paramref name="id"/>, ending on it.
+    /// </summary>
     public void Fly(WorldCamera camera, CharacterId id, Func<CharacterId, Vector3?> position)
     {
         _stops.Clear();
@@ -55,25 +69,34 @@ sealed class SquadTour
         BeginHop(camera, position);
     }
 
-    /// <summary>The member the camera is on or flying to.</summary>
+    /// <summary>
+    /// The member the camera is on or flying to.
+    /// </summary>
     public CharacterId? Current => _next < _stops.Count ? _stops[_next] : _stops.Count > 0 ? _stops[^1] : null;
 
-    /// <summary>Ends the hop under way at once: the camera cuts to the view it was flying to.</summary>
+    /// <summary>
+    /// Ends the hop under way at once: the camera cuts to the view it was flying to.
+    /// </summary>
     public void Finish(WorldCamera camera, Func<CharacterId, Vector3?> position)
     {
         if (Current is { } id && position(id) is { } at) (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (at, _yaw, _pitch, _distance);
         Active = false;
     }
 
-    /// <summary>The eye of the view the hop under way lands on (the next stop's during a hold), for the streaming to load there first; null with no flight.</summary>
+    /// <summary>
+    /// The eye of the view the hop under way lands on (the next stop's during a hold), for the streaming to load there first; null with no flight.
+    /// </summary>
     public Vector3? ArrivalEye(Func<CharacterId, Vector3?> position) =>
         Active && Current is { } id && position(id) is { } at
-            ? at + new Vector3(MathF.Cos(_pitch) * MathF.Sin(_yaw), MathF.Sin(_pitch), MathF.Cos(_pitch) * MathF.Cos(_yaw)) * _distance   // WorldCamera.Eye's boom
+            ? at + new Vector3(MathF.Cos(_pitch) * MathF.Sin(_yaw), MathF.Sin(_pitch),
+                    MathF.Cos(_pitch) * MathF.Cos(_yaw)) * _distance   // WorldCamera.Eye's boom
             : null;
 
     public void Stop() => Active = false;
 
-    /// <summary>Moves the camera by <paramref name="dt"/> seconds; false once the tour is over (the camera is left on the last member).</summary>
+    /// <summary>
+    /// Moves the camera by <paramref name="dt"/> seconds; false once the tour is over (the camera is left on the last member).
+    /// </summary>
     public bool Advance(double dt, WorldCamera camera, Func<CharacterId, Vector3?> position)
     {
         if (!Active) return false;
@@ -105,7 +128,11 @@ sealed class SquadTour
     void BeginHop(WorldCamera camera, Func<CharacterId, Vector3?> position)
     {
         while (_next < _stops.Count && position(_stops[_next]) is null) _next++;
-        if (_next >= _stops.Count) { Active = false; return; }
+        if (_next >= _stops.Count)
+        {
+            Active = false;
+            return;
+        }
         _from = camera.Target;
         (_time, _holding) = (0, false);
     }

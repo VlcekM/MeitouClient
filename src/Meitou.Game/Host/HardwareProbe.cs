@@ -6,13 +6,16 @@ using Meitou.Game.Settings;
 namespace Meitou.Game.Host;
 
 /// <summary>
-/// <c>--recommend-preset &lt;file&gt;</c> (docs/launcher.md "Graphics"): looks at the GPU the game would pick (a headless Vulkan device), the memory and
-/// the cores, and writes the quality preset that suits them as JSON, for the launcher's Detect button. No log, window or game files.
+/// <c>--recommend-preset &lt;file&gt;</c> (docs/launcher.md "Graphics"): looks at the GPU the game would pick (a headless Vulkan device), the memory
+/// and the cores, and writes the quality preset that suits them as JSON, for the launcher's Detect button. No log, window or game files.
 /// </summary>
 static class HardwareProbe
 {
-    /// <summary>What was found and the preset for it; <see cref="Summary"/> is the line the launcher shows.</summary>
-    public sealed record Report(string Preset, string Summary, string Gpu, bool Integrated, long VideoMemoryMb, long MemoryMb, int Cores, string? Problem);
+    /// <summary>
+    /// What was found and the preset for it; <see cref="Summary"/> is the line the launcher shows.
+    /// </summary>
+    public sealed record Report(string Preset, string Summary, string Gpu, bool Integrated, long VideoMemoryMb, long MemoryMb, int Cores,
+            string? Problem);
 
     /// <summary>
     /// The preset for the hardware. The thresholds are a judgement, not measured: an integrated GPU (but Apple's with 16 GB or more), under 3 GB
@@ -52,7 +55,8 @@ static class HardwareProbe
         bool apple = appleSilicon || gpu.StartsWith("Apple", StringComparison.Ordinal);
         string preset = Recommend(integrated, apple, videoMemoryMb, memoryMb, cores);
         // An integrated GPU's device-local heap is a share of the system's memory, not memory of its own.
-        string what = gpu.Length == 0 ? "GPU not found" : integrated ? $"{gpu} (integrated)" : $"{gpu} ({videoMemoryMb / 1024.0:0.#} GB video memory)";
+        string what = gpu.Length == 0 ? "GPU not found" : integrated ? $"{gpu} (integrated)"
+            : $"{gpu} ({videoMemoryMb / 1024.0:0.#} GB video memory)";
         string summary = $"{what}, {memoryMb / 1024.0:0.#} GB memory, {cores} threads: {preset}";
         return new(preset, summary, gpu, integrated, videoMemoryMb, memoryMb, cores, problem);
     }
@@ -60,7 +64,9 @@ static class HardwareProbe
     public static int Write(string path)
     {
         var report = Probe();
-        File.WriteAllText(path, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        File.WriteAllText(path,
+                JsonSerializer.Serialize(report,
+                new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
         Console.WriteLine($"hardware  {report.Summary}");
         return 0;
     }

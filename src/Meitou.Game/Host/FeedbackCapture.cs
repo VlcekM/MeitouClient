@@ -10,28 +10,42 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed class FeedbackCapture(GameHost host)
 {
-    /// <summary>The next frame is the feedback screenshot (drawn without the menus, the settings and the debug overlays).</summary>
+    /// <summary>
+    /// The next frame is the feedback screenshot (drawn without the menus, the settings and the debug overlays).
+    /// </summary>
     internal bool FeedbackShotRequested;
     bool _feedbackSendRequested;
-    /// <summary>The PNG of the last feedback screenshot, encoded off the frame thread; null without one.</summary>
+    /// <summary>
+    /// The PNG of the last feedback screenshot, encoded off the frame thread; null without one.
+    /// </summary>
     Task<byte[]>? _feedbackPicture;
     Task<FeedbackResult>? _feedbackSend;
     string _feedbackStatus = "", _feedbackStatusShown = "";
-    /// <summary>Where the camera was when the button was pressed, sent with every report made in a game; null outside one.</summary>
+    /// <summary>
+    /// Where the camera was when the button was pressed, sent with every report made in a game; null outside one.
+    /// </summary>
     string? _feedbackLocation;
 
-    /// <summary>The steps of the navmesh screenshot, made when a send asks for it: the zones round the camera load, the view is built, one frame is kept.</summary>
+    /// <summary>
+    /// The steps of the navmesh screenshot, made when a send asks for it: the zones round the camera load, the view is built, one frame is kept.
+    /// </summary>
     enum FeedbackNavStage { None, Loading, Drawing, Capturing }
 
     FeedbackNavStage _feedbackNavStage;
     Task? _feedbackNavLoad;
     long _feedbackNavSince;
     DebugOverlays.NavView _feedbackNavRestore;
-    /// <summary>The navmesh screenshot's PNG, encoded off the frame thread; null without one.</summary>
+    /// <summary>
+    /// The navmesh screenshot's PNG, encoded off the frame thread; null without one.
+    /// </summary>
     Task<byte[]>? _feedbackNavPicture;
-    /// <summary>The navmesh screenshot was tried for this form (it may have failed), so a send goes on without waiting for it again.</summary>
+    /// <summary>
+    /// The navmesh screenshot was tried for this form (it may have failed), so a send goes on without waiting for it again.
+    /// </summary>
     bool _feedbackNavTried;
-    /// <summary>The check for a newer Meitou, started when the form opens (<see cref="LatestRelease"/>).</summary>
+    /// <summary>
+    /// The check for a newer Meitou, started when the form opens (<see cref="LatestRelease"/>).
+    /// </summary>
     Task<string?>? _feedbackNewer;
 
     internal void FeedbackAction(MyGuiEvent e)
@@ -40,12 +54,14 @@ sealed class FeedbackCapture(GameHost host)
         else if (e.Action == "feedback-send") _feedbackSendRequested = true;
     }
 
-    /// <summary>In a game: there is a world to save, a camera to report and a navmesh to draw.</summary>
+    /// <summary>
+    /// In a game: there is a world to save, a camera to report and a navmesh to draw.
+    /// </summary>
     bool FeedbackInGame => host.Saves.SavesAvailable(out _) && host.Session.World.Player.Exists;
 
     /// <summary>
-    /// The feedback frame was drawn: <paramref name="rgba"/> is its picture (rows from the top; null when it could not be read). The form opens; for the navmesh
-    /// screenshot's frame the picture is kept and the send goes on.
+    /// The feedback frame was drawn: <paramref name="rgba"/> is its picture (rows from the top; null when it could not be read). The form opens; for
+    /// the navmesh screenshot's frame the picture is kept and the send goes on.
     /// </summary>
     internal void FeedbackCaptured(byte[]? rgba, int width, int height)
     {
@@ -57,7 +73,8 @@ sealed class FeedbackCapture(GameHost host)
             EndFeedbackNav();
             return;
         }
-        host.Player.FeedbackPanel.FeedbackPrefs = host.Config.Feedback ??= new();   // the same object: what the form changes is saved with the settings
+        // The same object: what the form changes is saved with the settings.
+        host.Player.FeedbackPanel.FeedbackPrefs = host.Config.Feedback ??= new();
         _feedbackPicture = picture;
         _feedbackNavPicture = null;
         _feedbackNavTried = false;
@@ -65,10 +82,13 @@ sealed class FeedbackCapture(GameHost host)
         _feedbackLocation = inGame ? CameraLocation() : null;
         host.Player.FeedbackPanel.FeedbackNewer = null;
         _feedbackNewer = LatestRelease.NewerThan(BuildVersion.Tag);
-        host.Player.FeedbackPanel.OpenFeedback(rgba is not null, inGame && host.Nav is not null && host.DebugOverlays.NavOverlayRenderer is not null, inGame ? null : "only in a game");
+        host.Player.FeedbackPanel.OpenFeedback(rgba is not null, inGame && host.Nav is not null && host.DebugOverlays.NavOverlayRenderer is not null,
+                inGame ? null : "only in a game");
     }
 
-    /// <summary>The camera as text for the issue: what it looks at, where the eye is, and the heading (the numbers of the F11 statistics).</summary>
+    /// <summary>
+    /// The camera as text for the issue: what it looks at, where the eye is, and the heading (the numbers of the F11 statistics).
+    /// </summary>
     string CameraLocation()
     {
         var c = System.Globalization.CultureInfo.InvariantCulture;
@@ -76,7 +96,9 @@ sealed class FeedbackCapture(GameHost host)
         return string.Create(c, $"target {t.X:0}, {t.Y:0}, {t.Z:0}; eye {e.X:0}, {e.Y:0}, {e.Z:0}; yaw {host.Camera.Yaw * 180 / MathF.PI:0}, pitch {host.Camera.Pitch * 180 / MathF.PI:0}, boom {host.Camera.Distance:0}");
     }
 
-    /// <summary>Starts the navmesh screenshot: Meitou's view on, the zones round the camera loading. False when there is no navmesh to draw.</summary>
+    /// <summary>
+    /// Starts the navmesh screenshot: Meitou's view on, the zones round the camera loading. False when there is no navmesh to draw.
+    /// </summary>
     bool StartFeedbackNav()
     {
         if (host.Nav is null || host.DebugOverlays.NavOverlayRenderer is not { } overlay) return false;
@@ -97,22 +119,34 @@ sealed class FeedbackCapture(GameHost host)
         return true;
     }
 
-    /// <summary>Once per frame while the navmesh screenshot is made: waits for the zones and the built view, then asks for the frame (<see cref="FeedbackCaptured"/> takes it).</summary>
+    /// <summary>
+    /// Once per frame while the navmesh screenshot is made: waits for the zones and the built view, then asks for the frame (<see
+    /// cref="FeedbackCaptured"/> takes it).
+    /// </summary>
     void StepFeedbackNav()
     {
         if (_feedbackNavStage == FeedbackNavStage.None) return;
         double waited = Stopwatch.GetElapsedTime(_feedbackNavSince).TotalSeconds;
-        if (host.Nav is null || waited > 30) { EndFeedbackNav(); return; }   // never held up for long: the report goes without it
-        if (_feedbackNavStage == FeedbackNavStage.Loading && (_feedbackNavLoad!.IsCompleted || waited > 10)) _feedbackNavStage = FeedbackNavStage.Drawing;
+        // never held up for long: the report goes without it
+        if (host.Nav is null || waited > 30)
+        {
+            EndFeedbackNav();
+            return;
+        }
+        if (_feedbackNavStage == FeedbackNavStage.Loading && (_feedbackNavLoad!.IsCompleted || waited > 10))
+                _feedbackNavStage = FeedbackNavStage.Drawing;
         if (_feedbackNavStage == FeedbackNavStage.Drawing
-            && (host.DebugOverlays.NavOverlayBuild is null && host.DebugOverlays.NavOverlayShown == (host.Nav.Walkability.World, DebugOverlays.NavView.Meitou) || waited > 20))
+            && (host.DebugOverlays.NavOverlayBuild is null
+                && host.DebugOverlays.NavOverlayShown == (host.Nav.Walkability.World, DebugOverlays.NavView.Meitou) || waited > 20))
         {
             _feedbackNavStage = FeedbackNavStage.Capturing;
             FeedbackShotRequested = true;
         }
     }
 
-    /// <summary>The navmesh screenshot is done (or given up): the view goes back to what it was and the send goes on.</summary>
+    /// <summary>
+    /// The navmesh screenshot is done (or given up): the view goes back to what it was and the send goes on.
+    /// </summary>
     void EndFeedbackNav()
     {
         _feedbackNavStage = FeedbackNavStage.None;
@@ -123,7 +157,9 @@ sealed class FeedbackCapture(GameHost host)
         _feedbackSendRequested = true;
     }
 
-    /// <summary>Once per frame, between ticks (a save may be made): a requested send starts, a finished one reports.</summary>
+    /// <summary>
+    /// Once per frame, between ticks (a save may be made): a requested send starts, a finished one reports.
+    /// </summary>
     internal void HandleFeedback()
     {
         if (_feedbackSend is { IsCompleted: true } done)
@@ -162,16 +198,29 @@ sealed class FeedbackCapture(GameHost host)
         Task? saveWritten = null;
         if (form.Save)
         {
-            if (host.Saves.Busy()) { host.Player.FeedbackPanel.FeedbackSending = false; host.Player.FeedbackPanel.FeedbackProgress("A save or load is still in progress. Try again in a moment.", error: true); return; }
+            if (host.Saves.Busy())
+            {
+                host.Player.FeedbackPanel.FeedbackSending = false;
+                host.Player.FeedbackPanel.FeedbackProgress("A save or load is still in progress. Try again in a moment.", error: true);
+                return;
+            }
             saveFolder = Path.Combine(Path.GetTempPath(), $"meitou-feedback-{Guid.NewGuid():N}", $"feedback-{DateTime.Now:yyyyMMdd-HHmmss}");
             var before = host.Saves.SaveWrite;
             host.Saves.QuickSaveNow(saveFolder, feedback: true);
-            if (ReferenceEquals(host.Saves.SaveWrite, before)) { host.Player.FeedbackPanel.FeedbackSending = false; host.Player.FeedbackPanel.FeedbackProgress("The game could not be saved (log.txt says why). Untick the save to send without it.", error: true); return; }
+            if (ReferenceEquals(host.Saves.SaveWrite, before))
+            {
+                host.Player.FeedbackPanel.FeedbackSending = false;
+                host.Player.FeedbackPanel.FeedbackProgress(
+                    "The game could not be saved (log.txt says why). Untick the save to send without it.", error: true);
+                return;
+            }
             saveWritten = host.Saves.SaveWrite;
         }
         string[] mods = [.. Data.LoadOrder.FromInstall(host.Install).Entries.Select(e => e.Name)];
-        string? log = form.Log && File.Exists(Path.Combine(AppContext.BaseDirectory, "log.txt")) ? Path.Combine(AppContext.BaseDirectory, "log.txt") : null;
-        var package = new FeedbackPackage(form, BuildVersion.Tag, BuildVersion.Commit, FeedbackSender.Platform(), mods, form.Screenshot ? _feedbackPicture : null,
+        string? log = form.Log && File.Exists(Path.Combine(AppContext.BaseDirectory, "log.txt")) ? Path.Combine(AppContext.BaseDirectory, "log.txt")
+                : null;
+        var package = new FeedbackPackage(form, BuildVersion.Tag, BuildVersion.Commit, FeedbackSender.Platform(), mods, form.Screenshot
+                ? _feedbackPicture : null,
             form.Navmesh ? _feedbackNavPicture : null, _feedbackLocation, saveFolder, saveWritten, log);
         _feedbackStatus = _feedbackStatusShown = form.Save ? "Saving the game..." : "Sending...";
         host.Player.FeedbackPanel.FeedbackProgress(_feedbackStatus);

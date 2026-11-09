@@ -25,13 +25,18 @@ static partial class WindowPointer
     // Glfw.GetApi() creates a native context on every call; the edge-scroll check runs every frame.
     static Glfw? s_glfwApi;
 
-    /// <summary>The pointer as a fraction of the window's client area (0 to 1 on both axes), or null when the window is not in front or the pointer is outside it.</summary>
+    /// <summary>
+    /// The pointer as a fraction of the window's client area (0 to 1 on both axes), or null when the window is not in front or the pointer is outside
+    /// it.
+    /// </summary>
     public static unsafe Vector2? InWindow(IWindow window)
     {
         if (OperatingSystem.IsWindows() && window.Native?.Win32 is { } native)
         {
             nint hwnd = native.Hwnd;
-            if (GetForegroundWindow() != hwnd || GetCursorPos(out var point) == 0 || ScreenToClient(hwnd, ref point) == 0 || GetClientRect(hwnd, out var client) == 0) return null;
+            if (GetForegroundWindow() != hwnd || GetCursorPos(out var point) == 0 || ScreenToClient(hwnd, ref point) == 0
+                    || GetClientRect(hwnd, out var client) == 0)
+                    return null;
             int width = client.Right - client.Left, height = client.Bottom - client.Top;
             if (width <= 0 || height <= 0 || point.X < 0 || point.Y < 0 || point.X >= width || point.Y >= height) return null;
             return new Vector2(point.X / (float)width, point.Y / (float)height);

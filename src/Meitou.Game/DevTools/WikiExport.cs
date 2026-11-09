@@ -12,23 +12,32 @@ using Meitou.Game.Host;
 namespace Meitou.Game.DevTools;
 
 /// <summary>
-/// <c>--wiki-export &lt;dir&gt;</c>: writes the agent wiki's generated files (zones, towns, factions, squads, npcs, items, buildings as JSON) from the
-/// player's own game data, the load order of <c>data/mods.cfg</c> applied, and exits. No window, no game run. The files follow the schema of
+/// <c>--wiki-export &lt;dir&gt;</c>: writes the agent wiki's generated files (zones, towns, factions, squads, npcs, items, buildings as JSON) from
+/// the player's own game data, the load order of <c>data/mods.cfg</c> applied, and exits. No window, no game run. The files follow the schema of
 /// <c>tools/playtest/wiki.example</c> plus an optional <c>data</c> object; nothing in them comes from outside the data files read
 /// (docs/agent-playtest.md, "The wiki").
 /// </summary>
 static partial class WikiExport
 {
+    #region Export
+
     const string DefaultSource = "generated from your game data";
 
     static readonly JsonWriterOptions WriterOptions = new() { Indented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    sealed record Row(string Id, string Name, string Kind, string? Faction, string? Zone, float? X, float? Z, string Confidence, string Notes, string? Record, SortedDictionary<string, object?> Data);
+    sealed record Row(string Id, string Name, string Kind, string? Faction, string? Zone, float? X, float? Z, string Confidence, string Notes,
+            string? Record, SortedDictionary<string, object?> Data);
 
-    /// <summary>Free-text fields the game data carries that <c>--facts-only</c> leaves out (item and research descriptions; the export reads no dialogue lines, lore or book texts at all).</summary>
-    static readonly string[] DroppedProseFields = ["item description", "research description", "dialogue lines (never read)", "lore and book contents (never read)", "character and squad flavour text (never read)"];
+    /// <summary>
+    /// Free-text fields the game data carries that <c>--facts-only</c> leaves out (item and research descriptions; the export reads no dialogue
+    /// lines, lore or book texts at all).
+    /// </summary>
+    static readonly string[] DroppedProseFields = ["item description", "research description", "dialogue lines (never read)",
+            "lore and book contents (never read)", "character and squad flavour text (never read)"];
 
-    /// <summary>True under <c>--facts-only</c>: no description text from the game goes into the files.</summary>
+    /// <summary>
+    /// True under <c>--facts-only</c>: no description text from the game goes into the files.
+    /// </summary>
     static bool s_factsOnly;
 
     public static int Run(string outDir, GameInstall install, bool factsOnly = false)
@@ -76,7 +85,10 @@ static partial class WikiExport
                 ["record"] = placement.TownId,
             };
             string faction = FactionName(town.Faction);
-            var row = new Row(Id(town.Name, placement.TownId), town.Name, town.Type switch { TownType.Ruins => "ruins", TownType.Nest => "nest", TownType.Outpost or TownType.Military or TownType.Prison or TownType.SlaveCamp => "camp", TownType.PointOfInterest => "poi", _ => "town" },
+            var row = new Row(Id(town.Name, placement.TownId), town.Name,
+                    town.Type switch { TownType.Ruins => "ruins", TownType.Nest => "nest",
+                    TownType.Outpost or TownType.Military or TownType.Prison or TownType.SlaveCamp => "camp", TownType.PointOfInterest => "poi",
+                    _ => "town" },
                 faction.Length == 0 ? null : faction, zoneId, placement.Position.X, placement.Position.Z, "Observed",
                 $"{town.Type} in {zoneId}" + (faction.Length == 0 ? "" : $", faction {faction}") + ". Position as the level data places it; not checked in game.", placement.TownId, data);
             towns.Add(row);
@@ -115,7 +127,8 @@ static partial class WikiExport
         // Factions.
         var factions = new List<Row>();
         var player = db.Find(FactionData.PlayerId);
-        foreach (var record in db.OfType(FcsRecordType.Faction).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.Faction).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId,
+                StringComparer.Ordinal))
         {
             var f = FactionData.From(record);
             if (f.Name.Length == 0) continue;
@@ -153,14 +166,18 @@ static partial class WikiExport
         var townFactionOf = new Dictionary<string, string>(StringComparer.Ordinal);   // town record -> faction name
         foreach (var t in towns) if (t.Faction is { } tf && t.Record is { } trec) townFactionOf.TryAdd(trec, tf);
         // A leader record that leads squads in several towns is a generic role (a shop trader): no position for it.
-        var leaderUse = allSquads.Where(q => q.Leader is not null && residentOf.ContainsKey(q.Id)).GroupBy(q => q.Leader!.Value.Id).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        var leaderUse = allSquads.Where(q => q.Leader is not null && residentOf.ContainsKey(q.Id))
+                .GroupBy(q => q.Leader!.Value.Id)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
         foreach (var squad in allSquads.OrderBy(s => s.Name, StringComparer.Ordinal).ThenBy(s => s.Id, StringComparer.Ordinal))
         {
             if (squad.Name.Length == 0) continue;
             string leader = squad.Leader is { } ll && db.Find(ll.Id) is { } lc ? lc.Name : "";
             string faction = FactionName(squad.Faction);
             string factionSource = faction.Length > 0 ? "squad template" : "";
-            if (faction.Length == 0 && residentOf.TryGetValue(squad.Id, out var ownerTown) && townFactionOf.TryGetValue(ownerTown, out var ownerFaction)) { faction = ownerFaction; factionSource = "the town that lists the squad (a template without a faction takes its town's)"; }
+            if (faction.Length == 0 && residentOf.TryGetValue(squad.Id, out var ownerTown)
+                    && townFactionOf.TryGetValue(ownerTown, out var ownerFaction))
+                    { faction = ownerFaction; factionSource = "the town that lists the squad (a template without a faction takes its town's)"; }
             var data = new SortedDictionary<string, object?>
             {
                 ["factionSource"] = factionSource,
@@ -173,27 +190,32 @@ static partial class WikiExport
             bool home = residentOf.TryGetValue(squad.Id, out var townRecord) && townAt.ContainsKey(townRecord);
             float? x = home ? townAt[townRecord!].X : null, z = home ? townAt[townRecord!].Z : null;
             string where = home ? $" Listed as a resident of {db.Find(townRecord!)?.Name}; the position is that town's, not where the squad stands." : "";
-            var row = new Row(Id(squad.Name, squad.Id), squad.Name, squad.IsUnique ? "unique-squad" : "squad", faction.Length == 0 ? null : faction, null, x, z, home ? "Inferred" : "Observed",
+            var row = new Row(Id(squad.Name, squad.Id), squad.Name, squad.IsUnique ? "unique-squad" : "squad", faction.Length == 0 ? null : faction,
+                    null, x, z, home ? "Inferred" : "Observed",
                 (squad.IsUnique ? "Unique squad" : "Squad template") + (leader.Length > 0 ? $", leader {leader}" : "") + (squad.HasShop ? ", runs a shop" : "") + "." + where, squad.Id, data);
             squads.Add(row);
             // A leader who leads exactly one resident squad is a person of that town: one npc entry with the town's position.
-            if (leader.Length > 0 && home && !characterRecords.Contains(squad.Leader!.Value.Id) && leaderUse.GetValueOrDefault(squad.Leader!.Value.Id) == 1)
+            if (leader.Length > 0 && home && !characterRecords.Contains(squad.Leader!.Value.Id)
+                    && leaderUse.GetValueOrDefault(squad.Leader!.Value.Id) == 1)
             {
                 var zone = WorldLayout.ZoneOf(x!.Value, z!.Value);
                 npcs.Add(new Row(Id(leader, squad.Leader!.Value.Id), leader, "npc", faction.Length == 0 ? null : faction, $"zone-{zone.X}-{zone.Y}", x, z, "Inferred",
                     $"Leader of the squad {squad.Name}, a resident of {db.Find(townRecord!)?.Name}. Position is the town's; roaming people move.", squad.Leader.Value.Id,
-                    new SortedDictionary<string, object?> { ["squad"] = squad.Name, ["town"] = db.Find(townRecord!)?.Name, ["factionSource"] = factionSource, ["record"] = squad.Leader.Value.Id }));
+                    new SortedDictionary<string, object?> { ["squad"] = squad.Name, ["town"] = db.Find(townRecord!)?.Name,
+                            ["factionSource"] = factionSource, ["record"] = squad.Leader.Value.Id }));
             }
         }
 
         // Character types (humans and animals), without position.
         var seenCharacters = new HashSet<string>(npcs.Select(n => n.Record ?? ""), StringComparer.Ordinal);
-        foreach (var record in db.OfType(FcsRecordType.Character).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.Character).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId,
+                StringComparer.Ordinal))
         {
             if (record.Name.Length == 0 || seenCharacters.Contains(record.StringId) || characterRecords.Contains(record.StringId)) continue;
             string faction = record.GetReferences("faction") is { Count: > 0 } fl ? FactionName(fl[0].TargetStringId) : "";
             bool animal = record.Type == FcsRecordType.AnimalCharacter;
-            npcs.Add(new Row(Id(record.Name, record.StringId), record.Name, animal ? "animal" : "npc", faction.Length == 0 ? null : faction, null, null, null, "Observed",
+            npcs.Add(new Row(Id(record.Name, record.StringId), record.Name, animal ? "animal" : "npc", faction.Length == 0 ? null : faction, null,
+                    null, null, "Observed",
                 (animal ? "Animal" : "Character") + " record" + (faction.Length == 0 ? "" : $" of faction {faction}") + "; no position (spawned by squads and towns).", record.StringId,
                 new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy }));
         }
@@ -205,15 +227,20 @@ static partial class WikiExport
 
         // Buildings (named records only).
         var buildings = new List<Row>();
-        foreach (var record in db.OfType(FcsRecordType.Building).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.Building).OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId,
+                StringComparer.Ordinal))
         {
             if (record.Name.Length == 0) continue;
             buildings.Add(new Row(Id(record.Name, record.StringId), record.Name, "building", null, null, null, null, "Observed",
                 $"Building record {record.StringId}, defined by {record.DefinedBy}.", record.StringId,
-                new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy, ["value"] = Num(record, "value") }));
+                new SortedDictionary<string, object?> { ["record"] = record.StringId, ["definedBy"] = record.DefinedBy,
+                        ["value"] = Num(record, "value") }));
         }
 
-        var files = new (string Name, List<Row> Rows)[] { ("zones", zones), ("towns", towns), ("factions", factions), ("squads", squads), ("npcs", npcs), ("items", items), ("buildings", buildings), ("shops", detail.Shops), ("vendors", detail.Vendors), ("overrides", detail.Overrides), ("characters", detail.Characters), ("research", research), ("animals", animals), ("spawns", spawn.Rows) };
+        var files = new (string Name, List<Row> Rows)[] { ("zones", zones), ("towns", towns), ("factions", factions), ("squads", squads),
+                ("npcs", npcs), ("items", items), ("buildings", buildings), ("shops", detail.Shops), ("vendors", detail.Vendors),
+                ("overrides", detail.Overrides), ("characters", detail.Characters), ("research", research), ("animals", animals),
+                ("spawns", spawn.Rows) };
         var modNames = order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n)).ToList();
         // A facts-only export is shipped, so it names no local path: only the clean-install wording or the mod names.
         string dataDir = factsOnly
@@ -233,10 +260,19 @@ static partial class WikiExport
         return 0;
     }
 
-    /// <summary>The divider lines of a mod manager's load order ("[1]----------[UI]----------.mod") are entries of mods.cfg but no mod.</summary>
+    #endregion
+
+    #region Writing
+
+    /// <summary>
+    /// The divider lines of a mod manager's load order ("[1]----------[UI]----------.mod") are entries of mods.cfg but no mod.
+    /// </summary>
     static bool IsSeparator(string name) => System.Text.RegularExpressions.Regex.IsMatch(name, @"^\[\d+\]-+\[.*\]-+\.mod$");
 
-    /// <summary>What every generated file says it was made from: the data folder, the load order, and the mods beyond the base game's four data files (<c>mods.cfg</c> applied).</summary>
+    /// <summary>
+    /// What every generated file says it was made from: the data folder, the load order, and the mods beyond the base game's four data files
+    /// (<c>mods.cfg</c> applied).
+    /// </summary>
     sealed record Meta(string Source, string DataDir, string LoadOrder, List<string> Mods, List<string> ModsCfg, List<string> Issues, bool FactsOnly);
 
     static void Write(string path, List<Row> rows, Meta meta)
@@ -275,7 +311,8 @@ static partial class WikiExport
             w.WriteString("kind", r.Kind);
             Nullable(w, "faction", r.Faction);
             w.WriteNull("region");
-            if (r.X is { } x && r.Z is { } z) { w.WriteNumber("x", MathF.Round(x)); w.WriteNumber("z", MathF.Round(z)); } else { w.WriteNull("x"); w.WriteNull("z"); }
+            if (r.X is { } x && r.Z is { } z)
+                    { w.WriteNumber("x", MathF.Round(x)); w.WriteNumber("z", MathF.Round(z)); } else { w.WriteNull("x"); w.WriteNull("z"); }
             Nullable(w, "zone", r.Zone);
             w.WriteBoolean("verified", false);
             w.WriteNull("verifiedOn");
@@ -300,16 +337,27 @@ static partial class WikiExport
     {
         switch (v)
         {
-            case null: w.WriteNullValue(); break;
-            case string s: w.WriteStringValue(s); break;
-            case bool b: w.WriteBooleanValue(b); break;
-            case int i: w.WriteNumberValue(i); break;
-            case long l: w.WriteNumberValue(l); break;
-            case float f: w.WriteNumberValue(MathF.Round(f * 1000) / 1000); break;
-            case double dbl: w.WriteNumberValue(Math.Round(dbl, 3)); break;
+            case null: w.WriteNullValue();
+            break;
+            case string s: w.WriteStringValue(s);
+            break;
+            case bool b: w.WriteBooleanValue(b);
+            break;
+            case int i: w.WriteNumberValue(i);
+            break;
+            case long l: w.WriteNumberValue(l);
+            break;
+            case float f: w.WriteNumberValue(MathF.Round(f * 1000) / 1000);
+            break;
+            case double dbl: w.WriteNumberValue(Math.Round(dbl, 3));
+            break;
             case IDictionary<string, object?> d:
                 w.WriteStartObject();
-                foreach (var (k, x) in d) { w.WritePropertyName(k); WriteValue(w, x); }
+                foreach (var (k, x) in d)
+                {
+                    w.WritePropertyName(k);
+                    WriteValue(w, x);
+                }
                 w.WriteEndObject();
                 break;
             case IEnumerable<string> list:
@@ -322,11 +370,16 @@ static partial class WikiExport
                 foreach (var x in items) WriteValue(w, x);
                 w.WriteEndArray();
                 break;
-            default: w.WriteStringValue(Convert.ToString(v, CultureInfo.InvariantCulture)); break;
+            default: w.WriteStringValue(Convert.ToString(v, CultureInfo.InvariantCulture));
+            break;
         }
     }
 
     // A value or float field as a number, null when the record has neither.
+    #endregion
+
+    #region Value helpers
+
     static object? Num(GameRecord r, string key) =>
         r.Floats.TryGetValue(key, out float f) ? MathF.Round(f * 1000) / 1000 : r.Ints.TryGetValue(key, out int i) ? i : null;
 
@@ -339,10 +392,24 @@ static partial class WikiExport
         bool dash = false;
         foreach (char c in text.Normalize(NormalizationForm.FormD))
         {
-            if (c is >= 'a' and <= 'z' or >= '0' and <= '9') { sb.Append(c); dash = false; }
-            else if (c is >= 'A' and <= 'Z') { sb.Append(char.ToLowerInvariant(c)); dash = false; }
-            else if (!dash && sb.Length > 0 && char.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark) { sb.Append('-'); dash = true; }
+            if (c is >= 'a' and <= 'z' or >= '0' and <= '9')
+            {
+                sb.Append(c);
+                dash = false;
+            }
+            else if (c is >= 'A' and <= 'Z')
+            {
+                sb.Append(char.ToLowerInvariant(c));
+                dash = false;
+            }
+            else if (!dash && sb.Length > 0 && char.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append('-');
+                dash = true;
+            }
         }
         return sb.ToString().Trim('-');
     }
+    #endregion
+
 }

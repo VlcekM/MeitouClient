@@ -22,9 +22,13 @@ namespace Meitou.Game.Host.Cameras;
 /// </summary>
 public sealed class StrategyCamera
 {
-    /// <summary>Eye pitch (radians above the horizon) at the highest view the rule allows, view y = <see cref="KenshiCamera.MaxViewY"/>.</summary>
+    /// <summary>
+    /// Eye pitch (radians above the horizon) at the highest view the rule allows, view y = <see cref="KenshiCamera.MaxViewY"/>.
+    /// </summary>
     public static readonly float MinPitch = -MathF.Asin(KenshiCamera.MaxViewY);
-    /// <summary>Eye pitch at the steepest view the rule allows, view y = <see cref="KenshiCamera.MinViewY"/>.</summary>
+    /// <summary>
+    /// Eye pitch at the steepest view the rule allows, view y = <see cref="KenshiCamera.MinViewY"/>.
+    /// </summary>
     public static readonly float MaxPitch = MathF.Asin(-KenshiCamera.MinViewY);
 
     const float DegreesToRadians = MathF.PI / 180;
@@ -50,15 +54,25 @@ public sealed class StrategyCamera
         State = Compute();
     }
 
-    /// <summary>Pivot position on the ground plane.</summary>
+    /// <summary>
+    /// Pivot position on the ground plane.
+    /// </summary>
     public Vector2 PivotXz { get; private set; }
-    /// <summary>Radians; the view's heading (0 looks along -Z), as <see cref="CameraState.Yaw"/>.</summary>
+    /// <summary>
+    /// Radians; the view's heading (0 looks along -Z), as <see cref="CameraState.Yaw"/>.
+    /// </summary>
     public float Yaw { get; private set; }
-    /// <summary>The pitch (eye above the horizon, radians): the pivot's, which the ground never changes.</summary>
+    /// <summary>
+    /// The pitch (eye above the horizon, radians): the pivot's, which the ground never changes.
+    /// </summary>
     public float Pitch { get; private set; }
-    /// <summary>The boom, 10..2000.</summary>
+    /// <summary>
+    /// The boom, 10..2000.
+    /// </summary>
     public float Distance { get; private set; }
-    /// <summary>The camera as of the last <see cref="Update"/> or placement.</summary>
+    /// <summary>
+    /// The camera as of the last <see cref="Update"/> or placement.
+    /// </summary>
     public CameraState State { get; private set; }
 
     public Vector3 Pivot => new(PivotXz.X, _pivotY, PivotXz.Y);
@@ -69,7 +83,9 @@ public sealed class StrategyCamera
     /// </summary>
     public Vector2? EdgePointer { get; set; }
 
-    /// <summary>Sets the pivot and view (yaw wrapped, pitch kept within the pitch limits, boom within the zoom limits); the pivot's height is found at once.</summary>
+    /// <summary>
+    /// Sets the pivot and view (yaw wrapped, pitch kept within the pitch limits, boom within the zoom limits); the pivot's height is found at once.
+    /// </summary>
     public void Place(Vector2 pivotXz, float yaw, float pitch, float distance)
     {
         PivotXz = pivotXz;
@@ -80,7 +96,9 @@ public sealed class StrategyCamera
         State = Compute();
     }
 
-    /// <summary>One zoom step of <paramref name="notches"/> wheel notches (positive zooms in).</summary>
+    /// <summary>
+    /// One zoom step of <paramref name="notches"/> wheel notches (positive zooms in).
+    /// </summary>
     public void Zoom(float notches)
     {
         ZoomBy(notches * KenshiCamera.WheelNotchInput, 1);
@@ -110,14 +128,18 @@ public sealed class StrategyCamera
         }
     }
 
-    /// <summary>Turns the view about the vertical (positive turns it to the left).</summary>
+    /// <summary>
+    /// Turns the view about the vertical (positive turns it to the left).
+    /// </summary>
     public void Rotate(float radians)
     {
         Yaw = Interp.WrapAngle(Yaw + radians);
         State = Compute();
     }
 
-    /// <summary>Moves the pivot on the ground plane: <paramref name="forward"/> along the view's heading, <paramref name="right"/> sideways, world units.</summary>
+    /// <summary>
+    /// Moves the pivot on the ground plane: <paramref name="forward"/> along the view's heading, <paramref name="right"/> sideways, world units.
+    /// </summary>
     public void Move(float forward, float right)
     {
         var f = new Vector2(-MathF.Sin(Yaw), -MathF.Cos(Yaw));
@@ -126,7 +148,9 @@ public sealed class StrategyCamera
         State = Compute();
     }
 
-    /// <summary>One tick: zoom (wheel and keys), pan (keys and edges), turn and tilt (keys and mouse drag), then the pivot's height, in game-sized frames.</summary>
+    /// <summary>
+    /// One tick: zoom (wheel and keys), pan (keys and edges), turn and tilt (keys and mouse drag), then the pivot's height, in game-sized frames.
+    /// </summary>
     public void Update(float dt, ActionState a)
     {
         int frames = Math.Max(1, (int)MathF.Round(dt / _settings.ReferenceFrameSeconds));
@@ -135,7 +159,9 @@ public sealed class StrategyCamera
         State = Compute();
     }
 
-    /// <summary>One frame of the game's camera step; <paramref name="share"/> is this frame's part of the tick's mouse movement and wheel.</summary>
+    /// <summary>
+    /// One frame of the game's camera step; <paramref name="share"/> is this frame's part of the tick's mouse movement and wheel.
+    /// </summary>
     void Frame(float h, ActionState a, float share)
     {
         // Zoom: the wheel (1.2 per notch) and the zoom keys (5 per second, 15 with Shift).
@@ -161,7 +187,8 @@ public sealed class StrategyCamera
         if (fwd != 0 || right != 0) Pan(fwd, right, h);
 
         // Turn and tilt: the held keys and, while the rotate button is down, the mouse movement, averaged over the last frames.
-        float yaw = (a.Held(InputAction.RotateRight) ? KenshiCamera.YawKeyInput : 0) - (a.Held(InputAction.RotateLeft) ? KenshiCamera.YawKeyInput : 0);
+        float yaw = (a.Held(InputAction.RotateRight) ? KenshiCamera.YawKeyInput : 0)
+            - (a.Held(InputAction.RotateLeft) ? KenshiCamera.YawKeyInput : 0);
         float tilt = (a.Held(InputAction.PitchUp) ? KenshiCamera.TiltKeyInput : 0) - (a.Held(InputAction.PitchDown) ? KenshiCamera.TiltKeyInput : 0);
         if (a.Held(InputAction.Orbit))
         {
@@ -180,7 +207,9 @@ public sealed class StrategyCamera
         FollowHeight(h);
     }
 
-    /// <summary>A zoom step of <paramref name="input"/>; the boom closes on its new length at <see cref="KenshiCamera.ZoomFollowRate"/> per second.</summary>
+    /// <summary>
+    /// A zoom step of <paramref name="input"/>; the boom closes on its new length at <see cref="KenshiCamera.ZoomFollowRate"/> per second.
+    /// </summary>
     void ZoomBy(float input, float h)
     {
         float target = KenshiCamera.ZoomedDistance(Distance, _settings.ZoomSpeed, input);
@@ -200,7 +229,9 @@ public sealed class StrategyCamera
         PivotXz += Vector2.Normalize(direction) * (KenshiCamera.PanSpeed(_settings.MoveSpeed, Distance) * h);
     }
 
-    /// <summary>The height the pivot is heading for, given its height now (the game's per-frame ground step; the view direction is not touched).</summary>
+    /// <summary>
+    /// The height the pivot is heading for, given its height now (the game's per-frame ground step; the view direction is not touched).
+    /// </summary>
     float HeightGoal(float y)
     {
         var eye = CameraState.EyeFor(new Vector3(PivotXz.X, y, PivotXz.Y), Yaw, Pitch, Distance);
@@ -213,7 +244,9 @@ public sealed class StrategyCamera
         return MathF.Max(goal, groundAtPivot);
     }
 
-    /// <summary>Puts the pivot at its goal height at once (a placement, not a frame).</summary>
+    /// <summary>
+    /// Puts the pivot at its goal height at once (a placement, not a frame).
+    /// </summary>
     void SettleHeight()
     {
         _pivotY = _pivotGround(PivotXz.X, PivotXz.Y);
@@ -264,7 +297,9 @@ public sealed class StrategyCamera
         return new CameraState(eye, forward, Vector3.UnitY, pivot, Yaw, Pitch, Distance, false);
     }
 
-    /// <summary>The average of the last frames' input with weights 1, a, a², ... from the newest back (the game's turn and tilt smoothing).</summary>
+    /// <summary>
+    /// The average of the last frames' input with weights 1, a, a², ... from the newest back (the game's turn and tilt smoothing).
+    /// </summary>
     sealed class SmoothedInput(float decay, int frames)
     {
         readonly float[] _samples = new float[frames];

@@ -6,20 +6,26 @@ using System.Runtime.CompilerServices;
 namespace Meitou.Game.Host;
 
 /// <summary>
-/// Compiles the Meitou assemblies' methods ahead of their first call, on three background threads below normal priority from the start of the game (docs/bench.md
-/// "Play benchmark"). The game runs without tiering (DECISIONS 19): a method is compiled once, fully optimised, when first called, and in play that landed in
-/// frames (the AI's first act, a screen's first binding, 20-80 ms each). Compiled here the code is the same, and the frame finds it ready. Generic methods and
-/// methods of generic types are left out (their instantiations are only known when used); so is code already compiled. <c>--no-precompile</c> turns it off.
+/// Compiles the Meitou assemblies' methods ahead of their first call, on three background threads below normal priority from the start of the game
+/// (docs/bench.md "Play benchmark"). The game runs without tiering (DECISIONS 19): a method is compiled once, fully optimised, when first called, and
+/// in play that landed in frames (the AI's first act, a screen's first binding, 20-80 ms each). Compiled here the code is the same, and the frame
+/// finds it ready. Generic methods and methods of generic types are left out (their instantiations are only known when used); so is code already
+/// compiled. <c>--no-precompile</c> turns it off.
 /// </summary>
 static class JitWarmup
 {
-    /// <summary>Threads compiling: the first frames call the rendering code within seconds of the start, and one thread took 7-8 s for all of it.</summary>
+    /// <summary>
+    /// Threads compiling: the first frames call the rendering code within seconds of the start, and one thread took 7-8 s for all of it.
+    /// </summary>
     const int Threads = 3;
 
-    // The order the game first calls them in: the simulation (the world ticks during the loading), the game's rendering (the first frames), the host, then the rest.
+    // The order the game first calls them in: the simulation (the world ticks during the loading), the game's rendering (the first frames), the host,
+    // then the rest.
     static readonly string[] Order = ["Meitou.Simulation", "MeitouClient"];
 
-    /// <summary>The game's renderers: compiled before the rest of the game's code, as the first frames call them.</summary>
+    /// <summary>
+    /// The game's renderers: compiled before the rest of the game's code, as the first frames call them.
+    /// </summary>
     const string RenderingNamespace = "Meitou.Game.Rendering";
 
     static readonly ConcurrentQueue<MethodBase> Queue = new();
@@ -28,14 +34,18 @@ static class JitWarmup
 
     public static void Start() => Spawn(List);
 
-    static void Spawn(ThreadStart body) => new Thread(body) { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "jit warm-up" }.Start();
+    static void Spawn(ThreadStart body) => new Thread(body) { IsBackground = true, Priority = ThreadPriority.BelowNormal,
+            Name = "jit warm-up" }.Start();
 
-    // Nothing may leave these threads: an exception unhandled on one would end the game. A method that cannot be compiled ahead (an assembly its signature needs is
-    // missing on this platform, say) is counted and left to compile on its first call, if it ever has one.
+    // Nothing may leave these threads: an exception unhandled on one would end the game. A method that cannot be compiled ahead (an assembly its
+    // signature needs is missing on this platform, say) is counted and left to compile on its first call, if it ever has one.
     static void List()
     {
         Watch.Start();
-        try { Enqueue(); }
+        try
+        {
+            Enqueue();
+        }
         catch (Exception e) { Console.Error.WriteLine($"warning   the jit warm-up stopped listing: {e.GetType().Name}: {e.Message}"); }
         s_running = Threads;
         for (int t = 1; t < Threads; t++) Spawn(Work);
@@ -44,25 +54,42 @@ static class JitWarmup
 
     static void Enqueue()
     {
-        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
-        var assemblies = typeof(JitWarmup).Assembly.GetReferencedAssemblies().Where(a => a.Name?.StartsWith("Meitou", StringComparison.Ordinal) == true)
+        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+            | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var assemblies = typeof(JitWarmup)
+                .Assembly.GetReferencedAssemblies()
+                .Where(a => a.Name?.StartsWith("Meitou", StringComparison.Ordinal) == true)
             .Select(TryLoad).OfType<Assembly>().Prepend(typeof(JitWarmup).Assembly)
             .OrderBy(a => Array.IndexOf(Order, a.GetName().Name) is var i and >= 0 ? i : Order.Length).ToList();
         foreach (var assembly in assemblies)
         {
             Type[] types;
-            try { types = assembly.GetTypes(); }
-            catch (ReflectionTypeLoadException e) { types = [.. e.Types.OfType<Type>()]; }
+            try
+            {
+                types = assembly.GetTypes();
+            }
+            catch (ReflectionTypeLoadException e)
+            {
+                types = [.. e.Types.OfType<Type>()];
+            }
 
             types = [.. types.OrderBy(t => t.Namespace?.StartsWith(RenderingNamespace, StringComparison.Ordinal) == true ? 0 : 1)];
             foreach (var type in types)
             {
                 if (type.ContainsGenericParameters) continue;
                 MethodBase[] methods;
-                try { methods = [.. type.GetMethods(all), .. type.GetConstructors(all)]; }
-                catch (Exception) { Interlocked.Increment(ref s_failed); continue; }
+                try
+                {
+                    methods = [.. type.GetMethods(all), .. type.GetConstructors(all)];
+                }
+                catch (Exception)
+                {
+                    Interlocked.Increment(ref s_failed);
+                    continue;
+                }
                 foreach (var method in methods)
-                    if (!method.IsAbstract && !method.ContainsGenericParameters && (method.MethodImplementationFlags & (MethodImplAttributes.InternalCall | MethodImplAttributes.Runtime)) == 0
+                    if (!method.IsAbstract && !method.ContainsGenericParameters
+                            && (method.MethodImplementationFlags & (MethodImplAttributes.InternalCall | MethodImplAttributes.Runtime)) == 0
                         && (method.Attributes & MethodAttributes.PinvokeImpl) == 0)
                         Queue.Enqueue(method);
             }
@@ -86,14 +113,23 @@ static class JitWarmup
                 }
             }
             if (Interlocked.Decrement(ref s_running) == 0)
-                Console.WriteLine($"jit       {s_compiled} methods compiled ahead in {Watch.Elapsed.TotalSeconds:0.0} s{(s_failed > 0 ? $" ({s_failed} could not be)" : "")}");
+            {
+                string failed = s_failed > 0 ? $" ({s_failed} could not be)" : "";
+                Console.WriteLine($"jit       {s_compiled} methods compiled ahead in {Watch.Elapsed.TotalSeconds:0.0} s{failed}");
+            }
         }
         catch (Exception e) { Console.Error.WriteLine($"warning   a jit warm-up thread stopped: {e.GetType().Name}: {e.Message}"); }
     }
 
     static Assembly? TryLoad(AssemblyName name)
     {
-        try { return Assembly.Load(name); }
-        catch (Exception) { return null; }
+        try
+        {
+            return Assembly.Load(name);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 }
