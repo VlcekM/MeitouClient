@@ -125,7 +125,9 @@ public sealed class FrameProfiler : IDisposable
         _recordStamp = cmd => cmd.Timestamp(_native.Frame.Timestamps, _pendingStamp);
     }
 
-    /// <summary>Before the frame's first stage (after the wait for a free frame, so that wait is not counted).</summary>
+    /// <summary>
+    /// Before the frame's first stage (after the wait for a free frame, so that wait is not counted).
+    /// </summary>
     public void BeginFrame()
     {
         for (int s = 0; s < Slots; s++) Collect(s);
@@ -176,7 +178,9 @@ public sealed class FrameProfiler : IDisposable
         _simNowTicks = ticks;
     }
 
-    /// <summary>After the frame is presented: the last stage (overlay, submit, present) ends and the frame's laps are kept.</summary>
+    /// <summary>
+    /// After the frame is presented: the last stage (overlay, submit, present) ends and the frame's laps are kept.
+    /// </summary>
     public void EndFrame()
     {
         // Its GPU stamp would land in the next frame's commands: the CPU lap only.
@@ -195,7 +199,9 @@ public sealed class FrameProfiler : IDisposable
         _cpuCount = Math.Min(_cpuCount + 1, History);
     }
 
-    /// <summary>Keeps the render thread's stage laps, the parts and the simulation rows of the frame just ended; returns its summed ms.</summary>
+    /// <summary>
+    /// Keeps the render thread's stage laps, the parts and the simulation rows of the frame just ended; returns its summed ms.
+    /// </summary>
     double RecordCpuStages()
     {
         double sum = 0;
@@ -215,7 +221,9 @@ public sealed class FrameProfiler : IDisposable
         return sum;
     }
 
-    /// <summary>--log-spikes: keeps the frame's number, its render-thread stages and its notes until its GPU times arrive.</summary>
+    /// <summary>
+    /// --log-spikes: keeps the frame's number, its render-thread stages and its notes until its GPU times arrive.
+    /// </summary>
     void RecordSpikeCpu(double sum)
     {
         _slotFrame[_slot] = ++_frameCounter;
@@ -295,7 +303,9 @@ public sealed class FrameProfiler : IDisposable
 
     bool TryStamp(int s, int i, out ulong ns) => _native.Frame.Timestamps.TryRead(_nativeStamps[s, i], out ns);
 
-    /// <summary>Reads the GPU stage times of slot <paramref name="s"/> when they are ready, into the GPU history.</summary>
+    /// <summary>
+    /// Reads the GPU stage times of slot <paramref name="s"/> when they are ready, into the GPU history.
+    /// </summary>
     void Collect(int s)
     {
         if (!_pending[s]) return;
@@ -369,7 +379,9 @@ public sealed class FrameProfiler : IDisposable
         return sum;
     }
 
-    /// <summary>Publishes the read frame: its GPU stage series, the other and total series, and the frame's observers.</summary>
+    /// <summary>
+    /// Publishes the read frame: its GPU stage series, the other and total series, and the frame's observers.
+    /// </summary>
     void PublishGpuFrame(int s, double total, double sum)
     {
         for (int k = 0; k < Stages; k++) _gpu[k][_gpuHead] = (float)_gpuFrame[k];
@@ -394,16 +406,24 @@ public sealed class FrameProfiler : IDisposable
     readonly List<(float[] Series, Vector4 Colour, float Thickness, int Head, int Count)> _plotted = [];
     int _cpuHead, _cpuCount, _gpuHead, _gpuCount;
 
-    /// <summary>What the chart shows; F12 cycles it.</summary>
+    /// <summary>
+    /// What the chart shows; F12 cycles it.
+    /// </summary>
     public Mode Showing { get; set; }
 
-    /// <summary>Frames whose GPU stage times have been read (at most <see cref="History"/>).</summary>
+    /// <summary>
+    /// Frames whose GPU stage times have been read (at most <see cref="History"/>).
+    /// </summary>
     public int GpuFrames => _gpuCount;
 
-    /// <summary>The newest frame's GPU time over its stamped stages, in ms (0 before the first frame is read).</summary>
+    /// <summary>
+    /// The newest frame's GPU time over its stamped stages, in ms (0 before the first frame is read).
+    /// </summary>
     public double LastGpuMs => _gpuCount == 0 ? 0 : _gpu[Total][(_gpuHead - 1 + History) % History];
 
-    /// <summary>Reads every GPU timing that is ready now (after the last frame of a run has been waited for).</summary>
+    /// <summary>
+    /// Reads every GPU timing that is ready now (after the last frame of a run has been waited for).
+    /// </summary>
     public void Flush() { for (int s = 0; s < Slots; s++) Collect(s); }
 
     /// <summary>
@@ -441,7 +461,9 @@ public sealed class FrameProfiler : IDisposable
 
     static string Label(int series) => series switch { Other => "other", Total => "total", _ => StageClock.Names[series] };
 
-    /// <summary>Mean of the last <paramref name="frames"/> entries of a series.</summary>
+    /// <summary>
+    /// Mean of the last <paramref name="frames"/> entries of a series.
+    /// </summary>
     static double Mean(float[] series, int head, int count, int frames)
     {
         frames = Math.Min(frames, count);
@@ -452,7 +474,9 @@ public sealed class FrameProfiler : IDisposable
         return sum / frames;
     }
 
-    /// <summary>Largest of the last <paramref name="count"/> entries of a series (all it holds).</summary>
+    /// <summary>
+    /// Largest of the last <paramref name="count"/> entries of a series (all it holds).
+    /// </summary>
     static double Max(float[] series, int head, int count)
     {
         float max = 0;
@@ -460,7 +484,9 @@ public sealed class FrameProfiler : IDisposable
         return max;
     }
 
-    /// <summary>Smallest 1, 2 or 5 × 10ⁿ at or above <paramref name="v"/>.</summary>
+    /// <summary>
+    /// Smallest 1, 2 or 5 × 10ⁿ at or above <paramref name="v"/>.
+    /// </summary>
     static float NiceCeiling(float v)
     {
         if (v <= 0) return 1;
@@ -491,7 +517,9 @@ public sealed class FrameProfiler : IDisposable
         DrawPlot(overlay, width, height, panel.X0, panel.Y0, panel.Y1);
     }
 
-    /// <summary>The chart's panel along the bottom: sized for its legend rows, drawn; returns its corners.</summary>
+    /// <summary>
+    /// The chart's panel along the bottom: sized for its legend rows, drawn; returns its corners.
+    /// </summary>
     (float X0, float Y0, float X1, float Y1) DrawPanel(DebugOverlay overlay, int width, int height, bool showGpu)
     {
         int rowCount = 0;
@@ -515,7 +543,9 @@ public sealed class FrameProfiler : IDisposable
         return (x0, y0, x1, y1);
     }
 
-    /// <summary>The panel's first line: the mode, the VRAM and RAM figures, and the whole frame's time.</summary>
+    /// <summary>
+    /// The panel's first line: the mode, the VRAM and RAM figures, and the whole frame's time.
+    /// </summary>
     void DrawHeader(DebugOverlay overlay, bool showGpu, float x0, float y0)
     {
         float cw = overlay.CharWidth;
@@ -654,7 +684,9 @@ public sealed class FrameProfiler : IDisposable
         _legendBox = (lx, ly, x1 - Pad, ly + (_rows.Count + 1) * lh, lh);
     }
 
-    /// <summary>The plot: y from 0 to a round number above the largest value shown, with labelled grid lines; ends the overlay's batch.</summary>
+    /// <summary>
+    /// The plot: y from 0 to a round number above the largest value shown, with labelled grid lines; ends the overlay's batch.
+    /// </summary>
     void DrawPlot(DebugOverlay overlay, int width, int height, float x0, float y0, float y1)
     {
         float cw = overlay.CharWidth, lh = overlay.LineHeight;
@@ -683,7 +715,9 @@ public sealed class FrameProfiler : IDisposable
         overlay.Flush(width, height);
     }
 
-    /// <summary>The grid lines and their labels: five steps from 0 to <paramref name="scale"/>.</summary>
+    /// <summary>
+    /// The grid lines and their labels: five steps from 0 to <paramref name="scale"/>.
+    /// </summary>
     void DrawGrid(DebugOverlay overlay, float scale, string labelFormat, float x0, float px0, float px1, float py0, float py1, float lh, Vector4 grid)
     {
         for (int k = 0; k <= 4; k++)
@@ -705,7 +739,9 @@ public sealed class FrameProfiler : IDisposable
         return "0.000";
     }
 
-    /// <summary>Every plotted series as lines, oldest at the left and the newest frame at the right edge.</summary>
+    /// <summary>
+    /// Every plotted series as lines, oldest at the left and the newest frame at the right edge.
+    /// </summary>
     void DrawSeries(DebugOverlay overlay, float scale, float px0, float px1, float py0, float py1)
     {
         float dx = (px1 - px0) / (History - 1);
@@ -771,7 +807,9 @@ public sealed class FrameProfiler : IDisposable
     int _vramAge;
     (long WorkingSet, long Managed) _ram;
 
-    /// <summary>The VRAM pie at the top right is shown (Shift+F12 in the game), with the profiler chart or without it.</summary>
+    /// <summary>
+    /// The VRAM pie at the top right is shown (Shift+F12 in the game), with the profiler chart or without it.
+    /// </summary>
     public bool ShowVram { get; set; }
 
     /// <summary>
@@ -807,7 +845,9 @@ public sealed class FrameProfiler : IDisposable
         alloc.WriteReport(w);
     }
 
-    /// <summary>The VRAM pie at the top right, while <see cref="ShowVram"/>.</summary>
+    /// <summary>
+    /// The VRAM pie at the top right, while <see cref="ShowVram"/>.
+    /// </summary>
     public void DrawVram(DebugOverlay overlay, int width, int height)
     {
         if (!ShowVram || width <= 0 || height <= 0) return;
@@ -901,7 +941,9 @@ public sealed class FrameProfiler : IDisposable
     readonly List<double> _medianScratch = new(History);
     readonly List<float>[] _runGpu = Enumerable.Range(0, Series).Select(_ => new List<float>()).ToArray();
 
-    /// <summary>The render thread's median frame total over the history (0 before 30 frames), the frame just kept included.</summary>
+    /// <summary>
+    /// The render thread's median frame total over the history (0 before 30 frames), the frame just kept included.
+    /// </summary>
     double CpuMedian()
     {
         int have = Math.Min(_cpuCount + 1, History);
@@ -913,7 +955,9 @@ public sealed class FrameProfiler : IDisposable
         return _medianScratch[have / 2];
     }
 
-    /// <summary>Adds the frame's stage times to the run's samples (after the skipped frames) for the end-of-run summary.</summary>
+    /// <summary>
+    /// Adds the frame's stage times to the run's samples (after the skipped frames) for the end-of-run summary.
+    /// </summary>
     void RecordRunGpu(double total, double sum)
     {
         for (int k = 0; k < Stages; k++) _runGpu[k].Add((float)_gpuFrame[k]);
@@ -922,7 +966,9 @@ public sealed class FrameProfiler : IDisposable
         SpikeLog.OnSummary ??= PrintRunSummary;
     }
 
-    /// <summary>Reports a spiked frame with its CPU and GPU stages and its notes.</summary>
+    /// <summary>
+    /// Reports a spiked frame with its CPU and GPU stages and its notes.
+    /// </summary>
     void ReportSpike(int s, double total, double sum, string notes)
     {
         _medianScratch.Clear();

@@ -8,16 +8,24 @@ namespace Meitou.Game.Rendering.Gpu.Core;
 /// </summary>
 public struct BarrierBatch
 {
-    /// <summary>The stages and accesses before the barrier, OR-ed over every <see cref="Add"/>.</summary>
+    /// <summary>
+    /// The stages and accesses before the barrier, OR-ed over every <see cref="Add"/>.
+    /// </summary>
     public PipelineStageFlags2 SrcStages;
 
-    /// <summary>The stages after the barrier, OR-ed over every <see cref="Add"/>.</summary>
+    /// <summary>
+    /// The stages after the barrier, OR-ed over every <see cref="Add"/>.
+    /// </summary>
     public PipelineStageFlags2 DstStages;
 
-    /// <summary>The source accesses, OR-ed over every <see cref="Add"/>.</summary>
+    /// <summary>
+    /// The source accesses, OR-ed over every <see cref="Add"/>.
+    /// </summary>
     public AccessFlags2 SrcAccess;
 
-    /// <summary>The destination accesses, OR-ed over every <see cref="Add"/>.</summary>
+    /// <summary>
+    /// The destination accesses, OR-ed over every <see cref="Add"/>.
+    /// </summary>
     public AccessFlags2 DstAccess;
 
     public readonly bool IsEmpty => SrcStages == 0 && DstStages == 0;

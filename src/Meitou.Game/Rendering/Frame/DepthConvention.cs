@@ -23,8 +23,10 @@ public static class DepthConvention
     /// </summary>
     public static float Clear => Reversed ? 0f : 1f;
 
-    /// <summary>The scene compare op for a GL-semantics one: Less/Greater and Lequal/Gequal swap when reversed; Equal, Notequal, Always
-    /// and Never are symmetric.</summary>
+    /// <summary>
+    /// The scene compare op for a GL-semantics one: Less/Greater and Lequal/Gequal swap when reversed; Equal, Notequal, Always and Never are
+    /// symmetric.
+    /// </summary>
     public static DepthFunction Compare(DepthFunction gl) => !Reversed ? gl : gl switch
     {
         DepthFunction.Less => DepthFunction.Greater,
@@ -39,8 +41,10 @@ public static class DepthConvention
     /// </summary>
     public static DepthFunction SceneCompare => Compare(DepthFunction.Lequal);
 
-    /// <summary>Depth bias (constant, slope factor) that pulls a draw <paramref name="units"/> toward the viewer: <c>(+u, +u)</c> reversed,
-    /// <c>(−u, −u)</c> conventional.</summary>
+    /// <summary>
+    /// Depth bias (constant, slope factor) that pulls a draw <paramref name="units"/> toward the viewer: <c>(+u, +u)</c> reversed,
+    /// <c>(−u, −u)</c> conventional.
+    /// </summary>
     public static (float Constant, float Slope) TowardViewer(float units) => Reversed ? (units, units) : (-units, -units);
 
     /// <summary>
@@ -62,8 +66,10 @@ public static class DepthConvention
     /// </summary>
     public static Matrix4x4 Apply(Matrix4x4 standard) => Reversed ? Reverse(standard) : standard;
 
-    /// <summary>The scene's perspective projection: <see cref="Matrix4x4.CreatePerspectiveFieldOfView"/> in this backend's convention.
-    /// Reversed: depth <c>n (f − z) / ((f − n) z)</c>, 1 at the near plane, 0 at the far one.</summary>
+    /// <summary>
+    /// The scene's perspective projection: <see cref="Matrix4x4.CreatePerspectiveFieldOfView"/> in this backend's convention. Reversed: depth <c>n (f
+    /// − z) / ((f − n) z)</c>, 1 at the near plane, 0 at the far one.
+    /// </summary>
     public static Matrix4x4 Perspective(float fieldOfView, float aspect, float near, float far) =>
         Apply(Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, aspect, near, far));
 

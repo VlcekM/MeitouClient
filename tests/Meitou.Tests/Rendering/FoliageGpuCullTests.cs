@@ -46,8 +46,10 @@ public class FoliageGpuCullTests
         return WorldCamera.FrustumPlanes(view * projection);
     }
 
-    /// <summary>Groups of instances spread around the eye, a third of them within a few ulps of their range (where the range test and the
-    /// fade's root are decided in the last bit) and a fifth of the spheres moved onto a frustum plane's limit.</summary>
+    /// <summary>
+    /// Groups of instances spread around the eye, a third of them within a few ulps of their range (where the range test and the fade's root are
+    /// decided in the last bit) and a fifth of the spheres moved onto a frustum plane's limit.
+    /// </summary>
     static List<SyntheticGroup> Synthetic(Random random, Vector3 eye, Vector4[] planes, int groups, int batches)
     {
         var view = new FoliageCullView().Set(planes);

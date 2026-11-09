@@ -140,7 +140,9 @@ static class StageClock
     public const int PartFill = 0, PartTextures = 1, PartGather = 2, PartPose = 3, PartMaterials = 4, PartBolts = 5, PartPortraits = 6, PartHover = 7,
         PartIcons = 8;
 
-    /// <summary>This frame's render-thread ms per part (<see cref="Part"/>).</summary>
+    /// <summary>
+    /// This frame's render-thread ms per part (<see cref="Part"/>).
+    /// </summary>
     public static readonly double[] PartMs = new double[PartNames.Length];
 
     /// <summary>
@@ -154,7 +156,9 @@ static class StageClock
     public const int UiWorldEnd = 0, UiMarkers = 1, UiSteer = 2, UiHud = 3, UiDebug = 4, UiSettings = 5, UiCinema = 6, UiLoading = 7, UiPointer = 8,
         UiComposite = 9;
 
-    /// <summary>This frame's render-thread ms per interface part (<see cref="UiPart"/>).</summary>
+    /// <summary>
+    /// This frame's render-thread ms per interface part (<see cref="UiPart"/>).
+    /// </summary>
     public static readonly double[] UiPartMs = new double[UiPartNames.Length];
 
     /// <summary>
@@ -171,7 +175,9 @@ static class StageClock
         OnClose?.Invoke(PartNames[part], true);
     }
 
-    /// <summary>Ends <paramref name="part"/> of the interface stage: the time since the last lap or part goes to it.</summary>
+    /// <summary>
+    /// Ends <paramref name="part"/> of the interface stage: the time since the last lap or part goes to it.
+    /// </summary>
     public static void UiPart(int part)
     {
         if (!Active) return;
@@ -191,7 +197,9 @@ static class StageClock
     /// </summary>
     public static readonly double[] JobMs = new double[Names.Length];
 
-    /// <summary>Adds a recording job's <paramref name="ticks"/> (Stopwatch) to <paramref name="stage"/> (render thread, after the jobs).</summary>
+    /// <summary>
+    /// Adds a recording job's <paramref name="ticks"/> (Stopwatch) to <paramref name="stage"/> (render thread, after the jobs).
+    /// </summary>
     public static void AddJob(int stage, long ticks)
     {
         if (Active && (uint)stage < (uint)JobMs.Length) JobMs[stage] += ticks * 1000.0 / Stopwatch.Frequency;

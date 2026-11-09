@@ -31,9 +31,11 @@ public sealed partial class PlayerSystem
 
     const string LockedText = "This item is locked in place and cannot be removed. You can try to pick the lock, find a saw, or use brute strength.";
 
-    /// <summary>Where a held item is placed: the window's root inventory, the inventory holding the section (the worn bag's for
+    /// <summary>
+    /// Where a held item is placed: the window's root inventory, the inventory holding the section (the worn bag's for
     /// <c>backpack_content</c>), the section's size in cells
-    /// (0: one item whatever its footprint), and the window's character, container or machine.</summary>
+    /// (0: one item whatever its footprint), and the window's character, container or machine.
+    /// </summary>
     readonly record struct Target(Inventory Root, Inventory Grid, string Section, int Columns, int Rows, CharacterCold? Owner,
             Locks.Fixture? Container, Production.Machine? Machine);
 

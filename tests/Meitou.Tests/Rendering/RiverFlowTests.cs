@@ -69,8 +69,10 @@ public class RiverFlowTests
     }
 }
 
-/// <summary>The river map baked from the game's own heights: its directions have no seams or pinwheels (neighbouring texels with weight point
-/// about the same way). Needs the install.</summary>
+/// <summary>
+/// The river map baked from the game's own heights: its directions have no seams or pinwheels (neighbouring texels with weight point about the same
+/// way). Needs the install.
+/// </summary>
 [Slow]
 public class RiverFlowWorldTests(ITestOutputHelper output)
 {

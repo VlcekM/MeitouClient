@@ -250,7 +250,8 @@ sealed class SandboxScenario(GameHost host)
 
     /// <summary>
     /// Keeps the camera on the hero (the middle of the pair while there is a foe), when following. Only the pivot moves: a cut every frame
-    /// (<see cref="CameraRig.Place"/>) would draw the rotation and zoom at the tick rate instead of interpolated.</summary>
+    /// (<see cref="CameraRig.Place"/>) would draw the rotation and zoom at the tick rate instead of interpolated.
+    /// </summary>
     /// <summary>
     /// The strategy camera on the character the player follows (<see cref="PlayerInterface.Follow"/>), as the sandbox's follow does; a gone character
     /// is let go.

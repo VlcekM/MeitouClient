@@ -22,8 +22,10 @@ public sealed class WorldTexture
     /// </summary>
     internal uint Number;
 
-    /// <summary>0 until resident, then the texture's number in its cache, which <see cref="WorldTextureCache.Index"/> turns into a bindless
-    /// index. Counts as use.</summary>
+    /// <summary>
+    /// 0 until resident, then the texture's number in its cache, which <see cref="WorldTextureCache.Index"/> turns into a bindless index. Counts as
+    /// use.
+    /// </summary>
     public uint Key
     {
         get
@@ -61,9 +63,10 @@ public sealed class WorldTexture
     /// </summary>
     internal bool EverResident;
 
-    /// <summary>Mip streaming (<see cref="MipStreaming"/>): how near the texture is used, as distance over the world length of a texture-coordinate
-    /// unit, smallest over its users (infinity: unknown); set by the owner of the cache before each <see
-    /// cref="WorldTextureCache.Rebalance"/>.</summary>
+    /// <summary>
+    /// Mip streaming (<see cref="MipStreaming"/>): how near the texture is used, as distance over the world length of a texture-coordinate unit,
+    /// smallest over its users (infinity: unknown); set by the owner of the cache before each <see cref="WorldTextureCache.Rebalance"/>.
+    /// </summary>
     public float Need = float.PositiveInfinity;
 
     /// <summary>
@@ -71,8 +74,10 @@ public sealed class WorldTexture
     /// </summary>
     public bool KeepAllMips;
 
-    /// <summary>Top levels the loaded image lacks against its file (the quality setting's and the streaming's), the quality's own share, and
-    /// the file's top size (before either).</summary>
+    /// <summary>
+    /// Top levels the loaded image lacks against its file (the quality setting's and the streaming's), the quality's own share, and the file's top
+    /// size (before either).
+    /// </summary>
     internal int Dropped, QualityDrop, FileWidth, FileHeight;
 
     /// <summary>
@@ -101,8 +106,10 @@ public sealed class WorldTexture
     /// </summary>
     internal bool Refine;
 
-    /// <summary>The image was loaded lean (<see cref="WorldTextureCache.LeanSize"/>) under the guard's pressure: <see
-    /// cref="WorldTextureCache.Rebalance"/> refines it once the pressure ends, whether or not its need is known.</summary>
+    /// <summary>
+    /// The image was loaded lean (<see cref="WorldTextureCache.LeanSize"/>) under the guard's pressure: <see cref="WorldTextureCache.Rebalance"/>
+    /// refines it once the pressure ends, whether or not its need is known.
+    /// </summary>
     internal bool Lean;
 
     /// <summary>
@@ -192,8 +199,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public int AwaitedCount => _pending.Count(t => !t.Replacing || t.Refine) + _uploadsAwaited;
     int _uploadsAwaited;
 
-    /// <summary>Recently used textures whose initial load is still deferred (e.g. by memory pressure).
-    /// Includes the once-per-second range marking; unused deferred foliage textures do not hold up a scene.</summary>
+    /// <summary>
+    /// Recently used textures whose initial load is still deferred (e.g. by memory pressure). Includes the once-per-second range marking; unused
+    /// deferred foliage textures do not hold up a scene.
+    /// </summary>
     public int UnresidentUsedCount
     {
         get
@@ -226,8 +235,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public int Unloads { get; private set; }
     public int Reloads { get; private set; }
 
-    /// <summary>Mip streaming (<see cref="MipStreaming"/>, <see cref="Rebalance"/>): what the owner says about the camera, and the images replaced by
-    /// one with more levels (finer, as something came near) or fewer (what nothing near needed).</summary>
+    /// <summary>
+    /// Mip streaming (<see cref="MipStreaming"/>, <see cref="Rebalance"/>): what the owner says about the camera, and the images replaced by one with
+    /// more levels (finer, as something came near) or fewer (what nothing near needed).
+    /// </summary>
     public MipStreaming Mips { get; } = new();
     public int Swaps { get; private set; }
     public int Refined { get; private set; }
@@ -238,8 +249,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     public int Refining { get; private set; }
 
-    /// <summary>Seconds a texture must have been finer than needed before it is replaced by a coarser image (no sooner: a camera that turns back
-    /// would have it reloaded at once); under the guard's pressure no wait.</summary>
+    /// <summary>
+    /// Seconds a texture must have been finer than needed before it is replaced by a coarser image (no sooner: a camera that turns back would have it
+    /// reloaded at once); under the guard's pressure no wait.
+    /// </summary>
     public double CoarsenAfterSeconds { get; set; } = 10;
 
     /// <summary>
@@ -248,8 +261,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public int MaxRefines { get; set; } = 6;
     public int MaxCoarsens { get; set; } = 2;
 
-    /// <summary>What the resident images would hold without streaming's drops (each dropped level counted as four times the one below; an estimate,
-    /// taken at <see cref="Rebalance"/>).</summary>
+    /// <summary>
+    /// What the resident images would hold without streaming's drops (each dropped level counted as four times the one below; an estimate, taken at
+    /// <see cref="Rebalance"/>).
+    /// </summary>
     public long UnstreamedBytes { get; private set; }
 
     /// <summary>
@@ -257,14 +272,17 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     public double IdleSeconds { get; set; } = 20;
 
-    /// <summary>Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too. With a <see cref="Share"/>
-    /// the mark is for all the sharing caches together (<see cref="TextureShare.ResidentBytes"/>), not for each.</summary>
+    /// <summary>
+    /// Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too. With a <see cref="Share"/> the mark
+    /// is for all the sharing caches together (<see cref="TextureShare.ResidentBytes"/>), not for each.
+    /// </summary>
     public double HighWaterMb { get; set; } = TextureQuality.MemoryBudgetMb(TextureQuality.Level);
     public double PressureIdleSeconds { get; set; } = 8;
 
-    /// <summary>The high-water mark as a share of the driver's video memory budget: the mark is the smaller of <see cref="HighWaterMb"/> and this
-    /// share (the default share is what
-    /// the fixed mark was on the 11.4 GB card it was tuned on), and three quarters of it under the guard's pressure.</summary>
+    /// <summary>
+    /// The high-water mark as a share of the driver's video memory budget: the mark is the smaller of <see cref="HighWaterMb"/> and this share (the
+    /// default share is what the fixed mark was on the 11.4 GB card it was tuned on), and three quarters of it under the guard's pressure.
+    /// </summary>
     public double HighWaterShare { get; set; } = TextureQuality.MemoryBudgetMb(0) / 11453.0;
 
     /// <summary>
@@ -272,8 +290,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     public double MarkMb => EffectiveMark(HighWaterMb, HighWaterShare, Guard, Areas);
 
-    /// <summary>Places kept loaded ("Keep textures at characters": the eye's and each merged kept point's, docs/render-objects.md "Kept points"): the
-    /// mark is this many times larger, its share of the memory budget at most <see cref="MaxAreaShare"/> (never below the unscaled share).</summary>
+    /// <summary>
+    /// Places kept loaded ("Keep textures at characters": the eye's and each merged kept point's, docs/render-objects.md "Kept points"): the mark is
+    /// this many times larger, its share of the memory budget at most <see cref="MaxAreaShare"/> (never below the unscaled share).
+    /// </summary>
     public int Areas { get; set; } = 1;
 
     /// <summary>
@@ -291,9 +311,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
         return Math.Min(highWaterMb, g.BudgetBytes / 1048576.0 * share) * (g.Pressure ? 0.75 : 1);
     }
 
-    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): while it is under pressure no texture is refined and a texture something draws
-    /// loads lean (at most <see cref="LeanSize"/>, refined when the pressure ends), and textures idle for <see cref="GuardIdleSeconds"/> are evicted,
-    /// least recently used first, whatever the high-water mark.</summary>
+    /// <summary>
+    /// The memory-pressure guard (<see cref="VramGuard"/>): while it is under pressure no texture is refined and a texture something draws loads lean
+    /// (at most <see cref="LeanSize"/>, refined when the pressure ends), and textures idle for <see cref="GuardIdleSeconds"/> are evicted, least
+    /// recently used first, whatever the high-water mark.
+    /// </summary>
     public VramGuard? Guard { get; set; }
 
     /// <summary>
@@ -477,8 +499,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     #region Streaming
 
-    /// <summary>Loads started while this is set go ahead of the other streaming work (<see cref="BackgroundWork.RunUrgent"/>): the owner sets it
-    /// while it touches what a flight's arrival view uses (docs/render-objects.md "Arrival prefetch").</summary>
+    /// <summary>
+    /// Loads started while this is set go ahead of the other streaming work (<see cref="BackgroundWork.RunUrgent"/>): the owner sets it while it
+    /// touches what a flight's arrival view uses (docs/render-objects.md "Arrival prefetch").
+    /// </summary>
     public bool Urgent { get; set; }
 
     void Start(WorldTexture t, bool replacing = false, bool lean = false)
@@ -1044,9 +1068,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (awaited) _steps.Enqueue(() => _uploadsAwaited--);
     }
 
-    /// <summary>The new image is about to replace the one the texture has (a reload with another number of top levels, <see cref="Rebalance"/>): the
-    /// old one goes (its bindless entries after the frames in flight, as an unload) and its bytes leave the count; <see cref="Resident"/> adds the
-    /// new. Records the levels the new image lacks.</summary>
+    /// <summary>
+    /// The new image is about to replace the one the texture has (a reload with another number of top levels, <see cref="Rebalance"/>): the old one
+    /// goes (its bindless entries after the frames in flight, as an unload) and its bytes leave the count; <see cref="Resident"/> adds the new.
+    /// Records the levels the new image lacks.
+    /// </summary>
     void BeginSwap(WorldTexture t, int dropped, bool droppable, int fileWidth, int fileHeight, bool replaced = false)
     {
         if (t.Native is not null)

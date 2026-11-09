@@ -12,10 +12,14 @@ sealed class PassTimer(IGpuContext gpu)
     QuerySlot _start, _stamp;
     Action<IGpuCommandList>? _write;
 
-    /// <summary>The start stamp, in the frame's command stream now.</summary>
+    /// <summary>
+    /// The start stamp, in the frame's command stream now.
+    /// </summary>
     public void Begin() => _start = Write();
 
-    /// <summary>The end stamp; the pair is read by <see cref="Poll"/> once its frame has completed.</summary>
+    /// <summary>
+    /// The end stamp; the pair is read by <see cref="Poll"/> once its frame has completed.
+    /// </summary>
     public void End()
     {
         var end = Write();
@@ -33,7 +37,9 @@ sealed class PassTimer(IGpuContext gpu)
         return _stamp;
     }
 
-    /// <summary>Adds the milliseconds of every finished pair to <paramref name="samples"/>; the last one, or null.</summary>
+    /// <summary>
+    /// Adds the milliseconds of every finished pair to <paramref name="samples"/>; the last one, or null.
+    /// </summary>
     public double? Poll(List<double> samples)
     {
         double? last = null;
@@ -65,7 +71,9 @@ sealed class FrameBlock(IGpuContext gpu, int bytes)
     long _frame = -1;
     GpuBufferBinding _binding;
 
-    /// <summary>Replaces the whole block.</summary>
+    /// <summary>
+    /// Replaces the whole block.
+    /// </summary>
     public void Set(ReadOnlySpan<float> values)
     {
         values.CopyTo(_data);

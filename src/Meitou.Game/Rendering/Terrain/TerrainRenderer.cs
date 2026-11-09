@@ -10,20 +10,30 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Game.Rendering.Terrain;
 
-/// <summary>Switches for drawing the world (keys in <see cref="WorldApp"/>).</summary>
+/// <summary>
+/// Switches for drawing the world (keys in <see cref="WorldApp"/>).
+/// </summary>
 public sealed class WorldRenderOptions
 {
     public bool Textures { get; set; } = true;
     public bool NormalMaps { get; set; } = true;
     public bool Objects { get; set; } = true;
     public bool Water { get; set; } = true;
-    /// <summary>The water reflects the mirrored scene (<see cref="ReflectionPass"/>) instead of just the sky colour.</summary>
+    /// <summary>
+    /// The water reflects the mirrored scene (<see cref="ReflectionPass"/>) instead of just the sky colour.
+    /// </summary>
     public bool Reflections { get; set; } = true;
-    /// <summary>0 solid, 1 solid + wireframe, 2 wireframe only.</summary>
+    /// <summary>
+    /// 0 solid, 1 solid + wireframe, 2 wireframe only.
+    /// </summary>
     public int Wireframe { get; set; }
-    /// <summary>The sandbox's floor grid drawn into the terrain (depth-tested, so characters hide it).</summary>
+    /// <summary>
+    /// The sandbox's floor grid drawn into the terrain (depth-tested, so characters hide it).
+    /// </summary>
     public bool Grid { get; set; }
-    /// <summary>0 normal, 1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass), 3 plain shading.</summary>
+    /// <summary>
+    /// 0 normal, 1 blend-map slot weights, 2 layer weights (R cliff, G slope, B grass), 3 plain shading.
+    /// </summary>
     public int Debug { get; set; }
     /// <summary>
     /// Terrain LOD (<see cref="Meitou.Data.World.TerrainLod"/>): the screen-space height error allowed near the eye, in pixels of the picture
@@ -36,13 +46,19 @@ public sealed class WorldRenderOptions
     /// and the field of view, the reflection pass from its own (half-size) target.
     /// </summary>
     public float TerrainPixelScale { get; set; } = TerrainLod.ProjectionScale(720, 50 * MathF.PI / 180);
-    /// <summary>The LOD rule these options give.</summary>
+    /// <summary>
+    /// The LOD rule these options give.
+    /// </summary>
     public TerrainLod TerrainLod => new(TerrainPixelScale, TerrainPixelError, TerrainPixelError, 0);
-    /// <summary>Beyond this distance the terrain takes the biomes' ground colour (the game's material distance is 30000).</summary>
+    /// <summary>
+    /// Beyond this distance the terrain takes the biomes' ground colour (the game's material distance is 30000).
+    /// </summary>
     public float MaterialDistance { get; set; } = 30000;
 }
 
-/// <summary>Sun and sky light for the world shaders (from <see cref="WorldSky"/>).</summary>
+/// <summary>
+/// Sun and sky light for the world shaders (from <see cref="WorldSky"/>).
+/// </summary>
 public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunColour, Vector3 AmbientSky, Vector3 AmbientGround, Vector3 FogColour,
     float FogDistance,
     Vector3 GlintDirection = default, Vector3 GlintColour = default)
@@ -95,7 +111,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     record struct Frame(Matrix4x4 ViewProjection, Vector3 Eye, WorldRenderOptions Options, WorldLighting Light);
 
-    /// <summary>The grid's vertex attribute at location 0 and its index buffer, as VkGl fed them from the GL vertex array.</summary>
+    /// <summary>
+    /// The grid's vertex attribute at location 0 and its index buffer, as VkGl fed them from the GL vertex array.
+    /// </summary>
     readonly LegacyProgram.Attribute _gridVertex;
     readonly GpuBufferBinding _gridElements;
     const int Colour = 0, Depth = 1, Solid = 2;
@@ -146,7 +164,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// </summary>
     InteriorMaskRenderer? _meshCut;
 
-    /// <summary>This call's placements (each group's contiguous, <see cref="MeshGroup.Offset"/> instances in), in the frame's constants.</summary>
+    /// <summary>
+    /// This call's placements (each group's contiguous, <see cref="MeshGroup.Offset"/> instances in), in the frame's constants.
+    /// </summary>
     Transient _placements;
     bool _depthReady;
 
@@ -224,7 +244,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         _gridElements = new GpuBufferBinding(_gridIndices.Handle, 0, _gridIndices.Size);
     }
 
-    /// <summary>The patch grid's points (location 0: two floats each), (<see cref="GridCells"/> + 1)² of them.</summary>
+    /// <summary>
+    /// The patch grid's points (location 0: two floats each), (<see cref="GridCells"/> + 1)² of them.
+    /// </summary>
     static float[] PatchGridPoints()
     {
         var grid = new float[(GridCells + 1) * (GridCells + 1) * 2];
@@ -234,8 +256,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         return grid;
     }
 
-    /// <summary>The index ranges of the whole grid (index 0) and of its four quarters, into <see cref="_indexOffsets"/>, <see cref="_firstIndices"/>
-    /// and <see cref="_indexCounts"/>; returns all the indices (the patch grid as one index buffer, GL's vertex array made native).</summary>
+    /// <summary>
+    /// The index ranges of the whole grid (index 0) and of its four quarters, into <see cref="_indexOffsets"/>, <see cref="_firstIndices"/> and
+    /// <see cref="_indexCounts"/>; returns all the indices (the patch grid as one index buffer, GL's vertex array made native).
+    /// </summary>
     uint[] PatchIndexRanges()
     {
         var indices = new List<uint>();
@@ -250,7 +274,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         return indices.ToArray();
     }
 
-    /// <summary>Writes the patch grid's points and indices into their buffers (<see cref="_gridVertices"/>, <see cref="_gridIndices"/>).</summary>
+    /// <summary>
+    /// Writes the patch grid's points and indices into their buffers (<see cref="_gridVertices"/>, <see cref="_gridIndices"/>).
+    /// </summary>
     void UploadPatchGrid(float[] grid, uint[] gridIndexData)
     {
         using var batch = _gpu.Uploads.Begin();
@@ -258,7 +284,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         batch.Write(_gridIndices, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(gridIndexData.AsSpan()));
     }
 
-    /// <summary>Width of the band at the fine window's border where it fades into the coarse grid.</summary>
+    /// <summary>
+    /// Width of the band at the fine window's border where it fades into the coarse grid.
+    /// </summary>
     static float BandOf(HeightWindow w) => Math.Clamp((w.Columns - 1) * w.Spacing * 0.1f, w.Spacing * 4, 3000);
 
     /// <summary>
@@ -279,7 +307,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     public int DrawnChunks { get; private set; }
     public long DrawnTriangles { get; private set; }
 
-    /// <summary>Starts counting drawn nodes and triangles for a new frame (several views add up).</summary>
+    /// <summary>
+    /// Starts counting drawn nodes and triangles for a new frame (several views add up).
+    /// </summary>
     public void BeginFrame()
     {
         (DrawnChunks, DrawnTriangles) = (0, 0);
@@ -289,11 +319,15 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             if (_frameNumber - _retired[i].Frame >= 4) { _retired[i].Texture.Dispose(); _retired.RemoveAt(i); }
     }
 
-    /// <summary>Uses biome textures and land maps from now on (null: untextured).</summary>
+    /// <summary>
+    /// Uses biome textures and land maps from now on (null: untextured).
+    /// </summary>
     public void SetTextures(TerrainTextures? t, bool owns = true) { _textures = t; _ownsTextures = owns; }
 
-    /// <summary>The textures the TERRAIN-mode meshes' biome rows come from (null: none, every row -1): a caller keeping
-    /// <see cref="FeatureBiomeRowAny"/> per placement computes it again when this object changes.</summary>
+    /// <summary>
+    /// The textures the TERRAIN-mode meshes' biome rows come from (null: none, every row -1): a caller keeping
+    /// <see cref="FeatureBiomeRowAny"/> per placement computes it again when this object changes.
+    /// </summary>
     public object? FeatureBiomes => _textures;
 
     /// <summary>
@@ -307,17 +341,23 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// </summary>
     public int FeatureBiomeRowAny(float x, float z) => _textures?.FeatureBiomeRowAny(x, z) ?? -1;
 
-    /// <summary>A bit per resident biome row (row r: word r / 32, bit r % 32), as <see cref="FeatureBiomeRow"/> tests them now.</summary>
+    /// <summary>
+    /// A bit per resident biome row (row r: word r / 32, bit r % 32), as <see cref="FeatureBiomeRow"/> tests them now.
+    /// </summary>
     public void FeatureResidentBiomes(Span<uint> bits)
     {
         if (_textures is null) bits.Clear();
         else _textures.ResidentBiomeBits(bits);
     }
 
-    /// <summary>The window the fine height texture currently holds.</summary>
+    /// <summary>
+    /// The window the fine height texture currently holds.
+    /// </summary>
     public HeightWindow Fine => _fine;
 
-    /// <summary>Bounds of a window against the quadtree's cell grid; safe on another thread.</summary>
+    /// <summary>
+    /// Bounds of a window against the quadtree's cell grid; safe on another thread.
+    /// </summary>
     public TerrainHeightBounds.Patch MeasureBounds(HeightWindow w) => _bounds.Measure(w);
 
     /// <summary>
@@ -350,7 +390,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     public void BeginFineStandby(HeightWindow window, TerrainHeightBounds.Patch patch, UploadQueue uploads, Action<FineStandby> ready) =>
         UploadFine(window, patch, uploads, texture => ready(new FineStandby(texture, window, patch)), null);
 
-    /// <summary>Draws <paramref name="next"/> from now on (no upload: it is resident) and returns the window it replaces as a standby.</summary>
+    /// <summary>
+    /// Draws <paramref name="next"/> from now on (no upload: it is resident) and returns the window it replaces as a standby.
+    /// </summary>
     public FineStandby SwapFine(FineStandby next)
     {
         var old = new FineStandby(_fineTexture, _fine, null);
@@ -358,7 +400,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         return old;
     }
 
-    /// <summary>Lets a standby go (its texture is freed after the frames in flight).</summary>
+    /// <summary>
+    /// Lets a standby go (its texture is freed after the frames in flight).
+    /// </summary>
     public void DropFine(FineStandby standby) => _retired.Add((standby.Texture, _frameNumber));
 
     void Swap(FineStandby next)
@@ -396,10 +440,14 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         }, "height swap");
     }
 
-    /// <summary>Height at a world point from the same grids the shaders read (bilinear, blended at the region's edge).</summary>
+    /// <summary>
+    /// Height at a world point from the same grids the shaders read (bilinear, blended at the region's edge).
+    /// </summary>
     public float HeightAt(float x, float z) => Snapshot().HeightAt(x, z);
 
-    /// <summary>The height sources as they are now, for a worker thread (render thread only: the fine window is swapped there).</summary>
+    /// <summary>
+    /// The height sources as they are now, for a worker thread (render thread only: the fine window is swapped there).
+    /// </summary>
     internal HeightSnapshot Snapshot() => new(_coarse, _coarseSize, _fine, _fineBand);
 
     /// <summary>
@@ -507,8 +555,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// </summary>
     public TerrainDecalRenderer? Decals { get; set; }
 
-    /// <summary>Moves the patches whose square overlaps a building of <paramref name="cut"/>'s (when it drew any) out of <see cref="_patchDraws"/>
-    /// into <see cref="_cutDraws"/>, both kept nearest first: <see cref="_plainCount"/> and <see cref="_cutCount"/>.</summary>
+    /// <summary>
+    /// Moves the patches whose square overlaps a building of <paramref name="cut"/>'s (when it drew any) out of <see cref="_patchDraws"/> into
+    /// <see cref="_cutDraws"/>, both kept nearest first: <see cref="_plainCount"/> and <see cref="_cutCount"/>.
+    /// </summary>
     void SplitInteriorCut(InteriorMaskRenderer? cut)
     {
         int n = _nodes.Count;
@@ -548,8 +598,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         _cutCount = SplitNear(_cutDraws, _cutCount, ref _cutReliefDraws, ref _cutReliefCount, _frame.Eye, r2);
     }
 
-    /// <summary>Moves the draws of <paramref name="draws"/>[..<paramref name="count"/>] whose square lies within sqrt(<paramref name="r2"/>) of the
-    /// eye (horizontally) to <paramref name="near"/>, both kept in order; returns how many stay.</summary>
+    /// <summary>
+    /// Moves the draws of <paramref name="draws"/>[..<paramref name="count"/>] whose square lies within sqrt(<paramref name="r2"/>) of the eye
+    /// (horizontally) to <paramref name="near"/>, both kept in order; returns how many stay.
+    /// </summary>
     static int SplitNear(PatchDraw[] draws, int count, ref PatchDraw[] near, ref int nearCount, Vector3 eye, float r2)
     {
         int kept = 0;
@@ -588,7 +640,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         _nodeKeys.AsSpan(0, n).Sort(span);
     }
 
-    /// <summary>How <see cref="RecordPatches"/> draws: filled (colour or depth), or the debug outline.</summary>
+    /// <summary>
+    /// How <see cref="RecordPatches"/> draws: filled (colour or depth), or the debug outline.
+    /// </summary>
     enum PatchMode { Solid, Wireframe, Prepass, Late, LateEqual }
 
     /// <summary>
@@ -627,9 +681,11 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     // segment: the frame set (NativeFrame), the terrain set, the dynamic state; per draw only commands (a patch: a push and a draw; a mesh
     // group: its pipeline, buffers and draw, kept per mesh while the vertex-array stamp holds).
 
-    /// <summary>The colour programs, with the parallax's march (<see cref="GroundRelief.ParallaxActive"/>) or without it (<see
-    /// cref="TerrainShaders.FragmentNative"/>), and with the normal-map samples or without them (the no-normal variants are compile-time programs for
-    /// Metal's shader compiler).</summary>
+    /// <summary>
+    /// The colour programs, with the parallax's march (<see cref="GroundRelief.ParallaxActive"/>) or without it
+    /// (<see cref="TerrainShaders.FragmentNative"/>), and with the normal-map samples or without them (the no-normal variants are compile-time
+    /// programs for Metal's shader compiler).
+    /// </summary>
     sealed record ColourSet(bool March, TerrainProgram Patch, TerrainProgram PatchNoNormal, TerrainProgram PatchCut, TerrainProgram PatchCutNoNormal,
         TerrainProgram Mesh, TerrainProgram MeshNoNormal, TerrainProgram MeshSolid, TerrainProgram MeshSolidNoNormal,
         TerrainProgram? PatchTess, TerrainProgram? PatchCutTess, TerrainProgram? MeshTess, TerrainProgram? MeshSolidTess) : IDisposable
@@ -686,8 +742,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             MeshTess(TerrainShaders.MeshFragmentSolidNative(march, reliefQuality: quality), "terrain meshes solid smoothed"));
     }
 
-    /// <summary>Whether the terrain colour programs may sample their normal-map arrays this frame: the option is on and the biome
-    /// layers are resident. The no-normal programs are compile-time variants, so this must select the matching program.</summary>
+    /// <summary>
+    /// Whether the terrain colour programs may sample their normal-map arrays this frame: the option is on and the biome layers are resident. The
+    /// no-normal programs are compile-time variants, so this must select the matching program.
+    /// </summary>
     bool NormalMapsOn => _frame.Options.Textures && _frame.Options.NormalMaps && _textures is { HasBiomes: true };
 
     TerrainProgram PatchColour => NormalMapsOn ? _patchColour : _patchColourNoNormal;
@@ -695,7 +753,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     TerrainProgram MeshColour => NormalMapsOn ? _meshColour : _meshColourNoNormal;
     TerrainProgram MeshSolid => NormalMapsOn ? _meshSolid : _meshSolidNoNormal;
 
-    /// <summary>A mesh program, or its tessellated twin while the rocks are smoothed (<see cref="RockSmoothing.TessellateActive"/>).</summary>
+    /// <summary>
+    /// A mesh program, or its tessellated twin while the rocks are smoothed (<see cref="RockSmoothing.TessellateActive"/>).
+    /// </summary>
     TerrainProgram Smoothed(TerrainProgram p, TerrainProgram? tessellated) => RockSmoothing.TessellateActive && tessellated is not null
         ? tessellated : p;
     static SamplerInfo StandInInfo(bool arrayed, ScalarKind kind) => new("", 0, 0, SamplerDimension.Dim2D, arrayed, false, false, kind, 0);
@@ -710,7 +770,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         public readonly GpuProgram P;
         readonly int[] _locations;
         readonly ScalarKind[] _kinds;
-        /// <summary>The program's own input locations (below the placements' rows): 0 .. Own − 1.</summary>
+        /// <summary>
+        /// The program's own input locations (below the placements' rows): 0 .. Own − 1.
+        /// </summary>
         public readonly int Own;
         VertexLayout? _last;
 
@@ -766,8 +828,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         }
     }
 
-    /// <summary>The bindless index of a native texture of the terrain's (<see cref="TerrainTexture.Bindless"/>: a new index when its sampler
-    /// changed), or the stand-in of <paramref name="kind"/>'s array when there is none.</summary>
+    /// <summary>
+    /// The bindless index of a native texture of the terrain's (<see cref="TerrainTexture.Bindless"/>: a new index when its sampler changed), or the
+    /// stand-in of <paramref name="kind"/>'s array when there is none.
+    /// </summary>
     static uint Index(TerrainTexture? texture, BindlessKind kind, uint standIn)
     {
         if (texture is null) return standIn;
@@ -878,7 +942,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         _constants = c;
     }
 
-    /// <summary>The camera of the frame (<see cref="Draw"/>'s or <see cref="DrawDepth"/>'s) as <see cref="ViewConstants"/>.</summary>
+    /// <summary>
+    /// The camera of the frame (<see cref="Draw"/>'s or <see cref="DrawDepth"/>'s) as <see cref="ViewConstants"/>.
+    /// </summary>
     ViewConstants View()
     {
         var light = _frame.Light;
@@ -892,8 +958,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         };
     }
 
-    /// <summary>Once per segment, in Prepare (wave 4): <see cref="_constants"/> into the frame's constants (again only when it changed within the
-    /// frame), and the set and dynamic offset the segment's job binds as set 2.</summary>
+    /// <summary>
+    /// Once per segment, in Prepare (wave 4): <see cref="_constants"/> into the frame's constants (again only when it changed within the frame), and
+    /// the set and dynamic offset the segment's job binds as set 2.
+    /// </summary>
     (GpuSet Set, uint Offset) PrepareConstantsBinding()
     {
         var f = _gpu.Frame;
@@ -919,15 +987,19 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     // ---- the terrain patches ----
 
-    /// <summary>One selected node as its draw needs it (Prepare fills the list, Record walks it): the push constants (<c>uNode</c>,
-    /// <c>uMorph</c>) and the index range (<c>Quadrant + 1</c>).</summary>
+    /// <summary>
+    /// One selected node as its draw needs it (Prepare fills the list, Record walks it): the push constants (<c>uNode</c>,
+    /// <c>uMorph</c>) and the index range (<c>Quadrant + 1</c>).
+    /// </summary>
     struct PatchDraw
     {
         public TerrainPush Push;
         public int Part;
     }
 
-    /// <summary>A patch program resolved for one pass state: the pipeline, the grid's vertex buffer and its index buffer.</summary>
+    /// <summary>
+    /// A patch program resolved for one pass state: the pipeline, the grid's vertex buffer and its index buffer.
+    /// </summary>
     sealed class PatchPipeline
     {
         public SegmentPipeline Segment;
@@ -1030,8 +1102,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         public override void Release() => Owner._patchJobs.Return(this);
     }
 
-    /// <summary>The pipeline and bindings for <paramref name="p"/> in this pass state, kept while the state stays the same (the reflection's
-    /// multisampled target alternates with the scene's: a few entries). The grid is the terrain's own vertex and index buffer.</summary>
+    /// <summary>
+    /// The pipeline and bindings for <paramref name="p"/> in this pass state, kept while the state stays the same (the reflection's multisampled
+    /// target alternates with the scene's: a few entries). The grid is the terrain's own vertex and index buffer.
+    /// </summary>
     PatchPipeline ResolvePatches(TerrainProgram p, DrawState state, PassTargets targets, string label)
     {
         var segment = new SegmentPipeline(p.P, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage,
@@ -1143,7 +1217,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         }
     }
 
-    /// <summary>Terrain triangles the depth draws have drawn since the counter was last reset (by the caller).</summary>
+    /// <summary>
+    /// Terrain triangles the depth draws have drawn since the counter was last reset (by the caller).
+    /// </summary>
     public long DepthTriangles { get; set; }
 
     int DrawMeshesDepth(List<(MeshBindings Mesh, int IndexCount, Matrix4x4 Model)> meshes)
@@ -1165,13 +1241,16 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         public MeshBindings Mesh = null!;
         public int IndexCount, Count, Offset, Index;
         public bool Mirrored;
-        /// <summary>What a native draw of this mesh needs, per program.
-        /// Inline (no object of its own), so a draw reads what grouping has just touched.</summary>
+        /// <summary>
+        /// What a native draw of this mesh needs, per program. Inline (no object of its own), so a draw reads what grouping has just touched.
+        /// </summary>
         public NativeMesh ColourNative, DepthNative, SolidNative;
         public ref NativeMesh Native(int kind) => ref kind == Colour ? ref ColourNative : ref (kind == Depth ? ref DepthNative : ref SolidNative);
     }
 
-    /// <summary>The pipeline state a segment's draws share (everything of <see cref="GraphicsPipelineDesc"/> but the vertex layout).</summary>
+    /// <summary>
+    /// The pipeline state a segment's draws share (everything of <see cref="GraphicsPipelineDesc"/> but the vertex layout).
+    /// </summary>
     readonly record struct SegmentPipeline(GpuProgram Program, AttachmentFormats Formats, BlendState Blend, ColorMask Mask,
         PolygonKind Polygon, bool AlphaToCoverage, bool DepthClamp);
 
@@ -1181,13 +1260,16 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     [System.Runtime.CompilerServices.InlineArray(4)]
     struct OwnVertices { GpuBufferBinding _first; }
 
-    /// <summary>A mesh resolved for one program: the mesh it came from, its vertex layout and own vertex buffers (locations 0 up to the
-    /// placements), its indices, and its pipelines for the last two segment states (the reflection's multisampled target alternates with the
-    /// scene's).</summary>
+    /// <summary>
+    /// A mesh resolved for one program: the mesh it came from, its vertex layout and own vertex buffers (locations 0 up to the placements), its
+    /// indices, and its pipelines for the last two segment states (the reflection's multisampled target alternates with the scene's).
+    /// </summary>
     struct NativeMesh
     {
         public MeshBindings? Source;
-        /// <summary>The program the layout and buffers are for (the smoothed and the flat ones read different locations).</summary>
+        /// <summary>
+        /// The program the layout and buffers are for (the smoothed and the flat ones read different locations).
+        /// </summary>
         public TerrainProgram? Program;
         public VertexLayout? Layout;
         public int VertexCount;
@@ -1291,7 +1373,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         return _meshGroupList.Count;
     }
 
-    /// <summary>What the draws of a mesh segment share (<see cref="OpenMeshSegment"/>).</summary>
+    /// <summary>
+    /// What the draws of a mesh segment share (<see cref="OpenMeshSegment"/>).
+    /// </summary>
     struct MeshSegment
     {
         public PassTargets Targets;
@@ -1300,8 +1384,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         public FrontFaceDirection Ccw, Cw;
     }
 
-    /// <summary>Opens a native segment for TERRAIN-mode meshes inside the host's pass: dynamic state (back faces culled, counter-clockwise),
-    /// the frame and terrain sets, and the placements' rows from <paramref name="rows"/> at locations 7 to 10.</summary>
+    /// <summary>
+    /// Opens a native segment for TERRAIN-mode meshes inside the host's pass: dynamic state (back faces culled, counter-clockwise), the frame and
+    /// terrain sets, and the placements' rows from <paramref name="rows"/> at locations 7 to 10.
+    /// </summary>
     MeshJob OpenMeshSegment(TerrainProgram p, int kind, string label, GpuBuffer rows, ulong rowsOffset, out MeshSegment s)
     {
         // Prepare (wave 4, docs/renderer-native.md 6.2): what the segment's commands need, into a job recorded by the caller.
@@ -1324,8 +1410,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         return job;
     }
 
-    /// <summary>A TERRAIN-mode mesh segment as prepared (<see cref="DrawGroups"/>, <see cref="DrawIndirect"/>): recorded on any thread, the same
-    /// commands as before wave 4.</summary>
+    /// <summary>
+    /// A TERRAIN-mode mesh segment as prepared (<see cref="DrawGroups"/>, <see cref="DrawIndirect"/>): recorded on any thread, the same commands as
+    /// before wave 4.
+    /// </summary>
     sealed class MeshJob : RecordJob
     {
         public struct Draw
@@ -1336,7 +1424,9 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             public int VertexCount;
             public GpuBufferBinding Elements;
             public uint IndexCount, Instances, FirstInstance;
-            /// <summary>Indirect: the arguments' buffer (else a plain indexed draw).</summary>
+            /// <summary>
+            /// Indirect: the arguments' buffer (else a plain indexed draw).
+            /// </summary>
             public GpuBuffer Args;
             public ulong ArgsOffset;
         }
@@ -1397,8 +1487,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         }
     }
 
-    /// <summary>A TERRAIN-mode mesh drawn indirect (<see cref="DrawMeshesIndirect"/>): the vertex array (position at 0, normal at 1), its index
-    /// count, and whether its placements mirror (the winding turns round), as <see cref="DrawMeshes"/> groups them.</summary>
+    /// <summary>
+    /// A TERRAIN-mode mesh drawn indirect (<see cref="DrawMeshesIndirect"/>): the vertex array (position at 0, normal at 1), its index count, and
+    /// whether its placements mirror (the winding turns round), as <see cref="DrawMeshes"/> groups them.
+    /// </summary>
     public readonly record struct IndirectMesh(MeshBindings Mesh, int IndexCount, bool Mirrored);
 
     /// <summary>
@@ -1460,8 +1552,10 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         return meshes.Length;
     }
 
-    /// <summary>A mesh's state for <paramref name="p"/>, made when the group meets another mesh: the layout and own vertex buffers, the
-    /// placements as per-instance rows of 64 bytes at locations 7 to 10.</summary>
+    /// <summary>
+    /// A mesh's state for <paramref name="p"/>, made when the group meets another mesh: the layout and own vertex buffers, the placements as
+    /// per-instance rows of 64 bytes at locations 7 to 10.
+    /// </summary>
     static void Current(ref NativeMesh n, MeshBindings va, TerrainProgram p)
     {
         Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];

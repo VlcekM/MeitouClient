@@ -6,7 +6,9 @@ using SharpMetal.ObjectiveCCore;
 
 namespace Meitou.Tests.MetalBackend;
 
-/// <summary>The Metal tests use one device at a time; the test GPU is real, but everything is offscreen.</summary>
+/// <summary>
+/// The Metal tests use one device at a time; the test GPU is real, but everything is offscreen.
+/// </summary>
 [CollectionDefinition("Metal GPU", DisableParallelization = true)]
 public sealed class MetalGpuCollection;
 

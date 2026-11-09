@@ -245,8 +245,10 @@ public sealed partial class MainWindow
         return gutter;
     }
 
-    /// <summary>A feature, as the game's menu shows it: one row (its switch, or its title) with a fold arrow, and its settings in a band under it
-    /// while open, named without the feature's name they repeat ("Light shafts strength" is "Strength"). The arrow or the name opens it.</summary>
+    /// <summary>
+    /// A feature, as the game's menu shows it: one row (its switch, or its title) with a fold arrow, and its settings in a band under it while open,
+    /// named without the feature's name they repeat ("Light shafts strength" is "Strength"). The arrow or the name opens it.
+    /// </summary>
     StackPanel GroupRows(SettingsGroup group, SettingsSection section)
     {
         var header = section.Settings.FirstOrDefault(x => x.Key == group.Header && Shown(x));

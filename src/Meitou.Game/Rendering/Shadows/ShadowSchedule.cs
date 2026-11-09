@@ -8,16 +8,24 @@ namespace Meitou.Game.Rendering.Shadows;
 /// </summary>
 public static class ShadowSchedule
 {
-    /// <summary>The default number of far cascades drawn in one frame.</summary>
+    /// <summary>
+    /// The default number of far cascades drawn in one frame.
+    /// </summary>
     public const int DefaultBudget = 1;
 
-    /// <summary>The most frames a wanted redraw waits before it is forced.</summary>
+    /// <summary>
+    /// The most frames a wanted redraw waits before it is forced.
+    /// </summary>
     public const int DefaultMaxWait = 3;
 
-    /// <summary>How many cascades, the last ones, count as far (share the budget): the three that were cascades 1 to 3 of four.</summary>
+    /// <summary>
+    /// How many cascades, the last ones, count as far (share the budget): the three that were cascades 1 to 3 of four.
+    /// </summary>
     public const int FarCascades = 3;
 
-    /// <summary>The cascades before the far ones (at least cascade 0), which are never deferred: 1 of four, 2 of five.</summary>
+    /// <summary>
+    /// The cascades before the far ones (at least cascade 0), which are never deferred: 1 of four, 2 of five.
+    /// </summary>
     public static int NearCascades(int count) => Math.Max(1, count - FarCascades);
 
     /// <summary>

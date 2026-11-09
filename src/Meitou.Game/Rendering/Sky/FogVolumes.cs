@@ -17,10 +17,14 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 internal sealed class FogVolumes
 {
-    /// <summary>The lowest height a block is measured at (its box): the sea is at 100 (<see cref="WorldWater.Height"/>), with room for the sea
-    /// floor seen through the water.</summary>
+    /// <summary>
+    /// The lowest height a block is measured at (its box): the sea is at 100 (<see cref="WorldWater.Height"/>), with room for the sea floor seen
+    /// through the water.
+    /// </summary>
     public const float SectionHeight = -1000f;
-    /// <summary>The highest height the box reaches for a block open upwards (far above the game's camera).</summary>
+    /// <summary>
+    /// The highest height the box reaches for a block open upwards (far above the game's camera).
+    /// </summary>
     public const float HighHeight = 30000f;
     /// <summary>
     /// Meitou cloud shadows weaken as the eye nears a placed block, linearly over this distance, and are gone inside one (<see
@@ -35,10 +39,14 @@ internal sealed class FogVolumes
     /// </summary>
     public const float CullAlpha = 0.99f;
 
-    /// <summary>How far the eye may move from where <see cref="HideDistanceByDirection"/> was solved before it is solved again.</summary>
+    /// <summary>
+    /// How far the eye may move from where <see cref="HideDistanceByDirection"/> was solved before it is solved again.
+    /// </summary>
     public const float DirectionSolveMargin = 300;
 
-    /// <summary>Cells the direction bound may split before it gives up (about 1 ms where it converges, the swamp's blocks).</summary>
+    /// <summary>
+    /// Cells the direction bound may split before it gives up (about 1 ms where it converges, the swamp's blocks).
+    /// </summary>
     public const int DirectionSolveBudget = 8000;
 
     /// <summary>
@@ -46,7 +54,9 @@ internal sealed class FogVolumes
     /// </summary>
     public const int CullVectors = 10;
 
-    /// <summary>One volume: its packed vec4s, the box a ray must cross (culling) and the point the game's queue sorts it by (its node).</summary>
+    /// <summary>
+    /// One volume: its packed vec4s, the box a ray must cross (culling) and the point the game's queue sorts it by (its node).
+    /// </summary>
     internal sealed class Volume(string name, int type)
     {
         public string Name { get; set; } = name;
@@ -57,9 +67,11 @@ internal sealed class FogVolumes
         public Vector3 SortCentre { get; set; }
     }
 
-    /// <summary>A weather effect's fog volume this frame (<see cref="ParticleRenderer.CollectFogVolumes"/>): world position (and the column's end),
+    /// <summary>
+    /// A weather effect's fog volume this frame (<see cref="ParticleRenderer.CollectFogVolumes"/>): world position (and the column's end),
     /// the record's radius and density distance, and the effect's fade fraction (0 to 1 over <c>fog fade in duration</c>, back to 0 over
-    /// <c>fog fade out duration</c>).</summary>
+    /// <c>fog fade out duration</c>).
+    /// </summary>
     public readonly record struct EffectFog(string Name, bool Cylinder, Vector3 Position, Vector3 End, float Radius, float Distance, Vector3 Colour,
         float Alpha, bool Additive, float Fade);
 
@@ -71,7 +83,9 @@ internal sealed class FogVolumes
     int _kept;
     Vector4 _eyeLight, _info;
 
-    /// <summary>Off: no volume is drawn (<c>--no-fog-volumes</c>; also while the simple sky is on).</summary>
+    /// <summary>
+    /// Off: no volume is drawn (<c>--no-fog-volumes</c>; also while the simple sky is on).
+    /// </summary>
     public bool Enabled { get; set; } = true;
     /// <summary>
     /// Presentation-only: the placed volumes of <c>fogfeatures.dat</c> are left out and only the effects' are drawn (the Meitou title's staging);
@@ -96,7 +110,9 @@ internal sealed class FogVolumes
     /// the weather fog's distance (0: none).
     /// </summary>
     internal (object? Block, float Radius, float Weather) CullState => (_occluder, CullRadius, AtmosphereDistance ?? 0);
-    /// <summary>True when <see cref="Covers"/> can answer yes this frame (a block the eye is in, or the weather fog complete).</summary>
+    /// <summary>
+    /// True when <see cref="Covers"/> can answer yes this frame (a block the eye is in, or the weather fog complete).
+    /// </summary>
     public bool CullActive => _occluder is not null || _atmosphereRadiusSquared > 0;
     /// <summary>
     /// The lowest y a box may reach and still lie inside the cull's block (its early-out box); very low when only the weather fog culls.
@@ -108,9 +124,11 @@ internal sealed class FogVolumes
     float _atmosphereRadiusSquared;
     DirectionSolve? _solved;
     Task<DirectionSolve>? _solving;
-    /// <summary>The distance beyond which the weather's fog (with the haze) hides everything this frame (<see cref="SkyRenderer.FogCullDistance"/>),
-    /// shown by the statistics; null: none, or the cull is off or a placed fog volume is in view. The shadow cascades' far distance is clamped to it
-    /// (<see cref="ShadowPass.RangeCap"/>).</summary>
+    /// <summary>
+    /// The distance beyond which the weather's fog (with the haze) hides everything this frame (<see cref="SkyRenderer.FogCullDistance"/>), shown by
+    /// the statistics; null: none, or the cull is off or a placed fog volume is in view. The shadow cascades' far distance is clamped to it
+    /// (<see cref="ShadowPass.RangeCap"/>).
+    /// </summary>
     public float? AtmosphereDistance => _atmosphereRadiusSquared > 0 ? MathF.Sqrt(_atmosphereRadiusSquared) : null;
 
     /// <summary>
@@ -120,10 +138,12 @@ internal sealed class FogVolumes
     /// receiver within the distance has a view depth under it.
     /// </summary>
     public float? ShadowHideDistance => _occluder is not null && SkyHidden ? CullRadius : null;
-    /// <summary>True when the eye is inside a placed block but its hide radius is not known this frame because the by-direction solve is still
+    /// <summary>
+    /// True when the eye is inside a placed block but its hide radius is not known this frame because the by-direction solve is still
     /// running in the background (it takes a few frames after the eye leaves its margin):
     /// <see cref="ShadowHideDistance"/> is null then, but the block still hides the view, so the shadow cap waits for the radius instead of being
-    /// released.</summary>
+    /// released.
+    /// </summary>
     public bool ShadowHidePending { get; private set; }
 
 
@@ -208,21 +228,31 @@ internal sealed class FogVolumes
         return nearest;
     }
 
-    /// <summary>The last <see cref="Update"/>'s <see cref="SkyExit"/> through the cull's block (statistics; null without a block).</summary>
+    /// <summary>
+    /// The last <see cref="Update"/>'s <see cref="SkyExit"/> through the cull's block (statistics; null without a block).
+    /// </summary>
     public float? SkyExitDistance { get; private set; }
 
-    /// <summary>The volumes drawn in the last <see cref="Update"/>, farthest first (statistics, tests).</summary>
+    /// <summary>
+    /// The volumes drawn in the last <see cref="Update"/>, farthest first (statistics, tests).
+    /// </summary>
     public List<string> Active { get; } = [];
     /// <summary>
     /// The volumes in view that did not fit <c>uFogVolumeData</c> in the last <see cref="Update"/> (the farthest ones; none in the base game).
     /// </summary>
     public int Dropped { get; private set; }
-    /// <summary>The cloud shadows' strength factor from the last <see cref="Update"/>: the eye's distance outside the nearest placed block over
-    /// <see cref="CloudShadowFade"/> (0 inside one, 1 with none near or the volumes off).</summary>
+    /// <summary>
+    /// The cloud shadows' strength factor from the last <see cref="Update"/>: the eye's distance outside the nearest placed block over
+    /// <see cref="CloudShadowFade"/> (0 inside one, 1 with none near or the volumes off).
+    /// </summary>
     public float CloudShadowScale { get; private set; } = 1;
-    /// <summary>The vec4s of <c>uFogVolumeData</c> in use after the last <see cref="Update"/>.</summary>
+    /// <summary>
+    /// The vec4s of <c>uFogVolumeData</c> in use after the last <see cref="Update"/>.
+    /// </summary>
     public int UsedData => _used;
-    /// <summary>The weather effects' fog volumes handed to the last <see cref="Update"/>, and how many of them were in view and drawn.</summary>
+    /// <summary>
+    /// The weather effects' fog volumes handed to the last <see cref="Update"/>, and how many of them were in view and drawn.
+    /// </summary>
     public int EffectVolumes { get; private set; }
     public int EffectVolumesDrawn { get; private set; }
     public IReadOnlyList<FogFeature> Features { get; }
@@ -236,7 +266,9 @@ internal sealed class FogVolumes
             if (Build(f) is { } v) _statics.Add(v);
     }
 
-    /// <summary>With the frame globals published (the world's renderer).</summary>
+    /// <summary>
+    /// With the frame globals published (the world's renderer).
+    /// </summary>
     public FogVolumes(IGpuContext gpu, IReadOnlyList<FogFeature> features) : this(features)
     {
         var g = gpu.Globals;
@@ -245,11 +277,15 @@ internal sealed class FogVolumes
         g.PublishUniformArray("uFogVolumeData", _data, () => _used);
     }
 
-    /// <summary>The game's light on the blocks (post/fog.hlsl <c>fog_planes_fs</c>): <c>max(0.08, sunColour.w · 1.6 · saturate(3 sunY + 0.2))</c>.
-    /// Spheres and beams take <c>sunColour.w</c> alone (<see cref="KenshiLighting.Daylight"/>).</summary>
+    /// <summary>
+    /// The game's light on the blocks (post/fog.hlsl <c>fog_planes_fs</c>): <c>max(0.08, sunColour.w · 1.6 · saturate(3 sunY + 0.2))</c>. Spheres and
+    /// beams take <c>sunColour.w</c> alone (<see cref="KenshiLighting.Daylight"/>).
+    /// </summary>
     public static float Light(float sunY) => MathF.Max(0.08f, KenshiLighting.Daylight(sunY) * 1.6f * Math.Clamp(sunY * 3f + 0.2f, 0f, 1f));
 
-    /// <summary>A file volume's packed form, or null for a block whose box no ray can meet.</summary>
+    /// <summary>
+    /// A file volume's packed form, or null for a block whose box no ray can meet.
+    /// </summary>
     internal static Volume? Build(FogFeature f)
     {
         switch (f.Type)
@@ -296,7 +332,9 @@ internal sealed class FogVolumes
         }
     }
 
-    /// <summary>A sphere of stored radius <paramref name="radius"/>: the hull (radius r) bounds it, the shader uses 0.96 r.</summary>
+    /// <summary>
+    /// A sphere of stored radius <paramref name="radius"/>: the hull (radius r) bounds it, the shader uses 0.96 r.
+    /// </summary>
     static void SetSphere(Volume v, Vector3 centre, float radius, float density, Vector3 colour, float alpha, bool additive)
     {
         v.BoxMin = centre - new Vector3(radius);
@@ -336,7 +374,9 @@ internal sealed class FogVolumes
         return (radius * fade, from + (distance - from) * fade);
     }
 
-    /// <summary>The game's density for a density distance (FUN_14010aea0): 1 / distance, 1 when it is not positive.</summary>
+    /// <summary>
+    /// The game's density for a density distance (FUN_14010aea0): 1 / distance, 1 when it is not positive.
+    /// </summary>
     static float Density(float distance) => distance > 0 ? 1f / distance : 1f;
 
     /// <summary>
@@ -364,7 +404,9 @@ internal sealed class FogVolumes
         _info = new Vector4(_used, KenshiLighting.Daylight(sunY), 0, 0);
     }
 
-    /// <summary>Resets what the frame's volumes and cull state are built from.</summary>
+    /// <summary>
+    /// Resets what the frame's volumes and cull state are built from.
+    /// </summary>
     void ClearFrame(Vector3 eye, IReadOnlyList<EffectFog>? effectFogs)
     {
         Active.Clear();
@@ -382,7 +424,9 @@ internal sealed class FogVolumes
         CloudShadowScale = 1;
     }
 
-    /// <summary>The static blocks and the weather's effect fogs inside the wedge, then packed (<see cref="PackPicked"/>).</summary>
+    /// <summary>
+    /// The static blocks and the weather's effect fogs inside the wedge, then packed (<see cref="PackPicked"/>).
+    /// </summary>
     void PickVolumes(Vector3 eye, Vector3 forward, float fieldOfView, float aspect, float far, IReadOnlyList<EffectFog>? effectFogs)
     {
         var wedge = Wedge.From(forward, fieldOfView, aspect);
@@ -391,7 +435,9 @@ internal sealed class FogVolumes
         PackPicked();
     }
 
-    /// <summary>Picks the weather's effect fogs (reusing the effect volumes) that are visible from the eye.</summary>
+    /// <summary>
+    /// Picks the weather's effect fogs (reusing the effect volumes) that are visible from the eye.
+    /// </summary>
     void ConsiderEffects(Vector3 eye, float far, in Wedge wedge, IReadOnlyList<EffectFog>? effectFogs)
     {
         int e = 0;
@@ -416,7 +462,9 @@ internal sealed class FogVolumes
             }
     }
 
-    /// <summary>Packs the picked volumes into <see cref="_data"/>: the nearest first while they fit, written farthest first.</summary>
+    /// <summary>
+    /// Packs the picked volumes into <see cref="_data"/>: the nearest first while they fit, written farthest first.
+    /// </summary>
     void PackPicked()
     {
         // Nearest first while they fit, then written farthest first (the game's transparent objects are sorted back to front).
@@ -501,7 +549,9 @@ internal sealed class FogVolumes
 
         static Vector2 Rotate(Vector2 v, float a) => new(v.X * MathF.Cos(a) - v.Y * MathF.Sin(a), v.X * MathF.Sin(a) + v.Y * MathF.Cos(a));
 
-        /// <summary>False when the box's footprint lies wholly outside one edge.</summary>
+        /// <summary>
+        /// False when the box's footprint lies wholly outside one edge.
+        /// </summary>
         public bool Touches(Vector3 eye, Vector3 min, Vector3 max)
         {
             if (_all) return true;
@@ -516,7 +566,9 @@ internal sealed class FogVolumes
         }
     }
 
-    /// <summary>What <see cref="Hidden(Vector3, Vector3, CullKind)"/> can leave out, for the statistics.</summary>
+    /// <summary>
+    /// What <see cref="Hidden(Vector3, Vector3, CullKind)"/> can leave out, for the statistics.
+    /// </summary>
     public enum CullKind { Terrain, Objects, Foliage, Characters, FoliageInstances, Other }
 
     /// <summary>
@@ -555,7 +607,9 @@ internal sealed class FogVolumes
     /// Solve the direction bound on the calling thread (tests, and whoever needs the cull in the first frame) instead of in the background.
     /// </summary>
     public bool SolveInline { get; set; }
-    /// <summary>Off: only <see cref="HideDistance"/> (for measuring what the direction bound adds).</summary>
+    /// <summary>
+    /// Off: only <see cref="HideDistance"/> (for measuring what the direction bound adds).
+    /// </summary>
     public bool DirectionBound { get; set; } = true;
     readonly record struct DirectionSolve(Volume Block, Vector3 Centre, float Far, float? Radius);
 
@@ -695,8 +749,10 @@ internal sealed class FogVolumes
 
     readonly record struct DirectionCell(int Face, double U0, double U1, double V0, double V1, double L0, double L1);
 
-    /// <summary>Measures each plane's normal length and the eye's inside distance with the margin (into the spans); false when the eye is not
-    /// inside one of the planes.</summary>
+    /// <summary>
+    /// Measures each plane's normal length and the eye's inside distance with the margin (into the spans); false when the eye is not inside one of
+    /// the planes.
+    /// </summary>
     static bool MeasurePlanes(ReadOnlySpan<Vector4> planes, Vector3 eye, float margin, Span<double> nx, Span<double> ny, Span<double> nz,
         Span<double> length, Span<double> insideLo, Span<double> insideHi)
     {
@@ -712,7 +768,9 @@ internal sealed class FogVolumes
         return true;
     }
 
-    /// <summary>The six cube faces, each in a 4 × 4 grid of cells over the whole path range (0 to <paramref name="far"/>).</summary>
+    /// <summary>
+    /// The six cube faces, each in a 4 × 4 grid of cells over the whole path range (0 to <paramref name="far"/>).
+    /// </summary>
     static PriorityQueue<DirectionCell, double> SeedDirectionCells(float far)
     {
         var queue = new PriorityQueue<DirectionCell, double>();
@@ -723,7 +781,9 @@ internal sealed class FogVolumes
         return queue;
     }
 
-    /// <summary>Splits a cell at the middle of its path range.</summary>
+    /// <summary>
+    /// Splits a cell at the middle of its path range.
+    /// </summary>
     static void SplitPath(PriorityQueue<DirectionCell, double> queue, DirectionCell cell)
     {
         double mid = (cell.L0 + cell.L1) * 0.5;
@@ -731,7 +791,9 @@ internal sealed class FogVolumes
         queue.Enqueue(cell with { L1 = mid }, -mid);
     }
 
-    /// <summary>Splits a cell into four at the middle of its directions.</summary>
+    /// <summary>
+    /// Splits a cell into four at the middle of its directions.
+    /// </summary>
     static void SplitDirections(PriorityQueue<DirectionCell, double> queue, DirectionCell cell)
     {
         double um = (cell.U0 + cell.U1) * 0.5, vm = (cell.V0 + cell.V1) * 0.5;
@@ -741,7 +803,9 @@ internal sealed class FogVolumes
         queue.Enqueue(cell with { U0 = um, V0 = vm }, -cell.L1);
     }
 
-    /// <summary>The unit direction through (u, v) of cube face <paramref name="face"/> (0..5: +x, -x, +y, -y, +z, -z).</summary>
+    /// <summary>
+    /// The unit direction through (u, v) of cube face <paramref name="face"/> (0..5: +x, -x, +y, -y, +z, -z).
+    /// </summary>
     static (double X, double Y, double Z) CubeDirection(int face, double u, double v)
     {
         var (x, y, z) = face switch { 0 => (1.0, u, v), 1 => (-1.0, u, v), 2 => (u, 1.0, v), 3 => (u, -1.0, v), 4 => (u, v, 1.0), _ => (u, v, -1.0) };
@@ -780,10 +844,14 @@ internal sealed class FogVolumes
         return true;
     }
 
-    /// <summary>Adds what a GPU cull left out (read back a few frames late) to the statistics.</summary>
+    /// <summary>
+    /// Adds what a GPU cull left out (read back a few frames late) to the statistics.
+    /// </summary>
     public void AddCulled(CullKind kind, int count) => Interlocked.Add(ref Culled[(int)kind], count);
 
-    /// <summary><see cref="Hidden(Vector3, Vector3, CullKind)"/> without the statistics (for a caller that counts its own, per instance).</summary>
+    /// <summary>
+    /// <see cref="Hidden(Vector3, Vector3, CullKind)"/> without the statistics (for a caller that counts its own, per instance).
+    /// </summary>
     public bool Covers(Vector3 min, Vector3 max)
     {
         // The weather fog: the nearest point of the box is past the distance where the fog alone makes the pixel (a sphere about the eye, the
@@ -803,6 +871,8 @@ internal sealed class FogVolumes
         return true;
     }
 
-    /// <summary><see cref="Hidden(Vector3, Vector3, CullKind)"/> for a bounding sphere.</summary>
+    /// <summary>
+    /// <see cref="Hidden(Vector3, Vector3, CullKind)"/> for a bounding sphere.
+    /// </summary>
     public bool Hidden(Vector3 centre, float radius, CullKind kind) => Hidden(centre - new Vector3(radius), centre + new Vector3(radius), kind);
 }

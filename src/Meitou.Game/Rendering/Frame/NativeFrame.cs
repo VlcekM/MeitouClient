@@ -84,8 +84,10 @@ sealed unsafe class NativeFrame : IDisposable
     /// </summary>
     public GpuSetLayout[] SetLayouts { get; }
 
-    /// <summary>A native program with the model's layout, then the consumer's <paramref name="own"/> sets (set 2 and up), and the shared
-    /// push-constant range (<see cref="NativeShaders.PushBytes"/>).</summary>
+    /// <summary>
+    /// A native program with the model's layout, then the consumer's <paramref name="own"/> sets (set 2 and up), and the shared push-constant range
+    /// (<see cref="NativeShaders.PushBytes"/>).
+    /// </summary>
     public GpuProgram Program(string vertexGlsl, string fragmentGlsl, string name, params GpuSetLayout[] own) =>
         _ctx.Shaders.Native(vertexGlsl, fragmentGlsl, name, [.. SetLayouts, .. own], NativeShaders.PushBytes);
 

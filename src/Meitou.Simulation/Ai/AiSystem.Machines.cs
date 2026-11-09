@@ -8,7 +8,9 @@ namespace Meitou.Simulation.Ai;
 // applies what the think leaves in AiMind.WorkOperate / CollectFrom / FillTo.
 public sealed partial class AiSystem
 {
-    /// <summary>The faction owning a town's buildings (its machine's owner), -1 for none.</summary>
+    /// <summary>
+    /// The faction owning a town's buildings (its machine's owner), -1 for none.
+    /// </summary>
     int WorkOwnerOf(int town) => town >= 0 && town < data.SiteFactions.Count ? data.SiteFactions[town] : -1;
 
     /// <summary>

@@ -39,9 +39,11 @@ sealed class VramWatch : IDisposable
         _thread.Start();
     }
 
-    /// <summary>Ends the process at once. <c>Environment.Exit</c> unloads the driver's DLLs, and with the render thread inside the driver near the
-    /// budget that unload can deadlock: the process then stays alive holding its video memory, and the next runs abort too. The OS frees all of
-    /// it when the process ends; the GPU objects can't be released here anyway, since the render thread is still using them.</summary>
+    /// <summary>
+    /// Ends the process at once. <c>Environment.Exit</c> unloads the driver's DLLs, and with the render thread inside the driver near the budget that
+    /// unload can deadlock: the process then stays alive holding its video memory, and the next runs abort too. The OS frees all of it when the
+    /// process ends; the GPU objects can't be released here anyway, since the render thread is still using them.
+    /// </summary>
     static void Terminate(int code)
     {
         if (OperatingSystem.IsWindows()) TerminateProcess(GetCurrentProcess(), (uint)code);

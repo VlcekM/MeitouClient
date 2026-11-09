@@ -27,10 +27,14 @@ public sealed unsafe partial class TerrainRenderer
             "terrain rock bake");
     }
 
-    /// <summary>True when the biome of parameter row <paramref name="row"/> has its layer textures resident now (the bake waits for it).</summary>
+    /// <summary>
+    /// True when the biome of parameter row <paramref name="row"/> has its layer textures resident now (the bake waits for it).
+    /// </summary>
     internal bool CanBakeRock(int row) => _textures is { HasBiomes: true } t && t.IsResident(row);
 
-    /// <summary>The identity of the biome's material for the atlas cache key (null: none). See <see cref="TerrainTextures.BiomeKey"/>.</summary>
+    /// <summary>
+    /// The identity of the biome's material for the atlas cache key (null: none). See <see cref="TerrainTextures.BiomeKey"/>.
+    /// </summary>
     internal string? RockBiomeKey(int row) => _textures?.BiomeKey(row);
 
     /// <summary>
@@ -48,8 +52,10 @@ public sealed unsafe partial class TerrainRenderer
         return (p.VertexLayout(attributes), bindings);
     }
 
-    /// <summary>The terrain's constants for a bake: the mesh material of the feature's biome <paramref name="row"/>, textured with normal maps,
-    /// without the overlay and colour maps, the window or the far fade, nothing underwater.</summary>
+    /// <summary>
+    /// The terrain's constants for a bake: the mesh material of the feature's biome <paramref name="row"/>, textured with normal maps, without the
+    /// overlay and colour maps, the window or the far fade, nothing underwater.
+    /// </summary>
     TerrainConstants BakeConstants(int row)
     {
         var c = BakeDefaults(row);
@@ -69,7 +75,9 @@ public sealed unsafe partial class TerrainRenderer
         return c;
     }
 
-    /// <summary>The bake's constants before the terrain's textures are bound: the stand-ins, the rock's biome row and the bake's switches.</summary>
+    /// <summary>
+    /// The bake's constants before the terrain's textures are bound: the stand-ins, the rock's biome row and the bake's switches.
+    /// </summary>
     TerrainConstants BakeDefaults(int row)
     {
         return new TerrainConstants
@@ -116,9 +124,11 @@ public sealed unsafe partial class TerrainRenderer
         };
     }
 
-    /// <summary>What a rock's impostor needs of the terrain to fade as the terrain's mesh shader fades (<see cref="ImpostorRockPush"/>): the maps'
+    /// <summary>
+    /// What a rock's impostor needs of the terrain to fade as the terrain's mesh shader fades (<see cref="ImpostorRockPush"/>): the maps'
     /// bindless indices, the colour window, the world's half size and the two distances (80% and 100% of <paramref name="materialDistance"/>).
-    /// <c>Flags</c> bit 0 ground map, 1 whole-world colour, 2 colour map.</summary>
+    /// <c>Flags</c> bit 0 ground map, 1 whole-world colour, 2 colour map.
+    /// </summary>
     internal (Vector4 Region, uint Ground, uint WorldColour, uint Colour, float HalfWorld, float FarStart, float FarEnd,
         uint Flags) RockFarView(float materialDistance)
     {

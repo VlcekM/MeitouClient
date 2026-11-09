@@ -98,8 +98,10 @@ public sealed class DeviceBuffer : IDisposable
     /// </summary>
     public long UsedFrame { get; internal set; }
 
-    /// <summary>A binding of the range from <paramref name="offset"/>, marking the buffer used by <paramref name="frame"/> (the Uploader
-    /// refuses to write it again in that frame).</summary>
+    /// <summary>
+    /// A binding of the range from <paramref name="offset"/>, marking the buffer used by <paramref name="frame"/> (the Uploader refuses to write it
+    /// again in that frame).
+    /// </summary>
     public GpuBufferBinding Binding(IGpuFrame frame, ulong offset = 0, ulong size = GpuBufferBinding.WholeSize)
     {
         UsedFrame = frame.Number;

@@ -18,8 +18,10 @@ namespace Meitou.Game.Rendering.Shadows;
 /// </summary>
 public sealed unsafe partial class ShadowPass
 {
-    /// <summary>The landmark shadow map's side (texels). Over the landmarks of the default reach (150000 around the camera) a texel is about 75
-    /// units; a landmark is 2000 or more in radius.</summary>
+    /// <summary>
+    /// The landmark shadow map's side (texels). Over the landmarks of the default reach (150000 around the camera) a texel is about 75 units; a
+    /// landmark is 2000 or more in radius.
+    /// </summary>
     public const int LandmarkMapSize = 4096;
 
     /// <summary>
@@ -28,11 +30,15 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     public const double AnchorReach = 200;
 
-    /// <summary>How far the shadow range may drift (share of the drawn one) before every cascade is drawn again.</summary>
+    /// <summary>
+    /// How far the shadow range may drift (share of the drawn one) before every cascade is drawn again.
+    /// </summary>
     const float RangeTolerance = 0.1f;
 
-    /// <summary>Foliage meshes smaller than this many texels of a cascade (radius × largest scale) cast nothing into it (Meitou): their shadow would
-    /// be a blur of a few texels under the soft filter, at the price of their triangles and cut-out fragments.</summary>
+    /// <summary>
+    /// Foliage meshes smaller than this many texels of a cascade (radius × largest scale) cast nothing into it (Meitou): their shadow would be a blur
+    /// of a few texels under the soft filter, at the price of their triangles and cut-out fragments.
+    /// </summary>
     public const float MinFoliageCasterTexels = 2;
 
     /// <summary>
@@ -41,28 +47,44 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     public const float MinCharacterCasterTexels = 1;
 
-    /// <summary>The <c>shadows</c> switch: Meitou (true, the default) or the game's CSM.</summary>
+    /// <summary>
+    /// The <c>shadows</c> switch: Meitou (true, the default) or the game's CSM.
+    /// </summary>
     public bool Meitou { get; set; } = true;
 
-    /// <summary>A temporal anti-aliasing or upscaling pass runs: the filter's noise changes every frame (it is static otherwise).</summary>
+    /// <summary>
+    /// A temporal anti-aliasing or upscaling pass runs: the filter's noise changes every frame (it is static otherwise).
+    /// </summary>
     public bool Temporal { get; set; }
 
-    /// <summary>Contact-hardening penumbrae (the blocker search); off: a fixed small filter.</summary>
+    /// <summary>
+    /// Contact-hardening penumbrae (the blocker search); off: a fixed small filter.
+    /// </summary>
     public bool ContactHardening { get; set; } = true;
 
-    /// <summary>The sun's angular diameter the penumbrae are made for (radians): a little more than the real sun's 0.53°.</summary>
+    /// <summary>
+    /// The sun's angular diameter the penumbrae are made for (radians): a little more than the real sun's 0.53°.
+    /// </summary>
     public float SunAngle { get; set; } = 0.7f * MathF.PI / 180;
 
-    /// <summary>Filter radius without a blocker search, and the least with one, in texels of the cascade.</summary>
+    /// <summary>
+    /// Filter radius without a blocker search, and the least with one, in texels of the cascade.
+    /// </summary>
     public float FilterTexels { get; set; } = 1.5f;
 
-    /// <summary>The widest penumbra radius in world units (a tall caster far above the ground); never less than <see cref="FilterTexels"/>.</summary>
+    /// <summary>
+    /// The widest penumbra radius in world units (a tall caster far above the ground); never less than <see cref="FilterTexels"/>.
+    /// </summary>
     public float MaxPenumbra { get; set; } = 3;
 
-    /// <summary>A sudden turn of the sun larger than this (radians) redraws every cascade at once.</summary>
+    /// <summary>
+    /// A sudden turn of the sun larger than this (radians) redraws every cascade at once.
+    /// </summary>
     public float SunJump { get; set; } = 2 * MathF.PI / 180;
 
-    /// <summary>How often each cascade was drawn (Meitou), for the log.</summary>
+    /// <summary>
+    /// How often each cascade was drawn (Meitou), for the log.
+    /// </summary>
     public readonly int[] CascadeDraws = new int[ShadowSettings.MaxCascades];
 
     /// <summary>
@@ -71,10 +93,14 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     public readonly int[,] RedrawReasons = new int[ShadowSettings.MaxCascades, 4];
 
-    /// <summary>How often every cascade was redrawn at once because the splits changed (index 0) or the sun jumped (1).</summary>
+    /// <summary>
+    /// How often every cascade was redrawn at once because the splits changed (index 0) or the sun jumped (1).
+    /// </summary>
     public readonly int[] AllReasons = new int[2];
 
-    /// <summary>The frames the Meitou shadows were drawn for (the log).</summary>
+    /// <summary>
+    /// The frames the Meitou shadows were drawn for (the log).
+    /// </summary>
     public int MeitouFrames { get; private set; }
 
     /// <summary>
@@ -87,7 +113,9 @@ public sealed unsafe partial class ShadowPass
         set => _meitouCascades = Math.Clamp(value, 1, ShadowSettings.MaxCascades);
     }
 
-    /// <summary>How many cascades, nearest first, filter in full (blocker search, 16 taps) at the <see cref="FilterQuality"/>.</summary>
+    /// <summary>
+    /// How many cascades, nearest first, filter in full (blocker search, 16 taps) at the <see cref="FilterQuality"/>.
+    /// </summary>
     int FullFilterCascades => _filterQuality switch { 0 => 0, 1 => Math.Max(1, MeitouCascades - 2), _ => ShadowSettings.MaxCascades };
 
     /// <summary>
@@ -172,7 +200,9 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     public int FarBudget { get; set; } = ShadowSchedule.DefaultBudget;
 
-    /// <summary>The most frames a deferred redraw waits.</summary>
+    /// <summary>
+    /// The most frames a deferred redraw waits.
+    /// </summary>
     public int MaxWait { get; set; } = ShadowSchedule.DefaultMaxWait;
 
     /// <summary>
@@ -181,16 +211,24 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     public bool CameraFlying { get; set; }
 
-    /// <summary>Frames the far cascades were skipped for the camera's flight (the log).</summary>
+    /// <summary>
+    /// Frames the far cascades were skipped for the camera's flight (the log).
+    /// </summary>
     public int FlightFrames { get; private set; }
 
-    /// <summary>The smallest foliage mesh <paramref name="cascade"/> draws (world units; 0 with the faithful shadows: every mesh).</summary>
+    /// <summary>
+    /// The smallest foliage mesh <paramref name="cascade"/> draws (world units; 0 with the faithful shadows: every mesh).
+    /// </summary>
     public float MinFoliageCaster(ShadowCascade cascade) => Meitou ? (float)cascade.Texel * MinFoliageCasterTexels : 0;
 
-    /// <summary>The <c>char-casters</c> A/B switch: on by default; the cull of <see cref="MinCharacterCasterTexels"/>.</summary>
+    /// <summary>
+    /// The <c>char-casters</c> A/B switch: on by default; the cull of <see cref="MinCharacterCasterTexels"/>.
+    /// </summary>
     public static bool CharacterCasterCull { get; set; } = true;
 
-    /// <summary>One line on the schedule: how often each cascade was drawn, and the terrain map's rebuilds.</summary>
+    /// <summary>
+    /// One line on the schedule: how often each cascade was drawn, and the terrain map's rebuilds.
+    /// </summary>
     public string DescribeMeitou()
     {
         string draws = string.Join("/", CascadeDraws.Take(MeitouCascades));
@@ -207,7 +245,9 @@ public sealed unsafe partial class ShadowPass
             $"{terrain}; {landmarks}";
     }
 
-    /// <summary>The landmark map's texel size in units for the log, or "off".</summary>
+    /// <summary>
+    /// The landmark map's texel size in units for the log, or "off".
+    /// </summary>
     string LandmarkTexel() => _landmarkBox is { } b ? $"{b.Texel:0} units per texel" : "off";
 
     #endregion
@@ -241,18 +281,24 @@ public sealed unsafe partial class ShadowPass
         return _anchor.Value;
     }
 
-    /// <summary>How often the grid anchor moved (Meitou), for the log.</summary>
+    /// <summary>
+    /// How often the grid anchor moved (Meitou), for the log.
+    /// </summary>
     public int AnchorMoves { get; private set; }
 
     #endregion
 
     #region Landmarks
 
-    /// <summary>Collects the landmarks to cast into the landmark map: their bounding spheres (xyz centre, w radius) into the list, and a key
-    /// that changes when that set does (WorldObjectRenderer.LandmarkCasters).</summary>
+    /// <summary>
+    /// Collects the landmarks to cast into the landmark map: their bounding spheres (xyz centre, w radius) into the list, and a key that changes when
+    /// that set does (WorldObjectRenderer.LandmarkCasters).
+    /// </summary>
     public delegate long LandmarkCollect(List<Vector4> spheres);
 
-    /// <summary>The landmarks for <see cref="Render"/>: how to collect them and how to draw their depth.</summary>
+    /// <summary>
+    /// The landmarks for <see cref="Render"/>: how to collect them and how to draw their depth.
+    /// </summary>
     public readonly record struct LandmarkCasters(LandmarkCollect Collect, CasterDraw Draw);
 
     GpuTexture? _landmarkMap;
@@ -263,10 +309,14 @@ public sealed unsafe partial class ShadowPass
     Vector3 _landmarkSun;
     readonly List<Vector4> _landmarkSpheres = [];
 
-    /// <summary>How often the landmark map was drawn, and the landmarks in it the last time (for the log).</summary>
+    /// <summary>
+    /// How often the landmark map was drawn, and the landmarks in it the last time (for the log).
+    /// </summary>
     public int LandmarkDraws { get; private set; }
 
-    /// <summary>The landmarks in the landmark map the last time it was drawn (for the log).</summary>
+    /// <summary>
+    /// The landmarks in the landmark map the last time it was drawn (for the log).
+    /// </summary>
     public int LandmarkCount { get; private set; }
 
     /// <summary>
@@ -427,7 +477,9 @@ public sealed unsafe partial class ShadowPass
         _cpuSamples.Add(CpuMs);
     }
 
-    /// <summary>Draws the <paramref name="drawn"/> cascades collected in <see cref="_casterViews"/>, each into its own layer of the array.</summary>
+    /// <summary>
+    /// Draws the <paramref name="drawn"/> cascades collected in <see cref="_casterViews"/>, each into its own layer of the array.
+    /// </summary>
     void DrawCascades(int drawn, CasterDraw draw, Vector3 toSun)
     {
         // Each cascade drawn is a rendering of its own layer, cleared by the load op; the other layers keep what they hold.
@@ -482,12 +534,16 @@ public sealed unsafe partial class ShadowPass
     SamplerSlot _blockerAtlasSlot;
     UniformHandle _blockerSizeHandle, _blockerLayerHandle;
 
-    /// <summary>The blocker pass's state, as the GL version's was: no culling, depth or blending, every colour channel written.</summary>
+    /// <summary>
+    /// The blocker pass's state, as the GL version's was: no culling, depth or blending, every colour channel written.
+    /// </summary>
     static readonly DrawState BlockerState = new(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal, false, 0, 0,
         BlendState.Off, ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A,
         PolygonKind.Fill, false, false);
 
-    /// <summary>The half-resolution blocker map (native; null until the first frame with contact hardening).</summary>
+    /// <summary>
+    /// The half-resolution blocker map (native; null until the first frame with contact hardening).
+    /// </summary>
     public GpuTexture? BlockerMap => _blocker;
 
     /// <summary>
@@ -553,10 +609,14 @@ public sealed unsafe partial class ShadowPass
 
     #region Publish
 
-    /// <summary>The blocker search's and the filter's widest radius in a cascade (world units).</summary>
+    /// <summary>
+    /// The blocker search's and the filter's widest radius in a cascade (world units).
+    /// </summary>
     double SearchRadius(ShadowCascade c) => Math.Max(MaxPenumbra, FilterTexels * 1.5 * c.Texel);
 
-    /// <summary>The whole-world height grid (WorldScene.Coarse) for the terrain shadow beyond the range; uploaded when first needed.</summary>
+    /// <summary>
+    /// The whole-world height grid (WorldScene.Coarse) for the terrain shadow beyond the range; uploaded when first needed.
+    /// </summary>
     public void SetTerrain(ushort[] heights, int size) => (_coarse, _coarseSize) = (heights, size);
 
     ushort[]? _coarse;

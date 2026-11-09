@@ -12,6 +12,8 @@ public static class TerrainLayerSkip
 {
     public static bool Enabled { get; set; } = true;
 
-    /// <summary>The threshold.</summary>
+    /// <summary>
+    /// The threshold.
+    /// </summary>
     public const float CliffEps = 0.03f;
 }

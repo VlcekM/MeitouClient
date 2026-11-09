@@ -84,7 +84,9 @@ public class GameplayDataTests
     }
 }
 
-/// <summary>The same views against the installed game, with the probe values the docs quote.</summary>
+/// <summary>
+/// The same views against the installed game, with the probe values the docs quote.
+/// </summary>
 [Slow]
 public class GameplayInstallTests
 {

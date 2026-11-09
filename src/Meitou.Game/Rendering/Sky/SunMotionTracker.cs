@@ -14,15 +14,21 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 sealed class SunMotionTracker
 {
-    /// <summary>The angles from the sun's centre (degrees) within which the sky takes all of the sun's motion, and past which none.</summary>
+    /// <summary>
+    /// The angles from the sun's centre (degrees) within which the sky takes all of the sun's motion, and past which none.
+    /// </summary>
     const float InnerAngle = 10, OuterAngle = 16;
-    /// <summary>A larger step of the sun in one frame (degrees) is a jump of the clock, not a motion to follow.</summary>
+    /// <summary>
+    /// A larger step of the sun in one frame (degrees) is a jump of the clock, not a motion to follow.
+    /// </summary>
     const float JumpAngle = 2;
 
     Vector3 _previous;
     bool _previousValid;
 
-    /// <summary>Forgets the previous sun (a camera cut or a teleport must not turn the old direction into a motion streak).</summary>
+    /// <summary>
+    /// Forgets the previous sun (a camera cut or a teleport must not turn the old direction into a motion streak).
+    /// </summary>
     public void Reset() => _previousValid = false;
 
     /// <summary>
@@ -57,7 +63,9 @@ sealed class SunMotionTracker
         return result;
     }
 
-    /// <summary>A direction's place on the screen (NDC) with this frame's camera, or null when it is not well in front.</summary>
+    /// <summary>
+    /// A direction's place on the screen (NDC) with this frame's camera, or null when it is not well in front.
+    /// </summary>
     static Vector2? Project(Vector3 direction, Matrix4x4 rotation, float fov, float aspect)
     {
         float x = Vector3.Dot(direction, new Vector3(rotation.M11, rotation.M21, rotation.M31));

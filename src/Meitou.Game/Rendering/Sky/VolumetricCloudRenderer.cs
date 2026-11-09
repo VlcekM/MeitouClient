@@ -8,7 +8,9 @@ using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Sky;
 
-/// <summary>Half-resolution clouds, independent view histories and a world-space sun-transmission map.</summary>
+/// <summary>
+/// Half-resolution clouds, independent view histories and a world-space sun-transmission map.
+/// </summary>
 public sealed class VolumetricCloudRenderer : IDisposable
 {
     readonly IGpuContext _gpu;
@@ -25,10 +27,14 @@ public sealed class VolumetricCloudRenderer : IDisposable
     public Vector2 ShadowOrigin { get; private set; }
     public SampledTexture ShadowMap => _shadowMap is null ? default : Sample(_shadowMap);
 
-    /// <summary>The slab's base height (the cloud height setting); the top follows at <see cref="VolumetricClouds.Thickness"/> above it.</summary>
+    /// <summary>
+    /// The slab's base height (the cloud height setting); the top follows at <see cref="VolumetricClouds.Thickness"/> above it.
+    /// </summary>
     public float Bottom { get; set; } = VolumetricClouds.Bottom;
 
-    /// <summary>Texels (half-size) round a texel's centre whose rays must all be hidden for the fog early-out to leave it out.</summary>
+    /// <summary>
+    /// Texels (half-size) round a texel's centre whose rays must all be hidden for the fog early-out to leave it out.
+    /// </summary>
     public const float FogSkipReach = 1.5f;
 
     sealed class ViewHistory : IDisposable
@@ -104,7 +110,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
 
     public void Invalidate() { _main.Frame = _mirror.Frame = -10; MainMotion = null; }
 
-    /// <summary>The main view's history only (its sky left out this frame; the reflection keeps marching).</summary>
+    /// <summary>
+    /// The main view's history only (its sky left out this frame; the reflection keeps marching).
+    /// </summary>
     public void InvalidateMain() { _main.Frame = -10; MainMotion = null; }
 
     /// <summary>
@@ -170,7 +178,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
         return Sample(h.A!);
     }
 
-    /// <summary>Remakes the history's images at <paramref name="w"/> × <paramref name="ht"/> when their size changed (the history is lost).</summary>
+    /// <summary>
+    /// Remakes the history's images at <paramref name="w"/> × <paramref name="ht"/> when their size changed (the history is lost).
+    /// </summary>
     void EnsureHistory(ViewHistory h, int w, int ht)
     {
         if (h.Current is not null && h.Current.Desc.Width == w && h.Current.Desc.Height == ht) return;
@@ -181,7 +191,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
         h.B = Make(w, ht, InternalFormat.Rgba16F, "cloud history b");
     }
 
-    /// <summary>Whether the history may be reprojected this frame: recent, from a close eye and the same settings and view.</summary>
+    /// <summary>
+    /// Whether the history may be reprojected this frame: recent, from a close eye and the same settings and view.
+    /// </summary>
     bool ReprojectionValid(ViewHistory h, Vector3 eye, float coverage, Vector3 key, Vector3 light, Vector3 ambient, Vector3 forward,
         Vector2 windDelta)
     {
@@ -221,5 +233,7 @@ public sealed class VolumetricCloudRenderer : IDisposable
     }
 }
 
-/// <summary>One frame's volumetric clouds for the motion vectors (<see cref="VolumetricCloudRenderer.MainMotion"/>).</summary>
+/// <summary>
+/// One frame's volumetric clouds for the motion vectors (<see cref="VolumetricCloudRenderer.MainMotion"/>).
+/// </summary>
 public readonly record struct CloudMotion(SampledTexture Clouds, SampledTexture Distance, Vector2 Wind, long Frame);

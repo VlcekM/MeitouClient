@@ -57,7 +57,9 @@ readonly record struct TutorialPoll
 /// </summary>
 sealed class TutorialManager
 {
-    /// <summary>The items in the exe's order; the index is the id (the classes' names, <c>Tutorial_*</c>).</summary>
+    /// <summary>
+    /// The items in the exe's order; the index is the id (the classes' names, <c>Tutorial_*</c>).
+    /// </summary>
     public static readonly string[] Names =
     [
         "BasicControls", "GUIOverview", "WhatDoIDo", "WhatDoIDo_InTown", "Injured_Intro", "Injured_FirstAid", "UnderAttack", "HiredRecruit",

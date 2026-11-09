@@ -18,10 +18,14 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 public sealed unsafe partial class TerrainDecalRenderer
 {
-    /// <summary>The most decals kept, and the most drawn in a frame (the nearest).</summary>
+    /// <summary>
+    /// The most decals kept, and the most drawn in a frame (the nearest).
+    /// </summary>
     const int MaxSurfaces = 1024, MaxSurfaceDraws = 512;
 
-    /// <summary>How high above the feet a splash is centred (a blow lands at the body, not the soles).</summary>
+    /// <summary>
+    /// How high above the feet a splash is centred (a blow lands at the body, not the soles).
+    /// </summary>
     const float SplashLift = 0.9f;
 
     /// <summary>

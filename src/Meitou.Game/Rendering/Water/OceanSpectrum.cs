@@ -40,10 +40,14 @@ public static class OceanSpectrum
 
     const float G = 9.81f;
 
-    /// <summary>The wind in m/s for the weather's wind speed (units per second, 1 unit = 1 dm).</summary>
+    /// <summary>
+    /// The wind in m/s for the weather's wind speed (units per second, 1 unit = 1 dm).
+    /// </summary>
     public static float WindMetres(float windSpeed) => Math.Clamp(windSpeed / 10f, MinWind, MaxWind);
 
-    /// <summary>The wave number range a cascade keeps (rad per unit): [lo, hi).</summary>
+    /// <summary>
+    /// The wave number range a cascade keeps (rad per unit): [lo, hi).
+    /// </summary>
     public static (float Lo, float Hi) Band(int cascade)
     {
         float lo = cascade == 0 ? 0 : 2 * MathF.PI / Lengths[cascade] * BandStart;

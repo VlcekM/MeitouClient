@@ -36,7 +36,9 @@ sealed class PostTaa : IDisposable
     Matrix4x4 _previousRotation;
     float _previousFov, _previousAspect;
 
-    /// <summary>The frame's particles, whose coverage is added to the upscalers' reactive mask (see <see cref="ParticleCoverage"/>).</summary>
+    /// <summary>
+    /// The frame's particles, whose coverage is added to the upscalers' reactive mask (see <see cref="ParticleCoverage"/>).
+    /// </summary>
     public ParticleRenderer? Particles { get; set; }
 
     /// <summary>
@@ -47,7 +49,9 @@ sealed class PostTaa : IDisposable
     /// </summary>
     public Action<IGpuCommandList, GpuTexture, ColorMask, bool>? ParticleCoverage { get; set; }
 
-    /// <summary>Moving geometry's own motion over the camera's, called after the velocity pass.</summary>
+    /// <summary>
+    /// Moving geometry's own motion over the camera's, called after the velocity pass.
+    /// </summary>
     public Action<MotionTargets>? ObjectMotion { get; set; }
 
     /// <summary>
@@ -106,8 +110,10 @@ sealed class PostTaa : IDisposable
         _linearSampler = new SampledTexture(Sampled(TextureMinFilter.Linear, TextureMagFilter.Linear), default);
     }
 
-    /// <summary>The offset frame <paramref name="frame"/> moves the projection by, in render pixels (the phase count covers every
-    /// display pixel at the render scale).</summary>
+    /// <summary>
+    /// The offset frame <paramref name="frame"/> moves the projection by, in render pixels (the phase count covers every display pixel at the render
+    /// scale).
+    /// </summary>
     public static Vector2 Offset(long frame, int renderWidth, int displayWidth) =>
         Jitter.Offset(frame, Jitter.PhaseCount(renderWidth, displayWidth));
 
@@ -217,7 +223,9 @@ sealed class PostTaa : IDisposable
         }
     }
 
-    /// <summary>Moving geometry's own motion (<see cref="ObjectMotion"/>) over the camera's, into the motion target's R and G.</summary>
+    /// <summary>
+    /// Moving geometry's own motion (<see cref="ObjectMotion"/>) over the camera's, into the motion target's R and G.
+    /// </summary>
     void DrawObjectMotion(IGpuCommandList cmd, GpuTexture depth, float near, float far, float fov, Vector2 jitterPixels)
     {
         if (ObjectMotion is not { } objectMotion) return;
@@ -280,7 +288,9 @@ sealed class PostTaa : IDisposable
         return true;
     }
 
-    /// <summary>Drops the failed external upscaler and makes the TAA histories it skipped.</summary>
+    /// <summary>
+    /// Drops the failed external upscaler and makes the TAA histories it skipped.
+    /// </summary>
     void FallBackToTaa(IUpscaler upscaler)
     {
         Console.WriteLine($"upscaler  {upscaler.Name} failed; using TAA");
@@ -291,7 +301,9 @@ sealed class PostTaa : IDisposable
         Ensure(_width, _height, _displayWidth, _displayHeight);
     }
 
-    /// <summary>The TAA: this frame's scene and motion against the previous history, into the other history target.</summary>
+    /// <summary>
+    /// The TAA: this frame's scene and motion against the previous history, into the other history target.
+    /// </summary>
     GpuTexture ResolveTaa(IGpuCommandList cmd, GpuTexture scene, Vector2 jitterPixels, bool cut, bool covered)
     {
         if (covered)
@@ -316,7 +328,9 @@ sealed class PostTaa : IDisposable
         return output;
     }
 
-    /// <summary>Remembers the camera of the frame just drawn, for the next frame's reprojection and cut test.</summary>
+    /// <summary>
+    /// Remembers the camera of the frame just drawn, for the next frame's reprojection and cut test.
+    /// </summary>
     void RememberFrame(Vector3 eye, Matrix4x4 rotation, float fov, float aspect)
     {
         _previousEye = eye;
@@ -372,7 +386,9 @@ sealed class PostTaa : IDisposable
         _externalValid = false;
     }
 
-    /// <summary>One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/>.</summary>
+    /// <summary>
+    /// One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/>.
+    /// </summary>
     void Fullscreen(IGpuCommandList cmd, LegacyProgram program, GpuTexture target, int w, int h)
     {
         var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None);

@@ -385,7 +385,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         return list;
     }
 
-    /// <summary>The characters standing (alive, not down) by faction, for <see cref="EnemiesOf"/>; once per check.</summary>
+    /// <summary>
+    /// The characters standing (alive, not down) by faction, for <see cref="EnemiesOf"/>; once per check.
+    /// </summary>
     void StandingFactions(CharacterTable table)
     {
         foreach (var l in _standingBy.Values)
@@ -415,7 +417,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         }
     }
 
-    /// <summary>The slots some living character is fighting (the combat state as of this tick).</summary>
+    /// <summary>
+    /// The slots some living character is fighting (the combat state as of this tick).
+    /// </summary>
     void Attacked(CharacterTable table)
     {
         _attacked.Clear();

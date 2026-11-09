@@ -16,7 +16,9 @@ static class AtmosphereShaders
     static string F(float v) => v.ToString("0.#########", CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
     static string V3(System.Numerics.Vector3 v) => $"vec3({F(v.X)}, {F(v.Y)}, {F(v.Z)})";
 
-    /// <summary>The water and shafts share the fade before the rendered water's far clip.</summary>
+    /// <summary>
+    /// The water and shafts share the fade before the rendered water's far clip.
+    /// </summary>
     internal const string WaterHorizonFunctions = """
 
         float atmoWaterWeight(float dist, float farClip) { return 1.0 - smoothstep(0.5, 0.9, dist / max(farClip, 1.0)); }
@@ -35,7 +37,9 @@ static class AtmosphereShaders
         }
         """;
 
-    /// <summary>What every world shader includes (fragment stage, or the grass's vertex stage).</summary>
+    /// <summary>
+    /// What every world shader includes (fragment stage, or the grass's vertex stage).
+    /// </summary>
     public static readonly string Functions = $$"""
 
         const float ATMO_PI = 3.14159265358979;

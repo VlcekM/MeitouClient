@@ -160,8 +160,10 @@ public sealed class VramGuard
     /// </summary>
     public bool Allows(ulong bytes) => Allows(bytes, 0);
 
-    /// <summary><see cref="Allows(ulong)"/> with <paramref name="pending"/> bytes the caller knows are on their way but are not in the memory
-    /// in use yet (they count against the room without being reserved again).</summary>
+    /// <summary>
+    /// <see cref="Allows(ulong)"/> with <paramref name="pending"/> bytes the caller knows are on their way but are not in the memory in use yet (they
+    /// count against the room without being reserved again).
+    /// </summary>
     public bool Allows(ulong bytes, ulong pending)
     {
         double now = _clock();

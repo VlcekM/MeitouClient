@@ -346,8 +346,10 @@ public sealed class ReflectionPass : IDisposable
         (_colour, _depth, _msColour, _msDepth) = (null, null, null, null);
     }
 
-    /// <summary>Collects finished GPU timings: native timestamps, read once their frame's slot comes round. Nothing waits, also with
-    /// <paramref name="wait"/> (kept for callers; the GL queries could block): a pass only a frame old has no time yet.</summary>
+    /// <summary>
+    /// Collects finished GPU timings: native timestamps, read once their frame's slot comes round. Nothing waits, also with
+    /// <paramref name="wait"/> (kept for callers; the GL queries could block): a pass only a frame old has no time yet.
+    /// </summary>
     public void Poll(bool wait = false)
     {
         _ = wait;
@@ -684,9 +686,11 @@ public sealed class ReflectionPass : IDisposable
     int _fogProgramSamples = -1;
     GpuPipeline? _fogPipeline;
 
-    /// <summary>The fog pass over the reflection: the fog volume functions with the texel's distance rebuilt from the reflection's depth
+    /// <summary>
+    /// The fog pass over the reflection: the fog volume functions with the texel's distance rebuilt from the reflection's depth
     /// (<paramref name="multisampled"/>: its first sample) through the inverse of the mirrored, oblique view-projection it was drawn with, and the
-    /// ray's direction through the plain one's.</summary>
+    /// ray's direction through the plain one's.
+    /// </summary>
     internal static string FogFragment(bool multisampled) => "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + $$"""
 
         in vec2 vUv;

@@ -7,8 +7,10 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The global illumination's acceleration structures and ray queries (docs/render-gi.md): a triangle built into a bottom level from
-/// <see cref="BufferUse.RayInput"/> buffers, placed by a top-level instance, traced from a compute shader.</summary>
+/// <summary>
+/// The global illumination's acceleration structures and ray queries (docs/render-gi.md): a triangle built into a bottom level from
+/// <see cref="BufferUse.RayInput"/> buffers, placed by a top-level instance, traced from a compute shader.
+/// </summary>
 public class RayQueryTests
 {
     const int N = 16;

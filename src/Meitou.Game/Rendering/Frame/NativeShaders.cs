@@ -46,8 +46,10 @@ static partial class NativeShaders
     /// </summary>
     public const uint PushBytes = 128;
 
-    /// <summary>Set 0, binding 0: the frame's atmosphere (the values <c>SkyRenderer.Apply</c> sets) and the bindless indices of the frame's
-    /// shared textures. Layout std140; <see cref="FrameConstants"/> is the C# side.</summary>
+    /// <summary>
+    /// Set 0, binding 0: the frame's atmosphere (the values <c>SkyRenderer.Apply</c> sets) and the bindless indices of the frame's shared textures.
+    /// Layout std140; <see cref="FrameConstants"/> is the C# side.
+    /// </summary>
     public const string FrameBlock = """
         layout(std140, set = 0, binding = 0) uniform FrameConstants
         {
@@ -181,9 +183,11 @@ static partial class NativeShaders
         BindlessTable.Declarations(BindlessSet) + FrameBlock + ViewBlock + BonesBlock + PushBlock(pushMembers)
         + "#define gl_VertexID gl_VertexIndex\n";
 
-    /// <summary>The atmosphere's and the shadows' uniforms (<see cref="AtmosphereShaders"/>, <see cref="ShadowShaders"/>, <see
+    /// <summary>
+    /// The atmosphere's and the shadows' uniforms (<see cref="AtmosphereShaders"/>, <see cref="ShadowShaders"/>, see
     /// cref="MeitouShadowShaders"/>):
-    /// <see cref="FrameConstants"/> members and the bindless arrays they index.</summary>
+    /// <see cref="FrameConstants"/> members and the bindless arrays they index.
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string> FrameMap = new Dictionary<string, string>
     {
         ["uAtmoSun"] = "frame.atmoSun",
@@ -250,9 +254,11 @@ static partial class NativeShaders
         ["uInteriorCut"] = "(view.interiorCut != 0u)",
     };
 
-    /// <summary>The shared mesh shaders' own uniforms (<see cref="Shaders.MeshVertex"/>, <see cref="Shaders.MeshFragment"/>,
+    /// <summary>
+    /// The shared mesh shaders' own uniforms (<see cref="Shaders.MeshVertex"/>, <see cref="Shaders.MeshFragment"/>,
     /// <see cref="ShadowShaders.MeshDepthFragment"/>; foliage's <c>uCoverage</c>): <see cref="MeshPush"/> members, the textures by their
-    /// bindless index. <c>uModel</c> is not here: each consumer supplies its own (foliage: per-instance rows).</summary>
+    /// bindless index. <c>uModel</c> is not here: each consumer supplies its own (foliage: per-instance rows).
+    /// </summary>
     public static readonly IReadOnlyDictionary<string, string> MeshMap = new Dictionary<string, string>
     {
         ["uSkinned"] = "pc.skinned",
@@ -364,9 +370,10 @@ static partial class NativeShaders
     /// </summary>
     public static string MeshFragment(IReadOnlyDictionary<string, string>? own = null) => Port(Shaders.MeshFragment, Map(own));
 
-    /// <summary><see cref="AtmosphereShaders.Functions"/> (embeds <see cref="ShadowShaders.Functions"/> and <see
-    /// cref="MeitouShadowShaders.Functions"/>);
-    /// for a native text that already has the prelude.</summary>
+    /// <summary>
+    /// <see cref="AtmosphereShaders.Functions"/> (embeds <see cref="ShadowShaders.Functions"/> and <see cref="MeitouShadowShaders.Functions"/>); for
+    /// a native text that already has the prelude.
+    /// </summary>
     public static string AtmosphereFunctions => Port(AtmosphereShaders.Functions, Map());
 
     /// <summary>

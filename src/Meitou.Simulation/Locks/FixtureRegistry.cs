@@ -1152,8 +1152,10 @@ public sealed partial class FixtureRegistry
         return best;
     }
 
-    /// <summary>How far (X/Z) the bed search looks: the original takes the beds of the character's town, or of the nearest town within this distance
-    /// (<c>FUN_1408cbea0</c>: squared 1.5625e7); Meitou has no player towns, so it takes the beds within it (<b>engine choice</b>).</summary>
+    /// <summary>
+    /// How far (X/Z) the bed search looks: the original takes the beds of the character's town, or of the nearest town within this distance
+    /// (<c>FUN_1408cbea0</c>: squared 1.5625e7); Meitou has no player towns, so it takes the beds within it (<b>engine choice</b>).
+    /// </summary>
     public const float BedSearchRange = 3952.85f;
 
     /// <summary>

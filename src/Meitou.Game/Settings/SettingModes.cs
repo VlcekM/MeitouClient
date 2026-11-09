@@ -9,7 +9,9 @@ namespace Meitou.Game.Settings;
 /// </summary>
 sealed class SettingModes
 {
-    /// <summary>The sliders whose Custom was picked: the slider stays shown even when its value matches a mode.</summary>
+    /// <summary>
+    /// The sliders whose Custom was picked: the slider stays shown even when its value matches a mode.
+    /// </summary>
     internal readonly HashSet<string> CustomModes = [];
 
     /// <summary>

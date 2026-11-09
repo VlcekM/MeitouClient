@@ -25,10 +25,13 @@ static class SyntheticTown
 
     public static readonly Vector3 Far = new(9500, 300, 2000);
 
-    /// <summary><paramref name="roaming"/> adds a second town (<c>31-t</c>, far away), roaming squads and bar squads at the first, and a roaming budget for the faction;
+    /// <summary>
+    /// <paramref name="roaming"/> adds a second town (<c>31-t</c>, far away), roaming squads and bar squads at the first, and a roaming budget for
+    /// the faction;
     /// <paramref name="extra"/> adds records, <paramref name="changePatrol"/> changes the resident <c>Patrol</c> template (<c>10-t</c>) and
     /// <paramref name="changeFolk"/> the
-    /// <c>Faction folk</c> one (<c>12-t</c>, the roaming squads') before the database is made.</summary>
+    /// <c>Faction folk</c> one (<c>12-t</c>, the roaming squads') before the database is made.
+    /// </summary>
     public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false, bool anatomy = false,
             bool items = false,
         IReadOnlyList<FcsRecord>? extra = null, Action<FcsRecord>? changePatrol = null, Action<FcsRecord>? changeFolk = null, Action<FcsRecord>? changeTown = null)

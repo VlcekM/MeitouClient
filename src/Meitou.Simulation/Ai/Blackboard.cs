@@ -915,8 +915,9 @@ public sealed class AiMind
     public CharacterId FightTarget { get; set; } = CharacterId.None;
 
     /// <summary>
-    /// <summary> The leader rescue goal's factor (<see cref="AiBehaviour.RescueLeader"/>): 1 while the squad leader is down and can be lifted, kept
-    /// by the carry system's serial sweep (the think reads it).
+    /// <summary>
+    /// The leader rescue goal's factor (<see cref="AiBehaviour.RescueLeader"/>): 1 while the squad leader is down and can be lifted, kept by the
+    /// carry system's serial sweep (the think reads it).
     /// </summary>
     public float RescueWant { get; set; }
 

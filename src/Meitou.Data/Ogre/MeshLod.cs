@@ -2,7 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Data.Ogre;
 
-/// <summary>One mesh LOD level: from which distance it is used, and the triangle-list indices of each submesh.</summary>
+/// <summary>
+/// One mesh LOD level: from which distance it is used, and the triangle-list indices of each submesh.
+/// </summary>
 /// <param name="Distance">The level's user value: used once the LOD value is above it (level 0: 0).</param>
 /// <param name="Indices">Per submesh (in submesh order); null for a submesh the level has no indices for.</param>
 /// <param name="ManualMesh">For a manual level: the mesh file to show instead (indices are then empty).</param>

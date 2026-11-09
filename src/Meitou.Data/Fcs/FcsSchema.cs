@@ -181,7 +181,9 @@ public sealed class FcsSchema
     }
 }
 
-/// <summary>One field of a record type in <c>fcs.def</c>.</summary>
+/// <summary>
+/// One field of a record type in <c>fcs.def</c>.
+/// </summary>
 /// <param name="Default">Default value as written (unquoted for strings; the type name for references).</param>
 /// <param name="ReferenceType">Target record type for <see cref="FcsFieldKind.Reference"/> / <see cref="FcsFieldKind.Instance"/>.</param>
 /// <param name="Groups">Parenthesised defaults, e.g. <c>"0, 24,0"</c> for reference values.</param>

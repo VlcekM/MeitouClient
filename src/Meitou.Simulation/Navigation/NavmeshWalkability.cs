@@ -126,9 +126,11 @@ public sealed partial class NavmeshWalkability : IWalkability
         return w.TryGroundHeight(x, z, out _);
     }
 
-    /// <summary>Whether there is a surface at (x, z) no more than <see cref="StandRise"/> above <paramref name="nearY"/> (a wall top beside the
+    /// <summary>
+    /// Whether there is a surface at (x, z) no more than <see cref="StandRise"/> above <paramref name="nearY"/> (a wall top beside the
     /// walker is not) nor
-    /// <see cref="StandDrop"/> below it (the ground under a floor is not).</summary>
+    /// <see cref="StandDrop"/> below it (the ground under a floor is not).
+    /// </summary>
     public bool IsWalkable(float x, float z, float nearY)
     {
         var w = _world;
@@ -361,14 +363,18 @@ public sealed partial class NavmeshWalkability : IWalkability
     static (NavRef, float, bool)? UnreachableKey(NavWorld w, Vector3 to, NavAgent agent) =>
         w.TryFindPolygon(to, NavQuery.GoalSnap, out var goal, out _) ? (goal, agent.Radius, agent.DoorsClosed) : null;
 
-    /// <summary>How far (units) along the provisional part of a route the zones are asked for (<see cref="RouteZones"/>), so the walker finds rocks,
-    /// walls and cliffs the terrain grid does not know before it gets there (engine choice: about a zone).</summary>
+    /// <summary>
+    /// How far (units) along the provisional part of a route the zones are asked for (<see cref="RouteZones"/>), so the walker finds rocks, walls and
+    /// cliffs the terrain grid does not know before it gets there (engine choice: about a zone).
+    /// </summary>
     public const float Lookahead = 4000;
 
     readonly System.Collections.Concurrent.ConcurrentDictionary<ZoneCoordinate, long> _routeZones = new();
 
-    /// <summary>The zones without a mesh that a provisional route passed through within <see cref="Lookahead"/> of its navmesh part, in the last
-    /// <paramref name="maxAge"/>: the host loads them, and every walker asks for its path again when they are live.</summary>
+    /// <summary>
+    /// The zones without a mesh that a provisional route passed through within <see cref="Lookahead"/> of its navmesh part, in the last
+    /// <paramref name="maxAge"/>: the host loads them, and every walker asks for its path again when they are live.
+    /// </summary>
     public IEnumerable<ZoneCoordinate> RouteZones(TimeSpan maxAge)
     {
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -502,8 +508,10 @@ public sealed partial class NavmeshWalkability : IWalkability
     /// </summary>
     public RoadNetwork? Roads { get; set; }
 
-    /// <summary>How far (units) along a road route its navmesh part reaches at most (engine choice: the navmesh path to a far point would cut the
-    /// road's bends, so the walker asks again every so often and keeps to the road).</summary>
+    /// <summary>
+    /// How far (units) along a road route its navmesh part reaches at most (engine choice: the navmesh path to a far point would cut the road's
+    /// bends, so the walker asks again every so often and keeps to the road).
+    /// </summary>
     public const float RoadHandover = 1500;
 
     /// <summary>

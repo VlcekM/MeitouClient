@@ -15,17 +15,23 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 static class TerrainColourCache
 {
-    /// <summary>Levels kept per tile: the window's.</summary>
+    /// <summary>
+    /// Levels kept per tile: the window's.
+    /// </summary>
     public const int Levels = 7;
 
-    /// <summary>A tile's side must be a multiple of this: its last level is still whole 4 × 4 blocks.</summary>
+    /// <summary>
+    /// A tile's side must be a multiple of this: its last level is still whole 4 × 4 blocks.
+    /// </summary>
     public const int Granule = 4 << (Levels - 1);
 
     const string Version = "terrain colour bc3 v1";
     const int Magic = 0x3343544D;   // "MTC3"
     static readonly ConcurrentDictionary<string, object> Gates = new();
 
-    /// <summary>A tile's side and its levels' BC3 blocks, rows of blocks top first.</summary>
+    /// <summary>
+    /// A tile's side and its levels' BC3 blocks, rows of blocks top first.
+    /// </summary>
     public sealed record Tile(int Size, byte[][] Levels);
 
     static IEnumerable<string> TilePaths(GameInstall install) =>
@@ -35,7 +41,9 @@ static class TerrainColourCache
     static string[] Uncached(GameInstall install) =>
         LoadCaches.Disabled ? [] : [.. TilePaths(install).Where(p => File.Exists(p) && !File.Exists(CachePath(p)))];
 
-    /// <summary>Whether a tile has no cache file yet (the first start, or a mod's new tile).</summary>
+    /// <summary>
+    /// Whether a tile has no cache file yet (the first start, or a mod's new tile).
+    /// </summary>
     public static bool Missing(GameInstall install) => Uncached(install).Length > 0;
 
     /// <summary>
@@ -53,7 +61,9 @@ static class TerrainColourCache
         return missing.Length;
     }
 
-    /// <summary>A tile's levels, read from its cache file or encoded (and written); null when the tile does not exist.</summary>
+    /// <summary>
+    /// A tile's levels, read from its cache file or encoded (and written); null when the tile does not exist.
+    /// </summary>
     public static Tile? Get(string path)
     {
         if (!File.Exists(path)) return null;
@@ -174,7 +184,9 @@ static class TerrainColourCache
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
-    /// <summary>BC3 bytes of <paramref name="levels"/> levels from a side of <paramref name="size"/>.</summary>
+    /// <summary>
+    /// BC3 bytes of <paramref name="levels"/> levels from a side of <paramref name="size"/>.
+    /// </summary>
     static int LevelBytes(int size, int levels)
     {
         int bytes = 0;

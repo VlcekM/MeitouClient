@@ -9,8 +9,10 @@ using Meitou.Game.Rendering.Terrain;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The native model's shader text (docs/renderer-native.md 3.3, <see cref="NativeShaders"/>): the ported shared text compiles with
-/// strict rules, keeps every body, and its blocks match the C# structs.</summary>
+/// <summary>
+/// The native model's shader text (docs/renderer-native.md 3.3, <see cref="NativeShaders"/>): the ported shared text compiles with strict rules,
+/// keeps every body, and its blocks match the C# structs.
+/// </summary>
 public class NativeShaderTests
 {
     static VulkanDevice? TryCreate()

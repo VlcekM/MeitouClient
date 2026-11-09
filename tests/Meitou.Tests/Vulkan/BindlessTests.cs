@@ -5,8 +5,10 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The bindless table (docs/renderer-native.md 2.6): the integer arrays, and indices usable in the frame they are registered or
-/// updated in. Synchronisation validation on.</summary>
+/// <summary>
+/// The bindless table (docs/renderer-native.md 2.6): the integer arrays, and indices usable in the frame they are registered or updated in.
+/// Synchronisation validation on.
+/// </summary>
 public class BindlessTests
 {
     static VulkanDevice? TryCreate()

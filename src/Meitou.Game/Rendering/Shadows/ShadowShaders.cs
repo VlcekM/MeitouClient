@@ -12,7 +12,9 @@ namespace Meitou.Game.Rendering.Shadows;
 /// </summary>
 static class ShadowShaders
 {
-    /// <summary>Uniform buffer binding points of the receiver block and the caster block.</summary>
+    /// <summary>
+    /// Uniform buffer binding points of the receiver block and the caster block.
+    /// </summary>
     public const uint ReceiverBinding = 6, CasterBinding = 7;
     public const string ReceiverBlock = "KenshiShadowReceiver", CasterBlock = "KenshiShadowCaster";
 
@@ -157,7 +159,9 @@ static class ShadowShaders
 
         """;
 
-    /// <summary>Depth-only fragment stage for geometry without a cut-out (the terrain).</summary>
+    /// <summary>
+    /// Depth-only fragment stage for geometry without a cut-out (the terrain).
+    /// </summary>
     public static readonly string DepthFragment = "#version 330 core\n" + CasterDepth + """
         void main() { shadowWriteDepth(); }
         """;
@@ -230,9 +234,11 @@ static class ShadowShaders
         }
         """;
 
-    /// <summary>Debug view of the cascade maps, drawn into a corner of the picture: the depth in grey (near the sun dark). One layer (the
-    /// Faithful atlas) is shown whole with its <c>uGrid</c> × <c>uGrid</c> tiles outlined; several (the Meitou cascades) are laid out as the game's
-    /// atlas (cascade i in column i / grid and row i % grid from the top, grid = <c>uGrid</c>), cells without a cascade dark blue.</summary>
+    /// <summary>
+    /// Debug view of the cascade maps, drawn into a corner of the picture: the depth in grey (near the sun dark). One layer (the Faithful atlas) is
+    /// shown whole with its <c>uGrid</c> × <c>uGrid</c> tiles outlined; several (the Meitou cascades) are laid out as the game's atlas (cascade i in
+    /// column i / grid and row i % grid from the top, grid = <c>uGrid</c>), cells without a cascade dark blue.
+    /// </summary>
     public const string AtlasFragment = """
         #version 330 core
         in vec2 vUv;

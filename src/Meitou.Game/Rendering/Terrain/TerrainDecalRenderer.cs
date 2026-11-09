@@ -22,7 +22,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     /// </summary>
     public const int FaithfulSlots = 8, MaxSlots = 32;
 
-    /// <summary>The most memory the Meitou layers take (<see cref="MaxSlots"/> at 1024², 16 at 2048²); the game's 8 whatever it costs.</summary>
+    /// <summary>
+    /// The most memory the Meitou layers take (<see cref="MaxSlots"/> at 1024², 16 at 2048²); the game's 8 whatever it costs.
+    /// </summary>
     const long LayerBudget = 256L << 20;
 
     const string Vertex = """
@@ -52,7 +54,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         void main() { fragColour = texture(textures2D[nonuniformEXT(vSprite)], vUv) * vColour; }
         """;
 
-    /// <summary>One decal's instance row (<see cref="Vertex"/>'s inputs).</summary>
+    /// <summary>
+    /// One decal's instance row (<see cref="Vertex"/>'s inputs).
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct DecalInstance
     {
@@ -125,10 +129,14 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         return new TerrainDecalRenderer(gpu, sprites);
     }
 
-    /// <summary>The game's <c>Decal Resolution</c>: the side of each cell's texture (512, 1024 or 2048); a change draws every cell again.</summary>
+    /// <summary>
+    /// The game's <c>Decal Resolution</c>: the side of each cell's texture (512, 1024 or 2048); a change draws every cell again.
+    /// </summary>
     public int Resolution { get; set; } = 1024;
 
-    /// <summary>The game's <c>Decal Range</c>: how far from the eye (X/Z, to the cell's square) cells are drawn.</summary>
+    /// <summary>
+    /// The game's <c>Decal Range</c>: how far from the eye (X/Z, to the cell's square) cells are drawn.
+    /// </summary>
     public float Range { get; set; } = 1000;
 
     /// <summary>
@@ -143,7 +151,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     /// </summary>
     public bool Drawn(uint key) => _drawn.Contains(key);
 
-    /// <summary>Picks the cells near <paramref name="eye"/> and draws the layers whose cell changed. Before the scene (outside a pass).</summary>
+    /// <summary>
+    /// Picks the cells near <paramref name="eye"/> and draws the layers whose cell changed. Before the scene (outside a pass).
+    /// </summary>
     public void Record(TerrainDecalStore store, Vector3 eye)
     {
         RegisterSprites();
@@ -159,7 +169,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         DrawChangedLayers(store, layerOf);
     }
 
-    /// <summary>Lists the cells within <see cref="Range"/> of the eye, nearest first, up to the layers the resolution allows.</summary>
+    /// <summary>
+    /// Lists the cells within <see cref="Range"/> of the eye, nearest first, up to the layers the resolution allows.
+    /// </summary>
     void CollectNear(TerrainDecalStore store, Vector3 eye, int resolution)
     {
         _near.Clear();
@@ -177,7 +189,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         if (_near.Count > limit) _near.RemoveRange(limit, _near.Count - limit);
     }
 
-    /// <summary>Makes the layer array (cleared slots) when cells are near and it is missing, of another size, or too short for them.</summary>
+    /// <summary>
+    /// Makes the layer array (cleared slots) when cells are near and it is missing, of another size, or too short for them.
+    /// </summary>
     void EnsureTarget(int resolution)
     {
         // Meitou: the array grows by 8 layers when more cells are near than it holds (every layer drawn again); it does not shrink.
@@ -195,7 +209,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         }
     }
 
-    /// <summary>Gives each near cell its layer (<paramref name="layerOf"/>): the one it has, else a free one, which is then reset for it.</summary>
+    /// <summary>
+    /// Gives each near cell its layer (<paramref name="layerOf"/>): the one it has, else a free one, which is then reset for it.
+    /// </summary>
     void AssignLayers(Span<bool> taken, Span<int> layerOf)
     {
         for (int i = 0; i < _near.Count; i++)
@@ -212,7 +228,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         }
     }
 
-    /// <summary>Draws each near cell whose layer shows another version of it, and lists the cells for the colour shader.</summary>
+    /// <summary>
+    /// Draws each near cell whose layer shows another version of it, and lists the cells for the colour shader.
+    /// </summary>
     void DrawChangedLayers(TerrainDecalStore store, Span<int> layerOf)
     {
         IGpuCommandList? cmd = null;
@@ -300,7 +318,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         cmd.EndRendering();
     }
 
-    /// <summary>The sprites into the bindless table, again with new samplers when the LOD bias they are sampled with changed.</summary>
+    /// <summary>
+    /// The sprites into the bindless table, again with new samplers when the LOD bias they are sampled with changed.
+    /// </summary>
     void RegisterSprites()
     {
         if (_gpu.LodBias == _spriteBias) return;

@@ -12,7 +12,9 @@ namespace Meitou.Game.Rendering.Ui;
 /// </summary>
 internal sealed unsafe class FreeTypeFace
 {
-    /// <summary>Taken around every FreeType call on a face, size or glyph slot.</summary>
+    /// <summary>
+    /// Taken around every FreeType call on a face, size or glyph slot.
+    /// </summary>
     public static readonly object Gate = new();
 
     static FT_LibraryRec_* s_library;
@@ -29,7 +31,9 @@ internal sealed unsafe class FreeTypeFace
     /// </summary>
     public static bool Interpreter35 { get; private set; }
 
-    /// <summary>The face of font file <paramref name="path"/> (opened on first use).</summary>
+    /// <summary>
+    /// The face of font file <paramref name="path"/> (opened on first use).
+    /// </summary>
     public static FreeTypeFace Open(string path)
     {
         string full = Path.GetFullPath(path);
@@ -91,15 +95,21 @@ internal sealed unsafe class FreeTypeFace
 
     public int UnitsPerEm => Face->units_per_EM;
 
-    /// <summary>The hhea ascender (positive) and descender (negative) in font units.</summary>
+    /// <summary>
+    /// The hhea ascender (positive) and descender (negative) in font units.
+    /// </summary>
     public int Ascender => Face->ascender;
 
     public int Descender => Face->descender;
 
-    /// <summary>The OS/2 ascent and descent values (font units); null without the table.</summary>
+    /// <summary>
+    /// The OS/2 ascent and descent values (font units); null without the table.
+    /// </summary>
     public (int TypoAscender, int TypoDescender, int WinAscent, int WinDescent)? Os2 { get; }
 
-    /// <summary>The kerning between two code points in font units (negative: closer); 0 for none.</summary>
+    /// <summary>
+    /// The kerning between two code points in font units (negative: closer); 0 for none.
+    /// </summary>
     public int KerningUnits(int left, int right)
     {
         if (_kerningInfo is null) return 0;

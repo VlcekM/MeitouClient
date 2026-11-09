@@ -38,7 +38,9 @@ public static class WaterFoam
         (pixels[o], pixels[o + 1], pixels[o + 2], pixels[o + 3]) = (Byte(lace), Byte(patches), Byte(Rim(u, v, 96, 0x5EEDu)), 255);
     }
 
-    /// <summary>The rim strength at (u, v) in [0, 1)² of a cellular noise with <paramref name="cells"/>² cells, wrapping.</summary>
+    /// <summary>
+    /// The rim strength at (u, v) in [0, 1)² of a cellular noise with <paramref name="cells"/>² cells, wrapping.
+    /// </summary>
     static float Rim(float u, float v, int cells, uint seed)
     {
         float px = u * cells;
@@ -72,7 +74,9 @@ public static class WaterFoam
 
     static byte Byte(float v) => (byte)Math.Clamp((int)MathF.Round(v * 255), 0, 255);
 
-    /// <summary>A smooth value noise at (u, v) with <paramref name="cells"/>² cells, wrapping: random values at the corners, interpolated.</summary>
+    /// <summary>
+    /// A smooth value noise at (u, v) with <paramref name="cells"/>² cells, wrapping: random values at the corners, interpolated.
+    /// </summary>
     static float Value(float u, float v, int cells, uint seed)
     {
         float px = u * cells;

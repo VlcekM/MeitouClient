@@ -37,21 +37,26 @@ public sealed class LauncherConfig
     /// The user confirmed the install and Kenshi folders in the first-start dialog.
     /// </summary>
     public bool FoldersConfirmed { get; set; }
-    /// <summary>The graphics preset was chosen for the hardware once (the first version installed whose game can detect it), or did not need
-    /// to be (the game's settings were already saved); the Graphics page's Detect button runs it again.</summary>
+    /// <summary>
+    /// The graphics preset was chosen for the hardware once (the first version installed whose game can detect it), or did not need to be (the game's
+    /// settings were already saved); the Graphics page's Detect button runs it again.
+    /// </summary>
     public bool PresetDetected { get; set; }
     public string? KenshiPath { get; set; }
     public bool IncludePrereleases { get; set; }
-    /// <summary>macOS only: <c>auto</c> (Vulkan when its loader exists, else Metal), <c>metal</c> or <c>vulkan</c>.
-    /// Other platforms always use Vulkan.</summary>
+    /// <summary>
+    /// macOS only: <c>auto</c> (Vulkan when its loader exists, else Metal), <c>metal</c> or <c>vulkan</c>. Other platforms always use Vulkan.
+    /// </summary>
     public string Renderer
     {
         get => _renderer;
         set => _renderer = value is "auto" or "metal" or "vulkan" ? value : "auto";
     }
     string _renderer = "auto";
-    /// <summary>macOS Metal: the soft GPU allocation budget in MB (5120 safe, 6144 balanced, 8120 high). It is a
-    /// VramGuard ceiling, not a hard reservation; Vulkan ignores it.</summary>
+    /// <summary>
+    /// macOS Metal: the soft GPU allocation budget in MB (5120 safe, 6144 balanced, 8120 high). It is a VramGuard ceiling, not a hard reservation;
+    /// Vulkan ignores it.
+    /// </summary>
     public int MetalMemoryBudget
     {
         get => _metalMemoryBudget;

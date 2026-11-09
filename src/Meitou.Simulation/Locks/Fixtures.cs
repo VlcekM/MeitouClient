@@ -284,9 +284,11 @@ public sealed class Fixture
     /// </summary>
     public bool Restored { get; set; }
 
-    /// <summary>Doors: a walker opened it (Meitou: it closes again once nobody has gone through it for a while,
+    /// <summary>
+    /// Doors: a walker opened it (Meitou: it closes again once nobody has gone through it for a while,
     /// <see cref="LockSystem.DoorsCloseBehind"/>), and the tick a character last went through or stood in it. Engine state, not saved; hashed only
-    /// while set.</summary>
+    /// while set.
+    /// </summary>
     public bool AutoOpened { get; set; }
     public long LastPass { get; set; }
 

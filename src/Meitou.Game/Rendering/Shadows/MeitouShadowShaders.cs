@@ -19,9 +19,13 @@ static class MeitouShadowShaders
     /// Size of <see cref="Block"/> (std140): two vec4 arrays of <see cref="ShadowSettings.MaxCascades"/>, four vec4, a mat4 and a vec4.
     /// </summary>
     public const int BlockBytes = 2 * ShadowSettings.MaxCascades * 16 + 4 * 16 + 64 + 16;
-    /// <summary>Float offsets in <see cref="Block"/> of the members after the two per-cascade arrays (<c>uMsParams</c> and on).</summary>
+    /// <summary>
+    /// Float offsets in <see cref="Block"/> of the members after the two per-cascade arrays (<c>uMsParams</c> and on).
+    /// </summary>
     public const int ParamsOffset = 2 * ShadowSettings.MaxCascades * 4;
-    /// <summary>Taps of the filter and of the blocker search.</summary>
+    /// <summary>
+    /// Taps of the filter and of the blocker search.
+    /// </summary>
     public const int FilterTaps = 16, BlockerTaps = 8;
 
     /// <summary>

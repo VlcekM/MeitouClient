@@ -11,7 +11,9 @@ namespace Meitou.Game.Rendering.Water;
 /// </summary>
 public sealed class WaveSet
 {
-    /// <summary>Real seconds per game hour at game speed 1 (docs/game/game-loop.md "Day length").</summary>
+    /// <summary>
+    /// Real seconds per game hour at game speed 1 (docs/game/game-loop.md "Day length").
+    /// </summary>
     public const double SecondsPerGameHour = 1200.0 / 11.0;
 
     /// <summary>
@@ -21,7 +23,9 @@ public sealed class WaveSet
 
     double? _lastHours;
 
-    /// <summary>The smoothed wind factor.</summary>
+    /// <summary>
+    /// The smoothed wind factor.
+    /// </summary>
     float _wind;
     double _shorePhase;
 
@@ -36,13 +40,19 @@ public sealed class WaveSet
     /// </summary>
     public Vector4 Shore;
 
-    /// <summary>The game-clock time for the normal maps' scrolling, in the unit the Faithful water's time has (seconds / 600).</summary>
+    /// <summary>
+    /// The game-clock time for the normal maps' scrolling, in the unit the Faithful water's time has (seconds / 600).
+    /// </summary>
     public float NormalTime;
 
-    /// <summary>The wind factor: 0 calm, 1 at 60 units per second (a stiff breeze), at most 1.5.</summary>
+    /// <summary>
+    /// The wind factor: 0 calm, 1 at 60 units per second (a stiff breeze), at most 1.5.
+    /// </summary>
     public static float WindFactor(float windSpeed) => Math.Clamp(windSpeed / 60f, 0f, 1.5f);
 
-    /// <summary>Usable values before the first frame, which then takes its wind at once.</summary>
+    /// <summary>
+    /// Usable values before the first frame, which then takes its wind at once.
+    /// </summary>
     public WaveSet()
     {
         Step(0, Vector2.UnitX, 0);

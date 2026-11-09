@@ -11,7 +11,9 @@ public sealed class PostOptions
 {
     #region Settings
 
-    /// <summary>The preset the settings came from; <c>meitou</c> by default.</summary>
+    /// <summary>
+    /// The preset the settings came from; <c>meitou</c> by default.
+    /// </summary>
     public string Preset = "meitou";
 
     /// <summary>
@@ -19,10 +21,14 @@ public sealed class PostOptions
     /// </summary>
     public bool Fxaa = true;
 
-    /// <summary>Meitou's SMAA in place of FXAA when no temporal upscaler runs (docs/render-post.md "SMAA"); off by default.</summary>
+    /// <summary>
+    /// Meitou's SMAA in place of FXAA when no temporal upscaler runs (docs/render-post.md "SMAA"); off by default.
+    /// </summary>
     public bool Smaa;
 
-    /// <summary>Kenshi's heat haze after FXAA (its <c>HeatHaze=1</c> setting, on when the key is absent; docs/formats/post-processing.md).</summary>
+    /// <summary>
+    /// Kenshi's heat haze after FXAA (its <c>HeatHaze=1</c> setting, on when the key is absent; docs/formats/post-processing.md).
+    /// </summary>
     public bool HeatHaze = true;
 
     /// <summary>
@@ -37,13 +43,19 @@ public sealed class PostOptions
     /// </summary>
     public float HeatHazeStrength = Enhancements.MeitouHeatHazeStrength;
 
-    /// <summary>The scale the heat haze uses: <see cref="HeatHazeStrength"/> with the Meitou switch, else the game's 1.</summary>
+    /// <summary>
+    /// The scale the heat haze uses: <see cref="HeatHazeStrength"/> with the Meitou switch, else the game's 1.
+    /// </summary>
     public float HeatHazeScale => MeitouHeatHaze ? HeatHazeStrength : 1;
 
-    /// <summary>Meitou switches (Enhancements), on by default; the <c>kenshi</c> preset turns them off.</summary>
+    /// <summary>
+    /// Meitou switches (Enhancements), on by default; the <c>kenshi</c> preset turns them off.
+    /// </summary>
     public bool Ssao = true;
 
-    /// <summary>Meitou switches (Enhancements), on by default; the <c>kenshi</c> preset turns them off.</summary>
+    /// <summary>
+    /// Meitou switches (Enhancements), on by default; the <c>kenshi</c> preset turns them off.
+    /// </summary>
     public bool Dither = true;
 
     /// <summary>
@@ -69,7 +81,9 @@ public sealed class PostOptions
     /// </summary>
     public float ShaftStrength = 0.8f;
 
-    /// <summary>How much the sky (which no haze covers) darkens behind shadowed air, relative to a surface at the grid's end.</summary>
+    /// <summary>
+    /// How much the sky (which no haze covers) darkens behind shadowed air, relative to a surface at the grid's end.
+    /// </summary>
     public const float ShaftSky = 0.5f;
 
     /// <summary>
@@ -89,7 +103,9 @@ public sealed class PostOptions
         _ => 160,
     };
 
-    /// <summary>The depth slices of the light shafts' grid (see <see cref="ShaftCells"/>).</summary>
+    /// <summary>
+    /// The depth slices of the light shafts' grid (see <see cref="ShaftCells"/>).
+    /// </summary>
     public int ShaftSlices => ShaftQuality switch
     {
         0 => 32,
@@ -97,7 +113,9 @@ public sealed class PostOptions
         _ => 64,
     };
 
-    /// <summary>The shadow samples per cell of the light shafts' grid (see <see cref="ShaftCells"/>).</summary>
+    /// <summary>
+    /// The shadow samples per cell of the light shafts' grid (see <see cref="ShaftCells"/>).
+    /// </summary>
     public int ShaftSamples => ShaftQuality switch
     {
         0 => 1,
@@ -105,39 +123,58 @@ public sealed class PostOptions
         _ => 2,
     };
 
-    /// <summary>The light shafts' near plane in world units.</summary>
+    /// <summary>
+    /// The light shafts' near plane in world units.
+    /// </summary>
     public const float ShaftNear = 50;
 
-    /// <summary>The air layer (docs/render-shafts.md "Air layer"): its density as a multiple of <see cref="ShaftAirDensity"/> at the ground under the
-    /// eye (0: none; the Tab slider), its scale height in world units and the Henyey-Greenstein anisotropy (0 even, towards 1 all towards the
-    /// sun).</summary>
+    /// <summary>
+    /// The air layer (docs/render-shafts.md "Air layer"): its density as a multiple of <see cref="ShaftAirDensity"/> at the ground under the eye (0:
+    /// none; the Tab slider), its scale height in world units and the Henyey-Greenstein anisotropy (0 even, towards 1 all towards the sun).
+    /// </summary>
     public float ShaftAir = 1;
 
-    /// <summary>The air layer's scale height in world units (see <see cref="ShaftAir"/>).</summary>
+    /// <summary>
+    /// The air layer's scale height in world units (see <see cref="ShaftAir"/>).
+    /// </summary>
     public const float ShaftAirHeight = 800;
 
-    /// <summary>The air layer's Henyey-Greenstein anisotropy (see <see cref="ShaftAir"/>): 0 even, towards 1 all towards the sun.</summary>
+    /// <summary>
+    /// The air layer's Henyey-Greenstein anisotropy (see <see cref="ShaftAir"/>): 0 even, towards 1 all towards the sun.
+    /// </summary>
     public const float ShaftAirPhase = 0.6f;
 
-    /// <summary>The air layer's base density, which <see cref="ShaftAir"/> and the time of day scale.</summary>
+    /// <summary>
+    /// The air layer's base density, which <see cref="ShaftAir"/> and the time of day scale.
+    /// </summary>
     public const float ShaftAirDensity = 1.5e-5f;
 
-    /// <summary>The air layer by the time of day (morning mist, evening haze): <see cref="ShaftAirDawn"/> times the density at sunrise and at sunset
+    /// <summary>
+    /// The air layer by the time of day (morning mist, evening haze): <see cref="ShaftAirDawn"/> times the density at sunrise and at sunset
     /// (the Tab slider), easing down to
-    /// <see cref="ShaftAirDay"/> times it over <see cref="ShaftAirRamp"/> hours after sunrise and before sunset (smoothstep).</summary>
+    /// <see cref="ShaftAirDay"/> times it over <see cref="ShaftAirRamp"/> hours after sunrise and before sunset (smoothstep).
+    /// </summary>
     public float ShaftAirDawn = 1;
 
-    /// <summary>The air layer's share of the density by day (see <see cref="ShaftAirDawn"/>).</summary>
+    /// <summary>
+    /// The air layer's share of the density by day (see <see cref="ShaftAirDawn"/>).
+    /// </summary>
     public const float ShaftAirDay = 0;
 
-    /// <summary>The hours over which the air layer eases from dawn to day (see <see cref="ShaftAirDawn"/>).</summary>
+    /// <summary>
+    /// The hours over which the air layer eases from dawn to day (see <see cref="ShaftAirDawn"/>).
+    /// </summary>
     public const float ShaftAirRamp = 5.5f;
 
-    /// <summary>The shafts under clouds (docs/render-shafts.md "Cloud cover"): the darkening loses <see cref="ShaftCloudShade"/> of itself as the
-    /// cloud density goes from <see cref="ShaftCloudFrom"/> to 1 (smoothstep).</summary>
+    /// <summary>
+    /// The shafts under clouds (docs/render-shafts.md "Cloud cover"): the darkening loses <see cref="ShaftCloudShade"/> of itself as the cloud
+    /// density goes from <see cref="ShaftCloudFrom"/> to 1 (smoothstep).
+    /// </summary>
     public const float ShaftCloudShade = 0.85f;
 
-    /// <summary>The cloud density where the shafts' darkening starts to lose its share under clouds (see <see cref="ShaftCloudShade"/>).</summary>
+    /// <summary>
+    /// The cloud density where the shafts' darkening starts to lose its share under clouds (see <see cref="ShaftCloudShade"/>).
+    /// </summary>
     public const float ShaftCloudFrom = 0.3f;
 
     /// <summary>
@@ -156,13 +193,19 @@ public sealed class PostOptions
     /// </summary>
     public ToneMapOperator ToneMap = ToneMapOperator.Hybrid;
 
-    /// <summary>The curve and grade used: the Meitou ones with the switch, else the game's clamp and none.</summary>
+    /// <summary>
+    /// The curve and grade used: the Meitou ones with the switch, else the game's clamp and none.
+    /// </summary>
     public ToneMapOperator ToneMapUsed => ToneMapping ? ToneMap : ToneMapOperator.Clamp;
 
-    /// <summary>Whether the grade applies: the <c>tonemap</c> switch and <see cref="Grade"/>.</summary>
+    /// <summary>
+    /// Whether the grade applies: the <c>tonemap</c> switch and <see cref="Grade"/>.
+    /// </summary>
     public bool GradeUsed => ToneMapping && Grade;
 
-    /// <summary>The hybrid tone map's share of ACES (0 the game's clamp, 1 ACES; default 0.75).</summary>
+    /// <summary>
+    /// The hybrid tone map's share of ACES (0 the game's clamp, 1 ACES; default 0.75).
+    /// </summary>
     public float ToneMix = 0.75f;
 
     /// <summary>
@@ -170,21 +213,31 @@ public sealed class PostOptions
     /// </summary>
     public bool Grade = true;
 
-    /// <summary>The grade's saturation (see <see cref="Grade"/>).</summary>
+    /// <summary>
+    /// The grade's saturation (see <see cref="Grade"/>).
+    /// </summary>
     public const float Saturation = 1.06f;
 
-    /// <summary>The grade's contrast (see <see cref="Grade"/>).</summary>
+    /// <summary>
+    /// The grade's contrast (see <see cref="Grade"/>).
+    /// </summary>
     public const float Contrast = 1.05f;
 
-    /// <summary>The Meitou <c>nightgrade</c> switch (docs/render-post.md "Night grading"); Faithful is the game's: no grading.</summary>
+    /// <summary>
+    /// The Meitou <c>nightgrade</c> switch (docs/render-post.md "Night grading"); Faithful is the game's: no grading.
+    /// </summary>
     public bool NightGrade = true;
 
-    /// <summary>How far the Meitou night grading moves the picture towards the rods' blue-grey at night, 0 to 1, kept while the switch is Faithful;
-    /// the adaptation (the auto exposure's mean luminance) decides how much of it applies, so by day it does nothing. Default <see
-    /// cref="Meitou.Data.World.NightGrade.MeitouStrength"/>.</summary>
+    /// <summary>
+    /// How far the Meitou night grading moves the picture towards the rods' blue-grey at night, 0 to 1, kept while the switch is Faithful; the
+    /// adaptation (the auto exposure's mean luminance) decides how much of it applies, so by day it does nothing. Default
+    /// <see cref="Meitou.Data.World.NightGrade.MeitouStrength"/>.
+    /// </summary>
     public float NightGradeStrength = Data.World.NightGrade.MeitouStrength;
 
-    /// <summary>The night grading's strength in use: <see cref="NightGradeStrength"/> with the switch, else 0.</summary>
+    /// <summary>
+    /// The night grading's strength in use: <see cref="NightGradeStrength"/> with the switch, else 0.
+    /// </summary>
     public float NightGradeAmount => NightGrade ? NightGradeStrength : 0;
 
     /// <summary>
@@ -193,10 +246,14 @@ public sealed class PostOptions
     /// </summary>
     public bool Bloom;
 
-    /// <summary>The bloom's share of every pixel's light scattered into its neighbourhood, 0 to 0.25, kept while the switch is off.</summary>
+    /// <summary>
+    /// The bloom's share of every pixel's light scattered into its neighbourhood, 0 to 0.25, kept while the switch is off.
+    /// </summary>
     public float BloomStrength = 0.13f;
 
-    /// <summary>The bloom's strength in use: <see cref="BloomStrength"/> with the switch, else 0.</summary>
+    /// <summary>
+    /// The bloom's strength in use: <see cref="BloomStrength"/> with the switch, else 0.
+    /// </summary>
     public float BloomAmount => Bloom ? BloomStrength : 0;
 
     /// <summary>
@@ -205,7 +262,9 @@ public sealed class PostOptions
     /// </summary>
     public const float BloomFirefly = 64;
 
-    /// <summary>Linear scale of the scene before everything else. 1 keeps the shaders' brightness (the - and = keys).</summary>
+    /// <summary>
+    /// Linear scale of the scene before everything else. 1 keeps the shaders' brightness (the - and = keys).
+    /// </summary>
     public float Exposure = 1;
 
     /// <summary>
@@ -214,10 +273,14 @@ public sealed class PostOptions
     /// </summary>
     public System.Numerics.Vector3 Balance = System.Numerics.Vector3.One;
 
-    /// <summary>World units: how far from a point occluders count (at least 3 % of its distance).</summary>
+    /// <summary>
+    /// World units: how far from a point occluders count (at least 3 % of its distance).
+    /// </summary>
     public const float SsaoRadius = 6;
 
-    /// <summary>The strength the SSAO pass is set with.</summary>
+    /// <summary>
+    /// The strength the SSAO pass is set with.
+    /// </summary>
     public const float SsaoStrength = 4;
 
     /// <summary>
@@ -225,7 +288,9 @@ public sealed class PostOptions
     /// </summary>
     public const float SsaoFadeStart = 1600;
 
-    /// <summary>The eye distance where the occlusion has faded out (see <see cref="SsaoFadeStart"/>).</summary>
+    /// <summary>
+    /// The eye distance where the occlusion has faded out (see <see cref="SsaoFadeStart"/>).
+    /// </summary>
     public const float SsaoFadeEnd = 6600;
 
     /// <summary>
@@ -240,14 +305,18 @@ public sealed class PostOptions
     /// </summary>
     public const float SsaoCharacterOccluder = 0.3f;
 
-    /// <summary>The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.</summary>
+    /// <summary>
+    /// The upscaler (render scale, TAA / FSR / DLSS); not part of the presets.
+    /// </summary>
     public readonly UpscaleOptions Upscale = new();
 
     #endregion
 
     #region Presets
 
-    /// <summary>The settings of a named preset; throws on an unknown name.</summary>
+    /// <summary>
+    /// The settings of a named preset; throws on an unknown name.
+    /// </summary>
     public static PostOptions Create(string preset)
     {
         var o = new PostOptions { Preset = preset };
@@ -274,7 +343,9 @@ public sealed class PostOptions
         return o;
     }
 
-    /// <summary>Copies other's settings into this one; the upscaler and the white balance are kept.</summary>
+    /// <summary>
+    /// Copies other's settings into this one; the upscaler and the white balance are kept.
+    /// </summary>
     public void CopyFrom(PostOptions other)
     {
         Preset = other.Preset;
@@ -308,7 +379,9 @@ public sealed class PostOptions
 
     #region Command line
 
-    /// <summary>Handles one command-line option; false when it is not a post-processing one.</summary>
+    /// <summary>
+    /// Handles one command-line option; false when it is not a post-processing one.
+    /// </summary>
     public bool TryParse(string a, Func<string> next)
     {
         switch (a)
@@ -347,7 +420,9 @@ public sealed class PostOptions
         }
     }
 
-    /// <summary>The upscaler named by <c>--upscaler</c>; throws on an unknown name.</summary>
+    /// <summary>
+    /// The upscaler named by <c>--upscaler</c>; throws on an unknown name.
+    /// </summary>
     static UpscalerKind ParseUpscaler(string text) =>
         Enum.TryParse<UpscalerKind>(text, true, out var k) ? k : throw new ArgumentException("--upscaler must be off, taa, fsr, dlss or metalfx");
 
@@ -355,7 +430,9 @@ public sealed class PostOptions
 
     #region Description
 
-    /// <summary>One line naming the settings in effect, for the log.</summary>
+    /// <summary>
+    /// One line naming the settings in effect, for the log.
+    /// </summary>
     public string Describe()
     {
         string aa = Upscale.Temporal ? "temporal" : Smaa ? "smaa" : Fxaa ? "fxaa" : "off";
@@ -373,16 +450,24 @@ public sealed class PostOptions
     #endregion
 }
 
-/// <summary>The tone curve of the composite (docs/render-post.md "Tone map and grading").</summary>
+/// <summary>
+/// The tone curve of the composite (docs/render-post.md "Tone map and grading").
+/// </summary>
 public enum ToneMapOperator
 {
-    /// <summary>Clamp at 1: what Kenshi does (its tone-map function is exposure only; docs/formats/post-processing.md).</summary>
+    /// <summary>
+    /// Clamp at 1: what Kenshi does (its tone-map function is exposure only; docs/formats/post-processing.md).
+    /// </summary>
     Clamp,
 
-    /// <summary>Identity up to 0.8 on the brightest channel, then an exponential shoulder towards 1: the same look without the hard clip.</summary>
+    /// <summary>
+    /// Identity up to 0.8 on the brightest channel, then an exponential shoulder towards 1: the same look without the hard clip.
+    /// </summary>
     Shoulder,
 
-    /// <summary>Narkowicz's ACES fit: filmic, but darker mid-tones and more contrast than Kenshi.</summary>
+    /// <summary>
+    /// Narkowicz's ACES fit: filmic, but darker mid-tones and more contrast than Kenshi.
+    /// </summary>
     Aces,
 
     /// <summary>

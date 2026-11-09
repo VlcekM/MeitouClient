@@ -21,7 +21,9 @@ public sealed class WorldWeather
     string _lastForced = "";
     Vector3? _eye;   // the camera of the last update
 
-    /// <summary>The zone the camera of the last update is in (as <c>--zone</c> names it), null before the first.</summary>
+    /// <summary>
+    /// The zone the camera of the last update is in (as <c>--zone</c> names it), null before the first.
+    /// </summary>
     public ZoneCoordinate? CameraZone => _eye is { } e ? WorldLayout.ZoneOf(e.X, e.Z) : null;
 
     readonly Data.GameDatabase? _database;
@@ -30,19 +32,31 @@ public sealed class WorldWeather
     public WorldWeather(WeatherWorld world, Data.GameDatabase? database = null) => (World, this._database) = (world, database);
 
     public WeatherWorld World { get; }
-    /// <summary>The state of the last <see cref="Update"/>.</summary>
+    /// <summary>
+    /// The state of the last <see cref="Update"/>.
+    /// </summary>
     public WeatherState State => World.Current;
-    /// <summary>The frame times of the last update (the sky's cloud drift steps by <see cref="FrameTimes.Game"/>).</summary>
+    /// <summary>
+    /// The frame times of the last update (the sky's cloud drift steps by <see cref="FrameTimes.Game"/>).
+    /// </summary>
     public FrameTimes Times { get; private set; }
 
-    /// <summary>The game day (the viewer's <c>--day</c> and its day keys, the game's clock).</summary>
+    /// <summary>
+    /// The game day (the viewer's <c>--day</c> and its day keys, the game's clock).
+    /// </summary>
     public int Day { get; set; }
-    /// <summary>The game speed (1 in the viewer) and whether the game is paused (never in the viewer).</summary>
+    /// <summary>
+    /// The game speed (1 in the viewer) and whether the game is paused (never in the viewer).
+    /// </summary>
     public float GameSpeed { get; set; } = 1;
     public bool Paused { get; set; }
-    /// <summary>Overrides the cloud drift (<c>--cloud-wind</c>); null follows the weather's wind.</summary>
+    /// <summary>
+    /// Overrides the cloud drift (<c>--cloud-wind</c>); null follows the weather's wind.
+    /// </summary>
     public Vector2? CloudWindOverride { get; set; }
-    /// <summary>Writes the weather change lines to the console.</summary>
+    /// <summary>
+    /// Writes the weather change lines to the console.
+    /// </summary>
     public bool Log { get; set; } = true;
 
 
@@ -97,13 +111,19 @@ public sealed class WorldWeather
 
     WeatherRegion? Here => World.CameraRegion ?? (_eye is { } e ? World.RegionAt(e.X, e.Z) : null);
 
-    /// <summary>The Tab panel's weather list: the weathers of the camera region's season, in its order (empty before the first frame).</summary>
+    /// <summary>
+    /// The Tab panel's weather list: the weathers of the camera region's season, in its order (empty before the first frame).
+    /// </summary>
     public IReadOnlyList<string> Choices() => Here is { } r ? [.. r.Season.Season.Weathers.Select(w => w.Weather.Name)] : [];
 
-    /// <summary>The list's current entry (-1: a forced weather or no region).</summary>
+    /// <summary>
+    /// The list's current entry (-1: a forced weather or no region).
+    /// </summary>
     public int Current() => World.ForcedWeather is null && Here is { } r ? r.WeatherEntryIndex : -1;
 
-    /// <summary>The list's button: the region and its weather.</summary>
+    /// <summary>
+    /// The list's button: the region and its weather.
+    /// </summary>
     public string ChoiceLabel() => World.ForcedWeather is { } f ? $"Weather: {f.Name} (forced)"
         : Here is { } r ? $"Weather: {r.Weather.Name}"
         : "Weather";
@@ -124,7 +144,9 @@ public sealed class WorldWeather
         return $"{region.Def.Name}: {before} -> {region.Weather.Name}, strength {region.Strength:0.00}, for {minutes}.";
     }
 
-    /// <summary>Maps the state onto the sky renderer's weather inputs.</summary>
+    /// <summary>
+    /// Maps the state onto the sky renderer's weather inputs.
+    /// </summary>
     public void Apply(SkyRenderer sky)
     {
         var s = State;
@@ -177,7 +199,9 @@ public sealed class WorldWeather
 
     int _lastRegion = -1;
 
-    /// <summary>The line for the log and the statistics: region, season, weather, strength, wind and the time left.</summary>
+    /// <summary>
+    /// The line for the log and the statistics: region, season, weather, strength, wind and the time left.
+    /// </summary>
     public string Describe()
     {
         var s = State;
@@ -194,7 +218,9 @@ public sealed class WorldWeather
             $"{where}; strength {s.Strength:0.00}, wind {s.WindSpeed:0} u/s heading {heading:0} deg, day {Day}");
     }
 
-    /// <summary>Game minutes as <c>1 d 3 h</c>, <c>3 h 20 min</c> or <c>45 min</c>.</summary>
+    /// <summary>
+    /// Game minutes as <c>1 d 3 h</c>, <c>3 h 20 min</c> or <c>45 min</c>.
+    /// </summary>
     public static string FormatMinutes(double minutes)
     {
         if (minutes >= 1_000_000 - 1) return "never";

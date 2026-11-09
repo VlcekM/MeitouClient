@@ -60,7 +60,9 @@ sealed class FeatureGrouping(SettingsMenu menu)
         new(SkinGroup, "Skin", []),
     ];
 
-    /// <summary>The features among a launcher section's <paramref name="keys"/> (docs/launcher.md "Graphics"), by the keys their settings are saved under.</summary>
+    /// <summary>
+    /// The features among a launcher section's <paramref name="keys"/> (docs/launcher.md "Graphics"), by the keys their settings are saved under.
+    /// </summary>
     internal static List<global::Meitou.Settings.SettingsGroup> LauncherGroups(IReadOnlyCollection<string> keys)
     {
         string? Key(string label) =>
@@ -97,7 +99,9 @@ sealed class FeatureGrouping(SettingsMenu menu)
 
     #region Open state
 
-    /// <summary>The groups the player opened (this session).</summary>
+    /// <summary>
+    /// The groups the player opened (this session).
+    /// </summary>
     internal readonly HashSet<string> OpenGroups = [];
 
     internal void ToggleGroup(string id)

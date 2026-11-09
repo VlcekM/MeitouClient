@@ -1,6 +1,8 @@
 namespace Meitou.Data.Gameplay.Bodies;
 
-/// <summary>One entry of a race's <c>combat anatomy</c>: a part, how likely it is to be struck, and its base HP.</summary>
+/// <summary>
+/// One entry of a race's <c>combat anatomy</c>: a part, how likely it is to be struck, and its base HP.
+/// </summary>
 /// <param name="Part">The LOCATIONAL_DAMAGE record.</param>
 /// <param name="HitWeight">The reference's value 0: a relative chance to be struck (<b>Observed</b>; the assignment of the two integers is inferred,
 /// character-stats.md).</param>
@@ -133,7 +135,9 @@ public sealed class RaceData
 
     public float StatMultiplier(StatsEnumerated stat) => (uint)stat < StatsInfo.Count ? StatMultipliers[(int)stat] : 1;
 
-    /// <summary>A map with every entry 1.</summary>
+    /// <summary>
+    /// A map with every entry 1.
+    /// </summary>
     /// <summary>
     /// The order the original's race stat map iterates (a boost map of every <see cref="StatsEnumerated"/> 0-38 inserted in order,
     /// <c>FUN_14042efa0</c>,

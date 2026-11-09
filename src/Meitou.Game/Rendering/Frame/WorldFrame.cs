@@ -53,9 +53,11 @@ sealed class WorldOptions
     public bool NoTextures, NoObjects, Wireframe;
     public int Debug;
 
-    /// <summary>The reach switch (Enhancements): Meitou by default (objects to 20000, landmarks 7.5 times that, terrain error 16 px) or the viewer's
+    /// <summary>
+    /// The reach switch (Enhancements): Meitou by default (objects to 20000, landmarks 7.5 times that, terrain error 16 px) or the viewer's
     /// old values (12000, none, 10 px).
-    /// <c>--object-distance</c> and <c>--terrain-error</c> as given (null: the mode's default, see the <c>...For</c> methods).</summary>
+    /// <c>--object-distance</c> and <c>--terrain-error</c> as given (null: the mode's default, see the <c>...For</c> methods).
+    /// </summary>
     public bool MeitouReach = true;
 
     /// <summary>
@@ -182,9 +184,11 @@ sealed class WorldOptions
 
     #region Enhancement switches
 
-    /// <summary>The range switch (Enhancements): foliage meshes drawn to their size class's range (Meitou, default) or their layer's (the game); the
+    /// <summary>
+    /// The range switch (Enhancements): foliage meshes drawn to their size class's range (Meitou, default) or their layer's (the game); the
     /// large class's range (null: the default;
-    /// <c>--range-large</c>), the medium and small ranges follow it at their default ratios.</summary>
+    /// <c>--range-large</c>), the medium and small ranges follow it at their default ratios.
+    /// </summary>
     public bool MeitouRange = true;
     public float? LargeRange;
 
@@ -804,10 +808,12 @@ sealed class SceneHost(IGpuContext ctx)
 
     public bool IsOpen => _cmd is not null;
 
-    /// <summary>Opens the host on <paramref name="targets"/> (nothing when it is open already); its jobs count towards <paramref name="stage"/>.
+    /// <summary>
+    /// Opens the host on <paramref name="targets"/> (nothing when it is open already); its jobs count towards <paramref name="stage"/>.
     /// <paramref name="clearColour"/> / <paramref name="clearDepth"/>: the attachments are cleared by the rendering's load ops (to the colour, to
     /// <see cref="DepthConvention.Clear"/>).
-    /// Without secondaries (<see cref="IGpuContext.RecordsSecondaries"/>) the guests record straight into its rendering.</summary>
+    /// Without secondaries (<see cref="IGpuContext.RecordsSecondaries"/>) the guests record straight into its rendering.
+    /// </summary>
     public void Open(int stage, PassTargets targets, ClearColour? clearColour = null, bool clearDepth = false)
     {
         if (_cmd is not null) { Stage(stage); return; }
@@ -1249,9 +1255,10 @@ static partial class WorldFrame
         /// </summary>
         public IReadOnlyList<Vector3> Kept = [];
 
-        /// <summary>Places kept loaded: the eye's and each merged kept point's, held at its highest for <see cref="AreasHoldMs"/> (the merge flickers
-        /// near its distance, and the grass store and terrain arrays reallocate when it grows). The texture, mesh and grass budgets scale with
-        /// it.</summary>
+        /// <summary>
+        /// Places kept loaded: the eye's and each merged kept point's, held at its highest for <see cref="AreasHoldMs"/> (the merge flickers near its
+        /// distance, and the grass store and terrain arrays reallocate when it grows). The texture, mesh and grass budgets scale with it.
+        /// </summary>
         public int Areas = 1;
         public long AreasAt;
 
@@ -2356,10 +2363,12 @@ static partial class WorldFrame
         if (ms > 5) SpikeLog.Note($"slow sky {step}", ms: ms);
     }
 
-    /// <summary>The air layer's density by the time of day (docs/render-shafts.md "Air layer"): <c>ShaftAirDawn</c> at sunrise and at sunset, easing
+    /// <summary>
+    /// The air layer's density by the time of day (docs/render-shafts.md "Air layer"): <c>ShaftAirDawn</c> at sunrise and at sunset, easing
     /// (smoothstep) to
     /// <c>ShaftAirDay</c> over <c>ShaftAirRamp</c> hours after sunrise and before sunset; at night the dawn value (the shafts need the sun
-    /// anyway).</summary>
+    /// anyway).
+    /// </summary>
     internal static float ShaftAirByTime(PostOptions o, SkyClock clock, float hour)
     {
         hour = ((hour % 24) + 24) % 24;
@@ -2368,9 +2377,10 @@ static partial class WorldFrame
         return PostOptions.ShaftAirDay + (o.ShaftAirDawn - PostOptions.ShaftAirDay) * (1 - t * t * (3 - 2 * t));
     }
 
-    /// <summary>How much of the haze in shadow the light shafts take off (docs/render-shafts.md): the strength times the sun's share of the light the
-    /// air scatters (the sun's colour against the sky's ambient, by luminance), faded out as the sun sets, when the sky's light is all there
-    /// is.</summary>
+    /// <summary>
+    /// How much of the haze in shadow the light shafts take off (docs/render-shafts.md): the strength times the sun's share of the light the air
+    /// scatters (the sun's colour against the sky's ambient, by luminance), faded out as the sun sets, when the sky's light is all there is.
+    /// </summary>
     internal static float ShaftDarkening(PostOptions o, WorldLighting light, float sunY)
     {
         static float Luminance(Vector3 c) => 0.2126f * c.X + 0.7152f * c.Y + 0.0722f * c.Z;
@@ -2380,17 +2390,21 @@ static partial class WorldFrame
         return o.ShaftStrength * share * t * t * (3 - 2 * t);
     }
 
-    /// <summary>How overcast the sky is, 0..1, for what fades under clouds (the light shafts, the Meitou water's glint): the sky's cloud density c,
-    /// or the weather's <c>rainAmount</c> (saturate(rain / 50)) where that is more, since rain falls from a covered sky whatever c the weather lists
-    /// (<c>swamp rain no wind</c> has c 0.5 and rain 40).</summary>
+    /// <summary>
+    /// How overcast the sky is, 0..1, for what fades under clouds (the light shafts, the Meitou water's glint): the sky's cloud density c, or the
+    /// weather's <c>rainAmount</c> (saturate(rain / 50)) where that is more, since rain falls from a covered sky whatever c the weather lists
+    /// (<c>swamp rain no wind</c> has c 0.5 and rain 40).
+    /// </summary>
     internal static float Overcast(float cloudDensity, float rain) => MathF.Max(Math.Clamp(cloudDensity, 0, 1), WeatherSurfaces.RainAmount(rain));
 
     static float Overcast(Gpu gpu) => Overcast(gpu.Sky.CloudDensity, gpu.Surfaces?.Rain ?? 0);
 
-    /// <summary>What is left of the light shafts under the cloud layer (docs/render-shafts.md "Cloud cover"): the game's sun shines through any
+    /// <summary>
+    /// What is left of the light shafts under the cloud layer (docs/render-shafts.md "Cloud cover"): the game's sun shines through any
     /// weather, but crisp shafts under a full overcast in the rain read wrong, so the darkening loses <c>ShaftCloudShade</c> of itself as the cloud
     /// density c goes from
-    /// <c>ShaftCloudFrom</c> to 1 (smoothstep).</summary>
+    /// <c>ShaftCloudFrom</c> to 1 (smoothstep).
+    /// </summary>
     internal static float ShaftCloudFade(float cloudDensity)
     {
         float t = Math.Clamp((cloudDensity - PostOptions.ShaftCloudFrom) / Math.Max(1 - PostOptions.ShaftCloudFrom, 1e-3f), 0, 1);

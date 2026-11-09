@@ -16,15 +16,21 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 static class LightShaftShaders
 {
-    /// <summary>Slices per row of the atlas.</summary>
+    /// <summary>
+    /// Slices per row of the atlas.
+    /// </summary>
     public const int AtlasColumns = 8;
 
     static readonly string IrradianceLevel = KenshiLighting.IrradianceLevel.ToString("0.0##", CultureInfo.InvariantCulture);
 
-    /// <summary>The grid, the slices' distances and the camera.</summary>
+    /// <summary>
+    /// The grid, the slices' distances and the camera.
+    /// </summary>
     internal const string Common = CommonUniforms + CommonFunctions;
 
-    /// <summary>The grid and camera uniforms of <see cref="Common"/> (the scan kernel declares the same names in a uniform block).</summary>
+    /// <summary>
+    /// The grid and camera uniforms of <see cref="Common"/> (the scan kernel declares the same names in a uniform block).
+    /// </summary>
     internal const string CommonUniforms = """
 
         uniform vec4 uShaftGrid;    // x cells across, y cells down, z slices, w slices per atlas row
@@ -33,7 +39,9 @@ static class LightShaftShaders
         uniform vec2 uShaftTan;     // tan(fov/2) * aspect, tan(fov/2)
         """;
 
-    /// <summary>The slices' distances and the view ray of <see cref="Common"/>.</summary>
+    /// <summary>
+    /// The slices' distances and the view ray of <see cref="Common"/>.
+    /// </summary>
     internal const string CommonFunctions = """
 
 
@@ -49,7 +57,9 @@ static class LightShaftShaders
         }
         """;
 
-    /// <summary>The haze's alpha along a ray (after <see cref="AtmosphereShaders.Functions"/>).</summary>
+    /// <summary>
+    /// The haze's alpha along a ray (after <see cref="AtmosphereShaders.Functions"/>).
+    /// </summary>
     internal const string Alpha = """
 
         // How much of the haze (and the weather's fog) a ray has gathered by this distance: atmoKenshiHaze's alpha (the ramp, then the fog's
@@ -195,8 +205,10 @@ static class LightShaftShaders
         }
         """;
 
-    /// <summary>The second pass, into a second atlas (R32F): per cell, the sun's share of the haze gathered from the eye to the far end of its slice
-    /// (the first pass's two sums over this slice and every nearer one; 1 where no haze has gathered yet).</summary>
+    /// <summary>
+    /// The second pass, into a second atlas (R32F): per cell, the sun's share of the haze gathered from the eye to the far end of its slice (the
+    /// first pass's two sums over this slice and every nearer one; 1 where no haze has gathered yet).
+    /// </summary>
     public static readonly string Integrate = "#version 330 core\n" + Common + """
 
         out vec4 fragColour;
@@ -218,16 +230,22 @@ static class LightShaftShaders
         }
         """;
 
-    /// <summary>The Meitou air layer's density and light (the scatter pass and the apply pass).</summary>
+    /// <summary>
+    /// The Meitou air layer's density and light (the scatter pass and the apply pass).
+    /// </summary>
     internal const string Air = AirUniform + AirFunctions;
 
-    /// <summary>The layer's uniform (<see cref="Air"/>).</summary>
+    /// <summary>
+    /// The layer's uniform (<see cref="Air"/>).
+    /// </summary>
     internal const string AirUniform = """
 
         uniform vec4 uShaftAir;     // x density at the base (per world unit; 0: no layer), y the base height, z the scale height, w the phase's anisotropy g
         """;
 
-    /// <summary>The layer's density (<see cref="Air"/>).</summary>
+    /// <summary>
+    /// The layer's density (<see cref="Air"/>).
+    /// </summary>
     internal const string AirFunctions = """
 
         // The layer's density at a height: full up to the base (the ground under the eye), falling off exponentially above it.

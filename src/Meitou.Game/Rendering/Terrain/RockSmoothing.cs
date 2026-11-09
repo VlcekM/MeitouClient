@@ -12,20 +12,30 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 public static class RockSmoothing
 {
-    /// <summary>Read when a mesh is decoded (the welded normals are made then or not at all).</summary>
+    /// <summary>
+    /// Read when a mesh is decoded (the welded normals are made then or not at all).
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 
-    /// <summary>Whether the rocks are drawn tessellated (where the device has tessellation shaders); the Tab panel toggles it. Off by default (on
-    /// from the Ultra preset): the welded normals already smooth the shading.</summary>
+    /// <summary>
+    /// Whether the rocks are drawn tessellated (where the device has tessellation shaders); the Tab panel toggles it. Off by default (on from the
+    /// Ultra preset): the welded normals already smooth the shading.
+    /// </summary>
     public static bool TessellateActive { get; set; }
 
-    /// <summary>The Phong curve's share (0: the flat triangles, 1: the full curve; the viewer's <c>--relief Roundness=</c>).</summary>
+    /// <summary>
+    /// The Phong curve's share (0: the flat triangles, 1: the full curve; the viewer's <c>--relief Roundness=</c>).
+    /// </summary>
     public static float Roundness { get; set; } = 0.75f;
 
-    /// <summary>Faces turning more than this from a corner's own keep their edge in the shading.</summary>
+    /// <summary>
+    /// Faces turning more than this from a corner's own keep their edge in the shading.
+    /// </summary>
     public const float CreaseDegrees = 60;
 
-    /// <summary>The tangent's w that marks its xyz as the geometry normal (a real tangent's w is ±1).</summary>
+    /// <summary>
+    /// The tangent's w that marks its xyz as the geometry normal (a real tangent's w is ±1).
+    /// </summary>
     public const float Tag = 2;
 
     /// <summary>
@@ -47,7 +57,9 @@ public static class RockSmoothing
         WeldCorners(model, vertexIds, around, agree, curve);
     }
 
-    /// <summary>Numbers the distinct positions (<paramref name="ids"/>) and gives each part its vertices' position ids and its faces' normals.</summary>
+    /// <summary>
+    /// Numbers the distinct positions (<paramref name="ids"/>) and gives each part its vertices' position ids and its faces' normals.
+    /// </summary>
     static void IndexPositions(Model model, Dictionary<Vector3, int> ids, int[][] vertexIds, Vector3[][] faceNormals)
     {
         // Positions shared across the parts, so a seam between submeshes curves alike from both sides.
@@ -72,7 +84,9 @@ public static class RockSmoothing
         }
     }
 
-    /// <summary>The non-degenerate face normals round each position.</summary>
+    /// <summary>
+    /// The non-degenerate face normals round each position.
+    /// </summary>
     static List<Vector3>[] FacesAround(Model model, int positionCount, int[][] vertexIds, Vector3[][] faceNormals)
     {
         // The faces round each position.
@@ -93,7 +107,9 @@ public static class RockSmoothing
         return around;
     }
 
-    /// <summary>Clears <paramref name="agree"/> where a position's corner normals disagree, and records its first usable normal.</summary>
+    /// <summary>
+    /// Clears <paramref name="agree"/> where a position's corner normals disagree, and records its first usable normal.
+    /// </summary>
     static void CornerAgreement(Model model, int[][] vertexIds, Vector3?[] first, bool[] agree)
     {
         // Whether a position's corners already agree (an authored smooth mesh keeps its normals), and the geometry normal.
@@ -108,7 +124,9 @@ public static class RockSmoothing
             }
     }
 
-    /// <summary>Each position's geometry normal: the sum of its faces, or its first corner normal where that is unusable.</summary>
+    /// <summary>
+    /// Each position's geometry normal: the sum of its faces, or its first corner normal where that is unusable.
+    /// </summary>
     static Vector3[] GeometryNormals(int positionCount, List<Vector3>[] around, bool[] agree, Vector3?[] first)
     {
         var curve = new Vector3[positionCount];
@@ -121,7 +139,9 @@ public static class RockSmoothing
         return curve;
     }
 
-    /// <summary>Sets every vertex's tangent to its position's geometry normal, and the normals of the corners that disagree to the faces within the crease.</summary>
+    /// <summary>
+    /// Sets every vertex's tangent to its position's geometry normal, and the normals of the corners that disagree to the faces within the crease.
+    /// </summary>
     static void WeldCorners(Model model, int[][] vertexIds, List<Vector3>[] around, bool[] agree, Vector3[] curve)
     {
         float crease = MathF.Cos(CreaseDegrees * MathF.PI / 180);

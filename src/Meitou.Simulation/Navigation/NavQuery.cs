@@ -142,8 +142,10 @@ public sealed class NavQuery(NavWorld world, NavDoors? doors = null)
         return new PathResult(Pull(corridor, agent));
     }
 
-    /// <summary>When the last search on this thread failed after reaching all it could, adds the polygons it reached to <paramref name="into"/>
-    /// (<see cref="NavRef.Key"/>): a search from any of them fails too.</summary>
+    /// <summary>
+    /// When the last search on this thread failed after reaching all it could, adds the polygons it reached to <paramref name="into"/>
+    /// (<see cref="NavRef.Key"/>): a search from any of them fails too.
+    /// </summary>
     public static void AddReachedByFailed(HashSet<long> into)
     {
         if (s_searchScratch is { Exhaustive: true } s)

@@ -32,7 +32,9 @@ public static class NormalHeight
         return height;
     }
 
-    /// <summary>The x and y slopes of each texel's normal (clamped), in <paramref name="pRe"/> and <paramref name="qRe"/>.</summary>
+    /// <summary>
+    /// The x and y slopes of each texel's normal (clamped), in <paramref name="pRe"/> and <paramref name="qRe"/>.
+    /// </summary>
     static void SlopeSpectra(byte[] rgba, int count, float[] pRe, float[] qRe)
     {
         for (int i = 0; i < count; i++)
@@ -44,7 +46,9 @@ public static class NormalHeight
         }
     }
 
-    /// <summary>Each half-octave band's surface share, from the gradient and curl energies of the spectra.</summary>
+    /// <summary>
+    /// Each half-octave band's surface share, from the gradient and curl energies of the spectra.
+    /// </summary>
     static float[] BandGains(float[] pRe, float[] pIm, float[] qRe, float[] qIm, int size)
     {
         int bands = (int)Math.Ceiling(2 * Math.Log2(size)) + 1;
@@ -70,7 +74,9 @@ public static class NormalHeight
         return gains;
     }
 
-    /// <summary>Scales the gradient part of the spectra in place by each band's gain (and the tilt), and divides by the frequency: H = -i G / k.</summary>
+    /// <summary>
+    /// Scales the gradient part of the spectra in place by each band's gain (and the tilt), and divides by the frequency: H = -i G / k.
+    /// </summary>
     static void ApplyGains(float[] pRe, float[] pIm, float[] qRe, float[] qIm, int size, float[] gains, float tilt)
     {
         // H = -i G / k, G the gradient part, times the band's share (interpolated between band centres in log frequency); -i (a + ib) = b - ia.
@@ -92,9 +98,10 @@ public static class NormalHeight
         }
     }
 
-    /// <summary>The root-mean-square slope per texel of an R8 height (0..255 counted as 0..1), wrapping, measured over <see cref="SteepnessStep"/>
-    /// texels: the height averaged in blocks that wide, central differences between blocks, so a fine texture's texel noise does not count as its
-    /// steepness.</summary>
+    /// <summary>
+    /// The root-mean-square slope per texel of an R8 height (0..255 counted as 0..1), wrapping, measured over <see cref="SteepnessStep"/> texels: the
+    /// height averaged in blocks that wide, central differences between blocks, so a fine texture's texel noise does not count as its steepness.
+    /// </summary>
     static float Steepness(byte[] height, int size)
     {
         int n = Math.Max(size / SteepnessStep, 2), step = size / n;
@@ -113,10 +120,14 @@ public static class NormalHeight
         return (float)Math.Sqrt(sum / (n * n));
     }
 
-    /// <summary>The scale <see cref="Steepness"/> is measured at, in texels (of a 512² height: features about 1/128 of the tile).</summary>
+    /// <summary>
+    /// The scale <see cref="Steepness"/> is measured at, in texels (of a 512² height: features about 1/128 of the tile).
+    /// </summary>
     public const int SteepnessStep = 4;
 
-    /// <summary>0..255 between the 1st and 99th percentiles, so a few deep pits do not flatten the rest.</summary>
+    /// <summary>
+    /// 0..255 between the 1st and 99th percentiles, so a few deep pits do not flatten the rest.
+    /// </summary>
     static byte[] Scaled(float[] values)
     {
         int count = values.Length;
@@ -128,7 +139,9 @@ public static class NormalHeight
         return bytes;
     }
 
-    /// <summary>In-place 2D FFT of a square power-of-two grid: rows, then columns (the inverse scaled by 1 / n²).</summary>
+    /// <summary>
+    /// In-place 2D FFT of a square power-of-two grid: rows, then columns (the inverse scaled by 1 / n²).
+    /// </summary>
     static void Fft2(float[] re, float[] im, int n, bool inverse)
     {
         Parallel.For(0, n, row => Fft(re.AsSpan(row * n, n), im.AsSpan(row * n, n), inverse));
@@ -145,7 +158,9 @@ public static class NormalHeight
         for (int k = 0; k < re.Length; k++) { re[k] *= s; im[k] *= s; }
     }
 
-    /// <summary>Iterative radix-2 FFT (unscaled).</summary>
+    /// <summary>
+    /// Iterative radix-2 FFT (unscaled).
+    /// </summary>
     static void Fft(Span<float> re, Span<float> im, bool inverse)
     {
         int n = re.Length;

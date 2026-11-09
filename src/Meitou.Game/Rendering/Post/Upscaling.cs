@@ -3,8 +3,10 @@ using System.Numerics;
 
 namespace Meitou.Game.Rendering.Post;
 
-/// <summary>How the scene gets from its render size to the display: drawn at full size, edges smoothed by FXAA (off), or temporally reconstructed
-/// from jittered frames at a render scale (the built-in TAA, AMD FSR, NVIDIA DLSS). docs/engine.md "Upscaling".</summary>
+/// <summary>
+/// How the scene gets from its render size to the display: drawn at full size, edges smoothed by FXAA (off), or temporally reconstructed from
+/// jittered frames at a render scale (the built-in TAA, AMD FSR, NVIDIA DLSS). docs/engine.md "Upscaling".
+/// </summary>
 public enum UpscalerKind { Off, Taa, Fsr, Dlss, MetalFx }
 
 /// <summary>
@@ -13,23 +15,35 @@ public enum UpscalerKind { Off, Taa, Fsr, Dlss, MetalFx }
 /// </summary>
 public enum FrameGenerationMethod { Off, Fsr, Dlss }
 
-/// <summary>The upscaler options of <see cref="PostOptions"/>: which one, the render scale (per axis) and the sharpening.</summary>
+/// <summary>
+/// The upscaler options of <see cref="PostOptions"/>: which one, the render scale (per axis) and the sharpening.
+/// </summary>
 public sealed class UpscaleOptions
 {
-    /// <summary>DLSS by default (TAA runs instead where it is not available): the Meitou anti-aliasing (Off is the game's FXAA).</summary>
+    /// <summary>
+    /// DLSS by default (TAA runs instead where it is not available): the Meitou anti-aliasing (Off is the game's FXAA).
+    /// </summary>
     public UpscalerKind Kind = UpscalerKind.Dlss;
-    /// <summary>The temporal method the Meitou anti-aliasing switch turns on (the last one chosen; DLSS until then).</summary>
+    /// <summary>
+    /// The temporal method the Meitou anti-aliasing switch turns on (the last one chosen; DLSS until then).
+    /// </summary>
     public UpscalerKind Preferred = UpscalerKind.Dlss;
     /// <summary>
     /// Render size over display size per axis; null selects <see cref="DefaultScale"/> for temporal Meitou rendering, native when off.
     /// </summary>
     public float? Scale;
-    /// <summary>The Meitou default with an upscaler: Quality (the High preset's).</summary>
+    /// <summary>
+    /// The Meitou default with an upscaler: Quality (the High preset's).
+    /// </summary>
     public const float DefaultScale = 1 / 1.5f;
     public const float UltraQualityScale = 0.83f;
-    /// <summary>0..1: FSR's own sharpening (RCAS); after TAA and DLSS the composite's (PostProcessShaders.Composite).</summary>
+    /// <summary>
+    /// 0..1: FSR's own sharpening (RCAS); after TAA and DLSS the composite's (PostProcessShaders.Composite).
+    /// </summary>
     public float Sharpness = 0.3f;
-    /// <summary>Set on the command line: the saved settings don't override it.</summary>
+    /// <summary>
+    /// Set on the command line: the saved settings don't override it.
+    /// </summary>
     public bool Explicit;
     /// <summary>
     /// DLSS's render preset for every mode, Streamline's and NGX's number (0 their default, 10 = J .. 13 = M; <see cref="DlssPresets"/>).
@@ -42,15 +56,21 @@ public sealed class UpscaleOptions
     /// </summary>
     public static readonly (string Name, uint Number)[] DlssPresets = [("Default", 0), ("J", 10), ("K", 11), ("L", 12), ("M", 13)];
 
-    /// <summary>The quality modes' scales, FSR's and DLSS's shared ratios (1.5, 1.7, 2, 3 per axis).</summary>
+    /// <summary>
+    /// The quality modes' scales, FSR's and DLSS's shared ratios (1.5, 1.7, 2, 3 per axis).
+    /// </summary>
     public static readonly (string Name, float Scale)[] Modes =
         [("native", 1f), ("ultra-quality", UltraQualityScale), ("quality", 1 / 1.5f), ("balanced", 1 / 1.7f), ("performance", 0.5f), ("ultra", 1 / 3f)];
 
     public bool Temporal => Kind != UpscalerKind.Off;
-    /// <summary>The render scale; with Off too (FXAA then runs on the plainly scaled-up picture: no jitter, no history).</summary>
+    /// <summary>
+    /// The render scale; with Off too (FXAA then runs on the plainly scaled-up picture: no jitter, no history).
+    /// </summary>
     public float EffectiveScale => Scale ?? (Temporal ? DefaultScale : 1);
 
-    /// <summary>A render scale from <c>--render-scale</c>: a mode's name or a number from 0.25 to 1.</summary>
+    /// <summary>
+    /// A render scale from <c>--render-scale</c>: a mode's name or a number from 0.25 to 1.
+    /// </summary>
     public static float ParseScale(string s)
     {
         foreach (var (name, scale) in Modes)
@@ -65,7 +85,9 @@ public sealed class UpscaleOptions
         return v;
     }
 
-    /// <summary>The render size for a display size: each axis scaled and rounded, at least 1.</summary>
+    /// <summary>
+    /// The render size for a display size: each axis scaled and rounded, at least 1.
+    /// </summary>
     public (int Width, int Height) RenderSize(int width, int height)
     {
         float s = EffectiveScale;
@@ -77,7 +99,9 @@ public sealed class UpscaleOptions
         (Kind, Preferred, Scale, Sharpness, DlssPreset) = (other.Kind, other.Preferred, other.Scale, other.Sharpness, other.DlssPreset);
     }
 
-    /// <summary>The upscaler and its scale for the log: <c>off</c> at native size, else the kind and the scale.</summary>
+    /// <summary>
+    /// The upscaler and its scale for the log: <c>off</c> at native size, else the kind and the scale.
+    /// </summary>
     public string Describe()
     {
         if (Kind == UpscalerKind.Off && EffectiveScale >= 1) return "off";
@@ -110,14 +134,18 @@ public static class Jitter
         return Math.Max((int)MathF.Ceiling(8 * ratio * ratio), 8);
     }
 
-    /// <summary>The offset of frame <paramref name="frame"/> in render pixels (Halton indices start at 1: index 0 would be the centre).</summary>
+    /// <summary>
+    /// The offset of frame <paramref name="frame"/> in render pixels (Halton indices start at 1: index 0 would be the centre).
+    /// </summary>
     public static Vector2 Offset(long frame, int phases)
     {
         int i = (int)(frame % phases) + 1;
         return new Vector2(Halton(i, 2) - 0.5f, Halton(i, 3) - 0.5f);
     }
 
-    /// <summary>The projection moved by <paramref name="pixels"/> render pixels: a clip-space translation scaled by w (row vectors).</summary>
+    /// <summary>
+    /// The projection moved by <paramref name="pixels"/> render pixels: a clip-space translation scaled by w (row vectors).
+    /// </summary>
     public static Matrix4x4 Apply(Matrix4x4 projection, Vector2 pixels, int renderWidth, int renderHeight)
     {
         if (pixels == Vector2.Zero) return projection;
@@ -139,21 +167,26 @@ public sealed record UpscaleInputs
 {
     public required Gpu.GpuTexture Colour, Depth, Motion, Output;
     public Gpu.GpuTexture? Reactive, Exposure;
-    /// <summary>DLSS's render preset (<see cref="UpscaleOptions.DlssPreset"/>).</summary>
+    /// <summary>
+    /// DLSS's render preset (<see cref="UpscaleOptions.DlssPreset"/>).
+    /// </summary>
     public uint Preset;
     public required int RenderWidth, RenderHeight, DisplayWidth, DisplayHeight;
     public required Vector2 JitterPixels;
     public required float Near, Far, FieldOfView, DeltaSeconds, Sharpness;
     public required bool Reset;
-    /// <summary>The camera, for upscalers that want matrices (DLSS): the unjittered projection of <see cref="Depth"/> (eye-relative view to clip),
-    /// this frame's clip space to the previous frame's for that projection (<see cref="Reprojection.ClipToPrevious"/>), the eye and its
-    /// axes.</summary>
+    /// <summary>
+    /// The camera, for upscalers that want matrices (DLSS): the unjittered projection of <see cref="Depth"/> (eye-relative view to clip), this
+    /// frame's clip space to the previous frame's for that projection (<see cref="Reprojection.ClipToPrevious"/>), the eye and its axes.
+    /// </summary>
     public Matrix4x4 ViewToClip, ClipToPreviousClip;
     public Vector3 Eye, Right, Up, Forward;
     public float Aspect;
 }
 
-/// <summary>An upscaler outside the post-processing chain's own TAA, backed by a vendor library (Meitou.Game.Rendering.Upscalers).</summary>
+/// <summary>
+/// An upscaler outside the post-processing chain's own TAA, backed by a vendor library (Meitou.Game.Rendering.Upscalers).
+/// </summary>
 public interface IUpscaler : IDisposable
 {
     UpscalerKind Kind { get; }
@@ -165,7 +198,9 @@ public interface IUpscaler : IDisposable
     bool Dispatch(UpscaleInputs inputs);
 }
 
-/// <summary>Camera reprojection for motion vectors.</summary>
+/// <summary>
+/// Camera reprojection for motion vectors.
+/// </summary>
 public static class Reprojection
 {
     /// <summary>

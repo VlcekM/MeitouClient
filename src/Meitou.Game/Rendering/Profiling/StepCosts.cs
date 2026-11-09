@@ -18,12 +18,16 @@ internal sealed class StepCosts
 
     readonly Dictionary<object, double> _expected = [];
 
-    /// <summary>How far past its budget a run may end (milliseconds). The queues start a step while the budget has not passed, as they always did, so
-    /// a run ends a step late; this lets that step be one of the usual size (many small ones, like grass slabs, fill the budget exactly as before)
-    /// and only defers one that is expected to take the run past budget + slack.</summary>
+    /// <summary>
+    /// How far past its budget a run may end (milliseconds). The queues start a step while the budget has not passed, as they always did, so a run
+    /// ends a step late; this lets that step be one of the usual size (many small ones, like grass slabs, fill the budget exactly as before) and only
+    /// defers one that is expected to take the run past budget + slack.
+    /// </summary>
     public const double Slack = 1.0;
 
-    /// <summary>The average cost of a kind in milliseconds; 0 for a kind not seen yet.</summary>
+    /// <summary>
+    /// The average cost of a kind in milliseconds; 0 for a kind not seen yet.
+    /// </summary>
     public double Expected(object kind) => _expected.GetValueOrDefault(kind);
 
     public void Learn(object kind, double ms) => _expected[kind] = _expected.TryGetValue(kind, out var e) ? e + Rate * (ms - e) : ms;

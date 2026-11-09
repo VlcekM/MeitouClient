@@ -8,7 +8,9 @@ public sealed unsafe partial class SkyRenderer
 {
     VolumetricCloudRenderer? _volume;
 
-    /// <summary>This frame's main-view volumetric clouds for the motion vectors, or null (no volume, or not marched this frame).</summary>
+    /// <summary>
+    /// This frame's main-view volumetric clouds for the motion vectors, or null (no volume, or not marched this frame).
+    /// </summary>
     public CloudMotion? CloudMotion => _volume?.MainMotion is { } m && m.Frame == Gpu.Frame.Number ? m : null;
     SampledTexture _volumeImage;
     bool _volumeShadowsReady;
@@ -22,7 +24,9 @@ public sealed unsafe partial class SkyRenderer
     public bool Warm { get; set; }
     bool VolumeShadows => VolumeEnabled && CloudShadows && _volumeShadowsReady && _volume is not null;
 
-    /// <summary>Records the volume's sun-transmission map before any world or reflection pass.</summary>
+    /// <summary>
+    /// Records the volume's sun-transmission map before any world or reflection pass.
+    /// </summary>
     public void PrepareCloudShadows()
     {
         _volumeShadowsReady = false;
@@ -47,7 +51,9 @@ public sealed unsafe partial class SkyRenderer
     /// </summary>
     public bool SkyFogSkip { get; set; } = true;
 
-    /// <summary>Whether the main view's sky pass was left out in the last frame (<see cref="SkyFogSkip"/>; for the stats line).</summary>
+    /// <summary>
+    /// Whether the main view's sky pass was left out in the last frame (<see cref="SkyFogSkip"/>; for the stats line).
+    /// </summary>
     public bool SkySkipped { get; private set; }
 
     /// <summary>

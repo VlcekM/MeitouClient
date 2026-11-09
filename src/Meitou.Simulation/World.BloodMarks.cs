@@ -2,7 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Simulation;
 
-/// <summary>What left blood on the ground (docs/game/blood-decals.md); the host turns it into terrain decals.</summary>
+/// <summary>
+/// What left blood on the ground (docs/game/blood-decals.md); the host turns it into terrain decals.
+/// </summary>
 public enum BloodMarkKind : byte
 {
     /// <summary>

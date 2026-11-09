@@ -4,10 +4,14 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Game.Rendering.Post;
 
-/// <summary>GLSL for the world view's post-processing chain (written from the public techniques, not from Kenshi's shaders).</summary>
+/// <summary>
+/// GLSL for the world view's post-processing chain (written from the public techniques, not from Kenshi's shaders).
+/// </summary>
 static class PostProcessShaders
 {
-    /// <summary>Full-screen triangle; <c>vUv</c> runs 0..1 over the screen.</summary>
+    /// <summary>
+    /// Full-screen triangle; <c>vUv</c> runs 0..1 over the screen.
+    /// </summary>
     public const string Vertex = """
         #version 330 core
         out vec2 vUv;
@@ -19,7 +23,9 @@ static class PostProcessShaders
         }
         """;
 
-    /// <summary>Interleaved gradient noise (Jimenez): a cheap per-pixel value in 0..1.</summary>
+    /// <summary>
+    /// Interleaved gradient noise (Jimenez): a cheap per-pixel value in 0..1.
+    /// </summary>
     const string Noise = """
         float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
         """;

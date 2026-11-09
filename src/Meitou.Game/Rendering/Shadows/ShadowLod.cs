@@ -10,13 +10,19 @@ namespace Meitou.Game.Rendering.Shadows;
 /// </summary>
 public static class ShadowLod
 {
-    /// <summary>The switch: on by default (<c>--ab shadow-coarse</c>); off draws every cascade's casters as before.</summary>
+    /// <summary>
+    /// The switch: on by default (<c>--ab shadow-coarse</c>); off draws every cascade's casters as before.
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 
-    /// <summary>The first cascade the coarser casters apply to (the nearest, index 0, keeps the picture's detail).</summary>
+    /// <summary>
+    /// The first cascade the coarser casters apply to (the nearest, index 0, keeps the picture's detail).
+    /// </summary>
     public const int FirstCascade = 1;
 
-    /// <summary>Objects take the mesh level the game would pick at the distance where one pixel of the render spans this many texels.</summary>
+    /// <summary>
+    /// Objects take the mesh level the game would pick at the distance where one pixel of the render spans this many texels.
+    /// </summary>
     public const float ObjectTexels = 1f;
 
     /// <summary>
@@ -24,18 +30,26 @@ public static class ShadowLod
     /// </summary>
     public const float TerrainTexels = 1f;
 
-    /// <summary>The deviation (texels) a generated foliage level may have in a coarsened cascade, when that is more than the main rule's.</summary>
+    /// <summary>
+    /// The deviation (texels) a generated foliage level may have in a coarsened cascade, when that is more than the main rule's.
+    /// </summary>
     public const float RockTexels = 4f;
 
-    /// <summary>A foliage mesh with a resident impostor atlas casts the impostor (a flat, sun-facing cut-out) in a coarsened cascade when its world
-    /// radius is at most this many texels: the atlas's sun direction is quantised (12 x 12 frames, about 7 degrees), which moves the shadow by about
-    /// 0.12 radius.</summary>
+    /// <summary>
+    /// A foliage mesh with a resident impostor atlas casts the impostor (a flat, sun-facing cut-out) in a coarsened cascade when its world radius is
+    /// at most this many texels: the atlas's sun direction is quantised (12 x 12 frames, about 7 degrees), which moves the shadow by about 0.12
+    /// radius.
+    /// </summary>
     public const float ImpostorTexels = 8f;
 
-    /// <summary>The ground distance from the eye from which such an instance casts the impostor (the mesh nearer than that).</summary>
+    /// <summary>
+    /// The ground distance from the eye from which such an instance casts the impostor (the mesh nearer than that).
+    /// </summary>
     public const float ImpostorFrom = 200;
 
-    /// <summary>Whether cascade <paramref name="index"/> draws coarser casters.</summary>
+    /// <summary>
+    /// Whether cascade <paramref name="index"/> draws coarser casters.
+    /// </summary>
     public static bool Applies(int index) => Enabled && index >= FirstCascade;
 
     /// <summary>

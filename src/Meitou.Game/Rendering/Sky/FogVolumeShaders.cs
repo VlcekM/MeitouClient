@@ -17,18 +17,24 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 static class FogVolumeShaders
 {
-    /// <summary>The vec4s of <c>uFogVolumeData</c> (the frame block's array; its GLSL size is written out in <see cref="NativeShaders.FrameBlock"/>
-    /// and <see cref="Functions"/>).</summary>
+    /// <summary>
+    /// The vec4s of <c>uFogVolumeData</c> (the frame block's array; its GLSL size is written out in <see cref="NativeShaders.FrameBlock"/> and
+    /// <see cref="Functions"/>).
+    /// </summary>
     public const int MaxData = 512;
 
-    /// <summary>Type tags (the first vec4's w) and the vec4s each type takes.</summary>
+    /// <summary>
+    /// Type tags (the first vec4's w) and the vec4s each type takes.
+    /// </summary>
     public const int BlockType = 1, SphereType = 2, BeamType = 3;
     public const int BlockLength = 10, SphereLength = 3, BeamLength = 4;
 
     public static int Length(int type) => type switch { BlockType => BlockLength, SphereType => SphereLength, BeamType => BeamLength, _ => throw new ArgumentOutOfRangeException(nameof(type)) };
 
-    /// <summary>The shader's sphere radius over the stored one: the hull is <c>unit_sphere.mesh</c> (radius 0.5) scaled by 2r, and
-    /// <c>fog_sphere_vs</c> measures 0.48 of the unscaled mesh (0.48 × 2r).</summary>
+    /// <summary>
+    /// The shader's sphere radius over the stored one: the hull is <c>unit_sphere.mesh</c> (radius 0.5) scaled by 2r, and
+    /// <c>fog_sphere_vs</c> measures 0.48 of the unscaled mesh (0.48 × 2r).
+    /// </summary>
     public const float SphereShaderRadius = 0.96f;
     /// <summary>
     /// The shader's beam radius over the stored one: <c>cylinder.mesh</c> scaled by 2r across, <c>fog_beam_vs</c> measures 0.4 of it.

@@ -25,11 +25,15 @@ sealed record GameplaySettings(
 
     public const float DefaultNpcRange = 3250;
 
-    /// <summary>The drop-downs' items, by the stored number.</summary>
+    /// <summary>
+    /// The drop-downs' items, by the stored number.
+    /// </summary>
     public static readonly string[] TownAttackLabels = ["Bombardment", "High", "Normal", "Fewer", "Rare", "Never"];
     public static readonly string[] DismembermentLabels = ["Never", "Rare", "Frequent"];
 
-    /// <summary>The install's <c>settings.cfg</c>; every missing key takes the original's default.</summary>
+    /// <summary>
+    /// The install's <c>settings.cfg</c>; every missing key takes the original's default.
+    /// </summary>
     public static GameplaySettings FromInstall(GameInstall install)
     {
         var values = ReadValues(install);

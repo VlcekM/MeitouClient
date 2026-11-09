@@ -7,7 +7,9 @@ using Meitou.Simulation;
 
 namespace Meitou.Tests.Navigation;
 
-/// <summary>The navmesh pipeline on The Hub (zones 20.32 and 21.32) against the Kenshi install.</summary>
+/// <summary>
+/// The navmesh pipeline on The Hub (zones 20.32 and 21.32) against the Kenshi install.
+/// </summary>
 [Slow]
 public class HubNavmeshTests
 {

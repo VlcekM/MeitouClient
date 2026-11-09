@@ -129,7 +129,9 @@ internal static partial class ZoneNavMeshBuilder
         return cos < StepEdgeAlignment;
     }
 
-    /// <summary>The rise across the link the two surfaces' own slopes towards it explain (their mean, or the one measured; 0 when neither is).</summary>
+    /// <summary>
+    /// The rise across the link the two surfaces' own slopes towards it explain (their mean, or the one measured; 0 when neither is).
+    /// </summary>
     static float ExpectedRise(RcCompactHeightfield chf, int x, int z, int i, int d, int nx, int nz, int j)
     {
         float? before = Rise(chf, x, z, i, (d + 2) % 4) is { } b ? -b : null;

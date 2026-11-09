@@ -26,9 +26,11 @@ public sealed class PuProperty(string name, string[] values, PuDynamic? dynamic,
     public override string ToString() => Dynamic is not null ? $"{Name} {Dynamic.Kind}" : $"{Name} {string.Join(' ', Values)}";
 }
 
-/// <summary>A block of a script: <c>system</c>, <c>technique</c>, <c>renderer</c>, <c>emitter</c>, <c>affector</c>, <c>observer</c>,
+/// <summary>
+/// A block of a script: <c>system</c>, <c>technique</c>, <c>renderer</c>, <c>emitter</c>, <c>affector</c>, <c>observer</c>,
 /// <c>handler</c>...
-/// <see cref="Args"/> are the words after the class (<c>emitter Box Emitter4</c>: Box, Emitter4).</summary>
+/// <see cref="Args"/> are the words after the class (<c>emitter Box Emitter4</c>: Box, Emitter4).
+/// </summary>
 public sealed class PuNode(string kind, string[] args, int line)
 {
     public string Kind { get; } = kind;

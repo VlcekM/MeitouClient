@@ -149,9 +149,11 @@ public sealed partial class CaptiveSystem
         }
     }
 
-    /// <summary>The cage a gatherer takes a captive from (see the class remarks): 173 and 217 the nearest (<c>BuildingFinder</c> slot 1), 245 the
-    /// first in the finder's order whose occupant is a woman or of another race (<c>FUN_1408d1410</c>, <b>Verified</b>: no distance sort, and no test
-    /// of the occupant being a player character, down or busy).</summary>
+    /// <summary>
+    /// The cage a gatherer takes a captive from (see the class remarks): 173 and 217 the nearest (<c>BuildingFinder</c> slot 1), 245 the first in the
+    /// finder's order whose occupant is a woman or of another race (<c>FUN_1408d1410</c>, <b>Verified</b>: no distance sort, and no test of the
+    /// occupant being a player character, down or busy).
+    /// </summary>
     Fixture? GatherTarget(World world, int slot, CharacterCold cold, IEnumerable<Fixture> cages, TaskType type)
     {
         var table = world.Characters;
@@ -325,9 +327,11 @@ public sealed partial class CaptiveSystem
         return End(world, j, null);
     }
 
-    /// <summary>The live NPC of <paramref name="faction"/> or an ally within <paramref name="radius"/> of the shipping town's
+    /// <summary>
+    /// The live NPC of <paramref name="faction"/> or an ally within <paramref name="radius"/> of the shipping town's
     /// <paramref name="centre"/> nearest to the leader (the original's designated-building finder, <c>FUN_1408ca950</c>, reduced to its owner hand;
-    /// its acceptance test is <b>Unknown</b>, s07-d083).</summary>
+    /// its acceptance test is <b>Unknown</b>, s07-d083).
+    /// </summary>
     CharacterId? Receiver(World world, int w, int faction, Vector2 centre, float radius)
     {
         var table = world.Characters;

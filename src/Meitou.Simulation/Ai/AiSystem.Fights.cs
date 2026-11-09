@@ -235,7 +235,9 @@ public sealed partial class AiSystem
 
     #region Protect goals
 
-    /// <summary>The x0.1 on an owned character's fight threat (<c>DAT_14167fad0</c>).</summary>
+    /// <summary>
+    /// The x0.1 on an owned character's fight threat (<c>DAT_14167fad0</c>).
+    /// </summary>
     const float OwnedFactor = 0.1f;
 
     /// <summary>

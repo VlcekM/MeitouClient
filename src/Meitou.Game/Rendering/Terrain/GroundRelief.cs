@@ -9,7 +9,9 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 public static class GroundRelief
 {
-    /// <summary>Read when the terrain textures are created (the height array is made then or not at all).</summary>
+    /// <summary>
+    /// Read when the terrain textures are created (the height array is made then or not at all).
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 
     /// <summary>
@@ -18,10 +20,14 @@ public static class GroundRelief
     /// </summary>
     public static int Quality { get; set; } = 2;
 
-    /// <summary>The name of a <see cref="Quality"/> level, for the settings panels.</summary>
+    /// <summary>
+    /// The name of a <see cref="Quality"/> level, for the settings panels.
+    /// </summary>
     public static string QualityName(int quality) => quality switch { 0 => "Low", 1 => "Medium", _ => "High" };
 
-    /// <summary>Whether the patches march the height (the Tab panel's toggle; the viewer's K).</summary>
+    /// <summary>
+    /// Whether the patches march the height (the Tab panel's toggle; the viewer's K).
+    /// </summary>
     public static bool ParallaxActive { get; set; } = true;
 
     /// <summary>
@@ -29,8 +35,10 @@ public static class GroundRelief
     /// </summary>
     public static bool DisplaceActive { get; set; } = true;
 
-    /// <summary>The depth scale in world units (1 unit = 10 cm; the Tab panel's slider, default 20 cm, the High preset's): each layer's depth (<see
-    /// cref="LayerDepthCm"/>) times this over <see cref="ReferenceDepth"/>.</summary>
+    /// <summary>
+    /// The depth scale in world units (1 unit = 10 cm; the Tab panel's slider, default 20 cm, the High preset's): each layer's depth
+    /// (<see cref="LayerDepthCm"/>) times this over <see cref="ReferenceDepth"/>.
+    /// </summary>
     public static float Depth { get; set; } = 2;
 
     /// <summary>
@@ -39,10 +47,14 @@ public static class GroundRelief
     /// </summary>
     public const float ReferenceDepth = 2;
 
-    /// <summary>Where the displacement ends (world units from the eye; in full to 60% of it; the Tab panel's slider).</summary>
+    /// <summary>
+    /// Where the displacement ends (world units from the eye; in full to 60% of it; the Tab panel's slider).
+    /// </summary>
     public static float DisplaceDistance { get; set; } = 1000;
 
-    /// <summary>Where the parallax ends (world units from the eye; in full to half of it; the Tab panel's slider).</summary>
+    /// <summary>
+    /// Where the parallax ends (world units from the eye; in full to half of it; the Tab panel's slider).
+    /// </summary>
     public static float ParallaxDistance { get; set; } = 600;
 
     /// <summary>
@@ -52,10 +64,14 @@ public static class GroundRelief
     /// </summary>
     public static float RefinePixels { get; set; }
 
-    /// <summary><see cref="RefinePixels"/> when the refinement is on.</summary>
+    /// <summary>
+    /// <see cref="RefinePixels"/> when the refinement is on.
+    /// </summary>
     public const float DefaultRefinePixels = 0.5f;
 
-    /// <summary>The root-mean-square slope every layer's relief is given at its tile's size (rise over run).</summary>
+    /// <summary>
+    /// The root-mean-square slope every layer's relief is given at its tile's size (rise over run).
+    /// </summary>
     public static float TargetSlope { get; set; } = 0.2f;
 
     /// <summary>
@@ -64,15 +80,21 @@ public static class GroundRelief
     /// </summary>
     public static float ScaleFollow { get; set; } = 0.5f;
 
-    /// <summary>The deepest a layer gets, in world units at <see cref="ReferenceDepth"/> (8: 80 cm, also at the default <see cref="Depth"/>; the
-    /// characters walk on the undisplaced ground, so deeper relief buries their feet).</summary>
+    /// <summary>
+    /// The deepest a layer gets, in world units at <see cref="ReferenceDepth"/> (8: 80 cm, also at the default <see cref="Depth"/>; the characters
+    /// walk on the undisplaced ground, so deeper relief buries their feet).
+    /// </summary>
     public static float MaxDepth { get; set; } = 8;
 
-    /// <summary>The displacement leaves out shapes wider than this (world units: 20, 2 m): the characters walk on the undisplaced surface, so broad
-    /// swells swallow their feet; the parallax keeps them beyond the displacement. 0 keeps all.</summary>
+    /// <summary>
+    /// The displacement leaves out shapes wider than this (world units: 20, 2 m): the characters walk on the undisplaced surface, so broad swells
+    /// swallow their feet; the parallax keeps them beyond the displacement. 0 keeps all.
+    /// </summary>
     public static float BroadCut { get; set; } = 20;
 
-    /// <summary>The cliff layer's depth (and its cap) as a multiple of the ground's.</summary>
+    /// <summary>
+    /// The cliff layer's depth (and its cap) as a multiple of the ground's.
+    /// </summary>
     public static float CliffScale { get; set; } = 1;
 
     /// <summary>
@@ -84,17 +106,25 @@ public static class GroundRelief
         ["4442-Newwworld.mod"] = 1 / 3f,   // ForestLand
     };
 
-    /// <summary>A biome's <see cref="BiomeDepth"/> factor, 1 when it has none.</summary>
+    /// <summary>
+    /// A biome's <see cref="BiomeDepth"/> factor, 1 when it has none.
+    /// </summary>
     public static float BiomeFactor(string stringId) => BiomeDepth.TryGetValue(stringId, out float f) ? f : 1;
 
-    /// <summary>The share of relief the grass, slope, dirt and road layers get, each from its own height map, by how much of the pixel it shows (0:
-    /// the base layer alone).</summary>
+    /// <summary>
+    /// The share of relief the grass, slope, dirt and road layers get, each from its own height map, by how much of the pixel it shows (0: the base
+    /// layer alone).
+    /// </summary>
     public static float OverlayRelief { get; set; } = 1;
 
-    /// <summary>How dark the relief's self-shadow gets on the sun (1: the sun fully hidden where it is deepest; 0 skips the sun's march).</summary>
+    /// <summary>
+    /// How dark the relief's self-shadow gets on the sun (1: the sun fully hidden where it is deepest; 0 skips the sun's march).
+    /// </summary>
     public static float SelfShadow { get; set; } = 0.6f;
 
-    /// <summary>The tessellation's density as a multiple of its base (the ground's segments and the rocks' curve error both divided by it).</summary>
+    /// <summary>
+    /// The tessellation's density as a multiple of its base (the ground's segments and the rocks' curve error both divided by it).
+    /// </summary>
     public static float TessDetail { get; set; } = 0.5f;
 
     /// <summary>
@@ -114,10 +144,14 @@ public static class GroundRelief
     /// </summary>
     public static System.Numerics.Vector2? FieldCentre { get; set; }
 
-    /// <summary>The texture field holds the cliff layers (on a steep face; their vertical projections) instead of the ground ones.</summary>
+    /// <summary>
+    /// The texture field holds the cliff layers (on a steep face; their vertical projections) instead of the ground ones.
+    /// </summary>
     public static bool FieldCliffs { get; set; }
 
-    /// <summary>A texture field tile's side in world units (the cliff field's: half of it).</summary>
+    /// <summary>
+    /// A texture field tile's side in world units (the cliff field's: half of it).
+    /// </summary>
     public const float FieldTile = 200;
 
     /// <summary>

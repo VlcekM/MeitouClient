@@ -14,7 +14,9 @@ namespace Meitou.Game.Rendering.Ui;
 /// </summary>
 public sealed partial class UiPainter
 {
-    /// <summary>Frames a record is kept without being drawn.</summary>
+    /// <summary>
+    /// Frames a record is kept without being drawn.
+    /// </summary>
     const int PaintRecordLife = 120;
 
     readonly Dictionary<PaintKey, PaintRecord> _painted = new(PaintKeyComparer.Instance);
@@ -22,7 +24,9 @@ public sealed partial class UiPainter
     long _paintFrame;
     int _textureVersion;
 
-    /// <summary>Set while a control is painted when its picture changes on its own (it is never recorded).</summary>
+    /// <summary>
+    /// Set while a control is painted when its picture changes on its own (it is never recorded).
+    /// </summary>
     bool _paintVolatile;
 
     readonly List<DebugOverlay.OverlayPass.Recorded> _recordAdds = [];

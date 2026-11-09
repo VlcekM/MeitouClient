@@ -230,8 +230,10 @@ public class OcclusionCullTests
     }
 }
 
-/// <summary>The pyramid's kernels (<c>HizShaders</c>) against the CPU's: odd picture sizes, a scene depth (in <see cref="DepthConvention"/>'s
-/// convention) that is cleared in places.</summary>
+/// <summary>
+/// The pyramid's kernels (<c>HizShaders</c>) against the CPU's: odd picture sizes, a scene depth (in <see cref="DepthConvention"/>'s convention) that
+/// is cleared in places.
+/// </summary>
 public class HizPyramidGpuTests
 {
     [Fact]

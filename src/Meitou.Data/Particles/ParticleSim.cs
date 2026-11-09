@@ -818,10 +818,12 @@ public sealed class ParticleSimulation
 
     // ---- reading ----
 
-    /// <summary>Technique <paramref name="index"/>'s particles into <paramref name="destination"/> (at least its <see cref="TechniqueParticleCount"/>
+    /// <summary>
+    /// Technique <paramref name="index"/>'s particles into <paramref name="destination"/> (at least its <see cref="TechniqueParticleCount"/>
     /// long); returns how many were written. The colour is multiplied by <paramref name="tint"/> (rgb) and <paramref name="alpha"/>;
     /// <paramref name="worldOffset"/> is added to every position (the sim keeps small numbers near its own origin; the caller adds where that origin
-    /// is).</summary>
+    /// is).
+    /// </summary>
     /// <param name="ahead">Seconds the particles are drawn ahead along their velocity (time queued but not yet simulated, so a unit stepped at a
     /// lower rate still moves every frame).</param>
     public int Collect(int index, Span<ParticleInstance> destination, Vector3 tint, float alpha, Vector3 worldOffset = default, float ahead = 0)

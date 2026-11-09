@@ -20,28 +20,42 @@ internal sealed class ShadowFogCap
     /// </summary>
     public const float Margin = 1.1f;
 
-    /// <summary>Ratio of neighbouring caps.</summary>
+    /// <summary>
+    /// Ratio of neighbouring caps.
+    /// </summary>
     public const float Step = 1.06f;
 
-    /// <summary>The lowest cap (the first split of a view is far under it).</summary>
+    /// <summary>
+    /// The lowest cap (the first split of a view is far under it).
+    /// </summary>
     public const float Floor = 1000f;
 
-    /// <summary>Grid steps the radius must fall before the cap is lowered.</summary>
+    /// <summary>
+    /// Grid steps the radius must fall before the cap is lowered.
+    /// </summary>
     public const int LowerSteps = 3;
 
-    /// <summary>Frames without a radius (none pending) before the cap is released.</summary>
+    /// <summary>
+    /// Frames without a radius (none pending) before the cap is released.
+    /// </summary>
     public const int HoldFrames = 12;
 
-    /// <summary>Frames a pending radius is waited for at most (a solve is a few frames; this only guards against one that never lands).</summary>
+    /// <summary>
+    /// Frames a pending radius is waited for at most (a solve is a few frames; this only guards against one that never lands).
+    /// </summary>
     public const int PendingFrames = 300;
 
     float? _applied;
     int _missing, _pending;
 
-    /// <summary>The cap now (null: none).</summary>
+    /// <summary>
+    /// The cap now (null: none).
+    /// </summary>
     public float? Current => _applied;
 
-    /// <summary>The grid value at or above <paramref name="distance"/> (times <see cref="Margin"/>).</summary>
+    /// <summary>
+    /// The grid value at or above <paramref name="distance"/> (times <see cref="Margin"/>).
+    /// </summary>
     public static float Quantise(float distance)
     {
         float padded = distance * Margin;
@@ -50,7 +64,9 @@ internal sealed class ShadowFogCap
         return Floor * MathF.Pow(Step, k);
     }
 
-    /// <summary>Takes this frame's hide radius (null: none) and whether one is pending, and returns the cap to use.</summary>
+    /// <summary>
+    /// Takes this frame's hide radius (null: none) and whether one is pending, and returns the cap to use.
+    /// </summary>
     public float? Update(float? hide, bool isPending = false)
     {
         if (hide is not { } h || !(h > 0))
@@ -70,7 +86,9 @@ internal sealed class ShadowFogCap
         _missing = _pending = 0;
     }
 
-    /// <summary>Counts a frame without a radius: a pending one is waited for, else the cap is held and then released.</summary>
+    /// <summary>
+    /// Counts a frame without a radius: a pending one is waited for, else the cap is held and then released.
+    /// </summary>
     void ReleaseWithoutRadius(bool isPending)
     {
         if (isPending)

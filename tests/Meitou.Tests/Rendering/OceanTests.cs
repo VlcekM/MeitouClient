@@ -7,8 +7,10 @@ using Meitou.Game.Rendering.Water;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The Meitou water's FFT ocean (docs/render-water.md "Meitou water"): the spectrum on the CPU, and the GPU's evolve, inverse FFT and
-/// assembly against a single wave worked out by hand.</summary>
+/// <summary>
+/// The Meitou water's FFT ocean (docs/render-water.md "Meitou water"): the spectrum on the CPU, and the GPU's evolve, inverse FFT and assembly
+/// against a single wave worked out by hand.
+/// </summary>
 public class OceanTests
 {
     const int N = 64;
@@ -42,8 +44,10 @@ public class OceanTests
         }
     }
 
-    /// <summary>One wave per cascade: h0(k) = A at a chosen texel, its mirror holding the conjugate. The GPU must give
-    /// Dy = 2A cos(k·x − ωt) and Dx = −2A k̂x sin(k·x − ωt) (the crests drawn together) at every texel.</summary>
+    /// <summary>
+    /// One wave per cascade: h0(k) = A at a chosen texel, its mirror holding the conjugate. The GPU must give Dy = 2A cos(k·x − ωt) and Dx = −2A k̂x
+    /// sin(k·x − ωt) (the crests drawn together) at every texel.
+    /// </summary>
     [Fact]
     [Slow]
     public void Gpu_transform_gives_the_wave_worked_out_by_hand()

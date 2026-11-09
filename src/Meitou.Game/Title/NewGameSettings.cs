@@ -10,7 +10,9 @@ namespace Meitou.Game.Title;
 /// </summary>
 internal sealed record NewGameSettings
 {
-    /// <summary>A slider: CAMERA float key, label, range, help line.</summary>
+    /// <summary>
+    /// A slider: CAMERA float key, label, range, help line.
+    /// </summary>
     internal sealed record Option(string Key, string Label, float Min, float Max, int HelpLine);
 
     public static readonly Option[] Options =

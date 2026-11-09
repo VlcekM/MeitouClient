@@ -26,13 +26,15 @@ public sealed unsafe class TerrainTextures : IDisposable
 {
     /// <summary>
     /// Slots of the near arrays: the pairs used near the eye at full size (each a BC3 and a BC1 layer of <c>layerSize</c>² with mips, 8.4 MB at
-    /// 2048), least recently needed evicted first. A pair without one is drawn from the far arrays.</summary>
+    /// 2048), least recently needed evicted first. A pair without one is drawn from the far arrays.
+    /// </summary>
     public const int NearLayers = 32;
 
     /// <summary>
     /// The far arrays hold every pair at the layer size over 2^FarShift (512² at 2048, 0.5 MB a pair): their levels are the near arrays' from
     /// FarShift down, so a sample whose level is at least FarShift reads the same texels from either (docs/render-terrain.md, "Layer
-    /// arrays").</summary>
+    /// arrays").
+    /// </summary>
     public const int FarShift = 2;
 
     /// <summary>
@@ -226,7 +228,8 @@ public sealed unsafe class TerrainTextures : IDisposable
 
         /// <summary>
         /// Drops the CPU images after <see cref="Create"/> has uploaded them. They are the largest LOH objects
-        /// of a cold start (the blend, ground and world-colour buffers); keeping the source alive kept them rooted.</summary>
+        /// of a cold start (the blend, ground and world-colour buffers); keeping the source alive kept them rooted.
+        /// </summary>
         internal void ReleaseUploaded()
         {
             Blend = null;
@@ -297,7 +300,8 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     /// <summary>
     /// <see cref="FeatureBiomeRow"/> before the residency test: the row of the biome at (x, z), or -1 when it has none. Fixed per
-    /// position; <see cref="FeatureBiomeRow"/> is this when <see cref="ResidentBiomeBits"/> has the row's bit, else -1.</summary>
+    /// position; <see cref="FeatureBiomeRow"/> is this when <see cref="ResidentBiomeBits"/> has the row's bit, else -1.
+    /// </summary>
     public int FeatureBiomeRowAny(float x, float z) =>
         _biomeMap is not null && _rowOf.TryGetValue(_biomeMap.At(x, z), out int row) ? row : -1;
 
@@ -475,7 +479,8 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// </summary>
     /// <summary>
     /// The ground's height under the eye (set each frame; unknown: none): the eye's cells count its height over it beyond the game's cameras
-    /// (<see cref="EyeLift"/>), so a camera high above the land loads neither all the biomes under it nor their full sizes.</summary>
+    /// (<see cref="EyeLift"/>), so a camera high above the land loads neither all the biomes under it nor their full sizes.
+    /// </summary>
     public float GroundUnderEye { get; set; } = float.NegativeInfinity;
 
     void UpdateBiomes(Vector3 eye, float materialDistance, Vector3? ahead, IReadOnlyList<Vector3>? kept)
@@ -689,7 +694,8 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     /// <summary>
     /// A free near slot, else the least recently needed one's of a pair not wanted near now (its biomes' rows drop it at once: they read the far
-    /// arrays before the new pair's levels are written), else -1.</summary>
+    /// arrays before the new pair's levels are written), else -1.
+    /// </summary>
     int AllocateSlot()
     {
         if (_nextFree < Capacity) return _nextFree++;
@@ -706,7 +712,8 @@ public sealed unsafe class TerrainTextures : IDisposable
 
     /// <summary>
     /// A biome becomes resident once all its texture pairs are in the far arrays: its parameter row is written then (texels 0 and 1 the far
-    /// indices, 1's W the relief factor GroundRelief.BiomeFactor, 13 and 14 the near slots, -1 for none).</summary>
+    /// indices, 1's W the relief factor GroundRelief.BiomeFactor, 13 and 14 the near slots, -1 for none).
+    /// </summary>
     void Refresh(int b)
     {
         var s = _state[b];
@@ -1029,7 +1036,8 @@ public sealed unsafe class TerrainTextures : IDisposable
     MapStandby? _mapTarget;
     /// <summary>
     /// At most this many standby pairs (about 45 MB of video memory each: the 2048² RGBA8 overlay and the 4096² BC3 colour with their levels):
-    /// one per kept place (<see cref="Areas"/> less the eye's), at least 2, at most 6.</summary>
+    /// one per kept place (<see cref="Areas"/> less the eye's), at least 2, at most 6.
+    /// </summary>
     int MaxMapStandbys => Math.Clamp(Areas - 1, 2, 6);
     /// <summary>
     /// Places kept loaded (<see cref="WorldTextureCache.Areas"/>, set by <see cref="TerrainStreamer"/>).
@@ -1281,7 +1289,8 @@ public sealed unsafe class TerrainTextures : IDisposable
     /// <summary>
     /// The terrain material's textures (null where one does not exist yet), for the native draws that read them by bindless index; <c>FarLod</c> the
     /// near arrays' level from which a sample reads the far arrays (<see cref="FarShift"/> less the sampler's bias, which the far arrays' sampler
-    /// adds too).</summary>
+    /// adds too).
+    /// </summary>
     internal readonly record struct TextureSet(TerrainTexture? Diffuse, TerrainTexture? Normal, TerrainTexture? Params, TerrainTexture? Cells, TerrainTexture? BlendMap,
         TerrainTexture? Overlay, TerrainTexture? Colour, TerrainTexture? Ground, TerrainTexture? WorldColour, TerrainTexture? Height, TerrainTexture? Relief,
         TerrainTexture? Field, TerrainTexture? DiffuseFar, TerrainTexture? NormalFar, float FarLod);

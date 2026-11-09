@@ -27,7 +27,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// </summary>
     public delegate void CasterDraw(ShadowCascade cascade, Matrix4x4 worldToClip, Vector4[] planes, Vector3 lodEye);
 
-    /// <summary>A cascade drawn this frame, as <see cref="CasterDraw"/> gets it (the same <c>Planes</c> array).</summary>
+    /// <summary>
+    /// A cascade drawn this frame, as <see cref="CasterDraw"/> gets it (the same <c>Planes</c> array).
+    /// </summary>
     public readonly record struct CasterView(ShadowCascade Cascade, Matrix4x4 WorldToClip, Vector4[] Planes, Vector3 LodEye);
 
     /// <summary>
@@ -35,19 +37,25 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// </summary>
     public delegate void CasterPrepare(ReadOnlySpan<CasterView> cascades);
 
-    /// <summary>The size of the receiver block (std140) the shaders declare in <see cref="ShadowShaders.Functions"/>: four per-cascade arrays of
-    /// <see cref="ShadowSettings.MaxCascades"/> (a mat4 and three vec4 each), a mat4 and three vec4.</summary>
+    /// <summary>
+    /// The size of the receiver block (std140) the shaders declare in <see cref="ShadowShaders.Functions"/>: four per-cascade arrays of
+    /// <see cref="ShadowSettings.MaxCascades"/> (a mat4 and three vec4 each), a mat4 and three vec4.
+    /// </summary>
     public const int ReceiverBytes = (28 * ShadowSettings.MaxCascades + 28) * 4;
 
-    /// <summary>The <see cref="StageClock"/> stage of the shadow casters' jobs.</summary>
+    /// <summary>
+    /// The <see cref="StageClock"/> stage of the shadow casters' jobs.
+    /// </summary>
     const int ShadowStage = 12;
 
     #region Cascades
 
     readonly CasterView[] _casterViews = new CasterView[ShadowSettings.MaxCascades];
 
-    /// <summary>The native GPU API (docs/renderer-native.md 7.1 step 8; all native since phase 8 stage 3: the atlas's host hands the casters
-    /// its targets and state, 8.9).</summary>
+    /// <summary>
+    /// The native GPU API (docs/renderer-native.md 7.1 step 8; all native since phase 8 stage 3: the atlas's host hands the casters its targets and
+    /// state, 8.9).
+    /// </summary>
     public IGpuContext Gpu { get; }
 
     GpuTexture? _atlas;
@@ -131,8 +139,10 @@ public sealed unsafe partial class ShadowPass : IDisposable
         _cpuSamples.Add(CpuMs);
     }
 
-    /// <summary>The casters' bias block of the cascade about to be drawn: the guests' segments take it when they are prepared (in the
-    /// draw callback), a new slice after each write, as VkGl renamed the GL buffer written between their draws.</summary>
+    /// <summary>
+    /// The casters' bias block of the cascade about to be drawn: the guests' segments take it when they are prepared (in the draw callback), a new
+    /// slice after each write, as VkGl renamed the GL buffer written between their draws.
+    /// </summary>
     void SetCasterBias(in Vector4 bias) => _casterBias.Set([bias.X, bias.Y, bias.Z, bias.W]);
 
     /// <summary>
@@ -164,7 +174,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
     DrawState CasterState(in AttachmentFormats formats) =>
         DrawState.For(formats, Gpu.DepthClamp, depthTest: true, depthWrite: true, compare: DepthFunction.Less, mask: 0, depthClamp: true);
 
-    /// <summary>The viewport and scissor the casters draw with (a whole layer, or the landmark map).</summary>
+    /// <summary>
+    /// The viewport and scissor the casters draw with (a whole layer, or the landmark map).
+    /// </summary>
     void SetTile(int x, int y, int s) =>
         Gpu.SetPassViewport(new PixelViewport(x, y, s, s, 0, 1), new PixelRect(x, y, (uint)s, (uint)s));
 
@@ -176,7 +188,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         Gpu.EndNative(cmd);
     }
 
-    /// <summary>Marks the shadows off for the receivers (the term is 1 everywhere).</summary>
+    /// <summary>
+    /// Marks the shadows off for the receivers (the term is 1 everywhere).
+    /// </summary>
     public void Disable()
     {
         _meitouValid = false;
@@ -184,8 +198,10 @@ public sealed unsafe partial class ShadowPass : IDisposable
         Upload(data);
     }
 
-    /// <summary>The cascade array: <paramref name="layers"/> layers of <paramref name="size"/>² (made again when either changes, e.g. the F5 toggle
-    /// between the Faithful and Meitou counts).</summary>
+    /// <summary>
+    /// The cascade array: <paramref name="layers"/> layers of <paramref name="size"/>² (made again when either changes, e.g. the F5 toggle between
+    /// the Faithful and Meitou counts).
+    /// </summary>
     void Resize(int size, int layers)
     {
         if (size == _atlasSize && layers == _atlasLayers && _atlas is not null) return;
@@ -243,8 +259,10 @@ public sealed unsafe partial class ShadowPass : IDisposable
         g.Publish("uShadowLandmark", () => _landmarkPublished ? _landmarkSampled : default);
     }
 
-    /// <summary>A texture with the sampler VkGl made from these GL parameters (the same rule, <see cref="SamplerDesc.FromGl"/>). None of these
-    /// textures is mipmapped, so the LOD bias never applies; wrap R is GL's default.</summary>
+    /// <summary>
+    /// A texture with the sampler VkGl made from these GL parameters (the same rule, <see cref="SamplerDesc.FromGl"/>). None of these textures is
+    /// mipmapped, so the LOD bias never applies; wrap R is GL's default.
+    /// </summary>
     SampledTexture Sampled(GpuTexture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, bool compare = false) =>
         new(Gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, compare, DepthFunction.Lequal, false, 1, false, 0)),
             t.View());
@@ -287,7 +305,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         Upload(data);
     }
 
-    /// <summary>The receiver block; the atlas is published to the receivers from now on (the GL code bound it to its unit here).</summary>
+    /// <summary>
+    /// The receiver block; the atlas is published to the receivers from now on (the GL code bound it to its unit here).
+    /// </summary>
     void Upload(float[] data)
     {
         _receiver.Set(data);
@@ -327,11 +347,15 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     #region Settings and range
 
-    /// <summary>The atlas side, the range and the number of cascades (the game's <c>shadow quality</c> and <c>Shadow Range</c>).</summary>
+    /// <summary>
+    /// The atlas side, the range and the number of cascades (the game's <c>shadow quality</c> and <c>Shadow Range</c>).
+    /// </summary>
     public ShadowSettings Settings { get; set; } = new();
 
-    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): its range scale shortens the shadow range (never below the game's default, or
-    /// the setting when that is shorter) while the video memory is nearly used up. Null: no clamp.</summary>
+    /// <summary>
+    /// The memory-pressure guard (<see cref="VramGuard"/>): its range scale shortens the shadow range (never below the game's default, or the setting
+    /// when that is shorter) while the video memory is nearly used up. Null: no clamp.
+    /// </summary>
     public VramGuard? Guard { get; set; }
 
     /// <summary>
@@ -347,7 +371,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     readonly ShadowFogCap _fogCapState = new();
 
-    /// <summary>The cap from the placed fog block this frame (<see cref="ShadowFogCap"/>), null for none.</summary>
+    /// <summary>
+    /// The cap from the placed fog block this frame (<see cref="ShadowFogCap"/>), null for none.
+    /// </summary>
     public float? FogCap { get; private set; }
 
     public bool Enabled { get; set; } = true;
@@ -358,7 +384,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// </summary>
     public float MinSunHeight { get; set; } = KenshiLighting.SunColourCutoff;
 
-    /// <summary>The cascades of the last frame (null when nothing was drawn).</summary>
+    /// <summary>
+    /// The cascades of the last frame (null when nothing was drawn).
+    /// </summary>
     public ShadowCascade[]? Cascades { get; private set; }
 
     /// <summary>
@@ -372,10 +400,14 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// </summary>
     public int CascadeCount => Meitou ? MeitouCascades : Math.Clamp(Settings.Cascades, 1, ShadowSettings.MaxCascades);
 
-    /// <summary>Whether the game's noise texture was found (else the receiver's jitter is a hash).</summary>
+    /// <summary>
+    /// Whether the game's noise texture was found (else the receiver's jitter is a hash).
+    /// </summary>
     public bool HasNoise => _noise is not null;
 
-    /// <summary>The range the cascades are fitted to and the casters are culled by: <see cref="Settings"/>' range, clamped by the guard.</summary>
+    /// <summary>
+    /// The range the cascades are fitted to and the casters are culled by: <see cref="Settings"/>' range, clamped by the guard.
+    /// </summary>
     public float EffectiveRange
     {
         get
@@ -433,7 +465,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         }
     }
 
-    /// <summary>The noise's texels, in the first frame (an upload goes with a frame); published from then on.</summary>
+    /// <summary>
+    /// The noise's texels, in the first frame (an upload goes with a frame); published from then on.
+    /// </summary>
     void UploadNoise()
     {
         if (_noiseUploaded || _noise is null || _noisePixels is null || !Gpu.Frame.Open) return;
@@ -462,21 +496,29 @@ public sealed unsafe partial class ShadowPass : IDisposable
 
     public double GpuMs { get; private set; }
 
-    /// <summary>What the caster callback drew in the last frame (for the log).</summary>
+    /// <summary>
+    /// What the caster callback drew in the last frame (for the log).
+    /// </summary>
     public string CasterStats { get; set; } = "";
 
-    /// <summary>CPU time of the callback's parts (terrain, objects, foliage) summed over the cascades of the last frame.</summary>
+    /// <summary>
+    /// CPU time of the callback's parts (terrain, objects, foliage) summed over the cascades of the last frame.
+    /// </summary>
     public readonly double[] PhaseMs = new double[3];
 
-    /// <summary>Collects finished GPU timings: native timestamps, read once their frame's slot comes round. Nothing waits, also with
-    /// <paramref name="wait"/> (kept for callers; the GL queries could block): a pass only a frame old has no time yet.</summary>
+    /// <summary>
+    /// Collects finished GPU timings: native timestamps, read once their frame's slot comes round. Nothing waits, also with
+    /// <paramref name="wait"/> (kept for callers; the GL queries could block): a pass only a frame old has no time yet.
+    /// </summary>
     public void Poll(bool wait = false)
     {
         _ = wait;
         if (_timer.Poll(_gpuSamples) is { } ms) GpuMs = ms;
     }
 
-    /// <summary>Mean and 95th percentile of the pass's GPU and CPU time over the frames drawn (the first left out: shaders warm up).</summary>
+    /// <summary>
+    /// Mean and 95th percentile of the pass's GPU and CPU time over the frames drawn (the first left out: shaders warm up).
+    /// </summary>
     public string DescribeStats()
     {
         Poll();
@@ -568,7 +610,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         Gpu.EndNative(cmd);
     }
 
-    /// <summary>The shadow term of the scene's surfaces, tinted by cascade (mode 2) or multiplied over the picture (mode 3).</summary>
+    /// <summary>
+    /// The shadow term of the scene's surfaces, tinted by cascade (mode 2) or multiplied over the picture (mode 3).
+    /// </summary>
     void DrawSceneView(IGpuCommandList cmd, int mode, PassTargets t, DrawState state, int width, int height, Matrix4x4 view,
         Matrix4x4 sceneProjection, Vector3 eye)
     {
@@ -583,7 +627,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         DrawFullscreen(cmd, p, t, s, new PixelViewport(0, 0, width, height, 0, 1), "shadow debug");
     }
 
-    /// <summary>The cascade layers in the lower right corner as the game's atlas, plain depth values (a plain sampler never compares).</summary>
+    /// <summary>
+    /// The cascade layers in the lower right corner as the game's atlas, plain depth values (a plain sampler never compares).
+    /// </summary>
     void DrawAtlasView(IGpuCommandList cmd, int mode, PassTargets t, DrawState state, bool scene, int width, int height)
     {
         int side = Math.Min(width, height) / (mode == 1 ? 2 : 3);
@@ -596,7 +642,9 @@ public sealed unsafe partial class ShadowPass : IDisposable
         DrawFullscreen(cmd, p, t, atlasState, viewport, "shadow atlas debug");
     }
 
-    /// <summary>One fullscreen triangle of <paramref name="p"/> in the debug views' rendering.</summary>
+    /// <summary>
+    /// One fullscreen triangle of <paramref name="p"/> in the debug views' rendering.
+    /// </summary>
     void DrawFullscreen(IGpuCommandList cmd, LegacyProgram p, PassTargets t, DrawState state, PixelViewport viewport, string label)
     {
         state.Record(cmd, t with { Viewport = viewport });

@@ -14,7 +14,9 @@ internal readonly struct HeightSnapshot
     readonly HeightWindow _fine;
     readonly float _fineBand, _fx0, _fz0, _fx1, _fz1;
 
-    /// <summary>The fine window it was taken with: the same one means the same heights (they are never written after they are published).</summary>
+    /// <summary>
+    /// The fine window it was taken with: the same one means the same heights (they are never written after they are published).
+    /// </summary>
     public HeightWindow Fine => _fine;
 
     public HeightSnapshot(ushort[] coarse, int coarseSize, HeightWindow fine, float fineBand)
@@ -30,7 +32,9 @@ internal readonly struct HeightSnapshot
         _fz1 = _fz0 + (fine.Rows - 1) * fine.Spacing;
     }
 
-    /// <summary>Height at a world point (bilinear in the coarse grid, blended into the fine window across its edge band).</summary>
+    /// <summary>
+    /// Height at a world point (bilinear in the coarse grid, blended into the fine window across its edge band).
+    /// </summary>
     public float HeightAt(float x, float z)
     {
         float h = WorldLayout.HalfWorldSize;

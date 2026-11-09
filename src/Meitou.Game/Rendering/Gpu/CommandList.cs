@@ -10,17 +10,21 @@ using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace Meitou.Game.Rendering.Gpu;
 
-/// <summary>An attachment of a <see cref="RenderingDesc"/>: a view in GENERAL layout, its load op and clear value (stores always). The depth
-/// clear defaults to 1 (conventional targets rely on it); scene-convention targets pass <see cref="DepthConvention.Clear"/>.</summary>
+/// <summary>
+/// An attachment of a <see cref="RenderingDesc"/>: a view in GENERAL layout, its load op and clear value (stores always). The depth clear defaults to
+/// 1 (conventional targets rely on it); scene-convention targets pass <see cref="DepthConvention.Clear"/>.
+/// </summary>
 public readonly record struct RenderTarget(GpuView View, LoadOp Load = LoadOp.Load, ClearColour Clear = default, float DepthClear = 1f)
 {
     public bool IsNull => View.IsNull;
 }
 
-/// <summary>What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, optionally a second
-/// colour attachment (<c>Extra</c>, location 1: the GI resolve's surface target, docs/render-gi.md) and a fragment shading rate attachment
+/// <summary>
+/// What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, optionally a second colour
+/// attachment (<c>Extra</c>, location 1: the GI resolve's surface target, docs/render-gi.md) and a fragment shading rate attachment
 /// (<c>ShadingRate</c>, an R8_UINT view in GENERAL layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been
-/// made for it, <see cref="AttachmentFormats.ShadingRate"/>).</summary>
+/// made for it, <see cref="AttachmentFormats.ShadingRate"/>).
+/// </summary>
 public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0,
     GpuView ShadingRate = default, int ShadingRateTexel = 0, RenderTarget Extra = default);
 
@@ -131,9 +135,11 @@ public sealed unsafe class CommandList : IGpuCommandList
 
     // ---- rendering ----
 
-    /// <summary>Begins dynamic rendering on <paramref name="d"/>. <paramref name="secondaries"/>: its contents are recorded in secondary command
-    /// buffers (<see cref="ExecuteCommands"/>, docs/renderer-native.md 6.1); nothing else may then be recorded into this list until <see
-    /// cref="EndRendering"/>.</summary>
+    /// <summary>
+    /// Begins dynamic rendering on <paramref name="d"/>. <paramref name="secondaries"/>: its contents are recorded in secondary command buffers
+    /// (<see cref="ExecuteCommands"/>, docs/renderer-native.md 6.1); nothing else may then be recorded into this list until
+    /// <see cref="EndRendering"/>.
+    /// </summary>
     public void BeginRendering(in RenderingDesc d, bool secondaries = false)
     {
         // The colour attachments: the main one, then the extra one (location 1) when there is one.
@@ -245,8 +251,10 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// </summary>
     public void ClearDepth(float value, PixelRect rect) => Clear(false, default, true, value, rect);
 
-    /// <summary>Clears the colour and / or depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>,
-    /// the colour first, as <c>VkGl.Clear</c> records it).</summary>
+    /// <summary>
+    /// Clears the colour and / or depth attachment of the open rendering inside <paramref name="rect"/> (<c>vkCmdClearAttachments</c>, the colour
+    /// first, as <c>VkGl.Clear</c> records it).
+    /// </summary>
     public void Clear(bool colour, ClearColour colourValue, bool depth, float depthValue, PixelRect rect)
     {
         var attachments = stackalloc ClearAttachment[2];
@@ -461,8 +469,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         _cmdBindDescriptorSets(Handle, point, vp.Layout, set, 1, &allocated, 0, null);
     }
 
-    /// <summary>Pushes a block of constants to a program (the layout comes from the program). Vulkan names the stages of the program's one
-    /// range, whatever <paramref name="stages"/> says: a push must name every stage of a range it overlaps and none outside it.</summary>
+    /// <summary>
+    /// Pushes a block of constants to a program (the layout comes from the program). Vulkan names the stages of the program's one range, whatever
+    /// <paramref name="stages"/> says: a push must name every stage of a range it overlaps and none outside it.
+    /// </summary>
     public void PushConstants<T>(GpuProgram program, GpuStage stages, in T value, uint offset = 0) where T : unmanaged
     {
         var vp = _ctx.Shaders.Backend(program);
@@ -510,10 +520,12 @@ public sealed unsafe class CommandList : IGpuCommandList
         Stats.IndirectDraws++;
     }
 
-    /// <summary>Non-indexed draws from <paramref name="args"/> (<c>VkDrawIndirectCommand</c>, 16 bytes each): the first
+    /// <summary>
+    /// Non-indexed draws from <paramref name="args"/> (<c>VkDrawIndirectCommand</c>, 16 bytes each): the first
     /// <paramref name="count"/> (a 32-bit value in <paramref name="countBuffer"/> at <paramref name="countOffset"/>, at most <paramref
     /// name="maxCount"/>),
-    /// one call. Needs <c>drawIndirectCount</c> (Vulkan 1.2) and <c>drawIndirectFirstInstance</c> for a non-zero firstInstance.</summary>
+    /// one call. Needs <c>drawIndirectCount</c> (Vulkan 1.2) and <c>drawIndirectFirstInstance</c> for a non-zero firstInstance.
+    /// </summary>
     public void DrawIndirectCount(GpuBuffer args, ulong offset, GpuBuffer countBuffer, ulong countOffset, uint maxCount, uint stride = 16)
     {
         _vk.CmdDrawIndirectCount(Handle, _device.BufferAt(args.Index), offset, _device.BufferAt(countBuffer.Index), countOffset, maxCount, stride);
@@ -566,9 +578,10 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// <inheritdoc/>
     public void InitTexture(GpuTexture texture) => _ctx.InitTexture(texture, Handle);
 
-    /// <summary>(Added for the Meitou water's ocean.) Copies tightly packed texels from <paramref name="src"/> at <paramref name="offset"/> over a
-    /// whole level and layer of <paramref name="dst"/> (GENERAL layout). The caller orders it against the writes before and the reads
-    /// after.</summary>
+    /// <summary>
+    /// (Added for the Meitou water's ocean.) Copies tightly packed texels from <paramref name="src"/> at <paramref name="offset"/> over a whole level
+    /// and layer of <paramref name="dst"/> (GENERAL layout). The caller orders it against the writes before and the reads after.
+    /// </summary>
     public unsafe void CopyTextureToBuffer(GpuTexture src, int level, int layer, in PixelRect region, GpuBuffer dst, ulong offset)
     {
         var copy = new BufferImageCopy
@@ -671,8 +684,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         Barrier(BarrierBatch.Full);
     }
 
-    /// <summary>(Phase 8 stage 1.) Scales level <paramref name="srcLevel"/> of <paramref name="texture"/> over its level <paramref name="dstLevel"/>
-    /// (all layers), as VkGl's <c>GenerateMipmap</c> does per level.</summary>
+    /// <summary>
+    /// (Phase 8 stage 1.) Scales level <paramref name="srcLevel"/> of <paramref name="texture"/> over its level <paramref name="dstLevel"/> (all
+    /// layers), as VkGl's <c>GenerateMipmap</c> does per level.
+    /// </summary>
     public void BlitLevel(GpuTexture texture, int srcLevel, int dstLevel, TextureMinFilter filter)
     {
         var d = texture.Desc;

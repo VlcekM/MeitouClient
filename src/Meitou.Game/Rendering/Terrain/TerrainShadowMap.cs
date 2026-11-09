@@ -35,7 +35,9 @@ sealed unsafe class TerrainShadowMap : IDisposable
     Vector3 _builtFor;
     int _result = -1;
 
-    /// <summary>Rebuilt when the sun's direction has turned by more than this (radians; about 0.1°).</summary>
+    /// <summary>
+    /// Rebuilt when the sun's direction has turned by more than this (radians; about 0.1°).
+    /// </summary>
     public const float RebuildAngle = 0.0017f;
 
     /// <param name="coarse">The whole-world raw heights, <paramref name="size"/>² samples (WorldScene.Coarse).</param>
@@ -74,22 +76,30 @@ sealed unsafe class TerrainShadowMap : IDisposable
             ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A, PolygonKind.Fill, false, false);
     }
 
-    /// <summary>The native GPU API the map is made and drawn with.</summary>
+    /// <summary>
+    /// The native GPU API the map is made and drawn with.
+    /// </summary>
     public IGpuContext Gpu { get; }
 
-    /// <summary>The finished map with its sampler (linear, clamped); null before the first build or when the sun is too high for any terrain shadow.</summary>
+    /// <summary>
+    /// The finished map with its sampler (linear, clamped); null before the first build or when the sun is too high for any terrain shadow.
+    /// </summary>
     public SampledTexture? Sampled => _result < 0 ? null : _targetsSampled[_result];
 
     public int Size => _size;
 
     public float Spacing => _spacing;
 
-    /// <summary>GPU work of the last rebuild is not timed separately; this counts rebuilds (for the log).</summary>
+    /// <summary>
+    /// GPU work of the last rebuild is not timed separately; this counts rebuilds (for the log).
+    /// </summary>
     public int Builds { get; private set; }
 
     public double LastBuildCpuMs { get; private set; }
 
-    /// <summary>Whether the sun is low enough to leave the land's shadows anywhere (a sun straight up casts none).</summary>
+    /// <summary>
+    /// Whether the sun is low enough to leave the land's shadows anywhere (a sun straight up casts none).
+    /// </summary>
     public static bool Applies(Vector3 toSun) => toSun.X * toSun.X + toSun.Z * toSun.Z > 1e-6f;
 
     /// <summary>

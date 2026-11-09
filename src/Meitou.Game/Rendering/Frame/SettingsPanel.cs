@@ -58,8 +58,10 @@ public sealed record Toggle(string Label, Func<bool> Get, Action<bool> Set, Func
 /// </summary>
 public sealed record PanelAction(string Label, Func<string> Question, Func<string> Run);
 
-/// <summary>A drop-down list after the action buttons: <see cref="Label"/> on the button, a click opens <see cref="Options"/> below it with the
-/// <see cref="Current"/> one marked "x", and a click on an option runs <see cref="Choose"/>, whose text is shown after.</summary>
+/// <summary>
+/// A drop-down list after the action buttons: <see cref="Label"/> on the button, a click opens <see cref="Options"/> below it with the
+/// <see cref="Current"/> one marked "x", and a click on an option runs <see cref="Choose"/>, whose text is shown after.
+/// </summary>
 public sealed record PanelChoice(Func<string> Label, Func<IReadOnlyList<string>> Options, Func<int> Current, Func<int, string> Choose);
 
 /// <summary>

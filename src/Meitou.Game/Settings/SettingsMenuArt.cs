@@ -12,11 +12,15 @@ sealed class SettingsMenuArt
     public const string Prefix = "meitou:settings:";
     public static string SurfacePrefix => Prefix + "v3:";
 
-    /// <summary>The window plate's pixels per UI unit; it is drawn nine-sliced, <see cref="WindowBorder"/> pixels per edge (shadow margin + corner radius).</summary>
+    /// <summary>
+    /// The window plate's pixels per UI unit; it is drawn nine-sliced, <see cref="WindowBorder"/> pixels per edge (shadow margin + corner radius).
+    /// </summary>
     public const float WindowDensity = 2;
     public const int WindowBorder = (int)((16 + 10) * WindowDensity);
 
-    /// <summary>The picture under the luckyren Mode setting: <c>assets/luckyren-mode.png</c>, embedded; <c>ImageTexture</c> name.</summary>
+    /// <summary>
+    /// The picture under the luckyren Mode setting: <c>assets/luckyren-mode.png</c>, embedded; <c>ImageTexture</c> name.
+    /// </summary>
     public const string LuckyrenImage = Prefix + "luckyren-mode";
 
     public void Ensure(UiPainter painter, bool meitou, Func<RgbaImage?> uiAtlas)

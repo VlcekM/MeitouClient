@@ -139,8 +139,10 @@ public sealed class SettingsLook
 
 public enum SettingKind { Toggle, Slider }
 
-/// <summary>One setting: a top-level key of <c>meitou.user.json</c>, or (<see cref="Graphics"/>) a Tab panel slider or switch under <c>graphics</c>
-/// (a slider by its label, a switch by <c>Meitou: </c> and its label, saved 1 on, 0 off).</summary>
+/// <summary>
+/// One setting: a top-level key of <c>meitou.user.json</c>, or (<see cref="Graphics"/>) a Tab panel slider or switch under <c>graphics</c> (a slider
+/// by its label, a switch by <c>Meitou: </c> and its label, saved 1 on, 0 off).
+/// </summary>
 public sealed record SettingDescription
 {
     public string Key { get; set; } = "";
@@ -152,9 +154,11 @@ public sealed record SettingDescription
     /// How much the setting costs (No / Low / Medium / High impact, Faster with Meitou), shown beside its name; null when not ranked.
     /// </summary>
     public string? Impact { get; set; }
-    /// <summary>The value when the key is missing (a toggle: 1 on, 0 off); null when it depends on the mode or the computer, and the slider then sits
+    /// <summary>
+    /// The value when the key is missing (a toggle: 1 on, 0 off); null when it depends on the mode or the computer, and the slider then sits
     /// at
-    /// <see cref="Shown"/> (a graphics toggle offers the game's default as a choice of its own).</summary>
+    /// <see cref="Shown"/> (a graphics toggle offers the game's default as a choice of its own).
+    /// </summary>
     public float? Default { get; set; }
     public float Shown { get; set; }
     /// <summary>
@@ -166,22 +170,30 @@ public sealed record SettingDescription
     public float Max { get; set; } = 1;
     public float Step { get; set; } = 1;
     public bool Logarithmic { get; set; }
-    /// <summary>A slider whose stored value falls as the setting improves (texture quality's level 0 is Maximum): drawn mirrored, so
-    /// right is always more; the value stored stays the same.</summary>
+    /// <summary>
+    /// A slider whose stored value falls as the setting improves (texture quality's level 0 is Maximum): drawn mirrored, so right is always more; the
+    /// value stored stays the same.
+    /// </summary>
     public bool Reversed { get; set; }
-    /// <summary>How a slider value reads: <see cref="Labels"/>[rounded value] when given, else value x <see cref="Scale"/> in <see cref="Format"/>
-    /// plus <see cref="Suffix"/>; below <see cref="OffBelow"/> it reads <see cref="OffText"/>.</summary>
+    /// <summary>
+    /// How a slider value reads: <see cref="Labels"/>[rounded value] when given, else value x <see cref="Scale"/> in <see cref="Format"/> plus
+    /// <see cref="Suffix"/>; below <see cref="OffBelow"/> it reads <see cref="OffText"/>.
+    /// </summary>
     public string[]? Labels { get; set; }
     public string Format { get; set; } = "0";
     public float Scale { get; set; } = 1;
     public string Suffix { get; set; } = "";
     public float? OffBelow { get; set; }
     public string OffText { get; set; } = "Off";
-    /// <summary>A slider's named values (render scale's quality modes): a drop-down of them and Custom, the slider shown only under Custom;
-    /// a value that is none of them reads Custom. Null: a plain slider (an older launcher shows that either way).</summary>
+    /// <summary>
+    /// A slider's named values (render scale's quality modes): a drop-down of them and Custom, the slider shown only under Custom; a value that is
+    /// none of them reads Custom. Null: a plain slider (an older launcher shows that either way).
+    /// </summary>
     public List<SettingMode>? Modes { get; set; }
-    /// <summary>Shown only while another setting of the section is at one value (the DLSS preset while anti-aliasing is DLSS); null: always
-    /// (an older launcher shows it either way).</summary>
+    /// <summary>
+    /// Shown only while another setting of the section is at one value (the DLSS preset while anti-aliasing is DLSS); null: always (an older launcher
+    /// shows it either way).
+    /// </summary>
     public SettingCondition? ShownWhen { get; set; }
 
     public string Text(float value)

@@ -13,12 +13,16 @@ namespace Meitou.Game.Rendering.Profiling;
 /// </summary>
 public static class SpikeLog
 {
-    /// <summary>A frame is a spike when its GPU time exceeds this many medians (and <see cref="MinMs"/>).</summary>
+    /// <summary>
+    /// A frame is a spike when its GPU time exceeds this many medians (and <see cref="MinMs"/>).
+    /// </summary>
     public const double Factor = 1.5;
 
     public const double MinMs = 2;
 
-    /// <summary>A frame slow only on the render thread is a spike from this many ms (shorter ones are no stutter).</summary>
+    /// <summary>
+    /// A frame slow only on the render thread is a spike from this many ms (shorter ones are no stutter).
+    /// </summary>
     public const double CpuMinMs = 20;
 
     static readonly object Gate = new();
@@ -28,15 +32,21 @@ public static class SpikeLog
     static long s_gc2, s_gcCount, s_takenFrames;
     static TimeSpan s_gcPause;
 
-    /// <summary>Set by the profiler: prints its per-stage run summary with <see cref="PrintSummary"/>.</summary>
+    /// <summary>
+    /// Set by the profiler: prints its per-stage run summary with <see cref="PrintSummary"/>.
+    /// </summary>
     internal static Action? OnSummary;
 
     public static bool Enabled { get; set; }
 
-    /// <summary>Frames at the start that print nothing (streaming settles: MEITOU_BENCH_SKIP).</summary>
+    /// <summary>
+    /// Frames at the start that print nothing (streaming settles: MEITOU_BENCH_SKIP).
+    /// </summary>
     public static int SkipFrames { get; set; } = int.TryParse(Environment.GetEnvironmentVariable("MEITOU_BENCH_SKIP"), out int k) ? k : 0;
 
-    /// <summary>Every spike line printed so far (the benchmark's summary counts them).</summary>
+    /// <summary>
+    /// Every spike line printed so far (the benchmark's summary counts them).
+    /// </summary>
     public static int Spikes { get; private set; }
 
     /// <summary>
@@ -76,7 +86,9 @@ public static class SpikeLog
         }
     }
 
-    /// <summary>The notes of the frame just ended as one string, and starts the next frame's.</summary>
+    /// <summary>
+    /// The notes of the frame just ended as one string, and starts the next frame's.
+    /// </summary>
     internal static string TakeFrame()
     {
         Dictionary<string, Tally> taken;
@@ -123,7 +135,9 @@ public static class SpikeLog
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"spike    frame {frame}: {gpuText} {cpuText} | {notesText}"));
     }
 
-    /// <summary>Appends the collections since the last frame (gen0 and gen2 counts, the pause) when there were any.</summary>
+    /// <summary>
+    /// Appends the collections since the last frame (gen0 and gen2 counts, the pause) when there were any.
+    /// </summary>
     static void AppendGarbageCollections(StringBuilder sb)
     {
         long g2 = GC.CollectionCount(2), g0 = GC.CollectionCount(0);
@@ -135,7 +149,9 @@ public static class SpikeLog
         (s_gcCount, s_gc2, s_gcPause) = (g0, g2, pause);
     }
 
-    /// <summary>Adds one frame's notes of a kind to the run's totals.</summary>
+    /// <summary>
+    /// Adds one frame's notes of a kind to the run's totals.
+    /// </summary>
     static void AddToTotals(string what, Tally t)
     {
         if (!Totals.TryGetValue(what, out var all)) Totals[what] = all = new Total();

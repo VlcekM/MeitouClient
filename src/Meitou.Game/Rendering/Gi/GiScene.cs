@@ -11,8 +11,10 @@ using Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Gi;
 
-/// <summary>What a traced hit reads of its geometry (48 bytes, <c>GiShaders.Geometry</c>): the vertex positions (three floats at the start of each
-/// vertex, <see cref="Stride"/> apart) and the triangle's three 32-bit indices, by device address.</summary>
+/// <summary>
+/// What a traced hit reads of its geometry (48 bytes, <c>GiShaders.Geometry</c>): the vertex positions (three floats at the start of each vertex,
+/// <see cref="Stride"/> apart) and the triangle's three 32-bit indices, by device address.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct GeometryRecord
 {
@@ -113,9 +115,10 @@ internal sealed unsafe class GiScene : IDisposable
     /// </summary>
     public bool LazyScene { get; set; } = true;
 
-    /// <summary>True (default; the bench's gi-top-shared switch): one top-level structure for all frame slots. The frame's full barrier orders each
-    /// frame's builds after the traces of the
-    /// frames before, so the slots need none of their own, and a changed scene is built once, not once per slot.</summary>
+    /// <summary>
+    /// True (default; the bench's gi-top-shared switch): one top-level structure for all frame slots. The frame's full barrier orders each frame's
+    /// builds after the traces of the frames before, so the slots need none of their own, and a changed scene is built once, not once per slot.
+    /// </summary>
     public bool SharedTop { get; set; } = true;
 
     #endregion

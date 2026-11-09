@@ -8,8 +8,10 @@ using Buffer = Silk.NET.Vulkan.Buffer;
 
 namespace Meitou.Game.Rendering.Frame;
 
-/// <summary>What a foliage cull dispatch needs of the previous frame's depth pyramid (<see cref="HizPyramid.ViewFor"/>): the buffer and the
-/// vec4s <see cref="FoliageShaders"/>' <c>ViewData.hz</c> and <c>hzOff</c> hold (<see cref="Vectors"/>).</summary>
+/// <summary>
+/// What a foliage cull dispatch needs of the previous frame's depth pyramid (<see cref="HizPyramid.ViewFor"/>): the buffer and the vec4s
+/// <see cref="FoliageShaders"/>' <c>ViewData.hz</c> and <c>hzOff</c> hold (<see cref="Vectors"/>).
+/// </summary>
 public readonly struct OcclusionView(GpuBufferBinding buffer, Vector4[] vectors)
 {
     /// <summary>
@@ -17,9 +19,11 @@ public readonly struct OcclusionView(GpuBufferBinding buffer, Vector4[] vectors)
     /// </summary>
     public GpuBufferBinding Buffer { get; } = buffer;
 
-    /// <summary><see cref="HizPyramid.ViewVectors"/> vec4s: [0] the previous eye and the eye's step, [1..3] the previous view's right, up and back
-    /// axes, [4] tan x, tan y, width and height of the depth, [5] pixels per unit of tangent, level count, level 0's width and height, [6..8] the
-    /// level offsets (as uints).</summary>
+    /// <summary>
+    /// <see cref="HizPyramid.ViewVectors"/> vec4s: [0] the previous eye and the eye's step, [1..3] the previous view's right, up and back axes, [4]
+    /// tan x, tan y, width and height of the depth, [5] pixels per unit of tangent, level count, level 0's width and height, [6..8] the level offsets
+    /// (as uints).
+    /// </summary>
     public Vector4[] Vectors { get; } = vectors;
     public bool IsEmpty => Buffer.IsNull;
 }

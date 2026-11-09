@@ -1084,8 +1084,10 @@ public sealed partial class CombatSystem
         for (int t = 0; t < n; t++) _fightersAt[t] = _index.AttackersOf(t).IsEmpty ? 0 : CountFightersAt(world, t);
     }
 
-    /// <summary>The melee fighters (engaged or circling) at <paramref name="t"/>, as of the last tick: the original's engaged count plus the
-    /// askers it turned away (<c>FUN_140666e20</c>). After <see cref="IndexAttackers"/>.</summary>
+    /// <summary>
+    /// The melee fighters (engaged or circling) at <paramref name="t"/>, as of the last tick: the original's engaged count plus the askers it turned
+    /// away (<c>FUN_140666e20</c>). After <see cref="IndexAttackers"/>.
+    /// </summary>
     public int FightersAt(World world, int t) => (uint)t < (uint)world.Characters.HighWater && t < _fightersAt.Length ? _fightersAt[t] : 0;
 
     int CountFightersAt(World world, int t)

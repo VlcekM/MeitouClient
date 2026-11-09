@@ -4,9 +4,11 @@ using Meitou.Game.Rendering.Gpu;
 
 namespace Meitou.Game.Rendering.Terrain;
 
-/// <summary>The terrain material cache's switch (docs/render-terrain.md "Material cache"): the A/B <c>terrain-material-cache</c> (B: every pixel
+/// <summary>
+/// The terrain material cache's switch (docs/render-terrain.md "Material cache"): the A/B <c>terrain-material-cache</c> (B: every pixel
 /// shades the layers);
-/// <c>MEITOU_DIAG_NO_MATERIAL_CACHE=1</c> starts it off.</summary>
+/// <c>MEITOU_DIAG_NO_MATERIAL_CACHE=1</c> starts it off.
+/// </summary>
 public static class TerrainMaterialCache
 {
     public static bool Enabled { get; set; } = !GpuContext.DiagNoMaterialCache;
@@ -41,7 +43,9 @@ public sealed unsafe partial class TerrainRenderer
 
     static long CacheBytes => 2L * CacheLevels * CacheSide * CacheSide * 4;
 
-    /// <summary>Bakes what the cache levels need this frame round <paramref name="eye"/> (before the scene, outside a pass).</summary>
+    /// <summary>
+    /// Bakes what the cache levels need this frame round <paramref name="eye"/> (before the scene, outside a pass).
+    /// </summary>
     public void RecordMaterialCache(Vector3 eye)
     {
         // Switched off, the levels keep what they hold (an A/B alternation finds them whole); the strips catch up when it is back on.
@@ -74,7 +78,9 @@ public sealed unsafe partial class TerrainRenderer
         }
     }
 
-    /// <summary>The inputs changed: a level being built starts again, a whole one is refreshed row by row while it is drawn from.</summary>
+    /// <summary>
+    /// The inputs changed: a level being built starts again, a whole one is refreshed row by row while it is drawn from.
+    /// </summary>
     void ResetCacheInputs(int key, TerrainTextures t)
     {
         _cacheKey = key;
@@ -87,7 +93,9 @@ public sealed unsafe partial class TerrainRenderer
         _cacheReach = 0.3f * t.Resident.Select(b => b.FadeDistance).Where(f => f > 0).DefaultIfEmpty(float.MaxValue).Min();
     }
 
-    /// <summary>Bakes what level <paramref name="k"/> needs this frame: its strips when it moved, else its first bake's next chunk.</summary>
+    /// <summary>
+    /// Bakes what level <paramref name="k"/> needs this frame: its strips when it moved, else its first bake's next chunk.
+    /// </summary>
     void BakeLevel(int k, Vector3 eye, ref IGpuCommandList? cmd, ref TerrainConstants c, Span<(int X, int Y, int W, int H)> rects,
         ref int budget, ref int build)
     {
@@ -113,7 +121,9 @@ public sealed unsafe partial class TerrainRenderer
         BakeFirstChunk(k, want, texel, rects, ref cmd, ref c, ref build);
     }
 
-    /// <summary>The strips a level gained as it moved from <paramref name="have"/> to <paramref name="want"/>, and its share of the refresh rows.</summary>
+    /// <summary>
+    /// The strips a level gained as it moved from <paramref name="have"/> to <paramref name="want"/>, and its share of the refresh rows.
+    /// </summary>
     void BakeStrips(int k, Vector2 want, Vector2 have, float texel, Span<(int X, int Y, int W, int H)> rects, ref IGpuCommandList? cmd,
         ref TerrainConstants c, ref int budget)
     {
@@ -142,7 +152,9 @@ public sealed unsafe partial class TerrainRenderer
         if (n > 0) Bake(ref cmd, k, want, texel, ref c, rects[..n]);
     }
 
-    /// <summary>The next chunk of a level's first bake (its rows done so far in <see cref="_cacheBuilt"/>); whole, the level is ready.</summary>
+    /// <summary>
+    /// The next chunk of a level's first bake (its rows done so far in <see cref="_cacheBuilt"/>); whole, the level is ready.
+    /// </summary>
     void BakeFirstChunk(int k, Vector2 want, float texel, Span<(int X, int Y, int W, int H)> rects, ref IGpuCommandList? cmd,
         ref TerrainConstants c, ref int build)
     {
@@ -186,7 +198,9 @@ public sealed unsafe partial class TerrainRenderer
         return true;
     }
 
-    /// <summary>The world rectangle [x0, x1) × [z0, z1) as texel rectangles of a level's wrapped image (up to four).</summary>
+    /// <summary>
+    /// The world rectangle [x0, x1) × [z0, z1) as texel rectangles of a level's wrapped image (up to four).
+    /// </summary>
     static int Wrapped(Span<(int X, int Y, int W, int H)> rects, int n, float x0, float x1, float z0, float z1, float texel)
     {
         int tx0 = (int)MathF.Round(x0 / texel), tx1 = (int)MathF.Round(x1 / texel), tz0 = (int)MathF.Round(z0 / texel),
@@ -249,8 +263,10 @@ public sealed unsafe partial class TerrainRenderer
         cmd.EndRendering();
     }
 
-    /// <summary>What the baked material depends on besides the place: the textures and maps by their bindless indices, the overlay window, the
-    /// biomes' parameter rows (<see cref="TerrainTextures.MaterialVersion"/>: residency and near slots), the switches.</summary>
+    /// <summary>
+    /// What the baked material depends on besides the place: the textures and maps by their bindless indices, the overlay window, the biomes'
+    /// parameter rows (<see cref="TerrainTextures.MaterialVersion"/>: residency and near slots), the switches.
+    /// </summary>
     static int CacheKey(in TerrainConstants c, int version)
     {
         var h = new HashCode();

@@ -61,9 +61,11 @@ public static class Enhancements
     /// </summary>
     public const float MeitouShadowRange = 10000, MeitouShadowRangeMax = 15000;
 
-    /// <summary>The Meitou <c>reach</c> switch's defaults (docs/render-objects.md, "Draw distance"): objects at full detail out
+    /// <summary>
+    /// The Meitou <c>reach</c> switch's defaults (docs/render-objects.md, "Draw distance"): objects at full detail out
     /// to 20000, huge landmarks out to 150000, and the terrain LOD's pixel error 16 (Faithful: 12000 and
-    /// <see cref="WorldRenderOptions.DefaultTerrainPixelError"/>, 10, what the viewer drew before the switch).</summary>
+    /// <see cref="WorldRenderOptions.DefaultTerrainPixelError"/>, 10, what the viewer drew before the switch).
+    /// </summary>
     public const float MeitouObjectDistance = 20000, MeitouLandmarkDistance = 150000, MeitouTerrainPixelError = 16;
     public const float FaithfulObjectDistance = 12000;
 
@@ -298,8 +300,10 @@ public static class Enhancements
     #endregion
 }
 
-/// <summary>The one key that turns Meitou off and on (F1 in the viewer, Shift+F1 in the game): every switch Faithful, then back to the
-/// ones that were Meitou before (all of them when they started Faithful). The Tab panel's checkboxes set them one by one.</summary>
+/// <summary>
+/// The one key that turns Meitou off and on (F1 in the viewer, Shift+F1 in the game): every switch Faithful, then back to the ones that were Meitou
+/// before (all of them when they started Faithful). The Tab panel's checkboxes set them one by one.
+/// </summary>
 public sealed class MeitouToggle(IReadOnlyList<Enhancement> switches)
 {
     bool[]? _before;

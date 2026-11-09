@@ -7,13 +7,17 @@ using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 
 namespace Meitou.Game.Rendering.Gi;
 
-/// <summary>One triangle geometry of a bottom-level build: positions (three floats at the start of each vertex) and 32-bit indices, both
-/// reached by device address (buffers made with <see cref="BufferUse.RayInput"/>).</summary>
+/// <summary>
+/// One triangle geometry of a bottom-level build: positions (three floats at the start of each vertex) and 32-bit indices, both reached by device
+/// address (buffers made with <see cref="BufferUse.RayInput"/>).
+/// </summary>
 public readonly record struct TriangleGeometry(ulong VertexAddress, uint VertexStride, uint VertexCount, ulong IndexAddress, uint TriangleCount,
     bool Opaque = true);
 
-/// <summary>A TLAS instance as Vulkan lays it out (<c>VkAccelerationStructureInstanceKHR</c>, 64 bytes): a 3 x 4 row-major transform, the
-/// 24-bit custom index with the 8-bit mask, the 24-bit hit group offset with 8 bits of flags, and the BLAS's device address.</summary>
+/// <summary>
+/// A TLAS instance as Vulkan lays it out (<c>VkAccelerationStructureInstanceKHR</c>, 64 bytes): a 3 x 4 row-major transform, the 24-bit custom index
+/// with the 8-bit mask, the 24-bit hit group offset with 8 bits of flags, and the BLAS's device address.
+/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct InstanceRecord
 {
@@ -24,8 +28,10 @@ public unsafe struct InstanceRecord
 
     public const int Size = 64;
 
-    /// <summary>An instance of <paramref name="blas"/> placed by <paramref name="world"/> (a System.Numerics row-vector matrix: the translation in
-    /// row 4), visible to rays whose cull mask shares a bit with <paramref name="mask"/>.</summary>
+    /// <summary>
+    /// An instance of <paramref name="blas"/> placed by <paramref name="world"/> (a System.Numerics row-vector matrix: the translation in row 4),
+    /// visible to rays whose cull mask shares a bit with <paramref name="mask"/>.
+    /// </summary>
     public static InstanceRecord Of(in Matrix4x4 world, uint customIndex, byte mask, ulong blas,
         GeometryInstanceFlagsKHR flags = GeometryInstanceFlagsKHR.TriangleFacingCullDisableBitKhr)
     {
@@ -91,9 +97,11 @@ public sealed unsafe class AccelerationStructure : IDisposable
 
     #region Bottom-level
 
-    /// <summary>A bottom-level structure over <paramref name="geometries"/>, built into <paramref name="cmd"/> (prefer fast tracing, compaction not
+    /// <summary>
+    /// A bottom-level structure over <paramref name="geometries"/>, built into <paramref name="cmd"/> (prefer fast tracing, compaction not
     /// used).
-    /// <paramref name="updatable"/>: it can be refitted (<see cref="RefitBottom"/>), and keeps its scratch buffer for that.</summary>
+    /// <paramref name="updatable"/>: it can be refitted (<see cref="RefitBottom"/>), and keeps its scratch buffer for that.
+    /// </summary>
     public static AccelerationStructure BuildBottom(VulkanDevice device, CommandList cmd, ReadOnlySpan<TriangleGeometry> geometries, string name,
         bool updatable = false)
     {
@@ -178,8 +186,10 @@ public sealed unsafe class AccelerationStructure : IDisposable
     /// </summary>
     public uint MaxInstances { get; private set; }
 
-    /// <summary>A top-level structure for up to <paramref name="maxInstances"/> instances with its scratch kept, rebuilt in place every frame
-    /// (<see cref="RebuildTop"/>).</summary>
+    /// <summary>
+    /// A top-level structure for up to <paramref name="maxInstances"/> instances with its scratch kept, rebuilt in place every frame
+    /// (<see cref="RebuildTop"/>).
+    /// </summary>
     public static AccelerationStructure CreateTop(VulkanDevice device, uint maxInstances, string name)
     {
         // Room for either build flavour (RebuildTop's fastTrace).
@@ -214,8 +224,10 @@ public sealed unsafe class AccelerationStructure : IDisposable
         return sizes;
     }
 
-    /// <summary>Rebuilds a structure of <see cref="CreateTop"/> over <paramref name="count"/> (at most <see cref="MaxInstances"/>) <see
-    /// cref="InstanceRecord"/>s at <paramref name="instancesAddress"/> into <paramref name="cmd"/>.</summary>
+    /// <summary>
+    /// Rebuilds a structure of <see cref="CreateTop"/> over <paramref name="count"/> (at most <see cref="MaxInstances"/>)
+    /// <see cref="InstanceRecord"/>s at <paramref name="instancesAddress"/> into <paramref name="cmd"/>.
+    /// </summary>
     public void RebuildTop(CommandList cmd, ulong instancesAddress, uint count, bool fastTrace = false)
     {
         if (count > MaxInstances)

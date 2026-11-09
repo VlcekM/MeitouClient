@@ -19,7 +19,9 @@ internal static class ShopSave
 {
     public const string RefreshKey = "inventory refresh time", StockKey = "meitou shop", FillsKey = "meitou shop fills";
 
-    /// <summary>Writes the shop over the platoon's keys; a squad with no shop keeps what was read.</summary>
+    /// <summary>
+    /// Writes the shop over the platoon's keys; a squad with no shop keeps what was read.
+    /// </summary>
     public static void Write(FcsRecord platoon, Shop? shop, World world)
     {
         if (shop is null) return;

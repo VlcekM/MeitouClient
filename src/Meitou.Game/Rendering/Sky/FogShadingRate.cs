@@ -16,7 +16,9 @@ public static class FogShadingRate
     /// </summary>
     public const int MarginBlocks = 2;
 
-    /// <summary>The opacity from which a tile is shaded 2 x 2, and from which 4 x 4.</summary>
+    /// <summary>
+    /// The opacity from which a tile is shaded 2 x 2, and from which 4 x 4.
+    /// </summary>
     public static readonly (float TwoByTwo, float FourByFour) Thresholds = (DefaultTwoByTwo, DefaultFourByFour);
 
     public const float DefaultTwoByTwo = 0.8f, DefaultFourByFour = 0.97f;
@@ -45,9 +47,13 @@ public static class FogShadingRate
     public static int Encode(int width,
         int height) => (System.Numerics.BitOperations.Log2((uint)width) << 2) | System.Numerics.BitOperations.Log2((uint)height);
 
-    /// <summary>The square fragment size a texel code stands for (2 x 1 and the like read as the larger side).</summary>
+    /// <summary>
+    /// The square fragment size a texel code stands for (2 x 1 and the like read as the larger side).
+    /// </summary>
     public static int SizeOf(int code) => 1 << Math.Max(code >> 2, code & 3);
 
-    /// <summary>Texels of a rate image covering <paramref name="pixels"/> pixels with tiles of <paramref name="texel"/>.</summary>
+    /// <summary>
+    /// Texels of a rate image covering <paramref name="pixels"/> pixels with tiles of <paramref name="texel"/>.
+    /// </summary>
     public static int Tiles(int pixels, int texel) => Math.Max((pixels + texel - 1) / texel, 1);
 }

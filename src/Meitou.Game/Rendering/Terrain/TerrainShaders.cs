@@ -13,10 +13,14 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 static partial class TerrainShaders
 {
-    /// <summary>Rows of the per-biome parameter texture (RGBA32F, one row per biome).</summary>
+    /// <summary>
+    /// Rows of the per-biome parameter texture (RGBA32F, one row per biome).
+    /// </summary>
     public const int ParamTexels = 15;
 
-    /// <summary>GpuTexture units of the world-wide maps (TerrainTextures binds units 0..6 for the region).</summary>
+    /// <summary>
+    /// GpuTexture units of the world-wide maps (TerrainTextures binds units 0..6 for the region).
+    /// </summary>
     public const int HeightCoarseUnit = 7, HeightFineUnit = 8, GroundUnit = 9, WorldColourUnit = 10;
 
     /// <summary>
@@ -434,7 +438,9 @@ static partial class TerrainShaders
         }
         """;
 
-    /// <summary>First of the four locations the instanced depth path reads a placement's rows from (the meshes use 0 to 6).</summary>
+    /// <summary>
+    /// First of the four locations the instanced depth path reads a placement's rows from (the meshes use 0 to 6).
+    /// </summary>
     public const int MeshInstanceLocation = 7;
 
     /// <summary>
@@ -599,7 +605,9 @@ static partial class TerrainShaders
         }
         """;
 
-    /// <summary>The shadow casters' evaluation stage: the same curved point (<see cref="MeshEvaluation"/>), the position alone.</summary>
+    /// <summary>
+    /// The shadow casters' evaluation stage: the same curved point (<see cref="MeshEvaluation"/>), the position alone.
+    /// </summary>
     public const string MeshEvaluationDepth = "#version 330 core\n" + MeshCurve + """
 
         void main() { gl_Position = uViewProjection * vec4(curvedPoint(), 1.0); }
@@ -1389,7 +1397,9 @@ static partial class TerrainShaders
         }
         """;
 
-    /// <summary><see cref="Fragment"/> for the instanced <see cref="MeshVertex"/>: the feature's biome per instance instead of the uniform.</summary>
+    /// <summary>
+    /// <see cref="Fragment"/> for the instanced <see cref="MeshVertex"/>: the feature's biome per instance instead of the uniform.
+    /// </summary>
     public static readonly string MeshFragment = PerInstanceBiome(Fragment, fade: true);
 
     /// <summary>
@@ -1416,7 +1426,9 @@ static partial class TerrainShaders
 
     // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
 
-    /// <summary>Set of <see cref="ConstantsBlock"/> (after the native model's frame set 0 and bindless set 1).</summary>
+    /// <summary>
+    /// Set of <see cref="ConstantsBlock"/> (after the native model's frame set 0 and bindless set 1).
+    /// </summary>
     public const int ConstantsSet = 2;
 
     /// <summary>
@@ -1507,15 +1519,19 @@ static partial class TerrainShaders
 
         """;
 
-    /// <summary>The per-draw values of a patch (<see cref="TerrainPush"/> is the C# side; std430): <c>uNode</c> and <c>uMorph</c>.</summary>
+    /// <summary>
+    /// The per-draw values of a patch (<see cref="TerrainPush"/> is the C# side; std430): <c>uNode</c> and <c>uMorph</c>.
+    /// </summary>
     public const string PushMembers = """
             vec4 node;
             vec2 morph;
         """;
 
-    /// <summary>The terrain's uniforms: <see cref="ConstantsBlock"/> members, the textures by bindless index (the array each one's format
-    /// selects: the layer arrays in <c>textures2DArray</c>, the integer blend cells in <c>utextures2D</c>), the patch's node in the push block. The
-    /// camera, light and fog are <see cref="ViewConstants"/> (<see cref="NativeShaders.ViewMap"/>).</summary>
+    /// <summary>
+    /// The terrain's uniforms: <see cref="ConstantsBlock"/> members, the textures by bindless index (the array each one's format selects: the layer
+    /// arrays in <c>textures2DArray</c>, the integer blend cells in <c>utextures2D</c>), the patch's node in the push block. The camera, light and
+    /// fog are <see cref="ViewConstants"/> (<see cref="NativeShaders.ViewMap"/>).
+    /// </summary>
     static readonly Dictionary<string, string> NativeMap = new()
     {
         ["uHeightCoarse"] = "textures2D[terrain.heightCoarse]",
@@ -1635,9 +1651,10 @@ static partial class TerrainShaders
         return native.Insert(line + 1, defines);
     }
 
-    /// <summary>The rock bake's extra push members (after <see cref="PushMembers"/>; std430 offsets 32, 48, 64, 80; <see cref="TerrainBakePush"/> is
-    /// the C# side): the frame's direction (towards the viewer; w the distance the material is shaded at), its image axes and the output
-    /// pass.</summary>
+    /// <summary>
+    /// The rock bake's extra push members (after <see cref="PushMembers"/>; std430 offsets 32, 48, 64, 80; <see cref="TerrainBakePush"/> is the C#
+    /// side): the frame's direction (towards the viewer; w the distance the material is shaded at), its image axes and the output pass.
+    /// </summary>
     public const string RockBakePushMembers = PushMembers + """
 
             vec4 bakeDir;
@@ -1697,7 +1714,9 @@ static partial class TerrainShaders
 
     static string Baked(string fragment) => fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_BAKED\n");
 
-    /// <summary>The material cache's bake (TerrainRenderer.MaterialCache): a triangle over the level's image.</summary>
+    /// <summary>
+    /// The material cache's bake (TerrainRenderer.MaterialCache): a triangle over the level's image.
+    /// </summary>
     public static string MaterialBakeVertexNative() => Native("""
         #version 330 core
         void main() { gl_Position = vec4(vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0, 0.0, 1.0); }
@@ -1708,10 +1727,11 @@ static partial class TerrainShaders
     /// normal, the texel as the footprint, at distance 0, without the march), writing before the blood, the wetness and the lighting: the albedo and
     /// gloss to the colour target, the shading normal and absorbance to the extra one.
     /// </summary>
-    /// <summary>The bake's outputs (<see cref="MaterialBakeFragmentNative"/>), before the blood: the layers' albedo and gloss; their tangent-space
-    /// normal's x and y (z follows), the rain absorbance and the relief as one height field over <c>BakeSpan</c> (0.5 the surface): the ground's
-    /// (pixelRelief's gather, depth and height) and the cliff's (its projections' heights along the normal, as a height), mixed by the cliff's
-    /// share.</summary>
+    /// <summary>
+    /// The bake's outputs (<see cref="MaterialBakeFragmentNative"/>), before the blood: the layers' albedo and gloss; their tangent-space normal's x
+    /// and y (z follows), the rain absorbance and the relief as one height field over <c>BakeSpan</c> (0.5 the surface): the ground's (pixelRelief's
+    /// gather, depth and height) and the cliff's (its projections' heights along the normal, as a height), mixed by the cliff's share.
+    /// </summary>
     const string BakeOutput = """
         fragColour = albedo;
         float bakeHeight = 0.5;
@@ -1823,13 +1843,17 @@ static partial class TerrainShaders
     public static string MeshControlNative() => Native(MeshControl);
     public static string MeshEvaluationNative() => Native(MeshEvaluation);
     public static string MeshEvaluationDepthNative() => Native(MeshEvaluationDepth);
-    /// <summary><see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2) with the terrain's push block, so both
-    /// stages of a depth program declare the same one.</summary>
+    /// <summary>
+    /// <see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2) with the terrain's push block, so both stages of a depth
+    /// program declare the same one.
+    /// </summary>
     public static string DepthFragmentNative() => Native(ShadowShaders.DepthFragment);
 }
 
-/// <summary>The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools
-/// are 32-bit (0 / 1).</summary>
+/// <summary>
+/// The C# side of <see cref="TerrainShaders.ConstantsBlock"/> (std140; offsets checked against the reflection by a test). GLSL bools are 32-bit (0 /
+/// 1).
+/// </summary>
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 960)]
 struct TerrainConstants
 {
@@ -1921,14 +1945,18 @@ struct BakeOrigins
     System.Numerics.Vector4 _level;
 }
 
-/// <summary>The cells of <see cref="TerrainConstants.BloodCells"/>: column, row, layer (std140 <c>vec4[32]</c>).</summary>
+/// <summary>
+/// The cells of <see cref="TerrainConstants.BloodCells"/>: column, row, layer (std140 <c>vec4[32]</c>).
+/// </summary>
 [System.Runtime.CompilerServices.InlineArray(TerrainDecalRenderer.MaxSlots)]
 struct BloodCells
 {
     System.Numerics.Vector4 _cell;
 }
 
-/// <summary>The C# side of <see cref="TerrainShaders.PushMembers"/> (std430 push constants): a patch's <c>uNode</c> and <c>uMorph</c>.</summary>
+/// <summary>
+/// The C# side of <see cref="TerrainShaders.PushMembers"/> (std430 push constants): a patch's <c>uNode</c> and <c>uMorph</c>.
+/// </summary>
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 24)]
 struct TerrainPush
 {
