@@ -227,7 +227,7 @@ public sealed partial class CaptiveSystem
                     TaskStart.Stand(table, w);
                     if (world.Squads.Find(wc.SquadId) is not { } squad) return End(world, j, CaptiveEventKind.GaveUp);
                     if (cage.Lock is { } l) l.Locked = false;
-                    world.Fixtures.LiftOut(world, j.Captive, w);
+                    world.Fixtures.LiftOut(world, j.Captive, w, stepOut: true);
                     cc.Escaped = false;
                     FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
                     Join(world, j.Captive, cc, squad, SquadRole.Slave);
