@@ -22,6 +22,14 @@ public sealed unsafe partial class PostProcess
 
     sealed class LampShadowFloorPass(GpuContext gpu) : FullscreenProgram(gpu, Gi.LampShadowShaders.Floor, "post lamp shadow floor");
 
+    sealed class LampShowPass : FullscreenProgram
+    {
+        public readonly SamplerSlot Shown;
+        public LampShowPass(GpuContext gpu) : base(gpu, Gi.LampShadowShaders.ShowTarget, "post lamp show") => Shown = P.Sampler("uShown");
+    }
+
+    LampShowPass? lampShow;
+
     Gi.LampShadowPass? lampShadowTrace;
     LampShadowApplyPass? lampShadowApply;
     LampShadowFloorPass? lampShadowFloor;
@@ -45,6 +53,16 @@ public sealed unsafe partial class PostProcess
         var filtered = lampFiltered ??= MakeLampLost();
         CloseSegment();
         var trace = lampShadowTrace ??= new Gi.LampShadowPass(Gpu, Options.LampShadowLamps);
+        if (lamps.DebugReference is { } reference && lamps.RowOf(reference.Lamp) is { } debugRow)
+        {
+            trace.RunReference(scene, lamps, depth.Texture, surface.Texture, lost.Texture, LampShadowViewNow(), debugRow, reference.Truth);
+            var show = lampShow ??= new LampShowPass(Gpu);
+            Bind(show.P, show.Shown, lost);
+            Draw(show.P, colour.Attachment, colour.Format, width, height, width, height, PassState);
+            Stamp("lamp shadows");
+            CloseSegment();
+            return;
+        }
         // With the tiles the rays are for what moves alone, a lamp at a time: total1 sums their lost light, filtered ends as 1.
         bool perLamp = lamps.Tiles is not null;
         if (perLamp)
@@ -77,6 +95,7 @@ public sealed unsafe partial class PostProcess
         lampShadowTrace?.Dispose();
         lampShadowApply?.P.Dispose();
         lampShadowFloor?.P.Dispose();
+        lampShow?.P.Dispose();
     }
 
     Gi.LampShadowView LampShadowViewNow()

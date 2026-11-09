@@ -90,10 +90,11 @@ static class LampShadowShaders
     /// </summary>
     static readonly string BlockerRays = $$"""
         // How far along the ray its blocker is (0: nothing between the surface and the lamp). Ends short of the lamp (its fixture) and at its reach; a lamp's owner is passed through.
+        float lampSkip = LAMP_NEAR_SKIP;   // what a ray leaves out before the lamp
         float lampBlocker(vec3 from, vec3 target, float reach, uint emitter)
         {
             vec3 ray = target - from;
-            float d = length(ray), tMax = min(d - LAMP_NEAR_SKIP, reach);
+            float d = length(ray), tMax = min(d - lampSkip, reach);
             if (tMax <= 0.0) return 0.0;
             uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT;
             if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
@@ -365,6 +366,98 @@ static class LampShadowShaders
             imageStore(uTotal, px, vec4(total0, 0.0));
             imageStore(uTotal1, px, vec4(total1, 0.0));
         }
+        """;
+
+    /// <summary>
+    /// Debug (console <c>lamps refview</c>): one lamp's visibility of the still world over the screen, grey, as the tile gives it (mode 0, <c>uOrigin</c>'s w) or as the truth of 256 rays to points of the lamp's disc (1), for comparing the two.
+    /// </summary>
+    public static readonly string TraceReference = $$"""
+        #version 460
+        #extension GL_EXT_ray_query : require
+        #extension GL_EXT_buffer_reference : require
+        #extension GL_EXT_buffer_reference_uvec2 : require
+        #extension GL_EXT_scalar_block_layout : require
+        layout(local_size_x = 8, local_size_y = 8) in;
+        {{Meitou.Rendering.Gpu.BindlessTable.Declarations(1)}}
+
+        layout(set = 0, binding = 0) uniform sampler2D uNearDepth;
+        layout(set = 0, binding = 1) uniform usampler2D uAlbedo;
+        layout(set = 0, binding = 2) uniform accelerationStructureEXT uScene;
+        {{GiShaders.GeometryStruct}}
+        layout(set = 0, binding = 3, std430) readonly buffer Geometries { Geometry geometries[]; };
+        layout(set = 0, binding = 4, std140) uniform Params
+        {
+            vec4 uLightGrid;
+            vec3 uRight;    float uFootprint;
+            vec3 uUp;       float uPhase;
+            vec3 uBack;     float pad0;
+            vec3 uGiEye;    float pad1;
+            vec3 uOrigin;   float uMode;
+            vec2 uNearPlanes;
+            vec2 uTan;
+            vec2 uFullSize;
+            vec2 uRayMask;      // x: the instances the rays see, y: the lamp
+        };
+        layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uLost;
+        layout(set = 0, binding = 11) uniform sampler2D uLampTiles;
+        layout(set = 0, binding = 8) uniform sampler2D uLightData;
+        {{Constants}}{{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
+        {{GiResolveShaders.ReconstructFunctions}}
+        {{GiShaders.OctDirection}}
+        {{GiShaders.HitBuffers}}
+        {{TracedSunShaders.CasterCutout}}
+        {{BlockerRays}}
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+            if (px.x >= int(uFullSize.x) || px.y >= int(uFullSize.y)) return;
+            vec3 shown = vec3(0.0, 0.0, 0.15);
+            uvec4 surface = texelFetch(uAlbedo, px, 0);
+            float z = (surface.w & 256u) == 0u ? 0.0 : depthAt(px);
+            int lamp = int(uRayMask.y);
+            if (z > 0.0)
+            {
+                vec3 world = positionAt(px, z);
+                vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
+                vec3 plane = lampPlane(px, world, n);
+                vec4 p = texelFetch(uLightData, ivec2(0, lamp), 0);
+                vec3 toLamp = p.xyz - world;
+                float d = length(toLamp);
+                vec4 cone = texelFetch(uLightData, ivec2(2, lamp), 0);
+                bool inCone = texelFetch(uLightData, ivec2(1, lamp), 0).w < 0.5 || dot(cone.xyz, -toLamp / max(d, 1e-4)) > cone.w;
+                if (d < p.w && inCone && dot(plane, toLamp) > 0.0)
+                {
+                    float seen;
+                    if (uMode < 0.5) seen = lampTileVisibility(lamp, toLamp, d, plane);
+                    else
+                    {
+                        vec3 l = toLamp / d, x, y;
+                        lampBasis(l, x, y);
+                        float radius = texelFetch(uLightData, ivec2(5, lamp), 0).x;
+                        lampSkip = uMode > 1.5 ? 60.0 : max(LAMP_NEAR_SKIP, 8.0 * radius);   // as the tiles (LampTiles.FixtureSources); mode 2: well past the lamp's housing
+                        vec3 from = world - uOrigin + plane * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint), centre = p.xyz - uOrigin;
+                        int lit = 0;
+                        for (int k = 0; k < 256; k++)
+                        {
+                            float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / 256.0) * radius;
+                            if (lampBlocker(from, centre + (x * cos(a) + y * sin(a)) * r, p.w, uint(texelFetch(uLightData, ivec2(3, lamp), 0).w)) <= 0.0) lit++;
+                        }
+                        seen = float(lit) / 256.0;
+                    }
+                    shown = vec3(seen);
+                }
+            }
+            imageStore(uLost, px, vec4(shown, 1.0));
+        }
+        """;
+
+    /// <summary>Debug: shows a target over the scene.</summary>
+    public const string ShowTarget = """
+        #version 330 core
+        in vec2 vUv;
+        out vec4 fragColour;
+        uniform sampler2D uShown;
+        void main() { fragColour = vec4(texelFetch(uShown, ivec2(floor(gl_FragCoord.xy)), 0).rgb, 1.0); }
         """;
 
     /// <summary>

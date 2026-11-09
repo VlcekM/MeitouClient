@@ -72,6 +72,12 @@ sealed partial class GameHost
         {
             if (ActiveLamps is not { } lamps || args.Count == 0) { con.Error("usage: lamps list [radius] | lamps off <index...> | lamps on"); return; }
             if (args[0] == "on") { lamps.DebugOff.Clear(); con.Print("all lamps on"); return; }
+            if (args[0] == "refview")
+            {
+                lamps.DebugReference = args.Count < 3 ? null : (int.Parse(args[1]), args[2] == "objects" ? 3 : args[2] == "ref60" ? 2 : args[2] == "ref" ? 1 : 0);
+                con.Print(lamps.DebugReference is null ? "refview off" : $"refview lamp {args[1]} {args[2]}");
+                return;
+            }
             if (args[0] == "tiles")
             {
                 if (args.Count > 1) lamps.TilesEnabled = args[1] == "on";

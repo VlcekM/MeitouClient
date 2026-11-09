@@ -89,7 +89,7 @@ static class LampShaders
             }
             float texel = texelPerDepth * d;
             float nl = clamp(dot(n, l), 0.03, 1.0);
-            float slope = min(sqrt(1.0 - nl * nl) / nl, 8.0), margin = 1.0 + texel * (1.0 + slope);
+            float slope = min(sqrt(1.0 - nl * nl) / nl, 3.0), margin = 1.0 + texel * (1.0 + slope);
             int place = int(t.z), row = place / 128;
             ivec2 corner = ivec2(place - row * 128, row) * LAMP_TILE_UNIT;
             vec2 st = uv * float(side);
@@ -101,9 +101,9 @@ static class LampShaders
             // Is anything in the way of any part of the lamp, and how far off it: the region a blocker near the lamp can cover, read by a spiral.
             float search = clamp(radius / (texelPerDepth * max(0.1 * d, 15.0)), 1.5, 48.0);
             float sum = 0.0, held = 0.0;
-            for (int k = 0; k < 8; k++)
+            for (int k = 0; k < 48; k++)
             {
-                float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / 8.0) * search;
+                float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / 48.0) * search;
                 vec2 p = st + vec2(cos(a), sin(a)) * r;
                 float v = lampTileAt(corner, side, ivec2(floor(p)));
                 if (v < 0.9999 && v < (d - margin - r * texel * slope) / reach) { sum += v; held += 1.0; }
@@ -125,7 +125,7 @@ static class LampShaders
                 return lit / 4.0;
             }
             // A wide one: a spiral of filtered lookups (a single texel per lookup steps along the texels' grid, in plates at a close view).
-            int taps = spread > 8.0 ? 24 : 12;
+            int taps = spread > 8.0 ? 64 : 32;
             for (int k = 0; k < taps; k++)
             {
                 float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / float(taps)) * spread;

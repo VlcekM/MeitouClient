@@ -26,6 +26,8 @@ sealed unsafe class LampShadowPass : IDisposable
     readonly GpuProgram oneProgram, sumProgram;
     readonly GpuComputePipeline onePipeline, sumPipeline;
     readonly List<(int Row, Vector4 Area, uint[] Cells, uint[] Wide)> areas = [];
+    GpuProgram? referenceProgram;
+    GpuComputePipeline referencePipeline;
     readonly List<uint[]> cellPool = [];
     int cellsUsed;
     /// <summary>The side in pixels of the cells a lamp's pass works on; a mask holds 2048, a screen wider than that takes all its cells.</summary>
@@ -152,6 +154,60 @@ sealed unsafe class LampShadowPass : IDisposable
             return;
         }
         cmd.PushDescriptors(to, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, Bindings), GpuBindPoint.Compute);
+    }
+
+    /// <summary>Debug (console <c>lamps refview</c>): one lamp's visibility of the still world into <paramref name="target"/>: the tile's (<paramref name="truth"/> false), or 256 rays to its disc.</summary>
+    public void RunReference(GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture target, in LampShadowView view, int row, int truth)
+    {
+        if (referenceProgram is null)
+        {
+            referenceProgram = ctx.Shaders.Compute(LampShadowShaders.TraceReference, "lamp shadow reference",
+            [
+                (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
+                (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage), (8, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler),
+            ], GpuSetLayout.Bindless);
+            referencePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(referenceProgram.Value, "lamp shadow reference"));
+        }
+        var parameters = new Params
+        {
+            LightGrid = lamps.Grid,
+            Right = new Vector4(view.Right, view.Footprint),
+            Up = new Vector4(view.Up, view.Phase),
+            Back = new Vector4(view.Back, 0),
+            Eye = new Vector4(view.Eye, 0),
+            Origin = new Vector4(scene.Origin, truth),
+            PlanesTan = new Vector4(view.NearPlanes, view.Tan.X, view.Tan.Y),
+            Size = new Vector4(view.Size, truth == 3 ? TracedSunShaders.LampTileObjects : TracedSunShaders.LampTileObjects | TracedSunShaders.LampTileGround, row),
+        };
+        var constants = ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
+        var cmd = (CommandList)ctx.BeginNative("lamp shadow reference");
+        cmd.Barrier(BarrierBatch.Full);
+        var (_, _, data) = lamps.Current;
+        var images = stackalloc DescriptorImageInfo[4];
+        images[0] = Image(depth);
+        images[1] = Image(surface);
+        images[2] = Image(data);
+        images[3] = Image(lamps.TilesTexture);
+        var storage = new DescriptorImageInfo(default, ctx.Device.ViewAt(target.View().Index), ImageLayout.General);
+        var top = scene.Top!.Handle;
+        var asWrite = new WriteDescriptorSetAccelerationStructureKHR { SType = StructureType.WriteDescriptorSetAccelerationStructureKhr, AccelerationStructureCount = 1, PAccelerationStructures = &top };
+        var records = new DescriptorBufferInfo(ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);
+        var uniform = new DescriptorBufferInfo(ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(Params));
+        var writes = stackalloc WriteDescriptorSet[8];
+        writes[0] = Sampled(0, &images[0]);
+        writes[1] = Sampled(1, &images[1]);
+        writes[2] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
+        writes[3] = Buffer(3, DescriptorType.StorageBuffer, &records);
+        writes[4] = Buffer(4, DescriptorType.UniformBuffer, &uniform);
+        writes[5] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &storage };
+        writes[6] = Sampled(8, &images[2]);
+        writes[7] = Sampled(11, &images[3]);
+        cmd.PushDescriptors(referenceProgram.Value, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 8), GpuBindPoint.Compute);
+        cmd.BindPipeline(referencePipeline);
+        cmd.BindBindlessTable(referenceProgram.Value, 1, GpuBindPoint.Compute);
+        cmd.Dispatch((uint)(((int)view.Size.X + 7) / 8), (uint)(((int)view.Size.Y + 7) / 8));
+        cmd.Barrier(BarrierBatch.Full);
+        ctx.EndNative(cmd);
     }
 
     /// <summary>
@@ -352,6 +408,7 @@ sealed unsafe class LampShadowPass : IDisposable
     {
         ctx.Shaders.Dispose(program);
         ctx.Shaders.Dispose(oneProgram);
+        if (referenceProgram is not null) ctx.Shaders.Dispose(referenceProgram.Value);
         ctx.Shaders.Dispose(sumProgram);
         penumbra.Dispose();
     }

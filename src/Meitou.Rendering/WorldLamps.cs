@@ -60,6 +60,16 @@ internal sealed class WorldLamps : IDisposable
     /// <summary>Debug: the cache's state.</summary>
     public string TilesDescription => Tiles?.Describe() ?? "none";
 
+    /// <summary>Debug (the console's <c>lamps refview</c>): the lamp whose visibility is shown over the scene, as its tile gives it or as the truth of many rays.</summary>
+    public (int Lamp, int Truth)? DebugReference { get; set; }
+
+    /// <summary>The row of this frame's data that holds lamp <paramref name="lamp"/>, if any.</summary>
+    internal int? RowOf(int lamp)
+    {
+        for (int k = 0; k < InGrid; k++) if (near[k].Lamp == lamp) return k;
+        return null;
+    }
+
     /// <summary>How far from the eye the lamps can hold a tile: the traced scene's range.</summary>
     public float TileReach { get; set; } = float.MaxValue;
 
