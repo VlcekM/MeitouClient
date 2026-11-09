@@ -90,6 +90,15 @@ public static class PuScriptReader
     /// </summary>
     public static List<PuNode> Parse(string text)
     {
+        var lines = CodeLines(text);
+        return BuildTree(lines);
+    }
+
+    /// <summary>
+    /// The text's non-empty lines with their comments cut and their whitespace trimmed, each with its 1-based line number.
+    /// </summary>
+    static List<(string Text, int Number)> CodeLines(string text)
+    {
         var lines = new List<(string Text, int Number)>();
         int n = 0;
         foreach (var raw in text.Split('\n'))
@@ -101,6 +110,15 @@ public static class PuScriptReader
             line = line.Trim();
             if (line.Length > 0) lines.Add((line, n));
         }
+
+        return lines;
+    }
+
+    /// <summary>
+    /// The blocks and properties of the code lines, as the top-level blocks.
+    /// </summary>
+    static List<PuNode> BuildTree(List<(string Text, int Number)> lines)
+    {
         var roots = new List<PuNode>();
         var stack = new Stack<PuNode>();
         for (int i = 0; i < lines.Count; i++)
