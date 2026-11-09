@@ -44,7 +44,7 @@ public sealed class WorldRenderOptions
 
 /// <summary>Sun and sky light for the world shaders (from <see cref="WorldSky"/>).</summary>
 public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunColour, Vector3 AmbientSky, Vector3 AmbientGround, Vector3 FogColour,
-        float FogDistance,
+    float FogDistance,
     Vector3 GlintDirection = default, Vector3 GlintColour = default)
 {
     /// <summary>
@@ -118,7 +118,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     // The colour programs, from the set the parallax setting asks for (UseColour): meshSolid is meshColour without the cross-fade discard
     // (EarlyDepth).
     TerrainProgram _patchColour, _patchColourNoNormal, _patchColourCut, _patchColourCutNoNormal, _meshColour, _meshColourNoNormal, _meshSolid,
-            _meshSolidNoNormal;
+        _meshSolidNoNormal;
     TerrainProgram? _patchColourTess, _patchColourCutTess, _meshColourTess, _meshSolidTess;
     readonly GpuSetLayout[] _sets;
     readonly ColourSet?[] _colourSets = new ColourSet?[6];
@@ -182,25 +182,25 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         _patchDepth = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.DepthFragmentNative(), "terrain depth");
         _patchPrepass = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(), TerrainShaders.PrepassFragmentNative(), "terrain prepass");
         _patchPrepassCut = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(),
-                TerrainShaders.PrepassFragmentNative(interiorCut: true), "terrain prepass interior cut");
+            TerrainShaders.PrepassFragmentNative(interiorCut: true), "terrain prepass interior cut");
         // The ground displacement (GroundRelief): the colour and prepass programs tessellated, for the patches near the eye (the same stages in both,
         // so the late colour's depth test meets the prepass's depths).
         if (gpu.HasTessellation)
         {
             _patchPrepassTess = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexTessNative(), TerrainShaders.PrepassFragmentNative(),
-                    "terrain relief prepass",
+                "terrain relief prepass",
                 TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative());
             _patchPrepassCutTess = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexTessNative(),
-                    TerrainShaders.PrepassFragmentNative(interiorCut: true), "terrain relief prepass interior cut",
+                TerrainShaders.PrepassFragmentNative(interiorCut: true), "terrain relief prepass interior cut",
                 TerrainShaders.PatchControlNative(), TerrainShaders.PatchEvaluationNative());
         }
         _meshDepth = new TerrainProgram(gpu, sets, TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(),
-                "terrain mesh depth");
+            "terrain mesh depth");
         // The rocks' smoothing (RockSmoothing): the mesh programs tessellated, the casters with the same curve.
         if (gpu.HasTessellation)
         {
             _meshDepthTess = new TerrainProgram(gpu, sets, TerrainShaders.MeshVertexTessNative(), TerrainShaders.DepthFragmentNative(),
-                    "terrain mesh depth smoothed",
+                "terrain mesh depth smoothed",
                 TerrainShaders.MeshControlNative(), TerrainShaders.MeshEvaluationDepthNative());
         }
         // GL's stand-ins for an absent texture, in the array each sampler indexes (the bindless stand-in is the float 2D one only).
@@ -335,7 +335,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     public sealed class FineStandby
     {
         internal FineStandby(TerrainTexture texture, HeightWindow window, TerrainHeightBounds.Patch? patch) => (Texture, Window,
-                Patch) = (texture, window, patch);
+            Patch) = (texture, window, patch);
         internal TerrainTexture Texture { get; }
         public HeightWindow Window { get; }
         /// <summary>
@@ -412,7 +412,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// water). <paramref name="secondary"/>: the reflection's call, with its own quadtree for its own LOD distance.
     /// </summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, WorldLighting light,
-            float cullBelow = float.NegativeInfinity, bool secondary = false, bool defer = false)
+        float cullBelow = float.NegativeInfinity, bool secondary = false, bool defer = false)
     {
         UseColour(GroundRelief.ParallaxActive, GroundRelief.Quality);
         _current = secondary ? _spare : _quadtree;
@@ -420,8 +420,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         _frame = new Frame(viewProjection, eye, options, light);
         var fog = FogCull;
         _current.Select(eye, _bounds,
-                (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max) &&
-                (fog is null || !fog.Hidden(min, max, FogVolumes.CullKind.Terrain)), _nodes);
+            (min, max) => max.Y >= cullBelow && WorldCamera.Intersects(frustum, min, max) &&
+            (fog is null || !fog.Hidden(min, max, FogVolumes.CullKind.Terrain)), _nodes);
 
         SortNearestFirst(eye);
         PreparePatches(_current);
@@ -543,7 +543,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             || !options.Textures || _textures is not { HasBiomes: true })
             return;
         float r2 = GroundRelief.TessellatedRadius >= float.MaxValue ? float.MaxValue
-                : GroundRelief.TessellatedRadius * GroundRelief.TessellatedRadius;
+            : GroundRelief.TessellatedRadius * GroundRelief.TessellatedRadius;
         _plainCount = SplitNear(_patchDraws, _plainCount, ref _reliefDraws, ref _reliefCount, _frame.Eye, r2);
         _cutCount = SplitNear(_cutDraws, _cutCount, ref _cutReliefDraws, ref _cutReliefCount, _frame.Eye, r2);
     }
@@ -581,7 +581,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             // A quadrant node draws one quarter of its square (TerrainQuadtree.Select).
             double s = node.Quadrant < 0 ? node.Size : node.Size / 2;
             double x0 = node.X0 + (node.Quadrant < 0 ? 0 : (node.Quadrant & 1) * s), z0 = node.Z0 +
-                    (node.Quadrant < 0 ? 0 : (node.Quadrant >> 1) * s);
+                (node.Quadrant < 0 ? 0 : (node.Quadrant >> 1) * s);
             double dx = Math.Max(Math.Max(x0 - eye.X, eye.X - (x0 + s)), 0), dz = Math.Max(Math.Max(z0 - eye.Z, eye.Z - (z0 + s)), 0);
             _nodeKeys[i] = dx * dx + dz * dz;
         }
@@ -652,7 +652,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         quality = Math.Clamp(quality, 0, 2);
         var set = _colourSets[(march ? 3 : 0) + quality] ??= MakeColour(march, quality);
         (_patchColour, _patchColourNoNormal, _patchColourCut,
-                _patchColourCutNoNormal) = (set.Patch, set.PatchNoNormal, set.PatchCut, set.PatchCutNoNormal);
+            _patchColourCutNoNormal) = (set.Patch, set.PatchNoNormal, set.PatchCut, set.PatchCutNoNormal);
         (_meshColour, _meshColourNoNormal, _meshSolid, _meshSolidNoNormal) = (set.Mesh, set.MeshNoNormal, set.MeshSolid, set.MeshSolidNoNormal);
         (_patchColourTess, _patchColourCutTess, _meshColourTess, _meshSolidTess) = (set.PatchTess, set.PatchCutTess, set.MeshTess, set.MeshSolidTess);
     }
@@ -697,7 +697,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
 
     /// <summary>A mesh program, or its tessellated twin while the rocks are smoothed (<see cref="RockSmoothing.TessellateActive"/>).</summary>
     TerrainProgram Smoothed(TerrainProgram p, TerrainProgram? tessellated) => RockSmoothing.TessellateActive && tessellated is not null
-            ? tessellated : p;
+        ? tessellated : p;
     static SamplerInfo StandInInfo(bool arrayed, ScalarKind kind) => new("", 0, 0, SamplerDimension.Dim2D, arrayed, false, false, kind, 0);
 
     /// <summary>
@@ -856,13 +856,13 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
                 c.Relief = Index(set.Relief, BindlessKind.Texture2D, _standIn2D);
                 c.Parallax = textured && GroundRelief.ParallaxActive && set.Height is not null ? GroundRelief.Depth : 0;
                 c.Displace = patches && textured && GroundRelief.DisplaceActive && _patchColourTess is not null && set.Height is not null
-                        ? GroundRelief.Depth : 0;
+                    ? GroundRelief.Depth : 0;
                 (c.DisplaceEnd, c.ParallaxEnd) = (GroundRelief.DisplaceDistance, GroundRelief.ParallaxDistance);
                 (c.OverlayRelief, c.SelfShadow, c.TargetSlope) = (GroundRelief.OverlayRelief, GroundRelief.SelfShadow, GroundRelief.TargetSlope);
                 (c.MaxDepth, c.ScaleFollow,
-                        c.CliffScale) = (GroundRelief.MaxDepth / GroundRelief.ReferenceDepth, GroundRelief.ScaleFollow, GroundRelief.CliffScale);
+                    c.CliffScale) = (GroundRelief.MaxDepth / GroundRelief.ReferenceDepth, GroundRelief.ScaleFollow, GroundRelief.CliffScale);
                 (c.Refine, c.PixelScale, c.BroadCut) = (patches && _patchColourTess is not null ? GroundRelief.RefinePixels : 0,
-                        options.TerrainPixelScale, GroundRelief.BroadCut);
+                    options.TerrainPixelScale, GroundRelief.BroadCut);
                 c.FieldTiles = Index(set.Field, BindlessKind.UintTexture2D, _standInUInt);
                 if (patches && textured && t.FieldCount > 0)
                     (c.FieldOrigin, c.FieldTile, c.FieldColumns, c.FieldCount) = (t.FieldOrigin, t.FieldTile, t.FieldColumns, t.FieldCount);
@@ -900,8 +900,8 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         if (_writtenFrame != f.Number || !System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in _constants))
                 .SequenceEqual(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in _written))))
         {
-            _constantsSlice = f.WriteConstants(
-                System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in _constants)), _uniformAlign);
+            var constants = System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in _constants));
+            _constantsSlice = f.WriteConstants(constants, _uniformAlign);
             (_written, _writtenFrame) = (_constants, f.Number);
             f.Stats.ConstantBytes += sizeof(TerrainConstants);
         }
@@ -1035,7 +1035,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     PatchPipeline ResolvePatches(TerrainProgram p, DrawState state, PassTargets targets, string label)
     {
         var segment = new SegmentPipeline(p.P, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage,
-                state.DepthClamp);
+            state.DepthClamp);
         foreach (var e in _patchPipelines)
             if (e.Segment == segment) return e;
         if (_patchPipelines.Count >= 16) _patchPipelines.Clear();
@@ -1409,7 +1409,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     /// <see cref="DrawMeshes"/>; the caller orders the meshes. Returns the number of draw calls.
     /// </summary>
     public int DrawMeshesIndirect(ReadOnlySpan<IndirectMesh> meshes, GpuBuffer rows, ulong rowsOffset, GpuBuffer args, ulong argsOffset,
-            bool depth = false, bool solid = false,
+        bool depth = false, bool solid = false,
         InteriorMaskRenderer? cut = null)
     {
         if (meshes.Length == 0) return 0;
@@ -1431,7 +1431,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
     }
 
     int DrawIndirect(ReadOnlySpan<IndirectMesh> meshes, GpuBuffer rows, ulong rowsOffset, GpuBuffer args, ulong argsOffset, TerrainProgram p,
-            int kind, string label)
+        int kind, string label)
     {
         var job = OpenMeshSegment(p, kind, label, rows, rowsOffset, out var s);
         if (_meshGroups.Count > 4096) _meshGroups.Clear();   // meshes come and go with streaming

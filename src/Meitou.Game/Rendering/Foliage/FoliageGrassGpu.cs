@@ -18,7 +18,7 @@ public readonly record struct GrassTables(Transient Zones, int ZoneCount, Transi
 /// the counters (draws, blades).
 /// </summary>
 public readonly record struct GrassResult(GpuBuffer Draws, ulong DrawsOffset, GpuBuffer Counters, ulong CountersOffset, int MaxDraws,
-        Transient Patches)
+    Transient Patches)
 {
     public bool IsEmpty => MaxDraws == 0;
 }
@@ -68,12 +68,12 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
             _cullBindings = Bindings(vk, _cull!.Value);
             _orderBindings = Bindings(vk, _order!.Value);
             _scratch = new FrameScratch(vk, "foliage grass scratch",
-                    BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferSrc | BufferUse.TransferDst, 64ul << 20);
+                BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferSrc | BufferUse.TransferDst, 64ul << 20);
         }
         _arena = new BufferArena(ctx, arenaBytes, BufferUse.Vertex | BufferUse.TransferDst, "foliage grass blades");
         _slots = DeviceBuffer.Create(ctx, (ulong)slotCapacity * GrassSlot.Size, BufferUse.Storage | BufferUse.TransferDst, "foliage grass slots");
         _prefixes = DeviceBuffer.Create(ctx, (ulong)slotCapacity * PrefixStride * 4, BufferUse.Storage | BufferUse.TransferDst,
-                "foliage grass prefixes");
+            "foliage grass prefixes");
         _counted = new ReadbackBuffer?[ctx.FramesInFlight];
         _countedWritten = new int[ctx.FramesInFlight];
     }
@@ -271,7 +271,7 @@ public sealed unsafe class FoliageGrassGpu : IDisposable
     /// (<see cref="GrassMotionReach"/>, 0: the patches' ranges only). The draws are read by this frame's draw.
     /// </summary>
     public GrassResult Dispatch(ReadOnlySpan<Vector4> planes, Vector2 eye, float pageSize, int prefixIndex, float fraction, in GrassTables tables,
-            float motionScale = 0)
+        float motionScale = 0)
     {
         int n = SlotHigh;
         if (n == 0 || tables.PatchCount == 0) return default;

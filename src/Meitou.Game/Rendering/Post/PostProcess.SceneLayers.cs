@@ -47,7 +47,7 @@ public sealed unsafe partial class PostProcess
             (NearDepth, ShaftInjected) = (P.Sampler("uNearDepth"), P.Sampler("uShaftInjected"));
             (NearPlanes, WaterY, FullSize) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uFullSize"));
             (Grid, Range, Eye, Tan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftEye"), P.Uniform("uShaftTan"),
-                    P.Uniform("uShaftFog"));
+                P.Uniform("uShaftFog"));
             (Right, Up, Back) = (P.Uniform("uShaftRight"), P.Uniform("uShaftUp"), P.Uniform("uShaftBack"));
             (Light, Scatter) = (P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
             (Atlas, Params, Air, Layers) = (P.Uniform("uShaftAtlas"), P.Uniform("uShaftParams"), P.Uniform("uShaftAir"), P.Uniform("uLayers"));

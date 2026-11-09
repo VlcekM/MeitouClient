@@ -222,7 +222,7 @@ static class BuildingLodShaders
             float gridLine(float v) { float f = fract(v); return min(f, 1.0 - f); }
             """);
         return Replace(f,
-                @"void\s+main\s*\(\s*\)\s*\{", "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + CutVolumes + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
+            @"void\s+main\s*\(\s*\)\s*\{", "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + CutVolumes + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
             + "    if ((uFadeMode & 2) != 0 && inCutVolume(vWorld)) discard;\n" + ScaffoldTest);
     }
 

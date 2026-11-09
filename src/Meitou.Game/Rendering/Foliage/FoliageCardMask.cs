@@ -147,7 +147,7 @@ public sealed class FoliageCardMask
     /// Where the masks are kept.
     /// </summary>
     public static string CacheRoot { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
-            "cardtrim");
+        "cardtrim");
 
     const uint Magic = 0x4D52544D;   // "MTRM"
     static readonly ConcurrentDictionary<(string Path, byte Cutoff), Lazy<FoliageCardMask?>> Memo = new();

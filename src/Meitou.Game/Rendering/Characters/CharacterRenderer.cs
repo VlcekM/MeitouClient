@@ -178,7 +178,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// <paramref name="byDefault"/>.
     /// </summary>
     public bool SkinOn(string? race, bool byDefault) => race is not null && _skinRaces is not null && _skinRaces.TryGetValue(race,
-            out bool chosen) ? chosen : byDefault;
+        out bool chosen) ? chosen : byDefault;
     readonly SkinScattering _skinScattering;
 
     /// <summary>
@@ -199,7 +199,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public static bool SkinByDefault(GameRecord race) => !race.GetBool("is robot");
 
     bool SkinFor(PartMaterial m) => m.Race is not null && _skinRaces is not null && _skinRaces.TryGetValue(m.Race,
-            out bool chosen) ? chosen : m.SkinDefault;
+        out bool chosen) ? chosen : m.SkinDefault;
 
     /// <summary>
     /// The person races of the loaded data (base game and mods) for the Skin page: every RACE record no ANIMAL_CHARACTER uses, by name, with its
@@ -430,7 +430,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     {
         if (!_states.TryGetValue(from, out var source) || source.Posed < 0 || source.Bones.Length == 0) return false;
         _states[key] = new CharState { Bones = [.. source.Bones], Previous = [.. source.Bones], Posed = _updateStamp, Seen = _updateStamp,
-                Frozen = true };
+            Frozen = true };
         return true;
     }
 
@@ -487,7 +487,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// (only their look and place, for loading).
     /// </summary>
     public bool InReach(Vector3 position, Vector3 eye, float distanceScale = 1) => Vector3.DistanceSquared(position,
-            eye) <= (DrawDistance * distanceScale + ReachMargin) * (DrawDistance * distanceScale + ReachMargin);
+        eye) <= (DrawDistance * distanceScale + ReachMargin) * (DrawDistance * distanceScale + ReachMargin);
     const float ReachMargin = 2000;
     /// <summary>
     /// The distance within which a character may be drawn this frame (<see cref="DrawDistance"/> plus the margin): the simulation's near radius for
@@ -557,7 +557,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     {
         _content.Textures.Mips.SetView(width, height, fieldOfView, Gpu.LodBias);
         _content.LodPixelsPerRadian = Data.World.TerrainLod.ProjectionScale(height,
-                fieldOfView);   // the generated levels are placed by their deviation in rendered pixels
+            fieldOfView);   // the generated levels are placed by their deviation in rendered pixels
         _viewPixelsPerRadian = _content.LodPixelsPerRadian;
         _viewKnown = true;
     }
@@ -582,9 +582,9 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         _colourProg = new ReflectedProgram(gpu, _nativeFrame, CharacterShaders.Vertex(),
             Gi.GiResolveShaders.WithAlbedo(colourFragment, inShader: true), "characters", CharacterShaders.InstanceLocation);
         _depthProg = new ReflectedProgram(gpu, _nativeFrame, CharacterShaders.DepthVertex(), CharacterShaders.DepthFragment(), "characters depth",
-                CharacterShaders.InstanceLocation);
+            CharacterShaders.InstanceLocation);
         _motionProg = new ReflectedProgram(gpu, _nativeFrame, CharacterShaders.MotionVertex(), CharacterShaders.MotionFragment(), "characters motion",
-                CharacterShaders.InstanceLocation);
+            CharacterShaders.InstanceLocation);
         _content = new CharacterContent(gpu, install, db, assetLocator, rigs);
         _skinScattering = new SkinScattering(gpu);
         _colourTimer = new PassTimer(gpu);
@@ -801,8 +801,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             float scale = inst.Scale > 0 ? inst.Scale : 1;
             var centre = inst.Position + new Vector3(0, asset.Height * 0.5f * scale, 0);
             bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach * inst.DrawDistanceScale
-                || inst.DrawDistanceScale <= 1 && Vector3.DistanceSquared(eye,
-                        inst.Position) > reach * reach;   // FUN_1405c9f60: the position's distance, skipped for a gigantic race
+                || inst.DrawDistanceScale <= 1 && Vector3.DistanceSquared(eye, inst.Position) > reach * reach;   // FUN_1405c9f60: the position's distance, skipped for a gigantic race
             if (far && !_portraitKeys.Contains(inst.Key))
             {
                 if (!inst.Hidden && Kept.Count > 0 && NearKept(centre) is var dk && dk <= KeptReach)
@@ -913,8 +912,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     {
         if (inst.World is { } world) return world;
         var placed = inst.Rotation is { } rotation
-            ? Matrix4x4.CreateTranslation(0, -asset.GroundOffset,
-                    0) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateTranslation(inst.Position)
+            ? Matrix4x4.CreateTranslation(0, -asset.GroundOffset, 0) * Matrix4x4.CreateFromQuaternion(rotation)
+                * Matrix4x4.CreateTranslation(inst.Position)
             : Matrix4x4.CreateRotationY(inst.Yaw) * Matrix4x4.CreateTranslation(inst.Position - new Vector3(0, asset.GroundOffset, 0));
         return scale != 1 ? Matrix4x4.CreateScale(scale) * placed : placed;
     }
@@ -1275,7 +1274,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             }
             var (baseField, blendField, weight) = CharacterShape.NormalBlend(c.Female, build.Definition, build.Starvation);
             string? File(string field) => field.EndsWith(" strong", StringComparison.Ordinal) ? c.BodyNormalStrong : field.EndsWith(" skinny",
-                    StringComparison.Ordinal) ? c.BodyNormalSkinny : c.BodyNormal;
+                StringComparison.Ordinal) ? c.BodyNormalSkinny : c.BodyNormal;
 
             // A race without the strong or skinny map keeps its own as the base.
             asset.PendingNormals = (_content.BodyTexture(File(baseField) ?? c.BodyNormal), _content.BodyTexture(File(blendField)), weight);

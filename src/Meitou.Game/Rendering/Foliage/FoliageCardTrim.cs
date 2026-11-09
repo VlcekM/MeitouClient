@@ -39,7 +39,7 @@ public readonly record struct FoliageCardTrimStats(int Units, int Trimmed, int R
     double UvAreaBefore, double UvAreaAfter, double WorldAreaBefore, double WorldAreaAfter, int OutsideUv = 0, int TinyCards = 0)
 {
     public static FoliageCardTrimStats operator +(FoliageCardTrimStats a, FoliageCardTrimStats b) => new(a.Units + b.Units, a.Trimmed + b.Trimmed,
-            a.Removed + b.Removed,
+        a.Removed + b.Removed,
         a.TrianglesBefore + b.TrianglesBefore, a.TrianglesAfter + b.TrianglesAfter, a.UvAreaBefore + b.UvAreaBefore, a.UvAreaAfter + b.UvAreaAfter,
         a.WorldAreaBefore + b.WorldAreaBefore, a.WorldAreaAfter + b.WorldAreaAfter, a.OutsideUv + b.OutsideUv, a.TinyCards + b.TinyCards);
 }
@@ -78,7 +78,7 @@ public static class FoliageCardTrimmer
         {
             ref readonly var v = ref verts[i];
             var key = ((int)MathF.Round(v.Position.X * 100), (int)MathF.Round(v.Position.Y * 100), (int)MathF.Round(v.Position.Z * 100),
-                    (int)MathF.Round(v.Uv.X * 10000), (int)MathF.Round(v.Uv.Y * 10000));
+                (int)MathF.Round(v.Uv.X * 10000), (int)MathF.Round(v.Uv.Y * 10000));
             if (!ids.TryGetValue(key, out int id)) ids[key] = id = ids.Count;
             canonical[i] = id;
         }
@@ -135,9 +135,9 @@ public static class FoliageCardTrimmer
 
             double uvArea = Math.Abs(SignedArea(poly));
             double worldArea = WorldArea(verts, i0, i1, i2) + (partner >= 0 ? WorldArea(verts, (int)src[partner * 3], (int)src[partner * 3 + 1],
-                    (int)src[partner * 3 + 2]) : 0);
+                (int)src[partner * 3 + 2]) : 0);
             stats = stats with { Units = stats.Units + 1, TrianglesBefore = stats.TrianglesBefore + originalTriangles,
-                    UvAreaBefore = stats.UvAreaBefore + uvArea, WorldAreaBefore = stats.WorldAreaBefore + worldArea };
+                UvAreaBefore = stats.UvAreaBefore + uvArea, WorldAreaBefore = stats.WorldAreaBefore + worldArea };
 
             // A card in a repeat of the texture (coordinates outside 0 to 1) is worked out in the first repeat and moved back.
             var tile = new Vector2(MathF.Floor(poly.Min(p => p.X) / mask.Width + 0.01f), MathF.Floor(poly.Min(p => p.Y) / mask.Height + 0.01f));
@@ -150,7 +150,7 @@ public static class FoliageCardTrimmer
             if (inside && uvArea >= 4)
             {
                 int level = Math.Clamp((int)MathF.Floor(MathF.Log2(MathF.Max(MathF.Sqrt((float)uvArea) / options.MinPixels, 1))), 0,
-                        mask.LevelCount - 1);
+                    mask.LevelCount - 1);
                 var key = new Key(poly, level);
                 if (!memo.TryGetValue(key, out outline))
                     memo[key] = outline = Outline(poly, mask, level, options, originalTriangles);
@@ -163,7 +163,7 @@ public static class FoliageCardTrimmer
                 output.Add((uint)i2);
                 if (partner >= 0) for (int k = 0; k < 3; k++) output.Add(src[partner * 3 + k]);
                 stats = stats with { TrianglesAfter = stats.TrianglesAfter + originalTriangles, UvAreaAfter = stats.UvAreaAfter + uvArea,
-                        WorldAreaAfter = stats.WorldAreaAfter + worldArea };
+                    WorldAreaAfter = stats.WorldAreaAfter + worldArea };
                 continue;
             }
             if (outline.Length == 0)
@@ -195,7 +195,7 @@ public static class FoliageCardTrimmer
             double newUv = Math.Abs(SignedArea(ring));
             double ratio = uvArea > 0 ? newUv / uvArea : 1;
             stats = stats with { Trimmed = stats.Trimmed + 1, TrianglesAfter = stats.TrianglesAfter + ring.Length - 2,
-                    UvAreaAfter = stats.UvAreaAfter + newUv, WorldAreaAfter = stats.WorldAreaAfter + worldArea * ratio };
+                UvAreaAfter = stats.UvAreaAfter + newUv, WorldAreaAfter = stats.WorldAreaAfter + worldArea * ratio };
         }
         if (stats.Trimmed == 0) return new Result(verts, src, stats);
         return new Result([.. vertices], [.. output], stats);
@@ -272,7 +272,7 @@ public static class FoliageCardTrimmer
     }
 
     static double WorldArea(Vertex[] v, int a, int b, int c) => 0.5 * Vector3.Cross(v[b].Position - v[a].Position,
-            v[c].Position - v[a].Position).Length();
+        v[c].Position - v[a].Position).Length();
 
     // ---- outlines ----
 
@@ -329,7 +329,7 @@ public static class FoliageCardTrimmer
         foreach (var p in card) (minY, maxY) = (MathF.Min(minY, p.Y), MathF.Max(maxY, p.Y));
         var cells = mask.Levels[Math.Clamp(level, 0, mask.LevelCount - 1)];
         int row0 = Math.Clamp((int)MathF.Floor(minY + 1e-4f), 0, mask.Height - 1), row1 = Math.Clamp((int)MathF.Ceiling(maxY - 1e-4f) - 1, row0,
-                mask.Height - 1);
+            mask.Height - 1);
 
         // A clip writes at most two points per point it is given: a card's two clips need four times its corners.
         int stripMax = 4 * card.Length, pointMax = 4 * (row1 - row0 + 1);
@@ -337,7 +337,7 @@ public static class FoliageCardTrimmer
         try
         {
             Span<Vector2> half = rented.AsSpan(0, stripMax), strip = rented.AsSpan(stripMax, stripMax), points = rented.AsSpan(2 * stripMax,
-                    pointMax);
+                pointMax);
             int count = 0;
             for (int r = row0; r <= row1; r++)
             {
@@ -347,7 +347,7 @@ public static class FoliageCardTrimmer
                 float minX = float.MaxValue, maxX = float.MinValue;
                 foreach (var p in strip[..n]) (minX, maxX) = (MathF.Min(minX, p.X), MathF.Max(maxX, p.X));
                 int c0 = Math.Clamp((int)MathF.Floor(minX + 1e-4f), 0, mask.Width - 1), c1 = Math.Clamp((int)MathF.Ceiling(maxX - 1e-4f) - 1, c0,
-                        mask.Width - 1);
+                    mask.Width - 1);
                 int first = -1, last = -1;
                 for (int c = c0; c <= c1; c++)
                     if (cells[r * mask.Width + c]) { if (first < 0) first = c; last = c; }

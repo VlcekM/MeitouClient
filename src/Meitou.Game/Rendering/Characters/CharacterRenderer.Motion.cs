@@ -32,7 +32,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// <paramref name="post"/>'s one object-motion callback beside the grass's (once), and gives <see cref="DrawMotion"/> this frame's camera.
     /// </summary>
     public void AttachMotion(IWorldPostChain? post, FoliageRenderer? foliage, Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector3 eye,
-            Vector4[] frustum,
+        Vector4[] frustum,
         Matrix4x4? relative = null, Matrix4x4? relativeUnjittered = null)
     {
         if (post is not { Temporal: true }) return;
@@ -75,7 +75,7 @@ internal sealed unsafe partial class CharacterRenderer
         if (_motionHasRelative)
         {
             var move = _havePreviousCamera ? new Vector3((float)((double)_motionEye.X - _previousEye.X),
-                    (float)((double)_motionEye.Y - _previousEye.Y), (float)((double)_motionEye.Z - _previousEye.Z)) : Vector3.Zero;
+                (float)((double)_motionEye.Y - _previousEye.Y), (float)((double)_motionEye.Z - _previousEye.Z)) : Vector3.Zero;
             previousRelative = Matrix4x4.CreateTranslation(move) * (_havePreviousCamera ? _previousRelativeUnjittered : _motionRelativeUnjittered);
             (_previousRelativeUnjittered, _previousEye) = (_motionRelativeUnjittered, _motionEye);
         }
@@ -95,7 +95,7 @@ internal sealed unsafe partial class CharacterRenderer
         try
         {
             DrawView(new ViewConstants { ViewProjection = _motionViewProjection, PreviousViewProjection = previous, Eye = _motionEye,
-                    NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc }, _motionEye, _motionFrustum,
+                NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc }, _motionEye, _motionFrustum,
                 relative: _motionHasRelative ? _motionRelative : null, previousRelative: previousRelative);
         }
         finally { _motionPass = false; }

@@ -422,7 +422,7 @@ public sealed unsafe partial class ShadowPass
         }
 
         _meitouValid = true;
-        PublishFrame(view, toSun, blockers);
+        PublishFrame(view, toSun, blockers, count);
         CpuMs = watch.Elapsed.TotalMilliseconds;
         _cpuSamples.Add(CpuMs);
     }
@@ -450,12 +450,12 @@ public sealed unsafe partial class ShadowPass
     /// <summary>
     /// Publishes the cascades before the first stale one (the receiver's range ends with the last published; the terrain and landmark maps go on).
     /// </summary>
-    void PublishFrame(ShadowView view, Vector3 toSun, bool blockers)
+    void PublishFrame(ShadowView view, Vector3 toSun, bool blockers, int count)
     {
         // The receivers read the cascades before the first stale one (the receiver's range ends with the last published; the terrain and landmark
         // maps go on).
-        int count = MeitouCascades;
         int published = count;
+
         for (int i = 0; i < count; i++)
         {
             if (_stale[i])
@@ -511,8 +511,7 @@ public sealed unsafe partial class ShadowPass
         if (_blockerNative is null)
         {
             // Native (docs/renderer-native.md 7.1, wave 3 agent B, step P): VkGl's SPIR-V and layout, made here once, never inside a draw.
-            var p = _blockerNative = LegacyProgram.Create(
-                Gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment, "shadow blockers");
+            var p = _blockerNative = LegacyProgram.Create(Gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment, "shadow blockers");
             (_blockerAtlasSlot, _blockerSizeHandle, _blockerLayerHandle) = (p.Sampler("uAtlas"), p.Uniform("uAtlasSize"), p.Uniform("uLayer"));
         }
 

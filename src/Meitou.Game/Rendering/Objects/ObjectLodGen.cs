@@ -91,7 +91,7 @@ public static class ObjectLodGen
     /// </summary>
     /// <param name="variant">The disk cache's name part for how the mesh was decoded (<see cref="MeshWeld.CacheVariant"/>).</param>
     public static Plan? PlanFor(string key, string path, Model model, float radius, IReadOnlyList<MeshLodLevel> fileLevels, float pixelsPerRadian,
-            string variant = "")
+        string variant = "")
     {
         if (!Enabled) return null;
         if (Plans.TryGetValue(key, out var known)) return known;
@@ -141,7 +141,7 @@ public static class ObjectLodGen
             {
                 var a = part.Vertices[part.Indices[t]].Position;
                 area += Vector3.Cross(part.Vertices[part.Indices[t + 1]].Position - a,
-                        part.Vertices[part.Indices[t + 2]].Position - a).Length() * 0.5;
+                    part.Vertices[part.Indices[t + 2]].Position - a).Length() * 0.5;
                 triangles++;
             }
         return FoliageScreenLod.TriangleExtent(area, (int)Math.Min(triangles, int.MaxValue));
@@ -184,7 +184,7 @@ public static class ObjectLodGen
         {
             if (k > 0) relative[k] = Math.Max(relative[k - 1], Math.Max(set.Errors[k] / radius, NormalWeight * set.NormalAngles[k]));
             subPixel[k] = FoliageScreenLod.SubPixelDistance(FoliageScreenLod.LevelExtent(triangleExtent, set.Triangles[0], set.Triangles[k]) / radius,
-                    TriPixels);
+                TriPixels);
         }
         var errors = FoliageScreenLod.EffectiveErrors(relative, subPixel, Tolerance, Multiple);
         var result = new float[n];

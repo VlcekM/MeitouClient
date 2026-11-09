@@ -51,7 +51,7 @@ sealed class LandmarkClass(AssetLocator assets)
     /// </summary>
     public static float Scale(in Matrix4x4 t) =>
         MathF.Sqrt(Math.Max(new Vector3(t.M11, t.M12, t.M13).LengthSquared(),
-                Math.Max(new Vector3(t.M21, t.M22, t.M23).LengthSquared(), new Vector3(t.M31, t.M32, t.M33).LengthSquared())));
+            Math.Max(new Vector3(t.M21, t.M22, t.M23).LengthSquared(), new Vector3(t.M31, t.M32, t.M33).LengthSquared())));
 
     /// <summary>
     /// The placement's world bounding radius.
@@ -69,7 +69,7 @@ sealed class LandmarkClass(AssetLocator assets)
     {
         var byZone = new ConcurrentDictionary<ZoneCoordinate, List<(PlacedMesh, float)>>();
         Parallel.ForEach(objects.PopulatedZones.Where(z => z.IsInsideGrid),
-                new ParallelOptions { MaxDegreeOfParallelism = Math.Max(2, Environment.ProcessorCount - 3) }, zone =>
+            new ParallelOptions { MaxDegreeOfParallelism = Math.Max(2, Environment.ProcessorCount - 3) }, zone =>
         {
             List<(PlacedMesh, float)>? found = null;
             foreach (var p in objects.BuildZone(zone).Items)

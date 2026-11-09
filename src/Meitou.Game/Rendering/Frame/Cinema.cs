@@ -25,7 +25,7 @@ enum CinemaKey
 /// <see cref="LensZoomLive"/>: elsewhere in the game they are its floor keys. Home puts the lens back wherever <see cref="LensResetLive"/>.
 /// </summary>
 sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>? setHour, Func<bool> fullScreenOn, Action toggleFullScreen,
-        string file, bool lensKeysAlways = true)
+    string file, bool lensKeysAlways = true)
 {
     #region Playback
 
@@ -48,13 +48,13 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     /// The viewer's keys file.
     /// </summary>
     public static string ViewerFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
-            "viewer-shots.json");
+        "viewer-shots.json");
 
     /// <summary>
     /// The game's keys file (its own: a world position means the same in both, so the viewer's file can be copied over it).
     /// </summary>
     public static string GameFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
-            "game-shots.json");
+        "game-shots.json");
 
     const int MaxKeys = 999, RecordFps = 60;
 
@@ -430,10 +430,10 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Button("Set key to camera", () => { if (_selected is { } s) SaveKey(s.Label); else Say("no key selected"); });
         Button("Go to key", () => { if (_selected is { } s) { Stop(); GoTo(s); } else Say("no key selected"); });
         Button(_selected is { Ease: true } ? "Ease: on" : "Ease: off",
-                () => { if (_selected is { } s) { s.Ease = !s.Ease; Save(); _preview = true; } else Say("no key selected"); });
+            () => { if (_selected is { } s) { s.Ease = !s.Ease; Save(); _preview = true; } else Say("no key selected"); });
         Button("Delete key", DeleteSelected);
         Button(setHour is null ? "Time follows: n/a" : _followTime ? "Time follows: on" : "Time follows: off", () => OnKey(CinemaKey.KeypadDivide,
-                false, false));
+            false, false));
         Button("Slower", () => Scale(1.25f));
         Button("Faster", () => Scale(1 / 1.25f));
         Button("Record", () => { if (!Playing) StartRecording(); });
@@ -478,7 +478,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
             if (_pathNext is not null) StopPath();
             // The nearest key within reach of the pointer, else the playhead.
             var hit = _keys.Select(k => (k,
-                    d: MathF.Abs(XAt(k.Time) - p.X))).Where(h => h.d <= MarkerHalf + 3).OrderBy(h => h.d).Select(h => h.k).FirstOrDefault();
+                d: MathF.Abs(XAt(k.Time) - p.X))).Where(h => h.d <= MarkerHalf + 3).OrderBy(h => h.d).Select(h => h.k).FirstOrDefault();
             Stop();
             if (hit is not null) { (_selected, _drag) = (hit, Drag.Key); return true; }
             _drag = Drag.Playhead;
@@ -628,7 +628,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     static void Say(string text) => Console.WriteLine($"cinema    {text}");
 
     sealed record Saved(int Slot, float[] Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour, float? Time = null,
-            bool Ease = false);
+        bool Ease = false);
 
     void Save()
     {

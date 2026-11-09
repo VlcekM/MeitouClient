@@ -127,8 +127,8 @@ public sealed unsafe class NavmeshOverlayRenderer : IDisposable
         _program.Set(_offset, _origin - eye);
         _program.Set(_depthScale, renderWidth / (float)width, renderHeight / (float)height);
         _program.Bind(_sceneDepth,
-                new SampledTexture(_gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
-                TextureWrapMode.ClampToEdge,
+            new SampledTexture(_gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+            TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), sceneDepthTexture.View()));
         var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha),
             depthClamp: _gpu.DepthClamp);

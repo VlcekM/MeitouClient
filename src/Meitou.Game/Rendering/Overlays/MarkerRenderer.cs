@@ -190,7 +190,7 @@ public sealed unsafe class MarkerRenderer : IDisposable
                 {
                     // Without normals in the file, the face's own.
                     var face = Vector3.Normalize(Vector3.Cross(positions[indices[t + 1]] - positions[indices[t]],
-                            positions[indices[t + 2]] - positions[indices[t]]));
+                        positions[indices[t + 2]] - positions[indices[t]]));
                     for (int k = 0; k < 3; k++)
                     {
                         uint i = indices[t + k];
@@ -268,11 +268,11 @@ public sealed unsafe class MarkerRenderer : IDisposable
         ReleaseTargets();
         var sampled = _samples > 1 ? TextureUse.TransferSrc : TextureUse.Sampled;
         _msColour = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Samples: _samples, Use: TextureUse.ColourTarget | sampled,
-                Name: "markers colour"));
+            Name: "markers colour"));
         _msDepth = _gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Samples: _samples, Use: TextureUse.DepthTarget,
-                Name: "markers depth"));
+            Name: "markers depth"));
         _resolved = _samples > 1 ? _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
-                Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "markers resolved")) : _msColour;
+            Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "markers resolved")) : _msColour;
     }
 
     /// <summary>

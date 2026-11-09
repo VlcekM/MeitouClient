@@ -134,7 +134,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         using (var upload = gpu.Uploads.Begin())
         {
             _atlas = upload.Create(new TextureDesc(InternalFormat.R8, _atlasSize, _atlasSize, Use: TextureUse.Sampled | TextureUse.TransferDst,
-                    Name: "debug overlay font"));
+                Name: "debug overlay font"));
             upload.Write(_atlas, 0, 0, new PixelRect(0, 0, (uint)_atlasSize, (uint)_atlasSize), pixels);
         }
         _atlasSampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
@@ -661,8 +661,8 @@ public sealed unsafe class DebugOverlay : IDisposable
         // As the GL version drew: no depth test or culling, blended over by alpha. The alpha channel accumulates as "over" does, so a transparent
         // target (the UI layer) ends up premultiplied: colour a * c, alpha a.
         var state = DrawState.For(t.Formats, Gpu.DepthClamp,
-                blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One,
-                AlphaDst: BlendingFactor.OneMinusSrcAlpha));
+            blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One,
+            AlphaDst: BlendingFactor.OneMinusSrcAlpha));
         state.Record(cmd, t);
         Span<LegacyProgram.Attribute?> attributes =
         [
@@ -671,7 +671,7 @@ public sealed unsafe class DebugOverlay : IDisposable
             new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 16), InternalFormat.Rgba32F, Stride * 4, false),
         ];
         var pipeline = Gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout(attributes), PrimitiveType.Triangles,
-                t.Formats, "debug overlay"));
+            t.Formats, "debug overlay"));
         cmd.BindPipeline(pipeline);
         Span<GpuBufferBinding> buffers = [attributes[0]!.Value.Buffer, attributes[1]!.Value.Buffer, attributes[2]!.Value.Buffer];
         cmd.BindVertexBuffers(0, buffers);
@@ -723,7 +723,7 @@ public sealed unsafe class DebugOverlay : IDisposable
         /// One <see cref="Add"/> as recorded: its arguments, the data at <paramref name="First"/> in the recording's floats.
         /// </summary>
         public readonly record struct Recorded(DebugOverlay Owner, SampledTexture? Image, PixelRect Clip, SampledTexture? Atlas, int First,
-                int Count);
+            int Count);
 
         List<Recorded>? _recording;
         List<float>? _recordedFloats;
@@ -807,8 +807,8 @@ public sealed unsafe class DebugOverlay : IDisposable
             try
             {
                 var state = DrawState.For(targets.Formats, gpu.DepthClamp,
-                        blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One,
-                        AlphaDst: BlendingFactor.OneMinusSrcAlpha));
+                    blend: new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, AlphaSrc: BlendingFactor.One,
+                    AlphaDst: BlendingFactor.OneMinusSrcAlpha));
                 state.Record(cmd, targets);
                 var data = CollectionsMarshal.AsSpan(_vertices);
                 var upload = gpu.Frame.AllocateConstants((ulong)(data.Length * 4), 16);
@@ -821,7 +821,7 @@ public sealed unsafe class DebugOverlay : IDisposable
                 ];
                 var program = painter._program;
                 var pipeline = gpu.Pipelines.Get(state.Pipeline(program.Program, program.VertexLayout(attributes), PrimitiveType.Triangles,
-                        targets.Formats, "UI overlay"));
+                    targets.Formats, "UI overlay"));
                 cmd.BindPipeline(pipeline);
                 Span<GpuBufferBinding> buffers = [attributes[0]!.Value.Buffer, attributes[1]!.Value.Buffer, attributes[2]!.Value.Buffer];
                 cmd.BindVertexBuffers(0, buffers);

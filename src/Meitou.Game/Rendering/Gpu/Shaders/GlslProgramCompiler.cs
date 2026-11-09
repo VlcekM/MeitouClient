@@ -107,10 +107,7 @@ public sealed partial class GlslProgramCompiler
     public static (string Vertex, string Fragment) Preprocess(string vertexGlsl, string fragmentGlsl, ShaderCompileOptions? options = null)
     {
         var (vs, fs) = InterfaceLocations.Apply(vertexGlsl, fragmentGlsl);
-        if (options is null)
-        {
-            return (vs, fs);
-        }
+        if (options is null) return (vs, fs);
 
         return (Define(vs, options), Define(fs, options));
     }

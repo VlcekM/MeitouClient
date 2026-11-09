@@ -282,10 +282,9 @@ internal sealed unsafe class GiScene : IDisposable
         // The objects are those near the eye snapped to a grid of SelectionSnap (the range widened by the snap's half diagonal, so every object
         // within Range is in): the set then changes when the
         // snapped eye does, not whenever an object crosses the range, and the top level can be left as it is.
-        var snapped = new Vector3(
-            MathF.Round(eye.X / SelectionSnap), MathF.Round(eye.Y / SelectionSnap), MathF.Round(eye.Z / SelectionSnap)) * SelectionSnap;
-        var selectionEye = lazy ? new Vector3(_epochCell.X, _epochCell.Y, _epochCell.Z) * EpochSize
-            : ReuseTop ? snapped : eye;
+        var snapped = new Vector3(MathF.Round(eye.X / SelectionSnap), MathF.Round(eye.Y / SelectionSnap), MathF.Round(eye.Z / SelectionSnap))
+            * SelectionSnap;
+        var selectionEye = lazy ? new Vector3(_epochCell.X, _epochCell.Y, _epochCell.Z) * EpochSize : ReuseTop ? snapped : eye;
         float selectionRange = ReuseTop ? Range + SelectionSnap * 0.87f : Range;
         if (objects is not null)
             foreach (var inst in objects.RayInstances(selectionEye, selectionRange))
@@ -432,7 +431,7 @@ internal sealed unsafe class GiScene : IDisposable
             ulong vertices = _ctx.Device.Address(part.Vertices.Handle),
                 indices = _ctx.Device.Address(part.Indices.Handle) + (ulong)part.Offset[sourceLevel] * 4;
             geometries.Add(new TriangleGeometry(vertices, (uint)part.Stride, (uint)(part.Vertices.Size / (ulong)part.Stride), indices,
-                    (uint)(count / 3)));
+                (uint)(count / 3)));
             recs.Add(new GeometryRecord { Vertices = vertices, Indices = indices, Stride = (uint)part.Stride, Kind = GeometryRecord.Object });
             partOf.Add(p);
         }
@@ -456,7 +455,7 @@ internal sealed unsafe class GiScene : IDisposable
             ulong vertices = _ctx.Device.Address(part.Vertices.Handle), indices = _ctx.Device.Address(part.Indices.Handle);
             // Cut-out parts (leaves) are not opaque: the trace tests their alpha at each candidate hit.
             geometries.Add(new TriangleGeometry(vertices, GpuVertex.ObjectSize, (uint)(part.Vertices.Size / GpuVertex.ObjectSize), indices,
-                    (uint)(part.IndexCount / 3), part.AlphaThreshold <= 0));
+                (uint)(part.IndexCount / 3), part.AlphaThreshold <= 0));
             recs.Add(new GeometryRecord
             {
                 Vertices = vertices,
@@ -484,8 +483,9 @@ internal sealed unsafe class GiScene : IDisposable
     bool _foliageComplete;
 
     bool FoliageStale(Vector3 eye, FoliageRenderer foliage, bool lazy, bool commit) =>
-        _frame - _foliageFrame >= 120 || (lazy ? commit : Vector3.DistanceSquared(eye,
-                _foliageEye) > 250f * 250f) || foliage.RayGeneration != _foliageGeneration
+        _frame - _foliageFrame >= 120
+        || (lazy ? commit : Vector3.DistanceSquared(eye, _foliageEye) > 250f * 250f)
+        || foliage.RayGeneration != _foliageGeneration
         || !_foliageComplete && _frame - _foliageFrame >= 2;
 
     /// <summary>
@@ -694,7 +694,7 @@ internal sealed unsafe class GiScene : IDisposable
                 ctx.Uploads.Write(_vertices, 0, MemoryMarshal.AsBytes(positions.AsSpan()));
                 cmd.Barrier(BarrierBatch.Full);
                 Blas.RefitBottom(cmd, [new TriangleGeometry(ctx.Device.Address(_vertices.Handle), 12, (uint)positions.Length,
-                        ctx.Device.Address(_indices.Handle), (uint)(cells * cells * 2))]);
+                    ctx.Device.Address(_indices.Handle), (uint)(cells * cells * 2))]);
                 _refitsSinceBuild++;
                 Refitted = true;
                 Centre = new Vector3(centre.X, 0, centre.Z);
@@ -709,7 +709,7 @@ internal sealed unsafe class GiScene : IDisposable
             _updatable = Refit;
             _refitsSinceBuild = 0;
             Blas = AccelerationStructure.BuildBottom(ctx.Device, cmd, [new TriangleGeometry(ctx.Device.Address(_vertices.Handle), 12,
-                    (uint)positions.Length, ctx.Device.Address(_indices.Handle), (uint)(cells * cells * 2))], name, _updatable);
+                (uint)positions.Length, ctx.Device.Address(_indices.Handle), (uint)(cells * cells * 2))], name, _updatable);
             if (!_updatable) Blas.ReleaseScratch();
             Centre = new Vector3(centre.X, 0, centre.Z);
             Record = new GeometryRecord

@@ -279,9 +279,9 @@ public sealed class MetalShaders : IGpuShaders
         // The default blocks move to set 1 (vertex binding 0, fragment binding 1), as the Vulkan path's do (SpirvPatch, VkGl's step);
         // then both stages' bindings flatten onto Metal's one table per stage (the vertex stage's blocks above the vertex buffers).
         byte[] v = SpirvPatch.RemapBindings(c.Vertex.DefaultBlock is null ? c.VertexSpirv : SpirvPatch.MoveDefaultBlock(c.VertexSpirv, 0),
-                VertexBlockBase, 0, SetStride);
+            VertexBlockBase, 0, SetStride);
         byte[] f = SpirvPatch.RemapBindings(c.Fragment.DefaultBlock is null ? c.FragmentSpirv : SpirvPatch.MoveDefaultBlock(c.FragmentSpirv, 1), 0, 0,
-                SetStride);
+            SetStride);
 
         if (Environment.GetEnvironmentVariable("MEITOU_METAL_DUMP") is { } dir)
         {

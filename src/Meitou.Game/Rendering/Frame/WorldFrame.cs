@@ -414,7 +414,7 @@ sealed class WorldOptions
         VSync = false;
         (ObjectDistance, ObjectLod) = (LowEndObjectDistance, LowEndObjectLod);
         (LargeRange, ImpostorDistance, LargeImpostorDistance) = (LowEndLargeRange, LowEndImpostorDistance,
-                LowEndLargeImpostorDistance);   // the medium and small ranges follow the large one
+            LowEndLargeImpostorDistance);   // the medium and small ranges follow the large one
         GrassDensity = LowEndGrassDensity;
         WaterReflection = 0;
         (ShadowsOff, ShadowFilter) = (true, 0);   // --shadow-range 0
@@ -818,9 +818,9 @@ sealed class SceneHost(IGpuContext ctx)
         // The extra target (the GI resolve's albedo) is cleared to 0 with the colour: no surface there takes the probes' light in post.
         var extra = clearColour is not null && !targets.Extra.IsNull ? targets.Extra with { Load = LoadOp.Clear, Clear = default } : targets.Extra;
         list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height, 0, 0, targets.ShadingRate, targets.ShadingRateTexel,
-                extra), secondaries);
+            extra), secondaries);
         ctx.BeginHostPassParallel(list, targets, DrawState.SceneDepth(targets.Formats, DrawState.Rgb),
-                stage);   // alpha: the characters only (the SSAO character mask)
+            stage);   // alpha: the characters only (the SSAO character mask)
         _cmd = list;
     }
 
@@ -1036,7 +1036,7 @@ static partial class WorldFrame
         var (x1, z1) = window.WorldOf(cells, cells);
         float height = WorldLayout.RawToHeight(raw);
         return new WorldScene { Window = window, Coarse = coarse, CoarseSize = coarseSize, FlatHeight = height, Focus = new Vector3(0, height,
-                0), X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Database = db, Clock = SkyClock.FromDatabase(db) };
+            0), X0 = x0, Z0 = z0, X1 = x1, Z1 = z1, Database = db, Clock = SkyClock.FromDatabase(db) };
     }
 
     public static (WorldCamera, WorldRenderOptions) Setup(WorldScene scene, WorldOptions o)
@@ -1396,7 +1396,7 @@ static partial class WorldFrame
         var colourEncode = withTextures && TerrainColourCache.Missing(install) ? Task.Run(() => EncodeColourTiles(install)) : null;
         var terrainSource = withTextures && scene.Database is { } textureDb ? Task.Run(() => TerrainTextures.Prepare(install, textureDb)) : null;
         var waterSource = !o.NoWater && scene.Database is { } waterDb ? Task.Run(() => WaterRenderer.Prepare(install, waterDb, assets,
-                scene.Coarse)) : null;
+            scene.Coarse)) : null;
 
         var (terrain, textures) = CreateTerrain(b, colourEncode, terrainSource, layerSize);
         var gpu = CreateSky(b, terrain);
@@ -1519,7 +1519,7 @@ static partial class WorldFrame
         // PostComposite/PostTaa slice as a host-constructed chain and leaves the Vulkan-only reflection and GI paths null.
         var post = b.Context is GpuContext vulkanPost ? new PostProcess(vulkanPost, o.Post) : null;
         var gpu = new Gpu { Terrain = terrain, Sky = new SkyRenderer(b.Context,
-                b.Assets) { CloudCoverage = o.Clouds }, Post = post, PostChain = post };
+            b.Assets) { CloudCoverage = o.Clouds }, Post = post, PostChain = post };
         post?.LoadHeatHaze(b.Assets);
 
         // The placed fog volumes (docs/formats/fogfeatures.md): the swamp's fog and the like, part of the game's look.
@@ -1550,8 +1550,7 @@ static partial class WorldFrame
         if (b.Scene.Database is not { } skyDb) return;
 
         gpu.Sky.LoadWorld(b.Install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
-        var world = WeatherWorld.Create(skyDb, b.Install, WeatherSeed,
-                WeatherTime.At(0));   // created on day 0; WorldWeather replays the schedule up to --day
+        var world = WeatherWorld.Create(skyDb, b.Install, WeatherSeed, WeatherTime.At(0));   // created on day 0; WorldWeather replays the schedule up to --day
         gpu.Weather = new WorldWeather(world, skyDb) { Day = o.Day ?? 0 };
         if (!o.AutoWeather)
         {
@@ -1632,7 +1631,7 @@ static partial class WorldFrame
         // it only when the run starts with it.
         bool meitouWater = o.MeitouWater, makeMeitou = meitouWater || b.Context is GpuContext;
         gpu.Water = WaterRenderer.Create(b.Context, b.Install, b.Scene.Database!, b.Assets, gpu.Sky, messages, b.Scene.Coarse, o.WaterGrid,
-                o.WaterOcean,
+            o.WaterOcean,
             b.Ready(source), meitouWaves: makeMeitou, shoreField: makeMeitou);
         gpu.Water.Meitou = meitouWater;
 
@@ -1686,7 +1685,7 @@ static partial class WorldFrame
 
         f.Lod = o.FoliageLod;
         (f.Impostors, f.ImpostorDistance, f.ImpostorBudgetMb) = (o.Impostors, o.ImpostorDistance ?? f.ImpostorDistance,
-                o.ImpostorBudgetMb ?? f.ImpostorBudgetMb);
+            o.ImpostorBudgetMb ?? f.ImpostorBudgetMb);
         if (o.LargeImpostorDistance is { } largeImpostor) f.LargeImpostorDistance = largeImpostor;
         if (o.GrassDensity is { } grassDensity) f.GrassDensitySetting = grassDensity;
         Console.WriteLine($"foliage   catalog and shaders ready ({f.LoadMs:0} ms)");
@@ -1772,7 +1771,7 @@ static partial class WorldFrame
     // The anti-aliasing slider's label changes with its numbering ("0 off" 2026-10-09, SMAA 2026-10-19), so a value saved under an old one is not
     // misread.
     public static readonly string[] UpscalerSliders = ["Anti-aliasing: 0 off 1 FXAA 2 SMAA 3 TAA 4 FSR 5 DLSS", "Render scale (upscaler)",
-            "Upscaler sharpness"];
+        "Upscaler sharpness"];
 
     /// <summary>
     /// DLSS's render preset (<see cref="UpscaleOptions.DlssPresets"/>); not an upscaler option of the command line, so the saved one always applies.
@@ -1861,7 +1860,7 @@ static partial class WorldFrame
     /// options and, once made, the renderer's parts; the distances follow the mode's defaults unless a Tab slider moved them.
     /// </summary>
     internal static IReadOnlyList<Enhancement> LiveSwitches(WorldOptions o, Func<Gpu?> gpu, Func<WorldCamera?> camera,
-            Func<WorldRenderOptions?> render) =>
+        Func<WorldRenderOptions?> render) =>
         Enhancements.Create(o.Post, () => gpu()?.Sky.MeitouHaze ?? o.MeitouHaze, v => { o.MeitouHaze = v; if (gpu() is { } g) g.Sky.MeitouHaze = v; },
             () => gpu()?.Shadow?.Meitou ?? o.MeitouShadows, v =>
             {
@@ -1913,7 +1912,7 @@ static partial class WorldFrame
     /// Meitou switches as checkboxes, the cache actions, the texture column and the weather choices.
     /// </summary>
     public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null,
-            Action<float>? setHour = null,
+        Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null,
         Func<float>? getTimeSpeed = null, Action<float>? setTimeSpeed = null, Func<bool>? getFullScreen = null, Action<bool>? setFullScreen = null,
         IReadOnlyList<PanelChoice>? extraChoices = null)
@@ -1933,7 +1932,7 @@ static partial class WorldFrame
         // so 8x and 16x look the same there.
         var samplers = g.Sky.Gpu.Samplers;
         sliders.Add(new Slider(FilteringSlider, 0, 4, () => MathF.Log2(samplers.MaxAnisotropy),
-                v => samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
+            v => samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
             Text: v => (1 << (int)MathF.Round(v)) + "x" + (MathF.Round(v) >= 3 ? " (as the game)" : "")));
 
         var toggles = SettingsToggles(g, switches, fifthCascade);
@@ -1945,14 +1944,14 @@ static partial class WorldFrame
         if (g.Weather is { } weather)
             choices.Add(new PanelChoice(weather.ChoiceLabel, weather.Choices, weather.Current, weather.Choose));
         return new SettingsPanel(ui, "Settings   (Tab hides this)", sliders, toggles, "Meitou improvements (unticked: as the game)", actions, side,
-                choices);
+            choices);
     }
 
     /// <summary>
     /// The viewer's own rows; the game passes none of them (its clock, vsync and window mode are its own settings).
     /// </summary>
     static void AddViewerSliders(List<Slider> sliders, Func<float>? getHour, Action<float>? setHour, Func<float>? getTimeSpeed,
-            Action<float>? setTimeSpeed,
+        Action<float>? setTimeSpeed,
         Func<bool>? getVSync, Action<bool>? setVSync, Func<bool>? getFullScreen, Action<bool>? setFullScreen)
     {
         // The time of day (the `--time` option and the , / . keys), to the minute.
@@ -1983,7 +1982,7 @@ static partial class WorldFrame
     static void AddObjectSliders(List<Slider> sliders, WorldObjectRenderer objects)
     {
         sliders.Add(new Slider(ObjectDistanceSlider, 1000, 400000, () => objects.ObjectDistance, v => objects.ObjectDistance = v, "0",
-                Logarithmic: true,
+            Logarithmic: true,
             Faithful: Enhancements.FaithfulObjectDistance, Meitou: Enhancements.MeitouObjectDistance));
         if (objects.HasLandmarks)
             sliders.Add(new Slider(LandmarkDistanceSlider, 1000, 400000, () => objects.LandmarkDistance,
@@ -2009,7 +2008,7 @@ static partial class WorldFrame
         static float Round50(float v) => MathF.Round(v / 50) * 50;
 
         sliders.Add(new Slider(FoliageDistanceSlider, 0.25f, 80, () => foliage.RangeSetting, v => foliage.RangeSetting = v, "0.00",
-                Logarithmic: true));
+            Logarithmic: true));
         // The generated levels switch at a pixel tolerance; the distance where each level takes over scales with its inverse.
         sliders.Add(new Slider(FoliageLodSlider, 0.25f, 8, () => FoliageRenderer.DefaultLodTolerance / foliage.LodTolerance,
             v => foliage.LodTolerance = FoliageRenderer.DefaultLodTolerance / v, Logarithmic: true,
@@ -2017,19 +2016,19 @@ static partial class WorldFrame
 
         // The range switch's class ranges (Meitou; the slider above then only moves the FAR layers' large meshes).
         sliders.Add(new Slider(LargeFoliageRangeSlider, 1000, 120000, () => foliage.LargeRange, v => foliage.LargeRange = Round50(v), "0",
-                Logarithmic: true));
+            Logarithmic: true));
         sliders.Add(new Slider(ImpostorDistanceSlider, 500, 40000, () => foliage.ImpostorDistance, v => foliage.ImpostorDistance = Round50(v), "0",
-                Logarithmic: true));
+            Logarithmic: true));
         sliders.Add(new Slider(LargeImpostorDistanceSlider, 500, 40000, () => foliage.LargeImpostorDistance,
-                v => foliage.LargeImpostorDistance = Round50(v), "0",
+            v => foliage.LargeImpostorDistance = Round50(v), "0",
             Logarithmic: true));
         sliders.Add(new Slider(MediumFoliageRangeSlider, 400, 80000, () => foliage.MediumRange, v => foliage.MediumRange = Round50(v), "0",
-                Logarithmic: true));
+            Logarithmic: true));
         sliders.Add(new Slider(SmallFoliageRangeSlider, 200, 40000, () => foliage.SmallRange, v => foliage.SmallRange = Round50(v), "0",
-                Logarithmic: true));
+            Logarithmic: true));
 
         sliders.Add(new Slider(GrassDistanceSlider, 0.25f, 80, () => foliage.GrassRangeSetting, v => foliage.GrassRangeSetting = v, "0.00",
-                Logarithmic: true));
+            Logarithmic: true));
         sliders.Add(new Slider(GrassDensitySlider, 0.1f, 2, () => foliage.GrassDensitySetting, v => foliage.GrassDensitySetting = v, "0.00"));
     }
 
@@ -2072,7 +2071,7 @@ static partial class WorldFrame
         sliders.Add(new Slider(GroundReliefQualitySlider, 0, 2, () => GroundRelief.Quality,
             v => GroundRelief.Quality = Math.Clamp((int)MathF.Round(v), 0, 2), "0", Text: v => GroundRelief.QualityName((int)MathF.Round(v))));
         sliders.Add(new Slider(GroundReliefDepthSlider, 0, 80, () => GroundRelief.Depth * 10, v => GroundRelief.Depth = MathF.Round(v * 2) / 20,
-                "0.0"));
+            "0.0"));
         if (g.Sky.Gpu.HasTessellation)
             sliders.Add(new Slider(GroundDisplaceDistanceSlider, 10, 200, () => GroundRelief.DisplaceDistance / 10,
                 v => GroundRelief.DisplaceDistance = MathF.Round(v) * 10, "0"));
@@ -2111,7 +2110,7 @@ static partial class WorldFrame
     {
         // A viewer option, not the game's: 1 is the game's haze (docs/formats/sky.md).
         sliders.Add(new Slider(HazeStrengthSlider, 0, 3, () => sky.HazeStrength, v => sky.HazeStrength = v, "0.00", Faithful: 1,
-                Meitou: Enhancements.MeitouHazeStrength));
+            Meitou: Enhancements.MeitouHazeStrength));
         // Ours (docs/formats/sky.md "Planetshine"): the planet's light at night, a multiple of the physical value.
         sliders.Add(new Slider(PlanetshineStrengthSlider, 0, 200, () => sky.PlanetshineStrength, v => sky.PlanetshineStrength = MathF.Round(v), "0"));
         sliders.Add(new Slider(CloudHeightSlider, VolumetricClouds.MinBottom, VolumetricClouds.MaxBottom, () => sky.CloudHeight,
@@ -2120,7 +2119,7 @@ static partial class WorldFrame
         sliders.Add(new Slider(AmbientStrengthSlider, 0, 3, () => sky.AmbientStrength, v => sky.AmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
         // Ours: a further multiple by night (the exposure sits at its night floor there, so it is not adapted away).
         sliders.Add(new Slider(NightAmbientStrengthSlider, 0, 5, () => sky.NightAmbientStrength,
-                v => sky.NightAmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
+            v => sky.NightAmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
     }
 
     /// <summary>
@@ -2198,15 +2197,15 @@ static partial class WorldFrame
         sliders.Add(new Slider(HeatHazeStrengthSlider, 0, 3, () => options.HeatHazeStrength, v => options.HeatHazeStrength = Round20(v), "0.00",
             Faithful: 1, Meitou: Enhancements.MeitouHeatHazeStrength));
         sliders.Add(new Slider(BloomStrengthSlider, 0, 0.25f, () => options.BloomStrength, v => options.BloomStrength = MathF.Round(v * 200) / 200,
-                "0.000", Faithful: 0));
+            "0.000", Faithful: 0));
         sliders.Add(new Slider(NightGradeStrengthSlider, 0, 1, () => options.NightGradeStrength, v => options.NightGradeStrength = Round20(v),
-                "0.00"));
+            "0.00"));
 
         sliders.Add(new Slider(ShaftStrengthSlider, 0, 1, () => options.ShaftStrength, v => options.ShaftStrength = Round20(v), "0.00"));
         sliders.Add(new Slider(ShaftAirSlider, 0, 4, () => options.ShaftAir, v => options.ShaftAir = Round20(v), "0.00"));
         sliders.Add(new Slider(ShaftAirDawnSlider, 0, 6, () => options.ShaftAirDawn, v => options.ShaftAirDawn = MathF.Round(v * 10) / 10, "0.0"));
         sliders.Add(new Slider(ShaftQualitySlider, 0, 2, () => options.ShaftQuality, v => options.ShaftQuality = Math.Clamp((int)MathF.Round(v), 0,
-                2), "0",
+            2), "0",
             Text: v => (int)MathF.Round(v) switch { 0 => "Low", 1 => "Medium", _ => "High" }));
     }
 
@@ -2230,9 +2229,9 @@ static partial class WorldFrame
         if (tessellation)
         {
             toggles.Add(new Toggle(RockSmoothingSwitch, () => RockSmoothing.TessellateActive, v => RockSmoothing.TessellateActive = v, Remaster: true,
-                    OnOff: true));
+                OnOff: true));
             toggles.Add(new Toggle(OutlineRefineSwitch, () => GroundRelief.RefinePixels > 0,
-                    v => GroundRelief.RefinePixels = v ? GroundRelief.DefaultRefinePixels : 0,
+                v => GroundRelief.RefinePixels = v ? GroundRelief.DefaultRefinePixels : 0,
                 Remaster: true, OnOff: true));
         }
         return toggles;
@@ -2306,7 +2305,7 @@ static partial class WorldFrame
     /// Sky-only loading frames, with the existing sky and post chain and without touching world streaming or character content.
     /// </summary>
     public static void DrawLoadingSky(Gpu gpu, WorldScene scene, WorldCamera camera, int width, int height, float hour, float seconds,
-            float fogDistance)
+        float fogDistance)
     {
         gpu.Terrain.Activate();
         var post = gpu.PostChain ?? throw new InvalidOperationException("the sky frame needs the post-processing chain");
@@ -2433,7 +2432,7 @@ static partial class WorldFrame
     /// <param name="sunHeight">The real sun's height: the map is drawn along the lighting direction while the sun still has a colour (as the
     /// game).</param>
     public static void DrawShadows(Gpu gpu, WorldCamera camera, WorldRenderOptions render, WorldLighting light, int width, int height,
-            float? sunHeight = null,
+        float? sunHeight = null,
         bool? temporal = null)
     {
         var shadow = gpu.Shadow!;
@@ -2442,7 +2441,7 @@ static partial class WorldFrame
         var v = camera.View;
         var up = Vector3.Normalize(new Vector3(v.M12, v.M22, v.M32));
         var view = new ShadowView(camera.Eye, camera.Forward, up, camera.FieldOfView, width / (float)Math.Max(height, 1), camera.Near,
-                camera.Distance);
+            camera.Distance);
         gpu.Terrain.DepthTriangles = 0;
 
         var casters = new ShadowCasters(gpu, shadow, render);
@@ -2514,7 +2513,7 @@ static partial class WorldFrame
             if (gpu.Foliage is { } f)
             {
                 f.DrawDepth(worldToClip, lodEye, planes, render, terrain, maxRange: shadow.EffectiveRange * 1.2f,
-                        minSize: shadow.MinFoliageCaster(cascade),
+                    minSize: shadow.MinFoliageCaster(cascade),
                     texel: (float)cascade.Texel, coarse: coarse > 0);
                 _foliage += f.DrawnInstances;
                 (foliageInstances, foliageCalls) = (f.DrawnInstances, f.DrawCalls);

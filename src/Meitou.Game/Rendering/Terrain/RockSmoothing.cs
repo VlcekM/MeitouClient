@@ -66,7 +66,7 @@ public static class RockSmoothing
             for (int t = 0; t < fn.Length; t++)
             {
                 Vector3 a = part.Vertices[idx[3 * t]].Position, b = part.Vertices[idx[3 * t + 1]].Position,
-                        c = part.Vertices[idx[3 * t + 2]].Position;
+                    c = part.Vertices[idx[3 * t + 2]].Position;
                 fn[t] = Vector3.Cross(b - a, c - a);   // twice the area long: larger faces count more
             }
         }

@@ -26,7 +26,7 @@ public sealed unsafe partial class PostProcess
         {
             NearDepth = P.Sampler("uNearDepth");
             (NearPlanes, Tan, Right, Up, Back) = (P.Uniform("uNearPlanes"), P.Uniform("uTan"), P.Uniform("uRight"), P.Uniform("uUp"),
-                    P.Uniform("uBack"));
+                P.Uniform("uBack"));
             (Eye, Size, WaterY) = (P.Uniform("uEye"), P.Uniform("uSize"), P.Uniform("uWaterY"));
         }
     }
@@ -113,7 +113,7 @@ public sealed unsafe partial class PostProcess
         _neutralRate?.Texture.Dispose();   // released after the frames in flight
         using var batch = Gpu.Uploads.Begin();
         var texture = batch.Create(new TextureDesc(InternalFormat.R8Ui, tiles, rows,
-                Use: TextureUse.Sampled | TextureUse.ShadingRate | TextureUse.TransferDst, Name: "post fog rate neutral"));
+            Use: TextureUse.Sampled | TextureUse.ShadingRate | TextureUse.TransferDst, Name: "post fog rate neutral"));
         batch.Write(texture, 0, 0, new PixelRect(0, 0, (uint)tiles, (uint)rows), new byte[tiles * rows]);
         return _neutralRate = new Target2D(texture, TextureMinFilter.Nearest, TextureMagFilter.Nearest);
     }
@@ -142,7 +142,7 @@ public sealed unsafe partial class PostProcess
             using var batch = Gpu.Uploads.Begin();
             _rateDistance = Make(batch, dw, dh, InternalFormat.Rg32F, TextureMinFilter.Nearest, "post fog rate distance");
             var texture = batch.Create(new TextureDesc(InternalFormat.R8Ui, tw, th,
-                    Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.ShadingRate | TextureUse.TransferSrc, Name: "post fog rate"));
+                Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.ShadingRate | TextureUse.TransferSrc, Name: "post fog rate"));
             _rateImage = new Target2D(texture, TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         }
         _rateDistancePass ??= new FogRateDistancePass(Gpu);
@@ -196,7 +196,7 @@ public sealed unsafe partial class PostProcess
             ImageExtent = new Vk.Extent3D((uint)image.Width, (uint)image.Height, 1),
         };
         Gpu.Device.Vk.CmdCopyImageToBuffer(((CommandList)cmd).Handle, Gpu.Device.NativeImage(image.Texture), Vk.ImageLayout.General,
-                Gpu.Device.BufferAt(slot.Buffer.Handle.Index), 1, &region);
+            Gpu.Device.BufferAt(slot.Buffer.Handle.Index), 1, &region);
         cmd.Order();
         slot.Frame = Gpu.Frame.Number;
         _rateReadbackNext = (_rateReadbackNext + 1) % _rateReadbacks.Length;

@@ -40,7 +40,7 @@ sealed unsafe class GiDebugPass : IDisposable
         ]);
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "gi debug"));
         _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-                TextureWrapMode.ClampToEdge,
+            TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
     }
 
@@ -59,14 +59,14 @@ sealed unsafe class GiDebugPass : IDisposable
     /// world space.
     /// </summary>
     public void Run(int mode, GiScene scene, GpuTexture depth, GpuTexture target, int width, int height, Matrix4x4 inverse, Vector3 eye,
-            WorldLighting light)
+        WorldLighting light)
     {
         if (scene.Top is null) return;
         if (_output is null || _output.Desc.Width != width || _output.Desc.Height != height)
         {
             _output?.Dispose();
             _output = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, width, height,
-                    Use: TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferSrc, Name: "gi debug"));
+                Use: TextureUse.Storage | TextureUse.Sampled | TextureUse.TransferSrc, Name: "gi debug"));
         }
         var parameters = new Params
         {

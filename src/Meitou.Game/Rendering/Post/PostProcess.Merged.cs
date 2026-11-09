@@ -41,7 +41,7 @@ public sealed unsafe partial class PostProcess
     GpuSampler _pointSampler;
 
     GpuSampler Point() => _pointSampler.Index != 0 ? _pointSampler : _pointSampler = Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest,
-            TextureMagFilter.Nearest,
+        TextureMagFilter.Nearest,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
 
     /// <summary>

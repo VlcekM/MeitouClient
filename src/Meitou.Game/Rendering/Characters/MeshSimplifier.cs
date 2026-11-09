@@ -170,7 +170,7 @@ internal static class MeshSimplifier
             foreach (int c in candidates)
             {
                 float score = Vector2.DistanceSquared(vertices[c].Uv, like.Uv) + normalWeight * Vector3.DistanceSquared(vertices[c].Normal,
-                        like.Normal);
+                    like.Normal);
                 if (score < bestScore) { bestScore = score; best = c; }
             }
             return best;
@@ -296,7 +296,7 @@ internal static class MeshSimplifier
         {
             double x = n.X, y = n.Y, z = n.Z, o = offset, w = weight;
             return new Quadric { _a = w * x * x, _b = w * x * y, _c = w * x * z, _d = w * x * o, _e = w * y * y, _f = w * y * z, _g = w * y * o,
-                    _h = w * z * z, _i = w * z * o, _j = w * o * o };
+                _h = w * z * z, _i = w * z * o, _j = w * o * o };
         }
 
         public void Add(in Quadric o)

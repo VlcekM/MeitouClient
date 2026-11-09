@@ -178,7 +178,7 @@ public static partial class FoliageGrassShaders
         if (!text.Contains(PreludeEnd))
             throw new InvalidOperationException("FoliageGrassShaders: the native prelude changed");
         text = text.Replace(PreludeEnd,
-                $"#define gl_VertexID (gl_VertexIndex & 15)\n#define GRASS_ROW (uint(gl_VertexIndex) >> {RowShift})\nflat out uint vRow;\n{PatchBlock}");
+            $"#define gl_VertexID (gl_VertexIndex & 15)\n#define GRASS_ROW (uint(gl_VertexIndex) >> {RowShift})\nflat out uint vRow;\n{PatchBlock}");
         var main = MainRegex().Match(text);
         if (!main.Success)
             throw new InvalidOperationException("FoliageGrassShaders: no main() in the blade vertex program");
@@ -198,7 +198,7 @@ public static partial class FoliageGrassShaders
     /// The blades' colour program, with the interior cut and the GI resolve's surface output, as <see cref="FoliageShaders.GrassFragmentNative"/>.
     /// </summary>
     public static string GrassFragmentGpu() => Gi.GiResolveShaders.WithAlbedo(Fragment(InteriorMaskRenderer.WithCut(FoliageShaders.GrassFragment)),
-            inShader: true);
+        inShader: true);
     public static string GrassMotionVertexGpu() => Vertex(FoliageShaders.GrassMotionVertex);
     public static string GrassMotionFragmentGpu() => Fragment(FoliageShaders.GrassMotionFragment);
 

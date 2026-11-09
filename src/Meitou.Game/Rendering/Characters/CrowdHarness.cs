@@ -50,7 +50,7 @@ internal sealed class CrowdHarness
     /// The renderer with a crowd attached (settled when not interactive, so a still shows every character).
     /// </summary>
     public static CharacterRenderer Create(IGpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o,
-            bool interactive)
+        bool interactive)
     {
         var db = scene.Database ?? throw new InvalidOperationException("--crowd needs the game data");
         var watch = Stopwatch.StartNew();
@@ -72,7 +72,7 @@ internal sealed class CrowdHarness
         Parallel.For(0, n, i =>
         {
             try { appearances[i] = CharacterAppearance.Build(db, install.Root, picks[i].StringId, new CharacterOptions { Seed = 100003 + i,
-                    Faction = faction?.StringId }); }
+                Faction = faction?.StringId }); }
             catch (Exception e) when (e is KeyNotFoundException or InvalidOperationException or IOException or ArgumentException)
             {
                 Interlocked.Increment(ref failures);

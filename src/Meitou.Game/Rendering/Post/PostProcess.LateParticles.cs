@@ -15,14 +15,14 @@ public sealed partial class PostProcess
     sealed class LateParticlesPass : FullscreenProgram
     {
         public readonly SamplerSlot AccumH, LowDepthH, AccumFarH, LowDepthFarH, AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ, Depth, Scene, Output,
-                History, Motion;
+            History, Motion;
         public readonly UniformHandle LowSizeH, LowSizeQ, Has, NearPlanes, Late, Target;
         public LateParticlesPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleLate, "post late particles")
         {
             (AccumH, LowDepthH, AccumFarH, LowDepthFarH) = (P.Sampler("uAccumH"), P.Sampler("uLowDepthH"), P.Sampler("uAccumFarH"),
-                    P.Sampler("uLowDepthFarH"));
+                P.Sampler("uLowDepthFarH"));
             (AccumQ, LowDepthQ, AccumFarQ, LowDepthFarQ) = (P.Sampler("uAccumQ"), P.Sampler("uLowDepthQ"), P.Sampler("uAccumFarQ"),
-                    P.Sampler("uLowDepthFarQ"));
+                P.Sampler("uLowDepthFarQ"));
             (Depth, Scene, Output) = (P.Sampler("uDepth"), P.Sampler("uScene"), P.Sampler("uOutput"));
             (History, Motion) = (P.Sampler("uHistory"), P.Sampler("uMotion"));
             (LowSizeH, LowSizeQ, Has, NearPlanes) = (P.Uniform("uLowSizeH"), P.Uniform("uLowSizeQ"), P.Uniform("uHas"), P.Uniform("uNearPlanes"));
@@ -34,7 +34,7 @@ public sealed partial class PostProcess
     {
         public readonly SamplerSlot Layer;
         public LateParticlesApplyPass(GpuContext gpu) : base(gpu,
-                PostProcessShaders.ParticleLateApply, "post late particles apply") => Layer = P.Sampler("uLayer");
+            PostProcessShaders.ParticleLateApply, "post late particles apply") => Layer = P.Sampler("uLayer");
     }
 
     LateParticlesPass? _lateParticles;

@@ -72,7 +72,7 @@ public sealed unsafe partial class PostProcess
         public readonly SamplerSlot Source;
         public readonly UniformHandle Texel;
         public BloomDownPass(GpuContext gpu) : base(gpu, PostProcessShaders.BloomDown, "post bloom down") => (Source, Texel) = (P.Sampler("uSource"),
-                P.Uniform("uTexel"));
+            P.Uniform("uTexel"));
     }
 
     sealed class BloomUpPass : FullscreenProgram

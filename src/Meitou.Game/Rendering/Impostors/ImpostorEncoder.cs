@@ -221,6 +221,9 @@ public static class ImpostorEncoder
         }
     }
 
+    /// <summary>
+    /// Writes a decoded colour block's 16 texels into <paramref name="rgba"/> (BC1 also sets alpha: 0 for the punch-through code).
+    /// </summary>
     static void WriteColourBlock(ImpostorEncoding encoding, byte[] rgba, int size, int by, int bx, ReadOnlySpan<byte> block, ReadOnlySpan<int> colours,
         bool punch)
     {
@@ -237,6 +240,9 @@ public static class ImpostorEncoder
         }
     }
 
+    /// <summary>
+    /// Writes a decoded alpha block into <paramref name="rgba"/>: BC5's two channels as red and green, else BC3's alpha.
+    /// </summary>
     static void WriteAlphaBlock(ImpostorEncoding encoding, byte[] rgba, int size, int by, int bx, ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
     {
         for (int i = 0; i < 16; i++)

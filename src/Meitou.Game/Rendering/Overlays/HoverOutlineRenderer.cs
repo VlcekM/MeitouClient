@@ -17,7 +17,7 @@ namespace Meitou.Game.Rendering.Overlays;
 /// <param name="Tint">The outline's and tint's colour (alpha: their strength).</param>
 /// <param name="Spheres">The bounding spheres of what is in it.</param>
 public readonly record struct HoverMask(GpuTexture Colour, GpuTexture Depth, float Near, float Far, Vector4 Tint,
-        IReadOnlyList<(Vector3 Centre, float Radius)> Spheres);
+    IReadOnlyList<(Vector3 Centre, float Radius)> Spheres);
 
 /// <summary>
 /// The hover outline (Meitou only, docs/game/ui-input.md "Hover outline"): the character under the mouse (and, with Alt held, those near) and the
@@ -132,7 +132,7 @@ public sealed class HoverOutlineRenderer
                 _program.Set(_colour, hover.Tint.X, hover.Tint.Y, hover.Tint.Z, hover.Tint.W);
                 _program.Set(_radius, outline);
                 var state = DrawState.For(over.Formats, _gpu.DepthClamp,
-                        blend: new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha));
+                    blend: new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha));
                 state.Record(cmd, over);
                 cmd.BindPipeline(_segment.Get(state, over.Formats, null));
                 _program.Flush(cmd);
@@ -176,7 +176,7 @@ public sealed class HoverOutlineRenderer
         for (int corner = 0; corner < 8; corner++)
         {
             var p = centre + new Vector3((corner & 1) == 0 ? -radius : radius, (corner & 2) == 0 ? -radius : radius,
-                    (corner & 4) == 0 ? -radius : radius);
+                (corner & 4) == 0 ? -radius : radius);
             var clip = Vector4.Transform(new Vector4(p, 1), viewProjection);
             if (clip.W <= 0.01f) return new PixelRect(0, 0, (uint)width, (uint)height);
             float x = (clip.X / clip.W * 0.5f + 0.5f) * width, y = (0.5f - clip.Y / clip.W * 0.5f) * height;   // top-left pixels

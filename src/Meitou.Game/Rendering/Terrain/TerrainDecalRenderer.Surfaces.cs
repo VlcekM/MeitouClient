@@ -356,7 +356,7 @@ public sealed unsafe partial class TerrainDecalRenderer
     }
 
     bool Bleeding(SurfaceDecal d) => d.Who is long who && _surfacePools.TryGetValue(who, out var pool) && pool == d &&
-            _surfaceClock - d.Bled <= StillBleeding;
+        _surfaceClock - d.Bled <= StillBleeding;
 
     /// <summary>
     /// Removes the oldest decal that is not a pool still bleeding; false when there is none (remembered until the surface clock moves).
@@ -425,14 +425,14 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// cref="RecordSurfaces"/> can tell terrain pixels, which the cells already carry blood on, from the rest.
     /// </summary>
     internal void CaptureTerrainDepth(GpuTexture sceneDepth) => Capture(sceneDepth, ref _terrainDepth, ref _terrainDepthIndex,
-            "blood terrain depth", true);
+        "blood terrain depth", true);
 
     /// <summary>
     /// Keeps the depth buffer as the static objects left it, before the foliage and everything else that sways or moves is drawn: a pixel nearer than
     /// this is not static, and takes no blood.
     /// </summary>
     internal void CaptureStaticDepth(GpuTexture sceneDepth) => Capture(sceneDepth, ref _staticDepth, ref _staticDepthIndex, "blood static depth",
-            false);
+        false);
 
     void Capture(GpuTexture sceneDepth, ref GpuTexture? target, ref uint index, string name, bool first)
     {
@@ -465,7 +465,7 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// <see cref="CaptureTerrainDepth"/> ran this frame.
     /// </summary>
     internal void RecordSurfaces(GpuTexture colour, GpuTexture depth, float near, float far, Matrix4x4 rotation, float tanX, float tanY,
-            Vector3 eye, Vector2 jitterNdc)
+        Vector3 eye, Vector2 jitterNdc)
     {
         if (!_surfacesOn || _surfaces.Count == 0 || _terrainDepth is null
             || _terrainDepthFrame != _gpu.Frame.Number || _staticDepthFrame != _gpu.Frame.Number)
@@ -519,12 +519,12 @@ public sealed unsafe partial class TerrainDecalRenderer
             if (index == uint.MaxValue || hw <= 0) continue;
             float life = d.Expires - _surfaceClock;
             uint abgr = d.Colour;
+            float alpha = MathF.Min((abgr >> 24) / 255f, life);
             _surfaceInstances[n++] = new SurfaceInstance
             {
                 Centre = new Vector4(d.Centre - eye, MathF.Sqrt(hw * hw + hh * hh)),   // the sphere round the decal's square
                 Shape = new Vector4(hw, hh, d.Angle, d.Floor ? 0 : 1),
-                Colour = new Vector4((abgr & 0xFF) / 255f, (abgr >> 8 & 0xFF) / 255f, (abgr >> 16 & 0xFF) / 255f,
-                        MathF.Min((abgr >> 24) / 255f, life)),
+                Colour = new Vector4((abgr & 0xFF) / 255f, (abgr >> 8 & 0xFF) / 255f, (abgr >> 16 & 0xFF) / 255f, alpha),
                 Sprite = index,
             };
         }
@@ -542,7 +542,7 @@ public sealed unsafe partial class TerrainDecalRenderer
 
     /// <summary>Draws the first <paramref name="n"/> instance rows over <paramref name="colour"/> in one native pass.</summary>
     void DrawSurfaces(GpuTexture colour, GpuProgram program, int n, float near, float far, Matrix4x4 rotation, float tanX, float tanY,
-            Vector3 back, Vector2 jitterNdc)
+        Vector3 back, Vector2 jitterNdc)
     {
         var cmd = _gpu.BeginNative("blood surfaces");
         cmd.Order();
@@ -552,8 +552,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         MemoryMarshal.AsBytes(_surfaceInstances.AsSpan(0, n)).CopyTo(new Span<byte>(rows.Pointer, n * SurfaceInstance.Size));
         var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: Multiply, mask: DrawState.Rgb);
         state.Record(cmd, t);
-        cmd.BindPipeline(_surfacePipeline ??=
-            _gpu.Pipelines.Get(state.Pipeline(program, SurfaceRows, PrimitiveType.TriangleStrip, t.Formats, "blood surfaces")));
+        var pipeline = _surfacePipeline ??= _gpu.Pipelines.Get(state.Pipeline(program, SurfaceRows, PrimitiveType.TriangleStrip, t.Formats, "blood surfaces"));
+        cmd.BindPipeline(pipeline);
         _frame.Bind(cmd, program, default);
         var push = new SurfacePush
         {
@@ -570,7 +570,10 @@ public sealed unsafe partial class TerrainDecalRenderer
         };
         cmd.PushConstants(program, GpuStage.Vertex | GpuStage.Fragment, in push);
         Span<GpuBufferBinding> buffers =
-        [new(rows.Handle, rows.Offset), new(rows.Handle, rows.Offset + 16), new(rows.Handle, rows.Offset + 32), new(rows.Handle, rows.Offset + 48),];
+        [
+            new(rows.Handle, rows.Offset), new(rows.Handle, rows.Offset + 16), new(rows.Handle, rows.Offset + 32), new(rows.Handle, rows.Offset + 48),
+        ];
+
         cmd.BindVertexBuffers(0, buffers);
         cmd.Draw(4, (uint)n);
         cmd.EndRendering();

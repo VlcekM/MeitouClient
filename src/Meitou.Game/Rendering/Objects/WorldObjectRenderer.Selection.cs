@@ -20,7 +20,7 @@ public sealed partial class WorldObjectRenderer
     /// One draw <see cref="Emit"/> added for an outlined building (its key, <see cref="AddLevels"/>'s arguments) and the instance's bounding sphere.
     /// </summary>
     readonly record struct SelectionDraw(string Key, GpuObjectMesh Gpu, ObjectMaterialSet Materials, LodBlend Blend, Matrix4x4 M, float Weight,
-            float Near, bool BackCull,
+        float Near, bool BackCull,
         bool Site, Vector3 Centre, float Radius);
 
     readonly List<SelectionDraw> _selectionDraws = [];
@@ -74,7 +74,7 @@ public sealed partial class WorldObjectRenderer
     /// counters stay as that pass left them.
     /// </summary>
     public void DrawSelectionMasks(IReadOnlyList<(string Key, float Floor, Vector4 Colour)> outlines, int width, int height, Matrix4x4 view,
-            float fieldOfView, Vector3 eye,
+        float fieldOfView, Vector3 eye,
         WorldRenderOptions options)
     {
         _selectionMasks.Clear();
@@ -183,9 +183,9 @@ public sealed partial class WorldObjectRenderer
             made.Depth.Dispose();
         }
         var colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Srgb8Alpha8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget,
-                Name: "selection mask"));
+            Name: "selection mask"));
         var depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height,
-                Use: TextureUse.Sampled | TextureUse.DepthTarget,
+            Use: TextureUse.Sampled | TextureUse.DepthTarget,
             Name: "selection mask depth"));
         if (index < _selectionTargets.Count) _selectionTargets[index] = (colour, depth);
         else _selectionTargets.Add((colour, depth));

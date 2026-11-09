@@ -27,7 +27,7 @@ internal readonly record struct PickBox(int Bone, Vector3 Min, Vector3 Max)
                         if (v.Weights[k] > best) (best, bone) = (v.Weights[k], (int)(v.Bones >> (8 * k)) & 0xFF);
                 }
                 boxes[bone] = boxes.TryGetValue(bone, out var b) ? (Vector3.Min(b.Min, v.Position), Vector3.Max(b.Max, v.Position)) : (v.Position,
-                        v.Position);
+                    v.Position);
             }
         return [.. boxes.Select(b => new PickBox(b.Key, b.Value.Min, b.Value.Max))];
     }

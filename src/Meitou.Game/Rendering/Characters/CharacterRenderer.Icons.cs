@@ -235,7 +235,7 @@ internal sealed unsafe partial class CharacterRenderer
             // An enhanced icon that gave up is drawn plainly from then on (see DrawIcon), so it is not saved among the supersampled ones.
             bool givenUp = entry.Frames > IconGiveUpFrames;
             DrawIcon(entry, i,
-                    save: entry.TexturesReady && IconSaveDirectory is not null && entry.MaterialId.Length > 0 && !(EnhancedIcons && givenUp));
+                save: entry.TexturesReady && IconSaveDirectory is not null && entry.MaterialId.Length > 0 && !(EnhancedIcons && givenUp));
 
             // Shown once its textures were all resident (before that it would show stand-ins), or after a while if they never are (the video memory
             // guard keeps them out).
@@ -266,7 +266,7 @@ internal sealed unsafe partial class CharacterRenderer
         if (entry.Colour is null)
         {
             entry.Colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h,
-                    Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: $"icon {entry.Key.Record}"));
+                Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: $"icon {entry.Key.Record}"));
             entry.Sampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
                 TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), entry.Colour.View());
         }

@@ -328,7 +328,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         foreach (var t in _cache.Values.Where(t => t.State == WorldTexture.Residency.Resident).OrderByDescending(t => t.Bytes))
         {
             int target = t.KeepAllMips || t.FileWidth == 0 || !float.IsFinite(t.Need) ? t.QualityDrop : Math.Max(Mips.Drop(t.FileWidth, t.FileHeight,
-                    t.Need), t.QualityDrop);
+                t.Need), t.QualityDrop);
             string flags = (t.KeepAllMips ? "k" : "") + (t.CannotDrop ? "c" : "") + (t.Replacing ? "r" : "")
                 + (t.TooFineSince != 0 ? "f" : "") + (t.Shared is { Refs: > 1 } ? "s" : "");
             w.WriteLine($"{t.Bytes / 1048576.0,10:0.000} {(now - t.LastUsed) / 1000.0,8:0.0} {t.Dropped,8} {target,7} {t.Need,9:0.###} "
@@ -397,8 +397,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
             if (ShouldWarnMissing(name)) Messages.Add($"texture not found: {name}");
             return t;
         }
-        if (deferred || !MayStart(t,
-                out bool lean)) { t.State = WorldTexture.Residency.Unloaded; return t; }   // loaded when its key is read (and the guard lets it)
+        // loaded when its key is read (and the guard lets it)
+        if (deferred || !MayStart(t, out bool lean)) { t.State = WorldTexture.Residency.Unloaded; return t; }
         Start(t, lean: lean);
         return t;
     }
@@ -465,7 +465,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         (t.BiasB, t.IndexB, t.HasB) = (t.BiasA, t.IndexA, t.HasA);
         var wrap = t.Border ? TextureWrapMode.ClampToBorder : TextureWrapMode.Repeat;
         var sampler = _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, wrap, wrap,
-                TextureWrapMode.Repeat,
+            TextureWrapMode.Repeat,
             false, DepthFunction.Lequal, transparentBorder: true, anisotropy: 8, integerFormat: false, bias));
         var view = t.Native.View(0, t.ViewLevels, 0, 1, t.ViewSwizzle);
         t.IndexA = _gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, view));
@@ -831,7 +831,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             // (docs/renderer-native.md 8.14). The file's bytes are pooled (docs/engine.md, pooled buffers): an RGBA8 decode returns them here, a
             // stored upload after its last step.
             var dds = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, Math.Max(Math.Max(dropMips, MipStreaming.Drop(w.Width, w.Height,
-                    need, streaming, perDistance, bias, extra)),
+                need, streaming, perDistance, bias, extra)),
                 LevelsAbove(w.Width, w.Height, leanSize))), out var whole, ArrayPool<byte>.Shared);
             bool handedOver = false;
             try
@@ -843,7 +843,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
                     // Only the level the swizzle test looks at is decoded on the CPU.
                     int level = Math.Max(Array.FindIndex(dds.Surfaces.ToArray(), s => s.Width <= 256 && s.Height <= 256), 0);
                     var compressed = new TextureData(new LoadedTexture([DdsDecoder.Decode(dds, 0, level)], null), dds, dropped, whole.Width,
-                            whole.Height, droppable);
+                        whole.Height, droppable);
                     handedOver = true;
                     return compressed;
                 }
@@ -958,7 +958,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         {
             // BC4 is one channel; the decoder (and so the RGBA8 path) shows it as grey with alpha 1.
             Publish(t, texture!, data, Math.Min(dds.MipCount, texture!.Desc.Levels), dds.Format == DdsFormat.Bc4 ? GpuSwizzle.RrrOne : default,
-                    dds.Surfaces.Sum(s => (long)s.Length));
+                dds.Surfaces.Sum(s => (long)s.Length));
             ArrayPool<byte>.Shared.Return(dds.Data);   // rented by Load; every slab above has been copied to staging
         });
     }

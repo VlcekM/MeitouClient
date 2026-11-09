@@ -97,7 +97,7 @@ public static partial class TriangleBins
     /// and motion programs are not).
     /// </summary>
     public static readonly string[] Categories = ["terrain", "rocks", "objects", "foliage meshes", "grass", "impostors", "rock impostors",
-            "characters"];
+        "characters"];
 
     /// <summary>
     /// The category of a program name, or -1 when the program is not counted.
@@ -199,7 +199,7 @@ public sealed class SizeHistogram
     /// This histogram scaled by <paramref name="factor"/> (for the mean over frames).
     /// </summary>
     public SizeHistogram Scaled(double factor) => new() { Triangles = [.. Triangles.Select(t => t * factor)],
-            Pixels = [.. Pixels.Select(p => p * factor)] };
+        Pixels = [.. Pixels.Select(p => p * factor)] };
 
     public void Add(SizeHistogram other)
     {

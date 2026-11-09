@@ -79,7 +79,7 @@ public sealed unsafe class HizPyramid : IDisposable
         _basePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_baseProgram, "hiz base"));
         _reducePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_reduceProgram, "hiz reduce"));
         _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-                TextureWrapMode.ClampToEdge,
+            TextureWrapMode.ClampToEdge,
             TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
     }
 
@@ -243,7 +243,7 @@ public sealed unsafe class HizPyramid : IDisposable
         float step = Vector3.Distance(current, _eye);
         if (!(step <= maxStep)) return default;
         return new OcclusionView(new GpuBufferBinding(_buffer!.Handle, 0, _buffer.Size), Vectors(_eye, step, _right, _up, _back, _tanX, _tanY, _width,
-                _height, _levelCount, _baseWidth, _baseHeight, _offsets));
+            _height, _levelCount, _baseWidth, _baseHeight, _offsets));
     }
 
     /// <summary>
@@ -251,7 +251,7 @@ public sealed unsafe class HizPyramid : IDisposable
     /// field of view, size) and the eye's step since.
     /// </summary>
     internal static Vector4[] Vectors(Vector3 eye, float step, Vector3 right, Vector3 up, Vector3 back, float tanX, float tanY, int width, int height,
-            int levelCount, int baseWidth, int baseHeight, uint[] offsets)
+        int levelCount, int baseWidth, int baseHeight, uint[] offsets)
     {
         var v = new Vector4[ViewVectors];
         v[0] = new Vector4(eye, step);

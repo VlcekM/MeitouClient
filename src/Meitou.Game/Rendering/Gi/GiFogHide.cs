@@ -24,7 +24,7 @@ internal static class GiFogHide
     /// <paramref name="slack"/>) across, from <paramref name="floorY"/> up to the top of the highest layer's reach.
     /// </summary>
     public static (Vector3 Min, Vector3 Max) ReachBox(float x, float z, float baseY, float spacing, float spacingY, int layers, float floorY,
-            float slack)
+        float slack)
     {
         float offset = LookupOffset * MathF.Min(spacing, spacingY), across = spacing + offset + slack;
         float top = baseY + (layers - 1 + 1.5f) * spacingY + offset;
@@ -50,7 +50,7 @@ internal static class GiFogHide
     /// cascades' toroidal offsets of window column 0 (x, z, in <paramref name="offsets"/> as x0, z0, x1, z1). Returns the entries written.
     /// </summary>
     public static int List(Span<uint> into, int phases, int phase, uint round, int period, ReadOnlySpan<byte> hiddenLayers,
-            params ReadOnlySpan<float> offsets) =>
+        params ReadOnlySpan<float> offsets) =>
         List(into, phases, phase, round, period, 0, hiddenLayers, offsets);
 
     /// <summary>
@@ -59,7 +59,7 @@ internal static class GiFogHide
     /// keyed on the tile like the sleep rule, with <see cref="FarBit"/> set; a probe both hidden and far is a hidden one.
     /// </summary>
     public static int List(Span<uint> into, int phases, int phase, uint round, int period, int farPeriod, ReadOnlySpan<byte> hiddenLayers,
-            ReadOnlySpan<float> offsets)
+        ReadOnlySpan<float> offsets)
     {
         const int columns = GiProbes.Columns, layers = GiProbes.Layers;
         int n = 0;
@@ -109,7 +109,7 @@ internal static class GiFogHide
     /// whose reach box (<see cref="ReachBox"/>) <paramref name="covers"/> says is hidden. The top layer is never counted: its reach has no upper end.
     /// </summary>
     public static int HiddenLayers(Func<Vector3, Vector3, bool> covers, float x, float z, float baseY, float spacing, float spacingY, int layerCount,
-            float floorY, float slack)
+        float floorY, float slack)
     {
         // Most columns are all or nothing: ask for the most layers first, then for the fewest, and only then bisect (coverage only gets harder with a
         // taller box).

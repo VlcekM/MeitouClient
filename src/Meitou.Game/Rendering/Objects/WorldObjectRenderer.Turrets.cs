@@ -59,7 +59,7 @@ public sealed partial class WorldObjectRenderer
                 float angle = joints[k].Rotor is not null ? RotorTurn(inst.Placed, joints[k]) : pose?.AngleOf(joints[k].PartId) ?? 0;
                 if (angle == 0) continue;
                 m *= Matrix4x4.CreateTranslation(-joints[k].Pivot) * Matrix4x4.CreateFromAxisAngle(joints[k].Axis,
-                        angle) * Matrix4x4.CreateTranslation(joints[k].Pivot);
+                    angle) * Matrix4x4.CreateTranslation(joints[k].Pivot);
             }
         }
         inst.Transform = m;

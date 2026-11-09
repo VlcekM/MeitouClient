@@ -59,7 +59,7 @@ public sealed class BenchResult
     public PictureDiffResult? Picture { get; set; }
 
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never,
-            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals };
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals };
 
     public void Save(string path)
     {
@@ -134,7 +134,7 @@ public sealed class BenchResult
     }
 
     static string Big(double v) => v >= 1e6 ? (v / 1e6).ToString("0.00", CultureInfo.InvariantCulture) + "M" : v >= 1e4 ? (v / 1e3).ToString("0.0",
-            CultureInfo.InvariantCulture) + "k" : v.ToString("0", CultureInfo.InvariantCulture);
+        CultureInfo.InvariantCulture) + "k" : v.ToString("0", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The tables of <c>--bench-tris</c> for one side: triangles and fragments per pass, and the main view's triangles by screen area per category.
@@ -144,7 +144,7 @@ public sealed class BenchResult
         if (c.Passes.Count > 0)
         {
             double pixels = Meta.TryGetValue("renderPixels", out var px) && double.TryParse(px, NumberStyles.Float, CultureInfo.InvariantCulture,
-                    out var pv) ? pv : 0;
+                out var pv) ? pv : 0;
             w.WriteLine();
             w.WriteLine($"triangles per pass, side {side} (pipeline statistics queries, mean per frame over {Meta.GetValueOrDefault("passFrames", "?")} serial frames; a part of a stage is indented under it; 'fs/tri' = fragment invocations per primitive out of the clipper, 'fs/px' = per render pixel)");
             w.WriteLine($"{"pass",-30}{"prims",9}{"vs inv",9}{"clip in",9}{"clip out",9}{"fs inv",9}{"fs/tri",8}{"fs/px",7}");

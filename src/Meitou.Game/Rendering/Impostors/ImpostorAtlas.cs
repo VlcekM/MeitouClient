@@ -254,6 +254,10 @@ public sealed class ImpostorAtlas : IDisposable
     /// </summary>
     readonly record struct Header(int Grid, int FramePixels, Vector3 Centre, float Radius, float Gloss, string Name);
 
+    /// <summary>
+    /// Reads the compressed levels from <paramref name="z"/> into one native block (the levels below <paramref name="firstLevel"/> hashed and
+    /// dropped) and makes the atlas; null when the hash does not match.
+    /// </summary>
     static ImpostorAtlas? ReadLevels(Stream z, (ImpostorMap Map, ImpostorEncoding Encoding, int[] Sizes)[] specs, int firstLevel, int levels,
         ulong expected, Header header)
     {

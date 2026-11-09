@@ -57,7 +57,7 @@ public sealed class VolumetricCloudRenderer : IDisposable
         _mirrorTimer = new(gpu);
         _shadowTimer = new(gpu);
         _noise = SampledImage.Rgba8(gpu, VolumetricClouds.AtlasSize, VolumetricClouds.AtlasSize, VolumetricClouds.CreateAtlas(), false, false,
-                "cloud noise atlas");
+            "cloud noise atlas");
         _march = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.March, "cloud march");
         _resolve = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Resolve, "cloud history");
         _shadow = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Shadow, "cloud shadow map");

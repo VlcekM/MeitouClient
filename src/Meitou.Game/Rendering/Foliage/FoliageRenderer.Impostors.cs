@@ -244,7 +244,7 @@ public sealed partial class FoliageRenderer
     /// nearest instance wants while a refine is on its way (<c>Coarse</c>: a blurrier crown for a moment), and the refines in flight.
     /// </summary>
     public (int NotAdmitted, int Missing, int Coarse, int Refining) ImpostorPopIn => (_impostorWantedCount - _impostorAdmittedCount,
-            _impostorMissingCount, _impostorCoarseCount, _impostorRefining.Count);
+        _impostorMissingCount, _impostorCoarseCount, _impostorRefining.Count);
 
     /// <summary>
     /// Atlases loading, waiting to bake, baking or uploading (part of <see cref="Pending"/>).
@@ -340,7 +340,7 @@ public sealed partial class FoliageRenderer
     /// The class of a mesh's atlas from its largest instance's radius: TERRAIN-mode rocks have their own largest frame.
     /// </summary>
     static ImpostorClass? ClassFor(MeshAsset a, float worldRadius, int triangles) => a.Terrain ? ImpostorClass.ForRock(worldRadius,
-            triangles) : ImpostorClass.For(worldRadius, triangles);
+        triangles) : ImpostorClass.For(worldRadius, triangles);
 
     /// <summary>
     /// The class of an atlas that is not loaded yet, estimated from the mesh's own bounds (the exact one comes with the load).
@@ -395,7 +395,7 @@ public sealed partial class FoliageRenderer
         if (!(a.ScreenPerRadian > 0)) return baseTransition;
         float radius = g.BoundsReady && g.MaxRadius > 0 ? g.MaxRadius : a.Radius * a.Mesh.MaxScale;
         return Math.Min(baseTransition, Math.Max(FoliageScreenLod.Transition(baseTransition, radius, a.ScreenPerRadian, a.ScreenFloor),
-                ScreenLodMinTransition));
+            ScreenLodMinTransition));
     }
 
     /// <summary>
@@ -408,7 +408,7 @@ public sealed partial class FoliageRenderer
     /// The transition of an atlas not made yet, from the class estimated from the mesh's bounds (infinite when it has none).
     /// </summary>
     float EstimatedTransition(MeshAsset a, Group? g = null) => EstimateClass(a) is { } c ? TransitionFor(a, c, a.Radius * a.Mesh.MaxScale,
-            g) : float.PositiveInfinity;
+        g) : float.PositiveInfinity;
 
     /// <summary>
     /// The ground distance from which a mesh is its impostor (infinite without a resident atlas or with the switch off).
@@ -441,8 +441,7 @@ public sealed partial class FoliageRenderer
         if (a.Terrain && !RockImpostorsActive) return (r, FoliageCull.MeshPart);
         float t = TransitionOf(a, g);
         if (_depthPass && _lodCoarse && !a.Terrain && a.Impostor is { Stage: ImpostorStage.Ready } ready)
-            t = Math.Min(t, ShadowLod.ImpostorTransition(ready.WorldRadius,
-                    _lodTexel));   // a far cascade: the flat caster for what is small in texels
+            t = Math.Min(t, ShadowLod.ImpostorTransition(ready.WorldRadius, _lodTexel));   // a far cascade: the flat caster for what is small in texels
         if (!(t <= range - band)) return (r, FoliageCull.MeshPart);
         float b = t * ImpostorBand;
         const float edge = 64;
@@ -550,7 +549,7 @@ public sealed partial class FoliageRenderer
             // Far mips: the nearest instance's ground distance, never inside the transition (an impostor is not drawn nearer).
             float need = Math.Max(raw * margin, t);
             _impostorPlan.Add(new PlanItem { Asset = a, Need = need, Key = need * (s is { Stage: ImpostorStage.Ready } ? ImpostorStickiness : 1f),
-                    Frame = frame, Grid = grid, Levels = levels, Radius = radius });
+                Frame = frame, Grid = grid, Levels = levels, Radius = radius });
         }
         _impostorPlan.Sort((x, y) => x.Key.CompareTo(y.Key));
         long limit = _impostorLimitBytes, total = 0;
@@ -719,7 +718,7 @@ public sealed partial class FoliageRenderer
         s.RefineLoad = BackgroundWork.Run<ImpostorAtlas?>(() =>
         {
             var atlas = cache.TryLoad(source,
-                    skip);   // only the levels the new textures keep are read (the albedo's from skip, the normal map's from skip + 1)
+                skip);   // only the levels the new textures keep are read (the albedo's from skip, the normal map's from skip + 1)
             if (atlas is not null && (atlas.FramePixels != frame || atlas.Grid != grid)) Free(ref atlas);
             return atlas;
         });
@@ -736,8 +735,8 @@ public sealed partial class FoliageRenderer
         {
             var a = _impostorRefining[i];
             var s = a.Impostor;
-            if (s is not { Stage: ImpostorStage.Ready,
-                    Textures: not null }) { _impostorRefining.RemoveAt(i--); continue; }   // unloaded meanwhile (UnloadImpostor frees the rest)
+            // unloaded meanwhile (UnloadImpostor frees the rest)
+            if (s is not { Stage: ImpostorStage.Ready, Textures: not null }) { _impostorRefining.RemoveAt(i--); continue; }
             if (s.RefineLoad is { } load)
             {
                 if (!load.IsCompleted) continue;
@@ -829,7 +828,7 @@ public sealed partial class FoliageRenderer
 
             // The nearest any transition is: the small class's smallest (a zone ending before it has no impostor ground for any mesh).
             float shortest = Math.Min(ImpostorDistance, LargeImpostorDistance) * Math.Min(1,
-                    ImpostorClass.SmallMinimumRadius / ImpostorClass.MinimumRadius) * (1 - ImpostorBand);
+                ImpostorClass.SmallMinimumRadius / ImpostorClass.MinimumRadius) * (1 - ImpostorBand);
 
             // Bakes wait in order of how soon their zones are close: from where the eye is now or will be in a few seconds of its motion.
             var lead = settling ? Vector2.Zero : _velocity * ImpostorLookaheadSeconds;
@@ -873,7 +872,7 @@ public sealed partial class FoliageRenderer
                     // Its own transition (the exact one once the atlas is loaded; before that estimated from the mesh's bounds, which also rules out
                     // a mesh that could never have an atlas: the load would only find that out).
                     float t = a.Impostor is { FramePixels: > 0 } loaded ? TransitionFor(a, loaded.Class, loaded.WorldRadius,
-                            g) : EstimatedTransition(a, g);
+                        g) : EstimatedTransition(a, g);
                     if (range - band < t || far < t * (1 - ImpostorBand)) continue;
                     _impostorWanted[a] = _impostorWanted.TryGetValue(a, out float known) ? Math.Min(known, urgency) : urgency;
                 }
@@ -971,7 +970,7 @@ public sealed partial class FoliageRenderer
             var meshes = ImpostorMeshes.Load(source, messages);
             if (meshes is null) return (source, null, null, null);
             var cls = rock ? ImpostorClass.ForRock(meshes.Radius * mesh.MaxScale, meshes.Triangles) : ImpostorClass.For(meshes.Radius * mesh.MaxScale,
-                    meshes.Triangles);
+                meshes.Triangles);
             if (rock && cls is not null)
             {
                 float share = meshes.SurfaceShare;
@@ -1004,7 +1003,7 @@ public sealed partial class FoliageRenderer
     /// The top levels an atlas never needs at a transition distance (<see cref="SkipFor"/> with the atlas's own radius).
     /// </summary>
     internal static int LevelsToSkip(ImpostorAtlas atlas, float maxScale, float transition) => SkipFor(atlas.FramePixels, atlas.Levels,
-            atlas.Radius * maxScale, transition);
+        atlas.Radius * maxScale, transition);
 
     /// <summary>
     /// Makes the atlas's textures with <paramref name="skip"/> on a worker (<see cref="ImpostorTextures.MakeOffThread"/>); <see cref="TakeMade"/>
@@ -1036,7 +1035,7 @@ public sealed partial class FoliageRenderer
                 // The albedo's top levels its nearest instance never samples are left out, and the normal map's one level more: it shapes the
                 // lighting, which varies slowly over a crown.
                 int levels = Math.Clamp(SkipFor(s.Atlas!.FramePixels, s.Atlas.Levels, s.Atlas.Radius * a.Mesh.MaxScale, Math.Max(s.Need,
-                        TransitionFor(a, s.Class, s.WorldRadius)))
+                    TransitionFor(a, s.Class, s.WorldRadius)))
                     + s.Extra, 0, s.Atlas.Levels - 1);
                 long need = ImpostorTextures.BytesFor(s.Atlas!, levels, levels + 1);
                 if (!MakeImpostorRoom(need, a) || _guard is { } g && !g.Allows((ulong)need))
@@ -1317,7 +1316,7 @@ public sealed partial class FoliageRenderer
     /// or a cascade's caster facing the sun (the direction towards it from the cascade's matrix).
     /// </summary>
     void AddImpostorDraws(MeshJob job, bool depth, Matrix4x4 viewProjection, PassTargets targets, DrawState state, bool coverage, bool indirect,
-            int argsFirst, ImpostorPass pass = ImpostorPass.Scene)
+        int argsFirst, ImpostorPass pass = ImpostorPass.Scene)
     {
         _impostorDraw ??= new ImpostorDraw(Gpu, _nativeFrame);
         var drawState = state with { Cull = CullMode.None };
@@ -1356,8 +1355,9 @@ public sealed partial class FoliageRenderer
                 Gloss = atlas.Gloss,
                 Coverage = coverage ? 1u : 0u,
                 View = view,
-                Spare = depth || !ImpostorQuad.Enabled || Vector3.DistanceSquared(d.Asset.Centre,
-                        atlas.Centre) > 1e-4f * atlas.Radius * atlas.Radius ? 0 : ImpostorQuad.Pack(d.Asset.HalfExtent, atlas.Radius),
+                Spare = depth || !ImpostorQuad.Enabled || Vector3.DistanceSquared(d.Asset.Centre, atlas.Centre) > 1e-4f * atlas.Radius * atlas.Radius
+                    ? 0
+                    : ImpostorQuad.Pack(d.Asset.HalfExtent, atlas.Radius),
             };
             MeshPush bytes = default;
             var drawPipeline = pipeline;

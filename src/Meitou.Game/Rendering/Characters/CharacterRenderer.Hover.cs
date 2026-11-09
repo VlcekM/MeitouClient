@@ -28,7 +28,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// world's colour pass, whose statistics then stand.
     /// </summary>
     public void DrawHoverMasks(IReadOnlyList<(long Key, Vector4 Colour)> wanted, int width, int height, Matrix4x4 view, float fieldOfView,
-            Vector3 eye)
+        Vector3 eye)
     {
         _hoverMasks.Clear();
         if (wanted.Count == 0 || width <= 0 || height <= 0) return;
@@ -60,7 +60,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// The wanted characters drawn in the world and on screen, grouped by colour (their live indices).
     /// </summary>
     List<(Vector4 Colour, List<int> Live)> HoverGroups(IReadOnlyList<(long Key, Vector4 Colour)> wanted, int width, int height, Matrix4x4 view,
-            float fieldOfView)
+        float fieldOfView)
     {
         var groups = new List<(Vector4 Colour, List<int> Live)>();
         var onScreen = view * Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, width / (float)height, 0.25f, 1e5f);
@@ -102,9 +102,9 @@ internal sealed unsafe partial class CharacterRenderer
         }
 
         var colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Srgb8Alpha8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget,
-                Name: "hover mask"));
+            Name: "hover mask"));
         var depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height,
-                Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "hover mask depth"));
+            Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "hover mask depth"));
         if (_hoverTargets.Count > g) _hoverTargets[g] = (colour, depth);
         else _hoverTargets.Add((colour, depth));
         return (colour, depth);

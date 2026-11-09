@@ -289,7 +289,7 @@ sealed class PostComposite : IDisposable
     /// low-resolution accumulations after that pass.
     /// </summary>
     public void ParticleCoverage(IGpuCommandList cmd, GpuTexture accum, GpuTexture lowDepth, GpuTexture accumFar, GpuTexture lowDepthFar,
-            GpuTexture sceneDepth,
+        GpuTexture sceneDepth,
         GpuTexture target, int divisor, float near, float far, ColorMask mask)
     {
         var c = _particleCoverageP;
@@ -531,9 +531,9 @@ sealed class PostComposite : IDisposable
             _luminanceTarget = _ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, LuminanceSize, LuminanceSize, LuminanceLevels,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst, Name: "post luminance"));
             _adaptA = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg32F, 1, 1,
-                    Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "post exposure adapted"));
+                Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "post exposure adapted"));
             _adaptB = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg32F, 1, 1,
-                    Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "post exposure adapted"));
+                Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "post exposure adapted"));
             (_adaptedValid, _adaptedFrames) = (false, 0);
         }
         if (_displayWidth <= 0 || _displayHeight <= 0) return;
@@ -587,7 +587,7 @@ sealed class PostComposite : IDisposable
     /// One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/> (its uniforms and samplers set before).
     /// </summary>
     void Fullscreen(IGpuCommandList cmd, LegacyProgram program, GpuTexture target, int w, int h, DrawState? state = null,
-            LoadOp load = LoadOp.DontCare)
+        LoadOp load = LoadOp.DontCare)
     {
         var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None);
         var s = state ?? DrawState.For(formats, false);
@@ -629,7 +629,7 @@ sealed class PostComposite : IDisposable
     /// chain).
     /// </summary>
     public void ParticleComposite(IGpuCommandList cmd, GpuTexture accum, GpuTexture lowDepth, GpuTexture accumFar, GpuTexture lowDepthFar,
-            GpuTexture sceneDepth,
+        GpuTexture sceneDepth,
         GpuTexture scene, int divisor, float near, float far)
     {
         var c = _particleCompositeP;
@@ -728,7 +728,7 @@ sealed class PostComposite : IDisposable
         public SsaoPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.Ssao, "post ssao")
         {
             (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"),
-                    P.Uniform("uWaterY"));
+                P.Uniform("uWaterY"));
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
@@ -762,7 +762,7 @@ sealed class PostComposite : IDisposable
                 P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uWaterY"));
             ShaftInjected = P.Sampler("uShaftInjected");
             (ShaftGrid, ShaftRange, ShaftTan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftTan"),
-                    P.Uniform("uShaftFog"));
+                P.Uniform("uShaftFog"));
             (ShaftRight, ShaftUp, ShaftBack) = (P.Uniform("uShaftRight"), P.Uniform("uShaftUp"), P.Uniform("uShaftBack"));
         }
     }
@@ -807,7 +807,7 @@ sealed class PostComposite : IDisposable
         {
             (NearDepth, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
             (NearPlanes, WaterY, Atlas, Params) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uShaftAtlas"),
-                    P.Uniform("uShaftParams"));
+                P.Uniform("uShaftParams"));
             Air = P.Uniform("uShaftAir");
         }
     }
@@ -864,7 +864,7 @@ sealed class PostComposite : IDisposable
         public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
         public readonly UniformHandle LowSize, NearPlanes, Div, Scale, Footprint;
         public ParticleCompositePass(IGpuContext ctx, string vertex) : base(ctx, vertex,
-                PostProcessShaders.ParticleComposite, "post particle composite")
+            PostProcessShaders.ParticleComposite, "post particle composite")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
             (AccumFar, LowDepthFar) = (P.Sampler("uAccumFar"), P.Sampler("uLowDepthFar"));

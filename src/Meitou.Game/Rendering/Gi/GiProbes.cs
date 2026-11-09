@@ -133,7 +133,7 @@ internal sealed unsafe class GiProbes : IDisposable
     /// Render globals: x on/filled, y strength, z resolve, w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.
     /// </summary>
     Vector4 Params => new(Enabled && Active && Shade && !InReflection && _updated ? 1 : 0, Strength, Resolve ? 1 : 0, InteriorEnabled ? MathF.Max(1,
-            InteriorGain) : 0);
+        InteriorGain) : 0);
 
     /// <summary>
     /// True: the lit fragments write their albedo and the post pass adds the probes' light (<c>--gi-resolve</c>, docs/render-gi.md "Resolve").
@@ -194,7 +194,7 @@ internal sealed unsafe class GiProbes : IDisposable
         _invalidateProgram = ctx.Shaders.Compute(GiShaders.ProbeInvalidate, "gi probe invalidate",
         [
             (0, DescriptorType.StorageBuffer), (1, DescriptorType.UniformBuffer), (2, DescriptorType.StorageImage), (3,
-                    DescriptorType.CombinedImageSampler),
+                DescriptorType.CombinedImageSampler),
         ]);
         _invalidatePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_invalidateProgram, "gi probe invalidate"));
         Variant(Rays);
@@ -222,10 +222,10 @@ internal sealed unsafe class GiProbes : IDisposable
         ctx.Device.Vk.CmdClearColorImage(cmd, ctx.Device.NativeImage(_distance), ImageLayout.General, &clear, 1, &range);
         ctx.Device.EndImmediate(cmd);
         _linear = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
-                TextureWrapMode.ClampToEdge,
+            TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
         _nearest = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-                TextureWrapMode.ClampToEdge,
+            TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
         var g = ctx.Globals;
@@ -258,7 +258,7 @@ internal sealed unsafe class GiProbes : IDisposable
             static bool Holds(float now, float cached, float margin) =>
                 now == 0 ? cached == 0 : cached > 0 && now <= cached + margin && now >= cached - 100;
             bool same = _hiddenValid && !scrolled && now.Block == _hiddenState.Block && moved <= HiddenSlack && Holds(now.Radius, _hiddenState.Radius,
-                    margin) && Holds(now.Weather, _hiddenState.Weather, margin);
+                margin) && Holds(now.Weather, _hiddenState.Weather, margin);
             if (!same)
             {
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -278,10 +278,10 @@ internal sealed unsafe class GiProbes : IDisposable
                             // Nearer than the nearest hide distance (in x, z alone, a lower bound of the box's distance): nothing there can be
                             // hidden.
                             float dx = MathF.Max(MathF.Abs(x0 + i * s - eye.X) - across, 0), dz = MathF.Max(MathF.Abs(z0 + k * s - eye.Z) - across,
-                                    0);
+                                0);
                             if (dx * dx + dz * dz < nearest * nearest) { _hiddenLayers[column] = 0; continue; }
                             int layers = GiFogHide.HiddenLayers(fog.Covers, x0 + i * s, z0 + k * s, _baseHeights[column], s, sy, Layers,
-                                    fog.CullFloor, 2 * HiddenSlack);
+                                fog.CullFloor, 2 * HiddenSlack);
                             _hiddenLayers[column] = (byte)layers;
                             Hidden[c] += layers;
                         }
@@ -295,7 +295,7 @@ internal sealed unsafe class GiProbes : IDisposable
         else _hiddenValid = false;
         var list = new Span<uint>((void*)_lists[_slot].Mapped, Probes);
         Listed = GiFogHide.List(list, phases, phase, (uint)(Updates / phases), hide ? HiddenPeriod : 0, FarPeriod, _hiddenLayers, [_grid[1].X,
-                _grid[1].Y, _grid[3].X, _grid[3].Y]);
+            _grid[1].Y, _grid[3].X, _grid[3].Y]);
     }
 
     /// <summary>
@@ -307,7 +307,7 @@ internal sealed unsafe class GiProbes : IDisposable
         var trace = _ctx.Shaders.Compute(GiShaders.ProbeTrace(rays), "gi probe trace " + rays,
         [
             (0, DescriptorType.AccelerationStructureKhr), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer), (3,
-                    DescriptorType.UniformBuffer),
+                DescriptorType.UniformBuffer),
             (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
             (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
             (10, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.CombinedImageSampler),
@@ -320,7 +320,7 @@ internal sealed unsafe class GiProbes : IDisposable
                     DescriptorType.StorageBuffer),
         ]);
         return _variants[rays] = (trace, blend, _ctx.Pipelines.Get(new ComputePipelineDesc(trace, "gi probe trace " + rays)),
-                _ctx.Pipelines.Get(new ComputePipelineDesc(blend, "gi probe blend " + rays)));
+            _ctx.Pipelines.Get(new ComputePipelineDesc(blend, "gi probe blend " + rays)));
     }
 
     /// <summary>
@@ -354,7 +354,7 @@ internal sealed unsafe class GiProbes : IDisposable
     /// <paramref name="scene"/>'s structure, after its <see cref="GiScene.Update"/>.
     /// </summary>
     public void Update(GiScene scene, Vector3 eye, HeightSnapshot heights, WorldLamps? lamps = null, FogVolumes? fog = null,
-            Vector3? interiorFocus = null)
+        Vector3? interiorFocus = null)
     {
         if (scene.Top is null) return;
         _slot = _ctx.Frame.Slot;
@@ -473,24 +473,24 @@ internal sealed unsafe class GiProbes : IDisposable
             var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(block.Handle.Index), block.Offset, (ulong)sizeof(Constants));
             var images = stackalloc DescriptorImageInfo[9];
             images[0] = new DescriptorImageInfo(_ctx.Device.SamplerAt(_linear.Index), _ctx.Device.ViewAt(_irradiance.View().Index),
-                    ImageLayout.General);
+                ImageLayout.General);
             images[1] = new DescriptorImageInfo(_ctx.Device.SamplerAt(_linear.Index), _ctx.Device.ViewAt(_distance.View().Index),
-                    ImageLayout.General);
+                ImageLayout.General);
             images[2] = new DescriptorImageInfo(_ctx.Device.SamplerAt(_nearest.Index), _ctx.Device.ViewAt(bases.View().Index), ImageLayout.General);
             images[3] = Image(g, "uAtmoIrradiance", cube: true);
             images[4] = Image(g, "uAtmoAmbientMap", cube: false);
             images[5] = ground.IsNull ? images[2] : new DescriptorImageInfo(_ctx.Device.SamplerAt(ground.Sampler.Index),
-                    _ctx.Device.ViewAt(ground.View.Index), ImageLayout.General);
+                _ctx.Device.ViewAt(ground.View.Index), ImageLayout.General);
             // The lamps' textures (a stand-in while there are none: the shader reads them only when LightGrid.w is set).
             if (lamps is not null)
             {
                 var (lampCells, lampIndex, lampData) = lamps.Current;
                 images[6] = new DescriptorImageInfo(_ctx.Device.SamplerAt(lamps.NearestSampler.Index), _ctx.Device.ViewAt(lampCells.View().Index),
-                        ImageLayout.General);
+                    ImageLayout.General);
                 images[7] = new DescriptorImageInfo(_ctx.Device.SamplerAt(lamps.NearestSampler.Index), _ctx.Device.ViewAt(lampIndex.View().Index),
-                        ImageLayout.General);
+                    ImageLayout.General);
                 images[8] = new DescriptorImageInfo(_ctx.Device.SamplerAt(lamps.NearestSampler.Index), _ctx.Device.ViewAt(lampData.View().Index),
-                        ImageLayout.General);
+                    ImageLayout.General);
             }
             else images[6] = images[7] = images[8] = images[2];
             var stateInfo = new DescriptorBufferInfo(_ctx.Device.BufferAt(_state.Handle.Index), 0, _state.Size);
@@ -606,7 +606,7 @@ internal sealed unsafe class GiProbes : IDisposable
     Matrix4x4 RandomRotation()
     {
         var axis = Vector3.Normalize(new Vector3(_random.NextSingle() * 2 - 1, _random.NextSingle() * 2 - 1,
-                _random.NextSingle() * 2 - 1) + new Vector3(1e-4f));
+            _random.NextSingle() * 2 - 1) + new Vector3(1e-4f));
         return Matrix4x4.CreateFromAxisAngle(axis, _random.NextSingle() * MathF.Tau);
     }
 

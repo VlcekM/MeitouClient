@@ -178,7 +178,7 @@ public sealed unsafe partial class WorldObjectRenderer
         var cmd = Gpu.BeginNative("building icon");
         var targets = PassTargets.Of(entry.Colour, entry.Depth);
         cmd.BeginRendering(new RenderingDesc(targets.Colour, targets.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, targets.Width,
-                targets.Height));
+            targets.Height));
         Gpu.BeginHostPass(cmd, targets, DrawState.Scene(targets.Formats));
         var rect = new PixelRect(0, 0, (uint)size, (uint)size);
         cmd.Clear(true, default, true, 1, rect);

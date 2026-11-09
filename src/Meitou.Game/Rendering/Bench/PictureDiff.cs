@@ -36,7 +36,7 @@ public static class PictureDiff
             heat[i + 3] = 255;
         }
         var result = new PictureDiffResult { Width = width, Height = height, Over1 = over1, Over4 = over4, Over12 = over12, MaxDiff = max,
-                MeanDiff = sum / (3.0 * width * height) };
+            MeanDiff = sum / (3.0 * width * height) };
         return (result, heat);
     }
 
