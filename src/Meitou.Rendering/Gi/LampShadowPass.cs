@@ -25,10 +25,12 @@ sealed unsafe class LampShadowPass : IDisposable
     readonly PenumbraFilter penumbra;
     readonly GpuProgram oneProgram, sumProgram;
     readonly GpuComputePipeline onePipeline, sumPipeline;
-    readonly List<(int Row, float Weight, Vector4 Area)> areas = [];
+    readonly List<(int Row, Vector4 Area, uint[] Cells, uint[] Wide)> areas = [];
+    readonly List<uint[]> cellPool = [];
+    int cellsUsed;
+    /// <summary>The side in pixels of the cells a lamp's pass works on; a mask holds 2048, a screen wider than that takes all its cells.</summary>
+    const int CellSize = 64, MaxCells = 2048;
     readonly List<(Vector3 Centre, float Radius)> movers = [];
-    /// <summary>The pixels a frame traces per lamp, in screens: past it the faintest lamps lose what moves' shadows.</summary>
-    const float ScreensPerFrame = 3;
     /// <summary>How far under a mover's sphere the ground is taken to be, for how far its shadow reaches.</summary>
     const float GroundMargin = 60;
 
@@ -63,6 +65,7 @@ sealed unsafe class LampShadowPass : IDisposable
     struct Params
     {
         public Vector4 LightGrid, Right, Up, Back, Eye, Origin, PlanesTan, Size, Rect;
+        public fixed uint Cells[64];
     }
 
     /// <summary>
@@ -167,7 +170,7 @@ sealed unsafe class LampShadowPass : IDisposable
         Clear(cmd, sum, 0);
         cmd.Barrier(BarrierBatch.Full);
         int margin = PenumbraFilter.RowMargin + PenumbraFilter.ColumnMargin;
-        foreach (var (row, _, area) in areas)
+        foreach (var (row, area, cells, wide) in areas)
         {
             var outer = new Vector4(MathF.Max(area.X - margin, 0), MathF.Max(area.Y - margin, 0), MathF.Min(area.Z + margin, w), MathF.Min(area.W + margin, h));
             var parameters = new Params
@@ -182,14 +185,15 @@ sealed unsafe class LampShadowPass : IDisposable
                 Size = new Vector4(view.Size, TracedSunShaders.LampMovers, row),
                 Rect = outer,
             };
+            for (int i = 0; i < 64; i++) parameters.Cells[i] = wide[i];
             var constants = ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
             Push(cmd, scene, lamps, depth, surface, lost, light, light, constants, oneProgram, true);
             cmd.BindPipeline(onePipeline);
             cmd.BindBindlessTable(oneProgram, 1, GpuBindPoint.Compute);
             cmd.Dispatch((uint)(((int)(outer.Z - outer.X) + 7) / 8), (uint)(((int)(outer.W - outer.Y) + 7) / 8));
             cmd.Barrier(BarrierBatch.Full);
-            penumbra.RunArea(cmd, new PenumbraTargets(depth, surface, lost, scratch, filtered, w, h), inverse, view.Footprint, area);
-            Sum(cmd, filtered, light, sum, area);
+            penumbra.RunArea(cmd, new PenumbraTargets(depth, surface, lost, scratch, filtered, w, h), inverse, view.Footprint, area, wide, cells);
+            Sum(cmd, filtered, light, sum, area, cells, view.Size);
             cmd.Barrier(BarrierBatch.Full);
         }
         Clear(cmd, filtered, 1);
@@ -206,14 +210,23 @@ sealed unsafe class LampShadowPass : IDisposable
         ctx.Device.Vk.CmdClearColorImage(cmd.Handle, ctx.Device.NativeImage(target), ImageLayout.General, &clear, 1, &range);
     }
 
-    void Sum(CommandList cmd, GpuTexture flag, GpuTexture light, GpuTexture sum, Vector4 area)
+    [StructLayout(LayoutKind.Sequential)]
+    struct SumParams
     {
-        var constants = ctx.Frame.Constants.Write<Vector4>(new ReadOnlySpan<Vector4>(&area, 1), 256);
+        public Vector4 Rect, Size;
+        public fixed uint Cells[64];
+    }
+
+    void Sum(CommandList cmd, GpuTexture flag, GpuTexture light, GpuTexture sum, Vector4 area, uint[] cells, Vector2 size)
+    {
+        var parameters = new SumParams { Rect = area, Size = new Vector4(size, 0, 0) };
+        for (int i = 0; i < 64; i++) parameters.Cells[i] = cells[i];
+        var constants = ctx.Frame.Constants.Write<SumParams>(new ReadOnlySpan<SumParams>(&parameters, 1), 256);
         var images = stackalloc DescriptorImageInfo[3];
         images[0] = Image(flag);
         images[1] = Image(light);
         images[2] = new DescriptorImageInfo(default, ctx.Device.ViewAt(sum.View().Index), ImageLayout.General);
-        var uniform = new DescriptorBufferInfo(ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, 16);
+        var uniform = new DescriptorBufferInfo(ctx.Device.BufferAt(constants.Handle.Index), constants.Offset, (ulong)sizeof(SumParams));
         var writes = stackalloc WriteDescriptorSet[4];
         writes[0] = Sampled(0, &images[0]);
         writes[1] = Sampled(1, &images[1]);
@@ -224,11 +237,12 @@ sealed unsafe class LampShadowPass : IDisposable
         cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
     }
 
-    /// <summary>For each lamp something moving stands in, the part of the screen its shadow can fall on, strongest lamps first within the frame's pixels.</summary>
+    /// <summary>For each lamp something moving stands in, the part of the screen its shadow can fall on.</summary>
     void PlanAreas(GiScene scene, WorldLamps lamps, in LampShadowView view, in Matrix4x4 inverse)
     {
         areas.Clear();
         movers.Clear();
+        cellsUsed = 0;
         scene.CollectMovers(movers);
         if (movers.Count == 0 || !Matrix4x4.Invert(inverse, out var toClip)) return;
         for (int row = 0; row < lamps.InGrid; row++)
@@ -236,29 +250,57 @@ sealed unsafe class LampShadowPass : IDisposable
             var l = lamps.RowLamp(row);
             Vector4 box = new(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
             bool any = false;
+            uint[] cells = NextCells();
             foreach (var (centre, radius) in movers)
             {
                 // Each mover apart: one whose shadow stays off the screen must not stretch the lamp's area across it.
                 Vector4 own = new(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
                 if (!Cover(l, centre, radius, view, toClip, ref own) || own.Z <= 0 || own.W <= 0 || own.X >= view.Size.X || own.Y >= view.Size.Y) continue;
                 box = new Vector4(MathF.Min(box.X, own.X), MathF.Min(box.Y, own.Y), MathF.Max(box.Z, own.Z), MathF.Max(box.W, own.W));
+                MarkCells(cells, own, view.Size);
                 any = true;
             }
-            if (!any) continue;
+            if (!any) { cellsUsed--; continue; }
             var area = new Vector4(MathF.Floor(MathF.Max(box.X, 0)), MathF.Floor(MathF.Max(box.Y, 0)), MathF.Ceiling(MathF.Min(box.Z, view.Size.X)), MathF.Ceiling(MathF.Min(box.W, view.Size.Y)));
-            if (area.Z <= area.X || area.W <= area.Y) continue;
-            areas.Add((row, l.Intensity * l.Radius / (50 + MathF.Max(Vector3.Distance(view.Eye, l.Position) - l.Radius, 0)), area));
+            if (area.Z <= area.X || area.W <= area.Y) { cellsUsed--; continue; }
+            areas.Add((row, area, cells, Grown(cells, view.Size)));
         }
-        areas.Sort((a, b) => b.Weight.CompareTo(a.Weight));
-        float budget = ScreensPerFrame * view.Size.X * view.Size.Y;
-        int margin = PenumbraFilter.RowMargin + PenumbraFilter.ColumnMargin, kept = 0;
-        foreach (var (_, _, area) in areas)
-        {
-            budget -= (area.Z - area.X + 2 * margin) * (area.W - area.Y + 2 * margin);
-            if (budget < 0 && kept > 0) break;
-            kept++;
-        }
-        areas.RemoveRange(kept, areas.Count - kept);
+    }
+
+    uint[] NextCells()
+    {
+        if (cellsUsed == cellPool.Count) cellPool.Add(new uint[64]);
+        var cells = cellPool[cellsUsed++];
+        Array.Clear(cells);
+        return cells;
+    }
+
+    static void MarkCells(uint[] cells, Vector4 box, Vector2 size)
+    {
+        int wide = ((int)size.X + CellSize - 1) / CellSize, high = ((int)size.Y + CellSize - 1) / CellSize;
+        if (wide * high > MaxCells) { Array.Fill(cells, uint.MaxValue); return; }
+        int x0 = Math.Clamp((int)box.X / CellSize, 0, wide - 1), x1 = Math.Clamp((int)box.Z / CellSize, 0, wide - 1);
+        int y0 = Math.Clamp((int)box.Y / CellSize, 0, high - 1), y1 = Math.Clamp((int)box.W / CellSize, 0, high - 1);
+        for (int y = y0; y <= y1; y++)
+            for (int x = x0; x <= x1; x++)
+                cells[(y * wide + x) / 32] |= 1u << ((y * wide + x) % 32);
+    }
+
+    /// <summary>The cells and their neighbours: what the rays must have done round a filtered cell.</summary>
+    uint[] Grown(uint[] cells, Vector2 size)
+    {
+        var grown = NextCells();
+        int wide = ((int)size.X + CellSize - 1) / CellSize, high = ((int)size.Y + CellSize - 1) / CellSize;
+        if (wide * high > MaxCells) { Array.Fill(grown, uint.MaxValue); return grown; }
+        for (int y = 0; y < high; y++)
+            for (int x = 0; x < wide; x++)
+            {
+                if ((cells[(y * wide + x) / 32] >> ((y * wide + x) % 32) & 1) == 0) continue;
+                for (int ny = Math.Max(y - 1, 0); ny <= Math.Min(y + 1, high - 1); ny++)
+                    for (int nx = Math.Max(x - 1, 0); nx <= Math.Min(x + 1, wide - 1); nx++)
+                        grown[(ny * wide + nx) / 32] |= 1u << ((ny * wide + nx) % 32);
+            }
+        return grown;
     }
 
     /// <summary>Grows <paramref name="box"/> (pixels) by where a sphere's shadow from <paramref name="l"/> can fall: the sphere and its shadow's end on the ground under it, or the lamp's reach. False: the lamp cannot reach it.</summary>

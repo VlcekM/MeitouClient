@@ -218,7 +218,18 @@ static class LampShadowShaders
             vec2 uFullSize;
             vec2 uRayMask;      // x: the instances the rays see, y: the lamp
             vec4 uRect;
+            uvec4 uCells[16];
         };
+        #define CELLS uCells
+        #define CELL_WIDTH ((int(uFullSize.x) + 63) / 64)
+
+        // The cells of 64 pixels this lamp's pass works on (LampShadowPass.CellSize): the mover-free rest of its area costs a test.
+        bool cellOn(ivec2 q)
+        {
+            ivec2 c = q / 64;
+            int i = c.y * CELL_WIDTH + c.x;
+            return ((CELLS[i / 128][(i / 32) % 4] >> uint(i % 32)) & 1u) != 0u;
+        }
         layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uLost;
         layout(set = 0, binding = 9, rgba16f) uniform writeonly image2D uTotal;
         layout(set = 0, binding = 11) uniform sampler2D uLampTiles;
@@ -245,7 +256,7 @@ static class LampShadowShaders
         void main()
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(uRect.xy);
-            if (px.x >= int(uRect.z) || px.y >= int(uRect.w)) return;
+            if (px.x >= int(uRect.z) || px.y >= int(uRect.w) || !cellOn(px)) return;
             vec4 lost = vec4(0.0, 0.0, 0.0, -1.0);
             vec3 total = vec3(0.0);
             uvec4 surface = texelFetch(uAlbedo, px, 0);
@@ -280,11 +291,21 @@ static class LampShadowShaders
         layout(set = 0, binding = 0) uniform sampler2D uFlag;
         layout(set = 0, binding = 1) uniform sampler2D uLight;
         layout(set = 0, binding = 2, rgba16f) uniform image2D uSum;
-        layout(set = 0, binding = 3, std140) uniform Params { vec4 uRect; };
+        layout(set = 0, binding = 3, std140) uniform Params { vec4 uRect; vec4 uSize; uvec4 uCells[16]; };
+        #define CELLS uCells
+        #define CELL_WIDTH ((int(uSize.x) + 63) / 64)
+
+        // The cells of 64 pixels this lamp's pass works on (LampShadowPass.CellSize): the mover-free rest of its area costs a test.
+        bool cellOn(ivec2 q)
+        {
+            ivec2 c = q / 64;
+            int i = c.y * CELL_WIDTH + c.x;
+            return ((CELLS[i / 128][(i / 32) % 4] >> uint(i % 32)) & 1u) != 0u;
+        }
         void main()
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(uRect.xy);
-            if (px.x >= int(uRect.z) || px.y >= int(uRect.w)) return;
+            if (px.x >= int(uRect.z) || px.y >= int(uRect.w) || !cellOn(px)) return;
             float flag = texelFetch(uFlag, px, 0).r;
             if (flag <= 0.0) return;
             imageStore(uSum, px, imageLoad(uSum, px) + vec4(flag * texelFetch(uLight, px, 0).rgb, 0.0));

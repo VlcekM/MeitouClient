@@ -38,7 +38,18 @@ sealed unsafe class PenumbraFilter : IDisposable
             vec4 size;         // width, height, a pixel's width per unit of depth, the pass (0 along rows, then 1 along columns)
             vec4 options;      // x: the blue channel names what the channels hold; only taps with the pixel's own name are read
             vec4 area;         // the pixels filtered: first x, y, one past the last x, y
+            uvec4 cells[16];   // with options.y: the cells worked on, a bit each
         } p;
+        #define CELLS p.cells
+        #define CELL_WIDTH ((int(p.size.x) + 63) / 64)
+
+        // The cells of 64 pixels this lamp's pass works on (LampShadowPass.CellSize): the mover-free rest of its area costs a test.
+        bool cellOn(ivec2 q)
+        {
+            ivec2 c = q / 64;
+            int i = c.y * CELL_WIDTH + c.x;
+            return ((CELLS[i / 128][(i / 32) % 4] >> uint(i % 32)) & 1u) != 0u;
+        }
 
         vec3 pointAt(ivec2 px)
         {
@@ -101,10 +112,23 @@ sealed unsafe class PenumbraFilter : IDisposable
         {
             ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(p.area.xy);
             if (!inside(px) || px.x >= int(p.area.z) || px.y >= int(p.area.w)) return;
+            if (p.options.y > 0.5 && !cellOn(px)) return;
             vec4 c = texelFetch(uIn, px, 0);
             ownName = c.b;
             bool rows = p.size.w < 0.5;
             if (c.a < 0.0) { imageStore(uOut, px, c); return; }   // no receiver: kept, and left out of its neighbours
+            if (!rows && c.a <= 0.0) { imageStore(uOut, px, vec4(c.rgb, 0.0)); return; }
+            if (rows && c.a <= 0.0)
+            {
+                bool blocker = false;
+                for (int k = 0; k < {{SearchTaps}} && !blocker; k++)
+                {
+                    float r = sqrt((float(k) + 0.5) / {{SearchTaps}}.0), a = float(k) * 2.39996323;
+                    ivec2 q = px + ivec2(round(vec2(cos(a), sin(a)) * r * {{F(Search)}}));
+                    blocker = inside(q) && texelFetch(uIn, q, 0).a > 0.0;
+                }
+                if (!blocker) { imageStore(uOut, px, vec4(c.rgb, 0.0)); return; }
+            }
             vec3 at = pointAt(px);
             float footprint = length(at) * p.size.z;
             vec3 n = plane(px, at);
@@ -141,6 +165,7 @@ sealed unsafe class PenumbraFilter : IDisposable
     {
         public Matrix4x4 Inverse;
         public Vector4 Size, Options, Area;
+        public fixed uint Cells[64];
     }
 
     readonly GpuContext ctx;
@@ -181,18 +206,22 @@ sealed unsafe class PenumbraFilter : IDisposable
     /// <summary>
     /// Both passes over <paramref name="area"/> alone (first x, y, one past the last x, y): the raw result must hold <see cref="RowMargin"/> + <see cref="ColumnMargin"/> pixels round it; the output holds only the area.
     /// </summary>
-    public void RunArea(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, Vector4 area)
+    /// <param name="wide">The cells the rows' pass works on (64 words): the area's cells grown by one.</param>
+    /// <param name="cells">The cells the columns' pass works on.</param>
+    public void RunArea(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, Vector4 area, uint[] wide, uint[] cells)
     {
         var rows = new Vector4(MathF.Max(area.X - ColumnMargin, 0), MathF.Max(area.Y - ColumnMargin, 0), MathF.Min(area.Z + ColumnMargin, t.Width), MathF.Min(area.W + ColumnMargin, t.Height));
-        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, false, rows);
+        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, false, rows, wide);
         cmd.Barrier(BarrierBatch.Full);
-        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, false, area);
+        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, false, area, cells);
         cmd.Barrier(BarrierBatch.Full);
     }
 
-    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named, Vector4 area)
+    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named, Vector4 area, uint[]? cells = null)
     {
-        var parameters = new Params { Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass), Options = new Vector4(named ? 1 : 0, 0, 0, 0), Area = area };
+        var parameters = new Params { Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass), Options = new Vector4(named ? 1 : 0, cells is null ? 0 : 1, 0, 0), Area = area };
+        if (cells is not null)
+            for (int i = 0; i < 64; i++) parameters.Cells[i] = cells[i];
         var constants = ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
         DescriptorImageInfo Sampled(GpuTexture texture) => new(ctx.Device.SamplerAt(sampler.Index), ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
         var images = stackalloc DescriptorImageInfo[4];
