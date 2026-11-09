@@ -74,6 +74,7 @@ public static class CameraPath
         if (n == 1) return keys[0].Shot;
         bool loop = loopBack is not null;
         float start = keys[0].Time, back = MathF.Max(loopBack ?? 0, 0.01f);
+
         // The key times on one lap, with the first key again at the lap's end.
         float T(int i) => i < n ? keys[i].Time : keys[0].Time + Duration(keys, back);
         if (loop)

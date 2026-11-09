@@ -271,14 +271,16 @@ public sealed class VramGuard
         if (_logged) return;
         _logged = true;
         _log?.Invoke(string.Create(CultureInfo.InvariantCulture,
-            $"vram      guard: device-local memory at {fraction * 100:0}% of the {_budget / 1048576} MB budget: new streaming paused (what is drawn loads small), idle textures and meshes evicted, " +
-            $"draw and streaming ranges clamped (x{_scale * StepDown:0.00} and falling while over {Low * 100:0}%); the statistics show it, this line is not repeated"));
+            $"vram      guard: device-local memory at {fraction * 100:0}% of the {_budget / 1048576} MB budget: new streaming paused " +
+            $"(what is drawn loads small), idle textures and meshes evicted, draw and streaming ranges clamped (x{_scale * StepDown:0.00} " +
+            $"and falling while over {Low * 100:0}%); the statistics show it, this line is not repeated"));
     }
 
     void Step(double now)
     {
         if (_budget <= 0) return;
         double f = Fraction;
+
         // An allocation the driver refused since the last sample: pressure, whatever the use reads.
         int failures = Allocator?.Failures ?? 0;
         bool failed = failures != _seenFailures;

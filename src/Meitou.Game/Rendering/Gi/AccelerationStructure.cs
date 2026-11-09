@@ -39,6 +39,7 @@ public unsafe struct InstanceRecord
         {
             CustomIndexAndMask = (customIndex & 0xFFFFFF) | ((uint)mask << 24), OffsetAndFlags = (uint)flags << 24, Reference = blas,
         };
+
         // Vulkan's rows are the transposed columns of the row-vector matrix.
         r.Transform[0] = world.M11;
         r.Transform[1] = world.M21;

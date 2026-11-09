@@ -23,10 +23,13 @@ internal sealed class MetalSetLayout
     {
         var layout = new MetalSetLayout();
         foreach (Match set in Regex.Matches(msl, @"struct\s+spvDescriptorSetBuffer(?<set>\d+)\s*\{(?<body>[^}]*)\}"))
+        {
             layout._members[uint.Parse(set.Groups["set"].Value)] =
             [
                 .. Regex.Matches(set.Groups["body"].Value, @"\[\[id\((?<id>\d+)\)\]\]").Select(m => uint.Parse(m.Groups["id"].Value)),
             ];
+        }
+
         return layout;
     }
 
@@ -175,7 +178,12 @@ public sealed class MetalShaders : IGpuShaders
     {
         var prefix = new uint[TableCapacity.Length];
         uint sum = 0;
-        for (int k = 0; k < prefix.Length; k++) { prefix[k] = sum; sum += TableCapacity[k]; }
+        for (int k = 0; k < prefix.Length; k++)
+        {
+            prefix[k] = sum;
+            sum += TableCapacity[k];
+        }
+
         return prefix;
     }
 
@@ -235,11 +243,14 @@ public sealed class MetalShaders : IGpuShaders
         uint[] cap = TableCapacity, prefix = TablePrefix;
         for (int k = 0; k < cap.Length; k++)
         {
-            string decl = $"layout(set = {Frame.NativeShaders.BindlessSet}, binding = {k}) uniform {BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[];";
+            string decl = $"layout(set = {Frame.NativeShaders.BindlessSet}, binding = {k}) uniform " +
+                $"{BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[];";
 
             // A stage that does not include the table's text (the host's test programs) has nothing to rewrite.
             if (!glsl.Contains(decl)) continue;
-            glsl = glsl.Replace(decl, $"layout(set = {Frame.NativeShaders.BindlessSet}, binding = {prefix[k]}) uniform {BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[{cap[k]}];");
+            string sized = $"layout(set = {Frame.NativeShaders.BindlessSet}, binding = {prefix[k]}) uniform " +
+                $"{BindlessTable.GlslTypes[k]} {BindlessTable.GlslArrays[k]}[{cap[k]}];";
+            glsl = glsl.Replace(decl, sized);
         }
         return glsl;
     }
@@ -381,13 +392,20 @@ public sealed class MetalShaders : IGpuShaders
 
     public GpuProgram Native(string vertexGlsl, string fragmentGlsl, string name, GpuSetLayout[] setLayouts, uint pushConstantBytes)
     {
-        if (pushConstantBytes > 128) throw new ArgumentOutOfRangeException(nameof(pushConstantBytes), "push constants are limited to 128 bytes (the guaranteed minimum)");
+        if (pushConstantBytes > 128)
+            throw new ArgumentOutOfRangeException(nameof(pushConstantBytes), "push constants are limited to 128 bytes (the guaranteed minimum)");
+
         var (vs, fs) = InterfaceLocations.Apply(vertexGlsl, fragmentGlsl);
 
         // The bindless set's runtime arrays are Metal 3 tier-2 argument buffers (docs/metal-backend.md); only a program
         // whose layout includes the table is translated with them, and only its shared text needs the rewrite.
         bool bindless = Array.Exists(setLayouts, l => ReferenceEquals(l, GpuSetLayout.Bindless));
-        if (bindless) { vs = RewriteBindless(vs); fs = RewriteBindless(fs); }
+        if (bindless)
+        {
+            vs = RewriteBindless(vs);
+            fs = RewriteBindless(fs);
+        }
+
         var v = SpirvPatch.RemapBindings(Compiler.CompileNative(vs, fragment: false), VertexBlockBase, 0, SetStride);
         if (bindless) v = SpirvPatch.BindlessFetchImages(v, Frame.NativeShaders.BindlessSet, TableTotal);
         var f = SpirvPatch.RemapBindings(Compiler.CompileNative(fs, fragment: true), 0, 0, SetStride);
@@ -401,8 +419,13 @@ public sealed class MetalShaders : IGpuShaders
         var rv = SpirvReflection.Parse(v);
         var rf = SpirvReflection.Parse(f);
         foreach (var block in rv.Blocks.Concat(rf.Blocks))
+        {
             if (block.Kind == BlockKind.PushConstant && block.Size > pushConstantBytes)
-                throw new InvalidOperationException($"{name}: push-constant block '{block.Name}' is {block.Size} bytes, the layout's range {pushConstantBytes}");
+            {
+                throw new InvalidOperationException(
+                    $"{name}: push-constant block '{block.Name}' is {block.Size} bytes, the layout's range {pushConstantBytes}");
+            }
+        }
 
         var info = new ProgramInfo
         {

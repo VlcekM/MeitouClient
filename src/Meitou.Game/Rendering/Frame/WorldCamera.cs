@@ -124,6 +124,7 @@ public sealed class WorldCamera
         var c2 = new Vector4(m.M12, m.M22, m.M32, m.M42);
         var c3 = new Vector4(m.M13, m.M23, m.M33, m.M43);
         var c4 = new Vector4(m.M14, m.M24, m.M34, m.M44);
+
         // Clip volume 0 <= z <= w for any 0..1 depth matrix: the same two planes (c3, c4 - c3) for the standard and the reversed
         // one (only which of them is the near plane swaps).
         return [c4 + c1, c4 - c1, c4 + c2, c4 - c2, c3, c4 - c3];

@@ -138,6 +138,7 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     readonly delegate* unmanaged<nint*, void*, uint> _configure;
     static delegate* unmanaged<nint*, void*, uint> s_dispatchFunction;   // the callback has no way to carry it
     readonly bool _debug;
+
     // Kept as long as the context (ffx_api.h); the slot also is the callback's user context.
     readonly CreateDesc* _createDesc;
     readonly BackendVkDesc* _backendDesc;
@@ -273,6 +274,7 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     void DestroyContext(bool configureOff = true)
     {
         if (*_contextSlot == 0) return;
+
         // The layer may still call back into it from a present in flight: configure it off, wait for the device, then destroy.
         if (configureOff) ConfigureFrame(false, _frameId);
         _device.WaitIdle();
@@ -318,6 +320,7 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         };
         blit.SrcOffsets[0] = new Offset3D(0, 0, 0);
         blit.SrcOffsets[1] = new Offset3D(w, h, 1);
+
         // Row 0 of the destination is the last row of the source.
         blit.DstOffsets[0] = new Offset3D(0, h, 0);
         blit.DstOffsets[1] = new Offset3D(w, 0, 1);
@@ -334,7 +337,8 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         if (slot is null || slot.Desc.Width != w || slot.Desc.Height != h || slot.Desc.Format != format)
         {
             slot?.Dispose();   // released after the frames in flight
-            slot = ctx.CreateTexture(new TextureDesc(format, w, h, Use: TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst, Name: name));
+            slot = ctx.CreateTexture(new TextureDesc(format, w, h, Use: TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst,
+                Name: name));
         }
         return slot;
     }

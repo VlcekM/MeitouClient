@@ -256,8 +256,11 @@ public sealed unsafe class CommandList : IGpuCommandList
         if (colour)
             attachments[n++] = new ClearAttachment(ImageAspectFlags.ColorBit, 0, new ClearValue(colourValue.Vk));
         if (depth)
+        {
             attachments[n++] = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(depthValue,
                     0)));
+        }
+
         if (n == 0) return;
         var area = new ClearRect(GlConventions.VkRect(rect), 0, 1);
         _vk.CmdClearAttachments(Handle, n, attachments, 1, &area);
@@ -356,8 +359,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         for (int i = 0; i < sets.Length; i++) resolved[i] = _device.SetAt(sets[i].Index);
         fixed (DescriptorSet* ps = resolved)
         fixed (uint* po = dynamicOffsets)
+        {
             _cmdBindDescriptorSets(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, first, (uint)sets.Length, ps,
                     (uint)dynamicOffsets.Length, po);
+        }
     }
 
     static PipelineBindPoint VkBindPoint(GpuBindPoint point) =>
@@ -421,6 +426,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         }
         var vp = _ctx.Shaders.Backend(program);
         var point = vp.ComputeCode is not null ? PipelineBindPoint.Compute : PipelineBindPoint.Graphics;
+
         // Pushed only into a layout made for it (a set too large for the device's push limit, or not per draw, is not one).
         if (_push is not null && _ctx.Shaders.Pushes(vp, set))
         {
@@ -428,6 +434,7 @@ public sealed unsafe class CommandList : IGpuCommandList
             Stats.DescriptorPushes++;
             return;
         }
+
         // Otherwise the set is written and bound (the frame's pools free it when the slot comes round). Bound by its own handle, not
         // through the device's set table: a set per draw would grow the table every frame. Safe on a recording job's thread.
         var allocated = _ctx.Frame.AllocateSetAnyThread(vp.SetLayouts[set]);
@@ -766,6 +773,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     public void Timestamp(IGpuTimestamps arena, in QuerySlot slot, GpuStage stage = GpuStage.All)
     {
         if (!slot.IsValid || arena is not QueryArena pools) return;
+
         // A timestamp names one stage: a single shader stage as itself, any combination (GpuStage.All, the default) as all commands.
         var vkStage = stage switch
         {

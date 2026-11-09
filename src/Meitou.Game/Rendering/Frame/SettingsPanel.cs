@@ -204,6 +204,7 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         _panelY1 = NoticeBottom + Pad;
         if (_open >= 0) _panelX1 = Math.Max(_panelX1, ChoiceX(_open) + ListWidth + Pad);
         if (_choices.Count > 0) _panelX1 = Math.Max(_panelX1, ChoiceX(_choices.Count) + Pad);
+
         // A long question or result widens the panel.
         if (Notice is { } notice)
             _panelX1 = Math.Max(_panelX1, (_confirming >= 0 ? NoX + BoxWidth(No) : _panelX0 + Pad + notice.Length * overlay.CharWidth) + Pad);
@@ -239,30 +240,39 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
             _open = -1;
             float x = ChoiceX(was);
             for (int k = 0; k < _openOptions.Count; k++)
+            {
                 if (In(p, x, ListTop + k * ToggleHeight, x + ListWidthFor(was), ListTop + (k + 1) * ToggleHeight))
                 {
                     _message = _choices[was].Choose(k);
                     return true;
                 }
+            }
+
             if (In(p, x, ButtonTop, x + BoxWidth(ChoiceText(_choices[was])), ButtonBottom)) return true;
         }
         for (int i = 0; i < _choices.Count; i++)
+        {
             if (In(p, ChoiceX(i), ButtonTop, ChoiceX(i) + BoxWidth(ChoiceText(_choices[i])), ButtonBottom))
             {
                 (_open, _openOptions) = (i, _choices[i].Options());
                 return true;
             }
+        }
+
         if (p.Y >= ButtonTop && p.Y <= ButtonBottom && p.X >= _panelX0 + Pad && p.X <= _panelX0 + Pad + ButtonWidth)
         {
             Reset();
             return true;
         }
         for (int i = 0; i < _actions.Count; i++)
+        {
             if (In(p, ActionX(i), ButtonTop, ActionX(i) + BoxWidth(_actions[i].Label), ButtonBottom))
             {
                 (_confirming, _question) = (i, _actions[i].Question());
                 return true;
             }
+        }
+
         for (int i = 0; i < _toggles.Count; i++)
         {
             float top = ToggleTop(i), x = ToggleX(i);
@@ -386,8 +396,10 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
             int current = _choices[_open].Current();
             overlay.Rect(x, ListTop, x + w, ListTop + ListHeight, new Vector4(0.12f, 0.12f, 0.13f, 1));
             for (int k = 0; k < _openOptions.Count; k++)
+            {
                 overlay.Text((k == current ? "x " : "  ") + _openOptions[k], x + 8, ListTop + k * ToggleHeight + 4,
                         k == current ? fill : DebugOverlay.TextColour);
+            }
         }
     }
 

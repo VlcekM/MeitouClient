@@ -105,7 +105,8 @@ public sealed record DrawState(CullMode Cull, FrontFaceDirection Front, bool Dep
     /// <summary>
     /// The pipeline for <paramref name="program"/> with this state.
     /// </summary>
-    public GraphicsPipelineDesc Pipeline(GpuProgram program, VertexLayout vertex, PrimitiveType topology, AttachmentFormats targets, string name = "") =>
+    public GraphicsPipelineDesc Pipeline(GpuProgram program, VertexLayout vertex, PrimitiveType topology, AttachmentFormats targets,
+        string name = "") =>
         new(program, vertex, topology, targets, Blend, ColourMask, Polygon, AlphaToCoverage, DepthClamp, name);
 
     /// <summary>

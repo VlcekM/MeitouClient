@@ -204,7 +204,8 @@ public sealed unsafe class MetalDisplay : IDisposable
             if (now - _noDrawableStamp > Stopwatch.Frequency)
             {
                 _noDrawableStamp = now;
-                Console.WriteLine($"metal     no drawable: window {Window.Size.X}x{Window.Size.Y} points, framebuffer {Window.FramebufferSize.X}x{Window.FramebufferSize.Y} pixels");
+                Console.WriteLine($"metal     no drawable: window {Window.Size.X}x{Window.Size.Y} points, " +
+                    $"framebuffer {Window.FramebufferSize.X}x{Window.FramebufferSize.Y} pixels");
             }
             return false;
         }

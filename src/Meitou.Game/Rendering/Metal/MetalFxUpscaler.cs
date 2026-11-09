@@ -132,7 +132,8 @@ public sealed class MetalFxUpscaler : IUpscaler
         _inputHeight = height;
         _outputWidth = displayWidth;
         _outputHeight = displayHeight;
-        Console.WriteLine($"metal     MetalFX temporal {width}x{height} -> {displayWidth}x{displayHeight}{(displayWidth > 2 * width || displayHeight > 2 * height ? " (below 0.50)" : "")}");
+        Console.WriteLine($"metal     MetalFX temporal {width}x{height} -> {displayWidth}x{displayHeight}" +
+            $"{(displayWidth > 2 * width || displayHeight > 2 * height ? " (below 0.50)" : "")}");
         return true;
     }
 

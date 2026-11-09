@@ -46,8 +46,7 @@ sealed class SkinScattering : IDisposable
             _texture = batch.Create(new TextureDesc(InternalFormat.Rgba16F, Width, Height, Name: "skin scattering"));
             batch.Write(_texture, 0, 0, new PixelRect(0, 0, Width, Height), System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.AsSpan()));
         }
-        var sampler = gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+        var sampler = gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear));
         Index = gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, _texture.View()));
     }
 

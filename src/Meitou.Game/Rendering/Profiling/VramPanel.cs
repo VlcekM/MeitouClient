@@ -73,8 +73,11 @@ sealed class VramPanel(GpuContext native)
             $"(memory budget extension: {native.Device.HasMemoryBudget})");
         var heaps = native.Device.Heaps();
         for (int i = 0; i < heaps.Count; i++)
+        {
             w.WriteLine($"  heap {i}: {heaps[i].Size / 1048576.0:0} MB, ours {heaps[i].Usage / 1048576.0:0.0} MB " +
                 $"of budget {heaps[i].Budget / 1048576.0:0.0} MB ({heaps[i].Flags})");
+        }
+
         ulong local = (ulong)alloc.Breakdown().Sum(o => (double)o.DeviceLocal) + empty + spare + scattered;
         string ours = $"ours: {blocks / 1048576.0:0.0} MB in {alloc.BlockCount} blocks ({local / 1048576.0:0.0} MB device-local), " +
             $"{alloc.TotalUsedBytes / 1048576.0:0.0} MB used by {alloc.AllocationCount} allocations; ";

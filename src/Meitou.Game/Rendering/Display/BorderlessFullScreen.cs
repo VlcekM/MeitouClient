@@ -121,7 +121,8 @@ public static class BorderlessFullScreen
         window.WindowBorder = WindowBorder.Hidden;
         window.Position = origin;
         window.Size = size;
-        Console.WriteLine($"window    borderless full screen {size.X} x {size.Y} at {origin.X},{origin.Y} (monitor work area {monitor.Bounds.Size.X} x {monitor.Bounds.Size.Y} at {monitor.Bounds.Origin.X},{monitor.Bounds.Origin.Y})");
+        Console.WriteLine($"window    borderless full screen {size.X} x {size.Y} at {origin.X},{origin.Y} " +
+            $"(monitor work area {monitor.Bounds.Size.X} x {monitor.Bounds.Size.Y} at {monitor.Bounds.Origin.X},{monitor.Bounds.Origin.Y})");
     }
 
     /// <summary>
@@ -138,13 +139,20 @@ public static class BorderlessFullScreen
             for (int i = 0; i < count; i++)
             {
                 glfw.GetMonitorWorkarea(monitors[i], out int x, out int y, out int w, out int h);
-                if (centre.X >= x && centre.X < x + w && centre.Y >= y && centre.Y < y + h) { found = monitors[i]; break; }
+                if (centre.X >= x && centre.X < x + w && centre.Y >= y && centre.Y < y + h)
+                {
+                    found = monitors[i];
+                    break;
+                }
             }
             if (found == null) found = glfw.GetPrimaryMonitor();
             if (found == null) return null;
             glfw.GetMonitorPos(found, out int px, out int py);
             return new Vector2D<int>(px, py);
         }
-        catch (Exception e) when (e is NotSupportedException or DllNotFoundException or EntryPointNotFoundException) { return null; }
+        catch (Exception e) when (e is NotSupportedException or DllNotFoundException or EntryPointNotFoundException)
+        {
+            return null;
+        }
     }
 }

@@ -125,7 +125,12 @@ public sealed class WorldTexture
     /// <summary>
     /// A user that just appeared (a new instance resolved): the need drops at once, before the pass that would find it.
     /// </summary>
-    public void OfferNow(float need) { if (need < Need) Need = need; if (need < NeedPass) NeedPass = need; }
+    public void OfferNow(float need)
+    {
+        if (need < Need) Need = need;
+        if (need < NeedPass) NeedPass = need;
+    }
+
     internal Residency State;
 
     /// <summary>
@@ -416,6 +421,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
         _cache[key] = t = new WorldTexture { Border = border, Owner = this, Name = name, LastUsed = Environment.TickCount64 };
         _byNumber.Add(t);
         t.Number = (uint)_byNumber.Count;
+
         // The game reduces texture fields to the bare file name (runtime-materials.md); a path still works.
         t.Path = _assets.Find(Path.GetFileName(name.Replace('\\', '/'))) ?? _assets.Find(name);
         if (t.Path is null)
@@ -424,8 +430,14 @@ public sealed unsafe class WorldTextureCache : IDisposable
             if (ShouldWarnMissing(name)) Messages.Add($"texture not found: {name}");
             return t;
         }
+
         // loaded when its key is read (and the guard lets it)
-        if (deferred || !MayStart(t, out bool lean)) { t.State = WorldTexture.Residency.Unloaded; return t; }
+        if (deferred || !MayStart(t, out bool lean))
+        {
+            t.State = WorldTexture.Residency.Unloaded;
+            return t;
+        }
+
         Start(t, lean: lean);
         return t;
     }
@@ -448,8 +460,15 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (guard.Streaming)
         {
             long bytes;
-            try { bytes = new FileInfo(t.Path!).Length; }
-            catch (IOException) { bytes = 4 << 20; }
+            try
+            {
+                bytes = new FileInfo(t.Path!).Length;
+            }
+            catch (IOException)
+            {
+                bytes = 4 << 20;
+            }
+
             // What is loading is not in the guard's sample yet (the image is made when its decode lands): it counts against the room too.
             if (guard.Allows((ulong)bytes, (ulong)_inFlight))
             {
@@ -487,6 +506,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
             (t.BiasA, t.IndexA, t.BiasB, t.IndexB) = (t.BiasB, t.IndexB, t.BiasA, t.IndexA);
             return t.IndexA;
         }
+
         // A bias not seen yet: a new entry (the older of the two goes after the frames in flight; draws recorded earlier keep theirs).
         if (t.HasB) _gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexB);
         (t.BiasB, t.IndexB, t.HasB) = (t.BiasA, t.IndexA, t.HasA);
@@ -513,6 +533,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     internal void Start(WorldTexture t, bool replacing = false, bool lean = false)
     {
         string path = t.Path!, name = t.Name;
+
         // The levels dropped on top of the quality setting's are decided on the worker once the file's size is known, from what the owner says
         // about how near the texture is used now.
         int quality = TextureQuality.LevelsToDrop(Path.GetFileName(path), _assets.Configured.GroupOfFile(path));
@@ -520,7 +541,12 @@ public sealed unsafe class WorldTextureCache : IDisposable
         t.QualityLevel = TextureQuality.Level;
         float need = t.KeepAllMips ? float.PositiveInfinity : t.Need;
         t.Lean = false;   // an image taken from another cache is not lean
-        if (!replacing && Shared(t, need, exact: false) is { } shared) { Adopt(t, shared); return; }
+        if (!replacing && Shared(t, need, exact: false) is { } shared)
+        {
+            Adopt(t, shared);
+            return;
+        }
+
         bool enabled = Mips.Enabled;
         float perDistance = Mips.PixelsPerDistance, bias = Mips.Bias;
         int extra = Mips.Extra, leanSize = lean ? LeanSize : 0;
@@ -530,16 +556,27 @@ public sealed unsafe class WorldTextureCache : IDisposable
         Func<TextureData?> load = () =>
         {
             TextureData data;
-            try { data = Load(path, quality, need, enabled, perDistance, bias, extra, leanSize); }
+            try
+            {
+                data = Load(path, quality, need, enabled, perDistance, bias, extra, leanSize);
+            }
             catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException)
             {
                 lock (Messages) Messages.Add($"texture {name}: {e.Message}");
                 return null;
             }
+
             // The image is made here too: a large one gets memory of its own (given back the moment it is unloaded, so it leaves no hole), and
             // vkAllocateMemory takes from 0.3 ms to 50, which on the render thread would be a frame's.
-            try { data.Image = _gpu.CreateTextureOffThread(DescOf(path, data)); }
-            catch (VulkanException) { }   // no memory now: the render thread makes it (or fails) as it did
+            try
+            {
+                data.Image = _gpu.CreateTextureOffThread(DescOf(path, data));
+            }
+            catch (VulkanException)
+            {
+                // no memory now: the render thread makes it (or fails) as it did
+            }
+
             return data;
         };
         t.Pending = Urgent ? BackgroundWork.RunUrgent(load) : BackgroundWork.Run(load);
@@ -672,7 +709,12 @@ public sealed unsafe class WorldTextureCache : IDisposable
                 t.CannotDrop = true;
                 Landed(t);
             }
-            else { t.State = WorldTexture.Residency.Missing; Landed(t); }
+            else
+            {
+                t.State = WorldTexture.Residency.Missing;
+                Landed(t);
+            }
+
             t.Pending = null;
             _pending.RemoveAt(found);
             started++;
@@ -754,7 +796,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (t.HasA) _gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexA);
         if (t.HasB) _gpu.Bindless.Free(BindlessKind.Texture2D, t.IndexB);
         t.HasA = t.HasB = false;
-        if (t.Shared is { } shared) { Share!.Release(shared); t.Shared = null; }
+        if (t.Shared is { } shared)
+        {
+            Share!.Release(shared);
+            t.Shared = null;
+        }
         else t.Native?.Dispose();
         t.Native = null;
         Version++;
@@ -837,8 +883,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
     {
         string name = $"{_allocationName} | {Path.GetFileName(path)}";
         if (data.Compressed is { } dds)
+        {
             return new TextureDesc(FormatOf(dds.Format), dds.Width, dds.Height, FullChain(dds.Width, dds.Height),
                     Use: TextureUse.Sampled | TextureUse.TransferDst, Name: name, Streamed: true);
+        }
+
         var levels = data.Rgba.Levels;
         var top = levels[0];
         return new TextureDesc(InternalFormat.Rgba8, top.Width, top.Height, FullChain(top.Width, top.Height),
@@ -1012,7 +1061,12 @@ public sealed unsafe class WorldTextureCache : IDisposable
         }
         if (replaced && dropped == t.Dropped) t.CannotDrop = true;   // nothing changed: do not ask again
         t.CannotDrop |= !droppable;
-        if (t.Refine) { t.Refine = false; _governor.Refining--; }
+        if (t.Refine)
+        {
+            t.Refine = false;
+            _governor.Refining--;
+        }
+
         t.Replacing = false;
         t.TooFineSince = 0;
         t.Dropped = dropped;
@@ -1024,7 +1078,13 @@ public sealed unsafe class WorldTextureCache : IDisposable
     {
         long r = 0, g = 0, b = 0;
         var p = image.Pixels;
-        for (int i = 0; i < p.Length; i += 4) { r += p[i]; g += p[i + 1]; b += p[i + 2]; }
+        for (int i = 0; i < p.Length; i += 4)
+        {
+            r += p[i];
+            g += p[i + 1];
+            b += p[i + 2];
+        }
+
         long n = Math.Max(p.Length / 4, 1);
         return b / n < 180 && Math.Abs(r - b) / n < 8 && Math.Abs(g - b) / n < 8;
     }

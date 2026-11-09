@@ -8,10 +8,10 @@ namespace Meitou.Game.Rendering.Gpu;
 /// <summary>
 /// A guest's native segment, prepared on the render thread and recorded later, on any thread (docs/renderer-native.md 6.2, wave 4).
 /// <para>
-/// Prepare (the renderer, render thread, in the frame's order) does everything that reads or changes shared state: the GL mirror (<c>CurrentTargets</c>,
-/// <c>CurrentState</c>), the exports (<c>VertexArray</c>, <c>Bindless</c>, <c>Buffer</c>), pipelines, the frame's constants, the bindless table, counters;
-/// it stores the results in the job. <see cref="Record"/> then only turns them into commands: it may read the job and immutable objects (pipelines,
-/// buffers), nothing else. A job is handed to <see cref="GpuContext.Record"/> and released once recorded.
+/// Prepare (the renderer, render thread, in the frame's order) does everything that reads or changes shared state: the GL mirror
+/// (<c>CurrentTargets</c>, <c>CurrentState</c>), the exports (<c>VertexArray</c>, <c>Bindless</c>, <c>Buffer</c>), pipelines, the frame's constants,
+/// the bindless table, counters; it stores the results in the job. <see cref="Record"/> then only turns them into commands: it may read the job and
+/// immutable objects (pipelines, buffers), nothing else. A job is handed to <see cref="GpuContext.Record"/> and released once recorded.
 /// </para>
 /// </summary>
 public abstract class RecordJob
@@ -73,9 +73,8 @@ public static class Recording
 /// A native host's rendering instance whose contents are secondary command buffers (docs/renderer-native.md 6.1 and 6.4, wave 4): the host opens it
 /// on its primary with <see cref="Begin"/>, its guests add their prepared segments in the frame's order (<see cref="Add"/>, or
 /// <see cref="BeginInline"/> for code that records on the render thread at once: an unported guest, a timestamp), and <see cref="End"/> records the
-/// jobs (on the job threads in
-/// <see cref="Recording.Mode"/> 2) and executes every secondary in that order. The command stream inside each secondary is what the single-threaded code
-/// recorded for that segment, so the picture is the same.
+/// jobs (on the job threads in <see cref="Recording.Mode"/> 2) and executes every secondary in that order. The command stream inside each secondary
+/// is what the single-threaded code recorded for that segment, so the picture is the same.
 /// </summary>
 public sealed class ParallelPass
 {
@@ -151,7 +150,8 @@ public sealed class ParallelPass
     }
 
     /// <summary>
-    /// A secondary recorded on the render thread now (an unported guest's segment, a timestamp), executed in this order; end it with <see cref="EndInline"/>.
+    /// A secondary recorded on the render thread now (an unported guest's segment, a timestamp), executed in this order; end it with
+    /// <see cref="EndInline"/>.
     /// </summary>
     public CommandList BeginInline(string label)
     {

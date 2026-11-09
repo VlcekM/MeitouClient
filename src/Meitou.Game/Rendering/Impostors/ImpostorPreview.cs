@@ -12,11 +12,11 @@ using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
-/// The impostor check (docs/impostors.md, "Preview"), native (phase 8 stage 2): draws instances of one mesh either as meshes, with the world's foliage
-/// program (<see cref="FoliageShaders.MeshVertexNative"/>, instanced, the same material values as <see cref="FoliageRenderer"/>), or as impostors with the
-/// impostor program (<see cref="ImpostorDraw"/>) on the same instance rows, so the two can be compared picture for picture. Lighting is the mesh shader's
-/// direct path (no world sky): both go through the same formula from the same inputs. The caller records into a rendering of its own (<see cref="Begin"/>);
-/// a frame must be open. Render thread only.
+/// The impostor check (docs/impostors.md, "Preview"), native (phase 8 stage 2): draws instances of one mesh either as meshes, with the world's
+/// foliage program (<see cref="FoliageShaders.MeshVertexNative"/>, instanced, the same material values as <see cref="FoliageRenderer"/>), or as
+/// impostors with the impostor program (<see cref="ImpostorDraw"/>) on the same instance rows, so the two can be compared picture for picture.
+/// Lighting is the mesh shader's direct path (no world sky): both go through the same formula from the same inputs. The caller records into a
+/// rendering of its own (<see cref="Begin"/>); a frame must be open. Render thread only.
 /// </summary>
 internal sealed class ImpostorPreview : IDisposable
 {
@@ -75,7 +75,8 @@ internal sealed class ImpostorPreview : IDisposable
     }
 
     /// <summary>
-    /// The instances as meshes into the open rendering of <paramref name="cmd"/> (formats <paramref name="formats"/>), in <paramref name="viewport"/>.
+    /// The instances as meshes into the open rendering of <paramref name="cmd"/> (formats <paramref name="formats"/>), in
+    /// <paramref name="viewport"/>.
     /// </summary>
     public void DrawMeshes(IGpuCommandList cmd, AttachmentFormats formats, PixelViewport viewport, Matrix4x4 viewProjection, Vector3 eye, Vector3 light,
         ReadOnlySpan<Matrix4x4> instances, bool coverage)
@@ -94,8 +95,8 @@ internal sealed class ImpostorPreview : IDisposable
     /// <summary>
     /// The instances as impostors: one billboard each, the camera's up axis for the billboards' roll.
     /// </summary>
-    public void DrawImpostors(IGpuCommandList cmd, AttachmentFormats formats, PixelViewport viewport, Matrix4x4 viewProjection, Vector3 eye, Vector3 cameraUp,
-        Vector3 light, ReadOnlySpan<Matrix4x4> instances, bool coverage)
+    public void DrawImpostors(IGpuCommandList cmd, AttachmentFormats formats, PixelViewport viewport, Matrix4x4 viewProjection, Vector3 eye,
+        Vector3 cameraUp, Vector3 light, ReadOnlySpan<Matrix4x4> instances, bool coverage)
     {
         if (_atlas is null) return;
 
@@ -211,7 +212,8 @@ internal sealed class ImpostorPreview : IDisposable
     }
 
     /// <summary>
-    /// The mesh shader's push constants for a material (the texture indices resolved through the bindless table, the stand-in where nothing is bound).
+    /// The mesh shader's push constants for a material (the texture indices resolved through the bindless table, the stand-in where nothing is
+    /// bound).
     /// </summary>
     MeshPush PushFor(Material m, uint stand, bool coverage)
     {

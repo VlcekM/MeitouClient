@@ -67,14 +67,24 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
         {
             if (t.QualityLevel == level || t.State is WorldTexture.Residency.Missing or WorldTexture.Residency.Unloaded)
                 continue;
-            if (t.State != WorldTexture.Residency.Resident || t.Native is null || t.Replacing || t.Pending is not null) { done = false; continue; }
+            if (t.State != WorldTexture.Residency.Resident || t.Native is null || t.Replacing || t.Pending is not null)
+            {
+                done = false;
+                continue;
+            }
+
             if (TextureQuality.LevelsToDrop(Path.GetFileName(t.Path!), assets.Configured.GroupOfFile(t.Path!),
                     level) == t.QualityDrop || t.CannotDrop)
             {
                 t.QualityLevel = level;   // this file drops as many levels at the new setting (an _HI or _LO name, an exempt group)
                 continue;
             }
-            if (replacing >= MaxRefines || !cache.MayStart(t)) { done = false; continue; }
+            if (replacing >= MaxRefines || !cache.MayStart(t))
+            {
+                done = false;
+                continue;
+            }
+
             cache.Start(t, replacing: true);
             replacing++;
         }
@@ -84,8 +94,8 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
     /// <summary>
     /// Mip streaming: after <see cref="WorldTextureCache.CommitNeeds"/>, a resident texture whose image has more top levels dropped than it may now
     /// (something came near) is loaded again with fewer, and the old image drawn until the new one is in (<see cref="WorldTextureCache.BeginSwap"/>);
-    /// one that is finer than it needs to be for <see cref="CoarsenAfterSeconds"/> (at once under the guard's pressure) is replaced by a coarser. Only
-    /// the textures this has been told the need of are touched (<see cref="WorldTexture.KeepAllMips"/> never).
+    /// one that is finer than it needs to be for <see cref="CoarsenAfterSeconds"/> (at once under the guard's pressure) is replaced by a coarser.
+    /// Only the textures this has been told the need of are touched (<see cref="WorldTexture.KeepAllMips"/> never).
     /// </summary>
     public void Rebalance()
     {
@@ -93,6 +103,7 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
         bool pressure = cache.Guard?.Pressure ?? false;
         cache.Mips.Extra = pressure ? 1 : 0;
         long unstreamed = 0;
+
         // replacements being loaded: finer ones are limited so they do not crowd out the other streaming work on the few worker threads
         int replacing = 0;
         foreach (var t in cache.Textures) if (t.Replacing) replacing++;
@@ -104,9 +115,15 @@ sealed class MipGovernor(WorldTextureCache cache, AssetLocator assets)
                 continue;
             // A lean image whose need is unknown is refined to the quality's levels.
             int target = Math.Max(float.IsFinite(t.Need) ? cache.Mips.Drop(t.FileWidth, t.FileHeight, t.Need) : 0, t.QualityDrop);
+
             // Another cache holds the file at the target levels: taken (a coarser one after the same wait as a load), nothing loaded.
             if ((target < t.Dropped || target > t.Dropped && (pressure || t.TooFineSince != 0 && now - t.TooFineSince >= CoarsenAfterSeconds * 1000))
-                && cache.Shared(t, t.Need, exact: true) is { } shared) { cache.Adopt(t, shared); continue; }
+                && cache.Shared(t, t.Need, exact: true) is { } shared)
+            {
+                cache.Adopt(t, shared);
+                continue;
+            }
+
             if (target < t.Dropped)
             {
                 if (replacing >= MaxRefines || !cache.MayStart(t)) continue;

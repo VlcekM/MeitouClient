@@ -121,6 +121,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     readonly MTLPixelFormat _presentFormat;
     readonly int _maxSampleCount;
     readonly bool _waitForSlot, _waitOneFrame;
+
     // Lossless target compression / base-view reuse is on by default (validated in the 2026-10-24 Metal run);
     // MEITOU_METAL_NO_COMPRESSION=1 disables it for an A/B. It is independent of the experimental GPU cull.
     static readonly bool LosslessCompression = Environment.GetEnvironmentVariable("MEITOU_METAL_NO_COMPRESSION") != "1";
@@ -139,10 +140,12 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     MTLRenderPipelineState _presentPipeline;
     long _frameNumber;
     int _slot = -1;
+
     // Objective-C objects returned by the frame's APIs (nextDrawable, commandBuffer, descriptors) are autoreleased.
     // Without a per-frame pool they accumulate for the whole process: 16k CAMetalLayer drawables after eight minutes.
     NSAutoreleasePool _framePool;
     bool _framePoolOpen;
+
     // The host pass open now (the guests' targets and state), and the segments of the recording model.
     PassTargets? _passTargets;
     DrawState? _passState;
@@ -254,8 +257,9 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         long oldest = _retiredTextures.Count > 0 ? _frameNumber - _retiredTextures[0].Frame : 0;
         return $"textures {tex}/{_textures.Count} views {liveViews}/{_views.Count} retiredViews {retired} retiredTextures {_retiredTextures.Count} " +
             $"oldest {oldest} levelViews {level} deferredDeletes {deferred} buffers {liveBuffers}/{_buffers.Count} " +
-            $"sets {_sets.Count} chunks {chunkCount} ({chunkBytes / 1048576} MB, {chunkUsed / 1048576} MB used); managed {managed.HeapSizeBytes / 1048576} MB " +
-            $"(LOH {loh / 1048576} MB), RSS {rss / 1048576} MB, GPU {Device.CurrentAllocatedSize / 1048576} MB";
+            $"sets {_sets.Count} chunks {chunkCount} ({chunkBytes / 1048576} MB, {chunkUsed / 1048576} MB used); " +
+            $"managed {managed.HeapSizeBytes / 1048576} MB (LOH {loh / 1048576} MB), RSS {rss / 1048576} MB, " +
+            $"GPU {Device.CurrentAllocatedSize / 1048576} MB";
     }
 
     /// <summary>
@@ -435,9 +439,14 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         // swizzled view creates a child texture. A multisampled texture always keeps its own image: its base type is
         // Type2DMultisample, and a child Type2D view would lose the samples (the reflection's MSAA targets depend on this).
         int totalLayers = of.Desc.Kind == TextureKind.Cube ? 6 * Math.Max(of.Desc.Layers, 1) : of.Desc.Layers;
-        bool baseView = (LosslessCompression || of.Desc.Samples > 1) && baseLevel == 0 && levels == of.Desc.Levels && baseLayer == 0 && layers == totalLayers &&
-            swizzle.Equals(GpuSwizzle.Identity) &&
-            viewType == (of.Desc.Kind switch { TextureKind.Cube => MTLTextureType.Cube, TextureKind.Texture2DArray => MTLTextureType.Type2DArray, _ => MTLTextureType.Type2D });
+        bool baseView = (LosslessCompression || of.Desc.Samples > 1) && baseLevel == 0 && levels == of.Desc.Levels && baseLayer == 0
+            && layers == totalLayers && swizzle.Equals(GpuSwizzle.Identity)
+            && viewType == (of.Desc.Kind switch
+            {
+                TextureKind.Cube => MTLTextureType.Cube,
+                TextureKind.Texture2DArray => MTLTextureType.Type2DArray,
+                _ => MTLTextureType.Type2D,
+            });
         var view = new MetalTextureView
         {
             // A swizzled view (the BC4 masks' red in all three, alpha one) is Metal's own texture swizzle: the same format, the
@@ -634,7 +643,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
             {
                 _uploadErrorReported = true;
                 string where = retired.Label.Length > 500 ? retired.Label[..500] + "..." : retired.Label;
-                Console.WriteLine($"metal     upload command buffer failed{ (where.Length > 0 ? $" ({where})" : "") }: {retired.Command.Error.LocalizedDescription}");
+                Console.WriteLine($"metal     upload command buffer failed{(where.Length > 0 ? $" ({where})" : "")}: " +
+                    $"{retired.Command.Error.LocalizedDescription}");
             }
 
             retired.Buffer.Dispose();
@@ -1056,8 +1066,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         var encoder = command.RenderCommandEncoder(descriptor);
         encoder.SetRenderPipelineState(_presentPipeline);
         encoder.SetFragmentTexture(TextureAt(_backbuffer!), 0);
-        encoder.SetFragmentSamplerState(Samplers.Backend(Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0))), 0);
+        encoder.SetFragmentSamplerState(Samplers.Backend(Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest))), 0);
         var targetSize = stackalloc float[2] { (float)drawable.Texture.Width, (float)drawable.Texture.Height };
         encoder.SetFragmentBytes((nint)targetSize, 8, 1);
         encoder.DrawPrimitives(MTLPrimitiveType.Triangle, 0, 3);
@@ -1072,7 +1081,10 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         if (_slot < 0)
             throw new InvalidOperationException($"no frame slot (slot {_slot}, frame {_frameNumber}, thread {Environment.CurrentManagedThreadId})");
         if (!Frame.Open)
-            throw new InvalidOperationException($"frame {Frame.Number} closed (slot {_slot}, frame {_frameNumber}, thread {Environment.CurrentManagedThreadId})");
+        {
+            throw new InvalidOperationException(
+                $"frame {Frame.Number} closed (slot {_slot}, frame {_frameNumber}, thread {Environment.CurrentManagedThreadId})");
+        }
     }
 
     #endregion
@@ -1305,7 +1317,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
     #region Blits and clears
 
     readonly Dictionary<MTLPixelFormat, MTLRenderPipelineState> _blitPipelines = [];
-    readonly Dictionary<(MTLPixelFormat Colour, MTLPixelFormat Extra, MTLPixelFormat Depth, ulong Samples, bool WritesColour, bool WritesDepth), MTLRenderPipelineState> _clearPipelines = [];
+    readonly Dictionary<(MTLPixelFormat Colour, MTLPixelFormat Extra, MTLPixelFormat Depth, ulong Samples, bool WritesColour, bool WritesDepth),
+        MTLRenderPipelineState> _clearPipelines = [];
     MTLLibrary? _clearLibrary;
 
     /// <summary>
@@ -1398,8 +1411,7 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         encoder.SetRenderPipelineState(pipeline);
         encoder.SetFragmentTexture(source, 0);
         var mag = filter == TextureMinFilter.Linear ? TextureMagFilter.Linear : TextureMagFilter.Nearest;
-        var sampler = Samplers.Backend(Samplers.Get(SamplerDesc.FromGl(filter, mag, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)));
+        var sampler = Samplers.Backend(Samplers.Get(SamplerDesc.Clamped(filter, mag)));
         encoder.SetFragmentSamplerState(sampler, 0);
         var size = stackalloc float[2] { width, height };
         encoder.SetFragmentBytes((nint)size, 8, 1);
@@ -1558,8 +1570,8 @@ public sealed unsafe class MetalContext : IGpuContext, IDisposable
         var command = Queue.CommandBuffer();
         var blit = command.BlitCommandEncoder();
         var buffer = Device.NewBuffer((ulong)(stride * height), MTLResourceOptions.ResourceStorageModeShared);
-        blit.CopyFromTexture(TextureAt(texture), (ulong)layer, (ulong)level, new MTLOrigin(), new MTLSize { width = (ulong)width, height = (ulong)height, depth = 1 },
-            buffer, 0, (ulong)stride, (ulong)(stride * height));
+        blit.CopyFromTexture(TextureAt(texture), (ulong)layer, (ulong)level, new MTLOrigin(),
+            new MTLSize { width = (ulong)width, height = (ulong)height, depth = 1 }, buffer, 0, (ulong)stride, (ulong)(stride * height));
         blit.EndEncoding();
         command.Commit();
         command.WaitUntilCompleted();

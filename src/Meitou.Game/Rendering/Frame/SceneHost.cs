@@ -24,11 +24,17 @@ sealed class SceneHost(IGpuContext ctx)
     /// </summary>
     public void Open(int stage, PassTargets targets, ClearColour? clearColour = null, bool clearDepth = false)
     {
-        if (_cmd is not null) { Stage(stage); return; }
+        if (_cmd is not null)
+        {
+            Stage(stage);
+            return;
+        }
+
         var list = ctx.BeginNative("scene");
         bool secondaries = ctx.RecordsSecondaries;
         var colour = clearColour is { } c ? targets.Colour with { Load = LoadOp.Clear, Clear = c } : targets.Colour;
         var depth = clearDepth ? targets.Depth with { Load = LoadOp.Clear, DepthClear = DepthConvention.Clear } : targets.Depth;
+
         // The extra target (the GI resolve's albedo) is cleared to 0 with the colour: no surface there takes the probes' light in post.
         var extra = clearColour is not null && !targets.Extra.IsNull ? targets.Extra with { Load = LoadOp.Clear, Clear = default } : targets.Extra;
         list.BeginRendering(new RenderingDesc(colour, depth, targets.Width, targets.Height, 0, 0, targets.ShadingRate, targets.ShadingRateTexel,
@@ -49,6 +55,7 @@ sealed class SceneHost(IGpuContext ctx)
     public void Close()
     {
         if (_cmd is not { } list) return;
+
         // Vulkan's queued guests execute into the rendering's secondaries; they must finish before EndRendering.
         ctx.EndHostPassParallel(list);
         list.EndRendering();

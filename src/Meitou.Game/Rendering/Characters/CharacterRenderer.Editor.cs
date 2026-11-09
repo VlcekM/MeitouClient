@@ -31,6 +31,7 @@ internal sealed unsafe partial class CharacterRenderer
 
     GpuTexture? _stageColour, _stageDepth;
     SampledTexture? _stageSampled;
+
     // The enhanced stage (Look): the half-float picture the character and the platform are drawn into, resolved into stageColour.
     GpuTexture? _stageHdr, _stageHdrDepth;
     SampledTexture _stageHdrSampled;
@@ -96,7 +97,14 @@ internal sealed unsafe partial class CharacterRenderer
         }
         int index = -1;
         for (int i = 0; i < _liveCount; i++)
-            if (_live[i].Key == r.Key) { index = i; break; }
+        {
+            if (_live[i].Key == r.Key)
+            {
+                index = i;
+                break;
+            }
+        }
+
         var cmd = Gpu.BeginNative("character stage");
         var target = hdr ? PassTargets.Of(_stageHdr, _stageHdrDepth) : PassTargets.Of(_stageColour, _stageDepth);
         cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width, target.Height));
@@ -115,9 +123,14 @@ internal sealed unsafe partial class CharacterRenderer
             Matrix4x4.Decompose(l.World, out _, out var facing, out _);
             StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
             _portraitLive = index;
-            try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light, FogDistance = hdr ? -3 : -2 }, eye,
-                []); }
-            finally { _portraitLive = -1; }
+            try
+            {
+                DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light, FogDistance = hdr ? -3 : -2 }, eye, []);
+            }
+            finally
+            {
+                _portraitLive = -1;
+            }
         }
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
@@ -210,8 +223,8 @@ internal sealed unsafe partial class CharacterRenderer
             Name: "character stage"));
         _stageDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Use: TextureUse.DepthTarget,
             Name: "character stage depth"));
-        _stageSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), _stageColour.View());
+        _stageSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)),
+            _stageColour.View());
     }
 
     void DisposeStage()

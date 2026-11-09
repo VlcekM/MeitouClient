@@ -73,7 +73,10 @@ public sealed unsafe class TriangleCounter : IDisposable
         if (type == uint.MaxValue) throw new VulkanException("no device-local memory type for the triangle counters");
 
         var flags = new MemoryAllocateFlagsInfo { SType = StructureType.MemoryAllocateFlagsInfo, Flags = MemoryAllocateFlags.DeviceAddressBit };
-        var alloc = new MemoryAllocateInfo { SType = StructureType.MemoryAllocateInfo, AllocationSize = req.Size, MemoryTypeIndex = type, PNext = &flags };
+        var alloc = new MemoryAllocateInfo
+        {
+            SType = StructureType.MemoryAllocateInfo, AllocationSize = req.Size, MemoryTypeIndex = type, PNext = &flags,
+        };
         VulkanException.Check(_vk.AllocateMemory(_device.Device, in alloc, null, out _memory), "vkAllocateMemory(triangle counters)");
         VulkanException.Check(_vk.BindBufferMemory(_device.Device, _buffer, _memory, 0), "vkBindBufferMemory(triangle counters)");
         _handle = new GpuBuffer(_device.AddBuffer(new BufferEntry(_buffer, null)), Bytes);
@@ -139,7 +142,8 @@ public sealed unsafe class TriangleCounter : IDisposable
     }
 
     /// <summary>
-    /// The samples counted since <see cref="Clear"/>, per category, as the histogram of their triangles (the frame in progress is submitted and waited for).
+    /// The samples counted since <see cref="Clear"/>, per category, as the histogram of their triangles (the frame in progress is submitted and
+    /// waited for).
     /// </summary>
     public Dictionary<string, SizeHistogram> Read()
     {

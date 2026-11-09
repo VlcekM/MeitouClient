@@ -34,7 +34,8 @@ public static class BenchStats
     /// </summary>
     public static double Percentile(double[] sorted, double q) => sorted[Math.Min((int)(sorted.Length * q), sorted.Length - 1)];
 
-    public static double Median(double[] sorted) => sorted.Length % 2 == 1 ? sorted[sorted.Length / 2] : (sorted[sorted.Length / 2 - 1] + sorted[sorted.Length / 2]) / 2;
+    public static double Median(double[] sorted) =>
+        sorted.Length % 2 == 1 ? sorted[sorted.Length / 2] : (sorted[sorted.Length / 2 - 1] + sorted[sorted.Length / 2]) / 2;
 
     /// <summary>
     /// A against B. <paramref name="blocks"/> numbers the frames' blocks (even blocks are side A, odd ones side B); each A block's mean is paired

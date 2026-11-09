@@ -39,9 +39,7 @@ sealed unsafe class GiDebugPass : IDisposable
             (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer),
         ]);
         _pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_program, "gi debug"));
-        _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+        _sampler = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
     }
 
     [StructLayout(LayoutKind.Sequential)]

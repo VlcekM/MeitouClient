@@ -227,7 +227,11 @@ public sealed unsafe class LinearAllocator : IDisposable
                 _offset = aligned + size;
                 return Slice(_chunks[_current], aligned, size);
             }
-            if (++_current < _chunks.Count) { _offset = size; return Slice(_chunks[_current], 0, size); }
+            if (++_current < _chunks.Count)
+            {
+                _offset = size;
+                return Slice(_chunks[_current], 0, size);
+            }
         }
         var chunk = NewChunk(ChunkSize, _chunks);
         _current = _chunks.Count - 1;
@@ -316,17 +320,21 @@ public sealed class BufferArena : IDisposable
         if (size == 0) return default;
         if (alignment == 0) alignment = 1;
         lock (_gate)
+        {
             for (int i = 0; i < _free.Count; i++)
             {
                 var (o, s) = _free[i];
                 ulong aligned = (o + alignment - 1) / alignment * alignment;
                 if (aligned + size > o + s) continue;
                 _free.RemoveAt(i);
+
                 // Keep the alignment gap and the tail as free ranges.
                 if (aligned > o) _free.Insert(i++, (o, aligned - o));
                 if (aligned + size < o + s) _free.Insert(i, (aligned + size, o + s - aligned - size));
                 return new ArenaRange(aligned, size);
             }
+        }
+
         return default;
     }
 
@@ -346,6 +354,7 @@ public sealed class BufferArena : IDisposable
             int i = 0;
             while (i < _free.Count && _free[i].Offset < range.Offset) i++;
             _free.Insert(i, (range.Offset, range.Size));
+
             // Coalesce with the neighbours.
             if (i + 1 < _free.Count && _free[i].Offset + _free[i].Size == _free[i + 1].Offset)
             {

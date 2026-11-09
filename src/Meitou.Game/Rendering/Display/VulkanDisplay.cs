@@ -20,21 +20,33 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// </summary>
     public IWindow? Window { get; }
     public VulkanDevice Device { get; }
+
     /// <summary>
     /// The native GPU API the renderers draw with; its frames are what <see cref="BeginFrame"/> / <see cref="Present"/> begin and submit.
     /// </summary>
     public GpuContext Context { get; }
+
+    /// <summary>
+    /// The window's presenter; null when headless.
+    /// </summary>
     readonly VulkanPresenter? _presenter;
+
+    /// <summary>
+    /// <c>MEITOU_VK_VALIDATION</c> asked for the validation layer (dispose then reports a clean run too).
+    /// </summary>
+    readonly bool _validationRequested;
 
     /// <summary>
     /// With a window: what the frame is drawn into (the window's framebuffer size), valid after <see cref="BeginFrame"/>; null when headless.
     /// </summary>
     public GpuTexture? Backbuffer => _presenter?.Backbuffer;
+
     /// <summary>
     /// Stopwatch ticks spent acquiring swapchain images and presenting (0 when headless).
     /// </summary>
     public long AcquireTicks => _presenter?.AcquireTicks ?? 0;
     public long PresentTicks => _presenter?.PresentTicks ?? 0;
+
     /// <summary>
     /// The window's vsync (<see cref="VulkanPresenter.VSync"/>; the swapchain is remade at the next frame). Always off without a window.
     /// </summary>
@@ -45,6 +57,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// fallback).
     /// </summary>
     public bool FrameGeneration => _presenter?.FrameGeneration is not null;
+
     /// <summary>
     /// The frame-interpolation layer itself (null for the plain swapchain); frame generation is configured on top of it.
     /// </summary>
@@ -59,6 +72,7 @@ public sealed unsafe class VulkanDisplay : IDisposable
     /// Streamline (DLSS), when <c>dlss</c> asked for it and it loaded; shut down before the device.
     /// </summary>
     public Streamline? Streamline { get; }
+
     /// <summary>
     /// NGX (DLSS on Linux, or on Windows with frame generation), when <c>dlss</c> asked for it and its client library and the DLSS model loaded; shut
     /// down before the device.
@@ -93,8 +107,8 @@ public sealed unsafe class VulkanDisplay : IDisposable
             RayTracing = RayTracing,
         };
 
-        // DLSS frame generation goes through Streamline (Windows, a window); FSR 3's needs AMD's library, checked first, so DLSS leaves Streamline for NGX only
-        // when the layer can be used.
+        // DLSS frame generation goes through Streamline (Windows, a window); FSR 3's needs AMD's library, checked first, so DLSS leaves Streamline
+        // for NGX only when the layer can be used.
         bool dlssFrameGeneration = frameGeneration == FrameGenerationMethod.Dlss && options is not null && OperatingSystem.IsWindows();
         if (frameGeneration == FrameGenerationMethod.Dlss && options is not null && !dlssFrameGeneration)
             Console.WriteLine("frame generation  DLSS unavailable: it needs Streamline, which is Windows only");
@@ -102,87 +116,130 @@ public sealed unsafe class VulkanDisplay : IDisposable
         bool fsrFrameGeneration = frameGeneration == FrameGenerationMethod.Fsr;
         string? layerWhy = OperatingSystem.IsMacOS() ? "the FFX library is not available for Metal" : null;
         bool layerLoads = fsrFrameGeneration && options is not null && layerWhy is null && FfxSwapchain.LibraryLoads(out _, out layerWhy);
+        (Ngx, Streamline) = LoadDlss(dlss, dlssFrameGeneration, layerLoads, deviceOptions);
+        bool wantLayer = fsrFrameGeneration && options is not null && WantLayer(layerLoads, layerWhy, deviceOptions);
+        if (options is not null) Window = OpenWindow(options.Value, deviceOptions);
+        Device = VulkanDevice.Create(deviceOptions);
+        ReportDevice();
+
+        Context = new GpuContext(Device);
+        if (options is not null) _presenter = CreatePresenter(vsync, wantLayer);
+    }
+
+    /// <summary>
+    /// DLSS's library, loaded before the instance (each adds what it needs to the device): NGX, or Streamline on Windows when NGX is not taken.
+    /// </summary>
+    static (Ngx? Ngx, Streamline? Streamline) LoadDlss(bool dlss, bool dlssFrameGeneration, bool layerLoads, VulkanDeviceOptions deviceOptions)
+    {
+        Ngx? ngx = null;
+        Streamline? streamline = null;
         if (dlss && OperatingSystem.IsWindows() && layerLoads)
         {
             // Frame generation: the FFX swapchain owns the present, which Streamline's interposer must see, so DLSS goes through NGX directly
             // (meitou_ngx.dll) and Streamline is not loaded. Without NGX, Streamline stays and frame generation is off (below).
-            Ngx = Ngx.TryInit(out var ngxWhy);
-            if (Ngx is not null) Ngx.Apply(deviceOptions);
+            ngx = Ngx.TryInit(out var ngxWhy);
+            if (ngx is not null) ngx.Apply(deviceOptions);
             else Console.WriteLine($"upscaler  {ngxWhy}");
         }
-        if (dlss && OperatingSystem.IsWindows() && Ngx is null)
+
+        if (dlss && OperatingSystem.IsWindows() && ngx is null)
         {
             // Streamline goes in before the instance and adds what it needs to the device.
-            Streamline = Streamline.TryInit(dlssFrameGeneration, out var why);
-            if (Streamline is null) Console.WriteLine($"upscaler  {why}");
-            else Streamline.Apply(deviceOptions);
+            streamline = Streamline.TryInit(dlssFrameGeneration, out var why);
+            if (streamline is null) Console.WriteLine($"upscaler  {why}");
+            else streamline.Apply(deviceOptions);
         }
         else if (dlss && OperatingSystem.IsLinux())
         {
             // Linux: NGX through NVIDIA's client library (libmeitou_ngx.so), likewise before the instance.
-            Ngx = Ngx.TryInit(out var why);
-            if (Ngx is null) Console.WriteLine($"upscaler  {why}");
-            else Ngx.Apply(deviceOptions);
+            ngx = Ngx.TryInit(out var why);
+            if (ngx is null) Console.WriteLine($"upscaler  {why}");
+            else ngx.Apply(deviceOptions);
         }
 
-        // Frame generation (FSR 3): the swapchain goes through AMD's layer, which needs more graphics queues (FfxSwapchain). Windows, Proton and
-        // Linux.
+        return (ngx, streamline);
+    }
+
+    /// <summary>
+    /// Frame generation (FSR 3): the swapchain goes through AMD's layer, which needs more graphics queues (FfxSwapchain). Windows, Proton and
+    /// Linux. False (with the reason) when the layer did not load or Streamline owns the present.
+    /// </summary>
+    bool WantLayer(bool layerLoads, string? layerWhy, VulkanDeviceOptions deviceOptions)
+    {
         bool wantLayer = false;
-        if (fsrFrameGeneration && options is not null)
-        {
-            string? why = layerWhy;
-            if (!layerLoads) { }
-            else if (Streamline is { DlssSupported: true })
-                why = "Streamline (DLSS) owns the present (NGX did not load, see the upscaler line above)";
-            else wantLayer = true;
-            if (!wantLayer) Console.WriteLine($"frame generation  unavailable: {why}");
-            else deviceOptions.ExtraGraphicsQueues = FfxSwapchain.WantedExtraQueues;
-        }
-        if (options is not null)
-        {
-            Window = Silk.NET.Windowing.Window.Create(options.Value with { API = GraphicsAPI.DefaultVulkan, VSync = false });
-            Window.Initialize();
-            SetWindowIcon(Window);
-            var surface = Window.VkSurface ?? throw new InvalidOperationException("the window has no Vulkan surface support");
-            var names = surface.GetRequiredExtensions(out uint count);
-            var extensions = new string[count];
-            for (int i = 0; i < count; i++) extensions[i] = SilkMarshal.PtrToString((nint)names[i])!;
-            deviceOptions.InstanceExtensions = [.. extensions, .. deviceOptions.InstanceExtensions ?? []];
-            deviceOptions.CreateSurface = instance => surface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface();
+        string? why = layerWhy;
+        if (!layerLoads) { }
+        else if (Streamline is { DlssSupported: true })
+            why = "Streamline (DLSS) owns the present (NGX did not load, see the upscaler line above)";
+        else wantLayer = true;
+        if (!wantLayer) Console.WriteLine($"frame generation  unavailable: {why}");
+        else deviceOptions.ExtraGraphicsQueues = FfxSwapchain.WantedExtraQueues;
+        return wantLayer;
+    }
 
-            // DLSS frame generation looks the window up by its surface: once the device is handed over, the surface is made again through the
-            // interposer.
-            if (Streamline is { FrameGenerationLoaded: true } sl && Window.Native?.Win32 is { } win32)
-                sl.UseWindow(win32.Hwnd, win32.HInstance);
-        }
-        Device = VulkanDevice.Create(deviceOptions);
+    /// <summary>
+    /// The window (shown, with its icon), its Vulkan surface's instance extensions and surface factory added to <paramref name="deviceOptions"/>.
+    /// </summary>
+    IWindow OpenWindow(WindowOptions options, VulkanDeviceOptions deviceOptions)
+    {
+        var window = Silk.NET.Windowing.Window.Create(options with { API = GraphicsAPI.DefaultVulkan, VSync = false });
+        window.Initialize();
+        SetWindowIcon(window);
+        var surface = window.VkSurface ?? throw new InvalidOperationException("the window has no Vulkan surface support");
+        var names = surface.GetRequiredExtensions(out uint count);
+        var extensions = new string[count];
+        for (int i = 0; i < count; i++) extensions[i] = SilkMarshal.PtrToString((nint)names[i])!;
+        deviceOptions.InstanceExtensions = [.. extensions, .. deviceOptions.InstanceExtensions ?? []];
+        deviceOptions.CreateSurface = instance => surface.Create<AllocationCallbacks>(instance.ToHandle(), null).ToSurface();
 
+        // DLSS frame generation looks the window up by its surface: once the device is handed over, the surface is made again through the
+        // interposer.
+        if (Streamline is { FrameGenerationLoaded: true } sl && window.Native?.Win32 is { } win32)
+            sl.UseWindow(win32.Hwnd, win32.HInstance);
+        return window;
+    }
+
+    /// <summary>
+    /// The device and the diagnostics in effect, in log.txt.
+    /// </summary>
+    void ReportDevice()
+    {
         // The validation mode in log.txt: a report then shows whether MEITOU_VK_VALIDATION=sync took effect.
         string validationMode = !Device.ValidationEnabled ? "" : Device.SyncValidationEnabled ? ", validation on (sync)" : ", validation on";
         Console.WriteLine($"vulkan    {Device.DeviceName}{validationMode}");
         if (GpuContext.DiagSubmit || GpuContext.DiagIdle)
-            Console.WriteLine($"diagnostic{(GpuContext.DiagSubmit ? " MEITOU_DIAG_SUBMIT" : "")}{(GpuContext.DiagIdle ? " MEITOU_DIAG_IDLE" : "")} on (issue #108; slower frames)");
+        {
+            string submit = GpuContext.DiagSubmit ? " MEITOU_DIAG_SUBMIT" : "";
+            string idle = GpuContext.DiagIdle ? " MEITOU_DIAG_IDLE" : "";
+            Console.WriteLine($"diagnostic{submit}{idle} on (issue #108; slower frames)");
+        }
+
         if (GpuContext.DiagNoMaterialCache || GpuContext.DiagNoGrow)
         {
             string cache = GpuContext.DiagNoMaterialCache ? " MEITOU_DIAG_NO_MATERIAL_CACHE" : "";
             string grow = GpuContext.DiagNoGrow ? " MEITOU_DIAG_NO_GROW" : "";
             Console.WriteLine($"diagnostic{cache}{grow} on (issue #319)");
         }
-        Context = new GpuContext(Device);
-        if (options is not null)
+    }
+
+    /// <summary>
+    /// The window's presenter, through Streamline's present and swapchain hooks where DLSS loaded, and AMD's layer when frame generation wants it.
+    /// </summary>
+    VulkanPresenter CreatePresenter(bool vsync, bool wantLayer)
+    {
+        var presenter = new VulkanPresenter(Context, vsync)
         {
-            _presenter = new VulkanPresenter(Context, vsync)
-            {
-                PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null,
-                StreamlineHooks = Streamline is { FrameGenerationSupported: true } g ? g.Swapchain : null,
-            };
-            if (wantLayer)
-            {
-                var layer = FfxSwapchain.TryCreate(Device, out var why);
-                if (layer is null) Console.WriteLine($"frame generation  unavailable: {why}");
-                else _presenter.FrameGeneration = layer;
-            }
+            PresentFunction = Streamline is { DlssSupported: true } s ? s.PresentProxy : null,
+            StreamlineHooks = Streamline is { FrameGenerationSupported: true } g ? g.Swapchain : null,
+        };
+        if (wantLayer)
+        {
+            var layer = FfxSwapchain.TryCreate(Device, out var why);
+            if (layer is null) Console.WriteLine($"frame generation  unavailable: {why}");
+            else presenter.FrameGeneration = layer;
         }
+
+        return presenter;
     }
 
     /// <summary>
@@ -199,7 +256,10 @@ public sealed unsafe class VulkanDisplay : IDisposable
             var icon = new Silk.NET.Core.RawImage(256, 256, pixels);
             window.SetWindowIcon(ref icon);
         }
-        catch (Exception e) { Console.WriteLine($"window icon  {e.Message}"); }
+        catch (Exception e)
+        {
+            Console.WriteLine($"window icon  {e.Message}");
+        }
     }
 
     /// <summary>
@@ -244,13 +304,12 @@ public sealed unsafe class VulkanDisplay : IDisposable
         Device.Frames.WaitAll();   // what was released after the frames in flight
         Streamline?.Dispose();
         Ngx?.Dispose();
-        if (Device.ValidationErrors > 0) Console.WriteLine($"vulkan validation: {Device.ValidationErrors} errors\n{string.Join("\n", Device.ValidationLog.Take(20))}");
+        if (Device.ValidationErrors > 0)
+            Console.WriteLine($"vulkan validation: {Device.ValidationErrors} errors\n{string.Join("\n", Device.ValidationLog.Take(20))}");
         else if (_validationRequested) Console.WriteLine("vulkan validation: 0 errors");
         Device.Dispose();
         Window?.Dispose();
     }
-
-    readonly bool _validationRequested;
 
     /// <summary>
     /// <c>%LOCALAPPDATA%\Meitou\pipeline-cache.bin</c> (the driver checks the header and ignores a cache from another device or driver);
@@ -267,7 +326,13 @@ public sealed unsafe class VulkanDisplay : IDisposable
             Directory.CreateDirectory(dir);
             return Path.Combine(dir, "pipeline-cache.bin");
         }
-        catch (IOException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 }

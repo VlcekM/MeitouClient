@@ -351,12 +351,16 @@ public static unsafe class GlUniforms
         rows = Math.Min(rows, m.Rows);
         columns = Math.Min(columns, m.Columns);
         fixed (byte* dst = block)
+        {
             for (int e = 0; e < elements; e++)
+            {
                 for (int c = 0; c < columns; c++)
+                {
                     for (int r = 0; r < rows; r++)
                     {
                         int srcIndex = (e * columns + c) * rows + r;
                         uint bits = ((uint*)src)[srcIndex];
+
                         // A float written to an int/bool member (glUniform1f on a bool) and an int to a float member convert as GL does.
                         if (m.Kind == ScalarKind.Float && isInt)
                         {
@@ -368,6 +372,9 @@ public static unsafe class GlUniforms
                             bits = bits != 0 ? 1u : 0u;
                         *(uint*)(dst + at.Offset + e * elemStride + c * colStride + r * 4) = bits;
                     }
+                }
+            }
+        }
     }
 }
 

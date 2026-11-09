@@ -63,7 +63,8 @@ public sealed class ImpostorMeshes
                 for (int i = 0; i + 2 < part.Indices.Length; i += 3)
                 {
                     var a = part.Vertices[part.Indices[i]].Position;
-                    area += 0.5 * Vector3.Cross(part.Vertices[part.Indices[i + 1]].Position - a, part.Vertices[part.Indices[i + 2]].Position - a).Length();
+                    area += 0.5 * Vector3.Cross(part.Vertices[part.Indices[i + 1]].Position - a,
+                        part.Vertices[part.Indices[i + 2]].Position - a).Length();
                 }
             }
 
@@ -168,7 +169,8 @@ public sealed unsafe class ImpostorBaker : IDisposable
 
     /// <param name="assets">Where texture names are looked up; null only when no source names a texture (tests).</param>
     public ImpostorBaker(IGpuContext gpu, AssetLocator? assets)
-        : this(gpu, new WorldTextureCache(gpu, assets!, "impostor textures") { IdleSeconds = double.MaxValue, HighWaterMb = double.MaxValue }, owns: true)
+        : this(gpu, new WorldTextureCache(gpu, assets!, "impostor textures") { IdleSeconds = double.MaxValue, HighWaterMb = double.MaxValue },
+            owns: true)
     {
     }
 
@@ -256,7 +258,8 @@ public sealed unsafe class ImpostorBaker : IDisposable
         public bool HasColours;
     }
 
-    internal sealed record Material(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2, ImpostorMaterial Settings)
+    internal sealed record Material(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2,
+        ImpostorMaterial Settings)
     {
         public IEnumerable<WorldTexture?> All => [Diffuse, Normal, Diffuse2, Normal2];
     }
@@ -289,7 +292,11 @@ public sealed unsafe class ImpostorBaker : IDisposable
             {
                 // A rock is drawn by the terrain's mesh program: its own vertex layout and buffers.
                 var (rockLayout, rockBindings) = RockTerrain!.RockBakeVertices(vertices);
-                parts.Add(new Part { Vertices = vertices, Indices = indices, Count = mp.Indices.Length, HasColours = mp.HasColours, Layout = rockLayout, Bindings = rockBindings });
+                parts.Add(new Part
+                {
+                    Vertices = vertices, Indices = indices, Count = mp.Indices.Length, HasColours = mp.HasColours, Layout = rockLayout,
+                    Bindings = rockBindings,
+                });
                 continue;
             }
 
@@ -343,8 +350,9 @@ public sealed unsafe class ImpostorBaker : IDisposable
     /// <paramref name="large"/> (and <paramref name="depth"/>), halved into <paramref name="small"/> by a linear blit and copied into
     /// <paramref name="readback"/> at pass × the row's bytes.
     /// </summary>
-    internal void RecordRow(IGpuCommandList cmd, int row, ImpostorClass size, ImpostorMeshes meshes, Part[] mainParts, Material main, Part[] leavesParts, Material? leaves,
-        GpuTexture large, GpuTexture depth, GpuTexture small, GpuBuffer readback, float lodBias, ImpostorSource? rock = null)
+    internal void RecordRow(IGpuCommandList cmd, int row, ImpostorClass size, ImpostorMeshes meshes, Part[] mainParts, Material main,
+        Part[] leavesParts, Material? leaves, GpuTexture large, GpuTexture depth, GpuTexture small, GpuBuffer readback, float lodBias,
+        ImpostorSource? rock = null)
     {
         int grid = size.Grid, f = size.FramePixels, samples = 2 * f, width = grid * samples, smallWidth = grid * f;
         PrepareFrameGlobals();
@@ -516,10 +524,14 @@ public sealed unsafe class ImpostorBaker : IDisposable
         }
 
         int f = size.FramePixels, samples = 2 * f, width = size.Grid * samples;
-        return (pre.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, samples, Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "impostor bake target")),
-            pre.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, samples, Use: TextureUse.DepthTarget, Name: "impostor bake target")),
+        return (pre.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, samples,
+                Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "impostor bake target")),
+            pre.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, samples, Use: TextureUse.DepthTarget,
+                Name: "impostor bake target")),
+
             // Metal halves the rows with a sampling render pass (BlitScaled), so the half-size atlas is a colour target as well as a copy source.
-            pre.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.Grid * f, f, Use: TextureUse.ColourTarget | TextureUse.TransferDst | TextureUse.TransferSrc, Name: "impostor bake target")));
+            pre.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.Grid * f, f,
+                Use: TextureUse.ColourTarget | TextureUse.TransferDst | TextureUse.TransferSrc, Name: "impostor bake target")));
     }
 
     /// <summary>

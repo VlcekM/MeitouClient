@@ -262,6 +262,7 @@ public sealed unsafe class FrameRing : IDisposable
                 }
             }
         }
+
         // Nothing in flight (or the last frame was already retired by WaitAll): safe now.
         destroy();
     }

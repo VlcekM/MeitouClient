@@ -228,14 +228,16 @@ public sealed unsafe class GpuAllocator : IDisposable
 
             foreach (var i in _liveImages)
             {
-                rows.Add((i.Allocation.Size, $"{Mb(i.Allocation.Size),10:0.000}  {i.Kind,-11}  image   {i.Name}  [{i.Format} {i.Extent.Width}x{i.Extent.Height}"
-                    + (i.Extent.Depth > 1 ? $"x{i.Extent.Depth}" : "") + $", {i.MipLevels} levels, {i.ArrayLayers} layers" + (i.Samples != SampleCountFlags.Count1Bit ? $", {i.Samples}" : "") + "]"));
+                rows.Add((i.Allocation.Size, $"{Mb(i.Allocation.Size),10:0.000}  {i.Kind,-11}  image   {i.Name}  "
+                    + $"[{i.Format} {i.Extent.Width}x{i.Extent.Height}" + (i.Extent.Depth > 1 ? $"x{i.Extent.Depth}" : "")
+                    + $", {i.MipLevels} levels, {i.ArrayLayers} layers" + (i.Samples != SampleCountFlags.Count1Bit ? $", {i.Samples}" : "") + "]"));
             }
 
             void Block(uint type, MemoryBlock b, bool spare) =>
                 blocks.Add((type, b.Size, $"{Mb(b.Size),10:0.000}  {Mb(b.Used),10:0.000}  {b.Free.Count,5}  type {type} "
-                + $"{_memProps.MemoryTypes[(int)type].PropertyFlags}" + (b.Optimal ? " images" : " buffers") + (b.Slot > 0 ? $" streamed, slots of {Mb(b.Slot):0.000} MB" : "") + (b.Dedicated ? " dedicated" : "")
-                + (spare ? " spare" : "")));
+                    + $"{_memProps.MemoryTypes[(int)type].PropertyFlags}" + (b.Optimal ? " images" : " buffers")
+                    + (b.Slot > 0 ? $" streamed, slots of {Mb(b.Slot):0.000} MB" : "") + (b.Dedicated ? " dedicated" : "")
+                    + (spare ? " spare" : "")));
 
             foreach (var (key, list) in _pools) foreach (var b in list) Block(key.Type, b, false);
             foreach (var (key, b) in _spares) Block(key.Type, b, true);
@@ -758,7 +760,11 @@ public sealed unsafe class GpuAllocator : IDisposable
 
         // With ray queries every block may hold acceleration structures, their build inputs or scratch, which are reached by device address.
         var addressFlags = new MemoryAllocateFlagsInfo { SType = StructureType.MemoryAllocateFlagsInfo, Flags = MemoryAllocateFlags.DeviceAddressBit };
-        var info = new MemoryAllocateInfo { SType = StructureType.MemoryAllocateInfo, AllocationSize = size, MemoryTypeIndex = type, PNext = _dev.HasRayQuery && !optimal ? &addressFlags : null };
+        var info = new MemoryAllocateInfo
+        {
+            SType = StructureType.MemoryAllocateInfo, AllocationSize = size, MemoryTypeIndex = type,
+            PNext = _dev.HasRayQuery && !optimal ? &addressFlags : null,
+        };
         var r = _vk.AllocateMemory(_dev.Device, in info, null, out var mem);
 
         if (r != Result.Success)

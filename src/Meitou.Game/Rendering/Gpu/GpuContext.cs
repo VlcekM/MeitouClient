@@ -13,8 +13,8 @@ public sealed class GpuFeatureException(string message) : Exception(message);
 /// <summary>
 /// What the native API requires and what it may use (docs/renderer-native.md 1, owner decision 1).
 /// </summary>
-public sealed record GpuFeatures(bool Bindless, bool MultiDrawIndirect, bool DrawIndirectFirstInstance, bool DrawIndirectCount, bool ShaderDrawParameters,
-    bool PushDescriptors, bool DebugLabels)
+public sealed record GpuFeatures(bool Bindless, bool MultiDrawIndirect, bool DrawIndirectFirstInstance, bool DrawIndirectCount,
+    bool ShaderDrawParameters, bool PushDescriptors, bool DebugLabels)
 {
     public static GpuFeatures Of(VulkanDevice d) => new(d.HasBindless, d.MultiDrawIndirect, d.DrawIndirectFirstInstance, d.DrawIndirectCount,
         d.ShaderDrawParameters, d.HasPushDescriptor, d.DebugUtils is not null);
@@ -25,7 +25,8 @@ public sealed record GpuFeatures(bool Bindless, bool MultiDrawIndirect, bool Dra
     public IReadOnlyList<string> Missing()
     {
         var m = new List<string>();
-        if (!Bindless) m.Add("descriptor indexing (runtime descriptor arrays, partially bound, update after bind for sampled images, non-uniform indexing)");
+        if (!Bindless)
+            m.Add("descriptor indexing (runtime descriptor arrays, partially bound, update after bind for sampled images, non-uniform indexing)");
         if (!MultiDrawIndirect) m.Add("multiDrawIndirect");
         if (!DrawIndirectFirstInstance) m.Add("drawIndirectFirstInstance");
         return m;
@@ -166,7 +167,8 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     public bool FrameCompleted(long frame) => Device.Frames.CompletedFrame >= frame;
 
     /// <summary>
-    /// Waits for the GPU, then copies level 0 / layer <paramref name="layer"/> of a colour texture into host memory (tests and tools; never inside a frame).
+    /// Waits for the GPU, then copies level 0 / layer <paramref name="layer"/> of a colour texture into host memory (tests and tools; never inside a
+    /// frame).
     /// </summary>
     public byte[] ReadBack(GpuTexture texture, int bytesPerTexel, int layer = 0)
     {
@@ -241,7 +243,8 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
                     writes[i].PBufferInfo = &buffers[i];
                     break;
                 case GpuSlotKind.CombinedSampler:
-                    images[i] = new DescriptorImageInfo(Device.SamplerAt(b.Texture.Sampler.Index), Device.ViewAt(b.Texture.View.Index), ImageLayout.General);
+                    images[i] = new DescriptorImageInfo(Device.SamplerAt(b.Texture.Sampler.Index), Device.ViewAt(b.Texture.View.Index),
+                        ImageLayout.General);
                     writes[i].DescriptorType = DescriptorType.CombinedImageSampler;
                     writes[i].PImageInfo = &images[i];
                     break;
@@ -283,7 +286,10 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
                 if (Device.Vk.AllocateDescriptorSets(Device.Device, &ai, &set) == Result.Success) return new GpuSet(Device.AddSet(set));
             }
 
-            var pi = new DescriptorPoolCreateInfo { SType = StructureType.DescriptorPoolCreateInfo, MaxSets = 1024, PoolSizeCount = 2, PPoolSizes = sizes };
+            var pi = new DescriptorPoolCreateInfo
+            {
+                SType = StructureType.DescriptorPoolCreateInfo, MaxSets = 1024, PoolSizeCount = 2, PPoolSizes = sizes,
+            };
             VulkanException.Check(Device.Vk.CreateDescriptorPool(Device.Device, &pi, null, out var fresh), "vkCreateDescriptorPool");
             _persistentPools.Add(fresh);
         }
@@ -345,7 +351,8 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
 
     /// <inheritdoc/>
     /// <remarks>
-    /// A streamed texture of <see cref="GpuAllocator.OwnMemoryBytes"/> or more gets memory of its own here (the slow vkAllocateMemory is the worker's).
+    /// A streamed texture of <see cref="GpuAllocator.OwnMemoryBytes"/> or more gets memory of its own here (the slow vkAllocateMemory is the
+    /// worker's).
     /// </remarks>
     public GpuTexture? CreateTextureOffThread(TextureDesc desc)
     {
@@ -377,7 +384,8 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     /// </summary>
     public GpuBuffer CreateBuffer(ulong size, BufferUse use, string name)
     {
-        var buffer = Device.Allocator.CreateBuffer(Math.Max(size, 4), DeviceBuffer.Usage(use) | BufferUsageFlags.TransferDstBit, MemoryKind.DeviceLocal, name);
+        var buffer = Device.Allocator.CreateBuffer(Math.Max(size, 4), DeviceBuffer.Usage(use) | BufferUsageFlags.TransferDstBit, MemoryKind.DeviceLocal,
+            name);
         return buffer.Handle;
     }
 
@@ -503,9 +511,9 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     }
 
     /// <summary>
-    /// A host's partial depth clear (<see cref="CommandList.ClearDepth"/>: a shadow tile, the depth between slices) in its place among the guests: into
-    /// <paramref name="host"/>'s rendering, or, while it takes secondaries, as a segment of its own (a primary may record nothing else inside such a
-    /// rendering).
+    /// A host's partial depth clear (<see cref="CommandList.ClearDepth"/>: a shadow tile, the depth between slices) in its place among the guests:
+    /// into <paramref name="host"/>'s rendering, or, while it takes secondaries, as a segment of its own (a primary may record nothing else inside
+    /// such a rendering).
     /// </summary>
     public void ClearDepth(IGpuCommandList host, float value, PixelRect rect) => Clear(host, false, default, true, value, rect);
 

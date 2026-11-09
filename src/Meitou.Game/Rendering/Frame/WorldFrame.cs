@@ -240,10 +240,12 @@ static partial class WorldFrame
     static void UpdateParticles(WorldGpu gpu, WorldCamera camera)
     {
         if (gpu.Weather is not { } weather || gpu.MakeParticles is null) return;
+
         // In flight (KenshiCamera.FlightHeight, the platoons' gate) the weather's effects stop, as its fog does (SkyRenderer.WeatherFogScale).
         var input = gpu.Sky.WeatherFogScale == 0 ? WeatherEffectInput.None : weather.EffectInput();
         if (input.Effects.Count == 0 && gpu.Particles is null) return;
         var particles = gpu.Particles ??= gpu.MakeParticles();
+
         // The effects are placed in the camera's weather region: the area follows the cell the camera is in.
         if (gpu.WeatherAreas is { } areas)
         {
@@ -299,6 +301,7 @@ static partial class WorldFrame
     public const string FilteringSlider = "Anisotropic filtering (texture filtering)";
     public const string TextureQualitySlider = "Texture quality 0-4 (game)";
     public static readonly string[] ParticleSliders = ["Weather particles: 0 off 1 quarter 2 half 3 auto 4 full", "Particle density x"];
+
     // The Tab panel sliders' labels: the meitou.user.json keys, and the launcher's settings schema names them (keep them).
     public const string ObjectDistanceSlider = "Object draw distance", GrassDensitySlider = "Grass density x",
         WaterReflectionSlider = "Water reflection 0-4 (game)", ShadowDistanceSlider = "Shadow distance (game 1k-9k, 0 off)",
@@ -475,20 +478,26 @@ static partial class WorldFrame
 
         // How fast the clock runs (`--time-speed`): game hours per real minute, 0 stopped.
         if (getTimeSpeed is not null && setTimeSpeed is not null)
+        {
             sliders.Add(new Slider("Time speed", 0, 240, getTimeSpeed, v => setTimeSpeed(v < 10 ? MathF.Round(v * 10) / 10 : MathF.Round(v)),
                 Text: v => v <= 0 ? "stopped" : $"{v:0.#} game h / min"));
+        }
 
         // The window's vsync (off: MAILBOX, else IMMEDIATE; the frame rate is uncapped).
         if (getVSync is not null && setVSync is not null)
+        {
             sliders.Add(new Slider("VSync", 0, 1, () => getVSync() ? 1 : 0, v => setVSync(v >= 0.5f),
                     Text: v => v >= 0.5f ? "on" : "off (uncapped)"));
+        }
 
         // Borderless full screen (also Alt+Enter).
         if (getFullScreen is not null && setFullScreen is not null)
+        {
             sliders.Add(new Slider("Full screen", 0, 1, () => getFullScreen() ? 1 : 0, v =>
             {
                 if (v >= 0.5f != getFullScreen()) setFullScreen(v >= 0.5f);
             }, Text: v => v >= 0.5f ? "borderless" : "window"));
+        }
     }
 
     /// <summary>
@@ -500,9 +509,12 @@ static partial class WorldFrame
             Logarithmic: true,
             Faithful: Enhancements.FaithfulObjectDistance, Meitou: Enhancements.MeitouObjectDistance));
         if (objects.HasLandmarks)
+        {
             sliders.Add(new Slider(LandmarkDistanceSlider, 1000, 400000, () => objects.LandmarkDistance,
                     v => objects.LandmarkDistance = MathF.Round(v / 100) * 100,
                 "0", Logarithmic: true, Faithful: 0, Meitou: Enhancements.MeitouLandmarkDistance));
+        }
+
         sliders.Add(new Slider(DistantTownsSlider, 0, ObjectRanges.MaxDistantTownRangeZones * 10,
             () => objects.DistantRange / WorldLayout.ZoneSize, v => objects.DistantRange = MathF.Round(v) * WorldLayout.ZoneSize, "0"));
         sliders.Add(new Slider(ObjectLodSlider, 0.25f, 4, () => 1 / objects.LodBias, v => objects.LodBias = 1 / v, "0.00", Logarithmic: true));
@@ -588,8 +600,11 @@ static partial class WorldFrame
         sliders.Add(new Slider(GroundReliefDepthSlider, 0, 80, () => GroundRelief.Depth * 10, v => GroundRelief.Depth = MathF.Round(v * 2) / 20,
             "0.0"));
         if (g.Sky.Gpu.HasTessellation)
+        {
             sliders.Add(new Slider(GroundDisplaceDistanceSlider, 10, 200, () => GroundRelief.DisplaceDistance / 10,
                 v => GroundRelief.DisplaceDistance = MathF.Round(v) * 10, "0"));
+        }
+
         sliders.Add(new Slider(GroundParallaxDistanceSlider, 10, 150, () => GroundRelief.ParallaxDistance / 10,
             v => GroundRelief.ParallaxDistance = MathF.Round(v) * 10, "0"));
     }
@@ -632,6 +647,7 @@ static partial class WorldFrame
             v => sky.CloudHeight = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
         // Ours: the sky's ambient light (shade, nights, interiors), a multiple of the game's.
         sliders.Add(new Slider(AmbientStrengthSlider, 0, 3, () => sky.AmbientStrength, v => sky.AmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
+
         // Ours: a further multiple by night (the exposure sits at its night floor there, so it is not adapted away).
         sliders.Add(new Slider(NightAmbientStrengthSlider, 0, 5, () => sky.NightAmbientStrength,
             v => sky.NightAmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
@@ -668,8 +684,10 @@ static partial class WorldFrame
             int i = (int)MathF.Round(v);
             g.WeatherParticles = i > 0;
             if (i > 0)
+            {
                 (post.Options.LowResParticles, post.Options.ParticleDivisor) = i switch { 1 => (true, 4), 2 => (true, 2), 3 => (true, 0), _ => (false,
                         0) };
+            }
         }, "0"));
         sliders.Add(new Slider(ParticleSliders[1], 0.1f, 1, () => g.ParticleDensity, v => g.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
 
@@ -845,13 +863,17 @@ static partial class WorldFrame
         host.Open(5, post.SceneTargets, new ClearColour(0, 0, 0, 0), clearDepth: true);
         gpu.Sky.Draw(vp, colours);
         host.Close();
+
         // Motion and particle callbacks belong to the world that is being replaced.
         var motion = gpu.PostChain?.ObjectMotion;
         var particles = post.Particles;
         gpu.PostChain?.ObjectMotion = null;
         post.Particles = null;
         post.SetCloudMotion(null);
-        try { post.End(); }
+        try
+        {
+            post.End();
+        }
         finally
         {
             gpu.PostChain?.ObjectMotion = motion;
@@ -930,6 +952,7 @@ static partial class WorldFrame
         float dt = (float)Math.Min(gpu.HeatHazeClock.Elapsed.TotalSeconds, 0.25);
         bool first = !gpu.HeatHazeClock.IsRunning;
         gpu.HeatHazeClock.Restart();
+
         // With the scheduler the value is the state's own (the weather's field × the strength × the sun factor, ramped on the settling time, snapped
         // on a teleport); without a scheduler (no database) it is the old forced path at strength 1, ramped here.
         var weather = gpu.Weather;
@@ -940,6 +963,7 @@ static partial class WorldFrame
                 weather?.Times.Settling ?? dt);
         if (!post.InstantAdaptation) gpu.HeatHazeHours += dt * HeatHaze.HoursPerSecond;
         post.HeatHazeHours = gpu.GameHours ?? gpu.HeatHazeHours;
+
         // the heat haze's D follows the install's `view distance`, not the sky haze's constant
         post.HeatHazeFarClip = KenshiHaze.FarDistance(HeatHaze.ViewDistanceSetting);
     }
@@ -958,6 +982,7 @@ static partial class WorldFrame
         bool? temporal = null)
     {
         var shadow = gpu.Shadow!;
+
         // The caller's post chain owns the temporal decision (Metal's PostTaa/MetalFX is outside gpu.Post).
         shadow.Temporal = temporal ?? gpu.PostChain?.Temporal == true;
         var v = camera.View;

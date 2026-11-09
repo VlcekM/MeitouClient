@@ -18,6 +18,7 @@ public static class BackgroundWork
             // A free thread takes the oldest urgent job first (TakeFromAny tries the collections in order), then the oldest other one.
             var both = new[] { _urgent, _queue };
             for (int i = 0; i < threads; i++)
+            {
                 new Thread(() =>
                 {
                     while (true)
@@ -27,6 +28,7 @@ public static class BackgroundWork
                     }
                 })
                 { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = $"meitou-stream-{i}" }.Start();
+            }
         }
 
         protected override void QueueTask(Task task) => (task.AsyncState is UrgentMark ? _urgent : _queue).Add(task);

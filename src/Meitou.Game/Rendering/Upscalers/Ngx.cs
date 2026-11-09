@@ -120,8 +120,8 @@ public sealed unsafe class Ngx : IDisposable
 
         if (Find(LibraryName) is not { } client)
         {
-            reason = $"{LibraryName} not found (tools/scripts/build-ngx-shim{ShimSuffix()}.sh builds it; next to the executable or in MEITOU_DLSS_PATH); "
-                + "NGX not loaded";
+            reason = $"{LibraryName} not found (tools/scripts/build-ngx-shim{ShimSuffix()}.sh builds it; next to the executable or in "
+                + "MEITOU_DLSS_PATH); NGX not loaded";
             return null;
         }
 
@@ -220,6 +220,7 @@ public sealed unsafe class Ngx : IDisposable
     public void Apply(VulkanDeviceOptions options)
     {
         options.InstanceExtensions = [.. options.InstanceExtensions ?? [], .. InstanceExtensions];
+
         // The device enables buffer device address as the Vulkan 1.2 feature; NGX's list names it as VK_EXT_buffer_device_address, which may not
         // be enabled together with that feature.
         options.DeviceExtensions = [.. options.DeviceExtensions ?? [], .. DeviceExtensions.Where(e => e != "VK_EXT_buffer_device_address")];

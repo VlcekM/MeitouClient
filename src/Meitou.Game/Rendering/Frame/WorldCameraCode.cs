@@ -43,8 +43,15 @@ public static class WorldCameraCode
         string hex = new((text ?? "").Where(c => !char.IsWhiteSpace(c)).ToArray());
         if (hex.Length != 2 * Bytes) return null;
         byte[] b;
-        try { b = Convert.FromHexString(hex); }
-        catch (FormatException) { return null; }
+        try
+        {
+            b = Convert.FromHexString(hex);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+
         if (b[0] != Version) return null;
         var v = new float[6];
         for (int i = 0; i < 6; i++) v[i] = BinaryPrimitives.ReadSingleLittleEndian(b.AsSpan(1 + 4 * i));

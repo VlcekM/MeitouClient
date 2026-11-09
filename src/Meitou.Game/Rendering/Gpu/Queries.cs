@@ -156,7 +156,8 @@ public sealed class GpuStats
     /// <summary>
     /// The counters <see cref="Running"/> gives, in its order.
     /// </summary>
-    public static readonly string[] CounterNames = ["draws", "indirect", "dispatches", "pipelines", "pushes", "segments", "constantBytes", "uploadBytes"];
+    public static readonly string[] CounterNames =
+        ["draws", "indirect", "dispatches", "pipelines", "pushes", "segments", "constantBytes", "uploadBytes"];
 
     readonly long[] _carried = new long[8];
 

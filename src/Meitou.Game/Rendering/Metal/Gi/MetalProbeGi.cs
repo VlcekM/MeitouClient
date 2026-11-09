@@ -68,10 +68,8 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         _irradianceImage = ctx.TextureAt(_irradiance);
         _distanceImage = ctx.TextureAt(_distance);
         _baseImage = ctx.TextureAt(_bases);
-        _linear = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
-        _nearest = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+        _linear = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear));
+        _nearest = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
         for (int i = 0; i < _constantsBuffers.Length; i++)
             _constantsBuffers[i] = ctx.Device.NewBuffer((ulong)Marshal.SizeOf<ProbeConstants>(), MTLResourceOptions.ResourceStorageModeShared);
 

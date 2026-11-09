@@ -35,7 +35,8 @@ public static class UploadProfile
     }
 
     /// <summary>
-    /// A memory block made or given back (<see cref="Part.NewBlock"/>, <see cref="Part.FreeBlock"/>); a line when it took 1 ms or more, with the thread kind.
+    /// A memory block made or given back (<see cref="Part.NewBlock"/>, <see cref="Part.FreeBlock"/>); a line when it took 1 ms or more, with the
+    /// thread kind.
     /// </summary>
     public static void EndBlock(bool created, long start, ulong size, uint type, bool optimal, bool dedicated)
     {

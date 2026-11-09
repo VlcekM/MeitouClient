@@ -175,12 +175,14 @@ sealed class ProfilerLegend
             var stages = FrameProfiler.Groups[gi].Stages;
             if (stages.Length > 1) rowCount++;
             if (stages.Length == 1 || _groupOpen[gi])
+            {
                 foreach (int s in stages)
                 {
                     rowCount += 1;
                     if (s == StageClock.UpdChars && _partsOpen) rowCount += partCount;
                     if (s == StageClock.Sim && _simOpen) rowCount += simRowCount + 2;
                 }
+            }
         }
 
         return rowCount;

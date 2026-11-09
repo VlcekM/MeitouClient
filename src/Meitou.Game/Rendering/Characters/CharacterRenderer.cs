@@ -240,11 +240,17 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             // A reused set: the background-loading bar asks every frame.
             _pendingLooks.Clear();
             foreach (var c in Draws.Items)
+            {
                 if (!_assets.ContainsKey(c.Appearance) && BuildsLook(c, _buildEye, _buildReach))
                     _pendingLooks.Add(c.Appearance);
+            }
+
             foreach (var c in Draws.Distant)
+            {
                 if (!_assets.ContainsKey(c.Appearance) && BuildsLook(c, _buildEye, _buildReach))
                     _pendingLooks.Add(c.Appearance);
+            }
+
             return _pendingLooks.Count + _content.Textures.AwaitedCount + _content.Textures.UnresidentUsedCount;
         }
     }
@@ -268,7 +274,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     /// <summary>
     /// Current appearances still being prepared/uploaded, or textures still being loaded. Failed assets count as finished.
     /// </summary>
-    public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !_assets.ContainsKey(c.Appearance)) || Draws.Distant.Any(c => !Deferred(c) && !_assets.ContainsKey(c.Appearance))
+    public bool ContentPending => Draws.Items.Any(c => !Deferred(c) && !_assets.ContainsKey(c.Appearance))
+        || Draws.Distant.Any(c => !Deferred(c) && !_assets.ContainsKey(c.Appearance))
         || _content.Textures.AwaitedCount > 0 || _content.Textures.UnresidentUsedCount > 0;
 
     /// <summary>
@@ -569,6 +576,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
     public bool SettleFirst { get; set; }
     float _textureBias;
     uint _textureStandIn;
+
     // What every material record depends on besides its material: the texture cache's version, the bias, the stand-in and the samplers. A change (or
     // a skin setting's) starts a new epoch, and each record is written again when next used.
     (int, float, uint, int) _materialInputs;
@@ -638,8 +646,11 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             var rig = l.Asset.Rig;
             if (state.Bones.Length != rig.BoneCount) continue;
             if (state.BoltLocal.Count > bolts.Count)
+            {
                 foreach (int id in state.BoltLocal.Keys.ToArray())
                     if (!bolts.Any(b => b.Id == id)) state.BoltLocal.Remove(id);
+            }
+
             int root = rig.Skeleton.Bones.FirstOrDefault(b => b.Parent is null)?.Handle ?? 0;
             foreach (var bolt in bolts)
             {
@@ -699,8 +710,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             ref var l = ref _live[i];
             if (l.PortraitOnly || l.Asset.IsIcon || l.Asset.Lamps.Count == 0) continue;
             foreach (var lamp in l.Asset.Lamps)
+            {
                 if (lamp.AttachIndex < l.State.Attach.Length)
                     into.Add(lamp.Light with { Position = (l.State.Attach[lamp.AttachIndex] * l.World).Translation });
+            }
         }
     }
 
@@ -787,7 +800,8 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         {
             var inst = items[i];
 
-            // Too small to show (Meitou's choice, docs/character-renderer.md "Tiny characters"): no build, pose or draw; the simulation and the host's lists still hold it.
+            // Too small to show (Meitou's choice, docs/character-renderer.md "Tiny characters"): no build, pose or draw; the simulation and the
+            // host's lists still hold it.
             _assets.TryGetValue(inst.Appearance, out var known);
             if (CullTiny(in inst, eye, known)) continue;
             if (AssetFor(in inst, eye, reach * inst.DrawDistanceScale, ref built, ref buildMs) is not { } asset)
@@ -800,8 +814,10 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
 
             float scale = inst.Scale > 0 ? inst.Scale : 1;
             var centre = inst.Position + new Vector3(0, asset.Height * 0.5f * scale, 0);
+
+            // FUN_1405c9f60: the position's distance, skipped for a gigantic race.
             bool far = inst.Hidden || Vector3.Distance(eye, centre) - asset.Radius * scale > reach * inst.DrawDistanceScale
-                || inst.DrawDistanceScale <= 1 && Vector3.DistanceSquared(eye, inst.Position) > reach * reach;   // FUN_1405c9f60: the position's distance, skipped for a gigantic race
+                || inst.DrawDistanceScale <= 1 && Vector3.DistanceSquared(eye, inst.Position) > reach * reach;
             if (far && !_portraitKeys.Contains(inst.Key))
             {
                 if (!inst.Hidden && Kept.Count > 0 && NearKept(centre) is var dk && dk <= KeptReach)
@@ -957,9 +973,14 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         var asset = l.Asset;
         var rig = asset.Rig;
         if (inst.Poses is { } poses)
+        {
             for (int p = 0; p < poses.Count; p++)
+            {
                 if (rig.Layer(_content.Database, poses[p].Animation, asset.Animal) is { } def)
                     AddLayer(new ActiveLayer(def, poses[p].Time, poses[p].Weight));
+            }
+        }
+
         foreach (var (def, time) in asset.Fixed) AddLayer(new ActiveLayer(def, time, 1));
         l.LayerCount = _layerCount - l.LayerStart;
     }
@@ -1153,24 +1174,29 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         foreach (var part in _slotParts)
             Offer(part, part.Near / part.UvScale * _budget.NeedScale);
         foreach (var (asset, distance) in _keptLooks)
+        {
             foreach (var part in asset.Parts)
                 Offer(part, Math.Max(Math.Max(distance, KeptViewDistance) - asset.Radius * 0.5f, 0.5f) / part.UvScale * _budget.NeedScale);
+        }
 
         static void Offer(AssetPart part, float need)
         {
             // Negative attachment bias needs finer resident mips as well as biased sampling.
             need *= MathF.Pow(2, part.Material.MipmapBias);
             foreach (var t in part.Material.Tex)
+            {
                 if (t is not null)
                 {
                     t.OfferNow(need);
                     _ = t.Key;
                 }
+            }
         }
     }
 
     static bool SameRecord(in CharacterMaterialRecord a, in CharacterMaterialRecord b) =>
-        MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in a)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in b)));
+        MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in a))
+            .SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<CharacterMaterialRecord>(in b)));
 
     readonly List<long> _staleKeys = [];
 
@@ -1215,9 +1241,17 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         for (int i = 0; i < _distantBuilds.Count; i++)
         {
             var look = _distantBuilds[i];
-            if (_assets.ContainsKey(look)) { _distantBuilds.RemoveAt(i--); continue; }
-            if (LoadBudget > 0 && (!_content.Fetched(look) || !Covered && built >= LoadBudget || buildMs >= (Covered ? CoveredBudgetMs : BuildBudgetMs)))
+            if (_assets.ContainsKey(look))
+            {
+                _distantBuilds.RemoveAt(i--);
                 continue;
+            }
+
+            if (LoadBudget > 0
+                && (!_content.Fetched(look) || !Covered && built >= LoadBudget || buildMs >= (Covered ? CoveredBudgetMs : BuildBudgetMs)))
+            {
+                continue;
+            }
             long buildStart = Stopwatch.GetTimestamp();
             _assets[look] = _content.Build(look);
             buildMs += Stopwatch.GetElapsedTime(buildStart).TotalMilliseconds;
@@ -1282,6 +1316,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
         if (asset.PendingNormals is not { } p || !Ready(p.Normal) || !Ready(p.Blend)) return;
         asset.PendingNormals = null;
         foreach (var part in asset.Parts)
+        {
             if (part.Material.Shading == CharacterShaders.ShadeBody)
             {
                 part.Material.Tex[CharacterShaders.SlotNormal] = p.Normal;
@@ -1289,6 +1324,7 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
                 part.Material.MuscleBlend = p.Weight;
                 part.Material.RecordEpoch = 0;
             }
+        }
 
         // Reading the key asks for the texture; a missing file never becomes resident.
         static bool Ready(WorldTexture? t) => t is null || t.Key != 0 || t.State == WorldTexture.Residency.Missing;
@@ -1370,11 +1406,15 @@ internal sealed unsafe partial class CharacterRenderer : IDisposable
             }
             Update(eye);   // the indices of what has just landed
         }
-        finally { LoadBudget = old; }
+        finally
+        {
+            LoadBudget = old;
+        }
     }
 
     public string Describe() =>
-        $"{Assets} appearances, {_content.MeshCount} meshes ({_content.MeshBytes / 1048576.0:0.0} MB), {_content.Textures.Describe()}, texture need x{_budget.NeedScale:0.0} (mark {_content.Textures.MarkMb:0} MB)";
+        $"{Assets} appearances, {_content.MeshCount} meshes ({_content.MeshBytes / 1048576.0:0.0} MB), {_content.Textures.Describe()}, " +
+        $"texture need x{_budget.NeedScale:0.0} (mark {_content.Textures.MarkMb:0} MB)";
 
     public void Dispose()
     {

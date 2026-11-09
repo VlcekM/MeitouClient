@@ -6,10 +6,10 @@ using Meitou.Game.Rendering.Overlays;
 namespace Meitou.Game.Rendering.Ui;
 
 /// <summary>
-/// Painted controls kept across frames: what a control added to the overlay pass (its quads and glyphs, their textures and clips), its opaque area and
-/// edit boxes, replayed while a control of the same content is drawn in the same hover and pushed state. Matched by content, not by object: the
-/// interface arranges new controls whenever the world ticks. A control is recorded the second frame it is seen (most controls that live one frame,
-/// as the floaters' moving ones, are never copied), and never while it changes on its own (a blinking caret, an icon still loading or the renderer's).
+/// Painted controls kept across frames: what a control added to the overlay pass (its quads and glyphs, their textures and clips), its opaque area
+/// and edit boxes, replayed while a control of the same content is drawn in the same hover and pushed state. Matched by content, not by object: the
+/// interface arranges new controls whenever the world ticks. A control is recorded the second frame it is seen (most controls that live one frame, as
+/// the floaters' moving ones, are never copied), and never while it changes on its own (a blinking caret, an icon still loading or the renderer's).
 /// Every record goes when a texture or font atlas the painter draws from changes, the size or the mode changes.
 /// </summary>
 public sealed partial class UiPainter

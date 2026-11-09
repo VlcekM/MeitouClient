@@ -373,6 +373,7 @@ public sealed unsafe class Streamline : IDisposable
         nint fn;
         fixed (byte* name = "vkCreateWin32SurfaceKHR\0"u8) fn = _interposerGetInstanceProcAddr(instance.Handle, name);
         if (fn == 0) return default;
+
         // VkWin32SurfaceCreateInfoKHR: sType 1000009000, next, flags, hinstance, hwnd.
         var info = stackalloc nint[5];
         info[0] = 1000009000;
@@ -402,7 +403,11 @@ public sealed unsafe class Streamline : IDisposable
             ComputeQueueIndex = 1 + graphics,
         };
         if (GraphicsQueues > device.ExtraQueues.Length)
-            Console.WriteLine($"streamline the graphics family has {device.ExtraQueues.Length} queues beyond ours, Streamline asked for {GraphicsQueues}");
+        {
+            Console.WriteLine(
+                $"streamline the graphics family has {device.ExtraQueues.Length} queues beyond ours, Streamline asked for {GraphicsQueues}");
+        }
+
         // Without DLSS Streamline is shut down at once, so no NVIDIA layer stays attached to another vendor's device (#55).
         int rc = _setVulkanInfo(&info);
         if (rc != 0)

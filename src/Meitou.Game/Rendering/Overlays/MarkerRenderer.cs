@@ -94,6 +94,7 @@ public sealed unsafe class MarkerRenderer : IDisposable
     readonly LegacyProgram _composite;
     readonly NativeSegment _compositeSegment;
     readonly SamplerSlot _markerImage;
+
     // The markers drawn multisampled with a depth of their own, at the picture's size, and resolved.
     GpuTexture? _msColour, _msDepth, _resolved;
     readonly int _samples;
@@ -102,6 +103,7 @@ public sealed unsafe class MarkerRenderer : IDisposable
     /// </summary>
     const long IdleReleaseMs = 10_000;
     long _idleSince;
+
     // The vertex ranges of the two meshes in the buffer (count 0: the mesh is missing).
     readonly (int First, int Count) _marker, _arrow, _ring;
 
@@ -183,7 +185,11 @@ public sealed unsafe class MarkerRenderer : IDisposable
             var mesh = OgreMeshReader.ReadFile(path);
             foreach (var sub in mesh.SubMeshes)
             {
-                if (sub.Operation != OgreOperationType.TriangleList || (sub.VertexData ?? mesh.SharedVertexData) is not { } v || v.ReadPositions() is not { } positions) continue;
+                if (sub.Operation != OgreOperationType.TriangleList || (sub.VertexData ?? mesh.SharedVertexData) is not { } v
+                    || v.ReadPositions() is not { } positions)
+                {
+                    continue;
+                }
                 float[]? normals = v.Find(OgreVertexSemantic.Normal) is { } n ? v.ReadFloats(n) : null;
                 var indices = sub.Indices.Indices;
                 for (int t = 0; t + 2 < indices.Length; t += 3)
@@ -300,8 +306,10 @@ public sealed unsafe class MarkerRenderer : IDisposable
         if (!hidden && Rotation && _ring.Count > 0)
             Draw(cmd, _ring, camera.Target + Vector3.UnitY - eye, Matrix4x4.CreateScale(MathF.Max(3, camera.Distance * 0.06f)), Visible);
         if (_arrow.Count > 0)
+        {
             foreach (var a in arrows)
                 Draw(cmd, _arrow, a.At - eye, ArrowScale * PointAlong(a.Direction), new Vector4(a.Colour, hidden ? ArrowHiddenAlpha : 1));
+        }
     }
 
     /// <summary>
@@ -347,8 +355,7 @@ public sealed unsafe class MarkerRenderer : IDisposable
         return Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(new Quaternion(Vector3.Cross(from, direction), 1 + dot)));
     }
 
-    GpuSampler Nearest() => _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-        TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+    GpuSampler Nearest() => _gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
 
     /// <summary>
     /// A frame that draws no marker: the targets are freed once none has been drawn for <see cref="IdleReleaseMs"/>.

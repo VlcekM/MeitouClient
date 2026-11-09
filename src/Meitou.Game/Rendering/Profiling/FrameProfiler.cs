@@ -181,6 +181,7 @@ public sealed class FrameProfiler : IDisposable
         _submitted[_slot] = StageClock.SubmissionStarted;
         _pending[_slot] = _stampCount[_slot] > 1;
         StampsLastFrame = _stampCount[_slot] + _preCount[_slot];
+
         // Complete when the context has ended the frame already (else the total falls back to gpuFrameMs).
         _slotWhole[_slot] = _native.CurrentFrameStamps;
         _slotPreEnd[_slot] = _native.LastFrameStamps.PreEnd;
@@ -234,6 +235,7 @@ public sealed class FrameProfiler : IDisposable
 
     // Series of the frame being read (Collect), and the stamp slots of each frame in flight.
     readonly double[] _gpuFrame = new double[Series];
+
     // Each profiled frame's own first and last stamps (its GPU total).
     readonly (QuerySlot Begin, QuerySlot End)[] _slotWhole = new (QuerySlot, QuerySlot)[Slots];
 
@@ -408,7 +410,10 @@ public sealed class FrameProfiler : IDisposable
     /// <summary>
     /// Reads every GPU timing that is ready now (after the last frame of a run has been waited for).
     /// </summary>
-    public void Flush() { for (int s = 0; s < Slots; s++) Collect(s); }
+    public void Flush()
+    {
+        for (int s = 0; s < Slots; s++) Collect(s);
+    }
 
     /// <summary>
     /// A left click at <paramref name="at"/> (framebuffer pixels): on a legend row marked + or - it opens or closes that row. True when it was on the
