@@ -53,6 +53,7 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
 {
     public GpuContext(VulkanDevice device)
     {
+        _standIns = new StandInTextures(this);   // made first, as its fields were initialised before the constructor ran
         Device = device;
         Features = GpuFeatures.Of(device);
         Features.Require(device.DeviceName);
@@ -201,7 +202,7 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
         Bindless.Dispose();
         Shaders.Dispose();
         DisposeSets();
-        DisposeDummies();
+        _standIns.Dispose();
         Samplers.Dispose();
         Defaults.Dispose();
     }
@@ -444,17 +445,17 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
 
     #endregion
 
-    #region Dummies
+    #region Stand-ins
 
-    uint? _standIn2D;
-    readonly Dictionary<(int, ScalarKind, bool), SampledTexture> _dummies = [];
-    readonly List<GpuTexture> _dummyTextures = [];
+    /// <summary>
+    /// The stand-in textures a sampler reads when nothing is bound (<see cref="StandInTextures"/>).
+    /// </summary>
+    readonly StandInTextures _standIns;
 
     /// <summary>
     /// The stand-in's index in the bindless 2D float array (what a 2D sampler with nothing bound reads, <see cref="Dummy"/>), registered once.
     /// </summary>
-    public uint StandIn2D => _standIn2D ??= Bindless.Register(BindlessKind.Texture2D,
-        Dummy(new SamplerInfo("", 0, 0, SamplerDimension.Dim2D, false, false, false, ScalarKind.Float, 0)));
+    public uint StandIn2D => _standIns.StandIn2D;
 
     /// <summary>
     /// The generic attribute value a disabled vertex input reads (<see cref="GpuDefaults.DummyVertex"/>).
@@ -464,31 +465,7 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     /// <summary>
     /// The stand-in a sampler reads when nothing is bound: (0, 0, 0, 1), or depth 1 for a shadow sampler.
     /// </summary>
-    public SampledTexture Dummy(SamplerInfo sampler)
-    {
-        int slot = GlConventions.SamplerSlot(sampler);
-        var key = (slot, sampler.SampledKind, sampler.Depth);
-        if (_dummies.TryGetValue(key, out var s)) return s;
-
-        var d = Defaults.Texture(slot, sampler.SampledKind, sampler.Depth);
-        var kind = slot == 2 ? TextureKind.Cube : slot == 1 ? TextureKind.Texture2DArray : TextureKind.Texture2D;
-        var desc = new TextureDesc(d.Format, 1, 1, 1, slot == 2 ? 1 : d.Layers, Kind: kind);
-        var t = BorrowTexture(desc, d.Image.Image);
-        bool integer = GlConventions.IsIntegerFormat(d.Format) || d.Format == InternalFormat.R32I;
-        var filter = SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.Repeat, TextureWrapMode.Repeat,
-            TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, integer, 0);
-        var sampled = new SampledTexture(Samplers.Get(filter), t.View());
-        _dummies[key] = sampled;
-        _dummyTextures.Add(t);   // borrowed image, but the view cut on it is ours to destroy
-        return sampled;
-    }
-
-    void DisposeDummies()
-    {
-        foreach (var t in _dummyTextures) t.Dispose();   // the stand-ins' views, before their images (Defaults) go
-
-        _dummyTextures.Clear();
-    }
+    public SampledTexture Dummy(SamplerInfo sampler) => _standIns.For(sampler);
 
     #endregion
 

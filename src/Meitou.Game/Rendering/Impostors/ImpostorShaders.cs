@@ -433,7 +433,11 @@ public static class ImpostorShaders
 
     """);
 
-    /// <summary>The colour program's main, from the sampled surface on: the wetness, the mesh shader's lighting and the haze.</summary>
+    /// <summary>
+
+    /// The colour program's main, from the sampled surface on: the wetness, the mesh shader's lighting and the haze.
+
+    /// </summary>
     const string FragmentLighting = """
             mat4 model = mat4(vModel0, vModel1, vModel2, vModel3);
             vec3 world = (model * vec4(s.position, 1.0)).xyz;
@@ -555,7 +559,11 @@ public static class ImpostorShaders
         }
         """;
 
-    /// <summary><see cref="DepthFragment"/> in the native model.</summary>
+    /// <summary>
+
+    /// <see cref="DepthFragment"/> in the native model.
+
+    /// </summary>
     public static string DepthFragmentNative() => NativeShaders.Port(DepthFragment, NativeShaders.Map(NativeMap), PushMembers);
 
     /// <summary>
@@ -595,7 +603,11 @@ public static class ImpostorShaders
     /// world space while baking).</summary>
     public static string BakeVertexNative() => NativeShaders.MeshVertex(new Dictionary<string, string> { ["uModel"] = "mat4(1.0)" });
 
-    /// <summary>The C# side of the bake's storage block (<see cref="BakeFragmentNative"/>, std430, 80 bytes).</summary>
+    /// <summary>
+
+    /// The C# side of the bake's storage block (<see cref="BakeFragmentNative"/>, std430, 80 bytes).
+
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     public struct BakeBlock
     {
@@ -603,9 +615,15 @@ public static class ImpostorShaders
         public int Pass, Pad1, Pad2, Pad3;
     }
 
-    // ---- the impostor program in the native model (docs/renderer-native.md 3.3): Vertex and Fragment through NativeShaders.Port ----
+    #region Native program
 
-    /// <summary>The impostor program's push constants (<see cref="ImpostorPush"/> is the C# side; std430, 80 bytes).</summary>
+    // The impostor program in the native model (docs/renderer-native.md 3.3): Vertex and Fragment through NativeShaders.Port.
+
+    /// <summary>
+
+    /// The impostor program's push constants (<see cref="ImpostorPush"/> is the C# side; std430, 80 bytes).
+
+    /// </summary>
     public const string PushMembers = """
             vec4 sphere;
             vec3 cameraUp;
@@ -621,7 +639,11 @@ public static class ImpostorShaders
             vec4 view;
         """;
 
-    /// <summary>The impostor program's own uniforms: <see cref="ImpostorPush"/> members, the atlas maps by their bindless index.</summary>
+    /// <summary>
+
+    /// The impostor program's own uniforms: <see cref="ImpostorPush"/> members, the atlas maps by their bindless index.
+
+    /// </summary>
     static readonly Dictionary<string, string> NativeMap = new()
     {
         ["uImpostor"] = "pc.sphere",
@@ -637,21 +659,39 @@ public static class ImpostorShaders
         ["uImpostorBox"] = "pc.spare",
     };
 
-    /// <summary><see cref="Vertex"/> in the native model.</summary>
+    /// <summary>
+
+    /// <see cref="Vertex"/> in the native model.
+
+    /// </summary>
     public static string VertexNative() => NativeShaders.Port(Vertex, NativeShaders.Map(NativeMap), PushMembers);
 
-    /// <summary><see cref="Fragment"/> in the native model.</summary>
+    /// <summary>
+
+    /// <see cref="Fragment"/> in the native model.
+
+    /// </summary>
     public static string FragmentNative() =>
         Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(Fragment, NativeShaders.Map(NativeMap), PushMembers), inShader: true);
 
-    /// <summary><see cref="FragmentAfterPrepass"/> in the native model.</summary>
+    /// <summary>
+
+    /// <see cref="FragmentAfterPrepass"/> in the native model.
+
+    /// </summary>
     public static string FragmentAfterPrepassNative() =>
         Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(FragmentAfterPrepass, NativeShaders.Map(NativeMap), PushMembers), inShader: true);
 
-    /// <summary><see cref="PrepassFragment"/> in the native model.</summary>
+    /// <summary>
+
+    /// <see cref="PrepassFragment"/> in the native model.
+
+    /// </summary>
     public static string PrepassFragmentNative() => NativeShaders.Port(PrepassFragment, NativeShaders.Map(NativeMap), PushMembers);
 
-    // ---- TERRAIN-mode rocks (docs/impostors.md section 13) ----
+    #endregion
+
+    #region TERRAIN-mode rocks (docs/impostors.md section 13)
 
     /// <summary><see cref="PushMembers"/> and what a rock's impostor needs of the terrain (<see cref="ImpostorRockPush"/> is the C# side; offsets 80
     /// to 123): the colour-map window, the bindless indices of the ground, whole-world colour and colour maps, the world's half size, the distances
@@ -738,4 +778,6 @@ public static class ImpostorShaders
 
         return regex.Replace(source, _ => replacement, 1);
     }
+
+    #endregion
 }

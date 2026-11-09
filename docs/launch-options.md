@@ -64,7 +64,7 @@ Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou
 
 ## Viewer (`meitou-viewer`)
 
-Authority: `tools/Meitou.ModelViewer/Program.cs` (dispatch), `WorldApp.cs`, `WorldApp.FieldTour.cs`, `ImpostorApp.cs`, and `src/Meitou.Game/Rendering/Frame/WorldFrame.cs` for the world options (see "Shared world options"). With no arguments it opens `--world --town "The Hub"`.
+Authority: `tools/Meitou.ModelViewer/Program.cs` (dispatch), `WorldApp.cs`, `WorldApp.FieldTour.cs`, `ImpostorApp.cs`, and `src/Meitou.Game/Rendering/Frame/WorldCommandLine.cs` for the world options (see "Shared world options"). With no arguments it opens `--world --town "The Hub"`.
 
 Dispatch: `--world`, `--view` and `--bench-compare` open the world viewer; `--impostor-preview` and `--impostor-bake-all` open the impostor tool; anything else prints a short usage and exits 2.
 
@@ -95,7 +95,7 @@ Dispatch: `--world`, `--view` and `--bench-compare` open the world viewer; `--im
 
 ## Shared world options
 
-Authority: `src/Meitou.Game/Rendering/Frame/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.Game/Rendering/Post/PostProcessOptions.cs` (`TryParse`, the post-processing rows), `src/Meitou.Game/Rendering/Frame/Enhancements.cs` (switch ids). Used by the game (after its own options) and by the viewer.
+Authority: `src/Meitou.Game/Rendering/Frame/WorldCommandLine.cs` (`Parse`, `Usage`), `src/Meitou.Game/Rendering/Post/PostProcessOptions.cs` (`TryParse`, the post-processing rows), `src/Meitou.Game/Rendering/Frame/Enhancements.cs` (switch ids). Used by the game (after its own options) and by the viewer.
 
 ### Where and camera
 
@@ -284,7 +284,7 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_DIAG_IDLE` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #108): each frame waits for every frame in flight before it begins. Slower frames. |
 | `MEITOU_DIAG_NO_MATERIAL_CACHE` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #319): the terrain material cache starts off; every pixel shades the layers. |
 | `MEITOU_DIAG_NO_GROW` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #319): the terrain near layer arrays and the grass store keep their first size (no growth for kept places or a longer grass distance). |
-| `MEITOU_VRAM_GUARD` | `src/Meitou.Game/Rendering/Frame/WorldFrame.cs`, `src/Meitou.Game/GameHost.Metal.cs` | `0` turns the memory-pressure guard off. On by default. |
+| `MEITOU_VRAM_GUARD` | `src/Meitou.Game/Rendering/Frame/WorldGpuBuilder.cs`, `src/Meitou.Game/GameHost.Metal.cs` | `0` turns the memory-pressure guard off. On by default. |
 | `MEITOU_OBJECT_LOD_CACHE` | `src/Meitou.Game/Rendering/Objects/ObjectLodGen.cs` | Folder for the object LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
 | `MEITOU_CHARACTER_LOD_CACHE` | `src/Meitou.Game/Rendering/Characters/CharacterContent.cs` | Folder for the character LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
 | `MEITOU_IMPOSTOR_CACHE` | `src/Meitou.Game/Rendering/Impostors/ImpostorCache.cs` | Impostor cache folder. |
