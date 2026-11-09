@@ -16,17 +16,34 @@ namespace Meitou.Game.Title;
 /// </summary>
 sealed class TitleComposition
 {
-    /// <summary>The view, as a viewer camera code (Ctrl+C in the viewer): target, yaw, pitch and distance.</summary>
+    /// <summary>
+    /// The view, as a viewer camera code (Ctrl+C in the viewer): target, yaw, pitch and distance.
+    /// </summary>
     internal const string Spot = "01D8183CC7662DD3442850C8C60D2BA740BE448EBDEE49D345";
-    /// <summary>The viewer's lens, which the spot was chosen with.</summary>
+
+    /// <summary>
+    /// The viewer's lens, which the spot was chosen with.
+    /// </summary>
     internal const float FieldOfView = 50 * MathF.PI / 180;
-    /// <summary>The near plane's cap: the eye is ~350 units over the ground, which would put the near plane past the wanderer.</summary>
+
+    /// <summary>
+    /// The near plane's cap: the eye is ~350 units over the ground, which would put the near plane past the wanderer.
+    /// </summary>
     const float NearPlane = 20;
-    /// <summary>How far right of the view's centre the sun stands.</summary>
+
+    /// <summary>
+    /// How far right of the view's centre the sun stands.
+    /// </summary>
     const float SunBearing = 26 * MathF.PI / 180;
-    /// <summary>Where the wanderer looks: this far right of the view's heading (negative: left).</summary>
+
+    /// <summary>
+    /// Where the wanderer looks: this far right of the view's heading (negative: left).
+    /// </summary>
     const float WandererBearing = -10 * MathF.PI / 180;
-    /// <summary>Where the wanderer stands: on the plateau under this point of a 16:9 frame (0..1 across, 0..1 down), else the ground under it.</summary>
+
+    /// <summary>
+    /// Where the wanderer stands: on the plateau under this point of a 16:9 frame (0..1 across, 0..1 down), else the ground under it.
+    /// </summary>
     static readonly Vector2 WandererOnScreen = new(0.337f, 0.93f);
     /// <summary>
     /// The foreground. The ridge: rocks drawn with the terrain texturing of the local cliff feature (<see cref="RidgeLook"/>), side by side from the
@@ -37,53 +54,103 @@ sealed class TitleComposition
     /// Every piece is turned by its yaw (degrees) from the view and scaled. The plateau comes before what lies on it.
     /// </summary>
     const string RidgeLook = "CLiff_Curved.mesh";
-    /// <summary>How far left of its screen point the plateau block is moved (world units), so its right-hand cliff falls just right of the wanderer.</summary>
+
+    /// <summary>
+    /// How far left of its screen point the plateau block is moved (world units), so its right-hand cliff falls just right of the wanderer.
+    /// </summary>
     const float PlateauLeft = 125;
+
+    /// <summary>
+    /// How far the moons are nudged from where the game puts them: left by about 15% of the big moon's size, up by a tenth.
+    /// </summary>
+    const float MoonsLeft = 2.4f * MathF.PI / 180, MoonsUp = 1.6f * MathF.PI / 180;
+
+    /// <summary>
+    /// The clouds' drift on the title (world units per second, right to left across the view): several times a windy day's.
+    /// </summary>
+    const float CloudSpeed = 125;
+
+    /// <summary>
+    /// The ghost-town ruin under the logo (houses and scrap piles the foliage system places round this x, z), and how far left across the view it is moved.
+    /// </summary>
+    static readonly Vector3 RuinCentre = new(-52860, 0, -22715);
+
+    const float RuinRadius = 350, RuinMove = 400;
+
     enum Part { Ridge, Plateau, OnPlateau, Building }
+
     static readonly (string Mesh, Part Part, Vector2 Screen, float Yaw, float Ahead, float Scale, float Sink)[] RidgePieces =
     [
         ("FLatTop_Pillar01.mesh", Part.Plateau, new(0.337f, 0.92f), 180, 45, 1, 0),
         ("Mesa_Zone_ScreeStones01.mesh", Part.OnPlateau, new(0.16f, 0.97f), 140, 0, 0.03f, 0.5f),
         ("Rock_MenhirStone_01.mesh", Part.OnPlateau, new(0.24f, 0.88f), 40, 0, 0.09f, 0.25f),
+
         // shrubs on the cliff top at the left, a tiny one by its edge on the right, and a few on the far edge at the left
-        ("bush01.mesh", Part.OnPlateau, new(-0.04f, 0.8f), 40, 0, 1.1f, 0.05f), ("shrub.mesh", Part.OnPlateau, new(0.09f, 0.79f), 160, 0, 0.3f, 0.05f),
-        ("shrubs&grass.mesh", Part.OnPlateau, new(0.15f, 0.86f), 90, 0, 1.2f, 0.1f), ("bush01.mesh", Part.OnPlateau, new(0.43f, 0.87f), 220, 0, 0.45f, 0.05f),
-        ("bush01.mesh", Part.OnPlateau, new(0.03f, 0.715f), 0, 0, 1.5f, 0.05f), ("shrub.mesh", Part.OnPlateau, new(0.2f, 0.715f), 30, 0, 0.45f, 0.05f),
+        ("bush01.mesh", Part.OnPlateau, new(-0.04f, 0.8f), 40, 0, 1.1f, 0.05f),
+        ("shrub.mesh", Part.OnPlateau, new(0.09f, 0.79f), 160, 0, 0.3f, 0.05f),
+        ("shrubs&grass.mesh", Part.OnPlateau, new(0.15f, 0.86f), 90, 0, 1.2f, 0.1f),
+        ("bush01.mesh", Part.OnPlateau, new(0.43f, 0.87f), 220, 0, 0.45f, 0.05f),
+        ("bush01.mesh", Part.OnPlateau, new(0.03f, 0.715f), 0, 0, 1.5f, 0.05f),
+        ("shrub.mesh", Part.OnPlateau, new(0.2f, 0.715f), 30, 0, 0.45f, 0.05f),
         ("shrubs&grass.mesh", Part.OnPlateau, new(0.12f, 0.72f), 60, 0, 1.6f, 0.1f),
+
         // a watchtower (the buildable one) at the far right, as on the original poster, on the valley floor this far ahead
         ("Watchtower", Part.Building, new(0.88f, 0.5f), 145, 2600, 1, 0),
     ];
-    /// <summary>The ghost-town ruin under the logo (houses and scrap piles the foliage system places round this x, z), and how far left across the view it is moved.</summary>
-    static readonly Vector3 RuinCentre = new(-52860, 0, -22715);
-    const float RuinRadius = 350, RuinMove = 400;
 
-    internal static WorldCameraCode.Pose Pose => WorldCameraCode.Decode(Spot) ?? throw new InvalidOperationException("TitleComposition.Spot is not a camera code");
-    /// <summary>The view's target on the ground: the world is loaded round it when the game boots to the title.</summary>
+    internal static WorldCameraCode.Pose Pose =>
+        WorldCameraCode.Decode(Spot) ?? throw new InvalidOperationException("TitleComposition.Spot is not a camera code");
+
+    /// <summary>
+    /// The view's target on the ground: the world is loaded round it when the game boots to the title.
+    /// </summary>
     internal static (float X, float Z) Focus => (Pose.Target.X, Pose.Target.Z);
 
     public Vector3 Wanderer { get; }
+
     public float WandererYaw { get; }
+
     public CharacterAppearance Appearance { get; }
 
-    /// <summary>The saved character's body from its stats and hunger (null: the staged wanderer's own shape).</summary>
+    /// <summary>
+    /// The saved character's body from its stats and hunger (null: the staged wanderer's own shape).
+    /// </summary>
     public BodyBuild? SavedBuild { get; init; }
-    /// <summary>The road's three fight centres, projected onto the actual valley floor.</summary>
+
+    /// <summary>
+    /// The road's three fight centres, projected onto the actual valley floor.
+    /// </summary>
     public IReadOnlyList<Vector3> Fights { get; }
-    /// <summary>The ruin moved left of the logo, for the title only (<see cref="FoliageRenderer.Shift"/>).</summary>
+
+    /// <summary>
+    /// The ruin moved left of the logo, for the title only (<see cref="FoliageRenderer.Shift"/>).
+    /// </summary>
     public FoliageShift Ruins { get; }
-    /// <summary>The staged ridge (<see cref="WorldObjectRenderer.Staged"/>), empty when the cliff feature or the outcrop mesh is missing.</summary>
+
+    /// <summary>
+    /// The staged ridge (<see cref="WorldObjectRenderer.Staged"/>), empty when the cliff feature or the outcrop mesh is missing.
+    /// </summary>
     public IReadOnlyList<PlacedMesh> Staged { get; }
 
-    public TitleComposition(GameInstall install, GameDatabase database, Func<float, float, float> ground, string character, CharacterAppearance? savedCharacter = null)
+    public TitleComposition(
+        GameInstall install, GameDatabase database, Func<float, float, float> ground, string character, CharacterAppearance? savedCharacter = null)
     {
         var view = new WorldCamera();
         Place(view);
         var (pieces, plateau, top) = Ridge(install, database, view, ground);
         Staged = pieces;
         Wanderer = OnPlateau(view, top, plateau, WandererOnScreen) ?? GroundUnder(view, WandererOnScreen, ground);
-        Fights = [GroundUnder(view, new(0.70f, 0.85f), ground), GroundUnder(view, new(0.755f, 0.89f), ground), GroundUnder(view, new(0.81f, 0.93f), ground)];
+        Fights =
+        [
+            GroundUnder(view, new(0.70f, 0.85f), ground),
+            GroundUnder(view, new(0.755f, 0.89f), ground),
+            GroundUnder(view, new(0.81f, 0.93f), ground),
+        ];
+
         // His back to the camera, looking out over the valley.
-        var facing = Vector3.Normalize(view.Forward with { Y = 0 }) * MathF.Cos(WandererBearing) + Vector3.Normalize(Vector3.Cross(view.Forward, Vector3.UnitY)) * MathF.Sin(WandererBearing);
+        var toward = Vector3.Normalize(view.Forward with { Y = 0 }) * MathF.Cos(WandererBearing);
+        var side = Vector3.Normalize(Vector3.Cross(view.Forward, Vector3.UnitY)) * MathF.Sin(WandererBearing);
+        var facing = toward + side;
         WandererYaw = MathF.Atan2(facing.X, facing.Z);   // the characters' yaw: 0 faces +Z (MovementSystem)
         var left = -Vector3.Normalize(Vector3.Cross(view.Forward, Vector3.UnitY) with { Y = 0 });
         Ruins = new(RuinCentre, RuinRadius, left * RuinMove, name => name.StartsWith("Ghost", StringComparison.Ordinal), ground);
@@ -127,14 +194,18 @@ sealed class TitleComposition
             {
                 // A building record by name, laid out as the game lays out a placed one: its origin on the plateau's top under its screen point,
                 // or with a distance ahead, on the ground that far along the ray.
-                if (database.Records.Values.FirstOrDefault(r => r.Type == Data.Fcs.FcsRecordType.Building && r.Name == name) is not { } building) continue;
+                if (database.Records.Values.FirstOrDefault(r => r.Type == Data.Fcs.FcsRecordType.Building && r.Name == name) is not { } building)
+                    continue;
+
                 var toward = RayThrough(view, screen);
                 var foot = view.Eye + toward * (ahead / MathF.Max(new Vector2(toward.X, toward.Z).Length(), 1e-3f));
                 foot = ahead == 0 && plateauTop is { } level ? PlaneHit(view, level, screen) : foot with { Y = ground(foot.X, foot.Z) };
+
                 // Scaled about its foot: a small one near the plateau's far edge reads as a big one far off, which the plateau would hide.
                 var about = Matrix4x4.CreateTranslation(-foot) * Matrix4x4.CreateScale(scale) * Matrix4x4.CreateTranslation(foot);
-                placed.AddRange(WorldObjectLayout.Building(database, building, $"meitou title {name}", foot,
-                    Quaternion.CreateFromAxisAngle(Vector3.UnitY, view.Yaw + yaw * MathF.PI / 180)).Select(p => p with { Transform = p.Transform * about }));
+                var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitY, view.Yaw + yaw * MathF.PI / 180);
+                placed.AddRange(WorldObjectLayout.Building(database, building, $"meitou title {name}", foot, turn)
+                    .Select(p => p with { Transform = p.Transform * about }));
                 continue;
             }
             // The ridge borrows the cliff's terrain texturing; the plateau and what lies on it are drawn as their own features.
@@ -146,7 +217,10 @@ sealed class TitleComposition
                 var mesh = Data.Ogre.OgreMeshReader.ReadFile(Path.Combine(install.Root, meshPath.TrimStart('.', '\\', '/')));
                 points = [.. (mesh.SharedVertexData?.ReadPositions() ?? []), .. mesh.SubMeshes.SelectMany(s => s.VertexData?.ReadPositions() ?? [])];
             }
-            catch (IOException) { continue; }
+            catch (IOException)
+            {
+                continue;
+            }
             if (points.Length == 0) continue;
             float highest = points.Max(p => p.Y), lowest = points.Min(p => p.Y);
             var ray = RayThrough(view, screen);
@@ -176,11 +250,14 @@ sealed class TitleComposition
         return (placed, surface, plateauTop);
     }
 
-
-    /// <summary>The map feature whose terrain texturing the staged rocks borrow (<see cref="RidgeLook"/>), null when the data has none.</summary>
+    /// <summary>
+    /// The map feature whose terrain texturing the staged rocks borrow (<see cref="RidgeLook"/>), null when the data has none.
+    /// </summary>
     static GameRecord? RidgeRecord(GameDatabase database) => FeatureRecord(database, RidgeLook);
 
-    /// <summary>The map feature, else the foliage mesh, drawing the mesh file named <paramref name="mesh"/>; null when the data has none.</summary>
+    /// <summary>
+    /// The map feature, else the foliage mesh, drawing the mesh file named <paramref name="mesh"/>; null when the data has none.
+    /// </summary>
     internal static GameRecord? FeatureRecord(GameDatabase database, string mesh)
     {
         GameRecord? Of(Data.Fcs.FcsRecordType type) => database.Records.Values.FirstOrDefault(r => r.Type == type &&
@@ -195,18 +272,24 @@ sealed class TitleComposition
     static Vector3? OnPlateau(WorldCamera view, float? top, IReadOnlyList<Vector3> plateau, Vector2 screen)
     {
         if (top is not { } height) return null;
+
         var hit = PlaneHit(view, height, screen);
         var near = plateau.Where(p => p.Y > height - 8 && Vector2.Distance(new(p.X, p.Z), new(hit.X, hit.Z)) < 12).ToList();
         return near.Count == 0 ? hit : hit with { Y = near.Max(p => p.Y) };
     }
 
-    /// <summary>Where the ray through <paramref name="screen"/> meets the level <paramref name="height"/> (below the eye).</summary>
+    /// <summary>
+    /// Where the ray through <paramref name="screen"/> meets the level <paramref name="height"/> (below the eye).
+    /// </summary>
     static Vector3 PlaneHit(WorldCamera view, float height, Vector2 screen)
     {
         var ray = RayThrough(view, screen);
         return view.Eye + ray * ((height - view.Eye.Y) / MathF.Min(ray.Y, -1e-3f));
     }
-    /// <summary>The view ray through <paramref name="screen"/> of a 16:9 frame (0..1 across, 0..1 down).</summary>
+
+    /// <summary>
+    /// The view ray through <paramref name="screen"/> of a 16:9 frame (0..1 across, 0..1 down).
+    /// </summary>
     static Vector3 RayThrough(WorldCamera camera, Vector2 screen)
     {
         var forward = camera.Forward;
@@ -216,7 +299,9 @@ sealed class TitleComposition
         return Vector3.Normalize(forward + right * ((screen.X * 2 - 1) * half * 16 / 9) + up * ((1 - screen.Y * 2) * half));
     }
 
-    /// <summary>The title's camera: the spot exactly as the camera code gives it, with the viewer's lens.</summary>
+    /// <summary>
+    /// The title's camera: the spot exactly as the camera code gives it, with the viewer's lens.
+    /// </summary>
     public static void Place(WorldCamera camera)
     {
         WorldCameraCode.Apply(Pose, camera);
@@ -224,7 +309,9 @@ sealed class TitleComposition
         camera.MaxNear = NearPlane;
     }
 
-    /// <summary>Where the ray through <paramref name="screen"/> (16:9) first meets the ground, marching in 2-unit steps out to 20000 units.</summary>
+    /// <summary>
+    /// Where the ray through <paramref name="screen"/> (16:9) first meets the ground, marching in 2-unit steps out to 20000 units.
+    /// </summary>
     static Vector3 GroundUnder(WorldCamera camera, Vector2 screen, Func<float, float, float> ground)
     {
         var ray = RayThrough(camera, screen);
@@ -235,38 +322,47 @@ sealed class TitleComposition
             float y = ground(p.X, p.Z);
             if (p.Y <= y) return p with { Y = y };
         }
+
         return eye + camera.Forward * 1000;
     }
 
+    #region Sky
 
-    /// <summary>How far the moons are nudged from where the game puts them: left by about 15% of the big moon's size, up by a tenth.</summary>
-    const float MoonsLeft = 2.4f * MathF.PI / 180, MoonsUp = 1.6f * MathF.PI / 180;
-    /// <summary>The clouds' drift on the title (world units per second, right to left across the view): several times a windy day's.</summary>
-    const float CloudSpeed = 125;
-
-    /// <summary>The turn that moves the planets <see cref="MoonsLeft"/> and <see cref="MoonsUp"/> in <paramref name="camera"/>'s view (<see cref="SkyRenderer.PlanetTurn"/>).</summary>
+    /// <summary>
+    /// The turn that moves the planets <see cref="MoonsLeft"/> and <see cref="MoonsUp"/> in <paramref name="camera"/>'s view (<see cref="SkyRenderer.PlanetTurn"/>).
+    /// </summary>
     public static Quaternion MoonTurn(WorldCamera camera)
     {
         var right = Vector3.Normalize(Vector3.Cross(camera.Forward, Vector3.UnitY));
         return Quaternion.CreateFromAxisAngle(Vector3.UnitY, MoonsLeft) * Quaternion.CreateFromAxisAngle(right, MoonsUp);
     }
 
-    /// <summary>The clouds' drift velocity (x, z) for <paramref name="camera"/>'s view: <see cref="CloudSpeed"/> towards the left.</summary>
+    /// <summary>
+    /// The clouds' drift velocity (x, z) for <paramref name="camera"/>'s view: <see cref="CloudSpeed"/> towards the left.
+    /// </summary>
     public static Vector2 CloudWind(WorldCamera camera)
     {
         var left = -Vector3.Normalize(Vector3.Cross(camera.Forward, Vector3.UnitY));
         return new Vector2(left.X, left.Z) * CloudSpeed;
     }
-    /// <summary>The <see cref="SkyClock.SunTurn"/> that puts the sun of <paramref name="hour"/> <see cref="SunBearing"/> right of <paramref name="camera"/>'s heading.</summary>
+
+    /// <summary>
+    /// The <see cref="SkyClock.SunTurn"/> that puts the sun of <paramref name="hour"/> <see cref="SunBearing"/> right of <paramref name="camera"/>'s heading.
+    /// </summary>
     public static float SunTurn(SkyClock clock, float hour, WorldCamera camera)
     {
         var sun = (clock with { SunTurn = 0 }).SunDirection(hour);
         var ahead = camera.Forward;
+
         // Right of the heading is the positive sense of SunTurn (counter-clockwise in X/Z, which is clockwise on screen from above).
         return MathF.Atan2(ahead.Z, ahead.X) + SunBearing - MathF.Atan2(sun.Z, sun.X);
     }
 
-    /// <summary>The wanderer, held in one frame of the relaxed idle: a still figure, as on the poster.</summary>
+    #endregion
+
+    /// <summary>
+    /// The wanderer, held in one frame of the relaxed idle: a still figure, as on the poster.
+    /// </summary>
     public void Fill(CharacterDrawList list) =>
         list.Add(new CharacterInstance(long.MinValue + 1, Appearance, Wanderer, WandererYaw, [new("idle_stand_confident", 0.5f, 1)]) { Build = SavedBuild });
 }

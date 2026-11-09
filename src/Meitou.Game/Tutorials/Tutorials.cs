@@ -7,13 +7,20 @@ namespace Meitou.Game.Tutorials;
 readonly record struct TutorialPoll
 {
     public bool EditorOrLoading { get; init; }
-    /// <summary>A PC in combat mode, unconscious or in a bed or prison (resets the calm counter of What do I do?).</summary>
+
+    /// <summary>
+    /// A PC in combat mode, unconscious or in a bed or prison (resets the calm counter of What do I do?).
+    /// </summary>
     public bool Unsettled { get; init; }
+
     public bool InTown { get; init; }
     public bool NeedsFirstAid { get; init; }
     public bool UnderAttack { get; init; }
     public int PcCount { get; init; }
-    /// <summary>The PCs, for the recruit tutorial's newest member.</summary>
+
+    /// <summary>
+    /// The PCs, for the recruit tutorial's newest member.
+    /// </summary>
     public IReadOnlyList<Simulation.CharacterId> Pcs { get; init; }
     public bool Stolen { get; init; }
     public bool AnyUnconscious { get; init; }
@@ -34,7 +41,9 @@ readonly record struct TutorialPoll
     public bool Placing { get; init; }
     public bool CraftingComplete { get; init; }
     public bool ResearchComplete { get; init; }
-    /// <summary>The management (overview) tab shown, -1 when it is closed.</summary>
+    /// <summary>
+    /// The management (overview) tab shown, -1 when it is closed.
+    /// </summary>
     public int ManagementTab { get; init; }
     public bool Blueprint { get; init; }
     public bool UnstartedConstruction { get; init; }
@@ -51,17 +60,24 @@ sealed class TutorialManager
     /// <summary>The items in the exe's order; the index is the id (the classes' names, <c>Tutorial_*</c>).</summary>
     public static readonly string[] Names =
     [
-        "BasicControls", "GUIOverview", "WhatDoIDo", "WhatDoIDo_InTown", "Injured_Intro", "Injured_FirstAid", "UnderAttack", "HiredRecruit", "StolenGoods", "KOd",
-        "KOdWithNonUnconsciousPC", "EscapePrision", "EscapeCannibalCage", "Sneaking", "HowToSteal", "HowToBounties", "YouAreHungry", "PlayingDead", "PermaJobs", "BeignSlave",
-        "Disguises", "MachineFull", "BuildingForSale", "ProductionBuilding", "BuildingGateWalls", "HowToCraft", "HowToCraft_NoCraftingBench", "Research_Benches", "Research_Built",
-        "Research_Blueprint", "BuildMode", "BuildMode_Construction", "Prospecting", "MissingLimb",
+        "BasicControls", "GUIOverview", "WhatDoIDo", "WhatDoIDo_InTown", "Injured_Intro", "Injured_FirstAid", "UnderAttack", "HiredRecruit",
+        "StolenGoods", "KOd", "KOdWithNonUnconsciousPC", "EscapePrision", "EscapeCannibalCage", "Sneaking", "HowToSteal", "HowToBounties",
+        "YouAreHungry", "PlayingDead", "PermaJobs", "BeignSlave", "Disguises", "MachineFull", "BuildingForSale", "ProductionBuilding",
+        "BuildingGateWalls", "HowToCraft", "HowToCraft_NoCraftingBench", "Research_Benches", "Research_Built", "Research_Blueprint", "BuildMode",
+        "BuildMode_Construction", "Prospecting", "MissingLimb",
     ];
 
     public const string FileName = "__tutorials.data";
     const uint Magic = 0xBAAAAAAD;
-    /// <summary>The seconds between trigger polls.</summary>
+
+    /// <summary>
+    /// The seconds between trigger polls.
+    /// </summary>
     const double PollSeconds = 2;
-    /// <summary>What do I do? fires once its calm counter (2 per poll) passes this.</summary>
+
+    /// <summary>
+    /// What do I do? fires once its calm counter (2 per poll) passes this.
+    /// </summary>
     const int CalmNeeded = 20;
 
     readonly List<int> _active = [], _pending = [], _drops = [];
@@ -70,7 +86,9 @@ sealed class TutorialManager
     int _calm, _recruits = -1;
     HashSet<Simulation.CharacterId>? _recruitBase;
 
-    /// <summary>The recruit the hired-recruit tutorial found (its Select page waits for them to be selected); null: none.</summary>
+    /// <summary>
+    /// The recruit the hired-recruit tutorial found (its Select page waits for them to be selected); null: none.
+    /// </summary>
     public Simulation.CharacterId? Recruit { get; private set; }
 
     public TutorialManager(string path)
@@ -79,12 +97,21 @@ sealed class TutorialManager
         Load();
     }
 
-    /// <summary>The <c>tutorials</c> option; off, nothing updates.</summary>
+    /// <summary>
+    /// The <c>tutorials</c> option; off, nothing updates.
+    /// </summary>
     public bool Enabled { get; set; } = true;
-    /// <summary>No file was read: the one-off camera hint is due.</summary>
+
+    /// <summary>
+    /// No file was read: the one-off camera hint is due.
+    /// </summary>
     public bool Fresh { get; private set; }
+
     public IReadOnlyList<int> Active => _active;
-    /// <summary>Each item's page (kept when it ends, as the original keeps it).</summary>
+
+    /// <summary>
+    /// Each item's page (kept when it ends, as the original keeps it).
+    /// </summary>
     public int[] Pages { get; } = new int[Names.Length];
     bool _dirty;
 
@@ -132,12 +159,18 @@ sealed class TutorialManager
             w.Write((uint)_pending.Count);
             foreach (int id in _pending) w.Write((uint)id);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Console.Error.WriteLine($"tutorials save failed: {e.Message}"); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"tutorials save failed: {e.Message}");
+        }
     }
 
     bool Ended(int id) => !_active.Contains(id) && !_pending.Contains(id);
 
-    /// <summary>One frame: drops, then every 2 s the pending items whose trigger holds turn active (returned, for the panel's flash and <c>Thing_Complete</c>); saves when changed.</summary>
+    /// <summary>
+    /// One frame: drops, then every 2 s the pending items whose trigger holds turn active (returned, for the panel's flash and <c>Thing_Complete</c>);
+    /// saves when changed.
+    /// </summary>
     public List<int>? Update(double seconds, Func<TutorialPoll> poll)
     {
         if (!Enabled) return null;
@@ -166,7 +199,9 @@ sealed class TutorialManager
         return started;
     }
 
-    /// <summary>An item's trigger (<c>conditionsMet</c>).</summary>
+    /// <summary>
+    /// An item's trigger (<c>conditionsMet</c>).
+    /// </summary>
     bool Holds(int id, in TutorialPoll p)
     {
         switch (id)
@@ -174,7 +209,12 @@ sealed class TutorialManager
             case 0 or 1: return !p.EditorOrLoading;
             case 2:
                 if (p.EditorOrLoading) return false;
-                if (p.Unsettled) { _calm = 0; return false; }
+                if (p.Unsettled)
+                {
+                    _calm = 0;
+                    return false;
+                }
+
                 _calm += 2;
                 return _calm > CalmNeeded;
             case 3: return Ended(2) && p.InTown;
@@ -182,7 +222,12 @@ sealed class TutorialManager
             case 5: return Ended(4) && p.NeedsFirstAid;
             case 6: return p.UnderAttack;
             case 7:
-                if (_recruits < 0) { _recruits = p.PcCount; _recruitBase = [.. p.Pcs ?? []]; }
+                if (_recruits < 0)
+                {
+                    _recruits = p.PcCount;
+                    _recruitBase = [.. p.Pcs ?? []];
+                }
+
                 if (p.PcCount <= _recruits) return false;
                 Recruit = (p.Pcs ?? []).LastOrDefault(c => _recruitBase?.Contains(c) != true);
                 return true;
@@ -205,10 +250,20 @@ sealed class TutorialManager
             case 24 or 30: return p.Placing;
             case 25: return p.CraftingComplete;
             case 26:
-                if (p.CraftingComplete) { _drops.Add(id); return false; }
+                if (p.CraftingComplete)
+                {
+                    _drops.Add(id);
+                    return false;
+                }
+
                 return p.ManagementTab == 3;
             case 27:
-                if (p.ResearchComplete) { _drops.Add(id); return false; }
+                if (p.ResearchComplete)
+                {
+                    _drops.Add(id);
+                    return false;
+                }
+
                 return p.ManagementTab == 2;
             case 28: return p.ResearchComplete;
             case 29: return p.Blueprint;
@@ -219,13 +274,17 @@ sealed class TutorialManager
         }
     }
 
-    /// <summary>Dismissed (the line's X, DISMISS, or FINISH on the last page): out of the active list, ended.</summary>
+    /// <summary>
+    /// Dismissed (the line's X, DISMISS, or FINISH on the last page): out of the active list, ended.
+    /// </summary>
     public void Dismiss(int id)
     {
         if (_active.Remove(id)) _dirty = true;
     }
 
-    /// <summary>The Tutorials window's ACTIVATE: an item not already active becomes active from its first page (true: added, for the flash and sound).</summary>
+    /// <summary>
+    /// The Tutorials window's ACTIVATE: an item not already active becomes active from its first page (true: added, for the flash and sound).
+    /// </summary>
     public bool Activate(int id)
     {
         if (_active.Contains(id)) return false;
@@ -238,14 +297,23 @@ sealed class TutorialManager
         return true;
     }
 
-    /// <summary>Reset Tutorials: nothing active, everything pending, the file deleted (the next update writes it anew). Pages are kept.</summary>
+    /// <summary>
+    /// Reset Tutorials: nothing active, everything pending, the file deleted (the next update writes it anew). Pages are kept.
+    /// </summary>
     public void Reset()
     {
         _active.Clear();
         _pending.Clear();
         _pending.AddRange(Enumerable.Range(0, Names.Length));
-        try { if (File.Exists(_path)) File.Delete(_path); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Console.Error.WriteLine($"tutorials reset: {e.Message}"); }
+        try
+        {
+            if (File.Exists(_path)) File.Delete(_path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"tutorials reset: {e.Message}");
+        }
+
         _dirty = true;
     }
 }

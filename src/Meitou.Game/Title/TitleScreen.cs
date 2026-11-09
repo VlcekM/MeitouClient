@@ -12,9 +12,26 @@ using WeatherEffectEntry = Meitou.Data.Particles.WeatherEffectEntry;
 
 namespace Meitou.Game.Title;
 
-/// <summary>The title screen's world: its staged characters, camera and light, and the Continue save's leader drawn in its saved look.</summary>
+/// <summary>
+/// The title screen's world: its staged characters, camera and light, and the Continue save's leader drawn in its saved look.
+/// </summary>
 sealed class TitleScreen(GameHost host)
 {
+    /// <summary>
+    /// The moons' fill light, and the shafts' air layer (a multiple of the usual) on the title: thick morning air so the low sun casts strong rays.
+    /// </summary>
+    const float TitlePlanetFill = 0.8f, TitleShaftAir = 2, TitleClouds = 0.38f;
+
+    /// <summary>
+    /// The title's white balance: keeps the orange of the early hour with the sun a little higher than that hour would put it.
+    /// </summary>
+    static readonly Vector3 TitleBalance = new(1.1f, 0.98f, 0.88f);
+
+    /// <summary>
+    /// The wanderer's fill light on the title: warm sky light so his back, turned to the low sun, is not a flat silhouette.
+    /// </summary>
+    static readonly Vector3 TitleFill = new(0.064f, 0.052f, 0.04f);
+
     TitleComposition? _titleComposition;
     internal TitleBattle? TitleBattle;
     Data.Characters.CharacterAppearance[] _titleAppearances = [];
@@ -26,24 +43,25 @@ sealed class TitleScreen(GameHost host)
     ParticleRenderer? _titleParticles;
     IReadOnlyList<WeatherEffectEntry>? _titleDust;
     float? _gameplayLens;
-    /// <summary>The gameplay character source, set aside while the title shows its staged actors.</summary>
+
+    /// <summary>
+    /// The gameplay character source, set aside while the title shows its staged actors.
+    /// </summary>
     Action<CharacterDrawList>? _gameplayCharacters;
+
     internal bool TitleVisible => host.Player.TitleOpen && host.Player.UiMode == UiMode.Meitou;
     internal float TitleHour => host.Scene.Clock.Sunrise + 0.75f;
-    /// <summary>The moons' fill light, and the shafts' air layer (a multiple of the usual) on the title: thick morning air so the low sun casts strong rays.</summary>
-    const float TitlePlanetFill = 0.8f, TitleShaftAir = 2, TitleClouds = 0.38f;
-    /// <summary>The title's white balance: keeps the orange of the early hour with the sun a little higher than that hour would put it.</summary>
-    static readonly Vector3 TitleBalance = new(1.1f, 0.98f, 0.88f);
-    /// <summary>The wanderer's fill light on the title: warm sky light so his back, turned to the low sun, is not a flat silhouette.</summary>
-    static readonly Vector3 TitleFill = new(0.064f, 0.052f, 0.04f);
 
     void EnsureTitleScene()
     {
         if (_titleComposition is not null || host.Scene.Database is not { } db) return;
         var saved = TitleSaveAppearance(db, out var stats, out float hunger);
+
         // Its body from its saved stats and hunger, as the world publishes it (CharacterSnapshot.Build; FUN_140531820 skips robots).
-        var build = saved is { Race: var race } && stats is not null && race.GetBool("is robot") != true
-            ? Data.Characters.CharacterShape.BuildFromStats(saved.Female, stats, static (stats, s) => stats[s], hunger) : (Data.Characters.BodyBuild?)null;
+        bool bodyFromStats = saved is { Race: var race } && stats is not null && race.GetBool("is robot") != true;
+        var build = bodyFromStats
+            ? Data.Characters.CharacterShape.BuildFromStats(saved!.Female, stats!, static (stats, s) => stats[s], hunger)
+            : (Data.Characters.BodyBuild?)null;
         _titleComposition = new(host.Install, db, host.Scene.GroundAt, host.Sandbox.SandboxRecord(db), saved) { SavedBuild = build };
         if (host.PopData is { } data && host.AnimationLengths is { } lengths && host.AnimationLibrary is { } library)
             TitleBattle = TitleBattle.Create(data, host.Scene.GroundAt, _titleComposition.Fights, lengths, library);
@@ -56,7 +74,9 @@ sealed class TitleScreen(GameHost host)
         }
     }
 
-    /// <summary>The first-created character in the player's first squad in the save Continue will load, drawn with its saved look and worn kit.</summary>
+    /// <summary>
+    /// The first-created character in the player's first squad in the save Continue will load, drawn with its saved look and worn kit.
+    /// </summary>
     /// <param name="stats">Its saved stats (null: unread).</param>
     /// <param name="hunger">Its saved hunger (0 to 3).</param>
     Data.Characters.CharacterAppearance? TitleSaveAppearance(GameDatabase db, out Simulation.Bodies.CharacterStats? stats, out float hunger)
@@ -100,13 +120,16 @@ sealed class TitleScreen(GameHost host)
             var worn = SavedKit.Wear(generated, character.Appearance, db) ?? SavedKit.Copy(generated);
             return appearances.Create(character.RecordId, WithSavedLimbs(worn, character, db)) ?? rolled;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or ArgumentException or Data.Fcs.FcsFormatException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or FormatException or ArgumentException
+            or Data.Fcs.FcsFormatException)
         {
             return null;
         }
     }
 
-    /// <summary><paramref name="kit"/> with the character's saved stumps and prosthetics, as the world loads them (SavedLimbs).</summary>
+    /// <summary>
+    /// <paramref name="kit"/> with the character's saved stumps and prosthetics, as the world loads them (SavedLimbs).
+    /// </summary>
     static Data.Characters.Loadout WithSavedLimbs(Data.Characters.Loadout kit, SaveCharacter character, GameDatabase db)
     {
         if (character.Medical is { } medical && character.Platoon.File is { } file) SavedKit.SetLimbs(kit, file, medical, db);
@@ -136,7 +159,9 @@ sealed class TitleScreen(GameHost host)
             if (record.Type is not (Data.Fcs.FcsRecordType.SquadTemplate or Data.Fcs.FcsRecordType.UniqueSquadTemplate)) return;
             var template = Data.Gameplay.SquadTemplate.From(record);
             if (template.Leader is { } leader) Add(leader.Id);
-            foreach (var member in template.Squad.Concat(template.Squad2).Concat(template.ChooseFrom).Concat(template.Animals).Concat(template.Animals2)) Add(member.Id);
+            foreach (var member in template.Squad.Concat(template.Squad2).Concat(template.ChooseFrom).Concat(template.Animals)
+                .Concat(template.Animals2))
+                Add(member.Id);
         }
         Add(startOrTemplateId);
         return characters;
@@ -156,12 +181,10 @@ sealed class TitleScreen(GameHost host)
     {
         if (!TitleVisible)
         {
-            if (_gameplayLens is { } lens) { host.Camera.FieldOfView = lens; host.Camera.MaxNear = 200; _gameplayLens = null; }
-            if (_gameplayCharacters is { } source && host.ActiveCharacters is { } restore) { restore.Source = source; _gameplayCharacters = null; }
-            if (host.ActiveFoliage is { } plants && _titleComposition is { } shown && plants.Shift == shown.Ruins) plants.Shift = null;
-            if (host.ActiveObjects is { } things && _titleComposition is { } staged && things.Staged == staged.Staged) things.Staged = null;
+            RestoreGameplayView();
             return;
         }
+
         EnsureTitleScene();
         if (_titleComposition is not { } title) return;
         _gameplayLens ??= host.Camera.FieldOfView;
@@ -181,16 +204,41 @@ sealed class TitleScreen(GameHost host)
         TitleComposition.Place(host.Camera);
     }
 
+    /// <summary>
+    /// Gives the gameplay its lens, character source, ruins and staged ridge back when the title closes.
+    /// </summary>
+    void RestoreGameplayView()
+    {
+        if (_gameplayLens is { } lens)
+        {
+            host.Camera.FieldOfView = lens;
+            host.Camera.MaxNear = 200;
+            _gameplayLens = null;
+        }
+
+        if (_gameplayCharacters is { } source && host.ActiveCharacters is { } restore)
+        {
+            restore.Source = source;
+            _gameplayCharacters = null;
+        }
+
+        if (host.ActiveFoliage is { } plants && _titleComposition is { } shown && plants.Shift == shown.Ruins) plants.Shift = null;
+        if (host.ActiveObjects is { } things && _titleComposition is { } staged && things.Staged == staged.Staged) things.Staged = null;
+    }
+
     internal void DrawTitleWorld(int width, int height)
     {
         EnsureTitleScene();
         if (_titleComposition is not { } title) return;
+
         double seconds = host.RealTime.Elapsed.TotalSeconds;
         PrepareTitleDust(seconds);
+
         // Clear sky with a few clouds whatever the region's weather, no placed fog volumes, the sun turned into the right of the view, the moons lit
         // full face so they read by day, and thicker morning air so the hill the sun peeks over casts rays through it.
         var sky = host.Gpu.Sky;
-        var (weather, coverage, regions, clock, wind) = (sky.Weather, sky.CloudCoverage, host.Gpu.Weather, host.Scene.Clock, sky.CloudWind);
+        var (weather, coverage, regions, clock, wind) =
+            (sky.Weather, sky.CloudCoverage, host.Gpu.Weather, host.Scene.Clock, sky.CloudWind);
         float hour = host.PresentationHour ?? TitleHour;
         // Fade the staged fill with the sun, reaching zero at the horizon.
         float fill = Math.Clamp(clock.SunDirection(hour).Y / MathF.Max(clock.SunDirection(TitleHour).Y, 1e-3f), 0, 1);
@@ -215,11 +263,15 @@ sealed class TitleScreen(GameHost host)
         host.Gpu.ParticleDensity = 0.3f;
         host.Gpu.WeatherParticles = true;
         if (host.Gpu.Foliage is { } foliage && host.WorldOptions.Screenshot is null) foliage.SwaySeconds = seconds;
-        try { WorldFrame.Draw(host.Gpu, host.Scene, host.Camera, host.Render, width, height, hour, (float)seconds / 600f, host.WorldOptions.FogDistance); }
+        try
+        {
+            WorldFrame.Draw(host.Gpu, host.Scene, host.Camera, host.Render, width, height, hour, (float)seconds / 600f, host.WorldOptions.FogDistance);
+        }
         finally
         {
             (host.Gpu.Particles, host.Gpu.ParticleDensity, host.Gpu.WeatherParticles) = (worldParticles, density, weatherParticles);
-            (sky.Weather, sky.CloudCoverage, host.Gpu.Weather, host.Scene.Clock, sky.PlanetFill, sky.CloudWind, sky.PlanetTurn) = (weather, coverage, regions, clock, 0, wind, Quaternion.Identity);
+            (sky.Weather, sky.CloudCoverage, host.Gpu.Weather, host.Scene.Clock, sky.PlanetFill, sky.CloudWind, sky.PlanetTurn) =
+                (weather, coverage, regions, clock, 0, wind, Quaternion.Identity);
             if (shafts is not null) (shafts.ShaftAir, shafts.ShaftStrength, shafts.Balance) = (air, strength, balance);
             if (host.Gpu.FogVolumes is { } restoreFog) restoreFog.HidePlaced = false;
             if (host.Gpu.Characters is { } unlit) unlit.Fill = default;
@@ -241,7 +293,8 @@ sealed class TitleScreen(GameHost host)
         if (_titleParticles is not { } dust) return;
         var left = -Vector3.Normalize(Vector3.Cross(host.Camera.Forward, Vector3.UnitY));
         float gust = 0.5f + 0.5f * MathF.Sin((float)(seconds % 120) * MathF.Tau / 24);
-        dust.SetWeather(new WeatherEffectInput { Effects = _titleDust!, Wind = new Vector2(left.X, left.Z) * (35 + 20 * gust) });
+        var wind = new Vector2(left.X, left.Z) * (35 + 20 * gust);
+        dust.SetWeather(new WeatherEffectInput { Effects = _titleDust!, Wind = wind });
         // Warm once before setting the tint; Draw advances subsequent frames on the menu's real-time clock.
         if (dust.Groups.Count == 0) dust.Update(seconds, host.Camera);
         float fade = Math.Clamp((host.Camera.Pitch + 0.65f) / 0.45f, 0, 1);

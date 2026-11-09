@@ -5,15 +5,44 @@ using Meitou.Data.Ui;
 
 namespace Meitou.Game.Ui;
 
-/// <summary>The character's stats window (docs/game/ui-screens.md): the skills by category with their levels and the next level's progress.</summary>
+/// <summary>
+/// The character's stats window (docs/game/ui-screens.md): the skills by category with their levels and the next level's progress.
+/// </summary>
 sealed class StatsWindow(PlayerInterface player)
 {
     internal StatHelpCatalog StatHelp = new();
+
+    internal string SelectedStat = ((int)StatsEnumerated.Katanas).ToString(CultureInfo.InvariantCulture);
+
+    // The category titles are the catalog's own words in dashes ("-Weapons-"): the layout has no text for them (docs/native-ui.md).
+    static readonly (int Before, string Caption)[][] StatHeadings =
+    [
+        [], [(0, "Weapons")], [(0, "Combat"), (4, "Ranged")],
+        [(0, "Thievery"), (4, "Athletics")], [(0, "Sciences"), (4, "Trades")],
+    ];
+
+    /// <summary>
+    /// The attributes and four skill columns, ordered as observed in the supplied original-game screenshot.
+    /// </summary>
+    internal static readonly StatsEnumerated[][] StatPanels =
+    [
+        [StatsEnumerated.Strength, StatsEnumerated.Toughness, StatsEnumerated.Dexterity, StatsEnumerated.Perception],
+        [StatsEnumerated.Katanas, StatsEnumerated.Sabres, StatsEnumerated.Hackers, StatsEnumerated.HeavyWeapons, StatsEnumerated.Blunt, StatsEnumerated.Polearms],
+        [StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Dodge, StatsEnumerated.MartialArts,
+            StatsEnumerated.Turrets, StatsEnumerated.Crossbows, StatsEnumerated.FriendlyFire],
+        [StatsEnumerated.Stealth, StatsEnumerated.Lockpicking, StatsEnumerated.Thieving, StatsEnumerated.Assassination, StatsEnumerated.Athletics,
+            StatsEnumerated.Swimming],
+        [StatsEnumerated.Medic, StatsEnumerated.Engineering, StatsEnumerated.Robotics, StatsEnumerated.Science,
+            StatsEnumerated.SmithingWeapon, StatsEnumerated.SmithingArmour, StatsEnumerated.SmithingBow, StatsEnumerated.Labouring, StatsEnumerated.Farming,
+            StatsEnumerated.Cooking],
+    ];
+
     internal void BindStatsGeometry(MyGuiLayout layout, UiBindings bindings)
     {
         bindings.TemplateScale = player.InventoryScale;
         bindings.Positions["Root"] = new(0, 0, 980 * player.InventoryScale, 650 * player.InventoryScale);
         bindings.Hidden.Add("lbDerivedStats");
+
         // The installed layout includes an unused derived-statistics column. The runtime screen
         // gives that space to skills and description (observed in the original-game reference).
         foreach (var widget in layout.Widgets)
@@ -26,38 +55,36 @@ sealed class StatsWindow(PlayerInterface player)
             if (widget.Children.Any(c => c.Name == "AttributesPanel"))
                 bindings.RelativePositions[widget] = new(0.00791139f, 0.0409836f, 0.25f, 0.295082f);
         }
+
         if (layout.Find("lbAttributes") is { } attributes)
             bindings.RelativePositions[attributes] = new(0.00791139f, 0.0163934f, 0.25f, 0.0327869f);
         if (layout.Find("lbSkills") is { } skills)
             bindings.RelativePositions[skills] = new(0.272f, 0.0163934f, 0.723f, 0.0327869f);
     }
 
-    // The category titles are the catalog's own words in dashes ("-Weapons-"): the layout has no text for them (docs/native-ui.md).
-    static readonly (int Before, string Caption)[][] StatHeadings =
-    [
-        [], [(0, "Weapons")], [(0, "Combat"), (4, "Ranged")],
-        [(0, "Thievery"), (4, "Athletics")], [(0, "Sciences"), (4, "Trades")],
-    ];
-
     internal void AddStatsContent(List<UiControl> controls)
     {
         var lead = player.Selected().FirstOrDefault();
         float scale = player.InventoryScale, rowHeight = 20 * scale;
+
         // The skill columns sit in Kenshi_GenericTextBoxSkin frames (the attributes column's frame has no text colour and keeps its grey).
         string statInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBoxSkin");
         for (int column = 0; column < StatPanels.Length; column++)
         {
             string name = column == 0 ? "AttributesPanel" : $"Skills{column}Panel";
             if (controls.FirstOrDefault(c => c.Name == name) is not { } panel) continue;
+
             var clip = panel.Bounds.Intersect(panel.Clip ?? panel.Bounds);
             float y = panel.Bounds.Y;
             for (int i = 0; i < StatPanels[column].Length; i++)
             {
                 foreach (var heading in StatHeadings[column].Where(h => h.Before == i))
                 {
-                    Text($"{name}-heading-{i}", "-" + Loc.Tr(heading.Caption) + "-", "Kenshi_StandardFont_Large", PlayerInterface.TitleColour, "Left VCenter", "", heading: true);
+                    Text($"{name}-heading-{i}", "-" + Loc.Tr(heading.Caption) + "-", "Kenshi_StandardFont_Large", PlayerInterface.TitleColour,
+                        "Left VCenter", "", heading: true);
                     y += rowHeight;
                 }
+
                 var stat = StatPanels[column][i];
                 string id = ((int)stat).ToString(CultureInfo.InvariantCulture), action = "stat:" + id;
                 string label = column == 0 ? StatLabel(stat).ToUpperInvariant() : StatLabel(stat);
@@ -70,10 +97,12 @@ sealed class StatsWindow(PlayerInterface player)
                 y += column == 0 ? 20 * scale : rowHeight * (wrapLabel ? 2 : 1);
             }
 
-            void Text(string controlName, string caption, string font, string colour, string align, string action, bool heading = false, bool wrap = false)
+            void Text(string controlName, string caption, string font, string colour, string align, string action, bool heading = false,
+                bool wrap = false)
             {
                 var properties = new Dictionary<string, string> { ["FontName"] = font, ["TextColour"] = colour, ["TextAlign"] = align };
                 if (wrap) properties["WordWrap"] = "true";
+
                 // Runtime category titles are larger than the surrounding standard text.
                 if (heading) properties["FontPixels"] = Math.Max(8, (int)MathF.Round(18 * scale)).ToString(CultureInfo.InvariantCulture);
                 bool value = align.StartsWith("Right", StringComparison.Ordinal);
@@ -86,6 +115,7 @@ sealed class StatsWindow(PlayerInterface player)
                     Vector4.Zero, Pickable: action.Length > 0, Clip: clip));
             }
         }
+
         AddStatDescription(controls);
     }
 
@@ -93,12 +123,15 @@ sealed class StatsWindow(PlayerInterface player)
     {
         if (!int.TryParse(SelectedStat, out int selected) || selected <= 0 || selected >= StatsInfo.Count
             || controls.FirstOrDefault(c => c.Name == "Description1Panel") is not { } left
-            || controls.FirstOrDefault(c => c.Name == "Description2Panel") is not { } right) return;
+            || controls.FirstOrDefault(c => c.Name == "Description2Panel") is not { } right)
+            return;
+
         var lead = player.Selected().FirstOrDefault();
         var stat = (StatsEnumerated)selected;
         var help = StatHelp.For(stat);
         string statInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBoxSkin");
-        float scale = player.InventoryScale, row = Math.Min(20 * scale, (left.Bounds.Height - 4 * scale) / Math.Max(1, 3 + help.Affected.Count + help.Training.Count));
+        float scale = player.InventoryScale;
+        float row = Math.Min(20 * scale, (left.Bounds.Height - 4 * scale) / Math.Max(1, 3 + help.Affected.Count + help.Training.Count));
         float y = left.Bounds.Y + 4 * scale;
         var leftClip = left.Bounds.Intersect(left.Clip ?? left.Bounds);
         var rightClip = right.Bounds.Intersect(right.Clip ?? right.Bounds);
@@ -115,13 +148,16 @@ sealed class StatsWindow(PlayerInterface player)
                 },
                 Vector4.Zero, Pickable: false, Clip: clip));
         }
+
         void Line(string name, string text, string colour, int pixels = 14)
         {
             Text(name, new(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, pixels == 18 ? 24 * scale : row), text, colour, pixels, leftClip);
             y += row;
         }
+
         Line("stat-description-title", StatLabel(stat), PlayerInterface.TitleColour, 18);
         Line("stat-affected-heading", StatHelp.TextAt(681), PlayerInterface.MainColour);
+
         // The rows' numbers (FUN_1408b1250, HudView.StatReadouts), matched to the catalog's rows by their label, right-aligned on the row.
         var readouts = lead?.Hud?.StatReadouts?.GetValueOrDefault(stat) ?? [];
         for (int i = 0; i < help.Affected.Count; i++)
@@ -129,9 +165,11 @@ sealed class StatsWindow(PlayerInterface player)
             var readout = readouts.FirstOrDefault(r => Loc.Tr(r.Label) == help.Affected[i]);
             string ink = readout.Main ? PlayerInterface.MainColour : statInk;
             if (readout.Value is { Length: > 0 } number)
-                Text($"stat-affected-value-{i}", new(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, row), number, ink, 14, leftClip, "Right Top");
+                Text($"stat-affected-value-{i}", new(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, row), number, ink, 14, leftClip,
+                    "Right Top");
             Line($"stat-affected-{i}", "-" + help.Affected[i].TrimEnd(':'), ink);
         }
+
         Line("stat-training-heading", StatHelp.TextAt(684), PlayerInterface.MainColour);
         for (int i = 0; i < help.Training.Count; i++)
             Line($"stat-training-{i}", "-" + help.Training[i], statInk);
@@ -148,9 +186,11 @@ sealed class StatsWindow(PlayerInterface player)
             new Dictionary<string, string>(), Vector4.Zero, Pickable: false, Clip: rightClip));
         var barText = new UiRect(bar.X + 10 * scale, bar.Y - 4 * scale, bar.Width - 20 * scale, row);
         Text("stat-next-level-label", barText, StatHelp.TextAt(220), PlayerInterface.MainColour, 14, rightClip);
-        Text("stat-next-level-percent", barText, ((int)(progress * 100)).ToString(CultureInfo.InvariantCulture) + "%", PlayerInterface.MainColour, 14, rightClip, "Right Top");
+        Text("stat-next-level-percent", barText, ((int)(progress * 100)).ToString(CultureInfo.InvariantCulture) + "%", PlayerInterface.MainColour, 14,
+            rightClip, "Right Top");
         Text("stat-description-heading", new(bar.X + 10 * scale, bar.Y + 12 * scale, bar.Width - 20 * scale, row),
             StatHelp.TextAt(440), PlayerInterface.MainColour, 14, rightClip);
+
         string description = System.Text.RegularExpressions.Regex.Replace(help.Description, @"\{[12]\}", "");
         if (help.PhysicalEffect.Length > 0) description += "\n\n" + help.PhysicalEffect;
         float multiplier = lead?.SkillXpMultipliers.ElementAtOrDefault(selected) ?? 0;
@@ -159,22 +199,6 @@ sealed class StatsWindow(PlayerInterface player)
         Text("stat-description-body", new(bar.X + 10 * scale, bar.Y + 28 * scale, bar.Width - 20 * scale, Math.Max(0, right.Bounds.Height - 36 * scale)),
             description, statInk, 14, rightClip, wrap: true);
     }
-
-    internal string SelectedStat = ((int)StatsEnumerated.Katanas).ToString(CultureInfo.InvariantCulture);
-
-    /// <summary>
-    /// The attributes and four skill columns, ordered as observed in the supplied original-game screenshot.
-    /// </summary>
-    internal static readonly StatsEnumerated[][] StatPanels =
-    [
-        [StatsEnumerated.Strength, StatsEnumerated.Toughness, StatsEnumerated.Dexterity, StatsEnumerated.Perception],
-        [StatsEnumerated.Katanas, StatsEnumerated.Sabres, StatsEnumerated.Hackers, StatsEnumerated.HeavyWeapons, StatsEnumerated.Blunt, StatsEnumerated.Polearms],
-        [StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Dodge, StatsEnumerated.MartialArts,
-            StatsEnumerated.Turrets, StatsEnumerated.Crossbows, StatsEnumerated.FriendlyFire],
-        [StatsEnumerated.Stealth, StatsEnumerated.Lockpicking, StatsEnumerated.Thieving, StatsEnumerated.Assassination, StatsEnumerated.Athletics, StatsEnumerated.Swimming],
-        [StatsEnumerated.Medic, StatsEnumerated.Engineering, StatsEnumerated.Robotics, StatsEnumerated.Science,
-            StatsEnumerated.SmithingWeapon, StatsEnumerated.SmithingArmour, StatsEnumerated.SmithingBow, StatsEnumerated.Labouring, StatsEnumerated.Farming, StatsEnumerated.Cooking],
-    ];
 
     internal static string StatLabel(StatsEnumerated stat) => Loc.Tr(StatLabelEnglish(stat));
 
