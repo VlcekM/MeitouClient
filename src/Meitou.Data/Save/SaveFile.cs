@@ -5,11 +5,16 @@ namespace Meitou.Data.Save;
 
 /// <summary>
 /// One file of a save folder (<c>quick.save</c>, <c>*.platoon</c>, <c>*.zone</c>): an FCS file of type 15 followed by the slot lists
-/// (docs/formats/save.md "Object handles and slot lists"). A list is an int32 count and that many ascending int32; <c>quick.save</c> has four,
-/// a zone file one, a platoon file none. Strings are read losslessly (<see cref="Fcs.LosslessUtf8"/>). The game writes every file as type 15, except that a V17 header-carrying platoon file was seen in a quicksave folder (docs/formats/save.md), so any FCS file type is accepted. Reading and writing again gives the same bytes.
+/// (docs/formats/save.md "Object handles and slot lists"). A list is an int32 count and that many ascending int32; <c>quick.save</c> has four, a zone
+/// file one, a platoon file none. Strings are read losslessly (<see cref="Fcs.LosslessUtf8"/>). The game writes every file as type 15, except that a
+/// V17 header-carrying platoon file was seen in a quicksave folder (docs/formats/save.md), so any FCS file type is accepted. Reading and writing
+/// again gives the same bytes.
 /// </summary>
 public sealed class SaveFile
 {
+    /// <summary>
+    /// The FCS part: header and records.
+    /// </summary>
     public FcsFile Data { get; init; } = new() { FileType = FcsFileType.V15 };
 
     /// <summary>
@@ -17,10 +22,20 @@ public sealed class SaveFile
     /// </summary>
     public List<int[]> SlotLists { get; } = [];
 
+    /// <summary>
+    /// The records of <see cref="Data"/>.
+    /// </summary>
     public List<FcsRecord> Records => Data.Records;
 
+    /// <summary>
+    /// Reads the file at <paramref name="path"/>.
+    /// </summary>
     public static SaveFile ReadFile(string path) => Read(File.ReadAllBytes(path));
 
+    /// <summary>
+    /// Reads a save file: its FCS part losslessly, then slot lists to the end; a list longer than the bytes left or stray bytes
+    /// throw <see cref="FcsFormatException"/>.
+    /// </summary>
     public static SaveFile Read(byte[] bytes)
     {
         using var stream = new MemoryStream(bytes, writable: false);
@@ -42,6 +57,9 @@ public sealed class SaveFile
         return file;
     }
 
+    /// <summary>
+    /// Writes the FCS part (record sizes kept, strings lossless) and then each slot list as its count and entries.
+    /// </summary>
     public void Write(Stream stream)
     {
         // Record sizes are written as held: the game's own files hold the child count there (docs/formats/save.md "byteSize").
@@ -54,6 +72,9 @@ public sealed class SaveFile
         }
     }
 
+    /// <summary>
+    /// The file's bytes, as <see cref="Write"/> writes them.
+    /// </summary>
     public byte[] ToBytes()
     {
         var ms = new MemoryStream();
@@ -61,5 +82,8 @@ public sealed class SaveFile
         return ms.ToArray();
     }
 
+    /// <summary>
+    /// Writes the file to <paramref name="path"/>.
+    /// </summary>
     public void WriteFile(string path) => File.WriteAllBytes(path, ToBytes());
 }

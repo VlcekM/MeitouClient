@@ -10,7 +10,14 @@ namespace Meitou.Data.Gameplay;
 /// </summary>
 public sealed record BiomeGroupData
 {
+    /// <summary>
+    /// The BIOME_GROUP's string id.
+    /// </summary>
     public required string Id { get; init; }
+
+    /// <summary>
+    /// The BIOME_GROUP's name in the active language.
+    /// </summary>
     public required string Name { get; init; }
 
     /// <summary>
@@ -43,6 +50,9 @@ public sealed record BiomeGroupData
     /// </summary>
     public IReadOnlyList<RecordLink> Nests { get; init; } = [];
 
+    /// <summary>
+    /// Reads the population fields of a BIOME_GROUP record.
+    /// </summary>
     public static BiomeGroupData From(GameRecord r)
     {
         IReadOnlyList<RecordLink> Links(string list) => [.. r.GetReferences(list).Select(RecordLink.From)];
@@ -74,8 +84,14 @@ public sealed record BiomeGroupData
 /// </summary>
 public sealed class BiomeMap
 {
+    /// <summary>
+    /// Each cell's index into <see cref="Groups"/> (-1: none), row by row (z then x).
+    /// </summary>
     readonly int[] _cells;
 
+    /// <summary>
+    /// A map of <paramref name="groups"/> with each of the 64 x 64 cells' group index (row by row); another cell count throws.
+    /// </summary>
     public BiomeMap(IReadOnlyList<BiomeGroupData> groups, int[] cellGroups)
     {
         if (cellGroups.Length != WeatherAreas.Cells * WeatherAreas.Cells)
@@ -85,6 +101,9 @@ public sealed class BiomeMap
         _cells = cellGroups;
     }
 
+    /// <summary>
+    /// The groups the cells index.
+    /// </summary>
     public IReadOnlyList<BiomeGroupData> Groups { get; }
 
     /// <summary>
@@ -116,5 +135,8 @@ public sealed class BiomeMap
         return new BiomeMap(groups, cells);
     }
 
+    /// <summary>
+    /// Paints the cells of every BIOME_GROUP of <paramref name="db"/> from the areas map's colours.
+    /// </summary>
     public static BiomeMap Create(GameDatabase db, WeatherAreas? areas) => Create(BiomeGroupData.LoadAll(db), areas);
 }

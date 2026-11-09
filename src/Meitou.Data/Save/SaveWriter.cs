@@ -11,10 +11,11 @@ public sealed class SaveWriter(SaveGame game)
     readonly SaveGame _game = game;
 
     /// <summary>
-    /// Writes the save into <paramref name="folder"/> the way the game does (docs/formats/save.md "The save file system"): first into a working folder
-    /// <c>_current&lt;N&gt;</c> beside it (the first N whose folder does not exist), then the finished folder replaces the old one in two renames, so a crash
-    /// leaves either the old save or the new one, never half of one. The old folder's contents are replaced as a whole: files the new save no longer has are gone.
-    /// <paramref name="beforeInstall"/> runs between the two renames (a test uses it to fail there); the old save is then moved back.
+    /// Writes the save into <paramref name="folder"/> the way the game does (docs/formats/save.md "The save file system"): first into a working
+    /// folder <c>_current&lt;N&gt;</c> beside it (the first N whose folder does not exist), then the finished folder replaces the old one in two
+    /// renames, so a crash leaves either the old save or the new one, never half of one. The old folder's contents are replaced as a whole: files the
+    /// new save no longer has are gone. <paramref name="beforeInstall"/> runs between the two renames (a test uses it to fail there); the old save is
+    /// then moved back.
     /// </summary>
     public void Write(string folder, Action? beforeInstall = null)
     {

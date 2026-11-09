@@ -7,39 +7,77 @@ namespace Meitou.Data.Gameplay.Construction;
 /// </summary>
 public sealed record ResearchData
 {
+    /// <summary>
+    /// The RESEARCH's string id.
+    /// </summary>
     public required string Id { get; init; }
+
+    /// <summary>
+    /// The RESEARCH's name in the active language.
+    /// </summary>
     public required string Name { get; init; }
+
+    /// <summary>
+    /// <c>category</c>.
+    /// </summary>
     public string Category { get; init; } = "";
+
+    /// <summary>
+    /// <c>description</c>.
+    /// </summary>
     public string Description { get; init; } = "";
+
+    /// <summary>
+    /// <c>level</c> (raised per repetition by <see cref="LevelAt"/>).
+    /// </summary>
     public int Level { get; init; }
+
     /// <summary>
     /// <c>time</c>: the base hours before <c>research rate</c> and the level growth.
     /// </summary>
     public float Time { get; init; }
+
+    /// <summary>
+    /// <c>is level upgrade</c>.
+    /// </summary>
     public bool IsLevelUpgrade { get; init; }
+
+    /// <summary>
+    /// <c>blueprint only</c>: not offered as available research (the gear blueprints <see cref="GameDatabase.AddGearBlueprints"/> adds set it).
+    /// </summary>
     public bool BlueprintOnly { get; init; }
+
     /// <summary>
     /// <c>requirements</c>: RESEARCH ids that must be finished, other records (buildings) that must be unlocked.
     /// </summary>
     public IReadOnlyList<string> Requirements { get; init; } = [];
+
     /// <summary>
     /// <c>cost</c>: items and counts (v0) paid when it is queued.
     /// </summary>
     public IReadOnlyList<(string Item, int Count)> Cost { get; init; } = [];
+
+    /// <summary>
+    /// <c>enable buildings</c>: the BUILDINGs it unlocks.
+    /// </summary>
     public IReadOnlyList<string> EnableBuildings { get; init; } = [];
+
     /// <summary>
     /// <c>repeats</c>: how many times it can be researched in all, at least once (<b>Verified</b>, the loader <c>FUN_140834b70</c> makes repetitions
     /// 1 .. repeats - 1 beside the base record).
     /// </summary>
     public int Repeats { get; init; }
+
     /// <summary>
     /// <c>repeat mult</c>: the cost and time factor per repetition (<b>Verified</b>, <c>FUN_1408320a0</c>).
     /// </summary>
     public float RepeatMult { get; init; } = 1;
+
     /// <summary>
     /// The crafts it unlocks (<c>enable item</c>, <c>enable armour</c>, ...): kind, record and the repetition (v0, 0 = the first) that unlocks it.
     /// </summary>
     public IReadOnlyList<(CraftKind Kind, string Id, int Repetition)> EnableCrafts { get; init; } = [];
+
     /// <summary>
     /// The repetition (v0) and level floor (v1) of every entry of the eight <c>enable</c> lists (<see cref="UnlockFields"/>).
     /// </summary>
@@ -64,14 +102,20 @@ public sealed record ResearchData
     /// to (<b>Observed</b>, <c>FUN_140831a60</c>).
     /// </summary>
     public IReadOnlyList<string> ImproveBuildings { get; init; } = [];
+
     /// <summary>
     /// <c>production mult</c>: replaces the listed buildings' multiplier (the last finished research wins).
     /// </summary>
     public float ProductionMult { get; init; } = 1;
+
     /// <summary>
     /// <c>power increase</c> and <c>power capacity increase</c>: added to the listed buildings' <c>power output</c> and <c>power capacity</c>.
     /// </summary>
     public int PowerIncrease { get; init; }
+
+    /// <summary>
+    /// <c>power capacity increase</c>: added to the listed buildings' <c>power capacity</c>.
+    /// </summary>
     public int CapacityIncrease { get; init; }
 
     /// <summary>
@@ -134,6 +178,9 @@ public sealed record ResearchData
         return hours;
     }
 
+    /// <summary>
+    /// Reads a RESEARCH record (<c>cost</c> entries with a negative count are left out).
+    /// </summary>
     public static ResearchData From(GameRecord r) => new()
     {
         Id = r.StringId,

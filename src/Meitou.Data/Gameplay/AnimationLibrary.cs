@@ -5,7 +5,29 @@ namespace Meitou.Data.Gameplay;
 /// <summary>
 /// The body area an ANIMATION plays on (<c>layer</c>: all, lower, upper, overlay).
 /// </summary>
-public enum AnimationArea : byte { All, Lower, Upper, Overlay, Other }
+public enum AnimationArea : byte
+{
+    /// <summary>
+    /// <c>all</c>: the whole body.
+    /// </summary>
+    All,
+    /// <summary>
+    /// <c>lower</c>: the lower body.
+    /// </summary>
+    Lower,
+    /// <summary>
+    /// <c>upper</c>: the upper body (the default).
+    /// </summary>
+    Upper,
+    /// <summary>
+    /// <c>overlay</c>.
+    /// </summary>
+    Overlay,
+    /// <summary>
+    /// Any other <c>layer</c> text.
+    /// </summary>
+    Other
+}
 
 /// <summary>
 /// The weapon kinds an ANIMATION's validity flags name (katanas, sabre, blunt, heavy weapons, hackers, polearm, unarmed, 1 handed).
@@ -13,8 +35,45 @@ public enum AnimationArea : byte { All, Lower, Upper, Overlay, Other }
 [Flags]
 public enum WeaponKinds : ushort
 {
+    /// <summary>
+    /// No kind.
+    /// </summary>
     None = 0,
-    Katana = 1, Sabre = 2, Blunt = 4, Heavy = 8, Hacker = 16, Polearm = 32, Unarmed = 64, OneHanded = 128,
+    /// <summary>
+    /// <c>katanas</c>.
+    /// </summary>
+    Katana = 1,
+    /// <summary>
+    /// <c>sabre</c>.
+    /// </summary>
+    Sabre = 2,
+    /// <summary>
+    /// <c>blunt</c>.
+    /// </summary>
+    Blunt = 4,
+    /// <summary>
+    /// <c>heavy weapons</c>.
+    /// </summary>
+    Heavy = 8,
+    /// <summary>
+    /// <c>hackers</c>.
+    /// </summary>
+    Hacker = 16,
+    /// <summary>
+    /// <c>polearm</c>.
+    /// </summary>
+    Polearm = 32,
+    /// <summary>
+    /// <c>unarmed</c>: fists.
+    /// </summary>
+    Unarmed = 64,
+    /// <summary>
+    /// <c>1 handed</c>; also what a weapon of no skill class animates as (<see cref="Combat.WeaponCategories.AnimationKind"/>).
+    /// </summary>
+    OneHanded = 128,
+    /// <summary>
+    /// Every kind.
+    /// </summary>
     All = 255,
 }
 
@@ -52,10 +111,12 @@ public sealed class AnimationLibrary
     /// CharacterAnimCategory 8, RANGED.
     /// </summary>
     public const int RangedCategory = 8;
+
     /// <summary>
     /// The ANIMATION category of <c>carry me</c> (3 in the data; the enum name is not known here).
     /// </summary>
     public const int CarriedCategory = 3;
+
     /// <summary>
     /// CharacterAnimCategory 4, SWIMMING (<b>Verified</b>, docs/animation.md): what a character in deep water plays instead of the normal clips.
     /// </summary>

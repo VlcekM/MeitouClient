@@ -7,6 +7,9 @@ namespace Meitou.Data.Gameplay.Economy;
 /// </summary>
 public sealed record ItemPlacementGroup
 {
+    /// <summary>
+    /// The ITEM_PLACEMENT_GROUP's string id.
+    /// </summary>
     public required string Id { get; init; }
 
     /// <summary>
@@ -23,8 +26,15 @@ public sealed record ItemPlacementGroup
     /// <c>min respawn time</c> / <c>max respawn time</c>: game hours from an item's going to the next one (an int in [min, max]).
     /// </summary>
     public int MinRespawnHours { get; init; }
+
+    /// <summary>
+    /// <c>max respawn time</c> (game hours, default 0).
+    /// </summary>
     public int MaxRespawnHours { get; init; }
 
+    /// <summary>
+    /// Reads an ITEM_PLACEMENT_GROUP record, its reference lists as a vendor list's.
+    /// </summary>
     public static ItemPlacementGroup From(GameDatabase db, GameRecord r) => new()
     {
         Id = r.StringId,

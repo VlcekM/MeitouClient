@@ -18,7 +18,14 @@ public sealed record BuildingBuildData
     /// </summary>
     public const string BuildingMaterialsItem = "580-gamedata.base";
 
+    /// <summary>
+    /// The BUILDING's string id.
+    /// </summary>
     public required string Id { get; init; }
+
+    /// <summary>
+    /// The BUILDING's name in the active language.
+    /// </summary>
     public required string Name { get; init; }
 
     /// <summary>
@@ -57,8 +64,19 @@ public sealed record BuildingBuildData
     /// </summary>
     public int PathMode { get; init; } = 2;
 
+    /// <summary>
+    /// <c>max slope</c> (default 0; docs/game/buildings-production.md "Placement").
+    /// </summary>
     public float MaxSlope { get; init; }
+
+    /// <summary>
+    /// <c>match slope</c> (default false).
+    /// </summary>
     public bool MatchSlope { get; init; }
+
+    /// <summary>
+    /// <c>vertical position tolerance</c> (default 0).
+    /// </summary>
     public float VerticalPositionTolerance { get; init; }
 
     /// <summary>
@@ -66,6 +84,10 @@ public sealed record BuildingBuildData
     /// </summary>
     public float Scale { get; init; } = 1;
 
+    /// <summary>
+    /// <c>creates player town</c> (default false): kept further from towns, and placed outside one it makes an outpost
+    /// (docs/game/buildings-production.md "Placement").
+    /// </summary>
     public bool CreatesPlayerTown { get; init; }
 
     /// <summary>
@@ -74,9 +96,24 @@ public sealed record BuildingBuildData
     /// </summary>
     public bool LinksTogether { get; init; }
 
+    /// <summary>
+    /// <c>is interior furniture</c> (default false).
+    /// </summary>
     public bool IsInteriorFurniture { get; init; }
+
+    /// <summary>
+    /// <c>is exterior furniture</c> (default false).
+    /// </summary>
     public bool IsExteriorFurniture { get; init; }
+
+    /// <summary>
+    /// <c>is node</c> (default false).
+    /// </summary>
     public bool IsNode { get; init; }
+
+    /// <summary>
+    /// <c>ceiling placement</c> (default false): the ghost needs a ceiling.
+    /// </summary>
     public bool CeilingPlacement { get; init; }
 
     /// <summary>
@@ -99,6 +136,9 @@ public sealed record BuildingBuildData
     /// </summary>
     public float BuildingHeight { get; init; } = 100;
 
+    /// <summary>
+    /// <c>is wall gate</c> (default false).
+    /// </summary>
     public bool IsWallGate { get; init; }
 
     /// <summary>
@@ -142,6 +182,9 @@ public sealed record BuildingBuildData
         return perHour > 0 ? Target / perHour : float.PositiveInfinity;
     }
 
+    /// <summary>
+    /// Reads the build fields of a BUILDING record; the defaults are those named on each property.
+    /// </summary>
     public static BuildingBuildData From(GameRecord r)
     {
         var refs = r.GetReferences("construction");

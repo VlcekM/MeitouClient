@@ -9,6 +9,9 @@ namespace Meitou.Data.Fcs;
 /// </summary>
 public static class LosslessUtf8
 {
+    /// <summary>
+    /// Decodes <paramref name="bytes"/>: valid UTF-8 sequences as their characters, every other byte as U+DC00 + byte.
+    /// </summary>
     public static string GetString(ReadOnlySpan<byte> bytes)
     {
         var sb = new StringBuilder(bytes.Length);
@@ -29,6 +32,10 @@ public static class LosslessUtf8
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Encodes <paramref name="s"/>: a lone U+DC80..U+DCFF back to its byte, a surrogate pair as its UTF-8 sequence, everything else as UTF-8; any
+    /// other lone surrogate throws.
+    /// </summary>
     public static byte[] GetBytes(string s)
     {
         var bytes = new List<byte>(s.Length);

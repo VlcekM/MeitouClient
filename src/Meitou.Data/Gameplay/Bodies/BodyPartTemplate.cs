@@ -5,9 +5,21 @@ namespace Meitou.Data.Gameplay.Bodies;
 /// </summary>
 public enum BodyPartType
 {
+    /// <summary>
+    /// 0: <c>PART_TORSO</c> (fcs_enums.def).
+    /// </summary>
     Torso = 0,
+    /// <summary>
+    /// 1: <c>PART_LEG</c>.
+    /// </summary>
     Leg = 1,
+    /// <summary>
+    /// 2: <c>PART_ARM</c> (also an animal's foreleg).
+    /// </summary>
     Arm = 2,
+    /// <summary>
+    /// 3: <c>PART_HEAD</c>.
+    /// </summary>
     Head = 3,
 }
 
@@ -16,8 +28,17 @@ public enum BodyPartType
 /// </summary>
 public enum BodySide
 {
+    /// <summary>
+    /// Neither side: the head, the torso, any part whose <c>collapse part</c> names no side.
+    /// </summary>
     None = 0,
+    /// <summary>
+    /// <c>collapse part</c> 4 (left arm) or 0x20 (left leg).
+    /// </summary>
     Left = 1,
+    /// <summary>
+    /// <c>collapse part</c> 2 (right arm) or 0x10 (right leg).
+    /// </summary>
     Right = 2,
 }
 
@@ -27,8 +48,19 @@ public enum BodySide
 /// </summary>
 public sealed record BodyPartTemplate
 {
+    /// <summary>
+    /// The LOCATIONAL_DAMAGE's string id.
+    /// </summary>
     public required string StringId { get; init; }
+
+    /// <summary>
+    /// The LOCATIONAL_DAMAGE's name in the active language.
+    /// </summary>
     public string Name { get; init; } = "";
+
+    /// <summary>
+    /// <c>body part type</c> (default 0, torso).
+    /// </summary>
     public BodyPartType Type { get; init; }
 
     /// <summary>
@@ -70,6 +102,10 @@ public sealed record BodyPartTemplate
     /// <c>bone name</c> and <c>bone name 2</c>: the skeleton bones of the part (a bolt sticks in one, docs/game/combat.md "Bolt visuals").
     /// </summary>
     public string BoneName { get; init; } = "";
+
+    /// <summary>
+    /// <c>bone name 2</c>: the part's second bone; empty when the part has only one.
+    /// </summary>
     public string BoneName2 { get; init; } = "";
 
     /// <summary>
@@ -77,8 +113,15 @@ public sealed record BodyPartTemplate
     /// under which it does (<c>FUN_14064a100</c>, docs/animation.md "Injury holds"); null when the record has none.
     /// </summary>
     public string? PainAnim { get; init; }
+
+    /// <summary>
+    /// The first <c>pain anim</c> reference's value 0: the health per cent under which the hold plays; 0 when the record has none.
+    /// </summary>
     public int PainThreshold { get; init; }
 
+    /// <summary>
+    /// The side of the part from its <c>collapse part</c> bits.
+    /// </summary>
     public BodySide Side => CollapsePart is 4 or 0x20 ? BodySide.Left : CollapsePart is 2 or 0x10 ? BodySide.Right : BodySide.None;
 
     /// <summary>
@@ -109,6 +152,9 @@ public sealed record BodyPartTemplate
         _ => -1,
     };
 
+    /// <summary>
+    /// Reads a LOCATIONAL_DAMAGE record.
+    /// </summary>
     public static BodyPartTemplate From(GameRecord r) => new()
     {
         StringId = r.StringId,

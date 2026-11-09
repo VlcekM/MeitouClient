@@ -23,6 +23,9 @@ public sealed class FcsRecord
     /// </summary>
     public int Type { get; set; }
 
+    /// <summary>
+    /// <see cref="Type"/> as a <see cref="FcsRecordType"/> (a number outside the enum stays as it is).
+    /// </summary>
     public FcsRecordType RecordType
     {
         get => (FcsRecordType)Type;
@@ -34,6 +37,9 @@ public sealed class FcsRecord
     /// </summary>
     public int Id { get; set; }
 
+    /// <summary>
+    /// The record's display name; a record with <see cref="IsRenamed"/> set renames the earlier one to it.
+    /// </summary>
     public string Name { get; set; } = "";
 
     /// <summary>
@@ -68,16 +74,39 @@ public sealed class FcsRecord
     /// </summary>
     public bool IsRemoved => Bools.TryGetValue(RemovedKey, out var removed) && removed;
 
+    /// <summary>
+    /// Bool fields by key, in file order (stored as a byte, 0 or 1).
+    /// </summary>
     public OrderedDictionary<string, bool> Bools { get; } = [];
+
+    /// <summary>
+    /// Float fields by key, in file order.
+    /// </summary>
     public OrderedDictionary<string, float> Floats { get; } = [];
+
+    /// <summary>
+    /// Int fields by key, in file order.
+    /// </summary>
     public OrderedDictionary<string, int> Ints { get; } = [];
+
+    /// <summary>
+    /// Vector fields (three floats) by key, in file order.
+    /// </summary>
     public OrderedDictionary<string, Vector3> Vector3S { get; } = [];
 
     /// <summary>
     /// Quaternion-valued fields, stored x, y, z, w.
     /// </summary>
     public OrderedDictionary<string, Vector4> Vector4S { get; } = [];
+
+    /// <summary>
+    /// String fields by key, in file order.
+    /// </summary>
     public OrderedDictionary<string, string> Strings { get; } = [];
+
+    /// <summary>
+    /// Filename fields (paths to meshes, textures, ...) by key, in file order; stored as strings.
+    /// </summary>
     public OrderedDictionary<string, string> Filenames { get; } = [];
 
     /// <summary>
@@ -108,6 +137,9 @@ public readonly record struct FcsReference(string TargetStringId, int Value0, in
     /// </summary>
     public bool IsRemoved => Value0 == RemovedValue && Value1 == RemovedValue && Value2 == RemovedValue;
 
+    /// <summary>
+    /// A reference entry that removes the link to <paramref name="targetStringId"/> (all three values <see cref="RemovedValue"/>).
+    /// </summary>
     public static FcsReference Removed(string targetStringId) => new(targetStringId, RemovedValue, RemovedValue, RemovedValue);
 }
 
@@ -116,6 +148,10 @@ public readonly record struct FcsReference(string TargetStringId, int Value0, in
 /// </summary>
 public sealed class FcsInstance
 {
+    /// <summary>
+    /// The instance's id within the record (a list entry id such as <c>"1"</c>); a later file's instance of the same id merges over
+    /// it (<see cref="GameDatabase"/>).
+    /// </summary>
     public string Id { get; set; } = "";
 
     /// <summary>
@@ -123,8 +159,14 @@ public sealed class FcsInstance
     /// </summary>
     public string Target { get; set; } = "";
 
+    /// <summary>
+    /// True when the instance removes the one of its id (an empty <see cref="Target"/>).
+    /// </summary>
     public bool IsRemoved => Target.Length == 0;
 
+    /// <summary>
+    /// Where the target record is placed (three floats).
+    /// </summary>
     public Vector3 Position { get; set; }
 
     /// <summary>

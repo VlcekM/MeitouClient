@@ -13,10 +13,12 @@ internal sealed class SkeletonRigCache(Func<string, string?> find)
     /// The plain rigs by full skeleton path.
     /// </summary>
     readonly ConcurrentDictionary<string, Lazy<SkeletonRig>> _rigs = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// The rigs with linked animation files, by the skeleton's and the found files' paths joined with <c>|</c>.
     /// </summary>
     readonly ConcurrentDictionary<string, Lazy<SkeletonRig>> _linkedRigs = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// The linked skeleton files by full path.
     /// </summary>

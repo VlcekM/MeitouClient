@@ -5,18 +5,38 @@ using Meitou.Data.World;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// Makes the records of a new save from scratch (docs/formats/save.md "Implementation outline"): the key sets are the ones that every record of the type has in
-/// the three real saves, ids follow the game's patterns (<c>&lt;n&gt;-quick.save-INGAME</c> in <c>quick.save</c>, <c>&lt;n&gt;--INGAME</c> in a platoon file,
-/// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> in a zone file, a state's id with <c>-S&lt;hex type&gt;</c>), and the random serials of handles come from a seeded
-/// hash so the same input gives the same save. Call <see cref="SaveGame.UpdateDerived"/> when done.
+/// Makes the records of a new save from scratch (docs/formats/save.md "Implementation outline"): the key sets are the ones that every record of the
+/// type has in the three real saves, ids follow the game's patterns (<c>&lt;n&gt;-quick.save-INGAME</c> in <c>quick.save</c>,
+/// <c>&lt;n&gt;--INGAME</c> in a platoon file, <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> in a zone file, a state's id with <c>-S&lt;hex
+/// type&gt;</c>), and the random serials of handles come from a seeded hash so the same input gives the same save. Call
+/// <see cref="SaveGame.UpdateDerived"/> when done.
 /// </summary>
 public sealed class SaveBuilder
 {
+    /// <summary>
+    /// The seed every <see cref="Serial"/> mixes in.
+    /// </summary>
     readonly ulong _seed;
+
+    /// <summary>
+    /// The container number the next platoon gets.
+    /// </summary>
     int _nextContainer = 1;
+
+    /// <summary>
+    /// The container number the next town gets.
+    /// </summary>
     int _nextTownContainer = 1;
+
+    /// <summary>
+    /// The counter <see cref="Serial"/> advances.
+    /// </summary>
     int _nextSerial;
 
+    /// <summary>
+    /// A builder of a new save: <c>quick.save</c> with its CAMERA, the two faction collections, every zone container in the last two slot lists and a
+    /// blank portrait atlas.
+    /// </summary>
     public SaveBuilder(ulong seed = 0)
     {
         this._seed = seed;
@@ -48,8 +68,19 @@ public sealed class SaveBuilder
         _nextSerial = game.Platoons.Count;
     }
 
+    /// <summary>
+    /// The save being built.
+    /// </summary>
     public SaveGame Game { get; }
+
+    /// <summary>
+    /// The INSTANCE_COLLECTION of the factions other than the player's.
+    /// </summary>
     public FcsRecord FactionCollectionOthers { get; }
+
+    /// <summary>
+    /// The INSTANCE_COLLECTION of the player's faction.
+    /// </summary>
     public FcsRecord FactionCollectionPlayer { get; }
 
     #region Ids
@@ -62,8 +93,14 @@ public sealed class SaveBuilder
             ? Math.Max(file.Data.NextId, 0) + 1
             : Math.Max(file.Data.NextId, file.Records.Max(r => Math.Max(r.Id, SaveGame.NumberOf(r)))) + 1;
 
+    /// <summary>
+    /// The id of record <paramref name="n"/> in <c>quick.save</c>: <c>&lt;n&gt;-quick.save-INGAME</c>.
+    /// </summary>
     static string QuickId(int n) => $"{n}-{SaveFolder.QuickSaveName}-INGAME";
 
+    /// <summary>
+    /// Adds a record of <paramref name="type"/> to <c>quick.save</c> under the next number, which becomes the file's next id.
+    /// </summary>
     FcsRecord Quick(FcsRecordType type, string name = "0")
     {
         int n = NextNumber(Game.Quick);
@@ -88,6 +125,9 @@ public sealed class SaveBuilder
 
     #region Quick save
 
+    /// <summary>
+    /// A CAMERA with the key set of a new game: the default toggles, day 1 at 13:00, no money, null handles and the game's start view.
+    /// </summary>
     static FcsRecord NewCamera()
     {
         var r = new FcsRecord { Type = (int)FcsRecordType.Camera, Name = "0" };
@@ -127,6 +167,9 @@ public sealed class SaveBuilder
         return r;
     }
 
+    /// <summary>
+    /// Adds an empty INSTANCE_COLLECTION to <c>quick.save</c> (<paramref name="file"/> is not read).
+    /// </summary>
     FcsRecord NewCollection(SaveFile file)
     {
         var r = Quick(FcsRecordType.InstanceCollection);
@@ -134,8 +177,8 @@ public sealed class SaveBuilder
     }
 
     /// <summary>
-    /// Adds a faction: the GAMESTATE_FACTION, its WAR_SAVESTATE, and an instance in the player collection or the other one (the collections are what the game's
-    /// faction writers walk). <paramref name="relations"/> is the faction's table (not for the player's faction, which has none).
+    /// Adds a faction: the GAMESTATE_FACTION, its WAR_SAVESTATE, and an instance in the player collection or the other one (the collections are what
+    /// the game's faction writers walk). <paramref name="relations"/> is the faction's table (not for the player's faction, which has none).
     /// </summary>
     public SaveFaction AddFaction(string factionId, string name, bool isPlayer, float prosperity, IEnumerable<SaveRelation>? relations = null,
         int platoonCounter = 0, int rank = 0)
@@ -222,8 +265,8 @@ public sealed class SaveBuilder
     #region Platoons and characters
 
     /// <summary>
-    /// Adds a platoon: its PLATOON record and an empty platoon file (named <c>&lt;name&gt;.platoon</c>, the record's <c>content file</c>) with the characters'
-    /// INSTANCE_COLLECTION. Characters are added with <see cref="AddCharacter"/>.
+    /// Adds a platoon: its PLATOON record and an empty platoon file (named <c>&lt;name&gt;.platoon</c>, the record's <c>content file</c>) with the
+    /// characters' INSTANCE_COLLECTION. Characters are added with <see cref="AddCharacter"/>.
     /// </summary>
     public SavePlatoon AddPlatoon(string name, string factionName, string factionId, string squadTemplate, Vector3 position, int money = 0,
         int squadIndex = 0)
@@ -265,8 +308,8 @@ public sealed class SaveBuilder
     }
 
     /// <summary>
-    /// Gives a platoon with no file an empty one (named <c>&lt;string id&gt;.platoon</c>, the record's <c>content file</c>) with the characters' INSTANCE_COLLECTION; a platoon
-    /// with a file keeps it.
+    /// Gives a platoon with no file an empty one (named <c>&lt;string id&gt;.platoon</c>, the record's <c>content file</c>) with the characters'
+    /// INSTANCE_COLLECTION; a platoon with a file keeps it.
     /// </summary>
     public void GiveFile(SavePlatoon platoon)
     {
@@ -293,8 +336,8 @@ public sealed class SaveBuilder
 
     /// <summary>
     /// Adds a character to a platoon: an instance in the file's collection and the six state records in the order the game writes them, with the
-    /// handle (type 1, the platoon's container and serial, the next free slot from 1). The records start with the defaults of a character that has done nothing;
-    /// fill STATS, MEDICAL_STATE and CHARACTER_APPEARANCE afterwards.
+    /// handle (type 1, the platoon's container and serial, the next free slot from 1). The records start with the defaults of a character that has
+    /// done nothing; fill STATS, MEDICAL_STATE and CHARACTER_APPEARANCE afterwards.
     /// </summary>
     public SaveCharacter AddCharacter(SavePlatoon platoon, string recordId, string name, string ownerFactionId, Vector3 position, Quaternion rotation,
         bool isLeader = false, int squadMemberType = 0, float age = 0.5f)
@@ -384,8 +427,8 @@ public sealed class SaveBuilder
     }
 
     /// <summary>
-    /// Removes a character from its platoon: its instance, the six state records and everything its inventory holds (items and the inventories of containers
-    /// inside it). The other characters keep their slots.
+    /// Removes a character from its platoon: its instance, the six state records and everything its inventory holds (items and the inventories of
+    /// containers inside it). The other characters keep their slots.
     /// </summary>
     public void RemoveCharacter(SavePlatoon platoon, SaveCharacter character)
     {
@@ -410,10 +453,11 @@ public sealed class SaveBuilder
     }
 
     /// <summary>
-    /// Replaces what a character's INVENTORY_STATE holds with <paramref name="items"/>: the old item records (and the contents of containers among them) leave the file, and
-    /// each item gets an INVENTORY_ITEM_STATE (<see cref="SaveInventory"/>) linked by an instance numbered from 1; a container's contents get an INVENTORY_STATE of their
-    /// own, linked by the item's one instance, as the game writes them. An item read from this inventory keeps its record's id and place in the file (and a container its
-    /// contents' state), so an inventory that did not change is written back the same.
+    /// Replaces what a character's INVENTORY_STATE holds with <paramref name="items"/>: the old item records (and the contents of containers among
+    /// them) leave the file, and each item gets an INVENTORY_ITEM_STATE (<see cref="SaveInventory"/>) linked by an instance numbered from 1; a
+    /// container's contents get an INVENTORY_STATE of their own, linked by the item's one instance, as the game writes them. An item read from this
+    /// inventory keeps its record's id and place in the file (and a container its contents' state), so an inventory that did not change is written
+    /// back the same.
     /// </summary>
     public void SetInventory(SavePlatoon platoon, SaveCharacter character, IReadOnlyList<SaveItem> items)
     {
@@ -425,8 +469,14 @@ public sealed class SaveBuilder
     #endregion
 }
 
+/// <summary>
+/// Helpers for building save files.
+/// </summary>
 static class SaveFileExtensions
 {
+    /// <summary>
+    /// Adds <paramref name="record"/> as the file's first record: id 1, string id <c>1-quick.save-INGAME</c>, the file's next id 1.
+    /// </summary>
     public static SaveFile WithRecord(this SaveFile file, FcsRecord record)
     {
         record.Id = 1;

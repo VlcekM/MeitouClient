@@ -5,12 +5,48 @@ namespace Meitou.Data.Gameplay.Combat;
 /// <summary>
 /// <c>ArmourClass</c> (docs/game/combat.md "Enums"): the weight class of a piece.
 /// </summary>
-public enum ArmourClass { Cloth = 0, Light = 1, Medium = 2, Heavy = 3 }
+public enum ArmourClass
+{
+    /// <summary>
+    /// <c>GEAR_CLOTH</c> (docs/game/economy.md "4.2 ARMOUR and clothing").
+    /// </summary>
+    Cloth = 0,
+    /// <summary>
+    /// <c>LIGHT</c>.
+    /// </summary>
+    Light = 1,
+    /// <summary>
+    /// <c>MEDIUM</c>.
+    /// </summary>
+    Medium = 2,
+    /// <summary>
+    /// <c>HEAVY</c>.
+    /// </summary>
+    Heavy = 3
+}
 
 /// <summary>
 /// <c>ArmourType</c>: the material row of the armour tables (an ARMOUR's <c>material type</c>).
 /// </summary>
-public enum ArmourType { Cloth = 0, Leather = 1, Chain = 2, MetalPlate = 3 }
+public enum ArmourType
+{
+    /// <summary>
+    /// <c>CLOTH</c> (docs/game/economy.md "4.2 ARMOUR and clothing").
+    /// </summary>
+    Cloth = 0,
+    /// <summary>
+    /// <c>LEATHER</c>.
+    /// </summary>
+    Leather = 1,
+    /// <summary>
+    /// <c>CHAIN</c>.
+    /// </summary>
+    Chain = 2,
+    /// <summary>
+    /// <c>METAL_PLATE</c>.
+    /// </summary>
+    MetalPlate = 3
+}
 
 /// <summary>
 /// One <c>part coverage</c> entry: the LOCATIONAL_DAMAGE record and the percentage of blows to that part the piece covers.
@@ -23,9 +59,24 @@ public readonly record struct PartCoverage(string PartStringId, int Percent);
 /// </summary>
 public sealed record ArmourData
 {
+    /// <summary>
+    /// The ARMOUR's string id.
+    /// </summary>
     public required string StringId { get; init; }
+
+    /// <summary>
+    /// The ARMOUR's name in the active language.
+    /// </summary>
     public string Name { get; init; } = "";
+
+    /// <summary>
+    /// <c>class</c>, clamped to 0..3 (default 0, cloth).
+    /// </summary>
     public ArmourClass Class { get; init; }
+
+    /// <summary>
+    /// <c>material type</c>, clamped to 0..3 (default 0, cloth).
+    /// </summary>
     public ArmourType Material { get; init; }
 
     /// <summary>
@@ -38,11 +89,34 @@ public sealed record ArmourData
     /// </summary>
     public int Slot { get; init; }
 
+    /// <summary>
+    /// <c>cut def bonus</c> (default 0).
+    /// </summary>
     public float CutDefBonus { get; init; }
+
+    /// <summary>
+    /// <c>blunt def bonus</c> (default 0).
+    /// </summary>
     public float BluntDefBonus { get; init; }
+
+    /// <summary>
+    /// <c>pierce def mult</c> (default 1).
+    /// </summary>
     public float PierceDefMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>cut into stun</c> (default 0); the tooltip shows 1 minus it as the cut resistance efficiency.
+    /// </summary>
     public float CutIntoStun { get; init; }
+
+    /// <summary>
+    /// <c>fist injury mult</c> (default 1): multiplied over the worn pieces into the punch self-damage factor (CharStats <c>+0x4c</c>).
+    /// </summary>
     public float FistInjuryMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>unarmed bonus</c> (default 0): summed over the worn pieces into the martial arts rating (CharStats <c>+0x2c</c>).
+    /// </summary>
     public int UnarmedBonus { get; init; }
 
     /// <summary>
@@ -51,14 +125,50 @@ public sealed record ArmourData
     /// </summary>
     public int PerceptionBonus { get; init; }
 
+    /// <summary>
+    /// <c>combat attk bonus</c> (the field's spelling; default 0).
+    /// </summary>
     public int CombatAttackBonus { get; init; }
+
+    /// <summary>
+    /// <c>combat def bonus</c> (default 0).
+    /// </summary>
     public int CombatDefenceBonus { get; init; }
+
+    /// <summary>
+    /// <c>combat skill bonus</c> (default 0).
+    /// </summary>
     public int CombatSkillBonus { get; init; }
+
+    /// <summary>
+    /// <c>dodge mult</c> (default 1).
+    /// </summary>
     public float DodgeMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>dexterity mult</c> (default 1).
+    /// </summary>
     public float DexterityMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>damage output mult</c> (default 1): the wearer's whole damage packet, used only when above 0 and not 1 (docs/game/combat.md "Weapons
+    /// and damage").
+    /// </summary>
     public float DamageOutputMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>athletics mult</c> (default 1).
+    /// </summary>
     public float AthleticsMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>combat speed mult</c> (default 1); a hat's is forced to 1 (docs/game/character-stats.md "Gear factors").
+    /// </summary>
     public float CombatSpeedMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>stealth mult</c> (default 1).
+    /// </summary>
     public float StealthMult { get; init; } = 1;
 
     /// <summary>
@@ -71,7 +181,14 @@ public sealed record ArmourData
     /// </summary>
     public float AssassinationMult { get; init; } = 1;
 
+    /// <summary>
+    /// <c>weight kg</c> (default 0): the weight that stands when <see cref="WeightAt"/> gives none.
+    /// </summary>
     public float WeightKg { get; init; }
+
+    /// <summary>
+    /// <c>part coverage</c> in list order: the parts the piece covers, each with its percentage (value 0).
+    /// </summary>
     public IReadOnlyList<PartCoverage> Coverage { get; init; } = [];
 
     /// <summary>
@@ -142,6 +259,9 @@ public sealed record ArmourData
         return 0;
     }
 
+    /// <summary>
+    /// Reads an ARMOUR record; the defaults are those named on each property.
+    /// </summary>
     public static ArmourData From(GameRecord r) => new()
     {
         StringId = r.StringId,

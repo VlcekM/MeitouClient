@@ -7,10 +7,70 @@ namespace Meitou.Data.Gameplay.Construction;
 /// </summary>
 public enum PlacementFailure : byte
 {
+    /// <summary>
+    /// Nothing fails: the ghost may be placed.
+    /// </summary>
     None,
-    TooCloseToTown, NotOwnedBuilding, NoResources, CropWillNotGrow, InsideIncomplete, MustBeOutside, MustBeInside, NeedsSnapNode,
-    TooCloseToBuilding, NoValidUsageNodes, CharactersInTheWay, BlocksUseNodes, InvalidGround, InvalidFloor, NotLevel,
-
+    /// <summary>
+    /// "Can't build too close to another town.": a non-player town is within its block radius.
+    /// </summary>
+    TooCloseToTown,
+    /// <summary>
+    /// "Can't place in a building you don't own.": the town block with the ghost inside or on a building.
+    /// </summary>
+    NotOwnedBuilding,
+    /// <summary>
+    /// "No resources at this location, mining would be pointless.": the resource value is under 0.01.
+    /// </summary>
+    NoResources,
+    /// <summary>
+    /// "This crop will not grow in this environment.": the crop yield is under 0.01.
+    /// </summary>
+    CropWillNotGrow,
+    /// <summary>
+    /// "Cannot build inside incomplete buildings."
+    /// </summary>
+    InsideIncomplete,
+    /// <summary>
+    /// "Must be placed outside or on a roof."
+    /// </summary>
+    MustBeOutside,
+    /// <summary>
+    /// "Must be placed inside a building."
+    /// </summary>
+    MustBeInside,
+    /// <summary>
+    /// "Can only be placed on certain locations (marked by blue nodes).": a snapping ghost not on a snap node.
+    /// </summary>
+    NeedsSnapNode,
+    /// <summary>
+    /// "Too close to another building.": a footprint node box overlaps physics shapes or another queued ghost.
+    /// </summary>
+    TooCloseToBuilding,
+    /// <summary>
+    /// "No valid usage nodes.": every usage node is invalid.
+    /// </summary>
+    NoValidUsageNodes,
+    /// <summary>
+    /// "There are characters in the way."
+    /// </summary>
+    CharactersInTheWay,
+    /// <summary>
+    /// "The building blocks another building use nodes."
+    /// </summary>
+    BlocksUseNodes,
+    /// <summary>
+    /// "The building has one or more parts on invalid ground.": a LAND part's node centre is under the water level.
+    /// </summary>
+    InvalidGround,
+    /// <summary>
+    /// "Invalid placing floor number. ...": a node overlaps floor collision above floor 0, or a ceiling ghost finds no ceiling.
+    /// </summary>
+    InvalidFloor,
+    /// <summary>
+    /// "Ground needs to be more level.": the vertical margins or the slope.
+    /// </summary>
+    NotLevel,
     /// <summary>
     /// Engine: the record is not a BUILDING or not research-unlocked.
     /// </summary>
@@ -30,8 +90,8 @@ public readonly record struct PlacementTown(TownData Town, Vector2 Position);
 
 /// <summary>
 /// The deterministic half of the placement checks (docs/simulation.md "Buildings"): pure functions of the data, run by the host for the ghost and
-/// again by the simulation on <c>PlaceBuildings</c> (the town block; <see cref="ResourceBlock"/> is the host's only). The geometric half lives in the
-/// host.
+/// again by the simulation on <c>PlaceBuildings</c> (the town block; <see cref="ResourceBlock"/> is the host's only). The geometric half lives in
+/// the host.
 /// </summary>
 public static class PlacementRules
 {
@@ -46,8 +106,8 @@ public static class PlacementRules
     public const float OutpostRadiusFactor = 2.5f;
 
     /// <summary>
-    /// The minimum resource value or crop yield below which a mine or farm is refused (<b>Verified</b>, docs/game/buildings-production.md
-    /// "Placement").
+    /// The minimum resource value or crop yield below which a mine or farm is refused (<b>Verified</b>,
+    /// docs/game/buildings-production.md "Placement").
     /// </summary>
     public const float MinimumYield = 0.01f;
 
@@ -94,8 +154,8 @@ public static class PlacementRules
 
     /// <summary>
     /// Whether a ghost may stand in a level building (<b>Verified</b> by decompile, <c>FUN_1404d69c0</c>): one a player faction owns; else, for a
-    /// ghost that does not create a player town, a ruin or one whose owner faction is <c>not real</c> (a building without an owner has "nofac", which
-    /// is).
+    /// ghost that does not create a player town, a ruin or one whose owner faction is <c>not real</c> (a building without an owner has "nofac",
+    /// which is).
     /// </summary>
     public static bool MayBuildIn(BuildingBuildData building, bool playerOwned, bool destroyed, bool ownerNotReal)
     {

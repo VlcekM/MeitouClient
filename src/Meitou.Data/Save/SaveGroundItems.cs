@@ -39,9 +39,10 @@ public static partial class SaveGroundItems
     }
 
     /// <summary>
-    /// Replaces the zone's list and the ITEM records it named with <paramref name="items"/> (each a position, a rotation and the item; one with a <see cref="SaveItem.Source"/> keeps its
-    /// record id and its unmodelled keys) and <paramref name="kept"/> (entries written back as read). A new item's record gets id <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> with <c>n</c>
-    /// above every such id of the file and of the read items, and the list's entries are numbered from 1. An empty list is not written (the original deletes it).
+    /// Replaces the zone's list and the ITEM records it named with <paramref name="items"/> (each a position, a rotation and the item; one with a
+    /// <see cref="SaveItem.Source"/> keeps its record id and its unmodelled keys) and <paramref name="kept"/> (entries written back as read). A new
+    /// item's record gets id <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> with <c>n</c> above every such id of the file and of the read items, and
+    /// the list's entries are numbered from 1. An empty list is not written (the original deletes it).
     /// </summary>
     public static void Write(SaveZone zone, IReadOnlyList<(Vector3 Position, Quaternion Rotation, SaveItem Item)> items,
         IReadOnlyList<SaveGroundItem> kept)
@@ -86,8 +87,9 @@ public static partial class SaveGroundItems
     }
 
     /// <summary>
-    /// The ITEM record of a loose item: the INVENTORY_ITEM_STATE key set (<see cref="SaveInventory.ItemRecord"/>, a read record's own keys kept) with <c>in inventory</c> false and an
-    /// empty <c>section</c>; a new one has no <c>uniform</c> and no <c>persist</c> handle (<b>Observed</b>: the one sample limb).
+    /// The ITEM record of a loose item: the INVENTORY_ITEM_STATE key set (<see cref="SaveInventory.ItemRecord"/>, a read record's own keys kept) with
+    /// <c>in inventory</c> false and an empty <c>section</c>; a new one has no <c>uniform</c> and no <c>persist</c> handle (<b>Observed</b>: the one
+    /// sample limb).
     /// </summary>
     public static FcsRecord GroundRecord(SaveItem item)
     {
@@ -100,8 +102,9 @@ public static partial class SaveGroundItems
     }
 
     /// <summary>
-    /// The highest <c>n</c> of the <paramref name="suffix"/> ids already in use: the file's records and instances, the kept entries and the read items being written back (whose
-    /// records were just removed, so a new item numbered from the file alone would take a read item's id and load as that item).
+    /// The highest <c>n</c> of the <paramref name="suffix"/> ids already in use: the file's records and instances, the kept entries and the read
+    /// items being written back (whose records were just removed, so a new item numbered from the file alone would take a read item's id and load as
+    /// that item).
     /// </summary>
     static int LastNumber(SaveFile file, IReadOnlyList<(Vector3 Position, Quaternion Rotation, SaveItem Item)> items,
         IReadOnlyList<SaveGroundItem> kept, string suffix)
@@ -113,8 +116,14 @@ public static partial class SaveGroundItems
         return ids.Select(id => Number(id, suffix)).DefaultIfEmpty(0).Max();
     }
 
+    /// <summary>
+    /// The instance id of list entry <paramref name="k"/>.
+    /// </summary>
     static string Entry(int k) => k.ToString(CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// The number before <paramref name="suffix"/> in <paramref name="id"/>; 0 when the id does not end with it or the rest is not a number.
+    /// </summary>
     static int Number(string id, string suffix)
     {
         if (!id.EndsWith(suffix, StringComparison.Ordinal)) return 0;
@@ -122,6 +131,9 @@ public static partial class SaveGroundItems
         return int.TryParse(id.AsSpan(0, id.Length - suffix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n : 0;
     }
 
+    /// <summary>
+    /// The next free record id of <paramref name="file"/>: one past the larger of its header's next id and its records' highest id.
+    /// </summary>
     static int NextNumber(SaveFile file) =>
         file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => r.Id)) + 1;
 }

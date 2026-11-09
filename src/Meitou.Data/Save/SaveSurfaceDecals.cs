@@ -5,12 +5,16 @@ using Meitou.Data.World;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// The blood on walls, floors and objects (Meitou-only, docs/formats/save.md "Terrain decals") as keys of the TERRAIN_DECALS record, which the original reads by name and so
-/// ignores: per mark i from 0, the vec3 <c>meitou sd&lt;i&gt;</c> (centre), the vec4 <c>meitou sdS&lt;i&gt;</c> (angle, size, life left, 0) and the ints
-/// <c>meitou sdK&lt;i&gt;</c> (type | variant &lt;&lt; 8 | floor &lt;&lt; 16) and <c>meitou sdC&lt;i&gt;</c> (colour ABGR, raw bits). Read until a centre is missing.
+/// The blood on walls, floors and objects (Meitou-only, docs/formats/save.md "Terrain decals") as keys of the TERRAIN_DECALS record, which the
+/// original reads by name and so ignores: per mark i from 0, the vec3 <c>meitou sd&lt;i&gt;</c> (centre), the vec4 <c>meitou sdS&lt;i&gt;</c> (angle,
+/// size, life left, 0) and the ints <c>meitou sdK&lt;i&gt;</c> (type | variant &lt;&lt; 8 | floor &lt;&lt; 16) and <c>meitou sdC&lt;i&gt;</c> (colour
+/// ABGR, raw bits). Read until a centre is missing.
 /// </summary>
 public static class SaveSurfaceDecals
 {
+    /// <summary>
+    /// The key prefixes of a mark's centre, shape, kind and colour.
+    /// </summary>
     const string Centre = "meitou sd", Shape = "meitou sdS", Kind = "meitou sdK", Colour = "meitou sdC";
 
     /// <summary>

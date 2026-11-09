@@ -9,8 +9,8 @@ namespace Meitou.Data.Characters;
 /// then for characters without a body file a random head, hair, beard, hair colour, skin tone, sliders and face poses from the race's editor limits,
 /// then backpack, clothing (with quality and material) and weapons (with manufacturer and model). Deterministic for a seed: the original's generator
 /// (<see cref="MsvcRandom"/>) seeded from it, its draws in the original's order (docs/characters.md "Original random sequence"). The step functions
-/// (<see cref="RollHead"/>, <see cref="RollFace"/>, <see cref="RollHair"/>,
-/// <see cref="RollBody"/>, <see cref="RollFacePoses"/>) are also the character editor's randomisers.
+/// (<see cref="RollHead"/>, <see cref="RollFace"/>, <see cref="RollHair"/>, <see cref="RollBody"/>, <see cref="RollFacePoses"/>) are also the
+/// character editor's randomisers.
 /// </summary>
 public static class CharacterGenerator
 {
@@ -274,9 +274,8 @@ public static class CharacterGenerator
 
     /// <summary>
     /// The body (<c>FUN_14007b940</c>): the Body sliders, then the Body colours, each as <see cref="Rolls"/> rolls them (each list its own group
-    /// draws); with
-    /// <paramref name="skinReroll"/> (a generated NPC, not the editor) the skin tone again, uniform over its whole range; last <c>Posture</c> back to
-    /// the appearance template's 20 (docs/characters.md "Random appearance": its draw is still made).
+    /// draws); with <paramref name="skinReroll"/> (a generated NPC, not the editor) the skin tone again, uniform over its whole range; last
+    /// <c>Posture</c> back to the appearance template's 20 (docs/characters.md "Random appearance": its draw is still made).
     /// </summary>
     public static void RollBody(AppearanceLimits? limits, FcsRecord look, MsvcRandom rng, bool skinReroll)
     {
@@ -317,8 +316,8 @@ public static class CharacterGenerator
     /// <summary>
     /// The original's rolls of a list of ranges (<c>FUN_14006fcf0</c>, <c>FUN_140070460</c>, <c>FUN_140070010</c>, <b>Verified</b> by decompilation):
     /// the ranges without a <c>random_group</c> in list order, one draw each; then one draw per group, shared by its ranges, the groups in the order
-    /// of the original's
-    /// <c>boost::unordered_map&lt;short, …&gt;</c> (<see cref="BoostHashOrder"/>). A value is round(variation × (2r − 1) + mid), not clamped.
+    /// of the original's <c>boost::unordered_map&lt;short, …&gt;</c> (<see cref="BoostHashOrder"/>). A value is round(variation × (2r − 1) + mid),
+    /// not clamped.
     /// </summary>
     static List<(T Range, int Value)> Rolls<T>(List<T> ranges, Func<T, (int Group, int Mid, int Variation)> of, MsvcRandom rng)
     {
@@ -348,6 +347,9 @@ public static class CharacterGenerator
         return result;
     }
 
+    /// <summary>
+    /// Whether the look is female (<c>sex female</c>).
+    /// </summary>
     static bool IsFemale(FcsRecord look) => look.Bools.TryGetValue("sex female", out var f) && f;
 
     #endregion
@@ -359,6 +361,9 @@ public static class CharacterGenerator
     /// </summary>
     public static int QualityOfGrade(int grade) => grade switch { 0 => 5, 2 => 40, 3 => 60, 4 => 80, 5 => 95, _ => 20 };
 
+    /// <summary>
+    /// Rolls the backpack, robot limbs, clothing, crossbow and weapons in that order, then puts a hip weapon before a back one.
+    /// </summary>
     static void RollEquipment(GameDatabase db, GameRecord character, GameRecord race, MsvcRandom rng, Loadout loadout)
     {
         RollBackpack(db, character, race, rng, loadout);
@@ -525,10 +530,9 @@ public static class CharacterGenerator
 
     /// <summary>
     /// The weapon factory's substitute when the picked manufacturer has no model or its model's level is 0 (<c>FUN_140580750</c>, <b>Verified</b>):
-    /// manufacturer <c>1057-gamedata.base</c> with model
-    /// <c>1058-gamedata.base</c>, the level that manufacturer's <c>weapon models</c> entry for the model gives plus the manufacturer's <c>overall
-    /// level</c> (cut to an int; neither base record has it).
-    /// <paramref name="orElse"/> stands in for a missing 1057 (a stripped data set).
+    /// manufacturer <c>1057-gamedata.base</c> with model <c>1058-gamedata.base</c>, the level that manufacturer's <c>weapon models</c> entry for the
+    /// model gives plus the manufacturer's <c>overall level</c> (cut to an int; neither base record has it). <paramref name="orElse"/> stands in for
+    /// a missing 1057 (a stripped data set).
     /// </summary>
     public static (GameRecord Maker, GameRecord? Model, int Level) FallbackWeaponMaker(GameDatabase db, GameRecord orElse)
     {
@@ -554,6 +558,9 @@ public static class CharacterGenerator
         return Running(list, rng.Range(0, list.Sum(o => o.Weight)));
     }
 
+    /// <summary>
+    /// <see cref="PickRelative{T}"/> for references.
+    /// </summary>
     static GameReference? PickRelative(MsvcRandom rng, IEnumerable<(GameReference? Ref, float Weight)> options)
     {
         var list = options.Where(o => o.Ref is not null && o.Weight > 0).ToList();
@@ -573,6 +580,9 @@ public static class CharacterGenerator
         return roll < list.Sum(o => o.Weight) ? Running(list, roll) : null;
     }
 
+    /// <summary>
+    /// <see cref="PickAbsolute{T}"/> for references.
+    /// </summary>
     static GameReference? PickAbsolute(MsvcRandom rng, IEnumerable<(GameReference? Ref, float Weight)> options)
     {
         var list = options.Where(o => o.Ref is not null && o.Weight > 0).ToList();
@@ -581,6 +591,9 @@ public static class CharacterGenerator
         return roll < list.Sum(o => o.Weight) ? RunningRef(list, roll) : null;
     }
 
+    /// <summary>
+    /// The first entry whose running weight sum exceeds <paramref name="roll"/>, else the last.
+    /// </summary>
     static T? Running<T>(List<(T? Item, float Weight)> list, float roll) where T : class
     {
         float sum = 0;
@@ -589,6 +602,9 @@ public static class CharacterGenerator
         return list[^1].Item;
     }
 
+    /// <summary>
+    /// <see cref="Running{T}"/> for references.
+    /// </summary>
     static GameReference? RunningRef(List<(GameReference? Ref, float Weight)> list, float roll)
     {
         float sum = 0;
@@ -633,6 +649,9 @@ public static class CharacterGenerator
         return (hue, delta / max, max);
     }
 
+    /// <summary>
+    /// The 32-bit FNV-1a hash of the low byte of each char of <paramref name="s"/>, as a seed mix-in per record.
+    /// </summary>
     static int Fnv1A(string s)
     {
         uint h = 0x811c9dc5;

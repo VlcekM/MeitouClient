@@ -6,9 +6,10 @@ using Meitou.Data.World;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// A whole save: <c>quick.save</c>, the platoon files and the zone files of a save folder, as typed views over their records (docs/formats/save.md).
-/// The views hold the records themselves, so changing one changes what <see cref="Write"/> writes; reading and writing again without a change gives the
-/// same bytes. <see cref="UpdateDerived"/> brings the parts that follow from the rest (slot lists, counters, CAMERA zone list) up to date after changes.
+/// A whole save: <c>quick.save</c>, the platoon files and the zone files of a save folder, as typed views over their records
+/// (docs/formats/save.md). The views hold the records themselves, so changing one changes what <see cref="Write"/> writes; reading and writing
+/// again without a change gives the same bytes. <see cref="UpdateDerived"/> brings the parts that follow from the rest (slot lists, counters,
+/// CAMERA zone list) up to date after changes.
 /// </summary>
 public sealed partial class SaveGame
 {
@@ -18,31 +19,67 @@ public sealed partial class SaveGame
     public const string GameVersion = "1.0.68";
 
     /// <summary>
-    /// The first slot lists 2 and 3 of a new <c>quick.save</c>: every zone container 1..4096 (all saves seen hold at least these,
-    /// docs/formats/save.md).
+    /// The first slot lists 2 and 3 of a new <c>quick.save</c>: every zone container 1..4096 (all saves seen hold at least
+    /// these, docs/formats/save.md).
     /// </summary>
     public const int ZoneContainerCount = WorldLayout.ZoneCount * WorldLayout.ZoneCount;
 
     #region Views and loading
 
+    /// <summary>
+    /// The <c>quick.save</c> file.
+    /// </summary>
     public SaveFile Quick { get; }
+
+    /// <summary>
+    /// The CAMERA record of <c>quick.save</c>.
+    /// </summary>
     public SaveCamera Camera { get; private set; } = null!;
+
+    /// <summary>
+    /// The GAMESTATE_FACTIONs of <c>quick.save</c>, each with its WAR_SAVESTATE.
+    /// </summary>
     public List<SaveFaction> Factions { get; } = [];
+
+    /// <summary>
+    /// The GAMESTATE_TOWNs of <c>quick.save</c>.
+    /// </summary>
     public List<SaveTown> Towns { get; } = [];
+
+    /// <summary>
+    /// The PLATOON records of <c>quick.save</c>, with their files when loaded.
+    /// </summary>
     public List<SavePlatoon> Platoons { get; } = [];
+
+    /// <summary>
+    /// The zone files, by coordinate (X, then Y).
+    /// </summary>
     public SortedDictionary<ZoneCoordinate, SaveZone> Zones { get; } = new(Comparer<ZoneCoordinate>.Create(CompareZones));
 
     /// <summary>
     /// The two INSTANCE_COLLECTIONs of <c>quick.save</c>: the player's faction, then every other faction (each instance targets a GAMESTATE_FACTION).
     /// </summary>
     public List<FcsRecord> FactionCollections { get; } = [];
+
     /// <summary>
     /// The GAMESTATE_TOWN_INSTANCE_LIST of <c>quick.save</c>: the towns made in play (nests, player outposts), each with its GAMESTATE_TOWN state.
     /// Set by a writer that adds one.
     /// </summary>
     public FcsRecord? TownInstanceList { get; set; }
+
+    /// <summary>
+    /// The BIOMES record of <c>quick.save</c> (the regions' weather), when the save has one.
+    /// </summary>
     public FcsRecord? Biomes { get; private set; }
+
+    /// <summary>
+    /// The RESEARCH record of <c>quick.save</c>, when the save has one.
+    /// </summary>
     public FcsRecord? Research { get; private set; }
+
+    /// <summary>
+    /// The TERRAIN_DECALS record of <c>quick.save</c> (<see cref="SaveDecals"/>), when the save has one.
+    /// </summary>
     public FcsRecord? Decals { get; private set; }
 
     /// <summary>
@@ -56,13 +93,15 @@ public sealed partial class SaveGame
     public byte[]? Portraits { get; set; }
 
     /// <summary>
-    /// Meitou's own sidecar files of code mods (<c>meitou-mods/&lt;mod id&gt;.dat</c>, docs/formats/save.md "Mod data"), by mod id. Kept for mods not loaded now, so a save
-    /// made from this one carries them on.
+    /// Meitou's own sidecar files of code mods (<c>meitou-mods/&lt;mod id&gt;.dat</c>, docs/formats/save.md "Mod data"), by mod id. Kept for mods not
+    /// loaded now, so a save made from this one carries them on.
     /// </summary>
     public SortedDictionary<string, byte[]> ModData { get; } = new(StringComparer.Ordinal);
+
     /// <summary>
-    /// The level editor's edits of the session (Meitou's own, in <see cref="SaveFolder.LevelEditsDirectory"/>): per zone the bytes of a zone file in the form of the editor's saved mod
-    /// (placed buildings with their state, cleared ones as entries with no target). A save without the folder (every older save, the original's) has none.
+    /// The level editor's edits of the session (Meitou's own, in <see cref="SaveFolder.LevelEditsDirectory"/>): per zone the bytes of a zone file in
+    /// the form of the editor's saved mod (placed buildings with their state, cleared ones as entries with no target). A save without the folder
+    /// (every older save, the original's) has none.
     /// </summary>
     public SortedDictionary<ZoneCoordinate, byte[]> LevelEdits { get; } = new(Comparer<ZoneCoordinate>.Create(CompareZones));
 
@@ -81,6 +120,9 @@ public sealed partial class SaveGame
     /// </summary>
     public List<string> Problems { get; } = [];
 
+    /// <summary>
+    /// A save of <paramref name="quick"/> alone, its views indexed (<see cref="Reindex"/>); throws <see cref="FcsFormatException"/> without a CAMERA.
+    /// </summary>
     public SaveGame(SaveFile quick)
     {
         Quick = quick;
@@ -217,8 +259,8 @@ public sealed partial class SaveGame
         Factions.FirstOrDefault(f => f.Record.References.ContainsKey("known")) ?? Factions.FirstOrDefault(f => f.Id == Gameplay.FactionData.PlayerId);
 
     /// <summary>
-    /// The zone-file check the game runs at load and at save (docs/formats/save.md, <c>FUN_140a0bef0</c>): the CAMERA <c>zones</c> list against the files.
-    /// Adds "Zone file missing" and "Extra zone file" problems.
+    /// The zone-file check the game runs at load and at save (docs/formats/save.md, <c>FUN_140a0bef0</c>): the CAMERA <c>zones</c> list against the
+    /// files. Adds "Zone file missing" and "Extra zone file" problems.
     /// </summary>
     public void CheckZoneFiles()
     {
@@ -262,9 +304,10 @@ public sealed partial class SaveGame
     #region Derived data
 
     /// <summary>
-    /// Brings the parts that follow from the rest up to date: the CAMERA <c>zones</c> list from the zone files, the character count of every platoon with a file and the file name,
-    /// slot lists 0 (platoon containers) and 1 (town containers) of <c>quick.save</c> (lists 2 and 3 are kept, or start as 1..4096: their meaning is Unknown), a zone file's
-    /// slot list when it has none, each file's <c>nextId</c> (raised to its highest record id, never lowered) and the <c>byteSize</c> of the records that carry a child count.
+    /// Brings the parts that follow from the rest up to date: the CAMERA <c>zones</c> list from the zone files, the character count of every platoon
+    /// with a file and the file name, slot lists 0 (platoon containers) and 1 (town containers) of <c>quick.save</c> (lists 2 and 3 are kept, or
+    /// start as 1..4096: their meaning is Unknown), a zone file's slot list when it has none, each file's <c>nextId</c> (raised to its highest record
+    /// id, never lowered) and the <c>byteSize</c> of the records that carry a child count.
     /// </summary>
     public void UpdateDerived()
     {
@@ -375,8 +418,8 @@ public sealed partial class SaveGame
     }
 
     /// <summary>
-    /// Writes the save into <paramref name="folder"/> through a <see cref="SaveWriter"/>: into a working folder beside it, then in place of the old one in
-    /// two renames. <paramref name="beforeInstall"/> runs between the two renames.
+    /// Writes the save into <paramref name="folder"/> through a <see cref="SaveWriter"/>: into a working folder beside it, then in place of the old
+    /// one in two renames. <paramref name="beforeInstall"/> runs between the two renames.
     /// </summary>
     public void Write(string folder, Action? beforeInstall = null) => new SaveWriter(this).Write(folder, beforeInstall);
 
@@ -384,6 +427,9 @@ public sealed partial class SaveGame
 
     #region Record numbers
 
+    /// <summary>
+    /// Matches the leading number of a record's string id (<c>12-</c>).
+    /// </summary>
     [GeneratedRegex(@"^(\d+)-")]
     private static partial Regex NumberPrefix();
 

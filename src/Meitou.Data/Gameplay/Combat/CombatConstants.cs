@@ -108,6 +108,9 @@ public sealed record CombatConstants
     /// </summary>
     public float WeaponInventoryWeightMult { get; init; }
 
+    /// <summary>
+    /// Reads the database's CONSTANTS record (<c>GLOBAL CONSTANTS</c>, else the first); all defaults when there is none.
+    /// </summary>
     public static CombatConstants FromDatabase(GameDatabase db)
     {
         return From(ConstantsRecord.Find(db));

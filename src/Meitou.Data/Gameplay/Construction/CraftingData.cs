@@ -5,7 +5,33 @@ namespace Meitou.Data.Gameplay.Construction;
 /// <summary>
 /// The crafts lists of a BUILDING_FUNCTIONALITY (fcs.def, <b>Verified</b>): what kind of record a bench makes.
 /// </summary>
-public enum CraftKind : byte { Item, Armour, Weapon, Crossbow, Backpack, Robotics }
+public enum CraftKind : byte
+{
+    /// <summary>
+    /// <c>item crafts</c>: ITEMs.
+    /// </summary>
+    Item,
+    /// <summary>
+    /// <c>armour crafts</c>: ARMOURs.
+    /// </summary>
+    Armour,
+    /// <summary>
+    /// <c>weapon crafts</c>: weapon models, each crossed with the player manufacturer's weapon types.
+    /// </summary>
+    Weapon,
+    /// <summary>
+    /// <c>crossbow crafts</c>: CROSSBOWs.
+    /// </summary>
+    Crossbow,
+    /// <summary>
+    /// <c>backpack crafts</c>: CONTAINERs.
+    /// </summary>
+    Backpack,
+    /// <summary>
+    /// <c>robotics crafts</c>: LIMB_REPLACEMENTs.
+    /// </summary>
+    Robotics
+}
 
 /// <summary>
 /// Something a crafting bench can queue (docs/game/buildings-production.md "Crafting"): the record made, for a weapon the MATERIAL_SPECS_WEAPON model
@@ -36,20 +62,47 @@ public sealed record CraftRecipe(CraftOption Option, string Name, float Hours, I
 /// </summary>
 public sealed record CraftBench
 {
+    /// <summary>
+    /// The WEAPON_MANUFACTURER whose <c>weapon types</c> and <c>weapon models</c> a weapon bench crafts.
+    /// </summary>
     public const string PlayerWeapons = "PLAYER_WEAPONS";
+
+    /// <summary>
+    /// The BUILDING_FUNCTIONALITY <c>function</c> of a crafting bench.
+    /// </summary>
     public const int CraftingFunction = 10;
+
+    /// <summary>
+    /// The Fabrics item, which armour draws at <c>fabrics amount</c> of its main material (<b>Verified</b>: the id is hard-coded in
+    /// <c>CraftingBuilding::vfunc_182</c>).
+    /// </summary>
+    public const string Fabrics = "584-gamedata.base";
+
     /// <summary>
     /// The armour qualities by crafting tier (<b>Verified</b>, the jump table of <c>FUN_14082e6b0</c>): prototype to masterwork.
     /// </summary>
     public static readonly int[] ArmourQualities = [5, 20, 40, 60, 80, 95];
 
+    /// <summary>
+    /// What the bench can queue, in list order (<c>item crafts</c>, <c>armour crafts</c>, <c>crossbow crafts</c>, <c>backpack crafts</c>, <c>robotics
+    /// crafts</c>, then the weapons).
+    /// </summary>
     public IReadOnlyList<CraftOption> Options { get; init; } = [];
+
     /// <summary>
     /// <c>tech level</c> (0: no cap, read as 100).
     /// </summary>
     public int TechLevel { get; init; } = 100;
+
+    /// <summary>
+    /// <c>overrides ingredients</c>: the bench's own input sections replace the items' <c>ingredients</c>.
+    /// </summary>
     public bool OverridesIngredients { get; init; }
 
+    /// <summary>
+    /// The bench of BUILDING_FUNCTIONALITY <paramref name="function"/>, null when its <c>function</c> is not <see cref="CraftingFunction"/>: every
+    /// listed record the database has, a weapon bench's models crossed with the <see cref="PlayerWeapons"/> weapon types, and the tech level.
+    /// </summary>
     public static CraftBench? From(GameDatabase db, GameRecord function)
     {
         if (function.GetInt("function", -1) != CraftingFunction) return null;
@@ -157,12 +210,6 @@ public sealed record CraftBench
             total += part.TargetStringId == "101-gamedata.quack" ? (int)(part.Values.Value0 * 1.5) : part.Values.Value0;
         return total == 0 ? 100 : total;
     }
-
-    /// <summary>
-    /// The Fabrics item, which armour draws at <c>fabrics amount</c> of its main material (<b>Verified</b>: the id is hard-coded in
-    /// <c>CraftingBuilding::vfunc_182</c>).
-    /// </summary>
-    public const string Fabrics = "584-gamedata.base";
 
     /// <summary>
     /// Armour hours (<b>Observed</b>, the ARMOUR constructor <c>FUN_140898e90</c>): <c>total coverage</c> / 100 x lerp(q, 1, 5), at least 1; hats x

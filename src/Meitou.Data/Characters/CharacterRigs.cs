@@ -14,22 +14,27 @@ public sealed class CharacterPoseSetup
     /// The skeleton, with the animation files the appearance's race and record link.
     /// </summary>
     public required SkeletonRig Rig { get; init; }
+
     /// <summary>
     /// The body-shape sliders as bone sizes; null for an animal or a skeleton they do not apply to.
     /// </summary>
     public BodyShapeData? Shape { get; init; }
+
     /// <summary>
     /// How far the body shape lifts the feet in the bind pose (negative: sinks them); the character is drawn lowered by it.
     /// </summary>
     public float GroundOffset { get; init; }
+
     /// <summary>
     /// The posture libraries (<c>postures</c>, <c>neck set</c>, <c>shoulder set</c>) held at the body file's sliders, weight 1.
     /// </summary>
     public IReadOnlyList<(LayerDef Def, float Time)> Fixed { get; init; } = [];
+
     /// <summary>
     /// The default idle: the body file's <c>idle stance</c>.
     /// </summary>
     public string Idle { get; init; } = "idle_stand_relax";
+
     /// <summary>
     /// The appearance is an animal's (no body shape, no ground offset).
     /// </summary>
@@ -43,8 +48,8 @@ public sealed class CharacterPoseSetup
 public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMesh, Func<string, string?> find)
 {
     /// <summary>
-    /// Rigs that find their files through <paramref name="assets"/>, as the characters' content does; one is shared by the simulation and the
-    /// renderer.
+    /// Rigs that find their files through <paramref name="assets"/>, as the characters' content does; one is shared by the simulation and
+    /// the renderer.
     /// </summary>
     public static CharacterRigs For(GameDatabase db, AssetLocator assets) => new(db, path => assets.FindMesh(path), name => assets.Find(name));
 
@@ -237,8 +242,8 @@ public sealed class CharacterRigs(GameDatabase db, Func<string, string?> findMes
     }
 
     /// <summary>
-    /// The same for a node turned by <paramref name="rotation"/> (a carried body's): lowered by the ground offset in its own frame, then turned and
-    /// moved.
+    /// The same for a node turned by <paramref name="rotation"/> (a carried body's): lowered by the ground offset in its own frame, then turned
+    /// and moved.
     /// </summary>
     public static Matrix4x4 Placement(CharacterPoseSetup setup, Vector3 position, Quaternion rotation, float scale)
     {

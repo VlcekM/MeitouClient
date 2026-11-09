@@ -15,12 +15,20 @@ public sealed class SurgeonDialogues(GameDatabase db)
     /// <c>DialogActionEnum</c> numbers (FCS editor): take money, character editor.
     /// </summary>
     public const int TakeMoney = 8, CharacterEditor = 11;
+
     /// <summary>
     /// <c>DialogConditionEnum</c> numbers the offer accepts: the player's money, the speaker recruitable.
     /// </summary>
     public const int PlayerMoney = 2, IsRecruitable = 77;
 
+    /// <summary>
+    /// The cost of each DIALOGUE by string id (<see cref="Cost"/>); null when it offers no surgery.
+    /// </summary>
     readonly ConcurrentDictionary<string, int?> _byDialogue = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The cost of each (CHARACTER, squad template) pair (<see cref="CostOf"/>); the template is empty when not the leader.
+    /// </summary>
     readonly ConcurrentDictionary<(string, string), int?> _byCharacter = new();
 
     /// <summary>
@@ -30,6 +38,9 @@ public sealed class SurgeonDialogues(GameDatabase db)
     public int? CostOf(string characterId, string? squadTemplateId, bool leader) =>
         _byCharacter.GetOrAdd((characterId, leader ? squadTemplateId ?? "" : ""), key => Find(key.Item1, key.Item2));
 
+    /// <summary>
+    /// The cheapest surgery of the character's dialogues, its packages' and, given a template, the template's <c>dialog leader</c> packages'.
+    /// </summary>
     int? Find(string characterId, string templateId)
     {
         if (db.Find(characterId) is not { Type: FcsRecordType.Character } character) return null;

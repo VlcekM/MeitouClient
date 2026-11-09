@@ -9,7 +9,14 @@ namespace Meitou.Data.Gameplay;
 /// </summary>
 public sealed record WorldEventStateData
 {
+    /// <summary>
+    /// The WORLD_EVENT_STATE's string id.
+    /// </summary>
     public required string Id { get; init; }
+
+    /// <summary>
+    /// The WORLD_EVENT_STATE's name in the active language.
+    /// </summary>
     public required string Name { get; init; }
 
     /// <summary>
@@ -26,6 +33,10 @@ public sealed record WorldEventStateData
     /// <c>player ally</c> / <c>player enemy</c>: a FACTION and whether it must (V0 = 1) or must not be the player's ally / hostile to the player.
     /// </summary>
     public IReadOnlyList<(string Faction, bool Value)> PlayerAlly { get; init; } = [];
+
+    /// <summary>
+    /// <c>player enemy</c>: a FACTION and whether it must (V0 = 1) or must not be hostile to the player.
+    /// </summary>
     public IReadOnlyList<(string Faction, bool Value)> PlayerEnemy { get; init; } = [];
 
     /// <summary>
@@ -33,6 +44,9 @@ public sealed record WorldEventStateData
     /// </summary>
     public bool PlayerInvolvement { get; init; }
 
+    /// <summary>
+    /// Reads a WORLD_EVENT_STATE record.
+    /// </summary>
     public static WorldEventStateData From(GameDatabase db, GameRecord r)
     {
         IReadOnlyList<(string, int)> Npcs(string list) =>
