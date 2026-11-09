@@ -57,10 +57,10 @@ public sealed class MetalPipelines : IGpuPipelines
             attachment.DestinationAlphaBlendFactor = MetalConventions.BlendFactor(desc.Blend.AlphaDst ?? desc.Blend.Dst);
             attachment.RgbBlendOperation = MetalConventions.BlendOp(desc.Blend.ColourOp);
             attachment.AlphaBlendOperation = MetalConventions.BlendOp(desc.Blend.AlphaOp);
-            attachment.WriteMask = desc.ColourMask.HasFlag(ColorMask.R) ? attachment.WriteMask | MTLColorWriteMask.Red : attachment.WriteMask & ~MTLColorWriteMask.Red;
-            attachment.WriteMask = desc.ColourMask.HasFlag(ColorMask.G) ? attachment.WriteMask | MTLColorWriteMask.Green : attachment.WriteMask & ~MTLColorWriteMask.Green;
-            attachment.WriteMask = desc.ColourMask.HasFlag(ColorMask.B) ? attachment.WriteMask | MTLColorWriteMask.Blue : attachment.WriteMask & ~MTLColorWriteMask.Blue;
-            attachment.WriteMask = desc.ColourMask.HasFlag(ColorMask.A) ? attachment.WriteMask | MTLColorWriteMask.Alpha : attachment.WriteMask & ~MTLColorWriteMask.Alpha;
+            attachment.WriteMask = WithChannel(desc.ColourMask.HasFlag(ColorMask.R), attachment.WriteMask, MTLColorWriteMask.Red);
+            attachment.WriteMask = WithChannel(desc.ColourMask.HasFlag(ColorMask.G), attachment.WriteMask, MTLColorWriteMask.Green);
+            attachment.WriteMask = WithChannel(desc.ColourMask.HasFlag(ColorMask.B), attachment.WriteMask, MTLColorWriteMask.Blue);
+            attachment.WriteMask = WithChannel(desc.ColourMask.HasFlag(ColorMask.A), attachment.WriteMask, MTLColorWriteMask.Alpha);
             d.ColorAttachments.SetObject(attachment, 0);
         }
         if (desc.Targets.Extra != InternalFormat.None)
@@ -80,6 +80,11 @@ public sealed class MetalPipelines : IGpuPipelines
         _graphics[desc] = state;
         return new GpuPipeline(desc);
     }
+
+    /// <summary>
+    /// <paramref name="mask"/> with <paramref name="channel"/> written when <paramref name="on"/>, masked off otherwise.
+    /// </summary>
+    static MTLColorWriteMask WithChannel(bool on, MTLColorWriteMask mask, MTLColorWriteMask channel) => on ? mask | channel : mask & ~channel;
 
     public GpuComputePipeline Get(in ComputePipelineDesc desc)
     {

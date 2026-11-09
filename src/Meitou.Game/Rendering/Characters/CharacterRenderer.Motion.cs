@@ -98,7 +98,11 @@ internal sealed unsafe partial class CharacterRenderer
                 NearPlanes = targets.Planes, JitterNdc = targets.JitterNdc }, _motionEye, _motionFrustum,
                 relative: _motionHasRelative ? _motionRelative : null, previousRelative: previousRelative);
         }
-        finally { _motionPass = false; }
+        finally
+        {
+            _motionPass = false;
+        }
+
         StageClock.Lap(StageClock.Characters, "characters motion");
     }
 }

@@ -128,7 +128,8 @@ public static partial class TriangleBins
         var main = MainFunction().Matches(fragment);
         if (!version.Success || main.Count != 1) return null;
         bool earlyTests = EarlyTests(fragment, category);
-        string head = "#extension GL_EXT_fragment_shader_barycentric : require\n#extension GL_EXT_buffer_reference : require\n#extension GL_EXT_buffer_reference_uvec2 : require\n"
+        string head = "#extension GL_EXT_fragment_shader_barycentric : require\n#extension GL_EXT_buffer_reference : require\n"
+            + "#extension GL_EXT_buffer_reference_uvec2 : require\n"
             + (earlyTests ? "layout(early_fragment_tests) in;\n" : "");
         string text = fragment.Insert(version.Index + version.Length, head);
         text = MainFunction().Replace(text, "void meitou_main()", 1);
@@ -203,7 +204,11 @@ public sealed class SizeHistogram
 
     public void Add(SizeHistogram other)
     {
-        for (int i = 0; i < Triangles.Length; i++) { Triangles[i] += other.Triangles[i]; Pixels[i] += other.Pixels[i]; }
+        for (int i = 0; i < Triangles.Length; i++)
+        {
+            Triangles[i] += other.Triangles[i];
+            Pixels[i] += other.Pixels[i];
+        }
     }
 }
 

@@ -48,13 +48,16 @@ static class CharacterShaders
         BloodFull = 1 << 21,
         // A headless body's neck cap (NeckCap, Meitou decapitation): the wound; with Mechanical, a robot race's metal socket.
         Wound = 1 << 22, Mechanical = 1 << 23;
-    // Instance flag (CharInstance.Flags; bit 0 interior, 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou decapitation): its head
-    // vertices (CharacterContent.HeadBit) are hidden.
+    // Instance flag (CharInstance.Flags; bit 0 interior, 12-15 hidden limbs, 16-17 the boots' side, 18-27 hidden parts): a headless body (Meitou
+    // decapitation): its head vertices (CharacterContent.HeadBit) are hidden.
     public const uint Headless = 1u << 28;
+
     // A cut-off head (CharacterAppearance.HeadOnly): only the head vertices are drawn.
     public const uint HeadOnly = 1u << 29;
+
     // Shading modes.
     public const uint ShadeItem = 0, ShadeBody = 1, ShadeHair = 2;
+
     // Texture slots (CharacterMaterialRecord.Tex).
     public const int SlotDiffuse = 0, SlotNormal = 1, SlotColourMap = 2, SlotHeadDiffuse = 3, SlotHeadNormal = 4, SlotHeadMask = 5, SlotBodyMask = 6,
         SlotHairOverlay = 7, SlotBeardOverlay = 8, SlotVest = 9, SlotBlendNormal = 18, SlotBlood = 19, Slots = 20;
@@ -221,7 +224,8 @@ static class CharacterShaders
 
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
 
-    public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n" + NativeShaders.AtmosphereFunctions + Structs + Lookup + $$"""
+    public static string Fragment(bool lateDepth = false) => "#version 450\n" + NativeShaders.Prelude(PushMembers) + "#define LAMP_SKIN\n"
+        + NativeShaders.AtmosphereFunctions + Structs + Lookup + $$"""
         in vec3 vWorld;
         in float vCurvature;
         in vec3 vNormal;

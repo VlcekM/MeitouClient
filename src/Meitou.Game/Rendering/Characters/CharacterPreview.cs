@@ -113,8 +113,7 @@ internal sealed class PreviewResolve : IDisposable
             Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
         var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width * s, height * s, Use: TextureUse.DepthTarget,
             Name: name + " depth"));
-        var sampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), colour.View());
+        var sampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest)), colour.View());
         return (colour, depth, sampled);
     }
 
@@ -129,8 +128,11 @@ internal sealed class PreviewResolve : IDisposable
         var targets = PassTargets.Of(into, null);
         var state = DrawState.For(targets.Formats, false);
         if (!_pipelines.TryGetValue(into.Desc.Format, out var pipeline))
+        {
             _pipelines[into.Desc.Format] = pipeline = _gpu.Pipelines.Get(state.Pipeline(_program.Program, _program.VertexLayout([]),
                     PrimitiveType.Triangles, targets.Formats, _program.Name));
+        }
+
         var cmd = _gpu.BeginNative("character preview resolve");
         cmd.Order();   // the source was just drawn
         cmd.BeginRendering(new RenderingDesc(targets.Colour, default, targets.Width, targets.Height));

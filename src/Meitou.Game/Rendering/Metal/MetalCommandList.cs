@@ -35,9 +35,11 @@ public sealed class MetalCommandList : IGpuCommandList
     bool _depthStateKnown, _depthTest, _depthWrite;
     DepthFunction _depthOp;
     long _epoch;
+
     // The redundancy filters are on by default (validated in the 2026-10-24 Metal run); MEITOU_METAL_NO_STATE_CACHE=1
     // reissues every state for an A/B. They are independent of the experimental GPU cull.
     static readonly bool CacheEncoderState = Environment.GetEnvironmentVariable("MEITOU_METAL_NO_STATE_CACHE") != "1";
+
     // Metal keeps these bound for the encoder's lifetime. Skip a bind that would write the same buffer and offset
     // again; Xcode's API insights otherwise report dozens of redundant binds in a busy scene encoder.
     readonly MTLBuffer[] _vertexBufferState = new MTLBuffer[64];
@@ -83,6 +85,16 @@ public sealed class MetalCommandList : IGpuCommandList
 
     #region Rendering
 
+    /// <summary>
+    /// The Metal load action of an attachment's load op.
+    /// </summary>
+    static MTLLoadAction LoadAction(LoadOp load) => load switch
+    {
+        LoadOp.Clear => MTLLoadAction.Clear,
+        LoadOp.DontCare => MTLLoadAction.DontCare,
+        _ => MTLLoadAction.Load,
+    };
+
     public void BeginRendering(in RenderingDesc d, bool secondaries = false)
     {
         if (secondaries) throw new NotSupportedException("the Metal backend records no secondary command lists yet");
@@ -100,9 +112,12 @@ public sealed class MetalCommandList : IGpuCommandList
             var attachments = descriptor.ColorAttachments;
             var attachment = attachments.Object(0);
             attachment.Texture = _ctx.ViewTexture(d.Colour.View);
-            attachment.LoadAction = d.Colour.Load switch { LoadOp.Clear => MTLLoadAction.Clear, LoadOp.DontCare => MTLLoadAction.DontCare, _ => MTLLoadAction.Load };
+            attachment.LoadAction = LoadAction(d.Colour.Load);
             attachment.StoreAction = MTLStoreAction.Store;
-            attachment.ClearColor = new MTLClearColor { red = d.Colour.Clear.R, green = d.Colour.Clear.G, blue = d.Colour.Clear.B, alpha = d.Colour.Clear.A };
+            attachment.ClearColor = new MTLClearColor
+            {
+                red = d.Colour.Clear.R, green = d.Colour.Clear.G, blue = d.Colour.Clear.B, alpha = d.Colour.Clear.A,
+            };
             attachments.SetObject(attachment, 0);
         }
 
@@ -112,7 +127,7 @@ public sealed class MetalCommandList : IGpuCommandList
             var attachments = descriptor.ColorAttachments;
             var extra = attachments.Object(1);
             extra.Texture = _ctx.ViewTexture(d.Extra.View);
-            extra.LoadAction = d.Extra.Load switch { LoadOp.Clear => MTLLoadAction.Clear, LoadOp.DontCare => MTLLoadAction.DontCare, _ => MTLLoadAction.Load };
+            extra.LoadAction = LoadAction(d.Extra.Load);
             extra.StoreAction = MTLStoreAction.Store;
             extra.ClearColor = new MTLClearColor { red = d.Extra.Clear.R, green = d.Extra.Clear.G, blue = d.Extra.Clear.B, alpha = d.Extra.Clear.A };
             attachments.SetObject(extra, 1);
@@ -122,7 +137,7 @@ public sealed class MetalCommandList : IGpuCommandList
         {
             var depth = descriptor.DepthAttachment;
             depth.Texture = _ctx.ViewTexture(d.Depth.View);
-            depth.LoadAction = d.Depth.Load switch { LoadOp.Clear => MTLLoadAction.Clear, LoadOp.DontCare => MTLLoadAction.DontCare, _ => MTLLoadAction.Load };
+            depth.LoadAction = LoadAction(d.Depth.Load);
             depth.StoreAction = MTLStoreAction.Store;
             depth.ClearDepth = d.Depth.DepthClear;
         }
@@ -177,9 +192,21 @@ public sealed class MetalCommandList : IGpuCommandList
         _lastPipeline = default;
         _depthStateKnown = false;   // ClearAttachments writes a depth state directly
         if (_hasViewport)
-            _render.SetViewport(new MTLViewport { originX = _viewport.X, originY = _viewport.Y, width = _viewport.Width, height = _viewport.Height, znear = _viewport.MinDepth, zfar = _viewport.MaxDepth });
+        {
+            _render.SetViewport(new MTLViewport
+            {
+                originX = _viewport.X, originY = _viewport.Y, width = _viewport.Width, height = _viewport.Height, znear = _viewport.MinDepth,
+                zfar = _viewport.MaxDepth,
+            });
+        }
+
         if (_hasScissor)
-            _render.SetScissorRect(new MTLScissorRect { x = (ulong)_scissor.X, y = (ulong)_scissor.Y, width = _scissor.Width, height = _scissor.Height });
+        {
+            _render.SetScissorRect(new MTLScissorRect
+            {
+                x = (ulong)_scissor.X, y = (ulong)_scissor.Y, width = _scissor.Width, height = _scissor.Height,
+            });
+        }
     }
 
     #endregion
@@ -218,7 +245,12 @@ public sealed class MetalCommandList : IGpuCommandList
         _viewport = v;
         _hasViewport = true;
         if (!same)
-            _render.SetViewport(new MTLViewport { originX = v.X, originY = v.Y, width = v.Width, height = v.Height, znear = v.MinDepth, zfar = v.MaxDepth });
+        {
+            _render.SetViewport(new MTLViewport
+            {
+                originX = v.X, originY = v.Y, width = v.Width, height = v.Height, znear = v.MinDepth, zfar = v.MaxDepth,
+            });
+        }
     }
 
     public void SetScissor(in PixelRect r)
@@ -267,7 +299,10 @@ public sealed class MetalCommandList : IGpuCommandList
         if (_render.NativePtr == IntPtr.Zero)
             throw new InvalidOperationException("BindVertexBuffers outside a rendering");
         if (first + (uint)bindings.Length > MetalShaders.VertexBlockBase)
-            throw new NotSupportedException($"the Metal backend keeps the vertex buffers in the slots below {MetalShaders.VertexBlockBase} (docs/metal-backend.md), {first}..{first + bindings.Length - 1} asked");
+        {
+            throw new NotSupportedException($"the Metal backend keeps the vertex buffers in the slots below {MetalShaders.VertexBlockBase} " +
+                $"(docs/metal-backend.md), {first}..{first + bindings.Length - 1} asked");
+        }
 
         for (int i = 0; i < bindings.Length; i++)
         {
@@ -440,8 +475,8 @@ public sealed class MetalCommandList : IGpuCommandList
 
                     if (set.Layout.Slots[b].OffsetAtBind)
                     {
-                        binding = new GpuBinding(binding.Slot, binding.Kind,
-                            Buffer: new GpuBufferBinding(binding.Buffer.Buffer, dynamicOffsets.IsEmpty ? 0 : dynamicOffsets[at++], binding.Buffer.Size));
+                        binding = new GpuBinding(binding.Slot, binding.Kind, Buffer: new GpuBufferBinding(binding.Buffer.Buffer,
+                            dynamicOffsets.IsEmpty ? 0 : dynamicOffsets[at++], binding.Buffer.Size));
                     }
 
                     bindings[b] = binding;
@@ -523,7 +558,8 @@ public sealed class MetalCommandList : IGpuCommandList
                 GpuBindingKind.StorageBuffer => GpuSlotKind.StorageBuffer,
                 GpuBindingKind.Sampled => GpuSlotKind.CombinedSampler,
                 GpuBindingKind.StorageImage => GpuSlotKind.CombinedSampler,   // the id is the slot; the kind only picks the table
-                _ => throw new NotSupportedException($"the Metal backend puts no {binding.Kind} in an argument buffer set (set {set}, binding {binding.Slot})"),
+                _ => throw new NotSupportedException(
+                    $"the Metal backend puts no {binding.Kind} in an argument buffer set (set {set}, binding {binding.Slot})"),
             };
             int at = Array.IndexOf(members, MetalShaders.Flatten(slotKind, stage, set, binding.Slot));
             if (at < 0) continue;   // this stage's struct has no such member (its shader never reads it)
@@ -541,7 +577,8 @@ public sealed class MetalCommandList : IGpuCommandList
                 if (binding.Texture.IsNull) continue;
 
                 var image = _ctx.ViewTexture(binding.Texture.View);
-                UseResource(image, binding.Kind == GpuBindingKind.StorageImage ? MTLResourceUsage.Read | MTLResourceUsage.Write : MTLResourceUsage.Read, computePass);
+                var usage = binding.Kind == GpuBindingKind.StorageImage ? MTLResourceUsage.Read | MTLResourceUsage.Write : MTLResourceUsage.Read;
+                UseResource(image, usage, computePass);
                 entries[at] = image.GpuResourceID._impl;
             }
 

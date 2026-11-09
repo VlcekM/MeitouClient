@@ -55,6 +55,7 @@ public sealed unsafe class MetalFrame : IGpuFrame
 
     readonly MetalCommandList _preFrame;
     MTLCommandBuffer _preCommand;
+
     // The separate pre-frame command buffer is part of the opt-in Metal GPU-cull path. With the CPU cull, the
     // upstream pre-frame work (uploads, the ocean's FFT, impostor bakes) stays in the frame's own command list
     // as before the 2026-10-23 cull change: the extra command buffer is not needed and is one more ordering

@@ -40,10 +40,17 @@ internal sealed class MeshMorphs
         }
         var slotOf = new Dictionary<uint, int>();
         foreach (var pose in mesh.Poses)
+        {
             if (pose.Target - 1 == target)
+            {
                 foreach (var v in pose.Vertices)
+                {
                     if (v.Index < part.Vertices.Length && !slotOf.ContainsKey(v.Index))
                         slotOf[v.Index] = slotOf.Count + 1;
+                }
+            }
+        }
+
         var poses = new Dictionary<string, (int[], Vector3[])>(StringComparer.Ordinal);
         foreach (var pose in mesh.Poses)
         {
@@ -54,11 +61,14 @@ internal sealed class MeshMorphs
 
         // The vertex's slot rides in the colour's X as raw bits (the characters use no vertex colours): 0 for a vertex no pose moves.
         foreach (var p in model.Parts)
+        {
             for (int i = 0; i < p.Vertices.Length; i++)
             {
                 uint slot = p.SubMeshIndex == target && slotOf.TryGetValue((uint)i, out int s) ? (uint)s : 0;
                 p.Vertices[i].Colour = new Vector4(BitConverter.UInt32BitsToSingle(slot), 0, 0, 1);
             }
+        }
+
         return new MeshMorphs { SlotCount = slotOf.Count, SubMeshIndex = target, Poses = poses! };
     }
 

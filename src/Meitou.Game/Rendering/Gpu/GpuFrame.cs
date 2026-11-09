@@ -219,7 +219,8 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
     }
 
     /// <summary>
-    /// After <see cref="GpuContext.SubmitAndWait"/>: the frame goes on in <paramref name="commands"/> and <paramref name="uploads"/> (begun), all before done.
+    /// After <see cref="GpuContext.SubmitAndWait"/>: the frame goes on in <paramref name="commands"/> and <paramref name="uploads"/> (begun), all
+    /// before done.
     /// </summary>
     internal void Continue(CommandBuffer commands, CommandBuffer uploads)
     {
@@ -276,12 +277,18 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
             {
                 if (list.Count > 0)
                 {
-                    var ai = new DescriptorSetAllocateInfo { SType = StructureType.DescriptorSetAllocateInfo, DescriptorPool = list[^1], DescriptorSetCount = 1, PSetLayouts = &layout };
+                    var ai = new DescriptorSetAllocateInfo
+                    {
+                        SType = StructureType.DescriptorSetAllocateInfo, DescriptorPool = list[^1], DescriptorSetCount = 1, PSetLayouts = &layout,
+                    };
                     DescriptorSet set;
                     if (_device.Vk.AllocateDescriptorSets(_device.Device, &ai, &set) == Result.Success) return set;
                 }
 
-                var pi = new DescriptorPoolCreateInfo { SType = StructureType.DescriptorPoolCreateInfo, MaxSets = 1024, PoolSizeCount = 4, PPoolSizes = sizes };
+                var pi = new DescriptorPoolCreateInfo
+                {
+                    SType = StructureType.DescriptorPoolCreateInfo, MaxSets = 1024, PoolSizeCount = 4, PPoolSizes = sizes,
+                };
                 VulkanException.Check(_device.Vk.CreateDescriptorPool(_device.Device, &pi, null, out var fresh), "vkCreateDescriptorPool");
                 list.Add(fresh);
             }

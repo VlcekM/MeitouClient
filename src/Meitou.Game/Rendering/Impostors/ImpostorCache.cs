@@ -9,8 +9,8 @@ namespace Meitou.Game.Rendering.Impostors;
 public readonly record struct ImpostorCacheMaintenance(int Files, long Bytes, int Stale, int Evicted, long BytesAfter);
 
 /// <summary>
-/// The disk cache of baked atlases: <c>%LOCALAPPDATA%\Meitou\impostors\&lt;name&gt;_&lt;key&gt;.mimp</c> (overridden by <c>MEITOU_IMPOSTOR_CACHE</c> or the
-/// constructor; never inside the repository). Files are written to a temporary name and moved into place, so a crash leaves no half file.
+/// The disk cache of baked atlases: <c>%LOCALAPPDATA%\Meitou\impostors\&lt;name&gt;_&lt;key&gt;.mimp</c> (overridden by <c>MEITOU_IMPOSTOR_CACHE</c>
+/// or the constructor; never inside the repository). Files are written to a temporary name and moved into place, so a crash leaves no half file.
 /// <para>
 /// The cache is kept in bounds (<see cref="Maintain"/>, docs/impostors.md section 4): files of an older format or baker version (their keys never
 /// match again), unreadable ones and abandoned temporary files are deleted, and when the files total more than <see cref="MaxBytes"/> the least
@@ -54,7 +54,8 @@ public sealed class ImpostorCache
     public string Root { get; }
 
     /// <summary>
-    /// The most the files may total, in bytes; 0 or less is no cap. The constructor sets it; <see cref="FoliageRenderer.ImpostorCacheMb"/> in the viewer.
+    /// The most the files may total, in bytes; 0 or less is no cap. The constructor sets it; <see cref="FoliageRenderer.ImpostorCacheMb"/> in the
+    /// viewer.
     /// </summary>
     public long MaxBytes { get; set; }
 
@@ -163,8 +164,11 @@ public sealed class ImpostorCache
             {
                 if (info.Extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (info.Name.Contains(".mimp.", StringComparison.OrdinalIgnoreCase) && time - info.LastWriteTimeUtc > AbandonedTemporary && Delete(info))
+                    if (info.Name.Contains(".mimp.", StringComparison.OrdinalIgnoreCase) && time - info.LastWriteTimeUtc > AbandonedTemporary
+                        && Delete(info))
+                    {
                         stale++;
+                    }
 
                     continue;
                 }

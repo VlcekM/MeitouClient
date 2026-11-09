@@ -93,8 +93,10 @@ public static class ImpostorEncoder
                 for (int channel = 0; channel < 2; channel++)
                 {
                     for (int y = 0; y < 4; y++)
+                    {
                         for (int x = 0; x < 4; x++)
                             values[y * 4 + x] = rgba[((by * 4 + y) * size + bx * 4 + x) * 4 + channel];
+                    }
 
                     EncodeBc4Block(values, result.AsSpan((by * blocks + bx) * 16 + channel * 8, 8));
                 }
@@ -347,7 +349,8 @@ public static class ImpostorEncoder
 
         for (int k = 0; k < 8; k++)
         {
-            axis = new Vector3(xx * axis.X + xy * axis.Y + xz * axis.Z, xy * axis.X + yy * axis.Y + yz * axis.Z, xz * axis.X + yz * axis.Y + zz * axis.Z);
+            axis = new Vector3(xx * axis.X + xy * axis.Y + xz * axis.Z, xy * axis.X + yy * axis.Y + yz * axis.Z,
+                xz * axis.X + yz * axis.Y + zz * axis.Z);
             float length = axis.Length();
             if (length < 1e-12f)
             {

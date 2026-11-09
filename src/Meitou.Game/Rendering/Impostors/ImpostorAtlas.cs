@@ -189,9 +189,9 @@ public sealed class ImpostorAtlas : IDisposable
 
     /// <summary>
     /// The atlas in <paramref name="stream"/>, or null when it is not a valid atlas of this format and baker version. Levels below
-    /// <paramref name="firstLevel"/> are inflated into one scratch buffer (they are part of the checksum) and left empty: the textures leave their top
-    /// levels out (<see cref="ImpostorTextures"/>' skip), and the top level is three quarters of a map's bytes, a refine of a far atlas read 3 to 20
-    /// MB to use a few hundred KB.
+    /// <paramref name="firstLevel"/> are inflated into one scratch buffer (they are part of the checksum) and left empty: the textures leave their
+    /// top levels out (<see cref="ImpostorTextures"/>' skip), and the top level is three quarters of a map's bytes, a refine of a far atlas read 3 to
+    /// 20 MB to use a few hundred KB.
     /// </summary>
     public static ImpostorAtlas? Read(Stream stream, int firstLevel = 0)
     {

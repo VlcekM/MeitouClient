@@ -29,8 +29,9 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
     // In the order of the set bits: input assembly primitives, vertex invocations, clipping invocations, clipping primitives, fragment invocations.
     const int Values = 5;
 
-    const QueryPipelineStatisticFlags Wanted = QueryPipelineStatisticFlags.InputAssemblyPrimitivesBit | QueryPipelineStatisticFlags.VertexShaderInvocationsBit |
-        QueryPipelineStatisticFlags.ClippingInvocationsBit | QueryPipelineStatisticFlags.ClippingPrimitivesBit | QueryPipelineStatisticFlags.FragmentShaderInvocationsBit;
+    const QueryPipelineStatisticFlags Wanted = QueryPipelineStatisticFlags.InputAssemblyPrimitivesBit
+        | QueryPipelineStatisticFlags.VertexShaderInvocationsBit | QueryPipelineStatisticFlags.ClippingInvocationsBit
+        | QueryPipelineStatisticFlags.ClippingPrimitivesBit | QueryPipelineStatisticFlags.FragmentShaderInvocationsBit;
 
     readonly GpuContext _ctx;
     readonly Vk _vk;
@@ -87,7 +88,8 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
     }
 
     /// <summary>
-    /// A stage or part of the frame ended (the stage clock's hook): the open query closes and is filed under <paramref name="label"/>, the next one opens.
+    /// A stage or part of the frame ended (the stage clock's hook): the open query closes and is filed under <paramref name="label"/>, the next one
+    /// opens.
     /// </summary>
     public void OnClose(string label, bool isSub)
     {
@@ -179,8 +181,8 @@ public sealed unsafe class PipelineStatsMeter : IDisposable
     }
 
     /// <summary>
-    /// Per part of the frame, what the queries counted (call after the frame was waited for): the stages (<c>terrain</c>, <c>foliage</c>, a second slice as
-    /// <c>terrain #2</c>) and their parts (<c>foliage/fol meshes</c>, <c>shadows/...</c>), in the order the frame ran them.
+    /// Per part of the frame, what the queries counted (call after the frame was waited for): the stages (<c>terrain</c>, <c>foliage</c>, a second
+    /// slice as <c>terrain #2</c>) and their parts (<c>foliage/fol meshes</c>, <c>shadows/...</c>), in the order the frame ran them.
     /// </summary>
     public List<(string Key, PassStat Stat)> Read()
     {

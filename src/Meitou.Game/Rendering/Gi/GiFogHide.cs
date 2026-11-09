@@ -68,6 +68,7 @@ internal static class GiFogHide
             for (int p = phase; p < GiProbes.Probes; p += phases) into[n++] = (uint)p;
             return n;
         }
+
         // The layers are a multiple of the phases, so a column's probes of this phase are its layers phase, phase + phases, ... (ascending probe
         // order).
         for (int c = 0; c < GiProbes.Cascades; c++)

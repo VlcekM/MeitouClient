@@ -76,8 +76,11 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     public static void Check(SamplerInfo s, string program)
     {
         if (s.Binding < 0 || s.Binding >= ArrayCount)
+        {
             throw new InvalidOperationException($"{program}: sampler '{s.Name}' at binding {s.Binding} "
                 + $"of the bindless set (bindings 0 to {ArrayCount - 1})");
+        }
+
         var (dim, arrayed, depth, scalar) = (BindlessKind)s.Binding switch
         {
             BindlessKind.Texture2DArray => (SamplerDimension.Dim2D, true, false, ScalarKind.Float),
@@ -89,9 +92,11 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
             _ => (SamplerDimension.Dim2D, false, false, ScalarKind.Float),
         };
         if (s.Dimension != dim || s.Arrayed != arrayed || s.Depth != depth || s.SampledKind != scalar || s.Multisampled || s.ArrayLength >= 0)
+        {
             throw new InvalidOperationException($"{program}: sampler '{s.Name}' at binding {s.Binding} of the bindless set must be " +
                 $"'{GlslTypes[s.Binding]} {GlslArrays[s.Binding]}[]' (got {s.SampledKind} {s.Dimension} "
                 + $"arrayed={s.Arrayed} depth={s.Depth} length={s.ArrayLength})");
+        }
     }
 
     #endregion
@@ -116,10 +121,12 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
         var props = new PhysicalDeviceProperties2 { SType = StructureType.PhysicalDeviceProperties2, PNext = &props12 };
         device.Vk.GetPhysicalDeviceProperties2(device.PhysicalDevice, &props);
         uint limit = Math.Min(props12.MaxPerStageDescriptorUpdateAfterBindSamplers, props12.MaxDescriptorSetUpdateAfterBindSampledImages);
+
         // MoltenVK advertises only 1024 update-after-bind sampled images ("Metal caps the legacy path"), but its Metal
         // argument buffers on Tier 2 (Apple silicon) hold far more. The 512-slot 2D array overflows when 512+ unique
         // textures are resident (The Hub's foliage alone); Windows GPUs advertise 16k+ and never see this.
         if (OperatingSystem.IsMacOS() && limit < 8192) limit = 8192;
+
         // 2D textures get most of the room; the rest are few (terrain arrays, the atmosphere's cubes, shadow maps, integer lookup textures
         // such as the terrain's blend cells, the sun's cascade array). The shares add up to 31/32 of the limit.
         Capacity = [Math.Min(16384u, limit / 2), Math.Min(1024u, limit / 8), Math.Min(256u, limit / 16), Math.Min(256u, limit / 16),
@@ -389,10 +396,15 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
             }
         }
         _applied[slot] = end;
+
         // Drop what every slot has seen.
         long seen = _applied.Min();
         int drop = (int)(seen - _journalBase);
-        if (drop > 0) { _journal.RemoveRange(0, drop); _journalBase = seen; }
+        if (drop > 0)
+        {
+            _journal.RemoveRange(0, drop);
+            _journalBase = seen;
+        }
     }
 
     #endregion

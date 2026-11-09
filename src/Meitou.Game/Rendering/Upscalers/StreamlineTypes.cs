@@ -20,8 +20,8 @@ public enum PclMarker : uint
 
 /// <summary>
 /// The Streamline 2.14.16 structures DLSS and DLSS frame generation are driven with, laid out as the SDK's headers (<c>sl_consts.h</c>,
-/// <c>sl_core_types.h</c>, <c>sl_dlss.h</c>, <c>sl_dlss_g.h</c>, <c>sl_reflex.h</c>): every structure starts with a next pointer, its GUID and its version
-/// (<c>sl_struct.h</c>).
+/// <c>sl_core_types.h</c>, <c>sl_dlss.h</c>, <c>sl_dlss_g.h</c>, <c>sl_reflex.h</c>): every structure starts with a next pointer, its GUID and its
+/// version (<c>sl_struct.h</c>).
 /// </summary>
 static unsafe class SlTypes
 {
@@ -210,8 +210,8 @@ static unsafe class SlTypes
     /// get their y flipped and motion is scaled by −1, −1) or top-down (copied flipped, as frame generation takes them: no flip, motion −1, +1,
     /// jitter y negated). Ours: motion in UV from previous to current; Streamline's: normalised, towards the previous position.
     /// </summary>
-    public static Constants CameraConstants(Matrix4x4 viewToClip, Matrix4x4 clipToPrevious, Vector2 jitterPixels, Vector3 eye, Vector3 up, Vector3 right,
-        Vector3 forward, float near, float far, float fov, float aspect, bool reset, bool bottomUp)
+    public static Constants CameraConstants(Matrix4x4 viewToClip, Matrix4x4 clipToPrevious, Vector2 jitterPixels, Vector3 eye, Vector3 up,
+        Vector3 right, Vector3 forward, float near, float far, float fov, float aspect, bool reset, bool bottomUp)
     {
         var toClip = bottomUp ? viewToClip * FlipY : viewToClip;
         Matrix4x4.Invert(toClip, out var clipToView);

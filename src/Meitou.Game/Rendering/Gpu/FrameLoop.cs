@@ -31,8 +31,8 @@ public sealed unsafe partial class GpuContext
     public double GpuFrameMs { get; private set; }
 
     /// <summary>
-    /// <c>MEITOU_PASS_STATS=1</c> only (else 0): the last completed frame's pre-frame GPU time, from the start of its uploads to the end of the pre-frame
-    /// command buffer (uploads, compute culls, grass kernels, impostor bakes), a frame ring late.
+    /// <c>MEITOU_PASS_STATS=1</c> only (else 0): the last completed frame's pre-frame GPU time, from the start of its uploads to the end of the
+    /// pre-frame command buffer (uploads, compute culls, grass kernels, impostor bakes), a frame ring late.
     /// </summary>
     public double PreFrameGpuMs { get; private set; }
 
@@ -193,8 +193,9 @@ public sealed unsafe partial class GpuContext
     }
 
     /// <summary>
-    /// Diagnostic (<see cref="DiagSubmit"/>, issue #108): submits the open frame's uploads and commands so far and waits for the GPU to finish them; the
-    /// frame goes on in fresh command buffers of the same slot (same constants, same swapchain image). Nothing outside a frame or inside a pass or segment.
+    /// Diagnostic (<see cref="DiagSubmit"/>, issue #108): submits the open frame's uploads and commands so far and waits for the GPU to finish them;
+    /// the frame goes on in fresh command buffers of the same slot (same constants, same swapchain image). Nothing outside a frame or inside a pass
+    /// or segment.
     /// </summary>
     public void SubmitAndWait()
     {

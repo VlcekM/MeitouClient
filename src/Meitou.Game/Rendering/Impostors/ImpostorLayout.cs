@@ -103,17 +103,19 @@ public static class ImpostorLayout
 }
 
 /// <summary>
-/// What an atlas is baked at (docs/impostors.md, "Size classes"): frame pixels and grid. The frame size follows from how big the largest instance of the
-/// mesh is on the screen at the reference transition distance (<see cref="For"/>), so a small bush gets a 64-pixel frame and a big tree a 256-pixel one;
-/// the grid is the same for all (<see cref="DefaultGrid"/>).
+/// What an atlas is baked at (docs/impostors.md, "Size classes"): frame pixels and grid. The frame size follows from how big the largest instance of
+/// the mesh is on the screen at the reference transition distance (<see cref="For"/>), so a small bush gets a 64-pixel frame and a big tree a
+/// 256-pixel one; the grid is the same for all (<see cref="DefaultGrid"/>).
 /// </summary>
-public readonly record struct ImpostorClass(string Name, int FramePixels, int Grid, float BakeDistance = ImpostorClass.ReferenceDistance, float Knee = 0)
+public readonly record struct ImpostorClass(string Name, int FramePixels, int Grid, float BakeDistance = ImpostorClass.ReferenceDistance,
+    float Knee = 0)
 {
     /// <summary>
     /// The small class (docs/impostors.md section 11): meshes whose largest instance is under <see cref="MinimumRadius"/> but at least
-    /// <see cref="SmallMinimumRadius"/> and that have at least <see cref="SmallMinimumTriangles"/> triangles (a few triangles cost less than the impostor's
-    /// quad). Small frames (<see cref="SmallFrame"/>), and a transition distance of its own, proportional to the size (<see cref="Transition"/>): the
-    /// largest instance is <c>27.8</c> pixels across at its transition whatever its size, as the smallest medium mesh (radius 48) is at 4000.
+    /// <see cref="SmallMinimumRadius"/> and that have at least <see cref="SmallMinimumTriangles"/> triangles (a few triangles cost less than the
+    /// impostor's quad). Small frames (<see cref="SmallFrame"/>), and a transition distance of its own, proportional to the size
+    /// (<see cref="Transition"/>): the largest instance is <c>27.8</c> pixels across at its transition whatever its size, as the smallest medium mesh
+    /// (radius 48) is at 4000.
     /// </summary>
     public const float SmallMinimumRadius = 2;
 
@@ -173,11 +175,13 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// </summary>
     public float Transition(float worldRadius, float impostorDistance) =>
         IsSmall ? impostorDistance * worldRadius / MinimumRadius
-        : Knee > 0 && worldRadius > Knee ? impostorDistance * worldRadius / Knee   // a TERRAIN-mode rock larger than its frame is magnified by (see ForRock)
+        // a TERRAIN-mode rock larger than its frame is magnified by (see ForRock)
+        : Knee > 0 && worldRadius > Knee ? impostorDistance * worldRadius / Knee
         : impostorDistance;
 
     /// <summary>
-    /// A sphere of <paramref name="worldRadius"/> units seen from <paramref name="distance"/>: its diameter in pixels at <see cref="ReferenceHeight"/>.
+    /// A sphere of <paramref name="worldRadius"/> units seen from <paramref name="distance"/>: its diameter in pixels at
+    /// <see cref="ReferenceHeight"/>.
     /// </summary>
     public static float ScreenDiameter(float worldRadius, float distance = ReferenceDistance) =>
         worldRadius * ReferenceHeight / (HalfFovTan * Math.Max(distance, 1));
@@ -191,8 +195,8 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
 
     /// <summary>
     /// <see cref="For"/> for a TERRAIN-mode rock (docs/impostors.md section 13): the same size rule, except that a rock too large for
-    /// <see cref="RockMaxFrame"/> (a radius of about 620 units and more at the reference distance) is not magnified more than the rule allows but switches
-    /// to its impostor further out, in proportion to its radius (<see cref="Knee"/>): the owner's rule of one atlas texel per pixel at the
+    /// <see cref="RockMaxFrame"/> (a radius of about 620 units and more at the reference distance) is not magnified more than the rule allows but
+    /// switches to its impostor further out, in proportion to its radius (<see cref="Knee"/>): the owner's rule of one atlas texel per pixel at the
     /// transition, the one the small class has the other way round.
     /// </summary>
     public static ImpostorClass? ForRock(float worldRadius, int triangles = int.MaxValue) => For(worldRadius, triangles, RockMaxFrame, rock: true);

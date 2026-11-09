@@ -17,6 +17,7 @@ internal readonly record struct PickBox(int Bone, Vector3 Min, Vector3 Max)
     {
         var boxes = new Dictionary<int, (Vector3 Min, Vector3 Max)>();
         foreach (var part in model.Parts)
+        {
             foreach (ref readonly var v in part.Vertices.AsSpan())
             {
                 int bone = -1;
@@ -29,6 +30,8 @@ internal readonly record struct PickBox(int Bone, Vector3 Min, Vector3 Max)
                 boxes[bone] = boxes.TryGetValue(bone, out var b) ? (Vector3.Min(b.Min, v.Position), Vector3.Max(b.Max, v.Position)) : (v.Position,
                     v.Position);
             }
+        }
+
         return [.. boxes.Select(b => new PickBox(b.Key, b.Value.Min, b.Value.Max))];
     }
 }
@@ -55,8 +58,11 @@ internal sealed partial class CharacterRenderer
         if (!_states.TryGetValue(key, out var s) || !s.RangedDrawn || s.Asset is not { IsIcon: false } asset || s.Posed < 0)
             return null;
         foreach (var part in asset.Parts)
+        {
             if (part.Muzzle && part.AttachIndex >= 0 && part.AttachIndex < s.Attach.Length)
                 return (s.Attach[part.AttachIndex] * s.World).Translation;
+        }
+
         return null;
     }
 

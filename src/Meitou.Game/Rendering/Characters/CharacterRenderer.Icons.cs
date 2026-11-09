@@ -180,7 +180,12 @@ internal sealed unsafe partial class CharacterRenderer
                 _iconAssetsBuilt++;
                 BuildIconAsset(entry);
             }
-            if (entry.Failed) { _iconsUnsettled.RemoveAt(i--); continue; }
+            if (entry.Failed)
+            {
+                _iconsUnsettled.RemoveAt(i--);
+                continue;
+            }
+
             if (entry.Asset is not { } asset) continue;
             entry.TexturesReady = asset.Parts[0].Material.Tex.All(t => t is null || t.Native is not null || t.State == WorldTexture.Residency.Missing);
             if (_liveCount == _live.Length) Array.Resize(ref _live, _liveCount * 2);
@@ -200,12 +205,22 @@ internal sealed unsafe partial class CharacterRenderer
     void BuildIconAsset(IconEntry entry)
     {
         var item = _content.Database.Find(entry.Key.Record);
-        if (item is null) { entry.Failed = true; return; }
+        if (item is null)
+        {
+            entry.Failed = true;
+            return;
+        }
+
         var spec = _content.IconMaterialOf(item, entry.Key.Material);
         entry.MaterialId = spec?.StringId ?? "";
         entry.Style = ItemIconStyle.Of(item, spec);
         entry.Asset = _content.BuildIcon(item, spec, entry.Key.Colour.Length > 0 ? _content.Database.Find(entry.Key.Colour) : null);
-        if (entry.Asset is null) { entry.Failed = true; return; }
+        if (entry.Asset is null)
+        {
+            entry.Failed = true;
+            return;
+        }
+
         _iconByAsset[entry.Asset] = entry;
     }
 
@@ -216,8 +231,10 @@ internal sealed unsafe partial class CharacterRenderer
     void PoseIcons()
     {
         for (int i = 0; i < _liveCount; i++)
+        {
             if (_live[i].Asset.IsIcon)
                 _attach[_live[i].AttachBase] = _iconByAsset[_live[i].Asset].Style.Matrices().Model;
+        }
     }
 
     /// <summary>
@@ -267,8 +284,8 @@ internal sealed unsafe partial class CharacterRenderer
         {
             entry.Colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, w, h,
                 Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: $"icon {entry.Key.Record}"));
-            entry.Sampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-                TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), entry.Colour.View());
+            entry.Sampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)),
+                entry.Colour.View());
         }
 
         // Enhanced: drawn into a half-float picture IconSupersample times larger, then resolved into the icon (coverage-weighted, so the edges blend
@@ -278,8 +295,11 @@ internal sealed unsafe partial class CharacterRenderer
         if (large && entry.Large is null)
             (entry.Large, entry.LargeDepth, entry.LargeSampled) = PreviewResolve.Targets(Gpu, w, h, IconLook, $"icon large {entry.Key.Record}");
         if (!large && entry.Depth is null)
+        {
             entry.Depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h, Use: TextureUse.DepthTarget,
                     Name: $"icon depth {entry.Key.Record}"));
+        }
+
         int s = large ? IconSupersample : 1;
         var cmd = Gpu.BeginNative("item icon");
         var target = large ? PassTargets.Of(entry.Large, entry.LargeDepth) : PassTargets.Of(entry.Colour, entry.Depth);
@@ -291,8 +311,15 @@ internal sealed unsafe partial class CharacterRenderer
         var (_, view, projection) = entry.Style.Matrices();
         var eye = new Vector3(0, 0, entry.Style.Distance);
         _portraitLive = index;
-        try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = Vector3.UnitZ, FogDistance = -1 }, eye, []); }
-        finally { _portraitLive = -1; }
+        try
+        {
+            DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = Vector3.UnitZ, FogDistance = -1 }, eye, []);
+        }
+        finally
+        {
+            _portraitLive = -1;
+        }
+
         Gpu.EndHostPass(cmd);
         cmd.EndRendering();
         if (large)
@@ -341,7 +368,11 @@ internal sealed unsafe partial class CharacterRenderer
                     Data.Textures.PngWriter.Write(temporary, w, h, rows);
                     File.Move(temporary, path, overwrite: true);
                 }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }   // not cached: the next run draws it again
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    // not cached: the next run draws it again
+                }
+
                 return true;
             });
         }

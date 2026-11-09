@@ -11,8 +11,8 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// AMD FSR 3.1 upscaling through the FidelityFX API (<c>amd_fidelityfx_vk.dll</c>, MIT, from the FidelityFX SDK 1.1.x; never in the repository):
 /// loaded at run time from <c>MEITOU_FFX_PATH</c> (the DLL or its folder) or next to the executable. The context is created for the render and
 /// display size of the first dispatch and again when they change; the dispatch is recorded into the <see cref="GpuContext"/>'s frame. Inputs follow
-/// <see cref="UpscaleInputs"/>: images stay in GENERAL (declared as COMMON, which the backend reads as GENERAL and returns them to), motion is turned into
-/// FSR's convention (render pixels towards the previous position) by the motion-vector scale. docs/engine.md "Upscaling".
+/// <see cref="UpscaleInputs"/>: images stay in GENERAL (declared as COMMON, which the backend reads as GENERAL and returns them to), motion is turned
+/// into FSR's convention (render pixels towards the previous position) by the motion-vector scale. docs/engine.md "Upscaling".
 /// </summary>
 public sealed unsafe class FsrUpscaler : IUpscaler
 {

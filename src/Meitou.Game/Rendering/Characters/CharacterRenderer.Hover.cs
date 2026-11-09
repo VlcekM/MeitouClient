@@ -68,11 +68,14 @@ internal sealed unsafe partial class CharacterRenderer
         {
             int index = -1;
             for (int i = 0; i < _liveCount; i++)
+            {
                 if (_live[i].Key == key)
                 {
                     index = i;
                     break;
                 }
+            }
+
             if (index < 0 || _live[index].PortraitOnly) continue;
             ref var l = ref _live[index];
             if (HoverOutlineRenderer.Bounds(l.Centre, l.Radius, onScreen, width, height, 0) is null) continue;
@@ -137,7 +140,12 @@ internal sealed unsafe partial class CharacterRenderer
 
     void DisposeHover()
     {
-        foreach (var (colour, depth) in _hoverTargets) { colour.Dispose(); depth.Dispose(); }
+        foreach (var (colour, depth) in _hoverTargets)
+        {
+            colour.Dispose();
+            depth.Dispose();
+        }
+
         _hoverTargets.Clear();
         _hoverMasks.Clear();
     }

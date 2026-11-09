@@ -73,6 +73,7 @@ public sealed class Model
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
         foreach (var part in Parts)
+        {
             foreach (var v in part.Vertices)
             {
                 var p = v.Position;
@@ -86,9 +87,12 @@ public sealed class Model
                         if (w > 0 && bone < skin.Length) p += Vector3.Transform(v.Position, skin[bone]) * w;
                     }
                 }
+
                 min = Vector3.Min(min, p);
                 max = Vector3.Max(max, p);
             }
+        }
+
         return Parts.Count == 0 ? (Min, Max) : (min, max);
     }
 
@@ -120,7 +124,13 @@ public sealed class Model
             }
             model.Parts.Add(part);
         }
-        if (model.Parts.Count == 0) { min = Vector3.Zero; max = Vector3.One; }
+
+        if (model.Parts.Count == 0)
+        {
+            min = Vector3.Zero;
+            max = Vector3.One;
+        }
+
         model.Min = min;
         model.Max = max;
         return model;
@@ -137,8 +147,11 @@ public sealed class Model
                 {
                     var list = new List<uint>();
                     for (int i = 2; i < src.Length; i++)
+                    {
                         if (i % 2 == 0) list.AddRange([src[i - 2], src[i - 1], src[i]]);
                         else list.AddRange([src[i - 1], src[i - 2], src[i]]);
+                    }
+
                     return [.. list];
                 }
             case OgreOperationType.TriangleFan:
@@ -194,42 +207,7 @@ public sealed class Model
         }
 
         bool skinned = boneCount is not null && assignments.Count > 0;
-        if (skinned)
-        {
-            int dropped = 0;
-            foreach (var group in assignments.GroupBy(a => a.VertexIndex))
-            {
-                if (group.Key >= n) { dropped++; continue; }
-                var top = group.Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256 && a.Weight > 0)
-                    .OrderByDescending(a => a.Weight).Take(4).ToArray();
-                dropped += group.Count(a => a.BoneIndex >= boneCount!.Value);
-                float sum = top.Sum(a => a.Weight);
-                if (sum <= 0) continue;
-                ref var v = ref verts[group.Key];
-                uint packed = 0;
-                var w = new float[4];
-                for (int k = 0; k < top.Length; k++)
-                {
-                    packed |= (uint)top[k].BoneIndex << (8 * k);
-                    w[k] = top[k].Weight / sum;
-                }
-                v.Bones = packed;
-                v.Weights = new Vector4(w[0], w[1], w[2], w[3]);
-            }
-            if (dropped > 0)
-                warnings.Add($"submesh {s}: {dropped} bone assignments name bones past the skeleton's {boneCount} and were dropped");
-            // A vertex without assignments follows blend index 0 fully (Ogre's Mesh::compileBoneAssignments): the lowest bone the vertex data's
-            // assignments use (docs/formats/ogre-mesh.md "Bone assignments"), so a hair's unweighted cards move with its head.
-            int lowest = assignments
-                .Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256)
-                .Select(a => (int)a.BoneIndex)
-                .DefaultIfEmpty(-1)
-                .Min();
-            if (lowest >= 0)
-                for (int i = 0; i < n; i++)
-                    if (verts[i].Weights == Vector4.Zero)
-                        (verts[i].Bones, verts[i].Weights) = ((uint)lowest, new Vector4(1, 0, 0, 0));
-        }
+        if (skinned) Skin(verts, assignments, boneCount, warnings, s);
 
         return new ModelPart
         {
@@ -242,6 +220,58 @@ public sealed class Model
             HasColours = colours is not null,
             Skinned = skinned,
         };
+    }
+
+    /// <summary>
+    /// The four heaviest bone assignments of each vertex, normalised; assignments past the skeleton's <paramref name="boneCount"/> bones are
+    /// dropped (with a warning), and a vertex left without any follows the lowest bone used.
+    /// </summary>
+    static void Skin(Vertex[] verts, List<OgreBoneAssignment> assignments, int? boneCount, List<string> warnings, int s)
+    {
+        int n = verts.Length;
+        int dropped = 0;
+        foreach (var group in assignments.GroupBy(a => a.VertexIndex))
+        {
+            if (group.Key >= n)
+            {
+                dropped++;
+                continue;
+            }
+
+            var top = group.Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256 && a.Weight > 0)
+                .OrderByDescending(a => a.Weight).Take(4).ToArray();
+            dropped += group.Count(a => a.BoneIndex >= boneCount!.Value);
+            float sum = top.Sum(a => a.Weight);
+            if (sum <= 0) continue;
+            ref var v = ref verts[group.Key];
+            uint packed = 0;
+            var w = new float[4];
+            for (int k = 0; k < top.Length; k++)
+            {
+                packed |= (uint)top[k].BoneIndex << (8 * k);
+                w[k] = top[k].Weight / sum;
+            }
+
+            v.Bones = packed;
+            v.Weights = new Vector4(w[0], w[1], w[2], w[3]);
+        }
+
+        if (dropped > 0)
+            warnings.Add($"submesh {s}: {dropped} bone assignments name bones past the skeleton's {boneCount} and were dropped");
+
+        // A vertex without assignments follows blend index 0 fully (Ogre's Mesh::compileBoneAssignments): the lowest bone the vertex data's
+        // assignments use (docs/formats/ogre-mesh.md "Bone assignments"), so a hair's unweighted cards move with its head.
+        int lowest = assignments
+            .Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256)
+            .Select(a => (int)a.BoneIndex)
+            .DefaultIfEmpty(-1)
+            .Min();
+        if (lowest < 0) return;
+        for (int i = 0; i < n; i++)
+        {
+            if (verts[i].Weights == Vector4.Zero)
+                (verts[i].Bones, verts[i].Weights) = ((uint)lowest, new Vector4(1, 0, 0, 0));
+        }
     }
 
     static float[]? Floats(OgreVertexData vd, OgreVertexSemantic semantic, out int components)

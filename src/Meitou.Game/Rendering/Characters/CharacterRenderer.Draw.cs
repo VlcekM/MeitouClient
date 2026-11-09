@@ -76,6 +76,7 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     readonly ViewBatches _mainView = new();
+
     // The shadow cascades' views by cascade index (PrepareDepth).
     ViewBatches?[] _cascadeViews = [];
     bool _depthPass, _motionPass;
@@ -124,13 +125,26 @@ internal sealed unsafe partial class CharacterRenderer
     /// 0: none) casts nothing there: hair, beards, small attachments and weapons leave the far maps, as the foliage's small meshes do
     /// (<c>ShadowPass.MinFoliageCasterTexels</c>).
     /// </summary>
-    /// <param name="cascade">The shadow cascade's index: its instances as <see cref="PrepareDepth"/> gathered them this frame, when it did (-1: gathered here).</param>
+    /// <param name="cascade">The shadow cascade's index: its instances as <see cref="PrepareDepth"/> gathered them this frame, when it did (-1:
+    /// gathered here).</param>
     public void DrawDepth(Matrix4x4 worldToClip, Vector3 lodEye, Vector4[] frustum, float lodFloor = 0, float minRadius = 0, int cascade = -1)
     {
-        var prepared = (uint)cascade < (uint)_cascadeViews.Length && _cascadeViews[cascade] is { } cv && cv.Stamp == _updateStamp && cv.Frame == Gpu.Frame.Number && cv.Frustum == frustum ? cv : null;
+        ViewBatches? prepared = null;
+        if ((uint)cascade < (uint)_cascadeViews.Length && _cascadeViews[cascade] is { } cv && cv.Stamp == _updateStamp && cv.Frame == Gpu.Frame.Number
+            && cv.Frustum == frustum)
+        {
+            prepared = cv;
+        }
+
         _depthPass = true;
-        try { DrawView(new ViewConstants { ViewProjection = worldToClip, Eye = lodEye }, lodEye, frustum, lodFloor, minRadius, prepared); }
-        finally { _depthPass = false; }
+        try
+        {
+            DrawView(new ViewConstants { ViewProjection = worldToClip, Eye = lodEye }, lodEye, frustum, lodFloor, minRadius, prepared);
+        }
+        finally
+        {
+            _depthPass = false;
+        }
     }
 
     /// <summary>
@@ -621,7 +635,12 @@ internal sealed unsafe partial class CharacterRenderer
         var active = vb.Active;
         active.Sort((a, b) => a.DoubleSided.CompareTo(b.DoubleSided));
         int total = 0;
-        foreach (var b in active) { b.Offset = total; total += b.Count; }
+        foreach (var b in active)
+        {
+            b.Offset = total;
+            total += b.Count;
+        }
+
         vb.Instances = Gpu.Frame.AllocateConstants((ulong)Math.Max(total, 1) * CharInstance.Size, 16);
     }
 

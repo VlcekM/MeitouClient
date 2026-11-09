@@ -236,12 +236,15 @@ sealed class WorldOptions
     public float PlanetshineStrength = Enhancements.MeitouPlanetshineStrength; // x the physical value (a Tab slider)
     // the Meitou stars switch (default): the procedural night sky (SkyRenderer.MeitouStars); false: the game's starfield texture
     public bool MeitouStars = true;
+
     // the Meitou clouds switch (default): the cloud layer lit by the sun through its depth (SkyRenderer.LitClouds);
     // false: the game's flat colour
     public bool MeitouClouds = true;
+
     // the Meitou cloudshadows switch (default): the cloud layer shades the sun on the land and water (SkyRenderer.CloudShadows);
     // false: none, as the game
     public bool CloudShadows = true;
+
     // the Meitou cloudfog switch (default): the cloud shadows fade near and inside placed fog volumes (SkyRenderer.CloudFog);
     // false: full strength
     public bool CloudFog = true;

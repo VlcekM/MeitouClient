@@ -168,6 +168,7 @@ static class WorldGpuBuilder
     {
         var o = b.Options;
         b.Step("sky");
+
         // WorldFrame.Draw runs a post chain through IWorldPostChain. Vulkan's PostProcess is complete here; Metal supplies its
         // PostComposite/PostTaa slice as a host-constructed chain and leaves the Vulkan-only reflection and GI paths null.
         var post = b.Context is GpuContext vulkanPost ? new PostProcess(vulkanPost, o.Post) : null;
@@ -203,13 +204,18 @@ static class WorldGpuBuilder
         if (b.Scene.Database is not { } skyDb) return;
 
         gpu.Sky.LoadWorld(b.Install, skyDb);   // the ambient map and the CONSTANTS exposure band (docs/formats/lighting.md)
-        var world = WeatherWorld.Create(skyDb, b.Install, WeatherSeed, WeatherTime.At(0));   // created on day 0; WorldWeather replays the schedule up to --day
+
+        // Created on day 0; WorldWeather replays the schedule up to --day.
+        var world = WeatherWorld.Create(skyDb, b.Install, WeatherSeed, WeatherTime.At(0));
         gpu.Weather = new WorldWeather(world, skyDb) { Day = o.Day ?? 0 };
         if (!o.AutoWeather)
         {
             if (!world.ForceWeather(o.Weather))
+            {
                 throw new ArgumentException($"no weather named '{o.Weather}'; "
                     + $"known: {string.Join(", ", SkyWeather.Names(skyDb).Distinct().Take(12))} ...");
+            }
+
             gpu.Sky.Weather = SkyWeather.Find(skyDb, o.Weather) ?? SkyWeather.Default;
         }
         Console.WriteLine($"weather   {(o.AutoWeather ? $"scheduler, seed {WeatherSeed}, from day {o.Day ?? 0}" : $"forced {o.Weather}")}");
@@ -277,6 +283,7 @@ static class WorldGpuBuilder
         var o = b.Options;
         var messages = new List<string>();
         b.Step("water");
+
         // The Meitou water's FFT, shore field and reflection are seam-neutral. Metal packs the two biome
         // parameter maps into one array and drops refraction (its scene copy is still Vulkan-only), which
         // leaves the Meitou fragment exactly at Metal's 16-sampler stage limit.

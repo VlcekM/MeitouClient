@@ -50,8 +50,8 @@ internal sealed class WorldGpu : IDisposable
     public readonly List<FogVolumes.EffectFog> EffectFogs = [];
 
     /// <summary>
-    /// The weather's particle effects (null while there are none: a clear weather, or <c>--no-particles</c>); <see cref="WorldFrame.EnsureParticles"/> makes
-    /// it.
+    /// The weather's particle effects (null while there are none: a clear weather, or <c>--no-particles</c>);
+    /// <see cref="WorldFrame.EnsureParticles"/> makes it.
     /// </summary>
     public ParticleRenderer? Particles;
 
@@ -271,8 +271,8 @@ internal sealed class WorldGpu : IDisposable
     public IReadOnlyList<Vector3> Kept = [];
 
     /// <summary>
-    /// Places kept loaded: the eye's and each merged kept point's, held at its highest for <see cref="WorldFrame.AreasHoldMs"/> (the merge flickers near its
-    /// distance, and the grass store and terrain arrays reallocate when it grows). The texture, mesh and grass budgets scale with it.
+    /// Places kept loaded: the eye's and each merged kept point's, held at its highest for <see cref="WorldFrame.AreasHoldMs"/> (the merge flickers
+    /// near its distance, and the grass store and terrain arrays reallocate when it grows). The texture, mesh and grass budgets scale with it.
     /// </summary>
     public int Areas = 1;
 

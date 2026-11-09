@@ -83,8 +83,11 @@ static class FrustumTests
     public static bool SphereVisible(Vector4[] planes, Vector3 centre, float radius)
     {
         foreach (var p in planes)
+        {
             if (p.X * centre.X + p.Y * centre.Y + p.Z * centre.Z + p.W < -radius * MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z))
                 return false;
+        }
+
         return true;
     }
 }

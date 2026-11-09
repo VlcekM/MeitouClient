@@ -29,7 +29,8 @@ public sealed class ImpostorTextures : IDisposable
     readonly int _levels;
 
     /// <summary>
-    /// Top levels left out per map (0 albedo, 1 normal): the foliage path drops those its transition distance never needs (docs/impostors.md 7, "VRAM").
+    /// Top levels left out per map (0 albedo, 1 normal): the foliage path drops those its transition distance never needs (docs/impostors.md 7,
+    /// "VRAM").
     /// </summary>
     readonly int[] _skips = new int[2];
 
@@ -61,7 +62,8 @@ public sealed class ImpostorTextures : IDisposable
     public bool Complete => _cursor.Complete;
 
     /// <param name="batch">Where the textures' layout transitions are recorded (<see cref="Uploader.Begin"/>).</param>
-    /// <param name="skip">Top levels of the albedo to leave out; <paramref name="surfaceSkip"/> those of the normal map (at most all but the last level).</param>
+    /// <param name="skip">Top levels of the albedo to leave out; <paramref name="surfaceSkip"/> those of the normal map (at most all but the last
+    /// level).</param>
     /// <param name="made">The maps <see cref="MakeOffThread"/> made with the same skips (an entry null: made here).</param>
     public ImpostorTextures(IGpuContext gpu, ImpostorAtlas atlas, IGpuUploadBatch batch, int skip = 0, int surfaceSkip = 0, GpuTexture?[]? made = null)
     {
@@ -111,7 +113,8 @@ public sealed class ImpostorTextures : IDisposable
     }
 
     /// <summary>
-    /// The GPU bytes an atlas takes with <paramref name="skip"/> top levels of its albedo and <paramref name="surfaceSkip"/> of its normal map left out.
+    /// The GPU bytes an atlas takes with <paramref name="skip"/> top levels of its albedo and <paramref name="surfaceSkip"/> of its normal map left
+    /// out.
     /// </summary>
     public static long BytesFor(ImpostorAtlas atlas, int skip, int surfaceSkip)
     {
@@ -209,8 +212,8 @@ public sealed class ImpostorTextures : IDisposable
 
     /// <summary>
     /// The bindless index of a map (0 albedo, 1 normal) in the 2D float array: trilinear, clamped to the edge, the baked levels, with the LOD bias
-    /// <paramref name="bias"/> in the sampler. Registered when first asked for and again when the bias changes (the old entries are freed after the frames
-    /// in flight). Render thread, outside recording jobs.
+    /// <paramref name="bias"/> in the sampler. Registered when first asked for and again when the bias changes (the old entries are freed after the
+    /// frames in flight). Render thread, outside recording jobs.
     /// </summary>
     public uint Index(int map, float bias)
     {

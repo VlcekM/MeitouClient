@@ -145,7 +145,12 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         {
             int label = key - CinemaKey.Keypad1 + 1;
             if (ctrl) SaveKey(label);
-            else if (Find(label) is { } k) { Stop(); GoTo(k); Say($"cut to key {label}"); }
+            else if (Find(label) is { } k)
+            {
+                Stop();
+                GoTo(k);
+                Say($"cut to key {label}");
+            }
             else Say($"key {label} is empty (Ctrl+numpad {label} saves the camera there)");
             return true;
         }
@@ -208,10 +213,19 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     void SaveKey(int label, float? at = null)
     {
         var shot = CameraShot.Of(camera(), getHour());
-        if (Find(label) is { } k) { k.Shot = shot; Say($"key {label} set to the camera at {k.Time:0.00} s: {Describe(shot)}"); }
+        if (Find(label) is { } k)
+        {
+            k.Shot = shot;
+            Say($"key {label} set to the camera at {k.Time:0.00} s: {Describe(shot)}");
+        }
         else
         {
-            if (_keys.Count >= MaxKeys) { Say($"{MaxKeys} keys at most"); return; }
+            if (_keys.Count >= MaxKeys)
+            {
+                Say($"{MaxKeys} keys at most");
+                return;
+            }
+
             float t = at ?? (_keys.Count == 0 ? 0 : _keys.Max(e => e.Time) + _spacing);
             while (_keys.Any(e => MathF.Abs(e.Time - t) < MinGap)) t += MinGap;
             _keys.Add(k = new Entry(label, shot, t, false));
@@ -232,8 +246,19 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     void TogglePlay(bool fromPlayhead)
     {
         if (_pathNext is not null) StopPath();
-        if (Playing) { Stop(); Say($"stopped at {_time:0.00} s"); return; }
-        if (_keys.Count < 2) { Say("save two keys or more first (Ctrl+numpad 1-9, or Add key in the F6 editor)"); return; }
+        if (Playing)
+        {
+            Stop();
+            Say($"stopped at {_time:0.00} s");
+            return;
+        }
+
+        if (_keys.Count < 2)
+        {
+            Say("save two keys or more first (Ctrl+numpad 1-9, or Add key in the F6 editor)");
+            return;
+        }
+
         if (!fromPlayhead || _time < Start || _time >= End - 1e-3) _time = Start;
         Playing = true;
         Say($"playing from {_time:0.00} s, {Summary()} (numpad Enter{(EditorVisible ? " or Space" : "")} stops)");
@@ -251,7 +276,12 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     void StartRecording()
     {
         if (_pathNext is not null) StopPath();
-        if (_keys.Count < 2) { Say("save two keys or more first"); return; }
+        if (_keys.Count < 2)
+        {
+            Say("save two keys or more first");
+            return;
+        }
+
         _takeFolder = Directory.CreateDirectory(Path.Combine(@"C:\Temp", $"meitou-take-{DateTime.Now:yyyyMMdd-HHmmss}")).FullName;
         (_takeFrame, _time, Playing) = (0, Start, true);
         Say($"recording {End - Start:0.#} s at {RecordFps} fps into {_takeFolder} (numpad Enter stops)");
@@ -263,7 +293,12 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     /// </summary>
     void TogglePath()
     {
-        if (_pathNext is not null) { StopPath(); return; }
+        if (_pathNext is not null)
+        {
+            StopPath();
+            return;
+        }
+
         Stop();
         _time = _keys.Count == 0 ? 0 : _keys.Max(k => k.Time) + _spacing;
         if (!DropPathKey()) return;
@@ -284,7 +319,14 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     /// </summary>
     bool DropPathKey()
     {
-        if (_keys.Count >= MaxKeys) { _pathNext = null; Save(); Say($"{MaxKeys} keys at most: the camera path stops here"); return false; }
+        if (_keys.Count >= MaxKeys)
+        {
+            _pathNext = null;
+            Save();
+            Say($"{MaxKeys} keys at most: the camera path stops here");
+            return false;
+        }
+
         var k = new Entry(Enumerable.Range(1, MaxKeys).First(l => Find(l) is null), CameraShot.Of(camera(), getHour()), (float)_time, false);
         _keys.Add(k);
         _selected = k;
@@ -316,7 +358,12 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
 
     void DeleteSelected()
     {
-        if (_selected is null) { Say("no key selected (click one on the timeline)"); return; }
+        if (_selected is null)
+        {
+            Say("no key selected (click one on the timeline)");
+            return;
+        }
+
         _keys.Remove(_selected);
         Say($"key {_selected.Label} deleted; {Summary()}");
         _selected = null;
@@ -336,26 +383,44 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         if (_pathNext is { } next)
         {
             _time += dt;
-            if (_time >= next) { _time = next; if (DropPathKey()) _pathNext = next + PathStep; }
+            if (_time >= next)
+            {
+                _time = next;
+                if (DropPathKey()) _pathNext = next + PathStep;
+            }
+
             return;
         }
         if (!Playing && !_preview) return;
         _preview = false;
         var flight = Flight;
-        if (flight.Count == 0) { Stop(); return; }
+        if (flight.Count == 0)
+        {
+            Stop();
+            return;
+        }
+
         var shot = CameraPath.Sample(flight, (float)_time, LoopBack);
         shot.Apply(camera());
         if (_followTime) setHour?.Invoke(shot.Hour);
         Moved?.Invoke();
         if (!Playing) return;
         _time += dt;
-        if (LoopBack is not null) { if (_time >= End) _time = Start + (_time - End); return; }
+        if (LoopBack is not null)
+        {
+            if (_time >= End) _time = Start + (_time - End);
+            return;
+        }
+
         // An open flight ends on its last key (drawn this frame); a recording of a loop is one lap.
         if (_time > End + dt * 0.5)
         {
             if (Recording)
+            {
                 Say($"recorded {_takeFrame + 1} frames into {_takeFolder}; "
                     + $"to a video: ffmpeg -framerate {RecordFps} -i \"{_takeFolder}\\%05d.png\" -c:v libx264 -crf 16 -pix_fmt yuv420p take.mp4");
+            }
+
             _time = End;
             Stop(keepTake: true);
         }
@@ -410,6 +475,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         (_x0, _x1) = (16, width - 16);
         _y1 = height - 16;
         (_rulerX0, _rulerX1) = (_x0 + Pad + 8, _x1 - Pad - 8);
+
         // While a key is dragged the scale stays put; otherwise it fits the flight with room to add keys after it.
         if (_drag == Drag.None) _viewEnd = MathF.Max(10, MathF.Ceiling((End + _spacing) / 5) * 5);
 
@@ -440,9 +506,17 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Button(_pathNext is null ? "Record path: off" : "Record path: on", TogglePath);
         Button(Environment.TickCount64 < _deleteAllUntil ? "Delete all keys: click again" : "Delete all keys", () =>
         {
-            if (Environment.TickCount64 < _deleteAllUntil) { _deleteAllUntil = 0; DeleteAll(); }
+            if (Environment.TickCount64 < _deleteAllUntil)
+            {
+                _deleteAllUntil = 0;
+                DeleteAll();
+            }
             else if (_keys.Count == 0) Say("no keys to delete");
-            else { _deleteAllUntil = Environment.TickCount64 + 3000; Say($"click Delete all keys again within 3 s to delete all {_keys.Count}"); }
+            else
+            {
+                _deleteAllUntil = Environment.TickCount64 + 3000;
+                Say($"click Delete all keys again within 3 s to delete all {_keys.Count}");
+            }
         });
         Button(Clean ? "Letterbox: on" : "Letterbox: off", () => Clean = !Clean);
         Button(fullScreenOn() ? "Full screen: on" : "Full screen: off", toggleFullScreen);
@@ -470,17 +544,30 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         if (p.Y >= _buttonsTop && p.Y <= _buttonsBottom)
         {
             foreach (var b in _buttons)
-                if (p.X >= b.X0 && p.X <= b.X1 && p.Y >= RowTop(b.Row) && p.Y <= RowTop(b.Row) + line + 8) { b.Run(); break; }
+            {
+                if (p.X >= b.X0 && p.X <= b.X1 && p.Y >= RowTop(b.Row) && p.Y <= RowTop(b.Row) + line + 8)
+                {
+                    b.Run();
+                    break;
+                }
+            }
+
             return true;
         }
         if (p.Y >= _rulerTop - line && p.Y <= _rulerTop + RulerHeight)
         {
             if (_pathNext is not null) StopPath();
+
             // The nearest key within reach of the pointer, else the playhead.
             var hit = _keys.Select(k => (k,
                 d: MathF.Abs(XAt(k.Time) - p.X))).Where(h => h.d <= MarkerHalf + 3).OrderBy(h => h.d).Select(h => h.k).FirstOrDefault();
             Stop();
-            if (hit is not null) { (_selected, _drag) = (hit, Drag.Key); return true; }
+            if (hit is not null)
+            {
+                (_selected, _drag) = (hit, Drag.Key);
+                return true;
+            }
+
             _drag = Drag.Playhead;
             MouseMove(p);
         }
@@ -534,8 +621,18 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
                 o.Rect(0, height - bar, width, height, new Vector4(0, 0, 0, 1));
             }
         }
-        if (saving) { _ui = null; return; }
-        if (EditorVisible) { DrawEditor(o, width, height); return; }
+        if (saving)
+        {
+            _ui = null;
+            return;
+        }
+
+        if (EditorVisible)
+        {
+            DrawEditor(o, width, height);
+            return;
+        }
+
         _ui = null;
         if (!showStatus || Clean || (_keys.Count == 0 && !Playing)) return;
         string mode = _pathNext is not null ? $"recording the camera path {_time:0.0} s"
@@ -578,6 +675,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
             o.Rect(x, _rulerTop + RulerHeight * (major ? 0.25f : 0.35f), x + 1, _rulerTop + RulerHeight * 0.45f, major ? Dim : Track);
             if (major) o.Text($"{i * step:0.##}", x + 2, _rulerTop + RulerHeight * 0.6f, Dim);
         }
+
         // The flight's span, and a loop's way back to the first key.
         if (_keys.Count > 0)
         {
@@ -586,6 +684,7 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
             if (_loop)
                 o.Rect(XAt(last), _rulerTop + RulerHeight * 0.47f, XAt(last + _spacing), _rulerTop + RulerHeight * 0.53f, Dim);
         }
+
         // A recorded path's keys sit close together: a number only where it clears the one before (the selected key's always).
         float labelEnd = float.MinValue;
         foreach (var k in Sorted)
@@ -639,7 +738,10 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
                 k.Shot.FieldOfView, k.Shot.Hour, k.Time, k.Ease)).ToList();
             System.IO.File.WriteAllText(_file, JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say($"could not save the keys to {_file}: {e.Message}"); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Say($"could not save the keys to {_file}: {e.Message}");
+        }
     }
 
     /// <summary>
@@ -661,7 +763,10 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
             }
             if (_keys.Count > 0) Say($"keys {Summary()} (from {_file})");
         }
-        catch (Exception e) when (e is IOException or JsonException) { Say($"could not read {_file}: {e.Message}"); }
+        catch (Exception e) when (e is IOException or JsonException)
+        {
+            Say($"could not read {_file}: {e.Message}");
+        }
     }
 
     #endregion

@@ -11,11 +11,10 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// in for the plain <c>vkCreateSwapchainKHR</c> / acquire / present of <see cref="Gpu.VulkanPresenter"/>. Frames are generated on top of it by
 /// <see cref="FrameGeneration"/>; without that context the layer presents every rendered frame as it is. The first <see cref="Create"/> makes the FFX
 /// context (it makes the swapchain); later ones (a resize, a vsync change) destroy the old swapchain and create the next through the context's own
-/// replacements, as the header says.
-/// Four queues are handed over (game, async compute, present, image acquire), the first of the device's graphics queue, the rest its
-/// <see cref="VulkanDevice.ExtraQueues"/>; their <c>submitFunc</c>s lock (the game queue on the device's <see cref="VulkanDevice.QueueLock"/>, the others
-/// on locks of their own, since only the layer submits on them). Windows, Proton and Linux (<c>libamd_fidelityfx_vk.so</c>,
-/// tools/scripts/build-ffx-linux.sh).
+/// replacements, as the header says. Four queues are handed over (game, async compute, present, image acquire), the first of the device's graphics
+/// queue, the rest its <see cref="VulkanDevice.ExtraQueues"/>; their <c>submitFunc</c>s lock (the game queue on the device's
+/// <see cref="VulkanDevice.QueueLock"/>, the others on locks of their own, since only the layer submits on them). Windows, Proton and Linux
+/// (<c>libamd_fidelityfx_vk.so</c>, tools/scripts/build-ffx-linux.sh).
 /// </summary>
 public sealed unsafe class FfxSwapchain : IDisposable
 {
@@ -205,9 +204,9 @@ public sealed unsafe class FfxSwapchain : IDisposable
         Submit(s_acquireQueue, AcquireLock, count, submits, fence);
 
     /// <summary>
-    /// Registers (or, with a null <paramref name="ui"/>, removes) the interface picture the layer lays over every presented image, rendered and generated:
-    /// premultiplied alpha, copied by the layer at the present into a buffer of its own (so the next frame may overwrite it). The layer forgets it at each
-    /// present, so this is called every frame. The image must be top-down like the presented one and have TransferSrc usage.
+    /// Registers (or, with a null <paramref name="ui"/>, removes) the interface picture the layer lays over every presented image, rendered and
+    /// generated: premultiplied alpha, copied by the layer at the present into a buffer of its own (so the next frame may overwrite it). The layer
+    /// forgets it at each present, so this is called every frame. The image must be top-down like the presented one and have TransferSrc usage.
     /// </summary>
     internal bool RegisterUi(FfxApi.Resource? ui)
     {

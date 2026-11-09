@@ -1,9 +1,9 @@
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// A command list being recorded (docs/renderer-native.md 2.7): the commands the renderers state, in the engine's words. The Vulkan list implements it;
-/// a second backend has its own (Metal: a command encoder). The Vulkan-only commands (the raw descriptor writes, the acceleration structure's) stay on
-/// the Vulkan class.
+/// A command list being recorded (docs/renderer-native.md 2.7): the commands the renderers state, in the engine's words. The Vulkan list implements
+/// it; a second backend has its own (Metal: a command encoder). The Vulkan-only commands (the raw descriptor writes, the acceleration structure's)
+/// stay on the Vulkan class.
 /// </summary>
 public interface IGpuCommandList
 {
@@ -106,7 +106,8 @@ public interface IGpuCommandList
     /// <summary>
     /// Binds sets to a program (the layout comes from the program).
     /// </summary>
-    void BindSets(GpuProgram program, uint first, ReadOnlySpan<GpuSet> sets, ReadOnlySpan<uint> dynamicOffsets, GpuBindPoint point = GpuBindPoint.Graphics);
+    void BindSets(GpuProgram program, uint first, ReadOnlySpan<GpuSet> sets, ReadOnlySpan<uint> dynamicOffsets,
+        GpuBindPoint point = GpuBindPoint.Graphics);
 
     /// <summary>
     /// Binds the bindless table to a program.

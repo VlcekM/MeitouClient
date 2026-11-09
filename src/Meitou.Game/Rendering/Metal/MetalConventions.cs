@@ -86,7 +86,10 @@ public static class MetalConventions
     /// </summary>
     public static int BlockWidth(InternalFormat f) =>
         f is InternalFormat.CompressedRgbS3TcDxt1Ext or InternalFormat.CompressedRgbaS3TcDxt1Ext or InternalFormat.CompressedRgbaS3TcDxt3Ext
-            or InternalFormat.CompressedRgbaS3TcDxt5Ext or InternalFormat.CompressedRedRgtc1 or InternalFormat.CompressedRgRgtc2 or InternalFormat.CompressedRgbaBptcUnorm ? 4 : 1;
+            or InternalFormat.CompressedRgbaS3TcDxt5Ext or InternalFormat.CompressedRedRgtc1 or InternalFormat.CompressedRgRgtc2
+            or InternalFormat.CompressedRgbaBptcUnorm
+            ? 4
+            : 1;
 
     public static MTLSamplerMinMagFilter Filter(TextureMinFilter f) =>
         f is TextureMinFilter.Nearest or TextureMinFilter.NearestMipmapNearest or TextureMinFilter.NearestMipmapLinear
