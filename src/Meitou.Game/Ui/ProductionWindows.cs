@@ -206,7 +206,7 @@ sealed class ProductionWindows(PlayerInterface player)
         if (m?.Storage is { } grid)
         {
             b.Positions["Root"] = new(0, 0, grid.Width * player.InventoryCell + 40 * player.InventoryScale,
-                Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + 108 * player.InventoryScale));
+                Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + StorageChrome * player.InventoryScale));
         }
 
         b.TemplateScale = player.InventoryScale;
@@ -407,9 +407,9 @@ sealed class ProductionWindows(PlayerInterface player)
     void AddStorageGrid(string id, List<UiControl> controls, MachineSnapshot m)
     {
         if (m.Storage is not { } grid) return;
-        if (id == "storage")
-            player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
-        else player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height);
+
+        player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
+        if (id == "bench") PlaceResearchButton(controls);
         if (controls.FirstOrDefault(c => c.Name == "backpack_content") is not { } slot) return;
 
         var area = slot.Bounds;
@@ -424,6 +424,23 @@ sealed class ProductionWindows(PlayerInterface player)
                 item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
                 slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour);
         }
+    }
+
+    /// <summary>
+    /// The research button keeps its height under HCenter Top alignment when the bench grows to fit its grid (#434).
+    /// </summary>
+    void PlaceResearchButton(List<UiControl> controls)
+    {
+        int index = controls.FindIndex(c => c.Name == "ResearchButton");
+        var root = controls.FirstOrDefault(c => c.Type == "Window");
+        if (index < 0 || root is null) return;
+
+        float scale = player.InventoryScale;
+        var bounds = root.Bounds;
+        controls[index] = controls[index] with
+        {
+            Bounds = new(bounds.X + 18 * scale, bounds.Y + 50 * scale, Math.Max(0, bounds.Width - 40 * scale), 32 * scale),
+        };
     }
 
     /// <summary>
