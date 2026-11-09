@@ -22,7 +22,7 @@ static partial class WorldFrame
     /// </summary>
     struct FrameState
     {
-        public Gpu Gpu;
+        public WorldGpu Gpu;
         public WorldScene Scene;
         public WorldCamera Camera;
         public WorldRenderOptions Render;
@@ -62,7 +62,7 @@ static partial class WorldFrame
     /// <paramref name="hour"/> is the time of day, <paramref name="time"/> the animation clock in seconds, <paramref name="weatherHour"/> the hour
     /// the weather schedule reads when it is not <paramref name="hour"/>. Render thread.
     /// </summary>
-    public static void Draw(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time,
+    public static void Draw(WorldGpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time,
         float fogDistance, float? weatherHour = null)
     {
         var f = new FrameState
@@ -394,7 +394,7 @@ static partial class WorldFrame
     /// <summary>
     /// The buildings' particle effects, handed to the particles once their background read finishes.
     /// </summary>
-    static void TakeBuildingEffects(Gpu gpu)
+    static void TakeBuildingEffects(WorldGpu gpu)
     {
         if (gpu.BuildingEffects is not { IsCompleted: true } effectsLoad) return;
         gpu.BuildingEffects = null;
@@ -514,7 +514,7 @@ static partial class WorldFrame
     /// The reflection's scene by its level (docs/formats/settings.md): 2 characters, 3 buildings (and the map features, which are not told apart),
     /// 4 everything else (foliage). Characters still reflect when the debug object switch is off.
     /// </summary>
-    static void DrawReflectedScene(Gpu gpu, WorldRenderOptions render, WorldLighting light, Matrix4x4 vp, Vector3 e, Vector4[] frustum)
+    static void DrawReflectedScene(WorldGpu gpu, WorldRenderOptions render, WorldLighting light, Matrix4x4 vp, Vector3 e, Vector4[] frustum)
     {
         var reflection = gpu.Reflection!;
         if (reflection.Level >= 3 && render.Objects && gpu.Objects is { } objects)
@@ -1031,7 +1031,7 @@ static partial class WorldFrame
     /// <summary>
     /// The hover outline's masks: the characters', then the outlined buildings' (a list made only when both have some).
     /// </summary>
-    static IReadOnlyList<HoverMask> OutlineMasks(Gpu gpu)
+    static IReadOnlyList<HoverMask> OutlineMasks(WorldGpu gpu)
     {
         IReadOnlyList<HoverMask> characters = gpu.Characters?.HoverMasks ?? [], building = gpu.Objects?.SelectionMasks ?? [];
         if (building.Count == 0) return characters;

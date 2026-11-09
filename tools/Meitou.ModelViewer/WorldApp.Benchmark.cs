@@ -18,7 +18,7 @@ static partial class WorldApp
     /// the loaded point at 60 frames per second of wall time, as the interactive viewer would, and prints frame-time percentiles, the worst frames
     /// with the time each streaming stage took on the render thread, and the resident memory.
     /// </summary>
-    static int FlyBenchmark(Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render,
+    static int FlyBenchmark(Game.Rendering.Display.VulkanDisplay display, WorldGpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render,
             WorldOptions o, int w, int h)
     {
         var context = display.Context;
@@ -213,7 +213,7 @@ static partial class WorldApp
     /// MEITOU_PASS_STATS=1: the pass meter's table and CSV lines, then one more frame with <see cref="WorldFrame.DetailedStats"/> on for what each
     /// pass drew (instances, calls, per cascade and per foliage step: the same lines the screenshot path prints).
     /// </summary>
-    static void ReportPasses(PassMeter meter, Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera,
+    static void ReportPasses(PassMeter meter, Game.Rendering.Display.VulkanDisplay display, WorldGpu gpu, WorldScene scene, WorldCamera camera,
             WorldRenderOptions render, WorldOptions o, int w, int h)
     {
         meter.Report(Console.Out);
@@ -239,7 +239,7 @@ static partial class WorldApp
     /// <summary>
     /// One line on the GPU memory the streamed meshes and textures hold.
     /// </summary>
-    static string Resident(Gpu gpu) =>
+    static string Resident(WorldGpu gpu) =>
         (gpu.Objects is { } objects ? $"objects {objects.ResidentDescription}" : "objects off") +
         (gpu.Foliage is { } foliage ? $"; foliage {foliage.ResidentDescription}" : "");
 }

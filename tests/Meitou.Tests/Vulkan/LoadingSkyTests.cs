@@ -30,7 +30,7 @@ public class LoadingSkyTests
             var options = PostOptions.Create("meitou");
             options.Upscale.Kind = upscaler;
             options.Upscale.Scale = 1;
-            using var gpu = new WorldFrame.Gpu
+            using var gpu = new WorldGpu
             {
                 Terrain = new TerrainRenderer(context, scene.Coarse, scene.CoarseSize, scene.Window),
                 Sky = new SkyRenderer(context) { MeitouStars = true },

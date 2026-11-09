@@ -15,7 +15,7 @@ using Meitou.Game.Rendering.Water;
 namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
-/// Builds the world frame's renderers (<see cref="WorldFrame.Gpu"/>) for a loaded scene, step by step: terrain, sky, weather, particles, lamps,
+/// Builds the world frame's renderers (<see cref="WorldGpu"/>) for a loaded scene, step by step: terrain, sky, weather, particles, lamps,
 /// water, objects, foliage, shadows, the crowd, GI and the memory guard.
 /// </summary>
 static class WorldGpuBuilder
@@ -36,7 +36,7 @@ static class WorldGpuBuilder
     /// foliage, shadows) with the step's name: the game draws a loading frame there. <paramref name="wait"/> waits for the CPU work started on
     /// workers at the beginning (the terrain textures' and the water's files and bakes); the game draws loading frames while it waits.
     /// </summary>
-    public static WorldFrame.Gpu Create(IGpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive,
+    public static WorldGpu Create(IGpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive,
         Action<string>? step = null, Action<Task>? wait = null, bool terrainTextures = true, bool particlesEnabled = true, int objectLoadBudget = -1,
         Func<(ulong Used, ulong Budget)>? vramSample = null)
     {
@@ -164,14 +164,14 @@ static class WorldGpuBuilder
     /// <summary>
     /// The frame's state with the terrain, the post chain (Vulkan's; Metal supplies its own), the sky and the placed fog volumes.
     /// </summary>
-    static WorldFrame.Gpu CreateSky(GpuBuild b, TerrainRenderer terrain)
+    static WorldGpu CreateSky(GpuBuild b, TerrainRenderer terrain)
     {
         var o = b.Options;
         b.Step("sky");
         // WorldFrame.Draw runs a post chain through IWorldPostChain. Vulkan's PostProcess is complete here; Metal supplies its
         // PostComposite/PostTaa slice as a host-constructed chain and leaves the Vulkan-only reflection and GI paths null.
         var post = b.Context is GpuContext vulkanPost ? new PostProcess(vulkanPost, o.Post) : null;
-        var gpu = new WorldFrame.Gpu { Terrain = terrain, Sky = new SkyRenderer(b.Context,
+        var gpu = new WorldGpu { Terrain = terrain, Sky = new SkyRenderer(b.Context,
             b.Assets) { CloudCoverage = o.Clouds }, Post = post, PostChain = post };
         post?.LoadHeatHaze(b.Assets);
 
@@ -196,7 +196,7 @@ static class WorldGpuBuilder
     /// <summary>
     /// The sky's world data and the weather scheduler (docs/formats/weather.md): auto, or one forced record through the same path.
     /// </summary>
-    static void CreateWeather(GpuBuild b, WorldFrame.Gpu gpu)
+    static void CreateWeather(GpuBuild b, WorldGpu gpu)
     {
         var o = b.Options;
         b.Step("weather");
@@ -222,7 +222,7 @@ static class WorldGpuBuilder
     /// The particles: the weather's effects (rain, ash...) follow the weather state (UpdateParticles); the map's effect placers are always on
     /// (docs/formats/weather.md "Effect placers on the map"), so the particle renderer exists from the start whatever the weather.
     /// </summary>
-    static void CreateParticles(GpuBuild b, WorldFrame.Gpu gpu, TerrainRenderer terrain)
+    static void CreateParticles(GpuBuild b, WorldGpu gpu, TerrainRenderer terrain)
     {
         var o = b.Options;
         b.Step("particles");
@@ -248,7 +248,7 @@ static class WorldGpuBuilder
     /// <summary>
     /// The lamps (docs/render-lights.md), including room lights, and the buildings' effects, read on workers from one level load.
     /// </summary>
-    static void CreateLamps(GpuBuild b, WorldFrame.Gpu gpu)
+    static void CreateLamps(GpuBuild b, WorldGpu gpu)
     {
         if (b.Scene.Database is not { } lampDb || b.Scene.Heightmap is not { } lampMap) return;
         var install = b.Install;
@@ -272,7 +272,7 @@ static class WorldGpuBuilder
     /// <summary>
     /// The water and its reflection pass, from the files read on a worker (<paramref name="source"/>).
     /// </summary>
-    static void CreateWater(GpuBuild b, WorldFrame.Gpu gpu, Task<WaterRenderer.Source> source)
+    static void CreateWater(GpuBuild b, WorldGpu gpu, Task<WaterRenderer.Source> source)
     {
         var o = b.Options;
         var messages = new List<string>();
@@ -298,7 +298,7 @@ static class WorldGpuBuilder
     /// The objects. Landmarks (huge objects, drawn to their own distance) are kept apart from the zones only when the viewer starts with them
     /// (Meitou reach, distance above 0).
     /// </summary>
-    static void CreateObjects(GpuBuild b, WorldFrame.Gpu gpu, int loadBudget)
+    static void CreateObjects(GpuBuild b, WorldGpu gpu, int loadBudget)
     {
         var o = b.Options;
         b.Step("objects");
@@ -319,7 +319,7 @@ static class WorldGpuBuilder
     /// <summary>
     /// The foliage, with its ranges, LOD, impostors and grass density from the options.
     /// </summary>
-    static void CreateFoliage(GpuBuild b, WorldFrame.Gpu gpu, TerrainRenderer terrain, bool interactive)
+    static void CreateFoliage(GpuBuild b, WorldGpu gpu, TerrainRenderer terrain, bool interactive)
     {
         var o = b.Options;
         b.Step("foliage");
@@ -347,7 +347,7 @@ static class WorldGpuBuilder
     /// <summary>
     /// The game's CSM mode (docs/formats/shadows.md): four cascades in one atlas of the <c>shadow quality</c> side, out to <c>Shadow Range</c>.
     /// </summary>
-    static void CreateShadows(GpuBuild b, WorldFrame.Gpu gpu)
+    static void CreateShadows(GpuBuild b, WorldGpu gpu)
     {
         var o = b.Options;
         b.Step("shadows");
@@ -371,7 +371,7 @@ static class WorldGpuBuilder
     /// <summary>
     /// The ray-traced global illumination: its scene, the debug view and the probes, on a device with ray queries.
     /// </summary>
-    static void CreateGi(WorldFrame.Gpu gpu, GpuContext context, WorldOptions o)
+    static void CreateGi(WorldGpu gpu, GpuContext context, WorldOptions o)
     {
         if (!context.Device.HasRayQuery)
         {
@@ -397,7 +397,7 @@ static class WorldGpuBuilder
     /// The memory-pressure guard (VramGuard), shared by the renderers that stream: MEITOU_VRAM_GUARD=0 leaves it off. Vulkan samples its allocator;
     /// another backend supplies the sample (Metal's device allocation and conservative budget).
     /// </summary>
-    static void AttachGuard(WorldFrame.Gpu gpu, IGpuContext context, Func<(ulong Used, ulong Budget)>? vramSample)
+    static void AttachGuard(WorldGpu gpu, IGpuContext context, Func<(ulong Used, ulong Budget)>? vramSample)
     {
         if (Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") == "0") return;
         VramGuard? guard = context is GpuContext vulkanGuard

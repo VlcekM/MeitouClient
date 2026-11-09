@@ -91,7 +91,7 @@ static partial class WorldApp
     /// <summary>
     /// The tour: each tile from <see cref="s_tourDistance"/> back at the camera's heading and <see cref="s_tourPitch"/> up, saved as tile-NNN.png.
     /// </summary>
-    static void FieldTour(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h, GpuContext context,
+    static void FieldTour(WorldGpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h, GpuContext context,
             GpuTexture target)
     {
         if (s_fieldTour is null || gpu.Terrain.TextureSet is not { FieldCount: > 0 } t) return;

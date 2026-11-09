@@ -240,7 +240,7 @@ Ground severed limbs, stuck bolts and an animal's held limb (`mouth` point) are 
   - advances debris by game time.
 - Leave `BloodForNewWorld` and `WriteDecals` in the shared save path; they will now have a store
   to use on Metal.
-- Confirm `gpu.Decals`, `gpu.DecalStore` and `gpu.DebrisPieces` are disposed by `WorldFrame.Gpu`.
+- Confirm `gpu.Decals`, `gpu.DecalStore` and `gpu.DebrisPieces` are disposed by `WorldGpu`.
 
 ### Acceptance
 

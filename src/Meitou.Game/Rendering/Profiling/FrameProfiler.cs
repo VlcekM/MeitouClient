@@ -23,16 +23,13 @@ public sealed class FrameProfiler : IDisposable
     // Series: the stages by StageClock index, then the GPU time outside the stamped stages (uploads, overlay), then the total.
     internal const int Other = Stages, Total = Stages + 1, Series = Stages + 2;
 
-    // The legend's open groups and upd-chars's parts; each row drawn last (its top and what a click on it opens: a group, PartsRow or nothing, -1),
-    // the legend's box, a closed group's summed series on the side shown, and the series plotted.
-    const int PartsRow = -2, SimRow = -3;
-
     // The panel's margin round it and its padding.
-    const float Margin = 16, Pad = 12;
+    const float Margin = 16;
+    internal const float Pad = 12;
 
     // The legend's top rows: a stage of its own, or a group of stages (shown as their sum) that a click on its row opens. The GPU's submit span
     // is the window copy/tail; driver-wait is CPU only.
-    static readonly (string Name, int[] Stages)[] Groups =
+    internal static readonly (string Name, int[] Stages)[] Groups =
     [
         ("sim", [StageClock.Sim]),
         ("update", [StageClock.Host, StageClock.Blood, StageClock.Birds, 0, 1, 2, StageClock.UpdChars, 3]),
@@ -46,7 +43,7 @@ public sealed class FrameProfiler : IDisposable
 
     internal static readonly int[] Order = Groups.SelectMany(g => g.Stages).ToArray();
 
-    static readonly Vector4[] Colours =
+    internal static readonly Vector4[] Colours =
     [
         new(0.55f, 0.75f, 1.00f, 1), new(0.35f, 0.55f, 0.95f, 1), new(0.60f, 0.45f, 0.95f, 1), new(0.95f, 0.85f, 0.35f, 1),
         new(0.25f, 0.80f, 0.85f, 1), new(0.95f, 0.55f, 0.85f, 1), new(0.65f, 0.65f, 0.65f, 1), new(0.95f, 0.55f, 0.25f, 1),
@@ -62,7 +59,7 @@ public sealed class FrameProfiler : IDisposable
     ];
 
     static readonly Vector4 FrameColour = new(1.00f, 0.55f, 0.10f, 1);
-    static readonly Vector4 DimColour = new(0.7f, 0.7f, 0.68f, 1);
+    internal static readonly Vector4 DimColour = new(0.7f, 0.7f, 0.68f, 1);
 
     #endregion
 
@@ -381,11 +378,15 @@ public sealed class FrameProfiler : IDisposable
 
     // The render thread's ms per part of upd-chars (StageClock.PartNames), listed under it in the legend, not plotted.
     readonly float[][] _parts = StageClock.PartNames.Select(_ => new float[History]).ToArray();
-    readonly bool[] _groupOpen = new bool[Groups.Length];
-    bool _partsOpen, _simOpen;
-    readonly List<(float Top, int Opens)> _rows = [];
-    (float X0, float Y0, float X1, float Y1, float LineHeight) _legendBox;
-    readonly float[][] _groupSeries = Groups.Select(_ => new float[History]).ToArray();
+
+    /// <summary>
+    /// The legend at the right, its open rows and where it was drawn (<see cref="ProfilerLegend"/>).
+    /// </summary>
+    readonly ProfilerLegend _legend = new();
+
+    /// <summary>
+    /// The series plotted: the legend's rows', then the whole frame's.
+    /// </summary>
     readonly List<(float[] Series, Vector4 Colour, float Thickness, int Head, int Count)> _plotted = [];
     int _cpuHead, _cpuCount, _gpuHead, _gpuCount;
 
@@ -413,23 +414,7 @@ public sealed class FrameProfiler : IDisposable
     /// A left click at <paramref name="at"/> (framebuffer pixels): on a legend row marked + or - it opens or closes that row. True when it was on the
     /// legend (the caller drops it).
     /// </summary>
-    public bool Click(Vector2 at)
-    {
-        var (bx0, by0, bx1, by1, lh) = _legendBox;
-        if (Showing == Mode.Off || at.X < bx0 || at.X > bx1 || at.Y < by0 || at.Y > by1) return false;
-
-        foreach (var (top, opens) in _rows)
-        {
-            if (at.Y < top || at.Y >= top + lh) continue;
-
-            if (opens >= 0) _groupOpen[opens] = !_groupOpen[opens];
-            else if (opens == PartsRow) _partsOpen = !_partsOpen;
-            else if (opens == SimRow) _simOpen = !_simOpen;
-            break;
-        }
-
-        return true;
-    }
+    public bool Click(Vector2 at) => Showing != Mode.Off && _legend.Click(at);
 
     static float[][] NewHistory()
     {
@@ -438,16 +423,16 @@ public sealed class FrameProfiler : IDisposable
         return h;
     }
 
-    static bool OnCpu(int series) => series != Other && !StageClock.GpuOnly(series);
+    internal static bool OnCpu(int series) => series != Other && !StageClock.GpuOnly(series);
 
-    static bool OnGpu(int series) => !StageClock.CpuOnly(series);
+    internal static bool OnGpu(int series) => !StageClock.CpuOnly(series);
 
     internal static string Label(int series) => series switch { Other => "other", Total => "total", _ => StageClock.Names[series] };
 
     /// <summary>
     /// Mean of the last <paramref name="frames"/> entries of a series.
     /// </summary>
-    static double Mean(float[] series, int head, int count, int frames)
+    internal static double Mean(float[] series, int head, int count, int frames)
     {
         frames = Math.Min(frames, count);
         if (frames == 0) return 0;
@@ -492,11 +477,11 @@ public sealed class FrameProfiler : IDisposable
 
         bool showGpu = Showing == Mode.Gpu;
         const int meanFrames = 30;
-        if (_simOpen) SimRows(meanFrames);
+        if (_legend.SimOpen) SimRows(meanFrames);
 
         var panel = DrawPanel(overlay, width, height, showGpu);
         DrawHeader(overlay, showGpu, panel.X0, panel.Y0);
-        DrawLegend(overlay, showGpu, panel.X1, panel.Y0, meanFrames);
+        _legend.Draw(overlay, showGpu, panel.X1, panel.Y0, meanFrames, Timings(), _plotted);
         DrawPlot(overlay, width, height, panel.X0, panel.Y0, panel.Y1);
     }
 
@@ -505,20 +490,7 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     (float X0, float Y0, float X1, float Y1) DrawPanel(DebugOverlay overlay, int width, int height, bool showGpu)
     {
-        int rowCount = 0;
-        for (int gi = 0; gi < Groups.Length; gi++)
-        {
-            var stages = Groups[gi].Stages;
-            if (stages.Length > 1) rowCount++;
-            if (stages.Length == 1 || _groupOpen[gi])
-                foreach (int s in stages)
-                {
-                    rowCount += 1;
-                    if (s == StageClock.UpdChars && _partsOpen) rowCount += _parts.Length;
-                    if (s == StageClock.Sim && _simOpen) rowCount += _simRows.Count + 2;
-                }
-        }
-
+        int rowCount = _legend.RowCount(_parts.Length, _simRows.Count);
         float lh = overlay.LineHeight;
         float panelH = (rowCount + 2.5f) * lh + 2 * Pad;
         float x0 = Margin, x1 = width - Margin, y1 = height - Margin, y0 = Math.Max(y1 - panelH, Margin);
@@ -549,124 +521,23 @@ public sealed class FrameProfiler : IDisposable
     }
 
     /// <summary>
-    /// The legend at the right: swatch, row, mean of the last frames on the CPU and the GPU. A row marked + opens (a click), - closes; a closed group
-    /// shows its stages' sum and is plotted as one line, an open one plots each stage.
+    /// What the legend reads this frame: both histories, upd-chars's parts and the sim rows.
     /// </summary>
-    void DrawLegend(DebugOverlay overlay, bool showGpu, float x1, float y0, int meanFrames)
+    LegendTimings Timings() => new()
     {
-        const float swatch = 10;
-        float lh = overlay.LineHeight, cw = overlay.CharWidth;
-        var hist = showGpu ? _gpu : _cpu;
-        int head = showGpu ? _gpuHead : _cpuHead, count = showGpu ? _gpuCount : _cpuCount;
-        float legendW = swatch + 6 + (16 + 10 + 10) * cw;
-        float lx = x1 - Pad - legendW, ly = y0 + Pad + 1.5f * lh;
-        var dim = DimColour;
-        overlay.Text($"{"",-16}{"cpu",10}{"gpu",10}", lx + swatch + 6, ly, dim);
-        _rows.Clear();
-        _plotted.Clear();
-        string Ms(bool shown, double ms) => shown ? ms.ToString("0.00", CultureInfo.InvariantCulture) : "-";
-        float NextRow(int opens)
-        {
-            float top = ly + (_rows.Count + 1) * lh;
-            _rows.Add((top, opens));
-            return top;
-        }
-
-        bool Plots(int s) => showGpu ? OnGpu(s) : OnCpu(s);
-        void StageRow(int s, string indent)
-        {
-            bool expands = s == StageClock.UpdChars || s == StageClock.Sim && _simNames.Length > 0;
-            bool open = s == StageClock.Sim ? _simOpen : _partsOpen;
-            float top = NextRow(!expands ? -1 : s == StageClock.Sim ? SimRow : PartsRow);
-            overlay.Rect(lx, top + 4, lx + swatch, top + 4 + swatch, Colours[s]);
-            if (Plots(s)) _plotted.Add((hist[s], Colours[s], s == Total ? 2f : 1.5f, head, count));
-            string label = indent + (expands ? open ? "- " : "+ " : "  ") + Label(s);
-            string cpu = Ms(OnCpu(s), Mean(_cpu[s], _cpuHead, _cpuCount, meanFrames));
-            string gpu = Ms(_gpuCount > 0 && OnGpu(s), Mean(_gpu[s], _gpuHead, _gpuCount, meanFrames));
-            overlay.Text($"{label,-16}{cpu,10}{gpu,10}", lx + swatch + 6, top, DebugOverlay.TextColour);
-            if (!expands || !open) return;
-
-            if (s == StageClock.Sim)
-            {
-                // The world ticks a frame ran and the mean tick, then the phases, the time outside the ticks and the costliest systems.
-                double ticks = Mean(_simTicks, _cpuHead, _cpuCount, meanFrames), inTicks = 0;
-                for (int p = 0; p < _simPhases - 1; p++) inTicks += _simRows[p].Ms;
-                string ticksText = string.Create(CultureInfo.InvariantCulture,
-                    $"{indent}    {ticks:0.0} ticks, {(ticks > 0 ? inTicks / ticks : 0):0.00} ms each");
-                overlay.Text(ticksText, lx + swatch + 6, NextRow(-1), dim);
-                overlay.Text($"{indent}    {_simPaths} paths waiting", lx + swatch + 6, NextRow(-1), dim);
-                foreach (var (name, ms) in _simRows)
-                {
-                    string row = indent + "    " + name;
-                    overlay.Text($"{(row.Length > 16 ? row[..16] : row),-16}{Ms(true, ms),10}{"",10}", lx + swatch + 6, NextRow(-1), dim);
-                }
-
-                return;
-            }
-
-            // Its parts, render thread only (the GPU work they record is in the passes that run it); not plotted.
-            for (int p = 0; p < _parts.Length; p++)
-            {
-                string partName = indent + "    " + StageClock.PartNames[p];
-                string partMs = Ms(true, Mean(_parts[p], _cpuHead, _cpuCount, meanFrames));
-                overlay.Text($"{partName,-16}{partMs,10}{"",10}", lx + swatch + 6, NextRow(-1), dim);
-            }
-        }
-
-        for (int gi = 0; gi < Groups.Length; gi++)
-        {
-            var (name, stages) = Groups[gi];
-            if (stages.Length == 1)
-            {
-                StageRow(stages[0], "");
-                continue;
-            }
-
-            double c = 0, g = 0;
-            bool anyCpu = false, anyGpu = false;
-            foreach (int s in stages)
-            {
-                if (OnCpu(s))
-                {
-                    c += Mean(_cpu[s], _cpuHead, _cpuCount, meanFrames);
-                    anyCpu = true;
-                }
-
-                if (OnGpu(s))
-                {
-                    g += Mean(_gpu[s], _gpuHead, _gpuCount, meanFrames);
-                    anyGpu = true;
-                }
-            }
-
-            float top = NextRow(gi);
-            bool open = _groupOpen[gi], shown = showGpu ? anyGpu : anyCpu;
-            var sum = _groupSeries[gi];
-            Array.Clear(sum);
-            foreach (int s in stages)
-            {
-                if (Plots(s))
-                {
-                    for (int i = 0; i < History; i++) sum[i] += hist[s][i];
-                }
-            }
-
-            if (!open)
-            {
-                overlay.Rect(lx, top + 4, lx + swatch, top + 4 + swatch, Colours[stages[0]]);
-                if (shown) _plotted.Add((sum, Colours[stages[0]], 1.5f, head, count));
-            }
-
-            overlay.Text($"{(open ? "- " : "+ ") + name,-16}{Ms(anyCpu, c),10}{Ms(_gpuCount > 0 && anyGpu, g),10}",
-                lx + swatch + 6, top, DebugOverlay.TextColour);
-            if (open)
-            {
-                foreach (int s in stages) StageRow(s, "  ");
-            }
-        }
-
-        _legendBox = (lx, ly, x1 - Pad, ly + (_rows.Count + 1) * lh, lh);
-    }
+        Cpu = _cpu,
+        CpuHead = _cpuHead,
+        CpuCount = _cpuCount,
+        Gpu = _gpu,
+        GpuHead = _gpuHead,
+        GpuCount = _gpuCount,
+        Parts = _parts,
+        SimTicks = _simTicks,
+        SimRows = _simRows,
+        SimPhases = _simPhases,
+        SimPaths = _simPaths,
+        SimExpands = _simNames.Length > 0,
+    };
 
     /// <summary>
     /// The plot: y from 0 to a round number above the largest value shown, with labelled grid lines; ends the overlay's batch.
@@ -674,7 +545,7 @@ public sealed class FrameProfiler : IDisposable
     void DrawPlot(DebugOverlay overlay, int width, int height, float x0, float y0, float y1)
     {
         float cw = overlay.CharWidth, lh = overlay.LineHeight;
-        float lx = _legendBox.X0;
+        float lx = _legend.Left;
 
         // The whole frame, on both charts (the render thread's history: a GPU chart's newest frames are a few behind it).
         _plotted.Add((_frameTime, FrameColour, 2f, _cpuHead, _cpuCount));

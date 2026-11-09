@@ -43,7 +43,7 @@ sealed class EditorBarScene(GameHost host, CharacterEditorHost editor)
     /// </summary>
     internal const float EditorBarHour = 23;
     /// <summary>
-    /// How far the bar's frame reaches (<see cref="WorldFrame.Gpu.ViewCap"/>): the bar and its staged ground, short of the world under it (<see
+    /// How far the bar's frame reaches (<see cref="WorldGpu.ViewCap"/>): the bar and its staged ground, short of the world under it (<see
     /// cref="Editor.EditorBar"/> stands it 3000 above the ground), so the terrain, foliage, objects and shadow cascades of the world below are
     /// culled; the water and its reflection are off.
     /// </summary>

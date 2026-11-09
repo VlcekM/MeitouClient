@@ -182,7 +182,7 @@ static partial class WorldApp
     /// Settles the streamers at the camera before the picture: the terrain, the objects (told the view first) and the foliage, each with
     /// its time.
     /// </summary>
-    static void SettleForPicture(Gpu gpu, WorldCamera camera, WorldOptions o)
+    static void SettleForPicture(WorldGpu gpu, WorldCamera camera, WorldOptions o)
     {
         // Before the first settle, so the textures load knowing the picture (the display size, the bias without the render scale: the same
         // level).
@@ -215,7 +215,7 @@ static partial class WorldApp
     /// Streaming test: fly the camera to the point at 3x the interactive fast speed, 60 frames per second of wall time, and report the render
     /// thread's cost per frame (draw + uploads) while data streams in.
     /// </summary>
-    static void FlyTo(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h, GpuContext context,
+    static void FlyTo(WorldGpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h, GpuContext context,
         double flyX, double flyZ)
     {
         var start = camera.Target;
@@ -254,7 +254,7 @@ static partial class WorldApp
     /// The last timed frames' costs and counts per renderer: objects, foliage, reflection, shadows, sky, post, exposure, particles, haze, fog,
     /// global illumination, occlusion and shafts.
     /// </summary>
-    static void PrintFrameCosts(Gpu gpu, WorldCamera camera)
+    static void PrintFrameCosts(WorldGpu gpu, WorldCamera camera)
     {
         if (gpu.Objects is { } objectStats) Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, {objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");
         if (gpu.Foliage is { } foliageStats) { foliageStats.PollTimers(wait: true); Console.WriteLine($"foliage   update {foliageStats.LastUpdateMs:0.00} ms, draw cpu {foliageStats.LastDrawCpuMs:0.00} ms, gpu {foliageStats.GpuMs:0.00} ms, {foliageStats.DrawCalls} draw calls, {foliageStats.DrawnInstances} meshes, {foliageStats.DrawnBlades:N0} grass blades;{foliageStats.MainDetail}"); }
@@ -291,7 +291,7 @@ static partial class WorldApp
     /// <summary>
     /// <c>--show-keys</c>: the key list and the settings panel drawn over the picture.
     /// </summary>
-    static void DrawKeysOverlay(GpuContext context, AssetLocator assets, Gpu gpu, WorldRenderOptions render, WorldOptions o, GpuTexture target,
+    static void DrawKeysOverlay(GpuContext context, AssetLocator assets, WorldGpu gpu, WorldRenderOptions render, WorldOptions o, GpuTexture target,
         int w, int h)
     {
         if (DebugOverlay.TryCreate(context, assets.Find) is not { } keysOverlay) return;
@@ -327,7 +327,7 @@ static partial class WorldApp
         s_ngx = display.Ngx;
         var window = display.Window!;
         if (!o.Windowed) BorderlessFullScreen.Toggle(window);
-        Gpu? gpu = null;
+        WorldGpu? gpu = null;
         WorldCamera camera = null!;
         WorldRenderOptions render = null!;
         IKeyboard? keyboard = null;
