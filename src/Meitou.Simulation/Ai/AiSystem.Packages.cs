@@ -198,7 +198,7 @@ public sealed partial class AiSystem
         }
 
         board.InTown = town;
-        if (town.Site >= 0 && !_places.ContainsKey(town.Site)) RefreshPlaces(world);
+        if (town.Site >= 0 && !_townPlaces.Has(town.Site)) _townPlaces.Refresh(world, this);
     }
 
     #endregion

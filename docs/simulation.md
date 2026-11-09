@@ -1824,7 +1824,7 @@ without one (nor outside a town), so a homeless squad does not sit where it stan
 is put on the seat's origin with no offset, facing the seat's way ([ai-tasks](game/ai-tasks.md) "Sitting"), and plays the functionality's clip ("sitting chair", pillows
 "sitting idle"). A town's bars and shops are
 the buildings whose residents (the squads living there, else the level data's `residents template`)
-have designation BAR or a shop (`AiSystem.RefreshPlaces`). Walks to nodes, beds and seats pass the
+have designation BAR or a shop (`TownPlaceIndex.Refresh`). Walks to nodes, beds and seats pass the
 spot's height and count as arrived only on that floor, and end within `MovementSystem.SpotArrive` (2) of
 it, not `ArriveRadius` (10), without separation over the last 10 (engine choice: the barman stands at his node). Furniture cuts holes in a floor's navmesh and
 the ground below shows through them (Observed: the Storm House at the Hub, counter, tables, stools, 22..28

@@ -26,13 +26,22 @@ public sealed record CaptiveSettings
     /// period (spread: at least one a tick) and keeps at most <see cref="MaxJobs"/> running.
     /// </summary>
     public int SweepEveryTicks { get; init; } = 30;
+    /// <summary>
+    /// The most jobs running at once (<see cref="SweepEveryTicks"/>).
+    /// </summary>
     public int MaxJobs { get; init; } = 32;
+    /// <summary>
+    /// The most jobs started over a sweep period (<see cref="SweepEveryTicks"/>).
+    /// </summary>
     public int MaxNewJobs { get; init; } = 8;
     /// <summary>
     /// A worker is at its cage within the cage's <c>use range</c> plus this; a walk that ended within <see cref="Slack"/> counts too (a cage inside a
     /// building).
     /// </summary>
     public float Reach { get; init; } = 15;
+    /// <summary>
+    /// How far from the cage a walk that ended still counts as there (<see cref="Reach"/>).
+    /// </summary>
     public float Slack { get; init; } = 200;
     /// <summary>
     /// Walks that end away from the cage before the job is given up.
@@ -47,6 +56,9 @@ public sealed record CaptiveSettings
     /// (<b>Observed</b>: 0.55).
     /// </summary>
     public float ChopSeconds { get; init; } = 1.5f;
+    /// <summary>
+    /// The share of the kill clip at which its blow lands (<see cref="ChopSeconds"/>).
+    /// </summary>
     public float BlowAt { get; init; } = 0.55f;
     /// <summary>
     /// A liberator opens the cage after this long at it (<b>engine choice</b>: the release task's timing is not documented).
@@ -159,6 +171,9 @@ public enum CaptiveJobKind : byte
     DogChase,
 }
 
+/// <summary>
+/// The phase of a job: walking to the captive, then working on it.
+/// </summary>
 public enum CaptivePhase : byte { Walk, Work }
 
 /// <summary>
@@ -166,24 +181,45 @@ public enum CaptivePhase : byte { Walk, Work }
 /// </summary>
 public sealed class CaptiveJob
 {
+    /// <summary>
+    /// What the job does.
+    /// </summary>
     public required CaptiveJobKind Kind { get; init; }
+    /// <summary>
+    /// The character doing it.
+    /// </summary>
     public required CharacterId Worker { get; init; }
+    /// <summary>
+    /// The character it is done on (none for a job without one).
+    /// </summary>
     public required CharacterId Captive { get; init; }
     /// <summary>
     /// The cage the captive is in (or, for <see cref="CaptiveJobKind.Deliver"/> and <see cref="CaptiveJobKind.CageSelf"/>, the cage it goes into).
     /// </summary>
     public required string Cage { get; init; }
+    /// <summary>
+    /// The worker's faction when the job started.
+    /// </summary>
     public required int Faction { get; init; }
     /// <summary>
     /// The town the job is in (its kill timer), -1: none.
     /// </summary>
     public int Site { get; init; } = -1;
+    /// <summary>
+    /// The job's phase.
+    /// </summary>
     public CaptivePhase Phase { get; set; }
     /// <summary>
     /// Game seconds in the phase and of the whole job.
     /// </summary>
     public float Time { get; set; }
+    /// <summary>
+    /// Game seconds of the whole job (<see cref="Time"/>).
+    /// </summary>
     public float Age { get; set; }
+    /// <summary>
+    /// Walks that ended away from the cage so far (<see cref="CaptiveSettings.Walks"/>).
+    /// </summary>
     public int Walks { get; set; }
     /// <summary>
     /// Blows struck (kill); the game second of the next line (eat).
@@ -193,15 +229,27 @@ public sealed class CaptiveJob
     /// Blows that beat an imprisoned captive down before a capture (196).
     /// </summary>
     public int Beats { get; set; }
+    /// <summary>
+    /// The second of the phase (<see cref="Time"/>) at which the worker says its next line.
+    /// </summary>
     public float NextBark { get; set; }
     /// <summary>
     /// A job of one of the player's animals (<see cref="CaptiveSystem"/>'s race-goal run for them): a player order ends it. The worker's task and
     /// goal as the last step left them.
     /// </summary>
     public bool PlayerSide { get; init; }
+    /// <summary>
+    /// The worker's task as the last step left it (<see cref="PlayerSide"/>).
+    /// </summary>
     public byte LastTask { get; set; }
+    /// <summary>
+    /// The worker's goal as the last step left it (<see cref="PlayerSide"/>).
+    /// </summary>
     public Vector2 LastGoal { get; set; }
 
+    /// <summary>
+    /// Hashes the job's state.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add((int)Kind);
@@ -225,8 +273,14 @@ public sealed class CaptiveJob
     }
 }
 
+/// <summary>
+/// What happened in a captive job (<see cref="CaptiveEvent"/>).
+/// </summary>
 public enum CaptiveEventKind { Started, Killed, Eaten, Enslaved, Gathered, Delivered, Caged, GaveUp, Captured, Shouted, Liberated }
 
+/// <summary>
+/// One event of a captive job, for the log and the tests.
+/// </summary>
 public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, CaptiveJobKind Job, CharacterId Worker, CharacterId Captive);
 
 /// <summary>
@@ -262,38 +316,74 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? combat, CaptiveSettings? settings = null) : ITickSystem, IStateHashed,
         IDecisionOwner, IGoalSource
 {
-    readonly List<CaptiveJob> _jobs = [];
-    readonly List<CaptiveEvent> _log = [];
-    // The kill timer of each town: the game hour from which a kill is wanted again (FUN_14034a810's map), by site.
-    readonly SortedDictionary<int, double> _killAt = [];
-    readonly CharacterAssembly _assembly = new(data);
-    readonly XpService _xp = new(data.Bodies.Constants, data.BodyOptions);
-    /// <summary>
-    /// The amount of the toughness XP a meal still awake gains per update (<b>Observed</b>: 10, <c>FUN_1404356f0</c>).
-    /// </summary>
-    const float EatToughnessXp = 10;
-    int _timerRolls;
+    #region State and the serial step
 
+    /// <summary>
+    /// The jobs under way, in the order they started.
+    /// </summary>
+    readonly List<CaptiveJob> _jobs = [];
+
+    /// <summary>
+    /// The events of the jobs, while <see cref="CaptiveSettings.RecordLog"/> is on.
+    /// </summary>
+    readonly List<CaptiveEvent> _log = [];
+
+    /// <summary>
+    /// Refreshes a character's equipment after a job changed what it wears.
+    /// </summary>
+    readonly CharacterAssembly _assembly = new(data);
+
+    /// <summary>
+    /// The XP a meal still awake gains in toughness.
+    /// </summary>
+    readonly XpService _xp = new(data.Bodies.Constants, data.BodyOptions);
+
+    /// <summary>
+    /// The settings (the defaults when none were given).
+    /// </summary>
     public CaptiveSettings Settings { get; } = settings ?? new CaptiveSettings();
+
     /// <summary>
     /// The length of the kill clip in game seconds (the system builder sets the data's <c>chop down static</c>;
     /// <see cref="CaptiveSettings.ChopSeconds"/> without animations).
     /// </summary>
     public float ChopSeconds { get; set; } = (settings ?? new CaptiveSettings()).ChopSeconds;
-    public IReadOnlyList<CaptiveJob> Jobs => _jobs;
-    public IReadOnlyList<CaptiveEvent> Log => _log;
+
     /// <summary>
-    /// The game hour from which the town <paramref name="site"/> wants a kill again (null: not asked yet).
+    /// The jobs under way.
     /// </summary>
-    public double? KillTimer(int site) => _killAt.TryGetValue(site, out double at) ? at : null;
+    public IReadOnlyList<CaptiveJob> Jobs => _jobs;
 
-    const ulong TimerSalt = 0x4B696C6C54696D72;
+    /// <summary>
+    /// The events of the jobs (only while <see cref="CaptiveSettings.RecordLog"/> is on).
+    /// </summary>
+    public IReadOnlyList<CaptiveEvent> Log => _log;
 
+    /// <summary>
+    /// The serial step: the slavers restored now and then, the racks, every job stepped on, the offers after them, then the sweep for new jobs and the player animals' race goals on each character's turn.
+    /// </summary>
     public void SlowWorld(World world)
     {
-        var table = world.Characters;
         if (world.Tick % RestoreEveryTicks == 0) RestoreSlavers(world);
         StepRacks(world);
+        StepJobs(world);
+        OfferAfterJobs(world);
+
+        // Each character is looked at once in SweepEveryTicks, on its slot's turn (slot mod the period), so the sweep spreads over the ticks instead
+        // of landing on one (8-11 ms a sweep with ~1,400 characters loaded, docs/simulation.md "Spread sweeps"; the original runs its AI updates 8
+        // characters a frame in turn, FUN_140786e30).
+        int every = world.Every(Settings.SweepEveryTicks), phase = (int)(world.Tick % every);
+        if (phase == 0) ExpireWaits(world.GameHours);
+        Sweep(world, every);
+        RunPlayerAnimalGoals(world, every);
+    }
+
+    /// <summary>
+    /// Steps every job on, in list order: a player animal's job a player order overrode is dropped, an ended one is dropped and its worker noted.
+    /// </summary>
+    void StepJobs(World world)
+    {
+        var table = world.Characters;
         for (int k = 0; k < _jobs.Count;)
         {
             var j = _jobs[k];
@@ -302,6 +392,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 _jobs.RemoveAt(k);
                 continue;
             }
+
             if (Step(world, j))
             {
                 if (j.PlayerSide && table.TryResolveNext(j.Worker, out int w))
@@ -314,16 +405,40 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 _ended.Add(j.Worker);
             }
         }
-        OfferAfterJobs(world);
-
-        // Each character is looked at once in SweepEveryTicks, on its slot's turn (slot mod the period), so the sweep spreads over the ticks instead
-        // of landing on one (8-11 ms a sweep with ~1,400 characters loaded, docs/simulation.md "Spread sweeps"; the original runs its AI updates 8
-        // characters a frame in turn, FUN_140786e30).
-        int every = world.Every(Settings.SweepEveryTicks), phase = (int)(world.Tick % every);
-        if (phase == 0) ExpireWaits(world.GameHours);
-        Sweep(world, every);
-        RunPlayerAnimalGoals(world, every);
     }
+
+    /// <summary>
+    /// Registers 239 Slave obedience's job and the player animals' race goals of both priorities with the decision step.
+    /// </summary>
+    public void RegisterSources(DecisionSystem decisions)
+    {
+        decisions.RegisterJob(TaskType.SlaveObedience, _obedient);
+        decisions.Register(new RaceGoals(this, TaskPriority.Urgent));
+        decisions.Register(new RaceGoals(this, TaskPriority.NonUrgent));
+    }
+
+    /// <summary>
+    /// Hashes the jobs, the kill timers and the waits (only once any exist).
+    /// </summary>
+    public void Hash(ref StateHasher hasher)
+    {
+        if (_jobs.Count == 0 && _killAt.Count == 0 && _givenUp.Count == 0) return;   // only once in use, so worlds without captives hash as before
+        hasher.Add(0x43617074);
+        hasher.Add(_jobs.Count);
+        foreach (var j in _jobs) j.Hash(ref hasher);
+        hasher.Add(_killAt.Count);
+        foreach (var (site, at) in _killAt)
+        {
+            hasher.Add(site);
+            hasher.Add(at);
+        }
+        hasher.Add(_timerRolls);
+        if (_givenUp.Count > 0) HashWaits(ref hasher);
+    }
+
+    #endregion
+
+    #region The player animals' race goals
 
     /// <summary>
     /// The player's animals keep their race's <c>AI Goals</c> but 230 (<c>Character::setupAI</c>, docs/game/animals.md "AI goals"): the limb fetch
@@ -347,6 +462,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         }
     }
 
+    /// <summary>
+    /// The race's <c>AI Goals</c> of the character (none without a race).
+    /// </summary>
     IReadOnlyList<AiGoal> RaceGoalsOf(CharacterCold c) => c.Race is { } race ? data.Ai.RaceGoals(race.StringId) : [];
 
     /// <summary>
@@ -398,6 +516,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return best;
     }
 
+    /// <summary>
+    /// Starts the race goal picked: the limb fetch's pick-up walk, else the goal's job (play, chase, eating a body) as a player-side job.
+    /// </summary>
     void StartRaceGoal(World world, int s, CharacterCold c, RaceGoal pick)
     {
         var table = world.Characters;
@@ -421,13 +542,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         Note(world, CaptiveEventKind.Started, job);
     }
 
-    public void RegisterSources(DecisionSystem decisions)
-    {
-        decisions.RegisterJob(TaskType.SlaveObedience, _obedient);
-        decisions.Register(new RaceGoals(this, TaskPriority.Urgent));
-        decisions.Register(new RaceGoals(this, TaskPriority.NonUrgent));
-    }
-
     /// <summary>
     /// A player animal's race goals of one priority (<c>Character::setupAI</c> adds the race's <c>AI Goals</c> to a player-faction animal, after
     /// 243): priority 3 at step 4, weighed with the other goals, priority 2 at step 6 before 14 Idleness. The best desire x weight starts
@@ -435,15 +549,27 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// </summary>
     sealed class RaceGoals(CaptiveSystem owner, TaskPriority priority) : IDecisionSource
     {
+        /// <summary>
+        /// The goal <see cref="CanRun"/> picked, with its tick and slot (the desire and the start read it).
+        /// </summary>
         (long Tick, int Slot, RaceGoal Goal) _picked = (-1, -1, default);
 
+        /// <summary>
+        /// The source's name in the decision log.
+        /// </summary>
         public string Name => $"Race goals (priority {(int)priority})";
+        /// <summary>
+        /// Priority 3 among the goals, priority 2 in the fallback.
+        /// </summary>
         public DecisionStep Step => priority == TaskPriority.Urgent ? DecisionStep.Goals : DecisionStep.Fallback;
         /// <summary>
         /// Step 4: after 243 (<c>setupAI</c>'s order); step 6: with the priority-2 goals, before the priority-1 ones.
         /// </summary>
         public int Key => priority == TaskPriority.Urgent ? 250 : 1000 + (int)TaskType.EatARandomKoBody;
 
+        /// <summary>
+        /// Runs while a race goal of this priority does; else may run for a free animal when one of this priority holds (and picks it).
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
@@ -457,6 +583,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             return DecisionCheck.Run;
         }
 
+        /// <summary>
+        /// The running goal's score while it still holds (1 when it no longer does), else the picked goal's.
+        /// </summary>
         public float Desire(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
@@ -465,6 +594,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             return _picked.Tick == world.Tick && _picked.Slot == slot ? _picked.Goal.Score : 0;
         }
 
+        /// <summary>
+        /// Starts the goal picked this tick for the slot.
+        /// </summary>
         public void Start(World world, int slot)
         {
             if (_picked.Tick == world.Tick && _picked.Slot == slot)
@@ -513,8 +645,29 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return true;
     }
 
-    // ------------------------------------------------------------------ the sweep
+    #endregion
 
+    #region The sweep
+
+    /// <summary>
+    /// The goal rows of the job kinds.
+    /// </summary>
+    static readonly HashSet<TaskType> JobRows = [.. Enum.GetValues<CaptiveJobKind>().Select(RowOf)];
+
+    /// <summary>
+    /// The ANIMATION records the jobs hold (<c>Task_KillPrisoner</c>, <c>Task_EatPrisoner</c>, <c>Task_ProcessNewSlave</c>, <b>Observed</b>).
+    /// </summary>
+    public const string ChopClip = "chop down static", EatClip = "eat", ProcessClip = "medic";
+
+    /// <summary>
+    /// EventTriggerEnum values the captive jobs fire (docs/game/dialogue.md "Enums").
+    /// </summary>
+    public const int MarkedForDeath = 10, ScreamingTorture = 11, IntroducingNewSlave = 35, RecapturedSlave = 37, SlaveDelivery = 39,
+            EatingSounds = 52;
+
+    /// <summary>
+    /// Whether a job holds the character as its worker or its captive.
+    /// </summary>
     bool Busy(CharacterId id)
     {
         foreach (var j in _jobs)
@@ -522,6 +675,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return false;
     }
 
+    /// <summary>
+    /// Whether a job is on the cage.
+    /// </summary>
     bool Taken(string cage)
     {
         foreach (var j in _jobs)
@@ -539,6 +695,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 && table.Next[slot].Task != (byte)CharacterTask.Rest && !Busy(table.IdOf(slot));
     }
 
+    /// <summary>
+    /// The sweep for new jobs: each squad member on its turn starts its first job if free (else its offers are cleared or kept), up to the caps.
+    /// </summary>
     void Sweep(World world, int every)
     {
         var table = world.Characters;
@@ -602,8 +761,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return true;
     }
 
-    static readonly HashSet<TaskType> JobRows = [.. Enum.GetValues<CaptiveJobKind>().Select(RowOf)];
-
     /// <summary>
     /// Whether the worker walks the job's own walk: a GoTo whose running row is the job's (<see cref="RowOf"/>). A walk it was on when the job
     /// started, its AI's or an errand's, is not, so the job sends its own at once, as a goal taken up ends the plan before it (docs/game/ai-tasks.md
@@ -665,6 +822,39 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 return site < 0 || !KillDue(world, site, cold) ? null : FateJob(world, slot, cold, board, site, CaptiveJobKind.Eat, probe);
             case TaskType.EatARandomDeadBody:
             case TaskType.EatARandomKoBody:
+            case TaskType.FogmanWorshipVictim:
+            case TaskType.AnimalFetchALimb:
+            case TaskType.PlayBecauseIHaveALimbInMouth:
+            case TaskType.ChaseAllyDogsWithMouthLimbs:
+            case TaskType.FindCropsToEat:
+                return TryStartFeeding(world, board, slot, cold, type, probe);
+            case TaskType.NewSlaveProcessing:
+            case TaskType.SlaveWatching:
+                return TryStartProcessing(world, slot, cold, type, site);
+            case TaskType.LiberateAllThePrisoners:
+                return LiberateTarget(world, slot, cold, board) is { } freed
+                    ? new CaptiveJob { Kind = CaptiveJobKind.Liberate, Worker = world.Characters.IdOf(slot), Captive = freed.Occupant,
+                            Cage = freed.Id, Faction = cold.Faction, Site = freed.Site }
+                    : null;
+            case TaskType.CaptureNewSlaves:
+            case TaskType.CarryWoundedSlaves:
+            case TaskType.WorkTheSlaves:
+                return TryStartSlaveWork(world, squad, slot, cold, type, probe);
+            default:
+                return TryStartLogistics(world, squad, board, slot, cold, type);
+        }
+    }
+
+    /// <summary>
+    /// The jobs of the feeding and the animals' goals (<see cref="TryStart"/>): eating a body, worship, fetching a limb (no job: it picks it up
+    /// itself), the dogs' play and chase, eating crops.
+    /// </summary>
+    CaptiveJob? TryStartFeeding(World world, Blackboard board, int slot, CharacterCold cold, TaskType type, bool probe)
+    {
+        switch (type)
+        {
+            case TaskType.EatARandomDeadBody:
+            case TaskType.EatARandomKoBody:
                 return BodyToEat(world, slot, cold, dead: type == TaskType.EatARandomDeadBody) is >= 0 and var meal
                     ? new CaptiveJob { Kind = CaptiveJobKind.EatBody, Worker = world.Characters.IdOf(slot), Captive = world.Characters.IdOf(meal),
                             Cage = "", Faction = cold.Faction }
@@ -692,34 +882,38 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                     ? new CaptiveJob { Kind = CaptiveJobKind.EatCrops, Worker = world.Characters.IdOf(slot), Captive = CharacterId.None, Cage = farm,
                             Faction = cold.Faction }
                     : null;
-            case TaskType.NewSlaveProcessing:
-            case TaskType.SlaveWatching:
-                // The slot-61 desire of 183 / 260 (and 167) for a goal without a target: 1 while not carrying and in posture 0, else 0.
-                if (cold.Carrying is { IsNone: false } || cold.Medical is { Standing: false }) return null;
-
-                // 183 first takes a free or escaped slave in sight, with no cage and no town (FUN_1408cd630).
-                if (type == TaskType.SlaveWatching && FreeSlaveToProcess(world, slot, cold) is >= 0 and var loose)
-                    return new CaptiveJob { Kind = CaptiveJobKind.Process, Worker = world.Characters.IdOf(slot),
-                            Captive = world.Characters.IdOf(loose), Cage = "", Faction = cold.Faction, Site = site };
-                if (site < 0) return null;
-                return ProcessTarget(world, slot, cold, site, watching: type == TaskType.SlaveWatching) is { } found
-                    ? new CaptiveJob { Kind = CaptiveJobKind.Process, Worker = world.Characters.IdOf(slot), Captive = found.Occupant, Cage = found.Id,
-                            Faction = cold.Faction, Site = site }
-                    : null;
-            case TaskType.LiberateAllThePrisoners:
-                return LiberateTarget(world, slot, cold, board) is { } freed
-                    ? new CaptiveJob { Kind = CaptiveJobKind.Liberate, Worker = world.Characters.IdOf(slot), Captive = freed.Occupant,
-                            Cage = freed.Id, Faction = cold.Faction, Site = freed.Site }
-                    : null;
-            case TaskType.CaptureNewSlaves:
-            case TaskType.CarryWoundedSlaves:
-            case TaskType.WorkTheSlaves:
-                return TryStartSlaveWork(world, squad, slot, cold, type, probe);
             default:
-                return TryStartLogistics(world, squad, board, slot, cold, type);
+                return null;
         }
     }
 
+    /// <summary>
+    /// The jobs of 260 New slave processing and 183 Slave watching (<see cref="TryStart"/>): a loose slave in sight first (183), else a caged one
+    /// of the town <paramref name="site"/>.
+    /// </summary>
+    CaptiveJob? TryStartProcessing(World world, int slot, CharacterCold cold, TaskType type, int site)
+    {
+        // The slot-61 desire of 183 / 260 (and 167) for a goal without a target: 1 while not carrying and in posture 0, else 0.
+        if (cold.Carrying is { IsNone: false } || cold.Medical is { Standing: false }) return null;
+
+        // 183 first takes a free or escaped slave in sight, with no cage and no town (FUN_1408cd630).
+        if (type == TaskType.SlaveWatching && FreeSlaveToProcess(world, slot, cold) is >= 0 and var loose)
+        {
+            return new CaptiveJob { Kind = CaptiveJobKind.Process, Worker = world.Characters.IdOf(slot),
+                    Captive = world.Characters.IdOf(loose), Cage = "", Faction = cold.Faction, Site = site };
+        }
+
+        if (site < 0) return null;
+
+        return ProcessTarget(world, slot, cold, site, watching: type == TaskType.SlaveWatching) is { } found
+            ? new CaptiveJob { Kind = CaptiveJobKind.Process, Worker = world.Characters.IdOf(slot), Captive = found.Occupant, Cage = found.Id,
+                    Faction = cold.Faction, Site = site }
+            : null;
+    }
+
+    /// <summary>
+    /// A kill or eat job on the fate target of the worker's town (a kill only with a weapon drawn); a fresh pick has the occupant say "marked for death". A probe changes nothing.
+    /// </summary>
     CaptiveJob? FateJob(World world, int slot, CharacterCold cold, Blackboard board, int site, CaptiveJobKind kind, bool probe = false)
     {
         if (FateTarget(world, slot, cold, board.OwnHome?.Key, out bool fresh, remember: !probe) is not { } cage)
@@ -771,24 +965,43 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         cold.Fighter is { } fighter && cold.Inventory is { } inv
         && (!fighter.Unarmed || inv.All().Any(i => i.Type == FcsRecordType.Weapon && !InventoryCommands.IsEquipmentSection(i.Section)));
 
-    /// <summary>
-    /// The ANIMATION records the jobs hold (<c>Task_KillPrisoner</c>, <c>Task_EatPrisoner</c>, <c>Task_ProcessNewSlave</c>, <b>Observed</b>).
-    /// </summary>
-    public const string ChopClip = "chop down static", EatClip = "eat", ProcessClip = "medic";
+    #endregion
+
+    #region Finders
 
     /// <summary>
-    /// EventTriggerEnum values the captive jobs fire (docs/game/dialogue.md "Enums").
+    /// The kill timer of each town: the game hour from which a kill is wanted again (FUN_14034a810's map), by site.
     /// </summary>
-    public const int MarkedForDeath = 10, ScreamingTorture = 11, IntroducingNewSlave = 35, RecapturedSlave = 37, SlaveDelivery = 39,
-            EatingSounds = 52;
+    readonly SortedDictionary<int, double> _killAt = [];
 
-    // ------------------------------------------------------------------ finders
+    /// <summary>
+    /// The kill timer rolls made so far (each one's salt, so two rolls of one town differ).
+    /// </summary>
+    int _timerRolls;
+
+    /// <summary>
+    /// The salt of the kill timer's roll.
+    /// </summary>
+    const ulong TimerSalt = 0x4B696C6C54696D72;
+
+    /// <summary>
+    /// The ex-slave's lowest slave level (FUN_1405a51e0).
+    /// </summary>
+    const float ExSlaveFloor = 0.01f;
+
+    /// <summary>
+    /// The game hour from which the town <paramref name="site"/> wants a kill again (null: not asked yet).
+    /// </summary>
+    public double? KillTimer(int site) => _killAt.TryGetValue(site, out double at) ? at : null;
 
     /// <summary>
     /// The town's cages (registering its fixtures when nobody has yet).
     /// </summary>
     IEnumerable<Fixture> CagesOf(World world, int site) => CagesOf(world, data, site);
 
+    /// <summary>
+    /// The town's cages (registering its fixtures when nobody has yet).
+    /// </summary>
     static IEnumerable<Fixture> CagesOf(World world, PopulationData data, int site)
     {
         if (!world.Fixtures.IsRegistered(site)) world.Fixtures.RegisterSite(world, data, site);
@@ -853,6 +1066,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     /// </summary>
     public bool CagesFull(World world, int site, CharacterCold who) => CagesFull(world, data, site, who);
 
+    /// <summary>
+    /// Whether the cages of the town are full for <paramref name="who"/> (<see cref="CagesFull(World, int, CharacterCold)"/>).
+    /// </summary>
     public static bool CagesFull(World world, PopulationData data, int site, CharacterCold who)
     {
         int home = world.Squads.Find(who.SquadId)?.Town ?? -1;
@@ -943,13 +1159,34 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return scan.Best;
     }
 
+    /// <summary>
+    /// The state of <see cref="FreeSlaveToProcess"/>'s scan: the watcher, and the nearest slave found so far.
+    /// </summary>
     struct FreeScan
     {
+        /// <summary>
+        /// The system scanning.
+        /// </summary>
         public CaptiveSystem System;
+        /// <summary>
+        /// The world.
+        /// </summary>
         public World World;
+        /// <summary>
+        /// The watcher's slot.
+        /// </summary>
         public int Self;
+        /// <summary>
+        /// The watcher.
+        /// </summary>
         public CharacterCold Me;
+        /// <summary>
+        /// The nearest slave so far (-1: none).
+        /// </summary>
         public int Best;
+        /// <summary>
+        /// Its squared distance.
+        /// </summary>
         public float BestD2;
     }
 
@@ -1042,12 +1279,12 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return MathF.Min(level, 1);
     }
 
-    const float ExSlaveFloor = 0.01f;
-
     bool Allied(int a, int b) => a >= 0 && b >= 0
             && (a == b || data.Relations.Contains(a) && data.Relations.Contains(b) && data.Relations.IsAlly(a, b));
 
-    // ------------------------------------------------------------------ one job
+    #endregion
+
+    #region One job
 
     /// <summary>
     /// One tick of a job; false when it is over.
@@ -1058,10 +1295,24 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         float dt = world.TickSeconds;
         j.Time += dt;
         j.Age += dt;
+
         if (!table.TryResolveNext(j.Worker, out int w) || table.Cold(w) is not { } wc || wc.Medical is { Incapacitated: true } || wc.InCombat
-                || wc.Fleeing || !wc.CarriedBy.IsNone)
+            || wc.Fleeing || !wc.CarriedBy.IsNone)
+        {
             return End(world, j, CaptiveEventKind.GaveUp);
+        }
+
         if (j.Age > Settings.GiveUpSeconds) return End(world, j, CaptiveEventKind.GaveUp);
+
+        return StepUncaged(world, j, w, wc) ?? StepAtCage(world, j, w, wc, dt);
+    }
+
+    /// <summary>
+    /// One tick of a job that is not done at a cage (the logistics, the slave work, eating bodies or crops, worship, the dogs' games, processing a
+    /// loose slave); null for a cage's job.
+    /// </summary>
+    bool? StepUncaged(World world, CaptiveJob j, int w, CharacterCold wc)
+    {
         if (j.Kind is CaptiveJobKind.Gather or CaptiveJobKind.Deliver or CaptiveJobKind.CageSelf)
             return StepLogistics(world, j, w, wc);
         if (j.Kind is CaptiveJobKind.Capture or CaptiveJobKind.Carry or CaptiveJobKind.Shout)
@@ -1072,14 +1323,30 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (j.Kind == CaptiveJobKind.DogPlay) return StepPlay(world, j, w, wc);
         if (j.Kind == CaptiveJobKind.DogChase) return StepChase(world, j, w);
         if (j.Kind == CaptiveJobKind.Process && j.Cage.Length == 0) return StepProcessLoose(world, j, w, wc);
+
+        return null;
+    }
+
+    /// <summary>
+    /// One tick of a job at a cage (kill, eat, liberate, process): over when the captive left the cage or died; the walk there, then facing the
+    /// captive while it works.
+    /// </summary>
+    bool StepAtCage(World world, CaptiveJob j, int w, CharacterCold wc, float dt)
+    {
+        var table = world.Characters;
         var cage = world.Fixtures.Find(j.Cage);
+
         if (cage is null || !table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { } cc || cc.InWhat != cage.Id || !cc.IsImprisoned
-                || cc.Medical is not { Dead: false })
+            || cc.Medical is not { Dead: false })
+        {
             return Over(world, j, table.TryResolveNext(j.Captive, out int gone) && table.Cold(gone)?.Medical is { Dead: true });
+        }
+
         if (j.Phase == CaptivePhase.Walk)
         {
             if (!Walk(world, j, w, cage, out bool arrived)) return End(world, j, CaptiveEventKind.GaveUp);
             if (!arrived) return true;
+
             TaskStart.Stand(table, w);
             j.Phase = CaptivePhase.Work;
             j.Time = 0;
@@ -1089,6 +1356,17 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         // Facing the captive while it works.
         var to = table.Next[c].Position - table.Next[w].Position;
         if (to.X * to.X + to.Z * to.Z > 1e-4f) table.Next[w].Yaw = MathF.Atan2(to.X, to.Z);
+
+        return WorkAtCage(world, j, w, wc, c, cc, dt);
+    }
+
+    /// <summary>
+    /// The work of a job at a cage, once there: the kill's blows, the eating, the release, the processing.
+    /// </summary>
+    bool WorkAtCage(World world, CaptiveJob j, int w, CharacterCold wc, int c, CharacterCold cc, float dt)
+    {
+        var table = world.Characters;
+
         switch (j.Kind)
         {
             case CaptiveJobKind.Kill:
@@ -1100,7 +1378,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                     j.Blows++;
                     world.Defer(new Dialogue.DialogueEvent(j.Captive, j.Worker, ScreamingTorture) { Tick = world.Tick + 1 });
                     bool died = combat.Execute(world, w, c, j.Blows);
-                    if (cc.Medical.Incapacitated) TaskStart.Stand(table, c);
+                    if (cc.Medical!.Incapacitated) TaskStart.Stand(table, c);
                     return died ? Over(world, j, true) : true;
                 }
             case CaptiveJobKind.Eat:
@@ -1129,6 +1407,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                     return End(world, j, null);
                 }
         }
+
         return true;
     }
 
@@ -1213,6 +1492,61 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return false;
     }
 
+    /// <summary>
+    /// The captive died or is gone: a death resets the town's kill timer (<c>FUN_140353990</c>, the end of both the kill and the meal).
+    /// </summary>
+    bool Over(World world, CaptiveJob j, bool died)
+    {
+        if (died && j.Site >= 0) _killAt[j.Site] = NextKill(world, j.Site);
+        return End(world, j, died ? j.Kind == CaptiveJobKind.Eat ? CaptiveEventKind.Eaten : CaptiveEventKind.Killed : CaptiveEventKind.GaveUp);
+    }
+
+    /// <summary>
+    /// Ends a job: the worker goes back to the AI.
+    /// </summary>
+    bool End(World world, CaptiveJob j, CaptiveEventKind? kind)
+    {
+        var table = world.Characters;
+        if (table.TryResolveNext(j.Worker, out int w) && table.Cold(w) is { } wc)
+        {
+            wc.Engaged = false;
+            wc.ActionClip = null;
+            if (table.Next[w].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, w);
+        }
+        if (kind is { } k) Note(world, k, j);
+        return false;
+    }
+
+    /// <summary>
+    /// Logs an event of the job (while <see cref="CaptiveSettings.RecordLog"/> is on).
+    /// </summary>
+    void Note(World world, CaptiveEventKind kind, CaptiveJob j)
+    {
+        if (Settings.RecordLog) _log.Add(new CaptiveEvent(world.Tick, kind, j.Kind, j.Worker, j.Captive));
+    }
+
+    #endregion
+
+    #region Eating
+
+    /// <summary>
+    /// The amount of the toughness XP a meal still awake gains per update (<b>Observed</b>: 10, <c>FUN_1404356f0</c>).
+    /// </summary>
+    const float EatToughnessXp = 10;
+
+    /// <summary>
+    /// The salt of the crop eater's farm roll.
+    /// </summary>
+    const ulong CropSalt = 0x4372_6F70_4561_7421;
+
+    /// <summary>
+    /// How near the farm's origin an eater stops (engine choice: the original walks to the farm's work point, getPositionMarker).
+    /// </summary>
+    const float CropReach = 30;
+
+    /// <summary>
+    /// The nearest body in sight to eat (dead, or down but alive), not carried, held or another job's captive, not of the eater's race, -1: none.
+    /// </summary>
     int BodyToEat(World world, int slot, CharacterCold cold, bool dead)
     {
         var table = world.Characters;
@@ -1317,8 +1651,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 farms.Count)];
     }
 
-    const ulong CropSalt = 0x4372_6F70_4561_7421;
-
     /// <summary>
     /// <c>Task_EatingCrops</c> (231): the eater walks to the farm, then each tick plays <c>eat</c>, is reported for crop theft (crime 14) against the
     /// farm's faction and eats (<see cref="Production.ProductionSystem.EatCrop"/>, one plant per game second). It stops when the farm has no food
@@ -1353,9 +1685,6 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         world.Machines.Touch();
         return true;
     }
-
-    // How near the farm's origin an eater stops (engine choice: the original walks to the farm's work point, getPositionMarker).
-    const float CropReach = 30;
 
     /// <summary>
     /// The medical context of a captive the rack or a meal damages (toughness, strength, the seed and a per-character roll key).
@@ -1415,6 +1744,20 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return wasDead ? eaten : medical.Dead;
     }
 
+    #endregion
+
+    #region Processing
+
+    /// <summary>
+    /// The record types a new slave is stripped of, in the original's order.
+    /// </summary>
+    static readonly FcsRecordType[] Stripped = [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Item, FcsRecordType.Container];
+
+    /// <summary>
+    /// The ARMOUR <c>stigma</c> of slave garments, which processing leaves on.
+    /// </summary>
+    const int SlaveStigma = 6;
+
     /// <summary>
     /// The processing of a new slave once the kneel is over (<c>Task_ProcessNewSlave</c>, <b>Verified</b>): every item of the whole inventory of
     /// record type WEAPON, then ARMOUR, ITEM and CONTAINER goes to the worker (its inventory, else the ground; engine choice for the original's
@@ -1473,58 +1816,5 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         world.SystemOf<Dialogue.DialogueSystem>()?.Forgive(world, w, table.IdOf(c));
     }
 
-    /// <summary>
-    /// The record types a new slave is stripped of, in the original's order.
-    /// </summary>
-    static readonly FcsRecordType[] Stripped = [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Item, FcsRecordType.Container];
-    /// <summary>
-    /// The ARMOUR <c>stigma</c> of slave garments, which processing leaves on.
-    /// </summary>
-    const int SlaveStigma = 6;
-
-    /// <summary>
-    /// The captive died or is gone: a death resets the town's kill timer (<c>FUN_140353990</c>, the end of both the kill and the meal).
-    /// </summary>
-    bool Over(World world, CaptiveJob j, bool died)
-    {
-        if (died && j.Site >= 0) _killAt[j.Site] = NextKill(world, j.Site);
-        return End(world, j, died ? j.Kind == CaptiveJobKind.Eat ? CaptiveEventKind.Eaten : CaptiveEventKind.Killed : CaptiveEventKind.GaveUp);
-    }
-
-    /// <summary>
-    /// Ends a job: the worker goes back to the AI.
-    /// </summary>
-    bool End(World world, CaptiveJob j, CaptiveEventKind? kind)
-    {
-        var table = world.Characters;
-        if (table.TryResolveNext(j.Worker, out int w) && table.Cold(w) is { } wc)
-        {
-            wc.Engaged = false;
-            wc.ActionClip = null;
-            if (table.Next[w].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, w);
-        }
-        if (kind is { } k) Note(world, k, j);
-        return false;
-    }
-
-    void Note(World world, CaptiveEventKind kind, CaptiveJob j)
-    {
-        if (Settings.RecordLog) _log.Add(new CaptiveEvent(world.Tick, kind, j.Kind, j.Worker, j.Captive));
-    }
-
-    public void Hash(ref StateHasher hasher)
-    {
-        if (_jobs.Count == 0 && _killAt.Count == 0 && _givenUp.Count == 0) return;   // only once in use, so worlds without captives hash as before
-        hasher.Add(0x43617074);
-        hasher.Add(_jobs.Count);
-        foreach (var j in _jobs) j.Hash(ref hasher);
-        hasher.Add(_killAt.Count);
-        foreach (var (site, at) in _killAt)
-        {
-            hasher.Add(site);
-            hasher.Add(at);
-        }
-        hasher.Add(_timerRolls);
-        if (_givenUp.Count > 0) HashWaits(ref hasher);
-    }
+    #endregion
 }

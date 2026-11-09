@@ -34,132 +34,110 @@ namespace Meitou.Simulation.Locks;
 /// </summary>
 public sealed partial class FixtureRegistry
 {
+    #region Fixtures and lookups
+
     /// <summary>
     /// The cage finder's distance scale: weight clamp(1 - d^2 / 4608^2, 1e-5, 1), x100 for the carrier's faction, x100 in its home (economy.md 11.7,
     /// <b>Observed</b>).
     /// </summary>
     public const float CageSearchScale = 4608;
+
     /// <summary>
     /// A sentence above this bounty is <see cref="LifeSentence"/> hours (economy.md 11.5).
     /// </summary>
     public const int LifeBounty = 25000;
+
+    /// <summary>
+    /// A life sentence's length.
+    /// </summary>
     public const float LifeSentence = 999999;
 
+    /// <summary>
+    /// Every fixture, in registration order.
+    /// </summary>
     readonly List<Fixture> _all = [];
+
+    /// <summary>
+    /// The fixtures by id.
+    /// </summary>
     readonly Dictionary<string, Fixture> _byId = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The fixtures of each registered building, by building key.
+    /// </summary>
     readonly Dictionary<string, List<Fixture>> _byBuilding = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The registered buildings' keys, in registration order.
+    /// </summary>
     readonly List<string> _buildings = [];
+
+    /// <summary>
+    /// The sites whose buildings are registered.
+    /// </summary>
     readonly HashSet<int> _sites = [];
+
+    /// <summary>
+    /// The buildings whose squad's initial door state was applied.
+    /// </summary>
     readonly HashSet<string> _initialApplied = new(StringComparer.Ordinal);
-    // The Open to public flag of the player's town buildings (the original's Building+0xc8, saved as `is public day`): set by the panel or read from
-    // a save.
+
+    /// <summary>
+    /// The Open to public flag of the player's town buildings (the original's Building+0xc8, saved as <c>is public day</c>): set by the panel or
+    /// read from a save.
+    /// </summary>
     readonly Dictionary<string, bool> _publicFlags = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The functionality record of each building record, by id; derived from the data.
+    /// </summary>
     readonly Dictionary<string, GameRecord?> _functions = new(StringComparer.Ordinal);
-    // (cage id, faction) -> the game hour until which a walk there is known to fail (engine: the "no path" memo of FindCage). Sorted, so it hashes in
-    // a fixed order.
+
+    /// <summary>
+    /// (cage id, faction) -> the game hour until which a walk there is known to fail (engine: the "no path" memo of FindCage). Sorted, so it
+    /// hashes in a fixed order.
+    /// </summary>
     readonly SortedDictionary<(string Cage, int Faction), double> _unreachable = new(Comparer<(string Cage, int Faction)>.Create((a, b) =>
         string.CompareOrdinal(a.Cage, b.Cage) is var c and not 0 ? c : a.Faction.CompareTo(b.Faction)));
+
+    /// <summary>
+    /// The cagings of the tick <see cref="_cagingsTick"/>.
+    /// </summary>
     readonly List<Imprisonment> _cagings = [];
+
+    /// <summary>
+    /// The tick of <see cref="_cagings"/> (-1: none).
+    /// </summary>
     long _cagingsTick = -1;
+
+    /// <summary>
+    /// The door gate of the paths (null: none), told when a building's doors block.
+    /// </summary>
     IDoorGate? _doors;
 
-    IReadOnlyList<ContainerSpot>? _containerSpots;
-
     /// <summary>
-    /// Where the containers with an inventory stand, for the host's picking; rebuilt (serial phases) only when a building registers or goes.
+    /// The number of fixtures.
     /// </summary>
-    public IReadOnlyList<ContainerSpot> ContainerSpots => _containerSpots
-            ??= [.. _all.Where(f => f.Contents is not null).Select(f
-                    => new ContainerSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0, f.Yaw))];
-
-    List<Fixture>? _cageList;
-    List<Fixture>? _bedList;
-
-    /// <summary>
-    /// Every cage, for the host's picking; the list is rebuilt (serial phases) when a building registers or goes, the spots only when a cage's lock,
-    /// occupant or owner changed.
-    /// </summary>
-    public IReadOnlyList<CageSpot> CageSpots(CharacterTable table)
-    {
-        _cageList ??= [.. _all.Where(f => f.Kind == FixtureKind.Cage)];
-        ulong key = 0x43616765 ^ (ulong)_cageList.Count;
-        for (int i = 0; i < _cageList.Count; i++)
-        {
-            var f = _cageList[i];
-            var held = IsFree(table, f) ? CharacterId.None : f.Occupant;
-            key = Rng.Mix(key ^ (ulong)i) ^ (uint)held.Slot ^ ((ulong)(uint)held.Generation << 32) ^ ((ulong)(uint)(f.Lock?.Level ?? 0) << 16)
-                    ^ ((ulong)(uint)f.Owner << 40)
-                ^ (f.Lock is { EffectivelyLocked: true } ? 1UL << 62 : 0) ^ (f.OccupantSelection ? 1UL << 63 : 0);
-        }
-        if (_publishedCages is not null && key == _publishedCagesKey) return _publishedCages;
-        _publishedCagesKey = key;
-        return _publishedCages = [.. _cageList.Select(f
-                => new CageSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Lock is { EffectivelyLocked: true }, IsFree(table, f) ? CharacterId.None
-                        : f.Occupant, f.Lock?.Level ?? 0, f.Yaw, f.OccupantSelection))];
-    }
-
-    IReadOnlyList<CageSpot>? _publishedCages;
-    ulong _publishedCagesKey;
-
-    IReadOnlyList<BedSpot>? _bedSpots;
-
-    /// <summary>
-    /// Every bed, for the host's picking; rebuilt (serial phases) only when a building registers or goes.
-    /// </summary>
-    public IReadOnlyList<BedSpot> BedSpots => _bedSpots
-            ??= [.. _all.Where(f => f.Kind == FixtureKind.Bed).Select(f => new BedSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Yaw))];
-
-    IReadOnlyList<TrainingSpot>? _dummySpots;
-
-    /// <summary>
-    /// Every town training dummy, for the host's picking; rebuilt (serial phases) only when a building registers or goes.
-    /// </summary>
-    public IReadOnlyList<TrainingSpot> TrainingSpots => _dummySpots
-            ??= [.. _all.Where(f => f.Kind == FixtureKind.Training).Select(f => new TrainingSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Yaw))];
-
-    /// <summary>
-    /// The fixture id of a town building's <paramref name="index"/>th training dummy (its furniture in layout order):
-    /// <c>&lt;building&gt;@dummy&lt;index&gt;</c>.
-    /// </summary>
-    public static string DummyId(string building, int index) => string.Create(CultureInfo.InvariantCulture, $"{building}{DummyMark}{index}");
-
-    /// <summary>
-    /// Whether an id names a town training dummy (<see cref="DummyId"/>), registered or not yet.
-    /// </summary>
-    public static bool IsDummy(string id) => id.LastIndexOf(DummyMark, StringComparison.Ordinal) is var at and > 0 && at
-            + DummyMark.Length < id.Length
-        && id.AsSpan(at + DummyMark.Length).IndexOfAnyExceptInRange('0', '9') < 0;
-
-    const string DummyMark = "@dummy";
-
-    IReadOnlyList<DoorPick>? _doorPicks;
-
-    /// <summary>
-    /// Every door, for the host's picking (<see cref="PublishedDoors"/> leaves closed unlocked town doors out); rebuilt (serial phases) only when a
-    /// building registers or goes.
-    /// </summary>
-    public IReadOnlyList<DoorPick> DoorPicks => _doorPicks
-            ??= [.. _all.Where(f => f.Kind == FixtureKind.Door).Select(f
-                    => new DoorPick(f.Id, f.Building, f.DoorIndex, f.Owner, DoorSpotOf(f)?.Centre ?? f.Position, DoorSpotOf(f)?.Slide
-                            ?? Vector3.Zero) { HostRecord = f.HostRecordId, Origin = f.Position, Yaw = f.Yaw })];
-
-    /// <summary>
-    /// The doors of each building, rebuilt with <see cref="DoorPicks"/> (both in the serial phases; read in parallel ones after).
-    /// </summary>
-    public ILookup<string, Fixture> DoorsByBuilding => _doorsByBuilding
-            ??= _all.Where(f => f.Kind == FixtureKind.Door).ToLookup(f => f.Building, StringComparer.Ordinal);
-    ILookup<string, Fixture>? _doorsByBuilding;
-
     public int Count => _all.Count;
+
     /// <summary>
     /// Every fixture, in registration order.
     /// </summary>
     public IReadOnlyList<Fixture> All => _all;
+
+    /// <summary>
+    /// The fixture <paramref name="id"/> (null: none).
+    /// </summary>
     public Fixture? Find(string id) => _byId.GetValueOrDefault(id);
+
     /// <summary>
     /// The fixtures of a placed building (its doors, own lock, interior cages, containers and beds).
     /// </summary>
     public IReadOnlyList<Fixture> OfBuilding(string buildingInstance) => _byBuilding.TryGetValue(buildingInstance, out var l) ? l : [];
+
+    /// <summary>
+    /// Whether the site's buildings are registered.
+    /// </summary>
     public bool IsRegistered(int site) => _sites.Contains(site);
 
     /// <summary>
@@ -194,7 +172,218 @@ public sealed partial class FixtureRegistry
     /// </summary>
     public Items.ItemFactory? Items { get; set; }
 
-    // ------------------------------------------------------------------ registration
+    /// <summary>
+    /// The registered buildings, in registration order.
+    /// </summary>
+    public IReadOnlyList<string> Buildings => _buildings;
+
+    #endregion
+
+    #region Published spots
+
+    /// <summary>
+    /// The container spots last built (null: build them again).
+    /// </summary>
+    IReadOnlyList<ContainerSpot>? _containerSpots;
+
+    /// <summary>
+    /// Every cage (null: build it again).
+    /// </summary>
+    List<Fixture>? _cageList;
+
+    /// <summary>
+    /// Every bed (null: build it again).
+    /// </summary>
+    List<Fixture>? _bedList;
+
+    /// <summary>
+    /// The cage spots last built.
+    /// </summary>
+    IReadOnlyList<CageSpot>? _publishedCages;
+
+    /// <summary>
+    /// The key of the cages' state <see cref="_publishedCages"/> was built for.
+    /// </summary>
+    ulong _publishedCagesKey;
+
+    /// <summary>
+    /// The bed spots last built (null: build them again).
+    /// </summary>
+    IReadOnlyList<BedSpot>? _bedSpots;
+
+    /// <summary>
+    /// The training spots last built (null: build them again).
+    /// </summary>
+    IReadOnlyList<TrainingSpot>? _dummySpots;
+
+    /// <summary>
+    /// The mark between a building's key and a training dummy's number.
+    /// </summary>
+    const string DummyMark = "@dummy";
+
+    /// <summary>
+    /// The door picks last built (null: build them again).
+    /// </summary>
+    IReadOnlyList<DoorPick>? _doorPicks;
+
+    /// <summary>
+    /// The doors of each building last built (null: build them again).
+    /// </summary>
+    ILookup<string, Fixture>? _doorsByBuilding;
+
+    /// <summary>
+    /// The door views last published.
+    /// </summary>
+    IReadOnlyDictionary<(string Building, int Door), DoorView> _publishedDoors = new Dictionary<(string Building, int Door), DoorView>();
+
+    /// <summary>
+    /// The key of the doors' state <see cref="_publishedDoors"/> was built for.
+    /// </summary>
+    ulong _publishedDoorsKey;
+
+    /// <summary>
+    /// Every door (null: build it again).
+    /// </summary>
+    List<Fixture>? _doorList;
+
+    /// <summary>
+    /// Where the containers with an inventory stand, for the host's picking; rebuilt (serial phases) only when a building registers or goes.
+    /// </summary>
+    public IReadOnlyList<ContainerSpot> ContainerSpots => _containerSpots
+            ??= [.. _all.Where(f => f.Contents is not null).Select(f
+                    => new ContainerSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0, f.Yaw))];
+
+    /// <summary>
+    /// Every cage, for the host's picking; the list is rebuilt (serial phases) when a building registers or goes, the spots only when a cage's lock,
+    /// occupant or owner changed.
+    /// </summary>
+    public IReadOnlyList<CageSpot> CageSpots(CharacterTable table)
+    {
+        _cageList ??= [.. _all.Where(f => f.Kind == FixtureKind.Cage)];
+        ulong key = 0x43616765 ^ (ulong)_cageList.Count;
+        for (int i = 0; i < _cageList.Count; i++)
+        {
+            var f = _cageList[i];
+            var held = IsFree(table, f) ? CharacterId.None : f.Occupant;
+            key = Rng.Mix(key ^ (ulong)i) ^ (uint)held.Slot ^ ((ulong)(uint)held.Generation << 32) ^ ((ulong)(uint)(f.Lock?.Level ?? 0) << 16)
+                    ^ ((ulong)(uint)f.Owner << 40)
+                ^ (f.Lock is { EffectivelyLocked: true } ? 1UL << 62 : 0) ^ (f.OccupantSelection ? 1UL << 63 : 0);
+        }
+        if (_publishedCages is not null && key == _publishedCagesKey) return _publishedCages;
+        _publishedCagesKey = key;
+        return _publishedCages = [.. _cageList.Select(f
+                => new CageSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Lock is { EffectivelyLocked: true }, IsFree(table, f) ? CharacterId.None
+                        : f.Occupant, f.Lock?.Level ?? 0, f.Yaw, f.OccupantSelection))];
+    }
+
+    /// <summary>
+    /// Every bed, for the host's picking; rebuilt (serial phases) only when a building registers or goes.
+    /// </summary>
+    public IReadOnlyList<BedSpot> BedSpots => _bedSpots
+            ??= [.. _all.Where(f => f.Kind == FixtureKind.Bed).Select(f => new BedSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Yaw))];
+
+    /// <summary>
+    /// Every town training dummy, for the host's picking; rebuilt (serial phases) only when a building registers or goes.
+    /// </summary>
+    public IReadOnlyList<TrainingSpot> TrainingSpots => _dummySpots
+            ??= [.. _all.Where(f => f.Kind == FixtureKind.Training).Select(f => new TrainingSpot(f.Id, f.RecordId, f.Position, f.Owner, f.Yaw))];
+
+    /// <summary>
+    /// The fixture id of a town building's <paramref name="index"/>th training dummy (its furniture in layout order):
+    /// <c>&lt;building&gt;@dummy&lt;index&gt;</c>.
+    /// </summary>
+    public static string DummyId(string building, int index) => string.Create(CultureInfo.InvariantCulture, $"{building}{DummyMark}{index}");
+
+    /// <summary>
+    /// Whether an id names a town training dummy (<see cref="DummyId"/>), registered or not yet.
+    /// </summary>
+    public static bool IsDummy(string id) => id.LastIndexOf(DummyMark, StringComparison.Ordinal) is var at and > 0 && at
+            + DummyMark.Length < id.Length
+        && id.AsSpan(at + DummyMark.Length).IndexOfAnyExceptInRange('0', '9') < 0;
+
+    /// <summary>
+    /// Every door, for the host's picking (<see cref="PublishedDoors"/> leaves closed unlocked town doors out); rebuilt (serial phases) only when a
+    /// building registers or goes.
+    /// </summary>
+    public IReadOnlyList<DoorPick> DoorPicks => _doorPicks
+            ??= [.. _all.Where(f => f.Kind == FixtureKind.Door).Select(f
+                    => new DoorPick(f.Id, f.Building, f.DoorIndex, f.Owner, DoorSpotOf(f)?.Centre ?? f.Position, DoorSpotOf(f)?.Slide
+                            ?? Vector3.Zero) { HostRecord = f.HostRecordId, Origin = f.Position, Yaw = f.Yaw })];
+
+    /// <summary>
+    /// The doors of each building, rebuilt with <see cref="DoorPicks"/> (both in the serial phases; read in parallel ones after).
+    /// </summary>
+    public ILookup<string, Fixture> DoorsByBuilding => _doorsByBuilding
+            ??= _all.Where(f => f.Kind == FixtureKind.Door).ToLookup(f => f.Building, StringComparer.Ordinal);
+
+    /// <summary>
+    /// The doors of the player's buildings and every other door that is not plainly closed and unlocked (open, moving, locked, set to lock or
+    /// broken), for the snapshot; a new dictionary only when one of them changed.
+    /// </summary>
+    internal IReadOnlyDictionary<(string Building, int Door), DoorView> PublishedDoors()
+    {
+        _doorList ??= [.. _all.Where(f => f.Kind == FixtureKind.Door)];
+        ulong key = 0x446F6F72 ^ (ulong)_doorList.Count;
+        for (int i = 0; i < _doorList.Count; i++)
+        {
+            var f = _doorList[i];
+            if (f.Kind != FixtureKind.Door || !Shown(f)) continue;
+            key = Rng.Mix(key ^ (ulong)i) ^ BitConverter.SingleToUInt32Bits(f.OpenAmount) ^ ((ulong)f.Motion << 32)
+                    ^ (f.Lock is { EffectivelyLocked: true } ? 1UL << 40 : 0) ^ (f.WantsLock ? 1UL << 41 : 0) ^ (f.DoorBroken ? 1UL << 42 : 0);
+        }
+        if (key == _publishedDoorsKey) return _publishedDoors;
+        var doorViews = new Dictionary<(string Building, int Door), DoorView>();
+        foreach (var f in _doorList)
+            if (Shown(f))
+                doorViews[(f.Building, f.DoorIndex)] = new DoorView(f.OpenAmount, f.Motion, f.Lock is { EffectivelyLocked: true }, f.WantsLock,
+                        f.DoorBroken, DoorSpotOf(f)?.Centre ?? f.Position, f.RecordId, f.Lock?.Level ?? 0);
+        _publishedDoorsKey = key;
+        return _publishedDoors = doorViews;
+
+        static bool Shown(Fixture f) => f.Site < 0 || f.OpenAmount > 0 || f.Motion != DoorMotion.Closed || f.WantsLock || f.DoorBroken
+                || f.Lock is { EffectivelyLocked: true };
+    }
+
+    /// <summary>
+    /// The panel's view of a building's doors (null for no building, or one without fixtures).
+    /// </summary>
+    internal BuildingDetail? DetailOf(string? instance, int faction)
+    {
+        if (instance is null || !_byBuilding.TryGetValue(instance, out var list)) return null;
+        var doorList = list.Where(f => f.Kind == FixtureKind.Door).OrderBy(f => f.DoorIndex)
+            .Select(f
+                    => new DoorDetail(f.Motion is DoorMotion.Open or DoorMotion.Opening, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0,
+                            f.DoorBroken, f.RecordId, f.WantsLock)).ToArray();
+        return new BuildingDetail(instance, doorList, OwnsBuilding(instance, faction),
+                PublicOf(instance)) { SalePrice = SalePrice(instance, faction) };
+    }
+
+    #endregion
+
+    #region Registration
+
+    /// <summary>
+    /// The node type of a bed's use node.
+    /// </summary>
+    const int UseNodeType = 4;
+
+    /// <summary>
+    /// How long a use node a failed walk marked stays skipped: 0.5 on the original's world clock (<c>DAT_1421303d0 + 0xa0</c>, game hours,
+    /// <b>Observed</b>: the 5-minute rule of Task_TakeIntruderOutside reads its differences x 60).
+    /// </summary>
+    public const double BadNodeHours = 0.5;
+
+    /// <summary>
+    /// A use node is marked when a path to the building fails within this (squared 400) of the failing position (<c>FUN_14054d410</c>).
+    /// </summary>
+    const float BadNodeReach = 20;
+
+    /// <summary>
+    /// The most a generated interior cage or bed of a save may stand from Meitou's fixture of the same record and still be that one: Meitou places
+    /// the interior from the same layout (<b>Observed</b>: the Rebirth Slave Shop's caged prisoner's cage at distance 0, the next cage of the room
+    /// 27.8 away; the 24 saved sleepers of the Rebirth garrison's beds at distance 0, the next bed of the record 33 away).
+    /// </summary>
+    const float SavedSpotReach = 1;
 
     /// <summary>
     /// Registers the fixtures of a town's buildings (<see cref="TownSite.Buildings"/>) once, then binds the held characters whose
@@ -209,6 +398,9 @@ public sealed partial class FixtureRegistry
         EmptyPurchased(world, site);
     }
 
+    /// <summary>
+    /// Registers a town building and adds it to the sight's occluders.
+    /// </summary>
     void RegisterWithSight(World world, PopulationData data, int site, TownBuilding b, int townFaction)
     {
         RegisterBuilding(world, data, site, b, townFaction);
@@ -253,17 +445,40 @@ public sealed partial class FixtureRegistry
         world.Sight.Remove(building);
     }
 
+    /// <summary>
+    /// Registers a town building: its owner (a saved owner first) and property, its fixtures, then their index and their saved or level state.
+    /// A building with no fixtures, no property and no seat is not kept.
+    /// </summary>
     void RegisterBuilding(World world, PopulationData data, int site, TownBuilding b, int townFaction)
     {
         if (_byBuilding.ContainsKey(b.Key)) return;
-        var db = data.Db;
+
         int levelOwner = data.LevelOwnerOf(b, townFaction);
         int owner = levelOwner;
         if (Saved?.GetValueOrDefault(b.Key)?.Strings.GetValueOrDefault("owner faction ID") is { Length: > 0 } savedOwner
-                && data.FactionIndex(savedOwner) is >= 0 and var savedFaction)
+            && data.FactionIndex(savedOwner) is >= 0 and var savedFaction)
+        {
             owner = savedFaction;
+        }
+
         // saved as the player's: bought, and saved again as such
         RegisterProperty(world, data, site, b, owner, purchased: owner != levelOwner && owner == data.PlayerFaction);
+        var list = FixturesOf(world, data, site, b, owner);
+        if (list.Count == 0 && !_properties.ContainsKey(b.Key) && !_seatSpots.Values.Any(s => s.Building == b.Key))
+            return;
+
+        IndexBuilding(b.Key, list);
+        _usableData ??= data;
+        RestoreBuilding(world, b, list, owner);
+    }
+
+    /// <summary>
+    /// A building's fixtures: its doors and own lock (none while destroyed), its lockable or storage furniture, its beds and training dummies; its
+    /// seats are registered on the way.
+    /// </summary>
+    List<Fixture> FixturesOf(World world, PopulationData data, int site, TownBuilding b, int owner)
+    {
+        var db = data.Db;
         var faction = owner >= 0 && owner < data.Factions.Count ? data.Factions[owner] : null;
         var list = new List<Fixture>();
         var record = db.Find(b.BuildingId);
@@ -275,15 +490,32 @@ public sealed partial class FixtureRegistry
             if (Lockable(db, record) is { } own)
                 list.Add(Make(world, db, own, b.Key, b.Key, record, site, owner, faction, b.Position, b.Yaw));
         }
+
         foreach (var f in b.Fixtures)
+        {
             if (db.Find(f.RecordId) is { } item
-                    && (Lockable(db, item) ?? (f.StorageWidth > 0 && f.StorageHeight > 0 ? FixtureKind.Container : null)) is { } kind)
+                && (Lockable(db, item) ?? (f.StorageWidth > 0 && f.StorageHeight > 0 ? FixtureKind.Container : null)) is { } kind)
+            {
                 list.Add(Make(world, db, kind, f.Id, b.Key, item, site, owner, faction, f.Position, f.Yaw, f.StorageWidth, f.StorageHeight));
+            }
+        }
+
         RegisterSeats(b, owner);
+        AddBeds(db, site, b, owner, list);
+        AddDummies(site, b, owner, list);
+        return list;
+    }
+
+    /// <summary>
+    /// Adds a fixture for each bed spot of the building, numbered in spot order.
+    /// </summary>
+    static void AddBeds(GameDatabase db, int site, TownBuilding b, int owner, List<Fixture> list)
+    {
         int bed = 0;
         foreach (var spot in b.Spots)
         {
             if (spot.Kind != HomeSpotKind.Bed) continue;
+
             list.Add(new Fixture
             {
                 Id = $"{b.Key}@bed{bed.ToString(CultureInfo.InvariantCulture)}",
@@ -301,10 +533,18 @@ public sealed partial class FixtureRegistry
             });
             bed++;
         }
+    }
+
+    /// <summary>
+    /// Adds a fixture for each training dummy among the building's furniture, numbered in furniture order.
+    /// </summary>
+    static void AddDummies(int site, TownBuilding b, int owner, List<Fixture> list)
+    {
         int dummy = 0;
         foreach (var piece in b.Furniture)
         {
             if (piece.Kind != HomeSpotKind.Training || piece.Record is not { } dummyRecord) continue;
+
             list.Add(new Fixture
             {
                 Id = DummyId(b.Key, dummy++),
@@ -318,15 +558,21 @@ public sealed partial class FixtureRegistry
                 HostRecordId = b.BuildingId,
             });
         }
-        if (list.Count == 0 && !_properties.ContainsKey(b.Key) && !_seatSpots.Values.Any(s => s.Building == b.Key))
-            return;
-        _byBuilding[b.Key] = list;
-        _buildings.Add(b.Key);
+    }
+
+    /// <summary>
+    /// Indexes the building's fixtures and drops the lists derived from them.
+    /// </summary>
+    void IndexBuilding(string building, List<Fixture> list)
+    {
+        _byBuilding[building] = list;
+        _buildings.Add(building);
         foreach (var f in list)
         {
             _all.Add(f);
             _byId[f.Id] = f;
         }
+
         _containerSpots = null;
         _doorPicks = null;
         _doorsByBuilding = null;
@@ -336,12 +582,22 @@ public sealed partial class FixtureRegistry
         _doorList = null;
         _publishedCages = null;
         _dummySpots = null;
-        _usableData ??= data;
+    }
+
+    /// <summary>
+    /// The building's public and nested flags, then its fixtures' saved state (and a player building's own public flag), else the level's; then
+    /// its doors follow.
+    /// </summary>
+    void RestoreBuilding(World world, TownBuilding b, List<Fixture> list, int owner)
+    {
         _levelPublic[b.Key] = Saved?.GetValueOrDefault(b.Key) is { } savedState ? savedState.Bools.GetValueOrDefault("is public day", true)
                 : b.LevelState?.GetBool("is public day", true) ?? true;
         if (Saved?.GetValueOrDefault(b.Key) is { } nestedState ? nestedState.Bools.GetValueOrDefault("is inside building")
                 : b.LevelState?.GetBool("is inside building") ?? false)
+        {
             _nested.Add(b.Key);
+        }
+
         if (Saved?.GetValueOrDefault(b.Key) is { } state)
         {
             Restore(StateKeys.Of(state), b.Key, list, level: false);
@@ -349,7 +605,11 @@ public sealed partial class FixtureRegistry
             if (owner >= 0 && owner == world.Player.Faction && state.Bools.TryGetValue("is public day", out bool open))
                 _publicFlags[b.Key] = open;
         }
-        else if (b.LevelState is { } levelState) Restore(StateKeys.Of(levelState), b.Key, list, level: true);
+        else if (b.LevelState is { } levelState)
+        {
+            Restore(StateKeys.Of(levelState), b.Key, list, level: true);
+        }
+
         SyncDoors(b.Key);
     }
 
@@ -531,8 +791,6 @@ public sealed partial class FixtureRegistry
         return nodes.Length > 0 ? nodes : null;
     }
 
-    const int UseNodeType = 4;
-
     /// <summary>
     /// Where a sleeper is put in a bed and the way it faces (<c>Building::getPositionMarker</c> / <c>getDirectionMarkerQuat</c>, docs/game/locks.md
     /// "Beds"): the bed's use node nearest <paramref name="from"/>, else the bed's position marker (its origin without a flagged part) and facing.
@@ -541,15 +799,8 @@ public sealed partial class FixtureRegistry
         Nearest(bed, bed.Bed.Nodes, from, bed.BadNodes is { Count: > 0 } ? i => IsBad(bed, i, now) : null) ?? (bed.Marker ?? bed.Position, bed.Yaw);
 
     /// <summary>
-    /// How long a use node a failed walk marked stays skipped: 0.5 on the original's world clock (<c>DAT_1421303d0 + 0xa0</c>, game hours,
-    /// <b>Observed</b>: the 5-minute rule of Task_TakeIntruderOutside reads its differences x 60).
+    /// Whether the bed's use node failed within the last <see cref="BadNodeHours"/>.
     /// </summary>
-    public const double BadNodeHours = 0.5;
-    /// <summary>
-    /// A use node is marked when a path to the building fails within this (squared 400) of the failing position (<c>FUN_14054d410</c>).
-    /// </summary>
-    const float BadNodeReach = 20;
-
     static bool IsBad(Fixture bed, int node, double now)
     {
         foreach (var (n, stamp) in bed.BadNodes!)
@@ -647,6 +898,9 @@ public sealed partial class FixtureRegistry
         _doors?.SetDoorsBlocked(buildingInstance, false);
     }
 
+    /// <summary>
+    /// The fixture kind of a record: a cage by its function, a container with a lock, else none.
+    /// </summary>
     FixtureKind? Lockable(GameDatabase db, GameRecord record)
     {
         if (TownBuildings.FunctionOf(db, record, _functions)?.GetInt("function") == TownBuildings.CageFunction)
@@ -654,9 +908,15 @@ public sealed partial class FixtureRegistry
         return record.GetBool("has lock") ? FixtureKind.Container : null;
     }
 
+    /// <summary>
+    /// The name of the first animation the functionality's <paramref name="list"/> names (null: none).
+    /// </summary>
     static string? FirstClip(GameDatabase db, GameRecord functionality, string list) =>
         functionality.GetReferences(list) is [var first, ..] ? db.Find(first.TargetStringId)?.Name : null;
 
+    /// <summary>
+    /// A fixture of a record: its kind, place, owner, lock and storage as the record and its functionality say.
+    /// </summary>
     Fixture Make(World world, GameDatabase db, FixtureKind kind, string id, string building, GameRecord record, int site, int owner,
             FactionData? faction, Vector3 at, float yaw, int storageWidth = 0, int storageHeight = 0, string host = "")
     {
@@ -701,9 +961,15 @@ public sealed partial class FixtureRegistry
         return Math.Min(level, 100);
     }
 
+    /// <summary>
+    /// A record's integer field, or its float rounded (0: none).
+    /// </summary>
     static int IntOf(GameRecord? r, string key) =>
         r is null ? 0 : r.Ints.TryGetValue(key, out int v) ? v : r.Floats.TryGetValue(key, out float f) ? (int)MathF.Round(f) : 0;
 
+    /// <summary>
+    /// A record's float field, or its integer (<paramref name="fallback"/>: none).
+    /// </summary>
     static float FloatOf(GameRecord? r, string key, float fallback = 0) =>
         r is null ? fallback : r.Floats.TryGetValue(key, out float v) ? v : r.Ints.TryGetValue(key, out int n) ? n : fallback;
 
@@ -760,13 +1026,6 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// The most a generated interior cage or bed of a save may stand from Meitou's fixture of the same record and still be that one: Meitou places
-    /// the interior from the same layout (<b>Observed</b>: the Rebirth Slave Shop's caged prisoner's cage at distance 0, the next cage of the room
-    /// 27.8 away; the 24 saved sleepers of the Rebirth garrison's beds at distance 0, the next bed of the record 33 away).
-    /// </summary>
-    const float SavedSpotReach = 1;
-
-    /// <summary>
     /// The interior bed fixture with the spot's record standing at the spot (<see cref="SavedSpotReach"/>), or null.
     /// </summary>
     Fixture? InteriorBedAt(SavedSpot spot)
@@ -792,7 +1051,9 @@ public sealed partial class FixtureRegistry
         return null;
     }
 
-    // ------------------------------------------------------------------ doors
+    #endregion
+
+    #region Doors
 
     /// <summary>
     /// Applies a squad template's <c>initial door state</c> to the doors of its home (docs/game/locks.md "Doors", <b>Verified</b>): 0 CLOSED unlocked
@@ -938,6 +1199,9 @@ public sealed partial class FixtureRegistry
         if (fixture.Kind == FixtureKind.Door) SyncDoors(fixture.Building);
     }
 
+    /// <summary>
+    /// Tells the door gate whether the building's doors block paths: all closed, locked and whole.
+    /// </summary>
     void SyncDoors(string building)
     {
         if (_doors is null || !_byBuilding.TryGetValue(building, out var list)) return;
@@ -1037,7 +1301,9 @@ public sealed partial class FixtureRegistry
         return any;
     }
 
-    // ------------------------------------------------------------------ cages and beds
+    #endregion
+
+    #region Cages and beds
 
     /// <summary>
     /// The factor on a building's reach while the character is not moving (<c>DAT_141682ad0</c>, read from the exe).
@@ -1049,6 +1315,35 @@ public sealed partial class FixtureRegistry
     /// 15 for a building with a containing building; the 45 of an outdoor one is not modelled).
     /// </summary>
     public const float WorkHeight = 15;
+
+    /// <summary>
+    /// How far (X/Z) the bed search looks: the original takes the beds of the character's town, or of the nearest town within this distance
+    /// (<c>FUN_1408cbea0</c>: squared 1.5625e7); Meitou has no player towns, so it takes the beds within it (<b>engine choice</b>).
+    /// </summary>
+    public const float BedSearchRange = 3952.85f;
+
+    /// <summary>
+    /// The bed weight factor for a bed inside town walls (<c>amInsideTownWalls</c> above 0; <c>DAT_14168bf24</c> = 4.0, <b>Verified</b>,
+    /// <c>FUN_1408cfe00</c>).
+    /// </summary>
+    public const float InsideWallsBedFactor = 4;
+
+    /// <summary>
+    /// Raised (serially) by every <see cref="Imprison"/> once the captive is held and its sentence set: where a captive's bounty is claimed
+    /// (economy.md 11.4).
+    /// </summary>
+    public event Action<World, Imprisonment>? Caged;
+
+    /// <summary>
+    /// The bed clip Task_GetOutOfBed plays backwards before leaving (<c>FUN_140345760</c> compares the bed's clip name with it, <b>Verified</b>).
+    /// </summary>
+    public const string GoToBedClip = "gotobed";
+
+    /// <summary>
+    /// How far round its lie spot one getting out of bed looks for floor (engine choice: a bunk on a deck leaves a hole of 16 or more round its use
+    /// node).
+    /// </summary>
+    const float BedFloorReach = 40;
 
     /// <summary>
     /// Whether a character is at a cage to use it (goal 108's <c>isAtLocation</c> for a building, <c>AI::isWithinChoppingRange</c>
@@ -1151,18 +1446,6 @@ public sealed partial class FixtureRegistry
         }
         return best;
     }
-
-    /// <summary>
-    /// How far (X/Z) the bed search looks: the original takes the beds of the character's town, or of the nearest town within this distance
-    /// (<c>FUN_1408cbea0</c>: squared 1.5625e7); Meitou has no player towns, so it takes the beds within it (<b>engine choice</b>).
-    /// </summary>
-    public const float BedSearchRange = 3952.85f;
-
-    /// <summary>
-    /// The bed weight factor for a bed inside town walls (<c>amInsideTownWalls</c> above 0; <c>DAT_14168bf24</c> = 4.0, <b>Verified</b>,
-    /// <c>FUN_1408cfe00</c>).
-    /// </summary>
-    public const float InsideWallsBedFactor = 4;
 
     /// <summary>
     /// The bed search of a player-faction character (the original's <c>FUN_1408cfe00</c>, docs/game/locks.md "Beds", <b>Observed</b>): the bed it
@@ -1301,12 +1584,6 @@ public sealed partial class FixtureRegistry
     public IReadOnlyList<Imprisonment> CagingsOf(long tick) => _cagingsTick == tick ? _cagings : [];
 
     /// <summary>
-    /// Raised (serially) by every <see cref="Imprison"/> once the captive is held and its sentence set: where a captive's bounty is claimed
-    /// (economy.md 11.4).
-    /// </summary>
-    public event Action<World, Imprisonment>? Caged;
-
-    /// <summary>
     /// The occupant of an unlocked cage is lifted out by the character in <paramref name="lifter"/> (locks.md "Cages and beds", <c>FUN_14034fbe0</c>,
     /// <b>Observed</b>): it is no longer held (the carry link is the caller's). Out of the cage of another faction than the lifter's, the lifter gets
     /// a pending code 7 against the cage owner and the freed one a pending Escaping Prison and the escaped flag. False when it is not imprisoned or
@@ -1384,6 +1661,9 @@ public sealed partial class FixtureRegistry
         if (ExitSpot(cage) is { } at) table.Place(slot, at, table.Next[slot].Yaw);
     }
 
+    /// <summary>
+    /// Puts a character into its fixture: placed there, standing, its path and orders dropped.
+    /// </summary>
     static void Hold(CharacterTable table, int slot, CharacterCold c, Vector3 at, float yaw)
     {
         table.Place(slot, at, yaw);
@@ -1496,11 +1776,6 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// The bed clip Task_GetOutOfBed plays backwards before leaving (<c>FUN_140345760</c> compares the bed's clip name with it, <b>Verified</b>).
-    /// </summary>
-    public const string GoToBedClip = "gotobed";
-
-    /// <summary>
     /// <c>Task_GetOutOfBed</c> (<c>FUN_140345760</c> start, <c>FUN_140348480</c> update, <b>Verified</b>): a bed whose clip is
     /// <see cref="GoToBedClip"/> keeps the sleeper while the clip plays backwards (<see cref="CharacterCold.LeavingBed"/>, the animation system sets
     /// <see cref="CharacterCold.BedExitDone"/> under a tenth of the clip), then it leaves; any other bed (every base one: <c>sleepinbed</c>) is left
@@ -1531,12 +1806,6 @@ public sealed partial class FixtureRegistry
         StandBeside(world, s);
         return true;
     }
-
-    /// <summary>
-    /// How far round its lie spot one getting out of bed looks for floor (engine choice: a bunk on a deck leaves a hole of 16 or more round its use
-    /// node).
-    /// </summary>
-    const float BedFloorReach = 40;
 
     /// <summary>
     /// A bed's furniture cuts a hole in the floor's navmesh, and its use node may lie well inside it: a sleeper left there would stand on the storey
@@ -1642,6 +1911,9 @@ public sealed partial class FixtureRegistry
         else if (c.SlaveState == 2 && elapsed > 12) (c.SlaveState, c.SlaveSince) = (3, world.GameHours);
     }
 
+    /// <summary>
+    /// Clears a character's hold: in nothing, no sentence, not kidnapped.
+    /// </summary>
     static void Clear(CharacterCold c)
     {
         c.InSomething = HeldState.None;
@@ -1652,7 +1924,9 @@ public sealed partial class FixtureRegistry
         c.Kidnapped = false;
     }
 
-    // ------------------------------------------------------------------ saves
+    #endregion
+
+    #region Saves and the hash
 
     /// <summary>
     /// Takes a building's lock and door state from its saved GAMESTATE_BUILDING (docs/game/locks.md "Save keys"): <c>hardness</c> and <c>broken</c>
@@ -1712,6 +1986,9 @@ public sealed partial class FixtureRegistry
         public static StateKeys Of(GameRecord r) => new(r.Ints, r.Floats, r.Bools, r.Strings);
     }
 
+    /// <summary>
+    /// Reads a lock's saved hardness, broken flag (when <paramref name="broken"/>), level and locked flag; the keys end in <paramref name="suffix"/>.
+    /// </summary>
     static void ReadLock(StateKeys state, LockState l, string suffix, bool broken)
     {
         if (state.Floats.TryGetValue("hardness" + suffix, out float h)) l.Hardness = h;
@@ -1777,52 +2054,6 @@ public sealed partial class FixtureRegistry
         return true;
     }
 
-    IReadOnlyDictionary<(string Building, int Door), DoorView> _publishedDoors = new Dictionary<(string Building, int Door), DoorView>();
-    ulong _publishedDoorsKey;
-    List<Fixture>? _doorList;
-
-    /// <summary>
-    /// The doors of the player's buildings and every other door that is not plainly closed and unlocked (open, moving, locked, set to lock or
-    /// broken), for the snapshot; a new dictionary only when one of them changed.
-    /// </summary>
-    internal IReadOnlyDictionary<(string Building, int Door), DoorView> PublishedDoors()
-    {
-        _doorList ??= [.. _all.Where(f => f.Kind == FixtureKind.Door)];
-        ulong key = 0x446F6F72 ^ (ulong)_doorList.Count;
-        for (int i = 0; i < _doorList.Count; i++)
-        {
-            var f = _doorList[i];
-            if (f.Kind != FixtureKind.Door || !Shown(f)) continue;
-            key = Rng.Mix(key ^ (ulong)i) ^ BitConverter.SingleToUInt32Bits(f.OpenAmount) ^ ((ulong)f.Motion << 32)
-                    ^ (f.Lock is { EffectivelyLocked: true } ? 1UL << 40 : 0) ^ (f.WantsLock ? 1UL << 41 : 0) ^ (f.DoorBroken ? 1UL << 42 : 0);
-        }
-        if (key == _publishedDoorsKey) return _publishedDoors;
-        var doorViews = new Dictionary<(string Building, int Door), DoorView>();
-        foreach (var f in _doorList)
-            if (Shown(f))
-                doorViews[(f.Building, f.DoorIndex)] = new DoorView(f.OpenAmount, f.Motion, f.Lock is { EffectivelyLocked: true }, f.WantsLock,
-                        f.DoorBroken, DoorSpotOf(f)?.Centre ?? f.Position, f.RecordId, f.Lock?.Level ?? 0);
-        _publishedDoorsKey = key;
-        return _publishedDoors = doorViews;
-
-        static bool Shown(Fixture f) => f.Site < 0 || f.OpenAmount > 0 || f.Motion != DoorMotion.Closed || f.WantsLock || f.DoorBroken
-                || f.Lock is { EffectivelyLocked: true };
-    }
-
-    /// <summary>
-    /// The panel's view of a building's doors (null for no building, or one without fixtures).
-    /// </summary>
-    internal BuildingDetail? DetailOf(string? instance, int faction)
-    {
-        if (instance is null || !_byBuilding.TryGetValue(instance, out var list)) return null;
-        var doorList = list.Where(f => f.Kind == FixtureKind.Door).OrderBy(f => f.DoorIndex)
-            .Select(f
-                    => new DoorDetail(f.Motion is DoorMotion.Open or DoorMotion.Opening, f.Lock is { EffectivelyLocked: true }, f.Lock?.Level ?? 0,
-                            f.DoorBroken, f.RecordId, f.WantsLock)).ToArray();
-        return new BuildingDetail(instance, doorList, OwnsBuilding(instance, faction),
-                PublicOf(instance)) { SalePrice = SalePrice(instance, faction) };
-    }
-
     /// <summary>
     /// Gives a re-registered building's doors the state its old doors had, by door index (an upgraded or downgraded building: the original keeps its
     /// door objects and only swaps their records). The new lock keeps its own level and hardness; whether it is locked carries over.
@@ -1862,10 +2093,8 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// The registered buildings, in registration order.
+    /// Hashes the properties, the fixtures, the count of initial door states applied, the records, the public flags and the unreachable cages.
     /// </summary>
-    public IReadOnlyList<string> Buildings => _buildings;
-
     internal void Hash(ref StateHasher h)
     {
         HashProperties(ref h);
@@ -1889,6 +2118,8 @@ public sealed partial class FixtureRegistry
             h.Add(until);
         }
     }
+
+    #endregion
 }
 
 /// <summary>

@@ -40,7 +40,13 @@ public sealed class AiSettings
     /// of the squad appearing.
     /// </summary>
     public float PatrolEveryHoursMin { get; init; } = 6;
+    /// <summary>
+    /// The most game hours between two patrols (<see cref="PatrolEveryHoursMin"/>).
+    /// </summary>
     public float PatrolEveryHoursMax { get; init; } = 12;
+    /// <summary>
+    /// Game hours from the squad appearing to its first patrol.
+    /// </summary>
     public float FirstPatrolHours { get; init; } = 4;
 
     /// <summary>
@@ -52,7 +58,13 @@ public sealed class AiSettings
     /// A patrol's route: this many points round the home town, between these multiples of the town's radius from its centre, then home.
     /// </summary>
     public int PatrolPoints { get; init; } = 4;
+    /// <summary>
+    /// The nearest a patrol point lies from the town's centre, in town radii (<see cref="PatrolPoints"/>).
+    /// </summary>
     public float PatrolRadiusMin { get; init; } = 1.5f;
+    /// <summary>
+    /// The farthest a patrol point lies from the town's centre, in town radii (<see cref="PatrolPoints"/>).
+    /// </summary>
     public float PatrolRadiusMax { get; init; } = 3f;
 
     /// <summary>
@@ -98,25 +110,7 @@ public sealed record ChangeAi(int SquadId, string PackageId) : SimCommand;
 /// </summary>
 public sealed partial class AiSystem(PopulationData data, AiSettings? settings = null) : ITickSystem, IStateHashed
 {
-    /// <summary>
-    /// The blackboard an <see cref="AiMind.Engine"/> mind chooses under: no package, nothing claimed (its combat goals read none of it).
-    /// </summary>
-    static readonly Blackboard EngineBoard = new([]);
-
-    /// <summary>
-    /// Every character's default goal (docs/game/ai.md "Default tasks per character", Observed): IDLE at the fluff tier, weight 0.1.
-    /// </summary>
-    public static readonly AiGoal Idle =
-        new(new AiTask("", "IDLE", TaskType.Idle, TaskPriority.Fluff, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 0.1f);
-
-    /// <summary>
-    /// Every character's other default goal (<c>Character::setupAI</c>, <b>Verified</b>; docs/game/ai-tasks.md "Self preservation"):
-    /// SELF_PRESERVATION, urgent, aimed at itself, weight 1, all hours. The entries of the role and race lists (30 races list it) are the same goal
-    /// and are left out of the scoring, so it counts once.
-    /// </summary>
-    public static readonly AiGoal SelfPreservationGoal =
-        new(new AiTask("", "SELF_PRESERVATION", TaskType.SelfPreservation, TaskPriority.Urgent, TaskTargetType.Self, TaskEndEvent.Nothing),
-            0, 100, 1f);
+    #region Settings and wiring
 
     /// <summary>
     /// Walks to a spot in a row that may end elsewhere before it gives the spot up.
@@ -138,16 +132,20 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// is <b>Unknown</b>).
     /// </summary>
     public const float EnemyVicinity = 1000;
+
+    /// <summary>
+    /// The live relation table (the population data's).
+    /// </summary>
     FactionRelations Relations => data.Relations;
 
     /// <summary>
-    /// The step that separates two candidates of the same score (the original's 0.0001).
+    /// The settings (the defaults when none were given).
     /// </summary>
-    const float TieStep = 1e-4f;
-
-    static readonly TaskPriority[] Tiers = [TaskPriority.Urgent, TaskPriority.NonUrgent, TaskPriority.Fluff];
-
     public AiSettings Settings { get; } = settings ?? new AiSettings();
+
+    /// <summary>
+    /// The population data the squads, towns and packages come from.
+    /// </summary>
     PopulationData Data => data;
 
     /// <summary>
@@ -167,33 +165,47 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     public Combat.CombatSystem? ThreatSource { get; set; }
 
     /// <summary>
-    /// The alarm an investigator answers: its squad's town's nearest in reach, for goal 210 only its own faction's
-    /// (<see cref="Crime.CrimeSystem.AlarmFor"/>).
+    /// The package-class rules, bound to the squad being updated (<see cref="Rules"/>).
     /// </summary>
-    internal Crime.TownAlarm? AlarmOf(World world, int slot, TaskType type, Blackboard board) =>
-        Crimes is { Alarms.Count: > 0 } crimes && world.Characters.Cold(slot) is { } cold
-            ? crimes.AlarmFor(board.Town, world.Characters.Previous[slot].Position,
-                type == TaskType.InvestigateAlarmsAlliesOnly ? cold.Faction : -1,
-                Crime.CrimeSystem.FloorOf(world, slot, world.Characters.Previous[slot].Position), world.Sight.PlaceOf(slot), world)
-            : null;
-
-    readonly Dictionary<string, (IReadOnlyList<SlottedPackage> Packages, SquadTemplate? Template)> _templates = [];
-
-    // Squads already looked at (ids are never reused); derived from the squads, so not part of the hash.
-    readonly HashSet<int> _looked = [];
-
-    // The turret indices of each town claimed in the current cadence pass (derived, not hashed).
-    readonly Dictionary<int, HashSet<int>> _turretTaken = [];
-
-    // The seats of each bar claimed in the current cadence pass, by building (derived, not hashed).
-    readonly Dictionary<TownBuilding, HashSet<int>> _seatTaken = new(ReferenceEqualityComparer.Instance);
-
-    // The guard posts of each building held in the current cadence pass, by spot index (derived, not hashed).
-    readonly Dictionary<TownBuilding, HashSet<int>> _postTaken = new(ReferenceEqualityComparer.Instance);
     readonly Rules _rules = new();
 
-    // ------------------------------------------------------------------ think (parallel)
+    /// <summary>
+    /// The lock system, for the gate codes (resolved in the serial step).
+    /// </summary>
+    Locks.LockSystem? _locks;
 
+    #endregion
+
+    #region Think
+
+    /// <summary>
+    /// The blackboard an <see cref="AiMind.Engine"/> mind chooses under: no package, nothing claimed (its combat goals read none of it).
+    /// </summary>
+    static readonly Blackboard EngineBoard = new([]);
+
+    /// <summary>
+    /// Every character's default goal (docs/game/ai.md "Default tasks per character", Observed): IDLE at the fluff tier, weight 0.1.
+    /// </summary>
+    public static readonly AiGoal Idle =
+        new(new AiTask("", "IDLE", TaskType.Idle, TaskPriority.Fluff, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 0.1f);
+
+    /// <summary>
+    /// Every character's other default goal (<c>Character::setupAI</c>, <b>Verified</b>; docs/game/ai-tasks.md "Self preservation"):
+    /// SELF_PRESERVATION, urgent, aimed at itself, weight 1, all hours. The entries of the role and race lists (30 races list it) are the same goal
+    /// and are left out of the scoring, so it counts once.
+    /// </summary>
+    public static readonly AiGoal SelfPreservationGoal =
+        new(new AiTask("", "SELF_PRESERVATION", TaskType.SelfPreservation, TaskPriority.Urgent, TaskTargetType.Self, TaskEndEvent.Nothing),
+            0, 100, 1f);
+
+    /// <summary>
+    /// Set by a fighter's think that chose a goal that is no fight (AiMind.LeaveFight).
+    /// </summary>
+    int _leaving;
+
+    /// <summary>
+    /// The parallel think: each character the AI runs, on its turn or when asked, chooses a goal and acts it out (writes its own slot only).
+    /// </summary>
     public void Think(World world, Partition part)
     {
         var table = world.Characters;
@@ -265,9 +277,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (behaviour == AiBehaviour.Flee || behaviour == AiBehaviour.SelfPreserve && mind.Step == TaskType.RunAway)
             mind.FleeRequest = behaviour == AiBehaviour.SelfPreserve ? FleeAsk.Threat : FleeAsk.Enemies;
     }
-
-    // Set by a fighter's think that chose a goal that is no fight (AiMind.LeaveFight).
-    int _leaving;
 
     /// <summary>
     /// Which goals of a character the AI does not hold may still take it over (<see cref="Preempts"/>).
@@ -385,6 +394,26 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         : cold.Role == (int)SquadRole.Slave ? AiRole.Slave
         : AiRole.Squad;
 
+    #endregion
+
+    #region Choosing a goal
+
+    /// <summary>
+    /// The step that separates two candidates of the same score (the original's 0.0001).
+    /// </summary>
+    const float TieStep = 1e-4f;
+
+    /// <summary>
+    /// The tiers the chooser weighs in turn (<see cref="Choose"/>).
+    /// </summary>
+    static readonly TaskPriority[] Tiers = [TaskPriority.Urgent, TaskPriority.NonUrgent, TaskPriority.Fluff];
+
+    /// <summary>
+    /// The chooser's candidates of one tier, a scratch list per worker thread (<see cref="Candidates"/>).
+    /// </summary>
+    [ThreadStatic] static List<(AiGoal Goal, float Score, float Desire)>? s_candidates;
+    static List<(AiGoal Goal, float Score, float Desire)> Candidates => s_candidates ??= [];
+
     /// <summary>
     /// The goal to act out, with its plan in <see cref="AiMind.Plan"/>: by tier (urgent, non-urgent, fluff), the goals with a positive score highest
     /// first, leaving out one whose list A already holds; the first whose plan succeeds wins (docs/game/ai-tasks.md "Planner": the pick). Idle when
@@ -418,35 +447,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     Restrict.Self => !ReferenceEquals(g, SelfPreservationGoal),
                     Restrict.Combat => TaskBehaviours.Of(g.Task.Type) != AiBehaviour.Fight && !ReferenceEquals(g, SelfPreservationGoal),
                     _ => false,
-                }) return;
+                })
+                {
+                    return;
+                }
+
                 var profile = TaskProfiles.Of(g.Task.Type);
                 float desire = Desire(world, TaskBehaviours.Of(g.Task.Type), g.Task.Type, profile, squad, board, mind, id, g.Task.Target);
                 if (desire <= 0) return;
-                int crowd = profile.Crowd == 1 ? 0
-                    : board.CrowdOf(g.Task.Type, TaskDataTable.Of(g.Task.Type)?.Is(TaskDataFlags.NeedsTarget) ?? false,
-                        CrowdTarget(g.Task.Target, squad, board, id), id);
-                float score = desire * g.Weight * (crowd > 0 ? MathF.Pow(profile.Crowd, crowd) : 1);
-                if (mind.Goal is { } current && current.Task.Type == g.Task.Type && current.Task.Target == g.Task.Target)
-                {
-                    score *= Settings.Continuity;
 
-                    // A goal it committed to holds at least 0.4 until the commitment runs out, then at most 0.05 (docs/game/ai.md "Packages and
-                    // goals", Observed).
-                    if (profile.Commits) score = world.GameHours < mind.CommitUntil ? MathF.Max(score, 0.4f) : MathF.Min(score, 0.05f);
-                }
+                float score = Score(world, g, profile, desire, squad, board, mind, id);
                 if (score <= 0) return;
 
-                // Highest first. The original keys its candidates by score and, while the key is taken, adds 0.0001 (FUN_14050df10, Verified): of
-                // equal scores the goal listed later ranks first.
-                for (int k = 0; k < candidates.Count; k++)
-                    if (candidates[k].Score == score)
-                    {
-                        score += TieStep;
-                        k = -1;
-                    }
-                int at = candidates.Count;
-                while (at > 0 && candidates[at - 1].Score < score) at--;
-                candidates.Insert(at, (g, score, desire));
+                Rank(candidates, g, score, desire);
             }
 
             // Index loops: a foreach over the interface would box an enumerator per list and pass.
@@ -467,8 +480,49 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return Idle;
     }
 
-    [ThreadStatic] static List<(AiGoal Goal, float Score, float Desire)>? s_candidates;
-    static List<(AiGoal Goal, float Score, float Desire)> Candidates => s_candidates ??= [];
+    /// <summary>
+    /// A candidate goal's score: its desire times its weight and its crowd factor (<see cref="TaskProfile.Crowd"/> per member already on it), the
+    /// running goal's continuity, and a committed goal's floor or ceiling.
+    /// </summary>
+    float Score(World world, AiGoal g, TaskProfile profile, float desire, Squad squad, Blackboard board, AiMind mind, CharacterId id)
+    {
+        int crowd = profile.Crowd == 1 ? 0
+            : board.CrowdOf(g.Task.Type, TaskDataTable.Of(g.Task.Type)?.Is(TaskDataFlags.NeedsTarget) ?? false,
+                CrowdTarget(g.Task.Target, squad, board, id), id);
+        float score = desire * g.Weight * (crowd > 0 ? MathF.Pow(profile.Crowd, crowd) : 1);
+
+        if (mind.Goal is { } current && current.Task.Type == g.Task.Type && current.Task.Target == g.Task.Target)
+        {
+            score *= Settings.Continuity;
+
+            // A goal it committed to holds at least 0.4 until the commitment runs out, then at most 0.05 (docs/game/ai.md "Packages and
+            // goals", Observed).
+            if (profile.Commits) score = world.GameHours < mind.CommitUntil ? MathF.Max(score, 0.4f) : MathF.Min(score, 0.05f);
+        }
+
+        return score;
+    }
+
+    /// <summary>
+    /// Puts a candidate in the list, highest score first.
+    /// </summary>
+    static void Rank(List<(AiGoal Goal, float Score, float Desire)> candidates, AiGoal g, float score, float desire)
+    {
+        // Highest first. The original keys its candidates by score and, while the key is taken, adds 0.0001 (FUN_14050df10, Verified): of
+        // equal scores the goal listed later ranks first.
+        for (int k = 0; k < candidates.Count; k++)
+        {
+            if (candidates[k].Score == score)
+            {
+                score += TieStep;
+                k = -1;
+            }
+        }
+
+        int at = candidates.Count;
+        while (at > 0 && candidates[at - 1].Score < score) at--;
+        candidates.Insert(at, (g, score, desire));
+    }
 
     /// <summary>
     /// The character a goal is aimed at, as its <c>TaskInfo</c> entry holds it (<c>FUN_140269e90</c> copies the goal's target hand): the member
@@ -496,6 +550,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // Going to bed: the bed search is its target finder, whose factor is 0 when it finds no bed (FUN_1408cfe00, Verified), so the goal is not
         // wanted.
         if (type is TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure && !HasBed(world, board, mind, self.Slot)) return 0;
+
         float desire = profile.Desire switch
         {
             TaskProfiles.Random => 0.01f + 0.4f * Rng.Float(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think,
@@ -503,7 +558,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             TaskProfiles.Special => 1,
             var d => d,
         };
-        return desire * behaviour switch
+        return desire * FinderFactor(world, behaviour, type, squad, board, mind, self, targeting);
+    }
+
+    /// <summary>
+    /// What a goal's target finder found, by its behaviour (0 when it found nothing, or when the goal is not wanted now): the factor on its type's
+    /// desire (<see cref="Desire"/>).
+    /// </summary>
+    float FinderFactor(World world, AiBehaviour behaviour, TaskType type, Squad squad, Blackboard board, AiMind mind, CharacterId self,
+        TaskTargetType targeting)
+    {
+        return behaviour switch
         {
             // A goal aimed at the squad's mission follows the contract's target (a bodyguard its employer), wanted only while there is one alive.
             AiBehaviour.Follow when targeting == TaskTargetType.SquadMission =>
@@ -521,7 +586,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Turret => board.TurretClaims.ContainsKey(self.Slot)
                 ? board.TurretFactors.GetValueOrDefault(self.Slot, 1) * TurretDesire(world, self.Slot) : 0,
             AiBehaviour.TownNode =>
-                WanderIn(board.Town, world.Characters.Previous[self.Slot].Position).Count > 0 || OccupiedBuildings(world, board) > 0 ? 1 : 0,
+                _townPlaces.WanderIn(board.Town, world.Characters.Previous[self.Slot].Position).Count > 0 || OccupiedBuildings(world, board) > 0
+                    ? 1 : 0,
             // Row 36 has no finder: its update strolls round the squad's town, or where the character stands without one (Task_PatrolTown,
             // docs/game/ai-tasks.md).
             AiBehaviour.PatrolTown => 1,
@@ -578,6 +644,45 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return withPlayer ? 0.5f : 0.01f;
     }
 
+    bool AtHomeTown(World world, Squad squad, Blackboard board, CharacterId self)
+    {
+        if (board.Town < 0 || !world.Characters.IsAlive(self)) return true;
+        var site = data.Sites[board.Town];
+        var p = world.Characters.Previous[self.Slot].Position;
+        float r = site.Town.Radius;
+        return Vector2.DistanceSquared(new Vector2(p.X, p.Z), new Vector2(site.Position.X, site.Position.Z)) <= r * r;
+    }
+
+    #endregion
+
+    #region Town places and targets
+
+    /// <summary>
+    /// The towns' places for the AI's squads (<see cref="TownPlaces"/>), by town site; rebuilt on the package cadence.
+    /// </summary>
+    readonly TownPlaceIndex _townPlaces = new(data);
+
+    /// <summary>
+    /// The desire and the target ask on every worker: one scratch list each.
+    /// </summary>
+    [ThreadStatic] static List<TownBuilding>? s_sellingScratch;
+
+    /// <summary>
+    /// BuildingDesignation BD_BAR.
+    /// </summary>
+    internal const int DesignationBar = 3;
+
+    /// <summary>
+    /// BUILDING <c>node type</c> NODE_GENERAL.
+    /// </summary>
+    const int NodeGeneral = 1;
+
+    /// <summary>
+    /// The finder factor of a building the shopper picked (<c>FUN_1409997f0</c>, <b>Verified</b>): 1 for one with BF_SHOP furniture inside, 0.4 for
+    /// any other public building.
+    /// </summary>
+    const float ShopNoCounterFactor = 0.4f;
+
     /// <summary>
     /// The nearest town whose <see cref="TownData.Radius"/> holds a point (as the game's position lookup, <c>FUN_140928890</c>), -1 when none.
     /// </summary>
@@ -596,337 +701,18 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// A town's public buildings with a general node by zone, its shops, its public bars, its outdoor tables and the guard posts of its
-    /// standing buildings, as <see cref="RefreshPlaces"/> last found them.
+    /// The places of town <paramref name="site"/> (<see cref="TownPlaceIndex.Of"/>).
     /// </summary>
-    sealed record TownPlaces(IReadOnlyDictionary<ZoneCoordinate, TownBuilding[]> Wander, IReadOnlyList<TownBuilding> Shops,
-        IReadOnlyList<TownBuilding> Bars,
-        IReadOnlyList<TownBuilding> OutdoorTables, IReadOnlyList<TownBuilding> Workplaces,
-        IReadOnlyDictionary<TownBuilding, ulong> Stock, IReadOnlyList<SeatClaim> Seats, IReadOnlyDictionary<TownBuilding, int> SeatOwners,
-        IReadOnlyList<TownBuilding> Public, IReadOnlyList<SeatClaim> Posts);
-
-    static readonly TownPlaces NoPlaces = new(new Dictionary<ZoneCoordinate, TownBuilding[]>(), [], [], [], [],
-        new Dictionary<TownBuilding, ulong>(), [], new Dictionary<TownBuilding, int>(), [], []);
-
-    // Rebuilt in the serial step, read by the think on every worker (derived, not hashed).
-    readonly Dictionary<int, TownPlaces> _places = [];
-
-    // The workplaces of each town 189 can really work at (RealWork), rebuilt with the places (derived, not hashed).
-    readonly Dictionary<int, IReadOnlyList<TownBuilding>> _realWork = [];
-
-    // The operator slots of each workplace held in the current cadence pass (derived, not hashed).
-    readonly Dictionary<TownBuilding, int> _workTaken = new(ReferenceEqualityComparer.Instance);
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _maxOperators = new(StringComparer.Ordinal);
-
-    TownPlaces Places(int site) => site >= 0 && _places.TryGetValue(site, out var p) ? p : NoPlaces;
+    TownPlaces Places(int site) => _townPlaces.Of(site);
 
     /// <summary>
-    /// The buildings wandering in <paramref name="site"/> can go to from <paramref name="at"/>: its public ones with a general node in the zone of
-    /// that point.
+    /// Whether a home spot is a general node (<see cref="NodeGeneral"/>).
     /// </summary>
-    IReadOnlyList<TownBuilding> WanderIn(int site, Vector3 at) =>
-        Places(site).Wander.TryGetValue(WorldLayout.ZoneOf(at.X, at.Z), out var list) ? list : [];
-
-    /// <summary>
-    /// The towns' places for the AI's squads (serial, on the package cadence). A bar is a building whose residents' template has <c>building
-    /// designation</c> BAR (the original's hang-around-bar package picks one of those in the home town, docs/game/ai-tasks.md "Town goals",
-    /// Observed); a shop one whose residents trade (<see cref="SquadTemplate.HasShop"/>; the original's shopping looks for BF_SHOP furniture inside,
-    /// which Meitou does not read: engine choice), and public, as the original's shop finders require. Residents are the squads living there, else
-    /// the level data's <c>residents template</c>; the layout flags <c>is bar</c> / <c>is shop</c> count too. A building is public as its residents'
-    /// template's <c>public day</c> (the original writes it over the home's flag), else as its level state's <c>is public day</c>, else public
-    /// (engine choice: the original's default is Unknown); a town building the player owns as its Open to public toggle once set (the stats panel,
-    /// <see cref="Locks.FixtureRegistry.PublicOf"/>).
-    /// </summary>
-    void RefreshPlaces(World world)
-    {
-        _places.Clear();
-        _realWork.Clear();
-        var shops = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
-        var bars = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
-        var publicFlag = new Dictionary<TownBuilding, bool>(ReferenceEqualityComparer.Instance);
-
-        // The building's own record (designation, last template, public day), else (engine choice, a town not made yet) the template of its level
-        // data's residents.
-        void Note(TownBuilding b, SquadTemplate? t)
-        {
-            if (world.Fixtures.RecordOf(b.Key) is { } record)
-            {
-                if (record.Template is { } id && TemplateOf(id).Template is { HasShop: true }) shops.Add(b);
-                if (record.Designation == DesignationBar) bars.Add(b);
-                if (record.PublicDay is { } open) publicFlag[b] = open;
-                return;
-            }
-            if (t is null) return;
-            if (t.HasShop) shops.Add(b);
-            if (t.BuildingDesignation == DesignationBar) bars.Add(b);
-            publicFlag.TryAdd(b, t.PublicDay);
-        }
-        var stocks = new Dictionary<TownBuilding, List<Trading.Shop>>(ReferenceEqualityComparer.Instance);
-        foreach (var squad in world.Squads.All)
-            if ((squad.Ai?.OwnHome ?? squad.HomeBuilding) is { } home)
-            {
-                Note(home, TemplateOf(squad.TemplateId).Template);
-
-                // Only a building shop sells to shoppers: its stock is in containers, which is all FUN_14054add0 looks at (a trader's carried stock
-                // is not).
-                if (squad.Shop is { Building: not null } shop) (stocks.TryGetValue(home, out var held) ? held : stocks[home] = []).Add(shop);
-            }
-        foreach (var squad in world.Squads.All)
-            for (int pass = 0; pass < 2; pass++)
-            {
-                // The squad's town, and the one it is in (a bar package away from home takes that town's bar).
-                int site = pass == 0 ? squad.Ai?.Town ?? -1 : squad.Ai?.InTown.Site ?? -1;
-                if (site >= 0 && !_places.ContainsKey(site)) AddPlaces(site);
-            }
-
-        void AddPlaces(int site)
-        {
-            var buildings = data.Sites[site].Buildings;
-            foreach (var b in buildings)
-                if (b.ResidentsTemplate.Length > 0) Note(b, TemplateOf(b.ResidentsTemplate).Template);
-            bool IsPublic(TownBuilding b) => world.Fixtures.PublicOf(b.Key)
-                ?? (publicFlag.TryGetValue(b, out bool open) ? open : b.LevelState?.GetBool("is public day", true) ?? true);
-            var wander = buildings.Where(b => IsPublic(b)).GroupBy(b => b.Zone).ToDictionary(g => g.Key, g => g.ToArray());
-            var shopList = buildings.Where(b => (b.IsShop || shops.Contains(b)) && IsPublic(b)).ToArray();
-            var stock = new Dictionary<TownBuilding, ulong>(ReferenceEqualityComparer.Instance);
-            foreach (var b in shopList) stock[b] = StockOf(world, b, stocks.GetValueOrDefault(b));
-
-            // The town's furniture to sit around at (chairs, thrones, dummies) and the faction owning each building: its property owner, else its
-            // level owner, else the town's.
-            int townFaction = site < data.SiteFactions.Count ? data.SiteFactions[site] : -1;
-            var seats = new List<SeatClaim>();
-            var seatOwners = new Dictionary<TownBuilding, int>(ReferenceEqualityComparer.Instance);
-            foreach (var b in buildings)
-            {
-                if (world.Fixtures.IsEmptied(b.Key)) continue;   // a bought house's furniture is gone
-                for (int i = 0; i < b.SeatCount; i++)
-                    if (Sittable(b.SeatAt(i).Kind, dummies: true))
-                    {
-                        seats.Add(new SeatClaim(b, i));
-                        if (!seatOwners.ContainsKey(b)) seatOwners[b] = BuildingOwner(world, b, townFaction);
-                    }
-            }
-            _places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || bars.Contains(b)) && IsPublic(b))],
-                [.. buildings.Where(b => b.IsOutdoorTable)],
-                [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b) && b.Function is >= 0 and var fn && (WorkFunctions >> fn & 1) != 0)],
-                stock, seats, seatOwners,
-                [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))],
-                [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b)).SelectMany(GuardPosts)]);
-            _realWork[site] = [.. _places[site].Workplaces.Where(b => RealWork(world, b))];
-        }
-    }
-
-    /// <summary>
-    /// The item functions a shop has on sale, as a bit mask (goal 118 looks for a shop selling what it wants, <c>FUN_14054add0</c>): what its stock
-    /// containers hold and what the stock of the squads living in it holds (a building shop's containers are merged into the squad's stock; a
-    /// trader's carried stock is not looked at).
-    /// </summary>
-    ulong StockOf(World world, TownBuilding building, List<Trading.Shop>? held)
-    {
-        ulong mask = 0;
-        void Add(IEnumerable<Items.ItemInstance> items)
-        {
-            foreach (var item in items)
-                if (data.Items.Info(item.Record) is { } info) mask |= ShoppingList.Bit(info.Function);
-        }
-        foreach (var f in building.Fixtures)
-            if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Contents is { } box) Add(box.Items);
-        if (held is not null)
-            foreach (var shop in held) Add(shop.Stock.Items);
-        return mask;
-    }
-
-    /// <summary>
-    /// BuildingDesignation BD_BAR.
-    /// </summary>
-    const int DesignationBar = 3;
-
-    /// <summary>
-    /// The BuildingFunction bits a worker looks for (mask <c>0x41a</c> of <c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c>, read as bits,
-    /// <b>Observed</b>): MINE, RESEARCH, REFINERY, CRAFTING.
-    /// </summary>
-    const int WorkFunctions = 0x41a;
-
-    /// <summary>
-    /// How near a worker stands to a building without a functionality <c>use range</c> (units, engine choice).
-    /// </summary>
-    internal const float WorkReach = 30;
-
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, float> _workRanges = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// How near a worker must come to its building's position: the functionality's <c>use range</c> (the original's <c>UseableStuff</c> reach,
-    /// <c>maxUseRange</c>, docs/game/buildings-production.md "Work distance"), <see cref="WorkReach"/> for a building without one.
-    /// </summary>
-    internal float WorkRangeOf(TownBuilding b) => _workRanges.GetOrAdd(b.BuildingId, id =>
-        data.Db.Find(id)?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId) is { } function
-            ? function.GetFloat("use range", WorkReach)
-            : WorkReach);
-
-    /// <summary>
-    /// A worker is at its building within <paramref name="reach"/> of the building's position, or twice that once it has stopped (the original's
-    /// arrival doubles the reach of a character that is not moving, docs/game/buildings-production.md "Work distance"), so one held off by the
-    /// building's collision short of the reach has arrived there.
-    /// </summary>
-    internal static bool AtWork(in CharacterHot n, Vector3 building, float reach)
-    {
-        float dx = n.Position.X - building.X, dz = n.Position.Z - building.Z;
-        bool stopped = n.Velocity.X * n.Velocity.X + n.Velocity.Z * n.Velocity.Z <= 1;
-        float r = stopped ? 2 * reach : reach;
-        return dx * dx + dz * dz <= r * r;
-    }
-
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _workClips = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// The clip a worker plays at a building: its functionality's <c>animation</c>, else <c>stonemine</c> (<c>Task_OperateMachine</c>,
-    /// docs/game/buildings-production.md).
-    /// </summary>
-    string WorkClipOf(TownBuilding b) => _workClips.GetOrAdd(b.BuildingId, id =>
-        data.Db.Find(id)?.GetReferences("functionality") is [var link, ..]
-            && data.Db.Find(link.TargetStringId)?.GetReferences("animation") is [var anim, ..]
-            && data.Db.Find(anim.TargetStringId) is { } clip ? clip.Name : "stonemine");
-
-    /// <summary>
-    /// The BUILDING_FUNCTIONALITY (string id) of a worker's building, null without one: <c>Task_OperateMachine</c>, which the original runs for 189 /
-    /// 190's act-outs (87, 221), adds its <c>animation events</c> to the work clip each update (docs/audio.md "Machine work").
-    /// </summary>
-    string? WorkFunctionalityOf(TownBuilding b) =>
-        data.Db.Find(b.BuildingId)?.GetReferences("functionality") is [var link, ..] ? link.TargetStringId : null;
-
-    /// <summary>
-    /// The machine events of standing work at a functionality's clip (<see cref="CharacterCold.ActionWork"/>); null without a functionality or clip.
-    /// </summary>
-    internal static WorkEvents? StandingWork(string? functionality, string? clip) =>
-        functionality is not null && clip is not null ? new WorkEvents(functionality, clip) : null;
-
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, float> _workHungerRates = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// The hunger rate of a worker at a building: its functionality's <c>hunger rate</c> (1 without one), which <c>Task_OperateMachine</c>'s set-up
-    /// (<c>FUN_14035b430</c>, <b>Verified</b>) writes to the operator's CharStats <c>+0x178</c> for the real (87) and the pretend (221) act-out
-    /// alike.
-    /// </summary>
-    float WorkHungerRateOf(TownBuilding b) => _workHungerRates.GetOrAdd(b.BuildingId, id =>
-        data.Db.Find(id)?.GetReferences("functionality") is [var link, ..]
-            && data.Db.Find(link.TargetStringId) is { } function ? function.GetFloat("hunger rate", 1) : 1);
-
-    /// <summary>
-    /// The building a worker works at (the finders of goals 189 / 190: a random building of the town with a function in <see cref="WorkFunctions"/>,
-    /// slot 2 of the building finder <c>FUN_1409fb020</c>); the roll is the character's and its <paramref name="epoch"/> of picks
-    /// (<see cref="AiMind.WorkEpoch"/>), so asking twice names the same one. Null: the town has none. 189 (<paramref name="type"/>, real work) takes
-    /// only the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any.
-    /// </summary>
-    TownBuilding? PickWork(World world, CharacterId self, int town, int epoch, TaskType type = TaskType.AutoLabouringMinesPretend)
-    {
-        if (!WorkAllowed(world, self.Slot, town)) return null;
-        var list = WorkplacesFor(town, type);
-        int free = 0;
-        foreach (var b in list) if (HasFreeSlot(b)) free++;
-        if (free == 0) return null;
-        int pick = Rng.Int(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiTarget ^ (ulong)epoch << 20 ^ 0x57), free);
-        foreach (var b in list)
-            if (HasFreeSlot(b) && pick-- == 0) return b;
-        return null;
-    }
-
-    /// <summary>
-    /// Whether a mind holds a workplace that is still one its goal <paramref name="type"/> may work at.
-    /// </summary>
-    bool HoldsWork(AiMind mind, int town, TaskType type) => mind.WorkPost is { } post && WorkplacesFor(town, type).Contains(post);
-
-    /// <summary>
-    /// Whether a workplace has an operator slot no one holds in this cadence pass (73 <c>machineHasFreeOperatorSlot</c>; the finder's
-    /// <c>couldIOperate</c>, docs/game/ai-tasks.md "Worker"): fewer holders than its functionality's <c>max operators</c>.
-    /// </summary>
-    bool HasFreeSlot(TownBuilding building) => _workTaken.GetValueOrDefault(building) < MaxOperatorsOf(building);
-
-    /// <summary>
-    /// A workplace's functionality <c>max operators</c> (1 when the key is missing); no limit for a building without a functionality record.
-    /// </summary>
-    int MaxOperatorsOf(TownBuilding building) => _maxOperators.GetOrAdd(building.BuildingId, id =>
-        data.Db.Find(id)?.GetReferences("functionality") is [var link, ..] && data.Db.Find(link.TargetStringId) is { } function
-            ? function.GetInt("max operators", 1) : int.MaxValue);
-
-    /// <summary>
-    /// The operator slots of 189 / 190 (docs/game/ai-tasks.md "Worker"): a member whose goal is one of them keeps the workplace it holds while that
-    /// is still one its goal may work at, else holds one with a free slot drawn as <see cref="PickWork"/> draws; a member on another goal lets its
-    /// slot go. Serial, on the package cadence, after every squad's kept slots are reserved (<see cref="ReserveWork"/>).
-    /// </summary>
-    void ClaimWork(World world, Blackboard board, Squad squad)
-    {
-        foreach (var id in squad.Members)
-        {
-            if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s)?.Ai is not { } mind) continue;
-            var type = mind.Goal?.Task.Type;
-            bool works = type is TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend;
-            if (works && HoldsWork(mind, board.Town, type!.Value)) continue;
-            if (mind.WorkPost is { } left) _workTaken[left] = _workTaken.GetValueOrDefault(left) - 1;
-            mind.WorkPost = works ? PickWork(world, id, board.Town, mind.WorkEpoch, type!.Value) : null;
-            if (mind.WorkPost is { } got) _workTaken[got] = _workTaken.GetValueOrDefault(got) + 1;
-        }
-    }
-
-    /// <summary>
-    /// The workplaces the members hold, reserved for every squad before any claims (as <see cref="ReserveSeats"/>).
-    /// </summary>
-    void ReserveWork(World world)
-    {
-        foreach (var squad in world.Squads.All)
-            foreach (var id in squad.Members)
-                if (world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)?.Ai?.WorkPost is { } post)
-                    _workTaken[post] = _workTaken.GetValueOrDefault(post) + 1;
-    }
-
-    /// <summary>
-    /// The workplaces of <paramref name="town"/> a worker on <paramref name="type"/> may pick: <see cref="RealWork"/> for 189, all of them for 190.
-    /// </summary>
-    IReadOnlyList<TownBuilding> WorkplacesFor(int town, TaskType type)
-    {
-        if (type != TaskType.AutoLabouringMines) return Places(town).Workplaces;
-        return town >= 0 && _realWork.TryGetValue(town, out var real) ? real : [];
-    }
-
-    /// <summary>
-    /// Whether 189 can really work at a workplace (docs/game/ai-tasks.md "Worker"). Its act-out, 87 Operating machine, needs !62
-    /// <c>machineHasEmptyInputs</c>, and with an empty input the plan must fill the machine from a source of its input, so the original's workers
-    /// keep to the workplaces they can run. A mine has no input; a refinery, research or crafting bench counts only with a machine running there with
-    /// its inputs (engine choice: the pick does not ask whether 94 / 93 could fill an empty one).
-    /// </summary>
-    static bool RealWork(World world, TownBuilding building)
-    {
-        if (building.Function == MineFunction) return true;
-        foreach (var m in world.Machines.All)
-            if (m.Position.X == building.Position.X && m.Position.Z == building.Position.Z) return !m.HasEmptyInputs;
-        return false;
-    }
-
-    /// <summary>
-    /// BuildingFunction BF_MINE.
-    /// </summary>
-    const int MineFunction = 1;
-
-    /// <summary>
-    /// The player-flag gate of the building finders of goals 189 / 190 (<c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c>, <b>Verified</b>): the town's
-    /// owner and the character must agree on being the player's faction; a player-faction character in a town that is not the player's works only as
-    /// an owned slave (slave state 1).
-    /// </summary>
-    bool WorkAllowed(World world, int slot, int town)
-    {
-        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
-        if (player < 0 || world.Characters.Cold(slot) is not { } cold) return true;
-        bool townIsPlayer = town >= 0 && town < data.SiteFactions.Count && data.SiteFactions[town] == player;
-        bool charIsPlayer = cold.Faction == player;
-        return townIsPlayer == charIsPlayer || charIsPlayer && cold.SlaveState == 1;
-    }
-
     static bool IsGeneralNode(HomeSpot s) => s.NodeType == NodeGeneral;
 
     /// <summary>
-    /// BUILDING <c>node type</c> NODE_GENERAL.
+    /// The character's roll of this tick for the target of a town goal of <paramref name="behaviour"/>.
     /// </summary>
-    const int NodeGeneral = 1;
-
     static ulong TargetRoll(World world, CharacterId self, AiBehaviour behaviour) =>
         Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiTarget ^ (ulong)world.Tick << 8 ^ (ulong)behaviour);
 
@@ -946,7 +732,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             case AiBehaviour.Shop:
                 {
                     var b = behaviour == AiBehaviour.TownNode
-                        ? PickFrom(WanderIn(town, world.Characters.Previous[self.Slot].Position), roll)
+                        ? PickFrom(_townPlaces.WanderIn(town, world.Characters.Previous[self.Slot].Position), roll)
                         : ShopFor(places, mind, roll, RandomShopping(world, town));
                     if (b is null) return null;
 
@@ -990,6 +776,78 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
+    /// A random spot of <paramref name="building"/> that <paramref name="accept"/>s, its position; null when it has none.
+    /// </summary>
+    static Vector3? RandomNode(TownBuilding building, Func<HomeSpot, bool> accept, ulong roll)
+    {
+        int nodes = 0;
+        foreach (var s in building.Spots) if (accept(s)) nodes++;
+        if (nodes == 0) return null;
+        int pick = Rng.Int(Rng.Mix(roll), nodes);
+        foreach (var s in building.Spots)
+            if (accept(s) && pick-- == 0) return s.Position;
+        return null;
+    }
+
+    static TownBuilding? PickFrom(IReadOnlyList<TownBuilding> from, ulong roll) => from.Count == 0 ? null : from[Rng.Int(roll, from.Count)];
+
+    /// <summary>
+    /// The shop goal 118 goes to (<c>FUN_1409997f0</c>, <b>Verified</b>): a random shop of the town selling an item function of the first entry on
+    /// the character's list that has one, the entries taken in order and those already bought skipped (<c>FUN_1409fc070</c>); none sells one: a
+    /// random public building of the town (<c>FUN_1409fc1b0</c>, <see cref="TownPlaces.Public"/>; not only a shop). The random pick is made only when
+    /// <paramref name="randomAllowed"/> (<see cref="RandomShopping"/>): in a town of the player's faction only a shop selling what the list wants is
+    /// found (the list finder runs before that test, <c>FUN_1409997f0</c>, <b>Verified</b>). The goal's factor is <see cref="ShopFactor"/>.
+    /// </summary>
+    static TownBuilding? ShopFor(TownPlaces places, AiMind mind, ulong roll, bool randomAllowed)
+    {
+        var shops = places.Shops;
+        var selling = s_sellingScratch ??= [];
+        for (int k = 0; shops.Count > 0 && k < mind.Shopping.Count; k++)
+        {
+            int function = mind.Shopping.OpenFunction(k);
+            if (function < 0) continue;
+            selling.Clear();
+            foreach (var shop in shops)
+                if (places.Stock.TryGetValue(shop, out ulong mask) && ShoppingList.Stocks(mask, function)) selling.Add(shop);
+            if (selling.Count > 0) return selling[Rng.Int(roll, selling.Count)];
+        }
+        return randomAllowed && places.Public.Count > 0 ? places.Public[Rng.Int(roll, places.Public.Count)] : null;
+    }
+
+    /// <summary>
+    /// The factor of the pick: 1 for a shop (Meitou's <see cref="TownPlaces.Shops"/>: trading residents or the layout's shop flag, standing for
+    /// BF_SHOP furniture, <b>Observed</b>), else <see cref="ShopNoCounterFactor"/>. It multiplies the goal's desire.
+    /// </summary>
+    static float ShopFactor(TownPlaces places, TownBuilding building)
+    {
+        foreach (var shop in places.Shops)
+            if (ReferenceEquals(shop, building)) return 1;
+        return ShopNoCounterFactor;
+    }
+
+    /// <summary>
+    /// Whether the random pick of goal 118 runs in <paramref name="town"/>: its finder <c>FUN_1409fc1b0</c> is called only when the faction of the
+    /// shopper's town has no player flag (<c>+0x250</c> clear, <c>FUN_1409997f0</c>, <b>Verified</b>), i.e. the town is not the player's faction's.
+    /// </summary>
+    bool RandomShopping(World world, int town) =>
+        !(town >= 0 && town < data.SiteFactions.Count && data.SiteFactions[town] is >= 0 and var owner
+            && owner == (world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction));
+
+    #endregion
+
+    #region Patrol
+
+    /// <summary>
+    /// The scatter of a patrol order with no town (<c>FUN_1405c6b30</c>, <c>DAT_1416f190c</c>) and the least scatter of any (<c>DAT_14168dcf4</c>).
+    /// </summary>
+    const float PatrolScatter = 1250;
+
+    /// <summary>
+    /// The least scatter of a town patrol's points (<see cref="PatrolScatter"/>).
+    /// </summary>
+    const float PatrolScatterMin = 500;
+
+    /// <summary>
     /// Acts out 36 Patrolling town (<c>Task_PatrolTown</c>, docs/game/ai-tasks.md "Town goals"): strolls to a point drawn round its squad's town
     /// (<see cref="PatrolArea"/>, <see cref="PatrolPoint"/>) and, once the walk is over, forgets it, so the next think draws another, as the
     /// original's update sends a new move each time the last one ended.
@@ -1011,12 +869,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         Become(world, slot, CharacterTask.Idle);
         mind.Target = null;
     }
-
-    /// <summary>
-    /// The scatter of a patrol order with no town (<c>FUN_1405c6b30</c>, <c>DAT_1416f190c</c>) and the least scatter of any (<c>DAT_14168dcf4</c>).
-    /// </summary>
-    const float PatrolScatter = 1250;
-    const float PatrolScatterMin = 500;
 
     /// <summary>
     /// The area order of 36 Patrolling town (<c>Task_PatrolTown</c> through <c>FUN_1405c6b30</c>, docs/game/ai-tasks.md "Town goals",
@@ -1057,81 +909,196 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return null;
     }
 
+    #endregion
+
+    #region Work
+
     /// <summary>
-    /// A random spot of <paramref name="building"/> that <paramref name="accept"/>s, its position; null when it has none.
+    /// The operator slots of each workplace held in the current cadence pass (derived, not hashed).
     /// </summary>
-    static Vector3? RandomNode(TownBuilding building, Func<HomeSpot, bool> accept, ulong roll)
+    readonly Dictionary<TownBuilding, int> _workTaken = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// The work data of the buildings and home pieces (reach, clip, functionality, hunger rate, operator slots), cached by string id.
+    /// </summary>
+    readonly WorkFunctionality _work = new(data);
+
+    /// <summary>
+    /// How near a worker stands to a building without a functionality <c>use range</c> (units, engine choice).
+    /// </summary>
+    internal const float WorkReach = 30;
+
+    /// <summary>
+    /// BuildingFunction BF_MINE.
+    /// </summary>
+    const int MineFunction = 1;
+
+    /// <summary>
+    /// How near a worker must come to its building's position: the functionality's <c>use range</c> (the original's <c>UseableStuff</c> reach,
+    /// <c>maxUseRange</c>, docs/game/buildings-production.md "Work distance"), <see cref="WorkReach"/> for a building without one.
+    /// </summary>
+    internal float WorkRangeOf(TownBuilding b) => _work.RangeOf(b);
+
+    /// <summary>
+    /// A worker is at its building within <paramref name="reach"/> of the building's position, or twice that once it has stopped (the original's
+    /// arrival doubles the reach of a character that is not moving, docs/game/buildings-production.md "Work distance"), so one held off by the
+    /// building's collision short of the reach has arrived there.
+    /// </summary>
+    internal static bool AtWork(in CharacterHot n, Vector3 building, float reach)
     {
-        int nodes = 0;
-        foreach (var s in building.Spots) if (accept(s)) nodes++;
-        if (nodes == 0) return null;
-        int pick = Rng.Int(Rng.Mix(roll), nodes);
-        foreach (var s in building.Spots)
-            if (accept(s) && pick-- == 0) return s.Position;
+        float dx = n.Position.X - building.X, dz = n.Position.Z - building.Z;
+        bool stopped = n.Velocity.X * n.Velocity.X + n.Velocity.Z * n.Velocity.Z <= 1;
+        float r = stopped ? 2 * reach : reach;
+        return dx * dx + dz * dz <= r * r;
+    }
+
+    /// <summary>
+    /// The machine events of standing work at a functionality's clip (<see cref="CharacterCold.ActionWork"/>); null without a functionality or clip.
+    /// </summary>
+    internal static WorkEvents? StandingWork(string? functionality, string? clip) =>
+        functionality is not null && clip is not null ? new WorkEvents(functionality, clip) : null;
+
+    /// <summary>
+    /// The building a worker works at (the finders of goals 189 / 190: a random building of the town with a function in
+    /// <see cref="TownPlaceIndex.WorkFunctions"/>, slot 2 of the building finder <c>FUN_1409fb020</c>); the roll is the character's and its <paramref name="epoch"/> of picks
+    /// (<see cref="AiMind.WorkEpoch"/>), so asking twice names the same one. Null: the town has none. 189 (<paramref name="type"/>, real work) takes
+    /// only the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any.
+    /// </summary>
+    TownBuilding? PickWork(World world, CharacterId self, int town, int epoch, TaskType type = TaskType.AutoLabouringMinesPretend)
+    {
+        if (!WorkAllowed(world, self.Slot, town)) return null;
+        var list = WorkplacesFor(town, type);
+        int free = 0;
+        foreach (var b in list) if (HasFreeSlot(b)) free++;
+        if (free == 0) return null;
+        int pick = Rng.Int(Rng.Hash(world.Seed, Rng.Key(self), RngPurpose.Think, SeedSalts.AiTarget ^ (ulong)epoch << 20 ^ 0x57), free);
+        foreach (var b in list)
+            if (HasFreeSlot(b) && pick-- == 0) return b;
         return null;
     }
 
-    // The desire and the target ask on every worker: one scratch list each.
-    [ThreadStatic] static List<TownBuilding>? s_sellingScratch;
-
-    static TownBuilding? PickFrom(IReadOnlyList<TownBuilding> from, ulong roll) => from.Count == 0 ? null : from[Rng.Int(roll, from.Count)];
+    /// <summary>
+    /// Whether a mind holds a workplace that is still one its goal <paramref name="type"/> may work at.
+    /// </summary>
+    bool HoldsWork(AiMind mind, int town, TaskType type) => mind.WorkPost is { } post && WorkplacesFor(town, type).Contains(post);
 
     /// <summary>
-    /// The shop goal 118 goes to (<c>FUN_1409997f0</c>, <b>Verified</b>): a random shop of the town selling an item function of the first entry on
-    /// the character's list that has one, the entries taken in order and those already bought skipped (<c>FUN_1409fc070</c>); none sells one: a
-    /// random public building of the town (<c>FUN_1409fc1b0</c>, <see cref="TownPlaces.Public"/>; not only a shop). The random pick is made only when
-    /// <paramref name="randomAllowed"/> (<see cref="RandomShopping"/>): in a town of the player's faction only a shop selling what the list wants is
-    /// found (the list finder runs before that test, <c>FUN_1409997f0</c>, <b>Verified</b>). The goal's factor is <see cref="ShopFactor"/>.
+    /// Whether a workplace has an operator slot no one holds in this cadence pass (73 <c>machineHasFreeOperatorSlot</c>; the finder's
+    /// <c>couldIOperate</c>, docs/game/ai-tasks.md "Worker"): fewer holders than its functionality's <c>max operators</c>.
     /// </summary>
-    static TownBuilding? ShopFor(TownPlaces places, AiMind mind, ulong roll, bool randomAllowed)
+    bool HasFreeSlot(TownBuilding building) => _workTaken.GetValueOrDefault(building) < _work.MaxOperatorsOf(building);
+
+    /// <summary>
+    /// The operator slots of 189 / 190 (docs/game/ai-tasks.md "Worker"): a member whose goal is one of them keeps the workplace it holds while that
+    /// is still one its goal may work at, else holds one with a free slot drawn as <see cref="PickWork"/> draws; a member on another goal lets its
+    /// slot go. Serial, on the package cadence, after every squad's kept slots are reserved (<see cref="ReserveWork"/>).
+    /// </summary>
+    void ClaimWork(World world, Blackboard board, Squad squad)
     {
-        var shops = places.Shops;
-        var selling = s_sellingScratch ??= [];
-        for (int k = 0; shops.Count > 0 && k < mind.Shopping.Count; k++)
+        foreach (var id in squad.Members)
         {
-            int function = mind.Shopping.OpenFunction(k);
-            if (function < 0) continue;
-            selling.Clear();
-            foreach (var shop in shops)
-                if (places.Stock.TryGetValue(shop, out ulong mask) && ShoppingList.Stocks(mask, function)) selling.Add(shop);
-            if (selling.Count > 0) return selling[Rng.Int(roll, selling.Count)];
+            if (!world.Characters.TryResolveNext(id, out int s) || world.Characters.Cold(s)?.Ai is not { } mind) continue;
+            var type = mind.Goal?.Task.Type;
+            bool works = type is TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend;
+            if (works && HoldsWork(mind, board.Town, type!.Value)) continue;
+            if (mind.WorkPost is { } left) _workTaken[left] = _workTaken.GetValueOrDefault(left) - 1;
+            mind.WorkPost = works ? PickWork(world, id, board.Town, mind.WorkEpoch, type!.Value) : null;
+            if (mind.WorkPost is { } got) _workTaken[got] = _workTaken.GetValueOrDefault(got) + 1;
         }
-        return randomAllowed && places.Public.Count > 0 ? places.Public[Rng.Int(roll, places.Public.Count)] : null;
     }
 
     /// <summary>
-    /// The finder factor of a building the shopper picked (<c>FUN_1409997f0</c>, <b>Verified</b>): 1 for one with BF_SHOP furniture inside, 0.4 for
-    /// any other public building.
+    /// The workplaces the members hold, reserved for every squad before any claims (as <see cref="ReserveSeats"/>).
     /// </summary>
-    const float ShopNoCounterFactor = 0.4f;
-
-    /// <summary>
-    /// The factor of the pick: 1 for a shop (Meitou's <see cref="TownPlaces.Shops"/>: trading residents or the layout's shop flag, standing for
-    /// BF_SHOP furniture, <b>Observed</b>), else <see cref="ShopNoCounterFactor"/>. It multiplies the goal's desire.
-    /// </summary>
-    static float ShopFactor(TownPlaces places, TownBuilding building)
+    void ReserveWork(World world)
     {
-        foreach (var shop in places.Shops)
-            if (ReferenceEquals(shop, building)) return 1;
-        return ShopNoCounterFactor;
+        foreach (var squad in world.Squads.All)
+            foreach (var id in squad.Members)
+                if (world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)?.Ai?.WorkPost is { } post)
+                    _workTaken[post] = _workTaken.GetValueOrDefault(post) + 1;
     }
 
     /// <summary>
-    /// Whether the random pick of goal 118 runs in <paramref name="town"/>: its finder <c>FUN_1409fc1b0</c> is called only when the faction of the
-    /// shopper's town has no player flag (<c>+0x250</c> clear, <c>FUN_1409997f0</c>, <b>Verified</b>), i.e. the town is not the player's faction's.
+    /// The workplaces of <paramref name="town"/> a worker on <paramref name="type"/> may pick: <see cref="RealWork"/> for 189, all of them for 190.
     /// </summary>
-    bool RandomShopping(World world, int town) =>
-        !(town >= 0 && town < data.SiteFactions.Count && data.SiteFactions[town] is >= 0 and var owner
-            && owner == (world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction));
-
-    bool AtHomeTown(World world, Squad squad, Blackboard board, CharacterId self)
+    IReadOnlyList<TownBuilding> WorkplacesFor(int town, TaskType type)
     {
-        if (board.Town < 0 || !world.Characters.IsAlive(self)) return true;
-        var site = data.Sites[board.Town];
-        var p = world.Characters.Previous[self.Slot].Position;
-        float r = site.Town.Radius;
-        return Vector2.DistanceSquared(new Vector2(p.X, p.Z), new Vector2(site.Position.X, site.Position.Z)) <= r * r;
+        if (type != TaskType.AutoLabouringMines) return Places(town).Workplaces;
+        return _townPlaces.RealWorkOf(town);
     }
+
+    /// <summary>
+    /// Whether 189 can really work at a workplace (docs/game/ai-tasks.md "Worker"). Its act-out, 87 Operating machine, needs !62
+    /// <c>machineHasEmptyInputs</c>, and with an empty input the plan must fill the machine from a source of its input, so the original's workers
+    /// keep to the workplaces they can run. A mine has no input; a refinery, research or crafting bench counts only with a machine running there with
+    /// its inputs (engine choice: the pick does not ask whether 94 / 93 could fill an empty one).
+    /// </summary>
+    internal static bool RealWork(World world, TownBuilding building)
+    {
+        if (building.Function == MineFunction) return true;
+        foreach (var m in world.Machines.All)
+            if (m.Position.X == building.Position.X && m.Position.Z == building.Position.Z) return !m.HasEmptyInputs;
+        return false;
+    }
+
+    /// <summary>
+    /// The player-flag gate of the building finders of goals 189 / 190 (<c>FUN_1408cac60</c> / <c>FUN_1408cadb0</c>, <b>Verified</b>): the town's
+    /// owner and the character must agree on being the player's faction; a player-faction character in a town that is not the player's works only as
+    /// an owned slave (slave state 1).
+    /// </summary>
+    bool WorkAllowed(World world, int slot, int town)
+    {
+        int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
+        if (player < 0 || world.Characters.Cold(slot) is not { } cold) return true;
+        bool townIsPlayer = town >= 0 && town < data.SiteFactions.Count && data.SiteFactions[town] == player;
+        bool charIsPlayer = cold.Faction == player;
+        return townIsPlayer == charIsPlayer || charIsPlayer && cold.SlaveState == 1;
+    }
+
+    /// <summary>
+    /// At its work building (<see cref="AtWork"/>): the walk there is over.
+    /// </summary>
+    static bool ArrivedAtWork(in CharacterHot n, AiMind mind, Vector3 building)
+    {
+        if (!AtWork(in n, building, mind.WorkRange)) return false;
+        mind.Walking = false;
+        mind.FailedWalks = 0;
+        return true;
+    }
+
+    /// <summary>
+    /// Staying home at a workstation of the home (the pretend operating of 221, <see cref="PretendOperate"/>).
+    /// </summary>
+    static bool PretendsAtHome(Blackboard board, int slot, AiBehaviour behaviour, TaskType type) =>
+        behaviour == AiBehaviour.Sit && type == TaskType.StayInHome && board.SeatClaims.TryGetValue(slot, out var claim)
+            && claim.Kind == HomeSpotKind.Workstation;
+
+    /// <summary>
+    /// At a workstation, pretending to operate it (effect 136 IS_WORKING_PRETEND, row 221): the machine's work clip and hunger rate, as the real
+    /// operating.
+    /// </summary>
+    void PretendOperate(World world, int slot, AiMind mind, HomeSpot piece)
+    {
+        var clip = _work.PieceClipOf(piece);
+        mind.WorkActive = true;
+        mind.WorkClip = clip;
+        mind.WorkHungerRate = piece.HungerRate;
+        if (world.Characters.Cold(slot) is { } worker) worker.ActionClip = clip;
+    }
+
+    #endregion
+
+    #region Acting out a goal
+
+    /// <summary>
+    /// The hand hold of a drawn crossbow.
+    /// </summary>
+    static readonly WeaponKinds BowHold = HandHold.OfCategory((int)Meitou.Data.Gameplay.Combat.WeaponCategory.Bow).Weapon;
+
+    /// <summary>
+    /// The radius of the ring a resident back from its town's time unloaded is put on round its spot (units; half a human's separation radius).
+    /// </summary>
+    const float ResumeRing = 4;
 
     /// <summary>
     /// Acts out a goal: sets the movement task it maps to, unless the character is already doing it.
@@ -1151,59 +1118,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             mind.Version = board.Version;
             return;
         }
+
         var type = goal.Task.Type;
         var behaviour = TaskBehaviours.Of(type);
         var profile = TaskProfiles.Of(type);
-
-        // A goal taken up anew starts over: a fresh target and, for a goal it commits to, a fresh commitment. So does a committed goal chosen again
-        // after its commitment ran out (engine reading: the original's target finders roll a new target then, so the goal counts as new).
-        bool fresh = mind.Goal is not { } before || before.Task.Type != type || before.Task.Target != goal.Task.Target
-            || profile.Commits && world.GameHours >= mind.CommitUntil;
-        if (fresh)
-        {
-            mind.Walking = false;
-            mind.FailedWalks = 0;
-            mind.Target = null;
-            // a renewed goal draws its node anew
-            mind.NodeRoll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think, SeedSalts.NodePick ^ (ulong)++mind.NodeEpoch);
-            // A spot given up is tried again from wherever the character is now (engine choice: the walk may have failed from the old place only).
-            mind.HomeUnreachable = false;
-            if (type is not (TaskType.RelaxInTownPackage or TaskType.SitAround or TaskType.SitOnThrone)) mind.SeatUnreachable = false;
-            if (profile.Commits)
-            {
-                ulong roll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think,
-                    SeedSalts.AiCommit ^ (ulong)world.Tick << 9 ^ (ulong)type);
-                mind.CommitUntil = world.GameHours + profile.CommitMin + Rng.Float(roll) * profile.CommitRange;
-            }
-        }
-
-        // Staying home sits on the chair its squad claimed for it (the original's 43 operates home furniture, chairs among it); without one it stands
-        // at home.
-        if (type == TaskType.StayInHome && board.SeatClaims.ContainsKey(slot) && !mind.SeatUnreachable) behaviour = AiBehaviour.Sit;
-        if (behaviour == AiBehaviour.Investigate && (fresh || mind.Behaviour != AiBehaviour.Investigate))
-            mind.LookAbout = Crime.CrimeSystem.FirstLookAboutSeconds;
-        mind.Goal = goal;
-        mind.Behaviour = behaviour;
-        mind.Version = board.Version;
-        mind.WanderRadius = 0;
-        mind.SitClip = null;   // set again below while it stays on its chair
-        mind.SitHungerRate = 1;
-        if (mind.WorkActive && behaviour != AiBehaviour.Work && !PretendsAtHome(board, slot, behaviour, type))
-        {
-            // It stopped working: the next pick is a new one and the work clip goes.
-            mind.WorkActive = false;
-            mind.WorkEpoch++;
-            if (table.Cold(slot) is { } worker && mind.WorkClip is not null && worker.ActionClip == mind.WorkClip)
-            {
-                worker.ActionClip = null;
-                worker.ActionWork = null;
-            }
-            mind.WorkClip = null;
-            mind.WorkFunctionality = null;
-        }
-        mind.FollowTarget = CharacterId.None;   // set again below for a follow goal aimed at the squad's mission
-        ref var n = ref table.Next[slot];
-        bool leader = mind.Squad.Leader == table.IdOf(slot);
+        bool fresh = TakeUp(world, slot, mind, goal, type, profile);
+        behaviour = Adopt(world, slot, mind, goal, board, type, behaviour, fresh);
 
         // Another goal gets it out of its bed (the get-up step's own think, or the goal's act-out where the plan has none); it stands where it lay.
         if (behaviour != AiBehaviour.Sleep && table.Cold(slot)!.InSomething == Locks.HeldState.Bed
@@ -1214,30 +1134,111 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return;
         }
 
+        if (!PlanStep(world, slot, mind, ref behaviour)) return;
+        if (mind.Resume && Resume(world, slot, mind)) return;
+
+        ActOut(world, slot, mind, goal, board, type, behaviour);
+    }
+
+    /// <summary>
+    /// Whether the goal is taken up anew, and then its start over: a fresh target and node roll, the spots given up tried again, and for a goal it
+    /// commits to a fresh commitment.
+    /// </summary>
+    static bool TakeUp(World world, int slot, AiMind mind, AiGoal goal, TaskType type, TaskProfile profile)
+    {
+        var table = world.Characters;
+
+        // A goal taken up anew starts over: a fresh target and, for a goal it commits to, a fresh commitment. So does a committed goal chosen again
+        // after its commitment ran out (engine reading: the original's target finders roll a new target then, so the goal counts as new).
+        bool fresh = mind.Goal is not { } before || before.Task.Type != type || before.Task.Target != goal.Task.Target
+            || profile.Commits && world.GameHours >= mind.CommitUntil;
+        if (!fresh) return false;
+
+        mind.Walking = false;
+        mind.FailedWalks = 0;
+        mind.Target = null;
+
+        // a renewed goal draws its node anew
+        mind.NodeRoll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think, SeedSalts.NodePick ^ (ulong)++mind.NodeEpoch);
+
+        // A spot given up is tried again from wherever the character is now (engine choice: the walk may have failed from the old place only).
+        mind.HomeUnreachable = false;
+        if (type is not (TaskType.RelaxInTownPackage or TaskType.SitAround or TaskType.SitOnThrone)) mind.SeatUnreachable = false;
+
+        if (profile.Commits)
+        {
+            ulong roll = Rng.Hash(world.Seed, Rng.Key(table.IdOf(slot)), RngPurpose.Think,
+                SeedSalts.AiCommit ^ (ulong)world.Tick << 9 ^ (ulong)type);
+            mind.CommitUntil = world.GameHours + profile.CommitMin + Rng.Float(roll) * profile.CommitRange;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The mind takes the goal and its behaviour (staying home on a claimed chair sits); what the last goal left is cleared: the wander radius, the
+    /// sitting clip, the work it stopped and the follow target. Returns the behaviour.
+    /// </summary>
+    AiBehaviour Adopt(World world, int slot, AiMind mind, AiGoal goal, Blackboard board, TaskType type, AiBehaviour behaviour, bool fresh)
+    {
+        var table = world.Characters;
+
+        // Staying home sits on the chair its squad claimed for it (the original's 43 operates home furniture, chairs among it); without one it stands
+        // at home.
+        if (type == TaskType.StayInHome && board.SeatClaims.ContainsKey(slot) && !mind.SeatUnreachable) behaviour = AiBehaviour.Sit;
+        if (behaviour == AiBehaviour.Investigate && (fresh || mind.Behaviour != AiBehaviour.Investigate))
+            mind.LookAbout = Crime.CrimeSystem.FirstLookAboutSeconds;
+
+        mind.Goal = goal;
+        mind.Behaviour = behaviour;
+        mind.Version = board.Version;
+        mind.WanderRadius = 0;
+        mind.SitClip = null;   // set again below while it stays on its chair
+        mind.SitHungerRate = 1;
+
+        if (mind.WorkActive && behaviour != AiBehaviour.Work && !PretendsAtHome(board, slot, behaviour, type))
+        {
+            // It stopped working: the next pick is a new one and the work clip goes.
+            mind.WorkActive = false;
+            mind.WorkEpoch++;
+
+            if (table.Cold(slot) is { } worker && mind.WorkClip is not null && worker.ActionClip == mind.WorkClip)
+            {
+                worker.ActionClip = null;
+                worker.ActionWork = null;
+            }
+
+            mind.WorkClip = null;
+            mind.WorkFunctionality = null;
+        }
+
+        mind.FollowTarget = CharacterId.None;   // set again below for a follow goal aimed at the squad's mission
+        return behaviour;
+    }
+
+    /// <summary>
+    /// The steps of the plan before the goal's own act-out: getting out of bed, sheathing and drawing (one think each), the walks home, out of the
+    /// home and near the target, and the ditch request. False when the step took the think (the act-out waits); <paramref name="behaviour"/> may
+    /// become the walk home.
+    /// </summary>
+    bool PlanStep(World world, int slot, AiMind mind, ref AiBehaviour behaviour)
+    {
+        var table = world.Characters;
+
         // Steps of the plan before the goal's own act-out: getting out of bed, sheathing (one think each); the walk and the rest are the goal's.
         switch (mind.Step)
         {
             case TaskType.GetOutOfBed or TaskType.GetOutOfBedIfItsEmergency or TaskType.GetOutOfBedOnceHealed:
                 Become(world, slot, CharacterTask.Idle);
                 StepDone(mind);
-                return;
+                return false;
             case TaskType.UnequipWeapon:
                 table.Cold(slot)!.DrawnWeapon = WeaponKinds.None;
                 StepDone(mind);
-                return;
+                return false;
             case TaskType.EquipWeapon or TaskType.EquipCrossbow:
-                // Task_EquipBestWeapon (6 melee only, 264 ranged only; FUN_140346c30, Verified): the matching weapon it carries comes out, else the
-                // hand is emptied.
-                var armed = table.Cold(slot)!;
-                bool ranged = mind.Step == TaskType.EquipCrossbow;
-                if (armed.Fighter is { } fighter)
-                    armed.DrawnWeapon = !ranged ? Combat.CombatSystem.MeleeDrawn(fighter) : fighter.Crossbow is not null ? BowHold : WeaponKinds.None;
-
-                // Neither the back nor the hip gave one: an NPC of a non-player faction takes the first matching weapon of its inventory (s08-f09).
-                if (armed.DrawnWeapon == WeaponKinds.None && DrawFromInventory(world, armed, ranged) && armed.Fighter is { } rebuilt)
-                    armed.DrawnWeapon = !ranged ? Combat.CombatSystem.MeleeDrawn(rebuilt) : rebuilt.Crossbow is not null ? BowHold : WeaponKinds.None;
-                StepDone(mind);
-                return;
+                EquipStep(world, slot, mind);
+                return false;
             case TaskType.GoHomebuilding:
                 // 19 Going home before the goal (43 Staying home and the like away from home): the walk home of the GoHome act-out.
                 behaviour = AiBehaviour.GoHome;
@@ -1250,48 +1251,85 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 // 200 Task_LeaveBuilding: to 1.1 of the door's span past its outer point (A + (A - B) x 1.1) of the home's first door, until outside.
                 if (LeavePoint(world, leaving) is { } outside
                     && !GoToSpot(world, slot, mind, outside, GiveUp.Target, SpeedMode.Walk, slack: 10))
-                    return;
+                {
+                    return false;
+                }
+
                 break;
             case TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast or TaskType.FillMachine when mind.Plan[0].Target.Kind == Targets.Store:
                 // Step 93 into the ditch target (rows 113, 114, 242), and the walk to it: the town duty system walks there and puts the carried items
                 // in, then the AI plans again.
                 mind.DitchRequest = true;
                 Become(world, slot, CharacterTask.Idle);
-                return;
+                return false;
             case TaskType.GetNearTo when !mind.Plan[0].Target.IsNone:
                 // 40 Following to within 10 of the plan's target, then the goal's own act-out.
-                if (!GoToSpot(world, slot, mind, Flat(mind.Plan[0].Target.Position), GiveUp.Target, SpeedMode.Walk, slack: 10)) return;
+                if (!GoToSpot(world, slot, mind, Flat(mind.Plan[0].Target.Position), GiveUp.Target, SpeedMode.Walk, slack: 10)) return false;
+
                 break;
         }
-        if (mind.Resume)
-        {
-            // Back from its town's time unloaded: it is already where the plan's walk ends (docs/simulation.md "Off-screen tier", residents'
-            // schedule).
-            mind.Resume = false;
-            if (mind.Step is TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast && !mind.Plan[0].Target.IsNone)
-            {
-                var end = mind.Plan[0].Target.Position;
 
-                // On a ring round the spot by member (engine choice): members sharing a bed or node are not put on one point, where separation would
-                // throw them off it.
-                float angle = mind.MemberIndex * 2.39996f;
-                end += new Vector3(MathF.Sin(angle), 0, MathF.Cos(angle)) * ResumeRing;
-                var walk = world.Walkability;
-                var at = !float.IsNaN(end.Y) && walk.FloorNear(end.X, end.Z, end.Y, FloorSlack) is { } floor ? floor
-                    : new Vector3(end.X, float.IsNaN(end.Y) ? walk.GroundHeight(end.X, end.Z) : end.Y, end.Z);
+        return true;
+    }
 
-                // Only onto walkable ground: a spot it could not walk to either is left to the walk and its give-up rule. The serial step puts it
-                // there (after the movement, which steps from the last tick's place), and it thinks again on the next tick, from the spot.
-                if (walk.IsWalkable(at.X, at.Z, at.Y))
-                {
-                    mind.PlaceAt = at;
-                    mind.Version = -1;
-                    Interlocked.Exchange(ref _placing, 1);
-                    Become(world, slot, CharacterTask.Idle);
-                    return;
-                }
-            }
-        }
+    /// <summary>
+    /// Task_EquipBestWeapon (6 melee only, 264 ranged only; <c>FUN_140346c30</c>, Verified): the matching weapon it carries comes out, else the
+    /// hand is emptied; the step is done.
+    /// </summary>
+    void EquipStep(World world, int slot, AiMind mind)
+    {
+        var table = world.Characters;
+        var armed = table.Cold(slot)!;
+        bool ranged = mind.Step == TaskType.EquipCrossbow;
+        if (armed.Fighter is { } fighter)
+            armed.DrawnWeapon = !ranged ? Combat.CombatSystem.MeleeDrawn(fighter) : fighter.Crossbow is not null ? BowHold : WeaponKinds.None;
+
+        // Neither the back nor the hip gave one: an NPC of a non-player faction takes the first matching weapon of its inventory (s08-f09).
+        if (armed.DrawnWeapon == WeaponKinds.None && DrawFromInventory(world, armed, ranged) && armed.Fighter is { } rebuilt)
+            armed.DrawnWeapon = !ranged ? Combat.CombatSystem.MeleeDrawn(rebuilt) : rebuilt.Crossbow is not null ? BowHold : WeaponKinds.None;
+
+        StepDone(mind);
+    }
+
+    /// <summary>
+    /// Back from its town's time unloaded (<see cref="AiMind.Resume"/>, cleared here): it is already where the plan's walk ends, put there by the
+    /// serial step when that is walkable. True when it is to be placed (the act-out waits).
+    /// </summary>
+    bool Resume(World world, int slot, AiMind mind)
+    {
+        // Back from its town's time unloaded: it is already where the plan's walk ends (docs/simulation.md "Off-screen tier", residents'
+        // schedule).
+        mind.Resume = false;
+        if (!(mind.Step is TaskType.MoveOnFreeWill or TaskType.MoveOnFreeWillFast && !mind.Plan[0].Target.IsNone)) return false;
+
+        var end = mind.Plan[0].Target.Position;
+
+        // On a ring round the spot by member (engine choice): members sharing a bed or node are not put on one point, where separation would
+        // throw them off it.
+        float angle = mind.MemberIndex * 2.39996f;
+        end += new Vector3(MathF.Sin(angle), 0, MathF.Cos(angle)) * ResumeRing;
+        var walk = world.Walkability;
+        var at = !float.IsNaN(end.Y) && walk.FloorNear(end.X, end.Z, end.Y, FloorSlack) is { } floor ? floor
+            : new Vector3(end.X, float.IsNaN(end.Y) ? walk.GroundHeight(end.X, end.Z) : end.Y, end.Z);
+
+        // Only onto walkable ground: a spot it could not walk to either is left to the walk and its give-up rule. The serial step puts it
+        // there (after the movement, which steps from the last tick's place), and it thinks again on the next tick, from the spot.
+        if (!walk.IsWalkable(at.X, at.Z, at.Y)) return false;
+
+        mind.PlaceAt = at;
+        mind.Version = -1;
+        Interlocked.Exchange(ref _placing, 1);
+        Become(world, slot, CharacterTask.Idle);
+        return true;
+    }
+
+    /// <summary>
+    /// The goal's own act-out by its behaviour (docs/game/ai-tasks.md): the task it maps to, the walk to its spot and what it does there.
+    /// </summary>
+    void ActOut(World world, int slot, AiMind mind, AiGoal goal, Blackboard board, TaskType type, AiBehaviour behaviour)
+    {
+        var table = world.Characters;
+
         switch (behaviour)
         {
             case AiBehaviour.Mill:
@@ -1304,145 +1342,40 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 Become(world, slot, CharacterTask.Follow);
                 break;
             case AiBehaviour.Patrol:
-                if (board.CurrentClass is PackageClass.Patrol or PackageClass.PatrolRunning && board.RouteIndex < board.Route.Length)
-                {
-                    if (!leader) Become(world, slot, CharacterTask.Follow);
-                    else WalkTo(world, slot, board.Route[board.RouteIndex],
-                        board.CurrentClass == PackageClass.PatrolRunning ? SpeedMode.Run : SpeedMode.Walk);
-                }
-                else Become(world, slot, CharacterTask.Wander);
+                ActPatrol(world, slot, mind, board);
                 break;
             case AiBehaviour.Sleep when table.Cold(slot)!.InSomething == Locks.HeldState.Bed:
                 // Lying in its bed. One loaded there, or laid in by the walk's end, sleeps by no start of this goal: the goal takes the sleep as its
                 // own (the original's sleeper runs its plan's 98 Task_UseBed).
                 if (table.Cold(slot)!.Running is not { Source: TaskSource.Goal } own || !own.Runs(CharacterTask.Sleep))
                     TaskStart.StartOwn(world, slot, new TaskRequest(CharacterTask.Sleep, type, TaskSource.Goal));
+
                 break;
             case AiBehaviour.Post:
             case AiBehaviour.Sleep:
             case AiBehaviour.GoHome:
-                // Going to bed without a bed spot at home: an occupier's bed of the town it holds, else the NPC bed search.
-                var spare = behaviour == AiBehaviour.Sleep && type is TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure
-                    ? SpareBed(world, board, mind, slot) : null;
-                var (target, home, floor, facing) = spare is not null
-                    ? (Flat(spare.Position), true, spare.Position.Y, (float?)null)
-                    : SpotFor(mind, board, behaviour, type);
-                if (GoToSpot(world, slot, mind, target, home ? GiveUp.Home : GiveUp.Post,
-                    type is TaskType.RunAwayHometown or TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk, height: floor))
-                {
-                    Become(world, slot, behaviour == AiBehaviour.Sleep ? CharacterTask.Rest : CharacterTask.Idle);
-
-                    // At its home's bed: the serial step lies it in (Task_UseBed via 98 Sleeping); resting on the floor stays the fallback when no
-                    // bed is free.
-                    if (behaviour == AiBehaviour.Sleep && home && floor is not null && (spare?.Id ?? BedSpotOf(board, mind)) is { } bed)
-                    {
-                        mind.BedAt = bed;
-                        Interlocked.Exchange(ref _bedding, 1);
-                    }
-                    // looking out
-                    if (home && board.Gate is { } gate && GateSpot(board, mind, type) is not null)
-                        table.Next[slot].Yaw = MathF.Atan2(gate.Out.X, gate.Out.Y);
-                    else if (facing is { } yaw) table.Next[slot].Yaw = yaw;   // at a node, facing its way (the barman over his counter)
-                }
+                ActAtSpot(world, slot, mind, board, type, behaviour);
                 break;
             case AiBehaviour.TownNode:
             case AiBehaviour.Shop:
             case AiBehaviour.ToTown:
-                // A shop picked is remembered, so the arrival knows what it sells (the same pick as the target's: the roll is this tick's).
-                if (mind.Target is null && behaviour == AiBehaviour.Shop)
-                    mind.ShopAt = ShopFor(Places(board.Town), mind, TargetRoll(world, table.IdOf(slot), behaviour),
-                        RandomShopping(world, board.Town));
-                mind.Target ??= TargetFor(world, table.IdOf(slot), behaviour, board.Town, mind)
-                    ?? (behaviour == AiBehaviour.TownNode ? OccupiedSpot(world, board, table.IdOf(slot)) : null);
-                if (mind.Target is not { } goTo) Become(world, slot, CharacterTask.Idle);
-                // a building without a counter: near its origin, on any floor
-                else if (GoToSpot(world, slot, mind, Flat(goTo), GiveUp.Target, SpeedMode.Walk,
-                    float.IsNaN(goTo.Y) ? WorkReach : 0, behaviour == AiBehaviour.ToTown || float.IsNaN(goTo.Y) ? null : goTo.Y))
-                {
-                    Become(world, slot, CharacterTask.Idle);
-
-                    // At the shop (Task_Shopping 119 starts): the first unit is bought a second on, then one a second (BuyForShoppers).
-                    if (behaviour == AiBehaviour.Shop && mind.ShopAt is not null && mind.NextBuyTick == 0)
-                    {
-                        mind.NextBuyTick = world.Tick + BuyTicks(world);
-                        Interlocked.Exchange(ref _shopping, 1);
-                    }
-                }
-                else if (behaviour == AiBehaviour.Shop) mind.NextBuyTick = 0;   // walking again: the task is not running
+                ActInTown(world, slot, mind, board, behaviour);
                 break;
             case AiBehaviour.PatrolTown:
                 Patrol(world, slot, mind, board);
                 break;
             case AiBehaviour.Work:
-                mind.WorkOperate = null;
-                mind.CollectFrom = null;
-                mind.FillTo = null;
-
-                // The workplace whose slot it holds wins over the pick it walks to (ClaimWork).
-                if (mind.WorkPost is { } post && mind.Target is { } aim && (aim.X != post.Position.X || aim.Z != post.Position.Z)) mind.Target = null;
-                if (mind.Target is null)
-                {
-                    if (mind.WorkActive) mind.WorkEpoch++;
-                    mind.WorkActive = true;
-                    if ((mind.WorkPost ?? PickWork(world, table.IdOf(slot), board.Town, mind.WorkEpoch, type)) is { } building)
-                    {
-                        mind.Target = new Vector3(building.Position.X, float.NaN, building.Position.Z);
-                        mind.WorkClip = WorkClipOf(building);
-                        mind.WorkFunctionality = WorkFunctionalityOf(building);
-                        mind.WorkHungerRate = WorkHungerRateOf(building);
-                        mind.WorkBuilding = building;
-                        mind.WorkOwner = WorkOwnerOf(board.Town);
-                    }
-                }
-                var stepAt = StepBuilding(mind, board.Town);
-                Vector3? working = stepAt is not null && stepAt != mind.WorkBuilding
-                    ? new Vector3(stepAt.Position.X, float.NaN, stepAt.Position.Z) : mind.Target;
-                var aimed = stepAt is not null && stepAt != mind.WorkBuilding ? stepAt : mind.WorkBuilding;
-                mind.WorkRange = aimed is null ? WorkReach : WorkRangeOf(aimed);
-                if (working is not { } workAt) Become(world, slot, CharacterTask.Idle);
-                else if (ArrivedAtWork(in n, mind, workAt)
-                    || GoToSpot(world, slot, mind, Flat(workAt), GiveUp.Target, SpeedMode.Walk, mind.WorkRange))
-                {
-                    // At the building: facing it, at its work clip.
-                    Become(world, slot, CharacterTask.Idle);
-                    var face = workAt - n.Position;
-                    if (face.X * face.X + face.Z * face.Z > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Z);
-                    if (table.Cold(slot) is { } workerCold)
-                    {
-                        workerCold.ActionClip = mind.WorkClip;
-                        workerCold.ActionWork = StandingWork(mind.WorkFunctionality, mind.WorkClip);
-                    }
-                    WorkAtMachine(mind, type, stepAt);
-                }
+                ActWork(world, slot, mind, board, type);
                 break;
             case AiBehaviour.Investigate:
-                {
-                    // Task_InvestigateAlarms: within 100 of the alarm it stops and faces it (the serial step counts the look-about down); else it
-                    // runs to 30 short of it, on its side.
-                    if (AlarmOf(world, slot, type, board) is not { } alarm)
-                    {
-                        Become(world, slot, CharacterTask.Idle);
-                        break;
-                    }
-                    var gap = n.Position - alarm.Position;
-                    if (gap.LengthSquared() <= Crime.CrimeSystem.AlarmLookRange * Crime.CrimeSystem.AlarmLookRange)
-                    {
-                        if (mind.Walking) Become(world, slot, CharacterTask.Idle);
-                        mind.Walking = false;
-                        if (gap.X * gap.X + gap.Z * gap.Z > 1e-4f) n.Yaw = MathF.Atan2(-gap.X, -gap.Z);
-                        break;
-                    }
-                    var side = Flat(gap);
-                    var spot = Flat(alarm.Position)
-                        + (side.LengthSquared() > 1e-4f ? Vector2.Normalize(side) : Vector2.UnitX) * Crime.CrimeSystem.AlarmApproach;
-                    GoToSpot(world, slot, mind, spot, GiveUp.Target, SpeedMode.Run);
-                    break;
-                }
+                Investigate(world, slot, mind, board, type);
+                break;
             case AiBehaviour.Assault:
                 // Stands until the serial step sends the attack on the member picked (the combat system walks it there).
                 Become(world, slot, CharacterTask.Idle);
                 mind.AssaultTarget = AssaultTargetFor(world, slot, board);
                 if (!mind.AssaultTarget.IsNone) Interlocked.Exchange(ref _assaulting, 1);
+
                 break;
             case AiBehaviour.Medic:
                 // Stands while the serial step starts the treatment of the patient its finder gives then (FirstAidSystem.SendGoalTreatments).
@@ -1471,43 +1404,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 if (DestinationCentre(world, board) is not { } town) Become(world, slot, CharacterTask.Idle);
                 else if (GoToSpot(world, slot, mind, town, GiveUp.Target, type == TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk))
                     Become(world, slot, CharacterTask.Idle);
+
                 break;
             case AiBehaviour.Relax:
             case AiBehaviour.Sit:
-                // At its claimed seat (a chair or throne, else a node; a training dummy is stood at).
-                HomeSpot claimed = default;
-                bool claim;
-                if (type is TaskType.SitAround or TaskType.SitOnThrone)
-                {
-                    claim = board.SitClaims.TryGetValue(slot, out var sitting);
-                    if (claim) claimed = sitting.Spot;
-                }
-                else claim = board.SeatClaims.TryGetValue(slot, out claimed);
-                if (claim)
-                {
-                    bool chair = claimed.Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat;
-
-                    // Already on its chair (moved onto it below, off the floor point the walk ended at).
-                    bool seated = chair && n.Task == (byte)CharacterTask.Rest && !mind.Walking
-                        && Vector2.DistanceSquared(Flat(n.Position), Flat(claimed.Position)) < 1
-                        && MathF.Abs(n.Position.Y - claimed.Position.Y) <= FloorSlack;
-                    if (seated || GoToSpot(world, slot, mind, Flat(claimed.Position), GiveUp.Seat, SpeedMode.Walk, height: claimed.Position.Y))
-                    {
-                        if (chair)
-                        {
-                            // On the seat's origin, with no offset, facing its way (docs/game/ai-tasks.md "Chairs"): the sitting clip carries the
-                            // pose.
-                            n.Position = claimed.Position;
-                            n.Yaw = world.BenchFacingFix ? claimed.Yaw : claimed.FaithfulYaw;
-                            mind.SitClip = claimed.SitClip;
-                            mind.SitHungerRate = claimed.HungerRate;
-                        }
-                        else if (claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation) n.Yaw = claimed.Yaw;
-                        if (claimed.Kind == HomeSpotKind.Workstation) PretendOperate(world, slot, mind, claimed);
-                        Become(world, slot,
-                            claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation ? CharacterTask.Idle : CharacterTask.Rest);
-                    }
-                }
+                ActSeated(world, slot, mind, board, type);
                 break;
             case AiBehaviour.RescueLeader:
             case AiBehaviour.Crouch:
@@ -1516,42 +1417,263 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 Become(world, slot, CharacterTask.Idle);
                 break;
             case AiBehaviour.Turret:
-                if (board.TurretClaims.TryGetValue(slot, out int t) && (uint)t < (uint)board.Turrets.Count && board.Turrets[t].Turret is { } turret)
-                {
-                    var spot = TurretSpot(world, turret);
-                    if (GoToSpot(world, slot, mind, Flat(spot), GiveUp.Post, SpeedMode.Walk, TurretSlack, spot.Y))
-                    {
-                        table.Next[slot].Yaw = turret.Yaw;   // at the gun, facing its way
-                        Become(world, slot, CharacterTask.Idle);
-                    }
-                }
-                else Become(world, slot, CharacterTask.Idle);
+                ActTurret(world, slot, mind, board);
                 break;
         }
     }
 
     /// <summary>
-    /// Staying home at a workstation of the home (the pretend operating of 221, <see cref="PretendOperate"/>).
+    /// A patrol package's route: the leader walks (or runs) to the route's next point, the others follow it; without a route it wanders.
     /// </summary>
-    static bool PretendsAtHome(Blackboard board, int slot, AiBehaviour behaviour, TaskType type) =>
-        behaviour == AiBehaviour.Sit && type == TaskType.StayInHome && board.SeatClaims.TryGetValue(slot, out var claim)
-            && claim.Kind == HomeSpotKind.Workstation;
+    static void ActPatrol(World world, int slot, AiMind mind, Blackboard board)
+    {
+        var table = world.Characters;
+        bool leader = mind.Squad.Leader == table.IdOf(slot);
+
+        if (board.CurrentClass is PackageClass.Patrol or PackageClass.PatrolRunning && board.RouteIndex < board.Route.Length)
+        {
+            if (!leader) Become(world, slot, CharacterTask.Follow);
+            else WalkTo(world, slot, board.Route[board.RouteIndex], board.CurrentClass == PackageClass.PatrolRunning ? SpeedMode.Run : SpeedMode.Walk);
+        }
+        else Become(world, slot, CharacterTask.Wander);
+    }
 
     /// <summary>
-    /// At a workstation, pretending to operate it (effect 136 IS_WORKING_PRETEND, row 221): the machine's work clip and hunger rate, as the real
-    /// operating.
+    /// The walk to its spot (a post, a bed, home; going to bed without a bed spot at home an occupier's bed of the town it holds), then resting or
+    /// standing there, laid in its bed by the serial step, facing out of the gate or its node's way.
     /// </summary>
-    void PretendOperate(World world, int slot, AiMind mind, HomeSpot piece)
+    void ActAtSpot(World world, int slot, AiMind mind, Blackboard board, TaskType type, AiBehaviour behaviour)
     {
-        var record = data.Db.Find(piece.Record ?? "");
-        var clip = _workClips.GetOrAdd(piece.Record ?? "", _ =>
-            record?.GetReferences("functionality") is [var link, ..]
-                && data.Db.Find(link.TargetStringId)?.GetReferences("animation") is [var anim, ..]
-                && data.Db.Find(anim.TargetStringId) is { } found ? found.Name : "stonemine");
+        var table = world.Characters;
+
+        // Going to bed without a bed spot at home: an occupier's bed of the town it holds, else the NPC bed search.
+        var spare = behaviour == AiBehaviour.Sleep && type is TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure
+            ? SpareBed(world, board, mind, slot) : null;
+        var (target, home, floor, facing) = spare is not null
+            ? (Flat(spare.Position), true, spare.Position.Y, (float?)null)
+            : SpotFor(mind, board, behaviour, type);
+        var speed = type is TaskType.RunAwayHometown or TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk;
+        if (!GoToSpot(world, slot, mind, target, home ? GiveUp.Home : GiveUp.Post, speed, height: floor)) return;
+
+        Become(world, slot, behaviour == AiBehaviour.Sleep ? CharacterTask.Rest : CharacterTask.Idle);
+
+        // At its home's bed: the serial step lies it in (Task_UseBed via 98 Sleeping); resting on the floor stays the fallback when no
+        // bed is free.
+        if (behaviour == AiBehaviour.Sleep && home && floor is not null && (spare?.Id ?? BedSpotOf(board, mind)) is { } bed)
+        {
+            mind.BedAt = bed;
+            Interlocked.Exchange(ref _bedding, 1);
+        }
+
+        // looking out
+        if (home && board.Gate is { } gate && GateSpot(board, mind, type) is not null)
+            table.Next[slot].Yaw = MathF.Atan2(gate.Out.X, gate.Out.Y);
+        else if (facing is { } yaw) table.Next[slot].Yaw = yaw;   // at a node, facing its way (the barman over his counter)
+    }
+
+    /// <summary>
+    /// The town goals' walk to their target (a node, a shop, the town): the target is found once per goal, and at a shop its buying starts.
+    /// </summary>
+    void ActInTown(World world, int slot, AiMind mind, Blackboard board, AiBehaviour behaviour)
+    {
+        var table = world.Characters;
+
+        // A shop picked is remembered, so the arrival knows what it sells (the same pick as the target's: the roll is this tick's).
+        if (mind.Target is null && behaviour == AiBehaviour.Shop)
+        {
+            mind.ShopAt = ShopFor(Places(board.Town), mind, TargetRoll(world, table.IdOf(slot), behaviour),
+                RandomShopping(world, board.Town));
+        }
+
+        mind.Target ??= TargetFor(world, table.IdOf(slot), behaviour, board.Town, mind)
+            ?? (behaviour == AiBehaviour.TownNode ? OccupiedSpot(world, board, table.IdOf(slot)) : null);
+
+        if (mind.Target is not { } goTo) Become(world, slot, CharacterTask.Idle);
+        // a building without a counter: near its origin, on any floor
+        else if (GoToSpot(world, slot, mind, Flat(goTo), GiveUp.Target, SpeedMode.Walk,
+            float.IsNaN(goTo.Y) ? WorkReach : 0, behaviour == AiBehaviour.ToTown || float.IsNaN(goTo.Y) ? null : goTo.Y))
+        {
+            Become(world, slot, CharacterTask.Idle);
+
+            // At the shop (Task_Shopping 119 starts): the first unit is bought a second on, then one a second (BuyForShoppers).
+            if (behaviour == AiBehaviour.Shop && mind.ShopAt is not null && mind.NextBuyTick == 0)
+            {
+                mind.NextBuyTick = world.Tick + BuyTicks(world);
+                Interlocked.Exchange(ref _shopping, 1);
+            }
+        }
+        else if (behaviour == AiBehaviour.Shop) mind.NextBuyTick = 0;   // walking again: the task is not running
+    }
+
+    /// <summary>
+    /// The workers' goals (189, 190): the workplace whose slot it holds (else a pick) and its clip, functionality and hunger rate; at the building
+    /// (or the plan step's), facing it at its work clip, working the machine.
+    /// </summary>
+    void ActWork(World world, int slot, AiMind mind, Blackboard board, TaskType type)
+    {
+        var table = world.Characters;
+        ref var n = ref table.Next[slot];
+        mind.WorkOperate = null;
+        mind.CollectFrom = null;
+        mind.FillTo = null;
+
+        // The workplace whose slot it holds wins over the pick it walks to (ClaimWork).
+        if (mind.WorkPost is { } post && mind.Target is { } aim && (aim.X != post.Position.X || aim.Z != post.Position.Z)) mind.Target = null;
+        if (mind.Target is null) PickWorkplace(world, slot, mind, board, type);
+
+        var stepAt = StepBuilding(mind, board.Town);
+        Vector3? working = stepAt is not null && stepAt != mind.WorkBuilding
+            ? new Vector3(stepAt.Position.X, float.NaN, stepAt.Position.Z) : mind.Target;
+        var aimed = stepAt is not null && stepAt != mind.WorkBuilding ? stepAt : mind.WorkBuilding;
+        mind.WorkRange = aimed is null ? WorkReach : WorkRangeOf(aimed);
+
+        if (working is not { } workAt)
+        {
+            Become(world, slot, CharacterTask.Idle);
+            return;
+        }
+
+        if (!ArrivedAtWork(in n, mind, workAt) && !GoToSpot(world, slot, mind, Flat(workAt), GiveUp.Target, SpeedMode.Walk, mind.WorkRange))
+            return;
+
+        // At the building: facing it, at its work clip.
+        Become(world, slot, CharacterTask.Idle);
+        var face = workAt - n.Position;
+        if (face.X * face.X + face.Z * face.Z > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Z);
+
+        if (table.Cold(slot) is { } workerCold)
+        {
+            workerCold.ActionClip = mind.WorkClip;
+            workerCold.ActionWork = StandingWork(mind.WorkFunctionality, mind.WorkClip);
+        }
+
+        WorkAtMachine(mind, type, stepAt);
+    }
+
+    /// <summary>
+    /// A worker without a target takes up work again (a new pick when it was working): the workplace whose slot it holds, else one picked, with its
+    /// clip, functionality, hunger rate and owner.
+    /// </summary>
+    void PickWorkplace(World world, int slot, AiMind mind, Blackboard board, TaskType type)
+    {
+        var table = world.Characters;
+        if (mind.WorkActive) mind.WorkEpoch++;
+
         mind.WorkActive = true;
-        mind.WorkClip = clip;
-        mind.WorkHungerRate = piece.HungerRate;
-        if (world.Characters.Cold(slot) is { } worker) worker.ActionClip = clip;
+        if ((mind.WorkPost ?? PickWork(world, table.IdOf(slot), board.Town, mind.WorkEpoch, type)) is not { } building) return;
+
+        mind.Target = new Vector3(building.Position.X, float.NaN, building.Position.Z);
+        mind.WorkClip = _work.ClipOf(building);
+        mind.WorkFunctionality = _work.FunctionalityOf(building);
+        mind.WorkHungerRate = _work.HungerRateOf(building);
+        mind.WorkBuilding = building;
+        mind.WorkOwner = WorkOwnerOf(board.Town);
+    }
+
+    /// <summary>
+    /// Task_InvestigateAlarms: within 100 of the alarm it stops and faces it (the serial step counts the look-about down); else it runs to 30 short
+    /// of it, on its side.
+    /// </summary>
+    void Investigate(World world, int slot, AiMind mind, Blackboard board, TaskType type)
+    {
+        ref var n = ref world.Characters.Next[slot];
+
+        if (AlarmOf(world, slot, type, board) is not { } alarm)
+        {
+            Become(world, slot, CharacterTask.Idle);
+            return;
+        }
+
+        var gap = n.Position - alarm.Position;
+
+        if (gap.LengthSquared() <= Crime.CrimeSystem.AlarmLookRange * Crime.CrimeSystem.AlarmLookRange)
+        {
+            if (mind.Walking) Become(world, slot, CharacterTask.Idle);
+
+            mind.Walking = false;
+            if (gap.X * gap.X + gap.Z * gap.Z > 1e-4f) n.Yaw = MathF.Atan2(-gap.X, -gap.Z);
+
+            return;
+        }
+
+        var side = Flat(gap);
+        var spot = Flat(alarm.Position)
+            + (side.LengthSquared() > 1e-4f ? Vector2.Normalize(side) : Vector2.UnitX) * Crime.CrimeSystem.AlarmApproach;
+        GoToSpot(world, slot, mind, spot, GiveUp.Target, SpeedMode.Run);
+    }
+
+    /// <summary>
+    /// The alarm an investigator answers: its squad's town's nearest in reach, for goal 210 only its own faction's
+    /// (<see cref="Crime.CrimeSystem.AlarmFor"/>).
+    /// </summary>
+    internal Crime.TownAlarm? AlarmOf(World world, int slot, TaskType type, Blackboard board) =>
+        Crimes is { Alarms.Count: > 0 } crimes && world.Characters.Cold(slot) is { } cold
+            ? crimes.AlarmFor(board.Town, world.Characters.Previous[slot].Position,
+                type == TaskType.InvestigateAlarmsAlliesOnly ? cold.Faction : -1,
+                Crime.CrimeSystem.FloorOf(world, slot, world.Characters.Previous[slot].Position), world.Sight.PlaceOf(slot), world)
+            : null;
+
+    /// <summary>
+    /// Relaxing and sitting: at its claimed seat (a chair or throne, else a node; a training dummy is stood at), on the chair's origin facing its
+    /// way, a workstation pretend-operated.
+    /// </summary>
+    void ActSeated(World world, int slot, AiMind mind, Blackboard board, TaskType type)
+    {
+        ref var n = ref world.Characters.Next[slot];
+
+        // At its claimed seat (a chair or throne, else a node; a training dummy is stood at).
+        HomeSpot claimed = default;
+        bool claim;
+
+        if (type is TaskType.SitAround or TaskType.SitOnThrone)
+        {
+            claim = board.SitClaims.TryGetValue(slot, out var sitting);
+            if (claim) claimed = sitting.Spot;
+        }
+        else claim = board.SeatClaims.TryGetValue(slot, out claimed);
+
+        if (!claim) return;
+
+        bool chair = claimed.Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat;
+
+        // Already on its chair (moved onto it below, off the floor point the walk ended at).
+        bool seated = chair && n.Task == (byte)CharacterTask.Rest && !mind.Walking
+            && Vector2.DistanceSquared(Flat(n.Position), Flat(claimed.Position)) < 1
+            && MathF.Abs(n.Position.Y - claimed.Position.Y) <= FloorSlack;
+        if (!seated && !GoToSpot(world, slot, mind, Flat(claimed.Position), GiveUp.Seat, SpeedMode.Walk, height: claimed.Position.Y)) return;
+
+        if (chair)
+        {
+            // On the seat's origin, with no offset, facing its way (docs/game/ai-tasks.md "Chairs"): the sitting clip carries the pose.
+            n.Position = claimed.Position;
+            n.Yaw = world.BenchFacingFix ? claimed.Yaw : claimed.FaithfulYaw;
+            mind.SitClip = claimed.SitClip;
+            mind.SitHungerRate = claimed.HungerRate;
+        }
+        else if (claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation) n.Yaw = claimed.Yaw;
+
+        if (claimed.Kind == HomeSpotKind.Workstation) PretendOperate(world, slot, mind, claimed);
+        Become(world, slot, claimed.Kind is HomeSpotKind.Training or HomeSpotKind.Workstation ? CharacterTask.Idle : CharacterTask.Rest);
+    }
+
+    /// <summary>
+    /// A turret guard: to the gun of the turret its squad claimed for it, facing its way; without one it stands.
+    /// </summary>
+    void ActTurret(World world, int slot, AiMind mind, Blackboard board)
+    {
+        var table = world.Characters;
+
+        if (board.TurretClaims.TryGetValue(slot, out int t) && (uint)t < (uint)board.Turrets.Count && board.Turrets[t].Turret is { } turret)
+        {
+            var spot = TurretSpot(world, turret);
+
+            if (GoToSpot(world, slot, mind, Flat(spot), GiveUp.Post, SpeedMode.Walk, TurretSlack, spot.Y))
+            {
+                table.Next[slot].Yaw = turret.Yaw;   // at the gun, facing its way
+                Become(world, slot, CharacterTask.Idle);
+            }
+        }
+        else Become(world, slot, CharacterTask.Idle);
     }
 
     /// <summary>
@@ -1606,9 +1728,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (kind == HomeSpotKind.Bed || type == TaskType.StayInHome) return (Flat(home.Position), true, null, null);
         return (mind.Post, false, null, null);
     }
-
-    // The lock system, for the gate codes (resolved in the serial step).
-    Locks.LockSystem? _locks;
 
     /// <summary>
     /// Where Task_GoHomeTown / Task_GoHomeTownFast walk (<c>FUN_14033dd70</c>, <b>Verified</b>): the platoon's object hand (<c>+0xb8</c> of its
@@ -1705,34 +1824,25 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         || board.Home is not null && !mind.HomeUnreachable && BedSpotOf(board, mind) is not null
         || SpareBed(world, board, mind, slot) is not null;
 
-    /// <summary>
-    /// The hand hold of a drawn crossbow.
-    /// </summary>
-    static readonly WeaponKinds BowHold = HandHold.OfCategory((int)Meitou.Data.Gameplay.Combat.WeaponCategory.Bow).Weapon;
+    #endregion
 
+    #region Walking
+
+    /// <summary>
+    /// What a character gives up when its walks to a spot keep failing: its home's spots (it uses its post), its post (where it stands becomes it),
+    /// the target, or relaxing at its bar seat.
+    /// </summary>
+    enum GiveUp : byte { Home, Post, Target, Seat }
+
+    /// <summary>
+    /// How far above or below a spot's floor a character may stand and still be at it (units).
+    /// </summary>
+    const float FloorSlack = 6;
+
+    /// <summary>
+    /// A point on the ground plane (X, Z).
+    /// </summary>
     static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
-
-    /// <summary>
-    /// Where a turret is manned: behind its gun (the gunner stands between the gun and the walkway behind it), inside the turret's <c>use range</c>:
-    /// the first of a few distances behind it whose ground is walkable at the turret's height, else beside or before it, else the turret's own place.
-    /// The Y is the walkable surface there, so the path goes up to the tower's floor rather than to the ground below it. Engine choice: the game's
-    /// gunner spot is not in the data.
-    /// </summary>
-    internal static Vector3 TurretSpot(World world, in TurretPost turret)
-    {
-        var at = Flat(turret.Position);
-        var forward = new Vector2(MathF.Sin(turret.Yaw), MathF.Cos(turret.Yaw));
-        var side = new Vector2(forward.Y, -forward.X);
-        float nearY = turret.Position.Y;
-        bool Walkable(Vector2 p) => world.Walkability.IsWalkable(p.X, p.Y, nearY);
-        Vector3 On(Vector2 p) => new(p.X, world.Walkability.GroundHeight(p.X, p.Y, nearY), p.Y);
-        float reach = MathF.Max(MathF.Min(turret.UseRange, 10), 2);
-        for (float d = reach * 0.6f; d >= 2; d -= 2)
-            if (Walkable(at - forward * d)) return On(at - forward * d);
-        for (int k = 0; k < 2; k++)
-            if (Walkable(at + side * (k == 0 ? 4 : -4))) return On(at + side * (k == 0 ? 4 : -4));
-        return Walkable(at + forward * 4) ? On(at + forward * 4) : On(at);
-    }
 
     /// <summary>
     /// Walks the character to a spot; true when it is there (and not walking). A walk that ends away from the spot counts as failed; after
@@ -1766,17 +1876,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (Vector2.Dot(normal, leafCentre - building) < 0) normal = -normal;
         Vector2 a = leafCentre + normal * 15, b = leafCentre - normal * 15;
         return a + (a - b) * 1.1f;
-    }
-
-    /// <summary>
-    /// At its work building (<see cref="AtWork"/>): the walk there is over.
-    /// </summary>
-    static bool ArrivedAtWork(in CharacterHot n, AiMind mind, Vector3 building)
-    {
-        if (!AtWork(in n, building, mind.WorkRange)) return false;
-        mind.Walking = false;
-        mind.FailedWalks = 0;
-        return true;
     }
 
     bool GoToSpot(World world, int slot, AiMind mind, Vector2 target, GiveUp giveUp, byte mode, float slack = 0, float? height = null)
@@ -1861,83 +1960,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         mind.FailedWalks++;
     }
 
-    // Set by a think that left a resident to be placed (<see cref="AiMind.PlaceAt"/>); the serial step looks for them only then.
-    int _placing;
-
-    /// <summary>
-    /// Puts the residents back from their town's time unloaded on the spots their thinks chose (serial, after the movement).
-    /// </summary>
-    static void Place(CharacterTable table)
-    {
-        for (int s = 0; s < table.HighWater; s++)
-        {
-            if (table.Cold(s)?.Ai is not { PlaceAt: { } at } mind) continue;
-            mind.PlaceAt = null;
-            TaskStart.Stand(table, s);
-            ref var n = ref table.Next[s];
-            n.Position = at;
-            n.Velocity = Vector3.Zero;
-        }
-    }
-
-    // Set by a think that left a sleeper to be laid in its bed (<see cref="AiMind.BedAt"/>).
-    int _bedding;
-
-    /// <summary>
-    /// How far (X/Z) from where it stands a sleeper takes another free bed of its home when its own is taken (units; engine choice).
-    /// </summary>
-    const float BedReach = 30;
-
-    /// <summary>
-    /// Lies the sleepers that reached their bed spot in it (serial: beds are shared). A taken bed gives way to the nearest free bed of the same
-    /// building within <see cref="BedReach"/>; with none free it keeps resting on the floor there (engine choice).
-    /// </summary>
-    static void LieDown(World world)
-    {
-        var table = world.Characters;
-        for (int s = 0; s < table.HighWater; s++)
-        {
-            if (table.Cold(s) is not { Ai: { BedAt: { } id } mind } cold) continue;
-            mind.BedAt = null;
-            ref var n = ref table.Next[s];
-            if (!n.Alive || mind.Behaviour != AiBehaviour.Sleep || n.Task != (byte)CharacterTask.Rest
-                || world.Fixtures.Find(id) is not { } bed)
-                continue;
-            var here = new Vector2(n.Position.X, n.Position.Z);
-            bool Near(Locks.Fixture f) => Vector2.DistanceSquared(here, Flat(f.Position)) <= BedReach * BedReach;
-            if (!Locks.FixtureRegistry.IsFree(table, bed) || !Near(bed))
-            {
-                Locks.Fixture? best = null;
-                float bestD = float.MaxValue;
-                foreach (var f in world.Fixtures.OfBuilding(bed.Building))
-                {
-                    if (f.Kind != Locks.FixtureKind.Bed || !Locks.FixtureRegistry.IsFree(table, f) || !Near(f)) continue;
-                    float d = Vector2.DistanceSquared(here, Flat(f.Position));
-                    if (d < bestD) (best, bestD) = (f, d);
-                }
-                if (best is null) continue;
-                bed = best;
-            }
-            if (cold.InSomething == Locks.HeldState.None) world.Fixtures.EnterBed(world, table.IdOf(s), bed);
-        }
-    }
-
-    /// <summary>
-    /// What a character gives up when its walks to a spot keep failing: its home's spots (it uses its post), its post (where it stands becomes it),
-    /// the target, or relaxing at its bar seat.
-    /// </summary>
-    enum GiveUp : byte { Home, Post, Target, Seat }
-
-    /// <summary>
-    /// How far above or below a spot's floor a character may stand and still be at it (units).
-    /// </summary>
-    const float FloorSlack = 6;
-
-    /// <summary>
-    /// The radius of the ring a resident back from its town's time unloaded is put on round its spot (units; half a human's separation radius).
-    /// </summary>
-    const float ResumeRing = 4;
-
     /// <summary>
     /// Switches to a standing task (wander, follow, idle, rest), dropping a walk in progress; nothing when it is doing it already. A goal's start on
     /// the character's own slot (<see cref="TaskStart.StartOwn"/>: the think runs in parallel), as the row of the goal it acts out.
@@ -1977,8 +1999,82 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     static TaskType GoalRow(World world, int slot) => world.Characters.Cold(slot)?.Ai?.Goal?.Task.Type ?? TaskType.Idle;
 
-    // ------------------------------------------------------------------ serial steps
+    #endregion
 
+    #region Placing and bedding
+
+    /// <summary>
+    /// Set by a think that left a resident to be placed (<see cref="AiMind.PlaceAt"/>); the serial step looks for them only then.
+    /// </summary>
+    int _placing;
+
+    /// <summary>
+    /// Set by a think that left a sleeper to be laid in its bed (<see cref="AiMind.BedAt"/>).
+    /// </summary>
+    int _bedding;
+
+    /// <summary>
+    /// How far (X/Z) from where it stands a sleeper takes another free bed of its home when its own is taken (units; engine choice).
+    /// </summary>
+    const float BedReach = 30;
+
+    /// <summary>
+    /// Puts the residents back from their town's time unloaded on the spots their thinks chose (serial, after the movement).
+    /// </summary>
+    static void Place(CharacterTable table)
+    {
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (table.Cold(s)?.Ai is not { PlaceAt: { } at } mind) continue;
+            mind.PlaceAt = null;
+            TaskStart.Stand(table, s);
+            ref var n = ref table.Next[s];
+            n.Position = at;
+            n.Velocity = Vector3.Zero;
+        }
+    }
+
+    /// <summary>
+    /// Lies the sleepers that reached their bed spot in it (serial: beds are shared). A taken bed gives way to the nearest free bed of the same
+    /// building within <see cref="BedReach"/>; with none free it keeps resting on the floor there (engine choice).
+    /// </summary>
+    static void LieDown(World world)
+    {
+        var table = world.Characters;
+        for (int s = 0; s < table.HighWater; s++)
+        {
+            if (table.Cold(s) is not { Ai: { BedAt: { } id } mind } cold) continue;
+            mind.BedAt = null;
+            ref var n = ref table.Next[s];
+            if (!n.Alive || mind.Behaviour != AiBehaviour.Sleep || n.Task != (byte)CharacterTask.Rest
+                || world.Fixtures.Find(id) is not { } bed)
+                continue;
+            var here = new Vector2(n.Position.X, n.Position.Z);
+            bool Near(Locks.Fixture f) => Vector2.DistanceSquared(here, Flat(f.Position)) <= BedReach * BedReach;
+            if (!Locks.FixtureRegistry.IsFree(table, bed) || !Near(bed))
+            {
+                Locks.Fixture? best = null;
+                float bestD = float.MaxValue;
+                foreach (var f in world.Fixtures.OfBuilding(bed.Building))
+                {
+                    if (f.Kind != Locks.FixtureKind.Bed || !Locks.FixtureRegistry.IsFree(table, f) || !Near(f)) continue;
+                    float d = Vector2.DistanceSquared(here, Flat(f.Position));
+                    if (d < bestD) (best, bestD) = (f, d);
+                }
+                if (best is null) continue;
+                bed = best;
+            }
+            if (cold.InSomething == Locks.HeldState.None) world.Fixtures.EnterBed(world, table.IdOf(s), bed);
+        }
+    }
+
+    #endregion
+
+    #region Serial step
+
+    /// <summary>
+    /// The contract and AI change commands: the squad (attached first when the AI does not run it yet) takes the package.
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var command in commands)
@@ -2001,98 +2097,173 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
     }
 
+    /// <summary>
+    /// The serial step: the requests the thinks left (placing, beds, shopping, assaults, fights, treatments, captive jobs, leaving fights), then on
+    /// the package cadence each squad's package, crowd and claims (a squad that appears at once), then the squad merges.
+    /// </summary>
     public void SlowWorld(World world)
+    {
+        SendRequests(world);
+        bool cadence = world.Tick % world.Every(Settings.PackageEveryTicks) == 0;
+
+        // Each town's turrets are claimed once per cadence, by the squads in squad order (derived, not hashed).
+        if (cadence) ReserveClaims(world);
+
+        foreach (var squad in world.Squads.All)
+        {
+            if (squad.Ai is null)
+            {
+                if (!AttachNew(world, squad, cadence)) continue;
+            }
+            else if (!cadence) continue;   // the rest is looked at on the package cadence only (and when the squad appears)
+
+            UpdateSquad(world, squad);
+        }
+
+        if (_merges.Count > 0) ApplyMerges(world);
+    }
+
+    /// <summary>
+    /// The requests the thinks left with a flag (placing, beds, shopping, assaults, fights, treatments, leaving fights) and the captive jobs, in that
+    /// order; the systems they need are looked up once.
+    /// </summary>
+    void SendRequests(World world)
     {
         var table = world.Characters;
         if (Interlocked.Exchange(ref _placing, 0) != 0) Place(table);
         if (Interlocked.Exchange(ref _bedding, 0) != 0) LieDown(world);
         if (Interlocked.Exchange(ref _shopping, 0) != 0) BuyForShoppers(world);
+
         _combat ??= world.SystemOf<Combat.CombatSystem>();
         _aggro ??= world.SystemOf<AggroSystem>();
         _locks ??= world.SystemOf<Locks.LockSystem>();
+
         if (Interlocked.Exchange(ref _assaulting, 0) != 0 | Volatile.Read(ref _forcedAssaults) != 0) SendAssaults(world);
         if (Interlocked.Exchange(ref _fighting, 0) != 0) SendFights(world);
         if (Interlocked.Exchange(ref _treating, 0) != 0) (_firstAid ??= world.SystemOf<FirstAid.FirstAidSystem>())?.SendGoalTreatments(world);
+
         SendCaptiveJobs(world);
         if (Interlocked.Exchange(ref _leaving, 0) != 0) LeaveFights(world);
-        bool cadence = world.Tick % world.Every(Settings.PackageEveryTicks) == 0;
-
-        // Each town's turrets are claimed once per cadence, by the squads in squad order (derived, not hashed).
-        if (cadence)
-        {
-            _turretTaken.Clear();
-            _seatTaken.Clear();
-            _postTaken.Clear();
-            _workTaken.Clear();
-            ReserveSeats(world);
-            ReservePosts(world);
-            RefreshPlaces(world);
-            ReserveWork(world);
-        }
-        foreach (var squad in world.Squads.All)
-        {
-            if (squad.Ai is null)
-            {
-                bool first = _looked.Add(squad.Id);
-                if (!first || !Runs(world, squad))
-                {
-                    if (first || cadence) EngineMinds(world, squad);
-                    continue;
-                }
-                Attach(world, squad);
-                if (squad.Ai!.Town >= 0 && !_places.ContainsKey(squad.Ai.Town)) RefreshPlaces(world);
-            }
-            else if (!cadence) continue;   // the rest is looked at on the package cadence only (and when the squad appears)
-            var board = squad.Ai!;
-            board.Intact = IsIntact(world, squad, board);
-            UpdateInTown(world, squad, board);
-            _rules.Bind(this, world, squad);
-            var platoon = PlatoonOf(world, squad);
-            if (platoon?.Campaign is { } campaign && PhasePackage(world, platoon, campaign) is { } phase) InstallPhasePackage(world, board, phase);
-            board.Update(_rules, world.GameHours);
-            if (platoon?.Campaign is null) StepPackage(world, squad, board);   // a campaign's squad has its war targets from the campaign
-            // A contract that ended: its leader says the package's contract end talk to the employer (event 30, FUN_14026a110).
-            if (board.TakeEnded() is { Package.ContractEndTalk: { } talk, Target: var employer } && !squad.Leader.IsNone)
-                world.Defer(new Dialogue.DialogueEvent(squad.Leader, employer, Dialogue.DialogueSystem.ContractJobEnded, talk)
-                    { Tick = world.Tick + 1 });
-            AdvanceRoute(world, squad, board);
-            board.Crowd.Clear();
-            board.CrowdEntries.Clear();
-            bool populationMoves = platoon is not null && !BoardMoves(board);
-            if (populationMoves) EngineMinds(world, squad, board);
-            for (int k = 0; k < squad.Members.Count; k++)
-            {
-                if (!table.TryResolveNext(squad.Members[k], out int s)) continue;
-                var cold = table.Cold(s)!;
-                if (!populationMoves && cold.Ai is null or { Engine: true })
-                {
-                    var p = table.Next[s].Position;
-                    cold.Ai = new AiMind
-                    {
-                        Squad = squad,
-                        MemberIndex = k,
-                        Post = OccupierPost(world, board, k) ?? new Vector2(p.X, p.Z),
-                        RaceGoals = cold.Race is { } race ? data.Ai.RaceGoals(race.StringId) : [],
-                        Resume = squad.Resume,
-                        Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
-                    };
-                }
-                if (cold.Ai?.Goal is { } g)
-                {
-                    board.Crowd[g.Task.Type] = board.Crowd.GetValueOrDefault(g.Task.Type) + 1;
-                    board.CrowdEntries.Add(new CrowdEntry(squad.Members[k], g.Task.Type, CrowdTarget(g.Task.Target, squad, board, squad.Members[k])));
-                }
-            }
-            squad.Resume = false;
-            ClaimTurrets(world, board, squad);
-            ClaimSeats(world, board, squad);
-            ClaimSitting(world, board, squad);
-            ClaimWork(world, board, squad);
-            ClaimTownPosts(world, board, squad);
-            FindGate(world, board, squad);
-        }
-        if (_merges.Count > 0) ApplyMerges(world);
     }
+
+    /// <summary>
+    /// The cadence pass's claims start again: the seats, posts and workplaces the members hold are reserved for every squad first, and the towns'
+    /// places are found again.
+    /// </summary>
+    void ReserveClaims(World world)
+    {
+        _turretTaken.Clear();
+        _seatTaken.Clear();
+        _postTaken.Clear();
+        _workTaken.Clear();
+        ReserveSeats(world);
+        ReservePosts(world);
+        _townPlaces.Refresh(world, this);
+        ReserveWork(world);
+    }
+
+    /// <summary>
+    /// A squad without a board: the first time it is seen, one the AI runs gets its board (and its town's places); else its minds are the
+    /// engine's (again on the cadence). True when it was attached now.
+    /// </summary>
+    bool AttachNew(World world, Squad squad, bool cadence)
+    {
+        bool first = _looked.Add(squad.Id);
+
+        if (!first || !Runs(world, squad))
+        {
+            if (first || cadence) EngineMinds(world, squad);
+
+            return false;
+        }
+
+        Attach(world, squad);
+        if (squad.Ai!.Town >= 0 && !_townPlaces.Has(squad.Ai.Town)) _townPlaces.Refresh(world, this);
+
+        return true;
+    }
+
+    /// <summary>
+    /// One squad's turn on the package cadence: its board's state and package (a campaign's phase package), the contract end talk, its route, the
+    /// minds and crowd of its members, and the claims (turrets, seats, sitting, work, town posts) and gate.
+    /// </summary>
+    void UpdateSquad(World world, Squad squad)
+    {
+        var board = squad.Ai!;
+        board.Intact = IsIntact(world, squad, board);
+        UpdateInTown(world, squad, board);
+        _rules.Bind(this, world, squad);
+
+        var platoon = PlatoonOf(world, squad);
+        if (platoon?.Campaign is { } campaign && PhasePackage(world, platoon, campaign) is { } phase) InstallPhasePackage(world, board, phase);
+
+        board.Update(_rules, world.GameHours);
+        if (platoon?.Campaign is null) StepPackage(world, squad, board);   // a campaign's squad has its war targets from the campaign
+
+        // A contract that ended: its leader says the package's contract end talk to the employer (event 30, FUN_14026a110).
+        if (board.TakeEnded() is { Package.ContractEndTalk: { } talk, Target: var employer } && !squad.Leader.IsNone)
+        {
+            world.Defer(new Dialogue.DialogueEvent(squad.Leader, employer, Dialogue.DialogueSystem.ContractJobEnded, talk)
+                { Tick = world.Tick + 1 });
+        }
+
+        AdvanceRoute(world, squad, board);
+        board.Crowd.Clear();
+        board.CrowdEntries.Clear();
+
+        bool populationMoves = platoon is not null && !BoardMoves(board);
+        if (populationMoves) EngineMinds(world, squad, board);
+
+        for (int k = 0; k < squad.Members.Count; k++) MindAndCrowd(world, squad, board, k, populationMoves);
+
+        squad.Resume = false;
+        ClaimTurrets(world, board, squad);
+        ClaimSeats(world, board, squad);
+        ClaimSitting(world, board, squad);
+        ClaimWork(world, board, squad);
+        ClaimTownPosts(world, board, squad);
+        FindGate(world, board, squad);
+    }
+
+    /// <summary>
+    /// Member <paramref name="k"/> of a squad the AI moves gets its mind (an engine mind is replaced), and its goal counts in the squad's crowd.
+    /// </summary>
+    void MindAndCrowd(World world, Squad squad, Blackboard board, int k, bool populationMoves)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(squad.Members[k], out int s)) return;
+
+        var cold = table.Cold(s)!;
+
+        if (!populationMoves && cold.Ai is null or { Engine: true })
+        {
+            var p = table.Next[s].Position;
+            cold.Ai = new AiMind
+            {
+                Squad = squad,
+                MemberIndex = k,
+                Post = OccupierPost(world, board, k) ?? new Vector2(p.X, p.Z),
+                RaceGoals = cold.Race is { } race ? data.Ai.RaceGoals(race.StringId) : [],
+                Resume = squad.Resume,
+                Shopping = ShoppingList.Make(data.Db, cold.RecordId, world.Seed, Rng.Key(table.IdOf(s))),
+            };
+        }
+
+        if (cold.Ai?.Goal is { } g)
+        {
+            board.Crowd[g.Task.Type] = board.Crowd.GetValueOrDefault(g.Task.Type) + 1;
+            board.CrowdEntries.Add(new CrowdEntry(squad.Members[k], g.Task.Type, CrowdTarget(g.Task.Target, squad, board, squad.Members[k])));
+        }
+    }
+
+    #endregion
+
+    #region Gates
+
+    /// <summary>
+    /// How far from a gate's leaf its gate guard stands (Observed, <c>Task_ManTheGate</c>: the door's point 15 along its normal).
+    /// </summary>
+    const float GateGuardOut = 15;
 
     /// <summary>
     /// Sets <see cref="Blackboard.Gate"/>: the cached home (<see cref="Blackboard.GateHome"/>) when it is a gate, else, for a squad with a gate
@@ -2144,11 +2315,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     internal static Vector3 FrontOf(GatePost gate) => gate.Door + new Vector3(gate.Out.X, 0, gate.Out.Y) * GateGuardOut;
 
     /// <summary>
-    /// How far from a gate's leaf its gate guard stands (Observed, <c>Task_ManTheGate</c>: the door's point 15 along its normal).
-    /// </summary>
-    const float GateGuardOut = 15;
-
-    /// <summary>
     /// Where a gate's guards stand: the gate guard 15 out from its leaf; a member whose node goal finds no node in a gate it lives in flanks the
     /// opening on that side, beyond the leaf's edges, alternately left and right in two rows (engine choice: it stands in for the original's gate
     /// posts, which no layout holds). Null for other goals, and for 157 while it holds a town post.
@@ -2168,6 +2334,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var along = new Vector3(-gate.Out.Y, 0, gate.Out.X) * side * (gate.HalfWidth + 6 + 7 * (step / 2));
         return front + new Vector3(gate.Out.X, 0, gate.Out.Y) * (8 * (step % 2)) + along;
     }
+
+    #endregion
+
+    #region Turrets
+
+    /// <summary>
+    /// The turret indices of each town claimed in the current cadence pass (derived, not hashed).
+    /// </summary>
+    readonly Dictionary<int, HashSet<int>> _turretTaken = [];
 
     /// <summary>
     /// Within this (squared 2.25e6) of the character the turret finder's pick has factor 1; within 600 in melee mode it has 0.8.
@@ -2230,6 +2405,91 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
+    /// Whether the member's role list has a turret goal open at <paramref name="hour"/>, and whether it is only the home building's (222): that one
+    /// may only man a turret mounted on its home. Its role list only (not its race's goals): a race goal without the town's turret data names no
+    /// turret.
+    /// </summary>
+    static bool TurretGoal(Blackboard board, Squad squad, CharacterId id, CharacterCold cold, int hour, out bool homeOnly)
+    {
+        var roles = board.Roles[(int)RoleOf(squad, id, cold)];
+        bool home = false, town = false;
+        for (int k = 0; k < roles.Count; k++)
+        {
+            if (!roles[k].InWindow(hour)) continue;
+            var type = roles[k].Task.Type;
+            if (type == TaskType.ManATurretOnBuilding) home = true;
+            else if (type is TaskType.ManATurret or TaskType.ManATurretPlayerJob or TaskType.UseTurret) town = true;
+        }
+        homeOnly = home && !town;
+        return home || town;
+    }
+
+    /// <summary>
+    /// Where a turret is manned: behind its gun (the gunner stands between the gun and the walkway behind it), inside the turret's <c>use range</c>:
+    /// the first of a few distances behind it whose ground is walkable at the turret's height, else beside or before it, else the turret's own place.
+    /// The Y is the walkable surface there, so the path goes up to the tower's floor rather than to the ground below it. Engine choice: the game's
+    /// gunner spot is not in the data.
+    /// </summary>
+    internal static Vector3 TurretSpot(World world, in TurretPost turret)
+    {
+        var at = Flat(turret.Position);
+        var forward = new Vector2(MathF.Sin(turret.Yaw), MathF.Cos(turret.Yaw));
+        var side = new Vector2(forward.Y, -forward.X);
+        float nearY = turret.Position.Y;
+        bool Walkable(Vector2 p) => world.Walkability.IsWalkable(p.X, p.Y, nearY);
+        Vector3 On(Vector2 p) => new(p.X, world.Walkability.GroundHeight(p.X, p.Y, nearY), p.Y);
+        float reach = MathF.Max(MathF.Min(turret.UseRange, 10), 2);
+        for (float d = reach * 0.6f; d >= 2; d -= 2)
+            if (Walkable(at - forward * d)) return On(at - forward * d);
+        for (int k = 0; k < 2; k++)
+            if (Walkable(at + side * (k == 0 ? 4 : -4))) return On(at + side * (k == 0 ? 4 : -4));
+        return Walkable(at + forward * 4) ? On(at + forward * 4) : On(at);
+    }
+
+    #endregion
+
+    #region Seats and posts
+
+    /// <summary>
+    /// The seats of each bar claimed in the current cadence pass, by building (derived, not hashed).
+    /// </summary>
+    readonly Dictionary<TownBuilding, HashSet<int>> _seatTaken = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// The guard posts of each building held in the current cadence pass, by spot index (derived, not hashed).
+    /// </summary>
+    readonly Dictionary<TownBuilding, HashSet<int>> _postTaken = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// The seats the members held before this pass (<see cref="ClaimSeats"/>), by slot; scratch.
+    /// </summary>
+    readonly Dictionary<int, HomeSpot> _kept = [];
+
+    /// <summary>
+    /// The sitting-around pieces the members held before this pass (<see cref="ClaimSitting"/>), by slot; scratch.
+    /// </summary>
+    readonly Dictionary<int, SeatClaim> _keptSits = [];
+
+    /// <summary>
+    /// The grid query of <see cref="Operated"/>: the characters, the spot and whether an operator stands on it.
+    /// </summary>
+    struct OperatorScan
+    {
+        /// <summary>
+        /// The characters (last tick's positions).
+        /// </summary>
+        public CharacterTable Table;
+        /// <summary>
+        /// The spot.
+        /// </summary>
+        public Vector3 At;
+        /// <summary>
+        /// An operator stands on the spot.
+        /// </summary>
+        public bool Found;
+    }
+
+    /// <summary>
     /// Gives the members whose role list has relaxing (under a bar package), sitting around or staying home open at this hour a seat of their
     /// <see cref="Blackboard.Home"/> (the package's bar under a bar package): in member order each takes the first seat no one in that building
     /// claimed in this cadence pass; members left without one do not relax or sit. Relaxing takes a chair, else a bar node, else a general node (the
@@ -2287,8 +2547,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
     }
 
-    readonly Dictionary<int, HomeSpot> _kept = [];
-
     /// <summary>
     /// Marks taken the chairs and thrones of <paramref name="home"/> a character sits on by an order (the player's Use,
     /// <see cref="CharacterTask.Operate"/>), so no member claims them.
@@ -2299,13 +2557,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (home.Spots[i].Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat && !taken.Contains(i)
                 && Operated(world, home.Spots[i].Position))
                 taken.Add(i);
-    }
-
-    struct OperatorScan
-    {
-        public CharacterTable Table;
-        public Vector3 At;
-        public bool Found;
     }
 
     /// <summary>
@@ -2323,7 +2574,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         });
         return scan.Found;
     }
-    readonly Dictionary<int, SeatClaim> _keptSits = [];
 
     /// <summary>
     /// The seats of <paramref name="building"/> taken in this cadence pass (indices of <see cref="TownBuilding.SeatAt"/>).
@@ -2367,7 +2617,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             bool playerSide = PlayerSide(world, cold);
             var at = world.Characters.Next[s].Position;
             int site = TownAt(at);
-            var seats = site >= 0 && MaySitIn(world, board, squad, site, playerSide) ? Places(site) : NoPlaces;
+            var seats = site >= 0 && MaySitIn(world, board, squad, site, playerSide) ? Places(site) : TownPlaceIndex.None;
             bool Mine(TownBuilding b) =>
                 seats.SeatOwners.TryGetValue(b, out int owner) && owner >= 0 && (owner == cold.Faction || owner == squad.Faction);
 
@@ -2453,12 +2703,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     bool PostHeld(SeatClaim post) => _postTaken.TryGetValue(post.Building, out var taken) && taken.Contains(post.Index);
 
+    /// <summary>
+    /// The guard posts of <paramref name="building"/> held in this cadence pass.
+    /// </summary>
     HashSet<int> PostsTakenOf(TownBuilding building) => _postTaken.TryGetValue(building, out var taken) ? taken : _postTaken[building] = [];
 
     /// <summary>
     /// The guard posts of a building (its spots of kind <see cref="HomeSpotKind.Guard"/>), numbered as its spots.
     /// </summary>
-    static IEnumerable<SeatClaim> GuardPosts(TownBuilding building)
+    internal static IEnumerable<SeatClaim> GuardPosts(TownBuilding building)
     {
         for (int i = 0; i < building.Spots.Count; i++)
             if (building.Spots[i].Kind == HomeSpotKind.Guard) yield return new SeatClaim(building, i);
@@ -2479,9 +2732,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Whether sitting around takes a piece of furniture of this kind (bits CHAIR and THRONE of the mask; TRAINING too unless
     /// <paramref name="dummies"/> is false).
     /// </summary>
-    static bool Sittable(HomeSpotKind kind, bool dummies) =>
+    internal static bool Sittable(HomeSpotKind kind, bool dummies) =>
         kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat || dummies && kind == HomeSpotKind.Training;
 
+    /// <summary>
+    /// Of the player's side: one of the player's characters or of the player's faction.
+    /// </summary>
     static bool PlayerSide(World world, CharacterCold cold) => cold.IsPlayer || world.Player.Faction >= 0 && cold.Faction == world.Player.Faction;
 
     /// <summary>
@@ -2503,6 +2759,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         }
     }
 
+    /// <summary>
+    /// The seat index of <paramref name="spot"/> in <paramref name="building"/> (<see cref="TownBuilding.SeatAt"/>); -1 when it has none.
+    /// </summary>
     static int IndexOf(TownBuilding building, HomeSpot spot)
     {
         for (int i = 0; i < building.SeatCount; i++)
@@ -2561,25 +2820,41 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return best;
     }
 
+    #endregion
+
+    #region Squads and packages
+
     /// <summary>
-    /// Whether the member's role list has a turret goal open at <paramref name="hour"/>, and whether it is only the home building's (222): that one
-    /// may only man a turret mounted on its home. Its role list only (not its race's goals): a race goal without the town's turret data names no
-    /// turret.
+    /// The packages and template of each squad template id (<see cref="TemplateOf"/>); derived from the data, not hashed.
     /// </summary>
-    static bool TurretGoal(Blackboard board, Squad squad, CharacterId id, CharacterCold cold, int hour, out bool homeOnly)
-    {
-        var roles = board.Roles[(int)RoleOf(squad, id, cold)];
-        bool home = false, town = false;
-        for (int k = 0; k < roles.Count; k++)
-        {
-            if (!roles[k].InWindow(hour)) continue;
-            var type = roles[k].Task.Type;
-            if (type == TaskType.ManATurretOnBuilding) home = true;
-            else if (type is TaskType.ManATurret or TaskType.ManATurretPlayerJob or TaskType.UseTurret) town = true;
-        }
-        homeOnly = home && !town;
-        return home || town;
-    }
+    readonly Dictionary<string, (IReadOnlyList<SlottedPackage> Packages, SquadTemplate? Template)> _templates = [];
+
+    /// <summary>
+    /// Squads already looked at (ids are never reused); derived from the squads, so not part of the hash.
+    /// </summary>
+    readonly HashSet<int> _looked = [];
+
+    /// <summary>
+    /// How long the war manager's phase package runs as the platoon's override before it is installed afresh (<c>FUN_140272240</c> called with 24
+    /// game hours, <b>Verified</b>).
+    /// </summary>
+    const double PhaseHours = 24;
+
+    /// <summary>
+    /// Derived from the data, not hashed.
+    /// </summary>
+    readonly Dictionary<string, AiPackage?> _firstPackages = [];
+
+    /// <summary>
+    /// The combat goals of each package and role (<see cref="CombatGoalsOf"/>); derived from the data, not hashed.
+    /// </summary>
+    readonly Dictionary<(AiPackage, AiRole), IReadOnlyList<AiGoal>> _combatGoals = [];
+
+    /// <summary>
+    /// The BuildingFunction bits the finder of a new home looks through: 0x13, BF_ANY, MINE and REFINERY (the house function's number 19 passed as a
+    /// bit mask, as the worker finder's 0x41a is read, <b>Observed</b>); a building with no functionality counts as BF_ANY.
+    /// </summary>
+    const int RehomeFunctions = 0x13;
 
     void Attach(World world, Squad squad)
     {
@@ -2675,12 +2950,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// How long the war manager's phase package runs as the platoon's override before it is installed afresh (<c>FUN_140272240</c> called with 24
-    /// game hours, <b>Verified</b>).
-    /// </summary>
-    const double PhaseHours = 24;
-
-    /// <summary>
     /// The package the war manager's record gives a campaign platoon for its phase (<c>FUN_140272570</c>: pt1, pt2 or retreat, the leader platoon's
     /// or the others'); null after the retreat or when the campaign lists none.
     /// </summary>
@@ -2727,10 +2996,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return _combatGoals[(package, role)] = list;
     }
 
-    // Derived from the data, not hashed.
-    readonly Dictionary<string, AiPackage?> _firstPackages = [];
-    readonly Dictionary<(AiPackage, AiRole), IReadOnlyList<AiGoal>> _combatGoals = [];
-
     /// <summary>
     /// The AI runs a squad that is not the player's, not a roaming platoon's active half (a town's own saved squad, pinned, is run like the town's, a
     /// save's wild one like the wild sites' squads), and whose template lists AI packages.
@@ -2767,7 +3032,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return false;
     }
 
-    (IReadOnlyList<SlottedPackage> Packages, SquadTemplate? Template) TemplateOf(string templateId)
+    /// <summary>
+    /// The packages and the template of a squad template id (none for an id that is no squad template), cached.
+    /// </summary>
+    internal (IReadOnlyList<SlottedPackage> Packages, SquadTemplate? Template) TemplateOf(string templateId)
     {
         if (_templates.TryGetValue(templateId, out var known)) return known;
         var template = data.Db.Find(templateId) is { } r && SquadFactory.IsTemplate(r) ? SquadTemplate.From(r) : null;
@@ -2847,12 +3115,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The BuildingFunction bits the finder of a new home looks through: 0x13, BF_ANY, MINE and REFINERY (the house function's number 19 passed as a
-    /// bit mask, as the worker finder's 0x41a is read, <b>Observed</b>); a building with no functionality counts as BF_ANY.
-    /// </summary>
-    const int RehomeFunctions = 0x13;
-
-    /// <summary>
     /// The home a squad moving out is given (<c>FUN_14099e6e0</c> through <c>FUN_1409fc2e0</c>, <b>Observed</b>): one of its town's buildings in
     /// <see cref="RehomeFunctions"/> that is for sale (the panel's test, slot 88 <c>FUN_14029c500</c>:
     /// <see cref="Locks.FixtureRegistry.SalePrice"/>), at random; null when there is none. The original also tests the squad against each
@@ -2917,6 +3179,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         World _world = null!;
         Squad _squad = null!;
 
+        /// <summary>
+        /// Binds the rules to the squad being updated.
+        /// </summary>
         public void Bind(AiSystem s, World w, Squad q) => (_system, _world, _squad) = (s, w, q);
 
         public bool CanStart(Blackboard board, AiPackage package, PackageClass kind) => kind switch
@@ -3067,7 +3332,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The faction owning a town building: its property owner, else its level owner, else the town's (<paramref name="townFaction"/>).
     /// </summary>
-    int BuildingOwner(World world, TownBuilding b, int townFaction) =>
+    internal int BuildingOwner(World world, TownBuilding b, int townFaction) =>
         world.Fixtures.PropertyOwner(b.Key) ?? data.LevelOwnerOf(b, townFaction);
 
     /// <summary>
@@ -3109,4 +3374,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         board.NextPatrol = world.GameHours + every;
         board.PatrolGiveUp = world.GameHours + Settings.PatrolGiveUpHours;
     }
+
+    #endregion
 }

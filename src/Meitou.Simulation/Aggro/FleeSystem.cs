@@ -71,7 +71,6 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     readonly List<Squad> _squads = [];
     readonly HashSet<int> _attacked = [];
-    readonly HashSet<int> _seen = [];
     readonly List<int> _standing = [];
 
     // The characters standing this check by faction (in slot order) and, per faction asked, the standing enemies of it: a battle of one faction, or of
