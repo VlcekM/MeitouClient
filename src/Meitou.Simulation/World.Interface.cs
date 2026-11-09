@@ -3,8 +3,14 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation;
 
+/// <summary>
+/// The world's interface steps between ticks: the paused commands, the system lookup and the held item.
+/// </summary>
 public sealed partial class World
 {
+    /// <summary>
+    /// The first system of each type (see <see cref="SystemOf"/>).
+    /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<Type, object?> _systemsByType = new();
 
     /// <summary>

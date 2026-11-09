@@ -14,8 +14,14 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 public static class ResearchSave
 {
+    /// <summary>
+    /// The key of entry <paramref name="k"/> under <paramref name="prefix"/>.
+    /// </summary>
     static string K(string prefix, int k) => prefix + k.ToString(CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// The ids under <paramref name="prefix"/> from entry 0 on, until one is missing (none for no record).
+    /// </summary>
     static List<string> List(FcsRecord? record, string prefix)
     {
         var ids = new List<string>();
@@ -43,6 +49,9 @@ public static class ResearchSave
         research.Set(db, Read(record), queued, List(record, "paid"), []);
     }
 
+    /// <summary>
+    /// Writes <paramref name="ids"/> under <paramref name="prefix"/>, the old entries removed first.
+    /// </summary>
     static void Replace(FcsRecord record, string prefix, IReadOnlyList<string> ids)
     {
         for (int k = 0; record.Strings.ContainsKey(K(prefix, k)); k++)

@@ -17,9 +17,21 @@ namespace Meitou.Simulation.Population;
 /// </summary>
 public readonly record struct CampaignTown(int Site, int PlayerTown)
 {
+    /// <summary>
+    /// No town.
+    /// </summary>
     public static readonly CampaignTown None = new(-1, 0);
+    /// <summary>
+    /// Whether this is no town.
+    /// </summary>
     public bool IsNone => Site < 0 && PlayerTown <= 0;
+    /// <summary>
+    /// The placed town at site <paramref name="site"/>.
+    /// </summary>
     public static CampaignTown OfSite(int site) => new(site, 0);
+    /// <summary>
+    /// The player town numbered <paramref name="number"/>.
+    /// </summary>
     public static CampaignTown OfPlayer(int number) => new(-1, number);
 }
 
@@ -40,11 +52,17 @@ public sealed class CampaignInstance
     /// <c>dat c</c>: the FACTION_CAMPAIGN.
     /// </summary>
     public required string CampaignId { get; init; }
+    /// <summary>
+    /// <c>target c</c>: the town it aims at.
+    /// </summary>
     public CampaignTown Target { get; set; }
     /// <summary>
     /// <c>enemy c</c>: the target's faction (-1: none).
     /// </summary>
     public int Enemy { get; set; } = -1;
+    /// <summary>
+    /// <c>home c</c>: the town it comes from.
+    /// </summary>
     public CampaignTown Home { get; set; }
     /// <summary>
     /// 0 travel, 1 at the target, 2 ended.
@@ -74,6 +92,9 @@ public sealed class CampaignInstance
     /// The characters it needs (int(<c>num forces</c> × <c>raidSizeMult</c>)) and those it gathered.
     /// </summary>
     public int Required { get; set; }
+    /// <summary>
+    /// The characters it gathered (see <see cref="Required"/>).
+    /// </summary>
     public int Men { get; set; }
     /// <summary>
     /// The game hour its first loaded fight began in the first 4 hours of an assault's phase 1 (<c>FUN_1409c70f0</c>, <b>Verified</b>); -1: none yet,
@@ -92,7 +113,13 @@ public sealed class CampaignInstance
     /// Its leader said the <c>dialog announcement</c> (the character, and the game hour; -1: not yet) and has reached the target. Not saved.
     /// </summary>
     public CharacterId Announcer { get; set; } = CharacterId.None;
+    /// <summary>
+    /// The game hour its leader said the announcement (-1: not yet; see <see cref="Announcer"/>).
+    /// </summary>
     public double AnnouncedAt { get; set; } = -1;
+    /// <summary>
+    /// The game hour its leader reached the target (-1: not yet). Not saved.
+    /// </summary>
     public double ArrivedAt { get; set; } = -1;
     /// <summary>
     /// The redirect timer (the original's +0xf0, started the first time the target is found gone or inactive; -1: not started). Not saved or hashed.
@@ -111,10 +138,25 @@ public sealed class CampaignInstance
 /// </summary>
 public sealed class CampaignRequest
 {
+    /// <summary>
+    /// The FACTION_CAMPAIGN it starts.
+    /// </summary>
     public required string CampaignId { get; init; }
+    /// <summary>
+    /// The target's faction (-1: none).
+    /// </summary>
     public int Enemy { get; set; } = -1;
+    /// <summary>
+    /// The game hour it is due at.
+    /// </summary>
     public double Due { get; set; }
+    /// <summary>
+    /// The town it aims at.
+    /// </summary>
     public CampaignTown Target { get; set; }
+    /// <summary>
+    /// The town it comes from (none: the faction's town nearest the target).
+    /// </summary>
     public CampaignTown Home { get; set; }
     /// <summary>
     /// The one counter (+0x58, <b>Verified</b> <c>FUN_1409cb310</c>; not saved) of the delays for a gone target and the starts tried:
@@ -128,7 +170,13 @@ public sealed class CampaignRequest
 /// </summary>
 public sealed class KnownCampaign(string id)
 {
+    /// <summary>
+    /// The FACTION_CAMPAIGN's id.
+    /// </summary>
     public string Id { get; } = id;
+    /// <summary>
+    /// The game hour of its last start (0: never started).
+    /// </summary>
     public double LastStart { get; set; }
 }
 
@@ -138,6 +186,9 @@ public sealed class KnownCampaign(string id)
 /// </summary>
 public sealed class WarManager
 {
+    /// <summary>
+    /// The faction it runs for (a position in the factions).
+    /// </summary>
     public required int Faction { get; init; }
     /// <summary>
     /// <c>updatetime</c>: the game hour of the next roll.
@@ -147,14 +198,26 @@ public sealed class WarManager
     /// <c>fwc id</c>.
     /// </summary>
     public int NextId { get; set; }
+    /// <summary>
+    /// The running campaigns.
+    /// </summary>
     public List<CampaignInstance> Actives { get; } = [];
+    /// <summary>
+    /// The queued campaigns.
+    /// </summary>
     public List<CampaignRequest> Requests { get; } = [];
+    /// <summary>
+    /// The campaigns the faction knows.
+    /// </summary>
     public List<KnownCampaign> Known { get; } = [];
     /// <summary>
     /// Requests queued since the world began (keys their delay rolls; not saved).
     /// </summary>
     internal int Queued { get; set; }
 
+    /// <summary>
+    /// The known campaign <paramref name="id"/>, added when it is not known yet.
+    /// </summary>
     public KnownCampaign Know(string id)
     {
         foreach (var k in Known)
@@ -177,7 +240,13 @@ public sealed partial class PopulationSystem : IStateHashed
 {
     #region Managers
 
+    /// <summary>
+    /// Each faction's war manager, by faction; null until <see cref="EnsureWars"/> makes them.
+    /// </summary>
     WarManager[]? _wars;
+    /// <summary>
+    /// The campaign data, read on first use.
+    /// </summary>
     CampaignDatabase? _campaignDb;
 
     /// <summary>
@@ -208,6 +277,9 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     public CampaignData? CampaignOf(string id) => (_campaignDb ??= new CampaignDatabase(_data.Db)).Find(id, !CampaignAncestorsOnce);
 
+    /// <summary>
+    /// The player's faction: the world's, else the data's.
+    /// </summary>
     int PlayerFactionOf(World world) => world.Player.Faction >= 0 ? world.Player.Faction : _data.PlayerFaction;
 
     /// <summary>
@@ -228,6 +300,9 @@ public sealed partial class PopulationSystem : IStateHashed
         if (world.Saved is { Wars.Count: > 0 } saved) Saving.WarSave.Read(world, this, saved);
     }
 
+    /// <summary>
+    /// The war manager of <paramref name="faction"/>; null before the managers are made or for no faction.
+    /// </summary>
     internal WarManager? WarOf(int faction) => _wars is not null && faction >= 0 && faction < _wars.Length ? _wars[faction] : null;
 
     #endregion
@@ -248,6 +323,9 @@ public sealed partial class PopulationSystem : IStateHashed
     /// null before the first need.
     /// </summary>
     double[]? _prosperity;
+    /// <summary>
+    /// The tick the prosperity last grew to.
+    /// </summary>
     long _prosperityTick;
 
     /// <summary>
@@ -308,6 +386,9 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     int _warCursor;
 
+    /// <summary>
+    /// The campaign step: the factions' prosperity grows, the managers are made if needed and the campaigns move on by the check's game seconds.
+    /// </summary>
     void StepCampaigns(World world)
     {
         StepProsperity(world);
@@ -345,6 +426,9 @@ public sealed partial class PopulationSystem : IStateHashed
 
     #region Towns
 
+    /// <summary>
+    /// The centre of a campaign town (XZ): a site's centre or a player town's position; the origin when the player town is gone.
+    /// </summary>
     Vector2 CentreOf(World world, CampaignTown t)
     {
         if (t.Site >= 0) return SiteCentre(t.Site);
@@ -364,9 +448,15 @@ public sealed partial class PopulationSystem : IStateHashed
         return world.Buildings.FindTown(t.PlayerTown)?.Radius ?? 2500;
     }
 
+    /// <summary>
+    /// The faction owning a campaign town (-1: none, or a player town that is gone).
+    /// </summary>
     int FactionOfTown(World world, CampaignTown t) =>
         t.Site >= 0 ? _data.SiteFactions[t.Site] : world.Buildings.FindTown(t.PlayerTown)?.Owner ?? -1;
 
+    /// <summary>
+    /// A campaign town's name: the site's town name, the player town's, else the player faction's name.
+    /// </summary>
     string NameOf(World world, CampaignTown t)
     {
         if (t.Site >= 0) return _data.Sites[t.Site].Town.Name;
@@ -377,6 +467,9 @@ public sealed partial class PopulationSystem : IStateHashed
         return PlayerFactionOf(world) is >= 0 and var pf ? _data.Factions[pf].Name : "";
     }
 
+    /// <summary>
+    /// Whether a campaign town is still there: a site in range, or a player town that stands.
+    /// </summary>
     bool Exists(World world, CampaignTown t) => t.Site >= 0 ? t.Site < _data.Sites.Count : world.Buildings.FindTown(t.PlayerTown) is not null;
 
     /// <summary>
@@ -431,7 +524,13 @@ public sealed partial class PopulationSystem : IStateHashed
 
     #region The roll
 
+    /// <summary>
+    /// The tick <see cref="_presentTowns"/> was gathered on (-1: never).
+    /// </summary>
     long _presentTick = -1;
+    /// <summary>
+    /// The towns a player character is in, gathered once a tick for <see cref="TownActive"/>.
+    /// </summary>
     readonly HashSet<CampaignTown> _presentTowns = [];
 
     /// <summary>
@@ -670,7 +769,24 @@ public sealed partial class PopulationSystem : IStateHashed
 
     #region Start and squads
 
-    enum StartResult { Started, Weak, NoHome }
+    /// <summary>
+    /// What <see cref="Start"/> did with a campaign.
+    /// </summary>
+    enum StartResult
+    {
+        /// <summary>
+        /// The campaign started.
+        /// </summary>
+        Started,
+        /// <summary>
+        /// It gathered too few men and was cancelled.
+        /// </summary>
+        Weak,
+        /// <summary>
+        /// It has no home town, or its target is gone.
+        /// </summary>
+        NoHome
+    }
 
     /// <summary>
     /// Starts a campaign (<c>FUN_1409c9830</c>): a home (the given one, else the faction's town nearest the target), the next id, its squads
@@ -725,6 +841,9 @@ public sealed partial class PopulationSystem : IStateHashed
         return StartResult.Started;
     }
 
+    /// <summary>
+    /// Adds a line to the town log, keeping the last 256.
+    /// </summary>
     void Log(string line)
     {
         if (_townLog.Count >= 256) _townLog.RemoveAt(0);
@@ -899,6 +1018,10 @@ public sealed partial class PopulationSystem : IStateHashed
         return p;
     }
 
+    /// <summary>
+    /// Adds a platoon to a campaign: it drops its own wait and point, its living members count to the campaign's men, and it leads when asked to or
+    /// when the campaign has no leader.
+    /// </summary>
     void Join(World world, CampaignInstance inst, Platoon p, bool leads)
     {
         p.Campaign = inst;
@@ -1422,6 +1545,9 @@ public sealed partial class PopulationSystem : IStateHashed
         return false;
     }
 
+    /// <summary>
+    /// A campaign won: it ends (phase 2), a hostile one posts its end, and the victory triggers follow up.
+    /// </summary>
     void Victory(World world, WarManager m, CampaignData c, CampaignInstance inst, double now)
     {
         inst.Phase = 2;
@@ -1433,6 +1559,10 @@ public sealed partial class PopulationSystem : IStateHashed
         FollowUp(world, m, c.VictoryTriggers, inst, now, 1);
     }
 
+    /// <summary>
+    /// A campaign lost: it ends (phase 2) with the message its kind and fight call for, and the loss triggers follow up when it reached its target or
+    /// fought the player.
+    /// </summary>
     void Defeat(World world, WarManager m, CampaignData c, CampaignInstance inst, double now)
     {
         inst.Phase = 2;
@@ -1501,6 +1631,9 @@ public sealed partial class PopulationSystem : IStateHashed
         }
     }
 
+    /// <summary>
+    /// Whether a living player character is within <paramref name="range"/> of <paramref name="at"/>.
+    /// </summary>
     static bool PlayerNear(World world, Vector3 at, float range)
     {
         var prev = world.Characters.Previous;
@@ -1514,6 +1647,9 @@ public sealed partial class PopulationSystem : IStateHashed
         return false;
     }
 
+    /// <summary>
+    /// Whether a loaded platoon of the campaign has a member in combat.
+    /// </summary>
     bool AnyFighting(World world, CampaignInstance inst)
     {
         foreach (int id in inst.Platoons)
@@ -1620,6 +1756,9 @@ public sealed partial class PopulationSystem : IStateHashed
         return seen > 2 && standing * 2 > seen;
     }
 
+    /// <summary>
+    /// Whether a player character stands up in the town.
+    /// </summary>
     bool PlayersStanding(World world, CampaignTown t) => PlayersIn(world, t).Up > 0;
 
     /// <summary>
@@ -1726,6 +1865,9 @@ public sealed partial class PopulationSystem : IStateHashed
     /// <see cref="Dialogue.DialogueSystem.HasInterrupt"/>), set by the host; null: none.
     /// </summary>
     public Func<World, CharacterId, string, bool>? Announcer { get; set; }
+    /// <summary>
+    /// The dialogue's pending-talk query (see <see cref="Announcer"/>); null: none.
+    /// </summary>
     public Func<CharacterId, bool>? PendingTalk { get; set; }
 
     /// <summary>
@@ -1795,6 +1937,9 @@ public sealed partial class PopulationSystem : IStateHashed
     /// The trail's step and its first slot count (<b>Verified</b>, <c>FUN_1409d6070</c>).
     /// </summary>
     const float TrailStep = 150;
+    /// <summary>
+    /// The trail's first slot count (see <see cref="TrailStep"/>).
+    /// </summary>
     const int TrailSlots = 5;
 
     /// <summary>
@@ -1859,6 +2004,10 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     const float ColumnRange = 6000, WaitNearTarget = 8294.4f;
 
+    /// <summary>
+    /// The off-screen speed of a campaign platoon, in units per second: by its <c>move speed</c>, else the leader 25 and the others 60, or 90 more
+    /// than 25000 away.
+    /// </summary>
     static float CampaignSpeed(MoveSpeed speed, bool leader, float distance) => speed switch
     {
         MoveSpeed.Walk => 25,
@@ -2030,6 +2179,9 @@ public sealed partial class PopulationSystem : IStateHashed
         }
     }
 
+    /// <summary>
+    /// Adds the war managers' state to the world's state hash, once any manager started or queued a campaign.
+    /// </summary>
     void HashWars(ref StateHasher h)
     {
         if (_wars is null || !_wars.Any(m => m.NextId > 0 || m.Requests.Count > 0)) return;

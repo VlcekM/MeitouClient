@@ -3,6 +3,9 @@ using Meitou.Simulation.Perception;
 
 namespace Meitou.Simulation.Ai;
 
+/// <summary>
+/// The AI's sleeping: the bed goals' desire and the minutes between bed uses.
+/// </summary>
 public sealed partial class AiSystem
 {
     /// <summary>

@@ -39,8 +39,17 @@ public sealed record DoorLockOrder(IReadOnlyList<CharacterId> Characters, string
 /// </summary>
 public sealed class DoorLockJob(string door, bool locking)
 {
+    /// <summary>
+    /// The door's fixture id.
+    /// </summary>
     public string Door { get; } = door;
+    /// <summary>
+    /// Whether the door is being locked (else unlocked).
+    /// </summary>
     public bool Lock { get; } = locking;
+    /// <summary>
+    /// The game seconds worked at it.
+    /// </summary>
     public float Work { get; set; }
 }
 
@@ -67,6 +76,10 @@ public sealed partial class LockSystem
     /// Engine choices of the walk-through opening (see the class remarks).
     /// </summary>
     public const int WalkerEveryTicks = 3;
+    /// <summary>
+    /// Engine choices of the walk-through opening (see the class remarks): the opening reach, the reach at a locked door, the slack past the leaf's
+    /// width, and the leaf's depth and height a walker is tested against.
+    /// </summary>
     public const float OpenReach = 40, LockedReach = 15, DoorSlack = 6, DoorDepth = 12, DoorHeight = 40;
     /// <summary>
     /// Meitou: a door a walker opened closes again this many game seconds after the last character went through or stood in it.
@@ -79,8 +92,14 @@ public sealed partial class LockSystem
     /// </summary>
     public bool DoorsCloseBehind { get; set; } = true;
 
+    /// <summary>
+    /// The building registry revision the player's doors were last registered at (-1: never).
+    /// </summary>
     long _buildingsRevision = -1;
 
+    /// <summary>
+    /// The door orders: toggling a building's doors, opening, closing, locking and unlocking one.
+    /// </summary>
     void DoorInputs(World world, SimCommand command)
     {
         var fixtures = world.Fixtures;
@@ -159,6 +178,9 @@ public sealed partial class LockSystem
         return (Vector2.DistanceSquared(from, inside) < Vector2.DistanceSquared(from, outside) ? inside : outside, DoorWorkReach);
     }
 
+    /// <summary>
+    /// The door order: the nearest player character able to opens, closes or picks the door.
+    /// </summary>
     void DoorOrderInput(World world, DoorOrder order)
     {
         if (world.Fixtures.Find(order.Door) is not { Kind: FixtureKind.Door, DoorBroken: false } door) return;
@@ -185,6 +207,9 @@ public sealed partial class LockSystem
         StartWork(world, best, CharacterTask.GoTo, row, door.Id, queued: order.Queued);
     }
 
+    /// <summary>
+    /// The lock-door order: the nearest player character able to locks or unlocks a door or cage the player owns.
+    /// </summary>
     void DoorLockInput(World world, DoorLockOrder order)
     {
         if (world.Fixtures.Find(order.Door) is not { Kind: FixtureKind.Door or FixtureKind.Cage, DoorBroken: false, Lock: { } l } door
@@ -319,6 +344,10 @@ public sealed partial class LockSystem
         return list;
     }
 
+    /// <summary>
+    /// The doors' step: the player's buildings registered, the leaves moved and held, walkers opening doors, and every <see cref="WalkerEveryTicks"/>
+    /// ticks the doors walkers reach opened.
+    /// </summary>
     void Doors(World world)
     {
         SyncPlayerBuildings(world);
@@ -367,11 +396,26 @@ public sealed partial class LockSystem
         }
     }
 
+    /// <summary>
+    /// The state of one scan of the walkers at a door: the door, its leaf, and what the walkers did.
+    /// </summary>
     struct WalkerScan
     {
+        /// <summary>
+        /// The world scanned.
+        /// </summary>
         public World World;
+        /// <summary>
+        /// The door.
+        /// </summary>
         public Fixture Door;
+        /// <summary>
+        /// Where its leaf is.
+        /// </summary>
         public DoorSpot Spot;
+        /// <summary>
+        /// Whether a walker opened it.
+        /// </summary>
         public bool Opened;
         /// <summary>
         /// The faction of the walker that opened the door (-1: none).
@@ -381,6 +425,9 @@ public sealed partial class LockSystem
         /// The door is open (or opening): the scan only notes who goes through or stands in it.
         /// </summary>
         public bool Watch;
+        /// <summary>
+        /// Whether someone went through or stood in it.
+        /// </summary>
         public bool Passed;
     }
 
@@ -459,9 +506,18 @@ public sealed partial class LockSystem
     /// </summary>
     public const float PassableOpen = 0.6f;
 
+    /// <summary>
+    /// The state of one scan of the characters at a door's leaf.
+    /// </summary>
     struct LeafScan
     {
+        /// <summary>
+        /// The world scanned.
+        /// </summary>
         public World World;
+        /// <summary>
+        /// Where the leaf is.
+        /// </summary>
         public DoorSpot Spot;
     }
 

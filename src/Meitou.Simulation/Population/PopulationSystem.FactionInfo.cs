@@ -1,5 +1,8 @@
 namespace Meitou.Simulation.Population;
 
+/// <summary>
+/// The population's faction information for the UI: the upcoming events of the factions' campaigns.
+/// </summary>
 public sealed partial class PopulationSystem
 {
     /// <summary>

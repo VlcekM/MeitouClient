@@ -64,7 +64,8 @@ public sealed partial class PopulationSystem
     static void RemoveMember(World world, CharacterId id) => world.Characters.Remove(id);
 
     /// <summary>
-    /// Clears what a character's cold state holds only while it is in the world: paths, AI, carrying, treatment, combat and stealth state, a pending crime, jobs.
+    /// Clears what a character's cold state holds only while it is in the world: paths, AI, carrying, treatment, combat and stealth state, a pending
+    /// crime, jobs.
     /// </summary>
     static void Detach(CharacterCold c)
     {

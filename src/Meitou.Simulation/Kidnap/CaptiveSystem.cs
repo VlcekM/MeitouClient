@@ -174,7 +174,17 @@ public enum CaptiveJobKind : byte
 /// <summary>
 /// The phase of a job: walking to the captive, then working on it.
 /// </summary>
-public enum CaptivePhase : byte { Walk, Work }
+public enum CaptivePhase : byte
+{
+    /// <summary>
+    /// Walking to the captive.
+    /// </summary>
+    Walk,
+    /// <summary>
+    /// Working on it.
+    /// </summary>
+    Work
+}
 
 /// <summary>
 /// One worker's job on one captive (serial state of the <see cref="CaptiveSystem"/>).
@@ -276,7 +286,53 @@ public sealed class CaptiveJob
 /// <summary>
 /// What happened in a captive job (<see cref="CaptiveEvent"/>).
 /// </summary>
-public enum CaptiveEventKind { Started, Killed, Eaten, Enslaved, Gathered, Delivered, Caged, GaveUp, Captured, Shouted, Liberated }
+public enum CaptiveEventKind
+{
+    /// <summary>
+    /// A job started.
+    /// </summary>
+    Started,
+    /// <summary>
+    /// The captive was killed.
+    /// </summary>
+    Killed,
+    /// <summary>
+    /// The captive was eaten.
+    /// </summary>
+    Eaten,
+    /// <summary>
+    /// The captive was made a slave (a capture's or a processing's).
+    /// </summary>
+    Enslaved,
+    /// <summary>
+    /// A slave was gathered from a cage into the squad.
+    /// </summary>
+    Gathered,
+    /// <summary>
+    /// A slave was delivered into a cage.
+    /// </summary>
+    Delivered,
+    /// <summary>
+    /// A slave was put in a cage.
+    /// </summary>
+    Caged,
+    /// <summary>
+    /// The job ended without its work done.
+    /// </summary>
+    GaveUp,
+    /// <summary>
+    /// The captive was cuffed.
+    /// </summary>
+    Captured,
+    /// <summary>
+    /// The worker shouted at a slave.
+    /// </summary>
+    Shouted,
+    /// <summary>
+    /// The captive was released.
+    /// </summary>
+    Liberated
+}
 
 /// <summary>
 /// One event of a captive job, for the log and the tests.
@@ -360,7 +416,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     public IReadOnlyList<CaptiveEvent> Log => _log;
 
     /// <summary>
-    /// The serial step: the slavers restored now and then, the racks, every job stepped on, the offers after them, then the sweep for new jobs and the player animals' race goals on each character's turn.
+    /// The serial step: the slavers restored now and then, the racks, every job stepped on, the offers after them, then the sweep for new jobs and
+    /// the player animals' race goals on each character's turn.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -634,6 +691,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             return cold.PickingUpItem is not null && cold.Running is { Row: TaskType.AnimalFetchALimb } ? TaskType.AnimalFetchALimb : null;
         }
 
+        /// <summary>
+        /// The priority of goal <paramref name="type"/> among the character's race goals; null when it has none.
+        /// </summary>
         TaskPriority? PriorityOf(CharacterCold cold, TaskType type) =>
             owner.RaceGoalsOf(cold).FirstOrDefault(g => g.Task.Type == type)?.Task.Priority;
     }
@@ -927,7 +987,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// A kill or eat job on the fate target of the worker's town (a kill only with a weapon drawn); a fresh pick has the occupant say "marked for death". A probe changes nothing.
+    /// A kill or eat job on the fate target of the worker's town (a kill only with a weapon drawn); a fresh pick has the occupant say "marked for
+    /// death". A probe changes nothing.
     /// </summary>
     CaptiveJob? FateJob(World world, int slot, CharacterCold cold, Blackboard board, int site, CaptiveJobKind kind, bool probe = false)
     {
@@ -1308,6 +1369,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         return MathF.Min(level, 1);
     }
 
+    /// <summary>
+    /// Whether two factions are allied: the same, or allies in the relations.
+    /// </summary>
     bool Allied(int a, int b) => a >= 0 && b >= 0
             && (a == b || data.Relations.Contains(a) && data.Relations.Contains(b) && data.Relations.IsAlly(a, b));
 
@@ -1518,11 +1582,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     }
 
     /// <summary>
-    /// The meals of 230 and 233 (<c>AI::findCorpse_onGround</c> <c>FUN_1408cfde0</c> / <c>AI::findDeadOrKOBody_onGround</c> <c>FUN_1408ce680</c>,
-    /// docs/game/ai-tasks.md), the nearest within the eater's sight (engine reading of its sensed list): 230 a dead body of a <c>carriable</c> race
-    /// lying down, for an animal eater not a robot and not of its own race; 233 a dead or downed one not of an allied faction, not a robot and not of
-    /// the eater's race. Not carried, not caged, and no other job's. -1: none. </summary> <summary> Whether a job holds <paramref name="id"/> as its
-    /// captive. A plain loop: a lambda capturing the id made a closure per character the scan looked at.
+    /// Whether a job holds <paramref name="id"/> as its captive. A plain loop: a lambda capturing the id made a closure per character the
+    /// scan looked at.
     /// </summary>
     bool IsJobCaptive(CharacterId id)
     {
@@ -1585,7 +1646,10 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     const float CropReach = 30;
 
     /// <summary>
-    /// The nearest body in sight to eat (dead, or down but alive), not carried, held or another job's captive, not of the eater's race, -1: none.
+    /// The meals of 230 and 233 (<c>AI::findCorpse_onGround</c> <c>FUN_1408cfde0</c> / <c>AI::findDeadOrKOBody_onGround</c> <c>FUN_1408ce680</c>,
+    /// docs/game/ai-tasks.md), the nearest within the eater's sight (engine reading of its sensed list): 230 a dead body of a <c>carriable</c> race
+    /// lying down, for an animal eater not a robot and not of its own race; 233 a dead or downed one not of an allied faction, not a robot and not of
+    /// the eater's race. Not carried, not caged, and no other job's. -1: none.
     /// </summary>
     int BodyToEat(World world, int slot, CharacterCold cold, bool dead)
     {

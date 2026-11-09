@@ -45,6 +45,9 @@ public sealed class Lockpicking(GameConstants constants, BodyOptions options)
     /// </summary>
     public const float MaxChance = 0.9f, CagedPenalty = 10;
 
+    /// <summary>
+    /// The XP the picking trains.
+    /// </summary>
     readonly XpService _xp = new(constants, options);
 
     /// <summary>

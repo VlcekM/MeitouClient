@@ -17,10 +17,19 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 public static class TownMachineSave
 {
+    /// <summary>
+    /// The prefix of every town machine key.
+    /// </summary>
     const string Prefix = "meitou tm";
 
+    /// <summary>
+    /// The key of entry <paramref name="i"/> with the given part.
+    /// </summary>
     static string Key(int i, string part = "") => Prefix + i.ToString(CultureInfo.InvariantCulture) + part;
 
+    /// <summary>
+    /// Writes the town machines over the camera record's entries (the old ones removed first).
+    /// </summary>
     public static void Write(FcsRecord camera, World world)
     {
         for (int i = 0; camera.Strings.ContainsKey(Key(i)); i++)

@@ -14,8 +14,14 @@ namespace Meitou.Simulation.Locks;
 /// </summary>
 static class ContainerSave
 {
+    /// <summary>
+    /// The key prefix of a container's contents (followed by its layout index).
+    /// </summary>
     public const string KeyPrefix = "meitou container ";
 
+    /// <summary>
+    /// One saved item: record, quantity, cell, quality, level, material, maker, charges, section, a bag's contents, unique flag and colour.
+    /// </summary>
     sealed record Entry(string R, int Q, int X, int Y, float Ql, int Lv, string M, string C, float Ch, string S, List<Entry>? I,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool U = false, string? Co = null);
 
@@ -31,6 +37,9 @@ static class ContainerSave
     /// </summary>
     public static string? Write(Inventory grid) => grid.Items.Count == 0 ? null : JsonSerializer.Serialize(Entries(grid));
 
+    /// <summary>
+    /// The saved entries of a grid's items, a bag's contents nested.
+    /// </summary>
     static List<Entry> Entries(Inventory grid)
             => [.. grid.Items.Select(i
                     => new Entry(i.Record, i.Quantity, i.X, i.Y, i.Quality, i.Level, i.MaterialId, i.CompanyId, i.Charges, i.Section,
@@ -55,6 +64,10 @@ static class ContainerSave
         if (entries is not null) Fill(entries, grid, factory, topLevel: true);
     }
 
+    /// <summary>
+    /// Puts saved entries into a grid (a bag's into the bag), each in its cell else the first free one; dropped when none is free or the data lacks
+    /// its record.
+    /// </summary>
     static void Fill(List<Entry> entries, Inventory grid, ItemFactory factory, bool topLevel)
     {
         foreach (var e in entries)

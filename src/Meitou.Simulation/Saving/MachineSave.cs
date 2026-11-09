@@ -19,7 +19,13 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 public static class MachineSave
 {
+    /// <summary>
+    /// The suffix of a building's GAMESTATE_BUILDING state id.
+    /// </summary>
     const string StateSuffix = "-S23";
+    /// <summary>
+    /// The suffix of a building's INVENTORY_STATE id.
+    /// </summary>
     const string InventorySuffix = "-inventory";
 
     /// <summary>
@@ -27,7 +33,13 @@ public static class MachineSave
     /// </summary>
     const string FurnaceSection = "in1";
 
+    /// <summary>
+    /// The key prefix of a remembered ingredient's string id (followed by its number).
+    /// </summary>
     const string PartialSid = "craft partial item sid ";
+    /// <summary>
+    /// The key prefix of a remembered ingredient's level (followed by its number).
+    /// </summary>
     const string PartialVal = "craft partial item val ";
 
     /// <summary>
@@ -79,6 +91,9 @@ public static class MachineSave
         instance.States.Insert(0, inventoryId);
     }
 
+    /// <summary>
+    /// Writes a machine's production, power, battery, input and farm keys into its building state.
+    /// </summary>
     static void WriteKeys(FcsRecord state, Machine m, double gameHours)
     {
         state.Floats["resource mult"] = m.Yield;
@@ -105,9 +120,10 @@ public static class MachineSave
 
     /// <summary>
     /// The crafting keys (<b>Observed</b>, <c>CraftingBuilding::vfunc_17</c>): <c>num crafts</c> (a float), <c>repeat</c>, and per queued craft k
-    /// <c>current&lt;k&gt;</c> (the item), <c>currentExtraData&lt;k&gt;</c> (a weapon's model, else empty), <c>current prog&lt;k&gt;</c> and <c>crit&lt;k&gt;</c>, then
-    /// the partly drawn items (<b>Verified</b>, <c>FUN_1402b8440</c>): every remembered level above 0, with the sections' own levels stored first, as strings
-    /// <c>craft partial item sid &lt;k&gt;</c> (the item), floats <c>craft partial item val &lt;k&gt;</c> and the int <c>craft partial item size</c> (how many).
+    /// <c>current&lt;k&gt;</c> (the item), <c>currentExtraData&lt;k&gt;</c> (a weapon's model, else empty), <c>current prog&lt;k&gt;</c> and
+    /// <c>crit&lt;k&gt;</c>, then the partly drawn items (<b>Verified</b>, <c>FUN_1402b8440</c>): every remembered level above 0, with the sections'
+    /// own levels stored first, as strings <c>craft partial item sid &lt;k&gt;</c> (the item), floats <c>craft partial item val &lt;k&gt;</c> and the
+    /// int <c>craft partial item size</c> (how many).
     /// </summary>
     static void WriteCraft(FcsRecord state, Machine m, CraftState c)
     {
@@ -167,6 +183,9 @@ public static class MachineSave
         state.Ints["craft partial item size"] = written;
     }
 
+    /// <summary>
+    /// The machine's items as saved: each input under <c>in&lt;k&gt;</c>, the output under <c>out</c>, then the crafting bench's finished items.
+    /// </summary>
     static List<SaveItem> Items(Machine m)
     {
         var list = new List<SaveItem>();
@@ -268,6 +287,9 @@ public static class MachineSave
         }
     }
 
+    /// <summary>
+    /// Reads a crafting bench's repeat flag, remembered ingredient levels and finished crafts.
+    /// </summary>
     static void ReadCraft(FcsRecord state, Machine m, ProductionSystem production)
     {
         m.Craft!.Repeat = state.Bools.GetValueOrDefault("repeat");
@@ -292,6 +314,9 @@ public static class MachineSave
         }
     }
 
+    /// <summary>
+    /// Reads a machine's production, power, battery, input and farm keys from its building state (a missing key leaves the default).
+    /// </summary>
     static void ReadKeys(FcsRecord state, Machine m)
     {
         if (state.Floats.TryGetValue("resource mult", out float y)) m.Yield = y;

@@ -49,15 +49,30 @@ public sealed record SandboxMovement(CharacterId Character, byte? Mode, float? S
 /// </summary>
 public sealed class CommandQueue
 {
+    /// <summary>
+    /// Guards <see cref="_pending"/> and <see cref="_sequence"/>.
+    /// </summary>
     readonly Lock _gate = new();
+    /// <summary>
+    /// The commands waiting, each with its place in the queue.
+    /// </summary>
     readonly List<(SimCommand Command, long Sequence)> _pending = [];
+    /// <summary>
+    /// The place the next command gets.
+    /// </summary>
     long _sequence;
 
+    /// <summary>
+    /// The number of commands waiting.
+    /// </summary>
     public int Count
     {
         get { lock (_gate) return _pending.Count; }
     }
 
+    /// <summary>
+    /// Queues a command for its tick (any thread).
+    /// </summary>
     public void Enqueue(SimCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -145,5 +160,8 @@ public sealed record StopCommand(IReadOnlyList<CharacterId> Characters) : SimCom
 /// </summary>
 public sealed record RepathCommand : SimCommand
 {
+    /// <summary>
+    /// The zones whose crossers ask again (null: everyone on the way).
+    /// </summary>
     public IReadOnlySet<ZoneCoordinate>? Zones { get; init; }
 }

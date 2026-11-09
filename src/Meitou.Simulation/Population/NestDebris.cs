@@ -26,9 +26,18 @@ public sealed record NestDrop(string Record, bool List, Vector3 Position, float 
 /// </summary>
 public static partial class NestFurniture
 {
+    /// <summary>
+    /// The mesh scale's random spread (± 0.1) and the lowest height a loot item is laid at.
+    /// </summary>
     const float MeshScaleSpread = 0.1f, LowestLoot = 1;
+    /// <summary>
+    /// How deep a NEST_ITEM's own <c>cluster</c> list may nest.
+    /// </summary>
     const int MaxDebrisDepth = 4;
 
+    /// <summary>
+    /// Lays out the nest's <c>debris</c> entries: v0 to v1 clusters of each NEST_ITEM, at the entry's scale, round the nest's place.
+    /// </summary>
     static void Debris(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, NestLayout layout)
     {
         foreach (var entry in nest.Debris)
@@ -110,6 +119,10 @@ public static partial class NestFurniture
         return Data.World.WorldObjectLayout.MeshVariant(mesh, IntIn(ref rolls, 1, variants));
     }
 
+    /// <summary>
+    /// Lays out the nest's <c>loot spawn</c> rolls: each at a random point within <c>size radius</c> on the navmesh, within <see cref="NavReach"/> of
+    /// the nest's height and not below <see cref="LowestLoot"/>.
+    /// </summary>
     static void Loot(TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, List<NestDrop> drops)
     {
         float nestY = walk.GroundHeight(at.X, at.Y);

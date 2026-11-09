@@ -42,6 +42,9 @@ public enum TownOwnership : byte
 public readonly record struct VerbFacts(
     bool RegardsLead, bool LeadRegards, bool InsideWalls, bool SquadTrader, TownOwnership Town, int Bounty, bool Bandit, bool NotReal);
 
+/// <summary>
+/// The world's context menu facts: the arrival banter, friendliness and what the pick-up verb reads.
+/// </summary>
 public sealed partial class World
 {
     /// <summary>

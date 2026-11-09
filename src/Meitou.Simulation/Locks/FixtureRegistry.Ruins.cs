@@ -10,10 +10,15 @@ namespace Meitou.Simulation.Locks;
 /// </summary>
 public sealed record RuinedBuilding(TownBuilding Building, bool Destroyed);
 
+/// <summary>
+/// The registry's town ruins: the buildings a town override ruined or restored.
+/// </summary>
 public sealed partial class FixtureRegistry
 {
-    // The town buildings whose ruin state a town override changed from the level data's, by key (docs/game/buildings-production.md "Ruined by
-    // residents").
+    /// <summary>
+    /// The town buildings whose ruin state a town override changed from the level data's, by key (docs/game/buildings-production.md "Ruined
+    /// by residents").
+    /// </summary>
     readonly Dictionary<string, RuinedBuilding> _ruins = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -21,7 +26,13 @@ public sealed partial class FixtureRegistry
     /// <see cref="RuinsRevision"/> counts changes.
     /// </summary>
     public IReadOnlyCollection<RuinedBuilding> Ruins => _ruins.Values;
+    /// <summary>
+    /// Counts changes of <see cref="Ruins"/>.
+    /// </summary>
     public long RuinsRevision { get; private set; }
+    /// <summary>
+    /// The cache of the published ruins and the revision it was made at.
+    /// </summary>
     (long Revision, RuinedBuilding[] List) _publishedRuins = (0, []);
 
     /// <summary>
@@ -54,6 +65,9 @@ public sealed partial class FixtureRegistry
         ApplyTownRuins(world, data, site, own);
     }
 
+    /// <summary>
+    /// Applies a town's resident ruins: the homes its override ruins are destroyed, the ones it no longer ruins restored.
+    /// </summary>
     void ApplyTownRuins(World world, PopulationData data, int site, HashSet<string> reset)
     {
         var town = data.Sites[site];
@@ -130,6 +144,9 @@ public sealed partial class FixtureRegistry
         }
     }
 
+    /// <summary>
+    /// Sets a town building's ruin state, keeping it listed while it differs from the level data's or was laid out afresh.
+    /// </summary>
     void SetRuin(World world, PopulationData data, int site, TownBuilding b, bool destroyed)
     {
         bool was = IsDestroyed(b);

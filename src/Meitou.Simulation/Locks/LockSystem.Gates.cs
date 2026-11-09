@@ -21,6 +21,9 @@ public sealed partial class LockSystem
     /// </summary>
     Dictionary<int, List<(int To, int State, GateLink Gate)>>? _gateGraph;
 
+    /// <summary>
+    /// Takes the host's gate regions; the gate graph is built again.
+    /// </summary>
     void GateInputs(GateRegionsCommand command)
     {
         Regions = command.Regions;
@@ -45,10 +48,15 @@ public sealed partial class LockSystem
         return state == 0 ? 1 : state;
     }
 
+    /// <summary>
+    /// The lock the gate graph is built under.
+    /// </summary>
     readonly object _gateGraphLock = new();
 
-    // Built on first use; the combat step asks from its workers (CombatSystem.ImmediateThreat), so the graph is built under a lock and published
-    // whole.
+    /// <summary>
+    /// The gate graph: each gate region's links to the others, with the state of the gates between. Built on first use; the combat step asks from its
+    /// workers (CombatSystem.ImmediateThreat), so the graph is built under a lock and published whole.
+    /// </summary>
     Dictionary<int, List<(int To, int State, GateLink Gate)>> GateGraph(World world)
     {
         if (Volatile.Read(ref _gateGraph) is { } built) return built;
@@ -137,6 +145,9 @@ public sealed partial class LockSystem
     static bool Nearer(World world, GateLink known, GateLink other, Vector2 near)
             => GateDistance(world, known, near) <= GateDistance(world, other, near);
 
+    /// <summary>
+    /// The distance from <paramref name="near"/> to the gate's main door leaf (infinity without one).
+    /// </summary>
     static float GateDistance(World world, GateLink gate, Vector2 near) =>
         MainGateDoor(world, gate.Building) is { } d ? Vector2.Distance(near, Flat(d.Spot.Centre)) : float.MaxValue;
 
@@ -224,6 +235,9 @@ public sealed partial class LockSystem
         return true;
     }
 
+    /// <summary>
+    /// The planner's view of an attacker whose target is behind a gate, reused across plans.
+    /// </summary>
     readonly GatePlan _gatePlan = new();
 
     /// <summary>

@@ -8,6 +8,9 @@ using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Ai;
 
+/// <summary>
+/// The AI's planning: the <see cref="PlanContext"/> each think plans through and the planner's targets.
+/// </summary>
 public sealed partial class AiSystem
 {
     /// <summary>
@@ -15,6 +18,9 @@ public sealed partial class AiSystem
     /// </summary>
     static class Targets
     {
+        /// <summary>
+        /// The target kinds: a spot, bed, seat, turret, town, work place, machine and store.
+        /// </summary>
         public const byte Spot = 1, Bed = 2, Seat = 3, Turret = 4, Town = 5, Work = 6, Machine = 7, Store = 8;
     }
 
@@ -43,14 +49,38 @@ public sealed partial class AiSystem
     /// </summary>
     sealed class PlanContext : IPlanWorld
     {
+        /// <summary>
+        /// The worker thread's context (<see cref="Local"/>).
+        /// </summary>
         [ThreadStatic] static PlanContext? s_local;
+        /// <summary>
+        /// The calling worker thread's context, made on its first use.
+        /// </summary>
         public static PlanContext Local => s_local ??= new PlanContext();
 
+        /// <summary>
+        /// The AI system it is bound to.
+        /// </summary>
         AiSystem _system = null!;
+        /// <summary>
+        /// The world it is bound to.
+        /// </summary>
         World _world = null!;
+        /// <summary>
+        /// The mind of the bound character.
+        /// </summary>
         AiMind _mind = null!;
+        /// <summary>
+        /// The blackboard of the bound character's squad.
+        /// </summary>
         Blackboard _board = null!;
+        /// <summary>
+        /// The bound character's slot.
+        /// </summary>
         int _slot;
+        /// <summary>
+        /// A scratch step list of the bound think.
+        /// </summary>
         readonly List<PlanStep> _scratch = [];
 
         /// <summary>
@@ -64,11 +94,19 @@ public sealed partial class AiSystem
         /// <see cref="IPlanWorld.Squadless"/>).
         /// </summary>
         public bool Squadless => _restrictedOpen;
+        /// <summary>
+        /// Whether restricted rows are open (set by <see cref="Bind"/>: the character is not of the player's side).
+        /// </summary>
         bool _restrictedOpen;
 
-        // Of the player's faction (the character or its faction): the side whose characters can be fully rested (state 72).
+        /// <summary>
+        /// Of the player's faction (the character or its faction): the side whose characters can be fully rested (state 72).
+        /// </summary>
         bool _playerSide;
 
+        /// <summary>
+        /// Binds the context to the character at slot <paramref name="at"/> of <paramref name="w"/> and sets which rows are open to it.
+        /// </summary>
         public PlanContext Bind(AiSystem s, World w, int at, AiMind m, Blackboard b)
         {
             (_system, _world, _slot, _mind, _board) = (s, w, at, m, b);
@@ -135,6 +173,10 @@ public sealed partial class AiSystem
             return true;
         }
 
+        /// <summary>
+        /// The desire of a row on the way: the sleeping desire for UseBed (0 drops the node), else the row's task profile desire, 1 for a random or
+        /// own desire function.
+        /// </summary>
         public float Desire(TaskDataRow row, in PlanTarget target)
         {
             // row 98: AI slot 30 (FUN_1405a0880); 0 drops the node
@@ -143,8 +185,15 @@ public sealed partial class AiSystem
             return d >= 0 ? d : 1;   // a random or own desire function counts as 1 on the way
         }
 
+        /// <summary>
+        /// The bound character's next hot row.
+        /// </summary>
         ref CharacterHot Me => ref _world.Characters.Next[_slot];
 
+        /// <summary>
+        /// Whether the bound character is at a target: none counts as there, as does a walk there that ended on its own; a work target by its work
+        /// range, else within the target kind's slack and on the target's floor.
+        /// </summary>
         bool At(in PlanTarget t)
         {
             if (t.IsNone) return true;
@@ -177,10 +226,19 @@ public sealed partial class AiSystem
             return null;
         }
 
+        /// <summary>
+        /// The workplaces of the board's town (none outside a town).
+        /// </summary>
         IEnumerable<Meitou.Data.World.TownBuilding> Workplaces() => _board.Town >= 0 ? _system.Places(_board.Town).Workplaces : [];
 
+        /// <summary>
+        /// The flat distance to a target (0 for none).
+        /// </summary>
         float Distance(in PlanTarget t) => t.IsNone ? 0 : Vector2.Distance(Flat(Me.Position), Flat(t.Position));
 
+        /// <summary>
+        /// Whether the bound character is at a target and resting or idle.
+        /// </summary>
         bool Settled(in PlanTarget t) => At(t) && (CharacterTask)Me.Task is CharacterTask.Rest or CharacterTask.Idle;
 
         /// <summary>
@@ -299,11 +357,26 @@ public sealed partial class AiSystem
             _ => false,
         };
 
+        /// <summary>
+        /// The state of one enemy scan of the planner: what it compares against, and whether it found one.
+        /// </summary>
         struct EnemyScan
         {
+            /// <summary>
+            /// The character table scanned.
+            /// </summary>
             public CharacterTable Table;
+            /// <summary>
+            /// The faction relations it judges by.
+            /// </summary>
             public FactionRelations Relations;
+            /// <summary>
+            /// The scanning character's slot and faction.
+            /// </summary>
             public int Self, Faction;
+            /// <summary>
+            /// Whether an enemy was found.
+            /// </summary>
             public bool Found;
         }
 

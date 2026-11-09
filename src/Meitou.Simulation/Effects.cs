@@ -29,9 +29,21 @@ public struct Effect
     /// </summary>
     public int Sequence;
 
+    /// <summary>
+    /// What the effect is (the emitting system's code).
+    /// </summary>
     public int Kind;
+    /// <summary>
+    /// An amount, by the kind's meaning.
+    /// </summary>
     public float Amount;
+    /// <summary>
+    /// A place, by the kind's meaning.
+    /// </summary>
     public Vector3 Position;
+    /// <summary>
+    /// An argument, by the kind's meaning.
+    /// </summary>
     public int Arg;
 }
 
@@ -57,14 +69,32 @@ public sealed class EffectBuffer
         return c != 0 ? c : a.Sequence.CompareTo(b.Sequence);
     };
 
+    /// <summary>
+    /// The effects emitted.
+    /// </summary>
     readonly List<Effect> _items = [];
+    /// <summary>
+    /// The source of the last effect (-1: none yet), for <see cref="Effect.Sequence"/>.
+    /// </summary>
     int _lastSource = -1;
+    /// <summary>
+    /// The sequence of the last effect.
+    /// </summary>
     int _sequence;
 
+    /// <summary>
+    /// The system that runs now (<see cref="Effect.System"/>).
+    /// </summary>
     internal int System { get; set; }
 
+    /// <summary>
+    /// The effects emitted.
+    /// </summary>
     internal List<Effect> Items => _items;
 
+    /// <summary>
+    /// Adds an effect of <paramref name="source"/> on <paramref name="target"/>.
+    /// </summary>
     public void Emit(int source, int target, int kind, float amount = 0, Vector3 position = default, int arg = 0)
     {
         _sequence = source == _lastSource ? _sequence + 1 : 0;
@@ -82,6 +112,9 @@ public sealed class EffectBuffer
         });
     }
 
+    /// <summary>
+    /// Empties the buffer.
+    /// </summary>
     internal void Reset()
     {
         _items.Clear();

@@ -33,6 +33,9 @@ public sealed record KidnapSettings
     /// Walks to cages before the carrier gives up and drops the captive; lifts that fail before it lets the victim be.
     /// </summary>
     public int CageWalks { get; init; } = 3;
+    /// <summary>
+    /// Lifts that fail before the kidnapper lets the victim be (see <see cref="CageWalks"/>).
+    /// </summary>
     public int LiftTries { get; init; } = 3;
     /// <summary>
     /// Game hours a victim put down for want of a cage is left alone.
@@ -48,21 +51,53 @@ public sealed record KidnapSettings
     public bool RecordLog { get; init; }
 }
 
-public enum KidnapPhase : byte { Lift, Carry, Walk }
+/// <summary>
+/// Where an abduction is: lifting the victim, carrying it home, walking it to a cage.
+/// </summary>
+public enum KidnapPhase : byte
+{
+    /// <summary>
+    /// Lifting the victim.
+    /// </summary>
+    Lift,
+    /// <summary>
+    /// Carrying it home.
+    /// </summary>
+    Carry,
+    /// <summary>
+    /// Walking it to a cage.
+    /// </summary>
+    Walk
+}
 
 /// <summary>
 /// One kidnapper's hold on one victim (serial state of the <see cref="KidnapSystem"/>): lifting it, carrying it home, walking it to a cage.
 /// </summary>
 public sealed class Abduction
 {
+    /// <summary>
+    /// The kidnapper.
+    /// </summary>
     public required CharacterId Carrier { get; init; }
+    /// <summary>
+    /// The victim.
+    /// </summary>
     public required CharacterId Victim { get; init; }
+    /// <summary>
+    /// The kidnapper's faction.
+    /// </summary>
     public required int Faction { get; init; }
+    /// <summary>
+    /// Where the abduction is.
+    /// </summary>
     public KidnapPhase Phase { get; set; }
     /// <summary>
     /// Game seconds in the phase (the wait for a cage).
     /// </summary>
     public float Time { get; set; }
+    /// <summary>
+    /// The lifts or cage walks tried in the phase.
+    /// </summary>
     public int Tries { get; set; }
     /// <summary>
     /// The cage chosen (reserved while the abduction lasts).
@@ -84,6 +119,9 @@ public sealed class Abduction
     /// </summary>
     public bool Hauls { get; init; }
 
+    /// <summary>
+    /// Adds the abduction to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Carrier);
@@ -99,8 +137,32 @@ public sealed class Abduction
     }
 }
 
-public enum KidnapEventKind { Lifted, Caged, Dropped, GaveUp }
+/// <summary>
+/// What happened in an abduction (<see cref="KidnapEvent"/>).
+/// </summary>
+public enum KidnapEventKind
+{
+    /// <summary>
+    /// The victim was lifted.
+    /// </summary>
+    Lifted,
+    /// <summary>
+    /// The victim was put in a cage.
+    /// </summary>
+    Caged,
+    /// <summary>
+    /// The carrier put the victim down for want of a cage.
+    /// </summary>
+    Dropped,
+    /// <summary>
+    /// The abduction ended otherwise.
+    /// </summary>
+    GaveUp
+}
 
+/// <summary>
+/// One abduction event of the log (<see cref="KidnapSystem.Log"/>): the tick, what happened, the carrier, the victim and the faction.
+/// </summary>
 public readonly record struct KidnapEvent(long Tick, KidnapEventKind Kind, CharacterId Carrier, CharacterId Victim, int Faction);
 
 /// <summary>
@@ -128,24 +190,51 @@ public readonly record struct KidnapEvent(long Tick, KidnapEventKind Kind, Chara
 public sealed class KidnapSystem(PopulationData data, PopulationSystem population, CarrySystem carry, KidnapSettings? settings = null) : ITickSystem,
         IStateHashed
 {
+    #region State
+
+    /// <summary>
+    /// The abductions running, in the order they started.
+    /// </summary>
     readonly List<Abduction> _abductions = [];
+    /// <summary>
+    /// The events since the world began, kept only with <see cref="KidnapSettings.RecordLog"/>.
+    /// </summary>
     readonly List<KidnapEvent> _log = [];
+    /// <summary>
+    /// A scratch list of the victims a look finds.
+    /// </summary>
     readonly List<int> _victims = [];
+    /// <summary>
+    /// The victims of the running abductions and the refused ones, which a look leaves alone.
+    /// </summary>
     readonly HashSet<CharacterId> _reserved = [];
 
-    // Victims a carrier put down for want of a cage: left alone until this game hour (a body would otherwise be lifted and put down in turn). In the
-    // order they were put down.
+    /// <summary>
+    /// Victims a carrier put down for want of a cage: left alone until this game hour (a body would otherwise be lifted and put down in turn). In the
+    /// order they were put down.
+    /// </summary>
     readonly List<(CharacterId Victim, double Until)> _refused = [];
 
+    /// <summary>
+    /// The kidnapping settings.
+    /// </summary>
     public KidnapSettings Settings { get; } = settings ?? new KidnapSettings();
     /// <summary>
     /// The relation event of a caging (<see cref="FactionDeeds.Caged"/>); null: none.
     /// </summary>
     public FactionDeeds? Deeds { get; set; }
+    /// <summary>
+    /// The abductions running.
+    /// </summary>
     public IReadOnlyList<Abduction> Abductions => _abductions;
+    /// <summary>
+    /// The events kept (<see cref="KidnapSettings.RecordLog"/>).
+    /// </summary>
     public IReadOnlyList<KidnapEvent> Log => _log;
 
-    // ------------------------------------------------------------------ the finder
+    #endregion
+
+    #region The finder
 
     /// <summary>
     /// Whether the character in <paramref name="slot"/> may be kidnapped by one of <paramref name="faction"/> (the finder of goal 132, carry-loot.md
@@ -208,8 +297,13 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         return true;
     }
 
-    // ------------------------------------------------------------------ the tick
+    #endregion
 
+    #region The tick
+
+    /// <summary>
+    /// The kidnapping step: each running abduction moves on (an ended one is dropped), then the kidnappers on their turn look for victims.
+    /// </summary>
     public void SlowWorld(World world)
     {
         for (int k = 0; k < _abductions.Count;)
@@ -224,6 +318,10 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         Look(world, every);
     }
 
+    /// <summary>
+    /// The kidnappers on their turn of <paramref name="every"/> ticks look for a downed victim within their sight, not reserved, and start
+    /// an abduction.
+    /// </summary>
     void Look(World world, int every)
     {
         var table = world.Characters;
@@ -306,6 +404,9 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         return best;
     }
 
+    /// <summary>
+    /// Whether <paramref name="id"/> carries out an abduction.
+    /// </summary>
     bool Busy(CharacterId id)
     {
         foreach (var a in _abductions)
@@ -313,7 +414,9 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         return false;
     }
 
-    // ------------------------------------------------------------------ one abduction
+    #endregion
+
+    #region One abduction
 
     /// <summary>
     /// One tick of an abduction; false when it is over.
@@ -460,6 +563,9 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         return world.Fixtures.FindCage(world, carrier, at, FixtureRegistry.HomeOf(world, carrier), f => !candidate(f) || Reserved(f, self));
     }
 
+    /// <summary>
+    /// Whether another abduction chose cage <paramref name="f"/>.
+    /// </summary>
     bool Reserved(Fixture f, Abduction? self)
     {
         foreach (var a in _abductions)
@@ -489,6 +595,9 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         return best;
     }
 
+    /// <summary>
+    /// Sends the carrier to <paramref name="cage"/>, which the abduction reserves.
+    /// </summary>
     bool ToCage(World world, Abduction a, int g, Fixture cage)
     {
         a.Phase = KidnapPhase.Walk;
@@ -534,6 +643,9 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         return true;
     }
 
+    /// <summary>
+    /// The carrier puts the victim down for want of a cage; the victim is left alone for <see cref="KidnapSettings.RefuseHours"/>.
+    /// </summary>
     bool Drop(World world, Abduction a, int g)
     {
         TaskStart.Stand(world.Characters, g);
@@ -564,11 +676,17 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
         return false;
     }
 
+    /// <summary>
+    /// Logs an event of the abduction (<see cref="KidnapSettings.RecordLog"/>).
+    /// </summary>
     void Note(World world, KidnapEventKind kind, Abduction a)
     {
         if (Settings.RecordLog) _log.Add(new KidnapEvent(world.Tick, kind, a.Carrier, a.Victim, a.Faction));
     }
 
+    /// <summary>
+    /// Adds the running abductions and the refused victims to the world's state hash, while there are any.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         if (_abductions.Count == 0 && _refused.Count == 0) return;   // only while one runs, so worlds without kidnappings hash as before
@@ -582,4 +700,6 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
             hasher.Add(until);
         }
     }
+
+    #endregion
 }

@@ -10,9 +10,18 @@ using SquadMemoryData = Meitou.Simulation.Dialogue.SquadMemoryData;
 
 namespace Meitou.Simulation.Saving;
 
+/// <summary>
+/// The wild platoons and nests of a capture.
+/// </summary>
 public static partial class SaveCapture
 {
+    /// <summary>
+    /// The name prefix of a nest's GAMESTATE_TOWN state.
+    /// </summary>
     const string NestStatePrefix = "Nest state ";
+    /// <summary>
+    /// The suffix of a GAMESTATE_TOWN state id (the hex of 94).
+    /// </summary>
     const string TownStateSuffix = "-S5e";   // the hex of GAMESTATE_TOWN (94)
 
     /// <summary>
@@ -252,8 +261,9 @@ public static partial class SaveCapture
 
     /// <summary>
     /// The wild squads the population made that are in the world (docs/formats/save.md "Wild and nest platoons") as new platoons: a nest's with
-    /// <c>basetown</c> its TOWN record and <c>hometown</c> the nest's handle, a homeless one with neither; <c>sqt</c> 2 (every wild platoon of the samples), the
-    /// region as <c>map area</c>, the package running; its characters as new ones. Loaded again they are the save's wild platoons, counted by their nest or sector.
+    /// <c>basetown</c> its TOWN record and <c>hometown</c> the nest's handle, a homeless one with neither; <c>sqt</c> 2 (every wild platoon of the
+    /// samples), the region as <c>map area</c>, the package running; its characters as new ones. Loaded again they are the save's wild platoons,
+    /// counted by their nest or sector.
     /// </summary>
     static void WriteWildNpcs(SaveBuilder builder, World world, PopulationData data, PopulationSystem population, Dictionary<int, Hand> nests,
         SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings, Dictionary<string, RaceData?> races)
@@ -386,7 +396,8 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// A new platoon's region: <c>map area sid</c> = the BIOME_GROUP of the cell it stands in, <c>map area name</c> its name (as every platoon of the samples has).
+    /// A new platoon's region: <c>map area sid</c> = the BIOME_GROUP of the cell it stands in, <c>map area name</c> its name (as every platoon of the
+    /// samples has).
     /// </summary>
     static void WriteMapArea(FcsRecord record, PopulationData data, Vector3 at)
     {
@@ -400,6 +411,9 @@ public static partial class SaveCapture
         record.Strings["map area name"] = biomes.Groups[g].Name;
     }
 
+    /// <summary>
+    /// The id of number <paramref name="n"/> in <c>quick.save</c>.
+    /// </summary>
     static string QuickNumberId(int n) => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{n}-{SaveFolder.QuickSaveName}-INGAME");
 
     /// <summary>

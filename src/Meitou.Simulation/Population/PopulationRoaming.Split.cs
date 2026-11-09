@@ -4,6 +4,9 @@ using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Population;
 
+/// <summary>
+/// The population's squad splits: an imprisoned member's own squad and the platoons that must be kept.
+/// </summary>
 public sealed partial class PopulationSystem
 {
     /// <summary>
@@ -75,6 +78,9 @@ public sealed partial class PopulationSystem
         }
     }
 
+    /// <summary>
+    /// Whether a platoon is persistent: set by the engine or its saved record, unless cleared since.
+    /// </summary>
     bool PersistentPlatoon(Platoon p) => !p.PersistentCleared && (p.Persistent || p.Saved?.Source.Record.Bools.GetValueOrDefault("persistent") == true);
 
     /// <summary>

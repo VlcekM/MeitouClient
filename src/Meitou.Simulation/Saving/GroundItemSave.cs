@@ -110,8 +110,8 @@ public static class GroundItemSave
 
     /// <summary>
     /// Puts the original's <c>persist</c> handle on a camp's new items (docs/formats/save.md "Zone files"): the nest's (type 85,
-    /// <paramref name="nests"/> by wild site) or the town's (type 13, a <c>spawn in town centre</c> town's state). A camp the save holds no handle of leaves
-    /// its items without one. A read item keeps its own.
+    /// <paramref name="nests"/> by wild site) or the town's (type 13, a <c>spawn in town centre</c> town's state). A camp the save holds no handle of
+    /// leaves its items without one. A read item keeps its own.
     /// </summary>
     public static void WritePersist(SaveGame game, PopulationData data, List<(SaveItem Item, int Camp)> camps, IReadOnlyDictionary<int, Hand> nests)
     {

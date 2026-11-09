@@ -286,6 +286,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     internal enum Restrict : byte
     {
+        /// <summary>
+        /// No restriction: every goal may take it over.
+        /// </summary>
         None,
         /// <summary>
         /// Self preservation alone (its run, or its fight through row 13 against its own attacker).
@@ -417,6 +420,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// The chooser's candidates of one tier, a scratch list per worker thread (<see cref="Candidates"/>).
     /// </summary>
     [ThreadStatic] static List<(AiGoal Goal, float Score, float Desire)>? s_candidates;
+    /// <summary>
+    /// The calling worker thread's candidate list (<see cref="s_candidates"/>), made on its first use.
+    /// </summary>
     static List<(AiGoal Goal, float Score, float Desire)> Candidates => s_candidates ??= [];
 
     /// <summary>
@@ -651,6 +657,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return withPlayer ? 0.5f : 0.01f;
     }
 
+    /// <summary>
+    /// Whether a character is within its squad's home town's radius; true when the squad has no town or the character is not alive.
+    /// </summary>
     bool AtHomeTown(World world, Squad squad, Blackboard board, CharacterId self)
     {
         if (board.Town < 0 || !world.Characters.IsAlive(self)) return true;
@@ -800,6 +809,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return null;
     }
 
+    /// <summary>
+    /// A building of <paramref name="from"/> picked by <paramref name="roll"/> (uniform); null when the list is empty.
+    /// </summary>
     static TownBuilding? PickFrom(IReadOnlyList<TownBuilding> from, ulong roll) => from.Count == 0 ? null : from[Rng.Int(roll, from.Count)];
 
     /// <summary>
@@ -977,9 +989,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The building a worker works at (the finders of goals 189 / 190: a random building of the town with a function in
-    /// <see cref="TownPlaceIndex.WorkFunctions"/>, slot 2 of the building finder <c>FUN_1409fb020</c>); the roll is the character's and its <paramref name="epoch"/> of picks
-    /// (<see cref="AiMind.WorkEpoch"/>), so asking twice names the same one. Null: the town has none. 189 (<paramref name="type"/>, real work) takes
-    /// only the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any.
+    /// <see cref="TownPlaceIndex.WorkFunctions"/>, slot 2 of the building finder <c>FUN_1409fb020</c>); the roll is the character's and its
+    /// <paramref name="epoch"/> of picks (<see cref="AiMind.WorkEpoch"/>), so asking twice names the same one. Null: the town has none. 189
+    /// (<paramref name="type"/>, real work) takes only the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any.
     /// </summary>
     TownBuilding? PickWork(World world, CharacterId self, int town, int epoch, TaskType type = TaskType.AutoLabouringMinesPretend)
     {
@@ -1889,7 +1901,25 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// What a character gives up when its walks to a spot keep failing: its home's spots (it uses its post), its post (where it stands becomes it),
     /// the target, or relaxing at its bar seat.
     /// </summary>
-    enum GiveUp : byte { Home, Post, Target, Seat }
+    enum GiveUp : byte
+    {
+        /// <summary>
+        /// Its home: its spots are given up (<see cref="AiMind.HomeUnreachable"/>), so it uses its post.
+        /// </summary>
+        Home,
+        /// <summary>
+        /// Its post: where it stands becomes its post.
+        /// </summary>
+        Post,
+        /// <summary>
+        /// The target (<see cref="AiMind.Target"/> is cleared).
+        /// </summary>
+        Target,
+        /// <summary>
+        /// Relaxing at its bar seat (<see cref="AiMind.SeatUnreachable"/>).
+        /// </summary>
+        Seat
+    }
 
     /// <summary>
     /// How far above or below a spot's floor a character may stand and still be at it (units).
@@ -1901,13 +1931,6 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     static Vector2 Flat(Vector3 p) => new(p.X, p.Z);
 
-    /// <summary>
-    /// Walks the character to a spot; true when it is there (and not walking). A walk that ends away from the spot counts as failed; after
-    /// <see cref="MaxFailedWalks"/> in a row it gives the spot up as <paramref name="giveUp"/> says. <paramref name="slack"/> overrides
-    /// <see cref="AiSettings.PostSlack"/> where the spot must be exact (a turret's gun); <paramref name="height"/> is the floor the spot is on, so
-    /// the path reaches a floor or walkway above the ground; a spot over a hole furniture cuts in that floor is walked to beside it, on the floor
-    /// (<see cref="IWalkability.FloorNear"/>).
-    /// </summary>
     /// <summary>
     /// Where 200 Task_LeaveBuilding walks (docs/game/ai-tasks.md): A + (A − B) × 1.1 of the building's first door with a known leaf, A and B its
     /// points 15 either side of the leaf (engine reading of which is outer: the side away from the building's origin). Null: no door known.
@@ -1936,6 +1959,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return a + (a - b) * 1.1f;
     }
 
+    /// <summary>
+    /// Walks the character to a spot; true when it is there (and not walking). A walk that ends away from the spot counts as failed; after
+    /// <see cref="MaxFailedWalks"/> in a row it gives the spot up as <paramref name="giveUp"/> says. <paramref name="slack"/> overrides
+    /// <see cref="AiSettings.PostSlack"/> where the spot must be exact (a turret's gun); <paramref name="height"/> is the floor the spot is on, so
+    /// the path reaches a floor or walkway above the ground; a spot over a hole furniture cuts in that floor is walked to beside it, on the floor
+    /// (<see cref="IWalkability.FloorNear"/>).
+    /// </summary>
     bool GoToSpot(World world, int slot, AiMind mind, Vector2 target, GiveUp giveUp, byte mode, float slack = 0, float? height = null)
     {
         var walk = world.Walkability;
@@ -2492,6 +2522,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     const int RehomeFunctions = 0x13;
 
+    /// <summary>
+    /// Gives a squad its AI: its home (assigned, or the one its town gave it), whose template and initial door state apply, and a new blackboard of
+    /// its template's packages, taken as already in the town it starts in; a saved squad's AI state is applied to it.
+    /// </summary>
     void Attach(World world, Squad squad)
     {
         var (packages, template) = TemplateOf(squad.TemplateId);
@@ -2667,6 +2701,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         return false;
     }
 
+    /// <summary>
+    /// Whether the squad is the player's: of the player's faction, or with a player character among its members.
+    /// </summary>
     bool IsPlayers(World world, Squad squad)
     {
         if (squad.Faction == data.PlayerFaction && data.PlayerFaction >= 0) return true;
@@ -2743,6 +2780,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (platoon.Stored is { } stored && stored.HomeBuilding?.Key == building) stored.HomeBuilding = null;
     }
 
+    /// <summary>
+    /// Gives a squad moving out another house of its town that is for sale (<see cref="HouseForSale"/>, else none) as its own home and its home in
+    /// use, and has its members think again.
+    /// </summary>
     void Rehome(World world, Squad squad)
     {
         var home = HouseForSale(world, squad);
@@ -2823,8 +2864,17 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// </summary>
     sealed class Rules : IPackageRules
     {
+        /// <summary>
+        /// The AI system it is bound to.
+        /// </summary>
         AiSystem _system = null!;
+        /// <summary>
+        /// The world it is bound to.
+        /// </summary>
         World _world = null!;
+        /// <summary>
+        /// The squad being updated.
+        /// </summary>
         Squad _squad = null!;
 
         /// <summary>
@@ -2832,6 +2882,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         /// </summary>
         public void Bind(AiSystem s, World w, Squad q) => (_system, _world, _squad) = (s, w, q);
 
+        /// <summary>
+        /// Whether a package of class <paramref name="kind"/> may start for the bound squad (the class's start test; a plain package always may).
+        /// </summary>
         public bool CanStart(Blackboard board, AiPackage package, PackageClass kind) => kind switch
         {
             PackageClass.Retreat => !board.Intact,
@@ -2874,6 +2927,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         /// </summary>
         int BarTown(Blackboard board) => !_squad.TownOwn && board.InTown.Site >= 0 ? board.InTown.Site : board.Town;
 
+        /// <summary>
+        /// Whether the running package of class <paramref name="kind"/> is finished for the bound squad (the class's finished test).
+        /// </summary>
         public bool Finished(Blackboard board, AiPackage package, PackageClass kind) => kind switch
         {
             PackageClass.Retreat => board.Intact,
@@ -2890,9 +2946,15 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             _ => false,
         };
 
+        /// <summary>
+        /// Whether a finished package may hand over to its <c>Leads to</c>: a passing-by assault only by its own rule, any other class always.
+        /// </summary>
         public bool MayLead(Blackboard board, AiPackage package, PackageClass kind) =>
             kind != PackageClass.PassingAssault || _system.AssaultMayLead(_world, _squad, board);
 
+        /// <summary>
+        /// The running package of class <paramref name="kind"/> gives way to another: a passing-by assault or an occupation ends.
+        /// </summary>
         public void Ended(Blackboard board, AiPackage package, PackageClass kind)
         {
             switch (kind)
@@ -2906,6 +2968,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             }
         }
 
+        /// <summary>
+        /// A package of class <paramref name="kind"/> just started for the bound squad: a patrol lays its route, a bar package takes a table, and the
+        /// other classes set up what they need.
+        /// </summary>
         public void Started(Blackboard board, AiPackage package, PackageClass kind)
         {
             switch (kind)

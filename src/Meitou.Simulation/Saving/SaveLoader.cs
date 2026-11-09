@@ -346,6 +346,9 @@ public static class SaveLoader
             world.Player.Squad = (squads.FirstOrDefault(s => s.Members.Count > 0) ?? squads[0]).Id;
     }
 
+    /// <summary>
+    /// The relation table as a flat array, faction by faction, row by row.
+    /// </summary>
     internal static float[] Snapshot(FactionRelations relations)
     {
         int n = relations.Count;
@@ -429,6 +432,10 @@ public static class SaveLoader
         }
     }
 
+    /// <summary>
+    /// Keeps each faction's saved state (prosperity, counter, relation table) and, when the options apply relations, puts the save's rank, trust,
+    /// relations and war flags into the data; a faction the data lacks is noted.
+    /// </summary>
     static void LoadFactions(SaveGame save, PopulationData data, SaveLoadOptions options, LoadedSave loaded)
     {
         foreach (var f in save.Factions)
@@ -461,6 +468,9 @@ public static class SaveLoader
         }
     }
 
+    /// <summary>
+    /// Makes a player platoon of the save a squad in the world with its characters.
+    /// </summary>
     static void LoadPlayerPlatoon(World world, SavePlatoon platoon, PopulationData data, SaveLoadOptions options, LoadedSave loaded,
         int playerIndex, Dictionary<string, RaceData?> races, Dictionary<string, BodyPartTemplate?> parts,
         Dictionary<SaveCharacter, CharacterId> bySource, CharacterAssembly assembly,

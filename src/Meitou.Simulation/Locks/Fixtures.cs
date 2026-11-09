@@ -7,7 +7,21 @@ namespace Meitou.Simulation.Locks;
 /// <summary>
 /// The original's <c>Character+0x2f8</c> (save key <c>in something</c>, docs/game/carry-loot.md): 0 normal, 1 in a bed, 2 imprisoned.
 /// </summary>
-public enum HeldState : byte { None = 0, Bed = 1, Imprisoned = 2 }
+public enum HeldState : byte
+{
+    /// <summary>
+    /// Normal (0).
+    /// </summary>
+    None = 0,
+    /// <summary>
+    /// In a bed (1).
+    /// </summary>
+    Bed = 1,
+    /// <summary>
+    /// Imprisoned (2).
+    /// </summary>
+    Imprisoned = 2
+}
 
 /// <summary>
 /// A placement of a save's zone building list: its BUILDING record and world position (<see cref="Saving.HeldSave.BuildingSpots"/>).
@@ -54,13 +68,15 @@ public sealed record BedSpot(string Id, string Record, Vector3 Position, int Own
 public sealed record TrainingSpot(string Id, string Record, Vector3 Position, int Owner, float Yaw);
 
 /// <summary>
-/// What a bed's BUILDING says (docs/game/locks.md "Beds"): its functionality's <c>function</c> (6 BF_BED, 25 BF_SKELETON_BED), the clip it is lain in
-/// (the functionality's <c>animation</c>: <c>sleepinbed</c>, <c>sleeponfloor</c>), the sum of its construction materials (the bed search weighs a bed
-/// that needs more than 1 three times) and its use nodes (null with fewer than 2: it is lain in at its own origin and facing). </summary> <summary> A
-/// cage's clips (ANIMATION names; null: none listed): standing in it, unconscious, dazed.
+/// A cage's clips (ANIMATION names; null: none listed): standing in it, unconscious, dazed.
 /// </summary>
 public readonly record struct CageClips(string? Idle, string? Ko, string? Dazed, string? Lockpick = null);
 
+/// <summary>
+/// What a bed's BUILDING says (docs/game/locks.md "Beds"): its functionality's <c>function</c> (6 BF_BED, 25 BF_SKELETON_BED), the clip it is lain in
+/// (the functionality's <c>animation</c>: <c>sleepinbed</c>, <c>sleeponfloor</c>), the sum of its construction materials (the bed search weighs a bed
+/// that needs more than 1 three times) and its use nodes (null with fewer than 2: it is lain in at its own origin and facing).
+/// </summary>
 public readonly record struct BedData(int Function, string? Clip, float Materials, UseNode[]? Nodes = null);
 
 /// <summary>
@@ -77,21 +93,29 @@ public readonly record struct UseNode(Vector3 At, float Yaw);
 public sealed record ContainerSpot(string Id, string Record, Vector3 Position, int Owner = -1, bool Locked = false, int Level = 0, float Yaw = 0);
 
 /// <summary>
-/// A door for the host's picking: its fixture id, its key in <see cref="WorldSnapshot.Doors"/>, its owner faction, where its closed leaf is (else its
-/// building's origin) and how far it slides fully open (<see cref="DoorSpot.Slide"/>). </summary> <summary> A cage for picking: its fixture id,
-/// CAGE-function BUILDING record, place, owner faction (-1 none), whether its lock holds, who is in it (None: free), its lock's level, its yaw and
-/// whether pointing at it points at its occupant (<see cref="Fixture.OccupantSelection"/>).
+/// A cage for picking: its fixture id, CAGE-function BUILDING record, place, owner faction (-1 none), whether its lock holds, who is in it (None:
+/// free), its lock's level, its yaw and whether pointing at it points at its occupant (<see cref="Fixture.OccupantSelection"/>).
 /// </summary>
 public sealed record CageSpot(string Id, string Record, Vector3 Position, int Owner, bool Locked, CharacterId Occupant, int Level = 0, float Yaw = 0,
         bool OccupantSelection = false);
 
+/// <summary>
+/// A door for the host's picking: its fixture id, its key in <see cref="WorldSnapshot.Doors"/>, its owner faction, where its closed leaf is (else its
+/// building's origin) and how far it slides fully open (<see cref="DoorSpot.Slide"/>).
+/// </summary>
 public sealed record DoorPick(string Id, string Building, int Door, int Owner, Vector3 Position, Vector3 Slide = default)
 {
     /// <summary>
     /// The BUILDING record whose door it is, where that building stands and its yaw: the frame of its collision (<c>NavDoorGeometry.Shape</c>).
     /// </summary>
     public string HostRecord { get; init; } = "";
+    /// <summary>
+    /// Where the host building stands (see <see cref="HostRecord"/>).
+    /// </summary>
     public Vector3 Origin { get; init; }
+    /// <summary>
+    /// The host building's yaw (see <see cref="HostRecord"/>).
+    /// </summary>
     public float Yaw { get; init; }
 }
 
@@ -99,7 +123,25 @@ public sealed record DoorPick(string Id, string Building, int Door, int Owner, V
 /// The door's motion state as saved in <c>state&lt;i&gt;</c> (docs/game/locks.md "Doors"; not the DoorState enum): 0 closed, 1 open, 2 opening, 3
 /// closing.
 /// </summary>
-public enum DoorMotion : byte { Closed = 0, Open = 1, Opening = 2, Closing = 3 }
+public enum DoorMotion : byte
+{
+    /// <summary>
+    /// Closed (0).
+    /// </summary>
+    Closed = 0,
+    /// <summary>
+    /// Open (1).
+    /// </summary>
+    Open = 1,
+    /// <summary>
+    /// Opening (2).
+    /// </summary>
+    Opening = 2,
+    /// <summary>
+    /// Closing (3).
+    /// </summary>
+    Closing = 3
+}
 
 /// <summary>
 /// The lock object of docs/game/locks.md "Lock object": one structure for doors, lockable buildings, cages and shackles. The pick timer lives on the
@@ -121,13 +163,25 @@ public sealed class LockState
     /// Resistance to cutting and breaking.
     /// </summary>
     public float Hardness { get; set; }
+    /// <summary>
+    /// Whether the lock is locked.
+    /// </summary>
     public bool Locked { get; set; }
+    /// <summary>
+    /// Whether the lock is broken.
+    /// </summary>
     public bool Broken { get; set; }
     /// <summary>
     /// Seconds of picking since the last roll, and the time of the next roll.
     /// </summary>
     public float PickTime { get; set; }
+    /// <summary>
+    /// The pick time at which the next roll comes (see <see cref="PickTime"/>).
+    /// </summary>
     public float NextRoll { get; set; } = FirstRoll;
+    /// <summary>
+    /// The pick rolls made on the lock, the counter of its random stream.
+    /// </summary>
     public int Rolls { get; set; }
     /// <summary>
     /// The owner's broken flag (the lock's owner +8, its slot 97, <c>FUN_140297d60</c>): a player cage or safe being dismantled
@@ -141,6 +195,9 @@ public sealed class LockState
     /// </summary>
     public bool EffectivelyLocked => Locked && !Broken && !OwnerBroken && Level >= 1;
 
+    /// <summary>
+    /// Adds the lock's state to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Level);
@@ -166,12 +223,18 @@ public sealed class Fixture
     /// <see cref="FixtureRegistry.BadNodeHours"/>. Runtime only: not saved or hashed.
     /// </summary>
     internal List<(int Node, double Stamp)>? BadNodes;
+    /// <summary>
+    /// The fixture's id (see the class remarks).
+    /// </summary>
     public required string Id { get; init; }
     /// <summary>
     /// The instance id of the placed building it belongs to (the house of a door, the building of an interior item): what <see cref="IDoorGate"/> and
     /// the save name.
     /// </summary>
     public required string Building { get; init; }
+    /// <summary>
+    /// What kind of fixture it is.
+    /// </summary>
     public required FixtureKind Kind { get; init; }
     /// <summary>
     /// The BUILDING record (the door's own record for a door).
@@ -181,6 +244,9 @@ public sealed class Fixture
     /// The town site it was registered with, and the owner faction (a position in the data's factions; -1 none).
     /// </summary>
     public int Site { get; init; } = -1;
+    /// <summary>
+    /// The owner faction (a position in the data's factions; -1 none; see <see cref="Site"/>).
+    /// </summary>
     public int Owner { get; set; } = -1;
     /// <summary>
     /// A nest building's (<see cref="NestBuildings"/>): its faction's kidnappers use it wherever they stand.
@@ -190,6 +256,9 @@ public sealed class Fixture
     /// Where an occupant is held, and which way it faces (the item's origin: the cage's attach node is not read, an engine choice).
     /// </summary>
     public Vector3 Position { get; init; }
+    /// <summary>
+    /// The way an occupant faces (see <see cref="Position"/>).
+    /// </summary>
     public float Yaw { get; init; }
     /// <summary>
     /// The building's position marker (<see cref="Meitou.Data.World.WorldObjectLayout.PositionMarker"/>) where it differs from
@@ -211,10 +280,25 @@ public sealed class Fixture
     /// <c>gatecode</c> (kept as read) and <c>wants lock</c>.
     /// </summary>
     public int DoorIndex { get; init; } = -1;
+    /// <summary>
+    /// Doors: the motion state (see <see cref="DoorIndex"/>).
+    /// </summary>
     public DoorMotion Motion { get; set; }
+    /// <summary>
+    /// Doors: the open amount, 0..1.
+    /// </summary>
     public float OpenAmount { get; set; }
+    /// <summary>
+    /// Doors: the door's own broken flag.
+    /// </summary>
     public bool DoorBroken { get; set; }
+    /// <summary>
+    /// Doors: the <c>gatecode</c>, kept as read (-1: none).
+    /// </summary>
     public int GateCode { get; set; } = -1;
+    /// <summary>
+    /// Doors: <c>wants lock</c>.
+    /// </summary>
     public bool WantsLock { get; set; }
     /// <summary>
     /// Doors: the door's own construction progress (Building +0x164, 1 when whole; docs/game/locks.md "Bash door"): blows take it down, at 0 the door
@@ -226,6 +310,9 @@ public sealed class Fixture
     /// and <see cref="DoorIndex"/>; a player building's bed has it too, so an upgrade is noticed).
     /// </summary>
     public DoorLeaf Leaf { get; init; }
+    /// <summary>
+    /// Doors and player beds: the parent BUILDING record (see <see cref="Leaf"/>).
+    /// </summary>
     public string HostRecordId { get; init; } = "";
     /// <summary>
     /// Doors: its building is a gate (<see cref="Meitou.Data.World.TownBuildings.IsGate"/>), a boundary of the gate codes; derived from the data, not
@@ -237,6 +324,9 @@ public sealed class Fixture
     /// hashed or saved.
     /// </summary>
     internal DoorSpot? Spot { get; set; }
+    /// <summary>
+    /// Doors: whether the door gate was asked for <see cref="Spot"/> already.
+    /// </summary>
     internal bool SpotAsked { get; set; }
 
     /// <summary>
@@ -258,7 +348,13 @@ public sealed class Fixture
     /// derived from the data.
     /// </summary>
     public UseNode[]? UseNodes { get; init; }
+    /// <summary>
+    /// Cages and beds: the <c>use range</c> (see <see cref="Restrains"/>).
+    /// </summary>
     public float UseRange { get; init; }
+    /// <summary>
+    /// Cages and beds: who is in it (none: free).
+    /// </summary>
     public CharacterId Occupant { get; set; } = CharacterId.None;
     /// <summary>
     /// Cages: a torture rack (<see cref="Meitou.Data.World.TownBuildings.IsRack"/>); derived from the data.
@@ -269,6 +365,9 @@ public sealed class Fixture
     /// only on a rack.
     /// </summary>
     public float RackTimer { get; set; }
+    /// <summary>
+    /// Racks: whether the last frame stretched its user (see <see cref="RackTimer"/>).
+    /// </summary>
     public bool RackBusy { get; set; }
     /// <summary>
     /// Beds: its record's <see cref="BedData"/>; derived from the data, not hashed or saved.
@@ -290,8 +389,14 @@ public sealed class Fixture
     /// while set.
     /// </summary>
     public bool AutoOpened { get; set; }
+    /// <summary>
+    /// Doors: the tick a character last went through or stood in it (see <see cref="AutoOpened"/>).
+    /// </summary>
     public long LastPass { get; set; }
 
+    /// <summary>
+    /// Adds the fixture's state to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Rng.StableHash(Id));
@@ -335,7 +440,13 @@ public readonly record struct DoorView(float Open, DoorMotion Motion, bool Locke
 /// </summary>
 public sealed record BuildingDetail(string Instance, IReadOnlyList<DoorDetail> Doors, bool Owned = false, bool? Public = null)
 {
+    /// <summary>
+    /// The building's sale price for the player (null: not for sale).
+    /// </summary>
     public long? SalePrice { get; init; }
+    /// <summary>
+    /// The selected bed's own panel data (null: no bed selected).
+    /// </summary>
     public BedDetail? Bed { get; init; }
 }
 
@@ -377,6 +488,9 @@ public interface IDoorGate
 /// </summary>
 public readonly record struct DoorSpot(Vector3 Centre, Vector3 Normal, float HalfWidth, float HalfHeight = 0)
 {
+    /// <summary>
+    /// How far the leaf moves when fully open, in the same frame (see the record's remarks).
+    /// </summary>
     public Vector3 Slide { get; init; }
 
     /// <summary>

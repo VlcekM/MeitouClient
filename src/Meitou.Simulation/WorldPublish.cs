@@ -11,6 +11,9 @@ using Meitou.Simulation.Weather;
 
 namespace Meitou.Simulation;
 
+/// <summary>
+/// The world's publish: the partitions, the snapshot buffers and the character views the host draws.
+/// </summary>
 public sealed partial class World
 {
     #region Partitions
@@ -84,6 +87,9 @@ public sealed partial class World
         return own;
     }
 
+    /// <summary>
+    /// Whether another buffer of the ring shows <paramref name="s"/> at slot <paramref name="i"/>.
+    /// </summary>
     bool ShownElsewhere(SnapshotBuffer buffer, CharacterSnapshot s, int i)
     {
         foreach (var b in _snapshotRing)
@@ -548,7 +554,8 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// What the player may do with it: the turret it mans, the ranged line, stealth and watchers, the bars, the prison, the knock-out and kidnap chances.
+    /// What the player may do with it: the turret it mans, the ranged line, stealth and watchers, the bars, the prison, the knock-out and
+    /// kidnap chances.
     /// </summary>
     void FillInteraction(CharacterSnapshot s, int i, in PublishedCharacter v, in PublishFacts f)
     {

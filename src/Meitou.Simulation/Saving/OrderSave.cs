@@ -18,16 +18,19 @@ public sealed record SavedOrder(TaskType Row, Vector3 Point, Hand Hand, string? 
 
 /// <summary>
 /// A player character's order queue in its GAMESTATE_AI record <c>ai</c>, next to the perma-jobs (<see cref="PermaJobSave"/>; <b>Verified</b>,
-/// <c>AITaskSytem</c> vfuncs 1 and 2, writer <c>FUN_1405090b0</c>, loader <c>FUN_1405092d0</c>; docs/game/ai-tasks.md "Perma-jobs", docs/simulation.md "Order
-/// queue"): per order i from 0 the int <c>tjob&lt;i&gt;</c> (task type), the vec3 <c>tjobP&lt;i&gt;</c> (point) and the handle <c>tjobT&lt;i&gt;</c>
-/// (target: a character or a building). The queue is written front first, started or not; nothing is saved of it running. Meitou's own keys carry
-/// what the keys above cannot: the string <c>meitou tjob&lt;i&gt;</c> (the <see cref="OrderEntry.Site"/> id, which wins on load) and the int
-/// <c>meitou tjobK&lt;i&gt;</c> (the owner's detail code, <see cref="IOrderOwner.SaveKind"/>; absent: 0). A load reads the orders into
-/// <see cref="CharacterCold.SavedOrders"/>; the decision step makes them the queue (<see cref="Restore"/>) once the world they name exists, and
-/// starts the front as any other.
+/// <c>AITaskSytem</c> vfuncs 1 and 2, writer <c>FUN_1405090b0</c>, loader <c>FUN_1405092d0</c>; docs/game/ai-tasks.md "Perma-jobs",
+/// docs/simulation.md "Order queue"): per order i from 0 the int <c>tjob&lt;i&gt;</c> (task type), the vec3 <c>tjobP&lt;i&gt;</c> (point) and the
+/// handle <c>tjobT&lt;i&gt;</c> (target: a character or a building). The queue is written front first, started or not; nothing is saved of it
+/// running. Meitou's own keys carry what the keys above cannot: the string <c>meitou tjob&lt;i&gt;</c> (the <see cref="OrderEntry.Site"/> id, which
+/// wins on load) and the int <c>meitou tjobK&lt;i&gt;</c> (the owner's detail code, <see cref="IOrderOwner.SaveKind"/>; absent: 0). A load reads the
+/// orders into <see cref="CharacterCold.SavedOrders"/>; the decision step makes them the queue (<see cref="Restore"/>) once the world they name
+/// exists, and starts the front as any other.
 /// </summary>
 public static class OrderSave
 {
+    /// <summary>
+    /// The GAMESTATE_AI key prefixes of an order: the task type, the point, the target handle and Meitou's site id and detail code.
+    /// </summary>
     const string Type = "tjob", Point = "tjobP", Target = "tjobT", MeitouSite = "meitou tjob", MeitouKind = "meitou tjobK";
 
     /// <summary>
@@ -71,6 +74,9 @@ public static class OrderSave
         }
     }
 
+    /// <summary>
+    /// Writes order <paramref name="i"/> into the AI record; Meitou's site and detail keys only when set.
+    /// </summary>
     static void Put(FcsRecord ai, int i, TaskType row, Vector3 point, Hand hand, string? site, int kind)
     {
         ai.Ints[Type + i] = (int)row;
@@ -81,7 +87,8 @@ public static class OrderSave
     }
 
     /// <summary>
-    /// The row as the original numbers it: the Sleep order is 258 <c>USE_BED_ORDER</c> (Meitou's row 98 is the task it starts); the other rows are the same.
+    /// The row as the original numbers it: the Sleep order is 258 <c>USE_BED_ORDER</c> (Meitou's row 98 is the task it starts); the other rows are
+    /// the same.
     /// </summary>
     static TaskType SavedRow(TaskType row) => row == TaskType.UseBed ? TaskType.UseBedOrder : row;
 
@@ -169,6 +176,9 @@ public static class OrderSave
         DecisionSystem.Request(cold);
     }
 
+    /// <summary>
+    /// The world character whose saved handle is <paramref name="hand"/>; <see cref="CharacterId.None"/> when none is.
+    /// </summary>
     static CharacterId Find(CharacterTable table, Hand hand)
     {
         for (int s = 0; s < table.HighWater; s++)

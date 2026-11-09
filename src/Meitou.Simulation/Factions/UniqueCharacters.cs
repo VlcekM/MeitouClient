@@ -7,7 +7,21 @@ namespace Meitou.Simulation.Factions;
 /// <summary>
 /// A unique character's state (docs/game/factions-squads-towns.md "Unique characters", <c>NPC is</c> values): 1 is also the state of one never made.
 /// </summary>
-public enum UniqueState : byte { Dead = 0, Alive = 1, Imprisoned = 2 }
+public enum UniqueState : byte
+{
+    /// <summary>
+    /// Dead (0).
+    /// </summary>
+    Dead = 0,
+    /// <summary>
+    /// Alive, or never made (1).
+    /// </summary>
+    Alive = 1,
+    /// <summary>
+    /// Imprisoned (2).
+    /// </summary>
+    Imprisoned = 2
+}
 
 /// <summary>
 /// One CHARACTER record with <c>unique</c>: whether a squad made it, the live character, its state and whether the player was involved.
@@ -22,6 +36,9 @@ public sealed class UniqueEntry
     /// The character while it is in the world (none: not in the world, or not made yet).
     /// </summary>
     public CharacterId Handle { get; set; } = CharacterId.None;
+    /// <summary>
+    /// The unique's state.
+    /// </summary>
     public UniqueState State { get; set; } = UniqueState.Alive;
     /// <summary>
     /// The player killed, imprisoned or holds it.
@@ -41,30 +58,61 @@ public sealed class UniqueEntry
 /// </summary>
 public sealed class UniqueCharacters
 {
+    /// <summary>
+    /// The entries by CHARACTER record id.
+    /// </summary>
     readonly SortedDictionary<string, UniqueEntry> _entries = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The record ids of the uniques in the world, by character.
+    /// </summary>
     readonly Dictionary<CharacterId, string> _byHandle = [];
+    /// <summary>
+    /// Whether <see cref="SeedPrisoners"/> ran.
+    /// </summary>
     bool _seeded;
+    /// <summary>
+    /// The factions of the dead uniques, queued for their prosperity drop (see <see cref="Died"/>).
+    /// </summary>
+    readonly List<int> _fallen = [];
 
+    /// <summary>
+    /// The number of entries.
+    /// </summary>
     public int Count => _entries.Count;
     /// <summary>
     /// Bumped by every change to a state or player flag (an entry made, released, dead, captured, freed, loaded or seeded): world states read it.
     /// </summary>
     public long Version { get; private set; }
+    /// <summary>
+    /// The entries in record id order.
+    /// </summary>
     public IEnumerable<KeyValuePair<string, UniqueEntry>> All => _entries;
+    /// <summary>
+    /// The entry of a CHARACTER record; null when it has none.
+    /// </summary>
     public UniqueEntry? Find(string recordId) => _entries.GetValueOrDefault(recordId);
     /// <summary>
     /// The state a query sees: an absent entry is alive (the original's default).
     /// </summary>
     public UniqueState StateOf(string recordId) => _entries.TryGetValue(recordId, out var e) ? e.State : UniqueState.Alive;
+    /// <summary>
+    /// Whether a squad made the unique (<see cref="UniqueEntry.Claimed"/>).
+    /// </summary>
     public bool IsClaimed(string recordId) => _entries.TryGetValue(recordId, out var e) && e.Claimed;
     /// <summary>
     /// The unique record of a character in the world (null: not a tracked unique).
     /// </summary>
     public string? RecordOf(CharacterId id) => _byHandle.GetValueOrDefault(id);
 
+    /// <summary>
+    /// Whether a record is a unique CHARACTER or ANIMAL_CHARACTER.
+    /// </summary>
     public static bool IsUnique(GameRecord? record) => record is { Type: FcsRecordType.Character or FcsRecordType.AnimalCharacter }
             && record.GetBool("unique");
 
+    /// <summary>
+    /// The entry of a record, made when absent.
+    /// </summary>
     UniqueEntry Entry(string recordId)
     {
         if (!_entries.TryGetValue(recordId, out var e)) _entries[recordId] = e = new UniqueEntry();
@@ -96,6 +144,9 @@ public sealed class UniqueCharacters
         _byHandle[id] = recordId;
     }
 
+    /// <summary>
+    /// Clears an entry's character.
+    /// </summary>
     void Unbind(UniqueEntry e)
     {
         if (!e.Handle.IsNone) _byHandle.Remove(e.Handle);
@@ -134,8 +185,6 @@ public sealed class UniqueCharacters
         e.State = UniqueState.Dead;
         e.Player |= byPlayer;
     }
-
-    readonly List<int> _fallen = [];
 
     /// <summary>
     /// The factions of the uniques that died since the last call, in order (the population lowers their prosperity, <c>FUN_1407a6200</c>).
@@ -203,6 +252,9 @@ public sealed class UniqueCharacters
         }
     }
 
+    /// <summary>
+    /// Adds the entries to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(_entries.Count);

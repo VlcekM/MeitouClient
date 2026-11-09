@@ -12,18 +12,25 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Production;
 
-// Job lists (Perma-Jobs; docs/simulation.md "Production", the original's rules in docs/game/ai-tasks.md "Perma-jobs"): the decision step takes the first job of a player character's
-// list that can run (ListJobs here is the production pick's contributor), so a higher job takes over as soon as it can run and a blocked one passes to the next. Meitou runs Operating machine (87, the
-// operator below), Operating automatic machine (152: an operator that only hauls for it), Hauling to (124: a machine's output carried to the job's storage, CharacterTask.Haul; on an automatic machine, carried inputs into it), Engineer (125: ConstructionSystem builds the site its finder picks) and Turret guard (234: manning the job's turret as an operator). Blocked
-// uses one test for starting and for going on.
+/// <summary>
+/// Job lists (Perma-Jobs; docs/simulation.md "Production", the original's rules in docs/game/ai-tasks.md "Perma-jobs"): the decision step takes the
+/// first job of a player character's list that can run (ListJobs here is the production pick's contributor), so a higher job takes over as soon as it
+/// can run and a blocked one passes to the next. Meitou runs Operating machine (87, the operator below), Operating automatic machine (152: an
+/// operator that only hauls for it), Hauling to (124: a machine's output carried to the job's storage, CharacterTask.Haul; on an automatic machine,
+/// carried inputs into it), Engineer (125: ConstructionSystem builds the site its finder picks) and Turret guard (234: manning the job's turret as an
+/// operator). Blocked uses one test for starting and for going on.
+/// </summary>
 public sealed partial class ProductionSystem
 {
     /// <summary>
-    /// How often (ticks) the decision step asks again for a player character idle or on a job's task, staggered by slot (<see cref="DecisionSystem.ReAsked"/>; engine choice: the original
-    /// re-plans when its task ends or its commitment runs out).
+    /// How often (ticks) the decision step asks again for a player character idle or on a job's task, staggered by slot
+    /// (<see cref="DecisionSystem.ReAsked"/>; engine choice: the original re-plans when its task ends or its commitment runs out).
     /// </summary>
     public const int JobCheckTicks = 10;
 
+    /// <summary>
+    /// Gives each player character named a job of the order's type on its site (when the site exists).
+    /// </summary>
     void AddJobs(World world, AddJob add)
     {
         if (Site(world, add.Site) is null) return;
@@ -35,6 +42,9 @@ public sealed partial class ProductionSystem
         }
     }
 
+    /// <summary>
+    /// Gives a character the job an order makes (a first aid on a robot makes the Robotics job).
+    /// </summary>
     void AddOrderJobs(World world, AddOrderJob add)
     {
         var table = world.Characters;
@@ -44,7 +54,8 @@ public sealed partial class ProductionSystem
         if (ordered == TaskType.FirstAidOrder && table.TryResolveNext(add.Target, out int t) && table.Cold(t)?.Race is { IsRobot: true })
             ordered = TaskType.FirstAidRobot;
 
-        // Follow (31) and Bodyguard (45) on a character become the jobs that follow it (docs/game/ai-tasks.md "Finders of the jobs": they act on the job's own target).
+        // Follow (31) and Bodyguard (45) on a character become the jobs that follow it (docs/game/ai-tasks.md "Finders of the jobs": they act on the
+        // job's own target).
         bool onCharacter = ordered is TaskType.Bodyguard or TaskType.StayCloseToTarget;
         foreach (var id in Who(world, add.Characters))
         {
@@ -60,6 +71,9 @@ public sealed partial class ProductionSystem
         }
     }
 
+    /// <summary>
+    /// Removes a job from a character's list.
+    /// </summary>
     void RemoveJobAt(World world, RemoveJob remove)
     {
         var table = world.Characters;
@@ -83,6 +97,9 @@ public sealed partial class ProductionSystem
             cold.Running = job with { Job = job.Job == index ? -1 : job.Job - 1 };
     }
 
+    /// <summary>
+    /// Moves a job within a character's list.
+    /// </summary>
     void MoveJobTo(World world, MoveJob move)
     {
         if (!world.Characters.TryResolveNext(move.Character, out int slot) || world.Characters.Cold(slot) is not { } cold) return;
@@ -103,9 +120,10 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The production pick's list jobs as the decision step's contributor (<see cref="IJobSource"/>, step 5; 234 also step 3): Operating machine 87, Operating automatic machine 152, Hauling
-    /// to 124, Training 97, Turret guard 234, Engineer 125 and the follow jobs 31, 45, 289; and the carrying jobs 138, 223, 273 (<see cref="ErrandJobs"/>). A job runs while
-    /// <see cref="Runnable"/> holds; one that no longer does and that nothing replaces ends (<see cref="End"/>).
+    /// The production pick's list jobs as the decision step's contributor (<see cref="IJobSource"/>, step 5; 234 also step 3): Operating machine 87,
+    /// Operating automatic machine 152, Hauling to 124, Training 97, Turret guard 234, Engineer 125 and the follow jobs 31, 45, 289; and the carrying
+    /// jobs 138, 223, 273 (<see cref="ErrandJobs"/>). A job runs while <see cref="Runnable"/> holds; one that no longer does and that nothing
+    /// replaces ends (<see cref="End"/>).
     /// </summary>
     public void RegisterSources(DecisionSystem decisions)
     {
@@ -122,8 +140,14 @@ public sealed partial class ProductionSystem
         decisions.Register(new ImplicitJobs(this));
     }
 
+    /// <summary>
+    /// The production's job contributor (<see cref="IJobSource"/>) of the list's job types.
+    /// </summary>
     sealed class ListJobs(ProductionSystem owner) : IJobSource
     {
+        /// <summary>
+        /// Whether list job <paramref name="k"/> can run (or runs already) for the character.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot, int k)
         {
             var table = world.Characters;
@@ -144,7 +168,8 @@ public sealed partial class ProductionSystem
             bool onErrand = owner._errands.ContainsKey(table.IdOf(slot));
             if (!AbleFor(cold, type, task, onErrand)) return runs ? DecisionCheck.Runs : DecisionCheck.No("carrying, carried or down");
 
-            // 234's effect (using the turret) is planned through 146, whose list B has !158: not while a melee attacker is within 40 (docs/game/ai-tasks.md "Precedence").
+            // 234's effect (using the turret) is planned through 146, whose list B has !158: not while a melee attacker is within 40
+            // (docs/game/ai-tasks.md "Precedence").
             if (type == TaskType.ManATurretPlayerJob && world.SystemOf<CombatSystem>() is { } combat
                 && CharacterFacts.ImmediateThreat(combat, world, slot))
                 return DecisionCheck.No("a melee threat within 40 (146 needs !158)");
@@ -153,6 +178,9 @@ public sealed partial class ProductionSystem
             return runs ? DecisionCheck.Runs : DecisionCheck.Run;
         }
 
+        /// <summary>
+        /// Starts list job <paramref name="k"/> for the character (a follow job whose fight is over follows again).
+        /// </summary>
         public void Start(World world, int slot, int k)
         {
             var table = world.Characters;
@@ -165,30 +193,48 @@ public sealed partial class ProductionSystem
         }
 
         /// <summary>
-        /// A Turret guard (234, kind 2) is urgent while enemies are sensed (AI <c>+0xbc</c>, the senses' <c>numEnemies</c>, <see cref="SenseBlock.Enemies"/>; <c>FUN_14050e5b0</c>).
+        /// A Turret guard (234, kind 2) is urgent while enemies are sensed (AI <c>+0xbc</c>, the senses' <c>numEnemies</c>,
+        /// <see cref="SenseBlock.Enemies"/>; <c>FUN_14050e5b0</c>).
         /// </summary>
         public bool Urgent(World world, int slot, int k) =>
             world.Characters.Cold(slot)!.Jobs[k].Type == TaskType.ManATurretPlayerJob && CharacterFacts.Senses(world, slot) is { Enemies: > 0 };
 
+        /// <summary>
+        /// Ends the character's list job.
+        /// </summary>
         public void Stop(World world, int slot, int k) => End(world, slot);
     }
 
     /// <summary>
-    /// The implicit jobs (squad AI options) as step 5's source after the list (the original's lowest keys, <c>FUN_14050e5b0</c>): a character idle, on a standing task or on a job's task
-    /// (a list job's that could not run on, or an implicit one) takes the one <see cref="ImplicitPick"/> gives; it runs while that is the one it is on (the same type and site). One on an
-    /// implicit job that no longer holds ends it (<see cref="Passed"/>: the original rebuilds the entry on every pass, so nothing carries over).
+    /// The implicit jobs (squad AI options) as step 5's source after the list (the original's lowest keys, <c>FUN_14050e5b0</c>): a character idle,
+    /// on a standing task or on a job's task (a list job's that could not run on, or an implicit one) takes the one <see cref="ImplicitPick"/> gives;
+    /// it runs while that is the one it is on (the same type and site). One on an implicit job that no longer holds ends it (<see cref="Passed"/>:
+    /// the original rebuilds the entry on every pass, so nothing carries over).
     /// </summary>
     sealed class ImplicitJobs(ProductionSystem owner) : IDecisionSource
     {
+        /// <summary>
+        /// What the last <see cref="CanRun"/> picked: the tick, the slot, the job type and its site (tick -1: nothing).
+        /// </summary>
         (long Tick, int Slot, TaskType Type, string Site) _picked = (-1, -1, TaskType.None, "");
 
+        /// <summary>
+        /// The trace name.
+        /// </summary>
         public string Name => "Implicit jobs";
+        /// <summary>
+        /// Step 5, the jobs.
+        /// </summary>
         public DecisionStep Step => DecisionStep.Jobs;
         /// <summary>
         /// After the list (its key 0).
         /// </summary>
         public int Key => 1;
 
+        /// <summary>
+        /// Whether an implicit job can run for the character: one out of a fight, idle, on a standing task or on a job's task, that
+        /// <see cref="ImplicitPick"/> gives a job.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             var table = world.Characters;
@@ -205,11 +251,17 @@ public sealed partial class ProductionSystem
             return DecisionCheck.Run;
         }
 
+        /// <summary>
+        /// Starts the implicit job <see cref="CanRun"/> picked this tick.
+        /// </summary>
         public void Start(World world, int slot)
         {
             if (_picked.Tick == world.Tick && _picked.Slot == slot) owner.StartImplicit(world, slot, _picked.Type, _picked.Site);
         }
 
+        /// <summary>
+        /// The step passed over it: a character on an implicit job that no longer holds ends it.
+        /// </summary>
         public void Passed(World world, int slot, in DecisionCheck check)
         {
             var table = world.Characters;
@@ -224,10 +276,12 @@ public sealed partial class ProductionSystem
     public const float SeatRange = 600;
 
     /// <summary>
-    /// The implicit job of a character whose list has none to run (docs/game/ai-tasks.md "Perma-jobs": the original's lowest keys, in this order), with the jobs switch on, not
-    /// sneaking and not a slave; Sleep and Sit not while it holds position. <see cref="SquadAi.Ditch"/>: carried items a storage takes go there (242; only with no queued orders). <see cref="SquadAi.Sleep"/>: an injured character lies in the bed
-    /// the bed search finds (153, whose target finder it is, <b>Verified</b>; <see cref="Locks.FixtureRegistry.FindBed"/>) until healed (then 257 gets it up). <see cref="SquadAi.Sit"/>: a free
-    /// chair (275). The one it is on is kept while it holds (a bed within <see cref="Locks.FixtureRegistry.BedSearchRange"/>). Distances are from the character.
+    /// The implicit job of a character whose list has none to run (docs/game/ai-tasks.md "Perma-jobs": the original's lowest keys, in this order),
+    /// with the jobs switch on, not sneaking and not a slave; Sleep and Sit not while it holds position. <see cref="SquadAi.Ditch"/>: carried items a
+    /// storage takes go there (242; only with no queued orders). <see cref="SquadAi.Sleep"/>: an injured character lies in the bed the bed search
+    /// finds (153, whose target finder it is, <b>Verified</b>; <see cref="Locks.FixtureRegistry.FindBed"/>) until healed (then 257 gets it up).
+    /// <see cref="SquadAi.Sit"/>: a free chair (275). The one it is on is kept while it holds (a bed within
+    /// <see cref="Locks.FixtureRegistry.BedSearchRange"/>). Distances are from the character.
     /// </summary>
     (TaskType Type, string Site)? ImplicitPick(World world, int slot)
     {
@@ -244,7 +298,8 @@ public sealed partial class ProductionSystem
         var on = PermaJobs.ListJob(cold, (CharacterTask)table.Next[slot].Task) is { Implicit: true } running ? running.Row : TaskType.None;
         if ((options & SquadAi.Ditch) != 0)
         {
-            // The 242 entry is rebuilt every pass (FUN_14050e5b0): the trip goes on only while no order is queued and its storage still takes something carried.
+            // The 242 entry is rebuilt every pass (FUN_14050e5b0): the trip goes on only while no order is queued and its storage still takes
+            // something carried.
             if (on == TaskType.DitchAllResources && cold.HaulTo is { } keep && !PlayerOrders.Holds(world, slot) && cold.Inventory is { } held
                 && Site(world, keep) is { Complete: true } keptSite && keptSite.Owner == world.Player.Faction
                 && Ensure(world, keptSite) is { } keptStore && keptStore.Data.IsStorage && keptStore.Storage is not null
@@ -286,9 +341,10 @@ public sealed partial class ProductionSystem
     public const float TrainingRate = 2;
 
     /// <summary>
-    /// A user at a training dummy (<c>Task_UseTrainingDummy</c> slot 2 and <c>UseableStuff</c> vfunc 0x4b0, <b>Verified</b> by decompile): facing it, the building's <c>stat used</c> rises every
-    /// tick through <see cref="XpService.Capped"/> at <see cref="TrainingRate"/>, up to the building's cap (<c>output rate</c>: MkI 6, MkII 11, MkIII 16, whose descriptions promise levels 5, 10 and 15,
-    /// <b>Observed</b>; the field read as the cap is +0x1a4, not traced to the record). The gain also depends on the raw stat, not the injured one.
+    /// A user at a training dummy (<c>Task_UseTrainingDummy</c> slot 2 and <c>UseableStuff</c> vfunc 0x4b0, <b>Verified</b> by decompile): facing it,
+    /// the building's <c>stat used</c> rises every tick through <see cref="XpService.Capped"/> at <see cref="TrainingRate"/>, up to the building's
+    /// cap (<c>output rate</c>: MkI 6, MkII 11, MkIII 16, whose descriptions promise levels 5, 10 and 15, <b>Observed</b>; the field read as the cap
+    /// is +0x1a4, not traced to the record). The gain also depends on the raw stat, not the injured one.
     /// </summary>
     void Train(ref CharacterHot n, CharacterCold cold, BuildSite site, Machine m, float dt)
     {
@@ -304,6 +360,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     static bool IsSeat(Machine m) => m.Data.Function is TownBuildings.ChairFunction or ThroneFunction;
 
+    /// <summary>
+    /// BF_THRONE.
+    /// </summary>
     const int ThroneFunction = 24;
 
     /// <summary>
@@ -337,6 +396,9 @@ public sealed partial class ProductionSystem
         return best;
     }
 
+    /// <summary>
+    /// Starts an implicit job: a bed's sleep, a ditch's haul, else operating the site.
+    /// </summary>
     void StartImplicit(World world, int slot, TaskType type, string siteId)
     {
         var table = world.Characters;
@@ -364,14 +426,15 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The square of how far (3D) from the character a job's target may be (<b>Verified</b>, <c>AI::isTargetInRangeForOrders</c> <c>FUN_140597790</c> in the default ROAM_FAR mode: the walk a job
-    /// plans needs StateType 27 <c>isMovementAllowed</c>; about 6517 units). Farther, the job is skipped, so a character away from its base does not walk back for a job there.
+    /// The square of how far (3D) from the character a job's target may be (<b>Verified</b>, <c>AI::isTargetInRangeForOrders</c> <c>FUN_140597790</c>
+    /// in the default ROAM_FAR mode: the walk a job plans needs StateType 27 <c>isMovementAllowed</c>; about 6517 units). Farther, the job is
+    /// skipped, so a character away from its base does not walk back for a job there.
     /// </summary>
     public const float JobRangeSq = 4.246733e7f;
 
     /// <summary>
-    /// A job of the list that may run now: Meitou runs its type, the jobs switch is on (or the type ignores it), the character is not getting up, its target is within
-    /// <see cref="JobRangeSq"/>, and it is not blocked.
+    /// A job of the list that may run now: Meitou runs its type, the jobs switch is on (or the type ignores it), the character is not getting up, its
+    /// target is within <see cref="JobRangeSq"/>, and it is not blocked.
     /// </summary>
     bool Runnable(World world, int slot, CharacterCold cold, int k)
     {
@@ -386,7 +449,8 @@ public sealed partial class ProductionSystem
         if (CharacterFacts.GettingUp(cold, world.Tick)) return false;
         var at = world.Characters.Next[slot].Position;
 
-        // The engineer job ignores its target: its finder picks any site (the original's row 125 finder, docs/game/buildings-production.md "Builders and dismantle"); a pick out of range fails the job, and so does a character with no working arm (row 2's state 38).
+        // The engineer job ignores its target: its finder picks any site (the original's row 125 finder, docs/game/buildings-production.md "Builders
+        // and dismantle"); a pick out of range fails the job, and so does a character with no working arm (row 2's state 38).
         if (job.Type == TaskType.JobBuilder)
         {
             return ConstructionSystem.HasWorkingArm(cold) && Construction?.EngineerSite(world, slot) is { } pick
@@ -398,8 +462,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The character a Bodyguard (45), Staying close (31) or animal Staying close (289) job follows (the row has no finder: it acts on the job's own target, docs/game/ai-tasks.md "Finders of the jobs"): the job's character,
-    /// found again from its saved handle after a load, alive and not the follower itself; for 31 and 289 also standing (the rows' state 7, <c>!isTargetDown</c>). Null: the job is blocked.
+    /// The character a Bodyguard (45), Staying close (31) or animal Staying close (289) job follows (the row has no finder: it acts on the job's own
+    /// target, docs/game/ai-tasks.md "Finders of the jobs"): the job's character, found again from its saved handle after a load, alive and not the
+    /// follower itself; for 31 and 289 also standing (the rows' state 7, <c>!isTargetDown</c>). Null: the job is blocked.
     /// </summary>
     static CharacterId? FollowedBy(World world, int slot, CharacterCold cold, int k)
     {
@@ -418,9 +483,10 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Whether a job cannot run (the original skips such a job: an unmet start condition the planner cannot meet, or the target finder found nothing; docs/game/ai-tasks.md "Perma-jobs").
-    /// Operating: the building is gone or not an operable machine, its operator places are taken by others, or it has no work (<see cref="HasWork"/>). Hauling to: the storage is gone, and
-    /// the character carries nothing it takes and no machine within <see cref="ProductionSettings.HaulRange"/> has an output it takes. Automatic machines (152, and 124 on one): <see cref="AutoWork"/>.
+    /// Whether a job cannot run (the original skips such a job: an unmet start condition the planner cannot meet, or the target finder found nothing;
+    /// docs/game/ai-tasks.md "Perma-jobs"). Operating: the building is gone or not an operable machine, its operator places are taken by others, or
+    /// it has no work (<see cref="HasWork"/>). Hauling to: the storage is gone, and the character carries nothing it takes and no machine within
+    /// <see cref="ProductionSettings.HaulRange"/> has an output it takes. Automatic machines (152, and 124 on one): <see cref="AutoWork"/>.
     /// </summary>
     bool Blocked(World world, CharacterCold cold, PermaJob job)
     {
@@ -437,11 +503,13 @@ public sealed partial class ProductionSystem
                 if (m.Data.Function != ObjectRanges.TurretFunction || !HasWorkingArm(cold)) return true;
                 return OperatorsOf(world, id) - (cold.OperateSite == id ? 1 : 0) >= m.Data.MaxOperators;
             case TaskType.UseTrainingDummy:
-                // Training (97): a dummy with a place free for a character with an arm that works (the row's state 38; the rest of its conditions, 73, is Unknown). It goes on at the cap, as the original's has no end.
+                // Training (97): a dummy with a place free for a character with an arm that works (the row's state 38; the rest of its conditions,
+                // 73, is Unknown). It goes on at the cap, as the original's has no end.
                 if (!m.Data.IsTraining || OperatorsOf(world, id) - (cold.OperateSite == id ? 1 : 0) >= m.Data.MaxOperators) return true;
                 return !HasWorkingArm(cold);
             case TaskType.OperateAutomaticMachinery:
-                // Done as soon as no input of the machine is empty (the row's done list !62, machineHasEmptyInputs false): the 124 companion goes on from there.
+                // Done as soon as no input of the machine is empty (the row's done list !62, machineHasEmptyInputs false): the 124 companion goes on
+                // from there.
                 return !m.Data.IsAutomatic || !m.Data.IsProducer || !m.HasEmptyInputs || !AutoWork(world, site, m, cold, fetch: true);
             case TaskType.OperateStorage:
                 // On an automatic machine (152's companion, the original's Task_FillMachine into it): what the character carries for its inputs.
@@ -460,9 +528,10 @@ public sealed partial class ProductionSystem
     static bool HasWorkingArm(CharacterCold cold) => cold.Medical is { } m && (m.ArmWorks(left: true) || m.ArmWorks(left: false));
 
     /// <summary>
-    /// A machine an operator can work (the original's start conditions of task 87: output not full, inputs not empty, power; docs/game/ai-tasks.md): it has power, and a bench a queued
-    /// research or craft; a farm a dead crop to clear, a ripe one to harvest or a growing one with water (tended); inputs that hold something or that the operator can fill
-    /// (it carries the item or, with <see cref="ProductionSettings.AutoHaul"/>, <see cref="NearestSource"/> finds it); and room in the output or, with AutoHaul, a storage that takes it.
+    /// A machine an operator can work (the original's start conditions of task 87: output not full, inputs not empty, power; docs/game/ai-tasks.md):
+    /// it has power, and a bench a queued research or craft; a farm a dead crop to clear, a ripe one to harvest or a growing one with water (tended);
+    /// inputs that hold something or that the operator can fill (it carries the item or, with <see cref="ProductionSettings.AutoHaul"/>,
+    /// <see cref="NearestSource"/> finds it); and room in the output or, with AutoHaul, a storage that takes it.
     /// </summary>
     bool HasWork(World world, BuildSite site, Machine m, CharacterCold cold)
     {
@@ -496,8 +565,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Haul work at an automatic machine (engine reading of 152, whose goal is "no empty inputs", and of 124 on it): the character is on a trip for it, or carries an item an input has room for;
-    /// with <paramref name="fetch"/> also an empty input a storage holds the item of, a full output a storage takes, or the machine's output carried that a storage takes.
+    /// Haul work at an automatic machine (engine reading of 152, whose goal is "no empty inputs", and of 124 on it): the character is on a trip for
+    /// it, or carries an item an input has room for; with <paramref name="fetch"/> also an empty input a storage holds the item of, a full output a
+    /// storage takes, or the machine's output carried that a storage takes.
     /// </summary>
     bool AutoWork(World world, BuildSite site, Machine m, CharacterCold cold, bool fetch)
     {
@@ -537,8 +607,8 @@ public sealed partial class ProductionSystem
             && Fits(store.Storage!, item);
 
     /// <summary>
-    /// What 242 Ditch all resources carries off (finder <c>FUN_1405a59a0</c>, its item collection <c>FUN_140749490</c>, <b>Verified</b>): ITEMs with <c>item function</c> 0 or 15, and food
-    /// (function 3) but the first, in inventory order.
+    /// What 242 Ditch all resources carries off (finder <c>FUN_1405a59a0</c>, its item collection <c>FUN_140749490</c>, <b>Verified</b>): ITEMs with
+    /// <c>item function</c> 0 or 15, and food (function 3) but the first, in inventory order.
     /// </summary>
     internal static IEnumerable<Items.ItemInstance> Ditchable(Items.Inventory inv)
     {
@@ -588,6 +658,9 @@ public sealed partial class ProductionSystem
         return best;
     }
 
+    /// <summary>
+    /// Starts list job <paramref name="k"/> by its type: building, operating, hauling or a turret.
+    /// </summary>
     void StartJob(World world, int slot, int k)
     {
         var table = world.Characters;

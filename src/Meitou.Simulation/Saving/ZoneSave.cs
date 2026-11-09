@@ -60,6 +60,9 @@ public static class ZoneSave
         }
     }
 
+    /// <summary>
+    /// The zone's building states by the instance id of the building that lists them.
+    /// </summary>
     static Dictionary<string, FcsRecord> StatesByInstance(SaveZone zone)
     {
         var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);

@@ -13,6 +13,9 @@ namespace Meitou.Simulation.Ai;
 /// </summary>
 public static class Repertoire
 {
+    /// <summary>
+    /// The repertoire flags: human, platoon, imprisoned, chained, animal and crippled.
+    /// </summary>
     public const int Human = 1, Platoon = 2, Imprisoned = 4, Chained = 0x10, Animal = 0x20, Crippled = 0x40;
 
     /// <summary>
@@ -71,6 +74,9 @@ public enum TaskSource : byte
 /// </summary>
 public enum StartResult : byte
 {
+    /// <summary>
+    /// The task was started.
+    /// </summary>
     Started,
     /// <summary>
     /// The character's <see cref="Repertoire"/> does not register the row; nothing changed.
@@ -106,10 +112,25 @@ public enum TaskEnd : byte
 /// </summary>
 public readonly record struct TaskRequest(CharacterTask Task, TaskType Row, TaskSource Source)
 {
+    /// <summary>
+    /// The index in the character's job list of the job it runs (-1: none).
+    /// </summary>
     public int Job { get; init; } = -1;
+    /// <summary>
+    /// The target character the act-out reads (none: no target).
+    /// </summary>
     public CharacterId Target { get; init; } = CharacterId.None;
+    /// <summary>
+    /// The site (a fixture or building id) the act-out reads; null: none.
+    /// </summary>
     public string? Site { get; init; }
+    /// <summary>
+    /// The point the act-out reads.
+    /// </summary>
     public System.Numerics.Vector3 Point { get; init; }
+    /// <summary>
+    /// The task the character goes back to when the act-out ends by itself (engine: for the characters the decision step does not decide).
+    /// </summary>
     public CharacterTask Resume { get; init; }
 
     /// <summary>
@@ -190,6 +211,9 @@ public interface ITaskHandler
 /// </summary>
 public interface ITaskOwner
 {
+    /// <summary>
+    /// Registers its act-out handlers with <paramref name="tasks"/>.
+    /// </summary>
     void RegisterTasks(TaskHandlers tasks);
 }
 
@@ -201,9 +225,18 @@ public interface ITaskOwner
 /// </summary>
 public sealed class TaskHandlers
 {
+    /// <summary>
+    /// The handler of each task, by task number.
+    /// </summary>
     readonly ITaskHandler?[] _handlers = new ITaskHandler?[256];
+    /// <summary>
+    /// The handlers of rows that have one of their own.
+    /// </summary>
     readonly Dictionary<TaskType, ITaskHandler> _rows = [];
 
+    /// <summary>
+    /// Registers the handler of <paramref name="task"/>.
+    /// </summary>
     public void Register(CharacterTask task, ITaskHandler handler) =>
         _handlers[(byte)task] = handler ?? throw new ArgumentNullException(nameof(handler));
 
@@ -212,6 +245,9 @@ public sealed class TaskHandlers
     /// </summary>
     public void Register(TaskType row, ITaskHandler handler) => _rows[row] = handler ?? throw new ArgumentNullException(nameof(handler));
 
+    /// <summary>
+    /// The handler of <paramref name="task"/>; null: none (the start just sets the task).
+    /// </summary>
     public ITaskHandler? Of(CharacterTask task) => _handlers[(byte)task];
 
     /// <summary>
@@ -396,6 +432,9 @@ public static class TaskStart
     public static CharacterTask Standing(CharacterCold cold, CharacterTask task) =>
         !DecisionSystem.Decides(cold) && task is CharacterTask.Wander or CharacterTask.Follow ? task : CharacterTask.Idle;
 
+    /// <summary>
+    /// Whether the request is a step of the running task: a goal's or reaction's attack while a following job runs its follow or attack.
+    /// </summary>
     static bool Step(RunningTask running, CharacterTask current, in TaskRequest request) =>
         request.Task == CharacterTask.Attack && request.Source is TaskSource.Goal or TaskSource.Reaction && Production.PermaJobs.Follows(running.Row)
         && running.Runs(current) && current is CharacterTask.Follow or CharacterTask.Attack;

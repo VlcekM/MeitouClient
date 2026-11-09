@@ -8,13 +8,22 @@ namespace Meitou.Simulation;
 /// </summary>
 public sealed record PathResult(IReadOnlyList<Vector3> Points)
 {
+    /// <summary>
+    /// No path.
+    /// </summary>
     public static readonly PathResult NotFound = new([]);
+    /// <summary>
+    /// Whether a path was found.
+    /// </summary>
     public bool Found => Points.Count > 0;
     /// <summary>
     /// How many of the points, from the start, follow the real walkable surface; the rest are a provisional long-range route over the terrain through
     /// zones whose navmesh is not loaded, to be asked for again on the way (all of them for an ordinary path).
     /// </summary>
     public int Exact { get; init; } = int.MaxValue;
+    /// <summary>
+    /// Whether part of the path is provisional (see <see cref="Exact"/>).
+    /// </summary>
     public bool IsProvisional => Exact < Points.Count;
 }
 
@@ -33,6 +42,9 @@ public interface IWalkability
     /// Whether a character may stand at world X/Z.
     /// </summary>
     bool IsWalkable(float x, float z);
+    /// <summary>
+    /// A path from <paramref name="from"/> to <paramref name="to"/> (<see cref="PathResult.NotFound"/>: none).
+    /// </summary>
     PathResult FindPath(Vector3 from, Vector3 to);
     /// <summary>
     /// Height a character now at height <paramref name="nearY"/> stands at: where floors are stacked (a walkway over a street, an upper storey), the
@@ -117,10 +129,19 @@ public sealed class OpenGroundWalkability(Func<float, float, float> ground) : IW
     /// </summary>
     public const float SampleStep = 50f;
 
+    /// <summary>
+    /// The terrain height.
+    /// </summary>
     public float GroundHeight(float x, float z) => ground(x, z);
 
+    /// <summary>
+    /// Whether the terrain is above the water.
+    /// </summary>
     public bool IsWalkable(float x, float z) => ground(x, z) > WorldWater.Height;
 
+    /// <summary>
+    /// A straight path, refused when either end or a sample on the way is under the water.
+    /// </summary>
     public PathResult FindPath(Vector3 from, Vector3 to)
     {
         if (!IsWalkable(from.X, from.Z) || !IsWalkable(to.X, to.Z)) return PathResult.NotFound;
@@ -160,9 +181,21 @@ public interface IAgentWalkability : IWalkability
 /// </summary>
 public readonly record struct WaterCost(float Shallow, float Waist, float Deep)
 {
+    /// <summary>
+    /// Whether the costs are set.
+    /// </summary>
     public bool IsSet => Shallow > 0;
+    /// <summary>
+    /// The lowest of the three costs.
+    /// </summary>
     public float Min => MathF.Min(Shallow, MathF.Min(Waist, Deep));
+    /// <summary>
+    /// The cost of water state <paramref name="state"/> (3 deep, 2 waist-deep, else shallow).
+    /// </summary>
     public float this[int state] => state switch { 3 => Deep, 2 => Waist, _ => Shallow };
+    /// <summary>
+    /// The same cost at every depth.
+    /// </summary>
     public static WaterCost Uniform(float factor) => new(factor, factor, factor);
 
     /// <summary>
@@ -190,7 +223,13 @@ public readonly record struct WaterCost(float Shallow, float Waist, float Deep)
 /// </summary>
 public static class WalkableSpots
 {
+    /// <summary>
+    /// The ring radii of the search.
+    /// </summary>
     static readonly float[] Radii = [4, 8, 16, 32, 64, 128];
+    /// <summary>
+    /// The eight directions of each ring.
+    /// </summary>
     static readonly Vector2[] Directions =
         [.. Enumerable.Range(0, 8).Select(k => new Vector2(MathF.Cos(k * MathF.PI / 4), MathF.Sin(k * MathF.PI / 4)))];
 

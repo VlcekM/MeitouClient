@@ -15,6 +15,9 @@ namespace Meitou.Simulation.Saving;
 [Flags]
 public enum ImportOptions
 {
+    /// <summary>
+    /// No option ticked.
+    /// </summary>
     None = 0,
 
     /// <summary>
@@ -49,18 +52,19 @@ public enum ImportOptions
 }
 
 /// <summary>
-/// Importing a game (docs/formats/save.md "Importing a game", <c>FUN_140378a30</c>): a new world that keeps only what the player brought from an old save.
-/// <see cref="Filter"/> cuts a loaded <see cref="SaveGame"/> down to that part, in the shape the loader and the capture already work with;
-/// <see cref="SaveLoader"/> then makes the world from it as from any save, so the characters, their items, medical state and stats are the old platoon files'
-/// unchanged. The original does the same work with its own containers: the save is read into the save container, the world is reset, and each part is
-/// copied across.
+/// Importing a game (docs/formats/save.md "Importing a game", <c>FUN_140378a30</c>): a new world that keeps only what the player brought from an old
+/// save. <see cref="Filter"/> cuts a loaded <see cref="SaveGame"/> down to that part, in the shape the loader and the capture already work with;
+/// <see cref="SaveLoader"/> then makes the world from it as from any save, so the characters, their items, medical state and stats are the old
+/// platoon files' unchanged. The original does the same work with its own containers: the save is read into the save container, the world is reset,
+/// and each part is copied across.
 /// </summary>
 public static class SaveImport
 {
     #region Import
 
     /// <summary>
-    /// Where "Reset squad positions" puts the player's squads (<c>FUN_140378a30</c>, the camera and <c>FUN_14036b370</c>); squad i of the list stands at +(i, 0, i).
+    /// Where "Reset squad positions" puts the player's squads (<c>FUN_140378a30</c>, the camera and <c>FUN_14036b370</c>); squad i of the list stands
+    /// at +(i, 0, i).
     /// </summary>
     public static readonly Vector3 ResetPosition = new(-43500, 0, -6625);
 
@@ -150,8 +154,8 @@ public static class SaveImport
     public const int TicksFromVersion = 0 << 24 | 90 << 12 | 0;
 
     /// <summary>
-    /// A save version as the import window compares it (<c>FUN_14047acf0</c>, <b>Verified</b> by decompile): "a.b.c" read as three integers, packed a &lt;&lt; 24
-    /// | b &lt;&lt; 12 | c; anything else (an empty or "Ancient" version) is 0.
+    /// A save version as the import window compares it (<c>FUN_14047acf0</c>, <b>Verified</b> by decompile): "a.b.c" read as three integers,
+    /// packed a &lt;&lt; 24 | b &lt;&lt; 12 | c; anything else (an empty or "Ancient" version) is 0.
     /// </summary>
     public static int PackedVersion(string version)
     {
@@ -188,7 +192,8 @@ public static class SaveImport
             .OrderBy(p => p.Record.Ints.GetValueOrDefault("squad index"))
             .ToList();
 
-        // Engine choice: the original salvages a squad from a "Nameless_0.platoon" file and pays 10000 cats; here a save without a player squad is refused.
+        // Engine choice: the original salvages a squad from a "Nameless_0.platoon" file and pays 10000 cats; here a save without a player squad
+        // is refused.
         if (keep.Count == 0) throw new InvalidOperationException("The save has no squad of the player's to import.");
 
         game.Quick.Records.RemoveAll(r => r.RecordType == FcsRecordType.Platoon && !keep.Any(p => ReferenceEquals(p.Record, r)));
@@ -345,7 +350,8 @@ public static class SaveImport
     }
 
     /// <summary>
-    /// Cuts a town record to what the player knew of it: its knowledge flags, its handles and instance and faction keys (and the replacement town with Dead NPCs).
+    /// Cuts a town record to what the player knew of it: its knowledge flags, its handles and instance and faction keys (and the replacement town
+    /// with Dead NPCs).
     /// </summary>
     static void CutToKnowledge(FcsRecord r, ImportOptions options)
     {
@@ -398,6 +404,9 @@ public static class SaveImport
         return removed;
     }
 
+    /// <summary>
+    /// A point on the ground plane (X, Z).
+    /// </summary>
     static Vector2 Flat(Vector3 v) => new(v.X, v.Z);
 
     /// <summary>

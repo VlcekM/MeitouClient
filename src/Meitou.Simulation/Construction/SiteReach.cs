@@ -34,8 +34,8 @@ public static class SiteReach
 
     /// <summary>
     /// The height difference below which a worker has arrived at a building when it is not on the building's floor (<c>AI::isWithinChoppingRange</c>,
-    /// <b>Verified</b> <c>FUN_14059c6d0</c>): 130 for a door or a building with a door, else 45 for a building standing outside any building, else 15 (the
-    /// original's ceiling-mounted class, <c>vfunc 0x428</c>, also gets 45; it is not read).
+    /// <b>Verified</b> <c>FUN_14059c6d0</c>): 130 for a door or a building with a door, else 45 for a building standing outside any building, else 15
+    /// (the original's ceiling-mounted class, <c>vfunc 0x428</c>, also gets 45; it is not read).
     /// </summary>
     public static float HeightLimit(bool door, bool inBuilding) => door ? 130 : inBuilding ? 15 : 45;
 

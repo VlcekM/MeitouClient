@@ -5,7 +5,9 @@ using Meitou.Simulation.Locks;
 
 namespace Meitou.Simulation.Kidnap;
 
-// Torture racks: docs/game/locks.md "Torture racks".
+/// <summary>
+/// Torture racks: docs/game/locks.md "Torture racks".
+/// </summary>
 public sealed partial class CaptiveSystem
 {
     /// <summary>
@@ -28,6 +30,10 @@ public sealed partial class CaptiveSystem
             if (rack.Rack) StepRack(world, rack, world.TickSeconds);
     }
 
+    /// <summary>
+    /// One tick of a torture rack: with its occupant on it, the armour comes off by its timer and the machine runs; empty, the rack and
+    /// machine reset.
+    /// </summary>
     void StepRack(World world, Fixture rack, float dt)
     {
         var table = world.Characters;

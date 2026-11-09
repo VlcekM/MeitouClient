@@ -63,6 +63,9 @@ public static class PlayerRelations
         if (before != after) Posted(world, relations, a, b, before, after);
     }
 
+    /// <summary>
+    /// Posts the threshold message of a relation change between the player's faction and another (<see cref="Notice"/>).
+    /// </summary>
     static void Posted(World world, FactionRelations relations, int a, int b, float before, float after)
     {
         // The player's row is kept in the other faction's table: either way round the other faction names the message.
@@ -92,6 +95,9 @@ public static class PlayerRelations
 /// </summary>
 public sealed class FactionDeeds(FactionRelations relations, PopulationData? data = null)
 {
+    /// <summary>
+    /// The faction relations the deeds move.
+    /// </summary>
     public FactionRelations Relations { get; } = relations;
 
     /// <summary>
@@ -121,6 +127,10 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
         return w * v.FactionImportance;
     }
 
+    /// <summary>
+    /// Applies a deed of <paramref name="doer"/> against <paramref name="victim"/> as a relation event of the victim's faction about the doer's (none
+    /// within one faction or of amount 0).
+    /// </summary>
     void Apply(World world, int doer, int victim, RelationEventKind kind, float x)
     {
         var table = world.Characters;

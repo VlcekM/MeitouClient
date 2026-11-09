@@ -83,8 +83,8 @@ public static class ZoneActivation
     }
 
     /// <summary>
-    /// Every zone overlapping the box of +-<see cref="Box"/> round <paramref name="p"/>, plus <paramref name="ring"/> more zones on every side (0 or 1, the
-    /// <c>Fast zone hopping</c> setting).
+    /// Every zone overlapping the box of +-<see cref="Box"/> round <paramref name="p"/>, plus <paramref name="ring"/> more zones on every side (0 or
+    /// 1, the <c>Fast zone hopping</c> setting).
     /// </summary>
     public static HashSet<ZoneCoordinate> ZonesAround(Vector3 p, int ring)
     {

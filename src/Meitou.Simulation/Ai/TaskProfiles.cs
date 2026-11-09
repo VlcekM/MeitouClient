@@ -17,10 +17,19 @@ public readonly record struct TaskProfile(float Desire, float CommitMin = 0, flo
 /// </summary>
 public static class TaskProfiles
 {
+    /// <summary>
+    /// The desire stand-ins: a random desire (0.01 + 0.4 x a fresh roll) and a special one (a TaskData function of its own).
+    /// </summary>
     public const float Random = -1, Special = -2;
 
+    /// <summary>
+    /// The profile of a type not in <see cref="Table"/>: special desire, no commitment, crowd 1.
+    /// </summary>
     static readonly TaskProfile Default = new(Special);
 
+    /// <summary>
+    /// The profile of every goal type the engine acts out.
+    /// </summary>
     static readonly Dictionary<TaskType, TaskProfile> Table = new()
     {
         [TaskType.Idle] = new(0.1f),
@@ -57,9 +66,14 @@ public static class TaskProfiles
         [TaskType.TerritorialAggressionButDontLeaveHome] = new(0.5f),
     };
 
-    // Flat by type number for the think's hot loop.
+    /// <summary>
+    /// Flat by type number for the think's hot loop.
+    /// </summary>
     static readonly TaskProfile[] Flat = BuildFlat();
 
+    /// <summary>
+    /// Builds <see cref="Flat"/>: <see cref="Default"/> for every type, then the table's entries.
+    /// </summary>
     static TaskProfile[] BuildFlat()
     {
         var a = new TaskProfile[TaskBehaviours.TypeCount];
@@ -68,6 +82,9 @@ public static class TaskProfiles
         return a;
     }
 
+    /// <summary>
+    /// The profile of a goal type (<see cref="Default"/> for one out of range).
+    /// </summary>
     public static TaskProfile Of(TaskType type) => (uint)type < (uint)Flat.Length ? Flat[(int)type] : Default;
 }
 
@@ -79,6 +96,9 @@ public static class TaskProfiles
 /// </summary>
 public static class TaskAggression
 {
+    /// <summary>
+    /// The intended aggression of a row type.
+    /// </summary>
     public static float Of(TaskType type) => type switch
     {
         TaskType.MeleeAttack or TaskType.MeleeAttackAnimal or TaskType.RangedAttack or TaskType.RangedAttackFocused

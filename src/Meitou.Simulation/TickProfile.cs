@@ -9,10 +9,34 @@ namespace Meitou.Simulation;
 /// </summary>
 public sealed class TickProfile
 {
+    /// <summary>
+    /// The phases' names, by phase index.
+    /// </summary>
     public static readonly string[] PhaseNames = ["inputs", "grid", "sight", "schedule", "think", "move", "act", "commit", "slow world", "publish"];
+    /// <summary>
+    /// The phase indices.
+    /// </summary>
     public const int Inputs = 0, Grid = 1, Sight = 2, Schedule = 3, Think = 4, Move = 5, Act = 6, Commit = 7, SlowWorld = 8, Publish = 9;
+    /// <summary>
+    /// Per parallel phase (think, move, act): the parts it adds, "&lt;phase&gt; cpu" (its jobs' time summed over the threads) and "&lt;phase&gt;
+    /// slow" (the slowest job of each system's run, summed). Against the phase's wall time: wall near slow means one job holds the others up; cpu /
+    /// threads near wall means the threads are all busy.
+    /// </summary>
+    static readonly Dictionary<int, (string Cpu, string Slow)> JobNames = new()
+    {
+        [Think] = ("think cpu", "think slow"),
+        [Move] = ("move cpu", "move slow"),
+        [Act] = ("act cpu", "act slow"),
+    };
 
+    /// <summary>
+    /// The timestamp the current span began at.
+    /// </summary>
     long _last;
+    /// <summary>
+    /// The timestamp the current part began at (see <see cref="Part"/>).
+    /// </summary>
+    long _partLast;
 
     /// <summary>
     /// Measure the ticks (set by the host between ticks).
@@ -45,6 +69,9 @@ public sealed class TickProfile
     /// </summary>
     public List<(string Name, double Ms)> Parts { get; } = [];
 
+    /// <summary>
+    /// Clears the sums (the parts stay listed).
+    /// </summary>
     public void Clear()
     {
         Ticks = 0;
@@ -54,6 +81,9 @@ public sealed class TickProfile
         for (int i = 0; i < Parts.Count; i++) Parts[i] = (Parts[i].Name, 0);
     }
 
+    /// <summary>
+    /// Starts a tick's measuring for <paramref name="systems"/> systems.
+    /// </summary>
     internal void Begin(int systems)
     {
         if (SystemMs.Length != systems)
@@ -63,18 +93,9 @@ public sealed class TickProfile
         _last = _partLast = Stopwatch.GetTimestamp();
     }
 
-    long _partLast;
-
-    // Per parallel phase (think, move, act): the parts it adds, "<phase> cpu" (its jobs' time summed over the threads) and "<phase> slow" (the
-    // slowest job of each system's run, summed). Against the phase's wall time: wall near slow means one job holds the others up; cpu / threads near
-    // wall means the threads are all busy.
-    static readonly Dictionary<int, (string Cpu, string Slow)> JobNames = new()
-    {
-        [Think] = ("think cpu", "think slow"),
-        [Move] = ("move cpu", "move slow"),
-        [Act] = ("act cpu", "act slow"),
-    };
-
+    /// <summary>
+    /// Adds a parallel phase's jobs: their time summed and the slowest (see <see cref="JobNames"/>).
+    /// </summary>
     internal void Jobs(int phase, long sumTicks, long maxTicks)
     {
         var (cpu, slow) = JobNames[phase];
@@ -82,6 +103,9 @@ public sealed class TickProfile
         Add(slow, maxTicks * 1000.0 / Stopwatch.Frequency);
     }
 
+    /// <summary>
+    /// Adds <paramref name="ms"/> to the part <paramref name="name"/>, listing it when new.
+    /// </summary>
     void Add(string name, double ms)
     {
         for (int i = 0; i < Parts.Count; i++)

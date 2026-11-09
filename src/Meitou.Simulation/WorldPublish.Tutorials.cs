@@ -10,6 +10,9 @@ namespace Meitou.Simulation;
 /// </summary>
 public readonly record struct TutorialFacts(bool InTown, bool Stolen, bool Uniform, bool Blueprint, bool InPrison, bool InCannibalCage);
 
+/// <summary>
+/// The world's tutorial facts.
+/// </summary>
 public sealed partial class World
 {
     /// <summary>
@@ -21,6 +24,9 @@ public sealed partial class World
     /// </summary>
     const int BlueprintFunction = 11;
 
+    /// <summary>
+    /// What the tutorial triggers read this tick (<see cref="TutorialFacts"/>).
+    /// </summary>
     TutorialFacts PublishTutorialFacts(PopulationData? population)
     {
         bool town = false, stolen = false, uniform = false, blueprint = false, prison = false, cannibal = false;

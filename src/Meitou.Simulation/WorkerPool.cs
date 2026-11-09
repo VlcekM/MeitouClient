@@ -10,17 +10,43 @@ namespace Meitou.Simulation;
 /// </summary>
 public sealed class WorkerPool : IDisposable
 {
+    /// <summary>
+    /// The worker threads (none for one thread).
+    /// </summary>
     readonly Thread[] _threads;
+    /// <summary>
+    /// Each worker's wake signal.
+    /// </summary>
     readonly SemaphoreSlim[] _wake;
+    /// <summary>
+    /// Counts the workers still busy with the job.
+    /// </summary>
     readonly CountdownEvent _done = new(0);
+    /// <summary>
+    /// Whether the pool is stopping.
+    /// </summary>
     volatile bool _stopping;
 
-    // The job in flight (written by the caller before the workers are woken, which orders it for them).
+    /// <summary>
+    /// The job in flight (written by the caller before the workers are woken, which orders it for them).
+    /// </summary>
     Action<int>? _body;
+    /// <summary>
+    /// The numbers of the job (see <see cref="_body"/>).
+    /// </summary>
     int _count;
+    /// <summary>
+    /// The next number to hand out (see <see cref="_body"/>).
+    /// </summary>
     int _next;
+    /// <summary>
+    /// The first failure of the job (see <see cref="_body"/>).
+    /// </summary>
     ExceptionDispatchInfo? _failure;
 
+    /// <summary>
+    /// A pool of <paramref name="threadCount"/> workers (1: none, the caller runs everything).
+    /// </summary>
     public WorkerPool(int threadCount)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(threadCount, 1);
@@ -45,6 +71,9 @@ public sealed class WorkerPool : IDisposable
         }
     }
 
+    /// <summary>
+    /// The number of threads.
+    /// </summary>
     public int ThreadCount { get; }
 
     /// <summary>
@@ -76,6 +105,9 @@ public sealed class WorkerPool : IDisposable
         _failure?.Throw();
     }
 
+    /// <summary>
+    /// A worker's loop: woken, it takes numbers until the job's are done, then signals.
+    /// </summary>
     void Work(int index)
     {
         while (true)
@@ -105,6 +137,9 @@ public sealed class WorkerPool : IDisposable
         }
     }
 
+    /// <summary>
+    /// Stops the workers and frees their signals.
+    /// </summary>
     public void Dispose()
     {
         if (_stopping) return;

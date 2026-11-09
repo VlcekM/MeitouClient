@@ -6,18 +6,24 @@ namespace Meitou.Simulation.Saving;
 /// The crime markers of a character in its GAMESTATE_CHARACTER record (docs/formats/save.md "Locks, cages and sentences"): Meitou's own keys where
 /// the original's are not known. <c>meitou escaped</c> (bool, <see cref="CharacterCold.Escaped"/>), <c>meitou kidnapped</c> (bool,
 /// <see cref="CharacterCold.Kidnapped"/>), the original's <c>disguiseblown</c> (float game seconds left, status <c>+0x110</c>,
-/// <see cref="CharacterCold.RecentlyWanted"/>; <c>FUN_140626580</c>, <b>Verified</b>; written always, as the original does, and read with the older
-/// <c>meitou recently wanted</c> as fallback), the original's short-keyed <c>tn</c> (bool, status <c>+0xea</c>, <see cref="CharacterCold.Freed"/>;
-/// <c>FUN_140626580</c> writes and <c>FUN_140626830</c> reads it, <b>Verified</b>; written always) and <c>meitou recognition</c> (float 0..1, the bounty
-/// recognition meter <see cref="CharacterCold.Recognition"/>). The Meitou keys are written only while set and removed otherwise, so a save without
-/// them is written as it was read. The bounty ledger, the held state and the sentence have their own savers (<see cref="BountySave"/>,
-/// <see cref="HeldSave"/>).
+/// <see cref="CharacterCold.RecentlyWanted"/>; <c>FUN_140626580</c>, <b>Verified</b>; written always, as the original does, and read with the
+/// older <c>meitou recently wanted</c> as fallback), the original's short-keyed <c>tn</c> (bool, status <c>+0xea</c>,
+/// <see cref="CharacterCold.Freed"/>; <c>FUN_140626580</c> writes and <c>FUN_140626830</c> reads it, <b>Verified</b>; written always) and
+/// <c>meitou recognition</c> (float 0..1, the bounty recognition meter <see cref="CharacterCold.Recognition"/>). The Meitou keys are written only
+/// while set and removed otherwise, so a save without them is written as it was read. The bounty ledger, the held state and the sentence have
+/// their own savers (<see cref="BountySave"/>, <see cref="HeldSave"/>).
 /// </summary>
 public static class CrimeSave
 {
+    /// <summary>
+    /// The GAMESTATE_CHARACTER keys of the crime markers (see the class remarks; <c>tn</c> is the freed flag).
+    /// </summary>
     public const string EscapedKey = "meitou escaped", RecentlyWantedKey = "disguiseblown", OldRecentlyWantedKey = "meitou recently wanted",
         RecognitionKey = "meitou recognition", KidnappedKey = "meitou kidnapped", FreedKey = "tn";
 
+    /// <summary>
+    /// Reads the crime markers from a character's state record (nothing when there is none).
+    /// </summary>
     public static void Read(FcsRecord? state, CharacterCold cold)
     {
         if (state is null) return;
@@ -32,6 +38,9 @@ public static class CrimeSave
         cold.Recognition = Math.Clamp(state.Floats.GetValueOrDefault(RecognitionKey), 0, 1);
     }
 
+    /// <summary>
+    /// Writes the crime markers into a character's state record: the Meitou keys only while set, the original's always.
+    /// </summary>
     public static void Write(FcsRecord state, CharacterCold cold)
     {
         if (cold.Escaped)

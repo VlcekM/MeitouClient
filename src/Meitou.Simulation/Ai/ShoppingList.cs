@@ -32,9 +32,18 @@ public sealed class ShoppingList
     /// </summary>
     const int ResetAfterHour = 7;
 
+    /// <summary>
+    /// The item function of each entry, how many of it are wanted and how many were bought today.
+    /// </summary>
     readonly int[] _function, _wanted, _done;
+    /// <summary>
+    /// The day and town the bought counts are for (<c>int.MinValue</c> and -1: nobody has asked yet).
+    /// </summary>
     int _day = int.MinValue, _town = -1;
 
+    /// <summary>
+    /// A list of item functions with the number wanted of each, none bought yet.
+    /// </summary>
     internal ShoppingList(int[] function, int[] wanted)
     {
         this._function = function;
@@ -47,6 +56,9 @@ public sealed class ShoppingList
     /// </summary>
     public ShoppingList() : this([], []) { }
 
+    /// <summary>
+    /// The number of entries.
+    /// </summary>
     public int Count => _function.Length;
 
     /// <summary>
@@ -188,6 +200,9 @@ public sealed class ShoppingList
     /// </summary>
     public static ulong Bit(int f) => (uint)f < 64 ? 1UL << f : 0;
 
+    /// <summary>
+    /// Adds the bought counts and their day and town to the world's state hash (nothing for a list nobody asked yet).
+    /// </summary>
     internal void Hash(ref StateHasher hasher)
     {
         // A list nobody has asked yet is the one its seed makes: nothing to add.
