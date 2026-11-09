@@ -14,19 +14,24 @@ public sealed partial class NavmeshWalkability
     [ThreadStatic] static List<Wall>? s_wallScratch;
     [ThreadStatic] static HashSet<int>? s_seenScratch;
 
-    /// <summary>One edge of the walkable surface that leads nowhere, on the XZ plane, with its unit normal into the walkable side.</summary>
+    /// <summary>
+    /// One edge of the walkable surface that leads nowhere, on the XZ plane, with its unit normal into the walkable side.
+    /// </summary>
     readonly record struct Wall(Vector2 A, Vector2 B, Vector2 Inward);
 
     /// <summary>
-    /// The part of a free move (root motion, combat footwork) that a body of <paramref name="radius"/> at <paramref name="from"/> can make: as the original's nav agent,
-    /// a circle swept against the walls of the walkable surface round it (the polygon edges that lead nowhere: a wall, a drop, a hole furniture cuts, a closed door)
-    /// stops where it would first touch one, and the rest of the step slides along that wall and is swept once more (docs/game/pathfinding.md "Walls").
-    /// Only walls the move closes on stop it, so a body already nearer than its radius can still move along or away. Off the loaded zones: the whole step.
+    /// The part of a free move (root motion, combat footwork) that a body of <paramref name="radius"/> at <paramref name="from"/> can make: as the original's nav
+    /// agent, a circle swept against the walls of the walkable surface round it (the polygon edges that lead nowhere: a wall, a drop, a hole furniture cuts, a
+    /// closed door) stops where it would first touch one, and the rest of the step slides along that wall and is swept once more (docs/game/pathfinding.md
+    /// "Walls"). Only walls the move closes on stop it, so a body already nearer than its radius can still move along or away. Off the loaded zones: the whole
+    /// step.
     /// </summary>
     public Vector2 Slide(Vector3 from, Vector2 step, float radius)
     {
         var w = _world;
-        if (step == Vector2.Zero || radius <= 0 || !w.Contains(WorldLayout.ZoneOf(from.X, from.Z))) return step;
+        if (step == Vector2.Zero || radius <= 0 || !w.Contains(WorldLayout.ZoneOf(from.X, from.Z)))
+            return step;
+
         var walls = s_wallScratch ??= [];
         walls.Clear();
         GatherWalls(w, from, radius + step.Length() + 1, walls);
@@ -63,7 +68,9 @@ public sealed partial class NavmeshWalkability
             if (d2 < r2)
             {
                 var n = d2 > 1e-8f ? off / MathF.Sqrt(d2) : wall.Inward;
-                if (Vector2.Dot(step, n) < -approach * length && best > 0) (best, normal) = (0, n);
+                if (Vector2.Dot(step, n) < -approach * length && best > 0)
+                    (best, normal) = (0, n);
+
                 continue;
             }
             // The face: where the circle's edge reaches the wall's line, when that point lies on the wall.
@@ -98,7 +105,8 @@ public sealed partial class NavmeshWalkability
     {
         var f = from - corner;
         float a = Vector2.Dot(step, step), b = Vector2.Dot(f, step), c = f.LengthSquared() - r2;
-        if (b >= 0 || a < 1e-12f) return;   // moving away from the corner
+        if (b >= 0 || a < 1e-12f)
+            return; // moving away from the corner
         float disc = b * b - a * c;
         if (disc < 0) return;
         float t = (-b - MathF.Sqrt(disc)) / a;
@@ -107,7 +115,9 @@ public sealed partial class NavmeshWalkability
         normal = Vector2.Normalize(from + step * t - corner);
     }
 
-    /// <summary>The walls within <paramref name="reach"/> of <paramref name="from"/> (XZ) at about its height, over the loaded zones round it.</summary>
+    /// <summary>
+    /// The walls within <paramref name="reach"/> of <paramref name="from"/> (XZ) at about its height, over the loaded zones round it.
+    /// </summary>
     void GatherWalls(NavWorld w, Vector3 from, float reach, List<Wall> walls)
     {
         var seen = s_seenScratch ??= [];
@@ -115,23 +125,37 @@ public sealed partial class NavmeshWalkability
         var lo = WorldLayout.ZoneOf(from.X - reach, from.Z - reach);
         var hi = WorldLayout.ZoneOf(from.X + reach, from.Z + reach);
         for (int zz = Math.Min(lo.Y, hi.Y); zz <= Math.Max(lo.Y, hi.Y); zz++)
+        {
             for (int zx = Math.Min(lo.X, hi.X); zx <= Math.Max(lo.X, hi.X); zx++)
             {
-                if (!w.TryGetSlot(new ZoneCoordinate(zx, zz), out int slot)) continue;
+                if (!w.TryGetSlot(new ZoneCoordinate(zx, zz), out int slot))
+                    continue;
+
                 var m = w.Mesh(slot);
                 var ix = m.Index;
                 seen.Clear();
-                int x0 = ix.Col(from.X - reach - m.BoundsMin.X), x1 = ix.Col(from.X + reach - m.BoundsMin.X);
-                int z0 = ix.Row(from.Z - reach - m.BoundsMin.Y), z1 = ix.Row(from.Z + reach - m.BoundsMin.Y);
+                int x0 = ix.Col(from.X - reach - m.BoundsMin.X);
+                int x1 = ix.Col(from.X + reach - m.BoundsMin.X);
+                int z0 = ix.Row(from.Z - reach - m.BoundsMin.Y);
+                int z1 = ix.Row(from.Z + reach - m.BoundsMin.Y);
                 for (int cz = z0; cz <= z1; cz++)
+                {
                     for (int cx = x0; cx <= x1; cx++)
+                    {
                         foreach (int p in ix.Cells[cz * ix.Columns + cx])
                         {
-                            if (!m.Kept[p] || !seen.Add(p) || ClosedDoor(m, p, doors)) continue;
-                            if (from.X < ix.Min[p].X - reach || from.X > ix.Max[p].X + reach || from.Z < ix.Min[p].Y - reach || from.Z > ix.Max[p].Y + reach) continue;
+                            if (!m.Kept[p] || !seen.Add(p) || ClosedDoor(m, p, doors))
+                                continue;
+
+                            if (from.X < ix.Min[p].X - reach || from.X > ix.Max[p].X + reach || from.Z < ix.Min[p].Y - reach || from.Z > ix.Max[p].Y + reach)
+                                continue;
+
                             AddWalls(m, p, from, reach, doors, walls);
                         }
+                    }
+                }
             }
+        }
     }
 
     static void AddWalls(ZoneNavMesh m, int p, Vector3 from, float reach, NavDoors doors, List<Wall> walls)
@@ -139,21 +163,31 @@ public sealed partial class NavmeshWalkability
         var poly = m.Polygons[p];
         for (int k = 0; k < poly.Length; k++)
         {
-            if (Open(m, p, k, doors)) continue;
+            if (Open(m, p, k, doors))
+                continue;
+
             var a = m.Vertices[poly[k]];
             var b = m.Vertices[poly[(k + 1) % poly.Length]];
             var ab = new Vector2(b.X - a.X, b.Z - a.Z);
             float ab2 = ab.LengthSquared();
-            if (ab2 < 1e-8f) continue;
+            if (ab2 < 1e-8f)
+                continue;
+
             float u = Math.Clamp(((from.X - a.X) * ab.X + (from.Z - a.Z) * ab.Y) / ab2, 0, 1);
-            float nx = a.X + ab.X * u - from.X, nz = a.Z + ab.Y * u - from.Z;
-            if (nx * nx + nz * nz > reach * reach || MathF.Abs(a.Y + (b.Y - a.Y) * u - from.Y) > WallHeightWindow) continue;
+            float nx = a.X + ab.X * u - from.X;
+            float nz = a.Z + ab.Y * u - from.Z;
+            if (nx * nx + nz * nz > reach * reach || MathF.Abs(a.Y + (b.Y - a.Y) * u - from.Y) > WallHeightWindow)
+                continue;
+
             // Polygons wind so that the inside is left of each edge seen from above (ZoneNavMesh.Contains).
             walls.Add(new Wall(new Vector2(a.X, a.Z), new Vector2(b.X, b.Z), Vector2.Normalize(new Vector2(-ab.Y, ab.X))));
         }
     }
 
-    /// <summary>Whether a walker can cross edge <paramref name="k"/> of polygon <paramref name="p"/>: into a kept polygon that is not a closed door, over a tile link, or over the zone's border.</summary>
+    /// <summary>
+    /// Whether a walker can cross edge <paramref name="k"/> of polygon <paramref name="p"/>: into a kept polygon that is not a closed door, over a tile link, or
+    /// over the zone's border.
+    /// </summary>
     static bool Open(ZoneNavMesh m, int p, int k, NavDoors doors)
     {
         int q = m.Neighbours[p][k];
@@ -167,5 +201,6 @@ public sealed partial class NavmeshWalkability
             || NavGeometry.OnLine(a.Z, b.Z, m.BoundsMin.Y) || NavGeometry.OnLine(a.Z, b.Z, m.BoundsMax.Y);
     }
 
-    static bool ClosedDoor(ZoneNavMesh m, int p, NavDoors doors) => m.DoorOf is { } of && of[p] is var d and >= 0 && doors.IsClosed(m.DoorIds![d]);
+    static bool ClosedDoor(ZoneNavMesh m, int p, NavDoors doors) =>
+        m.DoorOf is { } of && of[p] is var d and >= 0 && doors.IsClosed(m.DoorIds![d]);
 }

@@ -8,13 +8,15 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// Builds a zone's navmesh from its gathered geometry with Recast (DotRecast): per tile rasterise the triangles with their areas, cut carvers,
-/// paint doors, partition, contour and triangulate; then stitch the tiles, and keep only the regions near a seed
-/// (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`). Radius 0: clearance is a query-time check.
+/// Builds a zone's navmesh from its gathered geometry with Recast (DotRecast): per tile rasterise the triangles with their areas, cut carvers, paint
+/// doors, partition, contour and triangulate; then stitch the tiles, and keep only the regions near a seed (docs/game/pathfinding.md, Generator
+/// "Seeds" and `regionPruningSettings`). Radius 0: clearance is a query-time check.
 /// </summary>
 internal static partial class ZoneNavMeshBuilder
 {
-    /// <summary>Cells of the neighbouring tiles rasterised round each tile (Recast's borderSize; engine choice: its usual walkable radius + 3, radius 0 here).</summary>
+    /// <summary>
+    /// Cells of the neighbouring tiles rasterised round each tile (Recast's borderSize; engine choice: its usual walkable radius + 3, radius 0 here).
+    /// </summary>
     const int TileBorderCells = 3;
 
     public static ZoneNavMesh Build(ZoneGeometry g, NavBuildSettings s, out NavBuildTimes times)
@@ -24,7 +26,8 @@ internal static partial class ZoneNavMeshBuilder
         float zoneSize = g.ZoneMax.X - g.ZoneMin.X;
         float pad = TileBorderCells * s.CellSize;
         int cellsPerSide = (int)MathF.Round(zoneSize / s.CellSize);
-        if (cellsPerSide % s.TileCells != 0) throw new ArgumentException($"{cellsPerSide} cells per zone side is not a multiple of {s.TileCells}");
+        if (cellsPerSide % s.TileCells != 0)
+            throw new ArgumentException($"{cellsPerSide} cells per zone side is not a multiple of {s.TileCells}");
         int tilesPerSide = cellsPerSide / s.TileCells;
         float tileWorld = s.TileCells * s.CellSize;
         var verts = g.Vertices.ToArray();
@@ -41,9 +44,14 @@ internal static partial class ZoneNavMeshBuilder
         void Tiles(float x0, float z0, float x1, float z1, List<int>[] buckets, int id)
         {
             // A tile also takes what lies in its border (BuildTile).
-            x0 -= pad; z0 -= pad; x1 += pad; z1 += pad;
-            int tx0 = Math.Clamp((int)MathF.Floor((x0 - g.ZoneMin.X) / tileWorld), 0, tilesPerSide - 1), tx1 = Math.Clamp((int)MathF.Floor((x1 - g.ZoneMin.X) / tileWorld), 0, tilesPerSide - 1);
-            int tz0 = Math.Clamp((int)MathF.Floor((z0 - g.ZoneMin.Y) / tileWorld), 0, tilesPerSide - 1), tz1 = Math.Clamp((int)MathF.Floor((z1 - g.ZoneMin.Y) / tileWorld), 0, tilesPerSide - 1);
+            x0 -= pad;
+            z0 -= pad;
+            x1 += pad;
+            z1 += pad;
+            int tx0 = Math.Clamp((int)MathF.Floor((x0 - g.ZoneMin.X) / tileWorld), 0,
+                    tilesPerSide - 1), tx1 = Math.Clamp((int)MathF.Floor((x1 - g.ZoneMin.X) / tileWorld), 0, tilesPerSide - 1);
+            int tz0 = Math.Clamp((int)MathF.Floor((z0 - g.ZoneMin.Y) / tileWorld), 0,
+                    tilesPerSide - 1), tz1 = Math.Clamp((int)MathF.Floor((z1 - g.ZoneMin.Y) / tileWorld), 0, tilesPerSide - 1);
             if (x1 < g.ZoneMin.X || x0 > g.ZoneMax.X || z1 < g.ZoneMin.Y || z0 > g.ZoneMax.Y) return;
             for (int tz = tz0; tz <= tz1; tz++)
                 for (int tx = tx0; tx <= tx1; tx++) buckets[tz * tilesPerSide + tx].Add(id);
@@ -54,7 +62,10 @@ internal static partial class ZoneNavMeshBuilder
             for (int k = 0; k < 3; k++)
             {
                 float x = verts[indices[t + k] * 3], z = verts[indices[t + k] * 3 + 2];
-                x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); z0 = Math.Min(z0, z); z1 = Math.Max(z1, z);
+                x0 = Math.Min(x0, x);
+                x1 = Math.Max(x1, x);
+                z0 = Math.Min(z0, z);
+                z1 = Math.Max(z1, z);
             }
             Tiles(x0, z0, x1, z1, triBuckets, t / 3);
         }
@@ -68,8 +79,10 @@ internal static partial class ZoneNavMeshBuilder
             var (a, b) = Bounds(g.Painters[c]);
             Tiles(a.X, a.Y, b.X, b.Y, painters, c);
         }
-        for (int c = 0; c < g.Solids.Count; c++) Tiles(g.Solids[c].Min.X, g.Solids[c].Min.Y, g.Solids[c].Max.X, g.Solids[c].Max.Y, solids, c);
-        for (int c = 0; c < g.MeshSolids.Count; c++) Tiles(g.MeshSolids[c].Min.X, g.MeshSolids[c].Min.Y, g.MeshSolids[c].Max.X, g.MeshSolids[c].Max.Y, meshSolids, c);
+        for (int c = 0; c < g.Solids.Count; c++)
+            Tiles(g.Solids[c].Min.X, g.Solids[c].Min.Y, g.Solids[c].Max.X, g.Solids[c].Max.Y, solids, c);
+        for (int c = 0; c < g.MeshSolids.Count; c++)
+            Tiles(g.MeshSolids[c].Min.X, g.MeshSolids[c].Min.Y, g.MeshSolids[c].Max.X, g.MeshSolids[c].Max.Y, meshSolids, c);
 
         var ticks = new TileTicks();
         var meshes = new RcPolyMesh?[tilesPerSide * tilesPerSide];
@@ -80,13 +93,19 @@ internal static partial class ZoneNavMeshBuilder
         {
             if (triBuckets[tile].Count == 0) return;
             int tx = tile % tilesPerSide, tz = tile / tilesPerSide;
-            meshes[tile] = BuildTile(g, s, verts, indices, areas, triBuckets[tile], carvers[tile], painters[tile], solids[tile], meshSolids[tile], ticks,
+            meshes[tile] = BuildTile(g, s, verts, indices, areas, triBuckets[tile], carvers[tile], painters[tile], solids[tile], meshSolids[tile],
+                    ticks,
                 g.ZoneMin.X + tx * tileWorld, g.ZoneMin.Y + tz * tileWorld, tileWorld, out details[tile]);
         });
         times.Tiles = watch.Elapsed.TotalMilliseconds;
         times.TileCount = meshes.Count(m => m is not null);
         double ms = 1000.0 / Stopwatch.Frequency;
-        times.CpuRaster = ticks.Raster * ms; times.CpuCompact = ticks.Compact * ms; times.CpuRegions = ticks.Regions * ms; times.CpuContours = ticks.Contours * ms; times.CpuMesh = ticks.Mesh * ms; times.CpuDetail = ticks.Detail * ms;
+        times.CpuRaster = ticks.Raster * ms;
+        times.CpuCompact = ticks.Compact * ms;
+        times.CpuRegions = ticks.Regions * ms;
+        times.CpuContours = ticks.Contours * ms;
+        times.CpuMesh = ticks.Mesh * ms;
+        times.CpuDetail = ticks.Detail * ms;
 
         watch.Restart();
         var mesh = Stitch(g, s, meshes, tilesPerSide, tileWorld, details);
@@ -96,11 +115,16 @@ internal static partial class ZoneNavMeshBuilder
 
         watch.Restart();
         SeedPruner.Prune(mesh, g, s);
-        // A ruin's floor outside its destroyed boundary lies under walls without collision: dropped, so no border closure or hull join keeps it again.
+        // A ruin's floor outside its destroyed boundary lies under walls without collision: dropped, so no border closure or hull join keeps it
+        // again.
         if (g.DestroyedOutline is { } outline)
         {
             for (int p = 0; p < mesh.PolygonCount; p++)
-                if (mesh.Kept[p]) { var c = mesh.Centre(p); mesh.Kept[p] = NavGeometry.InsideOutline(outline, new Vector2(c.X, c.Z)); }
+                if (mesh.Kept[p])
+                {
+                    var c = mesh.Centre(p);
+                    mesh.Kept[p] = NavGeometry.InsideOutline(outline, new Vector2(c.X, c.Z));
+                }
             mesh = mesh.WithoutPruned();
         }
         times.Prune = watch.Elapsed.TotalMilliseconds;
@@ -111,7 +135,9 @@ internal static partial class ZoneNavMeshBuilder
         return mesh;
     }
 
-    /// <summary>Stopwatch ticks the tiles of one build spent per phase; the tiles add to it from several threads.</summary>
+    /// <summary>
+    /// Stopwatch ticks the tiles of one build spent per phase; the tiles add to it from several threads.
+    /// </summary>
     sealed class TileTicks
     {
         public long Raster, Compact, Regions, Contours, Mesh, Detail;
@@ -121,17 +147,22 @@ internal static partial class ZoneNavMeshBuilder
     {
         var lo = new Vector2(float.MaxValue);
         var hi = new Vector2(float.MinValue);
-        foreach (var p in v.Polygon) { lo = Vector2.Min(lo, p); hi = Vector2.Max(hi, p); }
+        foreach (var p in v.Polygon)
+        {
+            lo = Vector2.Min(lo, p);
+            hi = Vector2.Max(hi, p);
+        }
         return (lo, hi);
     }
 
     /// <summary>
-    /// Height cells a tile may span (engine choice, far over any tile's span and under DotRecast's 2^20): past it the cells grow, and the climb and agent
-    /// height counted in cells of <see cref="NavBuildSettings.CellHeight"/> no longer match them.
+    /// Height cells a tile may span (engine choice, far over any tile's span and under DotRecast's 2^20): past it the cells grow, and the climb and
+    /// agent height counted in cells of <see cref="NavBuildSettings.CellHeight"/> no longer match them.
     /// </summary>
     const float MaxHeightCells = 60000;
 
-    static RcPolyMesh? BuildTile(ZoneGeometry g, NavBuildSettings s, float[] verts, int[] indices, int[] areas, List<int> tris, List<int> carvers, List<int> painters, List<int> solids, List<int> meshSolids, TileTicks ticks,
+    static RcPolyMesh? BuildTile(ZoneGeometry g, NavBuildSettings s, float[] verts, int[] indices, int[] areas, List<int> tris, List<int> carvers,
+            List<int> painters, List<int> solids, List<int> meshSolids, TileTicks ticks,
         float x0, float z0, float tileWorld, out HeightGrid?[]? detail)
     {
         detail = null;
@@ -146,12 +177,13 @@ internal static partial class ZoneNavMeshBuilder
             for (int k = 0; k < 3; k++)
             {
                 float y = verts[indices[t * 3 + k] * 3 + 1];
-                yMin = Math.Min(yMin, y); yMax = Math.Max(yMax, y);
+                yMin = Math.Min(yMin, y);
+                yMax = Math.Max(yMax, y);
             }
         float ch = s.CellHeight;
         if ((yMax - yMin) / ch > MaxHeightCells) ch = (yMax - yMin) / MaxHeightCells;
-        // A border of cells from the neighbouring tiles: Recast then keeps the contour vertices on the tile's edge and marks those edges as portals, so a
-        // narrow strip along the edge is not simplified away from it (docs/game/pathfinding.md, "Own builder", tile seams).
+        // A border of cells from the neighbouring tiles: Recast then keeps the contour vertices on the tile's edge and marks those edges as portals,
+        // so a narrow strip along the edge is not simplified away from it (docs/game/pathfinding.md, "Own builder", tile seams).
         int border = TileBorderCells;
         float pad = border * s.CellSize;
         var bmin = new RcVec3f(x0 - pad, yMin - 1, z0 - pad);
@@ -159,15 +191,17 @@ internal static partial class ZoneNavMeshBuilder
         int cells = s.TileCells + 2 * border;
         RcHeightfield Field() => new(cells, cells, bmin, bmax, s.CellSize, ch, border);
         var hf = Rasterize(ctx, verts, indices, areas, tris, Field, walkableClimb);
-        // Recast walks the top of a cutting span within the climb over a walkable one; the original has no face there. Only a top under the climb is lifted:
-        // one cell at it was the steep riser beside a roof cap, a stair of riser cells up to the cap (docs/game/pathfinding.md, "Own builder", low obstacles).
+        // Recast walks the top of a cutting span within the climb over a walkable one; the original has no face there. Only a top under the climb is
+        // lifted: one cell at it was the steep riser beside a roof cap, a stair of riser cells up to the cap (docs/game/pathfinding.md, "Own
+        // builder", low obstacles).
         RcFilters.FilterLowHangingWalkableObstacles(ctx, walkableClimb - 1, hf);
         RcFilters.FilterWalkableLowHeightSpans(ctx, walkableHeight, hf);
         long t1 = Stopwatch.GetTimestamp();
-        // Recast connects two neighbouring spans only when the free space they share (above the higher floor, below the lower ceiling) is the agent height, so a
-        // ramp climbing out from under a floor slab, a leaning wall or a roof edge loses a line of cells where its rise per cell eats the margin, although every
-        // cell has the headroom on its own (the filter above). The original connects faces by step height alone and asks the clearance per face, so the
-        // shared space is asked the agent height less the climb (docs/game/pathfinding.md, "Own builder", stairs under floors).
+        // Recast connects two neighbouring spans only when the free space they share (above the higher floor, below the lower ceiling) is the agent
+        // height, so a ramp climbing out from under a floor slab, a leaning wall or a roof edge loses a line of cells where its rise per cell eats
+        // the margin, although every cell has the headroom on its own (the filter above). The original connects faces by step height alone and asks
+        // the clearance per face, so the shared space is asked the agent height less the climb (docs/game/pathfinding.md, "Own builder", stairs under
+        // floors).
         var chf = RcCompacts.BuildCompactHeightfield(ctx, Math.Max(1, walkableHeight - walkableClimb), walkableClimb, hf);
 
         foreach (int c in carvers) Mark(ctx, g.Carvers[c], NavArea.Null, chf);
@@ -189,9 +223,9 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// The tile's polygons over watershed regions: chunky polygons, where monotone partitioning cuts open ground into long strips (a fifth more polygons for a
-    /// search to expand; docs/game/pathfinding.md "Search cost"). DotRecast refuses some watershed contours that Recast only warns about (a region winding
-    /// round a hole with two outlines, an outline simplified into a bad one): such a tile is partitioned monotone.
+    /// The tile's polygons over watershed regions: chunky polygons, where monotone partitioning cuts open ground into long strips (a fifth more
+    /// polygons for a search to expand; docs/game/pathfinding.md "Search cost"). DotRecast refuses some watershed contours that Recast only warns
+    /// about (a region winding round a hole with two outlines, an outline simplified into a bad one): such a tile is partitioned monotone.
     /// </summary>
     static RcPolyMesh? Partition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<StepLink> steps)
     {
@@ -200,7 +234,8 @@ internal static partial class ZoneNavMeshBuilder
         return mesh;
     }
 
-    static bool TryPartition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<StepLink> steps, bool watershed, out RcPolyMesh? mesh)
+    static bool TryPartition(RcContext ctx, RcCompactHeightfield chf, NavBuildSettings s, TileTicks ticks, List<StepLink> steps, bool watershed,
+            out RcPolyMesh? mesh)
     {
         mesh = null;
         long t0 = Stopwatch.GetTimestamp();
@@ -210,7 +245,8 @@ internal static partial class ZoneNavMeshBuilder
             RcRegions.BuildDistanceField(ctx, chf);
             RcRegions.BuildRegions(ctx, chf, s.MinRegionArea, s.MergeRegionArea);
         }
-        else RcRegions.BuildRegionsMonotone(ctx, chf, s.MinRegionArea, s.MergeRegionArea);
+        else
+            RcRegions.BuildRegionsMonotone(ctx, chf, s.MinRegionArea, s.MergeRegionArea);
         RelinkWithinRegions(chf, steps);
         long t1 = Stopwatch.GetTimestamp();
         Interlocked.Add(ref ticks.Regions, t1 - t0);
@@ -230,22 +266,29 @@ internal static partial class ZoneNavMeshBuilder
         return true;
     }
 
-    /// <summary>Cells between two height samples of a polygon (engine choice: 4 units, under a stair tread).</summary>
+    /// <summary>
+    /// Cells between two height samples of a polygon (engine choice: 4 units, under a stair tread).
+    /// </summary>
     const int HeightSampleCells = 2;
 
-    /// <summary>How far (units) a polygon's samples have to leave its plane for them to be kept (engine choice: most polygons are flat ground).</summary>
+    /// <summary>
+    /// How far (units) a polygon's samples have to leave its plane for them to be kept (engine choice: most polygons are flat ground).
+    /// </summary>
     const float HeightKeep = 2;
 
-    /// <summary>How far (units) from a polygon's plane a span may be and still be its surface when the polygon has no region (engine choice: under half a storey).</summary>
+    /// <summary>
+    /// How far (units) from a polygon's plane a span may be and still be its surface when the polygon has no region (engine choice: under half a
+    /// storey).
+    /// </summary>
     const float HeightReach = 25;
 
     /// <summary>
     /// The heights of each polygon's own surface (docs/game/pathfinding.md, "Heights"): every <see cref="HeightSampleCells"/> cells over its box, the
-    /// walkable span of the region it was made from, else the walkable span nearest its plane within <see cref="HeightReach"/>, NaN where there is none;
-    /// at the stitched vertices' level (half a cell under the span's top). DotRecast leaves the region 0 on polygons merged across regions: their regions
-    /// are those of the spans at their corners (<see cref="CornerRegions"/>), each sample taking the one of theirs nearest the plane, which over a large
-    /// polygon on a slope lies far off it. A polygon is planar only between its corners, so over stairs, ramps and humps it lay up to ~40 off the surface.
-    /// Recast's own detail mesh gives the same heights at a hundred times the cost.
+    /// walkable span of the region it was made from, else the walkable span nearest its plane within <see cref="HeightReach"/>, NaN where there is
+    /// none; at the stitched vertices' level (half a cell under the span's top). DotRecast leaves the region 0 on polygons merged across regions:
+    /// their regions are those of the spans at their corners (<see cref="CornerRegions"/>), each sample taking the one of theirs nearest the plane,
+    /// which over a large polygon on a slope lies far off it. A polygon is planar only between its corners, so over stairs, ramps and humps it lay up
+    /// to ~40 off the surface. Recast's own detail mesh gives the same heights at a hundred times the cost.
     /// </summary>
     static HeightGrid?[] SampleHeights(RcPolyMesh m, RcCompactHeightfield chf, int border)
     {
@@ -259,14 +302,17 @@ internal static partial class ZoneNavMeshBuilder
             int reg = m.regs[p];
             regions.Clear();
             if (reg == 0) CornerRegions(m, chf, border, p, regions);
-            else regions.Add(reg);
+            else
+                regions.Add(reg);
             int x0 = int.MaxValue, x1 = int.MinValue, z0 = int.MaxValue, z1 = int.MinValue;
             int count = 0;
             for (int k = 0; k < nvp && m.polys[p * nvp * 2 + k] != RcRecast.RC_MESH_NULL_IDX; k++, count++)
             {
                 int v = m.polys[p * nvp * 2 + k] * 3;
-                x0 = Math.Min(x0, m.verts[v]); x1 = Math.Max(x1, m.verts[v]);
-                z0 = Math.Min(z0, m.verts[v + 2]); z1 = Math.Max(z1, m.verts[v + 2]);
+                x0 = Math.Min(x0, m.verts[v]);
+                x1 = Math.Max(x1, m.verts[v]);
+                z0 = Math.Min(z0, m.verts[v + 2]);
+                z1 = Math.Max(z1, m.verts[v + 2]);
                 corner[k] = new Vector3(m.verts[v], m.verts[v + 1] - 0.5f, m.verts[v + 2]);
             }
             // The plane's height (in cells) at a cell: the fan triangle the point is in, else the one it is nearest to, extended.
@@ -275,7 +321,8 @@ internal static partial class ZoneNavMeshBuilder
                 float best = float.MinValue, y = corner[0].Y;
                 for (int k = 1; k + 1 < count; k++)
                 {
-                    if (!NavGeometry.Barycentric(cx, cz, corner[0], corner[k], corner[k + 1], out float u, out float v, out float w)) continue;
+                    if (!NavGeometry.Barycentric(cx, cz, corner[0], corner[k], corner[k + 1], out float u, out float v, out float w))
+                        continue;
                     float inside = MathF.Min(u, MathF.Min(v, w));
                     if (inside <= best) continue;
                     best = inside;
@@ -289,16 +336,18 @@ internal static partial class ZoneNavMeshBuilder
             var own = new bool[columns * rows];
             SampleCells(chf, border, x0, z0, columns, regions, Plane, values, own);
             FillFromNeighbours(chf, border, x0, z0, columns, values);
-            grids[p] = new HeightGrid(chf.bmin.X + (x0 + border + 0.5f) * chf.cs, chf.bmin.Z + (z0 + border + 0.5f) * chf.cs, step, columns, rows, values) { Own = own };
+            grids[p] = new HeightGrid(chf.bmin.X + (x0 + border + 0.5f) * chf.cs, chf.bmin.Z + (z0 + border + 0.5f) * chf.cs, step, columns, rows,
+                    values) { Own = own };
         }
         return grids;
     }
 
     /// <summary>
-    /// Each sample of a polygon's box (<see cref="SampleHeights"/>): the walkable span of its regions nearest its <paramref name="planeAt"/> (in cells), else the one
-    /// nearest the plane within <see cref="HeightReach"/>; NaN where there is none.
+    /// Each sample of a polygon's box (<see cref="SampleHeights"/>): the walkable span of its regions nearest its <paramref name="planeAt"/> (in
+    /// cells), else the one nearest the plane within <see cref="HeightReach"/>; NaN where there is none.
     /// </summary>
-    static void SampleCells(RcCompactHeightfield chf, int border, int x0, int z0, int columns, HashSet<int> regions, Func<float, float, float> planeAt,
+    static void SampleCells(RcCompactHeightfield chf, int border, int x0, int z0, int columns, HashSet<int> regions, Func<float, float,
+            float> planeAt,
         float[] values, bool[] own)
     {
         for (int j = 0, rows = values.Length / columns; j < rows; j++)
@@ -330,10 +379,11 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// Gives the samples <see cref="SampleCells"/> left without a span the walkable span within a climb a cell of a sampled neighbour's height, spreading from
-    /// sample to sample until none is added (engine choice). A polygon is one connected surface, so where the ground leaves its plane by more than
-    /// <see cref="HeightReach"/> in a region none of its corners touches, its height carries on from its neighbours (Observed zone 20.32 at -50695,805,
-    /// docs/game/pathfinding.md "Polygon heights"). Without it the plane, ~40 over the ground, was taken there and walkers could not step onto it.
+    /// Gives the samples <see cref="SampleCells"/> left without a span the walkable span within a climb a cell of a sampled neighbour's height,
+    /// spreading from sample to sample until none is added (engine choice). A polygon is one connected surface, so where the ground leaves its plane
+    /// by more than <see cref="HeightReach"/> in a region none of its corners touches, its height carries on from its neighbours (Observed zone 20.32
+    /// at -50695,805, docs/game/pathfinding.md "Polygon heights"). Without it the plane, ~40 over the ground, was taken there and walkers could not
+    /// step onto it.
     /// </summary>
     static void FillFromNeighbours(RcCompactHeightfield chf, int border, int x0, int z0, int columns, float[] values)
     {
@@ -372,7 +422,9 @@ internal static partial class ZoneNavMeshBuilder
         }
     }
 
-    /// <summary>The regions (not the tile border's) of the walkable spans within the climb of a polygon's corners, in the four cells round each.</summary>
+    /// <summary>
+    /// The regions (not the tile border's) of the walkable spans within the climb of a polygon's corners, in the four cells round each.
+    /// </summary>
     static void CornerRegions(RcPolyMesh m, RcCompactHeightfield chf, int border, int p, HashSet<int> regions)
     {
         int nvp = m.nvp;
@@ -396,8 +448,8 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// Gives the polygons whose surface leaves their plane by more than <see cref="HeightKeep"/> their height samples (<see cref="ZoneNavMesh.Heights"/>). The zone's
-    /// polygons are the tiles' in tile order (<see cref="Stitch"/>).
+    /// Gives the polygons whose surface leaves their plane by more than <see cref="HeightKeep"/> their height samples
+    /// (<see cref="ZoneNavMesh.Heights"/>). The zone's polygons are the tiles' in tile order (<see cref="Stitch"/>).
     /// </summary>
     static void AddDetail(ZoneNavMesh mesh, RcPolyMesh?[] meshes, HeightGrid?[]?[] details, HeightWindow? ground)
     {
@@ -420,7 +472,8 @@ internal static partial class ZoneNavMeshBuilder
                         float x = grid.X0 + i * grid.Step, z = grid.Z0 + j * grid.Step;
                         if (float.IsNaN(y) || !mesh.Contains(polygon, x, z)) continue;
                         off = MathF.Max(off, MathF.Abs(y - mesh.HeightAt(polygon, x, z)));
-                        if (onTerrain && !(ground!.TryHeightAt(x, z, out float t) && MathF.Abs(MathF.Max(t, WorldWater.Height) - y) <= TerrainMatch)) onTerrain = false;
+                        if (onTerrain && !(ground!.TryHeightAt(x, z, out float t) && MathF.Abs(MathF.Max(t, WorldWater.Height) - y) <= TerrainMatch))
+                            onTerrain = false;
                     }
                 if (off <= HeightKeep) continue;
                 heights[polygon] = onTerrain ? HeightGrid.OnTerrain : grid;
@@ -431,23 +484,28 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// How near (units) the heightmap every sample of a polygon has to be for the polygon to stand on the terrain (<see cref="HeightGrid.OnTerrain"/>; engine
-    /// choice: the spans come from the terrain's 36-unit triangles, the heightmap's 18-unit samples differ from them by a few units on curved ground).
+    /// How near (units) the heightmap every sample of a polygon has to be for the polygon to stand on the terrain
+    /// (<see cref="HeightGrid.OnTerrain"/>; engine choice: the spans come from the terrain's 36-unit triangles, the heightmap's 18-unit samples
+    /// differ from them by a few units on curved ground).
     /// </summary>
     const float TerrainMatch = 3;
 
     /// <summary>
-    /// How far below an upward face of a solid a span's floor has to be to count as inside (engine choice: one height cell). Recast rounds a span's top up to the
-    /// highest point of its surface over the cell, so a span on the solid's own top is on or above that face and stays.
+    /// How far below an upward face of a solid a span's floor has to be to count as inside (engine choice: one height cell). Recast rounds a span's
+    /// top up to the highest point of its surface over the cell, so a span on the solid's own top is on or above that face and stays.
     /// </summary>
     internal const float SolidTopInset = 1;
 
-    /// <summary>Removes the walkable spans whose floor, at the middle of their cell, lies inside the solid (docs/game/pathfinding.md, "Solids").</summary>
+    /// <summary>
+    /// Removes the walkable spans whose floor, at the middle of their cell, lies inside the solid (docs/game/pathfinding.md, "Solids").
+    /// </summary>
     static void RemoveInside(NavSolid solid, RcCompactHeightfield chf)
     {
         float cs = chf.cs, ch = chf.ch;
-        int x0 = Math.Max(0, (int)MathF.Floor((solid.Min.X - chf.bmin.X) / cs)), x1 = Math.Min(chf.width - 1, (int)MathF.Floor((solid.Max.X - chf.bmin.X) / cs));
-        int z0 = Math.Max(0, (int)MathF.Floor((solid.Min.Y - chf.bmin.Z) / cs)), z1 = Math.Min(chf.height - 1, (int)MathF.Floor((solid.Max.Y - chf.bmin.Z) / cs));
+        int x0 = Math.Max(0, (int)MathF.Floor((solid.Min.X - chf.bmin.X) / cs)), x1 = Math.Min(chf.width - 1,
+                (int)MathF.Floor((solid.Max.X - chf.bmin.X) / cs));
+        int z0 = Math.Max(0, (int)MathF.Floor((solid.Min.Y - chf.bmin.Z) / cs)), z1 = Math.Min(chf.height - 1,
+                (int)MathF.Floor((solid.Max.Y - chf.bmin.Z) / cs));
         for (int z = z0; z <= z1; z++)
             for (int x = x0; x <= x1; x++)
             {
@@ -458,30 +516,43 @@ internal static partial class ZoneNavMeshBuilder
                     var p = new Vector3(chf.bmin.X + (x + 0.5f) * cs, chf.bmin.Y + chf.spans[i].y * ch, chf.bmin.Z + (z + 0.5f) * cs);
                     bool inside = true;
                     foreach (var plane in solid.Planes)
-                        if (plane.X * p.X + plane.Y * p.Y + plane.Z * p.Z + plane.W >= (plane.Y > 0 ? -SolidTopInset : 0)) { inside = false; break; }
+                        if (plane.X * p.X + plane.Y * p.Y + plane.Z * p.Z + plane.W >= (plane.Y > 0 ? -SolidTopInset : 0))
+                        {
+                            inside = false;
+                            break;
+                        }
                     if (inside) chf.areas[i] = NavArea.Null;
                 }
             }
     }
 
     /// <summary>
-    /// How far (cells) from where a map feature's surface runs inside a building's solid that surface is removed (engine choice: two cells, so the building's
-    /// walkway and the feature's surface are not neighbours; docs/game/pathfinding.md, "Map features").
+    /// How far (cells) from where a map feature's surface runs inside a building's solid that surface is removed (engine choice: two cells, so the
+    /// building's walkway and the feature's surface are not neighbours; docs/game/pathfinding.md, "Map features").
     /// </summary>
     const int FeatureSeamCells = 2;
 
-    /// <summary>How far (units) a span's floor may be over a feature triangle's height at the cell's middle and still stand on it (engine choice).</summary>
+    /// <summary>
+    /// How far (units) a span's floor may be over a feature triangle's height at the cell's middle and still stand on it (engine choice).
+    /// </summary>
     const float FeatureSurfaceReach = 2;
 
-    /// <summary>The height over a span's floor its enclosure rays run at (engine choice: just over the ground, under a gravel pile's skirt).</summary>
+    /// <summary>
+    /// The height over a span's floor its enclosure rays run at (engine choice: just over the ground, under a gravel pile's skirt).
+    /// </summary>
     const float EncloseRayHeight = 1;
 
-    /// <summary>How many of the <see cref="EncloseDirections"/> must hit the mesh for a span to be walled in (engine choice).</summary>
+    /// <summary>
+    /// How many of the <see cref="EncloseDirections"/> must hit the mesh for a span to be walled in (engine choice).
+    /// </summary>
     const int EncloseHits = 4;
 
-    static readonly Vector3[] EncloseDirections = [.. Enumerable.Range(0, 8).Select(k => new Vector3(MathF.Cos(k * MathF.PI / 4), 0, MathF.Sin(k * MathF.PI / 4)))];
+    static readonly Vector3[] EncloseDirections = [.. Enumerable.Range(0,
+            8).Select(k => new Vector3(MathF.Cos(k * MathF.PI / 4), 0, MathF.Sin(k * MathF.PI / 4)))];
 
-    /// <summary>Whether a point is walled in by a triangle mesh: at least <see cref="EncloseHits"/> of eight horizontal rays from it hit one of its triangles.</summary>
+    /// <summary>
+    /// Whether a point is walled in by a triangle mesh: at least <see cref="EncloseHits"/> of eight horizontal rays from it hit one of its triangles.
+    /// </summary>
     static bool Enclosed(Vector3[] t, Vector3 at)
     {
         int hits = 0;
@@ -501,7 +572,9 @@ internal static partial class ZoneNavMeshBuilder
         return false;
     }
 
-    /// <summary>Whether the ray from <paramref name="o"/> along <paramref name="d"/> crosses the triangle (a, b, c), Moller-Trumbore.</summary>
+    /// <summary>
+    /// Whether the ray from <paramref name="o"/> along <paramref name="d"/> crosses the triangle (a, b, c), Moller-Trumbore.
+    /// </summary>
     static bool RayHits(Vector3 o, Vector3 d, Vector3 a, Vector3 b, Vector3 c)
     {
         Vector3 e1 = b - a, e2 = c - a, p = Vector3.Cross(d, e2);
@@ -517,14 +590,17 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// Removes the walkable spans inside a closed or bottom-open triangle mesh (<see cref="NavMeshSolid"/>): the nearest of its triangles above the span's floor, at
-    /// the middle of the cell and more than <see cref="SolidTopInset"/> over it, faces up, and the mesh walls the span in (<see cref="Enclosed"/>; docs/game/pathfinding.md, "Map features").
+    /// Removes the walkable spans inside a closed or bottom-open triangle mesh (<see cref="NavMeshSolid"/>): the nearest of its triangles above the
+    /// span's floor, at the middle of the cell and more than <see cref="SolidTopInset"/> over it, faces up, and the mesh walls the span in
+    /// (<see cref="Enclosed"/>; docs/game/pathfinding.md, "Map features").
     /// </summary>
     static void RemoveInside(NavMeshSolid solid, RcCompactHeightfield chf, List<NavSolid> allSolids, List<int> tileSolids)
     {
         float cs = chf.cs, ch = chf.ch;
-        int x0 = Math.Max(0, (int)MathF.Floor((solid.Min.X - chf.bmin.X) / cs)), x1 = Math.Min(chf.width - 1, (int)MathF.Floor((solid.Max.X - chf.bmin.X) / cs));
-        int z0 = Math.Max(0, (int)MathF.Floor((solid.Min.Y - chf.bmin.Z) / cs)), z1 = Math.Min(chf.height - 1, (int)MathF.Floor((solid.Max.Y - chf.bmin.Z) / cs));
+        int x0 = Math.Max(0, (int)MathF.Floor((solid.Min.X - chf.bmin.X) / cs)), x1 = Math.Min(chf.width - 1,
+                (int)MathF.Floor((solid.Max.X - chf.bmin.X) / cs));
+        int z0 = Math.Max(0, (int)MathF.Floor((solid.Min.Y - chf.bmin.Z) / cs)), z1 = Math.Min(chf.height - 1,
+                (int)MathF.Floor((solid.Max.Y - chf.bmin.Z) / cs));
         if (x0 > x1 || z0 > z1) return;
         int w = x1 - x0 + 1;
         // The mesh's crossings of each cell's middle line: height, and whether that triangle faces up.
@@ -544,13 +620,14 @@ internal static partial class ZoneNavMeshBuilder
                 for (int x = cx0; x <= cx1; x++)
                 {
                     float px = chf.bmin.X + (x + 0.5f) * cs, pz = chf.bmin.Z + (z + 0.5f) * cs;
-                    if (!NavGeometry.Barycentric(px, pz, a, b, c, out float u, out float v, out float wt) || u < 0 || v < 0 || wt < 0) continue;
+                    if (!NavGeometry.Barycentric(px, pz, a, b, c, out float u, out float v, out float wt) || u < 0 || v < 0 || wt < 0)
+                        continue;
                     ref var list = ref hits[(z - z0) * w + x - x0];
                     (list ??= []).Add((u * a.Y + v * b.Y + wt * c.Y, up));
                 }
         }
-        // Where the feature's upward surface runs inside a building's solid (Mourn's tube through the defensive wall), it does not join the building's walkway:
-        // its own surface within FeatureSeamCells of there is removed.
+        // Where the feature's upward surface runs inside a building's solid (Mourn's tube through the defensive wall), it does not join the
+        // building's walkway: its own surface within FeatureSeamCells of there is removed.
         var buried = new bool[hits.Length];
         bool anyBuried = false;
         for (int z = z0; z <= z1; z++)
@@ -567,8 +644,16 @@ internal static partial class ZoneNavMeshBuilder
                         if (!faceUp) continue;
                         bool inside = true;
                         foreach (var plane in b.Planes)
-                            if (plane.X * px + plane.Y * (y - SolidTopInset) + plane.Z * pz + plane.W >= 0) { inside = false; break; }
-                        if (inside) { buried[(z - z0) * w + x - x0] = anyBuried = true; break; }
+                            if (plane.X * px + plane.Y * (y - SolidTopInset) + plane.Z * pz + plane.W >= 0)
+                            {
+                                inside = false;
+                                break;
+                            }
+                        if (inside)
+                        {
+                            buried[(z - z0) * w + x - x0] = anyBuried = true;
+                            break;
+                        }
                     }
                     if (buried[(z - z0) * w + x - x0]) break;
                 }
@@ -597,20 +682,26 @@ internal static partial class ZoneNavMeshBuilder
                     bool up = false, onSurface = false;
                     foreach (var (y, faceUp) in list)
                     {
-                        if (y > floor + SolidTopInset && y < nearest) { nearest = y; up = faceUp; }
+                        if (y > floor + SolidTopInset && y < nearest)
+                        {
+                            nearest = y;
+                            up = faceUp;
+                        }
                         if (faceUp && floor >= y - SolidTopInset && floor - y <= FeatureSurfaceReach) onSurface = true;
                     }
                     // Under a single-sided top (a trestle bridge's deck) the ground stays walkable unless the mesh walls it in.
-                    if (up && !Enclosed(solid.Triangles, new Vector3(chf.bmin.X + (x + 0.5f) * cs, floor + EncloseRayHeight, chf.bmin.Z + (z + 0.5f) * cs))) up = false;
+                    if (up && !Enclosed(solid.Triangles, new Vector3(
+                            chf.bmin.X + (x + 0.5f) * cs, floor + EncloseRayHeight, chf.bmin.Z + (z + 0.5f) * cs)))
+                        up = false;
                     if (up || seam && onSurface) chf.areas[i] = NavArea.Null;
                 }
             }
     }
 
     /// <summary>
-    /// Removes the walkable spans more than <paramref name="depth"/> (the agent's height) under the terrain at the middle of their cell: the top of a building part
-    /// buried in the ground, which has headroom under the terrain's surface (Observed: zone 24.27 by Bad Teeth's gate, a face at 120 under ground at 159;
-    /// docs/game/pathfinding.md, "Solids"). Only columns with more than one span can hold one; the exterior mesh only.
+    /// Removes the walkable spans more than <paramref name="depth"/> (the agent's height) under the terrain at the middle of their cell: the top of a
+    /// building part buried in the ground, which has headroom under the terrain's surface (Observed: zone 24.27 by Bad Teeth's gate, a face at 120
+    /// under ground at 159; docs/game/pathfinding.md, "Solids"). Only columns with more than one span can hold one; the exterior mesh only.
     /// </summary>
     static void RemoveUnderground(HeightWindow terrain, float depth, RcCompactHeightfield chf)
     {
@@ -623,7 +714,8 @@ internal static partial class ZoneNavMeshBuilder
                 for (int i = cell.index, end = cell.index + cell.count; i < end; i++)
                 {
                     if (chf.areas[i] == NavArea.Null) continue;
-                    if (float.IsNaN(ground) && !terrain.TryHeightAt(chf.bmin.X + (x + 0.5f) * chf.cs, chf.bmin.Z + (z + 0.5f) * chf.cs, out ground)) break;
+                    if (float.IsNaN(ground) && !terrain.TryHeightAt(chf.bmin.X + (x + 0.5f) * chf.cs, chf.bmin.Z + (z + 0.5f) * chf.cs, out ground))
+                        break;
                     if (chf.bmin.Y + chf.spans[i].y * chf.ch < ground - depth) chf.areas[i] = NavArea.Null;
                 }
             }

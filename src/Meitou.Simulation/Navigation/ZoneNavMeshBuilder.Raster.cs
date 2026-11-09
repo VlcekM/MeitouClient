@@ -17,11 +17,21 @@ internal static partial class ZoneNavMeshBuilder
         var cut = field();
         RasterizeWhere(ctx, verts, indices, areas, tris, walk, climb, walkable: true);
         RasterizeWhere(ctx, verts, indices, areas, tris, cut, climb, walkable: false);
-        for (int c = 0; c < walk.spans.Length; c++) walk.spans[c] = MergeColumn(walk.spans[c], cut.spans[c], climb);
+        for (int c = 0; c < walk.spans.Length; c++)
+            walk.spans[c] = MergeColumn(walk.spans[c], cut.spans[c], climb);
+
         return walk;
     }
 
-    static void RasterizeWhere(RcContext ctx, float[] verts, int[] indices, int[] areas, List<int> tris, RcHeightfield hf, int climb, bool walkable)
+    static void RasterizeWhere(
+        RcContext ctx,
+        float[] verts,
+        int[] indices,
+        int[] areas,
+        List<int> tris,
+        RcHeightfield hf,
+        int climb,
+        bool walkable)
     {
         int count = tris.Count(t => (areas[t] != NavArea.Null) == walkable);
         var tileTris = new int[count * 3];
@@ -29,20 +39,23 @@ internal static partial class ZoneNavMeshBuilder
         int i = 0;
         foreach (int t in tris)
         {
-            if ((areas[t] != NavArea.Null) != walkable) continue;
+            if ((areas[t] != NavArea.Null) != walkable)
+                continue;
+
             tileTris[i * 3] = indices[t * 3];
             tileTris[i * 3 + 1] = indices[t * 3 + 1];
             tileTris[i * 3 + 2] = indices[t * 3 + 2];
             tileAreas[i++] = areas[t];
         }
+
         RcRasterizations.RasterizeTriangles(ctx, verts, tileTris, tileAreas, count, hf, climb);
     }
 
     /// <summary>
-    /// One column's spans of both fields (each sorted and apart) merged where they touch, as Recast merges them; a merged span takes the highest walkable
-    /// area whose top is within <paramref name="climb"/> of its own top, else none, and a walkable one stands at that walkable top, not on the cutting part
-    /// over it: the original cuts a face under cutting geometry rather than lifting it, so a steep collar rising from a roof is no stair of cutting tops
-    /// onto the dome it carries (docs/game/pathfinding.md, "Own builder", rasterization).
+    /// One column's spans of both fields (each sorted and apart) merged where they touch, as Recast merges them; a merged span takes the highest walkable area
+    /// whose top is within <paramref name="climb"/> of its own top, else none, and a walkable one stands at that walkable top, not on the cutting part over it:
+    /// the original cuts a face under cutting geometry rather than lifting it, so a steep collar rising from a roof is no stair of cutting tops onto the dome it
+    /// carries (docs/game/pathfinding.md, "Own builder", rasterization).
     /// </summary>
     static RcSpan? MergeColumn(RcSpan? walk, RcSpan? cut, int climb)
     {
@@ -50,34 +63,50 @@ internal static partial class ZoneNavMeshBuilder
         while (walk is not null || cut is not null)
         {
             RcSpan? span = null;
-            int walkTop = int.MinValue, walkArea = NavArea.Null;
+            int walkTop = int.MinValue;
+            int walkArea = NavArea.Null;
             while (true)
             {
                 bool fromWalk = walk is not null && (cut is null || walk.smin <= cut.smin);
                 var next = fromWalk ? walk : cut;
-                if (next is null || span is not null && next.smin > span.smax) break;
+                if (next is null || span is not null && next.smin > span.smax)
+                    break;
+
                 if (fromWalk)
                 {
                     walk = walk!.next;
                     walkTop = Math.Max(walkTop, next.smax);
                     walkArea = Math.Max(walkArea, next.area);
                 }
-                else cut = cut!.next;
+                else
+                {
+                    cut = cut!.next;
+                }
 
-                if (span is null) span = next;
+                if (span is null)
+                {
+                    span = next;
+                }
                 else
                 {
                     span.smin = Math.Min(span.smin, next.smin);
                     span.smax = Math.Max(span.smax, next.smax);
                 }
             }
+
             span!.next = null;
             span.area = walkTop >= span.smax - climb ? walkArea : NavArea.Null;
-            if (span.area != NavArea.Null) span.smax = walkTop;
-            if (tail is null) head = span;
-            else tail.next = span;
+            if (span.area != NavArea.Null)
+                span.smax = walkTop;
+
+            if (tail is null)
+                head = span;
+            else
+                tail.next = span;
+
             tail = span;
         }
+
         return head;
     }
 }

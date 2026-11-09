@@ -3,8 +3,8 @@ using System.Numerics;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// A built navigation mesh of one zone: convex polygons (up to six vertices, counter-clockwise seen from above) with their areas and neighbours.
-/// Kept in world coordinates. <see cref="Neighbours"/> is parallel to the polygon's edges: edge <c>k</c> runs from vertex <c>k</c> to <c>k + 1</c>
+/// A built navigation mesh of one zone: convex polygons (up to six vertices, counter-clockwise seen from above) with their areas and neighbours. Kept
+/// in world coordinates. <see cref="Neighbours"/> is parallel to the polygon's edges: edge <c>k</c> runs from vertex <c>k</c> to <c>k + 1</c>
 /// (wrapping) and leads to polygon <c>Neighbours[k]</c>, or −1 where the mesh ends.
 /// </summary>
 public sealed class ZoneNavMesh
@@ -14,9 +14,13 @@ public sealed class ZoneNavMesh
     public required int ZoneX { get; init; }
     public required int ZoneZ { get; init; }
     public required Vector3[] Vertices { get; init; }
-    /// <summary>Per polygon: vertex indices.</summary>
+    /// <summary>
+    /// Per polygon: vertex indices.
+    /// </summary>
     public required int[][] Polygons { get; init; }
-    /// <summary>Per polygon: the neighbour behind each edge, −1 for none.</summary>
+    /// <summary>
+    /// Per polygon: the neighbour behind each edge, −1 for none.
+    /// </summary>
     public required int[][] Neighbours { get; init; }
     public required byte[] Areas { get; init; }
     /// <summary>
@@ -24,43 +28,58 @@ public sealed class ZoneNavMesh
     /// edge, polygon; null for most polygons. Such edges have <c>Neighbours</c> −1.
     /// </summary>
     public int[]?[]? Links { get; init; }
-    /// <summary>Per polygon: false when the seed pass removed it.</summary>
+    /// <summary>
+    /// Per polygon: false when the seed pass removed it.
+    /// </summary>
     public required bool[] Kept { get; init; }
     public required Vector2 BoundsMin { get; init; }
     public required Vector2 BoundsMax { get; init; }
-    /// <summary>Instance ids of the buildings whose doors are in this mesh (<see cref="NavDoors"/>); null when there are none.</summary>
+    /// <summary>
+    /// Instance ids of the buildings whose doors are in this mesh (<see cref="NavDoors"/>); null when there are none.
+    /// </summary>
     public string[]? DoorIds { get; internal set; }
-    /// <summary>Per polygon: the index into <see cref="DoorIds"/> for door polygons, −1 otherwise; null when there are no doors.</summary>
+    /// <summary>
+    /// Per polygon: the index into <see cref="DoorIds"/> for door polygons, −1 otherwise; null when there are no doors.
+    /// </summary>
     public int[]? DoorOf { get; internal set; }
-    /// <summary>The walkable collision triangles the polygons stand for, for exact heights (<see cref="NavSurfaces"/>); null when none were kept.</summary>
+    /// <summary>
+    /// The walkable collision triangles the polygons stand for, for exact heights (<see cref="NavSurfaces"/>); null when none were kept.
+    /// </summary>
     public NavSurfaces? Surfaces { get; internal set; }
     /// <summary>
-    /// Per polygon: the heights of its own surface on a grid (<see cref="HeightGrid"/>), null for one that lies on its plane; the array is null when none has any
-    /// (docs/game/pathfinding.md, "Heights").
+    /// Per polygon: the heights of its own surface on a grid (<see cref="HeightGrid"/>), null for one that lies on its plane; the array is null when
+    /// none has any (docs/game/pathfinding.md, "Heights").
     /// </summary>
     public HeightGrid?[]? Heights { get; internal set; }
     /// <summary>
-    /// The first polygon of the building interiors appended to the zone's exterior (<see cref="NavInteriors.Combine"/>), <see cref="int.MaxValue"/> when
-    /// there are none: the exterior's polygons come first and their neighbours are exterior polygons. The seed flood tests portal widths on exterior edges
-    /// only (<see cref="SeedPruner.MinPortalWidth"/>).
+    /// The first polygon of the building interiors appended to the zone's exterior (<see cref="NavInteriors.Combine"/>), <see cref="int.MaxValue"/>
+    /// when there are none: the exterior's polygons come first and their neighbours are exterior polygons. The seed flood tests portal widths on
+    /// exterior edges only (<see cref="SeedPruner.MinPortalWidth"/>).
     /// </summary>
     public int InteriorStart { get; init; } = int.MaxValue;
-    /// <summary>The zone's heightmap samples (exact terrain heights; the simulation's own grid is exact only near where the game started). Read when the zone loads, not cached.</summary>
+    /// <summary>
+    /// The zone's heightmap samples (exact terrain heights; the simulation's own grid is exact only near where the game started). Read when the zone
+    /// loads, not cached.
+    /// </summary>
     public Meitou.Data.World.HeightWindow? Terrain { get; internal set; }
 
     public int PolygonCount => Polygons.Length;
 
-    /// <summary>The (edge, polygon) pairs of a polygon's <see cref="Links"/>, flattened.</summary>
+    /// <summary>
+    /// The (edge, polygon) pairs of a polygon's <see cref="Links"/>, flattened.
+    /// </summary>
     public ReadOnlySpan<int> LinksOf(int polygon) => Links is { } l && l[polygon] is { } a ? a : [];
 
-    /// <summary>Whether the edge of a polygon is one of its <see cref="Links"/>.</summary>
+    /// <summary>
+    /// Whether the edge of a polygon is one of its <see cref="Links"/>.
+    /// </summary>
     internal bool HasLink(int polygon, int edge) => NavGeometry.HasLink(LinksOf(polygon), edge);
 
     bool[]? _wallVertices;
 
     /// <summary>
-    /// Whether a vertex lies on the edge of the walkable surface (an obstacle, a drop, the end of the mesh): the places a footprint has to keep clear of.
-    /// Edges along the zone border do not count (the next zone continues there).
+    /// Whether a vertex lies on the edge of the walkable surface (an obstacle, a drop, the end of the mesh): the places a footprint has to keep clear
+    /// of. Edges along the zone border do not count (the next zone continues there).
     /// </summary>
     public bool IsWallVertex(int vertex)
     {
@@ -88,10 +107,14 @@ public sealed class ZoneNavMesh
         return w[vertex];
     }
 
-    /// <summary><see cref="Heights"/> from a list with one entry per polygon (null when every entry is).</summary>
+    /// <summary>
+    /// <see cref="Heights"/> from a list with one entry per polygon (null when every entry is).
+    /// </summary>
     internal static HeightGrid?[]? HeightsOf(List<HeightGrid?> list) => list.Any(h => h is not null) ? [.. list] : null;
 
-    /// <summary>This mesh with another kept set over the same polygons (the arrays are shared).</summary>
+    /// <summary>
+    /// This mesh with another kept set over the same polygons (the arrays are shared).
+    /// </summary>
     internal ZoneNavMesh WithKept(bool[] kept) => new()
     {
         ZoneX = ZoneX,
@@ -113,8 +136,9 @@ public sealed class ZoneNavMesh
     };
 
     /// <summary>
-    /// A copy without the pruned polygons (and the vertices only they used), neighbours renumbered; what the game keeps and caches. Arrays for the maps, no LINQ: it runs
-    /// whenever a loaded zone's kept set changes, and a growing vertex dictionary and an iterator per polygon were most of its garbage.
+    /// A copy without the pruned polygons (and the vertices only they used), neighbours renumbered; what the game keeps and caches. Arrays for the
+    /// maps, no LINQ: it runs whenever a loaded zone's kept set changes, and a growing vertex dictionary and an iterator per polygon were most of its
+    /// garbage.
     /// </summary>
     public ZoneNavMesh WithoutPruned()
     {
@@ -166,7 +190,9 @@ public sealed class ZoneNavMesh
         };
     }
 
-    /// <summary><see cref="InteriorStart"/> in the copy's numbering (<paramref name="map"/>: the copy's index per polygon, −1 if pruned).</summary>
+    /// <summary>
+    /// <see cref="InteriorStart"/> in the copy's numbering (<paramref name="map"/>: the copy's index per polygon, −1 if pruned).
+    /// </summary>
     int KeptInteriorStart(int[] map)
     {
         if (InteriorStart >= PolygonCount) return InteriorStart;
@@ -175,7 +201,9 @@ public sealed class ZoneNavMesh
         return kept;
     }
 
-    /// <summary>A polygon's vertices in the copy's numbering, each vertex copied the first time a kept polygon uses it.</summary>
+    /// <summary>
+    /// A polygon's vertices in the copy's numbering, each vertex copied the first time a kept polygon uses it.
+    /// </summary>
     int[] KeptVertices(int[] polygon, int[] vertexMap, List<Vector3> vertices)
     {
         var result = new int[polygon.Length];
@@ -199,7 +227,9 @@ public sealed class ZoneNavMesh
         return result;
     }
 
-    /// <summary>A polygon's links (pairs of edge and target) to kept polygons, renumbered; null when none is left.</summary>
+    /// <summary>
+    /// A polygon's links (pairs of edge and target) to kept polygons, renumbered; null when none is left.
+    /// </summary>
     static int[]? KeptLinks(ReadOnlySpan<int> links, int[] map)
     {
         int keptPairs = 0;
@@ -220,7 +250,10 @@ public sealed class ZoneNavMesh
 
     readonly Lazy<PointIndex> _index;
 
-    /// <summary>The grid over the polygons' XZ boxes (64 units a cell, ascending polygon order in a cell); built on first use, independent of <see cref="Kept"/>.</summary>
+    /// <summary>
+    /// The grid over the polygons' XZ boxes (64 units a cell, ascending polygon order in a cell); built on first use, independent of
+    /// <see cref="Kept"/>.
+    /// </summary>
     internal PointIndex Index => _index.Value;
 
     public ZoneNavMesh() => _index = new Lazy<PointIndex>(() => new PointIndex(this), LazyThreadSafetyMode.ExecutionAndPublication);
@@ -242,8 +275,14 @@ public sealed class ZoneNavMesh
             {
                 var lo = new Vector2(float.MaxValue);
                 var hi = new Vector2(float.MinValue);
-                foreach (int i in m.Polygons[p]) { var v = m.Vertices[i]; lo = Vector2.Min(lo, new(v.X, v.Z)); hi = Vector2.Max(hi, new(v.X, v.Z)); }
-                Min[p] = lo; Max[p] = hi;
+                foreach (int i in m.Polygons[p])
+                {
+                    var v = m.Vertices[i];
+                    lo = Vector2.Min(lo, new(v.X, v.Z));
+                    hi = Vector2.Max(hi, new(v.X, v.Z));
+                }
+                Min[p] = lo;
+                Max[p] = hi;
             }
             // Two passes over the boxes: count the polygons per cell, then fill exact arrays (ascending polygon order in every cell).
             var counts = new int[Columns * Rows];
@@ -271,7 +310,9 @@ public sealed class ZoneNavMesh
         public int Row(float v) => Math.Clamp((int)(v / Cell), 0, Rows - 1);
     }
 
-    /// <summary>Appends the kept polygons that contain (x, z) seen from above.</summary>
+    /// <summary>
+    /// Appends the kept polygons that contain (x, z) seen from above.
+    /// </summary>
     public void PolygonsAt(float x, float z, List<int> result)
     {
         if (!TryCell(x, z, out var ix, out var cell)) return;
@@ -280,7 +321,10 @@ public sealed class ZoneNavMesh
                 result.Add(p);
     }
 
-    /// <summary>The height of the highest kept surface at (x, z); false when no kept polygon contains the point. <see cref="PolygonsAt"/> and <see cref="HeightAt"/> without the list.</summary>
+    /// <summary>
+    /// The height of the highest kept surface at (x, z); false when no kept polygon contains the point. <see cref="PolygonsAt"/> and
+    /// <see cref="HeightAt"/> without the list.
+    /// </summary>
     public bool TryHighestAt(float x, float z, out float height)
     {
         height = float.MinValue;
@@ -295,7 +339,9 @@ public sealed class ZoneNavMesh
         return any;
     }
 
-    /// <summary>Appends the heights at (x, z) of every kept polygon containing the point (stacked floors give several).</summary>
+    /// <summary>
+    /// Appends the heights at (x, z) of every kept polygon containing the point (stacked floors give several).
+    /// </summary>
     public void HeightsAt(float x, float z, List<float> heights)
     {
         if (!TryCell(x, z, out var ix, out var cell)) return;
@@ -315,7 +361,10 @@ public sealed class ZoneNavMesh
     bool Covers(PointIndex ix, int p, float x, float z) =>
         Kept[p] && x >= ix.Min[p].X - 1e-3f && x <= ix.Max[p].X + 1e-3f && z >= ix.Min[p].Y - 1e-3f && z <= ix.Max[p].Y + 1e-3f && Contains(p, x, z);
 
-    /// <summary>The kept polygon nearest to (x, y, z) in XZ distance (ties and containing polygons by height), within <paramref name="maxDistance"/>, not one <paramref name="skip"/> rules out; −1 when none.</summary>
+    /// <summary>
+    /// The kept polygon nearest to (x, y, z) in XZ distance (ties and containing polygons by height), within <paramref name="maxDistance"/>, not one
+    /// <paramref name="skip"/> rules out; −1 when none.
+    /// </summary>
     public int Nearest(float x, float y, float z, float maxDistance, out float distance, Func<int, bool>? skip = null)
     {
         var ix = _index.Value;
@@ -329,13 +378,20 @@ public sealed class ZoneNavMesh
                 foreach (int p in ix.Cells[cz * ix.Columns + cx])
                 {
                     if (!Kept[p] || skip?.Invoke(p) == true) continue;
-                    if (x < ix.Min[p].X - maxDistance || x > ix.Max[p].X + maxDistance || z < ix.Min[p].Y - maxDistance || z > ix.Max[p].Y + maxDistance) continue;
+                    if (x < ix.Min[p].X - maxDistance || x > ix.Max[p].X + maxDistance || z < ix.Min[p].Y - maxDistance
+                            || z > ix.Max[p].Y + maxDistance)
+                        continue;
                     float d = DistanceXz(p, x, z);
                     if (d > maxDistance) continue;
                     float py = HeightAt(p, Math.Clamp(x, ix.Min[p].X, ix.Max[p].X), Math.Clamp(z, ix.Min[p].Y, ix.Max[p].Y));
                     // XZ distance first, then how far the surface is from the wanted height.
                     float score = d * 4 + Math.Abs(py - y);
-                    if (score < bestScore) { bestScore = score; best = p; distance = d; }
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        best = p;
+                        distance = d;
+                    }
                 }
         return best;
     }
@@ -359,7 +415,8 @@ public sealed class ZoneNavMesh
     }
 
     /// <summary>
-    /// Height of the polygon's surface at (x, z), assuming the point lies inside: its height samples there (<see cref="Heights"/>), else its fan over the corners.
+    /// Height of the polygon's surface at (x, z), assuming the point lies inside: its height samples there (<see cref="Heights"/>), else its fan over
+    /// the corners.
     /// </summary>
     public float HeightAt(int polygon, float x, float z)
     {
@@ -367,7 +424,8 @@ public sealed class ZoneNavMesh
         {
             if (grid == HeightGrid.OnTerrain)
             {
-                if (Terrain is { } terrain && terrain.TryHeightAt(x, z, out float ground)) return MathF.Max(ground, Data.World.WorldWater.Height);
+                if (Terrain is { } terrain && terrain.TryHeightAt(x, z, out float ground))
+                    return MathF.Max(ground, Data.World.WorldWater.Height);
             }
             else if (grid.TryHeightAt(x, z, out float sampled)) return sampled;
         }
@@ -386,12 +444,18 @@ public sealed class ZoneNavMesh
         foreach (var i in p)
         {
             float d = (Vertices[i].X - x) * (Vertices[i].X - x) + (Vertices[i].Z - z) * (Vertices[i].Z - z);
-            if (d < best) { best = d; y = Vertices[i].Y; }
+            if (d < best)
+            {
+                best = d;
+                y = Vertices[i].Y;
+            }
         }
         return y;
     }
 
-    /// <summary>Whether (x, z) lies inside the polygon seen from above.</summary>
+    /// <summary>
+    /// Whether (x, z) lies inside the polygon seen from above.
+    /// </summary>
     public bool Contains(int polygon, float x, float z)
     {
         var p = Polygons[polygon];
@@ -404,7 +468,9 @@ public sealed class ZoneNavMesh
         return true;
     }
 
-    /// <summary>Distance on the XZ plane from the point to the polygon (0 inside).</summary>
+    /// <summary>
+    /// Distance on the XZ plane from the point to the polygon (0 inside).
+    /// </summary>
     internal float DistanceXz(int polygon, float x, float z)
     {
         if (Contains(polygon, x, z)) return 0;
@@ -419,7 +485,9 @@ public sealed class ZoneNavMesh
         return best;
     }
 
-    /// <summary>The polygons a polygon leads to inside this mesh: behind its edges, then across its <see cref="Links"/>.</summary>
+    /// <summary>
+    /// The polygons a polygon leads to inside this mesh: behind its edges, then across its <see cref="Links"/>.
+    /// </summary>
     public IEnumerable<int> NeighboursOf(int polygon)
     {
         foreach (int q in Neighbours[polygon]) if (q >= 0) yield return q;
@@ -428,10 +496,12 @@ public sealed class ZoneNavMesh
     }
 
     /// <summary>
-    /// The edges of kept polygons (of every polygon when <paramref name="all"/>) that lie on the border line of this zone facing the direction (<paramref name="dx"/>, <paramref name="dz"/>) and lead nowhere
-    /// inside the mesh (edges that have a link are left out when <paramref name="skipLinked"/>).
+    /// The edges of kept polygons (of every polygon when <paramref name="all"/>) that lie on the border line of this zone facing the direction
+    /// (<paramref name="dx"/>, <paramref name="dz"/>) and lead nowhere inside the mesh (edges that have a link are left out when
+    /// <paramref name="skipLinked"/>).
     /// </summary>
-    /// <param name="keep">The kept set to read instead of <see cref="Kept"/>; null with <paramref name="all"/> false reads <see cref="Kept"/>.</param>
+    /// <param name="keep">The kept set to read instead of <see cref="Kept"/>; null with <paramref name="all"/> false reads <see
+    /// cref="Kept"/>.</param>
     /// <param name="all">Every polygon, kept or not.</param>
     internal List<(int Polygon, int Edge)> BorderEdges(int dx, int dz, bool skipLinked, bool[]? keep = null, bool all = false)
     {
@@ -456,12 +526,15 @@ public sealed class ZoneNavMesh
 }
 
 /// <summary>
-/// The heights of one polygon's surface every <see cref="Step"/> units from (<see cref="X0"/>, <see cref="Z0"/>), row-major, NaN where the heightfield had none of the
-/// polygon's own surface (docs/game/pathfinding.md, "Heights").
+/// The heights of one polygon's surface every <see cref="Step"/> units from (<see cref="X0"/>, <see cref="Z0"/>), row-major, NaN where the
+/// heightfield had none of the polygon's own surface (docs/game/pathfinding.md, "Heights").
 /// </summary>
 public sealed class HeightGrid(float x0, float z0, float step, int columns, int rows, float[] values)
 {
-    /// <summary>For a polygon lying on the terrain: its height is the zone's heightmap (<see cref="ZoneNavMesh.Terrain"/>, the water's height over the sea), no samples kept.</summary>
+    /// <summary>
+    /// For a polygon lying on the terrain: its height is the zone's heightmap (<see cref="ZoneNavMesh.Terrain"/>, the water's height over the sea),
+    /// no samples kept.
+    /// </summary>
     public static readonly HeightGrid OnTerrain = new(0, 0, 1, 0, 0, []);
 
     public float X0 { get; } = x0;
@@ -470,10 +543,15 @@ public sealed class HeightGrid(float x0, float z0, float step, int columns, int 
     public int Columns { get; } = columns;
     public int Rows { get; } = rows;
     public float[] Values { get; } = values;
-    /// <summary>While the zone is built: per sample, whether it is a span of the polygon's own region (not the span nearest its plane); null once built or loaded.</summary>
+    /// <summary>
+    /// While the zone is built: per sample, whether it is a span of the polygon's own region (not the span nearest its plane); null once built or
+    /// loaded.
+    /// </summary>
     internal bool[]? Own { get; set; }
 
-    /// <summary>The height at (x, z) between the four samples round it, those that have none left out; false when none of the four has one.</summary>
+    /// <summary>
+    /// The height at (x, z) between the four samples round it, those that have none left out; false when none of the four has one.
+    /// </summary>
     public bool TryHeightAt(float x, float z, out float height)
     {
         float u = Math.Clamp((x - X0) / Step, 0, Columns - 1), v = Math.Clamp((z - Z0) / Step, 0, Rows - 1);
@@ -492,7 +570,10 @@ public sealed class HeightGrid(float x0, float z0, float step, int columns, int 
         void Add(float h, float w)
         {
             if (float.IsNaN(h)) return;
-            sum += h * w; weight += w; plain += h; found++;
+            sum += h * w;
+            weight += w;
+            plain += h;
+            found++;
         }
     }
 }
