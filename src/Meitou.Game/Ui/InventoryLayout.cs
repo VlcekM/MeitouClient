@@ -229,6 +229,29 @@ sealed class InventoryLayout(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// The player's own animal's inventory window ends where its "-INVENTORY-" label would start, with no main grid, so its death items stay out of
+    /// sight (<b>Observed</b>, original: a bought Garru with meat and skins in its save, and a dog). The loot window keeps the grid.
+    /// </summary>
+    internal static void TrimAnimalWindow(List<UiControl> controls)
+    {
+        var window = controls.FirstOrDefault(c => c.Type == "Window");
+        var label = controls.FirstOrDefault(c => c.Name == "MainSectionName");
+        if (window is null || label is null) return;
+
+        // The frame's pieces under the cut move up with the bottom edge; those crossing it (the sides, the panel, the window) shorten.
+        float cut = label.Bounds.Y, shrink = window.Bounds.Y + window.Bounds.Height - cut;
+        controls.RemoveAll(c => c.Name is "main" or "MainSectionName");
+        for (int i = 0; i < controls.Count; i++)
+        {
+            var r = controls[i].Bounds;
+            if (r.Y >= cut)
+                controls[i] = controls[i] with { Bounds = r with { Y = r.Y - shrink } };
+            else if (r.Y + r.Height > cut)
+                controls[i] = controls[i] with { Bounds = r with { Height = Math.Max(0, r.Height - shrink) } };
+        }
+    }
+
     #endregion
 
     #region Grids
