@@ -308,7 +308,8 @@ public sealed partial class FirstAidSystem
     /// <item><b>Allies</b> (sensed allies, not dead): not a robot race unless robotics; not carried by an enemy of the medic; not fighting; an NPC
     /// medic skips the maimed (<see cref="MedicalState.Maimed"/>). Score =
     /// <see cref="Need"/> x <see cref="Nearness"/>; the same faction always counts, another one at 0.1 and, for a player medic, only with Heal
-    /// Allies; x 0.05 when another medic works on it. The medic itself scores its plain need. The highest wins.</item>
+    /// Allies; x 0.05 when another medic works on it. The medic itself scores its plain need (a robot race only for Robotics, as its patients).
+    /// The highest wins.</item>
     /// <item><b>Strangers</b>, when pass 1 found nobody: sensed neutral, knocked-out, imprisoned or crawling ones that are no enemy; not an animal or
     /// a robot race, not of a not-real faction, not fighting. A free one needs the medic's faction to <c>heal strangers</c>, to be down and to pass
     /// <c>FUN_14059a670</c> (same NPC class unless bandits, or allied); a prisoner needs a cage of the medic's faction and not to be a slave; a
@@ -409,7 +410,7 @@ public sealed partial class FirstAidSystem
                     bestScore = score;
                 }
             }
-        float self = Need(world, i, i, organic, robotic);
+        float self = cold.Race.IsRobot && !robotics ? 0 : Need(world, i, i, organic, robotic);
         if (bestScore < self)
         {
             best = i;
